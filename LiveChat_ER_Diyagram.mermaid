@@ -1,0 +1,155 @@
+erDiagram
+  ORGANIZATION ||--o{ LICENSE : owns
+  LICENSE ||--o{ ACCOUNT : has
+  LICENSE ||--o{ GROUP : has
+  LICENSE ||--o{ CHAT : has
+  LICENSE ||--o{ CANNED_RESPONSE : has
+  LICENSE ||--o{ PROPERTY : has
+  LICENSE ||--o{ SUBSCRIPTION : has
+  LICENSE ||--o{ BOT : has
+  LICENSE ||--o{ ROUTING_RULE : has
+  LICENSE ||--o{ WORKFLOW : has
+  LICENSE ||--o{ CAMPAIGN : has
+  LICENSE ||--o{ GOAL : has
+  LICENSE ||--o{ WEBHOOK : has
+  LICENSE ||--o{ APP_INSTALL : has
+  ROLE ||--o{ ACCOUNT : assigns
+  ACCOUNT ||--o{ GROUP_MEMBER : joins
+  GROUP ||--o{ GROUP_MEMBER : contains
+  GROUP ||--o{ CANNED_RESPONSE : scopes
+  ACCOUNT ||--o{ CANNED_RESPONSE : authors
+  CUSTOMER ||--o{ CHAT : starts
+  CUSTOMER ||--o{ VISIT : browses
+  CHAT ||--o{ CHAT_THREAD : contains
+  CHAT_THREAD ||--o{ EVENT : contains
+  CHAT ||--|| PRE_CHAT_FORM : has
+  CHAT ||--o{ CHAT_TAG : labeled
+  TAG ||--o{ CHAT_TAG : used
+  CHAT ||--o{ RATING : receives
+  SUBSCRIPTION ||--o{ INVOICE : bills
+
+  LICENSE {
+    bigint id PK
+    bigint organization_id FK
+    string plan
+    timestamp trial_ends_at
+  }
+  ACCOUNT {
+    uuid id PK
+    bigint license_id FK
+    string email
+    string name
+    bigint role_id FK
+    int chat_limit
+    string routing_status
+    timestamp last_seen_at
+  }
+  GROUP {
+    bigint id PK
+    bigint license_id FK
+    string name
+    bool is_default
+  }
+  GROUP_MEMBER {
+    bigint group_id FK
+    uuid account_id FK
+    string priority
+  }
+  BOT {
+    uuid id PK
+    bigint license_id FK
+    string name
+    int chat_limit
+  }
+  CHAT {
+    uuid id PK
+    bigint license_id FK
+    uuid customer_id FK
+    bigint group_id FK
+    string status
+    string source_url
+    timestamp started_at
+    timestamp ended_at
+  }
+  CHAT_THREAD {
+    uuid id PK
+    uuid chat_id FK
+    bool active
+  }
+  EVENT {
+    uuid id PK
+    uuid thread_id FK
+    uuid author_id
+    string type
+    text text
+    string mode
+    timestamp created_at
+    timestamp seen_at
+  }
+  CUSTOMER {
+    uuid id PK
+    bigint license_id FK
+    string external_id
+    string name
+    string email
+    jsonb geo
+  }
+  VISIT {
+    uuid id PK
+    uuid customer_id FK
+    string came_from
+    jsonb pages
+    string ip
+    string os
+    string browser
+    text user_agent
+  }
+  CANNED_RESPONSE {
+    uuid id PK
+    bigint license_id FK
+    bigint group_id FK
+    uuid author_id FK
+    string shortcut
+    text text
+    string visibility
+  }
+  PRE_CHAT_FORM {
+    uuid chat_id FK
+    jsonb fields
+  }
+  ROUTING_RULE {
+    uuid id PK
+    bigint license_id FK
+    int priority
+    jsonb conditions
+    bigint target_group_id FK
+  }
+  WORKFLOW {
+    uuid id PK
+    bigint license_id FK
+    jsonb nodes
+    jsonb edges
+    string status
+  }
+  CAMPAIGN {
+    uuid id PK
+    bigint license_id FK
+    string type
+    jsonb trigger
+    text template
+    bool active
+  }
+  RATING {
+    uuid id PK
+    uuid chat_id FK
+    string value
+    timestamp created_at
+  }
+  SUBSCRIPTION {
+    uuid id PK
+    bigint license_id FK
+    string plan
+    string cycle
+    int seats
+    string status
+  }

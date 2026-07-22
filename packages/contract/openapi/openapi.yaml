@@ -1,0 +1,221 @@
+openapi: 3.1.0
+
+info:
+  title: Nexa Platform API
+  version: 1.0.0
+  description: |
+    Nexa live support + AI customer service platform.
+
+    **Resource-based REST** (ADR-04). Actions that are not plain CRUD live as a
+    POST sub-path under the resource they act on — `POST /chats/{chatId}/transfer`,
+    not `POST /action/transfer_chat`.
+
+    **Errors** always use the envelope `{ error: { type, message, request_id } }`.
+    The `type` field is the machine-readable category; the HTTP status is derived
+    from it and the two never disagree.
+
+    **Auth** is OAuth 2.1 (authorization code + PKCE) for agents, Personal Access
+    Tokens for server-to-server, and a short-lived customer token for the widget.
+    Every route additionally declares the scopes it requires.
+
+servers:
+  - url: http://localhost:4000/api/v1
+    description: Local development
+  - url: https://api.nexa.example/api/v1
+    description: Production (single region — eu)
+
+tags:
+  - name: System
+    description: Health and metadata.
+  - name: Auth
+    description: OAuth 2.1, personal access tokens, customer tokens.
+  - name: Chats
+    description: Conversations — chat → thread → event.
+  - name: Configuration
+    description: Groups, agents, tags, canned responses, routing, channels.
+  - name: Reports
+    description: Aggregate analytics.
+  - name: Billing
+    description: Subscription, usage metering, trial.
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      summary: Liveness and dependency check
+      description: |
+        Reports the process plus each backing store. Returns 200 only when every
+        dependency is reachable, so it is safe to use as a readiness probe.
+      security: []
+      responses:
+        "200":
+          description: All dependencies reachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: At least one dependency is unreachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OAuth 2.1 access token or customer token.
+    basicPat:
+      type: http
+      scheme: basic
+      description: "Personal Access Token — `base64(account_id:pat)`."
+
+  schemas:
+    Health:
+      type: object
+      required: [status, service, version, region, uptime_s, dependencies]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        service:
+          type: string
+          examples: [api]
+        version:
+          type: string
+        region:
+          type: string
+          enum: [eu]
+        uptime_s:
+          type: number
+        dependencies:
+          type: object
+          required: [database, redis]
+          properties:
+            database: { $ref: "#/components/schemas/DependencyHealth" }
+            redis: { $ref: "#/components/schemas/DependencyHealth" }
+
+    DependencyHealth:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [up, down]
+        latency_ms:
+          type: number
+        error:
+          type: string
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [type, message, request_id]
+          properties:
+            type:
+              $ref: "#/components/schemas/ErrorType"
+            message:
+              type: string
+              description: Human-readable; never contains secrets or raw SQL.
+            request_id:
+              type: string
+              description: Correlates with server logs and traces.
+            details:
+              type: object
+              additionalProperties: true
+
+    ErrorType:
+      type: string
+      description: Machine-readable error category (v2-03 §1.8).
+      enum:
+        - authentication
+        - authorization
+        - chat_anonymized
+        - chat_inactive
+        - customer_banned
+        - greeting_not_found
+        - group_not_found
+        - group_offline
+        - group_unavailable
+        - groups_offline
+        - internal
+        - license_expired
+        - limit_reached
+        - misdirected_request
+        - not_allowed
+        - not_found
+        - pending_requests_limit_reached
+        - request_timeout
+        - service_unavailable
+        - too_many_requests
+        - unsupported_version
+        - users_limit_reached
+        - validation
+        - wrong_product_version
+
+  responses:
+    BadRequest:
+      description: Malformed or failing validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing, malformed or expired credentials
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated but lacking the required scope or role
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: |
+        Resource does not exist, or exists in another tenant. Both cases return
+        404 so IDs cannot be enumerated (NFR-S5).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Conflicts with current resource state
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          description: Seconds until the caller may retry.
+          schema: { type: integer }
+        X-RateLimit-Limit:
+          schema: { type: integer }
+        X-RateLimit-Remaining:
+          schema: { type: integer }
+        X-RateLimit-Reset:
+          description: Unix timestamp (seconds) when the window resets.
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  parameters:
+    PageId:
+      name: page_id
+      in: query
+      required: false
+      description: Opaque keyset cursor from the previous page.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+
+security:
+  - bearerAuth: []
+  - basicPat: []

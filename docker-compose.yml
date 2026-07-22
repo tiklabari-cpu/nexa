@@ -1,0 +1,50 @@
+name: nexa
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: nexa-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexa
+      POSTGRES_PASSWORD: nexa_dev_password
+      POSTGRES_DB: nexa
+      # Deterministic ordering for tests
+      LANG: C
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+    ports:
+      - '5433:5432'
+    volumes:
+      - nexa_pgdata:/var/lib/postgresql/data
+      - ./infra/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nexa -d nexa']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexa-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes', '--save', '']
+    ports:
+      - '6380:6379'
+    volumes:
+      - nexa_redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
+
+volumes:
+  nexa_pgdata:
+  nexa_redisdata:

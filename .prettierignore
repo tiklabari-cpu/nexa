@@ -1,0 +1,16 @@
+node_modules
+dist
+build
+coverage
+.turbo
+playwright-report
+test-results
+pnpm-lock.yaml
+**/generated/**
+# Reference documents stay exactly as delivered.
+urun-gereksinim-dokumani-PRD.md
+rapor-1-fonksiyonel.md
+rapor-2-teknik-mimari.md
+prd-yeterlilik-degerlendirmesi.md
+MASTER-PROMPT.md
+v2-derin-analiz/

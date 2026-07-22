@@ -1,0 +1,20 @@
+// Nexa data model.
+//
+// Source of truth: PRD §8.4 + rapor-2 §5.3. The legacy
+// `LiveChat_ER_Diyagram.mermaid` contradicts both and is NOT used.
+//
+// Models arrive with the slice that needs them:
+//   slice 1 — extensions + migration plumbing (this file starts empty of models)
+//   slice 2 — tenancy & auth (organizations, licenses, accounts, tokens)
+//   slice 3 — the remaining tables, partitioning, RLS policies
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgcrypto, citext, vector]
+}

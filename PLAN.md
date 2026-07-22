@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–6, 8 ✅ tamam · Dilim 7 sırada
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–8 ✅ tamam · Dilim 9–10 kaldı
 
 ---
 
@@ -42,7 +42,7 @@ Her dilim: (a) OpenAPI+tip → (b) Prisma migration → (c) backend servis + uni
 | 4   | chat→thread→event + Agent Chat API                                                       |  MAX   | `feat/04-chat-core`       |  ✅   |
 | 5   | RTM WebSocket + reconnect/missed-event sync                                              |  MAX   | `feat/05-rtm`             |  ✅   |
 | 6   | Customer widget (iframe loader + Customer Chat API + trusted domains)                    | XHIGH  | `feat/06-widget`          |  ✅   |
-| 7   | Inbox 3-pane + composer                                                                  | XHIGH  | `feat/07-inbox`           |  ⬜   |
+| 7   | Inbox 3-pane + composer                                                                  | XHIGH  | `feat/07-inbox`           |  ✅   |
 | 8   | Routing + queue + concurrent limit + fallback                                            |  MAX   | `feat/08-routing`         |  ✅   |
 | 9   | Reports Overview + Billing/metering + trial                                              | XHIGH  | `feat/09-reports-billing` |  ⬜   |
 | 10  | Design system + tüm ekranların tutarlı stillenmesi                                       | XHIGH  | `feat/10-design-system`   |  ⬜   |
@@ -217,7 +217,25 @@ widget bundle **5.3 KB gzip** (bütçe 50 KB) · loader 1.09 KB.
 - Customer Chat API: token, start_chat, send_event, RTM customer socket
 - Trusted domains allowlist; HTML escape (asla innerHTML)
 
-### Dilim 7 — Inbox 3-pane [XHIGH]
+### Dilim 7 — Inbox 3-pane [XHIGH] ✅
+
+**Teslim edildi (2026-07-22):** tarayıcıda uçtan uca doğrulandı —
+giriş → 3-pane inbox → widget'tan gelen mesaj **sayfa yenilemeden** transcript'e düştü →
+internal note gönderildi → müşteri onu görmüyor, ajan görüyor.
+
+- Design-brief token'ları doğrudan uygulandı (dilim 10'un bir kısmı buraya alındı;
+  arayüzü önce stilsiz kurup sonra boyamak iki kez iş demekti).
+- RTM push'ları **aynı React Query cache'ine** yazılıyor — paralel "canlı olaylar"
+  listesi tutup render'da birleştirmek, duplike ve sırasız mesajın kaynağıdır.
+- Event id ile dedupe: push ve refetch aynı olayı getirebilir; optimistic placeholder
+  gerçeğiyle değiştiriliyor.
+- Internal note modu ayırt edilemez olamaz: amber composer + "Only your team will see this"
+  - baloncukta açık etiket. Buradaki pahalı hata notu müşteriye göndermektir.
+- Auto-scroll yalnız zaten en alttaysa takip ediyor — geçmişi okuyan ajanı yukarıdan
+  koparmak, kaçırılan scroll'dan kötüdür.
+- Reconnect: `RtmClient` chat başına son event id'yi tutuyor, her yeniden bağlanmada
+  `sync` ile replay ediyor; backoff jitter'lı (sunucu restart'ında tüm ajanların
+  aynı anda dönmesi kesintiyi uzatır).
 
 - Sol: Chats grubu (All/My/Queued/Unassigned/Archive) canlı sayaç
 - Orta: liste (virtualized) + transcript (reverse infinite scroll)

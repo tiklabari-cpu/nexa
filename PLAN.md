@@ -271,7 +271,7 @@ gerçekten yönlendirilmesi için routing bir ön koşul.
 
 ### Dilim 9 — Reports + Billing [XHIGH] ✅
 
-**Teslim edildi (2026-07-22):** 476 test yeşil (120 unit + 356 integration).
+**Teslim edildi (2026-07-22):** 398 test yeşil (120 unit + 278 integration).
 
 - **ADR-09 tek tanım:** "AI resolution" = kapanışta `author_type='agent'` event'i olmayan thread.
   Reports "Automated" ve fatura sayacı **aynı** predicate'i okuyor; test ikisinin eşitliğini
@@ -348,7 +348,8 @@ gösteriyor, var gibi davranmıyor. Detay: HANDOFF.md.
 
 ## 5. Bitti Tanımı Takibi
 
-- [x] Tüm testler yeşil — 476 (120 unit + 356 integration)
+- [x] Tüm testler yeşil — **398** (120 unit + 278 integration)
+      · @nexa/types 26 · rtm 23+42 · widget 20 · web 9 · api 42+236
 - [x] typecheck + lint + format temiz · migration drift yok
 - [x] `make dev` tek komutla her şeyi ayağa kaldırıyor
 - [x] README.md kurulum + mimariyi anlatıyor

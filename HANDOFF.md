@@ -23,7 +23,7 @@ replies, tags it, archives it, and it shows up in reports and billing.
 | 9     | Reports overview, metering, trial gate                                       |                 ✅                 |
 | 10    | Design system                                                                | ◐ tokens + inbox styled; see below |
 
-**476 tests green** — 120 unit, 356 integration. Typecheck, lint and format clean.
+**398 tests green** — 120 unit, 278 integration. Typecheck, lint and format clean.
 No schema drift.
 
 ---

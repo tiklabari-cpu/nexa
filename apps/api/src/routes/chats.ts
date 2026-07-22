@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { EVENT_RECIPIENTS, EVENT_TYPES, TRANSFER_REASONS, isShortId } from '@nexa/types';
+import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { hasChatScope } from '../services/chat/access.js';
@@ -68,8 +69,17 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   return result.data;
 }
 
-export default async function chatRoutes(app: FastifyInstance): Promise<void> {
-  const chats = new ChatService(app.db, app.redis, new RealtimePublisher(app.redis, app.log));
+export default async function chatRoutes(
+  app: FastifyInstance,
+  { env }: { env: Env },
+): Promise<void> {
+  const chats = new ChatService(
+    app.db,
+    app.redis,
+    new RealtimePublisher(app.redis, app.log),
+    undefined,
+    { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
+  );
 
   /**
    * An event body must carry something. A `message` with neither text nor an

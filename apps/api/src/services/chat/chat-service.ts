@@ -25,6 +25,7 @@ import { ApiError } from '../../lib/api-error.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
+import { recordAiResolution, threadWasAiResolved } from '../billing/metering.js';
 import { RoutingService, type RoutingContext } from '../routing/routing-service.js';
 import {
   canSeeChat,
@@ -73,6 +74,11 @@ export class ChatService {
      */
     private readonly publisher?: RealtimePublisher,
     private readonly routing: RoutingService = new RoutingService(),
+    /** ADR-13 — overage price and monthly allowance, from env. */
+    private readonly billing: { aiOverageCents: number; aiIncluded: number } = {
+      aiOverageCents: 50,
+      aiIncluded: 200,
+    },
   ) {}
 
   /**
@@ -458,6 +464,13 @@ export class ChatService {
         where: { id: chat.id },
         include: chatInclude,
       });
+      // ADR-09: a thread that closes with no agent-authored event resolved
+      // without a human. Counted here, in the same transaction that closes it,
+      // so the billing figure and the conversation can never disagree.
+      if (await threadWasAiResolved(tx, thread.id)) {
+        await recordAiResolution(tx, tenant, this.billing.aiOverageCents, this.billing.aiIncluded);
+      }
+
       // Closing frees a slot, so whoever is waiting can be assigned now rather
       // than on the next arrival — otherwise a quiet period leaves customers
       // queued behind an agent who is already free.

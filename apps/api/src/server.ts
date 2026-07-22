@@ -7,12 +7,14 @@ import type { Env } from './config/env.js';
 import errorHandler from './plugins/error-handler.js';
 import auth from './plugins/auth.js';
 import database from './plugins/database.js';
+import licenseGate from './plugins/license-gate.js';
 import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
 import authRoutes from './routes/auth.js';
 import agentRoutes from './routes/agents.js';
 import chatRoutes from './routes/chats.js';
 import customerRoutes from './routes/customer.js';
+import reportRoutes from './routes/reports.js';
 import healthRoutes from './routes/health.js';
 
 export const API_PREFIX = '/api/v1';
@@ -76,6 +78,7 @@ export async function buildServer({ env }: BuildServerOptions): Promise<FastifyI
   await app.register(redis, { env });
   await app.register(auth, { env });
   await app.register(rateLimit, { env });
+  await app.register(licenseGate);
 
   app.addHook('onSend', async (request, reply) => {
     reply.header('X-Request-Id', request.id);
@@ -85,9 +88,10 @@ export async function buildServer({ env }: BuildServerOptions): Promise<FastifyI
     async (api) => {
       await api.register(healthRoutes, { env, version: VERSION });
       await api.register(authRoutes, { env });
-      await api.register(chatRoutes);
+      await api.register(chatRoutes, { env });
       await api.register(agentRoutes);
       await api.register(customerRoutes);
+      await api.register(reportRoutes, { env });
     },
     { prefix: API_PREFIX },
   );

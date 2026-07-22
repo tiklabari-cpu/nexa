@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–8 ✅ tamam · Dilim 9–10 kaldı
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–9 ✅ tamam · Dilim 10 kısmi (bkz. HANDOFF.md)
 
 ---
 
@@ -44,8 +44,8 @@ Her dilim: (a) OpenAPI+tip → (b) Prisma migration → (c) backend servis + uni
 | 6   | Customer widget (iframe loader + Customer Chat API + trusted domains)                    | XHIGH  | `feat/06-widget`          |  ✅   |
 | 7   | Inbox 3-pane + composer                                                                  | XHIGH  | `feat/07-inbox`           |  ✅   |
 | 8   | Routing + queue + concurrent limit + fallback                                            |  MAX   | `feat/08-routing`         |  ✅   |
-| 9   | Reports Overview + Billing/metering + trial                                              | XHIGH  | `feat/09-reports-billing` |  ⬜   |
-| 10  | Design system + tüm ekranların tutarlı stillenmesi                                       | XHIGH  | `feat/10-design-system`   |  ⬜   |
+| 9   | Reports Overview + Billing/metering + trial                                              | XHIGH  | `feat/09-reports-billing` |  ✅   |
+| 10  | Design system + tüm ekranların tutarlı stillenmesi                                       | XHIGH  | (dilim 7'ye katıldı)      |   ◐   |
 
 Durum: ⬜ başlamadı · ⏳ devam · ✅ bitti (test yeşil + push)
 
@@ -269,7 +269,32 @@ gerçekten yönlendirilmesi için routing bir ön koşul.
 - ADR-08 algoritması; concurrent limit; fallback grup; kuyruk pozisyonu
 - Negatif testler: limit dolu → kuyruk; tüm gruplar offline → `groups_offline`
 
-### Dilim 9 — Reports + Billing [XHIGH]
+### Dilim 9 — Reports + Billing [XHIGH] ✅
+
+**Teslim edildi (2026-07-22):** 476 test yeşil (120 unit + 356 integration).
+
+- **ADR-09 tek tanım:** "AI resolution" = kapanışta `author_type='agent'` event'i olmayan thread.
+  Reports "Automated" ve fatura sayacı **aynı** predicate'i okuyor; test ikisinin eşitliğini
+  doğruluyor. Anlaşacağı varsayılan iki sayaç er ya da geç ayrışır ve bunu ilk fark eden
+  faturayı itiraz eden müşteri olur.
+- Kapanışta sayılıyor, artımlı bayrakla değil: ajan sonradan katılınca bayrağı doğru
+  temizlemek gerekirdi, yanlış yapınca insanın yaptığı işi müşteriye faturalardınız.
+- `automated_rate` **kapanmış** sohbetlere göre — açık sohbet henüz çözülmedi; toplam
+  üzerinden hesaplamak inbox yoğunlaştıkça oranı düşürürdü.
+- CSAT oyu yoksa `null`, %0 değil: oylanmamış dönem _bilinmiyor_, felaket değil.
+- **ADR-10 trial:** süresi dolunca **salt-okuma** — veri okunabilir, silinmez, dışa aktarılabilir.
+  Yazma → 402 `license_expired`. `/auth/*` açık kalıyor: çıkış ve token iptalini engellemek
+  "lütfen ödeyin"i "kapana kısıldınız"a çevirir.
+- License gate route bazında değil hook olarak: "şu bir endpoint'i unuttuk" bedava katmanın
+  sessizce sınırsız olma yoludur.
+- Kota %80'de uyarı (PRD §8.3 akış 5).
+
+### Dilim 10 — Design System [XHIGH] ◐ kısmi
+
+Token sistemi, Tailwind eşlemesi ve a11y kuralları var; inbox baştan sona bunları kullanıyor
+(hiçbir bileşende sabit renk yok). Eksik olan **uygulanacak diğer ekranlar**: Customers, Team,
+Playbook, Reports, Settings — API'leri var, UI'ları yok. Icon rail bunları devre dışı
+gösteriyor, var gibi davranmıyor. Detay: HANDOFF.md.
 
 - Overview KPI: total chats, chats/agent, avg first response, CSAT, automated (ADR-09)
 - `usage_records` metering; trial gün sayacı; salt-okuma modu (ADR-10); Stripe mock
@@ -323,10 +348,13 @@ gerçekten yönlendirilmesi için routing bir ön koşul.
 
 ## 5. Bitti Tanımı Takibi
 
-- [ ] Tüm testler yeşil (unit + integration + E2E)
-- [ ] typecheck + lint temiz
-- [ ] `make dev` tek komutla her şeyi ayağa kaldırıyor
-- [ ] README.md kurulum + mimariyi anlatıyor
-- [ ] Demo akışı: widget mesaj → routing → agent inbox canlı → yanıt → arşiv
-- [ ] Her dilim commit + push edilmiş
-- [ ] HANDOFF.md yazılmış
+- [x] Tüm testler yeşil — 476 (120 unit + 356 integration)
+- [x] typecheck + lint + format temiz · migration drift yok
+- [x] `make dev` tek komutla her şeyi ayağa kaldırıyor
+- [x] README.md kurulum + mimariyi anlatıyor
+- [x] Demo akışı doğrulandı: widget mesaj → routing (URL kuralıyla Sales'e) →
+      agent inbox'ta **canlı** (13 ms) → yanıt → internal note (müşteri görmüyor) →
+      etiket → arşiv → reports + billing
+- [x] Her dilim commit + push edilmiş
+- [x] HANDOFF.md yazılmış
+- [ ] Playwright E2E paketi — tarayıcı akışı elle doğrulandı, otomatik suite yok (bkz. HANDOFF)

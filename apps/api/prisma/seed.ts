@@ -173,15 +173,29 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       priority: 1000,
     },
   });
+
   if (teams.length > 1) {
+    const salesTeam = teams[1]!;
     await prisma.routingRule.create({
       data: {
         licenseId,
         name: 'Pricing pages go to Sales',
         kind: 'chat',
         conditions: { url_contains: ['/pricing', '/plans'] },
-        targetGroupId: teams[1]!.id,
+        targetGroupId: salesTeam.id,
         priority: 10,
+      },
+    });
+
+    // Sales needs a member, or the rule is dead weight: routing falls through
+    // to the fallback team when nobody in the matched one can take the chat,
+    // which is correct but makes the rule look broken in a demo.
+    await prisma.groupAgent.create({
+      data: {
+        licenseId,
+        groupId: salesTeam.id,
+        agentId: owner.id,
+        priority: 'normal',
       },
     });
   }

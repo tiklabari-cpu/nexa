@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1 ✅ tamam · Dilim 2 sırada
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–2 ✅ tamam · Dilim 3 sırada
 
 ---
 
@@ -37,7 +37,7 @@ Her dilim: (a) OpenAPI+tip → (b) Prisma migration → (c) backend servis + uni
 | #   | Dilim                                                                                    | Zorluk | Branch                    | Durum |
 | --- | ---------------------------------------------------------------------------------------- | :----: | ------------------------- | :---: |
 | 1   | Bootstrap: monorepo, DB+Redis, `make dev`, health check, CI                              | XHIGH  | `feat/01-bootstrap`       |  ✅   |
-| 2   | Auth + tenant izolasyonu (RLS + cross-tenant negatif test) + OAuth2.1/PKCE + PAT + scope |  MAX   | `feat/02-auth-tenant`     |  ⬜   |
+| 2   | Auth + tenant izolasyonu (RLS + cross-tenant negatif test) + OAuth2.1/PKCE + PAT + scope |  MAX   | `feat/02-auth-tenant`     |  ✅   |
 | 3   | Veri modeli + migration (PRD §8.4) + invariant'lar + seed                                |  MAX   | `feat/03-data-model`      |  ⬜   |
 | 4   | chat→thread→event + Agent Chat API                                                       |  MAX   | `feat/04-chat-core`       |  ⬜   |
 | 5   | RTM WebSocket + reconnect/missed-event sync                                              |  MAX   | `feat/05-rtm`             |  ⬜   |
@@ -67,7 +67,27 @@ Durum: ⬜ başlamadı · ⏳ devam · ✅ bitti (test yeşil + push)
 - CI: GitHub Actions — typecheck + lint + unit test + build
 - Kabul: `make dev` ayakta, `/health` 200, CI yeşil
 
-### Dilim 2 — Auth + Tenant İzolasyonu [MAX]
+### Dilim 2 — Auth + Tenant İzolasyonu [MAX] ✅
+
+**Teslim edildi (2026-07-22):** 203 test yeşil (120 unit + 83 integration) · typecheck/lint/format temiz ·
+migration drift yok · uçtan uca doğrulandı (login → PKCE authorize → token → /auth/me, seed'lenmiş
+iki kiracıyla; Acme token'ı Northwind'e ulaşamıyor).
+
+**Kanıtlanan invariant'lar:**
+
+- `nexa_app` rolü superuser DEĞİL, tablo sahibi DEĞİL → RLS gerçekten uygulanıyor (test bunu doğruluyor)
+- Tenant context yoksa **0 satır** (fail-closed); cross-tenant read/update/delete/insert hepsi bloklu
+- `SET LOCAL` transaction dışına sızmıyor (hata durumunda bile)
+- Token'lar yalnız hash olarak saklanıyor; PAT düz metni tek seferlik dönüyor
+- Authorization code tek kullanımlık; replay → ürettiği token'lar da iptal
+- Refresh rotation + reuse → tüm aile iptal
+- Rol/suspend değişikliği mevcut token'lara anında yansıyor
+- Zayıf session güçlü PAT üretemiyor (privilege escalation kapalı)
+- Customer token agent yüzeyine ulaşamıyor (404, 403 değil)
+- `public: true` + `scopes` kombinasyonu boot'ta hata veriyor
+
+**Kapsam notu:** `customers` ve `trusted_domains` tabloları dilim 3'ten dilim 2'ye alındı —
+`/customer/token`'ın trusted-domain kontrolü onlarsız uygulanamaz ve test edilemezdi.
 
 **Invariant'lar / tehditler (önce yaz):**
 
@@ -150,7 +170,22 @@ Durum: ⬜ başlamadı · ⏳ devam · ✅ bitti (test yeşil + push)
 
 ## 4. Deviations (sapmalar)
 
-_(henüz yok)_
+- **D1 (dilim 2):** Redirect URI eşleşmesi **tam eşitlik** (OAuth 2.1). Kaynak platformun
+  "kayıtlı yol, istek yolunun alt dizesi olabilir" kuralı (v2-03 §8.6) uygulanmadı — bu kural
+  client alanındaki herhangi bir open-redirect'i code sızdırma kanalına çevirir.
+- **D2 (dilim 2):** Access token TTL 8 saat değil **1 saat** (NFR-S2 iyileştirmesi).
+- **D3 (dilim 2):** Parola KDF olarak argon2id yerine **scrypt** (RFC 7914, Node standart
+  kütüphanesi). Gerekçe: native modül kurulum riski yok; güvenlik farkı marjinal, dayanıklılık farkı değil.
+- **D4 (dilim 2):** Customer token **stateless HMAC** (DB'de satır yok). Her anonim ziyaretçi için
+  satır yazmak konuşma verisinden büyük bir tabloya yol açardı. Bedeli: tekil iptal yok —
+  TTL kısa, ban/lisans kontrolü her istekte canlı veriden yapılıyor.
+- **D5 (dilim 2):** `licenses.id` için `BIGSERIAL` + `START WITH 1000001`. Prisma'nın
+  `@default(autoincrement())` beklentisiyle uyumlu; elle `CREATE SEQUENCE` drift üretiyordu.
+
+**Doküman düzeltmeleri (kaynakta sayı hatası):**
+
+- v2-03 §8.5 başlığı "~63 scope" diyor, tablosu **58** sayıyor. Tablo esas alındı.
+- v2-03 §1.8 tablosu **24** hata tipi listeliyor (master prompt 23 diyor). Tablo esas alındı.
 
 ---
 

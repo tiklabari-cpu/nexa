@@ -60,6 +60,23 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Health" }
 
+  /auth/login:
+    $ref: "./paths/auth.yaml#/login"
+  /auth/authorize:
+    $ref: "./paths/auth.yaml#/authorize"
+  /auth/token:
+    $ref: "./paths/auth.yaml#/token"
+  /auth/revoke:
+    $ref: "./paths/auth.yaml#/revoke"
+  /auth/me:
+    $ref: "./paths/auth.yaml#/me"
+  /auth/personal-access-tokens:
+    $ref: "./paths/auth.yaml#/personalAccessTokens"
+  /auth/personal-access-tokens/{tokenId}:
+    $ref: "./paths/auth.yaml#/personalAccessToken"
+  /customer/token:
+    $ref: "./paths/auth.yaml#/customerToken"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -108,6 +125,37 @@ components:
           type: number
         error:
           type: string
+
+    TokenGrant:
+      type: object
+      required: [access_token, token_type, expires_in, refresh_token, scope, account_id, license_id]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, enum: [Bearer] }
+        expires_in:
+          type: integer
+          description: Seconds. Capped at 3600 — the source platform used 28800.
+        refresh_token:
+          type: string
+          description: Rotates on every use; the previous value stops working.
+        scope: { type: string, description: Comma-separated. }
+        account_id: { type: string, format: uuid }
+        license_id: { type: string }
+        organization_id: { type: string, format: uuid }
+
+    PersonalAccessToken:
+      type: object
+      required: [id, name, scopes, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, nullable: true }
+        kind: { type: string, enum: [pat, oauth, bot] }
+        scopes:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        expires_at: { type: string, format: date-time, nullable: true }
 
     Error:
       type: object

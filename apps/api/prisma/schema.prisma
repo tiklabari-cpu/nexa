@@ -4,9 +4,13 @@
 // `LiveChat_ER_Diyagram.mermaid` contradicts both and is NOT used.
 //
 // Models arrive with the slice that needs them:
-//   slice 1 — extensions + migration plumbing (this file starts empty of models)
-//   slice 2 — tenancy & auth (organizations, licenses, accounts, tokens)
-//   slice 3 — the remaining tables, partitioning, RLS policies
+//   slice 2 — tenancy & auth (this file)
+//   slice 3 — the remaining domain tables, events partitioning, full RLS sweep
+//
+// Every tenant-scoped table carries `license_id` (and `organization_id` where
+// the resource outlives a license). Row level security is defined in the SQL
+// migrations, not here — Prisma has no schema syntax for policies, and the
+// policies are the load-bearing part of tenant isolation.
 
 generator client {
   provider        = "prisma-client-js"
@@ -16,5 +20,233 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [pgcrypto, citext, vector]
+  // plpgsql is a Postgres built-in and always present; declaring it keeps
+  // `prisma migrate diff` clean so a real drift is never lost in the noise.
+  extensions = [pgcrypto, citext, vector, plpgsql(schema: "pg_catalog")]
+}
+
+/// Tenant root.
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  /// ADR-12: single region for the MVP; immutable once written.
+  region    String   @default("eu")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  licenses     License[]
+  oauthClients OauthClient[]
+
+  @@map("organizations")
+}
+
+/// Billing and membership boundary. One organization may hold several.
+///
+/// PRD §8.4 gives licenses a bigint id rather than a uuid. The backing sequence
+/// is created in the RLS migration and starts at 1000001, so ids never resemble
+/// row counts or test fixtures.
+model License {
+  id             BigInt    @id @default(autoincrement())
+  organizationId String    @map("organization_id") @db.Uuid
+  plan           String    @default("growth")
+  billingCycle   String    @default("monthly") @map("billing_cycle")
+  trialEndsAt    DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  status         String    @default("trialing")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships   AgentMembership[]
+  apiTokens     ApiToken[]
+  refreshTokens OauthRefreshToken[]
+
+  @@index([organizationId])
+  @@map("licenses")
+}
+
+/// A person. One account can be a member of many licenses.
+model Account {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique @db.Citext
+  name         String
+  avatarUrl    String?   @map("avatar_url")
+  /// scrypt (RFC 7914). Null for accounts that only sign in via SSO.
+  passwordHash String?   @map("password_hash")
+  lastSeenAt   DateTime? @map("last_seen_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  memberships        AgentMembership[]
+  authorizationCodes OauthAuthorizationCode[]
+  refreshTokens      OauthRefreshToken[]
+
+  @@map("accounts")
+}
+
+/// Membership carries the role, availability and routing capacity of an agent
+/// within one license. PRD §8.4.
+model AgentMembership {
+  licenseId            BigInt   @map("license_id")
+  agentId              String   @map("agent_id") @db.Uuid
+  role                 String
+  routingStatus        String   @default("offline") @map("routing_status")
+  concurrentChatsLimit Int      @default(6) @map("concurrent_chats_limit")
+  twoFactorEnabled     Boolean  @default(false) @map("two_factor_enabled")
+  awaitingApproval     Boolean  @default(false) @map("awaiting_approval")
+  suspended            Boolean  @default(false) @map("suspended")
+  /// Tie-breaker for round-robin assignment (ADR-08 step 4).
+  lastAssignedAt       DateTime? @map("last_assigned_at") @db.Timestamptz(6)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  agent   Account @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@id([licenseId, agentId])
+  @@index([agentId])
+  @@map("agent_memberships")
+}
+
+/// Registered OAuth 2.1 application.
+model OauthClient {
+  id             String   @id
+  organizationId String   @map("organization_id") @db.Uuid
+  displayName    String   @map("display_name")
+  /// Null for public clients — OAuth 2.1 requires PKCE instead of a secret.
+  secretHash     String?  @map("secret_hash")
+  redirectUris   String[] @map("redirect_uris")
+  clientType     String   @default("public") @map("client_type")
+  scopes         String[] @default([])
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization       Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  authorizationCodes OauthAuthorizationCode[]
+  refreshTokens      OauthRefreshToken[]
+
+  @@index([organizationId])
+  @@map("oauth_clients")
+}
+
+/// Single-use authorization code. Stored hashed: a leaked database backup must
+/// not hand an attacker live codes.
+model OauthAuthorizationCode {
+  codeHash            String    @id @map("code_hash")
+  clientId            String    @map("client_id")
+  accountId           String    @map("account_id") @db.Uuid
+  licenseId           BigInt    @map("license_id")
+  organizationId      String    @map("organization_id") @db.Uuid
+  redirectUri         String    @map("redirect_uri")
+  scopes              String[]
+  /// PKCE — S256 only. OAuth 2.1 forbids `plain`.
+  codeChallenge       String    @map("code_challenge")
+  codeChallengeMethod String    @default("S256") @map("code_challenge_method")
+  expiresAt           DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt          DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  client  OauthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  account Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("oauth_authorization_codes")
+}
+
+/// Refresh token with rotation lineage.
+///
+/// `replacedById` records which token superseded this one. Reuse of an already
+/// rotated token is the classic signal of a stolen refresh token, so detecting
+/// it lets us revoke the whole family rather than just refusing one request.
+model OauthRefreshToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  clientId       String    @map("client_id")
+  accountId      String    @map("account_id") @db.Uuid
+  licenseId      BigInt    @map("license_id")
+  organizationId String    @map("organization_id") @db.Uuid
+  scopes         String[]
+  /// All tokens rotated from one original login share a family id.
+  familyId       String    @map("family_id") @db.Uuid
+  replacedById   String?   @map("replaced_by_id") @db.Uuid
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  client  OauthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  account Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  license License     @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([accountId])
+  @@map("oauth_refresh_tokens")
+}
+
+/// End users who talk to the workspace. Scoped to the organization rather than
+/// a license, because a person is the same person across licenses (PRD §8.4).
+///
+/// Pulled into slice 2 (from slice 3) because `/customer/token` cannot be
+/// implemented — or tested — without it.
+model Customer {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String?
+  email          String?   @db.Citext
+  phone          String?
+  countryCode    String?   @map("country_code") @db.Char(2)
+  country        String?
+  isLead         Boolean   @default(false) @map("is_lead")
+  chatsCount     Int       @default(0) @map("chats_count")
+  ticketsCount   Int       @default(0) @map("tickets_count")
+  lastActivityAt DateTime? @map("last_activity_at") @db.Timestamptz(6)
+  bannedAt       DateTime? @map("banned_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([organizationId, lastActivityAt(sort: Desc)])
+  @@index([organizationId, email])
+  @@map("customers")
+}
+
+/// Origins allowed to embed the widget and mint customer tokens (NFR-S6).
+///
+/// Ships with the endpoint it protects rather than being added later: an
+/// allowlist retrofitted after integrators depend on the open behaviour is a
+/// breaking change nobody wants to make.
+model TrustedDomain {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  licenseId      BigInt   @map("license_id")
+  /// Hostname only, lowercase, no scheme or port, e.g. `shop.example.com`.
+  domain         String
+  /// Also allow `*.domain`. Never permits a bare public suffix.
+  includeSubdomains Boolean @default(false) @map("include_subdomains")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, domain])
+  @@index([licenseId])
+  @@map("trusted_domains")
+}
+
+/// Bearer credentials: OAuth access tokens, personal access tokens and bot
+/// tokens. Only the hash is stored — the plaintext is shown once, at creation.
+model ApiToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  licenseId      BigInt    @map("license_id")
+  organizationId String    @map("organization_id") @db.Uuid
+  /// Account uuid for pat/oauth; bot id for bot tokens.
+  ownerId        String    @map("owner_id")
+  kind           String
+  tokenHash      String    @unique @map("token_hash")
+  /// Human label, for the PAT management screen.
+  name           String?
+  scopes         String[]  @default([])
+  clientId       String?   @map("client_id")
+  /// Ties an access token to the refresh family that minted it, so revoking a
+  /// family also kills its access tokens.
+  familyId       String?   @map("family_id") @db.Uuid
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt     DateTime? @map("last_used_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, kind])
+  @@index([ownerId])
+  @@index([familyId])
+  @@map("api_tokens")
 }

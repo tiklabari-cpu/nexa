@@ -43,7 +43,9 @@ export default async function healthRoutes(
 ): Promise<void> {
   const startedAt = Date.now();
 
-  app.get('/health', { config: { public: true } }, async (_request, reply) => {
+  // Monitors poll this continuously; rate limiting it would take the probe down
+  // before it took the service down.
+  app.get('/health', { config: { public: true, skipRateLimit: true } }, async (_request, reply) => {
     const [database, redis] = await Promise.all([
       probe('database', () => app.db.$queryRaw`SELECT 1`),
       probe('redis', () => app.redis.ping()),

@@ -1,0 +1,334 @@
+# Authentication surface — OAuth 2.1 + PKCE, personal access tokens, customer tokens.
+#
+# The authorization step is a JSON POST rather than the classic browser redirect
+# because Nexa's agent app is a first-party client: there is no third party to
+# show a consent screen to, and a redirect round-trip would add a full page load
+# to every sign-in. The security-relevant parts of the flow are unchanged —
+# single-use codes, mandatory S256 PKCE, exact redirect matching, rotation.
+
+login:
+  post:
+    tags: [Auth]
+    operationId: login
+    summary: Verify credentials and list available workspaces
+    description: |
+      Returns the licenses this account may sign in to. Issues no tokens — the
+      caller picks a workspace and continues with `/auth/authorize`.
+
+      Responds identically whether the email is unknown or the password is
+      wrong, and always spends the same time, so registered addresses cannot be
+      enumerated.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email, password]
+            properties:
+              email: { type: string, format: email, maxLength: 320 }
+              password: { type: string, minLength: 1, maxLength: 512 }
+    responses:
+      "200":
+        description: Credentials accepted
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account, memberships]
+              properties:
+                account:
+                  type: object
+                  required: [id, email, name]
+                  properties:
+                    id: { type: string, format: uuid }
+                    email: { type: string }
+                    name: { type: string }
+                memberships:
+                  type: array
+                  items:
+                    type: object
+                    required: [license_id, organization_id, organization_name, role]
+                    properties:
+                      license_id: { type: string }
+                      organization_id: { type: string, format: uuid }
+                      organization_name: { type: string }
+                      role: { type: string, enum: [owner, viceowner, admin, agent] }
+                      license_status: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+authorize:
+  post:
+    tags: [Auth]
+    operationId: authorize
+    summary: Issue a single-use authorization code
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [client_id, redirect_uri, code_challenge, email, password, license_id]
+            properties:
+              client_id: { type: string }
+              redirect_uri:
+                type: string
+                description: Must match a registered URI exactly.
+              code_challenge:
+                type: string
+                minLength: 43
+                maxLength: 128
+                description: BASE64URL(SHA256(code_verifier)).
+              code_challenge_method:
+                type: string
+                enum: [S256]
+                default: S256
+                description: S256 only — OAuth 2.1 removes `plain`.
+              scope:
+                type: string
+                description: Comma-separated. Defaults to the client's registered scopes.
+              state: { type: string, maxLength: 512 }
+              email: { type: string, format: email }
+              password: { type: string }
+              license_id: { type: string }
+    responses:
+      "200":
+        description: Authorization code issued
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, redirect_uri, expires_in]
+              properties:
+                code: { type: string }
+                redirect_uri: { type: string }
+                state: { type: string }
+                expires_in: { type: integer }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+token:
+  post:
+    tags: [Auth]
+    operationId: exchangeToken
+    summary: Exchange an authorization code, or rotate a refresh token
+    description: |
+      Refresh tokens rotate on every use. Presenting one that has already been
+      rotated revokes the entire token family — the standard response to a
+      captured refresh token (OAuth 2.1 §4.3.1).
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                title: Authorization code grant
+                required: [grant_type, code, code_verifier, client_id, redirect_uri]
+                properties:
+                  grant_type: { type: string, enum: [authorization_code] }
+                  code: { type: string }
+                  code_verifier: { type: string, minLength: 43, maxLength: 128 }
+                  client_id: { type: string }
+                  client_secret: { type: string }
+                  redirect_uri: { type: string }
+              - type: object
+                title: Refresh token grant
+                required: [grant_type, refresh_token, client_id]
+                properties:
+                  grant_type: { type: string, enum: [refresh_token] }
+                  refresh_token: { type: string }
+                  client_id: { type: string }
+                  client_secret: { type: string }
+    responses:
+      "200":
+        description: Tokens issued
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TokenGrant" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+revoke:
+  post:
+    tags: [Auth]
+    operationId: revokeToken
+    summary: Revoke an access or refresh token
+    description: |
+      Always returns 200, even for a token that never existed — per RFC 7009 the
+      caller's goal is "this token must not work", and reporting whether it was
+      real would turn the endpoint into an oracle.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token]
+            properties:
+              token: { type: string }
+              token_type_hint: { type: string, enum: [access_token, refresh_token] }
+    responses:
+      "200":
+        description: Token is no longer valid
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                revoked: { type: boolean }
+
+me:
+  get:
+    tags: [Auth]
+    operationId: getCurrentPrincipal
+    summary: Describe the caller
+    responses:
+      "200":
+        description: Caller identity, tenant and effective scopes
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, organization_id, license_id, scopes]
+              properties:
+                kind: { type: string, enum: [agent, bot, customer] }
+                account_id: { type: string, format: uuid }
+                email: { type: string }
+                name: { type: string }
+                role: { type: string, enum: [owner, viceowner, admin, agent] }
+                organization_id: { type: string, format: uuid }
+                license_id: { type: string }
+                region: { type: string, enum: [eu] }
+                scopes:
+                  type: array
+                  items: { type: string }
+                routing_status:
+                  type: string
+                  enum: [accepting_chats, not_accepting_chats, offline]
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+
+personalAccessTokens:
+  get:
+    tags: [Auth]
+    operationId: listPersonalAccessTokens
+    summary: List the caller's personal access tokens
+    responses:
+      "200":
+        description: Tokens (metadata only — the secret is never retrievable)
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/PersonalAccessToken" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  post:
+    tags: [Auth]
+    operationId: createPersonalAccessToken
+    summary: Create a personal access token
+    description: |
+      The plaintext token is in this response and nowhere else — only its hash
+      is stored. A token cannot be granted scopes the creating session does not
+      already hold.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              scopes:
+                type: array
+                items: { type: string }
+              expires_in_days: { type: integer, minimum: 1, maximum: 365 }
+    responses:
+      "201":
+        description: Token created
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "../openapi.yaml#/components/schemas/PersonalAccessToken"
+                - type: object
+                  required: [token]
+                  properties:
+                    token:
+                      type: string
+                      description: Shown once. Not recoverable.
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+personalAccessToken:
+  delete:
+    tags: [Auth]
+    operationId: deletePersonalAccessToken
+    summary: Revoke a personal access token
+    parameters:
+      - name: tokenId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "204": { description: Revoked }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+customerToken:
+  post:
+    tags: [Auth]
+    operationId: issueCustomerToken
+    summary: Mint a widget (customer) token
+    description: |
+      Called by the widget on load. The token is scoped to one organization and
+      grants nothing outside the Customer Chat API.
+
+      The requesting `Origin` must be a trusted domain for the organization
+      (NFR-S6), which is what stops an arbitrary site from opening conversations
+      against someone else's workspace.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [organization_id]
+            properties:
+              organization_id: { type: string, format: uuid }
+              customer_id:
+                type: string
+                format: uuid
+                description: Returning visitor. A new customer is created when omitted.
+    responses:
+      "200":
+        description: Customer token issued
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, expires_in, customer_id, organization_id]
+              properties:
+                token: { type: string }
+                expires_in: { type: integer }
+                customer_id: { type: string, format: uuid }
+                organization_id: { type: string, format: uuid }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

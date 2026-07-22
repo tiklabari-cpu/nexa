@@ -6,7 +6,7 @@
 
 ## 1. Karar
 
-**Evet — PRD, çalışan bir klonun kodlama planını yazmaya başlamak için yeterli, hatta beklenenin çok üstünde.** Bu bir "gereksinim taslağı"nın ötesinde: gerçek veri modeli (DDL), gerçek API kontratları (JSON örnekleriyle), RTM protokolü, güvenlik/scope modeli ve destekleyici raporlarda üretim-seviyesi iskelet kod içeriyor. MVP ve v1'i kodlamaya bugün başlanabilir.
+**Evet — PRD, çalışan bir klonun kodlama planını yazmaya başlamak için yeterli, hatta beklenenin çok üstünde.** Bu bir "gereksinim taslağı"nın ötesinde: gerçek veri modeli (DDL), gerçek API kontratları (JSON örnekleriyle), RTM protokolü, güvenlik/scope modeli ve destekleyici raporlarda üretim-seviyesi iskelet kod içeriyor. MVP ve v1'i kodlamaya bugün başlanabilir. 
 
 Eksikler klonun **başlamasını engellemiyor**; üç kategoriye düşüyor: (a) tasarımca bilinçli ertelenen UI/UX katmanı, (b) kaynaktan gözlemlenemeyen ve zaten her klonun kendi kararı olan birkaç sayısal/kontrat detayı, (c) hiçbir PRD'nin baştan tam yazamayacağı doğası gereği Ar-Ge olan parçalar (AI skill derleme, RAG ayarı). Bunların hepsi teknik tasarım aşamasında çözülür ve çoğu zaten PRD'de (§11.2 Q1–Q12) ve `v2-03 §12`'de açıkça işaretlenmiş.
 

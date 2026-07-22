@@ -21,7 +21,8 @@
     "db:seed": "pnpm --filter @nexa/api db:seed",
     "db:reset": "pnpm --filter @nexa/api db:reset",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css,yaml,yml}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,css,yaml,yml}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,css,yaml,yml}\"",
+    "db:check-drift": "pnpm --filter @nexa/api db:check-drift"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

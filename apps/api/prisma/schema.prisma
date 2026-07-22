@@ -4,8 +4,8 @@
 // `LiveChat_ER_Diyagram.mermaid` contradicts both and is NOT used.
 //
 // Models arrive with the slice that needs them:
-//   slice 2 — tenancy & auth (this file)
-//   slice 3 — the remaining domain tables, events partitioning, full RLS sweep
+//   slice 2 — tenancy & auth
+//   slice 3 — the conversation core, configuration, AI, billing and audit tables
 //
 // Every tenant-scoped table carries `license_id` (and `organization_id` where
 // the resource outlives a license). Row level security is defined in the SQL
@@ -53,10 +53,28 @@ model License {
   status         String    @default("trialing")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships   AgentMembership[]
   apiTokens     ApiToken[]
   refreshTokens OauthRefreshToken[]
+  groups        Group[]
+  chats         Chat[]
+  tags          Tag[]
+  tickets       Ticket[]
+  cannedResponses CannedResponse[]
+  campaigns     Campaign[]
+  goals         Goal[]
+  aiAgents      AiAgent[]
+  skills        Skill[]
+  workflows     Workflow[]
+  routingRules  RoutingRule[]
+  channels      Channel[]
+  websites      Website[]
+  webhooks      Webhook[]
+  subscriptions Subscription[]
+  usageRecords  UsageRecord[]
+  auditEntries  AuditLogEntry[]
+  securitySettings SecuritySettings?
 
   @@index([organizationId])
   @@map("licenses")
@@ -76,6 +94,7 @@ model Account {
   memberships        AgentMembership[]
   authorizationCodes OauthAuthorizationCode[]
   refreshTokens      OauthRefreshToken[]
+  groupMemberships   GroupAgent[]
 
   @@map("accounts")
 }
@@ -196,6 +215,10 @@ model Customer {
   bannedAt       DateTime? @map("banned_at") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  chats   Chat[]
+  tickets Ticket[]
+  visits  Visit[]
+
   @@index([organizationId, lastActivityAt(sort: Desc)])
   @@index([organizationId, email])
   @@map("customers")
@@ -249,4 +272,612 @@ model ApiToken {
   @@index([ownerId])
   @@index([familyId])
   @@map("api_tokens")
+}
+
+// ===========================================================================
+// Teams
+// ===========================================================================
+
+/// Departments / chatting teams. PRD §8.4 gives groups a per-license integer id
+/// rather than a uuid, so the primary key is composite.
+model Group {
+  id           BigInt   @default(autoincrement())
+  licenseId    BigInt   @map("license_id")
+  name         String
+  languageCode String   @default("en") @map("language_code")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License      @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  agents  GroupAgent[]
+
+  @@id([licenseId, id])
+  @@map("groups")
+}
+
+/// Membership of an agent in a team, with the routing preference that decides
+/// who gets offered a chat first (ADR-08 step 2).
+model GroupAgent {
+  licenseId BigInt @map("license_id")
+  groupId   BigInt @map("group_id")
+  agentId   String @map("agent_id") @db.Uuid
+  priority  String @default("normal")
+
+  group Group   @relation(fields: [licenseId, groupId], references: [licenseId, id], onDelete: Cascade)
+  agent Account @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@id([licenseId, groupId, agentId])
+  @@index([agentId])
+  @@map("group_agents")
+}
+
+// ===========================================================================
+// Conversation core: chat → thread → event
+// ===========================================================================
+
+/// A continuing relationship with one customer. Threads come and go inside it;
+/// the chat itself persists, which is what makes "resume" meaningful.
+///
+/// A partial unique index (in the migration) enforces at most one *active* chat
+/// per license+customer — the invariant the whole inbox model rests on.
+model Chat {
+  id         String   @id @db.VarChar(12)
+  licenseId  BigInt   @map("license_id")
+  customerId String   @map("customer_id") @db.Uuid
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license  License    @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  threads  Thread[]
+  users    ChatUser[]
+  access   ChatAccess[]
+  ratings  Rating[]
+  tickets  Ticket[]
+  skillRuns SkillRun[]
+
+  @@index([licenseId, createdAt(sort: Desc)])
+  @@index([customerId])
+  @@map("chats")
+}
+
+/// One continuous exchange within a chat. Closing a thread archives it; the
+/// customer coming back opens a new thread on the same chat.
+model Thread {
+  id               String    @id @db.VarChar(12)
+  chatId           String    @map("chat_id") @db.VarChar(12)
+  licenseId        BigInt    @map("license_id")
+  active           Boolean   @default(true)
+  /// Null once assigned; set while waiting in the routing queue.
+  queuePosition    Int?      @map("queue_position")
+  queuedAt         DateTime? @map("queued_at") @db.Timestamptz(6)
+  /// Agent currently responsible. Null means unassigned or queued.
+  assigneeId       String?   @map("assignee_id") @db.Uuid
+  summary          String?
+  summaryUpdatedAt DateTime? @map("summary_updated_at") @db.Timestamptz(6)
+  /// Monotonic per-thread event counter. Event ids are derived from it, which
+  /// is what makes "everything after event N" answerable without timestamps.
+  eventSequence    Int       @default(0) @map("event_sequence")
+  firstResponseAt  DateTime? @map("first_response_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  closedAt         DateTime? @map("closed_at") @db.Timestamptz(6)
+
+  chat   Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  tags   ThreadTag[]
+  events Event[]
+
+  @@index([chatId, createdAt])
+  @@index([licenseId, active, createdAt(sort: Desc)])
+  @@index([assigneeId])
+  @@map("threads")
+}
+
+/// Everything that ever happened in a thread.
+///
+/// Range-partitioned by month in the migration — this is by far the largest
+/// table, and partitioning is what keeps list queries, vacuum cost and archival
+/// bounded as it grows. Prisma has no syntax for partitioning, so the CREATE
+/// TABLE is hand-written; queries are unaffected.
+model Event {
+  id            String   @db.VarChar(40)
+  threadId      String   @map("thread_id") @db.VarChar(12)
+  /// Denormalised from the thread so transcript queries need no join.
+  chatId        String   @map("chat_id") @db.VarChar(12)
+  licenseId     BigInt   @map("license_id")
+  type          String
+  text          String?
+  authorId      String?  @map("author_id")
+  authorType    String   @map("author_type")
+  /// `all` reaches the customer; `agents` is an internal note.
+  recipients    String   @default("all")
+  attachmentUrl String?  @map("attachment_url")
+  properties    Json     @default("{}")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@id([id, createdAt])
+  @@index([threadId, createdAt])
+  @@index([chatId, createdAt])
+  @@index([licenseId, createdAt])
+  /// Reports filter on event properties; GIN turns that from a scan into a lookup.
+  @@index([properties(ops: JsonbPathOps)], type: Gin, map: "idx_events_properties")
+  @@map("events")
+}
+
+/// Who is in a chat, and how much of it they have seen.
+model ChatUser {
+  chatId    String    @map("chat_id") @db.VarChar(12)
+  userId    String    @map("user_id")
+  userType  String    @map("user_type")
+  present   Boolean   @default(true)
+  seenUpTo  DateTime? @map("seen_up_to") @db.Timestamptz(6)
+  joinedAt  DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@id([chatId, userId])
+  @@index([userId])
+  @@map("chat_users")
+}
+
+/// Which teams may see a chat. This is the access control list the inbox
+/// filters on — an agent sees a chat only through a group they belong to.
+model ChatAccess {
+  chatId  String @map("chat_id") @db.VarChar(12)
+  groupId BigInt @map("group_id")
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@id([chatId, groupId])
+  @@index([groupId])
+  @@map("chat_access")
+}
+
+/// Tags applied to a thread, not a chat: what a conversation was *about* can
+/// change between one visit and the next.
+model Tag {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  name      String
+  authorId  String?  @map("author_id")
+  groupIds  BigInt[] @default([]) @map("group_ids")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License     @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  threads ThreadTag[]
+
+  @@unique([licenseId, name])
+  @@map("tags")
+}
+
+model ThreadTag {
+  threadId String   @map("thread_id") @db.VarChar(12)
+  tagId    String   @map("tag_id") @db.Uuid
+  taggedAt DateTime @default(now()) @map("tagged_at") @db.Timestamptz(6)
+
+  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([threadId, tagId])
+  @@index([tagId])
+  @@map("thread_tags")
+}
+
+/// Asynchronous conversations (email and the like), as opposed to live chats.
+model Ticket {
+  id            String    @id @db.VarChar(12)
+  licenseId     BigInt    @map("license_id")
+  customerId    String?   @map("customer_id") @db.Uuid
+  sourceChatId  String?   @map("source_chat_id") @db.VarChar(12)
+  subject       String?
+  status        String    @default("open")
+  assigneeId    String?   @map("assignee_id") @db.Uuid
+  groupId       BigInt?   @map("group_id")
+  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license    License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  sourceChat Chat?     @relation(fields: [sourceChatId], references: [id], onDelete: SetNull)
+
+  @@index([licenseId, status, lastMessageAt(sort: Desc)])
+  @@index([assigneeId])
+  @@map("tickets")
+}
+
+/// Customer satisfaction, recorded against the chat (PRD §8.4).
+model Rating {
+  id        String   @id @default(uuid()) @db.Uuid
+  chatId    String   @map("chat_id") @db.VarChar(12)
+  licenseId BigInt   @map("license_id")
+  threadId  String?  @map("thread_id") @db.VarChar(12)
+  value     String
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, createdAt])
+  @@map("ratings")
+}
+
+// ===========================================================================
+// Agent productivity
+// ===========================================================================
+
+/// Saved replies, inserted in the composer with `#shortcut`.
+model CannedResponse {
+  id         String   @id @default(uuid()) @db.Uuid
+  licenseId  BigInt   @map("license_id")
+  scope      String   @default("chat")
+  shortcut   String
+  text       String
+  groupId    BigInt?  @map("group_id")
+  visibility String   @default("all")
+  updatedBy  String?  @map("updated_by")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, scope, shortcut])
+  @@index([licenseId, groupId])
+  @@map("canned_responses")
+}
+
+// ===========================================================================
+// Engage: campaigns, goals, visitor telemetry
+// ===========================================================================
+
+/// Proactive greetings and targeted messages.
+model Campaign {
+  id         String    @id @default(uuid()) @db.Uuid
+  licenseId  BigInt    @map("license_id")
+  name       String
+  type       String    @default("targeted_message")
+  status     String    @default("inactive")
+  /// Trigger predicate: url, time on page, exit intent, geo, …
+  conditions Json      @default("{}")
+  content    Json      @default("{}")
+  startsAt   DateTime? @map("starts_at") @db.Timestamptz(6)
+  endsAt     DateTime? @map("ends_at") @db.Timestamptz(6)
+  recurring  Boolean   @default(false)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, status])
+  @@map("campaigns")
+}
+
+/// A conversion worth counting — visitor reached a page, completed a purchase.
+model Goal {
+  id         String   @id @default(uuid()) @db.Uuid
+  licenseId  BigInt   @map("license_id")
+  name       String
+  definition Json     @default("{}")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, active])
+  @@map("goals")
+}
+
+/// Browsing telemetry behind the real-time visitor list.
+model Visit {
+  id         String    @id @default(uuid()) @db.Uuid
+  customerId String    @map("customer_id") @db.Uuid
+  licenseId  BigInt    @map("license_id")
+  cameFrom   String?   @map("came_from")
+  pages      Json      @default("[]")
+  /// Personal data (NFR-S9): subject to the retention policy, and never
+  /// returned to the widget.
+  ip         String?
+  os         String?
+  browser    String?
+  userAgent  String?   @map("user_agent")
+  startedAt  DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt    DateTime? @map("ended_at") @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, startedAt(sort: Desc)])
+  @@index([licenseId, startedAt(sort: Desc)])
+  @@map("visits")
+}
+
+// ===========================================================================
+// AI
+// ===========================================================================
+
+/// An AI agent (customer-facing) or Copilot (agent-facing).
+model AiAgent {
+  id          String   @id @default(uuid()) @db.Uuid
+  licenseId   BigInt   @map("license_id")
+  kind        String   @default("ai_agent")
+  name        String
+  persona     Json     @default("{}")
+  tone        String?
+  avatarUrl   String?  @map("avatar_url")
+  languages   String[] @default([])
+  instruction String?
+  active      Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license          License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  skills           Skill[]
+  knowledgeSources KnowledgeSource[]
+
+  @@index([licenseId, kind])
+  @@map("ai_agents")
+}
+
+/// A named capability, expressed as an ordered list of steps compiled from a
+/// natural-language instruction (ADR-14 — Skill is the single paradigm).
+model Skill {
+  id          String   @id @default(uuid()) @db.Uuid
+  licenseId   BigInt   @map("license_id")
+  aiAgentId   String?  @map("ai_agent_id") @db.Uuid
+  name        String
+  kind        String
+  instruction String?
+  /// Ordered: detect_intent, request_info, tag, summarize, send_message,
+  /// transfer_to_team.
+  steps       Json     @default("[]")
+  trigger     Json     @default("{}")
+  active      Boolean  @default(false)
+  runsCount   Int      @default(0) @map("runs_count")
+  createdBy   String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License    @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  aiAgent AiAgent?   @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  runs    SkillRun[]
+
+  @@index([licenseId, kind, active])
+  @@map("skills")
+}
+
+/// Audit trail for skill executions — what ran, against which chat, and why it
+/// did what it did.
+model SkillRun {
+  id      String   @id @default(uuid()) @db.Uuid
+  skillId String   @map("skill_id") @db.Uuid
+  chatId  String?  @map("chat_id") @db.VarChar(12)
+  licenseId BigInt @map("license_id")
+  status  String   @default("succeeded")
+  log     Json     @default("[]")
+  ranAt   DateTime @default(now()) @map("ran_at") @db.Timestamptz(6)
+
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  chat  Chat? @relation(fields: [chatId], references: [id], onDelete: SetNull)
+
+  @@index([skillId, ranAt(sort: Desc)])
+  @@index([licenseId, ranAt(sort: Desc)])
+  @@map("skill_runs")
+}
+
+/// Visual node/edge automation. The table exists so the schema matches PRD §8.4,
+/// but ADR-14 defers the editor to v2 — nothing writes here yet.
+model Workflow {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  name      String
+  nodes     Json     @default("[]")
+  edges     Json     @default("[]")
+  status    String   @default("draft")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, status])
+  @@map("workflows")
+}
+
+/// A document, page or FAQ the AI may draw on.
+model KnowledgeSource {
+  id        String   @id @default(uuid()) @db.Uuid
+  aiAgentId String   @map("ai_agent_id") @db.Uuid
+  licenseId BigInt   @map("license_id")
+  type      String
+  name      String
+  sourceUrl String?  @map("source_url")
+  content   String?
+  status    String   @default("ready")
+  addedBy   String?  @map("added_by")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  aiAgent AiAgent           @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  chunks  KnowledgeChunk[]
+
+  @@index([aiAgentId, type])
+  @@index([licenseId])
+  @@map("knowledge_sources")
+}
+
+/// Retrieval unit. The embedding column is pgvector; its ivfflat index is
+/// created in the migration because Prisma cannot express index methods.
+model KnowledgeChunk {
+  id         String                @id @default(uuid()) @db.Uuid
+  sourceId   String                @map("source_id") @db.Uuid
+  licenseId  BigInt                @map("license_id")
+  chunkText  String                @map("chunk_text")
+  embedding  Unsupported("vector(1536)")?
+  tokenCount Int?                  @map("token_count")
+  position   Int                   @default(0)
+  createdAt  DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  source KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId, position])
+  @@index([licenseId])
+  @@map("knowledge_chunks")
+}
+
+// ===========================================================================
+// Configuration
+// ===========================================================================
+
+/// Rules deciding which team a new conversation lands in (ADR-08 step 1).
+model RoutingRule {
+  id            String   @id @default(uuid()) @db.Uuid
+  licenseId     BigInt   @map("license_id")
+  name          String?
+  kind          String   @default("chat")
+  /// url / domain / geolocation / page predicates.
+  conditions    Json     @default("{}")
+  targetGroupId BigInt?  @map("target_group_id")
+  priority      Int      @default(0)
+  /// The catch-all used when nothing else matches. At most one per license+kind.
+  isFallback    Boolean  @default(false) @map("is_fallback")
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, kind, enabled, priority])
+  @@map("routing_rules")
+}
+
+/// A connected inbound channel.
+model Channel {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  type      String
+  status    String   @default("off")
+  config    Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, type])
+  @@map("channels")
+}
+
+/// A site the widget is installed on.
+model Website {
+  id          String    @id @default(uuid()) @db.Uuid
+  licenseId   BigInt    @map("license_id")
+  domain      String
+  createdBy   String?   @map("created_by")
+  connectedAt DateTime? @map("connected_at") @db.Timestamptz(6)
+  setup       String    @default("manual")
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, domain])
+  @@map("websites")
+}
+
+/// Outbound webhook registration.
+///
+/// `secretKey` is the HMAC signing key (v2-04 §6.2). Unlike the platform this
+/// clones, it is never echoed back inside the payload — only the signature
+/// travels, so the secret cannot leak through a customer's request logs.
+model Webhook {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  clientId  String?  @map("client_id")
+  url       String
+  action    String
+  secretKey String   @map("secret_key")
+  type      String   @default("license")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, action, enabled])
+  @@map("webhooks")
+}
+
+/// Per-license security configuration (PRD §8.4 `security_settings`).
+model SecuritySettings {
+  licenseId          BigInt   @id @map("license_id")
+  bannedCustomerIps  String[] @default([]) @map("banned_customer_ips")
+  spamFilterEnabled  Boolean  @default(true) @map("spam_filter_enabled")
+  fileSharingEnabled Boolean  @default(true) @map("file_sharing_enabled")
+  allowedFileTypes   String[] @default(["image/png", "image/jpeg", "application/pdf"]) @map("allowed_file_types")
+  maxFileSizeBytes   Int      @default(10485760) @map("max_file_size_bytes")
+  requireTwoFactor   Boolean  @default(false) @map("require_two_factor")
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("security_settings")
+}
+
+// ===========================================================================
+// Billing (ADR-13 — Stripe is mocked)
+// ===========================================================================
+
+model Subscription {
+  id                    String    @id @default(uuid()) @db.Uuid
+  licenseId             BigInt    @map("license_id")
+  plan                  String    @default("growth")
+  billingCycle          String    @default("monthly") @map("billing_cycle")
+  seats                 Int       @default(1)
+  unitPriceCents        Int       @default(9900) @map("unit_price_cents")
+  aiResolutionsIncluded Int       @default(200) @map("ai_resolutions_included")
+  status                String    @default("trialing")
+  trialEndsAt           DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  currentPeriodEnd      DateTime? @map("current_period_end") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, status])
+  @@map("subscriptions")
+}
+
+/// Metered usage, aggregated per calendar month.
+///
+/// `ai_resolutions` is the single counter behind both billing and the Reports
+/// "Automated" figure (ADR-09) — two counters would inevitably disagree.
+model UsageRecord {
+  id                    String   @id @default(uuid()) @db.Uuid
+  licenseId             BigInt   @map("license_id")
+  metric                String
+  /// `yyyymm`.
+  period                String   @db.Char(6)
+  quantity              BigInt   @default(0)
+  included              BigInt   @default(0)
+  overageUnit           Int      @default(1) @map("overage_unit")
+  overageUnitPriceCents Int      @default(0) @map("overage_unit_price_cents")
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, metric, period])
+  @@map("usage_records")
+}
+
+// ===========================================================================
+// Audit
+// ===========================================================================
+
+/// Security-relevant actions. PRD §8.4 makes this available on every plan,
+/// not just Enterprise as the source platform does.
+model AuditLogEntry {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  actorId   String?  @map("actor_id")
+  actorType String   @default("agent") @map("actor_type")
+  action    String
+  target    String?
+  metadata  Json     @default("{}")
+  ip        String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, createdAt(sort: Desc)])
+  @@index([licenseId, action, createdAt(sort: Desc)])
+  @@map("audit_log")
 }

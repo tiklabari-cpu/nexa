@@ -1,5 +1,10 @@
 import { parseEnv } from './config/env.js';
+import { loadEnvFile } from './config/load-env-file.js';
 import { buildServer } from './server.js';
+
+// Before parseEnv, so a developer running this directly does not have to
+// remember to source .env first.
+loadEnvFile();
 
 async function main(): Promise<void> {
   const env = parseEnv();

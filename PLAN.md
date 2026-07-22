@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–3 ✅ tamam · Dilim 4 sırada
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–4 ✅ tamam · Dilim 5 sırada
 
 ---
 
@@ -39,7 +39,7 @@ Her dilim: (a) OpenAPI+tip → (b) Prisma migration → (c) backend servis + uni
 | 1   | Bootstrap: monorepo, DB+Redis, `make dev`, health check, CI                              | XHIGH  | `feat/01-bootstrap`       |  ✅   |
 | 2   | Auth + tenant izolasyonu (RLS + cross-tenant negatif test) + OAuth2.1/PKCE + PAT + scope |  MAX   | `feat/02-auth-tenant`     |  ✅   |
 | 3   | Veri modeli + migration (PRD §8.4) + invariant'lar + seed                                |  MAX   | `feat/03-data-model`      |  ✅   |
-| 4   | chat→thread→event + Agent Chat API                                                       |  MAX   | `feat/04-chat-core`       |  ⬜   |
+| 4   | chat→thread→event + Agent Chat API                                                       |  MAX   | `feat/04-chat-core`       |  ✅   |
 | 5   | RTM WebSocket + reconnect/missed-event sync                                              |  MAX   | `feat/05-rtm`             |  ⬜   |
 | 6   | Customer widget (iframe loader + Customer Chat API + trusted domains)                    | XHIGH  | `feat/06-widget`          |  ⬜   |
 | 7   | Inbox 3-pane + composer                                                                  | XHIGH  | `feat/07-inbox`           |  ⬜   |
@@ -133,7 +133,30 @@ tümünde RLS · drift yok · seed iki kiracı + gerçekçi transcript üretiyor
 - Tüm CHECK kısıtları; RLS politikaları tüm tenant tablolarında
 - Seed: 2 organizasyon (cross-tenant test için), gruplar, ajanlar, müşteriler, örnek chat/thread/event, canned responses, tags, routing rules
 
-### Dilim 4 — chat→thread→event + Agent Chat API [MAX]
+### Dilim 4 — chat→thread→event + Agent Chat API [MAX] ✅
+
+**Teslim edildi (2026-07-22):** 290 test yeşil (120 unit + 170 integration) ·
+uçtan uca doğrulandı: widget token → agent chat başlatır → müşteri yanıtlar →
+internal note → arşiv → resume (yeni thread) → cross-tenant 404.
+
+**Kanıtlanan invariant'lar:**
+
+- Internal note (`recipients='agents'`) müşteri transcript'inde **yok** — SQL'de filtreleniyor,
+  sonradan atılmıyor (aksi halde kısa sayfa müşteriye "burada bir not var" bilgisini sızdırırdı).
+- Müşteri internal note **yazamıyor** — reddetmek yerine `all`'a düşürülüyor.
+- Idempotency: aynı `idempotency_key` ile tekrar → orijinal event (200), yeni satır yok.
+  Kiracılar arası key çakışması yok.
+- 12 eşzamanlı `send_event` → 1..12 arası **benzersiz ve boşluksuz** sequence
+  (`UPDATE … RETURNING`; read-then-write çakışırdı).
+- Kapalı sohbete yazma → 409 `chat_inactive`.
+- Ajan yalnız üyesi olduğu takımın sohbetlerini görüyor; takımdan çıkarılınca **anında** kaybediyor.
+- Kendisine kişisel transfer edilen sohbeti takım değişse de görmeye devam ediyor.
+- Boş takıma transfer → 409 `group_offline` (müşteri sahipsiz kalmıyor).
+- `after_event_id` ile replay (dilim 5'in kayıpsız reconnect primitifi) — sequence sırasına göre,
+  timestamp'e göre değil.
+
+**Kapsam notu:** Müşterinin kendi sohbetini okuma/yazma yüzeyi dilim 6'dan öne alındı —
+internal note sınırı ancak iki taraf da varken kanıtlanabilirdi.
 
 **Invariant'lar:** lisans+müşteri başına 1 aktif chat · aktif olmayan chat'e event yazılamaz (`chat_inactive`) · `recipients='agents'` event müşteriye gitmez · event id monotonik/idempotent · optimistic concurrency.
 

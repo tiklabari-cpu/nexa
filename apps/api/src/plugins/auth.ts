@@ -162,8 +162,11 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     }
 
     // --- Scopes -----------------------------------------------------------
-    if (config.scopes?.length) {
-      if (principal.kind === 'customer') throw ApiError.authorization();
+    // Scopes are an agent/bot concept — a customer token has none by design.
+    // For a customer, the route's `principals` list *is* the authorization
+    // decision, and it has already been enforced above. Applying an agent scope
+    // check here would make every customer-reachable route unreachable.
+    if (config.scopes?.length && principal.kind !== 'customer') {
       if (!hasAnyScope(principal.scopes, config.scopes)) {
         throw ApiError.authorization(
           `This token is missing the required scope (one of: ${config.scopes.join(', ')}).`,

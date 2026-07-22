@@ -193,6 +193,200 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List conversations
+     * @description Returns chats the caller may see. An agent sees a chat only through a team
+     *     they belong to unless their token carries `chats--all:ro`.
+     *
+     *     Paginated by opaque keyset cursor rather than offset: an offset page shifts
+     *     under you every time a new message arrives, which in an active inbox means
+     *     silently skipped conversations.
+     */
+    get: operations['listChats'];
+    put?: never;
+    /**
+     * Start a conversation with a customer
+     * @description Reuses the customer's existing active chat if there is one — a second
+     *     active chat for the same person is refused by the database, and silently
+     *     returning the existing one is what the caller almost always wants.
+     */
+    post: operations['startChat'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Fetch one conversation with its current thread */
+    get: operations['getChat'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read the transcript
+     * @description Ordered oldest-first within a thread. `after_event_id` replays everything
+     *     since a known event — the same primitive the realtime layer uses to
+     *     recover missed messages after a reconnect.
+     *
+     *     Internal notes are included for agents and omitted for customers.
+     */
+    get: operations['listEvents'];
+    put?: never;
+    /**
+     * Send a message, internal note or system event
+     * @description Idempotent when `idempotency_key` is supplied: retrying after a timeout
+     *     returns the original event rather than posting a duplicate. Without it, a
+     *     flaky connection turns one message into several.
+     *
+     *     Refuses to write to a closed conversation (`chat_inactive`) — resume it
+     *     first, which starts a new thread.
+     */
+    post: operations['sendEvent'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/deactivate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Close the active thread
+     * @description Archives the conversation. The chat itself persists so the customer's
+     *     history stays intact and `resume` can continue it.
+     */
+    post: operations['deactivateChat'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/resume': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reopen an archived conversation
+     * @description Opens a **new thread** on the same chat rather than reviving the closed
+     *     one, so the archived exchange stays exactly as it was.
+     */
+    post: operations['resumeChat'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/transfer': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Hand the conversation to another team or agent */
+    post: operations['transferChat'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/tags': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Tag the current thread
+     * @description Tags describe a thread, not a chat — what a conversation is about can change between visits.
+     */
+    post: operations['tagThread'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/tags/{tagName}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Remove a tag from the current thread */
+    delete: operations['untagThread'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/seen': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Record how far the caller has read */
+    post: operations['markEventsAsSeen'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -232,6 +426,105 @@ export interface components {
       license_id: string;
       /** Format: uuid */
       organization_id?: string;
+    };
+    Chat: {
+      /** @description Short base32 token, e.g. TJ1H8CFKRV. */
+      id: string;
+      license_id: string;
+      /** Format: uuid */
+      customer_id: string;
+      active: boolean;
+      /** Format: date-time */
+      created_at: string;
+      access: {
+        group_ids?: number[];
+      };
+      users: components['schemas']['ChatUser'][];
+      thread?: components['schemas']['Thread'];
+    };
+    ChatSummary: {
+      id: string;
+      /** Format: uuid */
+      customer_id: string;
+      customer_name?: string | null;
+      active: boolean;
+      /** Format: date-time */
+      created_at: string;
+      thread_id?: string | null;
+      /** Format: uuid */
+      assignee_id?: string | null;
+      queue_position?: number | null;
+      unread_count?: number;
+      last_event?: components['schemas']['Event'] | null;
+      tags?: string[];
+    };
+    ChatUser: {
+      user_id: string;
+      /** @enum {string} */
+      user_type: 'agent' | 'customer';
+      present: boolean;
+      /** Format: date-time */
+      seen_up_to?: string | null;
+      name?: string | null;
+      email?: string | null;
+      avatar_url?: string | null;
+    };
+    Thread: {
+      id: string;
+      chat_id: string;
+      active: boolean;
+      /** Format: uuid */
+      assignee_id?: string | null;
+      queue_position?: number | null;
+      summary?: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      closed_at?: string | null;
+      tags?: string[];
+    };
+    Event: {
+      /** @description `<thread_id>_<sequence>` — ordering is decidable from the id alone. */
+      id: string;
+      chat_id: string;
+      thread_id: string;
+      /** @enum {string} */
+      type: 'message' | 'system_message' | 'rich_message' | 'file' | 'filled_form';
+      text?: string | null;
+      author_id?: string | null;
+      /** @enum {string} */
+      author_type: 'agent' | 'customer' | 'bot' | 'system';
+      /**
+       * @description `agents` is an internal note and never reaches the customer.
+       * @enum {string}
+       */
+      recipients: 'all' | 'agents';
+      attachment_url?: string | null;
+      properties?: {
+        [key: string]: unknown;
+      };
+      /** Format: date-time */
+      created_at: string;
+    };
+    NewEvent: {
+      /**
+       * @default message
+       * @enum {string}
+       */
+      type: 'message' | 'system_message' | 'rich_message' | 'file' | 'filled_form';
+      text?: string;
+      /**
+       * @default all
+       * @enum {string}
+       */
+      recipients: 'all' | 'agents';
+      /** Format: uri */
+      attachment_url?: string;
+      properties?: {
+        [key: string]: unknown;
+      };
+      /** @description Retrying with the same key returns the original event. */
+      idempotency_key?: string;
     };
     PersonalAccessToken: {
       /** Format: uuid */
@@ -357,6 +650,8 @@ export interface components {
   parameters: {
     /** @description Opaque keyset cursor from the previous page. */
     PageId: string;
+    /** @description Short base32 chat token. */
+    ChatId: string;
     Limit: number;
   };
   requestBodies: never;
@@ -724,6 +1019,393 @@ export interface operations {
       400: components['responses']['BadRequest'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  listChats: {
+    parameters: {
+      query?: {
+        /**
+         * @description `my` — assigned to the caller · `queued` — waiting for an agent ·
+         *     `unassigned` — routed but unclaimed · `archived` — closed ·
+         *     `all` — every chat the caller may see.
+         */
+        view?: 'all' | 'my' | 'queued' | 'unassigned' | 'archived';
+        customer_id?: string;
+        group_id?: number;
+        sort?: 'newest' | 'oldest';
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+        limit?: components['parameters']['Limit'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of chats */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ChatSummary'][];
+            next_page_id?: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  startChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          customer_id: string;
+          /** @description Teams granted access. Defaults to the routing fallback. */
+          group_ids?: number[];
+          /** @default true */
+          assign_to_me?: boolean;
+          initial_event?: components['schemas']['NewEvent'];
+        };
+      };
+    };
+    responses: {
+      /** @description An active chat already existed and was returned unchanged */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Chat'];
+        };
+      };
+      /** @description Chat created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Chat'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  getChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The chat */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Chat'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  listEvents: {
+    parameters: {
+      query?: {
+        /** @description Defaults to the most recent thread. */
+        thread_id?: string;
+        /** @description Return only events following this one, in the same thread. */
+        after_event_id?: string;
+        limit?: components['parameters']['Limit'];
+      };
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Event'][];
+            next_page_id?: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  sendEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['NewEvent'];
+      };
+    };
+    responses: {
+      /** @description Replay of an idempotent request; the original event */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+        };
+      };
+      /** @description Event recorded */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      404: components['responses']['NotFound'];
+      /** @description The conversation is not active */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  deactivateChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Closed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Chat'];
+        };
+      };
+      404: components['responses']['NotFound'];
+      /** @description Already closed */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  resumeChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reopened, with a new active thread */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Chat'];
+        };
+      };
+      404: components['responses']['NotFound'];
+      /** @description Already active */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  transferChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: int64 */
+          group_id?: number;
+          /** Format: uuid */
+          agent_id?: string;
+          /**
+           * @default manual
+           * @enum {string}
+           */
+          reason?: 'manual' | 'routing' | 'agent_disconnected' | 'ai_handoff';
+        };
+      };
+    };
+    responses: {
+      /** @description Transferred */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Chat'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      404: components['responses']['NotFound'];
+      /** @description The target team is offline or the chat is closed */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  tagThread: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          tag: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Applied (or already present) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            tags?: string[];
+          };
+        };
+      };
+      404: components['responses']['NotFound'];
+    };
+  };
+  untagThread: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+        tagName: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components['responses']['NotFound'];
+    };
+  };
+  markEventsAsSeen: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: date-time */
+          seen_up_to: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Recorded */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components['responses']['NotFound'];
     };
   };
 }

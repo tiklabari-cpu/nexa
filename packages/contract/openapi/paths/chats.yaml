@@ -1,0 +1,338 @@
+# Agent Chat API — the conversation core.
+#
+# Resource-based (ADR-04): actions that are not plain CRUD live as a POST
+# sub-path under the chat they act on, rather than as `/action/<verb>` calls.
+#
+# The model is chat → thread → event:
+#   chat   a continuing relationship with one customer; at most one active per
+#          license+customer, enforced by a partial unique index
+#   thread one continuous exchange; closing it archives the conversation, and
+#          the customer returning opens a new thread on the same chat
+#   event  everything that happened — messages, system notices, internal notes
+
+chats:
+  get:
+    tags: [Chats]
+    operationId: listChats
+    summary: List conversations
+    description: |
+      Returns chats the caller may see. An agent sees a chat only through a team
+      they belong to unless their token carries `chats--all:ro`.
+
+      Paginated by opaque keyset cursor rather than offset: an offset page shifts
+      under you every time a new message arrives, which in an active inbox means
+      silently skipped conversations.
+    parameters:
+      - name: view
+        in: query
+        description: |
+          `my` — assigned to the caller · `queued` — waiting for an agent ·
+          `unassigned` — routed but unclaimed · `archived` — closed ·
+          `all` — every chat the caller may see.
+        schema:
+          type: string
+          enum: [all, my, queued, unassigned, archived]
+          default: all
+      - name: customer_id
+        in: query
+        schema: { type: string, format: uuid }
+      - name: group_id
+        in: query
+        schema: { type: integer, format: int64 }
+      - name: sort
+        in: query
+        schema: { type: string, enum: [newest, oldest], default: newest }
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: A page of chats
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/ChatSummary" }
+                next_page_id: { type: string }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Chats]
+    operationId: startChat
+    summary: Start a conversation with a customer
+    description: |
+      Reuses the customer's existing active chat if there is one — a second
+      active chat for the same person is refused by the database, and silently
+      returning the existing one is what the caller almost always wants.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [customer_id]
+            properties:
+              customer_id: { type: string, format: uuid }
+              group_ids:
+                type: array
+                items: { type: integer, format: int64 }
+                description: Teams granted access. Defaults to the routing fallback.
+              assign_to_me: { type: boolean, default: true }
+              initial_event:
+                $ref: "../openapi.yaml#/components/schemas/NewEvent"
+    responses:
+      "201":
+        description: Chat created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
+      "200":
+        description: An active chat already existed and was returned unchanged
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+chat:
+  get:
+    tags: [Chats]
+    operationId: getChat
+    summary: Fetch one conversation with its current thread
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    responses:
+      "200":
+        description: The chat
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+events:
+  get:
+    tags: [Chats]
+    operationId: listEvents
+    summary: Read the transcript
+    description: |
+      Ordered oldest-first within a thread. `after_event_id` replays everything
+      since a known event — the same primitive the realtime layer uses to
+      recover missed messages after a reconnect.
+
+      Internal notes are included for agents and omitted for customers.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+      - name: thread_id
+        in: query
+        description: Defaults to the most recent thread.
+        schema: { type: string }
+      - name: after_event_id
+        in: query
+        description: Return only events following this one, in the same thread.
+        schema: { type: string }
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: A page of events
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Event" }
+                next_page_id: { type: string }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+  post:
+    tags: [Chats]
+    operationId: sendEvent
+    summary: Send a message, internal note or system event
+    description: |
+      Idempotent when `idempotency_key` is supplied: retrying after a timeout
+      returns the original event rather than posting a duplicate. Without it, a
+      flaky connection turns one message into several.
+
+      Refuses to write to a closed conversation (`chat_inactive`) — resume it
+      first, which starts a new thread.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/NewEvent" }
+    responses:
+      "201":
+        description: Event recorded
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Event" }
+      "200":
+        description: Replay of an idempotent request; the original event
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Event" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: The conversation is not active
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
+deactivate:
+  post:
+    tags: [Chats]
+    operationId: deactivateChat
+    summary: Close the active thread
+    description: |
+      Archives the conversation. The chat itself persists so the customer's
+      history stays intact and `resume` can continue it.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    responses:
+      "200":
+        description: Closed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: Already closed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
+resume:
+  post:
+    tags: [Chats]
+    operationId: resumeChat
+    summary: Reopen an archived conversation
+    description: |
+      Opens a **new thread** on the same chat rather than reviving the closed
+      one, so the archived exchange stays exactly as it was.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    responses:
+      "200":
+        description: Reopened, with a new active thread
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: Already active
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
+transfer:
+  post:
+    tags: [Chats]
+    operationId: transferChat
+    summary: Hand the conversation to another team or agent
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: Exactly one of `group_id` or `agent_id`.
+            properties:
+              group_id: { type: integer, format: int64 }
+              agent_id: { type: string, format: uuid }
+              reason:
+                type: string
+                enum: [manual, routing, agent_disconnected, ai_handoff]
+                default: manual
+    responses:
+      "200":
+        description: Transferred
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: The target team is offline or the chat is closed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
+tags:
+  post:
+    tags: [Chats]
+    operationId: tagThread
+    summary: Tag the current thread
+    description: Tags describe a thread, not a chat — what a conversation is about can change between visits.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [tag]
+            properties:
+              tag: { type: string, minLength: 1, maxLength: 64 }
+    responses:
+      "200":
+        description: Applied (or already present)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tags:
+                  type: array
+                  items: { type: string }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+tag:
+  delete:
+    tags: [Chats]
+    operationId: untagThread
+    summary: Remove a tag from the current thread
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+      - name: tagName
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      "204": { description: Removed }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+seen:
+  post:
+    tags: [Chats]
+    operationId: markEventsAsSeen
+    summary: Record how far the caller has read
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [seen_up_to]
+            properties:
+              seen_up_to: { type: string, format: date-time }
+    responses:
+      "204": { description: Recorded }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

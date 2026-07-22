@@ -46,24 +46,25 @@ export function ownerClient(): PrismaClient {
 }
 
 /**
- * Wipe every table. Ordered by dependency, and scoped to the tables this slice
- * owns so it never silently truncates something a later slice adds.
+ * Wipe every tenant table.
+ *
+ * Discovered from the catalogue rather than hard-coded: a list would silently
+ * go stale the moment a slice adds a table, leaving residue that makes tests
+ * pass or fail depending on what ran before them. Partitions and Prisma's own
+ * bookkeeping are excluded.
  */
 export async function resetDatabase(db: PrismaClient): Promise<void> {
-  await db.$executeRawUnsafe(`
-    TRUNCATE TABLE
-      api_tokens,
-      oauth_refresh_tokens,
-      oauth_authorization_codes,
-      oauth_clients,
-      trusted_domains,
-      customers,
-      agent_memberships,
-      accounts,
-      licenses,
-      organizations
-    RESTART IDENTITY CASCADE
-  `);
+  const tables = await db.$queryRaw<Array<{ tablename: string }>>`
+    SELECT tablename FROM pg_tables
+    WHERE schemaname = 'public'
+      AND tablename <> '_prisma_migrations'
+      -- Partitions are truncated through their parent.
+      AND tablename NOT LIKE 'events\\_%'
+  `;
+  if (tables.length === 0) return;
+
+  const quoted = tables.map((t) => `"${t.tablename}"`).join(', ');
+  await db.$executeRawUnsafe(`TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE`);
 }
 
 let passwordHashCache: string | null = null;

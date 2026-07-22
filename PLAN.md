@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–2 ✅ tamam · Dilim 3 sırada
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–3 ✅ tamam · Dilim 4 sırada
 
 ---
 
@@ -38,7 +38,7 @@ Her dilim: (a) OpenAPI+tip → (b) Prisma migration → (c) backend servis + uni
 | --- | ---------------------------------------------------------------------------------------- | :----: | ------------------------- | :---: |
 | 1   | Bootstrap: monorepo, DB+Redis, `make dev`, health check, CI                              | XHIGH  | `feat/01-bootstrap`       |  ✅   |
 | 2   | Auth + tenant izolasyonu (RLS + cross-tenant negatif test) + OAuth2.1/PKCE + PAT + scope |  MAX   | `feat/02-auth-tenant`     |  ✅   |
-| 3   | Veri modeli + migration (PRD §8.4) + invariant'lar + seed                                |  MAX   | `feat/03-data-model`      |  ⬜   |
+| 3   | Veri modeli + migration (PRD §8.4) + invariant'lar + seed                                |  MAX   | `feat/03-data-model`      |  ✅   |
 | 4   | chat→thread→event + Agent Chat API                                                       |  MAX   | `feat/04-chat-core`       |  ⬜   |
 | 5   | RTM WebSocket + reconnect/missed-event sync                                              |  MAX   | `feat/05-rtm`             |  ⬜   |
 | 6   | Customer widget (iframe loader + Customer Chat API + trusted domains)                    | XHIGH  | `feat/06-widget`          |  ⬜   |
@@ -106,7 +106,25 @@ iki kiracıyla; Acme token'ı Northwind'e ulaşamıyor).
 - Scope modeli: `resource--access:permission` (v2-03 §8.5 tam liste)
 - `TenantScopedRepository` + PostgreSQL RLS (`current_setting('app.current_license')`)
 
-### Dilim 3 — Veri Modeli [MAX]
+### Dilim 3 — Veri Modeli [MAX] ✅
+
+**Teslim edildi (2026-07-22):** 240 test yeşil (120 unit + 120 integration) · 39 tablo ·
+tümünde RLS · drift yok · seed iki kiracı + gerçekçi transcript üretiyor.
+
+**Veritabanının kendi başına koruduğu invariant'lar (uygulama koduna güvenmeden):**
+
+- `uq_one_active_chat` — lisans+müşteri başına 1 aktif chat. **Yarış testiyle** kanıtlandı:
+  8 eşzamanlı `start_chat` → tam olarak 1 tanesi başarılı.
+- `uq_one_active_thread` — chat başına 1 aktif thread.
+- `threads_closed_consistency_check` — aktif+kapalı çelişkisi imkânsız.
+- `uq_one_fallback_routing_rule` — lisans+kind başına 1 fallback.
+- `events` aylık RANGE partition + otomatik partition üretimi + DEFAULT partition
+  (saat kayması olan mesaj kaybolmaz, bulunabilir bir yere düşer). Partition pruning
+  EXPLAIN ile doğrulandı.
+- `events → threads` FK (ON DELETE CASCADE) — **testte bulundu:** FK yokken chat silinince
+  event satırları yetim kalıyordu (GDPR silme talebi için gerçek sorun).
+- `audit_log` append-only: `UPDATE`/`DELETE` hem policy hem GRANT seviyesinde reddediliyor.
+- pgvector ivfflat + boyut doğrulaması (1536 dışındaki embedding reddediliyor).
 
 - PRD §8.4'teki 30+ tablo, rapor-2 §5.3 DDL'e birebir
 - `events` aylık RANGE partition + otomatik partition üretimi
@@ -181,6 +199,15 @@ iki kiracıyla; Acme token'ı Northwind'e ulaşamıyor).
   TTL kısa, ban/lisans kontrolü her istekte canlı veriden yapılıyor.
 - **D5 (dilim 2):** `licenses.id` için `BIGSERIAL` + `START WITH 1000001`. Prisma'nın
   `@default(autoincrement())` beklentisiyle uyumlu; elle `CREATE SEQUENCE` drift üretiyordu.
+- **D6 (dilim 3):** `events` tablosuna `DEFAULT` partition eklendi (PRD'de yok). Gerekçe:
+  partition penceresi dışına düşen bir satır aksi halde hata verip **müşteri mesajını
+  kaybettirir**. Default partition kaybı önler ve anomaliyi bulunabilir kılar.
+- **D7 (dilim 3):** `threads` tablosuna PRD §8.4'te olmayan alanlar eklendi:
+  `assignee_id`, `event_sequence`, `queued_at`, `first_response_at`. Sırasıyla inbox
+  ataması, kayıpsız reconnect (dilim 5) ve Reports "ilk yanıt süresi" için gerekli.
+- **D8 (dilim 3):** `prisma migrate diff` tek başına drift kapısı olamıyor — Prisma index
+  _access method_ (ivfflat/GIN) modelleyemiyor. `pnpm db:check-drift` bu tek bilinen
+  ifadeye izin verip diğer her farkta hata veriyor; sinyal korunuyor.
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

@@ -24,12 +24,39 @@ export function createPrismaClient(env: Env): PrismaClient {
   });
 }
 
+/**
+ * How far ahead event partitions are kept. An insert into a month with no
+ * partition lands in `events_default` rather than failing, but that partition
+ * is unindexed for range scans and grows without bound — so the window must
+ * stay comfortably ahead of real time.
+ */
+const PARTITION_MONTHS_AHEAD = 3;
+const PARTITION_MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
 async function databasePlugin(app: FastifyInstance, options: { env: Env }): Promise<void> {
   const db = createPrismaClient(options.env);
 
   await db.$connect();
   app.decorate('db', db);
+
+  const maintainPartitions = async (): Promise<void> => {
+    try {
+      await db.$queryRaw`SELECT events_maintain_partitions(${PARTITION_MONTHS_AHEAD}, 1)`;
+    } catch (error) {
+      // Never fatal: the default partition catches anything that slips through,
+      // so a failure here degrades performance rather than losing messages.
+      app.log.error({ err: error }, 'event partition maintenance failed');
+    }
+  };
+
+  // At boot, and periodically, because a process that stays up for months would
+  // otherwise outlive its partition window.
+  await maintainPartitions();
+  const timer = setInterval(() => void maintainPartitions(), PARTITION_MAINTENANCE_INTERVAL_MS);
+  timer.unref();
+
   app.addHook('onClose', async () => {
+    clearInterval(timer);
     await db.$disconnect();
   });
 }

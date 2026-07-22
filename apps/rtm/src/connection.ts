@@ -18,11 +18,22 @@ export interface Connection {
   authenticated: boolean;
   licenseId: string | null;
   actorId: string | null;
-  /** Push actions this socket subscribed to; empty means "none yet". */
+  /** Teams the agent belongs to — the audience filter keys on these. */
+  groupIds: number[];
+  /** True when the token may see every chat in the licence. */
+  unrestricted: boolean;
+  /**
+   * Push actions this socket asked for. Empty means none: a client receives
+   * only what it explicitly subscribed to, so adding a new push type cannot
+   * flood clients that do not understand it.
+   */
   subscriptions: Set<string>;
   pendingRequests: number;
   lastSeenAt: number;
   connectedAt: number;
+  /** Fixed-window message budget — see Dispatcher#withinRateLimit. */
+  rateWindowStartedAt: number;
+  messagesInWindow: number;
 }
 
 export class ConnectionRegistry {
@@ -39,10 +50,14 @@ export class ConnectionRegistry {
       authenticated: false,
       licenseId: null,
       actorId: null,
+      groupIds: [],
+      unrestricted: false,
       subscriptions: new Set(),
       pendingRequests: 0,
       lastSeenAt: Date.now(),
       connectedAt: Date.now(),
+      rateWindowStartedAt: Date.now(),
+      messagesInWindow: 0,
     };
 
     this.#byId.set(connection.id, connection);
@@ -50,13 +65,23 @@ export class ConnectionRegistry {
     return connection;
   }
 
-  /** Called once the login handshake succeeds (slice 5). */
-  authenticate(id: string, actor: { licenseId: string; actorId: string }): Connection | undefined {
+  /** Called once the login handshake succeeds. */
+  authenticate(
+    id: string,
+    actor: {
+      licenseId: string;
+      actorId: string;
+      groupIds?: number[];
+      unrestricted?: boolean;
+    },
+  ): Connection | undefined {
     const connection = this.#byId.get(id);
     if (!connection) return undefined;
     connection.authenticated = true;
     connection.licenseId = actor.licenseId;
     connection.actorId = actor.actorId;
+    connection.groupIds = actor.groupIds ?? [];
+    connection.unrestricted = actor.unrestricted ?? false;
     this.#index(this.#byActor, this.#actorKey(connection.organizationId, actor.actorId), id);
     return connection;
   }

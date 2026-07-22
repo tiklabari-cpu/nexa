@@ -90,6 +90,9 @@ importers:
       '@nexa/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@prisma/client':
+        specifier: ^6.1.0
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       ioredis:
         specifier: ^5.4.2
         version: 5.11.1(supports-color@10.2.2)

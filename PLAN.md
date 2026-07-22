@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–4 ✅ tamam · Dilim 5 sırada
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–5 ✅ tamam · Dilim 6 sırada
 
 ---
 
@@ -40,7 +40,7 @@ Her dilim: (a) OpenAPI+tip → (b) Prisma migration → (c) backend servis + uni
 | 2   | Auth + tenant izolasyonu (RLS + cross-tenant negatif test) + OAuth2.1/PKCE + PAT + scope |  MAX   | `feat/02-auth-tenant`     |  ✅   |
 | 3   | Veri modeli + migration (PRD §8.4) + invariant'lar + seed                                |  MAX   | `feat/03-data-model`      |  ✅   |
 | 4   | chat→thread→event + Agent Chat API                                                       |  MAX   | `feat/04-chat-core`       |  ✅   |
-| 5   | RTM WebSocket + reconnect/missed-event sync                                              |  MAX   | `feat/05-rtm`             |  ⬜   |
+| 5   | RTM WebSocket + reconnect/missed-event sync                                              |  MAX   | `feat/05-rtm`             |  ✅   |
 | 6   | Customer widget (iframe loader + Customer Chat API + trusted domains)                    | XHIGH  | `feat/06-widget`          |  ⬜   |
 | 7   | Inbox 3-pane + composer                                                                  | XHIGH  | `feat/07-inbox`           |  ⬜   |
 | 8   | Routing + queue + concurrent limit + fallback                                            |  MAX   | `feat/08-routing`         |  ⬜   |
@@ -162,7 +162,32 @@ internal note sınırı ancak iki taraf da varken kanıtlanabilirdi.
 
 - `POST /api/v1/chats` (start) · `GET /api/v1/chats` (list) · `POST /api/v1/chats/{id}/events` · `.../deactivate` · `.../resume` · `.../transfer` · `.../tags` · `GET /api/v1/chats/{id}`
 
-### Dilim 5 — RTM WebSocket [MAX]
+### Dilim 5 — RTM WebSocket [MAX] ✅
+
+**Teslim edildi (2026-07-22):** 332 test yeşil (120 unit + 212 integration; 42'si RTM) ·
+canlı doğrulandı: REST send → push **13 ms**, socket düşür → 3 mesaj gel → reconnect + sync →
+**hiçbiri kaybolmadı**.
+
+**Mimari:** API soketle konuşmaz. Redis'e zarf yayınlar; zarf _hem_ payload'ı _hem_ izleyici
+kitlesini (audience) taşır. Gateway aptaldır: yetki kararı vermez, çünkü tenant context'i ve
+takım üyeliği görünürlüğü yoktur — vereceği her karar tahmin olurdu. Tek kendi kontrolü:
+zarfın lisansı bağlantının lisansıyla eşleşmeli.
+
+**Kanıtlanan invariant'lar:**
+
+- **Kayıpsız reconnect:** cursor = event id içindeki sequence. Timestamp KULLANILMAZ —
+  aynı milisaniyede birden çok event olabilir ve süreçler arası saat farkı vardır.
+  Test: aynı `createdAt`'li 12 event doğru sırada replay ediliyor.
+- Replay üst sınırı 200/chat; aşılırsa `truncated: true` (istemci transcript'i yeniden çeker).
+  Sınırsız replay hem istemciyi boğar hem gateway'i sınırsız allocate ettirir.
+- Bağlantı kopukken **kazanılan** chat `new_chat_ids`'te bildiriliyor (geçmişi replay edilmiyor);
+  **kaybedilen** chat `removed_chat_ids`'te.
+- Cursor eski bir thread'i işaret ediyorsa → `truncated` (0'dan replay uzun sohbette istemciyi boğardı).
+- Internal note müşterinin **replay'inde de** yok — reconnect sızıntı yolu olmuyor.
+- Cross-tenant: başka kiracının chat'i ne replay ediliyor ne de varlığı doğrulanıyor.
+- Fan-out: takım dışı ajana gitmiyor · müşteriye agent-only push gitmiyor ·
+  abone olunmayan push gitmiyor · bozuk bus mesajı soketi düşürmüyor.
+- Socket üzerinden chat mutasyonu reddediliyor — aynı invariant'ların iki implementasyonu olmaz.
 
 **Invariant'lar:** reconnect'te event kaybı YOK (`sync` son event id'den) · login 30sn · ping 15sn · 10 pending/soket · fan-out yalnız yetkili ajanlara.
 

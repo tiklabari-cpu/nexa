@@ -14,7 +14,7 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "test:unit": "turbo run test:unit",
-    "test:integration": "turbo run test:integration",
+    "test:integration": "turbo run test:integration --concurrency=1",
     "test:e2e": "pnpm --filter @nexa/e2e test",
     "contract:generate": "pnpm --filter @nexa/contract generate",
     "db:migrate": "pnpm --filter @nexa/api db:migrate",

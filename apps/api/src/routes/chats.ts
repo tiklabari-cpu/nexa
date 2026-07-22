@@ -4,6 +4,7 @@ import { EVENT_RECIPIENTS, EVENT_TYPES, TRANSFER_REASONS, isShortId } from '@nex
 import { ApiError } from '../lib/api-error.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { hasChatScope } from '../services/chat/access.js';
+import { RealtimePublisher } from '../services/realtime/publisher.js';
 
 const chatIdSchema = z.string().refine(isShortId, 'not a valid chat id');
 
@@ -60,7 +61,7 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 }
 
 export default async function chatRoutes(app: FastifyInstance): Promise<void> {
-  const chats = new ChatService(app.db, app.redis);
+  const chats = new ChatService(app.db, app.redis, new RealtimePublisher(app.redis, app.log));
 
   /**
    * An event body must carry something. A `message` with neither text nor an

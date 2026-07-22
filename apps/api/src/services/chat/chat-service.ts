@@ -24,6 +24,7 @@ import {
 import { ApiError } from '../../lib/api-error.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
+import type { RealtimePublisher } from '../realtime/publisher.js';
 import {
   canSeeChat,
   chatVisibilityFilter,
@@ -64,7 +65,32 @@ export class ChatService {
   constructor(
     private readonly db: PrismaClient,
     private readonly redis: RedisLike,
+    /**
+     * Optional so unit tests and scripts can build a service without a bus.
+     * Realtime delivery is an enhancement over polling, never a precondition
+     * for the write succeeding.
+     */
+    private readonly publisher?: RealtimePublisher,
   ) {}
+
+  /**
+   * Everyone entitled to see activity on a chat: the teams it is routed to,
+   * anyone personally in it, and the customer.
+   *
+   * Computed here, where team membership and tenant context are available, and
+   * carried in the envelope — the gateway has neither and could only guess.
+   */
+  #audienceFor(chat: {
+    customerId: string;
+    access: Array<{ groupId: bigint }>;
+    users: Array<{ userId: string; userType: string }>;
+  }) {
+    return {
+      groupIds: chat.access.map((a) => Number(a.groupId)),
+      agentIds: chat.users.filter((u) => u.userType === 'agent').map((u) => u.userId),
+      customerId: chat.customerId,
+    };
+  }
 
   // -------------------------------------------------------------------------
   // Reads
@@ -231,6 +257,28 @@ export class ChatService {
       initialEvent?: NewEventInput;
     },
   ): Promise<{ chat: ChatDetail; created: boolean }> {
+    const result = await this.#startInTransaction(tenant, principal, input);
+
+    if (result.created && result.raw) {
+      await this.publisher?.publish(tenant, 'incoming_chat', this.#audienceFor(result.raw), {
+        requester_id: actorOf(principal),
+        chat: result.chat,
+      });
+    }
+
+    return { chat: result.chat, created: result.created };
+  }
+
+  async #startInTransaction(
+    tenant: TenantContext,
+    principal: Principal,
+    input: {
+      customerId: string;
+      groupIds?: bigint[];
+      assignToMe: boolean;
+      initialEvent?: NewEventInput;
+    },
+  ): Promise<{ chat: ChatDetail; created: boolean; raw?: ChatRow }> {
     const actorId = actorOf(principal);
 
     return withTenant(this.db, tenant, async (tx) => {
@@ -276,7 +324,7 @@ export class ChatService {
         where: { id: chat.id },
         include: chatInclude,
       });
-      return { chat: serialiseChat(reloaded), created: true };
+      return { chat: serialiseChat(reloaded), created: true, raw: reloaded };
     });
   }
 
@@ -335,7 +383,7 @@ export class ChatService {
         });
       }
 
-      return event;
+      return { event, recipients, audience: this.#audienceFor(chat), id: event.id };
     });
 
     if (idempotencyKey) {
@@ -343,7 +391,20 @@ export class ChatService {
       await this.redis.set(idempotencyKey, result.id, 'EX', IDEMPOTENCY_TTL_SECONDS, 'NX');
     }
 
-    return { event: result, replayed: false };
+    // After the transaction, never inside it: announcing an event a subscriber
+    // could then fail to read would be worse than announcing it a moment late.
+    await this.publisher?.publish(
+      tenant,
+      'incoming_event',
+      // An internal note goes to agents only — the audience is where that is
+      // decided, so the gateway cannot get it wrong.
+      result.recipients === 'agents'
+        ? { groupIds: result.audience.groupIds, agentIds: result.audience.agentIds }
+        : result.audience,
+      { chat_id: result.event.chat_id, thread_id: result.event.thread_id, event: result.event },
+    );
+
+    return { event: result.event, replayed: false };
   }
 
   async deactivate(
@@ -351,7 +412,7 @@ export class ChatService {
     principal: Principal,
     chatId: string,
   ): Promise<ChatDetail> {
-    return withTenant(this.db, tenant, async (tx) => {
+    const result = await withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'write');
       const chat = await this.#loadVisibleChat(tx, visibility, chatId);
 
@@ -384,12 +445,19 @@ export class ChatService {
         where: { id: chat.id },
         include: chatInclude,
       });
-      return serialiseChat(reloaded);
+      return { detail: serialiseChat(reloaded), audience: this.#audienceFor(chat) };
     });
+
+    await this.publisher?.publish(tenant, 'chat_deactivated', result.audience, {
+      chat_id: chatId,
+      thread_id: result.detail.thread?.id ?? null,
+      requester_id: actorOf(principal),
+    });
+    return result.detail;
   }
 
   async resume(tenant: TenantContext, principal: Principal, chatId: string): Promise<ChatDetail> {
-    return withTenant(this.db, tenant, async (tx) => {
+    const result = await withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'write');
       const chat = await this.#loadVisibleChat(tx, visibility, chatId);
 
@@ -440,8 +508,15 @@ export class ChatService {
         where: { id: chat.id },
         include: chatInclude,
       });
-      return serialiseChat(reloaded);
+      return { detail: serialiseChat(reloaded), audience: this.#audienceFor(reloaded) };
     });
+
+    // Reopening looks like a new arrival to every inbox watching it.
+    await this.publisher?.publish(tenant, 'incoming_chat', result.audience, {
+      requester_id: actorOf(principal),
+      chat: result.detail,
+    });
+    return result.detail;
   }
 
   async transfer(
@@ -454,7 +529,7 @@ export class ChatService {
       throw ApiError.validation('Provide exactly one of group_id or agent_id.');
     }
 
-    return withTenant(this.db, tenant, async (tx) => {
+    const result = await withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'write');
       const chat = await this.#loadVisibleChat(tx, visibility, chatId);
 
@@ -543,8 +618,30 @@ export class ChatService {
         where: { id: chat.id },
         include: chatInclude,
       });
-      return serialiseChat(reloaded);
+      return {
+        detail: serialiseChat(reloaded),
+        // Union of before and after: the losing team needs to be told the chat
+        // left as much as the winning team needs to be told it arrived.
+        audience: {
+          groupIds: [...this.#audienceFor(chat).groupIds, ...this.#audienceFor(reloaded).groupIds],
+          agentIds: [...this.#audienceFor(chat).agentIds, ...this.#audienceFor(reloaded).agentIds],
+          customerId: chat.customerId,
+        },
+        threadId: thread.id,
+      };
     });
+
+    await this.publisher?.publish(tenant, 'chat_transferred', result.audience, {
+      chat_id: chatId,
+      thread_id: result.threadId,
+      requester_id: actorOf(principal),
+      reason: target.reason,
+      transferred_to: {
+        group_ids: target.groupId !== undefined ? [Number(target.groupId)] : [],
+        agent_ids: target.agentId !== undefined ? [target.agentId] : [],
+      },
+    });
+    return result.detail;
   }
 
   async tagThread(

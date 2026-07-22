@@ -4,21 +4,45 @@
   "globalDependencies": ["tsconfig.base.json", ".env"],
   "globalEnv": [
     "NODE_ENV",
+    "LOG_LEVEL",
+    "NEXA_REGION",
+
     "DATABASE_URL",
+    "DATABASE_APP_URL",
     "REDIS_URL",
+
+    "API_PORT",
+    "API_HOST",
+    "API_BASE_URL",
+    "RTM_PORT",
+    "RTM_HOST",
+    "RTM_BASE_URL",
+    "WEB_PORT",
+    "WEB_ORIGIN",
+    "WIDGET_PORT",
+
     "JWT_SIGNING_KEY",
     "WEBHOOK_HMAC_SEED",
-    "API_PORT",
-    "RTM_PORT",
-    "API_BASE_URL",
-    "RTM_BASE_URL",
+    "CUSTOMER_TOKEN_SECRET",
+    "ACCESS_TOKEN_TTL",
+    "REFRESH_TOKEN_TTL",
+    "CUSTOMER_TOKEN_TTL",
+    "AUTH_CODE_TTL",
+
     "RATE_LIMIT_AGENT_PER_MIN",
     "RATE_LIMIT_AGENT_BURST",
     "RATE_LIMIT_CUSTOMER_PER_MIN",
     "RATE_LIMIT_RTM_PER_SEC",
-    "AI_OVERAGE_CENTS",
+
     "TRIAL_DAYS",
-    "NEXA_REGION"
+    "UNIT_PRICE_CENTS",
+    "AI_RESOLUTIONS_INCLUDED",
+    "AI_OVERAGE_CENTS",
+
+    "LLM_PROVIDER",
+    "MAIL_PROVIDER",
+    "STORAGE_PROVIDER",
+    "STRIPE_PROVIDER"
   ],
   "tasks": {
     "build": {

@@ -25,6 +25,174 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/login': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Verify credentials and list available workspaces
+     * @description Returns the licenses this account may sign in to. Issues no tokens — the
+     *     caller picks a workspace and continues with `/auth/authorize`.
+     *
+     *     Responds identically whether the email is unknown or the password is
+     *     wrong, and always spends the same time, so registered addresses cannot be
+     *     enumerated.
+     */
+    post: operations['login'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/authorize': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Issue a single-use authorization code */
+    post: operations['authorize'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/token': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Exchange an authorization code, or rotate a refresh token
+     * @description Refresh tokens rotate on every use. Presenting one that has already been
+     *     rotated revokes the entire token family — the standard response to a
+     *     captured refresh token (OAuth 2.1 §4.3.1).
+     */
+    post: operations['exchangeToken'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/revoke': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Revoke an access or refresh token
+     * @description Always returns 200, even for a token that never existed — per RFC 7009 the
+     *     caller's goal is "this token must not work", and reporting whether it was
+     *     real would turn the endpoint into an oracle.
+     */
+    post: operations['revokeToken'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Describe the caller */
+    get: operations['getCurrentPrincipal'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/personal-access-tokens': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the caller's personal access tokens */
+    get: operations['listPersonalAccessTokens'];
+    put?: never;
+    /**
+     * Create a personal access token
+     * @description The plaintext token is in this response and nowhere else — only its hash
+     *     is stored. A token cannot be granted scopes the creating session does not
+     *     already hold.
+     */
+    post: operations['createPersonalAccessToken'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/personal-access-tokens/{tokenId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Revoke a personal access token */
+    delete: operations['deletePersonalAccessToken'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customer/token': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mint a widget (customer) token
+     * @description Called by the widget on load. The token is scoped to one organization and
+     *     grants nothing outside the Customer Chat API.
+     *
+     *     The requesting `Origin` must be a trusted domain for the organization
+     *     (NFR-S6), which is what stops an arbitrary site from opening conversations
+     *     against someone else's workspace.
+     */
+    post: operations['issueCustomerToken'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -48,6 +216,36 @@ export interface components {
       status: 'up' | 'down';
       latency_ms?: number;
       error?: string;
+    };
+    TokenGrant: {
+      access_token: string;
+      /** @enum {string} */
+      token_type: 'Bearer';
+      /** @description Seconds. Capped at 3600 — the source platform used 28800. */
+      expires_in: number;
+      /** @description Rotates on every use; the previous value stops working. */
+      refresh_token: string;
+      /** @description Comma-separated. */
+      scope: string;
+      /** Format: uuid */
+      account_id: string;
+      license_id: string;
+      /** Format: uuid */
+      organization_id?: string;
+    };
+    PersonalAccessToken: {
+      /** Format: uuid */
+      id: string;
+      name: string | null;
+      /** @enum {string} */
+      kind?: 'pat' | 'oauth' | 'bot';
+      scopes: string[];
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      last_used_at?: string | null;
+      /** Format: date-time */
+      expires_at?: string | null;
     };
     Error: {
       error: {
@@ -194,6 +392,338 @@ export interface operations {
           'application/json': components['schemas']['Health'];
         };
       };
+    };
+  };
+  login: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: email */
+          email: string;
+          password: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Credentials accepted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            account: {
+              /** Format: uuid */
+              id: string;
+              email: string;
+              name: string;
+            };
+            memberships: {
+              license_id: string;
+              /** Format: uuid */
+              organization_id: string;
+              organization_name: string;
+              /** @enum {string} */
+              role: 'owner' | 'viceowner' | 'admin' | 'agent';
+              license_status?: string;
+            }[];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  authorize: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          client_id: string;
+          /** @description Must match a registered URI exactly. */
+          redirect_uri: string;
+          /** @description BASE64URL(SHA256(code_verifier)). */
+          code_challenge: string;
+          /**
+           * @description S256 only — OAuth 2.1 removes `plain`.
+           * @default S256
+           * @enum {string}
+           */
+          code_challenge_method?: 'S256';
+          /** @description Comma-separated. Defaults to the client's registered scopes. */
+          scope?: string;
+          state?: string;
+          /** Format: email */
+          email: string;
+          password: string;
+          license_id: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Authorization code issued */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            code: string;
+            redirect_uri: string;
+            state?: string;
+            expires_in: number;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  exchangeToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json':
+          | {
+              /** @enum {string} */
+              grant_type: 'authorization_code';
+              code: string;
+              code_verifier: string;
+              client_id: string;
+              client_secret?: string;
+              redirect_uri: string;
+            }
+          | {
+              /** @enum {string} */
+              grant_type: 'refresh_token';
+              refresh_token: string;
+              client_id: string;
+              client_secret?: string;
+            };
+      };
+    };
+    responses: {
+      /** @description Tokens issued */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TokenGrant'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  revokeToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          token: string;
+          /** @enum {string} */
+          token_type_hint?: 'access_token' | 'refresh_token';
+        };
+      };
+    };
+    responses: {
+      /** @description Token is no longer valid */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            revoked?: boolean;
+          };
+        };
+      };
+    };
+  };
+  getCurrentPrincipal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Caller identity, tenant and effective scopes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            kind: 'agent' | 'bot' | 'customer';
+            /** Format: uuid */
+            account_id?: string;
+            email?: string;
+            name?: string;
+            /** @enum {string} */
+            role?: 'owner' | 'viceowner' | 'admin' | 'agent';
+            /** Format: uuid */
+            organization_id: string;
+            license_id: string;
+            /** @enum {string} */
+            region?: 'eu';
+            scopes: string[];
+            /** @enum {string} */
+            routing_status?: 'accepting_chats' | 'not_accepting_chats' | 'offline';
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+    };
+  };
+  listPersonalAccessTokens: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Tokens (metadata only — the secret is never retrievable) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['PersonalAccessToken'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  createPersonalAccessToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          scopes?: string[];
+          expires_in_days?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Token created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PersonalAccessToken'] & {
+            /** @description Shown once. Not recoverable. */
+            token: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+    };
+  };
+  deletePersonalAccessToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tokenId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Revoked */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  issueCustomerToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          organization_id: string;
+          /**
+           * Format: uuid
+           * @description Returning visitor. A new customer is created when omitted.
+           */
+          customer_id?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Customer token issued */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            token: string;
+            expires_in: number;
+            /** Format: uuid */
+            customer_id: string;
+            /** Format: uuid */
+            organization_id: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
     };
   };
 }

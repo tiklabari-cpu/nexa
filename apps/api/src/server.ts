@@ -5,8 +5,11 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { Env } from './config/env.js';
 import errorHandler from './plugins/error-handler.js';
+import auth from './plugins/auth.js';
 import database from './plugins/database.js';
+import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
+import authRoutes from './routes/auth.js';
 import healthRoutes from './routes/health.js';
 
 export const API_PREFIX = '/api/v1';
@@ -68,6 +71,8 @@ export async function buildServer({ env }: BuildServerOptions): Promise<FastifyI
 
   await app.register(database, { env });
   await app.register(redis, { env });
+  await app.register(auth, { env });
+  await app.register(rateLimit, { env });
 
   app.addHook('onSend', async (request, reply) => {
     reply.header('X-Request-Id', request.id);
@@ -76,6 +81,7 @@ export async function buildServer({ env }: BuildServerOptions): Promise<FastifyI
   await app.register(
     async (api) => {
       await api.register(healthRoutes, { env, version: VERSION });
+      await api.register(authRoutes, { env });
     },
     { prefix: API_PREFIX },
   );

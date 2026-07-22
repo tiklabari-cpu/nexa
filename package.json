@@ -1,0 +1,36 @@
+{
+  "name": "nexa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.15.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "turbo run test:integration",
+    "test:e2e": "pnpm --filter @nexa/e2e test",
+    "contract:generate": "pnpm --filter @nexa/contract generate",
+    "db:migrate": "pnpm --filter @nexa/api db:migrate",
+    "db:seed": "pnpm --filter @nexa/api db:seed",
+    "db:reset": "pnpm --filter @nexa/api db:reset",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,css,yaml,yml}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1"
+  }
+}

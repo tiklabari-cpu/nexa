@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 11 requires build scripts to be opted into explicitly. These four need
+# theirs: Prisma downloads/produces its query engine, esbuild installs its
+# platform binary. Nothing else in the tree runs install scripts.
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  esbuild: true
+  prisma: true

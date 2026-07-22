@@ -1,0 +1,159 @@
+/**
+ * Design tokens — see design-brief.md §2–§5.
+ *
+ * Every colour, size and duration the UI uses lives here. Components consume
+ * them through the semantic Tailwind names (`bg-surface`, `text-secondary`),
+ * never as raw values, so a theme change is a one-file change.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg-canvas: #f7f8fa;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f1f3f7;
+  --bg-rail: #111726;
+  --bg-inset: #e9ecf2;
+  --border: #dde1e9;
+  --border-strong: #c3c9d6;
+
+  /* Text */
+  --text-primary: #111726;
+  --text-secondary: #4a5468;
+  --text-tertiary: #6b7488;
+  --text-inverse: #ffffff;
+
+  /* Brand */
+  --brand-100: #e4ecff;
+  --brand-500: #2f6bff;
+  --brand-600: #1f52d8;
+  --brand-700: #1740ac;
+  --brand-950: #0f1e42;
+  --focus-ring: #2f6bff;
+
+  /* Status — always paired with an icon or text, never colour alone */
+  --success: #12855a;
+  --warning: #a66200;
+  --danger: #c42a2a;
+  --info: #0b6e99;
+  --ai: #7c3aed;
+  --note: #b4740a;
+
+  /* Chat bubbles */
+  --bubble-agent-bg: var(--brand-500);
+  --bubble-agent-text: #ffffff;
+  --bubble-customer-bg: #eff1f5;
+  --bubble-customer-text: var(--text-primary);
+  --bubble-note-bg: #fff6e5;
+  --bubble-ai-bg: #f3edff;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px rgb(16 24 40 / 0.06);
+  --shadow-sm: 0 2px 6px rgb(16 24 40 / 0.08);
+  --shadow-md: 0 8px 24px rgb(16 24 40 / 0.12);
+
+  /* Motion */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-panel: 200ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-canvas: #0b1020;
+  --bg-surface: #121829;
+  --bg-surface-2: #1a2136;
+  --bg-rail: #080c18;
+  --bg-inset: #0e1424;
+  --border: #232c44;
+  --border-strong: #313c58;
+
+  --text-primary: #edf0f6;
+  --text-secondary: #a6b0c4;
+  --text-tertiary: #7c879e;
+  --text-inverse: #0b1020;
+
+  --focus-ring: #7aa2ff;
+
+  --success: #3dd68c;
+  --warning: #f5b14c;
+  --danger: #ff6b6b;
+  --info: #4fc3f7;
+  --ai: #b392f7;
+  --note: #ffce73;
+
+  --bubble-customer-bg: #1e2740;
+  --bubble-note-bg: #2e2210;
+  --bubble-ai-bg: #241a3d;
+
+  /* Shadows disappear on dark backgrounds — borders carry elevation instead. */
+  --shadow-xs: 0 0 0 1px var(--border);
+  --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 12px 32px rgb(0 0 0 / 0.5);
+}
+
+/* Respect the OS preference when the app has not pinned a theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family:
+    'Inter var',
+    Inter,
+    -apple-system,
+    'Segoe UI',
+    system-ui,
+    sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numeric data must not jitter as values update. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A single, always-visible focus treatment (design-brief §7). */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

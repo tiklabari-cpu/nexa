@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+  PNPM_VERSION: '11.15.1'
+
+jobs:
+  verify:
+    name: Typecheck · Lint · Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: nexa
+          POSTGRES_PASSWORD: nexa_dev_password
+          POSTGRES_DB: nexa
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U nexa -d nexa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6380:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://nexa:nexa_dev_password@localhost:5433/nexa
+      DATABASE_APP_URL: postgresql://nexa_app:nexa_app_dev_password@localhost:5433/nexa
+      REDIS_URL: redis://localhost:6380
+      JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
+      WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
+      CUSTOMER_TOKEN_SECRET: ci-customer-token-secret-0123456789abcdef0123
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare database extensions and app role
+        run: |
+          PGPASSWORD=nexa_dev_password psql -h localhost -p 5433 -U nexa -d nexa \
+            -v ON_ERROR_STOP=1 -f infra/db/init/00-extensions.sql
+
+      - name: Build contract (OpenAPI bundle + generated types)
+        run: pnpm --filter @nexa/contract build
+
+      - name: Verify generated types are in sync with the spec
+        run: |
+          pnpm --filter @nexa/contract generate
+          if ! git diff --quiet -- packages/contract/src/generated; then
+            echo "::error::Generated API types are stale. Run 'pnpm contract:generate' and commit the result."
+            git diff -- packages/contract/src/generated
+            exit 1
+          fi
+
+      - name: Generate Prisma client
+        run: pnpm --filter @nexa/api db:generate
+
+      - name: Apply migrations
+        run: pnpm --filter @nexa/api db:migrate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Integration tests
+        run: pnpm test:integration
+
+      - name: Build
+        run: pnpm build
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: verify
+    # The e2e workspace lands with slice 4; skip cleanly until then.
+    if: ${{ hashFiles('apps/e2e/package.json') != '' }}
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: nexa
+          POSTGRES_PASSWORD: nexa_dev_password
+          POSTGRES_DB: nexa
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U nexa -d nexa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6380:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://nexa:nexa_dev_password@localhost:5433/nexa
+      DATABASE_APP_URL: postgresql://nexa_app:nexa_app_dev_password@localhost:5433/nexa
+      REDIS_URL: redis://localhost:6380
+      JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
+      WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
+      CUSTOMER_TOKEN_SECRET: ci-customer-token-secret-0123456789abcdef0123
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: |
+          PGPASSWORD=nexa_dev_password psql -h localhost -p 5433 -U nexa -d nexa \
+            -v ON_ERROR_STOP=1 -f infra/db/init/00-extensions.sql
+      - run: pnpm --filter @nexa/contract build
+      - run: pnpm --filter @nexa/api db:generate
+      - run: pnpm --filter @nexa/api db:migrate
+      - run: pnpm --filter @nexa/api db:seed
+
+      - name: Install Playwright browser
+        run: pnpm --filter @nexa/e2e exec playwright install --with-deps chromium
+
+      - name: Run end-to-end tests
+        run: pnpm test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report/
+          retention-days: 7

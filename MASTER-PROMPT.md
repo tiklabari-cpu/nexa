@@ -117,4 +117,3 @@ docker-compose.yml + seed + tüm testler + HANDOFF.md (durum özeti).
 BAŞLA: önce doküman kaynaklarını oku, PLAN.md + design-brief.md üret, sonra Faz 1'den
 itibaren durmadan ilerle (efor kapılarına saygı göstererek).
 
-Bakcaza

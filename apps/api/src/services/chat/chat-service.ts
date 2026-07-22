@@ -25,6 +25,7 @@ import { ApiError } from '../../lib/api-error.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
+import { RoutingService, type RoutingContext } from '../routing/routing-service.js';
 import {
   canSeeChat,
   chatVisibilityFilter,
@@ -71,6 +72,7 @@ export class ChatService {
      * for the write succeeding.
      */
     private readonly publisher?: RealtimePublisher,
+    private readonly routing: RoutingService = new RoutingService(),
   ) {}
 
   /**
@@ -255,6 +257,7 @@ export class ChatService {
       groupIds?: bigint[];
       assignToMe: boolean;
       initialEvent?: NewEventInput;
+      routing?: RoutingContext;
     },
   ): Promise<{ chat: ChatDetail; created: boolean }> {
     const result = await this.#startInTransaction(tenant, principal, input);
@@ -277,6 +280,7 @@ export class ChatService {
       groupIds?: bigint[];
       assignToMe: boolean;
       initialEvent?: NewEventInput;
+      routing?: RoutingContext;
     },
   ): Promise<{ chat: ChatDetail; created: boolean; raw?: ChatRow }> {
     const actorId = actorOf(principal);
@@ -298,15 +302,24 @@ export class ChatService {
       });
       if (existing) return { chat: serialiseChat(existing), created: false };
 
+      // Explicit teams win; otherwise the routing engine decides, so a chat
+      // opened from the widget lands with whoever should actually take it.
+      const decision = input.groupIds?.length
+        ? null
+        : await this.routing.route(tx, tenant.licenseId, input.routing ?? {});
+
       const groupIds = input.groupIds?.length
         ? input.groupIds
-        : await defaultGroupIds(tx, tenant.licenseId);
+        : (decision?.groupIds ?? (await defaultGroupIds(tx, tenant.licenseId)));
+
+      const assigneeId = input.assignToMe ? actorId : (decision?.assigneeId ?? null);
 
       const chat = await this.#createChatWithThread(tx, {
         licenseId: tenant.licenseId,
         customerId: input.customerId,
         groupIds,
-        assigneeId: input.assignToMe ? actorId : null,
+        assigneeId,
+        queuePosition: input.assignToMe ? null : (decision?.queuePosition ?? null),
       });
 
       if (input.initialEvent) {
@@ -445,8 +458,25 @@ export class ChatService {
         where: { id: chat.id },
         include: chatInclude,
       });
-      return { detail: serialiseChat(reloaded), audience: this.#audienceFor(chat) };
+      // Closing frees a slot, so whoever is waiting can be assigned now rather
+      // than on the next arrival — otherwise a quiet period leaves customers
+      // queued behind an agent who is already free.
+      const drained = await this.routing.drainQueue(tx, tenant.licenseId);
+
+      return { detail: serialiseChat(reloaded), audience: this.#audienceFor(chat), drained };
     });
+
+    for (const assignment of result.drained) {
+      await this.publisher?.publish(
+        tenant,
+        'incoming_chat',
+        { agentIds: [assignment.assigneeId] },
+        {
+          requester_id: null,
+          chat: { id: assignment.chatId, thread: { id: assignment.threadId } },
+        },
+      );
+    }
 
     await this.publisher?.publish(tenant, 'chat_deactivated', result.audience, {
       chat_id: chatId,
@@ -808,6 +838,7 @@ export class ChatService {
       customerId: string;
       groupIds: bigint[];
       assigneeId: string | null;
+      queuePosition?: number | null;
     },
   ) {
     const chatId = await this.#allocateChatId(tx);
@@ -845,6 +876,9 @@ export class ChatService {
         licenseId: input.licenseId,
         active: true,
         assigneeId: input.assigneeId,
+        ...(input.queuePosition != null
+          ? { queuePosition: input.queuePosition, queuedAt: new Date() }
+          : {}),
       },
     });
 

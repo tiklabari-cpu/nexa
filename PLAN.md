@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–5, 8 ✅ tamam · Dilim 6 sırada
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–6, 8 ✅ tamam · Dilim 7 sırada
 
 ---
 
@@ -41,7 +41,7 @@ Her dilim: (a) OpenAPI+tip → (b) Prisma migration → (c) backend servis + uni
 | 3   | Veri modeli + migration (PRD §8.4) + invariant'lar + seed                                |  MAX   | `feat/03-data-model`      |  ✅   |
 | 4   | chat→thread→event + Agent Chat API                                                       |  MAX   | `feat/04-chat-core`       |  ✅   |
 | 5   | RTM WebSocket + reconnect/missed-event sync                                              |  MAX   | `feat/05-rtm`             |  ✅   |
-| 6   | Customer widget (iframe loader + Customer Chat API + trusted domains)                    | XHIGH  | `feat/06-widget`          |  ⬜   |
+| 6   | Customer widget (iframe loader + Customer Chat API + trusted domains)                    | XHIGH  | `feat/06-widget`          |  ✅   |
 | 7   | Inbox 3-pane + composer                                                                  | XHIGH  | `feat/07-inbox`           |  ⬜   |
 | 8   | Routing + queue + concurrent limit + fallback                                            |  MAX   | `feat/08-routing`         |  ✅   |
 | 9   | Reports Overview + Billing/metering + trial                                              | XHIGH  | `feat/09-reports-billing` |  ⬜   |
@@ -194,7 +194,24 @@ zarfın lisansı bağlantının lisansıyla eşleşmeli.
 - `login` → `subscribe` → push (`incoming_chat`, `incoming_event`, `chat_deactivated`, `chat_transferred`, `incoming_typing_indicator`, `routing_status_set`, `queue_positions_updated`)
 - Redis pub/sub fan-out; missed-event sync testi
 
-### Dilim 6 — Customer Widget [XHIGH]
+### Dilim 6 — Customer Widget [XHIGH] ✅
+
+**Teslim edildi (2026-07-22):** 379 test yeşil (120 unit + 259 integration) ·
+widget bundle **5.3 KB gzip** (bütçe 50 KB) · loader 1.09 KB.
+
+- Customer Chat API ayrı yüzey (`/customer/chat*`) — agent route'larını filtreleyerek
+  yeniden kullanmak, oraya eklenen her yeni alanın biri hatırlayana kadar widget'a
+  açık kalması demekti.
+- Tek çağrıda tüm widget durumu (online, chat, events, queue position) — yavaş
+  bağlantıda panelin sohbet dolu mu boş mu açıldığı farkı.
+- Mesaj gönderme tek endpoint: ziyaretçi açısından "başlat" ve "gönder" farkı yok;
+  istemciye karar verdirmek iki ilk mesajın yarışmasına davetiye.
+- Framework yok, düz DOM — 50 KB bütçesinde React tek başına 3 katı.
+- `textContent` her yerde; `innerHTML` eslint'te yasak (NFR-S6).
+- Ajan yokken dürüst "kimse müsait değil" mesajı — sahte umut kısa beklemeyi
+  terk edilmiş sohbete çevirir.
+- WebSocket yerine 4 sn polling: uyuyan laptop / kopuk mobil ağda sessizce ölmeyen
+  ve ziyaretçi için ayırt edilemez olan seçenek.
 
 - Async loader snippet + cross-origin iframe; < 50KB hedefi
 - Customer Chat API: token, start_chat, send_event, RTM customer socket

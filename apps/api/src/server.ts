@@ -12,6 +12,7 @@ import redis from './plugins/redis.js';
 import authRoutes from './routes/auth.js';
 import agentRoutes from './routes/agents.js';
 import chatRoutes from './routes/chats.js';
+import customerRoutes from './routes/customer.js';
 import healthRoutes from './routes/health.js';
 
 export const API_PREFIX = '/api/v1';
@@ -86,6 +87,7 @@ export async function buildServer({ env }: BuildServerOptions): Promise<FastifyI
       await api.register(authRoutes, { env });
       await api.register(chatRoutes);
       await api.register(agentRoutes);
+      await api.register(customerRoutes);
     },
     { prefix: API_PREFIX },
   );

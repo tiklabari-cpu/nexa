@@ -10,6 +10,7 @@ import database from './plugins/database.js';
 import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
 import authRoutes from './routes/auth.js';
+import agentRoutes from './routes/agents.js';
 import chatRoutes from './routes/chats.js';
 import healthRoutes from './routes/health.js';
 
@@ -84,6 +85,7 @@ export async function buildServer({ env }: BuildServerOptions): Promise<FastifyI
       await api.register(healthRoutes, { env, version: VERSION });
       await api.register(authRoutes, { env });
       await api.register(chatRoutes);
+      await api.register(agentRoutes);
     },
     { prefix: API_PREFIX },
   );

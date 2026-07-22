@@ -31,6 +31,14 @@ const startChatSchema = z.object({
   group_ids: z.array(z.coerce.bigint()).max(20).optional(),
   assign_to_me: z.boolean().default(true),
   initial_event: newEventSchema.optional(),
+  /** Signals the routing rules match on. */
+  routing: z
+    .object({
+      url: z.string().max(2048).optional(),
+      country_code: z.string().length(2).optional(),
+      group_id: z.coerce.bigint().optional(),
+    })
+    .optional(),
 });
 
 const transferSchema = z.object({
@@ -121,6 +129,19 @@ export default async function chatRoutes(app: FastifyInstance): Promise<void> {
         ...(body.group_ids !== undefined ? { groupIds: body.group_ids } : {}),
         ...(body.initial_event !== undefined
           ? { initialEvent: normaliseEvent(body.initial_event) }
+          : {}),
+        ...(body.routing !== undefined
+          ? {
+              routing: {
+                ...(body.routing.url !== undefined ? { url: body.routing.url } : {}),
+                ...(body.routing.country_code !== undefined
+                  ? { countryCode: body.routing.country_code }
+                  : {}),
+                ...(body.routing.group_id !== undefined
+                  ? { requestedGroupId: body.routing.group_id }
+                  : {}),
+              },
+            }
           : {}),
       });
 

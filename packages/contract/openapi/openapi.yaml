@@ -77,6 +77,25 @@ paths:
   /customer/token:
     $ref: "./paths/auth.yaml#/customerToken"
 
+  /chats:
+    $ref: "./paths/chats.yaml#/chats"
+  /chats/{chatId}:
+    $ref: "./paths/chats.yaml#/chat"
+  /chats/{chatId}/events:
+    $ref: "./paths/chats.yaml#/events"
+  /chats/{chatId}/deactivate:
+    $ref: "./paths/chats.yaml#/deactivate"
+  /chats/{chatId}/resume:
+    $ref: "./paths/chats.yaml#/resume"
+  /chats/{chatId}/transfer:
+    $ref: "./paths/chats.yaml#/transfer"
+  /chats/{chatId}/tags:
+    $ref: "./paths/chats.yaml#/tags"
+  /chats/{chatId}/tags/{tagName}:
+    $ref: "./paths/chats.yaml#/tag"
+  /chats/{chatId}/seen:
+    $ref: "./paths/chats.yaml#/seen"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -142,6 +161,122 @@ components:
         account_id: { type: string, format: uuid }
         license_id: { type: string }
         organization_id: { type: string, format: uuid }
+
+    Chat:
+      type: object
+      required: [id, license_id, customer_id, active, created_at, access, users]
+      properties:
+        id: { type: string, description: "Short base32 token, e.g. TJ1H8CFKRV." }
+        license_id: { type: string }
+        customer_id: { type: string, format: uuid }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        access:
+          type: object
+          properties:
+            group_ids:
+              type: array
+              items: { type: integer, format: int64 }
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/ChatUser" }
+        thread: { $ref: "#/components/schemas/Thread" }
+
+    ChatSummary:
+      type: object
+      required: [id, customer_id, active, created_at]
+      properties:
+        id: { type: string }
+        customer_id: { type: string, format: uuid }
+        customer_name: { type: string, nullable: true }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        thread_id: { type: string, nullable: true }
+        assignee_id: { type: string, format: uuid, nullable: true }
+        queue_position: { type: integer, nullable: true }
+        unread_count: { type: integer }
+        last_event:
+          allOf:
+            - $ref: "#/components/schemas/Event"
+          nullable: true
+        tags:
+          type: array
+          items: { type: string }
+
+    ChatUser:
+      type: object
+      required: [user_id, user_type, present]
+      properties:
+        user_id: { type: string }
+        user_type: { type: string, enum: [agent, customer] }
+        present: { type: boolean }
+        seen_up_to: { type: string, format: date-time, nullable: true }
+        name: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        avatar_url: { type: string, nullable: true }
+
+    Thread:
+      type: object
+      required: [id, chat_id, active, created_at]
+      properties:
+        id: { type: string }
+        chat_id: { type: string }
+        active: { type: boolean }
+        assignee_id: { type: string, format: uuid, nullable: true }
+        queue_position: { type: integer, nullable: true }
+        summary: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+
+    Event:
+      type: object
+      required: [id, chat_id, thread_id, type, author_type, recipients, created_at]
+      properties:
+        id:
+          type: string
+          description: "`<thread_id>_<sequence>` — ordering is decidable from the id alone."
+        chat_id: { type: string }
+        thread_id: { type: string }
+        type:
+          type: string
+          enum: [message, system_message, rich_message, file, filled_form]
+        text: { type: string, nullable: true }
+        author_id: { type: string, nullable: true }
+        author_type: { type: string, enum: [agent, customer, bot, system] }
+        recipients:
+          type: string
+          enum: [all, agents]
+          description: "`agents` is an internal note and never reaches the customer."
+        attachment_url: { type: string, nullable: true }
+        properties:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+
+    NewEvent:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [message, system_message, rich_message, file, filled_form]
+          default: message
+        text: { type: string, maxLength: 10000 }
+        recipients:
+          type: string
+          enum: [all, agents]
+          default: all
+        attachment_url: { type: string, format: uri }
+        properties:
+          type: object
+          additionalProperties: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Retrying with the same key returns the original event.
 
     PersonalAccessToken:
       type: object
@@ -258,6 +393,12 @@ components:
       required: false
       description: Opaque keyset cursor from the previous page.
       schema: { type: string }
+    ChatId:
+      name: chatId
+      in: path
+      required: true
+      description: Short base32 chat token.
+      schema: { type: string, minLength: 10, maxLength: 12 }
     Limit:
       name: limit
       in: query

@@ -15,6 +15,9 @@ import { execFile } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { loadEnvFile } from '../src/config/load-env-file.js';
+
+loadEnvFile();
 
 const run = promisify(execFile);
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');

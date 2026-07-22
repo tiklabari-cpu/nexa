@@ -4,6 +4,13 @@ SHELL := /bin/bash
 COMPOSE := docker compose
 PSQL := $(COMPOSE) exec -T db psql -U nexa -d nexa
 
+# Export .env to every recipe, so `make dev` / `make test` need no `source .env`
+# and Turbo can forward the variables it declares in globalEnv.
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
+
 .PHONY: help
 help: ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \

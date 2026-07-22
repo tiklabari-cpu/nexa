@@ -41,7 +41,9 @@ async function databasePlugin(app: FastifyInstance, options: { env: Env }): Prom
 
   const maintainPartitions = async (): Promise<void> => {
     try {
-      await db.$queryRaw`SELECT events_maintain_partitions(${PARTITION_MONTHS_AHEAD}, 1)`;
+      // Casts are explicit: Prisma sends JS numbers as bigint, which does not
+      // match the function's int signature.
+      await db.$queryRaw`SELECT events_maintain_partitions(${PARTITION_MONTHS_AHEAD}::int, 1::int)`;
     } catch (error) {
       // Never fatal: the default partition catches anything that slips through,
       // so a failure here degrades performance rather than losing messages.

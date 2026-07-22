@@ -11,7 +11,10 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { buildEventId, generateShortId } from '@nexa/types';
+import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword, hashToken } from '../src/lib/crypto.js';
+
+loadEnvFile();
 
 const prisma = new PrismaClient();
 

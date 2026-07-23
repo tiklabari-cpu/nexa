@@ -47,6 +47,7 @@ export interface Membership {
   role: string;
   license_status: string;
   organization_name: string;
+  client_id: string | null;
 }
 
 export interface TokenGrant {

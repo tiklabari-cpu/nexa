@@ -2,6 +2,12 @@ import { useEffect, type ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { SignInPage } from './features/auth/SignInPage.js';
+import {
+  ForgotPasswordPage,
+  JoinPage,
+  ResetPasswordPage,
+  SignUpPage,
+} from './features/auth/PublicPages.js';
 import { BillingPage } from './features/billing/BillingPage.js';
 import { CustomersPage } from './features/customers/CustomersPage.js';
 import { PlaybookPage } from './features/playbook/PlaybookPage.js';
@@ -30,8 +36,24 @@ export function App(): ReactElement {
   }
 
   // Signing out mid-session must not leave a module route rendering against a
-  // dead token, so the whole tree collapses to sign-in rather than redirecting.
-  if (status !== 'signed-in') return <SignInPage />;
+  // dead token, so the whole tree collapses to the signed-out routes rather
+  // than redirecting.
+  //
+  // Those routes are a real router rather than a single page because three of
+  // them are reached from a link in an email: `/join` and `/reset-password`
+  // carry a token in the URL, and landing on a sign-in form instead would
+  // discard it.
+  if (status !== 'signed-in') {
+    return (
+      <Routes>
+        <Route path="/signup" element={<SignUpPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/join" element={<JoinPage />} />
+        <Route path="*" element={<SignInPage />} />
+      </Routes>
+    );
+  }
 
   return (
     <Routes>

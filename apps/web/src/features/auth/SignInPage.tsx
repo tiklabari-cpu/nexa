@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactElement } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth, type Membership } from '../../lib/auth-store.js';
 
 /**
@@ -140,6 +141,18 @@ export function SignInPage(): ReactElement {
             </button>
           </form>
         )}
+
+        <p className="mt-4 text-center text-xs text-content-secondary">
+          <Link to="/forgot-password" className="text-brand-600 underline">
+            Forgot your password?
+          </Link>
+        </p>
+        <p className="mt-2 text-center text-xs text-content-secondary">
+          New here?{' '}
+          <Link to="/signup" className="text-brand-600 underline">
+            Create a workspace
+          </Link>
+        </p>
 
         <p className="mt-4 text-center text-2xs text-content-tertiary">
           Demo: owner@acme.localhost / nexa-demo-password

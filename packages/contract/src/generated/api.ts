@@ -1663,6 +1663,13 @@ export interface components {
         /** @enum {string} */
         role: 'owner' | 'viceowner' | 'admin' | 'agent';
         license_status?: string;
+        /**
+         * @description The workspace's OAuth client. Returned so the agent app does
+         *     not have to derive one from the organisation name — which had
+         *     no answer for a workspace created through signup, and
+         *     collided for two organisations sharing a first word.
+         */
+        client_id?: string | null;
       }[];
     };
     Invitation: {
@@ -2066,6 +2073,7 @@ export interface operations {
               /** @enum {string} */
               role: 'owner' | 'viceowner' | 'admin' | 'agent';
               license_status?: string;
+              client_id?: string | null;
             }[];
           };
         };

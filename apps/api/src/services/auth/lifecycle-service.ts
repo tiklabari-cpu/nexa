@@ -32,6 +32,8 @@ export interface Membership {
   organization_name: string;
   role: string;
   license_status: string;
+  /** The workspace's OAuth client. Returned so the caller never guesses it. */
+  client_id: string | null;
 }
 
 export interface Session {
@@ -120,17 +122,18 @@ export class LifecycleService {
     const { token, hash } = newToken();
     const expiresAt = new Date(Date.now() + RESET_TTL_MS);
 
-    // `$executeRaw`, not `$queryRaw`: the function returns void, and Prisma
-    // cannot deserialise a void column.
-    await this.#db
-      .$executeRaw`SELECT auth_request_password_reset(${email}::citext, ${hash}, ${expiresAt})`;
+    // The function reports whether it recorded anything. Working that out here
+    // instead — with a plain `SELECT ... FROM accounts` — is what broke this
+    // once: that query runs as the application role with no tenant context, row
+    // level security returned nothing every time, and the link was never sent
+    // to anyone while the token sat in the table looking correct.
+    //
+    // Knowing is fine. The *route* is what has to answer identically either
+    // way, and it does.
+    const [row] = await this.#db.$queryRaw<Array<{ recorded: boolean }>>`
+      SELECT auth_request_password_reset(${email}::citext, ${hash}, ${expiresAt}) AS recorded`;
 
-    // Whether a row was written is not reported back — the function returns
-    // void on purpose. Look the account up separately, so the *mailer* knows
-    // and the response shape cannot.
-    const account = await this.#db.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM accounts WHERE email = ${email}::citext`;
-    return account.length > 0 ? token : null;
+    return row?.recorded ? token : null;
   }
 
   async confirmPasswordReset(token: string, password: string): Promise<void> {
@@ -267,7 +270,8 @@ export class LifecycleService {
              organization_id::text AS organization_id,
              organization_name,
              role,
-             license_status
+             license_status,
+             client_id
       FROM auth_list_memberships(${accountId}::uuid)`;
   }
 }

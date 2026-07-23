@@ -592,6 +592,14 @@ components:
               organization_name: { type: string }
               role: { type: string, enum: [owner, viceowner, admin, agent] }
               license_status: { type: string }
+              client_id:
+                type: string
+                nullable: true
+                description: |
+                  The workspace's OAuth client. Returned so the agent app does
+                  not have to derive one from the organisation name — which had
+                  no answer for a workspace created through signup, and
+                  collided for two organisations sharing a first word.
 
     Invitation:
       type: object

@@ -21,6 +21,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
+import { InviteTeammates, PendingInvitations } from './InviteTeammates.js';
 
 interface Agent {
   id: string;
@@ -83,6 +84,10 @@ export function TeamPage(): ReactElement {
         <ErrorNotice message="Could not load the team. Check that the API is reachable and try again." />
       ) : (
         <>
+          <div className="mb-6 flex justify-end">
+            <InviteTeammates />
+          </div>
+
           <KpiGrid>
             <Kpi label="Teammates" value={formatCount(items.length)} />
             <Kpi
@@ -98,6 +103,12 @@ export function TeamPage(): ReactElement {
             />
             <Kpi label="Teams" value={formatCount(groups.data?.items.length ?? null)} />
           </KpiGrid>
+
+          <Section title="Pending invitations">
+            <Card>
+              <PendingInvitations />
+            </Card>
+          </Section>
 
           <Section title="Teammates">
             <Card>

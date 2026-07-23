@@ -11,7 +11,7 @@
 
 | Faz                | PRD  | Durum                                                    |
 | ------------------ | ---- | -------------------------------------------------------- |
-| **Faz 0 — MVP**    | §5.1 | ⏳ **28 tam · 6 kısmi · 18 açık** (52 gereksinim)        |
+| **Faz 0 — MVP**    | §5.1 | ⏳ **36 tam · 4 kısmi · 12 açık** (52 gereksinim)        |
 | Faz 1 — v1         | §5.2 | ⏳ kısmen başlandı (Playbook/AI öne çekildi — bkz. §1.3) |
 | Faz 2 — v2         | §5.3 | ⬜ başlanmadı                                            |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                                            |
@@ -127,9 +127,9 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | PRD  | Gereksinim                                     | Öncelik      | Durum | Nerede                  |
 | ---- | ---------------------------------------------- | ------------ | :---: | ----------------------- |
 | 00.1 | Login (email+parola; SSO/2FA opsiyonel)        | Must (MVP)   |  ✅   | Dilim 2 · `/auth/login` |
-| 00.2 | **Signup + 14 gün kartsız trial başlatma**     | Must (MVP)   |  ⬜   | **Dilim 12**            |
-| 00.3 | **Forgot password** (süreli token, nötr mesaj) | Must (MVP)   |  ⬜   | **Dilim 12**            |
-| 00.4 | **Onboarding sihirbazı** + tohum veri          | Should (MVP) |  ⬜   | **Dilim 12**            |
+| 00.2 | **Signup + 14 gün kartsız trial başlatma**     | Must (MVP)   |  ✅   | Dilim 12                |
+| 00.3 | **Forgot password** (süreli token, nötr mesaj) | Must (MVP)   |  ✅   | Dilim 12                |
+| 00.4 | **Onboarding sihirbazı** + tohum veri          | Should (MVP) |  ⬜   | **Dilim 14'e taşındı**  |
 
 ### 3.1 FR-MOD-01 — Global Shell / Navigation
 
@@ -173,10 +173,10 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | PRD                | Gereksinim                                       | Öncelik    | Durum | Nerede              |
 | ------------------ | ------------------------------------------------ | ---------- | :---: | ------------------- |
 | 04.1               | Team kenar çubuğu (AI Agents/Teammates/Teams)    | Must (MVP) |  ✅   | F2                  |
-| 04.3.1             | **Copy invite link**                             | Must (MVP) |  ⬜   | **Dilim 12**        |
+| 04.3.1             | **Copy invite link**                             | Must (MVP) |  ✅   | Dilim 12            |
 | 04.3.3             | Teammates tablosu (Name/Role/Status/2FA)         | Must (MVP) |  ✅   | F2                  |
 | 04.3.4             | Profile paneli (concurrent chats limit dahil)    | Must (MVP) |  ✅   | F2 · Dilim 8        |
-| 04.4               | **Invite teammates modal** (çoklu email + rol)   | Must (MVP) |  ⬜   | **Dilim 12**        |
+| 04.4               | **Invite teammates modal** (çoklu email + rol)   | Must (MVP) |  ✅   | Dilim 12            |
 | 04.5               | Teams CRUD + Primary agent önceliği              | Must (MVP) |  ✅   | Dilim 8 · `/groups` |
 | 04.2, 04.3.2, 04.6 | AI agent performance, filtre, Chatbots/Suspended | v1         |  🔒   | v1                  |
 
@@ -242,7 +242,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | #      | Dilim                                  | PRD kapsamı                                                            | Neden bu sıra                                                                                                                                                                                                                        |
 | ------ | -------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **11** | **Ticketing çekirdeği**                | 02.1.3 · 02.6 · 08.5.3 · (03.2.3, 07.3.2 düzeltmesi)                   | PRD §5.1 MVP'yi _"canlı sohbet **+ temel ticketing** çekirdeği"_ diye tanımlıyor — en büyük tek delik. Ayrıca bugün **görünür kusur**: `customers.tickets_count` ve Reports "Total cases" ticket sayıyor, sayı yapısal olarak hep 0. |
-| **12** | **Hesap yaşam döngüsü**                | 00.2 · 00.3 · 00.4 · 04.3.1 · 04.4                                     | Ürün kendi kendine hesap üretemiyor; her şey seed'e bağlı. ADR-10 trial'ı gerçek bir signup'la hiç sınanmadı.                                                                                                                        |
+| ~~12~~ | **Hesap yaşam döngüsü** ✅             | 00.2 ✅ · 00.3 ✅ · 04.3.1 ✅ · 04.4 ✅                                | Teslim edildi. Onboarding sihirbazı (00.4, Should) Dilim 14'e taşındı — Must'lar önce. Tarayıcıda bulunan iki hata için bkz. §D13/D14.                                                                                               |
 | **13** | **Kanallar + dosya + greeting**        | 08.5.1 · 08.5.2 · 08.5.9 · 08.9.4 · 11.2 · 11.3 · (02.3.5/11.4 attach) | Widget'ın kurulum yüzeyi ve müşteriye ilk dokunuş. 08.9.4 güvenlik şekli taşıyor (NFR-S10: tür/boyut/tarama).                                                                                                                        |
 | **14** | **Checkout + bildirim + shell kalanı** | 10.1.1–.3 · 10.1.6 · 13.8 · 01.1.3 · 01.1.6 · 08.7.1 · 03.1.1          | PRD çıkış kriteri "trial→ücretli ≥%8" bu yol olmadan ölçülemez.                                                                                                                                                                      |
 
@@ -1001,6 +1001,24 @@ görüneceği en son yerdir.
 - **D11 (dilim 11):** `tickets.assignee_id` için Prisma ilişkisi/FK **eklenmedi** (PRD §8.4 de
   tanımlamıyor). Ajan adı sayfa başına tek toplu sorguyla çözülüyor. Alternatif olan satır
   başına arama, kuyruk birkaç yüz ticket'a çıkınca ortaya çıkan N+1'dir.
+
+- **D12 (dilim 12):** PRD §8.4'te olmayan iki tablo eklendi: `password_reset_tokens` ve
+  `invitations`. §8.4 zaten var olan bir çalışma alanını tarif ediyor; birinin nasıl
+  **oluştuğuna** dair hiçbir şey söylemiyor. Kilitli 24 hata tipine `account_exists` (409)
+  eklendi — aynı kök sebep (bkz. D10).
+- **D13 (dilim 12, tarayıcıda bulundu):** Parola sıfırlama linki **hiç kimseye gitmiyordu**.
+  Servis "bu adres gerçek mi?"yi kendi `SELECT ... FROM accounts` sorgusuyla karar veriyordu;
+  o sorgu tenant bağlamı olmadan RLS altında çalışıp her seferinde 0 satır döndürüyordu.
+  Token yazılıyor, mail gönderilmiyordu. Integration testleri kaçırdı çünkü hepsi
+  **tabloya** bakıyordu, gönderilen mesaja değil. Fonksiyon artık boolean döndürüyor;
+  regresyon testi gerçek bir `FileMailer` ile posta kutusunu okuyor.
+- **D14 (dilim 12, tarayıcıda bulundu):** Yeni kaydolan sahip **giriş yapamıyordu**. Ajan
+  uygulaması `client_id`'yi organizasyon adının ilk kelimesinden türetiyordu; bu yalnızca
+  seed client'ları öyle adlandırdığı için çalışıyordu. Signup ile açılan çalışma alanında
+  öyle bir client yok — signup 201 dönüyor, ardından `/auth/authorize` 400 veriyor ve kullanıcı
+  "çalışma alanı oluşturulamadı" görüyordu (oysa oluşturulmuştu). Ayrıca "Acme Bikes" ve
+  "Acme Tools" aynı id'ye düşerdi ve `client_id` birincil anahtar. Artık signup client'ı
+  organizasyon uuid'sinden üretiyor ve `client_id` üyelikle birlikte dönüyor — tahmin yok.
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

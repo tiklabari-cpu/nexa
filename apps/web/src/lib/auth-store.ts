@@ -16,6 +16,8 @@ export interface Membership {
   organization_name: string;
   role: string;
   license_status: string;
+  /** The workspace's OAuth client, from the server rather than guessed. */
+  client_id?: string | null;
 }
 
 export interface CurrentAgent {
@@ -150,7 +152,12 @@ export const useAuth = create<AuthState>((set, get) => {
         const membership = memberships.find((m) => m.license_id === licenseId);
         if (!membership) throw new Error('Workspace not found.');
 
-        const clientId = `nexa-agent-app-${slugOf(membership.organization_name)}`;
+        // The server tells us which client to use. Deriving it from the
+        // organisation name used to work only because the seed named clients to
+        // match: a workspace created through signup had no such client, and two
+        // organisations sharing a first word would have collided.
+        const clientId =
+          membership.client_id ?? `nexa-agent-app-${slugOf(membership.organization_name)}`;
         const verifier = createVerifier();
         const challenge = await deriveChallenge(verifier);
 

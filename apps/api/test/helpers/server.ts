@@ -8,7 +8,7 @@
  * the question.
  */
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
-import { buildServer, API_PREFIX } from '../../src/server.js';
+import { buildServer, API_PREFIX, type BuildServerOptions } from '../../src/server.js';
 import { testEnv } from './fixtures.js';
 
 type Headers = Record<string, string>;
@@ -26,8 +26,10 @@ export interface TestServer {
 
 export async function startTestServer(
   overrides: Partial<NodeJS.ProcessEnv> = {},
+  /** Everything `buildServer` takes besides `env` — currently the mailer. */
+  build: Partial<Omit<BuildServerOptions, 'env'>> = {},
 ): Promise<TestServer> {
-  const app = await buildServer({ env: testEnv(overrides) });
+  const app = await buildServer({ env: testEnv(overrides), ...build });
   await app.ready();
 
   const url = (path: string): string => `${API_PREFIX}${path}`;

@@ -10,10 +10,14 @@
  * were written before the code.
  */
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
+import { FileMailer } from '../../src/services/mail/mailer.js';
 
 const STRONG_PASSWORD = 'a-quite-long-passphrase';
 
@@ -107,6 +111,29 @@ describe('account lifecycle', () => {
       await server.post('/auth/password-reset', { email: fx.a.ownerEmail });
       const [row] = await owner.passwordResetToken.findMany();
       expect(row!.tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('actually sends the link to a real address, and nothing to an unknown one', async () => {
+      // The regression this exists for: the service decided whether the address
+      // was real with its own query against `accounts`, which runs under row
+      // level security with no tenant context and returned nothing every time.
+      // The token was written and the mail was never sent — to anybody — and
+      // every assertion above still passed, because they all read the table.
+      const dir = await mkdtemp(join(tmpdir(), 'nexa-mail-'));
+      const mailer = new FileMailer(dir);
+      const mailed = await startTestServer({}, { mailer });
+
+      await mailed.post('/auth/password-reset', { email: 'nobody-at-all@example.test' });
+      expect(await mailer.outbox()).toHaveLength(0);
+
+      await mailed.post('/auth/password-reset', { email: fx.a.ownerEmail });
+      const outbox = await mailer.outbox();
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]!.to).toBe(fx.a.ownerEmail);
+      expect(outbox[0]!.body).toContain('/reset-password?token=');
+
+      await mailed.close();
+      await rm(dir, { recursive: true, force: true });
     });
   });
 

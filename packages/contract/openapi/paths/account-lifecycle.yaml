@@ -1,0 +1,289 @@
+# Account lifecycle — signup, password recovery, team invitations.
+#
+# PRD FR-MOD-00.2, 00.3, 04.3.1, 04.4.
+#
+# Until this existed the product could not create a workspace for itself: every
+# account came from the seed, and the trial rules (ADR-10) had never run against
+# an account the product made.
+
+signup:
+  post:
+    tags: [Auth]
+    operationId: signup
+    summary: Create a workspace and its first owner
+    description: |
+      One call creates the organization, the licence, the account and the owner
+      membership — all of them or none. A half-created workspace is not
+      something the person who hit "sign up" can repair, and they have no
+      account to complain from.
+
+      Starts a **14-day trial with no card** (ADR-10). Nothing is billed; the
+      trial counter is derived from `trial_ends_at` rather than stored as a
+      number, so it cannot drift from the date it claims to count towards.
+
+      **On an email that already exists this returns 409, deliberately** — unlike
+      password recovery below, which is enumeration-safe. Hiding it here would
+      mean answering "check your inbox" to someone who already has an account
+      and simply needs to sign in, and every path back to that realisation is
+      worse than the disclosure. Recovery has no such excuse: there is nothing
+      useful to tell the sender either way.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email, password, name, organization_name]
+            properties:
+              email: { type: string, format: email, maxLength: 320 }
+              password:
+                type: string
+                minLength: 12
+                maxLength: 200
+                description: Minimum length is the only rule; composition rules push people towards predictable substitutions.
+              name: { type: string, minLength: 1, maxLength: 120 }
+              organization_name: { type: string, minLength: 1, maxLength: 120 }
+    responses:
+      "201":
+        description: Workspace created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Session" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "409":
+        description: An account already exists for that email.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+passwordReset:
+  post:
+    tags: [Auth]
+    operationId: requestPasswordReset
+    summary: Ask for a reset link
+    description: |
+      **Always 202, with the same body, whether or not the account exists**
+      (FR-MOD-00.3). The work done is also kept comparable in both branches, so
+      response time does not answer the question the body refuses to.
+
+      The token is random, stored only as a hash, single-use and short-lived.
+      Consuming it revokes existing sessions — a password reset is what someone
+      does when they think another person has their account, and leaving that
+      person signed in defeats the point.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email]
+            properties:
+              email: { type: string, maxLength: 320 }
+    responses:
+      "202":
+        description: Accepted, regardless of whether an account exists.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  example: If an account exists for that address, we sent a link.
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+passwordResetConfirm:
+  post:
+    tags: [Auth]
+    operationId: confirmPasswordReset
+    summary: Set a new password with a reset token
+    responses:
+      "204": { description: Password changed; existing sessions revoked. }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401":
+        description: The token is unknown, expired or already used.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token, password]
+            properties:
+              token: { type: string, minLength: 20, maxLength: 200 }
+              password: { type: string, minLength: 12, maxLength: 200 }
+
+invitations:
+  get:
+    tags: [Configuration]
+    operationId: listInvitations
+    summary: Invitations that have not been accepted yet
+    responses:
+      "200":
+        description: Pending invitations
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Invitation" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Configuration]
+    operationId: createInvitations
+    summary: Invite teammates by email
+    description: |
+      Takes several addresses at once because that is how a team is actually
+      added (FR-MOD-04.4). Each gets its own single-use token.
+
+      **The role may not exceed the inviter's own.** Otherwise an agent could
+      mint an owner invitation and promote themselves through the side door.
+
+      Re-inviting an address that already has a pending invitation replaces it
+      rather than accumulating a second one — two live links to the same
+      workspace for the same person is one more than anybody wanted.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [emails]
+            properties:
+              emails:
+                type: array
+                minItems: 1
+                maxItems: 50
+                items: { type: string, maxLength: 320 }
+              role:
+                type: string
+                enum: [admin, agent]
+                default: admin
+                description: |
+                  Defaults to `admin`, matching the PRD. `owner` is not
+                  invitable — ownership transfers deliberately, not by email.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Invitation" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+invitation:
+  parameters:
+    - name: invitationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  delete:
+    tags: [Configuration]
+    operationId: revokeInvitation
+    summary: Revoke a pending invitation
+    description: The link stops working immediately; a forwarded invite is the whole reason this exists.
+    responses:
+      "204": { description: Revoked }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+invitationPreview:
+  get:
+    tags: [Auth]
+    operationId: previewInvitation
+    summary: What a person sees before accepting an invitation
+    description: |
+      Public, because the recipient has no account yet. Returns the workspace
+      name and whether an account already exists for the address, so the
+      acceptance screen can ask for a password or not — and nothing else. In
+      particular it does not reveal who else is in the workspace.
+    parameters:
+      - name: token
+        in: query
+        required: true
+        schema: { type: string, minLength: 20, maxLength: 200 }
+    responses:
+      "200":
+        description: The invitation
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organization_name, email, role, needs_password]
+              properties:
+                organization_name: { type: string }
+                email: { type: string }
+                role: { type: string, enum: [admin, agent] }
+                needs_password:
+                  type: boolean
+                  description: False when the address already has an account.
+      "401":
+        description: Unknown, expired or already-used invitation.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+invitationAccept:
+  post:
+    tags: [Auth]
+    operationId: acceptInvitation
+    summary: Join a workspace with an invitation token
+    description: |
+      If the address already has an account, this adds a membership to it rather
+      than creating a second account — one email is one person (PRD §8.4:
+      `accounts.email citext unique`), and a duplicate would split their history
+      in two.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token]
+            properties:
+              token: { type: string, minLength: 20, maxLength: 200 }
+              name: { type: string, minLength: 1, maxLength: 120 }
+              password:
+                type: string
+                minLength: 12
+                maxLength: 200
+                description: Required only when the address has no account yet.
+    responses:
+      "200":
+        description: Joined
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Session" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401":
+        description: Unknown, expired or already-used invitation.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

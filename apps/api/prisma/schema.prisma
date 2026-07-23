@@ -76,6 +76,8 @@ model License {
   auditEntries  AuditLogEntry[]
   securitySettings SecuritySettings?
 
+  invitations      Invitation[]
+
   @@index([organizationId])
   @@map("licenses")
 }
@@ -95,6 +97,8 @@ model Account {
   authorizationCodes OauthAuthorizationCode[]
   refreshTokens      OauthRefreshToken[]
   groupMemberships   GroupAgent[]
+  passwordResets     PasswordResetToken[]
+  invitationsSent    Invitation[]
 
   @@map("accounts")
 }
@@ -485,6 +489,44 @@ model Ticket {
   @@index([licenseId, lastMessageAt(sort: Desc), id(sort: Desc)], map: "tickets_license_last_message_idx")
   @@index([licenseId, assigneeId, lastMessageAt(sort: Desc)], map: "tickets_license_assignee_idx")
   @@map("tickets")
+}
+
+/// Password recovery (PRD FR-MOD-00.3). Not in §8.4 — see PLAN §D12.
+///
+/// Only the hash is stored: a leaked backup of this table must not be a set of
+/// working reset links.
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  accountId String    @map("account_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("password_reset_tokens")
+}
+
+/// Team invitations (PRD FR-MOD-04.4). Not in §8.4 — see PLAN §D12.
+model Invitation {
+  id             String    @id @default(uuid()) @db.Uuid
+  licenseId      BigInt    @map("license_id")
+  organizationId String    @map("organization_id") @db.Uuid
+  email          String    @db.Citext
+  role           String
+  tokenHash      String    @unique @map("token_hash")
+  invitedById    String    @map("invited_by_id") @db.Uuid
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  acceptedAt     DateTime? @map("accepted_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license   License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  invitedBy Account @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, createdAt(sort: Desc)], map: "invitations_license_id_idx")
+  @@map("invitations")
 }
 
 /// Customer satisfaction, recorded against the chat (PRD §8.4).

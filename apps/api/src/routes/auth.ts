@@ -124,6 +124,10 @@ export default async function authRoutes(
         organization_name: m.organization_name,
         role: m.role,
         license_status: m.license_status,
+        // Which OAuth client this workspace uses. The agent app used to derive
+        // it from the organisation name; a workspace created through signup has
+        // no client matching that guess.
+        client_id: m.client_id,
       })),
     });
   });

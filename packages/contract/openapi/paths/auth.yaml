@@ -56,6 +56,7 @@ login:
                       organization_name: { type: string }
                       role: { type: string, enum: [owner, viceowner, admin, agent] }
                       license_status: { type: string }
+                      client_id: { type: string, nullable: true }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

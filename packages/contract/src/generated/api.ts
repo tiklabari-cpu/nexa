@@ -128,6 +128,181 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/signup': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create a workspace and its first owner
+     * @description One call creates the organization, the licence, the account and the owner
+     *     membership — all of them or none. A half-created workspace is not
+     *     something the person who hit "sign up" can repair, and they have no
+     *     account to complain from.
+     *
+     *     Starts a **14-day trial with no card** (ADR-10). Nothing is billed; the
+     *     trial counter is derived from `trial_ends_at` rather than stored as a
+     *     number, so it cannot drift from the date it claims to count towards.
+     *
+     *     **On an email that already exists this returns 409, deliberately** — unlike
+     *     password recovery below, which is enumeration-safe. Hiding it here would
+     *     mean answering "check your inbox" to someone who already has an account
+     *     and simply needs to sign in, and every path back to that realisation is
+     *     worse than the disclosure. Recovery has no such excuse: there is nothing
+     *     useful to tell the sender either way.
+     */
+    post: operations['signup'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/password-reset': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ask for a reset link
+     * @description **Always 202, with the same body, whether or not the account exists**
+     *     (FR-MOD-00.3). The work done is also kept comparable in both branches, so
+     *     response time does not answer the question the body refuses to.
+     *
+     *     The token is random, stored only as a hash, single-use and short-lived.
+     *     Consuming it revokes existing sessions — a password reset is what someone
+     *     does when they think another person has their account, and leaving that
+     *     person signed in defeats the point.
+     */
+    post: operations['requestPasswordReset'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/password-reset/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Set a new password with a reset token */
+    post: operations['confirmPasswordReset'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/invitations/preview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What a person sees before accepting an invitation
+     * @description Public, because the recipient has no account yet. Returns the workspace
+     *     name and whether an account already exists for the address, so the
+     *     acceptance screen can ask for a password or not — and nothing else. In
+     *     particular it does not reveal who else is in the workspace.
+     */
+    get: operations['previewInvitation'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/invitations/accept': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Join a workspace with an invitation token
+     * @description If the address already has an account, this adds a membership to it rather
+     *     than creating a second account — one email is one person (PRD §8.4:
+     *     `accounts.email citext unique`), and a duplicate would split their history
+     *     in two.
+     */
+    post: operations['acceptInvitation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/invitations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Invitations that have not been accepted yet */
+    get: operations['listInvitations'];
+    put?: never;
+    /**
+     * Invite teammates by email
+     * @description Takes several addresses at once because that is how a team is actually
+     *     added (FR-MOD-04.4). Each gets its own single-use token.
+     *
+     *     **The role may not exceed the inviter's own.** Otherwise an agent could
+     *     mint an owner invitation and promote themselves through the side door.
+     *
+     *     Re-inviting an address that already has a pending invitation replaces it
+     *     rather than accumulating a second one — two live links to the same
+     *     workspace for the same person is one more than anybody wanted.
+     */
+    post: operations['createInvitations'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/invitations/{invitationId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        invitationId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Revoke a pending invitation
+     * @description The link stops working immediately; a forwarded invite is the whole reason this exists.
+     */
+    delete: operations['revokeInvitation'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/personal-access-tokens': {
     parameters: {
       query?: never;
@@ -1467,6 +1642,56 @@ export interface components {
       /** Format: date-time */
       created_at?: string;
     };
+    /**
+     * @description The account and the workspaces it may sign in to. Deliberately carries
+     *     no tokens: the caller picks a workspace and continues through
+     *     `/auth/authorize`, so one code path issues credentials rather than
+     *     three.
+     */
+    Session: {
+      account: {
+        /** Format: uuid */
+        id: string;
+        email: string;
+        name: string;
+      };
+      memberships: {
+        license_id: string;
+        /** Format: uuid */
+        organization_id: string;
+        organization_name: string;
+        /** @enum {string} */
+        role: 'owner' | 'viceowner' | 'admin' | 'agent';
+        license_status?: string;
+        /**
+         * @description The workspace's OAuth client. Returned so the agent app does
+         *     not have to derive one from the organisation name — which had
+         *     no answer for a workspace created through signup, and
+         *     collided for two organisations sharing a first word.
+         */
+        client_id?: string | null;
+      }[];
+    };
+    Invitation: {
+      /** Format: uuid */
+      id: string;
+      email: string;
+      /** @enum {string} */
+      role: 'admin' | 'agent';
+      invited_by_name?: string | null;
+      /** Format: date-time */
+      expires_at: string;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * @description The shareable link, returned **only** in the response that creates
+       *     the invitation. Listing invitations later does not re-expose it: the
+       *     token is stored as a hash, so there is nothing to re-expose, and a
+       *     list endpoint that handed out working links would turn read access
+       *     to the team page into workspace access.
+       */
+      accept_url?: string | null;
+    };
     Ticket: {
       id: string;
       subject: string;
@@ -1848,6 +2073,7 @@ export interface operations {
               /** @enum {string} */
               role: 'owner' | 'viceowner' | 'admin' | 'agent';
               license_status?: string;
+              client_id?: string | null;
             }[];
           };
         };
@@ -2018,6 +2244,283 @@ export interface operations {
         };
       };
       401: components['responses']['Unauthorized'];
+    };
+  };
+  signup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: email */
+          email: string;
+          /** @description Minimum length is the only rule; composition rules push people towards predictable substitutions. */
+          password: string;
+          name: string;
+          organization_name: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Workspace created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Session'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      /** @description An account already exists for that email. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  requestPasswordReset: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          email: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Accepted, regardless of whether an account exists. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @example If an account exists for that address, we sent a link. */
+            message: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  confirmPasswordReset: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          token: string;
+          password: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Password changed; existing sessions revoked. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      /** @description The token is unknown, expired or already used. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  previewInvitation: {
+    parameters: {
+      query: {
+        token: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The invitation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            organization_name: string;
+            email: string;
+            /** @enum {string} */
+            role: 'admin' | 'agent';
+            /** @description False when the address already has an account. */
+            needs_password: boolean;
+          };
+        };
+      };
+      /** @description Unknown, expired or already-used invitation. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  acceptInvitation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          token: string;
+          name?: string;
+          /** @description Required only when the address has no account yet. */
+          password?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Joined */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Session'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      /** @description Unknown, expired or already-used invitation. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listInvitations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Pending invitations */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Invitation'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createInvitations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          emails: string[];
+          /**
+           * @description Defaults to `admin`, matching the PRD. `owner` is not
+           *     invitable — ownership transfers deliberately, not by email.
+           * @default admin
+           * @enum {string}
+           */
+          role?: 'admin' | 'agent';
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Invitation'][];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  revokeInvitation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        invitationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Revoked */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   listPersonalAccessTokens: {

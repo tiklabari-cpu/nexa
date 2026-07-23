@@ -80,6 +80,20 @@ paths:
     $ref: "./paths/auth.yaml#/revoke"
   /auth/me:
     $ref: "./paths/auth.yaml#/me"
+  /auth/signup:
+    $ref: "./paths/account-lifecycle.yaml#/signup"
+  /auth/password-reset:
+    $ref: "./paths/account-lifecycle.yaml#/passwordReset"
+  /auth/password-reset/confirm:
+    $ref: "./paths/account-lifecycle.yaml#/passwordResetConfirm"
+  /auth/invitations/preview:
+    $ref: "./paths/account-lifecycle.yaml#/invitationPreview"
+  /auth/invitations/accept:
+    $ref: "./paths/account-lifecycle.yaml#/invitationAccept"
+  /invitations:
+    $ref: "./paths/account-lifecycle.yaml#/invitations"
+  /invitations/{invitationId}:
+    $ref: "./paths/account-lifecycle.yaml#/invitation"
   /auth/personal-access-tokens:
     $ref: "./paths/auth.yaml#/personalAccessTokens"
   /auth/personal-access-tokens/{tokenId}:
@@ -550,6 +564,62 @@ components:
         tickets_count: { type: integer }
         last_activity_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
+
+    Session:
+      type: object
+      description: |
+        The account and the workspaces it may sign in to. Deliberately carries
+        no tokens: the caller picks a workspace and continues through
+        `/auth/authorize`, so one code path issues credentials rather than
+        three.
+      required: [account, memberships]
+      properties:
+        account:
+          type: object
+          required: [id, email, name]
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: string }
+            name: { type: string }
+        memberships:
+          type: array
+          items:
+            type: object
+            required: [license_id, organization_id, organization_name, role]
+            properties:
+              license_id: { type: string }
+              organization_id: { type: string, format: uuid }
+              organization_name: { type: string }
+              role: { type: string, enum: [owner, viceowner, admin, agent] }
+              license_status: { type: string }
+              client_id:
+                type: string
+                nullable: true
+                description: |
+                  The workspace's OAuth client. Returned so the agent app does
+                  not have to derive one from the organisation name — which had
+                  no answer for a workspace created through signup, and
+                  collided for two organisations sharing a first word.
+
+    Invitation:
+      type: object
+      required: [id, email, role, expires_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        role: { type: string, enum: [admin, agent] }
+        invited_by_name: { type: string, nullable: true }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        accept_url:
+          type: string
+          nullable: true
+          description: |
+            The shareable link, returned **only** in the response that creates
+            the invitation. Listing invitations later does not re-expose it: the
+            token is stored as a hash, so there is nothing to re-expose, and a
+            list endpoint that handed out working links would turn read access
+            to the team page into workspace access.
 
     Ticket:
       type: object

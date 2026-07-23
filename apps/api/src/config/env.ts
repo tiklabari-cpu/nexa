@@ -27,6 +27,10 @@ const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_HOST: z.string().default('0.0.0.0'),
   API_BASE_URL: z.string().url().default('http://localhost:4000'),
+  /// Where invitation links point. The agent app, not the API.
+  WEB_APP_URL: z.string().url().default('http://localhost:5173'),
+  /// Outgoing mail is written here rather than sent (PLAN A4).
+  MAIL_DIR: z.string().default('.data/mail'),
   RTM_BASE_URL: z.string().default('ws://localhost:4001'),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
 

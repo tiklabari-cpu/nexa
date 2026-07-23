@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { SignInPage } from './features/auth/SignInPage.js';
 import { BillingPage } from './features/billing/BillingPage.js';
+import { CustomersPage } from './features/customers/CustomersPage.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
 import { ReportsPage } from './features/reports/ReportsPage.js';
 import { TeamPage } from './features/team/TeamPage.js';
@@ -35,6 +36,7 @@ export function App(): ReactElement {
       <Route path="/app" element={<AppShell />}>
         <Route index element={<Navigate to="/app/inbox" replace />} />
         <Route path="inbox" element={<InboxPage />} />
+        <Route path="customers" element={<CustomersPage />} />
         <Route path="team" element={<TeamPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="billing" element={<BillingPage />} />

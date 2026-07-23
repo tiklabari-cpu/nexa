@@ -33,6 +33,8 @@ tags:
     description: Conversations — chat → thread → event.
   - name: Customer
     description: The widget-facing surface. Customer token only.
+  - name: Customers
+    description: CRM — people who have contacted the workspace.
   - name: Configuration
     description: Groups, agents, tags, canned responses, routing, channels.
   - name: Reports
@@ -106,6 +108,13 @@ paths:
     $ref: "./paths/customer-chat.yaml#/close"
   /customer/chat/rating:
     $ref: "./paths/customer-chat.yaml#/rating"
+
+  /customers:
+    $ref: "./paths/customers.yaml#/customers"
+  /customers/{customerId}:
+    $ref: "./paths/customers.yaml#/customer"
+  /customers/{customerId}/ban:
+    $ref: "./paths/customers.yaml#/ban"
 
   /agents:
     $ref: "./paths/agents.yaml#/agents"
@@ -316,6 +325,74 @@ components:
         created_at: { type: string, format: date-time }
         last_used_at: { type: string, format: date-time, nullable: true }
         expires_at: { type: string, format: date-time, nullable: true }
+
+    CustomerSummary:
+      type: object
+      required: [id, name, email, is_lead, banned, chats_count, tickets_count]
+      properties:
+        id: { type: string, format: uuid }
+        name:
+          type: string
+          nullable: true
+          description: Null for a visitor who never introduced themselves.
+        email: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        country_code: { type: string, nullable: true, minLength: 2, maxLength: 2 }
+        country: { type: string, nullable: true }
+        is_lead:
+          type: boolean
+          description: Left an email address.
+        banned: { type: boolean }
+        chats_count:
+          type: integer
+          description: Counted from conversations, not read from a stored total.
+        tickets_count: { type: integer }
+        last_activity_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    CustomerDetail:
+      allOf:
+        - $ref: "#/components/schemas/CustomerSummary"
+        - type: object
+          required: [visits, chats]
+          properties:
+            banned_at: { type: string, format: date-time, nullable: true }
+            visits:
+              type: array
+              description: Most recent first.
+              items: { $ref: "#/components/schemas/Visit" }
+            chats:
+              type: array
+              items:
+                type: object
+                required: [id, active, created_at]
+                properties:
+                  id: { type: string }
+                  active: { type: boolean }
+                  created_at: { type: string, format: date-time }
+                  last_event_at: { type: string, format: date-time, nullable: true }
+
+    Visit:
+      type: object
+      required: [id, started_at, pages]
+      properties:
+        id: { type: string, format: uuid }
+        came_from:
+          type: string
+          nullable: true
+          description: Referring URL, when the browser sent one.
+        pages:
+          type: array
+          description: Pages seen during the visit, in order.
+          items:
+            type: object
+            properties:
+              url: { type: string }
+              at: { type: string, format: date-time }
+        os: { type: string, nullable: true }
+        browser: { type: string, nullable: true }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
 
     Agent:
       type: object

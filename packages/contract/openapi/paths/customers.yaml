@@ -1,0 +1,159 @@
+# Customers — the CRM side of the product.
+#
+# A note on counts. `customers.chats_count` and `tickets_count` exist in the
+# schema (PRD §8.4) but nothing has ever written to them, so reading them back
+# would report 0 for everyone. These endpoints count the related rows instead. A
+# denormalised counter that no write path maintains is worse than no counter:
+# it looks authoritative and is silently wrong.
+
+customers:
+  get:
+    tags: [Customers]
+    operationId: listCustomers
+    summary: List customers
+    description: |
+      Ordered by most recent activity, which is what a support team actually
+      scans for. Paginated by opaque keyset cursor rather than offset — with new
+      conversations arriving constantly an offset page shifts under the reader
+      and silently skips people.
+
+      Anonymous visitors are included: someone who opened the widget and never
+      gave a name is still a person waiting for an answer. They surface with a
+      null name rather than being filtered away.
+    parameters:
+      - name: query
+        in: query
+        description: Case-insensitive match against name, email and phone.
+        schema: { type: string, maxLength: 320 }
+      - name: segment
+        in: query
+        description: |
+          `all` · `leads` — gave an email · `recent` — active in the last 30 days
+          · `banned`.
+        schema:
+          type: string
+          enum: [all, leads, recent, banned]
+          default: all
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: A page of customers
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/CustomerSummary" }
+                total:
+                  type: integer
+                  description: Matching the current filter, across all pages.
+                next_page_id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+customer:
+  parameters:
+    - name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Customers]
+    operationId: getCustomer
+    summary: One customer, with their history
+    description: |
+      Includes recent visits and conversations. A customer in another tenant
+      returns 404, not 403 — a 403 would confirm the id is real (NFR-S5).
+    responses:
+      "200":
+        description: The customer
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Customers]
+    operationId: updateCustomer
+    summary: Edit customer details
+    description: |
+      Only the fields present in the body are changed, so two agents editing
+      different fields do not overwrite each other. Sending `null` clears a
+      field; omitting it leaves it alone.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, maxLength: 120, nullable: true }
+              email: { type: string, format: email, maxLength: 320, nullable: true }
+              phone: { type: string, maxLength: 40, nullable: true }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ban:
+  parameters:
+    - name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Customers]
+    operationId: banCustomer
+    summary: Ban a customer
+    description: |
+      Blocks new conversations and refuses to mint further widget tokens for
+      them. Existing history is kept: a ban is a moderation decision, not a
+      deletion request, and erasing the record would also erase the evidence
+      for it.
+
+      Requires `customers.ban:rw` — separate from ordinary customer editing
+      because it is the one customer action that denies someone service.
+    responses:
+      "200":
+        description: Banned
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Customers]
+    operationId: unbanCustomer
+    summary: Lift a ban
+    responses:
+      "200":
+        description: Ban lifted
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

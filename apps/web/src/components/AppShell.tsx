@@ -22,7 +22,7 @@ interface RailItem {
 
 const MODULES: RailItem[] = [
   { to: '/app/inbox', label: 'Inbox', icon: '▤', enabled: true },
-  { to: '/app/customers', label: 'Customers', icon: '◫', enabled: false },
+  { to: '/app/customers', label: 'Customers', icon: '◫', enabled: true },
   { to: '/app/team', label: 'Team', icon: '◑', enabled: true },
   { to: '/app/playbook', label: 'Playbook', icon: '✦', enabled: false },
   { to: '/app/reports', label: 'Reports', icon: '◆', enabled: true },

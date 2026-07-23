@@ -379,10 +379,17 @@ function readConfig(win: Window): WidgetConfig {
   };
 }
 
-/** The page the widget is embedded in, when the host shared it. */
+/**
+ * The page the widget is embedded in.
+ *
+ * `host_url` comes from the loader, which is the only code that can see it: a
+ * cross-origin frame's `document.referrer` is trimmed to the origin by the
+ * default referrer policy, so falling back to it yields the site rather than
+ * the page. Kept as a fallback anyway — better the site than nothing.
+ */
 function hostPageUrl(win: Window): string | undefined {
-  const referrer = win.document.referrer;
-  return referrer || undefined;
+  const fromLoader = new URLSearchParams(win.location.search).get('host_url');
+  return fromLoader || win.document.referrer || undefined;
 }
 
 /** Origin part of the referrer, for when the loader did not pass one through. */

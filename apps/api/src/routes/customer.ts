@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
+import { CustomerService } from '../services/customers/customer-service.js';
 
 const startSchema = z.object({
   text: z.string().trim().min(1).max(10_000),
@@ -45,6 +46,7 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 export default async function customerRoutes(app: FastifyInstance): Promise<void> {
   const publisher = new RealtimePublisher(app.redis, app.log);
   const chats = new ChatService(app.db, app.redis, publisher);
+  const customerDirectory = new CustomerService();
 
   /**
    * The widget's whole conversation state in one call.
@@ -130,6 +132,25 @@ export default async function customerRoutes(app: FastifyInstance): Promise<void
             },
           }),
         );
+      }
+
+      // The page the visitor wrote from. Recorded on a best-effort basis: it
+      // feeds the "Visited pages" panel an agent reads for context, and losing
+      // that context is not worth failing the message the visitor is trying to
+      // send.
+      if (body.url) {
+        try {
+          await request.withTenant((tx) =>
+            customerDirectory.recordPageView(tx, tenant, {
+              customerId: principal.customerId,
+              url: body.url!,
+              userAgent: request.headers['user-agent'],
+              ip: request.ip,
+            }),
+          );
+        } catch (error) {
+          request.log.warn({ err: error }, 'could not record page view');
+        }
       }
 
       const existing = await request.withTenant((tx) =>

@@ -116,9 +116,13 @@ function bucketFor(request: FastifyRequest, env: Env): Bucket {
     };
   }
 
+  // Unauthenticated callers share one bucket per IP. This covers sign-in,
+  // token exchange and widget token minting, so it is the limit an end-to-end
+  // suite runs into first — hence configurable like the others (ADR-07), rather
+  // than the only hard-coded one.
   return {
     key: `rl:anon:${request.ip}`,
-    limit: 30,
+    limit: env.RATE_LIMIT_ANON_PER_MIN,
     windowMs: 60_000,
   };
 }

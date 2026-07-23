@@ -27,6 +27,12 @@ export class WidgetApi {
   constructor(
     private readonly baseUrl: string,
     private readonly organizationId: string,
+    /**
+     * Origin of the page the widget is embedded in. Sent because this request
+     * comes from inside the iframe, whose own origin is Nexa's and therefore
+     * identical for every customer — it cannot say which site opened the chat.
+     */
+    private readonly hostOrigin: string | null = null,
   ) {}
 
   get authenticated(): boolean {
@@ -49,6 +55,7 @@ export class WidgetApi {
       body: JSON.stringify({
         organization_id: this.organizationId,
         ...(stored ? { customer_id: stored } : {}),
+        ...(this.hostOrigin ? { host_origin: this.hostOrigin } : {}),
       }),
     });
     if (!response.ok) throw new WidgetApiError(await describe(response));

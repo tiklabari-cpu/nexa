@@ -44,10 +44,31 @@ describe('widget loader', () => {
     expect(el!.src).toContain('https://widget.test/widget.html');
     expect(el!.src).toContain('organization_id=org-1');
 
-    // No allow-same-origin: the frame must not be able to reach host storage.
     const sandbox = el!.getAttribute('sandbox') ?? '';
     expect(sandbox).toContain('allow-scripts');
-    expect(sandbox).not.toContain('allow-same-origin');
+    // `allow-same-origin` gives the frame its own origin back — not the host's,
+    // which stays protected by the differing origin asserted below. Without it
+    // the document is opaque-origin: no storage, and every request carries
+    // `Origin: null`, which the API refuses. The widget could not authenticate.
+    expect(sandbox).toContain('allow-same-origin');
+  });
+
+  it('passes the host page origin through to the widget', () => {
+    // The token request is made from inside the frame, whose own origin is
+    // Nexa's and therefore identical for every customer. Only code running on
+    // the host page knows which site this actually is.
+    boot(setup({}));
+    const src = new URL(frame()!.src);
+    expect(src.searchParams.get('host_origin')).toBe(window.location.origin);
+  });
+
+  it('refuses to boot a same-origin widget', () => {
+    // Same-origin is precisely the configuration in which the iframe stops
+    // being an isolation boundary: with `allow-scripts allow-same-origin` the
+    // frame could reach into the embedder and strip its own sandbox.
+    const win = setup({ widgetOrigin: window.location.origin });
+    expect(boot(win)).toBeNull();
+    expect(frame()).toBeNull();
   });
 
   it('gives the iframe an accessible name', () => {

@@ -60,6 +60,22 @@ const createPatBody = z.object({
 const customerTokenBody = z.object({
   organization_id: z.string().uuid(),
   customer_id: z.string().uuid().optional(),
+  /**
+   * Origin of the page the widget is embedded in.
+   *
+   * The request itself comes from inside the widget iframe, so its `Origin`
+   * header is Nexa's own widget origin — identical for every customer and
+   * therefore useless for deciding which *website* opened the chat. The loader
+   * runs on the customer's page, knows that origin, and passes it through.
+   *
+   * Client-supplied, so it is a configuration control, not an authentication
+   * boundary: anyone can call this endpoint directly and claim any host. It
+   * stops a copied snippet from working on a site the owner did not authorise;
+   * it does not stop a deliberate attacker. What actually contains the damage
+   * is that the resulting token only ever reaches one visitor's own
+   * conversation within one organization.
+   */
+  host_origin: z.string().max(2048).optional(),
 });
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
@@ -75,14 +91,32 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 }
 
 /** Hostname of an Origin header, lowercased and without port. */
+/**
+ * Hostname of an origin, or null when the origin is unusable.
+ *
+ * Plaintext http is refused except on loopback. `.localhost` is included
+ * because RFC 6761 §6.3 reserves the whole TLD for loopback — a browser can
+ * never be pointed at someone else's machine through it — and development seeds
+ * give each demo tenant its own `<tenant>.localhost` so a cross-tenant mistake
+ * shows up as visibly wrong data instead of as a shared origin that happens to
+ * work for everyone.
+ *
+ * `"null"` — what a sandboxed, opaque-origin document sends — parses as a
+ * relative URL and is rejected here, which is the intent: an origin that
+ * identifies nothing cannot be matched against an allowlist.
+ */
 function originHost(origin: string | undefined): string | null {
   if (!origin) return null;
   try {
     const url = new URL(origin);
-    if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
-      return null;
-    }
-    return url.hostname.toLowerCase();
+    const hostname = url.hostname.toLowerCase();
+    const isLoopback =
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]';
+    if (url.protocol !== 'https:' && !isLoopback) return null;
+    return hostname;
   } catch {
     return null;
   }
@@ -394,9 +428,13 @@ export default async function authRoutes(
   app.post('/customer/token', { config: { public: true } }, async (request, reply) => {
     const body = parse(customerTokenBody, request.body);
 
-    const host = originHost(request.headers.origin);
+    // Prefer the embedding page's origin; fall back to the request's own for
+    // callers that talk to the API directly (server-side integrations, tests).
+    const host = originHost(body.host_origin) ?? originHost(request.headers.origin);
     if (!host) {
-      throw ApiError.authorization('A valid Origin header is required to request a widget token.');
+      throw ApiError.authorization(
+        'A valid embedding origin is required to request a widget token.',
+      );
     }
 
     // The organization id comes from the request body — untrusted. It only

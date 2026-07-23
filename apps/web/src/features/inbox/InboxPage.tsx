@@ -86,10 +86,17 @@ export function InboxPage(): ReactElement {
         </ul>
 
         <div className="mt-auto border-t border-border p-3">
-          <label className="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+          {/* `htmlFor` matters here: without it this is an unnamed combobox,
+              and the control that decides whether an agent receives work is the
+              last one that should be unlabelled (NFR-A11Y5). */}
+          <label
+            htmlFor="routing-status"
+            className="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+          >
             Availability
           </label>
           <select
+            id="routing-status"
             value={agent?.routing_status ?? 'offline'}
             onChange={(event) => void setRoutingStatus(event.target.value as 'accepting_chats')}
             className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"

@@ -46,6 +46,11 @@ export default defineConfig(({ mode }) => {
         },
     server: {
       port: Number(process.env['WIDGET_PORT'] ?? 5174),
+      // The demo host page is served from `<tenant>.localhost` so it sits on a
+      // different origin than the widget, the way a real embed does. RFC 6761
+      // reserves the whole `.localhost` TLD for loopback, so this cannot reach
+      // another machine.
+      allowedHosts: ['localhost', '.localhost'],
     },
     test: {
       environment: 'jsdom',

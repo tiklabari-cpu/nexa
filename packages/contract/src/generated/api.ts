@@ -182,9 +182,22 @@ export interface paths {
      * @description Called by the widget on load. The token is scoped to one organization and
      *     grants nothing outside the Customer Chat API.
      *
-     *     The requesting `Origin` must be a trusted domain for the organization
-     *     (NFR-S6), which is what stops an arbitrary site from opening conversations
-     *     against someone else's workspace.
+     *     The embedding page's origin must be a trusted domain for the organization
+     *     (NFR-S6). It arrives as `host_origin`, because the request is made from
+     *     inside the widget iframe and that frame's own `Origin` is Nexa's — the
+     *     same value for every customer, and so unable to say which site opened the
+     *     chat. Only code running on the host page knows that, which is why the
+     *     loader passes it through.
+     *
+     *     Being client-supplied makes this a **configuration** control rather than
+     *     an authentication boundary: anyone calling this endpoint directly can
+     *     claim any host. It stops a copied snippet from working on an unauthorised
+     *     site; it does not stop a deliberate attacker. What contains the damage is
+     *     that the resulting token only ever reaches one visitor's own conversation
+     *     within one organization.
+     *
+     *     `host_origin` is optional so server-side integrations can call this
+     *     directly, in which case the request's own `Origin` header is used.
      */
     post: operations['issueCustomerToken'];
     delete?: never;
@@ -1349,6 +1362,11 @@ export interface operations {
            * @description Returning visitor. A new customer is created when omitted.
            */
           customer_id?: string;
+          /**
+           * @description Origin of the page the widget is embedded in, e.g.
+           *     `https://shop.example`. Falls back to the `Origin` header.
+           */
+          host_origin?: string;
         };
       };
     };

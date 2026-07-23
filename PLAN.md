@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–9 ✅ tamam · Dilim 10 kısmi (bkz. HANDOFF.md)
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–9 ✅ · Dilim 10 ◐ (4/7 modül) · F1–F3 düzeltmeleri ✅ (bkz. §1b)
 
 ---
 
@@ -364,6 +364,45 @@ yani ne açtığı ne de açık olup olmadığı belliydi).
 > (`hidden` + `group-open:block` sınıfları) sabitleyen ayrı bir test; o test hata geri
 > konunca kırılıyor.
 
+### F3 — Playwright E2E paketi + widget yolunun onarımı (2026-07-23) ✅
+
+"Bitti" tanımının son açık maddesi kapandı: `apps/e2e` (Playwright, chromium) **10 test**.
+CI'daki koşullu e2e job'ı artık gerçekten çalışıyor.
+
+**Kapsam:** ana demo akışı tek tarayıcı oturumunda — ziyaretçi widget'tan yazar → routing atar →
+ajan **sayfa yenilemeden** görür → yanıtlar → ziyaretçi yanıtı görür → internal note eklenir ve
+ziyaretçide **görünmediği** doğrulanır → arşivlenir. Ayrı context'ler: ziyaretçi ve ajan farklı
+kişiler, storage paylaşmaları birindeki hatayı diğerinde maskeler.
+
+**Paket yazılırken bulunan gerçek hatalar (hepsi tarayıcı seviyesinde, alt katmanlar göremezdi):**
+
+- **Widget hiç kimlik alamıyormuş.** Loader iframe'i `allow-same-origin` olmadan
+  oluşturuyordu → doküman opak kökenli → her istek `Origin: null` taşıyor → API token
+  vermiyor. Tarayıcıda kanıtlandı (`self.origin === "null"`, 403). Unit testler geçiyordu
+  (jsdom köken modellemiyor), integration testler geçiyordu (API'yi düzgün Origin ile
+  doğrudan çağırıyorlar).
+- **Trusted-domain kontrolü uygulanamaz durumdaydı.** Token isteği iframe'den geliyor;
+  iframe'in kökeni Nexa'nın kendi widget kökeni, yani **her müşteri için aynı**. Hangi
+  sitenin sohbeti açtığını asla söyleyemezdi. Artık host sayfanın kökenini yalnız o sayfada
+  çalışan loader biliyor ve `host_origin` olarak aktarıyor. Bunun bir **yapılandırma**
+  kontrolü olduğu, kimlik doğrulama sınırı olmadığı kontratta açıkça yazıldı — doğrudan API
+  çağıran herkes istediği host'u iddia edebilir; asıl sınır token'ın tek ziyaretçinin kendi
+  konuşmasına kapsanmış olması.
+- **Launcher paneli kapatıyordu.** Panel açıkken launcher düğmesi composer'ın Send düğmesinin
+  üstünde kalıyor ve tıklamayı yutuyordu — panel düzgün görünüyor, mesaj gitmiyor.
+- **`Availability` etiketi select'e bağlı değildi** (`htmlFor` yok). Ajanın iş alıp almadığını
+  belirleyen kontrol, ekran okuyucuda isimsizdi.
+- **`.localhost` reddediliyordu.** Seed her demo kiracıya `<tenant>.localhost` veriyor ama
+  `originHost` http'yi yalnız düz `localhost` için kabul ediyordu — seed'lenen widget yerelde
+  hiç çalışamazdı. RFC 6761 §6.3 `.localhost` TLD'sinin tamamını loopback'e ayırdığı için
+  alt alan adları da kabul ediliyor.
+- **Anon rate limit env'den okunmuyordu** (tek sabit kodlanmış limitti, ADR-07'ye aykırı).
+  `RATE_LIMIT_ANON_PER_MIN` eklendi; CI e2e job'ında yükseltiliyor, üretim varsayılanı 30.
+
+**Test tasarımı notu:** organizasyon id'si worker kapsamlı çözülüyor. Test başına çözmek her
+test için bir `/auth/login` demekti ve tek koşuda anon limiti tetikliyordu — süit o zaman
+ürün hatası gibi görünen 429'larla düşüyordu.
+
 ---
 
 ## 3. Assumptions (varsayımlar — onay beklenmedi)
@@ -418,4 +457,4 @@ yani ne açtığı ne de açık olup olmadığı belliydi).
       etiket → arşiv → reports + billing
 - [x] Her dilim commit + push edilmiş
 - [x] HANDOFF.md yazılmış
-- [ ] Playwright E2E paketi — tarayıcı akışı elle doğrulandı, otomatik suite yok (bkz. HANDOFF)
+- [x] Playwright E2E paketi — 10 test, ana demo akışı tarayıcıda kanıtlandı (bkz. F3)

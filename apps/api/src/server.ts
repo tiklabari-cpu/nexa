@@ -15,6 +15,7 @@ import agentRoutes from './routes/agents.js';
 import chatRoutes from './routes/chats.js';
 import customerRoutes from './routes/customer.js';
 import customerDirectoryRoutes from './routes/customers.js';
+import ticketRoutes from './routes/tickets.js';
 import reportRoutes from './routes/reports.js';
 import settingsRoutes from './routes/settings.js';
 import playbookRoutes from './routes/playbook.js';
@@ -95,6 +96,7 @@ export async function buildServer({ env }: BuildServerOptions): Promise<FastifyI
       await api.register(agentRoutes);
       await api.register(customerRoutes);
       await api.register(customerDirectoryRoutes);
+      await api.register(ticketRoutes);
       await api.register(reportRoutes, { env });
       await api.register(settingsRoutes);
       await api.register(playbookRoutes);

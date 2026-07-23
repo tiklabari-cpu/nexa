@@ -53,6 +53,15 @@ export const SCOPES = [
   'chats--access:ro',
   'chats--all:rw',
   'chats--access:rw',
+  // Ticket. Not in the source platform's list (v2-03 §8.5) because there
+  // ticketing is a separate product with its own API. Nexa merges the two
+  // surfaces into one inbox, so tickets need scopes of their own — reusing
+  // `chats--*` would mean a token scoped to conversations silently also reads
+  // the follow-up work, and ADR-04 keeps resources distinct. See PLAN §D.
+  'tickets--all:ro',
+  'tickets--access:ro',
+  'tickets--all:rw',
+  'tickets--access:rw',
   // Customer
   'customers.ban:rw',
   'customers:own',

@@ -554,6 +554,78 @@ export interface paths {
     patch: operations['updateCustomer'];
     trace?: never;
   };
+  '/tickets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List tickets, newest activity first
+     * @description Ordered by `last_message_at` descending, which is the order the PRD
+     *     specifies and the order a queue is actually worked. Keyset pagination
+     *     rather than offset: tickets change status while someone is reading, and an
+     *     offset page shifts under them and skips rows.
+     *
+     *     `view` matches the PRD's Tickets group:
+     *
+     *     - `all` — everything the caller may see
+     *     - `unassigned` — no assignee; the pile nobody has picked up
+     *     - `my_open` — assigned to the caller and not yet solved or closed
+     *     - `solved` — solved or closed, the read-back pile
+     */
+    get: operations['listTickets'];
+    put?: never;
+    /**
+     * Create a ticket, optionally from a chat
+     * @description Two ways in. From a chat (`source_chat_id`) — the PRD's "Create ticket"
+     *     action, which carries the customer across so the follow-up is attached to
+     *     the same person. Or standalone with a `customer_id`, which is how an
+     *     inbound email becomes a ticket (FR-MOD-08.5.3).
+     *
+     *     **A chat gets at most one unresolved ticket.** An agent who clicks the
+     *     button twice, or two agents looking at the same conversation, would
+     *     otherwise split the follow-up across two tickets and one of them would be
+     *     forgotten. A second attempt returns `409` with the existing id so the
+     *     client can open it instead. The rule is a partial unique index, not an
+     *     application check, so a race cannot slip between the two.
+     */
+    post: operations['createTicket'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tickets/{ticketId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    /** One ticket */
+    get: operations['getTicket'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Change status, assignee, team or subject
+     * @description Assigning to an agent outside the licence, or to a team that does not
+     *     exist, is refused rather than stored — a ticket pointing at nobody is a
+     *     ticket nobody works.
+     *
+     *     Solving a ticket does not delete it: `solved` and `closed` stay readable
+     *     in the `solved` view.
+     */
+    patch: operations['updateTicket'];
+    trace?: never;
+  };
   '/customers/{customerId}/ban': {
     parameters: {
       query?: never;
@@ -1395,6 +1467,40 @@ export interface components {
       /** Format: date-time */
       created_at?: string;
     };
+    Ticket: {
+      id: string;
+      subject: string;
+      /** @enum {string} */
+      status: 'open' | 'pending' | 'solved' | 'closed' | 'spam';
+      /** Format: uuid */
+      assignee_id?: string | null;
+      assignee_name?: string | null;
+      /** Format: int64 */
+      group_id?: number | null;
+      /** Format: uuid */
+      customer_id?: string | null;
+      /** @description Null for a visitor who never introduced themselves. */
+      customer_name?: string | null;
+      customer_email?: string | null;
+      /** @description The conversation this followed on from, if any. */
+      source_chat_id?: string | null;
+      /** Format: date-time */
+      last_message_at?: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    TicketDetail: components['schemas']['Ticket'] & {
+      /**
+       * @description A snapshot of the conversation the ticket came from, so an agent
+       *     picking the ticket up has the context without hunting for it.
+       */
+      source_chat?: {
+        id: string;
+        active: boolean;
+        /** Format: date-time */
+        created_at?: string;
+      } | null;
+    };
     CustomerDetail: components['schemas']['CustomerSummary'] & {
       /** Format: date-time */
       banned_at?: string | null;
@@ -1485,6 +1591,14 @@ export interface components {
       };
       totals: {
         chats: number;
+        /** @description Tickets created in the range. */
+        tickets: number;
+        /**
+         * @description Chats plus tickets (PRD §3.3). Sent rather than left for the
+         *     client to add up, so every surface quoting "total cases" quotes
+         *     the same number.
+         */
+        total_cases: number;
         closed: number;
         automated: number;
         /** @description Share of *closed* chats. Null when nothing closed. */
@@ -1619,6 +1733,18 @@ export interface components {
     };
     /** @description Conflicts with current resource state */
     Conflict: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /**
+     * @description The trial has expired and the workspace is read-only (ADR-10). Reads
+     *     still succeed and nothing has been deleted; writes resume on subscribing.
+     */
+    PaymentRequired: {
       headers: {
         [name: string]: unknown;
       };
@@ -2654,6 +2780,165 @@ export interface operations {
       };
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listTickets: {
+    parameters: {
+      query?: {
+        view?: 'all' | 'unassigned' | 'my_open' | 'solved';
+        /** @description Case-insensitive match against subject and customer name/email. */
+        query?: string;
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+        limit?: components['parameters']['Limit'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of tickets */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Ticket'][];
+            /** @description Matching the current view, across all pages. */
+            total: number;
+            next_page_id?: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          subject: string;
+          /** @description The chat this follows up on. Supplies the customer if `customer_id` is omitted. */
+          source_chat_id?: string;
+          /** Format: uuid */
+          customer_id?: string;
+          /** Format: int64 */
+          group_id?: number | null;
+          /** Format: uuid */
+          assignee_id?: string | null;
+          /**
+           * @default open
+           * @enum {string}
+           */
+          status?: 'open' | 'pending' | 'solved' | 'closed' | 'spam';
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Ticket'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /**
+       * @description The chat already has an unresolved ticket. `details.existing_ticket_id`
+       *     carries it.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The ticket */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          subject?: string;
+          /** @enum {string} */
+          status?: 'open' | 'pending' | 'solved' | 'closed' | 'spam';
+          /** Format: uuid */
+          assignee_id?: string | null;
+          /** Format: int64 */
+          group_id?: number | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];

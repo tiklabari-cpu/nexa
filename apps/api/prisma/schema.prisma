@@ -469,7 +469,7 @@ model Ticket {
   licenseId     BigInt    @map("license_id")
   customerId    String?   @map("customer_id") @db.Uuid
   sourceChatId  String?   @map("source_chat_id") @db.VarChar(12)
-  subject       String?
+  subject       String
   status        String    @default("open")
   assigneeId    String?   @map("assignee_id") @db.Uuid
   groupId       BigInt?   @map("group_id")
@@ -482,6 +482,8 @@ model Ticket {
 
   @@index([licenseId, status, lastMessageAt(sort: Desc)])
   @@index([assigneeId])
+  @@index([licenseId, lastMessageAt(sort: Desc), id(sort: Desc)], map: "tickets_license_last_message_idx")
+  @@index([licenseId, assigneeId, lastMessageAt(sort: Desc)], map: "tickets_license_assignee_idx")
   @@map("tickets")
 }
 

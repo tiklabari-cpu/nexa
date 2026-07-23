@@ -1,0 +1,178 @@
+# Tickets — the asynchronous half of the inbox (PRD FR-MOD-02.1.3, 02.6).
+#
+# A chat is synchronous: someone is waiting. A ticket is the follow-up for work
+# that outlives the conversation — a refund to chase, a bug to file. The PRD
+# defines the MVP as "live chat *plus a basic ticketing core*", and the two
+# share the customer, so Reports counts them together as "total cases"
+# (FR-MOD-07.3.2) and the customer directory shows both counts.
+#
+# Visibility mirrors chats: an agent sees tickets assigned to them or to a team
+# they belong to; owners and admins see the whole licence. A ticket in another
+# tenant is 404, never 403 — a 403 would confirm the id exists (NFR-S5).
+
+tickets:
+  get:
+    tags: [Tickets]
+    operationId: listTickets
+    summary: List tickets, newest activity first
+    description: |
+      Ordered by `last_message_at` descending, which is the order the PRD
+      specifies and the order a queue is actually worked. Keyset pagination
+      rather than offset: tickets change status while someone is reading, and an
+      offset page shifts under them and skips rows.
+
+      `view` matches the PRD's Tickets group:
+
+      - `all` — everything the caller may see
+      - `unassigned` — no assignee; the pile nobody has picked up
+      - `my_open` — assigned to the caller and not yet solved or closed
+      - `solved` — solved or closed, the read-back pile
+    parameters:
+      - name: view
+        in: query
+        schema:
+          type: string
+          enum: [all, unassigned, my_open, solved]
+          default: all
+      - name: query
+        in: query
+        description: Case-insensitive match against subject and customer name/email.
+        schema: { type: string, maxLength: 320 }
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: A page of tickets
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Ticket" }
+                total:
+                  type: integer
+                  description: Matching the current view, across all pages.
+                next_page_id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Tickets]
+    operationId: createTicket
+    summary: Create a ticket, optionally from a chat
+    description: |
+      Two ways in. From a chat (`source_chat_id`) — the PRD's "Create ticket"
+      action, which carries the customer across so the follow-up is attached to
+      the same person. Or standalone with a `customer_id`, which is how an
+      inbound email becomes a ticket (FR-MOD-08.5.3).
+
+      **A chat gets at most one unresolved ticket.** An agent who clicks the
+      button twice, or two agents looking at the same conversation, would
+      otherwise split the follow-up across two tickets and one of them would be
+      forgotten. A second attempt returns `409` with the existing id so the
+      client can open it instead. The rule is a partial unique index, not an
+      application check, so a race cannot slip between the two.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [subject]
+            properties:
+              subject: { type: string, minLength: 1, maxLength: 200 }
+              source_chat_id:
+                type: string
+                maxLength: 12
+                description: The chat this follows up on. Supplies the customer if `customer_id` is omitted.
+              customer_id: { type: string, format: uuid }
+              group_id: { type: integer, format: int64, nullable: true }
+              assignee_id: { type: string, format: uuid, nullable: true }
+              status:
+                type: string
+                enum: [open, pending, solved, closed, spam]
+                default: open
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Ticket" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: |
+          The chat already has an unresolved ticket. `details.existing_ticket_id`
+          carries it.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ticket:
+  parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: { type: string, maxLength: 12 }
+
+  get:
+    tags: [Tickets]
+    operationId: getTicket
+    summary: One ticket
+    responses:
+      "200":
+        description: The ticket
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Tickets]
+    operationId: updateTicket
+    summary: Change status, assignee, team or subject
+    description: |
+      Assigning to an agent outside the licence, or to a team that does not
+      exist, is refused rather than stored — a ticket pointing at nobody is a
+      ticket nobody works.
+
+      Solving a ticket does not delete it: `solved` and `closed` stay readable
+      in the `solved` view.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              subject: { type: string, minLength: 1, maxLength: 200 }
+              status:
+                type: string
+                enum: [open, pending, solved, closed, spam]
+              assignee_id: { type: string, format: uuid, nullable: true }
+              group_id: { type: integer, format: int64, nullable: true }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

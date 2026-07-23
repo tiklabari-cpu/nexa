@@ -83,6 +83,7 @@ export const DEFAULT_AGENT_SCOPES: Scope[] = [
   'accounts--my:ro',
   'agents--my:rw',
   'chats--access:rw',
+  'tickets--access:rw',
   'customers:ro',
   'groups--my:ro',
   'tags--groups:ro',
@@ -97,6 +98,7 @@ export const ADMIN_SCOPES: Scope[] = [
   // mid-shift.
   'agents-bot--all:rw',
   'chats--all:rw',
+  'tickets--all:rw',
   'customers:rw',
   'customers.ban:rw',
   'groups--all:rw',

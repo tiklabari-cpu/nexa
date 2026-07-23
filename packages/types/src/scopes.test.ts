@@ -2,12 +2,30 @@ import { describe, expect, it } from 'vitest';
 import { SCOPES, expandScope, hasAnyScope, isScope } from './scopes.js';
 import { ERROR_STATUS, ERROR_TYPES } from './errors.js';
 
+/**
+ * Scopes Nexa adds to the transcribed catalogue.
+ *
+ * Listed explicitly rather than folded into the count so the guard keeps
+ * working: an addition nobody decided on still fails the test below.
+ */
+const NEXA_ADDED_SCOPES = [
+  // Ticketing is a separate product in the source platform, with its own API
+  // and no scopes in v2-03 §8.5. Nexa merges it into one inbox (PLAN §D).
+  'tickets--all:ro',
+  'tickets--access:ro',
+  'tickets--all:rw',
+  'tickets--access:rw',
+];
+
+const SOURCE_SCOPE_COUNT = 58;
+
 describe('scope catalogue', () => {
   // v2-03 §8.5 is headed "~63 scopes" but its table enumerates 58. The table is
   // the authority — the heading is an approximation. Transcribed verbatim.
-  it('carries every scope enumerated in v2-03 §8.5', () => {
-    expect(SCOPES).toHaveLength(58);
-    expect(new Set(SCOPES).size).toBe(58);
+  it('carries every scope enumerated in v2-03 §8.5, plus Nexa additions', () => {
+    expect(SCOPES).toHaveLength(SOURCE_SCOPE_COUNT + NEXA_ADDED_SCOPES.length);
+    expect(new Set(SCOPES).size).toBe(SCOPES.length);
+    for (const scope of NEXA_ADDED_SCOPES) expect(SCOPES).toContain(scope);
   });
 
   it('recognises real scopes and rejects invented ones', () => {
@@ -64,9 +82,14 @@ describe('hasAnyScope', () => {
 });
 
 describe('error taxonomy', () => {
-  it('carries the 24 documented types', () => {
-    expect(ERROR_TYPES).toHaveLength(24);
-    expect(new Set(ERROR_TYPES).size).toBe(24);
+  // Same rule as the scopes above: the source's 24, plus additions that are
+  // named here so an unplanned one still fails.
+  const NEXA_ADDED_TYPES = ['ticket_exists'];
+
+  it('carries the 24 documented types, plus Nexa additions', () => {
+    expect(ERROR_TYPES).toHaveLength(24 + NEXA_ADDED_TYPES.length);
+    expect(new Set(ERROR_TYPES).size).toBe(ERROR_TYPES.length);
+    for (const type of NEXA_ADDED_TYPES) expect(ERROR_TYPES).toContain(type);
   });
 
   it('maps every type to an HTTP status', () => {

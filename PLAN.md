@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–9 ✅ · Dilim 10 ◐ (5/7 modül) · F1–F3 düzeltmeleri ✅ (bkz. §1b)
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–9 ✅ · Dilim 10 ◐ (6/7 modül) · F1–F3 düzeltmeleri ✅ (bkz. §1b)
 
 ---
 
@@ -402,6 +402,41 @@ kişiler, storage paylaşmaları birindeki hatayı diğerinde maskeler.
 **Test tasarımı notu:** organizasyon id'si worker kapsamlı çözülüyor. Test başına çözmek her
 test için bir `/auth/login` demekti ve tek koşuda anon limiti tetikliyordu — süit o zaman
 ürün hatası gibi görünen 429'larla düşüyordu.
+
+### F5 — Settings modülü + composer `#` seçicisi (2026-07-23) ✅
+
+Dilim 10'un ikinci modülü. Kontrat 31 → **37 path**. **535 test yeşil**
+(177 unit + 335 integration + 23 E2E).
+
+- **Trusted domains** (CRUD) · **Saved replies** (CRUD) · **Routing rules** (liste + aç/kapa + hedef takım)
+- Trusted domains başa alındı çünkü ürünün çalışmasını kapıda tutan tek ayar o: müşterinin alan
+  adı listede olmadan widget kendi sitesinde token alamıyor ve hata "widget bozuk" gibi görünüyor,
+  "yapılandırma eksik" gibi değil. Bu ekran olmadan widget kimsenin kuramayacağı bir üründü.
+
+**Kapanan döngü — canned responses.** Şemada ve seed'de vardı, **hiçbir şey okumuyor ya da
+yazmıyordu**: ne yönetim ekranı ne composer'da `#` seçici (FR-MOD-02.3.5 ölü duruyordu). İkisi
+birden eklendi. E2E ana testi döngüyü uçtan uca kanıtlıyor: Settings'te kaydedilen yanıt,
+kimse sayfayı yenilemeden `#` ile müşteriye ulaşıyor.
+
+**Paylaşılan origin modülü (`lib/origin.ts`).** Trusted domain'i saklarken uygulanan
+normalizasyon ile token endpoint'inin `Origin` başlığından çıkardığı ana bilgisayar adı **birebir
+aynı olmak zorunda**. Bir nokta ya da port farkı, alan adının listede doğru görünürken
+widget'ın tam da eklendiği sitede reddedilmesi demek — ve iki yerde de bunu açıklayan hiçbir şey
+olmaz. `originHost` auth.ts'ten buraya taşındı; unit testin son bloğu iki tarafın aynı dizeye
+indiğini doğruluyor.
+
+**Bilinçli kısıtlar:**
+
+- Fallback routing rule **kapatılamıyor** (API 403, UI'da düğme devre dışı). Kapatmak, hiçbir
+  kurala uymayan sohbetleri gidecek yeri olmadan bırakırdı; yapılandırma yine sağlıklı görünürdü.
+- Wildcard alan adı (`*.example.com`) reddediliyor — çalışacakmış gibi durup asla eşleşmeyecek
+  bir değer saklamak yerine. Alt alan adı eşleşmesi `include_subdomains` bayrağı.
+- `#` seçici açıkken Enter seçiciye ait: ajanın hâlâ seçmekte olduğu ham `#promo` metnini
+  müşteriye göndermek, klavye tutarsızlığından daha kötü bir sonuç.
+- Seçici kelime içindeki `#` için açılmıyor (hex renk, URL fragment) — birini cümlenin ortasında
+  bölmek, özelliği hiç sunmamaktan kötü.
+
+---
 
 ### F4 — Customers modülü (2026-07-23) ✅
 

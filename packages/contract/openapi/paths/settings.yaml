@@ -1,0 +1,266 @@
+# Settings — workspace configuration.
+#
+# Everything here already existed in the schema and could previously only be
+# changed by editing the database. Trusted domains matter most: a customer
+# cannot install the widget on their own site until their domain is on this
+# list, so shipping the widget without this screen shipped a product nobody
+# could actually deploy.
+
+trustedDomains:
+  get:
+    tags: [Settings]
+    operationId: listTrustedDomains
+    summary: Domains allowed to embed the widget
+    responses:
+      "200":
+        description: The allowlist
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/TrustedDomain" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: addTrustedDomain
+    summary: Allow a domain to embed the widget
+    description: |
+      Accepts a bare hostname (`shop.example`) or a URL to take one from. The
+      hostname is stored lowercased, without port or path, because that is what
+      an `Origin` header reduces to when it is checked.
+
+      `include_subdomains` matches on a leading dot, so a rule for
+      `example.com` covers `shop.example.com` but never `evil-example.com`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [domain]
+            properties:
+              domain: { type: string, minLength: 1, maxLength: 253 }
+              include_subdomains: { type: boolean, default: false }
+    responses:
+      "201":
+        description: Added
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrustedDomain" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409":
+        description: Already on the allowlist
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trustedDomain:
+  parameters:
+    - name: domainId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  delete:
+    tags: [Settings]
+    operationId: removeTrustedDomain
+    summary: Stop allowing a domain
+    description: |
+      Takes effect on the next widget load: existing conversations continue, but
+      no new customer token will be minted for that site.
+    responses:
+      "204": { description: Removed }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+cannedResponses:
+  get:
+    tags: [Settings]
+    operationId: listCannedResponses
+    summary: Saved replies
+    description: |
+      Also read by the composer, which offers them behind `#`. Ordered by
+      shortcut so the picker is predictable.
+    parameters:
+      - name: scope
+        in: query
+        schema: { type: string, enum: [chat, ticket] }
+    responses:
+      "200":
+        description: Saved replies
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/CannedResponse" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: createCannedResponse
+    summary: Save a reply
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [shortcut, text]
+            properties:
+              shortcut:
+                type: string
+                pattern: "^[A-Za-z0-9_-]{1,40}$"
+                description: Typed after `#` in the composer. Letters, digits, `_` and `-`.
+              text: { type: string, minLength: 1, maxLength: 10000 }
+              scope: { type: string, enum: [chat, ticket], default: chat }
+    responses:
+      "201":
+        description: Saved
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CannedResponse" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409":
+        description: That shortcut is already used in this scope
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+cannedResponse:
+  parameters:
+    - name: cannedResponseId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Settings]
+    operationId: updateCannedResponse
+    summary: Edit a saved reply
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              shortcut: { type: string, pattern: "^[A-Za-z0-9_-]{1,40}$" }
+              text: { type: string, minLength: 1, maxLength: 10000 }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CannedResponse" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: That shortcut is already used in this scope
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Settings]
+    operationId: deleteCannedResponse
+    summary: Delete a saved reply
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+routingRules:
+  get:
+    tags: [Settings]
+    operationId: listRoutingRules
+    summary: Rules deciding which team receives a conversation
+    description: |
+      Evaluated in `priority` order; the first rule whose conditions *all* match
+      wins. The fallback rule has no conditions and catches everything else —
+      exactly one exists per kind, enforced by a partial unique index, because a
+      workspace with no fallback silently drops conversations nobody has claimed.
+    responses:
+      "200":
+        description: The rules
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/RoutingRule" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+routingRule:
+  parameters:
+    - name: ruleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Settings]
+    operationId: updateRoutingRule
+    summary: Enable, disable or retarget a rule
+    description: |
+      The fallback rule cannot be disabled. Turning it off would leave
+      conversations that match nothing with nowhere to go, and they would sit
+      unassigned with no indication anything was wrong.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              enabled: { type: boolean }
+              target_group_id: { type: integer, format: int64, nullable: true }
+              priority: { type: integer, minimum: 0, maximum: 1000 }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RoutingRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: The fallback rule cannot be disabled
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

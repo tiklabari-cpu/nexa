@@ -21,9 +21,9 @@ replies, tags it, archives it, and it shows up in reports and billing.
 | 7     | 3-pane agent inbox                                                           |                ✅                 |
 | 8     | Routing, capacity limits, queueing                                           |                ✅                 |
 | 9     | Reports overview, metering, trial gate                                       |                ✅                 |
-| 10    | Design system, shell + module screens                                        | ◐ 5 of 7 modules built; see below |
+| 10    | Design system, shell + module screens                                        | ◐ 6 of 7 modules built; see below |
 
-**461 tests green** — 135 unit, 310 integration, 16 end-to-end. Typecheck, lint and format clean.
+**535 tests green** — 177 unit, 335 integration, 23 end-to-end. Typecheck, lint and format clean.
 No schema drift.
 
 ---
@@ -49,9 +49,9 @@ than as nothing at all.
 rules from `design-brief.md` exist, and Inbox, Reports, Team and Billing all use
 them — no component hard-codes a colour.
 
-What is still missing is **Playbook and Settings**, and they are missing on both
-sides: neither has an API either. The icon rail shows them disabled rather than
-pretending otherwise.
+What is still missing is **Playbook** — the AI skill builder — and it is missing
+on both sides: no contract, no API, no screen. The icon rail shows it disabled
+rather than pretending otherwise.
 
 Building any of them means starting at the contract (`packages/contract/openapi/`)
 and working outward, as ADR-05 requires. `contract-parity.test.ts` will fail the
@@ -131,14 +131,12 @@ presents as flaky RTM tests.
 
 ## Suggested next steps
 
-1. **Finish slice 10** — Playbook and Settings. Neither has a contract entry or
-   an API, so both start there. Settings is the more useful of the two: trusted
-   domains, canned responses and routing rules all exist in the schema and can
-   only be changed by editing the database directly.
-2. **AI agent (v1).** The schema, skill step types and pgvector index are in
-   place and seeded; the compiler and retrieval orchestration are the work.
-3. **Webhooks.** The table, HMAC design and SSRF requirements are specified in
+1. **AI agent + Playbook (v1).** The last unbuilt module, and the largest: the
+   schema, skill step types and pgvector index are in place and seeded, but the
+   natural-language-to-steps compiler and the retrieval orchestration are the
+   actual work. Start at the contract as everything else did.
+2. **Webhooks.** The table, HMAC design and SSRF requirements are specified in
    `v2-derin-analiz/v2-04` §6; nothing is implemented. Ship the HMAC and the
    SSRF guard with the first version — retrofitting them once integrators depend
    on the loose behaviour is a breaking change.
-4. **Tickets.** The table and constraints exist; there is no API or UI.
+3. **Tickets.** The table and constraints exist; there is no API or UI.

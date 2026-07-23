@@ -1,6 +1,11 @@
 import { useEffect, type ReactElement } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { AppShell } from './components/AppShell.js';
 import { SignInPage } from './features/auth/SignInPage.js';
+import { BillingPage } from './features/billing/BillingPage.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
+import { ReportsPage } from './features/reports/ReportsPage.js';
+import { TeamPage } from './features/team/TeamPage.js';
 import { useAuth } from './lib/auth-store.js';
 
 export function App(): ReactElement {
@@ -21,5 +26,21 @@ export function App(): ReactElement {
     );
   }
 
-  return status === 'signed-in' ? <InboxPage /> : <SignInPage />;
+  // Signing out mid-session must not leave a module route rendering against a
+  // dead token, so the whole tree collapses to sign-in rather than redirecting.
+  if (status !== 'signed-in') return <SignInPage />;
+
+  return (
+    <Routes>
+      <Route path="/app" element={<AppShell />}>
+        <Route index element={<Navigate to="/app/inbox" replace />} />
+        <Route path="inbox" element={<InboxPage />} />
+        <Route path="team" element={<TeamPage />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="billing" element={<BillingPage />} />
+      </Route>
+      {/* Anything else, including the OAuth callback path, lands in the inbox. */}
+      <Route path="*" element={<Navigate to="/app/inbox" replace />} />
+    </Routes>
+  );
 }

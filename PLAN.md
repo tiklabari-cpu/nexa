@@ -45,7 +45,7 @@ Her dilim: (a) OpenAPI+tip → (b) Prisma migration → (c) backend servis + uni
 | 7   | Inbox 3-pane + composer                                                                  | XHIGH  | `feat/07-inbox`           |  ✅   |
 | 8   | Routing + queue + concurrent limit + fallback                                            |  MAX   | `feat/08-routing`         |  ✅   |
 | 9   | Reports Overview + Billing/metering + trial                                              | XHIGH  | `feat/09-reports-billing` |  ✅   |
-| 10  | Design system + tüm ekranların tutarlı stillenmesi                                       | XHIGH  | (dilim 7'ye katıldı)      |   ◐   |
+| 10  | Design system + tüm ekranların tutarlı stillenmesi                                       | XHIGH  | `fix/module-screens`      |   ◐   |
 
 Durum: ⬜ başlamadı · ⏳ devam · ✅ bitti (test yeşil + push)
 
@@ -333,6 +333,36 @@ Kontratsız kalan yüzey: `/reports/overview` · `/billing/subscription` · `/bi
 
 CI zaten üretilmiş tiplerin bayatlığını kontrol ediyordu; ama spec'in **kendisi** eksik olduğu
 için o kapı bunu yakalayamazdı. Parity testi bu boşluğu kapatıyor.
+
+### F2 — Kalıcı kabuk + API'si hazır modül ekranları (2026-07-23) ✅
+
+Dilim 10'un "uygulanacak ekran yok" boşluğunun API'si zaten var olan kısmı kapatıldı.
+**414 test yeşil** (131 unit + 283 integration); tarayıcıda seed veriyle uçtan uca doğrulandı.
+
+- **`AppShell`** — kalıcı icon rail + `react-router` ile deep-link'lenebilir rotalar
+  (`/app/inbox`, `/app/team`, `/app/reports`, `/app/billing`). PRD §8.1 rota semantiği:
+  ajanın baktığı ekranın linkini meslektaşına gönderebilmesi ve reload'un onu inbox'a
+  düşürmemesi gerekiyor. UI'ı olmayan modüller **gizlenmiyor, devre dışı** gösteriliyor —
+  gizlemek "bu üründe yok" der, devre dışı "henüz burada değil" der; doğrusu ikincisi.
+- **Reports** (`/reports/overview`) · **Team** (`/agents` + `/groups`) ·
+  **Billing** (`/billing/subscription` + `/billing/usage`).
+- Bilinmeyen ile sıfır ayrı gösteriliyor: oylanmamış dönem `—`, %0 değil. `formatX`
+  fonksiyonları `null`'ı `null` döndürüyor, sıfıra çevirmiyor.
+
+**Yolda bulunan hata (tarayıcıda, testte değil):** hesap menüsü kapalı `<details>`'in
+çocuklarını tarayıcının gizlemesine güveniyordu. Panel `position: absolute` olunca bu kural
+tutmuyor: 224×130'luk kutusunu koruyor, erişilebilirlik ağacında çalışan bir "Sign out" ile
+kalıyor, sadece içeriğin **arkasına** boyanıyor — ekranda yok, ekran okuyucuda ve tab
+sırasında tamamen var. `hidden group-open:block` ile açıkça gizlendi; `<summary>`'ye
+`role="button"` + `aria-expanded` eklendi (çıplak `<summary>` "generic" olarak duyuruluyordu,
+yani ne açtığı ne de açık olup olmadığı belliydi).
+
+> **Test dürüstlüğü notu:** ilk yazdığım görünürlük testleri bu hatayı yakalamıyordu —
+> jest-dom'un `toBeVisible()` fonksiyonu kapalı `<details>` altındaki öğeleri CSS'ten
+> bağımsız "gizli" sayıyor ve jsdom stylesheet yüklemiyor. Hatayı geri koyup testlerin yine
+> geçtiğini görerek doğruladım. Regresyonu asıl tutan, tarayıcının fiilen uyduğu mekanizmayı
+> (`hidden` + `group-open:block` sınıfları) sabitleyen ayrı bir test; o test hata geri
+> konunca kırılıyor.
 
 ---
 

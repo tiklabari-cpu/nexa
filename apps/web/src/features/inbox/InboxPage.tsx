@@ -35,7 +35,6 @@ export function InboxPage(): ReactElement {
 
   const agent = useAuth((s) => s.agent);
   const setRoutingStatus = useAuth((s) => s.setRoutingStatus);
-  const signOut = useAuth((s) => s.signOut);
 
   const chats = useMemo(() => list.data?.items ?? [], [list.data]);
 
@@ -50,9 +49,7 @@ export function InboxPage(): ReactElement {
   }, [chats, selectedId]);
 
   return (
-    <div className="flex h-full bg-canvas text-content">
-      <IconRail />
-
+    <>
       {/* Views */}
       <nav
         aria-label="Inbox views"
@@ -101,19 +98,6 @@ export function InboxPage(): ReactElement {
             <option value="not_accepting_chats">Not accepting</option>
             <option value="offline">Offline</option>
           </select>
-
-          <div className="mt-3 flex items-center justify-between text-2xs text-content-tertiary">
-            <span className="truncate" title={agent?.email ?? ''}>
-              {agent?.name ?? agent?.email}
-            </span>
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="rounded-sm px-1 underline hover:text-content"
-            >
-              Sign out
-            </button>
-          </div>
         </div>
       </nav>
 
@@ -225,48 +209,7 @@ export function InboxPage(): ReactElement {
 
       {/* Details */}
       {selectedId && chat.data && <DetailsPanel chat={chat.data} chatId={selectedId} />}
-    </div>
-  );
-}
-
-function IconRail(): ReactElement {
-  return (
-    <nav
-      aria-label="Modules"
-      className="flex w-rail shrink-0 flex-col items-center gap-1 bg-rail py-3"
-    >
-      <span
-        aria-hidden="true"
-        className="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white"
-      >
-        N
-      </span>
-      {[
-        { icon: '▤', label: 'Inbox', active: true },
-        { icon: '◫', label: 'Customers', active: false },
-        { icon: '◑', label: 'Team', active: false },
-        { icon: '◆', label: 'Reports', active: false },
-      ].map((item) => (
-        <button
-          key={item.label}
-          type="button"
-          aria-label={item.label}
-          aria-current={item.active ? 'page' : undefined}
-          disabled={!item.active}
-          className={`relative flex h-9 w-9 items-center justify-center rounded-md text-base ${
-            item.active ? 'bg-white/10 text-white' : 'text-white/40 disabled:cursor-not-allowed'
-          }`}
-        >
-          {item.active && (
-            <span
-              aria-hidden="true"
-              className="absolute -left-3 h-5 w-0.5 rounded-full bg-brand-500"
-            />
-          )}
-          <span aria-hidden="true">{item.icon}</span>
-        </button>
-      ))}
-    </nav>
+    </>
   );
 }
 

@@ -651,6 +651,209 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/ai-agents': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** AI agents on the licence */
+    get: operations['listAiAgents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/ai-agents/{aiAgentId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Rename an agent or turn it on and off
+     * @description Deactivating an agent stops every skill under it at once, which is what an
+     *     admin reaches for when automation is misbehaving. It does not delete
+     *     anything.
+     */
+    patch: operations['updateAiAgent'];
+    trace?: never;
+  };
+  '/skills': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Skills, with how often each has run */
+    get: operations['listSkills'];
+    put?: never;
+    /**
+     * Create a skill
+     * @description Created inactive. A skill goes live only when someone turns it on, so an
+     *     unfinished step list cannot start answering customers the moment it is
+     *     saved.
+     */
+    post: operations['createSkill'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/skills/compile': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Turn a plain-language instruction into steps
+     * @description Returns the steps it produced *and* the lines it could not understand,
+     *     rather than inventing something for them. A skill that plausibly does the
+     *     wrong thing to a customer is worse than one that refuses to compile, so
+     *     the editor shows the leftovers and lets the admin rewrite them.
+     *
+     *     Compiles only — nothing is saved.
+     */
+    post: operations['compileSkillInstruction'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/skills/preview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Run a step list against a sample message without saving anything
+     * @description Uses the same engine that serves customers, including knowledge
+     *     retrieval — a preview running different logic would be worse than none.
+     *     Nothing is written: no events, no tags, no run record.
+     */
+    post: operations['previewSkill'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/skills/{skillId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        skillId: string;
+      };
+      cookie?: never;
+    };
+    /** One skill */
+    get: operations['getSkill'];
+    put?: never;
+    post?: never;
+    /** Delete a skill */
+    delete: operations['deleteSkill'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit a skill
+     * @description Steps are validated before they are stored. A skill saved with a step the
+     *     engine cannot run would be skipped silently at the moment it mattered, and
+     *     an admin would have no way to know why nothing happened.
+     *
+     *     Activating a skill with no steps is refused for the same reason.
+     */
+    patch: operations['updateSkill'];
+    trace?: never;
+  };
+  '/skills/{skillId}/runs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        skillId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Recent runs, newest first
+     * @description The audit an admin reads when a customer got an answer nobody expected.
+     *     Each entry records the steps that executed and what each one decided.
+     */
+    get: operations['listSkillRuns'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-sources': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Knowledge the AI answers from */
+    get: operations['listKnowledgeSources'];
+    put?: never;
+    /**
+     * Add a source and index it
+     * @description Chunked and embedded on save, so it is answerable immediately rather than
+     *     after a background job an admin cannot see.
+     */
+    post: operations['createKnowledgeSource'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/knowledge-sources/{sourceId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Remove a source and everything indexed from it */
+    delete: operations['deleteKnowledgeSource'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/trusted-domains': {
     parameters: {
       query?: never;
@@ -1020,6 +1223,113 @@ export interface components {
       last_used_at?: string | null;
       /** Format: date-time */
       expires_at?: string | null;
+    };
+    AiAgent: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      /** @enum {string} */
+      kind: 'ai_agent' | 'copilot';
+      tone?: string | null;
+      active: boolean;
+      skills_count?: number;
+    };
+    /**
+     * @description A discriminated union on `type`. Steps are validated before they are
+     *     stored, so a step the engine cannot run is refused at save time rather
+     *     than skipped silently when a customer is waiting.
+     */
+    SkillStep: {
+      /** @enum {string} */
+      type:
+        | 'detect_intent'
+        | 'request_info'
+        | 'tag'
+        | 'summarize'
+        | 'send_message'
+        | 'transfer_to_team';
+      /** @description detect_intent: the intent name. */
+      intent?: string;
+      /** @description detect_intent: phrases to look for. */
+      phrases?: string[];
+      /** @description request_info: what to collect. */
+      field?: string;
+      /** @description request_info: what to ask. */
+      prompt?: string;
+      /** @description tag: the tag to apply. */
+      tag?: string;
+      /**
+       * @description send_message: a fixed reply, or one retrieved from knowledge.
+       * @enum {string}
+       */
+      source?: 'text' | 'knowledge';
+      /** @description send_message with source=text. */
+      text?: string;
+      /** @description transfer_to_team: the team name. */
+      group?: string;
+    };
+    Skill: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id?: string | null;
+      name: string;
+      /** @enum {string} */
+      kind: 'ai_agent' | 'workspace';
+      instruction?: string | null;
+      steps: components['schemas']['SkillStep'][];
+      active: boolean;
+      runs_count: number;
+      /** Format: date-time */
+      updated_at?: string;
+    };
+    SkillPreview: {
+      /**
+       * @description `skipped` means the intent did not match, or nothing produced a
+       *     reply — in which case a human takes the conversation.
+       * @enum {string}
+       */
+      outcome: 'answered' | 'handed_off' | 'skipped';
+      reply?: string | null;
+      tags?: string[];
+      transfer_to?: string | null;
+      summary?: string | null;
+      log: components['schemas']['SkillLogEntry'][];
+      /** @description Reasons the step list could not be run at all. */
+      errors: string[];
+    };
+    SkillLogEntry: {
+      step: string;
+      detail: string;
+      ok: boolean;
+    };
+    SkillRun: {
+      /** Format: uuid */
+      id: string;
+      chat_id?: string | null;
+      /**
+       * @description Whether the run completed — not what it did to the chat.
+       * @enum {string}
+       */
+      status: 'succeeded' | 'failed' | 'aborted';
+      /** @enum {string|null} */
+      outcome?: 'answered' | 'handed_off' | 'skipped' | null;
+      /** Format: date-time */
+      ran_at: string;
+      log: components['schemas']['SkillLogEntry'][];
+    };
+    KnowledgeSource: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      ai_agent_id?: string;
+      name: string;
+      /** @enum {string} */
+      type: 'website' | 'file' | 'article' | 'faq';
+      status: string;
+      chunk_count: number;
+      /** Format: date-time */
+      updated_at?: string;
     };
     TrustedDomain: {
       /** Format: uuid */
@@ -2488,6 +2798,404 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAiAgents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description AI agents */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AiAgent'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateAiAgent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        aiAgentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          active?: boolean;
+          tone?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiAgent'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listSkills: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Skills */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Skill'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createSkill: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          /** Format: uuid */
+          ai_agent_id?: string;
+          instruction?: string;
+          steps?: components['schemas']['SkillStep'][];
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Skill'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  compileSkillInstruction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          instruction: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Compiled */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            steps: components['schemas']['SkillStep'][];
+            /** @description Instruction lines that produced no step. */
+            unrecognised: string[];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  previewSkill: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          steps: components['schemas']['SkillStep'][];
+          message: string;
+          /** Format: uuid */
+          ai_agent_id?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description What the skill would have done */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SkillPreview'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getSkill: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        skillId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The skill */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Skill'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteSkill: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        skillId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateSkill: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        skillId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          instruction?: string;
+          steps?: components['schemas']['SkillStep'][];
+          active?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Skill'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description Cannot activate a skill with no steps */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listSkillRuns: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit'];
+      };
+      header?: never;
+      path: {
+        skillId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Runs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['SkillRun'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listKnowledgeSources: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sources */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['KnowledgeSource'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createKnowledgeSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          ai_agent_id: string;
+          name: string;
+          content: string;
+          /**
+           * @default article
+           * @enum {string}
+           */
+          type?: 'website' | 'file' | 'article' | 'faq';
+        };
+      };
+    };
+    responses: {
+      /** @description Indexed */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeSource'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteKnowledgeSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

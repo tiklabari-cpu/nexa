@@ -10,20 +10,20 @@ A working live-support platform. The MVP critical path runs end to end: a visito
 messages from the widget, routing assigns it, the agent sees it live in their inbox,
 replies, tags it, archives it, and it shows up in reports and billing.
 
-| Slice | Scope                                                                        |               State               |
-| ----- | ---------------------------------------------------------------------------- | :-------------------------------: |
-| 1     | Monorepo, Postgres + Redis, `make dev`, health checks, CI                    |                ✅                 |
-| 2     | OAuth 2.1 + PKCE, PAT, customer tokens, scopes, RLS tenant isolation         |                ✅                 |
-| 3     | Full PRD §8.4 schema, event partitioning, database-enforced invariants, seed |                ✅                 |
-| 4     | chat → thread → event, Agent Chat API                                        |                ✅                 |
-| 5     | RTM gateway, fan-out, lossless reconnect                                     |                ✅                 |
-| 6     | Customer Chat API + embeddable widget                                        |                ✅                 |
-| 7     | 3-pane agent inbox                                                           |                ✅                 |
-| 8     | Routing, capacity limits, queueing                                           |                ✅                 |
-| 9     | Reports overview, metering, trial gate                                       |                ✅                 |
-| 10    | Design system, shell + module screens                                        | ◐ 6 of 7 modules built; see below |
+| Slice | Scope                                                                        | State |
+| ----- | ---------------------------------------------------------------------------- | :---: |
+| 1     | Monorepo, Postgres + Redis, `make dev`, health checks, CI                    |  ✅   |
+| 2     | OAuth 2.1 + PKCE, PAT, customer tokens, scopes, RLS tenant isolation         |  ✅   |
+| 3     | Full PRD §8.4 schema, event partitioning, database-enforced invariants, seed |  ✅   |
+| 4     | chat → thread → event, Agent Chat API                                        |  ✅   |
+| 5     | RTM gateway, fan-out, lossless reconnect                                     |  ✅   |
+| 6     | Customer Chat API + embeddable widget                                        |  ✅   |
+| 7     | 3-pane agent inbox                                                           |  ✅   |
+| 8     | Routing, capacity limits, queueing                                           |  ✅   |
+| 9     | Reports overview, metering, trial gate                                       |  ✅   |
+| 10    | Design system, shell + module screens                                        |  ✅   |
 
-**535 tests green** — 177 unit, 335 integration, 23 end-to-end. Typecheck, lint and format clean.
+**595 tests green** — 219 unit, 353 integration, 23 end-to-end. Typecheck, lint and format clean.
 No schema drift.
 
 ---
@@ -45,18 +45,16 @@ than as nothing at all.
 
 ## What is honestly incomplete
 
-**Slice 10 is partial.** The token system, Tailwind mapping and accessibility
-rules from `design-brief.md` exist, and Inbox, Reports, Team and Billing all use
-them — no component hard-codes a colour.
+**Slice 10 is done.** All seven modules are built and reachable, all using the
+tokens from `design-brief.md` — no component hard-codes a colour.
 
-What is still missing is **Playbook** — the AI skill builder — and it is missing
-on both sides: no contract, no API, no screen. The icon rail shows it disabled
-rather than pretending otherwise.
-
-Building any of them means starting at the contract (`packages/contract/openapi/`)
-and working outward, as ADR-05 requires. `contract-parity.test.ts` will fail the
-build if a route ships without a contract entry, which is how the last ten
-endpoints got missed.
+**The AI is a deterministic stub, not a model.** `packages/ai-mock` derives
+embeddings from text (hashed bag of words, 1536 dims, L2-normalised) and
+compiles instructions with rules. Retrieval ranks by real lexical overlap, so it
+behaves like retrieval rather than looking like it — but "delivery" and
+"shipping" stay unrelated, as they would to any lexical method. Swapping in a
+real provider means replacing `embed()` and `compileInstruction()`; nothing else
+knows how the numbers were produced.
 
 **Not started (v1 scope in the PRD, deliberately out of the MVP path):**
 AI agent skill engine and RAG retrieval, Copilot, omnichannel adapters
@@ -131,10 +129,10 @@ presents as flaky RTM tests.
 
 ## Suggested next steps
 
-1. **AI agent + Playbook (v1).** The last unbuilt module, and the largest: the
-   schema, skill step types and pgvector index are in place and seeded, but the
-   natural-language-to-steps compiler and the retrieval orchestration are the
-   actual work. Start at the contract as everything else did.
+1. **Webhooks.** The largest remaining gap, and the one with a security shape:
+   the table exists, and `v2-derin-analiz/v2-04` §6 specifies HMAC signing and
+   SSRF protection. Ship both with the first version — retrofitting them once
+   integrators depend on the loose behaviour is a breaking change.
 2. **Webhooks.** The table, HMAC design and SSRF requirements are specified in
    `v2-derin-analiz/v2-04` §6; nothing is implemented. Ship the HMAC and the
    SSRF guard with the first version — retrofitting them once integrators depend

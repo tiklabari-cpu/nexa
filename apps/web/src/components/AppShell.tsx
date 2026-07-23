@@ -5,9 +5,10 @@
  * PRD §8.1 requires — an agent needs to be able to send a colleague a link to
  * what they are looking at, and a reload must not drop them back to the inbox.
  *
- * Modules with no UI yet are rendered as disabled rail entries rather than
- * hidden. Hiding them would imply the product does not have them; disabling
- * them says "not here yet", which is the truth.
+ * Every module in the rail is built and reachable. Earlier revisions rendered
+ * the unbuilt ones as disabled entries — visible but inert, which said "not
+ * here yet" rather than implying the product lacked them. Nothing is inert now,
+ * so that branch is gone rather than kept as untested code.
  */
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
@@ -17,20 +18,19 @@ interface RailItem {
   to: string;
   label: string;
   icon: string;
-  enabled: boolean;
 }
 
 const MODULES: RailItem[] = [
-  { to: '/app/inbox', label: 'Inbox', icon: '▤', enabled: true },
-  { to: '/app/customers', label: 'Customers', icon: '◫', enabled: true },
-  { to: '/app/team', label: 'Team', icon: '◑', enabled: true },
-  { to: '/app/playbook', label: 'Playbook', icon: '✦', enabled: false },
-  { to: '/app/reports', label: 'Reports', icon: '◆', enabled: true },
+  { to: '/app/inbox', label: 'Inbox', icon: '▤' },
+  { to: '/app/customers', label: 'Customers', icon: '◫' },
+  { to: '/app/team', label: 'Team', icon: '◑' },
+  { to: '/app/playbook', label: 'Playbook', icon: '✦' },
+  { to: '/app/reports', label: 'Reports', icon: '◆' },
 ];
 
 const FOOTER: RailItem[] = [
-  { to: '/app/billing', label: 'Billing', icon: '◈', enabled: true },
-  { to: '/app/settings', label: 'Settings', icon: '⚙', enabled: true },
+  { to: '/app/billing', label: 'Billing', icon: '◈' },
+  { to: '/app/settings', label: 'Settings', icon: '⚙' },
 ];
 
 export function AppShell(): ReactElement {
@@ -72,20 +72,6 @@ function IconRail(): ReactElement {
 function RailButton({ item }: { item: RailItem }): ReactElement {
   const shared =
     'relative flex h-9 w-9 items-center justify-center rounded-md text-base transition-colors';
-
-  if (!item.enabled) {
-    return (
-      <button
-        type="button"
-        disabled
-        aria-label={`${item.label} — not available yet`}
-        title={`${item.label} — not available yet`}
-        className={`${shared} cursor-not-allowed text-white/25`}
-      >
-        <span aria-hidden="true">{item.icon}</span>
-      </button>
-    );
-  }
 
   return (
     <NavLink

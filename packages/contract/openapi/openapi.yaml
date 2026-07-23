@@ -37,6 +37,8 @@ tags:
     description: CRM — people who have contacted the workspace.
   - name: Configuration
     description: Groups, agents, tags, canned responses, routing, channels.
+  - name: Playbook
+    description: AI agents, skills and the knowledge they answer from.
   - name: Settings
     description: Workspace configuration — trusted domains, saved replies, routing.
   - name: Reports
@@ -124,6 +126,25 @@ paths:
     $ref: "./paths/agents.yaml#/routingStatus"
   /groups:
     $ref: "./paths/agents.yaml#/groups"
+
+  /ai-agents:
+    $ref: "./paths/playbook.yaml#/aiAgents"
+  /ai-agents/{aiAgentId}:
+    $ref: "./paths/playbook.yaml#/aiAgent"
+  /skills:
+    $ref: "./paths/playbook.yaml#/skills"
+  /skills/compile:
+    $ref: "./paths/playbook.yaml#/compile"
+  /skills/preview:
+    $ref: "./paths/playbook.yaml#/preview"
+  /skills/{skillId}:
+    $ref: "./paths/playbook.yaml#/skill"
+  /skills/{skillId}/runs:
+    $ref: "./paths/playbook.yaml#/runs"
+  /knowledge-sources:
+    $ref: "./paths/playbook.yaml#/knowledgeSources"
+  /knowledge-sources/{sourceId}:
+    $ref: "./paths/playbook.yaml#/knowledgeSource"
 
   /settings/trusted-domains:
     $ref: "./paths/settings.yaml#/trustedDomains"
@@ -340,6 +361,122 @@ components:
         created_at: { type: string, format: date-time }
         last_used_at: { type: string, format: date-time, nullable: true }
         expires_at: { type: string, format: date-time, nullable: true }
+
+    AiAgent:
+      type: object
+      required: [id, name, kind, active]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, enum: [ai_agent, copilot] }
+        tone: { type: string, nullable: true }
+        active: { type: boolean }
+        skills_count: { type: integer }
+
+    SkillStep:
+      type: object
+      required: [type]
+      description: |
+        A discriminated union on `type`. Steps are validated before they are
+        stored, so a step the engine cannot run is refused at save time rather
+        than skipped silently when a customer is waiting.
+      properties:
+        type:
+          type: string
+          enum: [detect_intent, request_info, tag, summarize, send_message, transfer_to_team]
+        intent: { type: string, description: "detect_intent: the intent name." }
+        phrases:
+          type: array
+          items: { type: string }
+          description: "detect_intent: phrases to look for."
+        field: { type: string, description: "request_info: what to collect." }
+        prompt: { type: string, description: "request_info: what to ask." }
+        tag: { type: string, description: "tag: the tag to apply." }
+        source:
+          type: string
+          enum: [text, knowledge]
+          description: "send_message: a fixed reply, or one retrieved from knowledge."
+        text: { type: string, description: "send_message with source=text." }
+        group: { type: string, description: "transfer_to_team: the team name." }
+
+    Skill:
+      type: object
+      required: [id, name, kind, steps, active, runs_count]
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid, nullable: true }
+        name: { type: string }
+        kind: { type: string, enum: [ai_agent, workspace] }
+        instruction: { type: string, nullable: true }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/SkillStep" }
+        active: { type: boolean }
+        runs_count: { type: integer }
+        updated_at: { type: string, format: date-time }
+
+    SkillPreview:
+      type: object
+      required: [outcome, log, errors]
+      properties:
+        outcome:
+          type: string
+          enum: [answered, handed_off, skipped]
+          description: |
+            `skipped` means the intent did not match, or nothing produced a
+            reply — in which case a human takes the conversation.
+        reply: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+        transfer_to: { type: string, nullable: true }
+        summary: { type: string, nullable: true }
+        log:
+          type: array
+          items: { $ref: "#/components/schemas/SkillLogEntry" }
+        errors:
+          type: array
+          description: Reasons the step list could not be run at all.
+          items: { type: string }
+
+    SkillLogEntry:
+      type: object
+      required: [step, detail, ok]
+      properties:
+        step: { type: string }
+        detail: { type: string }
+        ok: { type: boolean }
+
+    SkillRun:
+      type: object
+      required: [id, status, ran_at, log]
+      properties:
+        id: { type: string, format: uuid }
+        chat_id: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [succeeded, failed, aborted]
+          description: Whether the run completed — not what it did to the chat.
+        outcome:
+          type: string
+          nullable: true
+          enum: [answered, handed_off, skipped, null]
+        ran_at: { type: string, format: date-time }
+        log:
+          type: array
+          items: { $ref: "#/components/schemas/SkillLogEntry" }
+
+    KnowledgeSource:
+      type: object
+      required: [id, name, type, status, chunk_count]
+      properties:
+        id: { type: string, format: uuid }
+        ai_agent_id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string, enum: [website, file, article, faq] }
+        status: { type: string }
+        chunk_count: { type: integer }
+        updated_at: { type: string, format: date-time }
 
     TrustedDomain:
       type: object

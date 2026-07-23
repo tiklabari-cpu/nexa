@@ -290,8 +290,11 @@ export class ChatService {
     },
   ): Promise<{ chat: ChatDetail; created: boolean; raw?: ChatRow }> {
     const actorId = actorOf(principal);
+    // A holder rather than a plain `let`: the assignment happens inside the
+    // transaction callback, and TypeScript cannot see that the callback ran.
+    const registration: { value?: { key: string; eventId: string } } = {};
 
-    return withTenant(this.db, tenant, async (tx) => {
+    const result = await withTenant(this.db, tenant, async (tx) => {
       const customer = await tx.customer.findUnique({
         where: { id: input.customerId },
         select: { id: true, bannedAt: true },
@@ -329,14 +332,30 @@ export class ChatService {
       });
 
       if (input.initialEvent) {
-        await this.#appendEvent(tx, {
+        const initial = await this.#appendEvent(tx, {
           licenseId: tenant.licenseId,
           chatId: chat.id,
           threadId: chat.threads[0]!.id,
           authorId: actorId,
-          authorType: principal.kind === 'bot' ? 'bot' : 'agent',
-          input: input.initialEvent,
+          authorType: authorTypeOf(principal),
+          input: {
+            ...input.initialEvent,
+            recipients: recipientsFor(principal, input.initialEvent.recipients ?? 'all'),
+          },
         });
+
+        // Registered under the same key `sendEvent` checks.
+        //
+        // A widget retrying a timed-out first message finds the chat already
+        // created and takes the `sendEvent` path instead of this one. Without
+        // this the key would be unknown there, and the visitor's opening line
+        // would be posted twice.
+        if (input.initialEvent.idempotencyKey) {
+          registration.value = {
+            key: `idem:${tenant.licenseId}:${chat.id}:${input.initialEvent.idempotencyKey}`,
+            eventId: initial.id,
+          };
+        }
       }
 
       const reloaded = await tx.chat.findUniqueOrThrow({
@@ -345,6 +364,20 @@ export class ChatService {
       });
       return { chat: serialiseChat(reloaded), created: true, raw: reloaded };
     });
+
+    // After commit: a key pointing at an event that was rolled back would make
+    // the retry replay something that does not exist.
+    if (registration.value) {
+      await this.redis.set(
+        registration.value.key,
+        registration.value.eventId,
+        'EX',
+        IDEMPOTENCY_TTL_SECONDS,
+        'NX',
+      );
+    }
+
+    return result;
   }
 
   async sendEvent(
@@ -378,11 +411,8 @@ export class ChatService {
         throw ApiError.chatInactive('Chat is not active. Resume it before sending events.');
       }
 
-      const authorType =
-        principal.kind === 'customer' ? 'customer' : principal.kind === 'bot' ? 'bot' : 'agent';
-
-      // A customer can never author an internal note.
-      const recipients: EventRecipients = principal.kind === 'customer' ? 'all' : input.recipients;
+      const authorType = authorTypeOf(principal);
+      const recipients = recipientsFor(principal, input.recipients);
 
       const event = await this.#appendEvent(tx, {
         licenseId: tenant.licenseId,
@@ -941,6 +971,34 @@ const chatInclude = {
     include: { tags: { include: { tag: { select: { name: true } } } } },
   },
 };
+
+/**
+ * Who the event is *from*.
+ *
+ * Shared by `start` and `sendEvent` because deriving it in two places is how it
+ * went wrong: `start` handled agents and bots and silently fell through to
+ * 'agent' for customers, so every conversation opened from the widget recorded
+ * the visitor's first message as authored by an agent. That made it render as
+ * an agent bubble, and — worse — gave every thread an agent-authored event from
+ * its first line, so ADR-09 could never count a conversation as an AI
+ * resolution. Reports showed 0% automated and the workspace was never billed
+ * for the automation it used.
+ */
+function authorTypeOf(principal: Principal): 'agent' | 'bot' | 'customer' {
+  switch (principal.kind) {
+    case 'agent':
+      return 'agent';
+    case 'bot':
+      return 'bot';
+    case 'customer':
+      return 'customer';
+  }
+}
+
+/** A customer can never author an internal note, on any write path. */
+function recipientsFor(principal: Principal, requested: EventRecipients): EventRecipients {
+  return principal.kind === 'customer' ? 'all' : requested;
+}
 
 function actorOf(principal: Principal): string {
   switch (principal.kind) {

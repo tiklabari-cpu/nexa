@@ -17,6 +17,7 @@ import customerRoutes from './routes/customer.js';
 import customerDirectoryRoutes from './routes/customers.js';
 import reportRoutes from './routes/reports.js';
 import settingsRoutes from './routes/settings.js';
+import playbookRoutes from './routes/playbook.js';
 import healthRoutes from './routes/health.js';
 
 export const API_PREFIX = '/api/v1';
@@ -96,6 +97,7 @@ export async function buildServer({ env }: BuildServerOptions): Promise<FastifyI
       await api.register(customerDirectoryRoutes);
       await api.register(reportRoutes, { env });
       await api.register(settingsRoutes);
+      await api.register(playbookRoutes);
     },
     { prefix: API_PREFIX },
   );

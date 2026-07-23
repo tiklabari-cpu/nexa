@@ -127,14 +127,36 @@ presents as flaky RTM tests.
 
 ---
 
-## Suggested next steps
+## What to build next
 
-1. **Webhooks.** The largest remaining gap, and the one with a security shape:
-   the table exists, and `v2-derin-analiz/v2-04` §6 specifies HMAC signing and
-   SSRF protection. Ship both with the first version — retrofitting them once
-   integrators depend on the loose behaviour is a breaking change.
-2. **Webhooks.** The table, HMAC design and SSRF requirements are specified in
-   `v2-derin-analiz/v2-04` §6; nothing is implemented. Ship the HMAC and the
-   SSRF guard with the first version — retrofitting them once integrators depend
-   on the loose behaviour is a breaking change.
-3. **Tickets.** The table and constraints exist; there is no API or UI.
+**Read `PLAN.md` §3 first.** It is the authority, and it is now a projection of the
+PRD's own phase and module structure — every work item carries an `FR-MOD` id.
+
+An audit on 2026-07-23 found that finishing the ten original slices was not the same
+as finishing the PRD's MVP: of the 52 requirements the PRD labels `Must/Should (MVP)`,
+**18 had no code at all**, and Playbook — shipped under slice 10 — is a v1 feature that
+had jumped ahead of them. `PLAN.md` §1.3 records this; §3 lists every gap with its
+evidence.
+
+The order, and why:
+
+1. **Ticketing** (`FR-MOD-02.1.3`, `02.6`, `08.5.3`) — PLAN §3.11, slice 11.
+   The PRD defines the MVP as "live chat **plus a basic ticketing core**", so this is
+   the largest hole. It is also visible today: `customers.tickets_count` and the
+   Reports "Total cases" card both count tickets, and nothing can create one, so the
+   number is structurally always zero.
+2. **Account lifecycle** (`00.2`–`00.4`, `04.3.1`, `04.4`) — slice 12. There is no
+   signup; every account comes from the seed. The trial rules (ADR-10) have never run
+   against an account the product created itself.
+3. **Channels, file sharing, greeting** (`08.5.1/.2/.9`, `08.9.4`, `11.2`) — slice 13.
+   File sharing carries the security shape here: NFR-S10 wants type/size limits and
+   scanning, and those belong in the first version rather than a retrofit.
+4. **Checkout, notifications, ⌘K** (`10.1.x`, `13.8`, `01.1.3`) — slice 14.
+
+**Webhooks (`FR-MOD-08.8.4`) is v1, not MVP** — worth flagging because an earlier
+version of this file recommended it first. When it is built, ship the HMAC signing and
+the SSRF guard with the first version (NFR-S7, risk R2, `v2-derin-analiz/v2-04` §6);
+retrofitting them once integrators depend on the loose behaviour is a breaking change.
+
+When every phase in `PLAN.md` is closed, run the mandatory closing sweep in **PLAN.md §F**
+before reporting the work finished.

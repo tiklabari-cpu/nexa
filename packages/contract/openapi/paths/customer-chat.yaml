@@ -1,0 +1,143 @@
+# Customer Chat API — the surface the widget talks to.
+#
+# Deliberately separate from the agent routes rather than the same endpoints with
+# fields filtered out. A customer has one conversation and no concept of teams,
+# assignment or internal notes; reusing the agent surface would mean every field
+# added there is exposed to the widget until someone remembers to hide it.
+#
+# Every route requires a customer token. An agent token is refused with 404 — not
+# 403 — so the surface cannot be probed.
+
+state:
+  get:
+    tags: [Customer]
+    operationId: getCustomerChatState
+    summary: The widget's entire conversation state
+    description: |
+      One round-trip on load rather than three. On a slow connection that is the
+      difference between the panel opening with the conversation already in it
+      and opening empty.
+
+      `online` reflects whether any agent is currently accepting chats, so the
+      widget can say nobody is available instead of implying an instant reply.
+      Internal notes are excluded in SQL, not filtered afterwards — a short page
+      that dropped them later would still leak that something was hidden.
+    responses:
+      "200":
+        description: Current state for this visitor
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerChatState" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+events:
+  post:
+    tags: [Customer]
+    operationId: sendCustomerMessage
+    summary: Send a message, opening a conversation if there is not one
+    description: |
+      A single endpoint because from the widget's side there is no difference: a
+      visitor types and presses enter. Making the client choose between "start"
+      and "send" invites a race where two first messages each try to start a
+      conversation.
+
+      Returns 201 when the message was recorded, 200 when an `idempotency_key`
+      replayed an earlier one.
+
+      A customer cannot write an internal note. The field is not accepted here at
+      all, rather than accepted and downgraded silently.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [text]
+            properties:
+              text: { type: string, minLength: 1, maxLength: 10000 }
+              url:
+                type: string
+                maxLength: 2048
+                description: Page the visitor is on. Feeds the routing rules.
+              name: { type: string, maxLength: 120, description: Pre-chat form value. }
+              email: { type: string, format: email, maxLength: 320 }
+              idempotency_key: { type: string, maxLength: 128 }
+    responses:
+      "200":
+        description: Idempotent replay — the original event, no new message
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerMessageResult" }
+      "201":
+        description: Message recorded
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerMessageResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402":
+        description: |
+          The license is read-only (expired trial). Existing conversations stay
+          readable; new messages are refused.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+close:
+  post:
+    tags: [Customer]
+    operationId: closeCustomerChat
+    summary: Close the conversation from the visitor's side
+    description: |
+      Ends the current thread. The chat itself continues to exist, so the visitor
+      returning opens a new thread on it rather than losing their history.
+    responses:
+      "204":
+        description: Conversation closed
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: There is no open conversation to close
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+rating:
+  post:
+    tags: [Customer]
+    operationId: rateCustomerChat
+    summary: Rate the conversation
+    description: |
+      Applies to the visitor's most recent conversation whether or not it is
+      still open, because ratings usually arrive just after one closes.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [value]
+            properties:
+              value: { type: string, enum: [good, bad] }
+              comment: { type: string, maxLength: 1000 }
+    responses:
+      "201":
+        description: Rating recorded
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, value, chat_id]
+              properties:
+                id: { type: string, format: uuid }
+                value: { type: string, enum: [good, bad] }
+                chat_id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

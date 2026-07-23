@@ -387,6 +387,251 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/chat': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The widget's entire conversation state
+     * @description One round-trip on load rather than three. On a slow connection that is the
+     *     difference between the panel opening with the conversation already in it
+     *     and opening empty.
+     *
+     *     `online` reflects whether any agent is currently accepting chats, so the
+     *     widget can say nobody is available instead of implying an instant reply.
+     *     Internal notes are excluded in SQL, not filtered afterwards — a short page
+     *     that dropped them later would still leak that something was hidden.
+     */
+    get: operations['getCustomerChatState'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customer/chat/events': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a message, opening a conversation if there is not one
+     * @description A single endpoint because from the widget's side there is no difference: a
+     *     visitor types and presses enter. Making the client choose between "start"
+     *     and "send" invites a race where two first messages each try to start a
+     *     conversation.
+     *
+     *     Returns 201 when the message was recorded, 200 when an `idempotency_key`
+     *     replayed an earlier one.
+     *
+     *     A customer cannot write an internal note. The field is not accepted here at
+     *     all, rather than accepted and downgraded silently.
+     */
+    post: operations['sendCustomerMessage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customer/chat/close': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Close the conversation from the visitor's side
+     * @description Ends the current thread. The chat itself continues to exist, so the visitor
+     *     returning opens a new thread on it rather than losing their history.
+     */
+    post: operations['closeCustomerChat'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customer/chat/rating': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Rate the conversation
+     * @description Applies to the visitor's most recent conversation whether or not it is
+     *     still open, because ratings usually arrive just after one closes.
+     */
+    post: operations['rateCustomerChat'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/agents': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List agents on the license
+     * @description Suspended agents are omitted: they cannot be assigned work, and offering
+     *     them in an assignee picker only produces a failed transfer.
+     */
+    get: operations['listAgents'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/agents/me/routing-status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set the caller's availability
+     * @description Switching to `accepting_chats` drains the queue: any waiting conversation
+     *     the caller can now take is assigned before the response returns, and the
+     *     chat ids appear in `assigned_from_queue`.
+     *
+     *     Without that, an agent who comes online to an empty screen sits idle while
+     *     customers wait for the next arrival to trigger assignment.
+     */
+    put: operations['setMyRoutingStatus'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/groups': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List teams and their members
+     * @description Teams are the unit of chat visibility: an agent sees a conversation because
+     *     a team they belong to has access to it. Membership carries the priority
+     *     that routing uses to pick between available agents (ADR-08).
+     */
+    get: operations['listGroups'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/overview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Headline conversation metrics
+     * @description Defaults to the last 30 days when no range is given.
+     *
+     *     Two rates deliberately return `null` rather than zero:
+     *
+     *     - `automated_rate` when nothing closed in the window. It is a share of
+     *       *closed* conversations, not all of them — an open chat has not resolved
+     *       either way, and counting it would make the number fall whenever the
+     *       inbox gets busy.
+     *     - `satisfaction.score` when nobody rated. An unrated period is unknown,
+     *       not bad, and 0% reads as a catastrophe.
+     */
+    get: operations['getReportsOverview'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/subscription': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Plan, trial state and estimated charge
+     * @description `access` states plainly what the workspace can still do, so a client never
+     *     has to infer read-only from a status string.
+     *
+     *     An expired trial is `read_only`, not locked (ADR-10): data stays readable
+     *     and exportable, and nothing is deleted. `estimated_total_cents` is 0 while
+     *     trialing.
+     *
+     *     Billing is mocked — no external provider is called — but the usage figures
+     *     and the arithmetic are real.
+     */
+    get: operations['getSubscription'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/usage': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Metered usage for the current period
+     * @description `quota_warning` turns true at 80% of the included AI resolutions
+     *     (PRD §8.3 flow 5). A quota that only surprises you at 100% is a support
+     *     ticket.
+     */
+    get: operations['getUsage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -539,6 +784,114 @@ export interface components {
       last_used_at?: string | null;
       /** Format: date-time */
       expires_at?: string | null;
+    };
+    Agent: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      /** Format: email */
+      email: string;
+      avatar_url?: string | null;
+      /** @enum {string} */
+      role: 'owner' | 'viceowner' | 'admin' | 'agent';
+      /** @enum {string} */
+      routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
+      /** @description Routing never assigns past this. Over-limit means queued. */
+      concurrent_chats_limit: number;
+      two_factor_enabled?: boolean;
+    };
+    Group: {
+      /** Format: int64 */
+      id: number;
+      name: string;
+      language_code: string;
+      agents: {
+        /** Format: uuid */
+        agent_id: string;
+        /**
+         * @description Assignment preference within the team (ADR-08). A full tier is
+         *     skipped rather than queued behind.
+         * @enum {string}
+         */
+        priority: 'primary' | 'first' | 'normal' | 'last';
+      }[];
+    };
+    UsageSummary: {
+      /** @description `yyyymm`. */
+      period: string;
+      ai_resolutions: {
+        /**
+         * @description Threads that closed with no agent-authored event (ADR-09). The
+         *     same query backs the "automated" figure in reports.
+         */
+        used: number;
+        included: number;
+        overage: number;
+        overage_cents: number;
+      };
+      api_calls: {
+        used: number;
+        included: number;
+      };
+    };
+    ReportsOverview: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      totals: {
+        chats: number;
+        closed: number;
+        automated: number;
+        /** @description Share of *closed* chats. Null when nothing closed. */
+        automated_rate?: number | null;
+        queued_now: number;
+      };
+      response_times: {
+        avg_first_response_seconds?: number | null;
+        avg_duration_seconds?: number | null;
+      };
+      satisfaction: {
+        good: number;
+        bad: number;
+        /** @description Null when nobody rated — unknown, not zero. */
+        score?: number | null;
+        responses: number;
+      };
+      by_agent: {
+        /** Format: uuid */
+        agent_id: string;
+        name?: string | null;
+        chats: number;
+      }[];
+      top_tags: {
+        name: string;
+        count: number;
+      }[];
+    };
+    CustomerChatState: {
+      /** @description Whether any agent is currently accepting chats. */
+      online: boolean;
+      customer: {
+        /** Format: uuid */
+        id: string;
+        name?: string | null;
+        email?: string | null;
+      };
+      chat: {
+        id: string;
+        thread_id?: string | null;
+        queue_position?: number | null;
+      } | null;
+      /** @description Customer-visible events only. Internal notes never appear. */
+      events: components['schemas']['Event'][];
+    };
+    CustomerMessageResult: {
+      chat_id: string;
+      queue_position?: number | null;
+      event?: components['schemas']['Event'] | null;
     };
     Error: {
       error: {
@@ -1406,6 +1759,346 @@ export interface operations {
         content?: never;
       };
       404: components['responses']['NotFound'];
+    };
+  };
+  getCustomerChatState: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current state for this visitor */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerChatState'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  sendCustomerMessage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          text: string;
+          /** @description Page the visitor is on. Feeds the routing rules. */
+          url?: string;
+          /** @description Pre-chat form value. */
+          name?: string;
+          /** Format: email */
+          email?: string;
+          idempotency_key?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Idempotent replay — the original event, no new message */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerMessageResult'];
+        };
+      };
+      /** @description Message recorded */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerMessageResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      /**
+       * @description The license is read-only (expired trial). Existing conversations stay
+       *     readable; new messages are refused.
+       */
+      402: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  closeCustomerChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Conversation closed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      /** @description There is no open conversation to close */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  rateCustomerChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          value: 'good' | 'bad';
+          comment?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Rating recorded */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            value: 'good' | 'bad';
+            chat_id: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAgents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Agents on the license */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Agent'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setMyRoutingStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
+        };
+      };
+    };
+    responses: {
+      /** @description Availability updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
+            /**
+             * @description Chats taken off the queue and assigned to the caller as a
+             *     direct result of this call. Empty for any status other than
+             *     `accepting_chats`.
+             */
+            assigned_from_queue: string[];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listGroups: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Teams on the license */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Group'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsOverview: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Metrics for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsOverview'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current subscription */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            plan: string;
+            /** @enum {string} */
+            billing_cycle?: 'monthly' | 'annual';
+            /** @enum {string} */
+            status: 'trialing' | 'active' | 'past_due' | 'read_only' | 'canceled';
+            /**
+             * @description What the workspace may do right now.
+             * @enum {string}
+             */
+            access: 'trialing' | 'active' | 'read_only';
+            trial?: {
+              /** Format: date-time */
+              ends_at?: string | null;
+              days_remaining?: number | null;
+            };
+            /** @description Non-suspended agents — what a seat charge is based on. */
+            seats: number;
+            unit_price_cents: number;
+            usage: components['schemas']['UsageSummary'];
+            estimated_total_cents?: number;
+            /** @enum {string} */
+            provider: 'mock';
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getUsage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Usage for the current billing period */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UsageSummary'] & {
+            /** @description True from 80% of the included allowance. */
+            quota_warning: boolean;
+            /** @description Billing period as `yyyymm`. */
+            period_label: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
     };
   };
 }

@@ -31,6 +31,8 @@ tags:
     description: OAuth 2.1, personal access tokens, customer tokens.
   - name: Chats
     description: Conversations — chat → thread → event.
+  - name: Customer
+    description: The widget-facing surface. Customer token only.
   - name: Configuration
     description: Groups, agents, tags, canned responses, routing, channels.
   - name: Reports
@@ -95,6 +97,29 @@ paths:
     $ref: "./paths/chats.yaml#/tag"
   /chats/{chatId}/seen:
     $ref: "./paths/chats.yaml#/seen"
+
+  /customer/chat:
+    $ref: "./paths/customer-chat.yaml#/state"
+  /customer/chat/events:
+    $ref: "./paths/customer-chat.yaml#/events"
+  /customer/chat/close:
+    $ref: "./paths/customer-chat.yaml#/close"
+  /customer/chat/rating:
+    $ref: "./paths/customer-chat.yaml#/rating"
+
+  /agents:
+    $ref: "./paths/agents.yaml#/agents"
+  /agents/me/routing-status:
+    $ref: "./paths/agents.yaml#/routingStatus"
+  /groups:
+    $ref: "./paths/agents.yaml#/groups"
+
+  /reports/overview:
+    $ref: "./paths/reports.yaml#/overview"
+  /billing/subscription:
+    $ref: "./paths/reports.yaml#/subscription"
+  /billing/usage:
+    $ref: "./paths/reports.yaml#/usage"
 
 components:
   securitySchemes:
@@ -291,6 +316,162 @@ components:
         created_at: { type: string, format: date-time }
         last_used_at: { type: string, format: date-time, nullable: true }
         expires_at: { type: string, format: date-time, nullable: true }
+
+    Agent:
+      type: object
+      required: [id, name, email, role, routing_status, concurrent_chats_limit]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        avatar_url: { type: string, nullable: true }
+        role: { type: string, enum: [owner, viceowner, admin, agent] }
+        routing_status:
+          type: string
+          enum: [accepting_chats, not_accepting_chats, offline]
+        concurrent_chats_limit:
+          type: integer
+          description: Routing never assigns past this. Over-limit means queued.
+        two_factor_enabled: { type: boolean }
+
+    Group:
+      type: object
+      required: [id, name, language_code, agents]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        language_code: { type: string }
+        agents:
+          type: array
+          items:
+            type: object
+            required: [agent_id, priority]
+            properties:
+              agent_id: { type: string, format: uuid }
+              priority:
+                type: string
+                enum: [primary, first, normal, last]
+                description: |
+                  Assignment preference within the team (ADR-08). A full tier is
+                  skipped rather than queued behind.
+
+    UsageSummary:
+      type: object
+      required: [period, ai_resolutions, api_calls]
+      properties:
+        period: { type: string, description: "`yyyymm`." }
+        ai_resolutions:
+          type: object
+          required: [used, included, overage, overage_cents]
+          properties:
+            used:
+              type: integer
+              description: |
+                Threads that closed with no agent-authored event (ADR-09). The
+                same query backs the "automated" figure in reports.
+            included: { type: integer }
+            overage: { type: integer }
+            overage_cents: { type: integer }
+        api_calls:
+          type: object
+          required: [used, included]
+          properties:
+            used: { type: integer }
+            included: { type: integer }
+
+    ReportsOverview:
+      type: object
+      required: [range, totals, response_times, satisfaction, by_agent, top_tags]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        totals:
+          type: object
+          required: [chats, closed, automated, queued_now]
+          properties:
+            chats: { type: integer }
+            closed: { type: integer }
+            automated: { type: integer }
+            automated_rate:
+              type: number
+              nullable: true
+              description: Share of *closed* chats. Null when nothing closed.
+            queued_now: { type: integer }
+        response_times:
+          type: object
+          properties:
+            avg_first_response_seconds: { type: integer, nullable: true }
+            avg_duration_seconds: { type: integer, nullable: true }
+        satisfaction:
+          type: object
+          required: [good, bad, responses]
+          properties:
+            good: { type: integer }
+            bad: { type: integer }
+            score:
+              type: number
+              nullable: true
+              description: Null when nobody rated — unknown, not zero.
+            responses: { type: integer }
+        by_agent:
+          type: array
+          items:
+            type: object
+            required: [agent_id, chats]
+            properties:
+              agent_id: { type: string, format: uuid }
+              name: { type: string, nullable: true }
+              chats: { type: integer }
+        top_tags:
+          type: array
+          items:
+            type: object
+            required: [name, count]
+            properties:
+              name: { type: string }
+              count: { type: integer }
+
+    CustomerChatState:
+      type: object
+      required: [online, customer, chat, events]
+      properties:
+        online:
+          type: boolean
+          description: Whether any agent is currently accepting chats.
+        customer:
+          type: object
+          required: [id]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, nullable: true }
+            email: { type: string, nullable: true }
+        chat:
+          type: object
+          nullable: true
+          required: [id]
+          properties:
+            id: { type: string }
+            thread_id: { type: string, nullable: true }
+            queue_position: { type: integer, nullable: true }
+        events:
+          type: array
+          description: Customer-visible events only. Internal notes never appear.
+          items: { $ref: "#/components/schemas/Event" }
+
+    CustomerMessageResult:
+      type: object
+      required: [chat_id]
+      properties:
+        chat_id: { type: string }
+        queue_position: { type: integer, nullable: true }
+        event:
+          oneOf:
+            - $ref: "#/components/schemas/Event"
+            - type: "null"
 
     Error:
       type: object

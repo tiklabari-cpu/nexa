@@ -1,0 +1,119 @@
+# Reports and billing.
+#
+# The "automated" figure here and the AI-resolution counter on the invoice are
+# the same query (ADR-09): a thread that closed with no agent-authored event.
+# Two independent counters would drift, and the first person to notice would be
+# a customer disputing a bill.
+
+overview:
+  get:
+    tags: [Reports]
+    operationId: getReportsOverview
+    summary: Headline conversation metrics
+    description: |
+      Defaults to the last 30 days when no range is given.
+
+      Two rates deliberately return `null` rather than zero:
+
+      - `automated_rate` when nothing closed in the window. It is a share of
+        *closed* conversations, not all of them — an open chat has not resolved
+        either way, and counting it would make the number fall whenever the
+        inbox gets busy.
+      - `satisfaction.score` when nobody rated. An unrated period is unknown,
+        not bad, and 0% reads as a catastrophe.
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: Metrics for the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsOverview" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+subscription:
+  get:
+    tags: [Billing]
+    operationId: getSubscription
+    summary: Plan, trial state and estimated charge
+    description: |
+      `access` states plainly what the workspace can still do, so a client never
+      has to infer read-only from a status string.
+
+      An expired trial is `read_only`, not locked (ADR-10): data stays readable
+      and exportable, and nothing is deleted. `estimated_total_cents` is 0 while
+      trialing.
+
+      Billing is mocked — no external provider is called — but the usage figures
+      and the arithmetic are real.
+    responses:
+      "200":
+        description: Current subscription
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan, status, access, seats, unit_price_cents, usage, provider]
+              properties:
+                plan: { type: string }
+                billing_cycle: { type: string, enum: [monthly, annual] }
+                status:
+                  type: string
+                  enum: [trialing, active, past_due, read_only, canceled]
+                access:
+                  type: string
+                  enum: [trialing, active, read_only]
+                  description: What the workspace may do right now.
+                trial:
+                  type: object
+                  properties:
+                    ends_at: { type: string, format: date-time, nullable: true }
+                    days_remaining: { type: integer, nullable: true }
+                seats:
+                  type: integer
+                  description: Non-suspended agents — what a seat charge is based on.
+                unit_price_cents: { type: integer }
+                usage: { $ref: "../openapi.yaml#/components/schemas/UsageSummary" }
+                estimated_total_cents: { type: integer }
+                provider: { type: string, enum: [mock] }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+usage:
+  get:
+    tags: [Billing]
+    operationId: getUsage
+    summary: Metered usage for the current period
+    description: |
+      `quota_warning` turns true at 80% of the included AI resolutions
+      (PRD §8.3 flow 5). A quota that only surprises you at 100% is a support
+      ticket.
+    responses:
+      "200":
+        description: Usage for the current billing period
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "../openapi.yaml#/components/schemas/UsageSummary"
+                - type: object
+                  required: [quota_warning, period_label]
+                  properties:
+                    quota_warning:
+                      type: boolean
+                      description: True from 80% of the included allowance.
+                    period_label:
+                      type: string
+                      description: "Billing period as `yyyymm`."
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

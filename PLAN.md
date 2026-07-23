@@ -306,6 +306,36 @@ gösteriyor, var gibi davranmıyor. Detay: HANDOFF.md.
 
 ---
 
+## 1b. Dilim sonrası düzeltmeler
+
+### F1 — Kontrat kayması kapatıldı (2026-07-23) ✅
+
+**Bulgu:** ADR-05 "contract-first" diyor, ama dilim 6, 8 ve 9 route'ları doğrudan
+`apps/api/src/routes/`'a yazıp `packages/contract/openapi/`'ye dokunmamış. **10 endpoint
+kontratsız kalmış** — dolayısıyla üretilmiş tipleri ve dokümantasyonu da yok. Hiçbir test
+bunu yakalamadı, çünkü testler route'ları doğrudan çağırıyordu.
+
+Kontratsız kalan yüzey: `/reports/overview` · `/billing/subscription` · `/billing/usage` ·
+`/agents` · `/agents/me/routing-status` · `/groups` · `/customer/chat` (+ `/events`,
+`/close`, `/rating`).
+
+**Düzeltme:**
+
+- 3 yeni path dosyası (`paths/agents.yaml`, `paths/reports.yaml`, `paths/customer-chat.yaml`)
+  \+ 6 yeni şema (`Agent`, `Group`, `UsageSummary`, `ReportsOverview`, `CustomerChatState`,
+  `CustomerMessageResult`) + `Customer` tag'i. Kontrat 18 → **28 path**.
+- **Asıl düzeltme kaymayı tekrar imkânsız kılan test:** `contract-parity.test.ts` Fastify'ın
+  router'ını `printRoutes` ile okuyup kontratla **iki yönlü** karşılaştırıyor — belgelenmemiş
+  route da, karşılığı olmayan kontrat maddesi de hata veriyor. Ayrıca: `operationId` tekilliği
+  (openapi-typescript tipleri buna göre anahtarlıyor, çakışma sessizce üzerine yazardı) ve
+  public olmayan her operasyonda 4xx tanımı.
+- Parser'ın sessizce boş küme üretip iki tarafı da "eşit" göstermesine karşı taban kontrolü.
+
+CI zaten üretilmiş tiplerin bayatlığını kontrol ediyordu; ama spec'in **kendisi** eksik olduğu
+için o kapı bunu yakalayamazdı. Parity testi bu boşluğu kapatıyor.
+
+---
+
 ## 3. Assumptions (varsayımlar — onay beklenmedi)
 
 - **A1:** Host'ta `psql` yok. Tüm DB CLI işlemleri Postgres container'ı içinden (`docker compose exec db psql`) yapılır.

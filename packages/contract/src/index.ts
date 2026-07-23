@@ -8,4 +8,5 @@
  */
 export type { components, operations, paths } from './generated/api.js';
 
-export { default as openapiDocument } from './document.js';
+export { default as openapiDocument, loadOpenApiDocument } from './document.js';
+export type { OpenApiDocument } from './document.js';

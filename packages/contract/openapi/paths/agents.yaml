@@ -1,0 +1,101 @@
+# Configuration — agents, availability and teams.
+#
+# Availability is not a cosmetic flag. Going `accepting_chats` is one of only two
+# moments capacity appears (the other being a chat closing), so the routing queue
+# drains on this call. That is why it returns what it assigned rather than 204.
+
+routingStatus:
+  put:
+    tags: [Configuration]
+    operationId: setMyRoutingStatus
+    summary: Set the caller's availability
+    description: |
+      Switching to `accepting_chats` drains the queue: any waiting conversation
+      the caller can now take is assigned before the response returns, and the
+      chat ids appear in `assigned_from_queue`.
+
+      Without that, an agent who comes online to an empty screen sits idle while
+      customers wait for the next arrival to trigger assignment.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [routing_status]
+            properties:
+              routing_status:
+                type: string
+                enum: [accepting_chats, not_accepting_chats, offline]
+    responses:
+      "200":
+        description: Availability updated
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [routing_status, assigned_from_queue]
+              properties:
+                routing_status:
+                  type: string
+                  enum: [accepting_chats, not_accepting_chats, offline]
+                assigned_from_queue:
+                  type: array
+                  description: |
+                    Chats taken off the queue and assigned to the caller as a
+                    direct result of this call. Empty for any status other than
+                    `accepting_chats`.
+                  items: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+agents:
+  get:
+    tags: [Configuration]
+    operationId: listAgents
+    summary: List agents on the license
+    description: |
+      Suspended agents are omitted: they cannot be assigned work, and offering
+      them in an assignee picker only produces a failed transfer.
+    responses:
+      "200":
+        description: Agents on the license
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Agent" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+groups:
+  get:
+    tags: [Configuration]
+    operationId: listGroups
+    summary: List teams and their members
+    description: |
+      Teams are the unit of chat visibility: an agent sees a conversation because
+      a team they belong to has access to it. Membership carries the priority
+      that routing uses to pick between available agents (ADR-08).
+    responses:
+      "200":
+        description: Teams on the license
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Group" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

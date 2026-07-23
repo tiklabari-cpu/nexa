@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell.js';
 import { SignInPage } from './features/auth/SignInPage.js';
 import { BillingPage } from './features/billing/BillingPage.js';
 import { CustomersPage } from './features/customers/CustomersPage.js';
+import { PlaybookPage } from './features/playbook/PlaybookPage.js';
 import { SettingsPage } from './features/settings/SettingsPage.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
 import { ReportsPage } from './features/reports/ReportsPage.js';
@@ -41,6 +42,7 @@ export function App(): ReactElement {
         <Route path="team" element={<TeamPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="billing" element={<BillingPage />} />
+        <Route path="playbook" element={<PlaybookPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       {/* Anything else, including the OAuth callback path, lands in the inbox. */}

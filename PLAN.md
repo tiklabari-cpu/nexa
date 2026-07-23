@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–9 ✅ · Dilim 10 ◐ (6/7 modül) · F1–F3 düzeltmeleri ✅ (bkz. §1b)
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–9 ✅ · Dilim 10 ✅ (7/7 modül) · F1–F3 düzeltmeleri ✅ (bkz. §1b)
 
 ---
 
@@ -45,7 +45,7 @@ Her dilim: (a) OpenAPI+tip → (b) Prisma migration → (c) backend servis + uni
 | 7   | Inbox 3-pane + composer                                                                  | XHIGH  | `feat/07-inbox`           |  ✅   |
 | 8   | Routing + queue + concurrent limit + fallback                                            |  MAX   | `feat/08-routing`         |  ✅   |
 | 9   | Reports Overview + Billing/metering + trial                                              | XHIGH  | `feat/09-reports-billing` |  ✅   |
-| 10  | Design system + tüm ekranların tutarlı stillenmesi                                       | XHIGH  | `fix/module-screens`      |   ◐   |
+| 10  | Design system + tüm ekranların tutarlı stillenmesi                                       | XHIGH  | `feat/playbook`           |  ✅   |
 
 Durum: ⬜ başlamadı · ⏳ devam · ✅ bitti (test yeşil + push)
 
@@ -402,6 +402,60 @@ kişiler, storage paylaşmaları birindeki hatayı diğerinde maskeler.
 **Test tasarımı notu:** organizasyon id'si worker kapsamlı çözülüyor. Test başına çözmek her
 test için bir `/auth/login` demekti ve tek koşuda anon limiti tetikliyordu — süit o zaman
 ürün hatası gibi görünen 429'larla düşüyordu.
+
+### F6 — Playbook: AI skill motoru + RAG (2026-07-23) ✅
+
+Dilim 10'un son modülü. **Dilim 10 artık 7/7.** Kontrat 37 → **46 path**.
+**595 test yeşil** (219 unit + 353 integration + 23 E2E).
+
+**`packages/ai-mock`** — sağlayıcısız, deterministik AI. Üç parça:
+
+- **Embedding**: içerikten türeyen hash'li kelime torbası, 1536 boyuta izdüşüm, L2 normalize.
+  Semantik değil (leksikal her yöntem gibi "delivery" ile "shipping"i ilişkilendirmez) ama
+  sistemin gerçekten dayandığı iki özelliği taşıyor: aynı metin → aynı vektör, ve örtüşen
+  kelimeler → yüksek benzerlik. Hafif gövdeleme eklendi ("takes"/"take" buluşsun diye);
+  bunun kesinlik bedeli intent eşiğinin 0.6'ya çıkarılmasıyla ödendi — iki kelimelik bir
+  ifade iki kelimeyi de istiyor.
+- **Compiler**: doğal dil → sıralı adımlar. Anlamadığı satırı **raporluyor**, uydurmuyor.
+  Müşteriye makul görünen yanlış işi yapan bir skill, derlenmeyi reddedenden kötüdür.
+- **Intent**: aynı tokenizer'la leksikal eşleşme.
+
+**Motor** (`skill-engine.ts`): adımları çalıştırıyor, sonucu üçe ayırıyor — `answered` /
+`handed_off` / `skipped`. Mesaj başına **tek** skill çalışıyor; iki skill'in aynı soruya cevap
+vermesi, yöneticinin hangisinin önce çalıştığını göremeyeceği bir durum yaratır.
+
+**Kanıtlanan invariant'lar:**
+
+- AI **bot** olarak yazıyor, agent olarak değil. ADR-09 bunu okuyor (agent event'i olmayan
+  kapanmış thread = AI resolution) ve Reports ilk-yanıt sayacını yalnız insanla başlatıyor.
+- Bilgi tabanında yeterince yakın bir şey yoksa **cevap vermiyor** — alakasız bir makaleden
+  cevaplamak, cevap olmadığını kabul etmekten kötüdür; sohbet insana kalıyor.
+- Bozuk skill müşteriye mesajını kaybettirmiyor; en kötü sonuç zaten insana kalan sohbet.
+- Transfer sonrası adımlar çalışmıyor (AI artık o sohbetin sahibi değil).
+- Müşterinin zaten verdiği bilgiyi tekrar sormuyor.
+- Cross-tenant: başka kiracının skill'i çalışmıyor, bilgisi getirilmiyor.
+
+**Yolda bulunan ciddi hata (benim kodum değil).** `ChatService.start` müşteri durumunu
+atlayıp **müşterinin ilk mesajını `author_type: 'agent'` olarak** kaydediyordu — `sendEvent`
+doğru yapıyor, `start` yapmıyordu. Aynı hesabı iki yerde yapmanın sonucu. Etkisi:
+
+1. Widget'tan açılan her sohbette ziyaretçinin ilk mesajı ajan balonu olarak görünürdü.
+2. Daha kötüsü: her thread daha ilk satırda "agent event"i kazandığı için **hiçbir sohbet
+   AI resolution sayılamazdı**. Reports "Automated" kalıcı olarak 0, ve kullanılan otomasyon
+   hiç faturalanmıyordu. (Daha önceki tarayıcı kontrolümde gördüğüm "AUTOMATED 0" buydu.)
+
+Türetme tek bir `authorTypeOf`'a alındı; `recipientsFor` de aynı şekilde paylaşıldı (müşteri
+hiçbir yazma yolunda internal note yazamaz). Regresyon testi ADR-09 döngüsünü uçtan uca
+sabitliyor.
+
+**İkinci hata:** widget zaman aşımından sonra ilk mesajı yeniden gönderirse chat artık var
+olduğu için `sendEvent` yoluna giriyor ve idempotency anahtarı tanınmıyordu — ziyaretçinin
+açılış mesajı çoğalırdı. `start` artık anahtarı aynı ad alanında kaydediyor.
+
+**Scope düzeltmesi:** `agents-bot--all:rw` admin varsayılanlarında yoktu; sahibin bile
+Playbook'u yönetmesi imkânsızdı.
+
+---
 
 ### F5 — Settings modülü + composer `#` seçicisi (2026-07-23) ✅
 

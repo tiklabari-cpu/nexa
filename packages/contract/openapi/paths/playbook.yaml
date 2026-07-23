@@ -1,0 +1,371 @@
+# Playbook — AI agents, skills and knowledge.
+#
+# A skill is an ordered list of steps run against an incoming customer message.
+# Steps are authored two ways and both end in the same place: an admin writes an
+# instruction in plain language and compiles it, or edits the step list
+# directly. `POST /skills/preview` runs the real engine without writing
+# anything, because a preview that runs different logic is worse than none.
+
+aiAgents:
+  get:
+    tags: [Playbook]
+    operationId: listAiAgents
+    summary: AI agents on the licence
+    responses:
+      "200":
+        description: AI agents
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AiAgent" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiAgent:
+  parameters:
+    - name: aiAgentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Playbook]
+    operationId: updateAiAgent
+    summary: Rename an agent or turn it on and off
+    description: |
+      Deactivating an agent stops every skill under it at once, which is what an
+      admin reaches for when automation is misbehaving. It does not delete
+      anything.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              active: { type: boolean }
+              tone: { type: string, maxLength: 40, nullable: true }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiAgent" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+skills:
+  get:
+    tags: [Playbook]
+    operationId: listSkills
+    summary: Skills, with how often each has run
+    responses:
+      "200":
+        description: Skills
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Skill" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: createSkill
+    summary: Create a skill
+    description: |
+      Created inactive. A skill goes live only when someone turns it on, so an
+      unfinished step list cannot start answering customers the moment it is
+      saved.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              ai_agent_id: { type: string, format: uuid }
+              instruction: { type: string, maxLength: 10000 }
+              steps:
+                type: array
+                items: { $ref: "../openapi.yaml#/components/schemas/SkillStep" }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Skill" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+skill:
+  parameters:
+    - name: skillId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: getSkill
+    summary: One skill
+    responses:
+      "200":
+        description: The skill
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Skill" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Playbook]
+    operationId: updateSkill
+    summary: Edit a skill
+    description: |
+      Steps are validated before they are stored. A skill saved with a step the
+      engine cannot run would be skipped silently at the moment it mattered, and
+      an admin would have no way to know why nothing happened.
+
+      Activating a skill with no steps is refused for the same reason.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              instruction: { type: string, maxLength: 10000 }
+              steps:
+                type: array
+                items: { $ref: "../openapi.yaml#/components/schemas/SkillStep" }
+              active: { type: boolean }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Skill" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: Cannot activate a skill with no steps
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Playbook]
+    operationId: deleteSkill
+    summary: Delete a skill
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+compile:
+  post:
+    tags: [Playbook]
+    operationId: compileSkillInstruction
+    summary: Turn a plain-language instruction into steps
+    description: |
+      Returns the steps it produced *and* the lines it could not understand,
+      rather than inventing something for them. A skill that plausibly does the
+      wrong thing to a customer is worse than one that refuses to compile, so
+      the editor shows the leftovers and lets the admin rewrite them.
+
+      Compiles only — nothing is saved.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [instruction]
+            properties:
+              instruction: { type: string, minLength: 1, maxLength: 10000 }
+    responses:
+      "200":
+        description: Compiled
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [steps, unrecognised]
+              properties:
+                steps:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/SkillStep" }
+                unrecognised:
+                  type: array
+                  description: Instruction lines that produced no step.
+                  items: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+preview:
+  post:
+    tags: [Playbook]
+    operationId: previewSkill
+    summary: Run a step list against a sample message without saving anything
+    description: |
+      Uses the same engine that serves customers, including knowledge
+      retrieval — a preview running different logic would be worse than none.
+      Nothing is written: no events, no tags, no run record.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [steps, message]
+            properties:
+              steps:
+                type: array
+                items: { $ref: "../openapi.yaml#/components/schemas/SkillStep" }
+              message: { type: string, minLength: 1, maxLength: 10000 }
+              ai_agent_id: { type: string, format: uuid, nullable: true }
+    responses:
+      "200":
+        description: What the skill would have done
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SkillPreview" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+runs:
+  parameters:
+    - name: skillId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Playbook]
+    operationId: listSkillRuns
+    summary: Recent runs, newest first
+    description: |
+      The audit an admin reads when a customer got an answer nobody expected.
+      Each entry records the steps that executed and what each one decided.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: Runs
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/SkillRun" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeSources:
+  get:
+    tags: [Playbook]
+    operationId: listKnowledgeSources
+    summary: Knowledge the AI answers from
+    responses:
+      "200":
+        description: Sources
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/KnowledgeSource" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Playbook]
+    operationId: createKnowledgeSource
+    summary: Add a source and index it
+    description: |
+      Chunked and embedded on save, so it is answerable immediately rather than
+      after a background job an admin cannot see.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, content, ai_agent_id]
+            properties:
+              ai_agent_id: { type: string, format: uuid }
+              name: { type: string, minLength: 1, maxLength: 200 }
+              content: { type: string, minLength: 1, maxLength: 100000 }
+              type: { type: string, enum: [website, file, article, faq], default: article }
+    responses:
+      "201":
+        description: Indexed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeSource" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeSource:
+  parameters:
+    - name: sourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  delete:
+    tags: [Playbook]
+    operationId: deleteKnowledgeSource
+    summary: Remove a source and everything indexed from it
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

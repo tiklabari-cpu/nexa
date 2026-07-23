@@ -69,16 +69,27 @@ describe('module navigation', () => {
     // The rail is icon-only, so without these it is a column of unlabelled
     // buttons to anyone not looking at it (NFR-A11Y5).
     renderShell();
-    for (const name of ['Inbox', 'Customers', 'Team', 'Reports', 'Billing']) {
+    for (const name of ['Inbox', 'Customers', 'Team', 'Playbook', 'Reports', 'Billing']) {
       expect(screen.getByRole('link', { name })).toBeInTheDocument();
     }
   });
 
-  it('shows modules with no UI as disabled rather than hiding them', () => {
+  it('leaves no dead entries in the rail', () => {
+    // Every module is built, so every rail entry navigates. A disabled entry
+    // here would mean a module was linked before it existed.
     renderShell();
-    const playbook = screen.getByRole('button', { name: /Playbook/ });
-    expect(playbook).toBeDisabled();
-    expect(playbook).toHaveAccessibleName('Playbook — not available yet');
+    for (const name of [
+      'Inbox',
+      'Customers',
+      'Team',
+      'Playbook',
+      'Reports',
+      'Billing',
+      'Settings',
+    ]) {
+      expect(screen.getByRole('link', { name })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('button', { name: /not available yet/ })).toBeNull();
   });
 });
 

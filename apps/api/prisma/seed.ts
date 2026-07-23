@@ -10,6 +10,7 @@
  * Idempotent: re-running against a seeded database is a no-op.
  */
 import { PrismaClient } from '@prisma/client';
+import { embed, toVectorLiteral } from '@nexa/ai-mock';
 import { buildEventId, generateShortId } from '@nexa/types';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword, hashToken } from '../src/lib/crypto.js';
@@ -62,14 +63,15 @@ const TENANTS: TenantSpec[] = [
   },
 ];
 
-/** Deterministic pseudo-embedding so retrieval demos are reproducible. */
-function fakeEmbedding(seed: number): string {
-  const values = Array.from({ length: 1536 }, (_, i) => {
-    const x = Math.sin((i + 1) * (seed + 1)) * 0.5;
-    return Number(x.toFixed(6));
-  });
-  return `[${values.join(',')}]`;
-}
+/**
+ * Embeddings come from the shared stub, which derives them from the chunk's
+ * *text*.
+ *
+ * They used to be derived from the chunk's position, which made cosine
+ * similarity meaningless — a delivery question was exactly as close to the
+ * refunds chunk as to the delivery one. Retrieval only looked like it worked
+ * because the demo had a single source.
+ */
 
 async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void> {
   const existing = await prisma.organization.findFirst({
@@ -334,12 +336,15 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       instruction:
         'When a customer asks about a delivery, collect the order number, summarise, and hand over if it is late by more than a week.',
       steps: [
-        { type: 'detect_intent', intent: 'order_status' },
+        {
+          type: 'detect_intent',
+          intent: 'order_status',
+          phrases: ['order status', 'where is my order', 'delivery', 'shipping', 'kargo nerede'],
+        },
         { type: 'request_info', field: 'order_number', prompt: 'What is your order number?' },
         { type: 'tag', tag: 'shipping' },
         { type: 'summarize' },
-        { type: 'send_message', template: 'order_status_reply' },
-        { type: 'transfer_to_team', condition: 'late_over_7_days', group: supportTeam.name },
+        { type: 'send_message', source: 'knowledge' },
       ],
       trigger: { on: 'customer_message' },
       active: spec.richDemo,
@@ -372,7 +377,7 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       knowledgeSource.id,
       licenseId.toString(),
       text,
-      fakeEmbedding(index),
+      toVectorLiteral(embed(text)),
       Math.ceil(text.length / 4),
       index,
     );
@@ -425,6 +430,7 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       scopes: [
         'accounts--my:rw',
         'agents--all:rw',
+        'agents-bot--all:rw',
         'chats--all:rw',
         'customers:rw',
         'groups--all:rw',

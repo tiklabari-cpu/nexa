@@ -16,6 +16,7 @@ import { ApiError } from '../lib/api-error.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { CustomerService } from '../services/customers/customer-service.js';
+import { AiResponder } from '../services/ai/ai-responder.js';
 
 const startSchema = z.object({
   text: z.string().trim().min(1).max(10_000),
@@ -47,6 +48,7 @@ export default async function customerRoutes(app: FastifyInstance): Promise<void
   const publisher = new RealtimePublisher(app.redis, app.log);
   const chats = new ChatService(app.db, app.redis, publisher);
   const customerDirectory = new CustomerService();
+  const ai = new AiResponder(chats, publisher);
 
   /**
    * The widget's whole conversation state in one call.
@@ -167,6 +169,11 @@ export default async function customerRoutes(app: FastifyInstance): Promise<void
           recipients: 'all',
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
         });
+
+        // A replay is the same message arriving twice; running the skill again
+        // would answer the customer twice for one question.
+        if (!replayed) await ai.handle(request, existing.id, body.text);
+
         return reply.status(replayed ? 200 : 201).send({ chat_id: existing.id, event });
       }
 
@@ -182,6 +189,8 @@ export default async function customerRoutes(app: FastifyInstance): Promise<void
         },
         ...(body.url ? { routing: { url: body.url } } : {}),
       });
+
+      await ai.handle(request, chat.id, body.text);
 
       const events = await chats.listEvents(tenant, principal, chat.id, { limit: 10 });
       return reply.status(201).send({

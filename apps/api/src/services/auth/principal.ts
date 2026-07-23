@@ -92,6 +92,10 @@ export const DEFAULT_AGENT_SCOPES: Scope[] = [
 export const ADMIN_SCOPES: Scope[] = [
   'accounts--all:rw',
   'agents--all:rw',
+  // Managing AI agents, skills and knowledge. Owners and admins configure the
+  // automation; ordinary agents work alongside it and do not reconfigure it
+  // mid-shift.
+  'agents-bot--all:rw',
   'chats--all:rw',
   'customers:rw',
   'customers.ban:rw',

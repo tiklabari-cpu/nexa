@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isScope, type Scope } from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { originHost } from '../lib/origin.js';
 import { withTenant } from '../lib/tenant.js';
 import { OauthService } from '../services/auth/oauth-service.js';
 import {
@@ -91,36 +92,6 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 }
 
 /** Hostname of an Origin header, lowercased and without port. */
-/**
- * Hostname of an origin, or null when the origin is unusable.
- *
- * Plaintext http is refused except on loopback. `.localhost` is included
- * because RFC 6761 §6.3 reserves the whole TLD for loopback — a browser can
- * never be pointed at someone else's machine through it — and development seeds
- * give each demo tenant its own `<tenant>.localhost` so a cross-tenant mistake
- * shows up as visibly wrong data instead of as a shared origin that happens to
- * work for everyone.
- *
- * `"null"` — what a sandboxed, opaque-origin document sends — parses as a
- * relative URL and is rejected here, which is the intent: an origin that
- * identifies nothing cannot be matched against an allowlist.
- */
-function originHost(origin: string | undefined): string | null {
-  if (!origin) return null;
-  try {
-    const url = new URL(origin);
-    const hostname = url.hostname.toLowerCase();
-    const isLoopback =
-      hostname === 'localhost' ||
-      hostname.endsWith('.localhost') ||
-      hostname === '127.0.0.1' ||
-      hostname === '[::1]';
-    if (url.protocol !== 'https:' && !isLoopback) return null;
-    return hostname;
-  } catch {
-    return null;
-  }
-}
 
 export default async function authRoutes(
   app: FastifyInstance,

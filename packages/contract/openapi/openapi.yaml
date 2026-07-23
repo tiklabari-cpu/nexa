@@ -37,6 +37,8 @@ tags:
     description: CRM — people who have contacted the workspace.
   - name: Configuration
     description: Groups, agents, tags, canned responses, routing, channels.
+  - name: Settings
+    description: Workspace configuration — trusted domains, saved replies, routing.
   - name: Reports
     description: Aggregate analytics.
   - name: Billing
@@ -122,6 +124,19 @@ paths:
     $ref: "./paths/agents.yaml#/routingStatus"
   /groups:
     $ref: "./paths/agents.yaml#/groups"
+
+  /settings/trusted-domains:
+    $ref: "./paths/settings.yaml#/trustedDomains"
+  /settings/trusted-domains/{domainId}:
+    $ref: "./paths/settings.yaml#/trustedDomain"
+  /settings/canned-responses:
+    $ref: "./paths/settings.yaml#/cannedResponses"
+  /settings/canned-responses/{cannedResponseId}:
+    $ref: "./paths/settings.yaml#/cannedResponse"
+  /settings/routing-rules:
+    $ref: "./paths/settings.yaml#/routingRules"
+  /settings/routing-rules/{ruleId}:
+    $ref: "./paths/settings.yaml#/routingRule"
 
   /reports/overview:
     $ref: "./paths/reports.yaml#/overview"
@@ -325,6 +340,49 @@ components:
         created_at: { type: string, format: date-time }
         last_used_at: { type: string, format: date-time, nullable: true }
         expires_at: { type: string, format: date-time, nullable: true }
+
+    TrustedDomain:
+      type: object
+      required: [id, domain, include_subdomains, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        domain:
+          type: string
+          description: Hostname only — lowercased, no scheme, port or path.
+        include_subdomains: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    CannedResponse:
+      type: object
+      required: [id, shortcut, text, scope, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        shortcut: { type: string }
+        text: { type: string }
+        scope: { type: string, enum: [chat, ticket] }
+        group_id: { type: integer, format: int64, nullable: true }
+        updated_by: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    RoutingRule:
+      type: object
+      required: [id, kind, conditions, priority, is_fallback, enabled]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, nullable: true }
+        kind: { type: string, enum: [chat, ticket] }
+        conditions:
+          type: object
+          description: |
+            All must match for the rule to win. Empty on the fallback rule,
+            which is why it catches everything.
+          additionalProperties: true
+        target_group_id: { type: integer, format: int64, nullable: true }
+        target_group_name: { type: string, nullable: true }
+        priority: { type: integer }
+        is_fallback: { type: boolean }
+        enabled: { type: boolean }
 
     CustomerSummary:
       type: object

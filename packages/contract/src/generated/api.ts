@@ -651,6 +651,144 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/trusted-domains': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Domains allowed to embed the widget */
+    get: operations['listTrustedDomains'];
+    put?: never;
+    /**
+     * Allow a domain to embed the widget
+     * @description Accepts a bare hostname (`shop.example`) or a URL to take one from. The
+     *     hostname is stored lowercased, without port or path, because that is what
+     *     an `Origin` header reduces to when it is checked.
+     *
+     *     `include_subdomains` matches on a leading dot, so a rule for
+     *     `example.com` covers `shop.example.com` but never `evil-example.com`.
+     */
+    post: operations['addTrustedDomain'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/trusted-domains/{domainId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        domainId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Stop allowing a domain
+     * @description Takes effect on the next widget load: existing conversations continue, but
+     *     no new customer token will be minted for that site.
+     */
+    delete: operations['removeTrustedDomain'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/canned-responses': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Saved replies
+     * @description Also read by the composer, which offers them behind `#`. Ordered by
+     *     shortcut so the picker is predictable.
+     */
+    get: operations['listCannedResponses'];
+    put?: never;
+    /** Save a reply */
+    post: operations['createCannedResponse'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/canned-responses/{cannedResponseId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        cannedResponseId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete a saved reply */
+    delete: operations['deleteCannedResponse'];
+    options?: never;
+    head?: never;
+    /** Edit a saved reply */
+    patch: operations['updateCannedResponse'];
+    trace?: never;
+  };
+  '/settings/routing-rules': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Rules deciding which team receives a conversation
+     * @description Evaluated in `priority` order; the first rule whose conditions *all* match
+     *     wins. The fallback rule has no conditions and catches everything else —
+     *     exactly one exists per kind, enforced by a partial unique index, because a
+     *     workspace with no fallback silently drops conversations nobody has claimed.
+     */
+    get: operations['listRoutingRules'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/routing-rules/{ruleId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Enable, disable or retarget a rule
+     * @description The fallback rule cannot be disabled. Turning it off would leave
+     *     conversations that match nothing with nowhere to go, and they would sit
+     *     unassigned with no indication anything was wrong.
+     */
+    patch: operations['updateRoutingRule'];
+    trace?: never;
+  };
   '/reports/overview': {
     parameters: {
       query?: never;
@@ -882,6 +1020,50 @@ export interface components {
       last_used_at?: string | null;
       /** Format: date-time */
       expires_at?: string | null;
+    };
+    TrustedDomain: {
+      /** Format: uuid */
+      id: string;
+      /** @description Hostname only — lowercased, no scheme, port or path. */
+      domain: string;
+      include_subdomains: boolean;
+      /** Format: date-time */
+      created_at: string;
+    };
+    CannedResponse: {
+      /** Format: uuid */
+      id: string;
+      shortcut: string;
+      text: string;
+      /** @enum {string} */
+      scope: 'chat' | 'ticket';
+      /** Format: int64 */
+      group_id?: number | null;
+      updated_by?: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    RoutingRule: {
+      /** Format: uuid */
+      id: string;
+      name?: string | null;
+      /** @enum {string} */
+      kind: 'chat' | 'ticket';
+      /**
+       * @description All must match for the rule to win. Empty on the fallback rule,
+       *     which is why it catches everything.
+       */
+      conditions: {
+        [key: string]: unknown;
+      };
+      /** Format: int64 */
+      target_group_id?: number | null;
+      target_group_name?: string | null;
+      priority: number;
+      is_fallback: boolean;
+      enabled: boolean;
     };
     CustomerSummary: {
       /** Format: uuid */
@@ -2306,6 +2488,306 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listTrustedDomains: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The allowlist */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['TrustedDomain'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  addTrustedDomain: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          domain: string;
+          /** @default false */
+          include_subdomains?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Added */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrustedDomain'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description Already on the allowlist */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  removeTrustedDomain: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        domainId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listCannedResponses: {
+    parameters: {
+      query?: {
+        scope?: 'chat' | 'ticket';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Saved replies */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['CannedResponse'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createCannedResponse: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Typed after `#` in the composer. Letters, digits, `_` and `-`. */
+          shortcut: string;
+          text: string;
+          /**
+           * @default chat
+           * @enum {string}
+           */
+          scope?: 'chat' | 'ticket';
+        };
+      };
+    };
+    responses: {
+      /** @description Saved */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CannedResponse'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description That shortcut is already used in this scope */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteCannedResponse: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        cannedResponseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateCannedResponse: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        cannedResponseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          shortcut?: string;
+          text?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CannedResponse'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description That shortcut is already used in this scope */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listRoutingRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['RoutingRule'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateRoutingRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          enabled?: boolean;
+          /** Format: int64 */
+          target_group_id?: number | null;
+          priority?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoutingRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description The fallback rule cannot be disabled */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       429: components['responses']['TooManyRequests'];
     };
   };

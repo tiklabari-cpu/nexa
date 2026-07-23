@@ -30,7 +30,7 @@ const MODULES: RailItem[] = [
 
 const FOOTER: RailItem[] = [
   { to: '/app/billing', label: 'Billing', icon: '◈', enabled: true },
-  { to: '/app/settings', label: 'Settings', icon: '⚙', enabled: false },
+  { to: '/app/settings', label: 'Settings', icon: '⚙', enabled: true },
 ];
 
 export function AppShell(): ReactElement {

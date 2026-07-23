@@ -84,7 +84,7 @@ describe('hasAnyScope', () => {
 describe('error taxonomy', () => {
   // Same rule as the scopes above: the source's 24, plus additions that are
   // named here so an unplanned one still fails.
-  const NEXA_ADDED_TYPES = ['ticket_exists'];
+  const NEXA_ADDED_TYPES = ['ticket_exists', 'account_exists'];
 
   it('carries the 24 documented types, plus Nexa additions', () => {
     expect(ERROR_TYPES).toHaveLength(24 + NEXA_ADDED_TYPES.length);

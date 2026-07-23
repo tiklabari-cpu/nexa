@@ -9,6 +9,10 @@
  */
 
 export const ERROR_TYPES = [
+  // Nexa addition. Signup is not in the source catalogue at all — that API
+  // assumes a workspace already exists — and "this email is taken" is a
+  // conflict, not a malformed request.
+  'account_exists',
   'authentication',
   'authorization',
   'chat_anonymized',
@@ -47,6 +51,7 @@ export type ErrorType = (typeof ERROR_TYPES)[number];
  * (v2-03 §1.8 flags it as a gap); these are the clone's locked choices.
  */
 export const ERROR_STATUS: Record<ErrorType, number> = {
+  account_exists: 409,
   authentication: 401,
   authorization: 403,
   chat_anonymized: 410,

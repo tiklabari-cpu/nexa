@@ -54,10 +54,7 @@ export function InboxPage(): ReactElement {
   const list = useChatList(view);
   const chat = useChat(selectedId);
   const transcript = useTranscript(selectedId);
-  const tickets = useTicketList(
-    selection.kind === 'ticket' ? selection.view : 'all',
-    onTickets,
-  );
+  const tickets = useTicketList(selection.kind === 'ticket' ? selection.view : 'all', onTickets);
 
   const agent = useAuth((s) => s.agent);
   const setRoutingStatus = useAuth((s) => s.setRoutingStatus);
@@ -243,43 +240,43 @@ export function InboxPage(): ReactElement {
       {onTickets ? (
         <TicketDetailPane ticketId={selectedTicketId} />
       ) : (
-      <main className="flex min-w-0 flex-1 flex-col bg-canvas">
-        {selectedId && chat.data ? (
-          <>
-            <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
-              <h2 className="flex-1 truncate text-sm font-semibold">
-                {chats.find((c) => c.id === selectedId)?.customer_name ?? 'Visitor'}
-              </h2>
-              <span className="font-mono text-2xs text-content-tertiary">{selectedId}</span>
-              <StatusDot
-                tone={chat.data.active ? 'success' : 'neutral'}
-                label={chat.data.active ? 'Active' : 'Archived'}
-              />
-              <CreateTicketButton
-                chatId={selectedId}
-                customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
-                onOpenTicket={(ticketId) => {
-                  setSelection({ kind: 'ticket', view: 'all' });
-                  setSelectedTicketId(ticketId);
-                }}
-              />
-            </header>
+        <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+          {selectedId && chat.data ? (
+            <>
+              <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+                <h2 className="flex-1 truncate text-sm font-semibold">
+                  {chats.find((c) => c.id === selectedId)?.customer_name ?? 'Visitor'}
+                </h2>
+                <span className="font-mono text-2xs text-content-tertiary">{selectedId}</span>
+                <StatusDot
+                  tone={chat.data.active ? 'success' : 'neutral'}
+                  label={chat.data.active ? 'Active' : 'Archived'}
+                />
+                <CreateTicketButton
+                  chatId={selectedId}
+                  customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
+                  onOpenTicket={(ticketId) => {
+                    setSelection({ kind: 'ticket', view: 'all' });
+                    setSelectedTicketId(ticketId);
+                  }}
+                />
+              </header>
 
-            <Transcript
-              events={transcript.data?.items ?? []}
-              loading={transcript.isPending}
-              currentAgentId={agent?.account_id ?? null}
+              <Transcript
+                events={transcript.data?.items ?? []}
+                loading={transcript.isPending}
+                currentAgentId={agent?.account_id ?? null}
+              />
+
+              <Composer chatId={selectedId} disabled={!chat.data.active} />
+            </>
+          ) : (
+            <EmptyState
+              title="No conversation selected"
+              description="Pick a conversation from the list to see it here."
             />
-
-            <Composer chatId={selectedId} disabled={!chat.data.active} />
-          </>
-        ) : (
-          <EmptyState
-            title="No conversation selected"
-            description="Pick a conversation from the list to see it here."
-          />
-        )}
-      </main>
+          )}
+        </main>
       )}
 
       {/* Details */}
@@ -318,7 +315,9 @@ function ViewButton({
         {icon}
       </span>
       <span className="flex-1">{label}</span>
-      {count !== undefined && <span className="tabular text-2xs text-content-tertiary">{count}</span>}
+      {count !== undefined && (
+        <span className="tabular text-2xs text-content-tertiary">{count}</span>
+      )}
     </button>
   );
 }

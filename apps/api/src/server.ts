@@ -16,6 +16,8 @@ import chatRoutes from './routes/chats.js';
 import customerRoutes from './routes/customer.js';
 import customerDirectoryRoutes from './routes/customers.js';
 import ticketRoutes from './routes/tickets.js';
+import accountLifecycleRoutes from './routes/account-lifecycle.js';
+import { FileMailer, NullMailer, type Mailer } from './services/mail/mailer.js';
 import reportRoutes from './routes/reports.js';
 import settingsRoutes from './routes/settings.js';
 import playbookRoutes from './routes/playbook.js';
@@ -26,9 +28,18 @@ export const VERSION = '0.1.0';
 
 export interface BuildServerOptions {
   env: Env;
+  /**
+   * Outgoing mail. Defaults to writing files (PLAN A4); the test server passes
+   * a null one so a suite that sends hundreds of invitations leaves nothing
+   * behind, and the tests that care about delivery pass their own.
+   */
+  mailer?: Mailer;
 }
 
-export async function buildServer({ env }: BuildServerOptions): Promise<FastifyInstance> {
+export async function buildServer({
+  env,
+  mailer = env.NODE_ENV === 'test' ? new NullMailer() : new FileMailer(env.MAIL_DIR),
+}: BuildServerOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
@@ -92,6 +103,7 @@ export async function buildServer({ env }: BuildServerOptions): Promise<FastifyI
     async (api) => {
       await api.register(healthRoutes, { env, version: VERSION });
       await api.register(authRoutes, { env });
+      await api.register(accountLifecycleRoutes, { env, mailer });
       await api.register(chatRoutes, { env });
       await api.register(agentRoutes);
       await api.register(customerRoutes);

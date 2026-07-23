@@ -251,6 +251,38 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 ---
 
+### 3.12 Dilim 12 — Hesap yaşam döngüsü: invariant ve tehditler (önce yazıldı)
+
+Auth yüzeyine dokunduğu için [MAX] özeni: liste kodun önüne yazıldı, negatif testler
+pozitiflerden önce kuruldu (MASTER-PROMPT §Zorluk Etiketleri).
+
+**Invariant'lar**
+
+- **I1** — Signup ya organizasyon + lisans + hesap + owner üyeliğinin **hepsini** üretir ya da
+  hiçbirini. Yarım kalmış bir çalışma alanı kullanıcının kendi başına düzeltemeyeceği bir şeydir.
+- **I2** — Bir e-posta = bir hesap (global `citext unique`). Aynı kişi birden çok lisansa
+  **üyelik** ile katılır, ikinci bir hesapla değil.
+- **I3** — Trial oluşturulmadan 14 gün sonra biter; `status='trialing'`, kart istenmez (ADR-10).
+- **I4** — Reset token'ı: rastgele 32 bayt, **yalnız hash'i** saklanır, süreli, **tek kullanımlık**.
+- **I5** — Forgot-password cevabı hesabın var olup olmamasından **bağımsız** olarak aynıdır
+  (gövde ve durum kodu).
+- **I6** — Davet token'ı: hash'li, süreli, tek kullanımlık, **tek lisansa** bağlı.
+- **I7** — Daveti kabul eden e-postanın hesabı zaten varsa **yeni hesap açılmaz**; mevcut hesaba
+  üyelik eklenir (I2'nin sonucu).
+- **I8** — Davet eden, **kendi rolünün üstünde** bir rol veremez.
+- **I9** — Parola değişimi mevcut oturumları (refresh token ailelerini) iptal eder.
+
+**Tehditler**
+
+- **T1** — Forgot-password ile e-posta numaralandırma (gövde, durum kodu **veya süre** farkı).
+- **T2** — Reset token'ı kaba kuvvet / tekrar kullanım.
+- **T3** — Davet linkinin yabancıya iletilmesi → yetkisiz çalışma alanı erişimi.
+- **T4** — Davet üzerinden yetki yükseltme (agent'ın owner daveti üretmesi).
+- **T5** — Daveti başka lisansa kabul ettirme (cross-tenant).
+- **T6** — Signup'ın kötüye kullanımı (kayıt spam'i) — anonim rate limit'e tabi.
+
+---
+
 ## 4. FAZ 1 — v1 (PRD §5.2)
 
 **PRD amacı:** _"AI Agent + omnichannel + mobil."_ Faz-0 kapanmadan başlanmaz (§1.3).

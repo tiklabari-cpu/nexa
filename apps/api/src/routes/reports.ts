@@ -106,7 +106,14 @@ export default async function reportRoutes(
         where: { licenseId: tenant.licenseId, active: true, queuePosition: { not: null } },
       });
 
-      return { totals, satisfaction, byAgent, topTags, queued };
+      // "Total cases" is chats *plus* tickets (PRD §3.3). Counted here rather
+      // than folded into the thread query above because the two have no join to
+      // share — a ticket need not have come from a conversation at all.
+      const tickets = await tx.ticket.count({
+        where: { licenseId: tenant.licenseId, createdAt: { gte: from, lte: to } },
+      });
+
+      return { totals, satisfaction, byAgent, topTags, queued, tickets };
     });
 
     const good = Number(report.satisfaction?.good ?? 0n);
@@ -120,6 +127,11 @@ export default async function reportRoutes(
       range: { from: from.toISOString(), to: to.toISOString() },
       totals: {
         chats: totalChats,
+        tickets: report.tickets,
+        // The figure the PRD's KPI card shows. Sent as its own field rather
+        // than left for the client to add up, so every surface that quotes
+        // "total cases" quotes the same number.
+        total_cases: totalChats + report.tickets,
         closed,
         // Share of *closed* conversations, not all of them: an open chat has
         // not resolved either way, and counting it would make the figure drop

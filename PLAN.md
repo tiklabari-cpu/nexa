@@ -956,6 +956,20 @@ görüneceği en son yerdir.
   _access method_ (ivfflat/GIN) modelleyemiyor. `pnpm db:check-drift` bu tek bilinen
   ifadeye izin verip diğer her farkta hata veriyor; sinyal korunuyor.
 
+- **D9 (dilim 11):** Kaynak platformun **58 scope**'una (v2-03 §8.5) `tickets--all:ro|rw` ve
+  `tickets--access:ro|rw` eklendi (→62). Gerekçe: kaynakta ticketing ayrı bir üründür ve
+  kendi API'si vardır; Nexa ikisini tek gelen kutusunda birleştiriyor. `chats--*`'ı yeniden
+  kullanmak, sohbet okumak için verilen bir token'ın takip işlerini de sessizce okuması
+  demekti (ADR-04 kaynakları ayrı tutar). Guard testi eklemeleri **isimle** listeliyor,
+  böylece plansız bir scope hâlâ testi düşürüyor.
+- **D10 (dilim 11):** Kilitli **24 hata tipine** (ADR-06) `ticket_exists` (409) eklendi (→25).
+  Aynı kök sebep: kaynak katalog yalnız sohbet alanını kapsıyor ve "bu zaten var" karşılığı
+  yok. Genel bir `conflict` yerine dar bir tip seçildi — katalogun geri kalanı da böyle
+  yazılmış (`group_offline`, `unavailable` değil).
+- **D11 (dilim 11):** `tickets.assignee_id` için Prisma ilişkisi/FK **eklenmedi** (PRD §8.4 de
+  tanımlamıyor). Ajan adı sayfa başına tek toplu sorguyla çözülüyor. Alternatif olan satır
+  başına arama, kuyruk birkaç yüz ticket'a çıkınca ortaya çıkan N+1'dir.
+
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 
 - v2-03 §8.5 başlığı "~63 scope" diyor, tablosu **58** sayıyor. Tablo esas alındı.

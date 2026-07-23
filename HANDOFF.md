@@ -10,6 +10,10 @@ A working live-support platform. The MVP critical path runs end to end: a visito
 messages from the widget, routing assigns it, the agent sees it live in their inbox,
 replies, tags it, archives it, and it shows up in reports and billing.
 
+The slice table below is the build history, **not** a claim that the PRD's MVP is
+finished — see "What to build next". 16 of the PRD's 52 MVP requirements are still
+unwritten.
+
 | Slice | Scope                                                                        | State |
 | ----- | ---------------------------------------------------------------------------- | :---: |
 | 1     | Monorepo, Postgres + Redis, `make dev`, health checks, CI                    |  ✅   |
@@ -22,8 +26,9 @@ replies, tags it, archives it, and it shows up in reports and billing.
 | 8     | Routing, capacity limits, queueing                                           |  ✅   |
 | 9     | Reports overview, metering, trial gate                                       |  ✅   |
 | 10    | Design system, shell + module screens                                        |  ✅   |
+| 11    | Ticketing core — `/tickets`, inbox Tickets group, create-from-chat           |  ✅   |
 
-**595 tests green** — 219 unit, 353 integration, 23 end-to-end. Typecheck, lint and format clean.
+**621 tests green** — 219 unit, 379 integration, 23 end-to-end. Typecheck, lint and format clean.
 No schema drift.
 
 ---
@@ -45,8 +50,10 @@ than as nothing at all.
 
 ## What is honestly incomplete
 
-**Slice 10 is done.** All seven modules are built and reachable, all using the
-tokens from `design-brief.md` — no component hard-codes a colour.
+**The PRD's MVP is about two thirds built.** 32 of its 52 `Must/Should (MVP)`
+requirements are done, 4 partial, 16 untouched — signup, forgot password, checkout,
+file sharing, notifications and ⌘K among them. `PLAN.md` §3 lists every one with the
+evidence behind the verdict.
 
 **The AI is a deterministic stub, not a model.** `packages/ai-mock` derives
 embeddings from text (hashed bag of words, 1536 dims, L2-normalised) and
@@ -56,11 +63,10 @@ behaves like retrieval rather than looking like it — but "delivery" and
 real provider means replacing `embed()` and `compileInstruction()`; nothing else
 knows how the numbers were produced.
 
-**Not started (v1 scope in the PRD, deliberately out of the MVP path):**
-AI agent skill engine and RAG retrieval, Copilot, omnichannel adapters
-(WhatsApp/Messenger/Twilio), tickets UI, campaigns and goals UI, canned-response
-UI, the visual workflow editor (ADR-14 defers it to v2 — the table exists,
-nothing writes to it).
+**Not started (v1 scope in the PRD):** webhooks, Copilot, omnichannel adapters
+(WhatsApp/Messenger/Twilio), campaigns, ticket rules and the advanced tickets grid,
+custom fields, forms builder, the apps marketplace. The visual workflow editor stays
+unbuilt by decision (ADR-14) — the table exists and nothing writes to it.
 
 **Mocked, as instructed:** Stripe (no external call; `usage_records` are real and
 the arithmetic is real), LLM providers, SMTP, object storage.
@@ -117,7 +123,7 @@ presents as flaky RTM tests.
 
 | Question                     | File                                                   |
 | ---------------------------- | ------------------------------------------------------ |
-| Decisions and why            | [PLAN.md](PLAN.md) §0 (ADRs), §4 (deviations)          |
+| Decisions and why            | [PLAN.md](PLAN.md) §0 (ADRs), §D (deviations)          |
 | Colours, spacing, a11y rules | [design-brief.md](design-brief.md)                     |
 | API contract                 | `packages/contract/openapi/`                           |
 | Tenant isolation             | `apps/api/src/lib/tenant.ts` + the RLS migration       |
@@ -138,20 +144,20 @@ as finishing the PRD's MVP: of the 52 requirements the PRD labels `Must/Should (
 had jumped ahead of them. `PLAN.md` §1.3 records this; §3 lists every gap with its
 evidence.
 
+~~1. Ticketing~~ — **done** (slice 11). `/tickets` list/create/get/patch, the Tickets
+group in the inbox, "Create ticket" on a conversation, and `total_cases` in Reports.
+Two pieces were moved out rather than rushed: email→ticket (`08.5.3`) belongs with the
+channel surface in slice 13, and "Copy chat link" (part of `02.6`) with slice 14.
+
 The order, and why:
 
-1. **Ticketing** (`FR-MOD-02.1.3`, `02.6`, `08.5.3`) — PLAN §3.11, slice 11.
-   The PRD defines the MVP as "live chat **plus a basic ticketing core**", so this is
-   the largest hole. It is also visible today: `customers.tickets_count` and the
-   Reports "Total cases" card both count tickets, and nothing can create one, so the
-   number is structurally always zero.
-2. **Account lifecycle** (`00.2`–`00.4`, `04.3.1`, `04.4`) — slice 12. There is no
+1. **Account lifecycle** (`00.2`–`00.4`, `04.3.1`, `04.4`) — slice 12. There is no
    signup; every account comes from the seed. The trial rules (ADR-10) have never run
-   against an account the product created itself.
-3. **Channels, file sharing, greeting** (`08.5.1/.2/.9`, `08.9.4`, `11.2`) — slice 13.
-   File sharing carries the security shape here: NFR-S10 wants type/size limits and
+   against an account the product created itself, so expect surprises there.
+2. **Channels, file sharing, greeting** (`08.5.1/.2/.3/.9`, `08.9.4`, `11.2`) — slice 13.
+   File sharing carries the security shape: NFR-S10 wants type and size limits and
    scanning, and those belong in the first version rather than a retrofit.
-4. **Checkout, notifications, ⌘K** (`10.1.x`, `13.8`, `01.1.3`) — slice 14.
+3. **Checkout, notifications, ⌘K** (`10.1.x`, `13.8`, `01.1.3`, `02.6` copy link) — slice 14.
 
 **Webhooks (`FR-MOD-08.8.4`) is v1, not MVP** — worth flagging because an earlier
 version of this file recommended it first. When it is built, ship the HMAC signing and

@@ -28,6 +28,11 @@ export const ERROR_TYPES = [
   'pending_requests_limit_reached',
   'request_timeout',
   'service_unavailable',
+  // Nexa addition. The source catalogue (v2-03 §1.8) is chat-only — ticketing
+  // lives in a separate product there — so it has no "this already exists"
+  // conflict. Kept narrow rather than adding a generic `conflict`, which is how
+  // the rest of this list is written (`group_offline`, not `unavailable`).
+  'ticket_exists',
   'too_many_requests',
   'unsupported_version',
   'users_limit_reached',
@@ -63,6 +68,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   pending_requests_limit_reached: 429,
   request_timeout: 408,
   service_unavailable: 503,
+  ticket_exists: 409,
   too_many_requests: 429,
   unsupported_version: 400,
   users_limit_reached: 429,

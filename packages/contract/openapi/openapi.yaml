@@ -35,6 +35,8 @@ tags:
     description: The widget-facing surface. Customer token only.
   - name: Customers
     description: CRM — people who have contacted the workspace.
+  - name: Tickets
+    description: Asynchronous follow-up work — the other half of "total cases".
   - name: Configuration
     description: Groups, agents, tags, canned responses, routing, channels.
   - name: Playbook
@@ -117,6 +119,10 @@ paths:
     $ref: "./paths/customers.yaml#/customers"
   /customers/{customerId}:
     $ref: "./paths/customers.yaml#/customer"
+  /tickets:
+    $ref: "./paths/tickets.yaml#/tickets"
+  /tickets/{ticketId}:
+    $ref: "./paths/tickets.yaml#/ticket"
   /customers/{customerId}/ban:
     $ref: "./paths/customers.yaml#/ban"
 
@@ -545,6 +551,49 @@ components:
         last_activity_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
 
+    Ticket:
+      type: object
+      required: [id, subject, status, created_at]
+      properties:
+        id: { type: string, maxLength: 12 }
+        subject: { type: string }
+        status:
+          type: string
+          enum: [open, pending, solved, closed, spam]
+        assignee_id: { type: string, format: uuid, nullable: true }
+        assignee_name: { type: string, nullable: true }
+        group_id: { type: integer, format: int64, nullable: true }
+        customer_id: { type: string, format: uuid, nullable: true }
+        customer_name:
+          type: string
+          nullable: true
+          description: Null for a visitor who never introduced themselves.
+        customer_email: { type: string, nullable: true }
+        source_chat_id:
+          type: string
+          nullable: true
+          maxLength: 12
+          description: The conversation this followed on from, if any.
+        last_message_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    TicketDetail:
+      allOf:
+        - $ref: "#/components/schemas/Ticket"
+        - type: object
+          properties:
+            source_chat:
+              nullable: true
+              description: |
+                A snapshot of the conversation the ticket came from, so an agent
+                picking the ticket up has the context without hunting for it.
+              type: object
+              required: [id, active]
+              properties:
+                id: { type: string, maxLength: 12 }
+                active: { type: boolean }
+                created_at: { type: string, format: date-time }
+
     CustomerDetail:
       allOf:
         - $ref: "#/components/schemas/CustomerSummary"
@@ -663,9 +712,18 @@ components:
             to: { type: string, format: date-time }
         totals:
           type: object
-          required: [chats, closed, automated, queued_now]
+          required: [chats, tickets, total_cases, closed, automated, queued_now]
           properties:
             chats: { type: integer }
+            tickets:
+              type: integer
+              description: Tickets created in the range.
+            total_cases:
+              type: integer
+              description: |
+                Chats plus tickets (PRD §3.3). Sent rather than left for the
+                client to add up, so every surface quoting "total cases" quotes
+                the same number.
             closed: { type: integer }
             automated: { type: integer }
             automated_rate:
@@ -819,6 +877,13 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     Conflict:
       description: Conflicts with current resource state
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    PaymentRequired:
+      description: |
+        The trial has expired and the workspace is read-only (ADR-10). Reads
+        still succeed and nothing has been deleted; writes resume on subscribing.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

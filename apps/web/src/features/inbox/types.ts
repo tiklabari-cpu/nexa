@@ -63,3 +63,23 @@ export interface Agent {
   routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
   concurrent_chats_limit: number;
 }
+
+/** Tickets — the asynchronous half of the inbox (PRD FR-MOD-02.1.3). */
+export type TicketStatus = 'open' | 'pending' | 'solved' | 'closed' | 'spam';
+export type TicketView = 'all' | 'unassigned' | 'my_open' | 'solved';
+
+export interface Ticket {
+  id: string;
+  subject: string;
+  status: TicketStatus;
+  assignee_id: string | null;
+  assignee_name: string | null;
+  group_id: number | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  source_chat_id: string | null;
+  last_message_at: string | null;
+  created_at: string;
+  source_chat?: { id: string; active: boolean; created_at: string } | null;
+}

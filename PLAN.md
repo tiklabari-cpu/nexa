@@ -4,7 +4,9 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–9 ✅ · Dilim 10 ✅ (7/7 modül) · F1–F3 düzeltmeleri ✅ (bkz. §1b)
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–10 ✅ (10/10) · F1–F6 düzeltmeleri ✅ (bkz. §1b)
+**PRD Faz-0 (MVP) uyumu: 28 tam · 6 kısmi · 18 açık (52 gereksinim).**
+Dilimlerin bitmesi MVP'nin bitmesi DEĞİLDİR — bkz. **§1a**.
 
 ---
 
@@ -48,6 +50,71 @@ Her dilim: (a) OpenAPI+tip → (b) Prisma migration → (c) backend servis + uni
 | 10  | Design system + tüm ekranların tutarlı stillenmesi                                       | XHIGH  | `feat/playbook`           |  ✅   |
 
 Durum: ⬜ başlamadı · ⏳ devam · ✅ bitti (test yeşil + push)
+
+> ⚠️ **Bu tablo "MVP bitti" demek DEĞİLDİR.** §1'deki 10 dilim, PRD'nin Faz-0 kapsamının
+> tamamı değil, benim seçtiğim bir kritik yol kesitidir. Gerçek uyum §1a'da.
+
+---
+
+## 1a. PRD Faz Uyumu (izlenebilirlik) — 2026-07-23 denetimi
+
+**Neden bu bölüm var.** §1'deki dilimler PRD'den türetilmişti ama zamanla PRD fazlarından
+ayrıştı: `Dilim 10` altında teslim edilen **Playbook aslında PRD'de v1'dir**
+(`FR-MOD-05.x → Must (v1)`, §5.2), buna karşılık **MVP etiketli 18 gereksinim hiç yazılmadı**.
+Yani bir v1 özelliği öne çekilirken Faz-0'da delik kaldı. Bu bölüm o deliği görünür tutar.
+
+**Yöntem:** PRD §6'daki 138 `FR-MOD` satırından `Must/Should (MVP*)` etiketli **52** tanesi
+alındı; her biri PLAN.md'nin iddiasına değil **koda** karşı kontrol edildi
+(route listesi, `openapi.yaml` path'leri, `schema.prisma` modelleri, `apps/web/src/features/`).
+
+### Açık MVP gereksinimleri (kod yok)
+
+| PRD | Gereksinim | Öncelik | Kanıt / durum |
+| --- | --- | --- | --- |
+| FR-MOD-02.1.3 | Tickets grubu (All/Unassigned/My open) | Must (MVP temel) | `Ticket` modeli var (schema:467), route/UI **yok** |
+| FR-MOD-02.6 | Create ticket from chat | Must (MVP) | Reopen var (`/chats/{id}/resume`), ticket üretimi yok |
+| FR-MOD-08.5.3 | Email (forwarding → ticket) | Must (MVP) | yok |
+| FR-MOD-00.2 | Signup + 14 gün trial başlatma | Must (MVP) | `/auth` altında signup endpoint yok — hesaplar yalnız seed'den |
+| FR-MOD-00.3 | Forgot password (süreli token) | Must (MVP) | yok |
+| FR-MOD-00.4 | Onboarding sihirbazı | Should (MVP) | yok |
+| FR-MOD-04.3.1 | Copy invite link | Must (MVP) | yok |
+| FR-MOD-04.4 | Invite teammates modal | Must (MVP) | yalnız UI metni (`TeamPage.tsx:109`), akış yok |
+| FR-MOD-08.5.1 | All channels kart gridi | Must (MVP) | yok |
+| FR-MOD-08.5.2 | Website widgets CRUD | Must (MVP) | `Website` modeli var (762), endpoint yok |
+| FR-MOD-08.5.9 | Chat page (hosted link) | Must (MVP) | yok |
+| FR-MOD-08.9.4 | File sharing (tür/boyut + tarama) | Must (MVP) | yalnız `attachment_url` alanı; upload/doğrulama yok |
+| FR-MOD-10.1.1 | Plan + Change plan | Must (MVP) | yalnız okuma (`/billing/subscription`) |
+| FR-MOD-10.1.2 | Billing cycle (Monthly/Annual) | Must (MVP) | yok |
+| FR-MOD-10.1.3 | Users stepper | Must (MVP) | yok |
+| FR-MOD-10.1.6 | Subscription summary + ödeme | Must (MVP) | yok |
+| FR-MOD-11.2 | Greeting card + quick replies | Must (MVP) | widget'ta launcher/composer var, greeting yok |
+| FR-MOD-13.8 | Notifications (ses/masaüstü) | Must (MVP) | yok |
+
+### Kısmi (çekirdek var, PRD kapsamı tamamlanmamış)
+
+| PRD | Eksik kalan |
+| --- | --- |
+| FR-MOD-02.3.5 | Composer'da `#` canned + emoji var; **attach yok** (08.9.4'e bağlı) |
+| FR-MOD-08.7.1 | Chat başına etiketleme var; **etiket kütüphanesi CRUD'u** (settings) yok |
+| FR-MOD-07.1 | Overview var; AI Agent / Metrics breakdown sekmeleri yok |
+| FR-MOD-03.1.1 | Customers listesi var; Real-time sekmeleri (Chatting/Queued/Waiting) yok |
+| FR-MOD-11.3 | Bot kimliği var; yapılandırılabilir persona yok |
+| FR-MOD-01.1.3 | ⌘K komut paleti yok (Must MVP temel) |
+
+### Faz ihlali (kayıt)
+
+- **Playbook + RAG (`packages/ai-mock`, `/skills`, `/knowledge-sources`)** → PRD'de **v1**
+  (`§5.2`, `FR-MOD-05.x/06.x`). MVP'den önce teslim edildi. Geri alınmıyor (çalışıyor ve
+  test edilmiş), ama Faz-0 kapanmadan başka v1 işi alınmayacak.
+
+### Sıradaki dilimler (PRD Faz-0'ı kapatmak için)
+
+| #   | Dilim | Kapsadığı PRD | Gerekçe |
+| --- | --- | --- | --- |
+| 11  | **Ticketing çekirdeği** | 02.1.3, 02.6, 08.5.3 | PRD §5.1 MVP amacını *"canlı sohbet **+ temel ticketing** çekirdeği"* diye tanımlıyor. Tek en büyük delik. Ayrıca **bugün görünür bir kusur**: `customer-service.ts` `tickets_count` sayıyor ve bu sayı hiçbir zaman 0'dan büyük olamıyor. |
+| 12  | **Hesap yaşam döngüsü** | 00.2, 00.3, 00.4, 04.3.1, 04.4 | Ürün şu an kendi kendine hesap üretemiyor; her şey seed'e bağlı. Trial (ADR-10) signup olmadan test edilemez. |
+| 13  | **Kanallar + dosya** | 08.5.1, 08.5.2, 08.5.9, 08.9.4, 11.2 | Widget'ın kurulum yüzeyi ve müşteriye ilk dokunuş (greeting). 08.9.4 güvenlik şekli taşıyor (tür/boyut/tarama). |
+| 14  | **Checkout + bildirim + ⌘K** | 10.1.x, 13.8, 01.1.3, 08.7.1 | Trial→ücretli dönüşüm yolu (PRD çıkış kriteri: ≥%8) ve kalan shell parçaları. |
 
 ---
 
@@ -574,8 +641,8 @@ görüneceği en son yerdir.
 
 ## 5. Bitti Tanımı Takibi
 
-- [x] Tüm testler yeşil — **398** (120 unit + 278 integration)
-      · @nexa/types 26 · rtm 23+42 · widget 20 · web 9 · api 42+236
+- [x] Tüm testler yeşil — **595** (219 unit + 353 integration + 23 E2E)
+      · @nexa/types 26 · ai-mock 42 · rtm 23+42 · widget 24 · web 33 · api 71+311
 - [x] typecheck + lint + format temiz · migration drift yok
 - [x] `make dev` tek komutla her şeyi ayağa kaldırıyor
 - [x] README.md kurulum + mimariyi anlatıyor

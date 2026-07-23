@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acme Bikes — widget host page</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Inter, -apple-system, 'Segoe UI', system-ui, sans-serif;
+        background: #f7f8fa;
+        color: #111726;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 4rem 1.5rem;
+      }
+      h1 {
+        font-size: 1.75rem;
+        margin: 0 0 0.5rem;
+      }
+      p {
+        color: #4a5468;
+        line-height: 1.6;
+      }
+      code {
+        background: #e9ecf2;
+        border-radius: 4px;
+        padding: 0.1rem 0.35rem;
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-size: 0.85em;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      A stand-in for a customer's own website: the page a visitor is actually on
+      when they open the chat. It exists so the widget can be exercised the way
+      it really ships — embedded in a third-party page, in an iframe, across an
+      origin boundary — rather than by loading the widget document directly,
+      which skips the loader, the sandbox and the postMessage channel entirely.
+
+      Driven by the end-to-end suite; also useful by hand via `make dev`.
+    -->
+    <main>
+      <h1>Acme Bikes</h1>
+      <p>
+        Demo host page for the Nexa widget. The chat launcher in the corner is a cross-origin
+        iframe created by <code>loader.js</code> — this page cannot read the conversation inside
+        it, and it cannot read this page.
+      </p>
+      <p>
+        Configure with <code>window.__nexa</code> before the loader runs. Query parameters
+        override the defaults so tests can point at a different organization.
+      </p>
+    </main>
+
+    <script>
+      // Test hook: `?organization_id=…` targets a specific tenant. Falls back to
+      // nothing so a misconfigured page fails visibly rather than silently
+      // talking to whichever tenant happens to be first.
+      const params = new URLSearchParams(location.search);
+      window.__nexa = {
+        organizationId: params.get('organization_id') ?? '',
+        // Must differ from this page's origin — the loader refuses a
+        // same-origin widget, because that is exactly the configuration in
+        // which the iframe stops being an isolation boundary. Serve this page
+        // from http://acme-bikes.localhost:5174 and the widget from
+        // http://localhost:5174; one Vite server answers both.
+        widgetOrigin: params.get('widget_origin') ?? 'http://localhost:5174',
+        position: 'bottom-right',
+        language: 'en',
+      };
+    </script>
+    <script type="module" src="/src/loader.ts"></script>
+  </body>
+</html>

@@ -48,15 +48,26 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
   const widgetOrigin = normaliseOrigin(config.widgetOrigin ?? win.location.origin);
   if (!widgetOrigin) return null;
 
+  // The isolation this widget depends on comes from the iframe being on a
+  // *different* origin than the page. Same-origin defeats it entirely: with
+  // `allow-scripts allow-same-origin` a same-origin frame can reach into the
+  // embedder and even strip its own sandbox. Refuse rather than run degraded.
+  if (widgetOrigin === win.location.origin) return null;
+
   const frame = win.document.createElement('iframe');
   frame.id = IFRAME_ID;
   frame.title = 'Chat';
   frame.setAttribute('aria-label', 'Customer support chat');
-  // No `allow-same-origin`: the iframe gets an opaque origin, so even if the
-  // widget document were compromised it cannot reach the host page's storage.
-  frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups');
+  // `allow-same-origin` gives the frame its *own* origin back. It does not give
+  // it the host page's — that boundary is the differing origin, enforced above.
+  //
+  // Without it the document is opaque-origin: no storage, and every request it
+  // makes carries `Origin: null`, which the API rejects because an origin that
+  // identifies nothing cannot be checked against an allowlist. The widget could
+  // not authenticate at all.
+  frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
   frame.setAttribute('allowtransparency', 'true');
-  frame.src = buildFrameUrl(widgetOrigin, config);
+  frame.src = buildFrameUrl(widgetOrigin, config, win.location.origin);
 
   Object.assign(frame.style, {
     position: 'fixed',
@@ -123,9 +134,13 @@ function normaliseOrigin(value: string): string | null {
   }
 }
 
-function buildFrameUrl(origin: string, config: NexaWidgetConfig): string {
+function buildFrameUrl(origin: string, config: NexaWidgetConfig, hostOrigin: string): string {
   const url = new URL('/widget.html', origin);
   url.searchParams.set('organization_id', config.organizationId);
+  // The embedding page's origin, which only code running on that page knows.
+  // The widget forwards it so the API can check it against the organization's
+  // trusted domains — see the note on `host_origin` in the token route.
+  url.searchParams.set('host_origin', hostOrigin);
   if (config.language) url.searchParams.set('language', config.language);
   return url.toString();
 }

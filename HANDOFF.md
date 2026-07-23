@@ -23,7 +23,7 @@ replies, tags it, archives it, and it shows up in reports and billing.
 | 9     | Reports overview, metering, trial gate                                       |                ✅                 |
 | 10    | Design system, shell + module screens                                        | ◐ 4 of 7 modules built; see below |
 
-**414 tests green** — 131 unit, 283 integration. Typecheck, lint and format clean.
+**426 tests green** — 133 unit, 283 integration, 10 end-to-end. Typecheck, lint and format clean.
 No schema drift.
 
 ---

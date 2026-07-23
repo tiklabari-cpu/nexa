@@ -42,6 +42,8 @@ const envSchema = z.object({
   RATE_LIMIT_AGENT_PER_MIN: z.coerce.number().int().positive().default(180),
   RATE_LIMIT_AGENT_BURST: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_CUSTOMER_PER_MIN: z.coerce.number().int().positive().default(60),
+  /** Unauthenticated callers, per IP: sign-in, token exchange, widget tokens. */
+  RATE_LIMIT_ANON_PER_MIN: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_RTM_PER_SEC: z.coerce.number().int().positive().default(10),
 
   TRIAL_DAYS: z.coerce.number().int().positive().default(14),

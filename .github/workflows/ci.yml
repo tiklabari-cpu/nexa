@@ -145,6 +145,11 @@ jobs:
       JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
       WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
       CUSTOMER_TOKEN_SECRET: ci-customer-token-secret-0123456789abcdef0123
+      # The suite signs in, exchanges tokens and mints widget tokens from one
+      # IP in quick succession. At the production default of 30/min that trips
+      # the anonymous limiter, and the run fails with 429s that look like
+      # product bugs. Raised here only.
+      RATE_LIMIT_ANON_PER_MIN: '500'
 
     steps:
       - uses: actions/checkout@v4

@@ -18,6 +18,8 @@ interface WidgetConfig {
   organizationId: string;
   apiBaseUrl: string;
   language: string;
+  /** Origin of the embedding page, supplied by the loader. */
+  hostOrigin: string | null;
 }
 
 interface State {
@@ -36,7 +38,7 @@ export function mount(doc: Document = document, win: Window = window): void {
   if (!root) return;
 
   const config = readConfig(win);
-  const api = new WidgetApi(config.apiBaseUrl, config.organizationId);
+  const api = new WidgetApi(config.apiBaseUrl, config.organizationId, config.hostOrigin);
 
   const state: State = {
     open: false,
@@ -91,6 +93,11 @@ export function mount(doc: Document = document, win: Window = window): void {
   function setOpen(open: boolean): void {
     state.open = open;
     ui.panel.hidden = !open;
+    // The launcher sits in the same corner as the panel's composer. Left
+    // visible it covers the Send button and swallows the click — the panel
+    // looks fine and simply will not send. The panel's own × is the close
+    // affordance once it is open.
+    ui.launcher.hidden = open;
     ui.launcher.setAttribute('aria-expanded', String(open));
     ui.launcher.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
 
@@ -366,6 +373,9 @@ function readConfig(win: Window): WidgetConfig {
     // Same origin as the widget document by default; overridable for local dev.
     apiBaseUrl: params.get('api') ?? 'http://localhost:4000/api/v1',
     language: params.get('language') ?? 'en',
+    // Falls back to the referrer, which is the embedding page when the loader
+    // created this frame. Null when the widget document is opened directly.
+    hostOrigin: params.get('host_origin') ?? referrerOrigin(win),
   };
 }
 
@@ -373,6 +383,15 @@ function readConfig(win: Window): WidgetConfig {
 function hostPageUrl(win: Window): string | undefined {
   const referrer = win.document.referrer;
   return referrer || undefined;
+}
+
+/** Origin part of the referrer, for when the loader did not pass one through. */
+function referrerOrigin(win: Window): string | null {
+  try {
+    return win.document.referrer ? new URL(win.document.referrer).origin : null;
+  } catch {
+    return null;
+  }
 }
 
 function postToHost(win: Window, message: Record<string, unknown>): void {

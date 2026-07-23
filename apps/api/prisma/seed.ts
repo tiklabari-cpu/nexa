@@ -14,6 +14,7 @@ import { embed, toVectorLiteral } from '@nexa/ai-mock';
 import { buildEventId, generateShortId } from '@nexa/types';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword, hashToken } from '../src/lib/crypto.js';
+import { ADMIN_SCOPES } from '../src/services/auth/principal.js';
 
 loadEnvFile();
 
@@ -427,17 +428,11 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       kind: 'pat',
       tokenHash: hashToken(demoToken),
       name: 'Demo token (seed)',
-      scopes: [
-        'accounts--my:rw',
-        'agents--all:rw',
-        'agents-bot--all:rw',
-        'chats--all:rw',
-        'customers:rw',
-        'groups--all:rw',
-        'tags--all:rw',
-        'canned_responses--all:rw',
-        'reports_read',
-      ],
+      // The owner's own scope set, not a copy of it. A hand-maintained list
+      // here drifts the moment a module adds a scope, and the symptom is that
+      // the demo owner cannot open the feature that was just built — which is
+      // exactly what happened when Playbook and then tickets landed.
+      scopes: [...ADMIN_SCOPES],
     },
   });
 

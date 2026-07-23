@@ -138,20 +138,20 @@ as finishing the PRD's MVP: of the 52 requirements the PRD labels `Must/Should (
 had jumped ahead of them. `PLAN.md` §1.3 records this; §3 lists every gap with its
 evidence.
 
+~~1. Ticketing~~ — **done** (slice 11). `/tickets` list/create/get/patch, the Tickets
+group in the inbox, "Create ticket" on a conversation, and `total_cases` in Reports.
+Two pieces were moved out rather than rushed: email→ticket (`08.5.3`) belongs with the
+channel surface in slice 13, and "Copy chat link" (part of `02.6`) with slice 14.
+
 The order, and why:
 
-1. **Ticketing** (`FR-MOD-02.1.3`, `02.6`, `08.5.3`) — PLAN §3.11, slice 11.
-   The PRD defines the MVP as "live chat **plus a basic ticketing core**", so this is
-   the largest hole. It is also visible today: `customers.tickets_count` and the
-   Reports "Total cases" card both count tickets, and nothing can create one, so the
-   number is structurally always zero.
-2. **Account lifecycle** (`00.2`–`00.4`, `04.3.1`, `04.4`) — slice 12. There is no
+1. **Account lifecycle** (`00.2`–`00.4`, `04.3.1`, `04.4`) — slice 12. There is no
    signup; every account comes from the seed. The trial rules (ADR-10) have never run
    against an account the product created itself.
-3. **Channels, file sharing, greeting** (`08.5.1/.2/.9`, `08.9.4`, `11.2`) — slice 13.
-   File sharing carries the security shape here: NFR-S10 wants type/size limits and
-   scanning, and those belong in the first version rather than a retrofit.
-4. **Checkout, notifications, ⌘K** (`10.1.x`, `13.8`, `01.1.3`) — slice 14.
+   (`08.5.1/.2/.9`, `08.5.3`, `08.9.4`, `11.2`) — slice 13. File sharing carries the
+   security shape here: NFR-S10 wants type/size limits and scanning, and those belong in
+   the first version rather than a retrofit.
+2. **Checkout, notifications, ⌘K** (`10.1.x`, `13.8`, `01.1.3`, `02.6` copy link) — slice 14.
 
 **Webhooks (`FR-MOD-08.8.4`) is v1, not MVP** — worth flagging because an earlier
 version of this file recommended it first. When it is built, ship the HMAC signing and

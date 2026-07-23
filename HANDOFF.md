@@ -1,6 +1,6 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-22 · **Branch:** `main` · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-07-23 · **Branch:** `main` · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
 
@@ -10,20 +10,20 @@ A working live-support platform. The MVP critical path runs end to end: a visito
 messages from the widget, routing assigns it, the agent sees it live in their inbox,
 replies, tags it, archives it, and it shows up in reports and billing.
 
-| Slice | Scope                                                                        |               State                |
-| ----- | ---------------------------------------------------------------------------- | :--------------------------------: |
-| 1     | Monorepo, Postgres + Redis, `make dev`, health checks, CI                    |                 ✅                 |
-| 2     | OAuth 2.1 + PKCE, PAT, customer tokens, scopes, RLS tenant isolation         |                 ✅                 |
-| 3     | Full PRD §8.4 schema, event partitioning, database-enforced invariants, seed |                 ✅                 |
-| 4     | chat → thread → event, Agent Chat API                                        |                 ✅                 |
-| 5     | RTM gateway, fan-out, lossless reconnect                                     |                 ✅                 |
-| 6     | Customer Chat API + embeddable widget                                        |                 ✅                 |
-| 7     | 3-pane agent inbox                                                           |                 ✅                 |
-| 8     | Routing, capacity limits, queueing                                           |                 ✅                 |
-| 9     | Reports overview, metering, trial gate                                       |                 ✅                 |
-| 10    | Design system                                                                | ◐ tokens + inbox styled; see below |
+| Slice | Scope                                                                        |               State               |
+| ----- | ---------------------------------------------------------------------------- | :-------------------------------: |
+| 1     | Monorepo, Postgres + Redis, `make dev`, health checks, CI                    |                ✅                 |
+| 2     | OAuth 2.1 + PKCE, PAT, customer tokens, scopes, RLS tenant isolation         |                ✅                 |
+| 3     | Full PRD §8.4 schema, event partitioning, database-enforced invariants, seed |                ✅                 |
+| 4     | chat → thread → event, Agent Chat API                                        |                ✅                 |
+| 5     | RTM gateway, fan-out, lossless reconnect                                     |                ✅                 |
+| 6     | Customer Chat API + embeddable widget                                        |                ✅                 |
+| 7     | 3-pane agent inbox                                                           |                ✅                 |
+| 8     | Routing, capacity limits, queueing                                           |                ✅                 |
+| 9     | Reports overview, metering, trial gate                                       |                ✅                 |
+| 10    | Design system, shell + module screens                                        | ◐ 4 of 7 modules built; see below |
 
-**398 tests green** — 120 unit, 278 integration. Typecheck, lint and format clean.
+**414 tests green** — 131 unit, 283 integration. Typecheck, lint and format clean.
 No schema drift.
 
 ---
@@ -46,10 +46,19 @@ than as nothing at all.
 ## What is honestly incomplete
 
 **Slice 10 is partial.** The token system, Tailwind mapping and accessibility
-rules from `design-brief.md` exist and the inbox uses them throughout — no
-component hard-codes a colour. What is missing is the rest of the screens to
-apply them to: Customers, Team, Playbook, Reports and Settings have API support
-but no UI. The icon rail shows them disabled rather than pretending otherwise.
+rules from `design-brief.md` exist, and Inbox, Reports, Team and Billing all use
+them — no component hard-codes a colour.
+
+What is still missing is **Customers, Playbook and Settings**, and they are
+missing on both sides: there is no API for them either. An earlier draft of this
+file claimed they had "API support but no UI", which was wrong — only Team,
+Reports and Billing did, and those now have screens. The icon rail shows the
+three remaining modules disabled rather than pretending otherwise.
+
+Building any of them means starting at the contract (`packages/contract/openapi/`)
+and working outward, as ADR-05 requires. `contract-parity.test.ts` will fail the
+build if a route ships without a contract entry, which is how the last ten
+endpoints got missed.
 
 **Not started (v1 scope in the PRD, deliberately out of the MVP path):**
 AI agent skill engine and RAG retrieval, Copilot, omnichannel adapters
@@ -124,8 +133,10 @@ presents as flaky RTM tests.
 
 ## Suggested next steps
 
-1. **Finish slice 10** by building the remaining screens against the existing
-   tokens — Customers and Team are the highest value, and their APIs exist.
+1. **Finish slice 10** — Customers, Playbook and Settings. Each needs a contract
+   entry and API before a screen, since none of the three has either.
+   Customers is the highest value: the `customers` and `visits` tables are
+   populated and nothing surfaces them.
 2. **AI agent (v1).** The schema, skill step types and pgvector index are in
    place and seeded; the compiler and retrieval orchestration are the work.
 3. **Webhooks.** The table, HMAC design and SSRF requirements are specified in

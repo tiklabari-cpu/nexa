@@ -69,16 +69,16 @@ describe('module navigation', () => {
     // The rail is icon-only, so without these it is a column of unlabelled
     // buttons to anyone not looking at it (NFR-A11Y5).
     renderShell();
-    for (const name of ['Inbox', 'Team', 'Reports', 'Billing']) {
+    for (const name of ['Inbox', 'Customers', 'Team', 'Reports', 'Billing']) {
       expect(screen.getByRole('link', { name })).toBeInTheDocument();
     }
   });
 
   it('shows modules with no UI as disabled rather than hiding them', () => {
     renderShell();
-    const customers = screen.getByRole('button', { name: /Customers/ });
-    expect(customers).toBeDisabled();
-    expect(customers).toHaveAccessibleName('Customers — not available yet');
+    const playbook = screen.getByRole('button', { name: /Playbook/ });
+    expect(playbook).toBeDisabled();
+    expect(playbook).toHaveAccessibleName('Playbook — not available yet');
   });
 });
 

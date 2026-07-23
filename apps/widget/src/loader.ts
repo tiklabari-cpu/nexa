@@ -67,7 +67,7 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
   // not authenticate at all.
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
   frame.setAttribute('allowtransparency', 'true');
-  frame.src = buildFrameUrl(widgetOrigin, config, win.location.origin);
+  frame.src = buildFrameUrl(widgetOrigin, config, hostPageUrl(win));
 
   Object.assign(frame.style, {
     position: 'fixed',
@@ -134,15 +134,37 @@ function normaliseOrigin(value: string): string | null {
   }
 }
 
-function buildFrameUrl(origin: string, config: NexaWidgetConfig, hostOrigin: string): string {
+function buildFrameUrl(
+  origin: string,
+  config: NexaWidgetConfig,
+  host: { origin: string; url: string },
+): string {
   const url = new URL('/widget.html', origin);
   url.searchParams.set('organization_id', config.organizationId);
   // The embedding page's origin, which only code running on that page knows.
   // The widget forwards it so the API can check it against the organization's
   // trusted domains — see the note on `host_origin` in the token route.
-  url.searchParams.set('host_origin', hostOrigin);
+  url.searchParams.set('host_origin', host.origin);
+  url.searchParams.set('host_url', host.url);
   if (config.language) url.searchParams.set('language', config.language);
   return url.toString();
+}
+
+/**
+ * The embedded page, as origin + path.
+ *
+ * The widget cannot work this out for itself: `document.referrer` inside a
+ * cross-origin frame is trimmed to the origin by the default referrer policy,
+ * so an agent would see "they are on the shop" and never "they are on
+ * /checkout" — which is the entire point of showing visited pages.
+ *
+ * Query string and fragment are dropped. They are where session tokens, reset
+ * links and email addresses live, and a support transcript is the last place
+ * those should end up. The path answers the question an agent actually has.
+ */
+function hostPageUrl(win: Window): { origin: string; url: string } {
+  const { origin, pathname } = win.location;
+  return { origin, url: `${origin}${pathname}`.slice(0, 2048) };
 }
 
 function clampDimension(value: unknown, min: number, max: number): number | null {

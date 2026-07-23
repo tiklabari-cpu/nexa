@@ -14,6 +14,7 @@ import authRoutes from './routes/auth.js';
 import agentRoutes from './routes/agents.js';
 import chatRoutes from './routes/chats.js';
 import customerRoutes from './routes/customer.js';
+import customerDirectoryRoutes from './routes/customers.js';
 import reportRoutes from './routes/reports.js';
 import healthRoutes from './routes/health.js';
 
@@ -91,6 +92,7 @@ export async function buildServer({ env }: BuildServerOptions): Promise<FastifyI
       await api.register(chatRoutes, { env });
       await api.register(agentRoutes);
       await api.register(customerRoutes);
+      await api.register(customerDirectoryRoutes);
       await api.register(reportRoutes, { env });
     },
     { prefix: API_PREFIX },

@@ -20,6 +20,7 @@ export interface TestServer {
   url: (path: string) => string;
   get: (path: string, headers?: Headers) => Promise<LightMyRequestResponse>;
   post: (path: string, payload?: unknown, headers?: Headers) => Promise<LightMyRequestResponse>;
+  patch: (path: string, payload?: unknown, headers?: Headers) => Promise<LightMyRequestResponse>;
   del: (path: string, headers?: Headers) => Promise<LightMyRequestResponse>;
 }
 
@@ -38,6 +39,13 @@ export async function startTestServer(
     post: (path, payload, headers = {}) =>
       app.inject({
         method: 'POST',
+        url: url(path),
+        headers,
+        ...(payload === undefined ? {} : { payload: payload as object }),
+      }),
+    patch: (path, payload, headers = {}) =>
+      app.inject({
+        method: 'PATCH',
         url: url(path),
         headers,
         ...(payload === undefined ? {} : { payload: payload as object }),

@@ -498,6 +498,91 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List customers
+     * @description Ordered by most recent activity, which is what a support team actually
+     *     scans for. Paginated by opaque keyset cursor rather than offset — with new
+     *     conversations arriving constantly an offset page shifts under the reader
+     *     and silently skips people.
+     *
+     *     Anonymous visitors are included: someone who opened the widget and never
+     *     gave a name is still a person waiting for an answer. They surface with a
+     *     null name rather than being filtered away.
+     */
+    get: operations['listCustomers'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customers/{customerId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * One customer, with their history
+     * @description Includes recent visits and conversations. A customer in another tenant
+     *     returns 404, not 403 — a 403 would confirm the id is real (NFR-S5).
+     */
+    get: operations['getCustomer'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Edit customer details
+     * @description Only the fields present in the body are changed, so two agents editing
+     *     different fields do not overwrite each other. Sending `null` clears a
+     *     field; omitting it leaves it alone.
+     */
+    patch: operations['updateCustomer'];
+    trace?: never;
+  };
+  '/customers/{customerId}/ban': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ban a customer
+     * @description Blocks new conversations and refuses to mint further widget tokens for
+     *     them. Existing history is kept: a ban is a moderation decision, not a
+     *     deletion request, and erasing the record would also erase the evidence
+     *     for it.
+     *
+     *     Requires `customers.ban:rw` — separate from ordinary customer editing
+     *     because it is the one customer action that denies someone service.
+     */
+    post: operations['banCustomer'];
+    /** Lift a ban */
+    delete: operations['unbanCustomer'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/agents': {
     parameters: {
       query?: never;
@@ -797,6 +882,58 @@ export interface components {
       last_used_at?: string | null;
       /** Format: date-time */
       expires_at?: string | null;
+    };
+    CustomerSummary: {
+      /** Format: uuid */
+      id: string;
+      /** @description Null for a visitor who never introduced themselves. */
+      name: string | null;
+      email: string | null;
+      phone?: string | null;
+      country_code?: string | null;
+      country?: string | null;
+      /** @description Left an email address. */
+      is_lead: boolean;
+      banned: boolean;
+      /** @description Counted from conversations, not read from a stored total. */
+      chats_count: number;
+      tickets_count: number;
+      /** Format: date-time */
+      last_activity_at?: string | null;
+      /** Format: date-time */
+      created_at?: string;
+    };
+    CustomerDetail: components['schemas']['CustomerSummary'] & {
+      /** Format: date-time */
+      banned_at?: string | null;
+      /** @description Most recent first. */
+      visits: components['schemas']['Visit'][];
+      chats: {
+        id: string;
+        active: boolean;
+        /** Format: date-time */
+        created_at: string;
+        /** Format: date-time */
+        last_event_at?: string | null;
+      }[];
+    };
+    Visit: {
+      /** Format: uuid */
+      id: string;
+      /** @description Referring URL, when the browser sent one. */
+      came_from?: string | null;
+      /** @description Pages seen during the visit, in order. */
+      pages: {
+        url?: string;
+        /** Format: date-time */
+        at?: string;
+      }[];
+      os?: string | null;
+      browser?: string | null;
+      /** Format: date-time */
+      started_at: string;
+      /** Format: date-time */
+      ended_at?: string | null;
     };
     Agent: {
       /** Format: uuid */
@@ -1924,6 +2061,160 @@ export interface operations {
       };
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listCustomers: {
+    parameters: {
+      query?: {
+        /** @description Case-insensitive match against name, email and phone. */
+        query?: string;
+        /**
+         * @description `all` · `leads` — gave an email · `recent` — active in the last 30 days
+         *     · `banned`.
+         */
+        segment?: 'all' | 'leads' | 'recent' | 'banned';
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+        limit?: components['parameters']['Limit'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of customers */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['CustomerSummary'][];
+            /** @description Matching the current filter, across all pages. */
+            total: number;
+            next_page_id?: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The customer */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string | null;
+          /** Format: email */
+          email?: string | null;
+          phone?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  banCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Banned */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  unbanCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Ban lifted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerDetail'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };

@@ -62,6 +62,30 @@ describe('widget loader', () => {
     expect(src.searchParams.get('host_origin')).toBe(window.location.origin);
   });
 
+  it('passes the host page path, which the frame cannot discover itself', () => {
+    // A cross-origin frame's `document.referrer` is trimmed to the origin, so
+    // without this an agent sees "they are on the shop" and never "they are on
+    // /checkout".
+    boot(setup({}));
+    const hostUrl = new URL(frame()!.src).searchParams.get('host_url');
+    expect(hostUrl).toBe(`${window.location.origin}${window.location.pathname}`);
+  });
+
+  it('strips the query string and fragment from the host page url', () => {
+    // That is where session tokens, reset links and email addresses live, and
+    // a support transcript is the last place they should surface.
+    window.history.replaceState({}, '', '/checkout?session=secret-token#step-2');
+    try {
+      boot(setup({}));
+      const hostUrl = new URL(frame()!.src).searchParams.get('host_url');
+      expect(hostUrl).toBe(`${window.location.origin}/checkout`);
+      expect(hostUrl).not.toContain('secret-token');
+      expect(hostUrl).not.toContain('#');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
   it('refuses to boot a same-origin widget', () => {
     // Same-origin is precisely the configuration in which the iframe stops
     // being an isolation boundary: with `allow-scripts allow-same-origin` the

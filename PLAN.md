@@ -4,7 +4,7 @@
 > Şema doğruluk kaynağı: `urun-gereksinim-dokumani-PRD.md` §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–9 ✅ · Dilim 10 ◐ (4/7 modül) · F1–F3 düzeltmeleri ✅ (bkz. §1b)
+**Başlangıç:** 2026-07-22 · **Durum:** Dilim 1–9 ✅ · Dilim 10 ◐ (5/7 modül) · F1–F3 düzeltmeleri ✅ (bkz. §1b)
 
 ---
 
@@ -402,6 +402,44 @@ kişiler, storage paylaşmaları birindeki hatayı diğerinde maskeler.
 **Test tasarımı notu:** organizasyon id'si worker kapsamlı çözülüyor. Test başına çözmek her
 test için bir `/auth/login` demekti ve tek koşuda anon limiti tetikliyordu — süit o zaman
 ürün hatası gibi görünen 429'larla düşüyordu.
+
+### F4 — Customers modülü (2026-07-23) ✅
+
+Dilim 10'un kalan üç modülünden ilki. Kontrattan başlandı (ADR-05): 3 path / 5 operasyon,
+kontrat 28 → **31 path**. **461 test yeşil** (135 unit + 310 integration + 16 E2E).
+
+- `GET /customers` (arama + segment + keyset sayfalama) · `GET /customers/{id}` (ziyaretler +
+  sohbetler) · `PATCH /customers/{id}` · `POST|DELETE /customers/{id}/ban`
+- UI: iki pane — liste + detay. Modal değil, çünkü ajan birine bakarken geldiği listeyle
+  karşılaştırıyor; modal bunu her seferinde elinden alır.
+
+**Yolda kapatılan iki veri boşluğu:**
+
+- **`chats_count` / `tickets_count` hiçbir zaman yazılmıyormuş.** Şemada var (PRD §8.4) ama
+  hiçbir yazma yolu bakmıyor; okunsa herkes için sonsuza kadar 0 gösterirdi — üstelik
+  yetkiliymiş gibi. İlişkili satırlardan sayılıyor. Test bunu açıkça sabitliyor: sütun 0'a
+  set edilip endpoint'in 1 döndürmesi bekleniyor.
+- **`visits` tablosu tamamen boşmuş.** Widget zaten sayfa URL'ini gönderiyordu (routing
+  kullanıyor), hiçbir yere yazılmıyordu. Artık kaydediliyor: 30 dk içinde aynı ziyaret
+  sürdürülüyor (sayfa başına satır değil), ardışık tekrarlar atlanıyor, 50 sayfa ile sınırlı,
+  user-agent'tan tarayıcı/OS çıkarılıyor. Mesajı düşürmemek için best-effort.
+
+**Ban yazma yolu eklendi.** `banned_at` sütunu ve iki yerde uygulaması (chat başlatma +
+token üretimi) zaten vardı; onu **set edebilecek** hiçbir şey yoktu. `customers.ban:rw`
+ayrı scope: yanlış yazılmış bir ismi düzeltebilen ajan, aynı yetkiyle birini hizmet dışı
+bırakabilmemeli. Geçmiş silinmiyor — ban moderasyon kararıdır, silme talebi değil; sohbetleri
+silmek kararın dayanağını da silerdi.
+
+**Testin yakaladığı gerçek hata:** sayfalama 11 müşteriden 5'ini gösteriyordu. Postgres'te
+`ORDER BY x DESC` varsayılanı **NULLS FIRST**; ben nulls-last varsayıp keyset predicate'ini
+ona göre yazmıştım. İkisi sessizce çelişince sayfalama erken bitiyor ve hiç aktivitesi olmayan
+her müşteri kayboluyordu — hata vermeden. Sıralama artık `nulls: 'last'` ile açıkça belirtiliyor.
+
+**Widget iyileştirmesi:** "Visited pages" sadece siteyi gösteriyordu, sayfayı değil — çapraz
+kökende `document.referrer` tarayıcı tarafından kökene kırpılıyor, yani widget yolu hiç
+öğrenemiyor. Loader artık `host_url` geçiyor. Query string ve fragment **kırpılıyor**: oturum
+token'ları, sıfırlama linkleri ve e-posta adresleri orada yaşar, destek kaydı da onların
+görüneceği en son yerdir.
 
 ---
 

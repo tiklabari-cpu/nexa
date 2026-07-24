@@ -4,7 +4,7 @@
 
 **Status:** pending
 
-**Dependencies:** 2 ✓, 3
+**Dependencies:** 2 ✓, 3 ✓
 
 **Priority:** high
 

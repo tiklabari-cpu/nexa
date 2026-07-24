@@ -33,6 +33,9 @@ const envSchema = z.object({
   MAIL_DIR: z.string().default('.data/mail'),
   RTM_BASE_URL: z.string().default('ws://localhost:4001'),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  /// Origin serving the widget loader + iframe. The install snippet points
+  /// `window.__nexa.widgetOrigin` and the async `loader.js` at it.
+  WIDGET_BASE_URL: z.string().url().default('http://localhost:5174'),
 
   JWT_SIGNING_KEY: secret(32),
   WEBHOOK_HMAC_SEED: secret(32),

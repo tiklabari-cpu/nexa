@@ -1273,6 +1273,58 @@ export interface paths {
     patch: operations['updateSecuritySettings'];
     trace?: never;
   };
+  '/websites': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Sites the widget is installed on */
+    get: operations['listWebsites'];
+    put?: never;
+    /**
+     * Add a site to install the widget on
+     * @description Accepts a bare hostname (`shop.example`) or a URL to take one from; the
+     *     hostname is stored lowercased, without port or path, the same shape the
+     *     token endpoint reduces an `Origin` to. A new site starts `pending` and
+     *     flips to `connected` on the widget's first handshake from that domain.
+     *
+     *     Adding a site does not make the widget work there — its domain must also
+     *     be a trusted domain (FR-MOD-08.9.1).
+     */
+    post: operations['addWebsite'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/websites/{websiteId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        websiteId: string;
+      };
+      cookie?: never;
+    };
+    /** One website, with its install snippet */
+    get: operations['getWebsite'];
+    put?: never;
+    post?: never;
+    /**
+     * Remove a website
+     * @description Takes effect on the next widget load: existing conversations continue, but
+     *     the site no longer appears in the list. Removing it does not revoke the
+     *     trusted domain — that is a separate allowlist (FR-MOD-08.9.1).
+     */
+    delete: operations['removeWebsite'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/uploads': {
     parameters: {
       query?: never;
@@ -1692,6 +1744,48 @@ export interface components {
       created_at: string;
     };
     /**
+     * @description A site a workspace has connected the widget to (FR-MOD-08.5.2). Distinct
+     *     from a trusted domain (FR-MOD-08.9.1): a website is the customer-facing
+     *     install record — where the snippet was pasted — while a trusted domain is
+     *     the security allowlist that decides whether the widget may mint a token
+     *     there. Adding a website does not authorise its origin; the domain must
+     *     also be a trusted domain for the widget to work.
+     */
+    Website: {
+      /** Format: uuid */
+      id: string;
+      /** @description Hostname only — lowercased, no scheme, port or path. */
+      domain: string;
+      /**
+       * @description `platform` for a hosted integration (Shopify/WordPress/GTM),
+       *     `manual` for a pasted snippet. Per PRD §8.4; the specific platform
+       *     icon the UI shows is a presentation mapping, not stored here.
+       * @enum {string}
+       */
+      setup: 'manual' | 'platform';
+      /**
+       * @description `connected` once the widget has completed its first handshake from
+       *     this domain; `pending` until then. `error` is reserved for a failed
+       *     verification signal (FR-MOD-08.5.2), written by the widgets screen.
+       * @enum {string}
+       */
+      status: 'pending' | 'connected' | 'error';
+      /**
+       * Format: date-time
+       * @description When the first handshake was seen, or null while pending.
+       */
+      connected_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * @description The code to paste before `</body>`. Sets `window.__nexa` and loads
+       *     the async widget loader. Identical across a workspace's sites — the
+       *     embedding origin is resolved at runtime — so "get code" per row shows
+       *     this same value.
+       */
+      snippet: string;
+    };
+    /**
      * @description Permission to store one file, issued by `POST /uploads` once the
      *     licence's file-sharing rules have accepted the declared type and size.
      */
@@ -2062,6 +2156,7 @@ export interface components {
       | 'unsupported_version'
       | 'users_limit_reached'
       | 'validation'
+      | 'website_exists'
       | 'wrong_product_version';
   };
   responses: {
@@ -4489,6 +4584,125 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listWebsites: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's websites */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Website'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  addWebsite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          domain: string;
+          /**
+           * @default manual
+           * @enum {string}
+           */
+          setup?: 'manual' | 'platform';
+        };
+      };
+    };
+    responses: {
+      /** @description Added */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Website'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description This domain is already added (`website_exists`) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getWebsite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        websiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The website */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Website'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  removeWebsite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        websiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

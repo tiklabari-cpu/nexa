@@ -20,6 +20,7 @@ import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { FileMailer, NullMailer, type Mailer } from './services/mail/mailer.js';
 import reportRoutes from './routes/reports.js';
 import settingsRoutes from './routes/settings.js';
+import websiteRoutes from './routes/websites.js';
 import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
 import healthRoutes from './routes/health.js';
@@ -112,6 +113,7 @@ export async function buildServer({
       await api.register(ticketRoutes);
       await api.register(reportRoutes, { env });
       await api.register(settingsRoutes);
+      await api.register(websiteRoutes, { env });
       await api.register(uploadRoutes, { env });
       await api.register(playbookRoutes);
     },

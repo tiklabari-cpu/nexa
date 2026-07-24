@@ -6,6 +6,7 @@ import { ApiError } from '../lib/api-error.js';
 import { originHost } from '../lib/origin.js';
 import { withTenant } from '../lib/tenant.js';
 import { OauthService } from '../services/auth/oauth-service.js';
+import { markWebsiteConnected } from '../services/websites/website-service.js';
 import {
   ADMIN_SCOPES,
   DEFAULT_AGENT_SCOPES,
@@ -468,6 +469,16 @@ export default async function authRoutes(
       organizationId: match.organization_id,
       licenseId: match.license_id,
     });
+
+    // The widget just proved it is live on this origin, so a website added for
+    // this domain (FR-MOD-08.5.2) becomes Connected here — the earliest reliable
+    // server-side signal. Best-effort: a failure must not deny the visitor a
+    // token, and a domain tracked only as a trusted domain matches nothing.
+    try {
+      await withTenant(app.db, tenant, (tx) => markWebsiteConnected(tx, host));
+    } catch (error) {
+      request.log.warn({ err: error, host }, 'failed to mark website connected');
+    }
 
     reply.header('Cache-Control', 'no-store');
     return reply.send({

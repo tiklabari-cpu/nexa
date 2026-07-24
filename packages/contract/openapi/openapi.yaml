@@ -186,6 +186,9 @@ paths:
   /websites/{websiteId}:
     $ref: "./paths/websites.yaml#/website"
 
+  /channels/email/inbound:
+    $ref: "./paths/channels.yaml#/emailInbound"
+
   /uploads:
     $ref: "./paths/uploads.yaml#/issueUpload"
   /uploads/{key}:

@@ -36,6 +36,15 @@ const envSchema = z.object({
   /// Origin serving the widget loader + iframe. The install snippet points
   /// `window.__nexa.widgetOrigin` and the async `loader.js` at it.
   WIDGET_BASE_URL: z.string().url().default('http://localhost:5174'),
+  /// Domain a workspace forwards its support mail to (FR-MOD-08.5.3). The
+  /// per-workspace address is `<organization_id>@<domain>`; the inbound webhook
+  /// reads the local part back to route the message. Must match what the web
+  /// app shows on the Email channel card (`VITE_INBOUND_EMAIL_DOMAIN`).
+  INBOUND_EMAIL_DOMAIN: z.string().default('inbound.nexa.localhost'),
+  /// Shared secret the mail provider presents on the inbound webhook, standing
+  /// in for a signed request. Optional: unset in dev/test leaves the endpoint
+  /// open (the recipient address is the only routing key), enforced when set.
+  INBOUND_EMAIL_SECRET: z.string().optional(),
 
   JWT_SIGNING_KEY: secret(32),
   WEBHOOK_HMAC_SEED: secret(32),

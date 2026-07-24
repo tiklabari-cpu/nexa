@@ -122,6 +122,26 @@ test.describe('channels', () => {
     await notify.click();
     await expect(whatsapp.getByText(/let you know/i)).toBeVisible();
   });
+
+  // FR-MOD-08.5.3: Email is Ready, not "Coming soon" — Get address reveals the
+  // per-workspace forwarding address a mail provider forwards support mail to.
+  test('offers Email as a ready forwarding address', async ({ agentPage }) => {
+    await agentPage.goto('/app/settings');
+    const channels = agentPage.getByRole('region', { name: 'Channels' });
+    await expect(channels).toBeVisible();
+
+    const email = channels.getByTestId('channel-email');
+    await expect(email.getByText('Ready')).toBeVisible();
+    await email.getByRole('button', { name: 'Get address' }).click();
+
+    const address = email.getByTestId('email-forwarding-address');
+    await expect(address).toBeVisible();
+    // The address is `<organization_id>@<inbound-domain>`, the same routing key
+    // the inbound webhook reads back.
+    await expect(address).toContainText('@inbound.');
+
+    await agentPage.screenshot({ path: 'kanit/10-email-channel.png', fullPage: true });
+  });
 });
 
 test.describe('settings', () => {

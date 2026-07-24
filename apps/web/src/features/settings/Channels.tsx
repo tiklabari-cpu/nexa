@@ -17,6 +17,14 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 /** Origin serving the widget and its hosted Chat page. */
 const WIDGET_URL = (import.meta.env['VITE_WIDGET_URL'] as string | undefined) ?? 'http://localhost:5174';
 
+/**
+ * Domain a workspace forwards its support mail to (FR-MOD-08.5.3). The address
+ * shown on the Email card is `<organization_id>@<domain>`; it must match the
+ * API's `INBOUND_EMAIL_DOMAIN`, which reads the local part back to route mail.
+ */
+const INBOUND_EMAIL_DOMAIN =
+  (import.meta.env['VITE_INBOUND_EMAIL_DOMAIN'] as string | undefined) ?? 'inbound.nexa.localhost';
+
 interface WebsiteStatusRow {
   status: string;
 }
@@ -46,9 +54,9 @@ const STATUS_META: Record<ChannelStatus, { tone: StatusTone; label: string }> = 
  *
  * Only the Website card moves with data: no sites → Not connected (Connect),
  * sites installed but none handshaked → Ready (Manage), any connected →
- * Connected (Manage). Everything else is a fixed "Coming soon" until its own
- * slice lands (Chat page 08.5.9, Email 08.5.3) — the "Get link" call-to-action
- * that pairs with Ready belongs to the Chat page and arrives with it.
+ * Connected (Manage). The Chat page (08.5.9) and Email (08.5.3) are Ready: each
+ * hands out a ready-to-use address rather than needing a connection step. What
+ * remains is a fixed "Coming soon" until its own slice lands.
  */
 export function channelsFor(websites: WebsiteStatusRow[]): Channel[] {
   const connected = websites.filter((w) => w.status === 'connected').length;
@@ -73,7 +81,14 @@ export function channelsFor(websites: WebsiteStatusRow[]): Channel[] {
       status: 'ready',
       cta: 'Get link',
     },
-    comingSoon('email', 'Email', '✉️', 'Forward support email into the inbox.'),
+    {
+      id: 'email',
+      name: 'Email',
+      icon: '✉️',
+      description: 'Forward your support inbox here and each email becomes a ticket.',
+      status: 'ready',
+      cta: 'Get address',
+    },
     comingSoon('messenger', 'Facebook Messenger', '📨', 'Answer Messenger conversations.'),
     comingSoon('whatsapp', 'WhatsApp', '📱', 'Answer WhatsApp messages.'),
     comingSoon('sms', 'SMS', '💬', 'Reply to text messages over Twilio.'),
@@ -120,6 +135,47 @@ function ChatPageLink({ label }: { label: string }): ReactElement {
       {url && (
         <code data-testid="chat-page-url" className="truncate text-2xs text-content-tertiary">
           {url}
+        </code>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The workspace's forwarding address (FR-MOD-08.5.3): `<organization_id>@<domain>`.
+ * Whatever a customer sends here lands in the inbox as a ticket. Like the Chat
+ * page link it copies to the clipboard and shows the value, so it can be pasted
+ * into a mail provider's forwarding rule either way.
+ */
+function EmailForwardingAddress({ label }: { label: string }): ReactElement {
+  const orgId = useAuth((s) => s.agent?.organization_id ?? null);
+  const [copied, setCopied] = useState(false);
+  const address = orgId ? `${orgId}@${INBOUND_EMAIL_DOMAIN}` : '';
+
+  const copy = (): void => {
+    if (!address) return;
+    void navigator.clipboard?.writeText(address).then(
+      () => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1_500);
+      },
+      () => setCopied(false),
+    );
+  };
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <button
+        type="button"
+        onClick={copy}
+        disabled={!address}
+        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+      >
+        {copied ? 'Copied' : label}
+      </button>
+      {address && (
+        <code data-testid="email-forwarding-address" className="truncate text-2xs text-content-tertiary">
+          {address}
         </code>
       )}
     </div>
@@ -193,6 +249,8 @@ function ChannelCardView({
           )
         ) : channel.id === 'chat-page' ? (
           <ChatPageLink label={channel.cta} />
+        ) : channel.id === 'email' ? (
+          <EmailForwardingAddress label={channel.cta} />
         ) : (
           <a
             href={channel.href}

@@ -35,8 +35,14 @@ describe('channelsFor', () => {
     expect(chat.cta).toBe('Get link');
   });
 
+  it('offers Email as a ready-to-use forwarding address', () => {
+    const email = channelsFor([]).find((c) => c.id === 'email')!;
+    expect(email.status).toBe('ready');
+    expect(email.cta).toBe('Get address');
+  });
+
   it('shows every unbuilt channel as Coming soon with Get notified', () => {
-    const built = new Set(['website', 'chat-page']);
+    const built = new Set(['website', 'chat-page', 'email']);
     const rest = channelsFor([]).filter((c) => !built.has(c.id));
     expect(rest.length).toBeGreaterThan(0);
     for (const channel of rest) {

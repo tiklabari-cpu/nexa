@@ -1329,6 +1329,42 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/channels/email/inbound': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ingest a forwarded support email
+     * @description The webhook a mail provider calls when a message arrives at a workspace's
+     *     forwarding address, `<organization_id>@<inbound-domain>` (FR-MOD-08.5.3).
+     *
+     *     The recipient address routes the message to a workspace: its local part is
+     *     the organization id, resolved to a licence the same SECURITY DEFINER way
+     *     the hosted Chat page resolves one, because no session exists yet. The
+     *     sender is matched to an existing customer by email, so a returning writer
+     *     does not spawn a duplicate record; an unknown sender becomes a new one.
+     *
+     *     When the workspace keeps the spam filter on (the default) and the provider
+     *     flagged the message as spam, no ticket is created — the call still
+     *     succeeds, so the provider does not retry a message that was dropped on
+     *     purpose.
+     *
+     *     Delivery itself is mocked in this build (PLAN A4); a production deployment
+     *     authenticates the provider at the edge. When `INBOUND_EMAIL_SECRET` is
+     *     configured the caller must present it as the `X-Inbound-Secret` header.
+     */
+    post: operations['ingestInboundEmail'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/uploads': {
     parameters: {
       query?: never;
@@ -4719,6 +4755,63 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  ingestInboundEmail: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description Shared secret, checked only when `INBOUND_EMAIL_SECRET` is configured.
+         *     Lets the mock provider stand in for a signed webhook.
+         */
+        'X-Inbound-Secret'?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The workspace forwarding address the mail was sent to. */
+          to: string;
+          /** @description Sender, bare or `Name <addr>`. Matched to a customer by email. */
+          from: string;
+          /** @description Becomes the ticket subject. */
+          subject: string;
+          /** @description Message body. Not persisted — the ticket core carries no body. */
+          text?: string;
+          /** @description The provider's spam verdict, honoured when the workspace filter is on. */
+          spam?: boolean;
+        };
+      };
+    };
+    responses: {
+      /**
+       * @description The message was processed. `created` carries the new ticket id;
+       *     `ignored` means the spam filter dropped it.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            status: 'created' | 'ignored';
+            /** @description Present when `status` is `created`. */
+            ticket_id?: string;
+            /**
+             * @description Present when `status` is `ignored`.
+             * @enum {string}
+             */
+            reason?: 'spam';
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
     };
   };
   createUpload: {

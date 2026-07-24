@@ -11,7 +11,7 @@
 
 | Faz                | PRD  | Durum                                                    |
 | ------------------ | ---- | -------------------------------------------------------- |
-| **Faz 0 — MVP**    | §5.1 | ⏳ **48 ✅ · 5 ◐ · 1 ⬜ · 6 🔒** (60 satır)             |
+| **Faz 0 — MVP**    | §5.1 | ⏳ **47 ✅ · 6 ◐ · 1 ⬜ · 6 🔒** (60 satır)             |
 | Faz 1 — v1         | §5.2 | ⏳ kısmen başlandı (Playbook/AI öne çekildi — bkz. §1.3) |
 | Faz 2 — v2         | §5.3 | ⬜ başlanmadı                                            |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                                            |
@@ -94,26 +94,26 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | Modül                         | MVP | v1  | v2  | Ent. |               **Durum**                |
 | ----------------------------- | :-: | :-: | :-: | :--: | :------------------------------------: |
-| MOD-00 Auth + trial           |  ●  |     |     |      |     ◐ login var, signup/forgot yok     |
-| MOD-01 Global shell + ⌘K      |  ●  |  ○  |  ○  |      |        ◐ ray+panel var, ⌘K yok         |
-| MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      |  ◐ chat tarafı ✅, ticket tarafı yok   |
-| MOD-03.1 Real-time traffic    |  ○  |  ○  |  ○  |      |                   ◐                    |
+| MOD-00 Auth + trial           |  ●  |     |     |      |     ✅ (onboarding 00.4 hariç)     |
+| MOD-01 Global shell + ⌘K      |  ●  |  ○  |  ○  |      |        ◐ ⌘K+rozet ✅, Copilot v1         |
+| MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      |  ◐ chat+ticket ✅, Copy chat link ⬜   |
+| MOD-03.1 Real-time traffic    |  ○  |  ○  |  ○  |      | ✅ sekmeler (tm 19) |
 | MOD-03.2 Contacts CRM         |  ●  |  ○  |     |      |                   ✅                   |
 | MOD-03.3 Campaigns            |     |  ●  |  ○  |      |                   ⬜                   |
 | Engage/Goals + Sales tracker  |     |     |  ●  |      |                   ⬜                   |
-| MOD-04 Team/roller/teams      |  ●  |  ○  |  ○  |  ○   |      ◐ tablo+teams ✅, invite yok      |
+| MOD-04 Team/roller/teams      |  ●  |  ○  |  ○  |  ○   |      ✅ (invite Dilim 12)      |
 | MOD-05 Playbook               |     |  ●  |  ○  |      |        ◐ **(v1 — öne çekildi)**        |
 | MOD-06 AI Agent + RAG         |     |  ●  |  ○  |  ○   |        ◐ **(v1 — öne çekildi)**        |
 | Görsel Workflow builder       |     |     |  ●  |      |           ⛔ ADR-14 (UI yok)           |
 | MOD-07 Reports                |  ○  |  ○  |  ●  |  ○   |             ◐ Overview ✅              |
-| MOD-08.5 Channels             |  ○  |  ●  |     |  ○   |    ⬜ web widget kurulum yüzeyi yok    |
+| MOD-08.5 Channels             |  ○  |  ●  |     |  ○   |    ✅ MVP kanalları (grid/website/email/chat-page)    |
 | MOD-08.6 Routing              |  ○  |  ○  |  ●  |  ○   |            ✅ (MVP kapsamı)            |
-| MOD-08.7 Inbox araçları       |  ○  |  ●  |     |      |    ◐ canned ✅, tag kütüphanesi yok    |
+| MOD-08.7 Inbox araçları       |  ○  |  ●  |     |      |    ✅ canned + tag kütüphanesi (tm 17)    |
 | MOD-08.8 API access / MCP     |  ○  |  ○  |  ●  |      |      ✅ (PAT/API), webhook v1'de       |
-| MOD-08.9 Security             |  ○  |  ○  |  ●  |  ●   | ◐ trusted domains ✅, file sharing yok |
+| MOD-08.9 Security             |  ○  |  ○  |  ●  |  ●   | ✅ trusted domains + file sharing |
 | MOD-09 Apps marketplace       |     |  ○  |  ○  |  ○   |                   ⬜                   |
-| MOD-10 Billing                |  ●  |  ○  |     |  ○   |     ◐ okuma+trial ✅, checkout yok     |
-| MOD-11 Customer widget        |  ●  |  ○  |     |  ○   |  ◐ launcher/composer ✅, greeting yok  |
+| MOD-10 Billing                |  ●  |  ○  |     |  ○   |     ✅ checkout (MOCK) + trial     |
+| MOD-11 Customer widget        |  ●  |  ○  |     |  ○   |  ✅ launcher/greeting/persona/attach  |
 | MOD-12 Copilot                |  ○  |  ●  |  ○  |      |                   ⬜                   |
 | Mobil app                     |     |  ●  |  ○  |      |                   ⬜                   |
 
@@ -188,7 +188,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | PRD  | Gereksinim                             | Öncelik            | Durum | Nerede            |
 | ---- | -------------------------------------- | ------------------ | :---: | ----------------- |
-| 06.6 | Chatbot (kural-tabanlı, deterministik) | Should (MVP temel) |  ✅   | F6 · skill motoru |
+| 06.6 | Chatbot (kural-tabanlı, deterministik) | Should (MVP temel) |  ✅   | F6 skill motoru — NOT: PRD'nin ayrı LLM'siz kural-botu değil; öne çekilen v1 AI Agent bu payı karşılıyor |
 
 ### 3.6 FR-MOD-07 — Reports (yalnız MVP payı)
 
@@ -196,7 +196,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | ------ | ---------------------------------------------------------------------- | ------------------ | :---: | ------------------------------------------------------------------- |
 | 07.1   | Reports kenar çubuğu (Overview/AI Agent/Breakdown)                     | Should (MVP temel) |   ◐   | Dilim 9 (Overview ✅)                                               |
 | 07.3.1 | Overview header — range tabs (7/30/90/365 + custom) + vs. önceki dönem | Should             |   ◐   | Dilim 9 (aralık ✅, karşılaştırma ⬜)                               |
-| 07.3.2 | KPI kartları — Manual/Assisted/**Automated** + Total cases             | Must (MVP temel)   |  ✅   | Dilim 9 · ADR-09 ✅ · `total_cases = chats + tickets` ✅ (Dilim 11) |
+| 07.3.2 | KPI kartları — Manual/Assisted/**Automated** + Total cases             | Must (MVP temel)   |  ◐   | automated ✅ + total_cases ✅ (Dilim 11) · **Manual/Assisted ayrımı ⬜ (kodda yok)** |
 | 07.3.3 | Chats bölümü kartları (automated chats/hour, durations, response)      | Should             |   ◐   | Dilim 9                                                             |
 | 07.2   | Onboarding survey popover                                              | Could              |  🔒   | —                                                                   |
 
@@ -434,25 +434,23 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | S6       | Widget izolasyonu (`innerHTML` yasak)               |                    ✅ Dilim 6 (eslint kuralı)                    |
 | **S7**   | **Webhook HMAC + SSRF**                             | ⬜ v1 (08.8.4 ile birlikte — sonradan eklemek kırıcı değişiklik) |
 | S8       | Rate limiting                                       |                            ✅ ADR-07                             |
-| **S10**  | **File sharing güvenliği**                          |                  ⬜ **Dilim 13** ile aynı anda                   |
-| S12      | Audit log (append-only)                             |              ◐ tablo + policy ✅, olay kapsamı dar               |
+| **S10**  | **File sharing güvenliği**                          |                  ✅ Dilim 13 (fail-closed virüs tarama, tm 4)                   |
+| S12      | Audit log (append-only)                             |              ⬜ tablo + policy ✅, yazıcı yok (hiç olay INSERT edilmiyor)               |
 | A11Y1–6  | WCAG 2.1 AA · klavye · ⌘K                           |                    ✅ 01.1.3 (⌘K) Dilim 14 (tm 18)                    |
 | I18N1/2  | Widget + panel i18n                                 |                                ⬜                                |
 | C1/C2/C8 | GDPR · KVKK · retention                             |          ◐ silme CASCADE ✅ (Dilim 3), retention job ⬜          |
-| M4       | Test piramidi (unit + integration + contract + E2E) |                           ✅ 595 test                            |
+| M4       | Test piramidi (unit + integration + contract + E2E) |                           ✅ 752 test (258 unit + 454 integration + 40 E2E)                            |
 | M5       | Gözlemlenebilirlik (`request_id`, OTel, metrikler)  |                    ◐ `request_id` ✅, OTel ⬜                    |
 
 ---
 
 ## 8. Veri Modeli (PRD §8.4) — tablo durumu
 
-39 tablo migrate edildi, tümünde RLS (Dilim 3). Şemada **var ama henüz kullanılmayan** tablolar
+41 tablo migrate edildi, tümünde RLS (Dilim 3). Şemada **var ama henüz kullanılmayan** tablolar
 — her biri bir gereksinimi bekliyor:
 
 | Tablo       | Bekleyen gereksinim | Faz                                        |
 | ----------- | ------------------- | ------------------------------------------ |
-| `tickets`   | 02.1.3 / 02.6       | **Faz 0 · Dilim 11**                       |
-| `websites`  | 08.5.2              | **Faz 0 · Dilim 13**                       |
 | `webhooks`  | 08.8.4              | v1                                         |
 | `campaigns` | 03.3.x              | v1                                         |
 | `channels`  | 08.5.4–.6           | v1                                         |

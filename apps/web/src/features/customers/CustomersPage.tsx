@@ -11,6 +11,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -31,10 +32,26 @@ export function CustomersPage(): ReactElement {
   const queryClient = useQueryClient();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [segment, setSegment] = useState<Segment>('all');
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // A deep link (from the command palette, a bookmark, or a colleague) names a
+  // customer to open. Switch to the segment that contains everyone so the row
+  // is present, select it, then strip the parameter so a later segment change
+  // or reload does not re-pin the same person.
+  useEffect(() => {
+    const linked = searchParams.get('customer');
+    if (!linked) return;
+    setSegment('all');
+    setSelectedId(linked);
+    const next = new URLSearchParams(searchParams);
+    next.delete('customer');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Debounced so typing a name does not fire a request per keystroke, each one
   // counting against the caller's rate limit.
@@ -56,10 +73,12 @@ export function CustomersPage(): ReactElement {
 
   const items = useMemo(() => list.data?.items ?? [], [list.data]);
 
-  // Keep the selection valid as filters change under it.
+  // Keep the selection valid as filters change under it — but only once the
+  // list has actually loaded, so a deep-linked selection is not cleared against
+  // the empty array that precedes the first response.
   useEffect(() => {
-    if (selectedId && !items.some((c) => c.id === selectedId)) setSelectedId(null);
-  }, [items, selectedId]);
+    if (list.data && selectedId && !items.some((c) => c.id === selectedId)) setSelectedId(null);
+  }, [items, selectedId, list.data]);
 
   const canEdit = scopes.includes('customers:rw');
   const canBan = scopes.includes('customers.ban:rw');

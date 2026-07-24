@@ -10,34 +10,78 @@
  * here yet" rather than implying the product lacked them. Nothing is inert now,
  * so that branch is gone rather than kept as untested code.
  */
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { useAuth } from '../lib/auth-store.js';
-
-interface RailItem {
-  to: string;
-  label: string;
-  icon: string;
-}
-
-const MODULES: RailItem[] = [
-  { to: '/app/inbox', label: 'Inbox', icon: '▤' },
-  { to: '/app/customers', label: 'Customers', icon: '◫' },
-  { to: '/app/team', label: 'Team', icon: '◑' },
-  { to: '/app/playbook', label: 'Playbook', icon: '✦' },
-  { to: '/app/reports', label: 'Reports', icon: '◆' },
-];
-
-const FOOTER: RailItem[] = [
-  { to: '/app/billing', label: 'Billing', icon: '◈' },
-  { to: '/app/settings', label: 'Settings', icon: '⚙' },
-];
+import { useApiClient, useAuth } from '../lib/auth-store.js';
+import { CommandPalette } from './CommandPalette.js';
+import { FOOTER, MODULES, type NavDestination } from './navigation.js';
 
 export function AppShell(): ReactElement {
   return (
-    <div className="flex h-full bg-canvas text-content">
-      <IconRail />
-      <Outlet />
+    <div className="flex h-full flex-col bg-canvas text-content">
+      <TrialBanner />
+      <div className="flex min-h-0 flex-1">
+        <IconRail />
+        <Outlet />
+      </div>
+      {/* Reachable from every module: ⌘K opens it, and it lives outside the
+          scrolling area so it overlays whatever is on screen. */}
+      <CommandPalette />
+    </div>
+  );
+}
+
+interface TrialInfo {
+  access: 'trialing' | 'active' | 'read_only';
+  trial: { days_remaining: number | null };
+}
+
+/**
+ * Trial countdown + Subscribe (FR-MOD-00.2, 01.1.6).
+ *
+ * A thin bar rather than a rail item: the rail is icon-width, and "12 days
+ * left · Subscribe" is text that has to be readable from any module. It reads
+ * the same `['billing', 'subscription']` the Billing page does, so the count is
+ * one source and the cache is shared.
+ *
+ * Only owners and admins carry a billing scope; for anyone else the read is a
+ * 403, which resolves to no banner rather than a retry storm — the people who
+ * cannot subscribe are also the ones not nagged to. An active workspace shows
+ * nothing at all.
+ */
+function TrialBanner(): ReactElement | null {
+  const api = useApiClient();
+  const { data } = useQuery({
+    queryKey: ['billing', 'subscription'],
+    queryFn: () => api.get<TrialInfo>('/billing/subscription'),
+    retry: false,
+    staleTime: 60_000,
+  });
+
+  if (!data || data.access === 'active') return null;
+
+  const readOnly = data.access === 'read_only';
+  const days = data.trial.days_remaining;
+
+  return (
+    <div
+      role="status"
+      data-testid="trial-badge"
+      className="flex items-center justify-center gap-2 border-b border-border bg-brand-500/10 px-4 py-1.5 text-xs text-content"
+    >
+      <span aria-hidden="true">◈</span>
+      <span>
+        {readOnly
+          ? 'Your trial has ended — subscribe to start new conversations.'
+          : `${days ?? 0} day${days === 1 ? '' : 's'} left in your trial.`}
+      </span>
+      <NavLink
+        to="/app/billing"
+        className="font-semibold text-brand-600 underline-offset-2 hover:underline"
+      >
+        Subscribe
+      </NavLink>
     </div>
   );
 }
@@ -69,7 +113,7 @@ function IconRail(): ReactElement {
   );
 }
 
-function RailButton({ item }: { item: RailItem }): ReactElement {
+function RailButton({ item }: { item: NavDestination }): ReactElement {
   const shared =
     'relative flex h-9 w-9 items-center justify-center rounded-md text-base transition-colors';
 

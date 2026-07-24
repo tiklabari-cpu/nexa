@@ -7,7 +7,7 @@
  * missing configuration.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -15,6 +15,17 @@ import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { ChannelsGrid } from './Channels.js';
+import {
+  DEFAULT_PREFS,
+  loadPrefs,
+  savePrefs,
+  type NotificationPrefs,
+  type Permission,
+} from '../notifications/notifications.js';
+import {
+  currentPermission,
+  requestNotificationPermission,
+} from '../notifications/useNotifications.js';
 
 interface TrustedDomain {
   id: string;
@@ -28,6 +39,15 @@ interface CannedResponse {
   shortcut: string;
   text: string;
   scope: 'chat' | 'ticket';
+}
+
+interface Tag {
+  id: string;
+  name: string;
+  group_ids: number[];
+  author_id: string | null;
+  usage_count: number;
+  created_at: string;
 }
 
 interface SecuritySettings {
@@ -55,16 +75,138 @@ export function SettingsPage(): ReactElement {
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const canManageAccess = scopes.includes('access_rules:rw');
   const canManageReplies = scopes.includes('canned_responses--all:rw');
+  const canManageTags = scopes.includes('tags--all:rw');
 
   return (
     <Page title="Settings" description="Widget installation, saved replies and routing.">
       <ChannelsGrid />
+      <NotificationSettings />
       <WebsiteWidgets canEdit={canManageAccess} />
       <TrustedDomains canEdit={canManageAccess} />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />
+      <Tags canEdit={canManageTags} />
       <RoutingRules canEdit={canManageAccess} />
     </Page>
+  );
+}
+
+// --- Notifications -----------------------------------------------------------
+
+/**
+ * Per-agent alert preferences (FR-MOD-13.8).
+ *
+ * These live in the browser, not the account: they are about this device — its
+ * speakers, its OS permission — so a preference set on a laptop should not
+ * follow the agent to a shared kiosk. The inbox reads the same store on every
+ * incoming message, so a change here takes effect on the next one without a
+ * reload.
+ */
+function NotificationSettings(): ReactElement {
+  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
+  const [permission, setPermission] = useState<Permission>('default');
+
+  // Read once on mount — `loadPrefs` touches `localStorage`, which is not a
+  // render-time value.
+  useEffect(() => {
+    setPrefs(loadPrefs());
+    setPermission(currentPermission());
+  }, []);
+
+  function update(patch: Partial<NotificationPrefs>): void {
+    setPrefs((current) => {
+      const next = { ...current, ...patch };
+      savePrefs(next);
+      return next;
+    });
+  }
+
+  async function enableDesktop(): Promise<void> {
+    const result = await requestNotificationPermission();
+    setPermission(result);
+    // Turning the desktop toggle on is pointless if the browser refuses; keep
+    // the stored preference honest about what will actually happen.
+    if (result === 'granted') update({ desktop: true });
+  }
+
+  const desktopBlocked = permission === 'denied' || permission === 'unsupported';
+
+  return (
+    <Section
+      title="Notifications"
+      description="How you are alerted to new messages on this device. These settings are per-browser."
+    >
+      <Card>
+        <div className="divide-y divide-border">
+          <label className="flex items-center gap-3 p-4">
+            <input
+              type="checkbox"
+              checked={prefs.enabled}
+              onChange={(event) => update({ enabled: event.target.checked })}
+            />
+            <span className="flex-1 text-sm">
+              Enable notifications
+              <span className="block text-2xs text-content-tertiary">
+                Turning this off silences sound, desktop and tab alerts alike.
+              </span>
+            </span>
+            <StatusDot
+              tone={prefs.enabled ? 'success' : 'neutral'}
+              label={prefs.enabled ? 'On' : 'Off'}
+            />
+          </label>
+
+          <label className="flex items-center gap-3 p-4">
+            <input
+              type="checkbox"
+              checked={prefs.sound}
+              disabled={!prefs.enabled}
+              onChange={(event) => update({ sound: event.target.checked })}
+            />
+            <span className="flex-1 text-sm">
+              Play a sound
+              <span className="block text-2xs text-content-tertiary">
+                A short chime when a visitor writes in.
+              </span>
+            </span>
+          </label>
+
+          <div className="flex flex-wrap items-center gap-3 p-4">
+            <label className="flex flex-1 items-center gap-3">
+              <input
+                type="checkbox"
+                checked={prefs.desktop && permission === 'granted'}
+                disabled={!prefs.enabled || desktopBlocked}
+                onChange={(event) => update({ desktop: event.target.checked })}
+              />
+              <span className="text-sm">
+                Desktop notifications
+                <span className="block text-2xs text-content-tertiary">
+                  {permission === 'granted'
+                    ? 'Shown even when this tab is in the background.'
+                    : permission === 'denied'
+                      ? 'Blocked in your browser — allow notifications for this site to use them.'
+                      : permission === 'unsupported'
+                        ? 'This browser does not support desktop notifications.'
+                        : 'Ask your browser for permission to show these.'}
+                </span>
+              </span>
+            </label>
+
+            {prefs.enabled && permission !== 'granted' && permission !== 'unsupported' && (
+              <button
+                type="button"
+                onClick={() => void enableDesktop()}
+                disabled={permission === 'denied'}
+                className="rounded-md border border-border px-3 py-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+              >
+                Enable desktop notifications
+              </button>
+            )}
+          </div>
+        </div>
+      </Card>
+    </Section>
   );
 }
 
@@ -456,6 +598,139 @@ function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
                       type="button"
                       onClick={() => remove.mutate(item.id)}
                       aria-label={`Delete #${item.shortcut}`}
+                      className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+    </Section>
+  );
+}
+
+// --- Tag library -------------------------------------------------------------
+
+/**
+ * The workspace's curated tags (FR-MOD-08.7.1).
+ *
+ * Chat-level tagging already worked — an agent could type any word — but nothing
+ * agreed the vocabulary, so a team ended up with `vip`, `VIP` and `v.i.p.` for
+ * one idea. This library is that agreement: the inbox reads the same list to
+ * suggest tags, and `usage_count` shows which labels are actually earning their
+ * place.
+ */
+function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState('');
+
+  const list = useQuery({
+    queryKey: ['settings', 'tags'],
+    queryFn: () => api.get<{ items: Tag[] }>('/settings/tags'),
+  });
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['settings', 'tags'] });
+    // The inbox suggests tags from this same list; leaving its cache alone would
+    // keep a new tag hidden from the composer until the agent reloads.
+    void queryClient.invalidateQueries({ queryKey: ['tag-library'] });
+  };
+
+  const create = useMutation({
+    mutationFn: (body: { name: string }) => api.post<Tag>('/settings/tags', body),
+    onSuccess: () => {
+      setName('');
+      invalidate();
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/settings/tags/${id}`),
+    onSuccess: invalidate,
+  });
+
+  function submit(event: FormEvent): void {
+    event.preventDefault();
+    if (!name.trim()) return;
+    create.mutate({ name: name.trim() });
+  }
+
+  return (
+    <Section
+      title="Tags"
+      description="Labels agents apply to conversations. The inbox suggests these as they type."
+    >
+      {list.error ? (
+        <ErrorNotice message="Could not load tags." />
+      ) : (
+        <Card>
+          {canEdit && (
+            <form onSubmit={submit} className="flex flex-col gap-3 border-b border-border p-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <label htmlFor="new-tag-name" className="flex min-w-56 flex-1 flex-col gap-1">
+                  <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                    Tag
+                  </span>
+                  <input
+                    id="new-tag-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="vip"
+                    maxLength={64}
+                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={!name.trim() || create.isPending}
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {create.isPending ? 'Adding…' : 'Add tag'}
+                </button>
+              </div>
+
+              {create.isError && (
+                <p role="alert" className="text-2xs text-danger">
+                  {create.error instanceof ApiClientError
+                    ? create.error.message
+                    : 'Could not add that tag.'}
+                </p>
+              )}
+            </form>
+          )}
+
+          {list.isPending ? (
+            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+          ) : list.data.items.length === 0 ? (
+            <EmptyState
+              title="No tags yet"
+              description="Agree the words your team uses to label conversations."
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {list.data.items.map((tag) => (
+                <li key={tag.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="inline-flex items-center rounded-sm bg-inset px-2 py-0.5 font-mono text-2xs">
+                    {tag.name}
+                  </span>
+                  <span className="flex-1 text-2xs text-content-tertiary">
+                    {tag.group_ids.length === 0
+                      ? 'All teams'
+                      : `${tag.group_ids.length} team${tag.group_ids.length === 1 ? '' : 's'}`}
+                    {' · '}
+                    {tag.usage_count} in use
+                  </span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => remove.mutate(tag.id)}
+                      aria-label={`Delete tag ${tag.name}`}
                       className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                     >
                       Delete

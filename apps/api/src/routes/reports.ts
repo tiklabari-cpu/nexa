@@ -9,7 +9,35 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import type { Env } from '../config/env.js';
+import type { TenantClient, TenantContext } from '../lib/tenant.js';
 import { currentPeriod, trialState, usageSummary } from '../services/billing/metering.js';
+import {
+  BILLING_CYCLES,
+  priceSeats,
+  updateSubscription,
+  type BillingCycle,
+} from '../services/billing/subscription-service.js';
+
+const BILLING_WRITE_SCOPES = ['billing_manage', 'billing_admin'];
+
+const updateSubscriptionBody = z
+  .object({
+    plan: z.string().min(1).max(64).optional(),
+    billing_cycle: z.enum(BILLING_CYCLES).optional(),
+    seats: z.number().int().min(1).max(100_000).optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, 'at least one field is required');
+
+function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    throw ApiError.validation(
+      issue ? `${issue.path.join('.') || 'body'}: ${issue.message}` : 'Invalid request.',
+    );
+  }
+  return result.data;
+}
 
 const rangeQuery = z.object({
   from: z.coerce.date().optional(),
@@ -22,6 +50,58 @@ function resolveRange(query: z.infer<typeof rangeQuery>): { from: Date; to: Date
   const from = query.from ?? new Date(to.getTime() - 30 * 86_400_000);
   if (from > to) throw ApiError.validation('`from` must be before `to`.');
   return { from, to };
+}
+
+/**
+ * The full subscription view (`SubscriptionView`), built the same way for a read
+ * and for the reply after a change — so `PATCH` returns exactly what the next
+ * `GET` would, no client refetch needed.
+ *
+ * `seats` is the purchased count (the stored subscription, falling back to the
+ * active headcount before anyone has checked out); `min_seats` is the floor the
+ * stepper enforces. `estimated_total_cents` is 0 while trialing — the trial owes
+ * nothing — and otherwise the cycle-aware seat charge plus this month's overage.
+ */
+async function buildSubscriptionView(
+  tx: TenantClient,
+  tenant: TenantContext,
+  env: Env,
+): Promise<Record<string, unknown>> {
+  const [subscription, trial, usage, activeUsers] = await Promise.all([
+    tx.subscription.findFirst({
+      where: { licenseId: tenant.licenseId },
+      orderBy: { createdAt: 'desc' },
+    }),
+    trialState(tx, tenant),
+    usageSummary(tx, tenant, {
+      aiOverageCents: env.AI_OVERAGE_CENTS,
+      aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
+    }),
+    tx.agentMembership.count({ where: { suspended: false } }),
+  ]);
+
+  const unitPrice = subscription?.unitPriceCents ?? env.UNIT_PRICE_CENTS;
+  const billingCycle = (subscription?.billingCycle ?? 'monthly') as BillingCycle;
+  const seats = subscription?.seats ?? activeUsers;
+  const { seatChargeCents, annualSavingsCents } = priceSeats(unitPrice, seats, billingCycle);
+  const trialing = trial.access === 'trialing';
+
+  return {
+    plan: subscription?.plan ?? 'growth',
+    billing_cycle: billingCycle,
+    status: trial.status,
+    // What the workspace can still do, spelled out — a client should not have to
+    // infer read-only from a status string.
+    access: trial.access,
+    trial: { ends_at: trial.trialEndsAt, days_remaining: trial.daysRemaining },
+    seats,
+    min_seats: activeUsers,
+    unit_price_cents: unitPrice,
+    usage,
+    estimated_total_cents: trialing ? 0 : seatChargeCents + usage.ai_resolutions.overage_cents,
+    annual_savings_cents: trialing ? 0 : annualSavingsCents,
+    provider: 'mock',
+  };
 }
 
 export default async function reportRoutes(
@@ -167,46 +247,46 @@ export default async function reportRoutes(
     async (request, reply) => {
       const tenant = request.tenant();
 
-      const result = await request.withTenant(async (tx) => {
-        const [subscription, trial, usage, seats] = await Promise.all([
-          tx.subscription.findFirst({
-            where: { licenseId: tenant.licenseId },
-            orderBy: { createdAt: 'desc' },
-          }),
-          trialState(tx, tenant),
+      const view = await request.withTenant((tx) => buildSubscriptionView(tx, tenant, env));
+      return reply.send(view);
+    },
+  );
+
+  app.patch(
+    '/billing/subscription',
+    // Writable while read-only: subscribing is exactly how an expired trial
+    // comes back (ADR-10). `reports_read` is a read scope and so is not accepted
+    // here — changing the bill needs a billing scope.
+    { config: { scopes: BILLING_WRITE_SCOPES, allowWhenReadOnly: true } },
+    async (request, reply) => {
+      const body = parse(updateSubscriptionBody, request.body);
+      const tenant = request.tenant();
+
+      const view = await request.withTenant(async (tx) => {
+        const [activeUsers, usage] = await Promise.all([
+          tx.agentMembership.count({ where: { suspended: false } }),
           usageSummary(tx, tenant, {
             aiOverageCents: env.AI_OVERAGE_CENTS,
             aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
           }),
-          tx.agentMembership.count({ where: { suspended: false } }),
         ]);
-        return { subscription, trial, usage, seats };
+        await updateSubscription(
+          tx,
+          tenant,
+          {
+            ...(body.plan !== undefined ? { plan: body.plan } : {}),
+            ...(body.billing_cycle !== undefined ? { billingCycle: body.billing_cycle } : {}),
+            ...(body.seats !== undefined ? { seats: body.seats } : {}),
+          },
+          activeUsers,
+          usage.ai_resolutions.used,
+        );
+        // Read the whole view back in the same transaction, so the reply is a
+        // real GET rather than a hand-assembled echo that could drift from it.
+        return buildSubscriptionView(tx, tenant, env);
       });
 
-      const unitPrice = result.subscription?.unitPriceCents ?? env.UNIT_PRICE_CENTS;
-      const seatCost = unitPrice * result.seats;
-
-      return reply.send({
-        plan: result.subscription?.plan ?? 'growth',
-        billing_cycle: result.subscription?.billingCycle ?? 'monthly',
-        status: result.trial.status,
-        // What the workspace can still do, spelled out — a client should not
-        // have to infer read-only from a status string.
-        access: result.trial.access,
-        trial: {
-          ends_at: result.trial.trialEndsAt,
-          days_remaining: result.trial.daysRemaining,
-        },
-        seats: result.seats,
-        unit_price_cents: unitPrice,
-        usage: result.usage,
-        // Trial bills nothing, which is worth stating rather than implying.
-        estimated_total_cents:
-          result.trial.access === 'trialing'
-            ? 0
-            : seatCost + result.usage.ai_resolutions.overage_cents,
-        provider: 'mock',
-      });
+      return reply.send(view);
     },
   );
 

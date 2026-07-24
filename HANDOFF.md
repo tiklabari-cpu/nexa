@@ -1,8 +1,124 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-23 · **Branch:** `main` · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-07-25 · **Branch:** `main` (Dilim 14 merge edildi) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
+
+## Task log (newest-first)
+
+### 19 — Inbox real-time sekmeleri (All/Chatting/Queued/Waiting) — done — 2026-07-24 UTC
+- Yapıldı: FR-MOD-03.1.1. **Yalnız frontend** (yeni uç/DB yok — mevcut `/chats?view=` listesi
+  istemci tarafında bölünüyor). Yeni saf modül `features/inbox/traffic.ts`: `matchesTrafficTab`
+  + `filterByTrafficTab` + `trafficTabCounts`. Kova mantığı — **All** tüm liste; **Queued**
+  `queue_position!=null`; **Waiting** aktif + son olay müşteriden (yanıt bekliyor); **Chatting**
+  aktif + kuyrukta değil + son olay müşteriden değil. Chatting/Queued/Waiting **karşılıklı dışlayan**
+  (bir sohbet tek kovada), toplamları All'a eşit. `InboxPage.tsx`: konuşma listesi başlığının
+  altına yatay `role="tablist"` şeridi (aria-selected, sohbet görünümünde; ticket'larda yok);
+  her sekmede canlı sayaç rozeti. Sayaçlar RTM ile canlı — push `['chats']`'i invalidate ediyor,
+  liste + kovalar aynı state'ten türüyor. Seçim geçerliliği tam liste üzerinde kalıyor (sekme
+  değişince açık transcript düşmez); sadece render süzülür. Boş sekmede özel boş-durum metni.
+- Doğrulama: `pnpm -w typecheck` 0 · `pnpm -w lint` 0 · unit (web 72 / api 525) yeşil ·
+  `pnpm -w test:integration` 454 yeşil · `pnpm -w build` 0 · `pnpm exec playwright test` 40 yeşil
+  (yeni `apps/e2e/tests/inbox-tabs.spec.ts` dahil). Birim: `traffic.test.ts` (kova + sayaç +
+  filtre). Kanıt: `apps/e2e/kanit/19-realtime-tabs.png`.
+- Varsayımlar: FR-MOD-03.1.1'in "Real-time sekmeleri" başlığı MOD-03 traffic ekranına ait; task
+  hedef dosyaları (InboxPage/useInbox) gereği sekmeler **konuşma listesi** üzerine yatay şerit
+  olarak uygulandı (Supervised/Invited/Browsing kapsam dışı — task başlığı 4 sekmeyle sınırlı).
+- Sonraki pencereye not: `pnpm -w test` (turbo, paralel) çalışan dev sunucusuyla api/rtm/e2e'de
+  DB/port çakışması verir; kapı için serial script'leri kullan (`test:integration`, `playwright
+  test` tek başına). Supervised/Invited/Browsing sekmeleri ileri bir MOD-03 task'ında eklenebilir.
+
+### 18 — Command Palette (⌘K): içerik arama + rota atlama — done — 2026-07-24 UTC
+- Yapıldı: FR-MOD-01.1.3. **Yalnız frontend** (yeni uç yok — mevcut `/customers?query`,
+  `/tickets?query`, `/chats` kullanıldı). Yeni `components/CommandPalette.tsx`: ⌘K/Ctrl-K ile
+  her modülden açılır dialog; combobox + listbox (klavye: ↑/↓/Enter/Esc, `aria-activedescendant`,
+  backdrop kapatma, açılış/kapanışta odak iadesi). Boş sorgu → modül atlama; sorgu →
+  müşteri + sohbet + ticket araması gruplu. Aramalar **scope-gated** (customers/tickets/chats
+  read scope yoksa istek atılmaz — 403 gürültüsü yok). Sohbetin serbest-metin ucu yok:
+  `/chats?view=all` istemci tarafında filtrelenir. Modül filtresi anlık (raw input), kayıt
+  araması debounce (180ms). Ortak modül listesi `components/navigation.ts`'e çıkarıldı (rail +
+  palet tek kaynaktan). **Deep-link:** seçim `/app/customers?customer=`, `/app/inbox?chat=` /
+  `?ticket=` ile hedefe gider; `CustomersPage` ve `InboxPage` param'ı tüketip seçimi kurar,
+  "seçim geçerliliği" efektleri liste yüklenene dek (`list.data`/`tickets.data`) bekler ki
+  deep-link boş listeye karşı silinmesin.
+- Doğrulama (hepsi yeşil): `pnpm -w typecheck`, `pnpm -w lint`, `pnpm -w build`; **web unit 62**
+  (yeni `CommandPalette.test.tsx`: aç/kapa, modül listeleme+filtre+Enter atlama, keyword eşleşme,
+  müşteri+ticket arama→deep-link, scope-gate negatifi — stub fetch); api integration 454;
+  **e2e 39** (yeni `command-palette.spec.ts`: ⌘K açılışı, "Alex" araması müşteri+sohbet döndürür,
+  müşteri seçimi kayda gider; modül atlama Reports). Görsel kanıt:
+  `apps/e2e/kanit/18-command-palette.png`.
+- Varsayımlar: Sohbet araması istemci-taraflı filtre (küçük "all" listesi); ticket UI yolu seed'de
+  ticket olmadığından e2e'de değil, unit'te (stub) kanıtlandı. Deep-link'lenen müşteri "all"
+  segmentine, sohbet/ticket "All" görünümüne pinlenir (arşiv/banlı kenar durumları liste efektine
+  tabi).
+- Sonraki pencereye not: Kalan Dilim 14 kalemi **03.1.1** (inbox gerçek-zamanlı sekmeler
+  All/Chatting/Queued/Waiting) ve 02.6 "Copy chat link". Depodaki task-dışı bootstrap dosyaları
+  (AUTORUN-README/CONVENTIONS/TASK-RUNNER/run-loop, CLAUDE/MASTER-PROMPT/.gitignore değişiklikleri,
+  apps/api/.data, önceki kanit PNG'leri) kapsam disiplini gereği hâlâ untracked — bu commit'e
+  yalnız tm 18 dosyaları + 18-command-palette.png alındı.
+
+### 17 — Tags kütüphanesi CRUD (grup kapsamı) — done — 2026-07-24 UTC
+- Yapıldı: Merkezi etiket kütüphanesi (FR-MOD-08.7.1). **Kontrat:** `openapi.yaml`'a `Tag`
+  şeması (`group_ids`, `usage_count`, `author_id`) + `paths/settings.yaml`'a `listTags`/
+  `createTag`/`updateTag`/`deleteTag`; tipler yeniden generate edildi. **Backend:**
+  `routes/settings.ts`'e `GET/POST /settings/tags` + `PATCH/DELETE /settings/tags/:tagId`.
+  İsim, chat etiketlemeyle aynı normalizasyon (trim+lowercase, `[licenseId,name]` unique →
+  409/not_allowed). `group_ids` tenant'ın gruplarına doğrulanır (routing-rule deseni). Okuma
+  `tags--*:ro` (ajan datalist için `--groups:ro` dahil), yazma `tags--all:rw`. `usage_count`
+  = `_count(threads)`; kütüphane ve chat etiketleme **aynı `tags` tablosu** — ayrı liste değil.
+  **Frontend:** SettingsPage'e **Tags** bölümü (ekle/sil, "All teams · N in use"); DetailsPanel
+  tag input'una `<datalist>` (kütüphaneyi öneri olarak besler, serbest yazma hâlâ çalışır).
+- Doğrulama (hepsi yeşil): `pnpm -w typecheck`, `pnpm -w lint`, `pnpm -w build`; api unit 71;
+  rtm 65; web 56; **api integration 454** (yeni `settings > tags` blok: CRUD + grup kapsamı +
+  cross-tenant liste/silme 404 + shared-table usage_count + write-scope 403; contract-parity 5);
+  **e2e 37** (`settings › curates a tag in the library` dahil). Görsel kanıt:
+  `apps/e2e/kanit/17-tags-library.png` (kütüphane + `shipping · 1 in use` canlı sayaç).
+- Varsayımlar: UI'da yazma/silme + oluşturma; rename/regroup yalnız API+integration testiyle
+  kanıtlandı (canned-responses UI deseni ile hizalı — sadece create+delete yüzeyi). Grup atama
+  UI'sı yok (workspace-wide varsayılan); yazma admin-scope (`tags--all:rw`).
+- Sonraki pencereye not: `.taskmaster/tasks.json` commit anında `in-progress`'ti; sonrası `done`
+  işaretlendi (diskte doğru, commit'te değil — zararsız). Depoda task dışı bootstrap dosyaları
+  (AUTORUN-README.md, CONVENTIONS.md, TASK-RUNNER-PROMPT.md, run-loop.sh, CLAUDE/MASTER-PROMPT
+  değişiklikleri) hâlâ untracked/kirli — kapsam disiplini gereği bu commit'e alınmadı.
+
+### 16 — Bildirimler (ses/masaüstü/tarayıcı/e-posta) — done — 2026-07-24 UTC
+- Yapıldı: Yeni müşteri mesajında ajan bildirimi (FR-MOD-13.8). **İstemci:** saf karar
+  çekirdeği `features/notifications/notifications.ts` (`decideNotification` + localStorage
+  tercih IO) + efekt hook'u `useNotifications.ts` (ses = Web Audio çan, masaüstü = Notification
+  API, sekme başlığı `(n) Nexa` + favicon rozeti; sekme odağa gelince sıfırlanır). `useRealtime`
+  opsiyonel `onPush` alır (ref ile stabil, soket yeniden kurulmaz); `InboxPage` bağlar. Ayar
+  yüzeyi: SettingsPage'e **Notifications** bölümü (aç/kapa + ses + masaüstü izin butonu),
+  tercih tarayıcı-başına (localStorage), her mesajda taze okunur. **Sunucu e-posta:**
+  `customer.ts` atanmış ajana `mailer.send({kind:'notification'})` gönderir (best-effort,
+  mesajı bloklamaz; yalnız insan atanmışsa); `server.ts` mailer'ı customer route'a geçirir;
+  `mailer.ts` kind union'a `notification` eklendi.
+- Doğrulama: `typecheck`, `lint`, `build`, `test:unit` (56 web — 20 yeni notifications testi
+  dahil: negatif/izin-reddi/self/sistem olayı; 71 api), `test:integration` (445 — yeni
+  `notifications.test.ts`: atanana e-posta düşer + follow-up + idempotent tek e-posta),
+  `test:e2e` (36 — yeni `notifications.spec.ts`: ayar yüzeyi + kapat/aç kalıcı + reload) — hepsi
+  yeşil. Kanıt: `apps/e2e/kanit/16-notifications-settings.png`.
+- Varsayımlar: Bildirim tercihleri hesap değil **cihaz** başına (localStorage) — cihaz-özgü
+  (hoparlör/OS izni). Negatif test (kapatınca sussun) ve izin-reddi sessiz degrade davranışları
+  saf `decideNotification` birim testleriyle deterministik kanıtlandı; e-posta entegrasyon
+  testiyle. Client bildirimleri `InboxPage` mount'una bağlı (Settings'teyken tetiklenmez) — MVP
+  için kabul; app-geneli için ileride AppShell'e taşınabilir.
+- Sonraki pencereye not: E-posta her müşteri mesajında atanana gider (mock, `.data/mail`);
+  gerçek sağlayıcıya geçiş tek `Mailer` implementasyonu değişimi. Kanıt png'leri repo
+  konvansiyonu gereği git'e alınmıyor.
+
+### 15 — Trial rozeti 'N gün' + Subscribe CTA (shell) — done — 2026-07-24 UTC
+- Yapıldı: `AppShell` flex-col'e alındı, ince üst `TrialBanner` eklendi —
+  `useQuery(['billing','subscription'])` ile BillingPage ile paylaşımlı cache;
+  `trialing` → "N days left", `read_only` → "trial bitti, abone ol", `active` → banner yok.
+  Subscribe CTA `/app/billing`'e gider. Billing scope'u olmayan ajanda 403 → `retry:false` →
+  banner yok (graceful). `AppShell.test.tsx` `QueryClientProvider` ile sarıldı.
+- Doğrulama: `typecheck`, `lint`, `build`, `test:unit` (40 web + 71 api), `test:integration`
+  (442), `test:e2e` (35, yeni trial-badge testi dahil) — hepsi yeşil. Kanıt:
+  `apps/e2e/kanit/15-trial-badge.png` (inbox içinden "14 days left … Subscribe").
+- Varsayımlar: yok. Trial gate + `/billing/subscription` (access, trial.days_remaining)
+  zaten mevcut (Dilim 9/14).
+- Sonraki pencereye not: kanıt png'leri repo konvansiyonu gereği git'e alınmıyor
+  (e2e spec regenerate ediyor). Dilim 14 merge SHA'sı slice kapanışında işlenecek.
 
 ## What exists
 

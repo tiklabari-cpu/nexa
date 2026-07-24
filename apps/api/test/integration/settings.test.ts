@@ -10,6 +10,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { generateShortId } from '@nexa/types';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -40,13 +41,13 @@ describe('settings', () => {
       licenseId: fx.a.licenseId,
       organizationId: fx.a.organizationId,
       ownerId: fx.a.ownerAccountId,
-      scopes: ['access_rules:rw', 'canned_responses--all:rw'],
+      scopes: ['access_rules:rw', 'canned_responses--all:rw', 'tags--all:rw'],
     });
     readToken = await grantToken(owner, {
       licenseId: fx.a.licenseId,
       organizationId: fx.a.organizationId,
       ownerId: fx.a.ownerAccountId,
-      scopes: ['access_rules:ro', 'canned_responses--all:ro'],
+      scopes: ['access_rules:ro', 'canned_responses--all:ro', 'tags--all:ro'],
     });
   });
 
@@ -265,6 +266,119 @@ describe('settings', () => {
         { shortcut: 'nope', text: 'x' },
         auth(readToken),
       );
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
+  // --- Tag library -----------------------------------------------------------
+
+  describe('tags', () => {
+    it('creates, renames and deletes a tag', async () => {
+      const created = await server.post('/settings/tags', { name: 'VIP' }, auth(adminToken));
+      expect(created.statusCode).toBe(201);
+      const body = created.json() as {
+        id: string;
+        name: string;
+        group_ids: number[];
+        usage_count: number;
+      };
+      // Stored with the same normalisation the inbox applies when tagging a chat,
+      // so the library and live tagging never split into two spellings.
+      expect(body.name).toBe('vip');
+      expect(body.group_ids).toEqual([]);
+      expect(body.usage_count).toBe(0);
+
+      const renamed = await server.patch(
+        `/settings/tags/${body.id}`,
+        { name: 'priority' },
+        auth(adminToken),
+      );
+      expect(renamed.statusCode).toBe(200);
+      expect((renamed.json() as { name: string }).name).toBe('priority');
+
+      const deleted = await server.del(`/settings/tags/${body.id}`, auth(adminToken));
+      expect(deleted.statusCode).toBe(204);
+    });
+
+    it('scopes a tag to specific teams', async () => {
+      const group = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Sales' },
+      });
+      const created = await server.post(
+        '/settings/tags',
+        { name: 'sales-lead', group_ids: [Number(group.id)] },
+        auth(adminToken),
+      );
+      expect(created.statusCode).toBe(201);
+      expect((created.json() as { group_ids: number[] }).group_ids).toEqual([Number(group.id)]);
+    });
+
+    it("rejects a team that isn't this workspace's", async () => {
+      // A group id from another tenant must not scope a tag here — RLS hides it,
+      // so it reads as an unknown team.
+      const theirGroup = await owner.group.create({
+        data: { licenseId: fx.b.licenseId, name: 'Theirs' },
+      });
+      const response = await server.post(
+        '/settings/tags',
+        { name: 'x', group_ids: [Number(theirGroup.id)] },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('refuses a duplicate name, comparing after normalisation', async () => {
+      await server.post('/settings/tags', { name: 'refund' }, auth(adminToken));
+      const again = await server.post('/settings/tags', { name: 'Refund' }, auth(adminToken));
+      expect(again.statusCode).toBe(403);
+    });
+
+    it.each(['', 'a'.repeat(65)])('rejects the invalid name %j', async (name) => {
+      const response = await server.post('/settings/tags', { name }, auth(adminToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('shares the library with chat tagging, counting live usage', async () => {
+      const created = await server.post('/settings/tags', { name: 'refunds' }, auth(adminToken));
+      const { id } = created.json() as { id: string };
+
+      // A conversation carrying the tag points at this very row — the library and
+      // chat tagging are one table, not two lists — so the count reflects real
+      // usage. This is what "chat tagging fed from the library" means concretely.
+      const chatId = generateShortId();
+      const threadId = generateShortId();
+      await owner.chat.create({
+        data: { id: chatId, licenseId: fx.a.licenseId, customerId: fx.a.customerId },
+      });
+      await owner.thread.create({ data: { id: threadId, chatId, licenseId: fx.a.licenseId } });
+      await owner.threadTag.create({ data: { threadId, tagId: id } });
+
+      const listed = await server.get('/settings/tags', auth(readToken));
+      const found = (
+        listed.json() as { items: Array<{ id: string; usage_count: number }> }
+      ).items.find((t) => t.id === id);
+      expect(found?.usage_count).toBe(1);
+    });
+
+    it("never returns or deletes another tenant's tag", async () => {
+      const theirs = await owner.tag.create({
+        data: { licenseId: fx.b.licenseId, name: 'their-secret' },
+      });
+
+      const listed = await server.get('/settings/tags', auth(readToken));
+      const names = (listed.json() as { items: Array<{ name: string }> }).items.map((t) => t.name);
+      expect(names).not.toContain('their-secret');
+
+      // The id alone must not reach across tenants.
+      const attempt = await server.del(`/settings/tags/${theirs.id}`, auth(adminToken));
+      expect(attempt.statusCode).toBe(404);
+
+      const still = await owner.tag.findUnique({ where: { id: theirs.id } });
+      expect(still).not.toBeNull();
+    });
+
+    it('requires write scope to create', async () => {
+      const response = await server.post('/settings/tags', { name: 'nope' }, auth(readToken));
       expect(response.statusCode).toBe(403);
     });
   });

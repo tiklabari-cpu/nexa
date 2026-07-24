@@ -16,6 +16,7 @@
  * what guards the regression, because that class is the mechanism the browser
  * actually obeys. A real rendered check belongs in the browser E2E suite.
  */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,15 +25,23 @@ import { AppShell } from './AppShell.js';
 import { useAuth } from '../lib/auth-store.js';
 
 function renderShell(initialPath = '/app/inbox') {
+  // The shell's trial banner reads `/billing/subscription` through TanStack
+  // Query, so a client is required to render at all. There is no server here,
+  // and with retries off the query simply stays without data — the banner
+  // renders nothing, which is the same as an active workspace and keeps these
+  // navigation/menu tests focused on the shell rather than on billing.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>
-        <Route path="/app" element={<AppShell />}>
-          <Route path="inbox" element={<p>Inbox module</p>} />
-          <Route path="reports" element={<p>Reports module</p>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialPath]}>
+        <Routes>
+          <Route path="/app" element={<AppShell />}>
+            <Route path="inbox" element={<p>Inbox module</p>} />
+            <Route path="reports" element={<p>Reports module</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

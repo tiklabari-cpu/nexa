@@ -55,4 +55,23 @@ test.describe('billing checkout', () => {
     await monthly.click();
     await expect(summary).not.toContainText(/saving/i);
   });
+
+  /**
+   * FR-MOD-01.1.6 — the trial badge lives in the shell, so it is proof from any
+   * module, not just Billing. The demo workspace is on a 14-day trial, so the
+   * banner counts down the days and its Subscribe CTA routes to Billing.
+   */
+  test('shell shows the trial countdown and Subscribe routes to billing', async ({ agentPage }) => {
+    await agentPage.goto('/app/inbox');
+
+    const badge = agentPage.getByTestId('trial-badge');
+    await expect(badge).toBeVisible();
+    await expect(badge).toContainText(/\d+ days? left in your trial\./);
+    await agentPage.screenshot({ path: 'kanit/15-trial-badge.png', fullPage: true });
+
+    // The CTA leaves the current module and lands on Billing.
+    await badge.getByRole('link', { name: 'Subscribe' }).click();
+    await expect(agentPage).toHaveURL(/\/app\/billing$/);
+    await expect(agentPage.getByRole('heading', { name: 'Billing', level: 1 })).toBeVisible();
+  });
 });

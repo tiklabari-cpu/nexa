@@ -4,6 +4,22 @@
 
 ---
 
+## Task log (newest-first)
+
+### 15 — Trial rozeti 'N gün' + Subscribe CTA (shell) — done — 2026-07-24 UTC
+- Yapıldı: `AppShell` flex-col'e alındı, ince üst `TrialBanner` eklendi —
+  `useQuery(['billing','subscription'])` ile BillingPage ile paylaşımlı cache;
+  `trialing` → "N days left", `read_only` → "trial bitti, abone ol", `active` → banner yok.
+  Subscribe CTA `/app/billing`'e gider. Billing scope'u olmayan ajanda 403 → `retry:false` →
+  banner yok (graceful). `AppShell.test.tsx` `QueryClientProvider` ile sarıldı.
+- Doğrulama: `typecheck`, `lint`, `build`, `test:unit` (40 web + 71 api), `test:integration`
+  (442), `test:e2e` (35, yeni trial-badge testi dahil) — hepsi yeşil. Kanıt:
+  `apps/e2e/kanit/15-trial-badge.png` (inbox içinden "14 days left … Subscribe").
+- Varsayımlar: yok. Trial gate + `/billing/subscription` (access, trial.days_remaining)
+  zaten mevcut (Dilim 9/14).
+- Sonraki pencereye not: kanıt png'leri repo konvansiyonu gereği git'e alınmıyor
+  (e2e spec regenerate ediyor). Dilim 14 merge SHA'sı slice kapanışında işlenecek.
+
 ## What exists
 
 A working live-support platform. The MVP critical path runs end to end: a visitor

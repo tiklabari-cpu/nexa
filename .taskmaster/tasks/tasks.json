@@ -232,10 +232,11 @@
         "description": "Cmd-K palet: icerik arama (musteri/sohbet/ticket) + rota atlama (moduller).",
         "details": "PRD: FR-MOD-01.1.3 · PLAN.md §3.1 · Dilim 14. apps/web/src/components/AppShell.tsx, apps/web/src/App.tsx (rotalar). Arama uclari mevcut: /customers?query, /tickets?query, /chats. Klavye kisayolu + palet UI. E2E kanit/.",
         "testStrategy": "Cmd-K paleti acilir; arama musteri/sohbet/ticket dondurur; sonuc secimi ilgili kayda, rota secimi modul rotasina gider. Gorsel kanit kanit/<id>-*.png.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-07-24T19:33:13.864Z"
       },
       {
         "id": "19",
@@ -243,17 +244,18 @@
         "description": "Konusma listesine sekmeler: All/Chatting/Queued/Waiting + canli sayac.",
         "details": "PRD: FR-MOD-03.1.1 · PLAN.md §3.3 · Dilim 14. apps/web/src/features/inbox/InboxPage.tsx, useInbox.ts. Liste zaten var (F4); sekme filtreleri + canli sayac eklenecek. E2E kanit/.",
         "testStrategy": "Sekmeler (All/Chatting/Queued/Waiting) listeyi dogru suzer; sayaclar canli; sekme degisimi anlik listeyi degistirir. Gorsel kanit kanit/<id>-*.png.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-07-24T19:45:55.614Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-24T19:15:36.719Z",
+      "lastModified": "2026-07-24T19:45:55.614Z",
       "taskCount": 19,
-      "completedCount": 17,
+      "completedCount": 19,
       "tags": [
         "master"
       ]

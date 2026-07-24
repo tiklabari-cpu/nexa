@@ -18,7 +18,8 @@ import { useNotifications } from '../notifications/useNotifications.js';
 import { TicketDetailPane, TicketList } from './TicketPane.js';
 import { useTicketList } from './useTickets.js';
 import { CreateTicketButton } from './CreateTicketButton.js';
-import type { InboxView, TicketView } from './types.js';
+import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
+import type { InboxView, TicketView, TrafficTab } from './types.js';
 
 const VIEWS: Array<{ id: InboxView; label: string; icon: string }> = [
   { id: 'all', label: 'All', icon: '▤' },
@@ -49,6 +50,7 @@ export function InboxPage(): ReactElement {
   const [selection, setSelection] = useState<Selection>({ kind: 'chat', view: 'all' });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [trafficTab, setTrafficTab] = useState<TrafficTab>('all');
 
   // A deep link opens a specific chat or ticket (from the command palette or a
   // shared URL). The record's own detail query loads it regardless of which
@@ -88,6 +90,16 @@ export function InboxPage(): ReactElement {
   const setRoutingStatus = useAuth((s) => s.setRoutingStatus);
 
   const chats = useMemo(() => list.data?.items ?? [], [list.data]);
+
+  // The real-time tabs segment the loaded list, so the counts move with the
+  // same data the rows render from. Selection stays validated against the full
+  // list below — switching tabs filters what is shown without dropping the
+  // open conversation, which would yank the transcript out from under the agent.
+  const trafficCounts = useMemo(() => trafficTabCounts(chats), [chats]);
+  const visibleChats = useMemo(
+    () => filterByTrafficTab(chats, trafficTab),
+    [chats, trafficTab],
+  );
 
   // Keep a selection valid as the list changes underneath — a chat can be
   // transferred away while it is open. Gated on `list.data` so a deep-linked
@@ -189,11 +201,49 @@ export function InboxPage(): ReactElement {
               : VIEWS.find((v) => v.id === view)?.label}
           </h2>
           <span className="tabular text-2xs text-content-tertiary">
-            {onTickets ? ticketItems.length : chats.length}
+            {onTickets ? ticketItems.length : visibleChats.length}
           </span>
         </header>
 
-        <div className="flex-1 overflow-y-auto">
+        {/* Real-time tabs (FR-MOD-03.1.1): a live segmentation of the chat list.
+            Chats only — tickets are asynchronous and have their own views. */}
+        {!onTickets && (
+          <div
+            role="tablist"
+            aria-label="Real-time tabs"
+            className="flex gap-1 border-b border-border px-2 py-1.5"
+          >
+            {TRAFFIC_TABS.map((tab) => {
+              const active = trafficTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTrafficTab(tab.id)}
+                  className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
+                    active
+                      ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                      : 'text-content-secondary hover:bg-surface-2'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    aria-hidden="true"
+                    className={`tabular rounded-sm px-1 text-2xs ${
+                      active ? 'bg-brand-200 dark:bg-brand-900' : 'bg-inset text-content-tertiary'
+                    }`}
+                  >
+                    {trafficCounts[tab.id]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto" role={onTickets ? undefined : 'tabpanel'}>
           {onTickets ? (
             <TicketList
               tickets={ticketItems}
@@ -203,18 +253,22 @@ export function InboxPage(): ReactElement {
             />
           ) : list.isPending ? (
             <ListSkeleton />
-          ) : chats.length === 0 ? (
+          ) : visibleChats.length === 0 ? (
             <EmptyState
-              title="Nothing here yet"
+              title={
+                chats.length > 0 && trafficTab !== 'all' ? 'Nothing in this tab' : 'Nothing here yet'
+              }
               description={
-                view === 'archived'
-                  ? 'Closed conversations will appear here.'
-                  : 'New conversations land here as they arrive.'
+                chats.length > 0 && trafficTab !== 'all'
+                  ? 'No conversations match this tab right now.'
+                  : view === 'archived'
+                    ? 'Closed conversations will appear here.'
+                    : 'New conversations land here as they arrive.'
               }
             />
           ) : (
             <ul>
-              {chats.map((item) => (
+              {visibleChats.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"

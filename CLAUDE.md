@@ -47,9 +47,12 @@ içinden aynı kilitlenme sorununa takılır.
 
 Bu döngü `/is` komutuna gömülüdür — adımları elle yürütmek yerine `/is` çağrılır.
 Seri çalışma: `/loop /is` (döngü kuralları `.claude/commands/is.md` sonunda: soru yerine
-günlüklenmiş varsayım; her iş kendi commit'iyle kapanır, push edilmez; `[MAX]` işler
-ayrı commit olur ve kapanış raporunda **[MAX] İNCELE** bölümüyle insana sunulur).
-Dilim bitince `/dilim-kapat` — push oradadır. Ham adımlar referans için:
+günlüklenmiş varsayım; işler `slice-<N>` dalında kendi commit'leriyle kapanır; `[MAX]`
+işler ayrı commit olur ve raporda **[MAX] İNCELE** bölümüyle sunulur). Dilim bitince
+döngü `/dilim-kapat`'ı kendisi uygular: PLAN.md geri yazımı, açıklamalı merge, **push**
+(otomatik push 2026-07-24'te onaylandı) ve sonraki dilimin görevleri. Faz 0'ın son
+dilimi kapanınca durur: `PLAN.md §F` kapanış raporu sunulur, Faz 1'e geçiş insan kararıdır.
+Ham adımlar referans için:
 
 1. `task-master next` → sıradaki iş
 2. `task-master show <id>` → ayrıntı; `details` alanındaki dosya yollarını oku
@@ -60,16 +63,18 @@ Dilim bitince `/dilim-kapat` — push oradadır. Ham adımlar referans için:
 6. `task-master set-status --id=<id> --status=done`
 7. **`/clear`** → yeni oturum, 1. adım
 
-## Dilim kapanışı
+## Dilim kapanışı (`/dilim-kapat` — döngüde otomatik çalışır)
 
-Bir dilimin tüm işleri bittiğinde, `/clear`'dan önce:
+Bir dilimin tüm işleri bittiğinde:
 
 1. `PLAN.md §3`'teki ilgili satırların durum işaretlerini güncelle (⬜/◐ → ✅)
 2. `PLAN.md §3.11` dilim tablosunu ve baştaki faz sayacını güncelle
    (sayaç **sayılarak** üretilir, elle yazılmaz — PLAN.md §1.2)
 3. Sapma varsa `PLAN.md §D`'ye, varsayım varsa `§C`'ye yaz
-4. Commit + push
+4. `slice-<N>` dalını main'e **açıklamalı** merge et + push (mesaj şablonu
+   `.claude/commands/dilim-kapat.md` §6'da; otomatik push onaylı — 2026-07-24)
 5. Sonraki dilimin görevlerini aynı yöntemle üret: kodu oku → elle `add-task`
+6. Faz 0'ın son dilimiyse: görev kurma — `PLAN.md §F` kapanış turu → rapor → DUR
 
 ## Bitti tanımı (her iş için)
 

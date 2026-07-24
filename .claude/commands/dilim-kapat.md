@@ -1,5 +1,5 @@
 ---
-description: Dilimi kapat — PLAN.md'yi geri güncelle, sayacı sayarak üret, commit at, sonraki dilimin görevlerini kur
+description: Dilimi kapat — PLAN.md'yi geri güncelle, açıklamalı merge + push (otomatik, onaylı), sonraki dilimin görevlerini kur
 allowed-tools: Bash(task-master *), Read, Grep, Glob, Edit, Bash(git *), Bash(pnpm *), Bash(make *)
 ---
 
@@ -10,8 +10,9 @@ Yapılmazsa `PLAN.md` yalan söylemeye başlar.
 
 `task-master list` — dilimin tüm görevleri `done` mu?
 
-`done` olmayan varsa dur. Kullanıcıya sor: tamamlanacak mı, yoksa `PLAN.md §D`'ye gerekçeli
-sapma olarak mı yazılacak? Kendi başına karar verme.
+`done` olmayan varsa dilim KAPANMAZ. Elle çalışıyorsan kullanıcıya sor. Döngü
+modundaysan kapatmayı deneme: döngüyü sonlandır, raporda nedenini söyle —
+yarım dilimi kapatmak `PLAN.md`'yi yalancı çıkarır, o karar insana aittir.
 
 ## 2. PLAN.md §3 durum işaretlerini güncelle
 
@@ -42,9 +43,30 @@ oradadır ve çoğu §C'ye aittir.
 - Birim + Playwright E2E yeşil
 - Dilimin PRD kabul kriterleri karşılandı
 
-## 6. Commit
+Kapı geçilmeden push YOK. Kırmızı varsa önce düzelt; düzeltemiyorsan döngüyü
+durdur ve raporla — kırmızının üstüne dilim kapatılmaz.
 
-Yeni dal aç (main'deysen), commit + push. Mesajda dilim numarası ve PRD kimlikleri geçsin.
+## 6. Merge + push (otomatik — kullanıcı 2026-07-24'te onayladı)
+
+Görev commit'leri `slice-<N>` dalında birikti (bkz. `/is` döngü modu). Sırayla:
+
+1. PLAN.md güncellemelerini dal üstünde commit'le: `docs(plan): dilim <N> kapanışı`
+2. `git checkout main && git merge --no-ff slice-<N>` — merge mesajı şablonu
+   (git geçmişindeki `merge: slice 11/12` deseninin devamı):
+
+   ```
+   merge: slice <N> — <dilimin kısa adı>
+
+   Teslim: <FR-MOD kimlikleri — her biri tek satır özet>
+   Sapmalar: <§D'ye yazılanlar; yoksa "yok">
+   Varsayımlar: <§C'ye yazılanlar; yoksa "yok">
+   [MAX]: <ayrı commit SHA'ları> — İNCELE bölümü kapanış raporunda
+   Testler: <birim/E2E sonuçları — hepsi yeşil>
+   ```
+
+3. `git push origin main` ve `git branch -d slice-<N>`
+
+Push açıklamasız gitmez — şablondaki her alan doldurulur.
 
 ## 7. Sonraki dilimi kur
 
@@ -61,4 +83,12 @@ ADR'lerle çelişen jenerik adımlar yazar. Her görevin `details` alanına
 kriterini koy. (`testStrategy`'nin CLI flag'i yok — `tasks.json`'ı düzenleyip
 `task-master generate` çalıştır.)
 
-Bitince `task-master validate-dependencies` ve `/clear`.
+Bitince `task-master validate-dependencies`. Elle moddaysan `/clear` öner;
+döngü modundaysan döngüye dön — sıradaki iterasyon yeni dilimin ilk işini alır.
+
+## 8. Faz 0'ın son dilimi kapandıysa — DUR
+
+Sonraki dilim yoksa (§3.11 tablosu bitti) yeni görev KURMA, Faz 1'e GEÇME.
+`PLAN.md §F` (Orkestratör Kapanış Turu — zorunlu) uygulanır: §F.1 denetimini yap,
+§F.2 raporunu kullanıcıya sun, döngüyü sonlandır. Faz 1–3 durumları geçicidir ve
+faz başlarken koda karşı denetlenir (PLAN.md §1.2) — o denetimi başlatmak insan kararıdır.

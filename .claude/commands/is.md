@@ -66,17 +66,28 @@ Kullanıcı `/loop /is` başlattıysa ya da "seri çalış / otonom devam et" de
 
 - **Soru sorup bekleme.** Karar gerekiyorsa en güvenli varsayımı seç, günlüğe
   `varsayım:` önekiyle yaz, ilerle. Varsayım taşıyan işleri kapanış raporunda işaretle.
+- **Döngü dilim dalında çalışır.** İlk iterasyonda `main`'deysen `git checkout -b slice-<N>`
+  (N'i görevin `Dilim N` çapasından al; komut mevcut değişiklikleri güvenle taşır).
+  Sonraki iterasyonlar aynı dalda sürer; `main`'e dönüş yalnız `/dilim-kapat` merge'ünde.
 - **Her işin kapanışında commit at, push etme.** `git add -A && git commit` —
   mesaj: `feat(<alan>): <özet> (tm <id> · FR-MOD-<xx>)`. Çökme yarım işi kaybettirmez,
-  her görev tek diff olarak incelenebilir kalır. Push yalnız `/dilim-kapat`'ta, insanla.
+  her görev tek diff olarak incelenebilir kalır. Push yalnız `/dilim-kapat`'ta —
+  orada otomatiktir (2026-07-24 kullanıcı onayı).
 - **`[MAX]` görev akışı durdurmaz ama denetimsiz de geçmez.** Negatif testler önce
   yazılır, kırmızı görülür, sonra yeşile çevrilir. İş **tek başına bir commit** olur
   (başka işle karıştırılmaz) ve `done`'a çekilir ki bağımlılar açılsın. Kapanış
   raporunda **[MAX] İNCELE** bölümü zorunludur: commit SHA'sı, test dosyaları,
-  dört negatif senaryonun çıktısı. İnsan incelemesi push'tan önce — dilim kapanışında.
+  dört negatif senaryonun çıktısı. İnsan incelemesi kapanış raporu üzerinden yapılır;
+  iş ayrı commit olduğu için gerekirse tek `git revert` ile geri alınır.
 - `/clear` yok; bu yüzden 3–4. adımdaki günlük disiplini daha da kritik: bağlam
   özetlense bile durum `tasks.json`'da yaşamalı.
 - Her iterasyonun sonunda tek paragraf rapor: `<id>` — ne yapıldı, kabul kriterleri durumu.
-- `next` uygun iş vermiyorsa (hepsi bitti ya da kalanlar bağımlılık bekliyor)
-  **döngüyü sonlandır** ve kapanış raporu ver: biten işler, commit listesi,
-  varsayımlar, **[MAX] İNCELE** bölümü, kırmızı kalan her şey. Boş tur atma.
+- `next` uygun iş vermiyorsa iki durum var:
+  - **(a) Dilimin tüm görevleri `done`** → `/dilim-kapat` talimatını
+    (`.claude/commands/dilim-kapat.md`) oku ve uygula: PLAN.md geri yazımı,
+    açıklamalı merge + push, sonraki dilimin görevlerinin kurulumu. Sonra döngüye
+    devam et — sıradaki iterasyon yeni dilimin ilk işini alır. Faz 0'ın son
+    dilimiyse dilim-kapat §8 döngüyü durdurur.
+  - **(b) `done` olmayan görev kaldı** (blocked/yarım) → **döngüyü sonlandır** ve
+    kapanış raporu ver: biten işler, commit listesi, varsayımlar, **[MAX] İNCELE**
+    bölümü, kırmızı kalan her şey. Boş tur atma.

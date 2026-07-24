@@ -1,72 +1,42 @@
-# Dependencies
-node_modules/
-.pnpm-store/
-
-# Env & secrets — NEVER commit
+# --- Secrets / env (ASLA commit'lenmez) ---
 .env
 .env.*
 !.env.example
 *.pem
 *.key
-*.p12
 secrets/
 
-# Build output
+# --- Bağımlılıklar / çıktı ---
+node_modules/
 dist/
 build/
-out/
 .next/
-.turbo/
+coverage/
 *.tsbuildinfo
 
-# Test / coverage artifacts
-coverage/
+# --- Turborepo / araç cache ---
+.turbo/
+.cache/
+.eslintcache
+
+# --- Otonom döngü logları ---
+.loop-logs/
+
+# --- Task Master (görev ağacı git'te KALIR; sadece yerel/gizli kısımlar hariç) ---
+.taskmaster/**/*.log
+.taskmaster/reports/
+.taskmaster/config.local.json
+
+# --- Test / e2e artefaktları ---
 playwright-report/
 test-results/
-blob-report/
-.playwright/
 
-# Logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-logs/
-
-# OS
+# --- OS / editör ---
 .DS_Store
-Thumbs.db
-
-# Editors
+*.log
 .idea/
 .vscode/*
 !.vscode/extensions.json
 
-# Local data volumes
+# --- Yerel çalışma verisi (dev runtime: mock mail + uploads) ---
 .data/
-pgdata/
-
-logs
-yarn-debug.log*
-yarn-error.log*
-dev-debug.log
-# Dependency directories
-# Environment variables
-# Editor directories and files
-.idea
-.vscode
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-# OS specific
-
-# Task files
-# tasks.json
-# tasks/
-
-# Otonom koşucu yerel durumu
-.taskmaster/faz0.kapandi
-
-# Otonom koşuda üretilen görsel kanıt (insan incelemesi için, repoya girmez)
-kanit/

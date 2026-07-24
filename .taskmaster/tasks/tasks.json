@@ -208,11 +208,11 @@
         "description": "Yeni mesaj/atama bildirimleri: ses, masaustu (Notification API), tarayici baslik/favicon, e-posta (mock mailer). Ayardan ac/kapa.",
         "details": "PRD: FR-MOD-13.8 · PLAN.md §3.10 · Dilim 14. Client: apps/web/src/features/inbox/useInbox.ts (RTM olaylari) -> yeni bildirim hook'u; masaustu izni. Server e-posta: apps/api/src/services/mail/mailer.ts (mock, .data/mail). Realtime kaynak: apps/api/src/services/realtime/publisher.ts. Ayar yuzeyi settings. E2E kanit/.",
         "testStrategy": "Yeni mesajda ses + masaustu (Notification API) + baslik bildirimi; e-posta mock kutusuna (.data/mail) duser; ayardan kapatinca bildirim gelmez (NEGATIF test); izin reddedilince sessiz degrade. Gorsel kanit kanit/<id>-*.png.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [],
-        "updatedAt": "2026-07-24T18:44:41.383Z"
+        "updatedAt": "2026-07-24T19:00:30.630Z"
       },
       {
         "id": "17",
@@ -220,10 +220,11 @@
         "description": "Merkezi etiket kutuphanesi CRUD (grup kapsamli). Chat basina etiket zaten var; bu kutuphane + settings yuzeyi ve chat etiketlemeyi besleme.",
         "details": "PRD: FR-MOD-08.7.1 · PLAN.md §3.7 · Dilim 14. Tag modeli (apps/api/prisma/schema.prisma), apps/api/src/routes/settings.ts (canned/routing deseni), web apps/web/src/features/settings/SettingsPage.tsx. Kontrat-once. Lisans kapsamli + cross-tenant testi. E2E kanit/.",
         "testStrategy": "Etiket olustur/duzenle/sil grup kapsaminda; lisans kapsamli; cross-tenant baska lisansin etiketine erisemez (test zorunlu); chat etiketleme kutuphaneden besleniyor. contract-parity yesil. Gorsel kanit kanit/<id>-*.png.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-07-24T19:01:48.698Z"
       },
       {
         "id": "18",
@@ -250,9 +251,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-24T18:44:41.384Z",
+      "lastModified": "2026-07-24T19:01:48.698Z",
       "taskCount": 19,
-      "completedCount": 15,
+      "completedCount": 16,
       "tags": [
         "master"
       ]

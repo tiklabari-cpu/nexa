@@ -41,6 +41,15 @@ interface CannedResponse {
   scope: 'chat' | 'ticket';
 }
 
+interface Tag {
+  id: string;
+  name: string;
+  group_ids: number[];
+  author_id: string | null;
+  usage_count: number;
+  created_at: string;
+}
+
 interface SecuritySettings {
   file_sharing_enabled: boolean;
   allowed_file_types: string[];
@@ -66,6 +75,7 @@ export function SettingsPage(): ReactElement {
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const canManageAccess = scopes.includes('access_rules:rw');
   const canManageReplies = scopes.includes('canned_responses--all:rw');
+  const canManageTags = scopes.includes('tags--all:rw');
 
   return (
     <Page title="Settings" description="Widget installation, saved replies and routing.">
@@ -75,6 +85,7 @@ export function SettingsPage(): ReactElement {
       <TrustedDomains canEdit={canManageAccess} />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />
+      <Tags canEdit={canManageTags} />
       <RoutingRules canEdit={canManageAccess} />
     </Page>
   );
@@ -587,6 +598,139 @@ function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
                       type="button"
                       onClick={() => remove.mutate(item.id)}
                       aria-label={`Delete #${item.shortcut}`}
+                      className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+    </Section>
+  );
+}
+
+// --- Tag library -------------------------------------------------------------
+
+/**
+ * The workspace's curated tags (FR-MOD-08.7.1).
+ *
+ * Chat-level tagging already worked — an agent could type any word — but nothing
+ * agreed the vocabulary, so a team ended up with `vip`, `VIP` and `v.i.p.` for
+ * one idea. This library is that agreement: the inbox reads the same list to
+ * suggest tags, and `usage_count` shows which labels are actually earning their
+ * place.
+ */
+function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState('');
+
+  const list = useQuery({
+    queryKey: ['settings', 'tags'],
+    queryFn: () => api.get<{ items: Tag[] }>('/settings/tags'),
+  });
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['settings', 'tags'] });
+    // The inbox suggests tags from this same list; leaving its cache alone would
+    // keep a new tag hidden from the composer until the agent reloads.
+    void queryClient.invalidateQueries({ queryKey: ['tag-library'] });
+  };
+
+  const create = useMutation({
+    mutationFn: (body: { name: string }) => api.post<Tag>('/settings/tags', body),
+    onSuccess: () => {
+      setName('');
+      invalidate();
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/settings/tags/${id}`),
+    onSuccess: invalidate,
+  });
+
+  function submit(event: FormEvent): void {
+    event.preventDefault();
+    if (!name.trim()) return;
+    create.mutate({ name: name.trim() });
+  }
+
+  return (
+    <Section
+      title="Tags"
+      description="Labels agents apply to conversations. The inbox suggests these as they type."
+    >
+      {list.error ? (
+        <ErrorNotice message="Could not load tags." />
+      ) : (
+        <Card>
+          {canEdit && (
+            <form onSubmit={submit} className="flex flex-col gap-3 border-b border-border p-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <label htmlFor="new-tag-name" className="flex min-w-56 flex-1 flex-col gap-1">
+                  <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                    Tag
+                  </span>
+                  <input
+                    id="new-tag-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="vip"
+                    maxLength={64}
+                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={!name.trim() || create.isPending}
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {create.isPending ? 'Adding…' : 'Add tag'}
+                </button>
+              </div>
+
+              {create.isError && (
+                <p role="alert" className="text-2xs text-danger">
+                  {create.error instanceof ApiClientError
+                    ? create.error.message
+                    : 'Could not add that tag.'}
+                </p>
+              )}
+            </form>
+          )}
+
+          {list.isPending ? (
+            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+          ) : list.data.items.length === 0 ? (
+            <EmptyState
+              title="No tags yet"
+              description="Agree the words your team uses to label conversations."
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {list.data.items.map((tag) => (
+                <li key={tag.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="inline-flex items-center rounded-sm bg-inset px-2 py-0.5 font-mono text-2xs">
+                    {tag.name}
+                  </span>
+                  <span className="flex-1 text-2xs text-content-tertiary">
+                    {tag.group_ids.length === 0
+                      ? 'All teams'
+                      : `${tag.group_ids.length} team${tag.group_ids.length === 1 ? '' : 's'}`}
+                    {' · '}
+                    {tag.usage_count} in use
+                  </span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => remove.mutate(tag.id)}
+                      aria-label={`Delete tag ${tag.name}`}
                       className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                     >
                       Delete

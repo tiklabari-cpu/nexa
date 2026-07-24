@@ -93,6 +93,27 @@ const updateSecurityBody = z
 
 const uuid = z.string().uuid();
 
+/**
+ * Same normalisation the inbox applies when an agent tags a conversation
+ * (`chat-service.tagThread`): trimmed and lowercased. Keeping the two in step is
+ * the point of the library — otherwise `VIP` typed in the composer and `vip`
+ * curated here would be two labels that look like one.
+ */
+const tagName = z.string().trim().toLowerCase().min(1).max(64);
+const tagGroupIds = z.array(z.coerce.bigint()).max(50);
+
+const createTagBody = z.object({
+  name: tagName,
+  group_ids: tagGroupIds.default([]),
+});
+
+const updateTagBody = z
+  .object({
+    name: tagName.optional(),
+    group_ids: tagGroupIds.optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
   if (!result.success) {
@@ -452,6 +473,148 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
       });
     },
   );
+
+  // --- Tag library -----------------------------------------------------------
+
+  // Read is open to any tag scope, `--groups` included, because the inbox reads
+  // this list to suggest tags as an agent types: an ordinary agent (who holds
+  // `tags--groups:ro`, not the tenant-wide set) still needs to see the
+  // vocabulary they are expected to apply.
+  app.get(
+    '/settings/tags',
+    { config: { scopes: ['tags--all:ro', 'tags--groups:ro'] } },
+    async (request, reply) => {
+      const items = await request.withTenant((tx) =>
+        tx.tag.findMany({
+          orderBy: { name: 'asc' },
+          include: { _count: { select: { threads: true } } },
+        }),
+      );
+      return reply.send({ items: items.map(serialiseTag) });
+    },
+  );
+
+  app.post(
+    '/settings/tags',
+    { config: { scopes: ['tags--all:rw'] } },
+    async (request, reply) => {
+      const body = parse(createTagBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      try {
+        const created = await request.withTenant(async (tx) => {
+          await assertGroupsExist(tx, body.group_ids);
+          return tx.tag.create({
+            data: {
+              licenseId: tenant.licenseId,
+              name: body.name,
+              groupIds: body.group_ids,
+              authorId: principal.kind === 'agent' ? principal.accountId : null,
+            },
+            include: { _count: { select: { threads: true } } },
+          });
+        });
+        return reply.status(201).send(serialiseTag(created));
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new ApiError('not_allowed', `The tag “${body.name}” already exists.`);
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.patch<{ Params: { tagId: string } }>(
+    '/settings/tags/:tagId',
+    { config: { scopes: ['tags--all:rw'] } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.tagId);
+      const body = parse(updateTagBody, request.body);
+
+      try {
+        const updated = await request.withTenant(async (tx) => {
+          const existing = await tx.tag.findFirst({ where: { id }, select: { id: true } });
+          if (!existing) throw ApiError.notFound('Tag not found.');
+          if (body.group_ids !== undefined) await assertGroupsExist(tx, body.group_ids);
+
+          return tx.tag.update({
+            where: { id },
+            data: {
+              ...(body.name !== undefined ? { name: body.name } : {}),
+              ...(body.group_ids !== undefined ? { groupIds: body.group_ids } : {}),
+            },
+            include: { _count: { select: { threads: true } } },
+          });
+        });
+        return reply.send(serialiseTag(updated));
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new ApiError('not_allowed', 'A tag with that name already exists.');
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.delete<{ Params: { tagId: string } }>(
+    '/settings/tags/:tagId',
+    { config: { scopes: ['tags--all:rw'] } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.tagId);
+
+      const deleted = await request.withTenant(async (tx) => {
+        // Scoped delete, not `delete by id`: the id alone would let a caller
+        // remove another tenant's tag if RLS were ever misconfigured.
+        const { count } = await tx.tag.deleteMany({ where: { id } });
+        return count;
+      });
+      if (deleted === 0) throw ApiError.notFound('Tag not found.');
+
+      return reply.status(204).send();
+    },
+  );
+}
+
+/**
+ * Rejects a create/update that names a team the workspace does not have.
+ *
+ * Mirrors the check the routing-rule editor makes: a `group_id` that resolves to
+ * nothing would scope a tag to a team that cannot exist, so it would silently
+ * apply to no one. RLS narrows the lookup to this tenant, so referencing another
+ * workspace's group fails here exactly as an unknown id does.
+ */
+async function assertGroupsExist(
+  tx: Prisma.TransactionClient,
+  groupIds: bigint[],
+): Promise<void> {
+  if (groupIds.length === 0) return;
+  const unique = [...new Set(groupIds.map((id) => id.toString()))];
+  const found = await tx.group.findMany({
+    where: { id: { in: groupIds } },
+    select: { id: true },
+  });
+  if (found.length !== unique.length) {
+    throw ApiError.validation('One or more of those teams do not exist.');
+  }
+}
+
+function serialiseTag(row: {
+  id: string;
+  name: string;
+  groupIds: bigint[];
+  authorId: string | null;
+  createdAt: Date;
+  _count?: { threads: number };
+}) {
+  return {
+    id: row.id,
+    name: row.name,
+    group_ids: row.groupIds.map((id) => Number(id)),
+    author_id: row.authorId,
+    usage_count: row._count?.threads ?? 0,
+    created_at: row.createdAt.toISOString(),
+  };
 }
 
 function serialiseSecurity(

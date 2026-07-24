@@ -178,6 +178,10 @@ paths:
     $ref: "./paths/settings.yaml#/routingRules"
   /settings/routing-rules/{ruleId}:
     $ref: "./paths/settings.yaml#/routingRule"
+  /settings/tags:
+    $ref: "./paths/settings.yaml#/tags"
+  /settings/tags/{tagId}:
+    $ref: "./paths/settings.yaml#/tag"
   /settings/security:
     $ref: "./paths/settings.yaml#/securitySettings"
 
@@ -636,6 +640,38 @@ components:
         updated_by: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    Tag:
+      type: object
+      description: |
+        A label from the workspace's central tag library (FR-MOD-08.7.1).
+
+        Tagging a conversation draws from this library — the same `tags` row a
+        thread points at is the one the library manages here — which is what
+        keeps a workspace's vocabulary consistent instead of a scatter of
+        one-off typos. Applying a name that is not yet in the library still
+        works (it is created on demand), but curating the library is how a team
+        agrees on the words before they are used.
+      required: [id, name, group_ids, usage_count, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name:
+          type: string
+          description: Lowercased and trimmed; unique within the workspace.
+        group_ids:
+          type: array
+          description: |
+            Teams this tag is scoped to. Empty means the whole workspace may
+            use it.
+          items: { type: integer, format: int64 }
+        author_id:
+          type: string
+          nullable: true
+          description: The account that first created the tag, if known.
+        usage_count:
+          type: integer
+          description: How many conversations currently carry this tag.
+        created_at: { type: string, format: date-time }
 
     RoutingRule:
       type: object

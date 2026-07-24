@@ -324,3 +324,127 @@ routingRule:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+tags:
+  get:
+    tags: [Settings]
+    operationId: listTags
+    summary: The workspace tag library
+    description: |
+      Curated labels for conversations (FR-MOD-08.7.1). The inbox reads the same
+      list to suggest tags as an agent types, so a name here is the vocabulary a
+      team has agreed on. Ordered by name. `usage_count` is how many
+      conversations currently carry each tag.
+    responses:
+      "200":
+        description: The library
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Tag" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: createTag
+    summary: Add a tag to the library
+    description: |
+      The name is stored lowercased and trimmed, and must be unique within the
+      workspace — the same normalisation the inbox applies when an agent tags a
+      conversation, so the library and live tagging never diverge into two
+      spellings of one label. `group_ids` scopes the tag to specific teams; an
+      empty list makes it available workspace-wide.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 64 }
+              group_ids:
+                type: array
+                maxItems: 50
+                items: { type: integer, format: int64 }
+    responses:
+      "201":
+        description: Added
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Tag" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409":
+        description: A tag with that name already exists
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+tag:
+  parameters:
+    - name: tagId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Settings]
+    operationId: updateTag
+    summary: Rename a tag or change its team scope
+    description: |
+      Renaming updates every conversation already carrying the tag — the label
+      is a single row threads point at, not a copied string — so a fixed typo is
+      corrected everywhere at once.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 64 }
+              group_ids:
+                type: array
+                maxItems: 50
+                items: { type: integer, format: int64 }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Tag" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: A tag with that name already exists
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Settings]
+    operationId: deleteTag
+    summary: Remove a tag from the library
+    description: |
+      Removes the tag from every conversation that carries it. Retiring a label
+      is deliberate: the conversations remain, they simply lose that tag.
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

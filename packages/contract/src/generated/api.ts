@@ -1243,6 +1243,66 @@ export interface paths {
     patch: operations['updateRoutingRule'];
     trace?: never;
   };
+  '/settings/tags': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The workspace tag library
+     * @description Curated labels for conversations (FR-MOD-08.7.1). The inbox reads the same
+     *     list to suggest tags as an agent types, so a name here is the vocabulary a
+     *     team has agreed on. Ordered by name. `usage_count` is how many
+     *     conversations currently carry each tag.
+     */
+    get: operations['listTags'];
+    put?: never;
+    /**
+     * Add a tag to the library
+     * @description The name is stored lowercased and trimmed, and must be unique within the
+     *     workspace — the same normalisation the inbox applies when an agent tags a
+     *     conversation, so the library and live tagging never diverge into two
+     *     spellings of one label. `group_ids` scopes the tag to specific teams; an
+     *     empty list makes it available workspace-wide.
+     */
+    post: operations['createTag'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/tags/{tagId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tagId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Remove a tag from the library
+     * @description Removes the tag from every conversation that carries it. Retiring a label
+     *     is deliberate: the conversations remain, they simply lose that tag.
+     */
+    delete: operations['deleteTag'];
+    options?: never;
+    head?: never;
+    /**
+     * Rename a tag or change its team scope
+     * @description Renaming updates every conversation already carrying the tag — the label
+     *     is a single row threads point at, not a copied string — so a fixed typo is
+     *     corrected everywhere at once.
+     */
+    patch: operations['updateTag'];
+    trace?: never;
+  };
   '/settings/security': {
     parameters: {
       query?: never;
@@ -1900,6 +1960,33 @@ export interface components {
       created_at: string;
       /** Format: date-time */
       updated_at: string;
+    };
+    /**
+     * @description A label from the workspace's central tag library (FR-MOD-08.7.1).
+     *
+     *     Tagging a conversation draws from this library — the same `tags` row a
+     *     thread points at is the one the library manages here — which is what
+     *     keeps a workspace's vocabulary consistent instead of a scatter of
+     *     one-off typos. Applying a name that is not yet in the library still
+     *     works (it is created on demand), but curating the library is how a team
+     *     agrees on the words before they are used.
+     */
+    Tag: {
+      /** Format: uuid */
+      id: string;
+      /** @description Lowercased and trimmed; unique within the workspace. */
+      name: string;
+      /**
+       * @description Teams this tag is scoped to. Empty means the whole workspace may
+       *     use it.
+       */
+      group_ids: number[];
+      /** @description The account that first created the tag, if known. */
+      author_id?: string | null;
+      /** @description How many conversations currently carry this tag. */
+      usage_count: number;
+      /** Format: date-time */
+      created_at: string;
     };
     RoutingRule: {
       /** Format: uuid */
@@ -4616,6 +4703,138 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       /** @description The fallback rule cannot be disabled */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listTags: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The library */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Tag'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createTag: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          group_ids?: number[];
+        };
+      };
+    };
+    responses: {
+      /** @description Added */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Tag'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description A tag with that name already exists */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteTag: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tagId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateTag: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tagId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          group_ids?: number[];
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Tag'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description A tag with that name already exists */
       409: {
         headers: {
           [name: string]: unknown;

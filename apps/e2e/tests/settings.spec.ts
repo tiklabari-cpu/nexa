@@ -189,6 +189,39 @@ test.describe('settings', () => {
     await expect(agentPage.getByText(host, { exact: true })).toBeVisible();
   });
 
+  // FR-MOD-08.7.1: the tag library. A label curated here is the vocabulary the
+  // inbox suggests as an agent tags a conversation, so the two never drift into
+  // separate spellings. Created and removed in one test so the seed-skipped
+  // tenant does not accumulate tags across runs.
+  test('curates a tag in the library', async ({ agentPage }) => {
+    await agentPage.goto('/app/settings');
+
+    const section = (): ReturnType<typeof agentPage.getByRole> =>
+      agentPage.getByRole('region', { name: 'Tags' });
+    await expect(section().getByRole('heading', { name: 'Tags', level: 2 })).toBeVisible();
+
+    const name = `vip-${Date.now().toString().slice(-6)}`;
+    await section().getByLabel('Tag', { exact: true }).fill(name);
+    await section().getByRole('button', { name: 'Add tag' }).click();
+
+    const row = section().locator('li').filter({ hasText: name });
+    await expect(row).toBeVisible();
+    // Unscoped tags are workspace-wide, and start unused.
+    await expect(row.getByText('All teams · 0 in use')).toBeVisible();
+
+    // Reload rather than trust the redraw: the round trip is the claim.
+    await agentPage.reload();
+    await expect(section().locator('li').filter({ hasText: name })).toBeVisible();
+    await section().screenshot({ path: 'kanit/17-tags-library.png' });
+
+    await section()
+      .locator('li')
+      .filter({ hasText: name })
+      .getByRole('button', { name: `Delete tag ${name}` })
+      .click();
+    await expect(section().getByText(name)).toHaveCount(0);
+  });
+
   test('refuses to disable the fallback routing rule', async ({ agentPage }) => {
     // Disabling it would leave conversations matching nothing with nowhere to
     // go, while the configuration still looked healthy.

@@ -1,5 +1,7 @@
 import { useState, type ReactElement } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { StatusDot } from '../../components/StatusDot.js';
+import { useApiClient } from '../../lib/auth-store.js';
 import { useChatAction } from './useInbox.js';
 import type { ChatDetail } from './types.js';
 
@@ -12,8 +14,22 @@ import type { ChatDetail } from './types.js';
  */
 export function DetailsPanel({ chat, chatId }: { chat: ChatDetail; chatId: string }): ReactElement {
   const [newTag, setNewTag] = useState('');
+  const api = useApiClient();
   const actions = useChatAction(chatId);
   const tags = chat.thread?.tags ?? [];
+
+  // Suggest the curated library (FR-MOD-08.7.1) so a team applies agreed labels
+  // rather than re-inventing a spelling per conversation. A free-typed tag still
+  // works — the datalist is a hint, not a constraint — and the query failing
+  // (e.g. an agent without a tag read scope) simply leaves it with no options.
+  const library = useQuery({
+    queryKey: ['tag-library'],
+    queryFn: () => api.get<{ items: Array<{ name: string }> }>('/settings/tags'),
+    staleTime: 60_000,
+  });
+  const suggestions = (library.data?.items ?? [])
+    .map((item) => item.name)
+    .filter((name) => !tags.includes(name));
 
   const addTag = (): void => {
     const value = newTag.trim();
@@ -83,6 +99,7 @@ export function DetailsPanel({ chat, chatId }: { chat: ChatDetail; chatId: strin
           </label>
           <input
             id="new-tag"
+            list="tag-library"
             value={newTag}
             onChange={(event) => setNewTag(event.target.value)}
             onKeyDown={(event) => {
@@ -95,6 +112,11 @@ export function DetailsPanel({ chat, chatId }: { chat: ChatDetail; chatId: strin
             maxLength={64}
             className="min-w-0 flex-1 rounded-sm border border-border bg-inset px-2 py-1 text-xs"
           />
+          <datalist id="tag-library">
+            {suggestions.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
           <button
             type="button"
             onClick={addTag}

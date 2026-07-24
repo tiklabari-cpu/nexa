@@ -961,6 +961,17 @@ components:
             id: { type: string, format: uuid }
             name: { type: string, nullable: true }
             email: { type: string, nullable: true }
+        agent:
+          type: object
+          nullable: true
+          description: |
+            Who the visitor is talking to, for the widget header (FR-MOD-11.3): a
+            human assignee if there is one, otherwise the active AI persona. Null
+            until either exists.
+          required: [name]
+          properties:
+            name: { type: string }
+            avatar_url: { type: string, nullable: true }
         chat:
           type: object
           nullable: true

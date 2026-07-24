@@ -437,4 +437,69 @@ describe('customer chat api', () => {
       expect(refused.statusCode).toBe(400);
     });
   });
+
+  // =========================================================================
+
+  describe('agent identity (FR-MOD-11.3)', () => {
+    interface AgentState {
+      agent: { name: string; avatar_url: string | null } | null;
+    }
+
+    it('names the active AI persona when no one has taken over', async () => {
+      await owner.aiAgent.create({
+        data: { licenseId: fx.a.licenseId, name: 'Ada', avatarUrl: null, active: true },
+      });
+
+      const { token } = await widgetToken();
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent?.name).toBe('Ada');
+    });
+
+    it('names the human agent once the conversation is assigned', async () => {
+      const { token } = await widgetToken();
+      await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+
+      // Hand the conversation to a person; the header should follow.
+      await owner.thread.updateMany({
+        where: { licenseId: fx.a.licenseId },
+        data: { assigneeId: fx.a.agentAccountId },
+      });
+
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent?.name).toBe('Agent a');
+    });
+
+    it('prefers a human assignee over the active AI persona', async () => {
+      await owner.aiAgent.create({
+        data: { licenseId: fx.a.licenseId, name: 'Ada', active: true },
+      });
+
+      const { token } = await widgetToken();
+      await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+      await owner.thread.updateMany({
+        where: { licenseId: fx.a.licenseId },
+        data: { assigneeId: fx.a.agentAccountId },
+      });
+
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent?.name).toBe('Agent a');
+    });
+
+    it('shows no identity when there is neither a person nor an active AI', async () => {
+      const { token } = await widgetToken();
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent).toBeNull();
+    });
+
+    it('does not leak another license\'s AI persona', async () => {
+      // B has an active persona; A's visitor must never see it.
+      await owner.aiAgent.create({
+        data: { licenseId: fx.b.licenseId, name: 'Bea', active: true },
+      });
+
+      const { token } = await widgetToken();
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent).toBeNull();
+    });
+  });
 });

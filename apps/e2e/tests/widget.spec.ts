@@ -127,6 +127,19 @@ test.describe('widget embedding', () => {
   });
 });
 
+test.describe('agent identity', () => {
+  // FR-MOD-11.3: the visitor should see who they are talking to. Acme's AI
+  // persona ("Ada") is active, so its name — not the agent's copilot, and not a
+  // generic title — heads the panel.
+  test('names the persona the visitor is talking to', async ({ page, organizationId }) => {
+    await openWidget(page, organizationId);
+    const frame = widgetFrame(page);
+
+    await expect(frame.getByRole('heading', { name: 'Ada' })).toBeVisible({ timeout: 20_000 });
+    await page.screenshot({ path: 'kanit/11-persona-header.png', fullPage: true });
+  });
+});
+
 test.describe('attachments', () => {
   // FR-MOD-02.3.5 + FR-MOD-11.4: a file can be attached from either composer,
   // sent, and seen on the other side — proven across the real cross-origin

@@ -94,7 +94,25 @@ export default async function customerRoutes(
         }),
       ]);
 
-      return { chat, agentsOnline, customer };
+      // Who the visitor is talking to (FR-MOD-11.3). A human assignee wins — it
+      // is a real person on the other end — otherwise the active AI persona,
+      // which is who answers first when one is configured.
+      const assigneeId = chat?.threads[0]?.assigneeId ?? null;
+      const responder = assigneeId
+        ? await tx.account.findUnique({
+            where: { id: assigneeId },
+            select: { name: true, avatarUrl: true },
+          })
+        : // The customer-facing persona only — `kind: 'copilot'` is the agent's
+          // assistant, not who the visitor is talking to. Oldest-first so the
+          // choice is stable when more than one exists.
+          await tx.aiAgent.findFirst({
+            where: { active: true, kind: 'ai_agent' },
+            orderBy: { createdAt: 'asc' },
+            select: { name: true, avatarUrl: true },
+          });
+
+      return { chat, agentsOnline, customer, responder };
     });
 
     const events = state.chat
@@ -116,6 +134,11 @@ export default async function customerRoutes(
             thread_id: state.chat.threads[0]?.id ?? null,
             queue_position: state.chat.threads[0]?.queuePosition ?? null,
           }
+        : null,
+      // The name and face the widget shows in its header, so the visitor knows
+      // whether they are talking to a person or the AI persona (FR-MOD-11.3).
+      agent: state.responder
+        ? { name: state.responder.name, avatar_url: state.responder.avatarUrl }
         : null,
       events: events.items,
     });

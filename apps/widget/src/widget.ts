@@ -8,7 +8,7 @@
  * with `textContent`. Never `innerHTML` — the eslint config bans it outright
  * rather than relying on anyone remembering (NFR-S6).
  */
-import { WidgetApi, type WidgetEvent } from './api.js';
+import { WidgetApi, type WidgetEvent, type WidgetState } from './api.js';
 
 const LAUNCHER_SIZE = 84;
 const PANEL = { width: 380, height: 620 } as const;
@@ -29,6 +29,8 @@ interface State {
   chatId: string | null;
   queuePosition: number | null;
   events: WidgetEvent[];
+  /** Who the visitor is talking to, shown in the header (FR-MOD-11.3). */
+  agent: { name: string; avatarUrl: string | null } | null;
   error: string | null;
   sending: boolean;
   /** A file the visitor picked and we uploaded, waiting to be sent. */
@@ -50,6 +52,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     chatId: null,
     queuePosition: null,
     events: [],
+    agent: null,
     error: null,
     sending: false,
     pendingAttachment: null,
@@ -76,6 +79,29 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
     renderedCount = state.events.length;
     ui.transcript.scrollTop = ui.transcript.scrollHeight;
+  }
+
+  /**
+   * The header names who the visitor is talking to (FR-MOD-11.3): the AI persona
+   * or, once a person takes over, that agent. An avatar when there is one, the
+   * initial otherwise — `textContent` throughout so a name can never be markup.
+   */
+  function renderHeader(): void {
+    const agent = state.agent;
+    ui.title.textContent = agent?.name ?? 'Chat with us';
+    ui.avatar.replaceChildren();
+    ui.avatar.hidden = agent === null;
+    if (!agent) return;
+
+    if (agent.avatarUrl) {
+      const img = doc.createElement('img');
+      img.className = 'nx-avatar-img';
+      img.alt = '';
+      img.src = agent.avatarUrl;
+      ui.avatar.append(img);
+    } else {
+      ui.avatar.textContent = initial(agent.name);
+    }
   }
 
   function renderStatus(): void {
@@ -137,9 +163,11 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.chatId = snapshot.chat?.id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
       state.events = snapshot.events;
+      state.agent = toAgent(snapshot.agent);
       state.error = null;
       renderEvents();
       renderStatus();
+      renderHeader();
       startPolling();
     } catch (error) {
       state.error = 'Chat is unavailable right now. Please try again shortly.';
@@ -260,10 +288,12 @@ export function mount(doc: Document = document, win: Window = window): void {
       // Replace wholesale: the server's view is authoritative and includes the
       // real ids for anything sent optimistically.
       state.events = snapshot.events;
+      state.agent = toAgent(snapshot.agent);
       renderedCount = 0;
       ui.transcript.replaceChildren();
       renderEvents();
       renderStatus();
+      renderHeader();
     } catch (error) {
       console.warn('nexa widget: refresh failed', error);
     }
@@ -339,6 +369,8 @@ interface Ui {
   file: HTMLInputElement;
   send: HTMLButtonElement;
   close: HTMLButtonElement;
+  avatar: HTMLElement;
+  title: HTMLElement;
 }
 
 function buildUi(doc: Document): Ui {
@@ -362,15 +394,22 @@ function buildUi(doc: Document): Ui {
 
   const header = doc.createElement('header');
   header.className = 'nx-header';
+  const identity = doc.createElement('div');
+  identity.className = 'nx-identity';
+  const avatar = doc.createElement('span');
+  avatar.className = 'nx-avatar';
+  avatar.setAttribute('aria-hidden', 'true');
+  avatar.hidden = true;
   const title = doc.createElement('h1');
   title.className = 'nx-title';
   title.textContent = 'Chat with us';
+  identity.append(avatar, title);
   const close = doc.createElement('button');
   close.type = 'button';
   close.className = 'nx-close';
   close.setAttribute('aria-label', 'Close chat');
   close.textContent = '×';
-  header.append(title, close);
+  header.append(identity, close);
 
   const transcript = doc.createElement('div');
   transcript.className = 'nx-transcript';
@@ -422,7 +461,21 @@ function buildUi(doc: Document): Ui {
   form.append(attach, file, input, send);
   panel.append(header, transcript, status, chip, form);
 
-  return { launcher, panel, transcript, status, chip, form, input, attach, file, send, close };
+  return {
+    launcher,
+    panel,
+    transcript,
+    status,
+    chip,
+    form,
+    input,
+    attach,
+    file,
+    send,
+    close,
+    avatar,
+    title,
+  };
 }
 
 function renderBubble(
@@ -534,6 +587,16 @@ function formatTime(iso: string): string {
     : date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+/** Map the API's snake_case identity to the widget's shape. */
+function toAgent(agent: WidgetState['agent']): { name: string; avatarUrl: string | null } | null {
+  return agent ? { name: agent.name, avatarUrl: agent.avatar_url } : null;
+}
+
+/** First letter of a name, for an avatar with no image. */
+function initial(name: string): string {
+  return (name.trim()[0] ?? '?').toUpperCase();
+}
+
 function readConfig(win: Window): WidgetConfig {
   const params = new URLSearchParams(win.location.search);
   return {
@@ -625,6 +688,14 @@ body {
   padding: 12px 14px; background: var(--nx-brand); color: #fff;
 }
 .nx-title { margin: 0; font-size: 15px; font-weight: 600; }
+.nx-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.nx-avatar {
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, .22); color: #fff;
+  font-size: 13px; font-weight: 600; overflow: hidden;
+}
+.nx-avatar-img { width: 100%; height: 100%; object-fit: cover; }
 .nx-close {
   border: 0; background: transparent; color: #fff;
   font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px;

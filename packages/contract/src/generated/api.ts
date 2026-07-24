@@ -2107,6 +2107,15 @@ export interface components {
         name?: string | null;
         email?: string | null;
       };
+      /**
+       * @description Who the visitor is talking to, for the widget header (FR-MOD-11.3): a
+       *     human assignee if there is one, otherwise the active AI persona. Null
+       *     until either exists.
+       */
+      agent?: {
+        name: string;
+        avatar_url?: string | null;
+      } | null;
       chat: {
         id: string;
         thread_id?: string | null;

@@ -18,6 +18,8 @@ export interface WidgetEvent {
 export interface WidgetState {
   online: boolean;
   customer: { id: string; name: string | null; email: string | null };
+  /** Who the visitor is talking to — a person or the AI persona. */
+  agent: { name: string; avatar_url: string | null } | null;
   chat: { id: string; thread_id: string | null; queue_position: number | null } | null;
   events: WidgetEvent[];
 }

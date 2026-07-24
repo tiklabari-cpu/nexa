@@ -18,7 +18,7 @@ export interface Message {
   subject: string;
   body: string;
   /** Correlates a message with the thing that caused it, for tests and support. */
-  kind: 'password_reset' | 'invitation';
+  kind: 'password_reset' | 'invitation' | 'notification';
 }
 
 export interface Mailer {

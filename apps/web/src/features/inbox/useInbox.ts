@@ -9,7 +9,7 @@
  */
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RtmClient, type RtmStatus } from '../../lib/realtime.js';
+import { RtmClient, type PushHandler, type RtmStatus } from '../../lib/realtime.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import type { ChatDetail, ChatEvent, ChatSummary, InboxView } from './types.js';
 
@@ -142,12 +142,17 @@ export function useChatAction(chatId: string | null) {
  * Kept in one place so there is a single definition of "a new event arrived",
  * whether it came from a push, a reconnect replay, or a refetch.
  */
-export function useRealtime(): RtmStatus {
+export function useRealtime(onPush?: PushHandler): RtmStatus {
   const queryClient = useQueryClient();
   const accessToken = useAuth((s) => s.accessToken);
   const organizationId = useAuth((s) => s.agent?.organization_id);
   const [status, setStatus] = useState<RtmStatus>('offline');
   const clientRef = useRef<RtmClient | null>(null);
+
+  // Held in a ref so a new callback identity each render does not tear down and
+  // rebuild the socket — the connection outlives any one render.
+  const onPushRef = useRef(onPush);
+  onPushRef.current = onPush;
 
   useEffect(() => {
     if (!accessToken || !organizationId) return;
@@ -164,7 +169,10 @@ export function useRealtime(): RtmStatus {
         'routing_status_set',
       ],
       onStatusChange: setStatus,
-      onPush: (action, payload) => applyPush(queryClient, action, payload),
+      onPush: (action, payload) => {
+        applyPush(queryClient, action, payload);
+        onPushRef.current?.(action, payload);
+      },
     });
 
     clientRef.current = client;

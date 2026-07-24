@@ -13,6 +13,7 @@ import { Composer } from './Composer.js';
 import { DetailsPanel } from './DetailsPanel.js';
 import { Transcript } from './Transcript.js';
 import { useChat, useChatList, useRealtime, useTranscript, useViewCounts } from './useInbox.js';
+import { useNotifications } from '../notifications/useNotifications.js';
 import { TicketDetailPane, TicketList } from './TicketPane.js';
 import { useTicketList } from './useTickets.js';
 import { CreateTicketButton } from './CreateTicketButton.js';
@@ -49,7 +50,10 @@ export function InboxPage(): ReactElement {
   const onTickets = selection.kind === 'ticket';
   const view = selection.kind === 'chat' ? selection.view : 'all';
 
-  const rtmStatus = useRealtime();
+  // Turn incoming messages into sound / desktop / tab-title alerts. The socket
+  // is shared: the same push updates the cache and drives the notification.
+  const notifier = useNotifications();
+  const rtmStatus = useRealtime(notifier.handlePush);
   const counts = useViewCounts();
   const list = useChatList(view);
   const chat = useChat(selectedId);

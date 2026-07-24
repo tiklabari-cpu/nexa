@@ -10,7 +10,7 @@
  * would work, but the agent API is what agents should use, and keeping the two
  * disjoint means the widget surface can be reasoned about on its own.
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import type { Env } from '../config/env.js';
@@ -20,6 +20,7 @@ import { CustomerService } from '../services/customers/customer-service.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { LocalStore } from '../services/storage/local-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
+import type { Mailer } from '../services/mail/mailer.js';
 
 const startSchema = z
   .object({
@@ -58,13 +59,49 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 export default async function customerRoutes(
   app: FastifyInstance,
-  { env }: { env: Env },
+  { env, mailer }: { env: Env; mailer: Mailer },
 ): Promise<void> {
   const publisher = new RealtimePublisher(app.redis, app.log);
   const chats = new ChatService(app.db, app.redis, publisher);
   const customerDirectory = new CustomerService();
   const ai = new AiResponder(chats, publisher);
   const store = new LocalStore(env.STORAGE_LOCAL_DIR);
+
+  /**
+   * Email the human assigned to a chat that their visitor wrote in
+   * (FR-MOD-13.8, the e-mail channel). Best-effort on purpose: the message is
+   * already persisted and delivered over realtime, so a mail failure must not
+   * fail the visitor's send. Only fires when there is a human assignee — a
+   * queued or AI-only chat has nobody to e-mail, and emailing on every message
+   * to an unassigned chat would be noise.
+   */
+  async function notifyAssignee(request: FastifyRequest, chatId: string): Promise<void> {
+    try {
+      const assignee = await request.withTenant(async (tx) => {
+        const thread = await tx.thread.findFirst({
+          where: { chatId, active: true },
+          orderBy: { createdAt: 'desc' },
+          select: { assigneeId: true },
+        });
+        if (!thread?.assigneeId) return null;
+        return tx.account.findUnique({
+          where: { id: thread.assigneeId },
+          select: { email: true, name: true },
+        });
+      });
+      if (!assignee?.email) return;
+
+      await mailer.send({
+        to: assignee.email,
+        kind: 'notification',
+        subject: 'New message from a visitor',
+        body: `Hi ${assignee.name ?? 'there'},\n\nA visitor sent a new message in a conversation assigned to you.\n\nOpen it here:\n${env.WEB_APP_URL}/app/inbox`,
+      });
+    } catch (error) {
+      // The realtime push already reached the agent; the e-mail is a courtesy.
+      request.log.warn({ err: error, chatId }, 'assignee notification e-mail failed');
+    }
+  }
 
   /**
    * The widget's whole conversation state in one call.
@@ -222,6 +259,9 @@ export default async function customerRoutes(
         // text gives the skill nothing to match, so it is left for a human.
         if (!replayed && body.text?.trim()) await ai.handle(request, existing.id, body.text);
 
+        // A replay is the same message arriving twice — do not e-mail again.
+        if (!replayed) await notifyAssignee(request, existing.id);
+
         return reply.status(replayed ? 200 : 201).send({ chat_id: existing.id, event });
       }
 
@@ -240,6 +280,10 @@ export default async function customerRoutes(
       });
 
       if (body.text?.trim()) await ai.handle(request, chat.id, body.text);
+
+      // Routing may have assigned this brand-new chat to an agent — that is the
+      // "assignment" notification (FR-MOD-13.8).
+      await notifyAssignee(request, chat.id);
 
       const events = await chats.listEvents(tenant, principal, chat.id, { limit: 10 });
       return reply.status(201).send({

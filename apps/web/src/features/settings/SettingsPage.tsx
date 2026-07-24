@@ -7,7 +7,7 @@
  * missing configuration.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -15,6 +15,17 @@ import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { ChannelsGrid } from './Channels.js';
+import {
+  DEFAULT_PREFS,
+  loadPrefs,
+  savePrefs,
+  type NotificationPrefs,
+  type Permission,
+} from '../notifications/notifications.js';
+import {
+  currentPermission,
+  requestNotificationPermission,
+} from '../notifications/useNotifications.js';
 
 interface TrustedDomain {
   id: string;
@@ -59,12 +70,132 @@ export function SettingsPage(): ReactElement {
   return (
     <Page title="Settings" description="Widget installation, saved replies and routing.">
       <ChannelsGrid />
+      <NotificationSettings />
       <WebsiteWidgets canEdit={canManageAccess} />
       <TrustedDomains canEdit={canManageAccess} />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />
       <RoutingRules canEdit={canManageAccess} />
     </Page>
+  );
+}
+
+// --- Notifications -----------------------------------------------------------
+
+/**
+ * Per-agent alert preferences (FR-MOD-13.8).
+ *
+ * These live in the browser, not the account: they are about this device — its
+ * speakers, its OS permission — so a preference set on a laptop should not
+ * follow the agent to a shared kiosk. The inbox reads the same store on every
+ * incoming message, so a change here takes effect on the next one without a
+ * reload.
+ */
+function NotificationSettings(): ReactElement {
+  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
+  const [permission, setPermission] = useState<Permission>('default');
+
+  // Read once on mount — `loadPrefs` touches `localStorage`, which is not a
+  // render-time value.
+  useEffect(() => {
+    setPrefs(loadPrefs());
+    setPermission(currentPermission());
+  }, []);
+
+  function update(patch: Partial<NotificationPrefs>): void {
+    setPrefs((current) => {
+      const next = { ...current, ...patch };
+      savePrefs(next);
+      return next;
+    });
+  }
+
+  async function enableDesktop(): Promise<void> {
+    const result = await requestNotificationPermission();
+    setPermission(result);
+    // Turning the desktop toggle on is pointless if the browser refuses; keep
+    // the stored preference honest about what will actually happen.
+    if (result === 'granted') update({ desktop: true });
+  }
+
+  const desktopBlocked = permission === 'denied' || permission === 'unsupported';
+
+  return (
+    <Section
+      title="Notifications"
+      description="How you are alerted to new messages on this device. These settings are per-browser."
+    >
+      <Card>
+        <div className="divide-y divide-border">
+          <label className="flex items-center gap-3 p-4">
+            <input
+              type="checkbox"
+              checked={prefs.enabled}
+              onChange={(event) => update({ enabled: event.target.checked })}
+            />
+            <span className="flex-1 text-sm">
+              Enable notifications
+              <span className="block text-2xs text-content-tertiary">
+                Turning this off silences sound, desktop and tab alerts alike.
+              </span>
+            </span>
+            <StatusDot
+              tone={prefs.enabled ? 'success' : 'neutral'}
+              label={prefs.enabled ? 'On' : 'Off'}
+            />
+          </label>
+
+          <label className="flex items-center gap-3 p-4">
+            <input
+              type="checkbox"
+              checked={prefs.sound}
+              disabled={!prefs.enabled}
+              onChange={(event) => update({ sound: event.target.checked })}
+            />
+            <span className="flex-1 text-sm">
+              Play a sound
+              <span className="block text-2xs text-content-tertiary">
+                A short chime when a visitor writes in.
+              </span>
+            </span>
+          </label>
+
+          <div className="flex flex-wrap items-center gap-3 p-4">
+            <label className="flex flex-1 items-center gap-3">
+              <input
+                type="checkbox"
+                checked={prefs.desktop && permission === 'granted'}
+                disabled={!prefs.enabled || desktopBlocked}
+                onChange={(event) => update({ desktop: event.target.checked })}
+              />
+              <span className="text-sm">
+                Desktop notifications
+                <span className="block text-2xs text-content-tertiary">
+                  {permission === 'granted'
+                    ? 'Shown even when this tab is in the background.'
+                    : permission === 'denied'
+                      ? 'Blocked in your browser — allow notifications for this site to use them.'
+                      : permission === 'unsupported'
+                        ? 'This browser does not support desktop notifications.'
+                        : 'Ask your browser for permission to show these.'}
+                </span>
+              </span>
+            </label>
+
+            {prefs.enabled && permission !== 'granted' && permission !== 'unsupported' && (
+              <button
+                type="button"
+                onClick={() => void enableDesktop()}
+                disabled={permission === 'denied'}
+                className="rounded-md border border-border px-3 py-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+              >
+                Enable desktop notifications
+              </button>
+            )}
+          </div>
+        </div>
+      </Card>
+    </Section>
   );
 }
 

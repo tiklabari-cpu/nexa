@@ -6,6 +6,31 @@
 
 ## Task log (newest-first)
 
+### 16 — Bildirimler (ses/masaüstü/tarayıcı/e-posta) — done — 2026-07-24 UTC
+- Yapıldı: Yeni müşteri mesajında ajan bildirimi (FR-MOD-13.8). **İstemci:** saf karar
+  çekirdeği `features/notifications/notifications.ts` (`decideNotification` + localStorage
+  tercih IO) + efekt hook'u `useNotifications.ts` (ses = Web Audio çan, masaüstü = Notification
+  API, sekme başlığı `(n) Nexa` + favicon rozeti; sekme odağa gelince sıfırlanır). `useRealtime`
+  opsiyonel `onPush` alır (ref ile stabil, soket yeniden kurulmaz); `InboxPage` bağlar. Ayar
+  yüzeyi: SettingsPage'e **Notifications** bölümü (aç/kapa + ses + masaüstü izin butonu),
+  tercih tarayıcı-başına (localStorage), her mesajda taze okunur. **Sunucu e-posta:**
+  `customer.ts` atanmış ajana `mailer.send({kind:'notification'})` gönderir (best-effort,
+  mesajı bloklamaz; yalnız insan atanmışsa); `server.ts` mailer'ı customer route'a geçirir;
+  `mailer.ts` kind union'a `notification` eklendi.
+- Doğrulama: `typecheck`, `lint`, `build`, `test:unit` (56 web — 20 yeni notifications testi
+  dahil: negatif/izin-reddi/self/sistem olayı; 71 api), `test:integration` (445 — yeni
+  `notifications.test.ts`: atanana e-posta düşer + follow-up + idempotent tek e-posta),
+  `test:e2e` (36 — yeni `notifications.spec.ts`: ayar yüzeyi + kapat/aç kalıcı + reload) — hepsi
+  yeşil. Kanıt: `apps/e2e/kanit/16-notifications-settings.png`.
+- Varsayımlar: Bildirim tercihleri hesap değil **cihaz** başına (localStorage) — cihaz-özgü
+  (hoparlör/OS izni). Negatif test (kapatınca sussun) ve izin-reddi sessiz degrade davranışları
+  saf `decideNotification` birim testleriyle deterministik kanıtlandı; e-posta entegrasyon
+  testiyle. Client bildirimleri `InboxPage` mount'una bağlı (Settings'teyken tetiklenmez) — MVP
+  için kabul; app-geneli için ileride AppShell'e taşınabilir.
+- Sonraki pencereye not: E-posta her müşteri mesajında atanana gider (mock, `.data/mail`);
+  gerçek sağlayıcıya geçiş tek `Mailer` implementasyonu değişimi. Kanıt png'leri repo
+  konvansiyonu gereği git'e alınmıyor.
+
 ### 15 — Trial rozeti 'N gün' + Subscribe CTA (shell) — done — 2026-07-24 UTC
 - Yapıldı: `AppShell` flex-col'e alındı, ince üst `TrialBanner` eklendi —
   `useQuery(['billing','subscription'])` ile BillingPage ile paylaşımlı cache;

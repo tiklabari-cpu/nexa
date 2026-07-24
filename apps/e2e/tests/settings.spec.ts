@@ -8,11 +8,95 @@
  */
 import { expect, test, openWidget, visitorSends, widgetFrame } from './fixtures.js';
 
+test.describe('website widgets', () => {
+  // FR-MOD-08.5.2: add a site, install the snippet, and watch the row flip to
+  // Connected the moment the widget first handshakes from that domain — proven
+  // across the real cross-origin boundary. A unique `*.localhost` host keeps the
+  // run from colliding with the seeded `acme-bikes.localhost`.
+  test('a site goes Connected on the first handshake, from one add', async ({
+    browser,
+    agentPage,
+    organizationId,
+  }) => {
+    const domain = `widget-check-${Date.now()}.localhost`;
+
+    await agentPage.goto('/app/settings');
+    const section = agentPage.getByRole('region', { name: 'Website widgets' });
+
+    // One add: the website *and* its trusted domain, so the widget works there.
+    await section.getByLabel('Website domain').fill(domain);
+    await section.getByRole('button', { name: 'Add website' }).click();
+
+    const row = section.locator('li').filter({ hasText: domain });
+    await expect(row.getByText('Waiting for first message')).toBeVisible();
+
+    // The snippet is revealed straight away and carries the widget bootstrap.
+    await expect(section.getByTestId('website-snippet')).toContainText('window.__nexa');
+    await agentPage.screenshot({ path: 'kanit/7-website-pending.png', fullPage: true });
+
+    // No dual source: the same action put the domain on the trusted allowlist.
+    const trusted = agentPage.getByRole('region', { name: 'Trusted domains' });
+    await expect(trusted.getByText(domain)).toBeVisible();
+
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    try {
+      // A visitor on that very domain sends a message. Sending is what forces
+      // the token exchange to complete — the panel opens before it does — and it
+      // is that request the server marks the site Connected inside. Opening alone
+      // would race the handshake.
+      await visitor.goto(`http://${domain}:5174/demo.html?organization_id=${organizationId}`);
+      const vf = widgetFrame(visitor);
+      await vf.getByRole('button', { name: 'Open chat' }).click();
+      await vf.getByRole('textbox', { name: 'Message' }).fill('Testing the widget install');
+      await vf.getByRole('button', { name: 'Send' }).click();
+      await expect(vf.getByRole('log', { name: 'Conversation' })).toContainText(
+        'Testing the widget install',
+        { timeout: 20_000 },
+      );
+
+      // Back on Settings the row flips to Connected with the KK2 signal. Reload
+      // rather than trust the poll: the server-written transition is the claim,
+      // and a reload proves it persisted rather than being a screen artefact.
+      await agentPage.reload();
+      const reloadedSection = agentPage.getByRole('region', { name: 'Website widgets' });
+      const connectedRow = reloadedSection.locator('li').filter({ hasText: domain });
+      // Not `exact`: the status glyph is concatenated into the same element, so
+      // the text reads "●Connected".
+      await expect(connectedRow.getByText('Connected')).toBeVisible({ timeout: 20_000 });
+      await expect(connectedRow.getByText('Test message received')).toBeVisible();
+      await agentPage.screenshot({ path: 'kanit/7-website-connected.png', fullPage: true });
+    } finally {
+      await visitorContext.close();
+      // Remove both the site and the domain it trusted, so nothing accumulates
+      // across runs — this test's whole point is that the two move together.
+      await agentPage
+        .getByRole('region', { name: 'Website widgets' })
+        .locator('li')
+        .filter({ hasText: domain })
+        .getByRole('button', { name: `Remove ${domain}` })
+        .click()
+        .catch(() => {});
+      await agentPage
+        .getByRole('region', { name: 'Trusted domains' })
+        .locator('li')
+        .filter({ hasText: domain })
+        .getByRole('button', { name: 'Remove' })
+        .click()
+        .catch(() => {});
+    }
+  });
+});
+
 test.describe('settings', () => {
   test('shows the trusted domain the widget actually depends on', async ({ agentPage }) => {
     await agentPage.getByRole('link', { name: 'Settings' }).click();
     await expect(agentPage.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-    await expect(agentPage.getByText('acme-bikes.localhost')).toBeVisible();
+    // Scoped to the allowlist: the seed's domain also appears as a Website widget
+    // row above, so an unscoped match would hit two elements.
+    await expect(
+      agentPage.getByRole('region', { name: 'Trusted domains' }).getByText('acme-bikes.localhost'),
+    ).toBeVisible();
   });
 
   test('adds and removes a trusted domain', async ({ agentPage }) => {

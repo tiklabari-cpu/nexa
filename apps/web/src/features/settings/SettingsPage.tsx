@@ -13,6 +13,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { WebsiteWidgets } from './WebsiteWidgets.js';
 
 interface TrustedDomain {
   id: string;
@@ -56,6 +57,7 @@ export function SettingsPage(): ReactElement {
 
   return (
     <Page title="Settings" description="Widget installation, saved replies and routing.">
+      <WebsiteWidgets canEdit={canManageAccess} />
       <TrustedDomains canEdit={canManageAccess} />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />
@@ -104,7 +106,7 @@ function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement {
   return (
     <Section
       title="Trusted domains"
-      description="The widget only works on these sites. Everywhere else it is refused a token."
+      description="The allowlist the widget checks. Adding a website above fills this in for you; edit it here only for finer control, such as covering subdomains."
     >
       {list.error ? (
         <ErrorNotice message="Could not load trusted domains." />

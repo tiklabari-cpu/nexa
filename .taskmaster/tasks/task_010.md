@@ -4,7 +4,7 @@
 
 **Status:** pending
 
-**Dependencies:** 7
+**Dependencies:** 7 ✓
 
 **Priority:** medium
 

@@ -66,6 +66,24 @@ export function licenseOfKey(key: string): bigint | null {
   }
 }
 
+/** Where `POST /uploads` says the file will live. Kept next to `buildKey`. */
+export const UPLOAD_PATH_PREFIX = '/api/v1/uploads/';
+
+/**
+ * The key an `attachment_url` refers to, or null if it refers to anything else.
+ *
+ * Deliberately not a URL parse. An event's attachment may only ever be a file
+ * this API stored, so the accepted shape is one exact prefix and one key — no
+ * host, no scheme, no query, no second path segment. Everything a parser would
+ * have to normalise away (`//evil.example`, `@`, percent-encoded separators,
+ * backslashes) simply fails the prefix or the key pattern instead.
+ */
+export function keyFromAttachmentUrl(url: string): string | null {
+  if (!url.startsWith(UPLOAD_PATH_PREFIX)) return null;
+  const key = url.slice(UPLOAD_PATH_PREFIX.length);
+  return licenseOfKey(key) === null ? null : key;
+}
+
 const EXTENSIONS: Record<string, string> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',

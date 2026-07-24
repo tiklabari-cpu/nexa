@@ -6,6 +6,8 @@ import { ApiError } from '../lib/api-error.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { hasChatScope } from '../services/chat/access.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
+import { LocalStore } from '../services/storage/local-store.js';
+import { keyFromAttachmentUrl, licenseOfKey } from '../services/storage/upload-url.js';
 
 const chatIdSchema = z.string().refine(isShortId, 'not a valid chat id');
 
@@ -22,7 +24,10 @@ const newEventSchema = z.object({
   type: z.enum(EVENT_TYPES).default('message'),
   text: z.string().max(10_000).optional(),
   recipients: z.enum(EVENT_RECIPIENTS).default('all'),
-  attachment_url: z.string().url().max(2048).optional(),
+  // Not `.url()`. An absolute URL is exactly what must not be accepted here —
+  // see `assertAttachment` below. The shape check lives there, with the
+  // principal it needs.
+  attachment_url: z.string().max(2048).optional(),
   properties: z.record(z.unknown()).optional(),
   idempotency_key: z.string().min(1).max(128).optional(),
 });
@@ -73,6 +78,7 @@ export default async function chatRoutes(
   app: FastifyInstance,
   { env }: { env: Env },
 ): Promise<void> {
+  const store = new LocalStore(env.STORAGE_LOCAL_DIR);
   const chats = new ChatService(
     app.db,
     app.redis,
@@ -80,6 +86,35 @@ export default async function chatRoutes(
     undefined,
     { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
   );
+
+  /**
+   * An attachment may only be a file this licence uploaded through `/uploads`.
+   *
+   * It used to be any string that parsed as a URL. That made every event a
+   * place to hang a link the recipient's browser would then fetch from our
+   * conversation UI — a tracker, an exploit, or another tenant's file, all
+   * wearing our origin's credibility.
+   *
+   * Three things are checked and none of them is optional:
+   *   1. the value is one of our own upload paths, not a URL at all
+   *   2. the licence inside the key is the caller's own
+   *   3. the bytes are really there — a grant is permission to upload, not
+   *      permission to claim
+   *
+   * The message is the same for all three. Which part refused is not something
+   * a caller probing for another tenant's keys gets to learn.
+   */
+  async function assertAttachment(licenseId: bigint, url: string): Promise<void> {
+    const refuse = (): never => {
+      throw ApiError.validation(
+        'attachment_url must be a file this workspace uploaded through /uploads.',
+      );
+    };
+
+    const key = keyFromAttachmentUrl(url);
+    if (key === null || licenseOfKey(key) !== licenseId) refuse();
+    if (!(await store.exists(key!))) refuse();
+  }
 
   /**
    * An event body must carry something. A `message` with neither text nor an
@@ -132,6 +167,10 @@ export default async function chatRoutes(
     async (request, reply) => {
       const body = parse(startChatSchema, request.body);
       const principal = request.requirePrincipal();
+
+      if (body.initial_event?.attachment_url) {
+        await assertAttachment(principal.licenseId, body.initial_event.attachment_url);
+      }
 
       const { chat, created } = await chats.start(request.tenant(), principal, {
         customerId: body.customer_id,
@@ -216,10 +255,13 @@ export default async function chatRoutes(
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
       const body = parse(newEventSchema, request.body);
+      const principal = request.requirePrincipal();
+
+      if (body.attachment_url) await assertAttachment(principal.licenseId, body.attachment_url);
 
       const { event, replayed } = await chats.sendEvent(
         request.tenant(),
-        request.requirePrincipal(),
+        principal,
         chatId,
         normaliseEvent(body),
       );

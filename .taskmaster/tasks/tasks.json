@@ -19,26 +19,27 @@
         "description": "Kod tabaninda hicbir yukleme ucu yok: openapi.yaml'in 55 yolunun hicbirinde upload/presign gecmiyor. Mimari karar zaten verilmis — server.ts:69 bodyLimit'i 1 MiB'e sabitlemis ve yorumu 'attachments go through signed upload URLs' diyor. Yani multipart API'den GECMEZ.",
         "details": "POST /api/v1/uploads -> {upload_url, file_url, expires_at}. Tur/boyut SecuritySettings'ten okunur (gorev 1). Depolama anahtari license kapsamli olmali (cross-tenant okuma olmasin). bodyLimit 1 MiB'e dokunma — dosya API uzerinden akmiyor. Kontrat once: openapi.yaml -> generate -> route.\n\nPRD: FR-MOD-08.9.4 · PLAN.md §3.7 · Dilim 13\n\n[günlük 2026-07-24 03:49 UTC] plan: iki adimli imzali yukleme, STORAGE_PROVIDER=local (env.ts:60'ta zaten tanimli; stack'te S3/MinIO YOK — docker-compose sadece db+redis). (1) kontrat: POST /uploads {filename,content_type,size_bytes} -> {upload_url,file_url,expires_at}; PUT /uploads/{key} imzali hedef; GET /uploads/{key} servis. (2) anahtar bicimi <licenseId>/<uuid>.<ext> — licenseId anahtarin ICINDE, cross-tenant yapisal olarak imkansiz. (3) imza: HMAC-SHA256(key|contentType|sizeBytes|exp), customer-token.ts:117 deseni. Yeni env: UPLOAD_SIGNING_KEY (secret(32)) + STORAGE_LOCAL_DIR (varsayilan .data/uploads, zaten gitignore'da). (4) POST tur/boyut'u SecuritySettings'ten okur (gorev 1), izinsizse URL URETMEZ. (5) GET normal auth + anahtardaki licenseId karsilastirmasi — imzasiz, boylece attachment_url suresi dolmaz.\n\n[günlük 2026-07-24 03:49 UTC] varsayim: bodyLimit celiskisi cozumu — global 1 MiB'e DOKUNULMUYOR (server.ts:69, regresyon testi bunu bekliyor); yalnizca PUT /uploads/{key} rotasi Fastify'in rota bazli bodyLimit'i ile kendi tavanini koyuyor. Yerel saglayicida dosya ayni surecten gecmek zorunda (ayri host yok); 'API uzerinden akmiyor' notunun ozu normal JSON yuzeyinin korunmasiydi, o korunuyor. S3'e gecilirse saglayici degisir, API sozlesmesi degismez.\n\n[günlük 2026-07-24 03:59 UTC] KAPANIS: POST /uploads (izin) + PUT /uploads/:key (imzali) + GET /uploads/:key (oturum+lisans) yazildi. Kontrat 56->58 yol. 12 entegrasyon testi, 451 toplam yesil. typecheck+lint yesil. reseed+login OK.\n\n[günlük 2026-07-24 03:59 UTC] duzeltme: anahtar bicimi <lic>/<uuid> -> <lic>-<uuid> degistirildi. Sebep: egik cizgili anahtar tek path parametresine sigmiyor, rota /uploads/* olmak zorunda kaliyordu ve contract-parity.test.ts bunu kontrattaki /uploads/{key} ile eslestiremeyip dusuruyordu. Diskte hala lisans basina klasorleniyor.\n\n[günlük 2026-07-24 03:59 UTC] yan bulgu (duzeltildi): bodyLimit asan govde 500 donuyordu — error-handler.ts FST_ERR_CTP_BODY_TOO_LARGE'i eslemiyor, generic internal'a dusuyordu. ADR-06 ihlali ve mevcut bir hataydi (benim degisikligim degil). validation'a eslendi. PLAN.md D'ye yazilacak.",
         "testStrategy": "Kabul: uc, tur/boyut sinirlarini SecuritySettings'ten okur ve izinsiz tur icin URL URETMEZ. Cross-tenant: A lisansinin anahtari B'nin dosyasina erisemez. Regresyon: server.ts bodyLimit 1 MiB degismedi.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "1"
         ],
         "priority": "high",
         "subtasks": [],
-        "updatedAt": "2026-07-24T03:48:30.351Z"
+        "updatedAt": "2026-07-24T04:00:16.019Z"
       },
       {
         "id": "3",
         "title": "08.9.4-c — attachment_url'i kendi depomuza kilitle [MAX]",
         "description": "GUVENLIK ACIGI: chats.ts:25 attachment_url'i sadece z.string().url().max(2048) ile doguluyor. Su an bir agent veya musteri BUYUK HERHANGI BIR host'u isaret edebilir — bizim imzaladigimiz dosya oldugu hicbir yerde kontrol edilmiyor. Event.attachmentUrl (schema.prisma:396) bu ham degeri sakliyor.",
-        "details": "Yalniz gorev 2'nin urettigi imzali yoldan gelen URL kabul edilir. NFR-S10 + MASTER-PROMPT [MAX] kurali: NEGATIF TESTLER POZITIFLERDEN ONCE yazilir. En az su dordu: (a) yabanci host URL'i reddedilir, (b) MIME spoof reddedilir, (c) maxFileSizeBytes asimi reddedilir, (d) baska lisansin dosya anahtari reddedilir. Hata zarfi ADR-06.\n\nPRD: FR-MOD-08.9.4 (NFR-S10) · PLAN.md §3.7 · Dilim 13 · [MAX]",
+        "details": "Yalniz gorev 2'nin urettigi imzali yoldan gelen URL kabul edilir. NFR-S10 + MASTER-PROMPT [MAX] kurali: NEGATIF TESTLER POZITIFLERDEN ONCE yazilir. En az su dordu: (a) yabanci host URL'i reddedilir, (b) MIME spoof reddedilir, (c) maxFileSizeBytes asimi reddedilir, (d) baska lisansin dosya anahtari reddedilir. Hata zarfi ADR-06.\n\nPRD: FR-MOD-08.9.4 (NFR-S10) · PLAN.md §3.7 · Dilim 13 · [MAX]\n\n[günlük 2026-07-24 04:03 UTC] [MAX] kirmizi teyidi: (a) yabanci host TESTI DUSTU — https://evil.example/tracker.png 201 ile kabul edildi, acik dogrulandi. TUZAK: (b)(c)(d) YESIL geldi ama YANLIS SEBEPTEN — z.string().url() goreli yollari reddediyor, guvenlik kontrolu oldugu icin degil. Ayni sebeple 'kendi dosyamizi kabul et' testi de 400 aliyor. Yani mevcut kod tam ters: her host kabul, kendi dosyamiz red. Yesil negatif testin nedenini dogrulamadan gecmek bu isin en buyuk tuzagi.\n\n[günlük 2026-07-24 04:05 UTC] KAPANIS [MAX]: acik kapatildi. chats.ts:25 z.string().url() kaldirildi; assertAttachment uc sey dogruluyor — (1) deger bizim /api/v1/uploads/ yolumuz (URL parse DEGIL, tek prefix + anahtar deseni; //evil.example, @, yuzde-kodlu ayirici gibi normalize edilmesi gereken her sey desende dusuyor), (2) anahtardaki lisans caginin kendi lisansi, (3) baytlar gercekten diskte (LocalStore.exists — grant yuklemek icin izindir, iddia etmek icin degil). Ucu de ayni mesajla reddediliyor. Iki cagri noktasi da baglandi: POST /chats initial_event ve POST /chats/:id/events.\n\n[günlük 2026-07-24 04:05 UTC] (b)(c)(d) artik DOGRU sebepten yesil: (c) 'grant alinmis ama yuklenmemis' testi yalnizca store.exists sayesinde geciyor — sekil ve lisans dogru oldugu icin diger iki kontrol onu durdurmuyor. (a) 201->400, 'kendi dosyamiz' 400->201: iki yon de tersine dondu, kontrol gercekten calisiyor.",
         "testStrategy": "[MAX] — NEGATIF TESTLER ONCE YAZILIR VE KIRMIZI GORULUR: (a) yabanci host URL'i reddedilir, (b) MIME spoof reddedilir, (c) maxFileSizeBytes asimi reddedilir, (d) baska lisansin dosya anahtari reddedilir. Dordu de ADR-06 zarfi doner. ANCAK SONRA pozitif akis yazilir. E2E: ekli dosya karsi tarafta acilir.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "2"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-07-24T04:00:30.514Z"
       },
       {
         "id": "4",
@@ -157,13 +158,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-24T03:48:30.351Z",
+      "lastModified": "2026-07-24T04:00:30.514Z",
       "taskCount": 12,
-      "completedCount": 1,
+      "completedCount": 2,
       "tags": [
         "master"
       ],
-      "updated": "2026-07-24T03:59:40.910Z"
+      "updated": "2026-07-24T04:05:48.218Z"
     }
   }
 }

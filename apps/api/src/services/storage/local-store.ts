@@ -9,7 +9,7 @@
  * argument that stops being true the first time someone adds a caller.
  */
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { licenseOfKey } from './upload-url.js';
 
@@ -45,6 +45,22 @@ export class LocalStore {
       return { bytes, contentType: contentType.trim() };
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Whether the bytes are actually here.
+   *
+   * A grant is permission to upload, not permission to claim: without this,
+   * an event could point at a key that was issued and never used, and every
+   * recipient would see a broken attachment we told them was fine.
+   */
+  async exists(key: string): Promise<boolean> {
+    try {
+      await stat(this.#pathFor(key));
+      return true;
+    } catch {
+      return false;
     }
   }
 

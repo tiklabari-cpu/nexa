@@ -255,6 +255,88 @@ describe('uploads', () => {
     expect(traversal.statusCode).toBe(404);
   });
 
+  // --- attachment_url: what an event is allowed to point at --------------------
+
+  /**
+   * `attachment_url` was `z.string().url()` and nothing more. Any agent could
+   * hang any URL on an event and every recipient's browser would fetch it —
+   * a tracker, an exploit, or a file belonging to another licence, rendered
+   * inside our own conversation as though we had served it.
+   *
+   * These four are written before the check exists and are expected to fail
+   * first ([MAX], MASTER-PROMPT). The rule they pin down: an attachment may
+   * only be something this licence uploaded through `/uploads`, and that we
+   * can still find.
+   */
+  describe('attachment_url', () => {
+    async function startChat(token: string, licenseCustomer: string) {
+      const response = await server.post('/chats', { customer_id: licenseCustomer }, auth(token));
+      expect([200, 201]).toContain(response.statusCode);
+      return response.json() as { id: string };
+    }
+
+    const send = async (token: string, chatId: string, attachmentUrl: string) =>
+      server.post(
+        `/chats/${chatId}/events`,
+        { type: 'message', attachment_url: attachmentUrl },
+        auth(token),
+      );
+
+    it('(a) refuses a URL on someone else\'s host', async () => {
+      const chat = await startChat(tokenA, fx.a.customerId);
+
+      const sent = await send(tokenA, chat.id, 'https://evil.example/tracker.png');
+
+      expect(sent.statusCode).toBe(400);
+      expect(sent.json().error.type).toBe('validation');
+    });
+
+    it('(b) refuses a path that only looks like one of ours', async () => {
+      const chat = await startChat(tokenA, fx.a.customerId);
+
+      // Right prefix, key that was never minted here — the shape is not the
+      // authorisation.
+      const spoofed = await send(tokenA, chat.id, '/api/v1/uploads/evil.html');
+
+      expect(spoofed.statusCode).toBe(400);
+    });
+
+    it('(c) refuses a key that was granted but never uploaded', async () => {
+      const chat = await startChat(tokenA, fx.a.customerId);
+      const granted = await server.post(
+        '/uploads',
+        { content_type: 'image/png', size_bytes: PNG.byteLength },
+        auth(tokenA),
+      );
+
+      // No PUT. Nothing is stored, so nothing may be referenced: a grant is
+      // permission to upload, not permission to claim.
+      const sent = await send(tokenA, chat.id, granted.json().file_url);
+
+      expect(sent.statusCode).toBe(400);
+    });
+
+    it("(d) refuses another licence's file key", async () => {
+      const { fileUrl } = await upload(tokenB); // stored under licence B
+      const chat = await startChat(tokenA, fx.a.customerId);
+
+      const sent = await send(tokenA, chat.id, fileUrl);
+
+      expect(sent.statusCode).toBe(400);
+    });
+
+    it('accepts a file this licence really uploaded', async () => {
+      const { fileUrl, putStatus } = await upload(tokenA);
+      expect(putStatus).toBe(201);
+      const chat = await startChat(tokenA, fx.a.customerId);
+
+      const sent = await send(tokenA, chat.id, fileUrl);
+
+      expect(sent.statusCode).toBe(201);
+      expect(sent.json().attachment_url).toBe(fileUrl);
+    });
+  });
+
   // --- Regression ------------------------------------------------------------
 
   it('leaves the 1 MiB body limit alone for ordinary routes', async () => {

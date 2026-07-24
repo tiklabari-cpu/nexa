@@ -24,6 +24,12 @@ interface WidgetConfig {
   language: string;
   /** Origin of the embedding page, supplied by the loader. */
   hostOrigin: string | null;
+  /**
+   * The hosted Chat page (FR-MOD-08.5.9): the widget is the whole page, not a
+   * launcher in someone else's, and it is served from our own origin — so it
+   * has no launcher, no host to message, and authorises against itself.
+   */
+  chatPage: boolean;
 }
 
 interface State {
@@ -424,7 +430,8 @@ export function mount(doc: Document = document, win: Window = window): void {
   });
 
   doc.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && state.open) {
+    // On the Chat page there is nothing to close to, so Escape must not blank it.
+    if (event.key === 'Escape' && state.open && !config.chatPage) {
       setOpen(false);
       ui.launcher.focus();
     }
@@ -438,10 +445,22 @@ export function mount(doc: Document = document, win: Window = window): void {
     if (data?.type === 'nexa:host-close') setOpen(false);
   });
 
-  postToHost(win, { type: 'nexa:ready' });
-
-  // The proactive nudge, once the host has wired up its message channel.
-  showGreeting();
+  if (config.chatPage) {
+    // The whole page is the conversation: no launcher, no host to message, open
+    // from the start.
+    root.classList.add('nx-page');
+    ui.launcher.hidden = true;
+    ui.close.hidden = true;
+    ui.panel.hidden = false;
+    state.open = true;
+    renderPrechat();
+    ui.input.focus();
+    void connect();
+  } else {
+    postToHost(win, { type: 'nexa:ready' });
+    // The proactive nudge, once the host has wired up its message channel.
+    showGreeting();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -773,14 +792,19 @@ function rememberGreetingDismissed(win: Window): void {
 
 function readConfig(win: Window): WidgetConfig {
   const params = new URLSearchParams(win.location.search);
+  // The hosted page is served at `/chat.html`; the query flag is an override for
+  // dev and tests opening the widget document directly.
+  const chatPage = win.location.pathname.endsWith('/chat.html') || params.get('chat_page') === '1';
   return {
     organizationId: params.get('organization_id') ?? '',
     // Same origin as the widget document by default; overridable for local dev.
     apiBaseUrl: params.get('api') ?? 'http://localhost:4000/api/v1',
     language: params.get('language') ?? 'en',
-    // Falls back to the referrer, which is the embedding page when the loader
-    // created this frame. Null when the widget document is opened directly.
-    hostOrigin: params.get('host_origin') ?? referrerOrigin(win),
+    // On the Chat page the widget is served from our own origin and speaks for
+    // it; elsewhere the loader passes the embedding page's origin, falling back
+    // to the referrer when the widget document is opened directly.
+    hostOrigin: chatPage ? win.location.origin : (params.get('host_origin') ?? referrerOrigin(win)),
+    chatPage,
   };
 }
 
@@ -860,6 +884,8 @@ body {
   overflow: hidden;
   box-shadow: 0 12px 32px rgb(16 24 40 / .18);
 }
+/* Hosted Chat page: the panel is the whole viewport, no floating card. */
+.nx-page .nx-panel { inset: 0; border: 0; border-radius: 0; box-shadow: none; }
 .nx-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 14px; background: var(--nx-brand); color: #fff;

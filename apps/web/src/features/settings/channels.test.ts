@@ -29,8 +29,15 @@ describe('channelsFor', () => {
     expect(w.cta).toBe('Manage');
   });
 
+  it('offers the Chat page as a ready-to-share link', () => {
+    const chat = channelsFor([]).find((c) => c.id === 'chat-page')!;
+    expect(chat.status).toBe('ready');
+    expect(chat.cta).toBe('Get link');
+  });
+
   it('shows every unbuilt channel as Coming soon with Get notified', () => {
-    const rest = channelsFor([]).filter((c) => c.id !== 'website');
+    const built = new Set(['website', 'chat-page']);
+    const rest = channelsFor([]).filter((c) => !built.has(c.id));
     expect(rest.length).toBeGreaterThan(0);
     for (const channel of rest) {
       expect(channel.status).toBe('coming_soon');
@@ -41,10 +48,10 @@ describe('channelsFor', () => {
   it('represents all four statuses, each driven by state', () => {
     const seen = new Set([
       website([]).status,
-      website([{ status: 'pending' }]).status,
       website([{ status: 'connected' }]).status,
-      channelsFor([]).find((c) => c.id === 'chat-page')!.status,
+      channelsFor([]).find((c) => c.id === 'chat-page')!.status, // ready
+      channelsFor([]).find((c) => c.id === 'whatsapp')!.status, // coming_soon
     ]);
-    expect(seen).toEqual(new Set(['not_connected', 'ready', 'connected', 'coming_soon']));
+    expect(seen).toEqual(new Set(['not_connected', 'connected', 'ready', 'coming_soon']));
   });
 });

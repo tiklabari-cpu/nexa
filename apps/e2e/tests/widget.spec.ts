@@ -128,6 +128,43 @@ test.describe('widget embedding', () => {
   });
 });
 
+test.describe('chat page', () => {
+  // FR-MOD-08.5.9: a hosted link runs the widget full-page — no launcher, no
+  // iframe, no site install — and a conversation from it reaches the agent.
+  test('a conversation from the hosted link reaches the agent', async ({
+    browser,
+    organizationId,
+  }) => {
+    const visitorContext = await browser.newContext();
+    const agentContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    const agent = await agentContext.newPage();
+
+    try {
+      await signIn(agent);
+      await agent.getByLabel('Availability').selectOption('accepting_chats');
+
+      // The widget is the whole page here, addressed directly (not through the
+      // `#nexa-widget-frame` iframe).
+      await visitor.goto(`${WIDGET_ORIGIN}/chat.html?organization_id=${organizationId}`);
+      const composer = visitor.getByRole('textbox', { name: 'Message' });
+      await expect(composer).toBeVisible();
+
+      const question = `From the hosted chat page — ${Date.now()}`;
+      await composer.fill(question);
+      await visitor.getByRole('button', { name: 'Send' }).click();
+      await expect(visitor.getByRole('log', { name: 'Conversation' })).toContainText(question);
+      await visitor.screenshot({ path: 'kanit/9-chat-page.png', fullPage: true });
+
+      const list = agent.getByRole('region', { name: 'Conversations' });
+      await expect(list).toContainText(question, { timeout: 20_000 });
+    } finally {
+      await visitorContext.close();
+      await agentContext.close();
+    }
+  });
+});
+
 test.describe('greeting', () => {
   // FR-MOD-11.2: a proactive card with two quick replies. "Let's chat" opens a
   // pre-chat form; "Just browsing" tucks it away and it must not nag again this

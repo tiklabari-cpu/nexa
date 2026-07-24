@@ -502,4 +502,59 @@ describe('customer chat api', () => {
       expect((state.json() as AgentState).agent).toBeNull();
     });
   });
+
+  // =========================================================================
+
+  describe('hosted chat page (FR-MOD-08.5.9)', () => {
+    // The widget origin the test env serves the Chat page from; its host is the
+    // "self" the token route recognises as exempt from the allowlist.
+    const CHAT_PAGE_ORIGIN = 'http://localhost:5174';
+
+    it('mints a token for our own hosted page with no trusted domain', async () => {
+      // `localhost` is not on any tenant's allowlist — an embed there is refused
+      // — but the Chat page runs on our own origin and is exempt.
+      const response = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId, host_origin: CHAT_PAGE_ORIGIN },
+        { origin: CHAT_PAGE_ORIGIN },
+      );
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as { token: string }).token).toBeTruthy();
+    });
+
+    it('still refuses a third-party origin that is not trusted', async () => {
+      const response = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId, host_origin: 'https://evil.example' },
+        { origin: CHAT_PAGE_ORIGIN },
+      );
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('starts a real conversation from the chat page', async () => {
+      const granted = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId, host_origin: CHAT_PAGE_ORIGIN },
+        { origin: CHAT_PAGE_ORIGIN },
+      );
+      const { token } = granted.json() as { token: string };
+
+      const sent = await server.post('/customer/chat/events', { text: 'From the link' }, auth(token));
+      expect(sent.statusCode).toBe(201);
+      expect((sent.json() as { chat_id: string }).chat_id).toBeTruthy();
+    });
+
+    it('resolves the licence for a token minted this way', async () => {
+      // Cross-tenant guard: the chat page for A must never resolve B's licence.
+      const granted = await server.post(
+        '/customer/token',
+        { organization_id: fx.b.organizationId, host_origin: CHAT_PAGE_ORIGIN },
+        { origin: CHAT_PAGE_ORIGIN },
+      );
+      expect(granted.statusCode).toBe(200);
+      expect((granted.json() as { organization_id: string }).organization_id).toBe(
+        fx.b.organizationId,
+      );
+    });
+  });
 });

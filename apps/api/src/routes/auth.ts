@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { isScope, type Scope } from '@nexa/types';
 import type { Env } from '../config/env.js';
@@ -99,6 +100,9 @@ export default async function authRoutes(
   options: { env: Env },
 ): Promise<void> {
   const { env } = options;
+  // Our own widget origin. A token request whose host resolves to this is the
+  // hosted Chat page (FR-MOD-08.5.9), exempt from the trusted-domain allowlist.
+  const selfHost = originHost(env.WIDGET_BASE_URL);
   const oauth = new OauthService(app.db, {
     accessTokenTtl: env.ACCESS_TOKEN_TTL,
     refreshTokenTtl: env.REFRESH_TOKEN_TTL,
@@ -413,17 +417,25 @@ export default async function authRoutes(
       );
     }
 
-    // The organization id comes from the request body — untrusted. It only
-    // becomes meaningful once the calling origin is proven to be on that
-    // organization's allowlist.
+    // The organization id comes from the request body — untrusted. For an embed
+    // it only becomes meaningful once the calling origin is proven to be on that
+    // organization's allowlist. The one exception is our own hosted Chat page
+    // (FR-MOD-08.5.9): a page we serve, on our own origin, is a public chat link
+    // by design, so it resolves the licence directly instead of the allowlist —
+    // see the decision recorded in PLAN.md §C.
+    const isChatPage = selfHost !== null && host === selfHost;
     const matches = await app.db.$queryRaw<
       Array<{ license_id: bigint; organization_id: string; license_status: string }>
-    >`SELECT * FROM auth_resolve_widget_origin(${body.organization_id}::uuid, ${host})`;
+    >(
+      isChatPage
+        ? Prisma.sql`SELECT * FROM auth_resolve_organization_license(${body.organization_id}::uuid)`
+        : Prisma.sql`SELECT * FROM auth_resolve_widget_origin(${body.organization_id}::uuid, ${host})`,
+    );
 
     const match = matches[0];
     if (!match) {
       request.log.warn(
-        { host, organization_id: body.organization_id },
+        { host, organization_id: body.organization_id, isChatPage },
         'widget token requested from an untrusted origin',
       );
       throw ApiError.authorization('This origin is not a trusted domain for the organization.');

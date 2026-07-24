@@ -12,7 +12,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
-import { useApiClient } from '../../lib/auth-store.js';
+import { useApiClient, useAuth } from '../../lib/auth-store.js';
+
+/** Origin serving the widget and its hosted Chat page. */
+const WIDGET_URL = (import.meta.env['VITE_WIDGET_URL'] as string | undefined) ?? 'http://localhost:5174';
 
 interface WebsiteStatusRow {
   status: string;
@@ -62,7 +65,14 @@ export function channelsFor(websites: WebsiteStatusRow[]): Channel[] {
       cta: websiteStatus === 'not_connected' ? 'Connect' : 'Manage',
       href: '#section-website-widgets',
     },
-    comingSoon('chat-page', 'Chat page', '💬', 'A hosted page you can link to.'),
+    {
+      id: 'chat-page',
+      name: 'Chat page',
+      icon: '💬',
+      description: 'A hosted link customers chat from — no install needed.',
+      status: 'ready',
+      cta: 'Get link',
+    },
     comingSoon('email', 'Email', '✉️', 'Forward support email into the inbox.'),
     comingSoon('messenger', 'Facebook Messenger', '📨', 'Answer Messenger conversations.'),
     comingSoon('whatsapp', 'WhatsApp', '📱', 'Answer WhatsApp messages.'),
@@ -74,6 +84,46 @@ export function channelsFor(websites: WebsiteStatusRow[]): Channel[] {
 
 function comingSoon(id: string, name: string, icon: string, description: string): Channel {
   return { id, name, icon, description, status: 'coming_soon', cta: 'Get notified' };
+}
+
+/**
+ * The Chat page's shareable link (FR-MOD-08.5.9): our own hosted page, scoped to
+ * this workspace by its organization id. Copies to the clipboard and shows the
+ * URL so it can be read or shared either way.
+ */
+function ChatPageLink({ label }: { label: string }): ReactElement {
+  const orgId = useAuth((s) => s.agent?.organization_id ?? null);
+  const [copied, setCopied] = useState(false);
+  const url = orgId ? `${WIDGET_URL}/chat.html?organization_id=${orgId}` : '';
+
+  const copy = (): void => {
+    if (!url) return;
+    void navigator.clipboard?.writeText(url).then(
+      () => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1_500);
+      },
+      () => setCopied(false),
+    );
+  };
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <button
+        type="button"
+        onClick={copy}
+        disabled={!url}
+        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+      >
+        {copied ? 'Copied' : label}
+      </button>
+      {url && (
+        <code data-testid="chat-page-url" className="truncate text-2xs text-content-tertiary">
+          {url}
+        </code>
+      )}
+    </div>
+  );
 }
 
 export function ChannelsGrid(): ReactElement {
@@ -141,6 +191,8 @@ function ChannelCardView({
               {channel.cta}
             </button>
           )
+        ) : channel.id === 'chat-page' ? (
+          <ChatPageLink label={channel.cta} />
         ) : (
           <a
             href={channel.href}

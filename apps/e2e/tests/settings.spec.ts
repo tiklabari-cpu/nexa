@@ -112,6 +112,12 @@ test.describe('channels', () => {
 
     await agentPage.screenshot({ path: 'kanit/8-channels-grid.png', fullPage: true });
 
+    // The Chat page is ready to share (FR-MOD-08.5.9) — Get link reveals the URL.
+    const chatPage = channels.getByTestId('channel-chat-page');
+    await expect(chatPage.getByText('Ready')).toBeVisible();
+    await chatPage.getByRole('button', { name: 'Get link' }).click();
+    await expect(chatPage.getByTestId('chat-page-url')).toContainText('/chat.html');
+
     // Get notified acknowledges without pretending the channel shipped.
     await notify.click();
     await expect(whatsapp.getByText(/let you know/i)).toBeVisible();

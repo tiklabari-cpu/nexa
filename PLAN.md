@@ -139,7 +139,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | PRD                      | Gereksinim                                               | Öncelik          | Durum | Nerede                                      |
 | ------------------------ | -------------------------------------------------------- | ---------------- | :---: | ------------------------------------------- |
-| 01.1.3                   | **Command Palette (⌘K)** — içerik arama + rota atlama    | Must (MVP temel) |  ⬜   | **Dilim 14**                                |
+| 01.1.3                   | **Command Palette (⌘K)** — içerik arama + rota atlama    | Must (MVP temel) |  ✅   | Dilim 14 (tm 18) — müşteri/sohbet/ticket arama + modül atlama, scope-gated, deep-link |
 | 01.1.6                   | Trial rozeti "N days" + Subscribe CTA                    | Must (MVP)       |   ◐   | Dilim 9 (gate var, rozet ⬜) → **Dilim 14** |
 | 01.2                     | Sol ikon rayı                                            | Must (MVP)       |  ✅   | F2 · `AppShell.tsx`                         |
 | 01.3                     | Sağ panel anahtarı (Details ↔ Copilot ↔ Expand)          | Must (MVP)       |   ◐   | Dilim 7 (Details ✅, Copilot v1)            |
@@ -436,7 +436,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | S8       | Rate limiting                                       |                            ✅ ADR-07                             |
 | **S10**  | **File sharing güvenliği**                          |                  ⬜ **Dilim 13** ile aynı anda                   |
 | S12      | Audit log (append-only)                             |              ◐ tablo + policy ✅, olay kapsamı dar               |
-| A11Y1–6  | WCAG 2.1 AA · klavye · ⌘K                           |                    ◐ 01.1.3 (⌘K) **Dilim 14**                    |
+| A11Y1–6  | WCAG 2.1 AA · klavye · ⌘K                           |                    ✅ 01.1.3 (⌘K) Dilim 14 (tm 18)                    |
 | I18N1/2  | Widget + panel i18n                                 |                                ⬜                                |
 | C1/C2/C8 | GDPR · KVKK · retention                             |          ◐ silme CASCADE ✅ (Dilim 3), retention job ⬜          |
 | M4       | Test piramidi (unit + integration + contract + E2E) |                           ✅ 595 test                            |

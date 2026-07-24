@@ -1,0 +1,341 @@
+/**
+ * Command palette (⌘K) — FR-MOD-01.1.3, NFR-A11Y6.
+ *
+ * One keystroke reaches everything: type to search customers, conversations and
+ * tickets, or jump straight to a module. It is the keyboard user's answer to a
+ * mouse user's rail — and the fast path for everyone once the product has more
+ * screens than a rail can hold.
+ *
+ * Two things keep it honest. Searches are gated on the caller's scopes, so a
+ * token that cannot read customers never fires a request that would 403 — the
+ * palette shows only what its holder is allowed to find. And a record it points
+ * at is opened by the target screen through a URL parameter, so the same deep
+ * link works whether it comes from here, a bookmark, or a colleague's message.
+ */
+import { useQuery } from '@tanstack/react-query';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactElement,
+} from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useApiClient, useAuth } from '../lib/auth-store.js';
+import type { CustomerSummary } from '../features/customers/types.js';
+import type { ChatSummary, Ticket } from '../features/inbox/types.js';
+import { NAV_DESTINATIONS } from './navigation.js';
+
+interface Command {
+  id: string;
+  group: string;
+  label: string;
+  sub?: string;
+  icon: string;
+  run: () => void;
+}
+
+const CUSTOMER_READ = ['customers:ro', 'customers:rw'];
+const TICKET_READ = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
+const CHAT_READ = ['chats--all:ro', 'chats--access:ro'];
+
+export function CommandPalette(): ReactElement | null {
+  const [open, setOpen] = useState(false);
+  const [rawQuery, setRawQuery] = useState('');
+  const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  const navigate = useNavigate();
+  const api = useApiClient();
+  const scopes = useAuth((s) => s.agent?.scopes ?? []);
+  const has = useCallback(
+    (allowed: string[]) => allowed.some((scope) => scopes.includes(scope)),
+    [scopes],
+  );
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setRawQuery('');
+    setQuery('');
+    setActiveIndex(0);
+  }, []);
+
+  // ⌘K / Ctrl-K opens it from anywhere. Remembering what had focus lets us hand
+  // it back on close, so the keyboard user is returned to where they were.
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if ((event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'K')) {
+        event.preventDefault();
+        returnFocusRef.current = (document.activeElement as HTMLElement | null) ?? null;
+        setOpen(true);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      inputRef.current?.focus();
+    } else if (returnFocusRef.current) {
+      returnFocusRef.current.focus?.();
+      returnFocusRef.current = null;
+    }
+  }, [open]);
+
+  // Debounced so a query fires per pause, not per keystroke — each request
+  // counts against the caller's rate limit, as the customer search learned.
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(rawQuery.trim()), 180);
+    return () => clearTimeout(timer);
+  }, [rawQuery]);
+
+  const searching = open && query.length > 0;
+
+  const customers = useQuery({
+    queryKey: ['palette', 'customers', query],
+    queryFn: () =>
+      api.get<{ items: CustomerSummary[] }>(
+        `/customers?query=${encodeURIComponent(query)}&limit=6`,
+      ),
+    enabled: searching && has(CUSTOMER_READ),
+    retry: false,
+    staleTime: 10_000,
+  });
+
+  const tickets = useQuery({
+    queryKey: ['palette', 'tickets', query],
+    queryFn: () =>
+      api.get<{ items: Ticket[] }>(`/tickets?query=${encodeURIComponent(query)}&limit=6`),
+    enabled: searching && has(TICKET_READ),
+    retry: false,
+    staleTime: 10_000,
+  });
+
+  // Chats have no free-text endpoint — the list is small and already loaded for
+  // the inbox, so it is filtered here rather than adding a search path the
+  // product does not otherwise need.
+  const chats = useQuery({
+    queryKey: ['palette', 'chats'],
+    queryFn: () => api.get<{ items: ChatSummary[] }>('/chats?view=all&limit=50'),
+    enabled: searching && has(CHAT_READ),
+    retry: false,
+    staleTime: 10_000,
+  });
+
+  const chatMatches = useMemo(() => {
+    if (!searching) return [];
+    const needle = query.toLowerCase();
+    return (chats.data?.items ?? [])
+      .filter(
+        (chat) =>
+          (chat.customer_name ?? '').toLowerCase().includes(needle) ||
+          (chat.last_event?.text ?? '').toLowerCase().includes(needle) ||
+          chat.id.toLowerCase().includes(needle),
+      )
+      .slice(0, 6);
+  }, [chats.data, query, searching]);
+
+  const commands = useMemo<Command[]>(() => {
+    // Route filtering needs no network, so it tracks the raw input for an
+    // instant response; only the record searches wait for the debounce.
+    const routeNeedle = rawQuery.trim().toLowerCase();
+    const list: Command[] = [];
+
+    for (const dest of NAV_DESTINATIONS) {
+      const matches =
+        !routeNeedle ||
+        dest.label.toLowerCase().includes(routeNeedle) ||
+        (dest.keywords ?? []).some((keyword) => keyword.includes(routeNeedle));
+      if (!matches) continue;
+      list.push({
+        id: `route:${dest.to}`,
+        group: 'Go to',
+        label: dest.label,
+        icon: dest.icon,
+        run: () => {
+          navigate(dest.to);
+          close();
+        },
+      });
+    }
+
+    if (searching) {
+      for (const customer of customers.data?.items ?? []) {
+        list.push({
+          id: `customer:${customer.id}`,
+          group: 'Customers',
+          label: customer.name ?? customer.email ?? customer.phone ?? 'Unnamed visitor',
+          sub: customer.email ?? customer.phone ?? undefined,
+          icon: '◫',
+          run: () => {
+            navigate(`/app/customers?customer=${customer.id}`);
+            close();
+          },
+        });
+      }
+
+      for (const chat of chatMatches) {
+        list.push({
+          id: `chat:${chat.id}`,
+          group: 'Conversations',
+          label: chat.customer_name ?? 'Visitor',
+          sub: chat.last_event?.text ?? chat.id,
+          icon: '▤',
+          run: () => {
+            navigate(`/app/inbox?chat=${chat.id}`);
+            close();
+          },
+        });
+      }
+
+      for (const ticket of tickets.data?.items ?? []) {
+        list.push({
+          id: `ticket:${ticket.id}`,
+          group: 'Tickets',
+          label: ticket.subject,
+          sub: `#${ticket.id}${ticket.customer_name ? ` · ${ticket.customer_name}` : ''}`,
+          icon: '▦',
+          run: () => {
+            navigate(`/app/inbox?ticket=${ticket.id}`);
+            close();
+          },
+        });
+      }
+    }
+
+    return list;
+  }, [rawQuery, searching, customers.data, chatMatches, tickets.data, navigate, close]);
+
+  // Any change to the result set puts the highlight back on the first row, so
+  // Enter never fires a stale selection left over from the previous query.
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [commands]);
+
+  // Keep the highlighted row in view as the arrow keys walk past the fold.
+  useEffect(() => {
+    listRef.current
+      ?.querySelector(`[data-index="${activeIndex}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
+
+  const onInputKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIndex((index) => Math.min(index + 1, commands.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex((index) => Math.max(index - 1, 0));
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      commands[activeIndex]?.run();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
+  };
+
+  if (!open) return null;
+
+  const busy = searching && (customers.isFetching || tickets.isFetching || chats.isFetching);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[12vh]"
+      // A mousedown on the backdrop dismisses; stopped on the panel so a drag
+      // that ends outside does not count as a dismiss.
+      onMouseDown={close}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        className="flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 border-b border-border px-4">
+          <span aria-hidden="true" className="text-content-tertiary">
+            ⌕
+          </span>
+          <input
+            ref={inputRef}
+            type="text"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="command-palette-list"
+            aria-activedescendant={
+              commands[activeIndex] ? `command-option-${activeIndex}` : undefined
+            }
+            aria-label="Search or jump to"
+            placeholder="Search customers, conversations, tickets — or jump to a module…"
+            value={rawQuery}
+            onChange={(event) => setRawQuery(event.target.value)}
+            onKeyDown={onInputKeyDown}
+            className="flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-content-tertiary"
+          />
+          <kbd className="rounded border border-border px-1.5 py-0.5 text-2xs text-content-tertiary">
+            Esc
+          </kbd>
+        </div>
+
+        <ul id="command-palette-list" role="listbox" ref={listRef} className="overflow-y-auto py-1">
+          {commands.length === 0 ? (
+            <li role="presentation" className="px-4 py-6 text-center text-sm text-content-secondary">
+              {busy ? 'Searching…' : 'No matches.'}
+            </li>
+          ) : (
+            commands.map((command, index) => {
+              const firstOfGroup = index === 0 || commands[index - 1]!.group !== command.group;
+              return (
+                <li key={command.id} role="presentation">
+                  {firstOfGroup && (
+                    <p
+                      role="presentation"
+                      className="px-4 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+                    >
+                      {command.group}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    role="option"
+                    id={`command-option-${index}`}
+                    data-index={index}
+                    aria-selected={index === activeIndex}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    // The palette is closing on select, so the click must not
+                    // also blur-then-refocus the input mid-teardown.
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={command.run}
+                    className={`flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors ${
+                      index === activeIndex ? 'bg-brand-100 dark:bg-brand-950' : 'hover:bg-surface-2'
+                    }`}
+                  >
+                    <span aria-hidden="true" className="text-content-tertiary">
+                      {command.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{command.label}</span>
+                      {command.sub && (
+                        <span className="block truncate text-2xs text-content-tertiary">
+                          {command.sub}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      </div>
+    </div>
+  );
+}

@@ -14,25 +14,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth } from '../lib/auth-store.js';
-
-interface RailItem {
-  to: string;
-  label: string;
-  icon: string;
-}
-
-const MODULES: RailItem[] = [
-  { to: '/app/inbox', label: 'Inbox', icon: '▤' },
-  { to: '/app/customers', label: 'Customers', icon: '◫' },
-  { to: '/app/team', label: 'Team', icon: '◑' },
-  { to: '/app/playbook', label: 'Playbook', icon: '✦' },
-  { to: '/app/reports', label: 'Reports', icon: '◆' },
-];
-
-const FOOTER: RailItem[] = [
-  { to: '/app/billing', label: 'Billing', icon: '◈' },
-  { to: '/app/settings', label: 'Settings', icon: '⚙' },
-];
+import { CommandPalette } from './CommandPalette.js';
+import { FOOTER, MODULES, type NavDestination } from './navigation.js';
 
 export function AppShell(): ReactElement {
   return (
@@ -42,6 +25,9 @@ export function AppShell(): ReactElement {
         <IconRail />
         <Outlet />
       </div>
+      {/* Reachable from every module: ⌘K opens it, and it lives outside the
+          scrolling area so it overlays whatever is on screen. */}
+      <CommandPalette />
     </div>
   );
 }
@@ -127,7 +113,7 @@ function IconRail(): ReactElement {
   );
 }
 
-function RailButton({ item }: { item: RailItem }): ReactElement {
+function RailButton({ item }: { item: NavDestination }): ReactElement {
   const shared =
     'relative flex h-9 w-9 items-center justify-center rounded-md text-base transition-colors';
 

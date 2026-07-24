@@ -6,6 +6,7 @@
  * comes from a token; no component hard-codes a hex value.
  */
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth-store.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -43,9 +44,32 @@ const TICKET_VIEWS: Array<{ id: TicketView; label: string; icon: string }> = [
 ];
 
 export function InboxPage(): ReactElement {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [selection, setSelection] = useState<Selection>({ kind: 'chat', view: 'all' });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+
+  // A deep link opens a specific chat or ticket (from the command palette or a
+  // shared URL). The record's own detail query loads it regardless of which
+  // list view is showing, so all this has to do is point the selection at it
+  // under the "All" view and then consume the parameter.
+  useEffect(() => {
+    const chatId = searchParams.get('chat');
+    const ticketId = searchParams.get('ticket');
+    if (!chatId && !ticketId) return;
+    if (chatId) {
+      setSelection({ kind: 'chat', view: 'all' });
+      setSelectedId(chatId);
+    } else if (ticketId) {
+      setSelection({ kind: 'ticket', view: 'all' });
+      setSelectedTicketId(ticketId);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('chat');
+    next.delete('ticket');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const onTickets = selection.kind === 'ticket';
   const view = selection.kind === 'chat' ? selection.view : 'all';
@@ -66,26 +90,27 @@ export function InboxPage(): ReactElement {
   const chats = useMemo(() => list.data?.items ?? [], [list.data]);
 
   // Keep a selection valid as the list changes underneath — a chat can be
-  // transferred away while it is open.
+  // transferred away while it is open. Gated on `list.data` so a deep-linked
+  // chat is not reset against the empty array that precedes the first load.
   useEffect(() => {
-    if (onTickets) return;
+    if (onTickets || !list.data) return;
     if (selectedId && !chats.some((c) => c.id === selectedId)) {
       setSelectedId(chats[0]?.id ?? null);
     } else if (!selectedId && chats.length > 0) {
       setSelectedId(chats[0]!.id);
     }
-  }, [chats, selectedId, onTickets]);
+  }, [chats, selectedId, onTickets, list.data]);
 
   const ticketItems = useMemo(() => tickets.data?.items ?? [], [tickets.data]);
 
   useEffect(() => {
-    if (!onTickets) return;
+    if (!onTickets || !tickets.data) return;
     if (selectedTicketId && !ticketItems.some((t) => t.id === selectedTicketId)) {
       setSelectedTicketId(ticketItems[0]?.id ?? null);
     } else if (!selectedTicketId && ticketItems.length > 0) {
       setSelectedTicketId(ticketItems[0]!.id);
     }
-  }, [ticketItems, selectedTicketId, onTickets]);
+  }, [ticketItems, selectedTicketId, onTickets, tickets.data]);
 
   return (
     <>

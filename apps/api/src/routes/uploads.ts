@@ -26,6 +26,7 @@ import { ApiError } from '../lib/api-error.js';
 import type { Env } from '../config/env.js';
 import { LocalStore } from '../services/storage/local-store.js';
 import { UploadSigner, buildKey, licenseOfKey } from '../services/storage/upload-url.js';
+import { assertClean, createVirusScanner } from '../services/storage/virus-scanner.js';
 
 const MIME = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/;
 
@@ -60,6 +61,7 @@ interface Options {
 export default async function uploadRoutes(app: FastifyInstance, { env }: Options): Promise<void> {
   const signer = new UploadSigner(env.UPLOAD_SIGNING_KEY);
   const store = new LocalStore(env.STORAGE_LOCAL_DIR);
+  const scanner = createVirusScanner(env.VIRUS_SCANNER);
 
   /**
    * The PUT ceiling.
@@ -156,6 +158,11 @@ export default async function uploadRoutes(app: FastifyInstance, { env }: Option
         // their forgery failed is how a forgery gets refined.
         throw ApiError.authorization('This upload URL is not valid.');
       }
+
+      // Scan before a single byte lands on disk: a stored file is therefore
+      // always one that passed, so the GET can never serve an unscanned file
+      // (FR-MOD-08.9.4). Fail closed — an unreachable scanner refuses the upload.
+      await assertClean(scanner, bytes);
 
       await store.put(verdict.grant.key, bytes, verdict.grant.contentType);
       return reply.status(201).send({

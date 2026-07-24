@@ -486,7 +486,7 @@ Stripe lokal, object storage `.data/uploads`) · prodüksiyon deploy/DNS yok · 
 
 ## A. Tarihçe — Dilim Detayları (Dilim 1–10)
 
-### Dilim 1 — Bootstrap [XHIGH] ✅
+### Dilim 1 — Bootstrap [MAX] ✅
 
 **Teslim edildi (2026-07-22):** 78 unit test yeşil · typecheck 8/8 · lint 6/6 · format temiz ·
 `make dev` çalışıyor · API+RTM `/health` 200 (db+redis canlı) · WS handshake doğrulandı
@@ -627,7 +627,7 @@ zarfın lisansı bağlantının lisansıyla eşleşmeli.
 - `login` → `subscribe` → push (`incoming_chat`, `incoming_event`, `chat_deactivated`, `chat_transferred`, `incoming_typing_indicator`, `routing_status_set`, `queue_positions_updated`)
 - Redis pub/sub fan-out; missed-event sync testi
 
-### Dilim 6 — Customer Widget [XHIGH] ✅
+### Dilim 6 — Customer Widget [MAX] ✅
 
 **Teslim edildi (2026-07-22):** 379 test yeşil (120 unit + 259 integration) ·
 widget bundle **5.3 KB gzip** (bütçe 50 KB) · loader 1.09 KB.
@@ -650,7 +650,7 @@ widget bundle **5.3 KB gzip** (bütçe 50 KB) · loader 1.09 KB.
 - Customer Chat API: token, start_chat, send_event, RTM customer socket
 - Trusted domains allowlist; HTML escape (asla innerHTML)
 
-### Dilim 7 — Inbox 3-pane [XHIGH] ✅
+### Dilim 7 — Inbox 3-pane [MAX] ✅
 
 **Teslim edildi (2026-07-22):** tarayıcıda uçtan uca doğrulandı —
 giriş → 3-pane inbox → widget'tan gelen mesaj **sayfa yenilemeden** transcript'e düştü →
@@ -702,7 +702,7 @@ gerçekten yönlendirilmesi için routing bir ön koşul.
 - ADR-08 algoritması; concurrent limit; fallback grup; kuyruk pozisyonu
 - Negatif testler: limit dolu → kuyruk; tüm gruplar offline → `groups_offline`
 
-### Dilim 9 — Reports + Billing [XHIGH] ✅
+### Dilim 9 — Reports + Billing [MAX] ✅
 
 **Teslim edildi (2026-07-22):** 398 test yeşil (120 unit + 278 integration).
 
@@ -722,7 +722,7 @@ gerçekten yönlendirilmesi için routing bir ön koşul.
   sessizce sınırsız olma yoludur.
 - Kota %80'de uyarı (PRD §8.3 akış 5).
 
-### Dilim 10 — Design System + modül ekranları [XHIGH] ✅
+### Dilim 10 — Design System + modül ekranları [MAX] ✅
 
 Token sistemi, Tailwind eşlemesi ve a11y kuralları (`design-brief.md` → config); hiçbir
 bileşende sabit renk yok. Başlangıçta yalnız inbox stillendirilmişti; kalan altı modül

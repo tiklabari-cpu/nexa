@@ -17,6 +17,7 @@ import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
+import { EICAR_SIGNATURE } from '../../src/services/storage/virus-scanner.js';
 
 describe('uploads', () => {
   let owner: PrismaClient;
@@ -334,6 +335,92 @@ describe('uploads', () => {
 
       expect(sent.statusCode).toBe(201);
       expect(sent.json().attachment_url).toBe(fileUrl);
+    });
+  });
+
+  // --- Virus scanning (FR-MOD-08.9.4) ----------------------------------------
+
+  describe('virus scanning', () => {
+    // The EICAR anti-virus test file — harmless, but every scanner flags it.
+    const eicar = Buffer.from(EICAR_SIGNATURE, 'latin1');
+
+    it('refuses an infected file, and never stores it', async () => {
+      const granted = await server.post(
+        '/uploads',
+        { content_type: 'image/png', size_bytes: eicar.byteLength },
+        auth(tokenA),
+      );
+      const grant = granted.json();
+
+      const put = await server.app.inject({
+        method: 'PUT',
+        url: grant.upload_url,
+        headers: { 'content-type': 'image/png' },
+        payload: eicar,
+      });
+      expect(put.statusCode).toBe(400);
+      expect(put.json().error.type).toBe('validation');
+
+      // Nothing was stored, so nothing can be served — to the uploader or anyone.
+      const get = await server.get(grant.file_url.replace('/api/v1', ''), auth(tokenA));
+      expect(get.statusCode).toBe(404);
+    });
+
+    it('does not let an infected file become a message event', async () => {
+      const chat = await server.post('/chats', { customer_id: fx.a.customerId }, auth(tokenA));
+      const chatId = (chat.json() as { id: string }).id;
+
+      const granted = await server.post(
+        '/uploads',
+        { content_type: 'image/png', size_bytes: eicar.byteLength },
+        auth(tokenA),
+      );
+      const grant = granted.json();
+      // Rejected at the PUT, so the key was never stored.
+      await server.app.inject({
+        method: 'PUT',
+        url: grant.upload_url,
+        headers: { 'content-type': 'image/png' },
+        payload: eicar,
+      });
+
+      // Referencing a file that does not exist cannot make an event.
+      const sent = await server.post(
+        `/chats/${chatId}/events`,
+        { type: 'message', attachment_url: grant.file_url },
+        auth(tokenA),
+      );
+      expect(sent.statusCode).toBe(400);
+    });
+
+    it('refuses the upload when the scanner is unreachable (fail closed)', async () => {
+      const down = await startTestServer({
+        STORAGE_LOCAL_DIR: mkdtempSync(join(tmpdir(), 'nexa-uploads-')),
+        VIRUS_SCANNER: 'unavailable',
+      });
+      try {
+        const granted = await down.post(
+          '/uploads',
+          { content_type: 'image/png', size_bytes: PNG.byteLength },
+          auth(tokenA),
+        );
+        expect(granted.statusCode).toBe(201);
+
+        // A perfectly clean file — but one we could not scan is still refused.
+        const put = await down.app.inject({
+          method: 'PUT',
+          url: granted.json().upload_url,
+          headers: { 'content-type': 'image/png' },
+          payload: PNG,
+        });
+        expect(put.statusCode).toBe(503);
+        expect(put.json().error.type).toBe('service_unavailable');
+
+        const get = await down.get(granted.json().file_url.replace('/api/v1', ''), auth(tokenA));
+        expect(get.statusCode).toBe(404);
+      } finally {
+        await down.close();
+      }
     });
   });
 

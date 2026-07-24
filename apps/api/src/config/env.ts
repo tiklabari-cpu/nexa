@@ -67,6 +67,12 @@ const envSchema = z.object({
   /** How long a signed upload URL stays usable. One shot, so this is short. */
   UPLOAD_URL_TTL: z.coerce.number().int().positive().max(3600).default(300),
   STRIPE_PROVIDER: z.enum(['mock']).default('mock'),
+  /**
+   * Upload virus scanning (FR-MOD-08.9.4). `mock` flags the EICAR test file and
+   * passes the rest; `unavailable` is always-down, for exercising the fail-closed
+   * path in tests and drills. A real ClamAV provider slots in here later.
+   */
+  VIRUS_SCANNER: z.enum(['mock', 'unavailable']).default('mock'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });

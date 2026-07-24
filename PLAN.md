@@ -248,7 +248,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | ~~11~~ | **Ticketing çekirdeği** ✅             | 02.1.3 ✅ · 02.6 (create) ✅ · 03.2.3 ✅ · 07.3.2 ✅                   | Teslim edildi (merge `0ec1b56`). Kapsamdan çıkanlar: 08.5.3 → Dilim 13, 02.6'nın "Copy chat link"i → Dilim 14.                         |
 | ~~12~~ | **Hesap yaşam döngüsü** ✅             | 00.2 ✅ · 00.3 ✅ · 04.3.1 ✅ · 04.4 ✅                                | Teslim edildi. Onboarding sihirbazı (00.4, Should) Dilim 14'e taşındı — Must'lar önce. Tarayıcıda bulunan iki hata için bkz. §D13/D14. |
 | ~~13~~ | **Kanallar + dosya + greeting** ✅     | 08.5.1 ✅ · 08.5.2 ✅ · 08.5.3 ✅ · 08.5.9 ✅ · 08.9.4 ✅ · 11.2 ✅ · 11.3 ✅ · 02.3.5/11.4 attach ✅ | Teslim edildi (merge `d6de3a6`). 08.5.3 (kaynak Dilim 11'de kapsam dışıydı) burada teslim edildi. Yeni: `website_exists` hata tipi (§D15), chat-page allowlist muafiyeti (§C-A8), email inbound (§C-A9). |
-| ~~14~~ | **Checkout + bildirim + shell kalanı** ✅ | 10.1.1–.3 ✅ · 10.1.6 ✅ · 13.8 ✅ · 01.1.3 ✅ · 01.1.6 ✅ · 08.7.1 ✅ · 03.1.1 ✅ | Teslim edildi (merge `MERGE_SHA`). Checkout Stripe MOCK (ADR-13). Kalan borç (kapsamdan çıktı): 00.4 Onboarding sihirbazı (Should) · 02.6 Copy chat link. |
+| ~~14~~ | **Checkout + bildirim + shell kalanı** ✅ | 10.1.1–.3 ✅ · 10.1.6 ✅ · 13.8 ✅ · 01.1.3 ✅ · 01.1.6 ✅ · 08.7.1 ✅ · 03.1.1 ✅ | Teslim edildi (merge `13b6f6b`). Checkout Stripe MOCK (ADR-13). Kalan borç (kapsamdan çıktı): 00.4 Onboarding sihirbazı (Should) · 02.6 Copy chat link. |
 
 **Faz-0 kapanış kapısı:** 52 gereksinimin tamamı ✅ veya gerekçeli ⛔ · §7 NFR kapısı geçildi ·
 `make dev` temiz kurulumdan demo akışını çalıştırıyor.

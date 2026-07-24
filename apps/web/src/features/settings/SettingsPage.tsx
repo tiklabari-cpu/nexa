@@ -13,6 +13,8 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { WebsiteWidgets } from './WebsiteWidgets.js';
+import { ChannelsGrid } from './Channels.js';
 
 interface TrustedDomain {
   id: string;
@@ -26,6 +28,15 @@ interface CannedResponse {
   shortcut: string;
   text: string;
   scope: 'chat' | 'ticket';
+}
+
+interface SecuritySettings {
+  file_sharing_enabled: boolean;
+  allowed_file_types: string[];
+  max_file_size_bytes: number;
+  spam_filter_enabled: boolean;
+  require_two_factor: boolean;
+  updated_at: string | null;
 }
 
 interface RoutingRule {
@@ -47,7 +58,10 @@ export function SettingsPage(): ReactElement {
 
   return (
     <Page title="Settings" description="Widget installation, saved replies and routing.">
+      <ChannelsGrid />
+      <WebsiteWidgets canEdit={canManageAccess} />
       <TrustedDomains canEdit={canManageAccess} />
+      <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />
       <RoutingRules canEdit={canManageAccess} />
     </Page>
@@ -94,7 +108,7 @@ function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement {
   return (
     <Section
       title="Trusted domains"
-      description="The widget only works on these sites. Everywhere else it is refused a token."
+      description="The allowlist the widget checks. Adding a website above fills this in for you; edit it here only for finer control, such as covering subdomains."
     >
       {list.error ? (
         <ErrorNotice message="Could not load trusted domains." />
@@ -175,6 +189,149 @@ function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement {
           )}
         </Card>
       )}
+    </Section>
+  );
+}
+
+// --- File sharing ------------------------------------------------------------
+
+/**
+ * The rules every upload is checked against, on both sides of a conversation.
+ *
+ * They were in the schema from the start but had no screen, so every workspace
+ * ran on the shipped defaults — three file types and 10 MiB — whether or not
+ * those suited it, and nobody could see what the limits were.
+ */
+function FileSharing({ canEdit }: { canEdit: boolean }): ReactElement {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  const [types, setTypes] = useState<string | null>(null);
+  const [sizeMb, setSizeMb] = useState<string | null>(null);
+
+  const settings = useQuery({
+    queryKey: ['settings', 'security'],
+    queryFn: () => api.get<SecuritySettings>('/settings/security'),
+  });
+
+  const save = useMutation({
+    mutationFn: (body: Partial<SecuritySettings>) =>
+      api.patch<SecuritySettings>('/settings/security', body),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['settings', 'security'], data);
+      setTypes(null);
+      setSizeMb(null);
+    },
+  });
+
+  if (settings.error) return <ErrorNotice message="Could not load file sharing rules." />;
+
+  const current = settings.data;
+  // `?? current` throughout: the inputs are uncontrolled drafts until touched,
+  // so an unsaved edit survives a background refetch.
+  const typesDraft = types ?? (current ? current.allowed_file_types.join(', ') : '');
+  const sizeDraft = sizeMb ?? (current ? String(Math.round(current.max_file_size_bytes / 1048576)) : '');
+
+  function submit(event: FormEvent): void {
+    event.preventDefault();
+    if (!current) return;
+
+    const parsedTypes = typesDraft
+      .split(',')
+      .map((type) => type.trim().toLowerCase())
+      .filter(Boolean);
+    const megabytes = Number(sizeDraft);
+    if (!Number.isFinite(megabytes) || megabytes < 1) return;
+
+    save.mutate({
+      allowed_file_types: parsedTypes,
+      max_file_size_bytes: Math.round(megabytes * 1048576),
+    });
+  }
+
+  return (
+    <Section
+      title="File sharing"
+      description="Applies to attachments from agents and customers alike. Anything outside these rules is refused."
+    >
+      <Card>
+        {settings.isPending ? (
+          <p className="p-4 text-sm text-content-secondary">Loading…</p>
+        ) : (
+          <div className="divide-y divide-border">
+            <label className="flex items-center gap-3 p-4">
+              <input
+                type="checkbox"
+                checked={current!.file_sharing_enabled}
+                disabled={!canEdit || save.isPending}
+                onChange={(event) => save.mutate({ file_sharing_enabled: event.target.checked })}
+              />
+              <span className="flex-1 text-sm">
+                Allow file sharing
+                <span className="block text-2xs text-content-tertiary">
+                  Turning this off refuses every attachment, whoever sends it.
+                </span>
+              </span>
+              <StatusDot
+                tone={current!.file_sharing_enabled ? 'success' : 'neutral'}
+                label={current!.file_sharing_enabled ? 'On' : 'Off'}
+              />
+            </label>
+
+            <form onSubmit={submit} className="flex flex-wrap items-end gap-3 p-4">
+              <label htmlFor="allowed-types" className="flex min-w-64 flex-1 flex-col gap-1">
+                <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                  Allowed types
+                </span>
+                <input
+                  id="allowed-types"
+                  value={typesDraft}
+                  disabled={!canEdit}
+                  onChange={(event) => setTypes(event.target.value)}
+                  placeholder="image/png, application/pdf"
+                  className="rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none placeholder:text-content-tertiary"
+                />
+                <span className="text-2xs text-content-tertiary">
+                  MIME types, comma separated — the form a browser labels a file with.
+                </span>
+              </label>
+
+              <label htmlFor="max-size" className="flex w-32 flex-col gap-1">
+                <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                  Max size (MB)
+                </span>
+                <input
+                  id="max-size"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={sizeDraft}
+                  disabled={!canEdit}
+                  onChange={(event) => setSizeMb(event.target.value)}
+                  className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+                />
+              </label>
+
+              {canEdit && (
+                <button
+                  type="submit"
+                  disabled={save.isPending}
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {save.isPending ? 'Saving…' : 'Save'}
+                </button>
+              )}
+
+              {save.isError && (
+                <p role="alert" className="w-full text-2xs text-danger">
+                  {save.error instanceof ApiClientError
+                    ? save.error.message
+                    : 'Could not save those rules.'}
+                </p>
+              )}
+            </form>
+          </div>
+        )}
+      </Card>
     </Section>
   );
 }

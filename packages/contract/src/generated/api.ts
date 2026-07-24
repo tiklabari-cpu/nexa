@@ -623,6 +623,10 @@ export interface paths {
      *
      *     A customer cannot write an internal note. The field is not accepted here at
      *     all, rather than accepted and downgraded silently.
+     *
+     *     A message must carry text, an `attachment_url`, or both — an attachment may
+     *     stand alone (FR-MOD-11.4). The attachment must be a file this workspace
+     *     uploaded through `/uploads`; any other value is refused.
      */
     post: operations['sendCustomerMessage'];
     delete?: never;
@@ -1239,6 +1243,198 @@ export interface paths {
     patch: operations['updateRoutingRule'];
     trace?: never;
   };
+  '/settings/security': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * File sharing and security rules
+     * @description The file-sharing fields are what FR-MOD-08.9.4 enforces on every upload.
+     *     They existed in the schema from the start but could only be changed by
+     *     editing the database, so the shipped defaults were the only rules any
+     *     workspace ever had.
+     *
+     *     A workspace that has never saved these settings has no row: signup does
+     *     not create one. The defaults from the schema are returned in that case,
+     *     which is what the server enforces anyway — reading has no side effect.
+     */
+    get: operations['getSecuritySettings'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Change the file sharing and security rules
+     * @description Creates the row on first write. `allowed_file_types` is validated as MIME
+     *     types (`type/subtype`) and stored lowercased: an entry like `.pdf` or
+     *     `pdf` would sit in the list looking like a rule while matching no upload
+     *     the browser ever labels.
+     */
+    patch: operations['updateSecuritySettings'];
+    trace?: never;
+  };
+  '/websites': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Sites the widget is installed on */
+    get: operations['listWebsites'];
+    put?: never;
+    /**
+     * Add a site to install the widget on
+     * @description Accepts a bare hostname (`shop.example`) or a URL to take one from; the
+     *     hostname is stored lowercased, without port or path, the same shape the
+     *     token endpoint reduces an `Origin` to. A new site starts `pending` and
+     *     flips to `connected` on the widget's first handshake from that domain.
+     *
+     *     Adding a site does not make the widget work there — its domain must also
+     *     be a trusted domain (FR-MOD-08.9.1).
+     */
+    post: operations['addWebsite'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/websites/{websiteId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        websiteId: string;
+      };
+      cookie?: never;
+    };
+    /** One website, with its install snippet */
+    get: operations['getWebsite'];
+    put?: never;
+    post?: never;
+    /**
+     * Remove a website
+     * @description Takes effect on the next widget load: existing conversations continue, but
+     *     the site no longer appears in the list. Removing it does not revoke the
+     *     trusted domain — that is a separate allowlist (FR-MOD-08.9.1).
+     */
+    delete: operations['removeWebsite'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/email/inbound': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ingest a forwarded support email
+     * @description The webhook a mail provider calls when a message arrives at a workspace's
+     *     forwarding address, `<organization_id>@<inbound-domain>` (FR-MOD-08.5.3).
+     *
+     *     The recipient address routes the message to a workspace: its local part is
+     *     the organization id, resolved to a licence the same SECURITY DEFINER way
+     *     the hosted Chat page resolves one, because no session exists yet. The
+     *     sender is matched to an existing customer by email, so a returning writer
+     *     does not spawn a duplicate record; an unknown sender becomes a new one.
+     *
+     *     When the workspace keeps the spam filter on (the default) and the provider
+     *     flagged the message as spam, no ticket is created — the call still
+     *     succeeds, so the provider does not retry a message that was dropped on
+     *     purpose.
+     *
+     *     Delivery itself is mocked in this build (PLAN A4); a production deployment
+     *     authenticates the provider at the edge. When `INBOUND_EMAIL_SECRET` is
+     *     configured the caller must present it as the `X-Inbound-Secret` header.
+     */
+    post: operations['ingestInboundEmail'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/uploads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ask permission to upload an attachment
+     * @description The rules from `security_settings` (FR-MOD-08.9.4) are enforced here,
+     *     before any bytes move: file sharing switched off, a type outside
+     *     `allowed_file_types`, or a size above `max_file_size_bytes` all fail at
+     *     this step and no URL is issued. A grant that never exists is a file that
+     *     can never be stored, which is why this is the enforcement point rather
+     *     than the PUT alone.
+     *
+     *     The returned `upload_url` carries its own signature and is good for one
+     *     file of exactly the declared type and length, for `UPLOAD_URL_TTL`
+     *     seconds. `file_url` is what belongs on the event as `attachment_url`; it
+     *     does not expire and is authorised by session instead.
+     */
+    post: operations['createUpload'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/uploads/{key}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The opaque `<licence>/<uuid><ext>` key from the grant. */
+        key: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Fetch a stored attachment
+     * @description Authorised by session, and the licence inside the key has to match the
+     *     caller's. A key belonging to another licence answers `404`, not `403`:
+     *     whether it exists is not something this caller gets to learn.
+     *
+     *     Served as `content-disposition: attachment` with `nosniff`. An allowed
+     *     `text/plain` rendered inline in our own origin would be stored XSS given
+     *     away for free.
+     */
+    get: operations['getUpload'];
+    /**
+     * Send the bytes for a granted upload
+     * @description Authorised by the signature in the query string, not by a session — it is
+     *     narrower than one: a single key, type and length, inside a short window.
+     *     The declared type and length are compared against what the request
+     *     actually carries, so a grant for a small PNG cannot deliver a large
+     *     anything-else.
+     *
+     *     Every rejection answers the same way. Telling a caller which part of a
+     *     forgery failed is how a forgery gets refined.
+     */
+    put: operations['putUpload'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/overview': {
     parameters: {
       query?: never;
@@ -1587,6 +1783,92 @@ export interface components {
       /** Format: date-time */
       created_at: string;
     };
+    /**
+     * @description A site a workspace has connected the widget to (FR-MOD-08.5.2). Distinct
+     *     from a trusted domain (FR-MOD-08.9.1): a website is the customer-facing
+     *     install record — where the snippet was pasted — while a trusted domain is
+     *     the security allowlist that decides whether the widget may mint a token
+     *     there. Adding a website does not authorise its origin; the domain must
+     *     also be a trusted domain for the widget to work.
+     */
+    Website: {
+      /** Format: uuid */
+      id: string;
+      /** @description Hostname only — lowercased, no scheme, port or path. */
+      domain: string;
+      /**
+       * @description `platform` for a hosted integration (Shopify/WordPress/GTM),
+       *     `manual` for a pasted snippet. Per PRD §8.4; the specific platform
+       *     icon the UI shows is a presentation mapping, not stored here.
+       * @enum {string}
+       */
+      setup: 'manual' | 'platform';
+      /**
+       * @description `connected` once the widget has completed its first handshake from
+       *     this domain; `pending` until then. `error` is reserved for a failed
+       *     verification signal (FR-MOD-08.5.2), written by the widgets screen.
+       * @enum {string}
+       */
+      status: 'pending' | 'connected' | 'error';
+      /**
+       * Format: date-time
+       * @description When the first handshake was seen, or null while pending.
+       */
+      connected_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * @description The code to paste before `</body>`. Sets `window.__nexa` and loads
+       *     the async widget loader. Identical across a workspace's sites — the
+       *     embedding origin is resolved at runtime — so "get code" per row shows
+       *     this same value.
+       */
+      snippet: string;
+    };
+    /**
+     * @description Permission to store one file, issued by `POST /uploads` once the
+     *     licence's file-sharing rules have accepted the declared type and size.
+     */
+    UploadGrant: {
+      /**
+       * @description Signed, single-use, and bound to the declared type and length. Send
+       *     the bytes here with `PUT` before `expires_at`.
+       */
+      upload_url: string;
+      /**
+       * @description Where the file will be readable, and the value that belongs on an
+       *     event's `attachment_url`. Does not expire — it is authorised by
+       *     session, and by the licence embedded in the key.
+       */
+      file_url: string;
+      /**
+       * Format: date-time
+       * @description When `upload_url` stops being accepted.
+       */
+      expires_at: string;
+    };
+    /**
+     * @description Per-license security configuration (PRD §8.4 `security_settings`).
+     *
+     *     `file_sharing_enabled`, `allowed_file_types` and `max_file_size_bytes`
+     *     are the rules FR-MOD-08.9.4 enforces on every upload — both the agent
+     *     composer's attachments and anything a customer sends.
+     */
+    SecuritySettings: {
+      /** @description When false, no attachment is accepted from either side. */
+      file_sharing_enabled: boolean;
+      /** @description Allowed MIME types. An empty list blocks every upload. */
+      allowed_file_types: string[];
+      /**
+       * Format: int32
+       * @description Per-file ceiling. 100 MiB is the hard maximum.
+       */
+      max_file_size_bytes: number;
+      spam_filter_enabled: boolean;
+      require_two_factor: boolean;
+      /** Format: date-time */
+      updated_at?: string | null;
+    };
     CannedResponse: {
       /** Format: uuid */
       id: string;
@@ -1861,6 +2143,15 @@ export interface components {
         name?: string | null;
         email?: string | null;
       };
+      /**
+       * @description Who the visitor is talking to, for the widget header (FR-MOD-11.3): a
+       *     human assignee if there is one, otherwise the active AI persona. Null
+       *     until either exists.
+       */
+      agent?: {
+        name: string;
+        avatar_url?: string | null;
+      } | null;
       chat: {
         id: string;
         thread_id?: string | null;
@@ -1914,6 +2205,7 @@ export interface components {
       | 'unsupported_version'
       | 'users_limit_reached'
       | 'validation'
+      | 'website_exists'
       | 'wrong_product_version';
   };
   responses: {
@@ -3070,7 +3362,9 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          text: string;
+          text?: string;
+          /** @description A `file_url` from `/uploads`. May be sent without text. */
+          attachment_url?: string;
           /** @description Page the visitor is on. Feeds the routing rules. */
           url?: string;
           /** @description Pre-chat form value. */
@@ -4285,6 +4579,369 @@ export interface operations {
         };
       };
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  getSecuritySettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SecuritySettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateSecuritySettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          file_sharing_enabled?: boolean;
+          allowed_file_types?: string[];
+          max_file_size_bytes?: number;
+          spam_filter_enabled?: boolean;
+          require_two_factor?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SecuritySettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listWebsites: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's websites */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Website'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  addWebsite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          domain: string;
+          /**
+           * @default manual
+           * @enum {string}
+           */
+          setup?: 'manual' | 'platform';
+        };
+      };
+    };
+    responses: {
+      /** @description Added */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Website'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description This domain is already added (`website_exists`) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getWebsite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        websiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The website */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Website'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  removeWebsite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        websiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  ingestInboundEmail: {
+    parameters: {
+      query?: never;
+      header?: {
+        /**
+         * @description Shared secret, checked only when `INBOUND_EMAIL_SECRET` is configured.
+         *     Lets the mock provider stand in for a signed webhook.
+         */
+        'X-Inbound-Secret'?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The workspace forwarding address the mail was sent to. */
+          to: string;
+          /** @description Sender, bare or `Name <addr>`. Matched to a customer by email. */
+          from: string;
+          /** @description Becomes the ticket subject. */
+          subject: string;
+          /** @description Message body. Not persisted — the ticket core carries no body. */
+          text?: string;
+          /** @description The provider's spam verdict, honoured when the workspace filter is on. */
+          spam?: boolean;
+        };
+      };
+    };
+    responses: {
+      /**
+       * @description The message was processed. `created` carries the new ticket id;
+       *     `ignored` means the spam filter dropped it.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            status: 'created' | 'ignored';
+            /** @description Present when `status` is `created`. */
+            ticket_id?: string;
+            /**
+             * @description Present when `status` is `ignored`.
+             * @enum {string}
+             */
+            reason?: 'spam';
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  createUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * @description Advisory only. The stored key is `<licence>/<uuid><ext>` with
+           *     the extension rebuilt from `content_type`; the supplied name
+           *     never becomes a path segment.
+           */
+          filename?: string;
+          /** @example image/png */
+          content_type: string;
+          /** @example 20480 */
+          size_bytes: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Permission granted */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UploadGrant'];
+        };
+      };
+      /**
+       * @description The type is not in `allowed_file_types`, or the size is above the
+       *     licence ceiling. `details` carries the rule that refused it.
+       */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      /** @description File sharing is switched off for this licence */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The opaque `<licence>/<uuid><ext>` key from the grant. */
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/octet-stream': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  putUpload: {
+    parameters: {
+      query: {
+        content_type: string;
+        size_bytes: number;
+        expires_at: number;
+        signature: string;
+      };
+      header?: never;
+      path: {
+        /** @description The opaque `<licence>/<uuid><ext>` key from the grant. */
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/octet-stream': string;
+      };
+    };
+    responses: {
+      /** @description Stored */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            file_url: string;
+            size_bytes: number;
+            checksum_sha256: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      /** @description The URL is expired, forged, or does not match the bytes sent */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
     };
   };
   getReportsOverview: {

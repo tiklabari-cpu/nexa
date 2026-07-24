@@ -11,7 +11,7 @@
 
 | Faz                | PRD  | Durum                                                    |
 | ------------------ | ---- | -------------------------------------------------------- |
-| **Faz 0 — MVP**    | §5.1 | ⏳ **30 ✅ · 11 ◐ · 13 ⬜ · 6 🔒** (60 satır)            |
+| **Faz 0 — MVP**    | §5.1 | ⏳ **39 ✅ · 8 ◐ · 7 ⬜ · 6 🔒** (60 satır)             |
 | Faz 1 — v1         | §5.2 | ⏳ kısmen başlandı (Playbook/AI öne çekildi — bkz. §1.3) |
 | Faz 2 — v2         | §5.3 | ⬜ başlanmadı                                            |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                                            |
@@ -155,7 +155,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | 02.3.1                                           | Transcript — canlı akış                                                                                      | Must (MVP)       |  ✅   | Dilim 4+5+7                                                                                       |
 | 02.3.3                                           | Composer (Enter/Shift+Enter)                                                                                 | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
 | 02.3.4                                           | Message type (Reply / Internal note)                                                                         | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
-| 02.3.5                                           | Composer araçları (canned `#`, tag, emoji, **attach**)                                                       | Must (MVP)       |   ◐   | F5 (`#` ✅) · attach → **Dilim 13**                                                               |
+| 02.3.5                                           | Composer araçları (canned `#`, tag, emoji, **attach**)                                                       | Must (MVP)       |   ✅   | F5 (`#` ✅) · attach → **Dilim 13**                                                               |
 | 02.3.6                                           | Send (optimistic, disabled/loading/error)                                                                    | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
 | 02.4.1–.6                                        | Details paneli (info/tags/visited pages/visit info)                                                          | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
 | 02.6                                             | **Create ticket** / Copy chat link / Reopen                                                                  | Must (MVP)       |   ◐   | Reopen ✅ (`/chats/{id}/resume`) · Create ticket ✅ (Dilim 11) · **Copy chat link ⬜ → Dilim 14** |
@@ -204,16 +204,16 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | PRD    | Gereksinim                                         | Öncelik    | Durum | Nerede                                           |
 | ------ | -------------------------------------------------- | ---------- | :---: | ------------------------------------------------ |
-| 08.5.1 | **All channels kart gridi**                        | Must (MVP) |  ⬜   | **Dilim 13**                                     |
-| 08.5.2 | **Website widgets** (+Add website / Install code)  | Must (MVP) |  ⬜   | **Dilim 13** — `Website` modeli var              |
-| 08.5.3 | **Email (forwarding → ticket)**                    | Must (MVP) |  ⬜   | **Dilim 13** (kanal yüzeyiyle)                   |
-| 08.5.9 | **Chat page** (hosted link)                        | Must (MVP) |  ⬜   | **Dilim 13**                                     |
+| 08.5.1 | **All channels kart gridi**                        | Must (MVP) |  ✅   | **Dilim 13**                                     |
+| 08.5.2 | **Website widgets** (+Add website / Install code)  | Must (MVP) |  ✅   | **Dilim 13** — `Website` modeli var              |
+| 08.5.3 | **Email (forwarding → ticket)**                    | Must (MVP) |  ✅   | **Dilim 13** (kanal yüzeyiyle)                   |
+| 08.5.9 | **Chat page** (hosted link)                        | Must (MVP) |  ✅   | **Dilim 13**                                     |
 | 08.6.1 | Chat routing kural motoru + fallback               | Must (MVP) |  ✅   | Dilim 8 · ADR-08                                 |
 | 08.7.1 | **Tags kütüphanesi CRUD** (grup kapsamı)           | Must (MVP) |   ◐   | Chat başına etiket ✅ · kütüphane → **Dilim 14** |
 | 08.7.2 | Canned responses (`#` shortcut, grup kapsamı)      | Must (MVP) |  ✅   | F5                                               |
 | 08.8.2 | API access — APIs & SDKs + PAT                     | Must (MVP) |  ✅   | Dilim 2 · F5                                     |
 | 08.9.1 | Trusted domains (widget allowlist)                 | Must (MVP) |  ✅   | Dilim 2 · F5                                     |
-| 08.9.4 | **File sharing** (izinli tür/boyut + virüs tarama) | Must (MVP) |  ⬜   | **Dilim 13** — NFR-S10                           |
+| 08.9.4 | **File sharing** (izinli tür/boyut + virüs tarama) | Must (MVP) |  ✅   | **Dilim 13** — NFR-S10                           |
 
 ### 3.8 FR-MOD-10 — Billing / Trial
 
@@ -230,9 +230,9 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | PRD  | Gereksinim                                   | Öncelik    | Durum | Nerede                                              |
 | ---- | -------------------------------------------- | ---------- | :---: | --------------------------------------------------- |
 | 11.1 | Launcher bubble + unread rozeti              | Must (MVP) |  ✅   | Dilim 6                                             |
-| 11.2 | **Greeting card + quick replies**            | Must (MVP) |  ⬜   | **Dilim 13**                                        |
-| 11.3 | Agent identity (AI persona / insan adı)      | Must (MVP) |   ◐   | Dilim 6 (bot kimliği ✅, persona ⬜) → **Dilim 13** |
-| 11.4 | Composer (mesaj + **attach** + emoji + send) | Must (MVP) |   ◐   | attach → **Dilim 13**                               |
+| 11.2 | **Greeting card + quick replies**            | Must (MVP) |  ✅   | **Dilim 13**                                        |
+| 11.3 | Agent identity (AI persona / insan adı)      | Must (MVP) |   ✅   | Dilim 6 (bot kimliği ✅) · persona ✅ Dilim 13      |
+| 11.4 | Composer (mesaj + **attach** + emoji + send) | Must (MVP) |  ✅   | attach ✅ Dilim 13                                   |
 | 11.6 | Embed snippet (async JS + `window.__lc`)     | Must (MVP) |  ✅   | Dilim 6                                             |
 
 ### 3.10 FR-MOD-13 — (yalnız MVP payı)
@@ -247,7 +247,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | ------ | -------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | ~~11~~ | **Ticketing çekirdeği** ✅             | 02.1.3 ✅ · 02.6 (create) ✅ · 03.2.3 ✅ · 07.3.2 ✅                   | Teslim edildi (merge `0ec1b56`). Kapsamdan çıkanlar: 08.5.3 → Dilim 13, 02.6'nın "Copy chat link"i → Dilim 14.                         |
 | ~~12~~ | **Hesap yaşam döngüsü** ✅             | 00.2 ✅ · 00.3 ✅ · 04.3.1 ✅ · 04.4 ✅                                | Teslim edildi. Onboarding sihirbazı (00.4, Should) Dilim 14'e taşındı — Must'lar önce. Tarayıcıda bulunan iki hata için bkz. §D13/D14. |
-| **13** | **Kanallar + dosya + greeting**        | 08.5.1 · 08.5.2 · 08.5.9 · 08.9.4 · 11.2 · 11.3 · (02.3.5/11.4 attach) | Widget'ın kurulum yüzeyi ve müşteriye ilk dokunuş. 08.9.4 güvenlik şekli taşıyor (NFR-S10: tür/boyut/tarama).                          |
+| ~~13~~ | **Kanallar + dosya + greeting** ✅     | 08.5.1 ✅ · 08.5.2 ✅ · 08.5.3 ✅ · 08.5.9 ✅ · 08.9.4 ✅ · 11.2 ✅ · 11.3 ✅ · 02.3.5/11.4 attach ✅ | Teslim edildi (merge `MERGE_SHA`). 08.5.3 (kaynak Dilim 11'de kapsam dışıydı) burada teslim edildi. Yeni: `website_exists` hata tipi (§D15), chat-page allowlist muafiyeti (§C-A8), email inbound (§C-A9). |
 | **14** | **Checkout + bildirim + shell kalanı** | 10.1.1–.3 · 10.1.6 · 13.8 · 01.1.3 · 01.1.6 · 08.7.1 · 03.1.1          | PRD çıkış kriteri "trial→ücretli ≥%8" bu yol olmadan ölçülemez.                                                                        |
 
 **Faz-0 kapanış kapısı:** 52 gereksinimin tamamı ✅ veya gerekçeli ⛔ · §7 NFR kapısı geçildi ·
@@ -486,7 +486,7 @@ Stripe lokal, object storage `.data/uploads`) · prodüksiyon deploy/DNS yok · 
 
 ## A. Tarihçe — Dilim Detayları (Dilim 1–10)
 
-### Dilim 1 — Bootstrap [XHIGH] ✅
+### Dilim 1 — Bootstrap [MAX] ✅
 
 **Teslim edildi (2026-07-22):** 78 unit test yeşil · typecheck 8/8 · lint 6/6 · format temiz ·
 `make dev` çalışıyor · API+RTM `/health` 200 (db+redis canlı) · WS handshake doğrulandı
@@ -627,7 +627,7 @@ zarfın lisansı bağlantının lisansıyla eşleşmeli.
 - `login` → `subscribe` → push (`incoming_chat`, `incoming_event`, `chat_deactivated`, `chat_transferred`, `incoming_typing_indicator`, `routing_status_set`, `queue_positions_updated`)
 - Redis pub/sub fan-out; missed-event sync testi
 
-### Dilim 6 — Customer Widget [XHIGH] ✅
+### Dilim 6 — Customer Widget [MAX] ✅
 
 **Teslim edildi (2026-07-22):** 379 test yeşil (120 unit + 259 integration) ·
 widget bundle **5.3 KB gzip** (bütçe 50 KB) · loader 1.09 KB.
@@ -650,7 +650,7 @@ widget bundle **5.3 KB gzip** (bütçe 50 KB) · loader 1.09 KB.
 - Customer Chat API: token, start_chat, send_event, RTM customer socket
 - Trusted domains allowlist; HTML escape (asla innerHTML)
 
-### Dilim 7 — Inbox 3-pane [XHIGH] ✅
+### Dilim 7 — Inbox 3-pane [MAX] ✅
 
 **Teslim edildi (2026-07-22):** tarayıcıda uçtan uca doğrulandı —
 giriş → 3-pane inbox → widget'tan gelen mesaj **sayfa yenilemeden** transcript'e düştü →
@@ -702,7 +702,7 @@ gerçekten yönlendirilmesi için routing bir ön koşul.
 - ADR-08 algoritması; concurrent limit; fallback grup; kuyruk pozisyonu
 - Negatif testler: limit dolu → kuyruk; tüm gruplar offline → `groups_offline`
 
-### Dilim 9 — Reports + Billing [XHIGH] ✅
+### Dilim 9 — Reports + Billing [MAX] ✅
 
 **Teslim edildi (2026-07-22):** 398 test yeşil (120 unit + 278 integration).
 
@@ -722,7 +722,7 @@ gerçekten yönlendirilmesi için routing bir ön koşul.
   sessizce sınırsız olma yoludur.
 - Kota %80'de uyarı (PRD §8.3 akış 5).
 
-### Dilim 10 — Design System + modül ekranları [XHIGH] ✅
+### Dilim 10 — Design System + modül ekranları [MAX] ✅
 
 Token sistemi, Tailwind eşlemesi ve a11y kuralları (`design-brief.md` → config); hiçbir
 bileşende sabit renk yok. Başlangıçta yalnız inbox stillendirilmişti; kalan altı modül
@@ -968,6 +968,24 @@ görüneceği en son yerdir.
 - **A5:** Stripe mock: `subscriptions`/`usage_records` lokal yazılır, dış çağrı yok.
 - **A6:** `region='eu'` sabit; `X-Region` başlığı doğrulanır ama tek değer kabul eder.
 - **A7:** Object storage mock: yerel `.data/uploads` + imzalı URL simülasyonu.
+- **A8 (dilim 13):** Barındırılan **Chat page** (08.5.9) trusted-domain allowlist'inden muaftır.
+  Widget üçüncü taraf sitelere gömülür ve `auth_resolve_widget_origin` çağıran origin'i
+  allowlist'e karşı doğrular; Chat page ise **kendi origin'imizden** sunulan, bilinçli olarak
+  public bir sohbet linkidir. Bu yüzden yeni bir SECURITY DEFINER fonksiyon
+  `auth_resolve_organization_license(org_id)` lisansı doğrudan çözer (allowlist yok). Sınır:
+  token yine tek organizasyona + müşterinin kendi konuşmasına kapalıdır; "public link = herkes
+  sohbet başlatabilir" destek kutusunun doğasıdır. Doğrulandı: chat-page origin → 200,
+  `evil.example` → 403.
+- **A9 (dilim 13):** **Email kanalı** (08.5.3) gelen yönü. Yönlendirme adresi
+  `<organization_id>@<INBOUND_EMAIL_DOMAIN>`; public webhook `POST /channels/email/inbound`
+  local part'ı org id olarak okur ve A8'in resolver'ıyla lisansa çözer (**yeni migration yok**).
+  `withTenant`/RLS o lisansa kilitler. Kararlar: (1) e-posta **gövdesi persist edilmez** —
+  ticket çekirdeği (Dilim 11) gövde alanı tutmaz, e-posta konusu `ticket.subject` olur;
+  (2) gönderen `organizationId+email` (citext) ile mevcut customer'a eşlenir — cross-tenant
+  eşleşmez, **ikinci kayıt açılmaz**; (3) spam: sağlayıcı verdikti × `SecuritySettings.spamFilterEnabled`
+  (varsayılan açık) — açıkken flagged mesaj ticket üretmez; (4) `INBOUND_EMAIL_SECRET` **opsiyonel**
+  kenar-kimliği (set ise `X-Inbound-Secret` zorunlu, dev/test'te açık — sağlayıcı imzası dağıtım
+  işi, SMTP mock A4 gibi); (5) iptal edilmiş lisans → 404.
 
 ## D. Deviations (sapmalar)
 
@@ -1023,6 +1041,12 @@ görüneceği en son yerdir.
   "çalışma alanı oluşturulamadı" görüyordu (oysa oluşturulmuştu). Ayrıca "Acme Bikes" ve
   "Acme Tools" aynı id'ye düşerdi ve `client_id` birincil anahtar. Artık signup client'ı
   organizasyon uuid'sinden üretiyor ve `client_id` üyelikle birlikte dönüyor — tahmin yok.
+- **D15 (dilim 13):** Kilitli hata tiplerine bir dar tip daha eklendi: `website_exists` (409,
+  tm6 — bir domain o lisansa zaten eklenmiş). Kök sebep ve gerekçe D10'dakiyle aynı: kaynak
+  katalog "bu zaten var" karşılığını taşımıyor; genel bir `conflict` yerine dar tip seçildi,
+  katalogun geri kalanı da öyle (`ticket_exists`, `account_exists`). Guard testi tipi **isimle**
+  listeliyor, plansız bir tip hâlâ testi düşürüyor. (Dilim 13 yalnız bunu ekledi; `greeting_not_found`/
+  `group_not_found` daha önce vardı.)
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

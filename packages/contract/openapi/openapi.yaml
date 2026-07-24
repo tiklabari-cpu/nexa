@@ -178,6 +178,21 @@ paths:
     $ref: "./paths/settings.yaml#/routingRules"
   /settings/routing-rules/{ruleId}:
     $ref: "./paths/settings.yaml#/routingRule"
+  /settings/security:
+    $ref: "./paths/settings.yaml#/securitySettings"
+
+  /websites:
+    $ref: "./paths/websites.yaml#/websites"
+  /websites/{websiteId}:
+    $ref: "./paths/websites.yaml#/website"
+
+  /channels/email/inbound:
+    $ref: "./paths/channels.yaml#/emailInbound"
+
+  /uploads:
+    $ref: "./paths/uploads.yaml#/issueUpload"
+  /uploads/{key}:
+    $ref: "./paths/uploads.yaml#/uploadObject"
 
   /reports/overview:
     $ref: "./paths/reports.yaml#/overview"
@@ -508,6 +523,106 @@ components:
           description: Hostname only — lowercased, no scheme, port or path.
         include_subdomains: { type: boolean }
         created_at: { type: string, format: date-time }
+
+    Website:
+      type: object
+      description: |
+        A site a workspace has connected the widget to (FR-MOD-08.5.2). Distinct
+        from a trusted domain (FR-MOD-08.9.1): a website is the customer-facing
+        install record — where the snippet was pasted — while a trusted domain is
+        the security allowlist that decides whether the widget may mint a token
+        there. Adding a website does not authorise its origin; the domain must
+        also be a trusted domain for the widget to work.
+      required: [id, domain, setup, status, connected_at, created_at, snippet]
+      properties:
+        id: { type: string, format: uuid }
+        domain:
+          type: string
+          description: Hostname only — lowercased, no scheme, port or path.
+        setup:
+          type: string
+          enum: [manual, platform]
+          description: |
+            `platform` for a hosted integration (Shopify/WordPress/GTM),
+            `manual` for a pasted snippet. Per PRD §8.4; the specific platform
+            icon the UI shows is a presentation mapping, not stored here.
+        status:
+          type: string
+          enum: [pending, connected, error]
+          description: |
+            `connected` once the widget has completed its first handshake from
+            this domain; `pending` until then. `error` is reserved for a failed
+            verification signal (FR-MOD-08.5.2), written by the widgets screen.
+        connected_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the first handshake was seen, or null while pending.
+        created_at: { type: string, format: date-time }
+        snippet:
+          type: string
+          description: |
+            The code to paste before `</body>`. Sets `window.__nexa` and loads
+            the async widget loader. Identical across a workspace's sites — the
+            embedding origin is resolved at runtime — so "get code" per row shows
+            this same value.
+
+    UploadGrant:
+      type: object
+      description: |
+        Permission to store one file, issued by `POST /uploads` once the
+        licence's file-sharing rules have accepted the declared type and size.
+      required: [upload_url, file_url, expires_at]
+      properties:
+        upload_url:
+          type: string
+          description: |
+            Signed, single-use, and bound to the declared type and length. Send
+            the bytes here with `PUT` before `expires_at`.
+        file_url:
+          type: string
+          description: |
+            Where the file will be readable, and the value that belongs on an
+            event's `attachment_url`. Does not expire — it is authorised by
+            session, and by the licence embedded in the key.
+        expires_at:
+          type: string
+          format: date-time
+          description: When `upload_url` stops being accepted.
+
+    SecuritySettings:
+      type: object
+      description: |
+        Per-license security configuration (PRD §8.4 `security_settings`).
+
+        `file_sharing_enabled`, `allowed_file_types` and `max_file_size_bytes`
+        are the rules FR-MOD-08.9.4 enforces on every upload — both the agent
+        composer's attachments and anything a customer sends.
+      required:
+        [
+          file_sharing_enabled,
+          allowed_file_types,
+          max_file_size_bytes,
+          spam_filter_enabled,
+          require_two_factor,
+        ]
+      properties:
+        file_sharing_enabled:
+          type: boolean
+          description: When false, no attachment is accepted from either side.
+        allowed_file_types:
+          type: array
+          description: Allowed MIME types. An empty list blocks every upload.
+          items: { type: string }
+        max_file_size_bytes:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 104857600
+          description: Per-file ceiling. 100 MiB is the hard maximum.
+        spam_filter_enabled: { type: boolean }
+        require_two_factor: { type: boolean }
+        updated_at: { type: string, format: date-time, nullable: true }
 
     CannedResponse:
       type: object
@@ -849,6 +964,17 @@ components:
             id: { type: string, format: uuid }
             name: { type: string, nullable: true }
             email: { type: string, nullable: true }
+        agent:
+          type: object
+          nullable: true
+          description: |
+            Who the visitor is talking to, for the widget header (FR-MOD-11.3): a
+            human assignee if there is one, otherwise the active AI persona. Null
+            until either exists.
+          required: [name]
+          properties:
+            name: { type: string }
+            avatar_url: { type: string, nullable: true }
         chat:
           type: object
           nullable: true
@@ -920,6 +1046,7 @@ components:
         - unsupported_version
         - users_limit_reached
         - validation
+        - website_exists
         - wrong_product_version
 
   responses:

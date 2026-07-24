@@ -48,15 +48,23 @@ events:
 
       A customer cannot write an internal note. The field is not accepted here at
       all, rather than accepted and downgraded silently.
+
+      A message must carry text, an `attachment_url`, or both — an attachment may
+      stand alone (FR-MOD-11.4). The attachment must be a file this workspace
+      uploaded through `/uploads`; any other value is refused.
     requestBody:
       required: true
       content:
         application/json:
           schema:
             type: object
-            required: [text]
+            description: At least one of `text` or `attachment_url` is required.
             properties:
               text: { type: string, minLength: 1, maxLength: 10000 }
+              attachment_url:
+                type: string
+                maxLength: 2048
+                description: A `file_url` from `/uploads`. May be sent without text.
               url:
                 type: string
                 maxLength: 2048

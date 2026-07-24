@@ -41,6 +41,10 @@ export const ERROR_TYPES = [
   'unsupported_version',
   'users_limit_reached',
   'validation',
+  // Nexa addition. Websites (FR-MOD-08.5.2) are not in the source catalogue
+  // (v2-03 §1.8, chat-only); a duplicate install domain is a conflict, kept
+  // narrow like `ticket_exists`/`account_exists` rather than a generic one.
+  'website_exists',
   'wrong_product_version',
 ] as const;
 
@@ -78,6 +82,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   unsupported_version: 400,
   users_limit_reached: 429,
   validation: 400,
+  website_exists: 409,
   wrong_product_version: 409,
 };
 

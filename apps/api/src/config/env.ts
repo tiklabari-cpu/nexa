@@ -33,10 +33,23 @@ const envSchema = z.object({
   MAIL_DIR: z.string().default('.data/mail'),
   RTM_BASE_URL: z.string().default('ws://localhost:4001'),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  /// Origin serving the widget loader + iframe. The install snippet points
+  /// `window.__nexa.widgetOrigin` and the async `loader.js` at it.
+  WIDGET_BASE_URL: z.string().url().default('http://localhost:5174'),
+  /// Domain a workspace forwards its support mail to (FR-MOD-08.5.3). The
+  /// per-workspace address is `<organization_id>@<domain>`; the inbound webhook
+  /// reads the local part back to route the message. Must match what the web
+  /// app shows on the Email channel card (`VITE_INBOUND_EMAIL_DOMAIN`).
+  INBOUND_EMAIL_DOMAIN: z.string().default('inbound.nexa.localhost'),
+  /// Shared secret the mail provider presents on the inbound webhook, standing
+  /// in for a signed request. Optional: unset in dev/test leaves the endpoint
+  /// open (the recipient address is the only routing key), enforced when set.
+  INBOUND_EMAIL_SECRET: z.string().optional(),
 
   JWT_SIGNING_KEY: secret(32),
   WEBHOOK_HMAC_SEED: secret(32),
   CUSTOMER_TOKEN_SECRET: secret(32),
+  UPLOAD_SIGNING_KEY: secret(32),
 
   ACCESS_TOKEN_TTL: z.coerce.number().int().positive().max(3600).default(3600),
   REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(2_592_000),
@@ -58,7 +71,17 @@ const envSchema = z.object({
   LLM_PROVIDER: z.enum(['mock']).default('mock'),
   MAIL_PROVIDER: z.enum(['mock']).default('mock'),
   STORAGE_PROVIDER: z.enum(['local']).default('local'),
+  /** Where the `local` provider keeps uploads. Inside `.data/`, which is ignored. */
+  STORAGE_LOCAL_DIR: z.string().default('.data/uploads'),
+  /** How long a signed upload URL stays usable. One shot, so this is short. */
+  UPLOAD_URL_TTL: z.coerce.number().int().positive().max(3600).default(300),
   STRIPE_PROVIDER: z.enum(['mock']).default('mock'),
+  /**
+   * Upload virus scanning (FR-MOD-08.9.4). `mock` flags the EICAR test file and
+   * passes the rest; `unavailable` is always-down, for exercising the fail-closed
+   * path in tests and drills. A real ClamAV provider slots in here later.
+   */
+  VIRUS_SCANNER: z.enum(['mock', 'unavailable']).default('mock'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
@@ -84,7 +107,12 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
         'DATABASE_APP_URL is required in production: connecting as the table owner bypasses row level security.',
       );
     }
-    for (const key of ['JWT_SIGNING_KEY', 'WEBHOOK_HMAC_SEED', 'CUSTOMER_TOKEN_SECRET'] as const) {
+    for (const key of [
+      'JWT_SIGNING_KEY',
+      'WEBHOOK_HMAC_SEED',
+      'CUSTOMER_TOKEN_SECRET',
+      'UPLOAD_SIGNING_KEY',
+    ] as const) {
       if (env[key].startsWith('dev-only-')) {
         throw new Error(`${key} still holds its development placeholder value.`);
       }

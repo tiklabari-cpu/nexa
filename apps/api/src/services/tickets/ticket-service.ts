@@ -218,6 +218,36 @@ export class TicketService {
     }
   }
 
+  /**
+   * Create a ticket from an inbound channel (email, FR-MOD-08.5.3).
+   *
+   * A forwarded email has no agent behind it, so there is no principal and no
+   * visibility to resolve — the licence is the one the recipient address
+   * resolved to, and RLS on the surrounding `withTenant` confines the write to
+   * it. Kept apart from `create()` on purpose: the scope-guarded path stays
+   * unreachable without a principal, and this one cannot be called by accident
+   * from a request that has an agent token.
+   */
+  async createFromEmail(
+    tx: TenantClient,
+    tenant: TenantContext,
+    input: { subject: string; customerId: string },
+  ): Promise<{ id: string }> {
+    return tx.ticket.create({
+      data: {
+        id: await allocateId(tx),
+        licenseId: tenant.licenseId,
+        subject: input.subject.trim() || '(no subject)',
+        status: 'open',
+        customerId: input.customerId,
+        // Set on creation so the ticket sorts from its first moment, matching
+        // create(): a null activity timestamp sorts unpredictably in the queue.
+        lastMessageAt: new Date(),
+      },
+      select: { id: true },
+    });
+  }
+
   async update(
     tx: TenantClient,
     tenant: TenantContext,

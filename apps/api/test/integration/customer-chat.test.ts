@@ -347,4 +347,214 @@ describe('customer chat api', () => {
       ).toBe(404);
     });
   });
+
+  // =========================================================================
+
+  describe('attachments (FR-MOD-11.4)', () => {
+    const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+
+    /** A customer's own upload: grant → PUT → file_url, the widget's real path. */
+    async function customerUpload(token: string): Promise<string> {
+      const granted = await server.post(
+        '/uploads',
+        { content_type: 'image/png', size_bytes: PNG.byteLength },
+        auth(token),
+      );
+      expect(granted.statusCode).toBe(201);
+      const grant = granted.json() as { upload_url: string; file_url: string };
+      const put = await server.app.inject({
+        method: 'PUT',
+        url: grant.upload_url,
+        headers: { 'content-type': 'image/png' },
+        payload: PNG,
+      });
+      expect(put.statusCode).toBe(201);
+      return grant.file_url;
+    }
+
+    it('sends an attachment with no text and shows it back on the event', async () => {
+      const { token } = await widgetToken();
+      const fileUrl = await customerUpload(token);
+
+      const sent = await server.post('/customer/chat/events', { attachment_url: fileUrl }, auth(token));
+      expect(sent.statusCode).toBe(201);
+
+      const state = await server.get('/customer/chat', auth(token));
+      const events = (state.json() as { events: Array<{ attachment_url: string | null }> }).events;
+      expect(events.at(-1)?.attachment_url).toBe(fileUrl);
+    });
+
+    it('sends text and an attachment together', async () => {
+      const { token } = await widgetToken();
+      const fileUrl = await customerUpload(token);
+
+      const sent = await server.post(
+        '/customer/chat/events',
+        { text: 'Here is the screenshot', attachment_url: fileUrl },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(201);
+    });
+
+    it('refuses a message with neither text nor an attachment', async () => {
+      const { token } = await widgetToken();
+      const empty = await server.post('/customer/chat/events', {}, auth(token));
+      expect(empty.statusCode).toBe(400);
+    });
+
+    it('refuses an attachment_url that is not a file from /uploads', async () => {
+      const { token } = await widgetToken();
+      const evil = await server.post(
+        '/customer/chat/events',
+        { attachment_url: 'https://evil.example/tracker.png' },
+        auth(token),
+      );
+      expect(evil.statusCode).toBe(400);
+      expect((evil.json() as { error: { type: string } }).error.type).toBe('validation');
+    });
+
+    it("refuses another tenant's uploaded file", async () => {
+      // Tenant B uploads a file, tenant A's visitor tries to attach it.
+      const agentTokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      const grantedB = await server.post(
+        '/uploads',
+        { content_type: 'image/png', size_bytes: PNG.byteLength },
+        auth(agentTokenB),
+      );
+      const foreignUrl = (grantedB.json() as { file_url: string }).file_url;
+
+      const { token } = await widgetToken();
+      const refused = await server.post(
+        '/customer/chat/events',
+        { attachment_url: foreignUrl },
+        auth(token),
+      );
+      expect(refused.statusCode).toBe(400);
+    });
+  });
+
+  // =========================================================================
+
+  describe('agent identity (FR-MOD-11.3)', () => {
+    interface AgentState {
+      agent: { name: string; avatar_url: string | null } | null;
+    }
+
+    it('names the active AI persona when no one has taken over', async () => {
+      await owner.aiAgent.create({
+        data: { licenseId: fx.a.licenseId, name: 'Ada', avatarUrl: null, active: true },
+      });
+
+      const { token } = await widgetToken();
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent?.name).toBe('Ada');
+    });
+
+    it('names the human agent once the conversation is assigned', async () => {
+      const { token } = await widgetToken();
+      await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+
+      // Hand the conversation to a person; the header should follow.
+      await owner.thread.updateMany({
+        where: { licenseId: fx.a.licenseId },
+        data: { assigneeId: fx.a.agentAccountId },
+      });
+
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent?.name).toBe('Agent a');
+    });
+
+    it('prefers a human assignee over the active AI persona', async () => {
+      await owner.aiAgent.create({
+        data: { licenseId: fx.a.licenseId, name: 'Ada', active: true },
+      });
+
+      const { token } = await widgetToken();
+      await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+      await owner.thread.updateMany({
+        where: { licenseId: fx.a.licenseId },
+        data: { assigneeId: fx.a.agentAccountId },
+      });
+
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent?.name).toBe('Agent a');
+    });
+
+    it('shows no identity when there is neither a person nor an active AI', async () => {
+      const { token } = await widgetToken();
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent).toBeNull();
+    });
+
+    it('does not leak another license\'s AI persona', async () => {
+      // B has an active persona; A's visitor must never see it.
+      await owner.aiAgent.create({
+        data: { licenseId: fx.b.licenseId, name: 'Bea', active: true },
+      });
+
+      const { token } = await widgetToken();
+      const state = await server.get('/customer/chat', auth(token));
+      expect((state.json() as AgentState).agent).toBeNull();
+    });
+  });
+
+  // =========================================================================
+
+  describe('hosted chat page (FR-MOD-08.5.9)', () => {
+    // The widget origin the test env serves the Chat page from; its host is the
+    // "self" the token route recognises as exempt from the allowlist.
+    const CHAT_PAGE_ORIGIN = 'http://localhost:5174';
+
+    it('mints a token for our own hosted page with no trusted domain', async () => {
+      // `localhost` is not on any tenant's allowlist — an embed there is refused
+      // — but the Chat page runs on our own origin and is exempt.
+      const response = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId, host_origin: CHAT_PAGE_ORIGIN },
+        { origin: CHAT_PAGE_ORIGIN },
+      );
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as { token: string }).token).toBeTruthy();
+    });
+
+    it('still refuses a third-party origin that is not trusted', async () => {
+      const response = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId, host_origin: 'https://evil.example' },
+        { origin: CHAT_PAGE_ORIGIN },
+      );
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('starts a real conversation from the chat page', async () => {
+      const granted = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId, host_origin: CHAT_PAGE_ORIGIN },
+        { origin: CHAT_PAGE_ORIGIN },
+      );
+      const { token } = granted.json() as { token: string };
+
+      const sent = await server.post('/customer/chat/events', { text: 'From the link' }, auth(token));
+      expect(sent.statusCode).toBe(201);
+      expect((sent.json() as { chat_id: string }).chat_id).toBeTruthy();
+    });
+
+    it('resolves the licence for a token minted this way', async () => {
+      // Cross-tenant guard: the chat page for A must never resolve B's licence.
+      const granted = await server.post(
+        '/customer/token',
+        { organization_id: fx.b.organizationId, host_origin: CHAT_PAGE_ORIGIN },
+        { origin: CHAT_PAGE_ORIGIN },
+      );
+      expect(granted.statusCode).toBe(200);
+      expect((granted.json() as { organization_id: string }).organization_id).toBe(
+        fx.b.organizationId,
+      );
+    });
+  });
 });

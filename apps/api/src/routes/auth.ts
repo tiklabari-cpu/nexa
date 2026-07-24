@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { isScope, type Scope } from '@nexa/types';
 import type { Env } from '../config/env.js';
@@ -6,6 +7,7 @@ import { ApiError } from '../lib/api-error.js';
 import { originHost } from '../lib/origin.js';
 import { withTenant } from '../lib/tenant.js';
 import { OauthService } from '../services/auth/oauth-service.js';
+import { markWebsiteConnected } from '../services/websites/website-service.js';
 import {
   ADMIN_SCOPES,
   DEFAULT_AGENT_SCOPES,
@@ -98,6 +100,9 @@ export default async function authRoutes(
   options: { env: Env },
 ): Promise<void> {
   const { env } = options;
+  // Our own widget origin. A token request whose host resolves to this is the
+  // hosted Chat page (FR-MOD-08.5.9), exempt from the trusted-domain allowlist.
+  const selfHost = originHost(env.WIDGET_BASE_URL);
   const oauth = new OauthService(app.db, {
     accessTokenTtl: env.ACCESS_TOKEN_TTL,
     refreshTokenTtl: env.REFRESH_TOKEN_TTL,
@@ -412,17 +417,25 @@ export default async function authRoutes(
       );
     }
 
-    // The organization id comes from the request body — untrusted. It only
-    // becomes meaningful once the calling origin is proven to be on that
-    // organization's allowlist.
+    // The organization id comes from the request body — untrusted. For an embed
+    // it only becomes meaningful once the calling origin is proven to be on that
+    // organization's allowlist. The one exception is our own hosted Chat page
+    // (FR-MOD-08.5.9): a page we serve, on our own origin, is a public chat link
+    // by design, so it resolves the licence directly instead of the allowlist —
+    // see the decision recorded in PLAN.md §C.
+    const isChatPage = selfHost !== null && host === selfHost;
     const matches = await app.db.$queryRaw<
       Array<{ license_id: bigint; organization_id: string; license_status: string }>
-    >`SELECT * FROM auth_resolve_widget_origin(${body.organization_id}::uuid, ${host})`;
+    >(
+      isChatPage
+        ? Prisma.sql`SELECT * FROM auth_resolve_organization_license(${body.organization_id}::uuid)`
+        : Prisma.sql`SELECT * FROM auth_resolve_widget_origin(${body.organization_id}::uuid, ${host})`,
+    );
 
     const match = matches[0];
     if (!match) {
       request.log.warn(
-        { host, organization_id: body.organization_id },
+        { host, organization_id: body.organization_id, isChatPage },
         'widget token requested from an untrusted origin',
       );
       throw ApiError.authorization('This origin is not a trusted domain for the organization.');
@@ -468,6 +481,16 @@ export default async function authRoutes(
       organizationId: match.organization_id,
       licenseId: match.license_id,
     });
+
+    // The widget just proved it is live on this origin, so a website added for
+    // this domain (FR-MOD-08.5.2) becomes Connected here — the earliest reliable
+    // server-side signal. Best-effort: a failure must not deny the visitor a
+    // token, and a domain tracked only as a trusted domain matches nothing.
+    try {
+      await withTenant(app.db, tenant, (tx) => markWebsiteConnected(tx, host));
+    } catch (error) {
+      request.log.warn({ err: error, host }, 'failed to mark website connected');
+    }
 
     reply.header('Cache-Control', 'no-store');
     return reply.send({

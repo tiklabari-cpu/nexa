@@ -8,11 +8,15 @@
  * with `textContent`. Never `innerHTML` — the eslint config bans it outright
  * rather than relying on anyone remembering (NFR-S6).
  */
-import { WidgetApi, type WidgetEvent } from './api.js';
+import { WidgetApi, type WidgetEvent, type WidgetState } from './api.js';
 
 const LAUNCHER_SIZE = 84;
 const PANEL = { width: 380, height: 620 } as const;
+/** Frame size while the proactive greeting card sits above the launcher. */
+const GREETING = { width: 340, height: 250 } as const;
 const POLL_INTERVAL_MS = 4_000;
+/** Per-session, so a dismissed greeting stays dismissed until the tab closes. */
+const GREETING_DISMISSED_KEY = 'nexa.greeting_dismissed';
 
 interface WidgetConfig {
   organizationId: string;
@@ -20,6 +24,12 @@ interface WidgetConfig {
   language: string;
   /** Origin of the embedding page, supplied by the loader. */
   hostOrigin: string | null;
+  /**
+   * The hosted Chat page (FR-MOD-08.5.9): the widget is the whole page, not a
+   * launcher in someone else's, and it is served from our own origin — so it
+   * has no launcher, no host to message, and authorises against itself.
+   */
+  chatPage: boolean;
 }
 
 interface State {
@@ -29,8 +39,19 @@ interface State {
   chatId: string | null;
   queuePosition: number | null;
   events: WidgetEvent[];
+  /** Who the visitor is talking to, shown in the header (FR-MOD-11.3). */
+  agent: { name: string; avatarUrl: string | null } | null;
+  /** The proactive greeting card is on screen (panel still closed). */
+  greetingOpen: boolean;
+  /** The pre-chat form is showing instead of the composer. */
+  prechat: boolean;
+  /** Pre-chat details to attach to the first message the visitor sends. */
+  pendingDetails: { name?: string; email?: string } | null;
   error: string | null;
   sending: boolean;
+  /** A file the visitor picked and we uploaded, waiting to be sent. */
+  pendingAttachment: { fileUrl: string; name: string } | null;
+  uploading: boolean;
 }
 
 export function mount(doc: Document = document, win: Window = window): void {
@@ -47,25 +68,59 @@ export function mount(doc: Document = document, win: Window = window): void {
     chatId: null,
     queuePosition: null,
     events: [],
+    agent: null,
+    greetingOpen: false,
+    prechat: false,
+    pendingDetails: null,
     error: null,
     sending: false,
+    pendingAttachment: null,
+    uploading: false,
   };
 
   const ui = buildUi(doc);
-  root.append(ui.panel, ui.launcher);
+  root.append(ui.panel, ui.greeting, ui.launcher);
 
   // --- Rendering -----------------------------------------------------------
 
   let renderedCount = 0;
+  // attachment_url → object URL. `refresh` rebuilds the transcript every few
+  // seconds; without this each rebuild would re-fetch every image's bytes and
+  // flash it blank while the new blob loads. Keyed by the stable url, so a
+  // re-render reuses the blob it already has.
+  const attachmentCache = new Map<string, string>();
 
   function renderEvents(): void {
     // Append only what is new: rebuilding the list would lose scroll position
     // and restart CSS animations on messages already on screen.
     for (const event of state.events.slice(renderedCount)) {
-      ui.transcript.append(renderBubble(doc, event));
+      ui.transcript.append(renderBubble(doc, event, api, attachmentCache));
     }
     renderedCount = state.events.length;
     ui.transcript.scrollTop = ui.transcript.scrollHeight;
+  }
+
+  /**
+   * The header names who the visitor is talking to (FR-MOD-11.3): the AI persona
+   * or, once a person takes over, that agent. An avatar when there is one, the
+   * initial otherwise — `textContent` throughout so a name can never be markup.
+   */
+  function renderHeader(): void {
+    const agent = state.agent;
+    ui.title.textContent = agent?.name ?? 'Chat with us';
+    ui.avatar.replaceChildren();
+    ui.avatar.hidden = agent === null;
+    if (!agent) return;
+
+    if (agent.avatarUrl) {
+      const img = doc.createElement('img');
+      img.className = 'nx-avatar-img';
+      img.alt = '';
+      img.src = agent.avatarUrl;
+      ui.avatar.append(img);
+    } else {
+      ui.avatar.textContent = initial(agent.name);
+    }
   }
 
   function renderStatus(): void {
@@ -90,6 +145,20 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.status.dataset['tone'] = 'ok';
   }
 
+  /**
+   * The frame is only as large as it needs to be — a full-size transparent
+   * iframe would swallow clicks on the host page. Three sizes: the open panel,
+   * the greeting card above a closed launcher, or just the launcher.
+   */
+  function resize(): void {
+    const size = state.open
+      ? PANEL
+      : state.greetingOpen
+        ? GREETING
+        : { width: LAUNCHER_SIZE, height: LAUNCHER_SIZE };
+    postToHost(win, { type: 'nexa:resize', width: size.width, height: size.height });
+  }
+
   function setOpen(open: boolean): void {
     state.open = open;
     ui.panel.hidden = !open;
@@ -101,19 +170,57 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.launcher.setAttribute('aria-expanded', String(open));
     ui.launcher.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
 
-    // The frame is only as large as it needs to be: a full-size transparent
-    // iframe would swallow clicks on the host page while the widget is closed.
-    postToHost(win, {
-      type: 'nexa:resize',
-      width: open ? PANEL.width : LAUNCHER_SIZE,
-      height: open ? PANEL.height : LAUNCHER_SIZE,
-    });
+    // Opening supersedes the proactive card, but does not count as dismissing it.
+    if (open && state.greetingOpen) {
+      state.greetingOpen = false;
+      ui.greeting.hidden = true;
+    }
+
+    resize();
     postToHost(win, { type: open ? 'nexa:open' : 'nexa:close' });
 
     if (open) {
-      ui.input.focus();
+      renderPrechat();
+      (state.prechat ? ui.prechatName : ui.input).focus();
       void connect();
     }
+  }
+
+  // --- Greeting card + pre-chat --------------------------------------------
+
+  /** Show the proactive card unless the visitor already waved it away. */
+  function showGreeting(): void {
+    if (state.open || greetingDismissed(win)) return;
+    state.greetingOpen = true;
+    ui.greeting.hidden = false;
+    resize();
+  }
+
+  function dismissGreeting(): void {
+    state.greetingOpen = false;
+    ui.greeting.hidden = true;
+    rememberGreetingDismissed(win);
+    if (!state.open) resize();
+  }
+
+  /** Swap the panel body between the pre-chat form and the conversation. */
+  function renderPrechat(): void {
+    const showForm = state.prechat;
+    ui.prechat.hidden = !showForm;
+    ui.transcript.hidden = showForm;
+    ui.status.hidden = showForm;
+    ui.form.hidden = showForm;
+    ui.chip.hidden = showForm || state.pendingAttachment === null;
+  }
+
+  function submitPrechat(): void {
+    const name = ui.prechatName.value.trim();
+    if (!name) return;
+    const email = ui.prechatEmail.value.trim();
+    state.pendingDetails = { name, ...(email ? { email } : {}) };
+    state.prechat = false;
+    renderPrechat();
+    ui.input.focus();
   }
 
   // --- Data ----------------------------------------------------------------
@@ -127,9 +234,16 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.chatId = snapshot.chat?.id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
       state.events = snapshot.events;
+      state.agent = toAgent(snapshot.agent);
       state.error = null;
+      // A returning visitor already in a conversation skips the pre-chat form.
+      if (snapshot.events.length > 0) {
+        state.prechat = false;
+        renderPrechat();
+      }
       renderEvents();
       renderStatus();
+      renderHeader();
       startPolling();
     } catch (error) {
       state.error = 'Chat is unavailable right now. Please try again shortly.';
@@ -139,9 +253,59 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
   }
 
+  async function onPickFile(): Promise<void> {
+    const file = ui.file.files?.[0];
+    ui.file.value = ''; // allow re-picking the same file
+    if (!file || state.uploading) return;
+
+    // Uploading needs a token; opening the panel already started `connect`, but
+    // a fast click can beat it, so make sure of it first.
+    if (!api.authenticated) await connect();
+
+    state.uploading = true;
+    ui.attach.disabled = true;
+    try {
+      const fileUrl = await api.upload(file);
+      state.pendingAttachment = { fileUrl, name: file.name };
+      state.error = null;
+      renderChip();
+    } catch (error) {
+      // The licence's file-sharing rules live on the server; a refusal (wrong
+      // type, too large) surfaces here rather than being guessed at.
+      state.error = 'That file could not be attached.';
+      renderStatus();
+      console.warn('nexa widget: upload failed', error);
+    } finally {
+      state.uploading = false;
+      ui.attach.disabled = false;
+    }
+  }
+
+  function renderChip(): void {
+    const chip = state.pendingAttachment;
+    ui.chip.replaceChildren();
+    ui.chip.hidden = chip === null;
+    if (!chip) return;
+
+    const name = doc.createElement('span');
+    name.className = 'nx-chip-name';
+    name.textContent = chip.name;
+    const remove = doc.createElement('button');
+    remove.type = 'button';
+    remove.className = 'nx-chip-x';
+    remove.setAttribute('aria-label', 'Remove attachment');
+    remove.textContent = '×';
+    remove.addEventListener('click', () => {
+      state.pendingAttachment = null;
+      renderChip();
+    });
+    ui.chip.append(name, remove);
+  }
+
   async function send(): Promise<void> {
     const text = ui.input.value.trim();
-    if (!text || state.sending) return;
+    const attachment = state.pendingAttachment;
+    if ((!text && !attachment) || state.sending) return;
 
     state.sending = true;
     ui.send.disabled = true;
@@ -151,23 +315,36 @@ export function mount(doc: Document = document, win: Window = window): void {
     // nothing happen presses enter again.
     const optimistic: WidgetEvent = {
       id: `pending-${Date.now()}`,
-      text,
+      text: text || null,
       author_type: 'customer',
       created_at: new Date().toISOString(),
       type: 'message',
+      attachment_url: attachment?.fileUrl ?? null,
     };
     state.events.push(optimistic);
     renderEvents();
+    state.pendingAttachment = null;
+    renderChip();
 
+    // Pre-chat name/email ride along with the first message. Captured before
+    // the await so a failed send can put them back.
+    const details = state.pendingDetails;
     try {
-      const result = await api.send(text, { url: hostPageUrl(win) });
+      const result = await api.send(text, {
+        url: hostPageUrl(win),
+        ...(attachment ? { attachment_url: attachment.fileUrl } : {}),
+        ...(details ?? {}),
+      });
       state.chatId = result.chat_id;
+      state.pendingDetails = null;
       state.error = null;
       await refresh();
     } catch (error) {
       state.error = 'Message not sent. Check your connection and try again.';
-      // Put the text back so it is not lost.
+      // Put the text and attachment back so neither is lost.
       ui.input.value = text;
+      state.pendingAttachment = attachment;
+      renderChip();
       state.events = state.events.filter((e) => e.id !== optimistic.id);
       renderedCount = 0;
       ui.transcript.replaceChildren();
@@ -192,10 +369,12 @@ export function mount(doc: Document = document, win: Window = window): void {
       // Replace wholesale: the server's view is authoritative and includes the
       // real ids for anything sent optimistically.
       state.events = snapshot.events;
+      state.agent = toAgent(snapshot.agent);
       renderedCount = 0;
       ui.transcript.replaceChildren();
       renderEvents();
       renderStatus();
+      renderHeader();
     } catch (error) {
       console.warn('nexa widget: refresh failed', error);
     }
@@ -225,10 +404,23 @@ export function mount(doc: Document = document, win: Window = window): void {
     setOpen(false);
     ui.launcher.focus();
   });
+  // "Let's chat": open into the pre-chat form (unless a conversation resumes).
+  ui.greetChat.addEventListener('click', () => {
+    state.prechat = true;
+    setOpen(true);
+  });
+  // "Just browsing": tuck the card away for the rest of the session.
+  ui.greetBrowse.addEventListener('click', () => dismissGreeting());
+  ui.prechat.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitPrechat();
+  });
   ui.form.addEventListener('submit', (event) => {
     event.preventDefault();
     void send();
   });
+  ui.attach.addEventListener('click', () => ui.file.click());
+  ui.file.addEventListener('change', () => void onPickFile());
   ui.input.addEventListener('keydown', (event) => {
     // Enter sends, Shift+Enter breaks the line — the convention every chat uses.
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -238,7 +430,8 @@ export function mount(doc: Document = document, win: Window = window): void {
   });
 
   doc.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && state.open) {
+    // On the Chat page there is nothing to close to, so Escape must not blank it.
+    if (event.key === 'Escape' && state.open && !config.chatPage) {
       setOpen(false);
       ui.launcher.focus();
     }
@@ -252,7 +445,22 @@ export function mount(doc: Document = document, win: Window = window): void {
     if (data?.type === 'nexa:host-close') setOpen(false);
   });
 
-  postToHost(win, { type: 'nexa:ready' });
+  if (config.chatPage) {
+    // The whole page is the conversation: no launcher, no host to message, open
+    // from the start.
+    root.classList.add('nx-page');
+    ui.launcher.hidden = true;
+    ui.close.hidden = true;
+    ui.panel.hidden = false;
+    state.open = true;
+    renderPrechat();
+    ui.input.focus();
+    void connect();
+  } else {
+    postToHost(win, { type: 'nexa:ready' });
+    // The proactive nudge, once the host has wired up its message channel.
+    showGreeting();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -262,10 +470,22 @@ interface Ui {
   panel: HTMLElement;
   transcript: HTMLElement;
   status: HTMLElement;
+  chip: HTMLElement;
   form: HTMLFormElement;
   input: HTMLTextAreaElement;
+  attach: HTMLButtonElement;
+  file: HTMLInputElement;
   send: HTMLButtonElement;
   close: HTMLButtonElement;
+  avatar: HTMLElement;
+  title: HTMLElement;
+  greeting: HTMLElement;
+  greetChat: HTMLButtonElement;
+  greetBrowse: HTMLButtonElement;
+  prechat: HTMLFormElement;
+  prechatName: HTMLInputElement;
+  prechatEmail: HTMLInputElement;
+  prechatSubmit: HTMLButtonElement;
 }
 
 function buildUi(doc: Document): Ui {
@@ -289,15 +509,22 @@ function buildUi(doc: Document): Ui {
 
   const header = doc.createElement('header');
   header.className = 'nx-header';
+  const identity = doc.createElement('div');
+  identity.className = 'nx-identity';
+  const avatar = doc.createElement('span');
+  avatar.className = 'nx-avatar';
+  avatar.setAttribute('aria-hidden', 'true');
+  avatar.hidden = true;
   const title = doc.createElement('h1');
   title.className = 'nx-title';
   title.textContent = 'Chat with us';
+  identity.append(avatar, title);
   const close = doc.createElement('button');
   close.type = 'button';
   close.className = 'nx-close';
   close.setAttribute('aria-label', 'Close chat');
   close.textContent = '×';
-  header.append(title, close);
+  header.append(identity, close);
 
   const transcript = doc.createElement('div');
   transcript.className = 'nx-transcript';
@@ -311,8 +538,28 @@ function buildUi(doc: Document): Ui {
   status.className = 'nx-status';
   status.setAttribute('role', 'status');
 
+  // Shows the picked file before it is sent; hidden until there is one.
+  const chip = doc.createElement('div');
+  chip.className = 'nx-chip';
+  chip.hidden = true;
+
   const form = doc.createElement('form');
   form.className = 'nx-form';
+
+  const attach = doc.createElement('button');
+  attach.type = 'button';
+  attach.className = 'nx-attach';
+  attach.setAttribute('aria-label', 'Attach a file');
+  // A paperclip glyph rather than an SVG, to stay inside the 50 KB budget.
+  attach.textContent = '📎';
+
+  const file = doc.createElement('input');
+  file.type = 'file';
+  file.className = 'nx-file';
+  file.accept = 'image/*,application/pdf';
+  file.hidden = true;
+  file.setAttribute('aria-hidden', 'true');
+  file.tabIndex = -1;
 
   const input = doc.createElement('textarea');
   input.className = 'nx-input';
@@ -326,13 +573,89 @@ function buildUi(doc: Document): Ui {
   send.className = 'nx-send';
   send.textContent = 'Send';
 
-  form.append(input, send);
-  panel.append(header, transcript, status, form);
+  form.append(attach, file, input, send);
 
-  return { launcher, panel, transcript, status, form, input, send, close };
+  // Pre-chat form — a fixed, minimal one on purpose (FR-MOD-11.2): the visual
+  // form builder is a separate v1 feature this must not depend on.
+  const prechat = doc.createElement('form');
+  prechat.className = 'nx-prechat';
+  prechat.hidden = true;
+  const prechatIntro = doc.createElement('p');
+  prechatIntro.className = 'nx-prechat-intro';
+  prechatIntro.textContent = 'Tell us who you are and we will get started.';
+  const prechatName = doc.createElement('input');
+  prechatName.className = 'nx-prechat-input';
+  prechatName.type = 'text';
+  prechatName.placeholder = 'Your name';
+  prechatName.setAttribute('aria-label', 'Your name');
+  prechatName.required = true;
+  prechatName.maxLength = 120;
+  const prechatEmail = doc.createElement('input');
+  prechatEmail.className = 'nx-prechat-input';
+  prechatEmail.type = 'email';
+  prechatEmail.placeholder = 'Email (optional)';
+  prechatEmail.setAttribute('aria-label', 'Email');
+  prechatEmail.maxLength = 320;
+  const prechatSubmit = doc.createElement('button');
+  prechatSubmit.type = 'submit';
+  prechatSubmit.className = 'nx-prechat-submit';
+  prechatSubmit.textContent = 'Start chat';
+  prechat.append(prechatIntro, prechatName, prechatEmail, prechatSubmit);
+
+  panel.append(header, transcript, status, prechat, chip, form);
+
+  // Greeting card — the proactive nudge that sits above a closed launcher.
+  const greeting = doc.createElement('div');
+  greeting.className = 'nx-greeting';
+  greeting.hidden = true;
+  greeting.setAttribute('role', 'dialog');
+  greeting.setAttribute('aria-label', 'Chat with us');
+  const greetMsg = doc.createElement('p');
+  greetMsg.className = 'nx-greet-msg';
+  greetMsg.textContent = 'Hi there 👋 Have a question? We are happy to help.';
+  const greetActions = doc.createElement('div');
+  greetActions.className = 'nx-greet-actions';
+  const greetChat = doc.createElement('button');
+  greetChat.type = 'button';
+  greetChat.className = 'nx-greet-chat';
+  greetChat.textContent = "Let's chat";
+  const greetBrowse = doc.createElement('button');
+  greetBrowse.type = 'button';
+  greetBrowse.className = 'nx-greet-browse';
+  greetBrowse.textContent = 'Just browsing';
+  greetActions.append(greetChat, greetBrowse);
+  greeting.append(greetMsg, greetActions);
+
+  return {
+    launcher,
+    panel,
+    transcript,
+    status,
+    chip,
+    form,
+    input,
+    attach,
+    file,
+    send,
+    close,
+    avatar,
+    title,
+    greeting,
+    greetChat,
+    greetBrowse,
+    prechat,
+    prechatName,
+    prechatEmail,
+    prechatSubmit,
+  };
 }
 
-function renderBubble(doc: Document, event: WidgetEvent): HTMLElement {
+function renderBubble(
+  doc: Document,
+  event: WidgetEvent,
+  api: WidgetApi,
+  cache: Map<string, string>,
+): HTMLElement {
   const row = doc.createElement('div');
   row.className = `nx-row nx-row--${event.author_type}`;
 
@@ -348,7 +671,8 @@ function renderBubble(doc: Document, event: WidgetEvent): HTMLElement {
   bubble.className = 'nx-bubble';
   // textContent, never innerHTML — this is the one place agent- and
   // customer-authored text meets the DOM.
-  bubble.textContent = event.text ?? '';
+  if (event.text) bubble.textContent = event.text;
+  if (event.attachment_url) bubble.append(renderAttachment(doc, api, event.attachment_url, cache));
 
   const time = doc.createElement('time');
   time.className = 'nx-time';
@@ -359,6 +683,75 @@ function renderBubble(doc: Document, event: WidgetEvent): HTMLElement {
   return row;
 }
 
+const IMAGE_URL = /\.(png|jpe?g|gif|webp)$/i;
+
+/**
+ * An attachment inside a bubble.
+ *
+ * The bytes are behind the customer token, so they are fetched with it and
+ * shown from an object URL — a bare `<img src>` could not send the header.
+ * Images preview inline; anything else becomes a download link, since rendering
+ * an arbitrary type inside our own document is a needless risk.
+ */
+function renderAttachment(
+  doc: Document,
+  api: WidgetApi,
+  url: string,
+  cache: Map<string, string>,
+): HTMLElement {
+  const name = url.split('/').pop() ?? 'attachment';
+
+  // Fetch the bytes once and remember the object URL, so a re-render sets the
+  // src synchronously rather than fetching and flashing blank again.
+  const objectUrl = (): Promise<string> => {
+    const cached = cache.get(url);
+    if (cached) return Promise.resolve(cached);
+    return api.fetchAttachment(url).then((blob) => {
+      const created = URL.createObjectURL(blob);
+      cache.set(url, created);
+      return created;
+    });
+  };
+
+  if (IMAGE_URL.test(url)) {
+    const img = doc.createElement('img');
+    img.className = 'nx-attachment-img';
+    img.alt = 'Attachment';
+    const cached = cache.get(url);
+    if (cached) {
+      img.src = cached;
+    } else {
+      void objectUrl()
+        .then((src) => {
+          img.src = src;
+        })
+        .catch(() => {
+          img.replaceWith(fileLink(doc, name, null));
+        });
+    }
+    return img;
+  }
+
+  const link = fileLink(doc, name, null);
+  void objectUrl()
+    .then((src) => {
+      link.href = src;
+      link.setAttribute('download', name);
+    })
+    .catch(() => {
+      /* leave the link inert; the visitor can retry by reopening */
+    });
+  return link;
+}
+
+function fileLink(doc: Document, name: string, href: string | null): HTMLAnchorElement {
+  const link = doc.createElement('a');
+  link.className = 'nx-attachment-file';
+  link.textContent = `📎 ${name}`;
+  if (href) link.href = href;
+  return link;
+}
+
 function formatTime(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
@@ -366,16 +759,52 @@ function formatTime(iso: string): string {
     : date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+/** Map the API's snake_case identity to the widget's shape. */
+function toAgent(agent: WidgetState['agent']): { name: string; avatarUrl: string | null } | null {
+  return agent ? { name: agent.name, avatarUrl: agent.avatar_url } : null;
+}
+
+/** First letter of a name, for an avatar with no image. */
+function initial(name: string): string {
+  return (name.trim()[0] ?? '?').toUpperCase();
+}
+
+/**
+ * Session storage, guarded like the localStorage helpers: Safari private mode
+ * and blocked site data both throw. A greeting that cannot remember it was
+ * dismissed simply reappears next load — annoying, not broken.
+ */
+function greetingDismissed(win: Window): boolean {
+  try {
+    return win.sessionStorage.getItem(GREETING_DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberGreetingDismissed(win: Window): void {
+  try {
+    win.sessionStorage.setItem(GREETING_DISMISSED_KEY, '1');
+  } catch {
+    // Ignored — the card just shows again next time.
+  }
+}
+
 function readConfig(win: Window): WidgetConfig {
   const params = new URLSearchParams(win.location.search);
+  // The hosted page is served at `/chat.html`; the query flag is an override for
+  // dev and tests opening the widget document directly.
+  const chatPage = win.location.pathname.endsWith('/chat.html') || params.get('chat_page') === '1';
   return {
     organizationId: params.get('organization_id') ?? '',
     // Same origin as the widget document by default; overridable for local dev.
     apiBaseUrl: params.get('api') ?? 'http://localhost:4000/api/v1',
     language: params.get('language') ?? 'en',
-    // Falls back to the referrer, which is the embedding page when the loader
-    // created this frame. Null when the widget document is opened directly.
-    hostOrigin: params.get('host_origin') ?? referrerOrigin(win),
+    // On the Chat page the widget is served from our own origin and speaks for
+    // it; elsewhere the loader passes the embedding page's origin, falling back
+    // to the referrer when the widget document is opened directly.
+    hostOrigin: chatPage ? win.location.origin : (params.get('host_origin') ?? referrerOrigin(win)),
+    chatPage,
   };
 }
 
@@ -409,6 +838,9 @@ function postToHost(win: Window, message: Record<string, unknown>): void {
 }
 
 const WIDGET_CSS = `
+/* The elements below carry their own display, which would otherwise beat the
+   UA [hidden] rule and leave a "hidden" card or panel on screen. */
+[hidden] { display: none !important; }
 :root {
   --nx-brand: #2f6bff;
   --nx-surface: #ffffff;
@@ -452,11 +884,21 @@ body {
   overflow: hidden;
   box-shadow: 0 12px 32px rgb(16 24 40 / .18);
 }
+/* Hosted Chat page: the panel is the whole viewport, no floating card. */
+.nx-page .nx-panel { inset: 0; border: 0; border-radius: 0; box-shadow: none; }
 .nx-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 14px; background: var(--nx-brand); color: #fff;
 }
 .nx-title { margin: 0; font-size: 15px; font-weight: 600; }
+.nx-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.nx-avatar {
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, .22); color: #fff;
+  font-size: 13px; font-weight: 600; overflow: hidden;
+}
+.nx-avatar-img { width: 100%; height: 100%; object-fit: cover; }
 .nx-close {
   border: 0; background: transparent; color: #fff;
   font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px;
@@ -489,6 +931,51 @@ body {
   background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 .nx-send:disabled { opacity: .6; cursor: default; }
+.nx-attach {
+  border: 1px solid var(--nx-border); border-radius: 8px; background: transparent;
+  width: 38px; font-size: 16px; line-height: 1; cursor: pointer; color: inherit;
+}
+.nx-attach:disabled { opacity: .6; cursor: default; }
+.nx-chip {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 12px 8px; padding: 6px 10px;
+  border: 1px solid var(--nx-border); border-radius: 8px; font-size: 12px;
+}
+.nx-chip-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-chip-x { border: 0; background: transparent; font-size: 16px; line-height: 1; cursor: pointer; color: var(--nx-muted); }
+.nx-attachment-img { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 4px; }
+.nx-attachment-file { display: inline-block; margin-top: 4px; color: inherit; text-decoration: underline; word-break: break-all; }
+.nx-row--customer .nx-attachment-file { color: #fff; }
+.nx-greeting {
+  position: fixed; right: 10px; bottom: 82px; width: 300px;
+  background: var(--nx-surface); color: var(--nx-text);
+  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
+  box-shadow: 0 8px 24px rgb(16 24 40 / .18);
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.nx-greet-msg { margin: 0; font-size: 14px; line-height: 1.4; }
+.nx-greet-actions { display: flex; gap: 8px; }
+.nx-greet-chat {
+  flex: 1; border: 0; border-radius: 8px; padding: 8px 10px;
+  background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+.nx-greet-browse {
+  flex: 1; border: 1px solid var(--nx-border); border-radius: 8px; padding: 8px 10px;
+  background: transparent; color: var(--nx-muted); font: inherit; cursor: pointer;
+}
+.nx-prechat {
+  flex: 1; display: flex; flex-direction: column; gap: 10px;
+  padding: 16px; overflow-y: auto;
+}
+.nx-prechat-intro { margin: 0 0 2px; font-size: 14px; color: var(--nx-muted); }
+.nx-prechat-input {
+  font: inherit; color: inherit; padding: 9px 11px; border-radius: 8px;
+  border: 1px solid var(--nx-border); background: transparent;
+}
+.nx-prechat-submit {
+  border: 0; border-radius: 8px; padding: 9px 12px;
+  background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
 :focus-visible { outline: 2px solid var(--nx-brand); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 `;

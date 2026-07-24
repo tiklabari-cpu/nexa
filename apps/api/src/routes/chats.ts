@@ -6,6 +6,8 @@ import { ApiError } from '../lib/api-error.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { hasChatScope } from '../services/chat/access.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
+import { LocalStore } from '../services/storage/local-store.js';
+import { assertUploadedAttachment } from '../services/storage/attachment.js';
 
 const chatIdSchema = z.string().refine(isShortId, 'not a valid chat id');
 
@@ -22,7 +24,10 @@ const newEventSchema = z.object({
   type: z.enum(EVENT_TYPES).default('message'),
   text: z.string().max(10_000).optional(),
   recipients: z.enum(EVENT_RECIPIENTS).default('all'),
-  attachment_url: z.string().url().max(2048).optional(),
+  // Not `.url()`. An absolute URL is exactly what must not be accepted here —
+  // see `assertAttachment` below. The shape check lives there, with the
+  // principal it needs.
+  attachment_url: z.string().max(2048).optional(),
   properties: z.record(z.unknown()).optional(),
   idempotency_key: z.string().min(1).max(128).optional(),
 });
@@ -73,6 +78,7 @@ export default async function chatRoutes(
   app: FastifyInstance,
   { env }: { env: Env },
 ): Promise<void> {
+  const store = new LocalStore(env.STORAGE_LOCAL_DIR);
   const chats = new ChatService(
     app.db,
     app.redis,
@@ -80,6 +86,12 @@ export default async function chatRoutes(
     undefined,
     { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
   );
+
+  // An attachment may only be a file this licence uploaded through `/uploads`
+  // (FR-MOD-08.9.4). Shared with the customer send path so the boundary has a
+  // single definition — see `assertUploadedAttachment`.
+  const assertAttachment = (licenseId: bigint, url: string): Promise<void> =>
+    assertUploadedAttachment(store, licenseId, url);
 
   /**
    * An event body must carry something. A `message` with neither text nor an
@@ -132,6 +144,10 @@ export default async function chatRoutes(
     async (request, reply) => {
       const body = parse(startChatSchema, request.body);
       const principal = request.requirePrincipal();
+
+      if (body.initial_event?.attachment_url) {
+        await assertAttachment(principal.licenseId, body.initial_event.attachment_url);
+      }
 
       const { chat, created } = await chats.start(request.tenant(), principal, {
         customerId: body.customer_id,
@@ -216,10 +232,13 @@ export default async function chatRoutes(
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
       const body = parse(newEventSchema, request.body);
+      const principal = request.requirePrincipal();
+
+      if (body.attachment_url) await assertAttachment(principal.licenseId, body.attachment_url);
 
       const { event, replayed } = await chats.sendEvent(
         request.tenant(),
-        request.requirePrincipal(),
+        principal,
         chatId,
         normaliseEvent(body),
       );

@@ -196,6 +196,66 @@ cannedResponse:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+securitySettings:
+  get:
+    tags: [Settings]
+    operationId: getSecuritySettings
+    summary: File sharing and security rules
+    description: |
+      The file-sharing fields are what FR-MOD-08.9.4 enforces on every upload.
+      They existed in the schema from the start but could only be changed by
+      editing the database, so the shipped defaults were the only rules any
+      workspace ever had.
+
+      A workspace that has never saved these settings has no row: signup does
+      not create one. The defaults from the schema are returned in that case,
+      which is what the server enforces anyway — reading has no side effect.
+    responses:
+      "200":
+        description: The current rules
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SecuritySettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Settings]
+    operationId: updateSecuritySettings
+    summary: Change the file sharing and security rules
+    description: |
+      Creates the row on first write. `allowed_file_types` is validated as MIME
+      types (`type/subtype`) and stored lowercased: an entry like `.pdf` or
+      `pdf` would sit in the list looking like a rule while matching no upload
+      the browser ever labels.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              file_sharing_enabled: { type: boolean }
+              allowed_file_types:
+                type: array
+                maxItems: 50
+                items: { type: string, maxLength: 255 }
+              max_file_size_bytes: { type: integer, minimum: 1, maximum: 104857600 }
+              spam_filter_enabled: { type: boolean }
+              require_two_factor: { type: boolean }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SecuritySettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 routingRules:
   get:
     tags: [Settings]

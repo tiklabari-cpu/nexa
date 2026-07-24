@@ -41,7 +41,11 @@ export default defineConfig(({ mode }) => {
           minify: 'terser',
           sourcemap: true,
           rollupOptions: {
-            input: resolve(import.meta.dirname, 'widget.html'),
+            input: {
+              widget: resolve(import.meta.dirname, 'widget.html'),
+              // The hosted Chat page (FR-MOD-08.5.9), same bundle, full-page.
+              chat: resolve(import.meta.dirname, 'chat.html'),
+            },
           },
         },
     server: {

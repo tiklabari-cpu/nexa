@@ -1,0 +1,107 @@
+# Website widgets — FR-MOD-08.5.2.
+#
+# The sites a workspace has connected the widget to: "Add website", the snippet
+# to install, and the Connected status the widget flips once it handshakes from
+# that domain. Deliberately separate from trusted domains (FR-MOD-08.9.1):
+# listing a website here does not authorise its origin. The domain must also be
+# a trusted domain before the widget can mint a token there — the two screens
+# answer different questions ("where did I install it" vs "where may it run").
+
+websites:
+  get:
+    tags: [Websites]
+    operationId: listWebsites
+    summary: Sites the widget is installed on
+    responses:
+      "200":
+        description: The workspace's websites
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Website" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Websites]
+    operationId: addWebsite
+    summary: Add a site to install the widget on
+    description: |
+      Accepts a bare hostname (`shop.example`) or a URL to take one from; the
+      hostname is stored lowercased, without port or path, the same shape the
+      token endpoint reduces an `Origin` to. A new site starts `pending` and
+      flips to `connected` on the widget's first handshake from that domain.
+
+      Adding a site does not make the widget work there — its domain must also
+      be a trusted domain (FR-MOD-08.9.1).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [domain]
+            properties:
+              domain: { type: string, minLength: 1, maxLength: 253 }
+              setup:
+                type: string
+                enum: [manual, platform]
+                default: manual
+    responses:
+      "201":
+        description: Added
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Website" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409":
+        description: This domain is already added (`website_exists`)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+website:
+  parameters:
+    - name: websiteId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Websites]
+    operationId: getWebsite
+    summary: One website, with its install snippet
+    responses:
+      "200":
+        description: The website
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Website" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Websites]
+    operationId: removeWebsite
+    summary: Remove a website
+    description: |
+      Takes effect on the next widget load: existing conversations continue, but
+      the site no longer appears in the list. Removing it does not revoke the
+      trusted domain — that is a separate allowlist (FR-MOD-08.9.1).
+    responses:
+      "204": { description: Removed }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

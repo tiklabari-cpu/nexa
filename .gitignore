@@ -67,3 +67,6 @@ dev-debug.log
 
 # Otonom koşucu yerel durumu
 .taskmaster/faz0.kapandi
+
+# Otonom koşuda üretilen görsel kanıt (insan incelemesi için, repoya girmez)
+kanit/

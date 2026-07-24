@@ -83,6 +83,9 @@ Bir dilimin tüm işleri bittiğinde:
 - Hata zarfı ADR-06: `{ error: { type, message, request_id, details? } }`
 - Her sorgu lisans kapsamlı; cross-tenant erişim testi var
 - Testler yeşil (birim + ilgili Playwright E2E)
+- Ekran/widget üreten işlerde görsel kanıt: E2E, iddianın ardından
+  `kanit/<id>-<ad>.png` kaydeder (config yalnız başarısızlıkta artefakt tutuyor;
+  otonom koşuda kimse ekrana bakmaz, insan sonradan bu dosyalara bakar)
 - `[MAX]` etiketli işlerde **negatif testler pozitiflerden önce** yazıldı
 
 ---

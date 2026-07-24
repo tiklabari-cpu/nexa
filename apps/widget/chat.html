@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Chat</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      /* The widget is the whole page here, not a floating launcher. */
+      #nexa-widget-root {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      The hosted Chat page (FR-MOD-08.5.9): a shareable link that runs the same
+      widget full-page, on our own origin, so a visitor can chat without anyone
+      installing a snippet anywhere. `readConfig` sees the `/chat.html` path and
+      switches the widget into page mode.
+    -->
+    <div id="nexa-widget-root"></div>
+    <script type="module" src="/src/widget.ts"></script>
+  </body>
+</html>

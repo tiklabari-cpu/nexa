@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactElement } from 'react';
 import type { ChatEvent } from './types.js';
+import { AttachmentView } from './Attachment.js';
 
 /**
  * The conversation.
@@ -106,7 +107,12 @@ function Bubble({
             }`}
           >
             {/* React escapes this; there is no dangerouslySetInnerHTML anywhere. */}
-            <span className="whitespace-pre-wrap break-words">{event.text}</span>
+            {event.text && <span className="whitespace-pre-wrap break-words">{event.text}</span>}
+            {event.attachment_url && (
+              <div className={event.text ? 'mt-2' : ''}>
+                <AttachmentView url={event.attachment_url} />
+              </div>
+            )}
           </div>
           <span className="tabular text-2xs text-content-tertiary">
             {pending ? 'Sending…' : formatTime(event.created_at)}

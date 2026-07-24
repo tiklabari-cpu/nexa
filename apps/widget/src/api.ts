@@ -12,11 +12,14 @@ export interface WidgetEvent {
   author_type: 'agent' | 'customer' | 'bot' | 'system';
   created_at: string;
   type: string;
+  attachment_url: string | null;
 }
 
 export interface WidgetState {
   online: boolean;
   customer: { id: string; name: string | null; email: string | null };
+  /** Who the visitor is talking to — a person or the AI persona. */
+  agent: { name: string; avatar_url: string | null } | null;
   chat: { id: string; thread_id: string | null; queue_position: number | null } | null;
   events: WidgetEvent[];
 }
@@ -76,14 +79,48 @@ export class WidgetApi {
 
   async send(
     text: string,
-    options: { url?: string; name?: string; email?: string } = {},
+    options: { url?: string; name?: string; email?: string; attachment_url?: string } = {},
   ): Promise<{ chat_id: string; event: WidgetEvent | null }> {
     return this.#request('POST', '/customer/chat/events', {
-      text,
+      // An attachment may travel without text (FR-MOD-11.4), so an empty string
+      // is omitted rather than sent — the server requires text *or* attachment.
+      ...(text ? { text } : {}),
       ...options,
       // Survives a retry after a timeout without posting the message twice.
       idempotency_key: randomKey(),
     });
+  }
+
+  /**
+   * Grant → signed PUT, the same two-step upload the agent app uses. Returns the
+   * `file_url` to hang on the message's `attachment_url`.
+   */
+  async upload(file: File): Promise<string> {
+    const grant = await this.#request<{ upload_url: string; file_url: string }>(
+      'POST',
+      '/uploads',
+      { filename: file.name, content_type: file.type, size_bytes: file.size },
+    );
+    // The PUT is authorised by the signature in the URL, not the token, and its
+    // body is raw bytes. `upload_url` is root-relative; resolve it against the
+    // API base so it does not hit the widget's own origin.
+    const response = await fetch(new URL(grant.upload_url, this.baseUrl).toString(), {
+      method: 'PUT',
+      headers: { 'content-type': file.type },
+      body: file,
+    });
+    if (!response.ok) throw new WidgetApiError(await describe(response));
+    return grant.file_url;
+  }
+
+  /** Fetch an attachment's bytes with the token, for inline rendering. */
+  async fetchAttachment(url: string): Promise<Blob> {
+    if (!this.#token) throw new WidgetApiError('not connected');
+    const response = await fetch(new URL(url, this.baseUrl).toString(), {
+      headers: { authorization: `Bearer ${this.#token}` },
+    });
+    if (!response.ok) throw new WidgetApiError(await describe(response));
+    return response.blob();
   }
 
   async rate(value: 'good' | 'bad'): Promise<void> {

@@ -76,6 +76,35 @@ export class ApiClient {
     return this.request<T>('DELETE', path, undefined, init);
   }
 
+  /**
+   * Fetch raw bytes with the session's credentials.
+   *
+   * Attachments are served from `/uploads/:key` behind a bearer token, so an
+   * `<img src>` — which cannot set the header — would only ever get a 404. The
+   * transcript fetches the blob here and renders it from an object URL instead.
+   */
+  async getBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+    const headers = new Headers(init.headers);
+    const token = this.#getAccessToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+
+    const response = await this.#fetch(`${this.#baseUrl}${path}`, {
+      ...init,
+      method: 'GET',
+      headers,
+      credentials: 'same-origin',
+    });
+    if (!response.ok) {
+      throw new ApiClientError({
+        type: 'internal',
+        status: response.status,
+        message: 'Could not load attachment.',
+        requestId: response.headers.get('X-Request-Id') ?? '-',
+      });
+    }
+    return response.blob();
+  }
+
   async request<T>(
     method: string,
     path: string,

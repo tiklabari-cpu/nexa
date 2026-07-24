@@ -885,6 +885,41 @@ components:
             used: { type: integer }
             included: { type: integer }
 
+    SubscriptionView:
+      type: object
+      required:
+        [plan, status, access, seats, min_seats, unit_price_cents, billing_cycle, usage, estimated_total_cents, provider]
+      properties:
+        plan: { type: string }
+        billing_cycle: { type: string, enum: [monthly, annual] }
+        status:
+          type: string
+          enum: [trialing, active, past_due, read_only, canceled]
+        access:
+          type: string
+          enum: [trialing, active, read_only]
+          description: What the workspace may do right now.
+        trial:
+          type: object
+          properties:
+            ends_at: { type: string, format: date-time, nullable: true }
+            days_remaining: { type: integer, nullable: true }
+        seats:
+          type: integer
+          description: Purchased seats — what the seat charge is based on.
+        min_seats:
+          type: integer
+          description: Floor for the seats stepper — the count of non-suspended agents.
+        unit_price_cents: { type: integer }
+        usage: { $ref: "#/components/schemas/UsageSummary" }
+        estimated_total_cents:
+          type: integer
+          description: Charge for the current cycle — the monthly figure, or the annual total when annual.
+        annual_savings_cents:
+          type: integer
+          description: What annual billing saves versus twelve monthly charges. 0 on monthly.
+        provider: { type: string, enum: [mock] }
+
     ReportsOverview:
       type: object
       required: [range, totals, response_times, satisfaction, by_agent, top_tags]

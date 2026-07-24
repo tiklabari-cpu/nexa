@@ -1489,7 +1489,24 @@ export interface paths {
     delete?: never;
     options?: never;
     head?: never;
-    patch?: never;
+    /**
+     * Change plan, billing cycle or seats
+     * @description The self-serve checkout levers (FR-MOD-10.1.1–.3). Nexa keeps a single,
+     *     transparent price (ADR-13, $99/user/month), so `plan` has one option today
+     *     (`growth`); the endpoint still validates it and is shaped for future tiers,
+     *     including the downgrade guard that refuses a plan whose included quota is
+     *     below what the workspace has already used this month.
+     *
+     *     `seats` is the purchased count; its floor is the number of non-suspended
+     *     agents (`min_seats`) — you cannot buy fewer seats than you have people.
+     *     `billing_cycle: annual` recomputes the total as ten monthly charges (two
+     *     months free) and reports the saving in `annual_savings_cents`.
+     *
+     *     Billing is mocked (ADR-13): nothing is charged and no external provider is
+     *     called. Writable even while the workspace is read-only — subscribing is how
+     *     an expired trial comes back.
+     */
+    patch: operations['updateSubscription'];
     trace?: never;
   };
   '/billing/usage': {
@@ -2088,6 +2105,35 @@ export interface components {
         used: number;
         included: number;
       };
+    };
+    SubscriptionView: {
+      plan: string;
+      /** @enum {string} */
+      billing_cycle: 'monthly' | 'annual';
+      /** @enum {string} */
+      status: 'trialing' | 'active' | 'past_due' | 'read_only' | 'canceled';
+      /**
+       * @description What the workspace may do right now.
+       * @enum {string}
+       */
+      access: 'trialing' | 'active' | 'read_only';
+      trial?: {
+        /** Format: date-time */
+        ends_at?: string | null;
+        days_remaining?: number | null;
+      };
+      /** @description Purchased seats — what the seat charge is based on. */
+      seats: number;
+      /** @description Floor for the seats stepper — the count of non-suspended agents. */
+      min_seats: number;
+      unit_price_cents: number;
+      usage: components['schemas']['UsageSummary'];
+      /** @description Charge for the current cycle — the monthly figure, or the annual total when annual. */
+      estimated_total_cents: number;
+      /** @description What annual billing saves versus twelve monthly charges. 0 on monthly. */
+      annual_savings_cents?: number;
+      /** @enum {string} */
+      provider: 'mock';
     };
     ReportsOverview: {
       range: {
@@ -4986,32 +5032,44 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            plan: string;
-            /** @enum {string} */
-            billing_cycle?: 'monthly' | 'annual';
-            /** @enum {string} */
-            status: 'trialing' | 'active' | 'past_due' | 'read_only' | 'canceled';
-            /**
-             * @description What the workspace may do right now.
-             * @enum {string}
-             */
-            access: 'trialing' | 'active' | 'read_only';
-            trial?: {
-              /** Format: date-time */
-              ends_at?: string | null;
-              days_remaining?: number | null;
-            };
-            /** @description Non-suspended agents — what a seat charge is based on. */
-            seats: number;
-            unit_price_cents: number;
-            usage: components['schemas']['UsageSummary'];
-            estimated_total_cents?: number;
-            /** @enum {string} */
-            provider: 'mock';
-          };
+          'application/json': components['schemas']['SubscriptionView'];
         };
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Plan id. Today: `growth`. */
+          plan?: string;
+          /** @enum {string} */
+          billing_cycle?: 'monthly' | 'annual';
+          /** @description Purchased seats. Must be at least `min_seats`. */
+          seats?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated subscription */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubscriptionView'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];

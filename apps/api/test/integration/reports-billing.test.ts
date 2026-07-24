@@ -364,4 +364,128 @@ describe('reports and billing', () => {
       expect([200, 201]).toContain(response.statusCode);
     });
   });
+
+  // FR-MOD-10.1.1–.3: the checkout levers. The fixture seeds two unsuspended
+  // agents, so the seats floor is 2 throughout.
+  describe('checkout — plan, cycle, seats', () => {
+    const activate = () =>
+      owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { status: 'active', trialEndsAt: null },
+      });
+
+    it('buys seats, and the new count is what a later GET reads', async () => {
+      const patched = await server.patch('/billing/subscription', { seats: 5 }, auth);
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json().seats).toBe(5);
+      expect(patched.json().min_seats).toBe(2);
+
+      // Persisted, not just echoed: an independent GET agrees.
+      expect((await server.get('/billing/subscription', auth)).json().seats).toBe(5);
+      const row = await owner.subscription.findFirstOrThrow({
+        where: { licenseId: fx.a.licenseId },
+      });
+      expect(row.seats).toBe(5);
+    });
+
+    it('prices annual as ten months and reports the saving', async () => {
+      await activate();
+      const response = await server.patch(
+        '/billing/subscription',
+        { billing_cycle: 'annual', seats: 3 },
+        auth,
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.json().billing_cycle).toBe('annual');
+      expect(response.json().seats).toBe(3);
+      // Ten months charged, two saved (~16.7%, the PRD's %15–17).
+      expect(response.json().estimated_total_cents).toBe(3 * 9900 * 10);
+      expect(response.json().annual_savings_cents).toBe(3 * 9900 * 2);
+    });
+
+    it('switching back to monthly drops the saving to zero', async () => {
+      await activate();
+      await server.patch('/billing/subscription', { billing_cycle: 'annual', seats: 2 }, auth);
+      const monthly = await server.patch('/billing/subscription', { billing_cycle: 'monthly' }, auth);
+      expect(monthly.json().estimated_total_cents).toBe(2 * 9900);
+      expect(monthly.json().annual_savings_cents).toBe(0);
+    });
+
+    it('floors the seats stepper at the active headcount', async () => {
+      const response = await server.patch('/billing/subscription', { seats: 1 }, auth);
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.type).toBe('validation');
+      // Nothing was written on the way to the rejection.
+      expect(await owner.subscription.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+    });
+
+    it('rejects an unknown plan', async () => {
+      const response = await server.patch('/billing/subscription', { plan: 'enterprise' }, auth);
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.type).toBe('validation');
+    });
+
+    it('rejects an unknown billing cycle', async () => {
+      const response = await server.patch('/billing/subscription', { billing_cycle: 'weekly' }, auth);
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('rejects an empty change', async () => {
+      const response = await server.patch('/billing/subscription', {}, auth);
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('needs a billing scope, not merely reports_read', async () => {
+      const readOnly = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const response = await server.patch(
+        '/billing/subscription',
+        { seats: 3 },
+        { authorization: `Bearer ${readOnly}` },
+      );
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('never changes another licence subscription', async () => {
+      await owner.subscription.create({
+        data: { licenseId: fx.a.licenseId, status: 'active', seats: 2, unitPriceCents: 9900 },
+      });
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['billing_manage'],
+      });
+
+      const response = await server.patch(
+        '/billing/subscription',
+        { seats: 7 },
+        { authorization: `Bearer ${tokenB}` },
+      );
+      expect(response.statusCode).toBe(200);
+
+      // A untouched; B got its own row.
+      expect(
+        (await owner.subscription.findFirstOrThrow({ where: { licenseId: fx.a.licenseId } })).seats,
+      ).toBe(2);
+      expect(
+        (await owner.subscription.findFirstOrThrow({ where: { licenseId: fx.b.licenseId } })).seats,
+      ).toBe(7);
+    });
+
+    it('stays writable while the trial is read-only — subscribing is the way back', async () => {
+      await owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { trialEndsAt: new Date(Date.now() - 86_400_000) },
+      });
+      // A normal write is refused (402) here; the billing change is not.
+      const response = await server.patch('/billing/subscription', { seats: 3 }, auth);
+      expect(response.statusCode).toBe(200);
+      expect(response.json().seats).toBe(3);
+    });
+  });
 });

@@ -59,31 +59,50 @@ subscription:
         description: Current subscription
         content:
           application/json:
-            schema:
-              type: object
-              required: [plan, status, access, seats, unit_price_cents, usage, provider]
-              properties:
-                plan: { type: string }
-                billing_cycle: { type: string, enum: [monthly, annual] }
-                status:
-                  type: string
-                  enum: [trialing, active, past_due, read_only, canceled]
-                access:
-                  type: string
-                  enum: [trialing, active, read_only]
-                  description: What the workspace may do right now.
-                trial:
-                  type: object
-                  properties:
-                    ends_at: { type: string, format: date-time, nullable: true }
-                    days_remaining: { type: integer, nullable: true }
-                seats:
-                  type: integer
-                  description: Non-suspended agents — what a seat charge is based on.
-                unit_price_cents: { type: integer }
-                usage: { $ref: "../openapi.yaml#/components/schemas/UsageSummary" }
-                estimated_total_cents: { type: integer }
-                provider: { type: string, enum: [mock] }
+            schema: { $ref: "../openapi.yaml#/components/schemas/SubscriptionView" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  patch:
+    tags: [Billing]
+    operationId: updateSubscription
+    summary: Change plan, billing cycle or seats
+    description: |
+      The self-serve checkout levers (FR-MOD-10.1.1–.3). Nexa keeps a single,
+      transparent price (ADR-13, $99/user/month), so `plan` has one option today
+      (`growth`); the endpoint still validates it and is shaped for future tiers,
+      including the downgrade guard that refuses a plan whose included quota is
+      below what the workspace has already used this month.
+
+      `seats` is the purchased count; its floor is the number of non-suspended
+      agents (`min_seats`) — you cannot buy fewer seats than you have people.
+      `billing_cycle: annual` recomputes the total as ten monthly charges (two
+      months free) and reports the saving in `annual_savings_cents`.
+
+      Billing is mocked (ADR-13): nothing is charged and no external provider is
+      called. Writable even while the workspace is read-only — subscribing is how
+      an expired trial comes back.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              plan: { type: string, description: "Plan id. Today: `growth`." }
+              billing_cycle: { type: string, enum: [monthly, annual] }
+              seats:
+                type: integer
+                minimum: 1
+                description: Purchased seats. Must be at least `min_seats`.
+    responses:
+      "200":
+        description: Updated subscription
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SubscriptionView" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

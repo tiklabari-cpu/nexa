@@ -17,10 +17,17 @@ karşılığı bulunur; yoksa PLAN.md §D'ye "PRD sapması" olarak yazılır.
 Task Master **planlamaz, yürütür.** Yürütme defteridir: durum, bağımlılık sırası, `next`,
 ve her işin altında biriken uygulama notları.
 
-**Kullanılmayacak komutlar:** `parse-prd`, `expand`, `add-task --prompt`, `update --from`.
-Bunların hiçbiri kod tabanını görmez (yalnız `research` komutu `--files`/`--tree` alır).
-Verdiğin metnin ötesine geçemedikleri için PLAN.md'nin ayrıntı seviyesini üretemezler ve
-ADR'lerle çelişen jenerik adımlar ("veritabanı modelini oluştur") yazarlar.
+**Kullanılmayacak komutlar:** `parse-prd`, `expand`, `add-task --prompt`, `update --from` —
+hiçbiri kod tabanını görmez; ADR'lerle çelişen jenerik adımlar ("veritabanı modelini
+oluştur") yazarlar. Ayrıca **oturum içinden AI'ya giden hiçbir task-master komutu
+çağrılmaz** (`update-task`, `update-subtask`, `research` dahil): claude-code provider
+iç içe claude süreci açıp kilitleniyor (2026-07-24'te ölçüldü — 300 sn, sıfır çıktı).
+
+**Görev günlüğü bunun yerine deterministik yazılır (AI yok, anında):**
+
+```bash
+node .taskmaster/gunluk.mjs <görev-id> "not"
+```
 
 **Görev ayrıştırması Claude Code tarafından yapılır** — gerçek dosyalar okunarak — ve
 Task Master'a elle yazılır:
@@ -30,11 +37,9 @@ task-master add-task --title "..." --description "..." --details "..." \
   --dependencies "2,3" --priority high     # --prompt YOK → LLM devreye girmez
 ```
 
-Bir işe başlamadan derinlik gerekiyorsa kod bağlamı alan tek komut:
-
-```bash
-task-master research "soru" --files=apps/api/src/routes/chats.ts --tree --save-to=3
-```
+Bir işe başlamadan derinlik gerekiyorsa kod **doğrudan okunur** (Read/Grep).
+`research` komutu yalnız oturum DIŞINDAN (kendi terminalinden) işe yarar; oturum
+içinden aynı kilitlenme sorununa takılır.
 
 ## Oturum döngüsü — bir oturum = bir iş
 
@@ -42,14 +47,15 @@ task-master research "soru" --files=apps/api/src/routes/chats.ts --tree --save-t
 
 Bu döngü `/is` komutuna gömülüdür — adımları elle yürütmek yerine `/is` çağrılır.
 Seri çalışma: `/loop /is` (döngü kuralları `.claude/commands/is.md` sonunda: soru yerine
-günlüklenmiş varsayım; `[MAX]` işler `done` değil `review`'a düşer, onayı insan verir).
-Dilim bitince `/dilim-kapat`. Ham adımlar referans için:
+günlüklenmiş varsayım; her iş kendi commit'iyle kapanır, push edilmez; `[MAX]` işler
+ayrı commit olur ve kapanış raporunda **[MAX] İNCELE** bölümüyle insana sunulur).
+Dilim bitince `/dilim-kapat` — push oradadır. Ham adımlar referans için:
 
 1. `task-master next` → sıradaki iş
 2. `task-master show <id>` → ayrıntı; `details` alanındaki dosya yollarını oku
 3. `task-master set-status --id=<id> --status=in-progress`
-4. Planını yaz: `task-master update-subtask --id=<id> --prompt="plan: ..."`
-5. Uygula. Öğrendiğin her şeyi (çalışan/çalışmayan) aynı komutla günlüğe düş —
+4. Planını yaz: `node .taskmaster/gunluk.mjs <id> "plan: ..."`
+5. Uygula. Öğrendiğin her şeyi (çalışan/çalışmayan) aynı günlükçüyle düş —
    bir sonraki oturumun bağlamı budur
 6. `task-master set-status --id=<id> --status=done`
 7. **`/clear`** → yeni oturum, 1. adım

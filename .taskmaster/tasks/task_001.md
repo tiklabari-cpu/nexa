@@ -14,6 +14,8 @@
 
 1) packages/contract/openapi/openapi.yaml: /settings/security ekle (GET + PATCH). Mevcut /settings/* yollari 169-179 arasinda; ayni desene uy. 2) @nexa/types generate. 3) apps/api/src/routes/settings.ts: license kapsamli handler; PATCH'te allowedFileTypes MIME dogrulamasi. 4) apps/web Settings altinda Security ekrani. Hata zarfi ADR-06. PRD: FR-MOD-08.9.4 · PLAN.md §3.7 · Dilim 13
 
+[günlük 2026-07-24 01:07 UTC] hazirlik: gorev capalari kodda dogrulandi (schema.prisma:849-851 alanlar mevcut; settings.ts'te yuzey yok; openapi.yaml /settings/* 169-179). Gunluk mekanizmasi: node .taskmaster/gunluk.mjs — update-task --append AI'ya gidip kilitlendigi icin kullanilmiyor.
+
 **Test Strategy:**
 
 Kabul: GET /settings/security lisans kapsamli doner; baska lisansin ayarina erisim ADR-06 zarfiyla reddedilir. PATCH gecersiz MIME'i reddeder. Birim: MIME allowlist dogrulayicisi. Cross-tenant testi ZORUNLU. Bitince PLAN.md §3.7 satiri guncellenir.

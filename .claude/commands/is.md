@@ -50,6 +50,21 @@ oturum (ya da özetlenen bağlam) aynı duvara toslamasın.
 `testStrategy` alanındaki kabul kriterlerinin **hepsini** tek tek doğrula. Testleri çalıştır.
 Bir madde karşılanmıyorsa görev `done` olmaz — ya tamamla ya `blocked` yap ve nedenini günlüğe yaz.
 
+**Entegrasyon testi çalıştırdıysan demo verisini geri yükle — istisnasız:**
+
+```bash
+pnpm db:seed && curl -sf -X POST http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"owner@acme.localhost","password":"nexa-demo-password"}' >/dev/null \
+  && echo "demo girişi OK" || echo "DEMO GİRİŞİ KIRIK — günlüğe yaz, done deme"
+```
+
+Entegrasyon paketi veritabanını **truncate ediyor** ve yerine kendi A/B kiracı
+fikstürünü bırakıyor (`owner-a@example.test` …). 2026-07-24'te ölçüldü: görev 1'in
+testlerinden sonra demo hesabı yok oldu, `owner@acme.localhost` girişi 401 döndü,
+insan uygulamaya giremedi — testler ise yeşildi. "Testler yeşil" ile "uygulama
+çalışıyor" aynı şey değildir; ikisini de doğrula.
+
 **Görev bir ekran ya da widget davranışı üretiyorsa** (`apps/web/**`, `apps/widget/**`
 dokunulduysa) kabul kriterini doğrulayan E2E adımı, iddianın **hemen ardından** kanıt
 kaydeder:

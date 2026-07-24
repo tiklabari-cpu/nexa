@@ -41,6 +41,16 @@ oradadır ve çoğu §C'ye aittir.
 
 - `make dev` temiz kurulumdan çalışıyor
 - Birim + Playwright E2E yeşil
+- **Demo girişi gerçekten çalışıyor** — iddia değil, kanıt:
+
+  ```bash
+  pnpm db:seed && curl -si -X POST http://localhost:4000/api/v1/auth/login \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"owner@acme.localhost","password":"nexa-demo-password"}' | head -1
+  ```
+
+  `HTTP/1.1 200` görmeden dilim kapanmaz. (Entegrasyon paketi DB'yi truncate ettiği
+  için bu adım her koşuda gerekli — bkz. `/is` §5.)
 - Dilimin PRD kabul kriterleri karşılandı
 
 Kapı geçilmeden push YOK. Kırmızı varsa önce düzelt; düzeltemiyorsan döngüyü

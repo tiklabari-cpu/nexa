@@ -623,6 +623,10 @@ export interface paths {
      *
      *     A customer cannot write an internal note. The field is not accepted here at
      *     all, rather than accepted and downgraded silently.
+     *
+     *     A message must carry text, an `attachment_url`, or both — an attachment may
+     *     stand alone (FR-MOD-11.4). The attachment must be a file this workspace
+     *     uploaded through `/uploads`; any other value is refused.
      */
     post: operations['sendCustomerMessage'];
     delete?: never;
@@ -3313,7 +3317,9 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          text: string;
+          text?: string;
+          /** @description A `file_url` from `/uploads`. May be sent without text. */
+          attachment_url?: string;
           /** @description Page the visitor is on. Feeds the routing rules. */
           url?: string;
           /** @description Pre-chat form value. */

@@ -7,7 +7,7 @@ import { ChatService } from '../services/chat/chat-service.js';
 import { hasChatScope } from '../services/chat/access.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { LocalStore } from '../services/storage/local-store.js';
-import { keyFromAttachmentUrl, licenseOfKey } from '../services/storage/upload-url.js';
+import { assertUploadedAttachment } from '../services/storage/attachment.js';
 
 const chatIdSchema = z.string().refine(isShortId, 'not a valid chat id');
 
@@ -87,34 +87,11 @@ export default async function chatRoutes(
     { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
   );
 
-  /**
-   * An attachment may only be a file this licence uploaded through `/uploads`.
-   *
-   * It used to be any string that parsed as a URL. That made every event a
-   * place to hang a link the recipient's browser would then fetch from our
-   * conversation UI — a tracker, an exploit, or another tenant's file, all
-   * wearing our origin's credibility.
-   *
-   * Three things are checked and none of them is optional:
-   *   1. the value is one of our own upload paths, not a URL at all
-   *   2. the licence inside the key is the caller's own
-   *   3. the bytes are really there — a grant is permission to upload, not
-   *      permission to claim
-   *
-   * The message is the same for all three. Which part refused is not something
-   * a caller probing for another tenant's keys gets to learn.
-   */
-  async function assertAttachment(licenseId: bigint, url: string): Promise<void> {
-    const refuse = (): never => {
-      throw ApiError.validation(
-        'attachment_url must be a file this workspace uploaded through /uploads.',
-      );
-    };
-
-    const key = keyFromAttachmentUrl(url);
-    if (key === null || licenseOfKey(key) !== licenseId) refuse();
-    if (!(await store.exists(key!))) refuse();
-  }
+  // An attachment may only be a file this licence uploaded through `/uploads`
+  // (FR-MOD-08.9.4). Shared with the customer send path so the boundary has a
+  // single definition — see `assertUploadedAttachment`.
+  const assertAttachment = (licenseId: bigint, url: string): Promise<void> =>
+    assertUploadedAttachment(store, licenseId, url);
 
   /**
    * An event body must carry something. A `message` with neither text nor an

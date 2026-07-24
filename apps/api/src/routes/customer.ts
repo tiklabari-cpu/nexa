@@ -13,20 +13,32 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
+import type { Env } from '../config/env.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
+import { LocalStore } from '../services/storage/local-store.js';
+import { assertUploadedAttachment } from '../services/storage/attachment.js';
 
-const startSchema = z.object({
-  text: z.string().trim().min(1).max(10_000),
-  /** Page the visitor is on — feeds the routing rules. */
-  url: z.string().max(2048).optional(),
-  /** Optional pre-chat form values. */
-  name: z.string().trim().max(120).optional(),
-  email: z.string().email().max(320).optional(),
-  idempotency_key: z.string().min(1).max(128).optional(),
-});
+const startSchema = z
+  .object({
+    // Optional now that an attachment can stand alone (FR-MOD-11.4): a visitor
+    // may send just a screenshot. The either/or is enforced by the refine below,
+    // the same invariant the agent path applies in `chats.ts`.
+    text: z.string().trim().max(10_000).optional(),
+    /** A file the visitor uploaded through `/uploads`, validated before use. */
+    attachment_url: z.string().max(2048).optional(),
+    /** Page the visitor is on — feeds the routing rules. */
+    url: z.string().max(2048).optional(),
+    /** Optional pre-chat form values. */
+    name: z.string().trim().max(120).optional(),
+    email: z.string().email().max(320).optional(),
+    idempotency_key: z.string().min(1).max(128).optional(),
+  })
+  .refine((body) => Boolean(body.text?.trim()) || Boolean(body.attachment_url), {
+    message: 'A message must have text or an attachment.',
+  });
 
 const rateSchema = z.object({
   value: z.enum(['good', 'bad']),
@@ -44,11 +56,15 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   return result.data;
 }
 
-export default async function customerRoutes(app: FastifyInstance): Promise<void> {
+export default async function customerRoutes(
+  app: FastifyInstance,
+  { env }: { env: Env },
+): Promise<void> {
   const publisher = new RealtimePublisher(app.redis, app.log);
   const chats = new ChatService(app.db, app.redis, publisher);
   const customerDirectory = new CustomerService();
   const ai = new AiResponder(chats, publisher);
+  const store = new LocalStore(env.STORAGE_LOCAL_DIR);
 
   /**
    * The widget's whole conversation state in one call.
@@ -122,6 +138,13 @@ export default async function customerRoutes(app: FastifyInstance): Promise<void
       const body = parse(startSchema, request.body);
       const tenant = request.tenant();
 
+      // An attachment must be a file this workspace uploaded through `/uploads`
+      // (FR-MOD-08.9.4) — the same check the agent path runs, before it can be
+      // stored on an event.
+      if (body.attachment_url) {
+        await assertUploadedAttachment(store, tenant.licenseId, body.attachment_url);
+      }
+
       // Pre-chat details, if the visitor gave them.
       if (body.name || body.email) {
         await request.withTenant((tx) =>
@@ -165,14 +188,16 @@ export default async function customerRoutes(app: FastifyInstance): Promise<void
       if (existing) {
         const { event, replayed } = await chats.sendEvent(tenant, principal, existing.id, {
           type: 'message',
-          text: body.text,
+          ...(body.text !== undefined ? { text: body.text } : {}),
+          ...(body.attachment_url ? { attachmentUrl: body.attachment_url } : {}),
           recipients: 'all',
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
         });
 
         // A replay is the same message arriving twice; running the skill again
-        // would answer the customer twice for one question.
-        if (!replayed) await ai.handle(request, existing.id, body.text);
+        // would answer the customer twice for one question. An attachment with no
+        // text gives the skill nothing to match, so it is left for a human.
+        if (!replayed && body.text?.trim()) await ai.handle(request, existing.id, body.text);
 
         return reply.status(replayed ? 200 : 201).send({ chat_id: existing.id, event });
       }
@@ -183,14 +208,15 @@ export default async function customerRoutes(app: FastifyInstance): Promise<void
         assignToMe: false,
         initialEvent: {
           type: 'message',
-          text: body.text,
+          ...(body.text !== undefined ? { text: body.text } : {}),
+          ...(body.attachment_url ? { attachmentUrl: body.attachment_url } : {}),
           recipients: 'all',
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
         },
         ...(body.url ? { routing: { url: body.url } } : {}),
       });
 
-      await ai.handle(request, chat.id, body.text);
+      if (body.text?.trim()) await ai.handle(request, chat.id, body.text);
 
       const events = await chats.listEvents(tenant, principal, chat.id, { limit: 10 });
       return reply.status(201).send({

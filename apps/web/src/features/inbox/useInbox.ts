@@ -57,11 +57,12 @@ export function useSendMessage(chatId: string | null) {
   const agent = useAuth((s) => s.agent);
 
   return useMutation({
-    mutationFn: (input: { text: string; recipients: 'all' | 'agents' }) =>
+    mutationFn: (input: { text: string; recipients: 'all' | 'agents'; attachmentUrl?: string }) =>
       api.post<ChatEvent>(`/chats/${chatId}/events`, {
         type: 'message',
         text: input.text,
         recipients: input.recipients,
+        ...(input.attachmentUrl ? { attachment_url: input.attachmentUrl } : {}),
         // Survives a retry after a timeout without sending twice.
         idempotency_key: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       }),
@@ -81,7 +82,7 @@ export function useSendMessage(chatId: string | null) {
         author_id: agent?.account_id ?? null,
         author_type: 'agent',
         recipients: input.recipients,
-        attachment_url: null,
+        attachment_url: input.attachmentUrl ?? null,
         properties: { pending: true },
         created_at: new Date().toISOString(),
       };

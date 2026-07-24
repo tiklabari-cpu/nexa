@@ -347,4 +347,94 @@ describe('customer chat api', () => {
       ).toBe(404);
     });
   });
+
+  // =========================================================================
+
+  describe('attachments (FR-MOD-11.4)', () => {
+    const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+
+    /** A customer's own upload: grant → PUT → file_url, the widget's real path. */
+    async function customerUpload(token: string): Promise<string> {
+      const granted = await server.post(
+        '/uploads',
+        { content_type: 'image/png', size_bytes: PNG.byteLength },
+        auth(token),
+      );
+      expect(granted.statusCode).toBe(201);
+      const grant = granted.json() as { upload_url: string; file_url: string };
+      const put = await server.app.inject({
+        method: 'PUT',
+        url: grant.upload_url,
+        headers: { 'content-type': 'image/png' },
+        payload: PNG,
+      });
+      expect(put.statusCode).toBe(201);
+      return grant.file_url;
+    }
+
+    it('sends an attachment with no text and shows it back on the event', async () => {
+      const { token } = await widgetToken();
+      const fileUrl = await customerUpload(token);
+
+      const sent = await server.post('/customer/chat/events', { attachment_url: fileUrl }, auth(token));
+      expect(sent.statusCode).toBe(201);
+
+      const state = await server.get('/customer/chat', auth(token));
+      const events = (state.json() as { events: Array<{ attachment_url: string | null }> }).events;
+      expect(events.at(-1)?.attachment_url).toBe(fileUrl);
+    });
+
+    it('sends text and an attachment together', async () => {
+      const { token } = await widgetToken();
+      const fileUrl = await customerUpload(token);
+
+      const sent = await server.post(
+        '/customer/chat/events',
+        { text: 'Here is the screenshot', attachment_url: fileUrl },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(201);
+    });
+
+    it('refuses a message with neither text nor an attachment', async () => {
+      const { token } = await widgetToken();
+      const empty = await server.post('/customer/chat/events', {}, auth(token));
+      expect(empty.statusCode).toBe(400);
+    });
+
+    it('refuses an attachment_url that is not a file from /uploads', async () => {
+      const { token } = await widgetToken();
+      const evil = await server.post(
+        '/customer/chat/events',
+        { attachment_url: 'https://evil.example/tracker.png' },
+        auth(token),
+      );
+      expect(evil.statusCode).toBe(400);
+      expect((evil.json() as { error: { type: string } }).error.type).toBe('validation');
+    });
+
+    it("refuses another tenant's uploaded file", async () => {
+      // Tenant B uploads a file, tenant A's visitor tries to attach it.
+      const agentTokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      const grantedB = await server.post(
+        '/uploads',
+        { content_type: 'image/png', size_bytes: PNG.byteLength },
+        auth(agentTokenB),
+      );
+      const foreignUrl = (grantedB.json() as { file_url: string }).file_url;
+
+      const { token } = await widgetToken();
+      const refused = await server.post(
+        '/customer/chat/events',
+        { attachment_url: foreignUrl },
+        auth(token),
+      );
+      expect(refused.statusCode).toBe(400);
+    });
+  });
 });

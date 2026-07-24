@@ -108,7 +108,7 @@ export async function buildServer({
       await api.register(accountLifecycleRoutes, { env, mailer });
       await api.register(chatRoutes, { env });
       await api.register(agentRoutes);
-      await api.register(customerRoutes);
+      await api.register(customerRoutes, { env });
       await api.register(customerDirectoryRoutes);
       await api.register(ticketRoutes);
       await api.register(reportRoutes, { env });

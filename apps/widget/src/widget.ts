@@ -31,6 +31,9 @@ interface State {
   events: WidgetEvent[];
   error: string | null;
   sending: boolean;
+  /** A file the visitor picked and we uploaded, waiting to be sent. */
+  pendingAttachment: { fileUrl: string; name: string } | null;
+  uploading: boolean;
 }
 
 export function mount(doc: Document = document, win: Window = window): void {
@@ -49,6 +52,8 @@ export function mount(doc: Document = document, win: Window = window): void {
     events: [],
     error: null,
     sending: false,
+    pendingAttachment: null,
+    uploading: false,
   };
 
   const ui = buildUi(doc);
@@ -57,12 +62,17 @@ export function mount(doc: Document = document, win: Window = window): void {
   // --- Rendering -----------------------------------------------------------
 
   let renderedCount = 0;
+  // attachment_url → object URL. `refresh` rebuilds the transcript every few
+  // seconds; without this each rebuild would re-fetch every image's bytes and
+  // flash it blank while the new blob loads. Keyed by the stable url, so a
+  // re-render reuses the blob it already has.
+  const attachmentCache = new Map<string, string>();
 
   function renderEvents(): void {
     // Append only what is new: rebuilding the list would lose scroll position
     // and restart CSS animations on messages already on screen.
     for (const event of state.events.slice(renderedCount)) {
-      ui.transcript.append(renderBubble(doc, event));
+      ui.transcript.append(renderBubble(doc, event, api, attachmentCache));
     }
     renderedCount = state.events.length;
     ui.transcript.scrollTop = ui.transcript.scrollHeight;
@@ -139,9 +149,59 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
   }
 
+  async function onPickFile(): Promise<void> {
+    const file = ui.file.files?.[0];
+    ui.file.value = ''; // allow re-picking the same file
+    if (!file || state.uploading) return;
+
+    // Uploading needs a token; opening the panel already started `connect`, but
+    // a fast click can beat it, so make sure of it first.
+    if (!api.authenticated) await connect();
+
+    state.uploading = true;
+    ui.attach.disabled = true;
+    try {
+      const fileUrl = await api.upload(file);
+      state.pendingAttachment = { fileUrl, name: file.name };
+      state.error = null;
+      renderChip();
+    } catch (error) {
+      // The licence's file-sharing rules live on the server; a refusal (wrong
+      // type, too large) surfaces here rather than being guessed at.
+      state.error = 'That file could not be attached.';
+      renderStatus();
+      console.warn('nexa widget: upload failed', error);
+    } finally {
+      state.uploading = false;
+      ui.attach.disabled = false;
+    }
+  }
+
+  function renderChip(): void {
+    const chip = state.pendingAttachment;
+    ui.chip.replaceChildren();
+    ui.chip.hidden = chip === null;
+    if (!chip) return;
+
+    const name = doc.createElement('span');
+    name.className = 'nx-chip-name';
+    name.textContent = chip.name;
+    const remove = doc.createElement('button');
+    remove.type = 'button';
+    remove.className = 'nx-chip-x';
+    remove.setAttribute('aria-label', 'Remove attachment');
+    remove.textContent = '×';
+    remove.addEventListener('click', () => {
+      state.pendingAttachment = null;
+      renderChip();
+    });
+    ui.chip.append(name, remove);
+  }
+
   async function send(): Promise<void> {
     const text = ui.input.value.trim();
-    if (!text || state.sending) return;
+    const attachment = state.pendingAttachment;
+    if ((!text && !attachment) || state.sending) return;
 
     state.sending = true;
     ui.send.disabled = true;
@@ -151,23 +211,31 @@ export function mount(doc: Document = document, win: Window = window): void {
     // nothing happen presses enter again.
     const optimistic: WidgetEvent = {
       id: `pending-${Date.now()}`,
-      text,
+      text: text || null,
       author_type: 'customer',
       created_at: new Date().toISOString(),
       type: 'message',
+      attachment_url: attachment?.fileUrl ?? null,
     };
     state.events.push(optimistic);
     renderEvents();
+    state.pendingAttachment = null;
+    renderChip();
 
     try {
-      const result = await api.send(text, { url: hostPageUrl(win) });
+      const result = await api.send(text, {
+        url: hostPageUrl(win),
+        ...(attachment ? { attachment_url: attachment.fileUrl } : {}),
+      });
       state.chatId = result.chat_id;
       state.error = null;
       await refresh();
     } catch (error) {
       state.error = 'Message not sent. Check your connection and try again.';
-      // Put the text back so it is not lost.
+      // Put the text and attachment back so neither is lost.
       ui.input.value = text;
+      state.pendingAttachment = attachment;
+      renderChip();
       state.events = state.events.filter((e) => e.id !== optimistic.id);
       renderedCount = 0;
       ui.transcript.replaceChildren();
@@ -229,6 +297,8 @@ export function mount(doc: Document = document, win: Window = window): void {
     event.preventDefault();
     void send();
   });
+  ui.attach.addEventListener('click', () => ui.file.click());
+  ui.file.addEventListener('change', () => void onPickFile());
   ui.input.addEventListener('keydown', (event) => {
     // Enter sends, Shift+Enter breaks the line — the convention every chat uses.
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -262,8 +332,11 @@ interface Ui {
   panel: HTMLElement;
   transcript: HTMLElement;
   status: HTMLElement;
+  chip: HTMLElement;
   form: HTMLFormElement;
   input: HTMLTextAreaElement;
+  attach: HTMLButtonElement;
+  file: HTMLInputElement;
   send: HTMLButtonElement;
   close: HTMLButtonElement;
 }
@@ -311,8 +384,28 @@ function buildUi(doc: Document): Ui {
   status.className = 'nx-status';
   status.setAttribute('role', 'status');
 
+  // Shows the picked file before it is sent; hidden until there is one.
+  const chip = doc.createElement('div');
+  chip.className = 'nx-chip';
+  chip.hidden = true;
+
   const form = doc.createElement('form');
   form.className = 'nx-form';
+
+  const attach = doc.createElement('button');
+  attach.type = 'button';
+  attach.className = 'nx-attach';
+  attach.setAttribute('aria-label', 'Attach a file');
+  // A paperclip glyph rather than an SVG, to stay inside the 50 KB budget.
+  attach.textContent = '📎';
+
+  const file = doc.createElement('input');
+  file.type = 'file';
+  file.className = 'nx-file';
+  file.accept = 'image/*,application/pdf';
+  file.hidden = true;
+  file.setAttribute('aria-hidden', 'true');
+  file.tabIndex = -1;
 
   const input = doc.createElement('textarea');
   input.className = 'nx-input';
@@ -326,13 +419,18 @@ function buildUi(doc: Document): Ui {
   send.className = 'nx-send';
   send.textContent = 'Send';
 
-  form.append(input, send);
-  panel.append(header, transcript, status, form);
+  form.append(attach, file, input, send);
+  panel.append(header, transcript, status, chip, form);
 
-  return { launcher, panel, transcript, status, form, input, send, close };
+  return { launcher, panel, transcript, status, chip, form, input, attach, file, send, close };
 }
 
-function renderBubble(doc: Document, event: WidgetEvent): HTMLElement {
+function renderBubble(
+  doc: Document,
+  event: WidgetEvent,
+  api: WidgetApi,
+  cache: Map<string, string>,
+): HTMLElement {
   const row = doc.createElement('div');
   row.className = `nx-row nx-row--${event.author_type}`;
 
@@ -348,7 +446,8 @@ function renderBubble(doc: Document, event: WidgetEvent): HTMLElement {
   bubble.className = 'nx-bubble';
   // textContent, never innerHTML — this is the one place agent- and
   // customer-authored text meets the DOM.
-  bubble.textContent = event.text ?? '';
+  if (event.text) bubble.textContent = event.text;
+  if (event.attachment_url) bubble.append(renderAttachment(doc, api, event.attachment_url, cache));
 
   const time = doc.createElement('time');
   time.className = 'nx-time';
@@ -357,6 +456,75 @@ function renderBubble(doc: Document, event: WidgetEvent): HTMLElement {
 
   row.append(bubble, time);
   return row;
+}
+
+const IMAGE_URL = /\.(png|jpe?g|gif|webp)$/i;
+
+/**
+ * An attachment inside a bubble.
+ *
+ * The bytes are behind the customer token, so they are fetched with it and
+ * shown from an object URL — a bare `<img src>` could not send the header.
+ * Images preview inline; anything else becomes a download link, since rendering
+ * an arbitrary type inside our own document is a needless risk.
+ */
+function renderAttachment(
+  doc: Document,
+  api: WidgetApi,
+  url: string,
+  cache: Map<string, string>,
+): HTMLElement {
+  const name = url.split('/').pop() ?? 'attachment';
+
+  // Fetch the bytes once and remember the object URL, so a re-render sets the
+  // src synchronously rather than fetching and flashing blank again.
+  const objectUrl = (): Promise<string> => {
+    const cached = cache.get(url);
+    if (cached) return Promise.resolve(cached);
+    return api.fetchAttachment(url).then((blob) => {
+      const created = URL.createObjectURL(blob);
+      cache.set(url, created);
+      return created;
+    });
+  };
+
+  if (IMAGE_URL.test(url)) {
+    const img = doc.createElement('img');
+    img.className = 'nx-attachment-img';
+    img.alt = 'Attachment';
+    const cached = cache.get(url);
+    if (cached) {
+      img.src = cached;
+    } else {
+      void objectUrl()
+        .then((src) => {
+          img.src = src;
+        })
+        .catch(() => {
+          img.replaceWith(fileLink(doc, name, null));
+        });
+    }
+    return img;
+  }
+
+  const link = fileLink(doc, name, null);
+  void objectUrl()
+    .then((src) => {
+      link.href = src;
+      link.setAttribute('download', name);
+    })
+    .catch(() => {
+      /* leave the link inert; the visitor can retry by reopening */
+    });
+  return link;
+}
+
+function fileLink(doc: Document, name: string, href: string | null): HTMLAnchorElement {
+  const link = doc.createElement('a');
+  link.className = 'nx-attachment-file';
+  link.textContent = `📎 ${name}`;
+  if (href) link.href = href;
+  return link;
 }
 
 function formatTime(iso: string): string {
@@ -489,6 +657,21 @@ body {
   background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 .nx-send:disabled { opacity: .6; cursor: default; }
+.nx-attach {
+  border: 1px solid var(--nx-border); border-radius: 8px; background: transparent;
+  width: 38px; font-size: 16px; line-height: 1; cursor: pointer; color: inherit;
+}
+.nx-attach:disabled { opacity: .6; cursor: default; }
+.nx-chip {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 12px 8px; padding: 6px 10px;
+  border: 1px solid var(--nx-border); border-radius: 8px; font-size: 12px;
+}
+.nx-chip-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-chip-x { border: 0; background: transparent; font-size: 16px; line-height: 1; cursor: pointer; color: var(--nx-muted); }
+.nx-attachment-img { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 4px; }
+.nx-attachment-file { display: inline-block; margin-top: 4px; color: inherit; text-decoration: underline; word-break: break-all; }
+.nx-row--customer .nx-attachment-file { color: #fff; }
 :focus-visible { outline: 2px solid var(--nx-brand); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 `;

@@ -43,6 +43,12 @@ function normalise(error: unknown): ApiError {
   ) {
     return ApiError.validation(fastifyError.message ?? 'Invalid request body.');
   }
+  // A body over `bodyLimit` was answering 500 with a generic envelope, which
+  // reads as "we broke" when the caller is the one who has to change something.
+  // Found while pinning the 1 MiB limit down for uploads (FR-MOD-08.9.4).
+  if (fastifyError.code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+    return ApiError.validation('Request body is larger than this endpoint accepts.');
+  }
   if (fastifyError.statusCode === 404) return ApiError.notFound('Route not found.');
   if (fastifyError.statusCode === 401) return ApiError.authentication();
   if (fastifyError.statusCode === 403) return ApiError.authorization();

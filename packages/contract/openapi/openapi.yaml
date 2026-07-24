@@ -181,6 +181,11 @@ paths:
   /settings/security:
     $ref: "./paths/settings.yaml#/securitySettings"
 
+  /uploads:
+    $ref: "./paths/uploads.yaml#/issueUpload"
+  /uploads/{key}:
+    $ref: "./paths/uploads.yaml#/uploadObject"
+
   /reports/overview:
     $ref: "./paths/reports.yaml#/overview"
   /billing/subscription:
@@ -510,6 +515,29 @@ components:
           description: Hostname only — lowercased, no scheme, port or path.
         include_subdomains: { type: boolean }
         created_at: { type: string, format: date-time }
+
+    UploadGrant:
+      type: object
+      description: |
+        Permission to store one file, issued by `POST /uploads` once the
+        licence's file-sharing rules have accepted the declared type and size.
+      required: [upload_url, file_url, expires_at]
+      properties:
+        upload_url:
+          type: string
+          description: |
+            Signed, single-use, and bound to the declared type and length. Send
+            the bytes here with `PUT` before `expires_at`.
+        file_url:
+          type: string
+          description: |
+            Where the file will be readable, and the value that belongs on an
+            event's `attachment_url`. Does not expire — it is authorised by
+            session, and by the licence embedded in the key.
+        expires_at:
+          type: string
+          format: date-time
+          description: When `upload_url` stops being accepted.
 
     SecuritySettings:
       type: object

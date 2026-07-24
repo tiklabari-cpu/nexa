@@ -1273,6 +1273,76 @@ export interface paths {
     patch: operations['updateSecuritySettings'];
     trace?: never;
   };
+  '/uploads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ask permission to upload an attachment
+     * @description The rules from `security_settings` (FR-MOD-08.9.4) are enforced here,
+     *     before any bytes move: file sharing switched off, a type outside
+     *     `allowed_file_types`, or a size above `max_file_size_bytes` all fail at
+     *     this step and no URL is issued. A grant that never exists is a file that
+     *     can never be stored, which is why this is the enforcement point rather
+     *     than the PUT alone.
+     *
+     *     The returned `upload_url` carries its own signature and is good for one
+     *     file of exactly the declared type and length, for `UPLOAD_URL_TTL`
+     *     seconds. `file_url` is what belongs on the event as `attachment_url`; it
+     *     does not expire and is authorised by session instead.
+     */
+    post: operations['createUpload'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/uploads/{key}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The opaque `<licence>/<uuid><ext>` key from the grant. */
+        key: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Fetch a stored attachment
+     * @description Authorised by session, and the licence inside the key has to match the
+     *     caller's. A key belonging to another licence answers `404`, not `403`:
+     *     whether it exists is not something this caller gets to learn.
+     *
+     *     Served as `content-disposition: attachment` with `nosniff`. An allowed
+     *     `text/plain` rendered inline in our own origin would be stored XSS given
+     *     away for free.
+     */
+    get: operations['getUpload'];
+    /**
+     * Send the bytes for a granted upload
+     * @description Authorised by the signature in the query string, not by a session — it is
+     *     narrower than one: a single key, type and length, inside a short window.
+     *     The declared type and length are compared against what the request
+     *     actually carries, so a grant for a small PNG cannot deliver a large
+     *     anything-else.
+     *
+     *     Every rejection answers the same way. Telling a caller which part of a
+     *     forgery failed is how a forgery gets refined.
+     */
+    put: operations['putUpload'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/overview': {
     parameters: {
       query?: never;
@@ -1620,6 +1690,28 @@ export interface components {
       include_subdomains: boolean;
       /** Format: date-time */
       created_at: string;
+    };
+    /**
+     * @description Permission to store one file, issued by `POST /uploads` once the
+     *     licence's file-sharing rules have accepted the declared type and size.
+     */
+    UploadGrant: {
+      /**
+       * @description Signed, single-use, and bound to the declared type and length. Send
+       *     the bytes here with `PUT` before `expires_at`.
+       */
+      upload_url: string;
+      /**
+       * @description Where the file will be readable, and the value that belongs on an
+       *     event's `attachment_url`. Does not expire — it is authorised by
+       *     session, and by the licence embedded in the key.
+       */
+      file_url: string;
+      /**
+       * Format: date-time
+       * @description When `upload_url` stops being accepted.
+       */
+      expires_at: string;
     };
     /**
      * @description Per-license security configuration (PRD §8.4 `security_settings`).
@@ -4398,6 +4490,136 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  createUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * @description Advisory only. The stored key is `<licence>/<uuid><ext>` with
+           *     the extension rebuilt from `content_type`; the supplied name
+           *     never becomes a path segment.
+           */
+          filename?: string;
+          /** @example image/png */
+          content_type: string;
+          /** @example 20480 */
+          size_bytes: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Permission granted */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UploadGrant'];
+        };
+      };
+      /**
+       * @description The type is not in `allowed_file_types`, or the size is above the
+       *     licence ceiling. `details` carries the rule that refused it.
+       */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      /** @description File sharing is switched off for this licence */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getUpload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The opaque `<licence>/<uuid><ext>` key from the grant. */
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/octet-stream': string;
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  putUpload: {
+    parameters: {
+      query: {
+        content_type: string;
+        size_bytes: number;
+        expires_at: number;
+        signature: string;
+      };
+      header?: never;
+      path: {
+        /** @description The opaque `<licence>/<uuid><ext>` key from the grant. */
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/octet-stream': string;
+      };
+    };
+    responses: {
+      /** @description Stored */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            file_url: string;
+            size_bytes: number;
+            checksum_sha256: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      /** @description The URL is expired, forged, or does not match the bytes sent */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
     };
   };
   getReportsOverview: {

@@ -1,0 +1,126 @@
+issueUpload:
+  post:
+    tags: [Uploads]
+    operationId: createUpload
+    summary: Ask permission to upload an attachment
+    description: |
+      The rules from `security_settings` (FR-MOD-08.9.4) are enforced here,
+      before any bytes move: file sharing switched off, a type outside
+      `allowed_file_types`, or a size above `max_file_size_bytes` all fail at
+      this step and no URL is issued. A grant that never exists is a file that
+      can never be stored, which is why this is the enforcement point rather
+      than the PUT alone.
+
+      The returned `upload_url` carries its own signature and is good for one
+      file of exactly the declared type and length, for `UPLOAD_URL_TTL`
+      seconds. `file_url` is what belongs on the event as `attachment_url`; it
+      does not expire and is authorised by session instead.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [content_type, size_bytes]
+            properties:
+              filename:
+                type: string
+                maxLength: 255
+                description: |
+                  Advisory only. The stored key is `<licence>/<uuid><ext>` with
+                  the extension rebuilt from `content_type`; the supplied name
+                  never becomes a path segment.
+              content_type: { type: string, maxLength: 255, example: image/png }
+              size_bytes: { type: integer, minimum: 1, example: 20480 }
+    responses:
+      "201":
+        description: Permission granted
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/UploadGrant" }
+      "400":
+        description: |
+          The type is not in `allowed_file_types`, or the size is above the
+          licence ceiling. `details` carries the rule that refused it.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403":
+        description: File sharing is switched off for this licence
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+uploadObject:
+  parameters:
+    - name: key
+      in: path
+      required: true
+      schema: { type: string }
+      description: The opaque `<licence>/<uuid><ext>` key from the grant.
+  put:
+    tags: [Uploads]
+    operationId: putUpload
+    summary: Send the bytes for a granted upload
+    description: |
+      Authorised by the signature in the query string, not by a session — it is
+      narrower than one: a single key, type and length, inside a short window.
+      The declared type and length are compared against what the request
+      actually carries, so a grant for a small PNG cannot deliver a large
+      anything-else.
+
+      Every rejection answers the same way. Telling a caller which part of a
+      forgery failed is how a forgery gets refined.
+    security: []
+    parameters:
+      - { name: content_type, in: query, required: true, schema: { type: string } }
+      - { name: size_bytes, in: query, required: true, schema: { type: integer } }
+      - { name: expires_at, in: query, required: true, schema: { type: integer } }
+      - { name: signature, in: query, required: true, schema: { type: string } }
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema: { type: string, format: binary }
+    responses:
+      "201":
+        description: Stored
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_url, size_bytes, checksum_sha256]
+              properties:
+                file_url: { type: string }
+                size_bytes: { type: integer }
+                checksum_sha256: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "403":
+        description: The URL is expired, forged, or does not match the bytes sent
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
+  get:
+    tags: [Uploads]
+    operationId: getUpload
+    summary: Fetch a stored attachment
+    description: |
+      Authorised by session, and the licence inside the key has to match the
+      caller's. A key belonging to another licence answers `404`, not `403`:
+      whether it exists is not something this caller gets to learn.
+
+      Served as `content-disposition: attachment` with `nosniff`. An allowed
+      `text/plain` rendered inline in our own origin would be stored XSS given
+      away for free.
+    responses:
+      "200":
+        description: The file
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

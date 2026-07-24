@@ -7,24 +7,25 @@
         "description": "schema.prisma:849-851'deki fileSharingEnabled/allowedFileTypes/maxFileSizeBytes sutunlari var ama hicbir yerden okunmuyor: openapi.yaml'da /settings/security yok, settings.ts route'unda gecmiyor, web'de ekrani yok. Olu sutunlari kontrata ve UI'a bagla.",
         "details": "1) packages/contract/openapi/openapi.yaml: /settings/security ekle (GET + PATCH). Mevcut /settings/* yollari 169-179 arasinda; ayni desene uy. 2) @nexa/types generate. 3) apps/api/src/routes/settings.ts: license kapsamli handler; PATCH'te allowedFileTypes MIME dogrulamasi. 4) apps/web Settings altinda Security ekrani. Hata zarfi ADR-06. PRD: FR-MOD-08.9.4 · PLAN.md §3.7 · Dilim 13\n\n[günlük 2026-07-24 01:07 UTC] hazirlik: gorev capalari kodda dogrulandi (schema.prisma:849-851 alanlar mevcut; settings.ts'te yuzey yok; openapi.yaml /settings/* 169-179). Gunluk mekanizmasi: node .taskmaster/gunluk.mjs — update-task --append AI'ya gidip kilitlendigi icin kullanilmiyor.\n\n[günlük 2026-07-24 02:01 UTC] plan: (1) contract paths/settings.yaml'a securitySettings (GET+PATCH) + openapi.yaml'a /settings/security yolu ve SecuritySettings semasi; (2) generate; (3) routes/settings.ts'e iki handler, scope access_rules:ro/rw, withTenant ile RLS kapsamli (security_settings RLS policy'si migration 20260722154008:983-984'te mevcut, dogrulandi); (4) SettingsPage.tsx'e SecuritySettings bolumu; (5) settings.test.ts'e GET/PATCH/MIME-red/cross-tenant testleri.\n\n[günlük 2026-07-24 02:01 UTC] varsayim: signup (auth_signup SQL fonksiyonu, migration 20260724101000:36-50) security_settings SATIRI OLUSTURMUYOR — yalnizca seed.ts:267 olusturuyor. Yani gercek bir signup'tan gelen lisansta satir YOK. Karar: GET satir yoksa sema varsayilanlarini doner (yazma yapmaz), PATCH upsert eder. Alternatif (signup SQL'ini degistirip migration eklemek) auth yuzeyine dokunacagi ve gorev 1 kapsamini asacagi icin secilmedi. Varsayilanlarin tek kaynakta kalmasi icin test, satirsiz GET ile bos-create edilmis satirin ayni degerleri verdigini dogruluyor.\n\n[günlük 2026-07-24 02:46 UTC] ENGEL bulundu (insan tarayicida fark etti): entegrasyon paketi DB'yi truncate edip yerine kendi A/B fiksturunu birakiyor (owner-a@example.test...). Demo hesabi owner@acme.localhost silinmisti, /auth/login 401 donuyordu, uygulamaya girilemiyordu — testler ise yesildi. Cozum: her entegrasyon kosusundan sonra 'pnpm db:seed' + login smoke kontrolu. Kural /is §5 ve /dilim-kapat §5'e yazildi. 2026-07-24 02:xx'te dogrulandi: seed sonrasi login HTTP 200.\n\n[günlük 2026-07-24 02:56 UTC] surdurme (loop): kontrat+route+7 test+SettingsPage yazilmis durumda bulundu (614 satir, commit edilmemis). Kalan: typecheck, entegrasyon kosusu, reseed+login smoke, E2E gorsel kanit (SettingsPage.tsx dokunuldugu icin zorunlu), commit.\n\n[günlük 2026-07-24 03:12 UTC] E2E testi eklendi (settings.spec.ts:80) ve iki hata bulup duzeltildi: (1) test durumu degistirip geri koymuyordu — seed idempotent oldugu icin ikinci kosuda kendi kendini kiriyordu, artik varsayilanlari geri yaziyor; (2) Save'e tiklayip hemen reload etmek PATCH'i geciyordu (yaris) — artik waitForResponse ile 200 bekleniyor. Kanit: apps/e2e/kanit/1-dosya-paylasimi.png ve -kaydedildi.png.\n\n[günlük 2026-07-24 03:12 UTC] KAPANIS: typecheck yesil (kontrat 55->56 yol), 439 entegrasyon testi yesil, reseed+login smoke OK, yeni E2E testi yesil. testStrategy maddelerinin hepsi karsilandi. PLAN.md 3.7 guncellemesi dilim kapanisina birakildi (sayac sayilarak uretilir).",
         "testStrategy": "Kabul: GET /settings/security lisans kapsamli doner; baska lisansin ayarina erisim ADR-06 zarfiyla reddedilir. PATCH gecersiz MIME'i reddeder. Birim: MIME allowlist dogrulayicisi. Cross-tenant testi ZORUNLU. Bitince PLAN.md §3.7 satiri guncellenir.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [],
-        "updatedAt": "2026-07-24T01:59:22.980Z"
+        "updatedAt": "2026-07-24T03:43:43.424Z"
       },
       {
         "id": "2",
         "title": "08.9.4-b — Imzali yukleme ucu (signed upload URL)",
         "description": "Kod tabaninda hicbir yukleme ucu yok: openapi.yaml'in 55 yolunun hicbirinde upload/presign gecmiyor. Mimari karar zaten verilmis — server.ts:69 bodyLimit'i 1 MiB'e sabitlemis ve yorumu 'attachments go through signed upload URLs' diyor. Yani multipart API'den GECMEZ.",
-        "details": "POST /api/v1/uploads -> {upload_url, file_url, expires_at}. Tur/boyut SecuritySettings'ten okunur (gorev 1). Depolama anahtari license kapsamli olmali (cross-tenant okuma olmasin). bodyLimit 1 MiB'e dokunma — dosya API uzerinden akmiyor. Kontrat once: openapi.yaml -> generate -> route.\n\nPRD: FR-MOD-08.9.4 · PLAN.md §3.7 · Dilim 13",
+        "details": "POST /api/v1/uploads -> {upload_url, file_url, expires_at}. Tur/boyut SecuritySettings'ten okunur (gorev 1). Depolama anahtari license kapsamli olmali (cross-tenant okuma olmasin). bodyLimit 1 MiB'e dokunma — dosya API uzerinden akmiyor. Kontrat once: openapi.yaml -> generate -> route.\n\nPRD: FR-MOD-08.9.4 · PLAN.md §3.7 · Dilim 13\n\n[günlük 2026-07-24 03:49 UTC] plan: iki adimli imzali yukleme, STORAGE_PROVIDER=local (env.ts:60'ta zaten tanimli; stack'te S3/MinIO YOK — docker-compose sadece db+redis). (1) kontrat: POST /uploads {filename,content_type,size_bytes} -> {upload_url,file_url,expires_at}; PUT /uploads/{key} imzali hedef; GET /uploads/{key} servis. (2) anahtar bicimi <licenseId>/<uuid>.<ext> — licenseId anahtarin ICINDE, cross-tenant yapisal olarak imkansiz. (3) imza: HMAC-SHA256(key|contentType|sizeBytes|exp), customer-token.ts:117 deseni. Yeni env: UPLOAD_SIGNING_KEY (secret(32)) + STORAGE_LOCAL_DIR (varsayilan .data/uploads, zaten gitignore'da). (4) POST tur/boyut'u SecuritySettings'ten okur (gorev 1), izinsizse URL URETMEZ. (5) GET normal auth + anahtardaki licenseId karsilastirmasi — imzasiz, boylece attachment_url suresi dolmaz.\n\n[günlük 2026-07-24 03:49 UTC] varsayim: bodyLimit celiskisi cozumu — global 1 MiB'e DOKUNULMUYOR (server.ts:69, regresyon testi bunu bekliyor); yalnizca PUT /uploads/{key} rotasi Fastify'in rota bazli bodyLimit'i ile kendi tavanini koyuyor. Yerel saglayicida dosya ayni surecten gecmek zorunda (ayri host yok); 'API uzerinden akmiyor' notunun ozu normal JSON yuzeyinin korunmasiydi, o korunuyor. S3'e gecilirse saglayici degisir, API sozlesmesi degismez.\n\n[günlük 2026-07-24 03:59 UTC] KAPANIS: POST /uploads (izin) + PUT /uploads/:key (imzali) + GET /uploads/:key (oturum+lisans) yazildi. Kontrat 56->58 yol. 12 entegrasyon testi, 451 toplam yesil. typecheck+lint yesil. reseed+login OK.\n\n[günlük 2026-07-24 03:59 UTC] duzeltme: anahtar bicimi <lic>/<uuid> -> <lic>-<uuid> degistirildi. Sebep: egik cizgili anahtar tek path parametresine sigmiyor, rota /uploads/* olmak zorunda kaliyordu ve contract-parity.test.ts bunu kontrattaki /uploads/{key} ile eslestiremeyip dusuruyordu. Diskte hala lisans basina klasorleniyor.\n\n[günlük 2026-07-24 03:59 UTC] yan bulgu (duzeltildi): bodyLimit asan govde 500 donuyordu — error-handler.ts FST_ERR_CTP_BODY_TOO_LARGE'i eslemiyor, generic internal'a dusuyordu. ADR-06 ihlali ve mevcut bir hataydi (benim degisikligim degil). validation'a eslendi. PLAN.md D'ye yazilacak.",
         "testStrategy": "Kabul: uc, tur/boyut sinirlarini SecuritySettings'ten okur ve izinsiz tur icin URL URETMEZ. Cross-tenant: A lisansinin anahtari B'nin dosyasina erisemez. Regresyon: server.ts bodyLimit 1 MiB degismedi.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "1"
         ],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-07-24T03:48:30.351Z"
       },
       {
         "id": "3",
@@ -156,13 +157,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-24T01:59:22.980Z",
+      "lastModified": "2026-07-24T03:48:30.351Z",
       "taskCount": 12,
-      "completedCount": 0,
+      "completedCount": 1,
       "tags": [
         "master"
       ],
-      "updated": "2026-07-24T03:12:37.023Z"
+      "updated": "2026-07-24T03:59:40.910Z"
     }
   }
 }

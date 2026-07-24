@@ -37,6 +37,7 @@ const envSchema = z.object({
   JWT_SIGNING_KEY: secret(32),
   WEBHOOK_HMAC_SEED: secret(32),
   CUSTOMER_TOKEN_SECRET: secret(32),
+  UPLOAD_SIGNING_KEY: secret(32),
 
   ACCESS_TOKEN_TTL: z.coerce.number().int().positive().max(3600).default(3600),
   REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(2_592_000),
@@ -58,6 +59,10 @@ const envSchema = z.object({
   LLM_PROVIDER: z.enum(['mock']).default('mock'),
   MAIL_PROVIDER: z.enum(['mock']).default('mock'),
   STORAGE_PROVIDER: z.enum(['local']).default('local'),
+  /** Where the `local` provider keeps uploads. Inside `.data/`, which is ignored. */
+  STORAGE_LOCAL_DIR: z.string().default('.data/uploads'),
+  /** How long a signed upload URL stays usable. One shot, so this is short. */
+  UPLOAD_URL_TTL: z.coerce.number().int().positive().max(3600).default(300),
   STRIPE_PROVIDER: z.enum(['mock']).default('mock'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
@@ -84,7 +89,12 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
         'DATABASE_APP_URL is required in production: connecting as the table owner bypasses row level security.',
       );
     }
-    for (const key of ['JWT_SIGNING_KEY', 'WEBHOOK_HMAC_SEED', 'CUSTOMER_TOKEN_SECRET'] as const) {
+    for (const key of [
+      'JWT_SIGNING_KEY',
+      'WEBHOOK_HMAC_SEED',
+      'CUSTOMER_TOKEN_SECRET',
+      'UPLOAD_SIGNING_KEY',
+    ] as const) {
       if (env[key].startsWith('dev-only-')) {
         throw new Error(`${key} still holds its development placeholder value.`);
       }

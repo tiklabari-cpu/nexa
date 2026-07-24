@@ -14,6 +14,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
+import { ChannelsGrid } from './Channels.js';
 
 interface TrustedDomain {
   id: string;
@@ -57,6 +58,7 @@ export function SettingsPage(): ReactElement {
 
   return (
     <Page title="Settings" description="Widget installation, saved replies and routing.">
+      <ChannelsGrid />
       <WebsiteWidgets canEdit={canManageAccess} />
       <TrustedDomains canEdit={canManageAccess} />
       <FileSharing canEdit={canManageAccess} />

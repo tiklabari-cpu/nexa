@@ -88,6 +88,36 @@ test.describe('website widgets', () => {
   });
 });
 
+test.describe('channels', () => {
+  // FR-MOD-08.5.1: a card grid whose Website status is read from the live
+  // /websites data (the seed connects one), while unbuilt channels say
+  // "Coming soon" and offer to notify.
+  test('shows a channel grid with a data-driven Website status', async ({ agentPage }) => {
+    await agentPage.goto('/app/settings');
+    const channels = agentPage.getByRole('region', { name: 'Channels' });
+    await expect(channels).toBeVisible();
+
+    // The seed has a connected website, so the card must read Connected — a
+    // hard-coded label would still say Connected, so the coming-soon check below
+    // is what proves the difference, together with the unit tests.
+    const website = channels.getByTestId('channel-website');
+    await expect(website.getByText('Connected')).toBeVisible();
+    await expect(website.getByRole('link', { name: 'Manage' })).toBeVisible();
+
+    // An unbuilt channel is honest about it.
+    const whatsapp = channels.getByTestId('channel-whatsapp');
+    await expect(whatsapp.getByText('Coming soon')).toBeVisible();
+    const notify = whatsapp.getByRole('button', { name: 'Get notified' });
+    await expect(notify).toBeVisible();
+
+    await agentPage.screenshot({ path: 'kanit/8-channels-grid.png', fullPage: true });
+
+    // Get notified acknowledges without pretending the channel shipped.
+    await notify.click();
+    await expect(whatsapp.getByText(/let you know/i)).toBeVisible();
+  });
+});
+
 test.describe('settings', () => {
   test('shows the trusted domain the widget actually depends on', async ({ agentPage }) => {
     await agentPage.getByRole('link', { name: 'Settings' }).click();

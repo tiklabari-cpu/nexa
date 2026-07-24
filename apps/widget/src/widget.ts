@@ -12,7 +12,11 @@ import { WidgetApi, type WidgetEvent, type WidgetState } from './api.js';
 
 const LAUNCHER_SIZE = 84;
 const PANEL = { width: 380, height: 620 } as const;
+/** Frame size while the proactive greeting card sits above the launcher. */
+const GREETING = { width: 340, height: 250 } as const;
 const POLL_INTERVAL_MS = 4_000;
+/** Per-session, so a dismissed greeting stays dismissed until the tab closes. */
+const GREETING_DISMISSED_KEY = 'nexa.greeting_dismissed';
 
 interface WidgetConfig {
   organizationId: string;
@@ -31,6 +35,12 @@ interface State {
   events: WidgetEvent[];
   /** Who the visitor is talking to, shown in the header (FR-MOD-11.3). */
   agent: { name: string; avatarUrl: string | null } | null;
+  /** The proactive greeting card is on screen (panel still closed). */
+  greetingOpen: boolean;
+  /** The pre-chat form is showing instead of the composer. */
+  prechat: boolean;
+  /** Pre-chat details to attach to the first message the visitor sends. */
+  pendingDetails: { name?: string; email?: string } | null;
   error: string | null;
   sending: boolean;
   /** A file the visitor picked and we uploaded, waiting to be sent. */
@@ -53,6 +63,9 @@ export function mount(doc: Document = document, win: Window = window): void {
     queuePosition: null,
     events: [],
     agent: null,
+    greetingOpen: false,
+    prechat: false,
+    pendingDetails: null,
     error: null,
     sending: false,
     pendingAttachment: null,
@@ -60,7 +73,7 @@ export function mount(doc: Document = document, win: Window = window): void {
   };
 
   const ui = buildUi(doc);
-  root.append(ui.panel, ui.launcher);
+  root.append(ui.panel, ui.greeting, ui.launcher);
 
   // --- Rendering -----------------------------------------------------------
 
@@ -126,6 +139,20 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.status.dataset['tone'] = 'ok';
   }
 
+  /**
+   * The frame is only as large as it needs to be — a full-size transparent
+   * iframe would swallow clicks on the host page. Three sizes: the open panel,
+   * the greeting card above a closed launcher, or just the launcher.
+   */
+  function resize(): void {
+    const size = state.open
+      ? PANEL
+      : state.greetingOpen
+        ? GREETING
+        : { width: LAUNCHER_SIZE, height: LAUNCHER_SIZE };
+    postToHost(win, { type: 'nexa:resize', width: size.width, height: size.height });
+  }
+
   function setOpen(open: boolean): void {
     state.open = open;
     ui.panel.hidden = !open;
@@ -137,19 +164,57 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.launcher.setAttribute('aria-expanded', String(open));
     ui.launcher.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
 
-    // The frame is only as large as it needs to be: a full-size transparent
-    // iframe would swallow clicks on the host page while the widget is closed.
-    postToHost(win, {
-      type: 'nexa:resize',
-      width: open ? PANEL.width : LAUNCHER_SIZE,
-      height: open ? PANEL.height : LAUNCHER_SIZE,
-    });
+    // Opening supersedes the proactive card, but does not count as dismissing it.
+    if (open && state.greetingOpen) {
+      state.greetingOpen = false;
+      ui.greeting.hidden = true;
+    }
+
+    resize();
     postToHost(win, { type: open ? 'nexa:open' : 'nexa:close' });
 
     if (open) {
-      ui.input.focus();
+      renderPrechat();
+      (state.prechat ? ui.prechatName : ui.input).focus();
       void connect();
     }
+  }
+
+  // --- Greeting card + pre-chat --------------------------------------------
+
+  /** Show the proactive card unless the visitor already waved it away. */
+  function showGreeting(): void {
+    if (state.open || greetingDismissed(win)) return;
+    state.greetingOpen = true;
+    ui.greeting.hidden = false;
+    resize();
+  }
+
+  function dismissGreeting(): void {
+    state.greetingOpen = false;
+    ui.greeting.hidden = true;
+    rememberGreetingDismissed(win);
+    if (!state.open) resize();
+  }
+
+  /** Swap the panel body between the pre-chat form and the conversation. */
+  function renderPrechat(): void {
+    const showForm = state.prechat;
+    ui.prechat.hidden = !showForm;
+    ui.transcript.hidden = showForm;
+    ui.status.hidden = showForm;
+    ui.form.hidden = showForm;
+    ui.chip.hidden = showForm || state.pendingAttachment === null;
+  }
+
+  function submitPrechat(): void {
+    const name = ui.prechatName.value.trim();
+    if (!name) return;
+    const email = ui.prechatEmail.value.trim();
+    state.pendingDetails = { name, ...(email ? { email } : {}) };
+    state.prechat = false;
+    renderPrechat();
+    ui.input.focus();
   }
 
   // --- Data ----------------------------------------------------------------
@@ -165,6 +230,11 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.events = snapshot.events;
       state.agent = toAgent(snapshot.agent);
       state.error = null;
+      // A returning visitor already in a conversation skips the pre-chat form.
+      if (snapshot.events.length > 0) {
+        state.prechat = false;
+        renderPrechat();
+      }
       renderEvents();
       renderStatus();
       renderHeader();
@@ -250,12 +320,17 @@ export function mount(doc: Document = document, win: Window = window): void {
     state.pendingAttachment = null;
     renderChip();
 
+    // Pre-chat name/email ride along with the first message. Captured before
+    // the await so a failed send can put them back.
+    const details = state.pendingDetails;
     try {
       const result = await api.send(text, {
         url: hostPageUrl(win),
         ...(attachment ? { attachment_url: attachment.fileUrl } : {}),
+        ...(details ?? {}),
       });
       state.chatId = result.chat_id;
+      state.pendingDetails = null;
       state.error = null;
       await refresh();
     } catch (error) {
@@ -323,6 +398,17 @@ export function mount(doc: Document = document, win: Window = window): void {
     setOpen(false);
     ui.launcher.focus();
   });
+  // "Let's chat": open into the pre-chat form (unless a conversation resumes).
+  ui.greetChat.addEventListener('click', () => {
+    state.prechat = true;
+    setOpen(true);
+  });
+  // "Just browsing": tuck the card away for the rest of the session.
+  ui.greetBrowse.addEventListener('click', () => dismissGreeting());
+  ui.prechat.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitPrechat();
+  });
   ui.form.addEventListener('submit', (event) => {
     event.preventDefault();
     void send();
@@ -353,6 +439,9 @@ export function mount(doc: Document = document, win: Window = window): void {
   });
 
   postToHost(win, { type: 'nexa:ready' });
+
+  // The proactive nudge, once the host has wired up its message channel.
+  showGreeting();
 }
 
 // ---------------------------------------------------------------------------
@@ -371,6 +460,13 @@ interface Ui {
   close: HTMLButtonElement;
   avatar: HTMLElement;
   title: HTMLElement;
+  greeting: HTMLElement;
+  greetChat: HTMLButtonElement;
+  greetBrowse: HTMLButtonElement;
+  prechat: HTMLFormElement;
+  prechatName: HTMLInputElement;
+  prechatEmail: HTMLInputElement;
+  prechatSubmit: HTMLButtonElement;
 }
 
 function buildUi(doc: Document): Ui {
@@ -459,7 +555,57 @@ function buildUi(doc: Document): Ui {
   send.textContent = 'Send';
 
   form.append(attach, file, input, send);
-  panel.append(header, transcript, status, chip, form);
+
+  // Pre-chat form — a fixed, minimal one on purpose (FR-MOD-11.2): the visual
+  // form builder is a separate v1 feature this must not depend on.
+  const prechat = doc.createElement('form');
+  prechat.className = 'nx-prechat';
+  prechat.hidden = true;
+  const prechatIntro = doc.createElement('p');
+  prechatIntro.className = 'nx-prechat-intro';
+  prechatIntro.textContent = 'Tell us who you are and we will get started.';
+  const prechatName = doc.createElement('input');
+  prechatName.className = 'nx-prechat-input';
+  prechatName.type = 'text';
+  prechatName.placeholder = 'Your name';
+  prechatName.setAttribute('aria-label', 'Your name');
+  prechatName.required = true;
+  prechatName.maxLength = 120;
+  const prechatEmail = doc.createElement('input');
+  prechatEmail.className = 'nx-prechat-input';
+  prechatEmail.type = 'email';
+  prechatEmail.placeholder = 'Email (optional)';
+  prechatEmail.setAttribute('aria-label', 'Email');
+  prechatEmail.maxLength = 320;
+  const prechatSubmit = doc.createElement('button');
+  prechatSubmit.type = 'submit';
+  prechatSubmit.className = 'nx-prechat-submit';
+  prechatSubmit.textContent = 'Start chat';
+  prechat.append(prechatIntro, prechatName, prechatEmail, prechatSubmit);
+
+  panel.append(header, transcript, status, prechat, chip, form);
+
+  // Greeting card — the proactive nudge that sits above a closed launcher.
+  const greeting = doc.createElement('div');
+  greeting.className = 'nx-greeting';
+  greeting.hidden = true;
+  greeting.setAttribute('role', 'dialog');
+  greeting.setAttribute('aria-label', 'Chat with us');
+  const greetMsg = doc.createElement('p');
+  greetMsg.className = 'nx-greet-msg';
+  greetMsg.textContent = 'Hi there 👋 Have a question? We are happy to help.';
+  const greetActions = doc.createElement('div');
+  greetActions.className = 'nx-greet-actions';
+  const greetChat = doc.createElement('button');
+  greetChat.type = 'button';
+  greetChat.className = 'nx-greet-chat';
+  greetChat.textContent = "Let's chat";
+  const greetBrowse = doc.createElement('button');
+  greetBrowse.type = 'button';
+  greetBrowse.className = 'nx-greet-browse';
+  greetBrowse.textContent = 'Just browsing';
+  greetActions.append(greetChat, greetBrowse);
+  greeting.append(greetMsg, greetActions);
 
   return {
     launcher,
@@ -475,6 +621,13 @@ function buildUi(doc: Document): Ui {
     close,
     avatar,
     title,
+    greeting,
+    greetChat,
+    greetBrowse,
+    prechat,
+    prechatName,
+    prechatEmail,
+    prechatSubmit,
   };
 }
 
@@ -597,6 +750,27 @@ function initial(name: string): string {
   return (name.trim()[0] ?? '?').toUpperCase();
 }
 
+/**
+ * Session storage, guarded like the localStorage helpers: Safari private mode
+ * and blocked site data both throw. A greeting that cannot remember it was
+ * dismissed simply reappears next load — annoying, not broken.
+ */
+function greetingDismissed(win: Window): boolean {
+  try {
+    return win.sessionStorage.getItem(GREETING_DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberGreetingDismissed(win: Window): void {
+  try {
+    win.sessionStorage.setItem(GREETING_DISMISSED_KEY, '1');
+  } catch {
+    // Ignored — the card just shows again next time.
+  }
+}
+
 function readConfig(win: Window): WidgetConfig {
   const params = new URLSearchParams(win.location.search);
   return {
@@ -640,6 +814,9 @@ function postToHost(win: Window, message: Record<string, unknown>): void {
 }
 
 const WIDGET_CSS = `
+/* The elements below carry their own display, which would otherwise beat the
+   UA [hidden] rule and leave a "hidden" card or panel on screen. */
+[hidden] { display: none !important; }
 :root {
   --nx-brand: #2f6bff;
   --nx-surface: #ffffff;
@@ -743,6 +920,36 @@ body {
 .nx-attachment-img { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 4px; }
 .nx-attachment-file { display: inline-block; margin-top: 4px; color: inherit; text-decoration: underline; word-break: break-all; }
 .nx-row--customer .nx-attachment-file { color: #fff; }
+.nx-greeting {
+  position: fixed; right: 10px; bottom: 82px; width: 300px;
+  background: var(--nx-surface); color: var(--nx-text);
+  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
+  box-shadow: 0 8px 24px rgb(16 24 40 / .18);
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.nx-greet-msg { margin: 0; font-size: 14px; line-height: 1.4; }
+.nx-greet-actions { display: flex; gap: 8px; }
+.nx-greet-chat {
+  flex: 1; border: 0; border-radius: 8px; padding: 8px 10px;
+  background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+.nx-greet-browse {
+  flex: 1; border: 1px solid var(--nx-border); border-radius: 8px; padding: 8px 10px;
+  background: transparent; color: var(--nx-muted); font: inherit; cursor: pointer;
+}
+.nx-prechat {
+  flex: 1; display: flex; flex-direction: column; gap: 10px;
+  padding: 16px; overflow-y: auto;
+}
+.nx-prechat-intro { margin: 0 0 2px; font-size: 14px; color: var(--nx-muted); }
+.nx-prechat-input {
+  font: inherit; color: inherit; padding: 9px 11px; border-radius: 8px;
+  border: 1px solid var(--nx-border); background: transparent;
+}
+.nx-prechat-submit {
+  border: 0; border-radius: 8px; padding: 9px 12px;
+  background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
 :focus-visible { outline: 2px solid var(--nx-brand); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 `;

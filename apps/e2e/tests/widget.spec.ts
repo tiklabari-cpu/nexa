@@ -78,10 +78,11 @@ test.describe('widget embedding', () => {
     expect(src).toContain('http://localhost:5174/widget.html');
     expect(new URL(src!).origin).not.toBe(new URL(HOST_PAGE).origin);
 
-    // The frame is launcher-sized until opened; a full-size transparent iframe
+    // The proactive greeting sizes the frame to fit its card. Dismiss it and the
+    // closed widget shrinks back to the launcher — a full-size transparent iframe
     // would swallow clicks on the host page.
-    const box = await frame.boundingBox();
-    expect(box!.width).toBeLessThanOrEqual(100);
+    await widgetFrame(page).getByRole('button', { name: 'Just browsing' }).click();
+    await expect.poll(async () => (await frame.boundingBox())!.width).toBeLessThanOrEqual(100);
   });
 
   test('gives the iframe a real origin so it can authenticate', async ({
@@ -124,6 +125,47 @@ test.describe('widget embedding', () => {
     await page.reload();
     await widgetFrame(page).getByRole('button', { name: 'Open chat' }).click();
     await expect(widgetFrame(page).getByRole('log', { name: 'Conversation' })).toContainText(text);
+  });
+});
+
+test.describe('greeting', () => {
+  // FR-MOD-11.2: a proactive card with two quick replies. "Let's chat" opens a
+  // pre-chat form; "Just browsing" tucks it away and it must not nag again this
+  // session. No campaigns or form-builder dependency — the form is fixed.
+  test('greets proactively and opens a pre-chat form on "Let\'s chat"', async ({
+    page,
+    organizationId,
+  }) => {
+    await page.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
+    const frame = widgetFrame(page);
+
+    // Appears without the visitor clicking anything.
+    await expect(frame.getByRole('button', { name: "Let's chat" })).toBeVisible();
+    await page.screenshot({ path: 'kanit/12-greeting-card.png', fullPage: true });
+
+    await frame.getByRole('button', { name: "Let's chat" }).click();
+    await expect(frame.getByRole('textbox', { name: 'Your name' })).toBeVisible();
+    await expect(frame.getByRole('button', { name: 'Start chat' })).toBeVisible();
+    await page.screenshot({ path: 'kanit/12-prechat-form.png', fullPage: true });
+  });
+
+  test('"Just browsing" dismisses the card for the rest of the session', async ({
+    page,
+    organizationId,
+  }) => {
+    await page.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
+    const frame = widgetFrame(page);
+
+    await frame.getByRole('button', { name: 'Just browsing' }).click();
+    await expect(frame.getByRole('button', { name: "Let's chat" })).toBeHidden();
+
+    // The launcher is still there — dismissing the nudge is not closing the door.
+    await expect(frame.getByRole('button', { name: 'Open chat' })).toBeVisible();
+
+    // A reload must not bring the card back (sessionStorage remembers).
+    await page.reload();
+    await expect(widgetFrame(page).getByRole('button', { name: 'Open chat' })).toBeVisible();
+    await expect(widgetFrame(page).getByRole('button', { name: "Let's chat" })).toBeHidden();
   });
 });
 

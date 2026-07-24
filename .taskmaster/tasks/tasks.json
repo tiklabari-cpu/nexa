@@ -220,11 +220,11 @@
         "description": "Merkezi etiket kutuphanesi CRUD (grup kapsamli). Chat basina etiket zaten var; bu kutuphane + settings yuzeyi ve chat etiketlemeyi besleme.",
         "details": "PRD: FR-MOD-08.7.1 · PLAN.md §3.7 · Dilim 14. Tag modeli (apps/api/prisma/schema.prisma), apps/api/src/routes/settings.ts (canned/routing deseni), web apps/web/src/features/settings/SettingsPage.tsx. Kontrat-once. Lisans kapsamli + cross-tenant testi. E2E kanit/.",
         "testStrategy": "Etiket olustur/duzenle/sil grup kapsaminda; lisans kapsamli; cross-tenant baska lisansin etiketine erisemez (test zorunlu); chat etiketleme kutuphaneden besleniyor. contract-parity yesil. Gorsel kanit kanit/<id>-*.png.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [],
-        "updatedAt": "2026-07-24T19:01:48.698Z"
+        "updatedAt": "2026-07-24T19:15:36.719Z"
       },
       {
         "id": "18",
@@ -251,9 +251,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-24T19:01:48.698Z",
+      "lastModified": "2026-07-24T19:15:36.719Z",
       "taskCount": 19,
-      "completedCount": 16,
+      "completedCount": 17,
       "tags": [
         "master"
       ]

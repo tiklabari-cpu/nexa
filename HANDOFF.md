@@ -6,6 +6,24 @@
 
 ## Task log (newest-first)
 
+### §F — Faz-0 kapanış turu (bakiye kapatma) — done — 2026-07-25 UTC
+- Yapıldı: 02.6 **Copy chat link** — inbox transcript başlığına "Copy link" düğmesi (`CopyLinkButton`);
+  `${origin}/app/inbox?chat=<id>` mutlak deep-link'ini panoya kopyalar (komut paleti + InboxPage'in
+  zaten tükettiği `?chat=` parametresi, tek kaynak). 02.6 artık tam ✅ (Reopen + Create ticket + Copy link).
+- Ölü kod temizliği: `apiClient` singleton export'u (`lib/api-client.ts` — hiç import edilmiyordu;
+  herkes `useApiClient()` / `new ApiClient()` kullanıyor) ve `useScrollToBottom` (InboxPage — hiç
+  çağrılmıyordu; artık kullanılmayan `useRef` import'u da düştü) kaldırıldı.
+- §D sapma kaydı: **D16** (audit_logs tablo+policy var ama yazıcı yok → S12 ⬜, v1 borcu), **D17**
+  (07.3.2 Manual/Assisted ayrımı yok → ◐), **D18** (faz sızıntısı — Playbook/AI v1 payları öne
+  çekildi → v1 sayılır, Faz-0 sayacına dâhil değil).
+- PLAN: sayaç 47✅/6◐ → **48✅/5◐** (02.6 ◐→✅) · §2 matris MOD-02 ✅ · §3.11 Dilim 14 bakiye notu güncellendi.
+- Doğrulama (yalnız web değişikliği): `@nexa/web` typecheck 0 · lint 0 · unit 72/72 · build 0.
+  Düğme yalnız seçili sohbetle render olur (tarayıcı doğrulaması tam stack ister); string+clipboard
+  mantığı test edilmiş idiom'u (`Channels` ChatPageLink) birebir yansıttığından statik+birim kapısıyla kapatıldı.
+- Açık bırakılan Faz-0 bakiyesi (bilinçli — kullanıcı "hızlı kapanış" seçti; §F.3 kararına bırakıldı):
+  Reports breakdown/365/custom (07.1/07.3.1/07.3.3) · 00.4 Onboarding sihirbazı · audit_log yazıcısı ·
+  OTel (M5) · retention job (C8) · i18n · PAT UI (08.8.2).
+
 ### 19 — Inbox real-time sekmeleri (All/Chatting/Queued/Waiting) — done — 2026-07-24 UTC
 - Yapıldı: FR-MOD-03.1.1. **Yalnız frontend** (yeni uç/DB yok — mevcut `/chats?view=` listesi
   istemci tarafında bölünüyor). Yeni saf modül `features/inbox/traffic.ts`: `matchesTrafficTab`

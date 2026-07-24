@@ -159,5 +159,3 @@ export class ApiClient {
     return payload as T;
   }
 }
-
-export const apiClient = new ApiClient();

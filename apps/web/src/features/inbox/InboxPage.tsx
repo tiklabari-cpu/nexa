@@ -5,7 +5,7 @@
  * list, and a transcript that takes the remaining width. Every colour and size
  * comes from a token; no component hard-codes a hex value.
  */
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth-store.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -335,6 +335,7 @@ export function InboxPage(): ReactElement {
                   tone={chat.data.active ? 'success' : 'neutral'}
                   label={chat.data.active ? 'Active' : 'Archived'}
                 />
+                <CopyLinkButton chatId={selectedId} />
                 <CreateTicketButton
                   chatId={selectedId}
                   customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
@@ -430,12 +431,31 @@ function ListSkeleton(): ReactElement {
   );
 }
 
-/** Kept for the scroll-into-view behaviour the transcript relies on. */
-export function useScrollToBottom(dependency: unknown): React.RefObject<HTMLDivElement> {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const node = ref.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [dependency]);
-  return ref;
+/**
+ * Copies a deep link to this conversation (FR-MOD-02.6). It reuses the `?chat=`
+ * parameter the inbox already consumes on load, made absolute, so a pasted link
+ * reopens the exact conversation from a ticket, a chat message, or another
+ * machine.
+ */
+function CopyLinkButton({ chatId }: { chatId: string }): ReactElement {
+  const [copied, setCopied] = useState(false);
+  const copy = (): void => {
+    const url = `${window.location.origin}/app/inbox?chat=${chatId}`;
+    void navigator.clipboard?.writeText(url).then(
+      () => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1_500);
+      },
+      () => setCopied(false),
+    );
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
+    >
+      {copied ? 'Copied' : 'Copy link'}
+    </button>
+  );
 }

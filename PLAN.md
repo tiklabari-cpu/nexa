@@ -11,7 +11,7 @@
 
 | Faz                | PRD  | Durum                                                    |
 | ------------------ | ---- | -------------------------------------------------------- |
-| **Faz 0 — MVP**    | §5.1 | ⏳ **47 ✅ · 6 ◐ · 1 ⬜ · 6 🔒** (60 satır)             |
+| **Faz 0 — MVP**    | §5.1 | ⏳ **48 ✅ · 5 ◐ · 1 ⬜ · 6 🔒** (60 satır)             |
 | Faz 1 — v1         | §5.2 | ⏳ kısmen başlandı (Playbook/AI öne çekildi — bkz. §1.3) |
 | Faz 2 — v2         | §5.3 | ⬜ başlanmadı                                            |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                                            |
@@ -96,7 +96,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | ----------------------------- | :-: | :-: | :-: | :--: | :------------------------------------: |
 | MOD-00 Auth + trial           |  ●  |     |     |      |     ✅ (onboarding 00.4 hariç)     |
 | MOD-01 Global shell + ⌘K      |  ●  |  ○  |  ○  |      |        ◐ ⌘K+rozet ✅, Copilot v1         |
-| MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      |  ◐ chat+ticket ✅, Copy chat link ⬜   |
+| MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      |  ✅ chat+ticket + Copy chat link (§F)   |
 | MOD-03.1 Real-time traffic    |  ○  |  ○  |  ○  |      | ✅ sekmeler (tm 19) |
 | MOD-03.2 Contacts CRM         |  ●  |  ○  |     |      |                   ✅                   |
 | MOD-03.3 Campaigns            |     |  ●  |  ○  |      |                   ⬜                   |
@@ -158,7 +158,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | 02.3.5                                           | Composer araçları (canned `#`, tag, emoji, **attach**)                                                       | Must (MVP)       |   ✅   | F5 (`#` ✅) · attach → **Dilim 13**                                                               |
 | 02.3.6                                           | Send (optimistic, disabled/loading/error)                                                                    | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
 | 02.4.1–.6                                        | Details paneli (info/tags/visited pages/visit info)                                                          | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
-| 02.6                                             | **Create ticket** / Copy chat link / Reopen                                                                  | Must (MVP)       |   ◐   | Reopen ✅ (`/chats/{id}/resume`) · Create ticket ✅ (Dilim 11) · **Copy chat link ⬜ (Dilim 14'te yapılmadı — kalan borç)** |
+| 02.6                                             | **Create ticket** / Copy chat link / Reopen                                                                  | Must (MVP)       |   ✅   | Reopen ✅ (`/chats/{id}/resume`) · Create ticket ✅ (Dilim 11) · Copy chat link ✅ (§F kapanış — transcript başlığı, `?chat=` deep-link) |
 | 02.8                                             | Archive (salt-okuma transcript)                                                                              | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
 | 02.1.2, 02.1.4, 02.2.1, 02.3.2, 02.5, 02.7, 02.9 | AI Agents grubu, kanal görünümleri, sıralama, Reply Suggestions, Copilot özeti, Tickets grid, typing preview | v1               |  🔒   | v1                                                                                                |
 | 02.2.3                                           | "Take tour" banner                                                                                           | Could            |  🔒   | —                                                                                                 |
@@ -248,7 +248,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | ~~11~~ | **Ticketing çekirdeği** ✅             | 02.1.3 ✅ · 02.6 (create) ✅ · 03.2.3 ✅ · 07.3.2 ✅                   | Teslim edildi (merge `0ec1b56`). Kapsamdan çıkanlar: 08.5.3 → Dilim 13, 02.6'nın "Copy chat link"i → Dilim 14.                         |
 | ~~12~~ | **Hesap yaşam döngüsü** ✅             | 00.2 ✅ · 00.3 ✅ · 04.3.1 ✅ · 04.4 ✅                                | Teslim edildi. Onboarding sihirbazı (00.4, Should) Dilim 14'e taşındı — Must'lar önce. Tarayıcıda bulunan iki hata için bkz. §D13/D14. |
 | ~~13~~ | **Kanallar + dosya + greeting** ✅     | 08.5.1 ✅ · 08.5.2 ✅ · 08.5.3 ✅ · 08.5.9 ✅ · 08.9.4 ✅ · 11.2 ✅ · 11.3 ✅ · 02.3.5/11.4 attach ✅ | Teslim edildi (merge `d6de3a6`). 08.5.3 (kaynak Dilim 11'de kapsam dışıydı) burada teslim edildi. Yeni: `website_exists` hata tipi (§D15), chat-page allowlist muafiyeti (§C-A8), email inbound (§C-A9). |
-| ~~14~~ | **Checkout + bildirim + shell kalanı** ✅ | 10.1.1–.3 ✅ · 10.1.6 ✅ · 13.8 ✅ · 01.1.3 ✅ · 01.1.6 ✅ · 08.7.1 ✅ · 03.1.1 ✅ | Teslim edildi (merge `13b6f6b`). Checkout Stripe MOCK (ADR-13). Kalan borç (kapsamdan çıktı): 00.4 Onboarding sihirbazı (Should) · 02.6 Copy chat link. |
+| ~~14~~ | **Checkout + bildirim + shell kalanı** ✅ | 10.1.1–.3 ✅ · 10.1.6 ✅ · 13.8 ✅ · 01.1.3 ✅ · 01.1.6 ✅ · 08.7.1 ✅ · 03.1.1 ✅ | Teslim edildi (merge `13b6f6b`). Checkout Stripe MOCK (ADR-13). Kalan borç (kapsamdan çıktı): 00.4 Onboarding sihirbazı (Should). 02.6 Copy chat link §F kapanışında teslim edildi. |
 
 **Faz-0 kapanış kapısı:** 52 gereksinimin tamamı ✅ veya gerekçeli ⛔ · §7 NFR kapısı geçildi ·
 `make dev` temiz kurulumdan demo akışını çalıştırıyor.
@@ -1045,6 +1045,19 @@ görüneceği en son yerdir.
   katalogun geri kalanı da öyle (`ticket_exists`, `account_exists`). Guard testi tipi **isimle**
   listeliyor, plansız bir tip hâlâ testi düşürüyor. (Dilim 13 yalnız bunu ekledi; `greeting_not_found`/
   `group_not_found` daha önce vardı.)
+
+- **D16 (§F kapanış turu, 2026-07-25):** `audit_logs` tablosu + RLS policy Dilim 12'de kuruldu
+  ama Faz-0'da **olay yazıcısı bağlanmadı** — hiçbir güvenlik olayı INSERT edilmiyor; §7.2 S12
+  kapısı bu yüzden ⬜. Gerekçe: Faz-0 Must yüzeyleri önce; audit üretimi + tüketimi (yazım +
+  export UI) v1 borcu. Tablo/policy hazır olduğundan v1'de yalnız yazıcı eklenecek — şema değişmez.
+- **D17 (§F kapanış turu, 2026-07-25):** Reports 07.3.2 yalnız **otomatik** çözüm oranını ve
+  `total_cases = chats + tickets` (Dilim 11) ölçüyor; PRD'nin **Manual/Assisted** ayrımı Faz-0'da
+  **yok** (durum ◐). Gerekçe: ayrım agent-attributed bir resolution event'i gerektiriyor; o veri
+  yolu v1 kapsamında. Sayaç bu kalemi ◐ sayar.
+- **D18 (§F kapanış turu — faz sızıntısı, 2026-07-25):** MOD-05 (Playbook) ve MOD-06 (AI Agent)
+  **v1 payları** Faz-0 kod tabanında mevcut (bkz. §1.3 ve §4.1/4.2 "öne çekildi"). Bunlar **v1
+  kapsamı** sayılır — Faz-0 kapanış sayacına dâhil **değildir** (🔒). Kapanış turu bunları "erken
+  teslim" işaretler, Faz-0 borcu olarak değil. Yeni iş **alınmaz**; mevcut yüzey v1'de tamamlanır.
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

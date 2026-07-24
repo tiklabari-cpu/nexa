@@ -69,6 +69,59 @@ test.describe('settings', () => {
     await rule.getByRole('button', { name: 'Enable' }).click();
     await expect(rule.getByRole('button', { name: 'Disable' })).toBeVisible();
   });
+
+  /**
+   * `security_settings` carried the file-sharing columns from the start and
+   * nothing read them: no contract path, no route, no screen. The columns were
+   * dead. This test is what stops them going back to being dead — it edits the
+   * rules through the UI and reloads, so a screen that renders but never
+   * persists fails here.
+   */
+  test('surfaces the file sharing rules and saves an edit', async ({ agentPage }) => {
+    await agentPage.goto('/app/settings');
+
+    // Re-resolved after every reload rather than held: the old handle points at
+    // a detached node once the page navigates.
+    const section = (): ReturnType<typeof agentPage.getByRole> =>
+      agentPage.getByRole('region', { name: 'File sharing' });
+
+    await expect(section().getByRole('heading', { name: 'File sharing', level: 2 })).toBeVisible();
+
+    async function save(types: string, megabytes: string): Promise<void> {
+      await section().getByLabel('Allowed types').fill(types);
+      await section().getByLabel('Max size (MB)').fill(megabytes);
+
+      // Clicking Save only *starts* the PATCH. Reloading straight after races
+      // it — sometimes the navigation wins and reads the previous values back,
+      // which made this test pass and fail on alternating runs. Wait for the
+      // response, not for the button.
+      const saved = agentPage.waitForResponse(
+        (response) =>
+          response.url().endsWith('/settings/security') &&
+          response.request().method() === 'PATCH',
+      );
+      await section().getByRole('button', { name: 'Save' }).click();
+      expect((await saved).status()).toBe(200);
+
+      // Reload rather than trusting the optimistic cache: the round trip is the
+      // claim, not the redraw.
+      await agentPage.reload();
+      await expect(section().getByLabel('Allowed types')).toHaveValue(types);
+      await expect(section().getByLabel('Max size (MB)')).toHaveValue(megabytes);
+    }
+
+    // The section, not the page: Trusted domains sits above it and grows by a
+    // row on every run, so a page shot pushes the thing being proved off the
+    // bottom. Evidence nobody can read is not evidence.
+    await save('image/png, text/csv', '5');
+    await section().screenshot({ path: 'kanit/1-dosya-paylasimi-kaydedildi.png' });
+
+    // Put the schema defaults back. `db:seed` skips a tenant it already created,
+    // so a test that leaves the row narrowed fails on its own next run — this
+    // one did, before the restore was added.
+    await save('image/png, image/jpeg, application/pdf', '10');
+    await section().screenshot({ path: 'kanit/1-dosya-paylasimi.png' });
+  });
 });
 
 test.describe('composer shortcuts', () => {

@@ -434,4 +434,133 @@ describe('settings', () => {
       for (const id of otherIds) expect(ids).not.toContain(id);
     });
   });
+
+  // --- Security / file sharing -----------------------------------------------
+
+  describe('security settings', () => {
+    // These fields decide what FR-MOD-08.9.4 lets through. Until this endpoint
+    // existed they could only be changed by editing the database, so every
+    // workspace ran on the shipped defaults whether they suited it or not.
+
+    it('returns the schema defaults when no row exists', async () => {
+      // Signup does not create this row — only the seed does — so this is what
+      // a real workspace reads until it saves for the first time.
+      const none = await owner.securitySettings.findUnique({
+        where: { licenseId: fx.a.licenseId },
+      });
+      expect(none).toBeNull();
+
+      const response = await server.get('/settings/security', auth(readToken));
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as Record<string, unknown>;
+
+      // Pins the constants in routes/settings.ts to the column defaults: a row
+      // created with nothing but its key must match what the endpoint invents.
+      const fromSchema = await owner.securitySettings.create({
+        data: { licenseId: fx.b.licenseId },
+      });
+      expect(body).toMatchObject({
+        file_sharing_enabled: fromSchema.fileSharingEnabled,
+        allowed_file_types: fromSchema.allowedFileTypes,
+        max_file_size_bytes: fromSchema.maxFileSizeBytes,
+        spam_filter_enabled: fromSchema.spamFilterEnabled,
+        require_two_factor: fromSchema.requireTwoFactor,
+      });
+      // No row was written to answer a read.
+      expect(
+        await owner.securitySettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+      ).toBeNull();
+      expect(body.updated_at).toBeNull();
+    });
+
+    it('creates the row on first save and reads it back', async () => {
+      const saved = await server.patch(
+        '/settings/security',
+        { allowed_file_types: ['image/png', 'text/csv'], max_file_size_bytes: 2_000_000 },
+        auth(adminToken),
+      );
+      expect(saved.statusCode).toBe(200);
+
+      const after = await server.get('/settings/security', auth(readToken));
+      expect(after.json()).toMatchObject({
+        allowed_file_types: ['image/png', 'text/csv'],
+        max_file_size_bytes: 2_000_000,
+        // Untouched fields keep their defaults rather than becoming null.
+        file_sharing_enabled: true,
+        spam_filter_enabled: true,
+      });
+    });
+
+    it('stores MIME types lowercased so they match what a browser sends', async () => {
+      const response = await server.patch(
+        '/settings/security',
+        { allowed_file_types: ['IMAGE/PNG'] },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as { allowed_file_types: string[] }).allowed_file_types).toEqual([
+        'image/png',
+      ]);
+    });
+
+    it('refuses an extension where a MIME type belongs', async () => {
+      // `.pdf` would sit in the allowlist looking like a rule and match nothing
+      // a browser ever labels, so file sharing would look configured and block
+      // every upload.
+      for (const bad of ['.pdf', 'pdf', 'image/', 'image']) {
+        const response = await server.patch(
+          '/settings/security',
+          { allowed_file_types: [bad] },
+          auth(adminToken),
+        );
+        expect(response.statusCode, `${bad} should be rejected`).toBe(400);
+        expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
+      }
+    });
+
+    it('refuses a size above the ceiling and a body with nothing in it', async () => {
+      const tooBig = await server.patch(
+        '/settings/security',
+        { max_file_size_bytes: 104_857_601 },
+        auth(adminToken),
+      );
+      expect(tooBig.statusCode).toBe(400);
+
+      const empty = await server.patch('/settings/security', {}, auth(adminToken));
+      expect(empty.statusCode).toBe(400);
+    });
+
+    it('refuses to write with a read-only token', async () => {
+      const response = await server.patch(
+        '/settings/security',
+        { file_sharing_enabled: false },
+        auth(readToken),
+      );
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("never reads or writes another tenant's rules", async () => {
+      await owner.securitySettings.create({
+        data: { licenseId: fx.b.licenseId, fileSharingEnabled: false, maxFileSizeBytes: 999 },
+      });
+
+      // Their row must not leak into our read...
+      const read = await server.get('/settings/security', auth(readToken));
+      expect(read.json()).toMatchObject({ file_sharing_enabled: true, max_file_size_bytes: 10_485_760 });
+
+      // ...and our write must not reach it.
+      const written = await server.patch(
+        '/settings/security',
+        { max_file_size_bytes: 5_000 },
+        auth(adminToken),
+      );
+      expect(written.statusCode).toBe(200);
+
+      const theirs = await owner.securitySettings.findUnique({
+        where: { licenseId: fx.b.licenseId },
+      });
+      expect(theirs?.maxFileSizeBytes).toBe(999);
+      expect(theirs?.fileSharingEnabled).toBe(false);
+    });
+  });
 });

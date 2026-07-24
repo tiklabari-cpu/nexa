@@ -46,6 +46,51 @@ const updateRuleBody = z
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
+/**
+ * `type/subtype`, the shape a browser actually puts in `Content-Type`.
+ *
+ * Rejecting anything else is the point: `.pdf` or `pdf` would sit in the
+ * allowlist looking like a rule while matching no upload ever labelled by a
+ * browser, so file sharing would appear configured and block everything.
+ */
+const MIME = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/;
+
+/** 100 MiB. Above this the signed-upload path (FR-MOD-08.9.4-b) is not viable. */
+const MAX_FILE_SIZE_CEILING = 104_857_600;
+
+/**
+ * Mirrors the column defaults in `schema.prisma` (`model SecuritySettings`).
+ *
+ * Signup does not create this row — only the seed does — so a real workspace
+ * reads these until it saves for the first time. They are duplicated here
+ * rather than read from the database because a read should not have to write a
+ * row to answer; `returns the schema defaults when no row exists` in
+ * `settings.test.ts` pins the two copies together.
+ */
+const SECURITY_DEFAULTS = {
+  fileSharingEnabled: true,
+  allowedFileTypes: ['image/png', 'image/jpeg', 'application/pdf'],
+  maxFileSizeBytes: 10_485_760,
+  spamFilterEnabled: true,
+  requireTwoFactor: false,
+} as const;
+
+const updateSecurityBody = z
+  .object({
+    file_sharing_enabled: z.boolean().optional(),
+    allowed_file_types: z
+      .array(z.string().trim().toLowerCase().max(255))
+      .max(50)
+      .refine((types) => types.every((type) => MIME.test(type)), {
+        message: 'each entry must be a MIME type such as image/png',
+      })
+      .optional(),
+    max_file_size_bytes: z.number().int().min(1).max(MAX_FILE_SIZE_CEILING).optional(),
+    spam_filter_enabled: z.boolean().optional(),
+    require_two_factor: z.boolean().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
 const uuid = z.string().uuid();
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
@@ -252,6 +297,63 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     },
   );
 
+  // --- Security / file sharing -----------------------------------------------
+
+  app.get(
+    '/settings/security',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
+    async (request, reply) => {
+      // `findFirst` with no `where`: RLS narrows it to this license, and the
+      // id-by-licenseId key means there is at most one row to find.
+      const row = await request.withTenant((tx) => tx.securitySettings.findFirst());
+      return reply.send(serialiseSecurity(row));
+    },
+  );
+
+  app.patch(
+    '/settings/security',
+    { config: { scopes: ['access_rules:rw'] } },
+    async (request, reply) => {
+      const body = parse(updateSecurityBody, request.body);
+      const tenant = request.tenant();
+
+      const data = {
+        ...(body.file_sharing_enabled !== undefined
+          ? { fileSharingEnabled: body.file_sharing_enabled }
+          : {}),
+        ...(body.allowed_file_types !== undefined
+          ? { allowedFileTypes: body.allowed_file_types }
+          : {}),
+        ...(body.max_file_size_bytes !== undefined
+          ? { maxFileSizeBytes: body.max_file_size_bytes }
+          : {}),
+        ...(body.spam_filter_enabled !== undefined
+          ? { spamFilterEnabled: body.spam_filter_enabled }
+          : {}),
+        ...(body.require_two_factor !== undefined
+          ? { requireTwoFactor: body.require_two_factor }
+          : {}),
+      };
+
+      // Upsert because signup leaves no row: a workspace saving these for the
+      // first time would otherwise get a 404 for settings it can plainly see.
+      const updated = await request.withTenant((tx) =>
+        tx.securitySettings.upsert({
+          where: { licenseId: tenant.licenseId },
+          create: {
+            ...SECURITY_DEFAULTS,
+            allowedFileTypes: [...SECURITY_DEFAULTS.allowedFileTypes],
+            ...data,
+            licenseId: tenant.licenseId,
+          },
+          update: data,
+        }),
+      );
+
+      return reply.send(serialiseSecurity(updated));
+    },
+  );
+
   // --- Routing rules ---------------------------------------------------------
 
   app.get(
@@ -350,6 +452,27 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
       });
     },
   );
+}
+
+function serialiseSecurity(
+  row: {
+    fileSharingEnabled: boolean;
+    allowedFileTypes: string[];
+    maxFileSizeBytes: number;
+    spamFilterEnabled: boolean;
+    requireTwoFactor: boolean;
+    updatedAt: Date;
+  } | null,
+) {
+  const value = row ?? SECURITY_DEFAULTS;
+  return {
+    file_sharing_enabled: value.fileSharingEnabled,
+    allowed_file_types: [...value.allowedFileTypes],
+    max_file_size_bytes: value.maxFileSizeBytes,
+    spam_filter_enabled: value.spamFilterEnabled,
+    require_two_factor: value.requireTwoFactor,
+    updated_at: row ? row.updatedAt.toISOString() : null,
+  };
 }
 
 function serialiseCanned(row: {

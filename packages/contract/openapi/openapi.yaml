@@ -178,6 +178,8 @@ paths:
     $ref: "./paths/settings.yaml#/routingRules"
   /settings/routing-rules/{ruleId}:
     $ref: "./paths/settings.yaml#/routingRule"
+  /settings/security:
+    $ref: "./paths/settings.yaml#/securitySettings"
 
   /reports/overview:
     $ref: "./paths/reports.yaml#/overview"
@@ -508,6 +510,40 @@ components:
           description: Hostname only — lowercased, no scheme, port or path.
         include_subdomains: { type: boolean }
         created_at: { type: string, format: date-time }
+
+    SecuritySettings:
+      type: object
+      description: |
+        Per-license security configuration (PRD §8.4 `security_settings`).
+
+        `file_sharing_enabled`, `allowed_file_types` and `max_file_size_bytes`
+        are the rules FR-MOD-08.9.4 enforces on every upload — both the agent
+        composer's attachments and anything a customer sends.
+      required:
+        [
+          file_sharing_enabled,
+          allowed_file_types,
+          max_file_size_bytes,
+          spam_filter_enabled,
+          require_two_factor,
+        ]
+      properties:
+        file_sharing_enabled:
+          type: boolean
+          description: When false, no attachment is accepted from either side.
+        allowed_file_types:
+          type: array
+          description: Allowed MIME types. An empty list blocks every upload.
+          items: { type: string }
+        max_file_size_bytes:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 104857600
+          description: Per-file ceiling. 100 MiB is the hard maximum.
+        spam_filter_enabled: { type: boolean }
+        require_two_factor: { type: boolean }
+        updated_at: { type: string, format: date-time, nullable: true }
 
     CannedResponse:
       type: object

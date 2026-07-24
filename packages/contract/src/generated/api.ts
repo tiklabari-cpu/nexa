@@ -1239,6 +1239,40 @@ export interface paths {
     patch: operations['updateRoutingRule'];
     trace?: never;
   };
+  '/settings/security': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * File sharing and security rules
+     * @description The file-sharing fields are what FR-MOD-08.9.4 enforces on every upload.
+     *     They existed in the schema from the start but could only be changed by
+     *     editing the database, so the shipped defaults were the only rules any
+     *     workspace ever had.
+     *
+     *     A workspace that has never saved these settings has no row: signup does
+     *     not create one. The defaults from the schema are returned in that case,
+     *     which is what the server enforces anyway — reading has no side effect.
+     */
+    get: operations['getSecuritySettings'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Change the file sharing and security rules
+     * @description Creates the row on first write. `allowed_file_types` is validated as MIME
+     *     types (`type/subtype`) and stored lowercased: an entry like `.pdf` or
+     *     `pdf` would sit in the list looking like a rule while matching no upload
+     *     the browser ever labels.
+     */
+    patch: operations['updateSecuritySettings'];
+    trace?: never;
+  };
   '/reports/overview': {
     parameters: {
       query?: never;
@@ -1586,6 +1620,28 @@ export interface components {
       include_subdomains: boolean;
       /** Format: date-time */
       created_at: string;
+    };
+    /**
+     * @description Per-license security configuration (PRD §8.4 `security_settings`).
+     *
+     *     `file_sharing_enabled`, `allowed_file_types` and `max_file_size_bytes`
+     *     are the rules FR-MOD-08.9.4 enforces on every upload — both the agent
+     *     composer's attachments and anything a customer sends.
+     */
+    SecuritySettings: {
+      /** @description When false, no attachment is accepted from either side. */
+      file_sharing_enabled: boolean;
+      /** @description Allowed MIME types. An empty list blocks every upload. */
+      allowed_file_types: string[];
+      /**
+       * Format: int32
+       * @description Per-file ceiling. 100 MiB is the hard maximum.
+       */
+      max_file_size_bytes: number;
+      spam_filter_enabled: boolean;
+      require_two_factor: boolean;
+      /** Format: date-time */
+      updated_at?: string | null;
     };
     CannedResponse: {
       /** Format: uuid */
@@ -4284,6 +4340,63 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getSecuritySettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SecuritySettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateSecuritySettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          file_sharing_enabled?: boolean;
+          allowed_file_types?: string[];
+          max_file_size_bytes?: number;
+          spam_filter_enabled?: boolean;
+          require_two_factor?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SecuritySettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

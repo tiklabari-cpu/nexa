@@ -2,7 +2,7 @@
 
 **Title:** 13.8 — Bildirimler (ses/masaustu/tarayici/e-posta)
 
-**Status:** pending
+**Status:** done
 
 **Dependencies:** None
 

@@ -253,6 +253,8 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 **Faz-0 kapanış kapısı:** 52 gereksinimin tamamı ✅ veya gerekçeli ⛔ · §7 NFR kapısı geçildi ·
 `make dev` temiz kurulumdan demo akışını çalıştırıyor.
 
+> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** (07.3.2 Manual/Assisted, Must) → tm **21** (07.1/07.3.1/07.3.3 Reports Breakdown) · tm **22** (00.4 Onboarding) · tm **23** (S12 audit yazıcısı) · tm **24** (C8 retention) · tm **25** (M5 OTel) · tm **26** (i18n). Bu bakiye kapanana dek Faz-0 **"kapandı" sayılmaz**; `run-loop.sh` sırayla işler (öncelik sırası: 20 · 23 · 24 → 22 · 25 · 26 → 21). Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
+
 ---
 
 ### 3.12 Dilim 12 — Hesap yaşam döngüsü: invariant ve tehditler (önce yazıldı)

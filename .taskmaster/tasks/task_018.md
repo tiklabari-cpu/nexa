@@ -2,7 +2,7 @@
 
 **Title:** 01.1.3 — Command Palette (Cmd-K): icerik arama + rota atlama
 
-**Status:** pending
+**Status:** done
 
 **Dependencies:** None
 

@@ -2,7 +2,7 @@
 
 **Title:** 08.7.1 — Tags kutuphanesi CRUD (grup kapsami)
 
-**Status:** pending
+**Status:** done
 
 **Dependencies:** None
 

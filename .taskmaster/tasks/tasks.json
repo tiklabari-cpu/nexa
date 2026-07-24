@@ -249,12 +249,361 @@
         "priority": "medium",
         "subtasks": [],
         "updatedAt": "2026-07-24T19:45:55.614Z"
+      },
+      {
+        "id": "20",
+        "title": "07.3.2 — Reports KPI: Manual/Assisted/Automated cozum ayrimi + Total cases",
+        "description": "Reports Overview KPI'lari bugun yalniz `automated` + `total_cases` gosteriyor (apps/api/src/routes/reports.ts ~124-220; ADR-09: agent-yazimli event'i olmayan kapanmis thread = automated). PRD 07.3.2 uc kirilim istiyor: Manual / Assisted / Automated. Veri zaten var (skill_executions + events); eksik olan ayrimi yapan aggregation + kartlar. Must (MVP temel), §D17.",
+        "details": "Tanim: Automated = kapanmis, hic agent-yazimli event yok (ADR-09, KORUNUR). Assisted = kapanmis, agent event VAR + o thread'e ait skill_execution VAR. Manual = kapanmis, agent event VAR, skill YOK. Manual+Assisted+Automated = toplam kapanmis vaka.\n1) Kontrat: packages/contract/openapi/paths/reports.yaml overview yanitina manual/assisted (+ *_rate) alanlari (automated'in yanina). openapi.yaml:201-206 mevcut /reports/* yollari. `pnpm --filter @nexa/types generate`.\n2) Aggregation: reports.ts overview SQL (~124-220). Kapanmis her vakayi uc sinifa ayir (skill_executions LEFT JOIN + agent-authored event kontrolu). ADR-09 automated tanimini bozma.\n3) manual_rate/assisted_rate; automated_rate mevcut mantikla ayni (closed=0 -> null).\n4) Web: apps/web/src/features/reports/ReportsPage.tsx — 3 KPI karti (Manual/Assisted/Automated) + Total cases; mevcut automated karti korunur.\nPRD: FR-MOD-07.3.2 · PLAN.md §3.6 · §D17. Kapsam: yalniz bu KPI kirilimi; Breakdown sayfasi task 21.",
+        "testStrategy": "DoD kapisi (typecheck/lint/unit/integration/build/e2e exit 0). Ozel: reports integration testinde uc sinifin (manual/assisted/automated) fixtür'leri; siniflandirma dogru; manual+assisted+automated = toplam closed; automated ADR-09 ile birebir ayni kalir; cross-tenant izolasyon ZORUNLU. api unit: rate hesaplari + closed=0 null guard. Bitince PLAN.md §3.6 07.3.2 satiri ◐→✅ ve §F sayaci guncellenir. Kanit: 3 kartli Reports ekrani screenshot.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": "1",
+            "title": "Kontrat: reports.yaml overview -> manual/assisted (+rate) alanlari",
+            "description": "openapi paths/reports.yaml overview yanitina manual, assisted, manual_rate, assisted_rate ekle; @nexa/types generate.",
+            "status": "pending",
+            "dependencies": []
+          },
+          {
+            "id": "2",
+            "title": "Aggregation: reports.ts SQL uc-sinif siniflandirmasi",
+            "description": "skill_executions + agent-authored event ile Manual/Assisted/Automated ayrimi; ADR-09 automated korunur.",
+            "status": "pending",
+            "dependencies": [
+              "1"
+            ]
+          },
+          {
+            "id": "3",
+            "title": "Rate hesaplari + null guard",
+            "description": "manual_rate/assisted_rate; closed=0 -> null; automated_rate mevcut mantikla tutarli.",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ]
+          },
+          {
+            "id": "4",
+            "title": "Web: ReportsPage 3 KPI karti + Total cases",
+            "description": "ReportsPage.tsx uc kart (Manual/Assisted/Automated) + Total cases; automated karti korunur.",
+            "status": "pending",
+            "dependencies": [
+              "3"
+            ]
+          },
+          {
+            "id": "5",
+            "title": "Testler: integration (3 sinif + toplam + cross-tenant) + unit (rate)",
+            "description": "Fixtür'ler; toplam=closed; automated=ADR-09; cross-tenant negatif; rate unit.",
+            "status": "pending",
+            "dependencies": [
+              "4"
+            ]
+          }
+        ],
+        "updatedAt": "2026-07-25T00:00:00.000Z"
+      },
+      {
+        "id": "21",
+        "title": "07.1/07.3.1/07.3.3 — Reports Breakdown sayfasi + AI Agent sekmesi + vs-onceki donem + Chats kartlari",
+        "description": "Reports bugun yalniz Overview (Dilim 9). Eksik Should payi: 07.1 kenar cubugu sekmeleri (Overview/AI Agent/Breakdown); 07.3.1 aralik tablarina 365+custom ve vs-onceki donem karsilastirmasi; 07.3.3 Chats bolumu kartlari (automated chats/hour, sure/response dagilimlari). §2 MOD-07 ◐.",
+        "details": "1) Kontrat: reports.yaml -> breakdown + ai-agent yanitlari; overview'a previous_period (delta) blogu. types generate.\n2) Backend: reports.ts — verilen range icin onceki esit-uzunluk donemi hesapla + delta don; 365/custom aralik (query param dogrulama); breakdown/ai-agent aggregation.\n3) Web: ReportsPage.tsx — sol sekme (Overview/AI Agent/Breakdown), range tabs 7/30/90/365 + custom date picker, her KPI'da vs-onceki delta rozeti, Chats bolumu kartlari.\nPRD: FR-MOD-07.1/07.3.1/07.3.3 · PLAN.md §3.6 · §2 MOD-07. Bagimlilik: task 20 (KPI kirilimi Breakdown'da yeniden kullanilir).",
+        "testStrategy": "DoD kapisi. Ozel: previous-period delta integration testi (esit uzunluk donem dogru); custom range param dogrulama; breakdown rakamlari; e2e Reports sekme gezinme (Overview/AI Agent/Breakdown). Bitince PLAN.md §3.6 (07.1/07.3.1/07.3.3) ◐→✅ ve §2 MOD-07 guncellenir. Kanit: Breakdown + AI Agent sekmesi screenshot.",
+        "status": "pending",
+        "dependencies": [
+          "20"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": "1",
+            "title": "Kontrat: breakdown/ai-agent + previous_period delta",
+            "description": "reports.yaml yeni yanitlar + overview delta blogu; types generate.",
+            "status": "pending",
+            "dependencies": []
+          },
+          {
+            "id": "2",
+            "title": "Backend: previous-period delta + 365/custom range + breakdown/ai-agent aggregation",
+            "description": "reports.ts onceki donem + delta; range dogrulama; yeni aggregation sorgulari.",
+            "status": "pending",
+            "dependencies": [
+              "1"
+            ]
+          },
+          {
+            "id": "3",
+            "title": "Web: sol sekmeler (Overview/AI Agent/Breakdown)",
+            "description": "ReportsPage sekme yapisi + rota/durum.",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ]
+          },
+          {
+            "id": "4",
+            "title": "Web: range tabs 365+custom + vs-onceki delta rozetleri + Chats kartlari",
+            "description": "Date picker; delta rozetleri; Chats bolumu kartlari.",
+            "status": "pending",
+            "dependencies": [
+              "3"
+            ]
+          },
+          {
+            "id": "5",
+            "title": "Testler: integration (delta + custom range) + unit + e2e sekme gezinme",
+            "description": "Delta dogrulugu; custom range; e2e navigasyon.",
+            "status": "pending",
+            "dependencies": [
+              "4"
+            ]
+          }
+        ],
+        "updatedAt": "2026-07-25T00:00:00.000Z"
+      },
+      {
+        "id": "22",
+        "title": "00.4 — Onboarding sihirbazi + tohum veri (yeni calisma alani)",
+        "description": "Signup ile acilan yeni calisma alani bugun bos aciliyor (apps/api/src/routes/settings.ts:64 — signup satir olusturmuyor, yalniz seed olusturuyor). PRD 00.4 (Should): yeni sahibe ilk kurulum sihirbazi (profil/persona, ilk website widget, davet, ornek tohum veri) ile bos ekran yerine calisir baslangic. §3.0 ⬜, Dilim 12/14'te ertelendi.",
+        "details": "1) Adim kapsami (PRD 00.4): (a) workspace/persona temel bilgi, (b) ilk website widget (mevcut 08.5.2 akisini yeniden kullan), (c) opsiyonel takim daveti (mevcut invite), (d) ornek/tohum veri (demo sohbet/canned) — MOCK.\n2) Backend: onboarding tamamlanma durumu (agent/organization alaninda flag ya da /onboarding/state); tohum veri icin tenant-kapsamli SECURITY DEFINER seed fonksiyonu (RLS uyumlu).\n3) Web: apps/web AppShell — ilk giriste onboarding rotasi/sihirbazi; adimlar mevcut Settings/Website/Team bilesenlerini yeniden kullanir; \"atla\" secenegi.\nPRD: FR-MOD-00.4 (Should) · PLAN.md §3.0 · §3.11. Sinir: gercek odeme/kart yok.",
+        "testStrategy": "DoD kapisi. Ozel: onboarding e2e (yeni signup -> sihirbaz -> hem skip hem complete yollari -> inbox); tohum-veri SECURITY DEFINER fonksiyonu cross-tenant integration testi (baska tenant'a sizmaz). Bitince PLAN.md §3.0 00.4 ⬜→✅, §2 MOD-00, §F sayaci (⬜ dususu) guncellenir. Kanit: sihirbaz screenshot.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": "1",
+            "title": "Adim kapsami + tamamlanma durumu modeli",
+            "description": "Adimlari netlestir; onboarding flag / state ucu tasarimi.",
+            "status": "pending",
+            "dependencies": []
+          },
+          {
+            "id": "2",
+            "title": "Backend: tenant-kapsamli tohum veri SECURITY DEFINER fonksiyonu + state ucu",
+            "description": "Demo veri seed fn (RLS uyumlu) + tamamlanma durumu.",
+            "status": "pending",
+            "dependencies": [
+              "1"
+            ]
+          },
+          {
+            "id": "3",
+            "title": "Web: onboarding sihirbazi rotasi + adimlar + skip",
+            "description": "Persona/website/invite/seed adimlari; mevcut bilesenleri yeniden kullan; atla.",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ]
+          },
+          {
+            "id": "4",
+            "title": "Testler: integration (seed izolasyon) + e2e (signup->wizard->inbox)",
+            "description": "Cross-tenant seed; skip ve complete e2e yollari.",
+            "status": "pending",
+            "dependencies": [
+              "3"
+            ]
+          }
+        ],
+        "updatedAt": "2026-07-25T00:00:00.000Z"
+      },
+      {
+        "id": "23",
+        "title": "S12 — audit_log yazicisi (append-only olay yazimi) [MAX]",
+        "description": "`audit_log` tablosu + RLS policy Dilim 12'de kuruldu (schema.prisma:911 AuditLogEntry, @@map audit_log) ama HICBIR olay INSERT edilmiyor — yazici yok (§D16). PRD NFR S12 append-only denetim izi istiyor. Guvenlik-hassas eylemlerde olay yaz. Sema DEGISMEZ.",
+        "details": "1) Olay kumesi (append-only): login basari/basarisiz, parola sifirlama, rol/uyelik degisikligi, ayar degisiklikleri (security/routing/billing), PAT olustur/iptal, trusted domain degisikligi. PRD S12.\n2) Merkezi yazici: apps/api/src icinde writeAuditEntry(ctx, action, target, meta); withTenant/RLS uyumlu; append-only (UPDATE/DELETE policy ile reddedildigini dogrula). Ilgili route handler'larina cagri ekle.\n3) Alanlar: actor, tenant, action, target, request_id (server.ts mevcut); PII minimizasyonu (parola/deger YAZMA).\n4) Okuma/export UI KAPSAM DISI (v1) — bu task yalniz YAZICI.\nPRD: NFR S12 · PLAN.md §7.2 · §D16.",
+        "testStrategy": "DoD kapisi + guvenlik. Her guvenlik eyleminde tam 1 append (integration); append-only ihlali (UPDATE/DELETE) reddi; cross-tenant gorunmezlik (negatif test ZORUNLU); PII sizmadigi. Efor [MAX] — tamper-direnci/append-only dogrulugu kritik. Bitince PLAN.md §7.2 S12 ⬜→✅ ve §D16 kapatildi olarak guncellenir.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": "1",
+            "title": "Olay kumesi + alan sozlesmesi",
+            "description": "actor/tenant/action/target/request_id; PII-min; hangi eylemler yazilir.",
+            "status": "pending",
+            "dependencies": []
+          },
+          {
+            "id": "2",
+            "title": "Merkezi writeAuditEntry (withTenant/RLS, append-only dogrula)",
+            "description": "Tek giris noktasi; UPDATE/DELETE policy reddini dogrula.",
+            "status": "pending",
+            "dependencies": [
+              "1"
+            ]
+          },
+          {
+            "id": "3",
+            "title": "Guvenlik-hassas handler'lara cagri ekle",
+            "description": "auth/settings/billing/PAT/trusted-domains handler'larinda writeAuditEntry cagrilari.",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ]
+          },
+          {
+            "id": "4",
+            "title": "Testler: integration (append/eylem, append-only red, cross-tenant) + unit",
+            "description": "Her eylemde 1 append; UPDATE/DELETE red; cross-tenant negatif; PII yok.",
+            "status": "pending",
+            "dependencies": [
+              "3"
+            ]
+          }
+        ],
+        "updatedAt": "2026-07-25T00:00:00.000Z"
+      },
+      {
+        "id": "24",
+        "title": "C8 — Veri saklama (retention) isi: suresi gecen veriyi budama (GDPR/KVKK) [MAX]",
+        "description": "Silme CASCADE var (Dilim 3) ama retention job YOK (§7.2 C8 ◐). PRD C1/C2/C8: saklama suresi gecmis veriyi (or. eski anonim ziyaretci/konusma/olay, .data mail) periyodik, tenant-kapsamli, geri-donusu-olmayan sekilde buda. Prod scheduler yok (sinir) — manuel/mock tetik.",
+        "details": "1) Saklama politikasi: hangi tablo/kolon TTL'i (events/threads yasi, anonim customer, mail .data). PRD C8 + ADR-12 (tek bolge eu).\n2) Job: apps/api/src altinda calistirilabilir script + package.json script (retention:run). GERCEK cron/prod scheduler YOK; SECURITY DEFINER + tenant dongusu, RLS-guvenli, batch + idempotent.\n3) Guvenlik: yanlislikla cross-tenant veya suresi GECMEMIS satiri SILMEME — kesin WHERE + dry-run modu + sayac log.\nPRD: NFR C1/C2/C8 · PLAN.md §7.2. Sinir: prod scheduler/DNS yok.",
+        "testStrategy": "DoD kapisi + guvenlik: irreversible silme icin siki testler. Integration: suresi gecen silinir, gecmeyen KALIR, cross-tenant DOKUNULMAZ, idempotent (tekrar calistir -> ek etki yok), dry-run YAZMAZ (yalniz sayar). Efor [MAX] — geri donusu yok + compliance. Bitince PLAN.md §7.2 C1/C2/C8 ◐→✅ guncellenir.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": "1",
+            "title": "Saklama politikasi (tablo->TTL) + dry-run tasarimi",
+            "description": "Hangi veri ne kadar tutulur; dry-run/uygula ayrimi.",
+            "status": "pending",
+            "dependencies": []
+          },
+          {
+            "id": "2",
+            "title": "retention:run script + SECURITY DEFINER tenant-dongulu budama",
+            "description": "package.json script; batch, idempotent, RLS-guvenli.",
+            "status": "pending",
+            "dependencies": [
+              "1"
+            ]
+          },
+          {
+            "id": "3",
+            "title": "Guvenlik guard'lari",
+            "description": "Kesin WHERE; dry-run; silinen sayaci log; cross-tenant koruma.",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ]
+          },
+          {
+            "id": "4",
+            "title": "Testler: integration (gecen siler / gecmeyen kalir / cross-tenant / idempotent / dry-run)",
+            "description": "Tam kapsama negatif+pozitif.",
+            "status": "pending",
+            "dependencies": [
+              "3"
+            ]
+          }
+        ],
+        "updatedAt": "2026-07-25T00:00:00.000Z"
+      },
+      {
+        "id": "25",
+        "title": "M5 — Gozlemlenebilirlik: OpenTelemetry span/metrik (request_id koprusu)",
+        "description": "request_id + korele log var (apps/api/src/server.ts:67-69 requestIdHeader; error-handler.ts) ama OTel YOK (§7.2 M5 ◐). PRD M5: dagitik izleme (span) + temel metrikler; request_id ile korele. Prod collector yok (sinir) — mock/konsol exporter.",
+        "details": "1) OTel SDK (Node): tracer + HTTP/route span'leri; exporter MOCK/konsol. request_id'yi span attribute + trace korelasyonuna bagla (server.ts).\n2) Temel metrikler: istek sayaci/sure, hata orani; kritik yollara (auth, chats, reports) span.\n3) Test ortaminda kapatilabilir; perf overhead sinirli.\nPRD: NFR M5 · PLAN.md §7.2. Sinir: gercek OTel collector/prod yok.",
+        "testStrategy": "DoD kapisi. Ozel: mock exporter'a span dustugu + span'de request_id attribute mevcut (integration); temel metrik uretimi; makul overhead. Bitince PLAN.md §7.2 M5 ◐→✅ guncellenir. Kanit: konsol/mock exporter span ciktisi.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": "1",
+            "title": "OTel SDK kurulum + tracer + mock/konsol exporter",
+            "description": "Node OTel; test-kapatilabilir exporter.",
+            "status": "pending",
+            "dependencies": []
+          },
+          {
+            "id": "2",
+            "title": "HTTP/route span'leri + request_id korelasyonu",
+            "description": "server.ts; span attribute request_id.",
+            "status": "pending",
+            "dependencies": [
+              "1"
+            ]
+          },
+          {
+            "id": "3",
+            "title": "Temel metrikler (istek/sure/hata) kritik yollarda",
+            "description": "auth/chats/reports.",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ]
+          },
+          {
+            "id": "4",
+            "title": "Testler: span uretimi + request_id attribute (mock exporter)",
+            "description": "Span dustu + attribute assertion.",
+            "status": "pending",
+            "dependencies": [
+              "3"
+            ]
+          }
+        ],
+        "updatedAt": "2026-07-25T00:00:00.000Z"
+      },
+      {
+        "id": "26",
+        "title": "I18N1/2 — Panel + widget i18n (mesaj katalogu + locale)",
+        "description": "i18n altyapisi YOK (§7.2 I18N ⬜); metinler kod icinde sabit, tarih/sayi Intl ile dagink (apps/web/src/lib/format.ts, Transcript.tsx). PRD I18N1/2: panel (apps/web) + widget (apps/widget) cevrilebilir olsun. Canli/otomatik ceviri kapsam disi (§9) — yalniz katalog + tr/en.",
+        "details": "1) Hafif i18n: harici agir bagimlilik gerekmez — mesaj katalogu (tr/en) + t() yardimci; locale kaynagi (kullanici/tarayici). Mevcut Intl format helper'larini (format.ts) locale'e bagla.\n2) Panel: apps/web gorunur string'leri katalogla; tr/en iskelet + eksik-anahtar guvenligi (fallback).\n3) Widget: apps/widget string'leri katalogla; P3 bundle butcesi (50KB, mevcut 5.3KB) korunur.\nPRD: NFR I18N1/2 · PLAN.md §7.2.",
+        "testStrategy": "DoD kapisi + widget bundle butcesi (P3) korunur (describe.skipIf boyut testi yesil). Ozel: t() eksik-anahtar fallback unit; locale degisince metin degisir smoke/e2e; widget boyut kontrolu. Bitince PLAN.md §7.2 I18N ⬜→✅ guncellenir.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": "1",
+            "title": "i18n yaklasimi + katalog (tr/en) + t() + locale kaynagi",
+            "description": "Hafif cozum; fallback; locale secimi.",
+            "status": "pending",
+            "dependencies": []
+          },
+          {
+            "id": "2",
+            "title": "Panel string katalogla + Intl helper'lari locale'e bagla",
+            "description": "apps/web string'leri + format.ts locale.",
+            "status": "pending",
+            "dependencies": [
+              "1"
+            ]
+          },
+          {
+            "id": "3",
+            "title": "Widget string katalogla (bundle butcesi P3)",
+            "description": "apps/widget; boyut korunur.",
+            "status": "pending",
+            "dependencies": [
+              "2"
+            ]
+          },
+          {
+            "id": "4",
+            "title": "Testler: t() fallback unit + locale smoke + widget boyut",
+            "description": "Fallback; locale-degisim; P3 boyut.",
+            "status": "pending",
+            "dependencies": [
+              "3"
+            ]
+          }
+        ],
+        "updatedAt": "2026-07-25T00:00:00.000Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-24T19:45:55.614Z",
-      "taskCount": 19,
+      "lastModified": "2026-07-25T00:00:00.000Z",
+      "taskCount": 26,
       "completedCount": 19,
       "tags": [
         "master"

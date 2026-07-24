@@ -2,7 +2,7 @@
 
 **Title:** 03.1.1 — Inbox real-time sekmeleri (All/Chatting/Queued/Waiting)
 
-**Status:** pending
+**Status:** done
 
 **Dependencies:** None
 

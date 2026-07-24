@@ -8,8 +8,8 @@
  * data and can still export it. The banner says so plainly, because "your trial
  * ended" without that reads as "your data is gone".
  */
-import { useQuery } from '@tanstack/react-query';
-import type { ReactElement } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, type ReactElement } from 'react';
 import {
   Card,
   CardSkeleton,
@@ -35,9 +35,11 @@ interface Subscription {
   access: 'trialing' | 'active' | 'read_only';
   trial: { ends_at: string | null; days_remaining: number | null };
   seats: number;
+  min_seats: number;
   unit_price_cents: number;
   usage: UsageSummary;
   estimated_total_cents: number;
+  annual_savings_cents: number;
   provider: string;
 }
 
@@ -57,6 +59,15 @@ export function BillingPage(): ReactElement {
   const usage = useQuery({
     queryKey: ['billing', 'usage'],
     queryFn: () => api.get<Usage>('/billing/usage'),
+  });
+
+  const queryClient = useQueryClient();
+  const change = useMutation({
+    mutationFn: (body: { billing_cycle?: string; seats?: number }) =>
+      api.patch<Subscription>('/billing/subscription', body),
+    // The reply is a full subscription view, so the whole page updates from it
+    // without a refetch round trip.
+    onSuccess: (updated) => queryClient.setQueryData(['billing', 'subscription'], updated),
   });
 
   if (subscription.error || usage.error) {
@@ -128,6 +139,8 @@ export function BillingPage(): ReactElement {
           />
         </KpiGrid>
       </Section>
+
+      <ManagePlan sub={sub} onChange={change.mutate} pending={change.isPending} />
 
       <Section
         title="AI resolutions"
@@ -205,5 +218,198 @@ function QuotaBar({ fraction, warning }: { fraction: number; warning: boolean })
         style={{ width: `${Math.min(100, Math.max(1, percent))}%` }}
       />
     </div>
+  );
+}
+
+/**
+ * The checkout levers (FR-MOD-10.1.1–.3, .6): billing cycle, seats and payment.
+ *
+ * Every change persists straight away through `PATCH /billing/subscription` and
+ * the page re-reads from the reply, so the summary is the server's arithmetic,
+ * not a second copy that could drift. The seat count cannot go below the active
+ * headcount (`min_seats`) — the minus button disables at the floor rather than
+ * letting the request fail.
+ *
+ * Payment is mocked (ADR-13): the panel is a labelled placeholder, not a real
+ * card form. Nothing is collected or charged, and during the trial the amount
+ * billed now is $0 (FR-MOD-10.1.6).
+ */
+function ManagePlan({
+  sub,
+  onChange,
+  pending,
+}: {
+  sub: Subscription;
+  onChange: (body: { billing_cycle?: string; seats?: number }) => void;
+  pending: boolean;
+}): ReactElement {
+  const [showPayment, setShowPayment] = useState(false);
+  const annual = sub.billing_cycle === 'annual';
+  const cycleUnit = annual ? 'year' : 'month';
+  const trialing = sub.access === 'trialing';
+
+  // Client-side preview of the recurring charge and the annual saving, matching
+  // the API (annual bills ten months, saving two). The number billed *now* still
+  // comes from the server — 0 while trialing.
+  const recurringCents = sub.seats * sub.unit_price_cents * (annual ? 10 : 1);
+  const annualSavingsCents = sub.seats * sub.unit_price_cents * 2;
+
+  const cycleButton = (isActive: boolean): string =>
+    `flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+      isActive
+        ? 'border-brand-500 bg-brand-500 text-white'
+        : 'border-border text-content-secondary hover:bg-surface-2'
+    }`;
+
+  return (
+    <Section
+      title="Manage plan"
+      description="Billing is mocked — nothing is charged. Changes save as you make them."
+    >
+      <Card>
+        <div className="flex flex-col gap-5 p-4">
+          {/* Billing cycle (FR-MOD-10.1.2) */}
+          <div>
+            <p className="mb-2 text-xs font-medium text-content-secondary">Billing cycle</p>
+            <div className="flex gap-2" role="group" aria-label="Billing cycle">
+              <button
+                type="button"
+                aria-pressed={!annual}
+                disabled={pending || !annual}
+                onClick={() => onChange({ billing_cycle: 'monthly' })}
+                className={cycleButton(!annual)}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
+                aria-pressed={annual}
+                disabled={pending || annual}
+                onClick={() => onChange({ billing_cycle: 'annual' })}
+                className={cycleButton(annual)}
+              >
+                Annual
+                <span className="ml-1 font-normal opacity-90">
+                  · save {formatMoney(annualSavingsCents)}/yr
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Users stepper (FR-MOD-10.1.3) */}
+          <div>
+            <p className="mb-2 text-xs font-medium text-content-secondary">Seats</p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                aria-label="Remove a seat"
+                disabled={pending || sub.seats <= sub.min_seats}
+                onClick={() => onChange({ seats: sub.seats - 1 })}
+                className="h-8 w-8 rounded-md border border-border text-lg leading-none text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
+              >
+                −
+              </button>
+              <span data-testid="seat-count" className="tabular w-8 text-center text-lg font-semibold">
+                {sub.seats}
+              </span>
+              <button
+                type="button"
+                aria-label="Add a seat"
+                disabled={pending}
+                onClick={() => onChange({ seats: sub.seats + 1 })}
+                className="h-8 w-8 rounded-md border border-border text-lg leading-none text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
+              >
+                +
+              </button>
+              <span className="text-sm text-content-secondary">
+                {formatMoney(sub.unit_price_cents)} / user / month
+              </span>
+            </div>
+            <p className="mt-1 text-2xs text-content-tertiary">
+              Minimum {sub.min_seats} — you cannot buy fewer seats than your active agents.
+            </p>
+          </div>
+
+          {/* Subscription summary (FR-MOD-10.1.6) */}
+          <div data-testid="billing-summary" className="rounded-md bg-inset p-3 text-sm">
+            {trialing ? (
+              <>
+                <p>
+                  Billed now <span className="font-semibold">{formatMoney(0)}</span> during the
+                  trial.
+                </p>
+                <p className="text-content-secondary">
+                  After the trial:{' '}
+                  <span className="font-semibold text-content">{formatMoney(recurringCents)}</span> /{' '}
+                  {cycleUnit}
+                </p>
+              </>
+            ) : (
+              <p>
+                Total:{' '}
+                <span className="font-semibold">{formatMoney(sub.estimated_total_cents)}</span> /{' '}
+                {cycleUnit}
+              </p>
+            )}
+            {annual && (
+              <p className="mt-1 text-2xs text-success">
+                Saving {formatMoney(annualSavingsCents)} a year versus monthly billing.
+              </p>
+            )}
+          </div>
+
+          {/* Enter payment details — mocked (FR-MOD-10.1.6, ADR-13) */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowPayment((v) => !v)}
+              className="rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+            >
+              Enter payment details
+            </button>
+
+            {showPayment && (
+              <div
+                data-testid="payment-panel"
+                role="group"
+                aria-label="Payment details"
+                className="mt-3 rounded-md border border-border p-3"
+              >
+                <p className="mb-3 text-2xs text-content-tertiary">
+                  Payment is mocked (ADR-13). No card is collected or charged — a real Stripe form
+                  would mount here. Billed now{' '}
+                  <span className="font-medium text-content">
+                    {trialing ? formatMoney(0) : formatMoney(sub.estimated_total_cents)}
+                  </span>
+                  .
+                </p>
+                <div className="flex flex-col gap-2">
+                  <input
+                    aria-label="Card number"
+                    placeholder="Card number (mocked)"
+                    disabled
+                    className="rounded-md border border-border bg-inset px-3 py-2 text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      aria-label="Expiry"
+                      placeholder="MM / YY"
+                      disabled
+                      className="w-24 rounded-md border border-border bg-inset px-3 py-2 text-sm"
+                    />
+                    <input
+                      aria-label="CVC"
+                      placeholder="CVC"
+                      disabled
+                      className="w-20 rounded-md border border-border bg-inset px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+    </Section>
   );
 }

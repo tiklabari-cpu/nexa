@@ -1,6 +1,6 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-23 · **Branch:** `main` · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-07-25 · **Branch:** `main` (Dilim 14 merge edildi) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
 

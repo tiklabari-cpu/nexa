@@ -7,11 +7,11 @@
 > Şema doğruluk kaynağı: PRD §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Son denetim:** 2026-07-23
+**Başlangıç:** 2026-07-22 · **Son denetim:** 2026-07-25
 
 | Faz                | PRD  | Durum                                                    |
 | ------------------ | ---- | -------------------------------------------------------- |
-| **Faz 0 — MVP**    | §5.1 | ⏳ **39 ✅ · 8 ◐ · 7 ⬜ · 6 🔒** (60 satır)             |
+| **Faz 0 — MVP**    | §5.1 | ⏳ **48 ✅ · 5 ◐ · 1 ⬜ · 6 🔒** (60 satır)             |
 | Faz 1 — v1         | §5.2 | ⏳ kısmen başlandı (Playbook/AI öne çekildi — bkz. §1.3) |
 | Faz 2 — v2         | §5.3 | ⬜ başlanmadı                                            |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                                            |
@@ -133,14 +133,14 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | 00.1 | Login (email+parola; SSO/2FA opsiyonel)        | Must (MVP)   |  ✅   | Dilim 2 · `/auth/login` |
 | 00.2 | **Signup + 14 gün kartsız trial başlatma**     | Must (MVP)   |  ✅   | Dilim 12                |
 | 00.3 | **Forgot password** (süreli token, nötr mesaj) | Must (MVP)   |  ✅   | Dilim 12                |
-| 00.4 | **Onboarding sihirbazı** + tohum veri          | Should (MVP) |  ⬜   | **Dilim 14'e taşındı**  |
+| 00.4 | **Onboarding sihirbazı** + tohum veri          | Should (MVP) |  ⬜   | Dilim 14'te yapılmadı — kalan borç (Should)  |
 
 ### 3.1 FR-MOD-01 — Global Shell / Navigation
 
 | PRD                      | Gereksinim                                               | Öncelik          | Durum | Nerede                                      |
 | ------------------------ | -------------------------------------------------------- | ---------------- | :---: | ------------------------------------------- |
 | 01.1.3                   | **Command Palette (⌘K)** — içerik arama + rota atlama    | Must (MVP temel) |  ✅   | Dilim 14 (tm 18) — müşteri/sohbet/ticket arama + modül atlama, scope-gated, deep-link |
-| 01.1.6                   | Trial rozeti "N days" + Subscribe CTA                    | Must (MVP)       |   ◐   | Dilim 9 (gate var, rozet ⬜) → **Dilim 14** |
+| 01.1.6                   | Trial rozeti "N days" + Subscribe CTA                    | Must (MVP)       |   ✅   | Dilim 14 (tm 15) — trial rozeti + Subscribe CTA |
 | 01.2                     | Sol ikon rayı                                            | Must (MVP)       |  ✅   | F2 · `AppShell.tsx`                         |
 | 01.3                     | Sağ panel anahtarı (Details ↔ Copilot ↔ Expand)          | Must (MVP)       |   ◐   | Dilim 7 (Details ✅, Copilot v1)            |
 | 01.1.1/.4/.5, 01.4, 01.5 | Hamburger, presence avatarları, Invite +N, banner, unpin | Should/Could     |  🔒   | v1+                                         |
@@ -158,7 +158,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | 02.3.5                                           | Composer araçları (canned `#`, tag, emoji, **attach**)                                                       | Must (MVP)       |   ✅   | F5 (`#` ✅) · attach → **Dilim 13**                                                               |
 | 02.3.6                                           | Send (optimistic, disabled/loading/error)                                                                    | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
 | 02.4.1–.6                                        | Details paneli (info/tags/visited pages/visit info)                                                          | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
-| 02.6                                             | **Create ticket** / Copy chat link / Reopen                                                                  | Must (MVP)       |   ◐   | Reopen ✅ (`/chats/{id}/resume`) · Create ticket ✅ (Dilim 11) · **Copy chat link ⬜ → Dilim 14** |
+| 02.6                                             | **Create ticket** / Copy chat link / Reopen                                                                  | Must (MVP)       |   ◐   | Reopen ✅ (`/chats/{id}/resume`) · Create ticket ✅ (Dilim 11) · **Copy chat link ⬜ (Dilim 14'te yapılmadı — kalan borç)** |
 | 02.8                                             | Archive (salt-okuma transcript)                                                                              | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
 | 02.1.2, 02.1.4, 02.2.1, 02.3.2, 02.5, 02.7, 02.9 | AI Agents grubu, kanal görünümleri, sıralama, Reply Suggestions, Copilot özeti, Tickets grid, typing preview | v1               |  🔒   | v1                                                                                                |
 | 02.2.3                                           | "Take tour" banner                                                                                           | Could            |  🔒   | —                                                                                                 |
@@ -167,7 +167,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | PRD                            | Gereksinim                                                    | Öncelik            | Durum | Nerede                                       |
 | ------------------------------ | ------------------------------------------------------------- | ------------------ | :---: | -------------------------------------------- |
-| 03.1.1                         | Real-time sekmeleri (All/Chatting/Queued/Waiting)             | Should (MVP temel) |   ◐   | F4 (liste ✅, sekmeler ⬜) → **Dilim 14**    |
+| 03.1.1                         | Real-time sekmeleri (All/Chatting/Queued/Waiting)             | Should (MVP temel) |   ✅   | Dilim 14 (tm 19) — All/Chatting/Queued/Waiting + canlı sayaç    |
 | 03.2.1                         | Contacts header + arama + filter                              | Must (MVP)         |  ✅   | F4                                           |
 | 03.2.3                         | Contacts tablosu (Name/Email/Phone/Country/Chats/**Tickets**) | Must (MVP)         |  ✅   | F4 — `tickets_count` artık gerçek (Dilim 11) |
 | 03.1.2, 03.1.3, 03.2.2, 03.3.x | Empty state, ziyaretçi tablosu, alt sekmeler, Campaigns       | Should/v1          |  🔒   | v1                                           |
@@ -209,7 +209,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | 08.5.3 | **Email (forwarding → ticket)**                    | Must (MVP) |  ✅   | **Dilim 13** (kanal yüzeyiyle)                   |
 | 08.5.9 | **Chat page** (hosted link)                        | Must (MVP) |  ✅   | **Dilim 13**                                     |
 | 08.6.1 | Chat routing kural motoru + fallback               | Must (MVP) |  ✅   | Dilim 8 · ADR-08                                 |
-| 08.7.1 | **Tags kütüphanesi CRUD** (grup kapsamı)           | Must (MVP) |   ◐   | Chat başına etiket ✅ · kütüphane → **Dilim 14** |
+| 08.7.1 | **Tags kütüphanesi CRUD** (grup kapsamı)           | Must (MVP) |   ✅   | Chat başına etiket ✅ · kütüphane CRUD ✅ Dilim 14 (tm 17) |
 | 08.7.2 | Canned responses (`#` shortcut, grup kapsamı)      | Must (MVP) |  ✅   | F5                                               |
 | 08.8.2 | API access — APIs & SDKs + PAT                     | Must (MVP) |  ✅   | Dilim 2 · F5                                     |
 | 08.9.1 | Trusted domains (widget allowlist)                 | Must (MVP) |  ✅   | Dilim 2 · F5                                     |
@@ -219,10 +219,10 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | PRD    | Gereksinim                                       | Öncelik    | Durum | Nerede                                                                              |
 | ------ | ------------------------------------------------ | ---------- | :---: | ----------------------------------------------------------------------------------- |
-| 10.1.1 | **Plan + Change plan**                           | Must (MVP) |  ⬜   | **Dilim 14**                                                                        |
-| 10.1.2 | **Billing cycle** (Monthly/Annual + indirim)     | Must (MVP) |  ⬜   | **Dilim 14**                                                                        |
-| 10.1.3 | **Users stepper** ($/user/mo × qty)              | Must (MVP) |  ⬜   | **Dilim 14**                                                                        |
-| 10.1.6 | **Subscription summary + Enter payment details** | Must (MVP) |  ⬜   | **Dilim 14** — ⚠️ PRD §11.1/1: gerçek kart girişi kapsam DIŞI; Stripe MOCK (ADR-13) |
+| 10.1.1 | **Plan + Change plan**                           | Must (MVP) |  ✅   | **Dilim 14** (tm 13) — checkout API                                                                        |
+| 10.1.2 | **Billing cycle** (Monthly/Annual + indirim)     | Must (MVP) |  ✅   | **Dilim 14** (tm 13)                                                                        |
+| 10.1.3 | **Users stepper** ($/user/mo × qty)              | Must (MVP) |  ✅   | **Dilim 14** (tm 13)                                                                        |
+| 10.1.6 | **Subscription summary + Enter payment details** | Must (MVP) |  ✅   | **Dilim 14** (tm 14) — ⚠️ PRD §11.1/1: gerçek kart girişi kapsam DIŞI; Stripe MOCK (ADR-13) |
 | 10.2   | 14 günlük trial mantığı (rozet + kısıtlama)      | Must (MVP) |  ✅   | Dilim 9 · ADR-10                                                                    |
 
 ### 3.9 FR-MOD-11 — Customer Widget
@@ -239,7 +239,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | PRD  | Gereksinim                                        | Öncelik    | Durum | Nerede       |
 | ---- | ------------------------------------------------- | ---------- | :---: | ------------ |
-| 13.8 | **Notifications** (ses/masaüstü/tarayıcı/e-posta) | Must (MVP) |  ⬜   | **Dilim 14** |
+| 13.8 | **Notifications** (ses/masaüstü/tarayıcı/e-posta) | Must (MVP) |  ✅   | **Dilim 14** (tm 16) |
 
 ### 3.11 Faz-0 dilim planı
 
@@ -248,7 +248,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | ~~11~~ | **Ticketing çekirdeği** ✅             | 02.1.3 ✅ · 02.6 (create) ✅ · 03.2.3 ✅ · 07.3.2 ✅                   | Teslim edildi (merge `0ec1b56`). Kapsamdan çıkanlar: 08.5.3 → Dilim 13, 02.6'nın "Copy chat link"i → Dilim 14.                         |
 | ~~12~~ | **Hesap yaşam döngüsü** ✅             | 00.2 ✅ · 00.3 ✅ · 04.3.1 ✅ · 04.4 ✅                                | Teslim edildi. Onboarding sihirbazı (00.4, Should) Dilim 14'e taşındı — Must'lar önce. Tarayıcıda bulunan iki hata için bkz. §D13/D14. |
 | ~~13~~ | **Kanallar + dosya + greeting** ✅     | 08.5.1 ✅ · 08.5.2 ✅ · 08.5.3 ✅ · 08.5.9 ✅ · 08.9.4 ✅ · 11.2 ✅ · 11.3 ✅ · 02.3.5/11.4 attach ✅ | Teslim edildi (merge `d6de3a6`). 08.5.3 (kaynak Dilim 11'de kapsam dışıydı) burada teslim edildi. Yeni: `website_exists` hata tipi (§D15), chat-page allowlist muafiyeti (§C-A8), email inbound (§C-A9). |
-| **14** | **Checkout + bildirim + shell kalanı** | 10.1.1–.3 · 10.1.6 · 13.8 · 01.1.3 · 01.1.6 · 08.7.1 · 03.1.1          | PRD çıkış kriteri "trial→ücretli ≥%8" bu yol olmadan ölçülemez.                                                                        |
+| ~~14~~ | **Checkout + bildirim + shell kalanı** ✅ | 10.1.1–.3 ✅ · 10.1.6 ✅ · 13.8 ✅ · 01.1.3 ✅ · 01.1.6 ✅ · 08.7.1 ✅ · 03.1.1 ✅ | Teslim edildi (merge `MERGE_SHA`). Checkout Stripe MOCK (ADR-13). Kalan borç (kapsamdan çıktı): 00.4 Onboarding sihirbazı (Should) · 02.6 Copy chat link. |
 
 **Faz-0 kapanış kapısı:** 52 gereksinimin tamamı ✅ veya gerekçeli ⛔ · §7 NFR kapısı geçildi ·
 `make dev` temiz kurulumdan demo akışını çalıştırıyor.

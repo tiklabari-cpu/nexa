@@ -1,0 +1,162 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "08.9.4-a — SecuritySettings dosya alanlarini yuzeye cikar",
+        "description": "schema.prisma:849-851'deki fileSharingEnabled/allowedFileTypes/maxFileSizeBytes sutunlari var ama hicbir yerden okunmuyor: openapi.yaml'da /settings/security yok, settings.ts route'unda gecmiyor, web'de ekrani yok. Olu sutunlari kontrata ve UI'a bagla.",
+        "details": "1) packages/contract/openapi/openapi.yaml: /settings/security ekle (GET + PATCH). Mevcut /settings/* yollari 169-179 arasinda; ayni desene uy. 2) @nexa/types generate. 3) apps/api/src/routes/settings.ts: license kapsamli handler; PATCH'te allowedFileTypes MIME dogrulamasi. 4) apps/web Settings altinda Security ekrani. Hata zarfi ADR-06. PRD: FR-MOD-08.9.4 · PLAN.md §3.7 · Dilim 13",
+        "testStrategy": "Kabul: GET /settings/security lisans kapsamli doner; baska lisansin ayarina erisim ADR-06 zarfiyla reddedilir. PATCH gecersiz MIME'i reddeder. Birim: MIME allowlist dogrulayicisi. Cross-tenant testi ZORUNLU. Bitince PLAN.md §3.7 satiri guncellenir.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "08.9.4-b — Imzali yukleme ucu (signed upload URL)",
+        "description": "Kod tabaninda hicbir yukleme ucu yok: openapi.yaml'in 55 yolunun hicbirinde upload/presign gecmiyor. Mimari karar zaten verilmis — server.ts:69 bodyLimit'i 1 MiB'e sabitlemis ve yorumu 'attachments go through signed upload URLs' diyor. Yani multipart API'den GECMEZ.",
+        "details": "POST /api/v1/uploads -> {upload_url, file_url, expires_at}. Tur/boyut SecuritySettings'ten okunur (gorev 1). Depolama anahtari license kapsamli olmali (cross-tenant okuma olmasin). bodyLimit 1 MiB'e dokunma — dosya API uzerinden akmiyor. Kontrat once: openapi.yaml -> generate -> route.\n\nPRD: FR-MOD-08.9.4 · PLAN.md §3.7 · Dilim 13",
+        "testStrategy": "Kabul: uc, tur/boyut sinirlarini SecuritySettings'ten okur ve izinsiz tur icin URL URETMEZ. Cross-tenant: A lisansinin anahtari B'nin dosyasina erisemez. Regresyon: server.ts bodyLimit 1 MiB degismedi.",
+        "status": "pending",
+        "dependencies": [
+          1
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "08.9.4-c — attachment_url'i kendi depomuza kilitle [MAX]",
+        "description": "GUVENLIK ACIGI: chats.ts:25 attachment_url'i sadece z.string().url().max(2048) ile doguluyor. Su an bir agent veya musteri BUYUK HERHANGI BIR host'u isaret edebilir — bizim imzaladigimiz dosya oldugu hicbir yerde kontrol edilmiyor. Event.attachmentUrl (schema.prisma:396) bu ham degeri sakliyor.",
+        "details": "Yalniz gorev 2'nin urettigi imzali yoldan gelen URL kabul edilir. NFR-S10 + MASTER-PROMPT [MAX] kurali: NEGATIF TESTLER POZITIFLERDEN ONCE yazilir. En az su dordu: (a) yabanci host URL'i reddedilir, (b) MIME spoof reddedilir, (c) maxFileSizeBytes asimi reddedilir, (d) baska lisansin dosya anahtari reddedilir. Hata zarfi ADR-06.\n\nPRD: FR-MOD-08.9.4 (NFR-S10) · PLAN.md §3.7 · Dilim 13 · [MAX]",
+        "testStrategy": "[MAX] — NEGATIF TESTLER ONCE YAZILIR VE KIRMIZI GORULUR: (a) yabanci host URL'i reddedilir, (b) MIME spoof reddedilir, (c) maxFileSizeBytes asimi reddedilir, (d) baska lisansin dosya anahtari reddedilir. Dordu de ADR-06 zarfi doner. ANCAK SONRA pozitif akis yazilir. E2E: ekli dosya karsi tarafta acilir.",
+        "status": "pending",
+        "dependencies": [
+          2
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "08.9.4-d — Virus taramasi",
+        "description": "PRD FR-MOD-08.9.4 'izinli tur/boyut + virus tarama' diyor; tarama ayagi hic yok. PLAN.md bunu Cikarim (AV) olarak isaretlemis — yani PRD'de arac adi yok, karar bize ait.",
+        "details": "Tarama tamamlanana kadar dosya musteriye servis EDILMEZ (event gorunur olmadan once temiz olmali). Secilen arac ve neden PLAN.md C (Assumptions) bolumune yazilir. Tarama basarisizsa event reddedilir, sessizce gecilmez.\n\nPRD: FR-MOD-08.9.4 · PLAN.md §3.7 · Dilim 13",
+        "testStrategy": "Kabul: taranmamis dosya musteriye servis EDILMEZ. Negatif: EICAR test dosyasi reddedilir, event olusmaz. Tarayici erisilemezse dosya KABUL EDILMEZ (fail-closed) — bu davranis testle sabitlenir, varsayima birakilmaz.",
+        "status": "pending",
+        "dependencies": [
+          2
+        ],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "02.3.5 + 11.4 — Attach (agent composer + widget composer)",
+        "description": "Iki composer'da da attach eksik. PLAN.md 3.2'ye gore F5'te '#' canned secicisi geldi ama attach gelmedi; 11.4 ayni sekilde kismi. chats.ts:89 zaten 'metin YA DA attachment' invariant'ini uyguluyor — sunucu tarafi hazir, istemci tarafi yok.",
+        "details": "apps/web/src/features/inbox (agent) + apps/widget/src/widget.ts (musteri). Ikisi de gorev 2'nin ucunu kullanir, gorev 3'un kurallarina tabidir. Istemci tarafi tur/boyut kontrolu YALNIZ kullanici deneyimi icindir; reddin gercek yeri sunucudur. E2E: apps/e2e/tests/widget.spec.ts'e ek akis.\n\nPRD: FR-MOD-02.3.5 + FR-MOD-11.4 · PLAN.md §3.2 / §3.9 · Dilim 13",
+        "testStrategy": "Kabul: iki composer'da da dosya eklenir, gonderilir, karsi tarafta gorunur. Regresyon: metinsiz+eksiz gonderim engellenir (chats.ts:89 invariant'i). Playwright: apps/e2e/tests/widget.spec.ts'e musteri akisi + inbox'a agent akisi.",
+        "status": "pending",
+        "dependencies": [
+          2,
+          3
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "08.5.2-a — Websites API + kontrat",
+        "description": "Website modeli schema.prisma:806-820'de duruyor (licenseId, domain, setup, status, connectedAt, unique[licenseId,domain]) ama openapi.yaml'da /websites yolu YOK ve hicbir route dosyasi ona dokunmuyor. Model olu.",
+        "details": "CRUD + snippet uretimi. status alani zaten 'pending' default'lu ve connectedAt nullable — 'Connected' gecisinin nerede yazildigina karar ver (widget ilk handshake'i mantikli yer). setup alani 'manual' default: manual | shopify | wordpress | gtm degerlerini burada sabitle. Kontrat once.\n\nPRD: FR-MOD-08.5.2 · PLAN.md §3.7 / §8 · Dilim 13",
+        "testStrategy": "Kabul: CRUD lisans kapsamli. Ayni domain iki kez eklenemez — unique[licenseId,domain] ihlali ADR-06 zarfi dondurur, ham 500 DEGIL (bu ayrimi test eder). Cross-tenant: baska lisansin sitesi okunamaz/silinemez. Kontrat: generate edilmis tipler openapi.yaml ile drift etmiyor.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "08.5.2-b — Website widgets ekrani + dogrulama sinyali",
+        "description": "PRD: + Add website / Install code manually / Invite developer; site tablosu (per-row get code / remove); Customize widget girisi; platform ikonlari. PRD KK2 ayrica kod yerlestikten sonra 'test message received' dogrulama sinyali istiyor — bu Nexa iyilestirmesi, taklit degil.",
+        "details": "apps/web/src/features/settings altina. Snippet </body> oncesine yerlesir ve mevcut widget loader'i ile uyumlu olmali (apps/widget/src/loader.ts, window.__lc). Trusted domains (08.9.1, Dilim 2'de teslim) ile ayni domain listesini gostermeye dikkat — iki ayri kaynak olmasin.\n\nPRD: FR-MOD-08.5.2 (KK1, KK2) · PLAN.md §3.7 · Dilim 13",
+        "testStrategy": "Kabul: snippet </body> oncesine yerlesir; kod calisinca status Connected'a doner VE 'test message received' dogrulama sinyali gorunur (KK2). Playwright: sahte sayfaya snippet enjekte -> handshake -> UI'da Connected. Trusted domains ile ikili domain kaynagi olusmadigi dogrulanir.",
+        "status": "pending",
+        "dependencies": [
+          5
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "08.5.1 — All channels kart gridi",
+        "description": "PRD: ikon + ad + durum + aciklama + CTA. Durumlar Connected / Ready / Not connected / Coming soon. CTA'lar Manage / Connect / Get link / Get notified.",
+        "details": "Kart durumlari uydurulmaz: Website karti 08.5.2-a'nin websites.status'undan, Chat page 08.5.9'dan beslenir. Henuz olmayan kanallar 'Coming soon' + Get notified. apps/web/src/features/settings.\n\nPRD: FR-MOD-08.5.1 · PLAN.md §3.7 · Dilim 13",
+        "testStrategy": "Kabul: dort durum (Connected/Ready/Not connected/Coming soon) ve dogru CTA eslesmesi. Website kartinin durumu gorev 6'nin verisinden gelir — sabit deger yazilirsa test kirilmali. Coming soon kartlari Get notified gosterir.",
+        "status": "pending",
+        "dependencies": [
+          5
+        ],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "08.5.9 — Chat page (hosted link)",
+        "description": "PRD KK3: site kurulumu olmadan da sohbet edilebilen paylasilabilir link. 'Get link' CTA'si kart gridinden gelir.",
+        "details": "Musteri Chat API'si (apps/api/src/routes/customer.ts) ve widget zaten var — bu is yeni bir sohbet motoru degil, mevcut widget'i barindirilmis bir sayfada acmaktir. Trusted domains kontrolunun bu yolda nasil davranacagina karar ver (kendi barindirdigimiz sayfa allowlist'e tabi mi?) — karar PLAN.md C'ye yazilir.\n\nPRD: FR-MOD-08.5.9 (KK3) · PLAN.md §3.7 · Dilim 13",
+        "testStrategy": "Kabul: link ile acilan sayfada site kurulumu OLMADAN sohbet baslar ve agent inbox'ina duser. Playwright: link -> mesaj -> inbox'ta gorunur. Trusted domains karari PLAN.md §C'ye yazilmis olmali.",
+        "status": "pending",
+        "dependencies": [
+          5
+        ],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "08.5.3 — Email kanali (forwarding -> ticket)",
+        "description": "Ticketing cekirdegi Dilim 11'de teslim edildi (apps/api/src/routes/tickets.ts). Bu is gelen e-postayi o cekirdege baglar.",
+        "details": "Kanal yuzeyi kart gridinden yonetilir. Gonderen e-postasi mevcut bir customer'a eslesirse yeni kayit acilmaz. Spam/dogrulama: SecuritySettings.spamFilterEnabled zaten semada var — kullan.\n\nPRD: FR-MOD-08.5.3 · PLAN.md §3.7 · Dilim 13",
+        "testStrategy": "Kabul: gelen e-posta ticket'a donusur ve dogru lisansa duser. Mevcut customer eslesirse IKINCI KAYIT ACILMAZ — bunu dogrulayan test zorunlu. Negatif: spamFilterEnabled acikken spam gonderim ticket uretmez.",
+        "status": "pending",
+        "dependencies": [
+          7
+        ],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "11.3 — Agent identity / persona",
+        "description": "PLAN.md 3.9: bot kimligi Dilim 6'da geldi, eksik olan persona (ad/avatar). PRD FR-MOD-06.4 persona alanlarini tanimliyor (Name/Avatar/Tone/Language) ama o Must(v1); MVP payi yalnizca musterinin kiminle konustugunu gormesi.",
+        "details": "MVP kapsami dar tut: ad + avatar widget'ta gorunur. Tone/Language/Answer length v1'e ait, buraya cekilmez. Greeting (gorev 12) bunu gosterdigi icin once bu biter.\n\nPRD: FR-MOD-11.3 (kaynak FR-MOD-06.4) · PLAN.md §3.9 · Dilim 13",
+        "testStrategy": "Kabul: musteri widget'ta agent adini ve avatarini gorur. KAPSAM TESTI: Tone/Language/Answer length MVP'de YOK — eklenmisse kapsam kaymasidir ve §D'ye yazilir.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "11.2 — Greeting card + quick replies",
+        "description": "PRD: proaktif karsilama karti; 'Lets chat' -> pre-chat form, 'Just browsing' -> karsilamayi erteler.",
+        "details": "KAPSAM UYARISI: Campaigns builder (03.3.2) ve Forms builder (08.7.7) Should/v1 — greeting bunlara BAGLANMAZ. Sabit minimum pre-chat form yeterli. apps/widget/src/widget.ts. Erteleme durumu oturum boyunca hatirlanmali (tekrar tekrar acilmasin).\n\nPRD: FR-MOD-11.2 · PLAN.md §3.9 · Dilim 13",
+        "testStrategy": "Kabul: karsilama karti gorunur; 'Lets chat' pre-chat formu acar; 'Just browsing' karti kapatir VE ayni oturumda tekrar acilmaz (regresyon testi). KAPSAM TESTI: campaigns (03.3.2) / forms builder (08.7.7) bagimliligi YOK.",
+        "status": "pending",
+        "dependencies": [
+          11
+        ],
+        "priority": "high",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2026-07-24T00:01:40.615Z",
+      "updated": "2026-07-24T00:30:00.000Z",
+      "description": "Nexa — Faz 0 / Dilim 13 yürütme defteri. Doğruluk kaynağı PLAN.md; bu dosya yalnız sıra ve not tutar."
+    }
+  }
+}

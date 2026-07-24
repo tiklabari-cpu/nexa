@@ -1,0 +1,96 @@
+# Dilim 13 — Kanallar + Dosya + Greeting (Faz 0 / MVP)
+
+> Bu dosya bir ürün gereksinim dokümanı DEĞİLDİR. `PLAN.md §3.11`'deki
+> **Dilim 13** satırının yürütme brief'idir. Doğruluk kaynağı sırasıyla:
+> `urun-gereksinim-dokumani-PRD.md` → `PLAN.md` → `MASTER-PROMPT.md`.
+> Task Master yalnızca bu dilimin iş sırasını ve notlarını tutar; kapsamı genişletmez.
+
+## Bağlam
+
+Nexa, TypeScript monorepo (pnpm + Turborepo) üzerinde bir canlı destek platformu.
+Backend: Node 24 + Fastify + Prisma + PostgreSQL 17 (pgvector) + Redis 7.
+Frontend: `apps/web` (agent paneli) ve `apps/widget` (müşteri widget'ı).
+Kontrat önce: `packages/contract/openapi.yaml` → `@nexa/types` generate edilir.
+Kilitli kararlar `PLAN.md §0`'daki ADR-01…ADR-15'tir; yeniden tartışılmaz.
+
+Faz 0'ın kapanmasına iki dilim kaldı. Bu brief, ikisinden ilkidir.
+Dilim 13'ün teması: **widget'ın kurulum yüzeyi ve müşteriye ilk dokunuş.**
+
+## Kapsam — yalnız bu 8 gereksinim
+
+Her iş kaleminin bir PRD kimliği vardır. Kimliksiz iş yapılmaz.
+
+1. **FR-MOD-08.5.1 — All channels kart gridi** (Must/MVP)
+   Settings altında kanal kartları: ikon + ad + durum + açıklama + CTA.
+   Durumlar: Connected / Ready / Not connected / Coming soon.
+   CTA'lar: Manage / Connect / Get link / Get notified.
+
+2. **FR-MOD-08.5.2 — Website widgets** (Must/MVP)
+   "+ Add website", "Install code manually", "Invite developer" akışları.
+   Site tablosu (per-row: get code / remove) ve "Customize widget" girişi.
+   Snippet üretimi; platform ikonları (Shopify / WordPress / GTM / raw).
+   Kod yerleştikten sonra Status "Connected" olur ve bir **doğrulama sinyali**
+   gösterilir ("test message received"). `Website` Prisma modeli zaten var;
+   `websites` tablosu bu dilimde kullanılmaya başlanır (PLAN.md §8).
+   Bağımlı olduğu yüzeyler: MOD-11 (widget), MOD-08.9.1 (trusted domains, ✅ mevcut).
+
+3. **FR-MOD-08.5.3 — Email kanalı (forwarding → ticket)** (Must/MVP)
+   Gelen e-postanın ticket'a dönüşmesi. Ticketing çekirdeği Dilim 11'de teslim
+   edildi; bu kalem kanal yüzeyini ona bağlar.
+
+4. **FR-MOD-08.5.9 — Chat page (hosted link)** (Must/MVP)
+   "Get link" ile paylaşılabilir barındırılmış sohbet sayfası; site kurulumu
+   olmadan da müşteri sohbet edebilir.
+
+5. **FR-MOD-08.9.4 — File sharing kuralları** (Must/MVP) — **[MAX] özen**
+   İzinli tür ve boyut listesi + virüs taraması. Hem agent composer'ının
+   attach'ini hem müşteri yüklemesini kısıtlar. NFR-S10 kapsamındadır:
+   izinsiz tür/boyut **reddedilir**; reddetme sunucu tarafında zorunludur,
+   istemci kontrolü tek başına yeterli değildir.
+
+6. **FR-MOD-11.2 — Greeting card + quick replies** (Must/MVP)
+   Widget'ta proaktif karşılama kartı; "Let's chat" / "Just browsing".
+   "Let's chat" → pre-chat form; "Just browsing" → karşılamayı erteler.
+
+7. **FR-MOD-11.3 — Agent identity / persona** (Must/MVP, kısmen var)
+   Bot kimliği Dilim 6'da ✅ geldi; eksik olan **persona** (ad/avatar).
+   Müşteri kiminle konuştuğunu görür.
+
+8. **FR-MOD-02.3.5 + FR-MOD-11.4 — Attach** (Must/MVP, kısmen var)
+   Composer'ın `#` canned seçicisi F5'te ✅ geldi; eksik olan **attach**.
+   Hem agent composer'ında hem widget composer'ında, 08.9.4 kurallarına tabi.
+
+## Kapsam dışı (bu dilimde YAPILMAZ)
+
+- Dilim 14'e ait olan her şey: checkout (10.1.x), bildirimler (13.8),
+  tags kütüphanesi (08.7.1), shell kalanı (01.1.3, 01.1.6, 03.1.1).
+- Campaigns builder (03.3.2) ve Forms builder (08.7.7) — ikisi de Should/v1.
+  Greeting'in pre-chat formu bunlara **bağlanmaz**; sabit minimum form yeterlidir.
+- PRD §11.1'deki kapsam dışı kalemler.
+
+## Her iş kalemi için bitti tanımı
+
+Bir iş "done" sayılmak için hepsini karşılar:
+
+- PRD'deki kabul kriteri karşılanır (yalnız "ekran duruyor" yetmez).
+- Kontrat önce: yeni uç varsa önce `packages/contract/openapi.yaml`, sonra kod.
+- Hata zarfı ADR-06'ya uyar: `{ error: { type, message, request_id, details? } }`.
+- Çok kiracılılık: her sorgu lisans kapsamlıdır; cross-tenant erişim testi vardır.
+- Testler yeşil: birim + ilgili Playwright E2E akışı.
+- Güvenlik taşıyan kalemlerde (08.9.4) **negatif testler pozitiflerden önce** yazılır.
+- `PLAN.md §3`'teki ilgili satırın durum işareti güncellenir.
+
+## Sıra ve bağımlılıklar
+
+1. Önce **08.9.4** (dosya kuralları) — 02.3.5/11.4 attach buna dayanır.
+2. Sonra **attach** (agent + widget composer).
+3. **08.5.1** kart gridi, **08.5.2** website widgets'ı taşır; 08.5.2 önce gelmez.
+4. **08.5.9** chat page ve **08.5.3** email, kart gridinin üstüne oturur.
+5. **11.3 persona** ve **11.2 greeting** widget tarafında bağımsız ilerleyebilir;
+   greeting persona'yı gösterdiği için 11.3 önce bitirilir.
+
+## Dilim kapanış kapısı
+
+Dilim 13 kapanır: 8 kalemin tamamı ✅ veya `PLAN.md §D`'ye gerekçeli sapma olarak
+yazılmış · `make dev` temiz kurulumdan çalışıyor · E2E paketi yeşil ·
+`PLAN.md §3.7 / §3.9 / §3.2` durum işaretleri ve §3.11 dilim tablosu güncellenmiş.

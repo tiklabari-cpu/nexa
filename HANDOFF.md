@@ -6,6 +6,28 @@
 
 ## Task log (newest-first)
 
+### 27 — 02.4 Details paneli ziyaret bilgisi (Visited pages + Visit info) — done — 2026-07-25 UTC
+- Yapıldı:
+  - **27.1 (T3-a) Kontrat+Backend:** `Chat` yanıtına nullable `visitor` bloğu — yeni `ChatVisitor`
+    şeması (`visited_pages[]` + `visit_info{device,referrer,duration_seconds,ip}`);
+    `pnpm --filter @nexa/contract generate` ile `src/generated/api.ts` yenilendi. `ChatService.get`
+    müşterinin **bu lisansa ait** en son ziyaretini chat'e bağlar (`#latestVisitor`): device =
+    browser+os ("Chrome on macOS"), duration = ended−started (sn, null-güvenli), pages defansif
+    ayrıştırılır. Ziyaret bloğu yalnız agent/bot principal'a döner — customer widget'a **hiç**
+    (IP kişisel veri, NFR-S9). Cross-license IDOR negatifi dahil 4 yeni integration testi.
+  - **27.2 (T3-b) UI:** `DetailsPanel.tsx`'e iki katlanır `<Section>` — "Visited pages" (path'e
+    kısaltılmış, tam URL'e linkli, sıralı liste) + "Visit info" (Device/Referring/Duration/IP,
+    boş alanlarda "Direct"/"—"); ziyaret yoksa anlamlı empty state (başlıklar gizlenmez). Web
+    `ChatDetail` tipine `visitor` + yeni `DetailsPanel.test.tsx` (3 render senaryosu).
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w build` ✅ ·
+  web 91 / widget 34 unit ✅ · `@nexa/api` 594 test (28 dosya, +4 "visitor context") ✅ ·
+  `pnpm -w test:e2e` 45 passed ✅ (demo-flow'a ziyaret-bilgisi görünürlük iddiası eklendi).
+- Varsayımlar: §C-A10 alanları (Device/Referring/Duration/IP) PRD Açıklama'sından türetildi;
+  canlı süre WS push kapsam dışı (T3-b snapshot gösterir).
+- Sonraki pencereye not: E2E'den önce kök **`.env` export edilmeli** (rtm kendi yüklemiyor) ve
+  4000/4001/5173/5174'te bayat dev server bırakılmamalı — bayat api raised rate-limit taşımadığından
+  widget.spec 429 verir (kapı düşer, kod değil).
+
 ### 21 — 07.1/07.3.1/07.3.3 Reports: Breakdown + AI Agent sekmeleri + vs-önceki dönem + Chats kartları — done — 2026-07-25 UTC
 - Yapıldı:
   - **Kontrat** (`packages/contract/openapi/`): overview yanıtına `previous_period` (eşit-uzunluk

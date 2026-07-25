@@ -17,6 +17,8 @@ export function DetailsPanel({ chat, chatId }: { chat: ChatDetail; chatId: strin
   const api = useApiClient();
   const actions = useChatAction(chatId);
   const tags = chat.thread?.tags ?? [];
+  const visitedPages = chat.visitor?.visited_pages ?? [];
+  const visitInfo = chat.visitor?.visit_info ?? null;
 
   // Suggest the curated library (FR-MOD-08.7.1) so a team applies agreed labels
   // rather than re-inventing a spelling per conversation. A free-typed tag still
@@ -136,6 +138,57 @@ export function DetailsPanel({ chat, chatId }: { chat: ChatDetail; chatId: strin
         )}
       </Section>
 
+      {/* Where this visitor has been and on what — the context an agent reads
+          before replying (FR-MOD-02.4). Both sections stay visible with an
+          explicit empty state so a quiet panel never reads as a loading bug. */}
+      <Section title="Visited pages">
+        {visitedPages.length === 0 ? (
+          <p className="text-xs text-content-tertiary">No pages recorded for this visitor.</p>
+        ) : (
+          <ol className="flex flex-col gap-1.5">
+            {visitedPages.map((page, index) => (
+              <li key={`${page.url}-${index}`} className="min-w-0">
+                <a
+                  href={page.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={page.url}
+                  className="block truncate text-xs text-brand-600 hover:underline"
+                >
+                  {prettyPath(page.url)}
+                </a>
+                {page.at && (
+                  <span className="text-2xs text-content-tertiary">
+                    {new Date(page.at).toLocaleTimeString()}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+      </Section>
+
+      <Section title="Visit info">
+        {visitInfo === null ? (
+          <p className="text-xs text-content-tertiary">No visit information yet.</p>
+        ) : (
+          <>
+            <Row label="Device">
+              <span className="text-xs">{visitInfo.device ?? '—'}</span>
+            </Row>
+            <Row label="Referring">
+              <span className="text-xs">{visitInfo.referrer ?? 'Direct'}</span>
+            </Row>
+            <Row label="Duration">
+              <span className="tabular text-xs">{formatDuration(visitInfo.duration_seconds)}</span>
+            </Row>
+            <Row label="IP">
+              <span className="font-mono text-2xs">{visitInfo.ip ?? '—'}</span>
+            </Row>
+          </>
+        )}
+      </Section>
+
       <div className="mt-auto border-t border-border p-3">
         {chat.active ? (
           <button
@@ -179,4 +232,28 @@ function Row({ label, children }: { label: string; children: React.ReactNode }):
       {children}
     </div>
   );
+}
+
+/** Show the path an agent scans for, not the full origin they already know. */
+function prettyPath(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.search}` || '/';
+  } catch {
+    // Already a bare path, or something we cannot parse — show it verbatim.
+    return url;
+  }
+}
+
+/** "45s" · "3m 20s" · "1h 4m". A dash when the length is unknown. */
+function formatDuration(seconds: number | null): string {
+  if (seconds === null || seconds < 0) return '—';
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    const rest = seconds % 60;
+    return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
 }

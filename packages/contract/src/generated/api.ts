@@ -1764,6 +1764,14 @@ export interface components {
       };
       users: components['schemas']['ChatUser'][];
       thread?: components['schemas']['Thread'];
+      /**
+       * @description The customer's most recent visit for this license, projected onto
+       *     the chat so the Details panel can show where the visitor came from
+       *     without a second call (FR-MOD-02.4). Null when nothing was recorded,
+       *     and omitted entirely on the customer's own view — the IP in
+       *     particular is personal data the widget never receives (NFR-S9).
+       */
+      visitor?: components['schemas']['ChatVisitor'] | null;
     };
     ChatSummary: {
       id: string;
@@ -1805,6 +1813,28 @@ export interface components {
       /** Format: date-time */
       closed_at?: string | null;
       tags?: string[];
+    };
+    /**
+     * @description A visit projected onto the chat surface (FR-MOD-02.4.1-.6): the pages the
+     *     visitor saw and a short summary of the session.
+     */
+    ChatVisitor: {
+      /** @description Pages seen during the visit, in order. */
+      visited_pages: {
+        url: string;
+        /** Format: date-time */
+        at?: string;
+      }[];
+      visit_info: {
+        /** @description Browser and operating system, e.g. "Chrome on macOS". */
+        device: string | null;
+        /** @description Referring URL, when the browser sent one. */
+        referrer: string | null;
+        /** @description Elapsed time of the visit in seconds; null if unknown. */
+        duration_seconds: number | null;
+        /** @description Visitor IP (NFR-S9 personal data; agents only). */
+        ip: string | null;
+      };
     };
     Event: {
       /** @description `<thread_id>_<sequence>` — ordering is decidable from the id alone. */

@@ -303,6 +303,16 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ChatUser" }
         thread: { $ref: "#/components/schemas/Thread" }
+        visitor:
+          description: |
+            The customer's most recent visit for this license, projected onto
+            the chat so the Details panel can show where the visitor came from
+            without a second call (FR-MOD-02.4). Null when nothing was recorded,
+            and omitted entirely on the customer's own view — the IP in
+            particular is personal data the widget never receives (NFR-S9).
+          allOf:
+            - $ref: "#/components/schemas/ChatVisitor"
+          nullable: true
 
     ChatSummary:
       type: object
@@ -352,6 +362,43 @@ components:
         tags:
           type: array
           items: { type: string }
+
+    ChatVisitor:
+      type: object
+      required: [visited_pages, visit_info]
+      description: |
+        A visit projected onto the chat surface (FR-MOD-02.4.1-.6): the pages the
+        visitor saw and a short summary of the session.
+      properties:
+        visited_pages:
+          type: array
+          description: Pages seen during the visit, in order.
+          items:
+            type: object
+            required: [url]
+            properties:
+              url: { type: string }
+              at: { type: string, format: date-time }
+        visit_info:
+          type: object
+          required: [device, referrer, duration_seconds, ip]
+          properties:
+            device:
+              type: string
+              nullable: true
+              description: Browser and operating system, e.g. "Chrome on macOS".
+            referrer:
+              type: string
+              nullable: true
+              description: Referring URL, when the browser sent one.
+            duration_seconds:
+              type: integer
+              nullable: true
+              description: Elapsed time of the visit in seconds; null if unknown.
+            ip:
+              type: string
+              nullable: true
+              description: Visitor IP (NFR-S9 personal data; agents only).
 
     Event:
       type: object

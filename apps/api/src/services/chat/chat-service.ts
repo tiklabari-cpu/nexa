@@ -200,7 +200,14 @@ export class ChatService {
     return withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'read');
       const chat = await this.#loadVisibleChat(tx, visibility, chatId);
-      return serialiseChat(chat);
+      const detail = serialiseChat(chat);
+      // Visit context (FR-MOD-02.4) is an agent-side surface. The widget never
+      // needs it, and the IP in particular is personal data that must not reach
+      // the customer (NFR-S9) — so it is attached only for agent/bot principals.
+      if (principal.kind !== 'customer') {
+        detail.visitor = await this.#latestVisitor(tx, tenant.licenseId, chat.customerId);
+      }
+      return detail;
     });
   }
 
@@ -816,6 +823,43 @@ export class ChatService {
     return chat;
   }
 
+  /**
+   * The customer's most recent visit for this license, shaped for the Details
+   * panel. Scoped to the license (not only the tenant RLS context): a customer
+   * who wrote to two workspaces of one company is one person, and the chat being
+   * read must show only the visit that belongs to its workspace.
+   */
+  async #latestVisitor(
+    tx: TenantClient,
+    licenseId: bigint,
+    customerId: string,
+  ): Promise<ChatVisitor | null> {
+    const visit = await tx.visit.findFirst({
+      where: { customerId, licenseId },
+      orderBy: { startedAt: 'desc' },
+      select: {
+        cameFrom: true,
+        pages: true,
+        os: true,
+        browser: true,
+        ip: true,
+        startedAt: true,
+        endedAt: true,
+      },
+    });
+    if (!visit) return null;
+
+    return {
+      visited_pages: visitedPagesOf(visit.pages),
+      visit_info: {
+        device: composeDevice(visit.browser, visit.os),
+        referrer: visit.cameFrom,
+        duration_seconds: visitDurationSeconds(visit.startedAt, visit.endedAt),
+        ip: visit.ip,
+      },
+    };
+  }
+
   async #findEventById(tenant: TenantContext, eventId: string): Promise<SerialisedEvent | null> {
     return withTenant(this.db, tenant, async (tx) => {
       const rows = await tx.$queryRaw<RawEvent[]>`
@@ -1157,6 +1201,17 @@ export interface ChatSummary {
   tags: string[];
 }
 
+/** The customer's most recent visit, projected onto the chat (FR-MOD-02.4). */
+export interface ChatVisitor {
+  visited_pages: Array<{ url: string; at?: string }>;
+  visit_info: {
+    device: string | null;
+    referrer: string | null;
+    duration_seconds: number | null;
+    ip: string | null;
+  };
+}
+
 export interface ChatDetail {
   id: string;
   license_id: string;
@@ -1181,6 +1236,11 @@ export interface ChatDetail {
     closed_at: string | null;
     tags: string[];
   } | null;
+  /**
+   * Populated only on `get`, and only for agent/bot principals. Undefined on
+   * other responses (start/resume/…) and on the customer's own view.
+   */
+  visitor?: ChatVisitor | null;
 }
 
 interface ChatRow {
@@ -1233,4 +1293,32 @@ function serialiseChat(chat: ChatRow): ChatDetail {
         }
       : null,
   };
+}
+
+/**
+ * `pages` is a free-form JSON column. Read it defensively: a malformed entry is
+ * dropped rather than allowed to break the Details panel it feeds.
+ */
+function visitedPagesOf(pages: unknown): Array<{ url: string; at?: string }> {
+  if (!Array.isArray(pages)) return [];
+  const result: Array<{ url: string; at?: string }> = [];
+  for (const entry of pages) {
+    if (entry && typeof entry === 'object' && typeof (entry as { url?: unknown }).url === 'string') {
+      const { url, at } = entry as { url: string; at?: unknown };
+      result.push(typeof at === 'string' ? { url, at } : { url });
+    }
+  }
+  return result;
+}
+
+/** "Chrome on macOS" when both are known; whichever is present otherwise. */
+function composeDevice(browser: string | null, os: string | null): string | null {
+  if (browser && os) return `${browser} on ${os}`;
+  return browser ?? os;
+}
+
+function visitDurationSeconds(startedAt: Date, endedAt: Date | null): number | null {
+  const end = endedAt ?? new Date();
+  const seconds = Math.round((end.getTime() - startedAt.getTime()) / 1000);
+  return seconds >= 0 ? seconds : null;
 }

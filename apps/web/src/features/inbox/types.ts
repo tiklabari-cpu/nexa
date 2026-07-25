@@ -26,6 +26,17 @@ export interface ChatSummary {
   tags: string[];
 }
 
+/** The customer's most recent visit, projected onto the chat (FR-MOD-02.4). */
+export interface ChatVisitor {
+  visited_pages: Array<{ url: string; at?: string }>;
+  visit_info: {
+    device: string | null;
+    referrer: string | null;
+    duration_seconds: number | null;
+    ip: string | null;
+  };
+}
+
 export interface ChatDetail {
   id: string;
   license_id: string;
@@ -50,6 +61,8 @@ export interface ChatDetail {
     closed_at: string | null;
     tags: string[];
   } | null;
+  /** Present only on the agent's fetch of a single chat; null when unrecorded. */
+  visitor?: ChatVisitor | null;
 }
 
 export type InboxView = 'all' | 'my' | 'queued' | 'unassigned' | 'archived';

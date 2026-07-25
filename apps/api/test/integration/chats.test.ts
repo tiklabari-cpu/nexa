@@ -897,6 +897,98 @@ describe('agent chat api', () => {
   });
 
   // =========================================================================
+  // Visitor context on the Details panel (FR-MOD-02.4)
+  // =========================================================================
+
+  describe('visitor context', () => {
+    it("surfaces the customer's latest visit on the chat", async () => {
+      const chat = await startChat(acmeAdminToken, { customerId: fx.a.customerId });
+      await owner.visit.create({
+        data: {
+          customerId: fx.a.customerId,
+          licenseId: fx.a.licenseId,
+          cameFrom: 'https://google.com/search?q=brakes',
+          pages: [
+            { url: 'https://shop.example/bikes', at: '2026-07-20T10:00:00.000Z' },
+            { url: 'https://shop.example/bikes/brakes', at: '2026-07-20T10:02:00.000Z' },
+          ],
+          os: 'macOS',
+          browser: 'Chrome',
+          ip: '203.0.113.7',
+          startedAt: new Date('2026-07-20T10:00:00.000Z'),
+          endedAt: new Date('2026-07-20T10:05:00.000Z'),
+        },
+      });
+
+      const response = await server.get(`/chats/${chat.id}`, auth(acmeAdminToken));
+      expect(response.statusCode).toBe(200);
+
+      const visitor = response.json().visitor;
+      expect(visitor.visited_pages.map((p: { url: string }) => p.url)).toEqual([
+        'https://shop.example/bikes',
+        'https://shop.example/bikes/brakes',
+      ]);
+      expect(visitor.visit_info).toMatchObject({
+        device: 'Chrome on macOS',
+        referrer: 'https://google.com/search?q=brakes',
+        duration_seconds: 300,
+        ip: '203.0.113.7',
+      });
+    });
+
+    it('reports no visitor when nothing was recorded, without failing', async () => {
+      const chat = await startChat(acmeAdminToken, { customerId: fx.a.customerId });
+      const response = await server.get(`/chats/${chat.id}`, auth(acmeAdminToken));
+      expect(response.statusCode).toBe(200);
+      // Null-safe: an IP-less, page-less visit or none at all reads as "no visit".
+      expect(response.json().visitor).toBeNull();
+    });
+
+    it('never exposes visitor context — or the IP — to the customer widget', async () => {
+      const { customer_id, token } = await customerTokenFor(fx.a);
+      const chat = await startChat(acmeAdminToken, { customerId: customer_id, text: 'Hi' });
+      await owner.visit.create({
+        data: {
+          customerId: customer_id,
+          licenseId: fx.a.licenseId,
+          pages: [{ url: 'https://shop.example/secret' }],
+          ip: '203.0.113.9',
+          startedAt: new Date(),
+        },
+      });
+
+      // The customer may read their own chat, but the visit block — the IP above
+      // all (NFR-S9) — must not be part of what the widget receives.
+      const response = await server.get(`/chats/${chat.id}`, auth(token));
+      expect(response.statusCode).toBe(200);
+      expect(response.json().visitor).toBeUndefined();
+      expect(response.body).not.toContain('203.0.113.9');
+    });
+
+    it("does not surface another license's visit for the same person", async () => {
+      // A second workspace of the same company records its own visit for this
+      // customer; reading Acme's chat must show only Acme's visit (NFR-S5 IDOR).
+      const chat = await startChat(acmeAdminToken, { customerId: fx.a.customerId });
+      await owner.visit.create({
+        data: {
+          customerId: fx.a.customerId,
+          licenseId: fx.b.licenseId,
+          pages: [{ url: 'https://other-workspace.example/leak' }],
+          ip: '198.51.100.5',
+          startedAt: new Date(),
+        },
+      });
+
+      const response = await server.get(`/chats/${chat.id}`, auth(acmeAdminToken));
+      expect(response.statusCode).toBe(200);
+      // No Acme visit exists; the other license's visit must not stand in for it.
+      expect(response.json().visitor).toBeNull();
+      expect(response.body).not.toContain('other-workspace.example/leak');
+      expect(response.body).not.toContain('198.51.100.5');
+    });
+  });
+
+  // =========================================================================
   // The customer's side of the same conversation
   // =========================================================================
 

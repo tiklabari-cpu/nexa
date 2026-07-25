@@ -44,6 +44,14 @@ test('a visitor conversation reaches the agent, is answered, and is archived', a
 
     await expect(agent.locator('main')).toContainText(question);
 
+    // --- Visitor context (FR-MOD-02.4) --------------------------------------
+    // Opening the conversation reveals the Details panel. Its Visited pages and
+    // Visit info sections are the context an agent reads before replying; they
+    // render whether or not a visit was recorded, so assert them by section.
+    const details = agent.getByRole('complementary', { name: 'Conversation details' });
+    await expect(details.getByText('Visited pages')).toBeVisible();
+    await expect(details.getByText('Visit info')).toBeVisible();
+
     // --- Reply --------------------------------------------------------------
     const answer = `Bring it in and we will true the rotor — ${Date.now()}`;
     await agent.getByRole('radio', { name: 'Reply' }).click();

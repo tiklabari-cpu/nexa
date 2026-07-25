@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 
 const SHORTCUT = /^[A-Za-z0-9_-]{1,40}$/;
 
@@ -169,16 +170,24 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
       }
 
       try {
-        const created = await request.withTenant((tx) =>
-          tx.trustedDomain.create({
+        const created = await request.withTenant(async (tx) => {
+          const row = await tx.trustedDomain.create({
             data: {
               organizationId: tenant.organizationId,
               licenseId: tenant.licenseId,
               domain,
               includeSubdomains: body.include_subdomains,
             },
-          }),
-        );
+          });
+          // Written in the same transaction as the change: the trail can never
+          // disagree with the allowlist, because either both land or neither.
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'settings.trusted_domain_added',
+            target: `trusted_domain:${row.id}`,
+            metadata: { domain },
+          });
+          return row;
+        });
 
         return reply.status(201).send({
           id: created.id,
@@ -205,6 +214,14 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
         // Scoped delete rather than `delete by id`: the id alone would let a
         // caller remove another tenant's domain if RLS were ever misconfigured.
         const { count } = await tx.trustedDomain.deleteMany({ where: { id: domainId } });
+        // Only record a removal that actually happened — a 404 (nothing matched)
+        // is not an event worth an entry.
+        if (count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'settings.trusted_domain_removed',
+            target: `trusted_domain:${domainId}`,
+          });
+        }
         return count;
       });
       if (deleted === 0) throw ApiError.notFound('Domain not found.');
@@ -358,8 +375,8 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
 
       // Upsert because signup leaves no row: a workspace saving these for the
       // first time would otherwise get a 404 for settings it can plainly see.
-      const updated = await request.withTenant((tx) =>
-        tx.securitySettings.upsert({
+      const updated = await request.withTenant(async (tx) => {
+        const row = await tx.securitySettings.upsert({
           where: { licenseId: tenant.licenseId },
           create: {
             ...SECURITY_DEFAULTS,
@@ -368,8 +385,15 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
             licenseId: tenant.licenseId,
           },
           update: data,
-        }),
-      );
+        });
+        // Field *names*, not values: the record shows what was touched without
+        // copying the new configuration into an append-only table.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.security_updated',
+          metadata: { fields: Object.keys(body) },
+        });
+        return row;
+      });
 
       return reply.send(serialiseSecurity(updated));
     },
@@ -438,7 +462,7 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
           if (!group) throw ApiError.validation('That team does not exist.');
         }
 
-        return tx.routingRule.update({
+        const row = await tx.routingRule.update({
           where: { id: ruleId },
           data: {
             ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
@@ -446,6 +470,14 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
             ...(body.target_group_id !== undefined ? { targetGroupId: body.target_group_id } : {}),
           },
         });
+        // Routing decides who sees which conversations, so a change to it is a
+        // security-relevant configuration event.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.routing_rule_updated',
+          target: `routing_rule:${ruleId}`,
+          metadata: { fields: Object.keys(body) },
+        });
+        return row;
       });
 
       const groupName =

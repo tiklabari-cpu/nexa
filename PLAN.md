@@ -437,7 +437,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | **S7**   | **Webhook HMAC + SSRF**                             | ⬜ v1 (08.8.4 ile birlikte — sonradan eklemek kırıcı değişiklik) |
 | S8       | Rate limiting                                       |                            ✅ ADR-07                             |
 | **S10**  | **File sharing güvenliği**                          |                  ✅ Dilim 13 (fail-closed virüs tarama, tm 4)                   |
-| S12      | Audit log (append-only)                             |              ⬜ tablo + policy ✅, yazıcı yok (hiç olay INSERT edilmiyor)               |
+| S12      | Audit log (append-only)                             | ✅ yazıcı bağlandı (tm 23): 12 güvenlik olayı INSERT ediliyor · UPDATE/DELETE DB'de reddi · cross-tenant izole · PII yok |
 | A11Y1–6  | WCAG 2.1 AA · klavye · ⌘K                           |                    ✅ 01.1.3 (⌘K) Dilim 14 (tm 18)                    |
 | I18N1/2  | Widget + panel i18n                                 |                                ⬜                                |
 | C1/C2/C8 | GDPR · KVKK · retention                             |          ◐ silme CASCADE ✅ (Dilim 3), retention job ⬜          |
@@ -1048,10 +1048,16 @@ görüneceği en son yerdir.
   listeliyor, plansız bir tip hâlâ testi düşürüyor. (Dilim 13 yalnız bunu ekledi; `greeting_not_found`/
   `group_not_found` daha önce vardı.)
 
-- **D16 (§F kapanış turu, 2026-07-25):** `audit_logs` tablosu + RLS policy Dilim 12'de kuruldu
-  ama Faz-0'da **olay yazıcısı bağlanmadı** — hiçbir güvenlik olayı INSERT edilmiyor; §7.2 S12
-  kapısı bu yüzden ⬜. Gerekçe: Faz-0 Must yüzeyleri önce; audit üretimi + tüketimi (yazım +
-  export UI) v1 borcu. Tablo/policy hazır olduğundan v1'de yalnız yazıcı eklenecek — şema değişmez.
+- **D16 (§F kapanış turu, 2026-07-25 · ÇÖZÜLDÜ tm 23):** ~~`audit_log` tablosu + RLS policy Dilim
+  12'de kuruldu ama Faz-0'da olay yazıcısı bağlanmadı — hiçbir güvenlik olayı INSERT edilmiyordu;
+  §7.2 S12 kapısı bu yüzden ⬜.~~ Merkezi `writeAuditEntry` (append-only; `withTenant`/RLS içinde;
+  PII-min sanitizasyon) `services/audit/audit-log.ts`'te eklendi ve 12 güvenlik eylemine bağlandı:
+  login başarı/başarısız, parola sıfırlama, üyelik davet/iptal, ayar (security/routing/trusted-domain),
+  billing aboneliği, PAT oluştur/iptal. Şema **değişmedi** (sadece yazıcı). Konfig değişiklikleri
+  eylemin kendi transaction'ında (atomik); auth/PAT yolları en-iyi-çaba (kimlik doğrulama audit'e
+  bağımlı olmasın). Okuma/export UI hâlâ v1 borcu. Kanıt: `test/integration/audit-log.test.ts`
+  (eylem başına tam 1 append · UPDATE/DELETE reddi · cross-tenant izolasyon · sır/PII yok) +
+  `src/services/audit/audit-log.test.ts` (sanitizasyon birim testi).
 - **D17 (§F kapanış turu, 2026-07-25 · ÇÖZÜLDÜ tm 20):** ~~Reports 07.3.2 yalnız **otomatik**
   çözüm oranını ölçüyordu; Manual/Assisted ayrımı yoktu.~~ tm 20'de üç-sınıf ayrım eklendi:
   **Automated** = kapanmış, agent-yazımlı event yok (ADR-09 birebir korundu, fatura ile aynı sorgu) ·

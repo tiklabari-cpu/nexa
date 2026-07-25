@@ -6,6 +6,37 @@
 
 ## Task log (newest-first)
 
+### 23 — S12 audit_log yazıcısı (append-only olay yazımı) [MAX] — done — 2026-07-25 UTC
+- Yapıldı: `audit_log` tablosu + RLS Dilim 12'de vardı ama **hiçbir olay yazılmıyordu** (§D16).
+  Merkezi tek yazıcı `services/audit/audit-log.ts` → `writeAuditEntry(tx, ctx, entry)`: verilen
+  **tenant transaction'ı** içinde tam 1 satır INSERT eder (RLS `WITH CHECK` yanlış tenant'ı reddeder),
+  `sanitizeAuditMetadata` sır benzeri anahtarları (pass/secret/token/verifier/hash/…) düşürür,
+  `request_id`'yi metadata'ya koyar. `plugins/audit.ts` → `request.auditContext()` principal'dan
+  actor/tenant/ip/requestId üretir. **Şema DEĞİŞMEDİ.**
+- Bağlanan 12 güvenlik eylemi: `auth.login` (başarılı `/auth/authorize`) · `auth.login_failed`
+  (kayıtlı client'ın org'una — attacker `license_id`'sine değil — atfedilir, e-posta yazılmaz) ·
+  `auth.password_reset` (hesabın her üyeliğine fan-out) · `member.invited`/`member.invitation_revoked`
+  (davet e-postası audit'e yazılmaz — PII-min) · `settings.security_updated`/`routing_rule_updated`/
+  `trusted_domain_added`/`trusted_domain_removed` · `billing.subscription_updated` · `pat.created`/
+  `pat.revoked`. Konfig mutasyonları eylemin kendi tx'inde **atomik**; auth/PAT yolları **en-iyi-çaba**
+  (kimlik doğrulama/erişilebilirlik audit yazımına bağımlı olmasın).
+- Doğrulama (DoD tam yeşil, exit 0): `pnpm -w typecheck` · `pnpm -w lint` · api unit+integration
+  **556/556** (yeni: 6 birim sanitizasyon + 16 integration) · `pnpm -w build` · `pnpm -w test:integration`
+  (serialize) **473/473** · rtm **65/65** · **e2e 41/41** · prettier temiz. Integration kanıtı
+  `test/integration/audit-log.test.ts`: eylem başına **tam 1 append** + doğru actor/target/metadata ·
+  UPDATE/DELETE **DB'de reddi** (`permission denied`) · tenant'sız INSERT fail-closed · yanlış-tenant
+  INSERT RLS reddi · **cross-tenant görünmezlik** (zorunlu negatif) · **sır/PII yok** (parola/PAT
+  plaintext/deneme e-postası logda yok).
+- Varsayımlar: (1) `audit_log` şema gereği **tenant-scoped** (license_id NOT NULL + RLS), bu yüzden
+  yalnız güvenilir tenant bağlamı olan eylemler yazılır. Login = tenant'a bağlanan adım
+  (`/auth/authorize`); `/auth/login` (üyelik listeleme) workspace seçmediğinden yazılmaz.
+  (2) Rol/üyelik değişikliği yüzeyi şu an **davet oluştur/iptal** (ayrı rol-değiştir/suspend endpoint'i
+  yok). (3) `auth.login_failed` yalnız `/auth/authorize` başarısızlığında (web app iki-adımlı akışta
+  önce `/auth/login`'de tenant'sız düşer — bu doğası gereği yazılamaz).
+- Sonraki pencereye not: **Okuma/export UI kapsam dışıydı (v1 borcu)** — audit tüketimi (liste/filtre/
+  export) ayrı task. Yazıcı-tarafı sözleşme değişmedi (OpenAPI'ye endpoint eklenmedi). Faz-0 bakiyesinde
+  sıradaki öncelik tm **24** (C8 retention).
+
 ### 20 — Reports KPI: Manual/Assisted/Automated ayrımı + Total cases (07.3.2) — done — 2026-07-25 UTC
 - Yapıldı: Reports Overview'a PRD 07.3.2'nin **üç-sınıf çözüm ayrımı**. **Automated** = kapanmış,
   agent-yazımlı event yok (ADR-09 birebir korundu — faturanın AI-resolution sayacıyla aynı sorgu) ·

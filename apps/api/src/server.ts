@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import type { Env } from './config/env.js';
 import errorHandler from './plugins/error-handler.js';
 import auth from './plugins/auth.js';
+import audit from './plugins/audit.js';
 import database from './plugins/database.js';
 import licenseGate from './plugins/license-gate.js';
 import rateLimit from './plugins/rate-limit.js';
@@ -95,6 +96,7 @@ export async function buildServer({
   await app.register(database, { env });
   await app.register(redis, { env });
   await app.register(auth, { env });
+  await app.register(audit);
   await app.register(rateLimit, { env });
   await app.register(licenseGate);
 

@@ -13,6 +13,7 @@ import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { withTenant } from '../lib/tenant.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { LifecycleService } from '../services/auth/lifecycle-service.js';
 import type { AgentRole } from '@nexa/types';
 import { roleAtLeast } from '../services/auth/principal.js';
@@ -95,7 +96,31 @@ export default async function accountLifecycleRoutes(
 
   app.post('/auth/password-reset/confirm', { config: { public: true } }, async (request, reply) => {
     const body = parse(resetConfirmBody, request.body);
-    await lifecycle.confirmPasswordReset(body.token, body.password);
+    const accountId = await lifecycle.confirmPasswordReset(body.token, body.password);
+
+    // A password is account-level, but the audit log is tenant-scoped — so the
+    // change is recorded once in each workspace the account can reach. The actor
+    // is the account itself (a self-service reset). Best-effort: a completed
+    // reset must not be undone because the trail could not be written.
+    try {
+      const tenants = await lifecycle.membershipTenants(accountId);
+      for (const tenant of tenants) {
+        await withTenant(app.db, tenant, (tx) =>
+          writeAuditEntry(
+            tx,
+            request.auditContext({
+              licenseId: tenant.licenseId,
+              actorId: accountId,
+              actorType: 'agent',
+            }),
+            { action: 'auth.password_reset', metadata: { via: 'reset_link' } },
+          ),
+        );
+      }
+    } catch (err) {
+      request.log.warn({ err }, 'failed to record password reset in audit log');
+    }
+
     return reply.code(204).send();
   });
 
@@ -163,15 +188,27 @@ export default async function accountLifecycleRoutes(
       });
     }
 
-    const created = await withTenant(app.db, tenant, (tx) =>
-      lifecycle.createInvitations(
+    const created = await withTenant(app.db, tenant, async (tx) => {
+      const records = await lifecycle.createInvitations(
         tx,
         tenant,
         { accountId: principal.accountId, role: principal.role as AgentRole },
         body.emails,
         body.role,
-      ),
-    );
+      );
+      // One entry per invitation, in the same transaction the invitations are
+      // written. The invitee's address is *not* recorded — the invitation row
+      // (referenced by id) already holds it, and copying it into an append-only
+      // log would spread that person's email further than they agreed to.
+      for (const invite of records) {
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'member.invited',
+          target: `invitation:${invite.id}`,
+          metadata: { role: invite.role },
+        });
+      }
+      return records;
+    });
 
     await Promise.all(
       created.map((invite) =>
@@ -194,9 +231,18 @@ export default async function accountLifecycleRoutes(
       const invitationId = parse(z.string().uuid(), request.params.invitationId);
       const tenant = request.tenant();
 
-      const deleted = await withTenant(app.db, tenant, (tx) =>
-        tx.invitation.deleteMany({ where: { id: invitationId, acceptedAt: null } }),
-      );
+      const deleted = await withTenant(app.db, tenant, async (tx) => {
+        const result = await tx.invitation.deleteMany({
+          where: { id: invitationId, acceptedAt: null },
+        });
+        if (result.count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'member.invitation_revoked',
+            target: `invitation:${invitationId}`,
+          });
+        }
+        return result;
+      });
       // RLS already scopes this to the licence; a miss is 404 rather than 403
       // so ids stay un-enumerable (NFR-S5).
       if (deleted.count === 0) throw ApiError.notFound('Invitation not found.');

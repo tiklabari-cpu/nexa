@@ -8,6 +8,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { resolutionRate, round } from './reports-metrics.js';
 import type { Env } from '../config/env.js';
 import type { TenantClient, TenantContext } from '../lib/tenant.js';
@@ -325,6 +326,12 @@ export default async function reportRoutes(
           activeUsers,
           usage.ai_resolutions.used,
         );
+        // Who changed the plan, and which fields — the amounts live in the
+        // subscription row, so the entry records the shape of the change only.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'billing.subscription_updated',
+          metadata: { fields: Object.keys(body) },
+        });
         // Read the whole view back in the same transaction, so the reply is a
         // real GET rather than a hand-assembled echo that could drift from it.
         return buildSubscriptionView(tx, tenant, env);

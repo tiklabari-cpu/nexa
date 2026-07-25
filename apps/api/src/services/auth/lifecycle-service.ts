@@ -136,16 +136,34 @@ export class LifecycleService {
     return row?.recorded ? token : null;
   }
 
-  async confirmPasswordReset(token: string, password: string): Promise<void> {
+  /** Returns the id of the account whose password was changed, for auditing. */
+  async confirmPasswordReset(token: string, password: string): Promise<string> {
     const passwordHash = await hashPassword(password);
     const rows = await this.#db.$queryRaw<Array<{ reset_account: string }>>`
       SELECT * FROM auth_consume_password_reset(${hashToken(token)}, ${passwordHash})`;
 
-    if (rows.length === 0) {
+    const row = rows[0];
+    if (!row) {
       // Unknown, expired and already-used are one answer: each distinction
       // would tell someone holding a stale link something about the account.
       throw ApiError.authentication('This reset link is no longer valid.');
     }
+    return row.reset_account;
+  }
+
+  /**
+   * The tenants an account can sign in to, so an account-level event — a
+   * password change — can be recorded in each affected workspace's audit log.
+   * Reuses the same SECURITY DEFINER function login does, so it runs before any
+   * tenant context exists.
+   */
+  async membershipTenants(
+    accountId: string,
+  ): Promise<Array<{ licenseId: bigint; organizationId: string }>> {
+    const rows = await this.#db.$queryRaw<
+      Array<{ license_id: bigint; organization_id: string }>
+    >`SELECT license_id, organization_id FROM auth_list_memberships(${accountId}::uuid)`;
+    return rows.map((r) => ({ licenseId: r.license_id, organizationId: r.organization_id }));
   }
 
   /**

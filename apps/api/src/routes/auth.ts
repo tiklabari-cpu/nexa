@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { isScope, type Scope } from '@nexa/types';
@@ -6,6 +6,11 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { originHost } from '../lib/origin.js';
 import { withTenant } from '../lib/tenant.js';
+import {
+  writeAuditEntry,
+  type AuditContext,
+  type AuditEntry,
+} from '../services/audit/audit-log.js';
 import { OauthService } from '../services/auth/oauth-service.js';
 import { markWebsiteConnected } from '../services/websites/website-service.js';
 import {
@@ -109,6 +114,59 @@ export default async function authRoutes(
     authorizationCodeTtl: env.AUTH_CODE_TTL,
   });
 
+  /**
+   * Best-effort audit write. Authentication and credential management must not
+   * fail because the trail could not be written, so unlike the config-change
+   * handlers — which write the entry inside the action's own transaction and
+   * roll back together — this logs and swallows. The normal path still records;
+   * only a genuine write failure is dropped, and it is logged where it happened.
+   */
+  async function audit(
+    request: FastifyRequest,
+    tenant: { licenseId: bigint; organizationId: string },
+    overrides: Partial<AuditContext>,
+    entry: AuditEntry,
+  ): Promise<void> {
+    try {
+      await withTenant(app.db, tenant, (tx) =>
+        writeAuditEntry(
+          tx,
+          request.auditContext({ licenseId: tenant.licenseId, ...overrides }),
+          entry,
+        ),
+      );
+    } catch (err) {
+      request.log.warn({ err, action: entry.action }, 'audit write failed');
+    }
+  }
+
+  /**
+   * Records a failed sign-in against the *registered client's* organization —
+   * trusted data — rather than the `license_id` in the request body, which is
+   * attacker-controlled and could otherwise plant an entry in an unrelated
+   * workspace's log. The attempted address is deliberately not stored: it is
+   * unverified and belongs to whoever was typed, not the workspace.
+   */
+  async function recordLoginFailure(
+    request: FastifyRequest,
+    organizationId: string,
+  ): Promise<void> {
+    try {
+      const rows = await app.db.$queryRaw<Array<{ license_id: bigint; organization_id: string }>>`
+        SELECT license_id, organization_id FROM auth_resolve_organization_license(${organizationId}::uuid)`;
+      const license = rows[0];
+      if (!license) return;
+      await audit(
+        request,
+        { licenseId: license.license_id, organizationId: license.organization_id },
+        { actorId: null, actorType: 'system' },
+        { action: 'auth.login_failed', metadata: { reason: 'invalid_credentials' } },
+      );
+    } catch (err) {
+      request.log.warn({ err }, 'failed to record login failure in audit log');
+    }
+  }
+
   // --- POST /auth/login ------------------------------------------------------
 
   app.post('/auth/login', { config: { public: true } }, async (request, reply) => {
@@ -152,7 +210,10 @@ export default async function authRoutes(
     }
 
     const account = await oauth.authenticateAccount(body.email, body.password);
-    if (!account) throw ApiError.authentication('Invalid email or password.');
+    if (!account) {
+      await recordLoginFailure(request, client.organization_id);
+      throw ApiError.authentication('Invalid email or password.');
+    }
 
     const licenseId = BigInt(body.license_id);
     const memberships = await oauth.listMemberships(account.id);
@@ -193,6 +254,16 @@ export default async function authRoutes(
       codeChallenge: body.code_challenge,
       codeChallengeMethod: body.code_challenge_method,
     });
+
+    // A password was verified and bound to this workspace — the audit-meaningful
+    // "signed in". `/auth/login` lists a person's workspaces but selects none,
+    // so it is not the sign-in event and is not recorded here.
+    await audit(
+      request,
+      { licenseId, organizationId: membership.organization_id },
+      { actorId: account.id, actorType: 'agent' },
+      { action: 'auth.login', target: `client:${client.id}` },
+    );
 
     return reply.send({
       code,
@@ -363,6 +434,19 @@ export default async function authRoutes(
         ttlSeconds: body.expires_in_days ? body.expires_in_days * 86_400 : undefined,
       });
 
+      // The scopes it can act with are the security-relevant part; the token
+      // itself is never written anywhere but the response.
+      await audit(
+        request,
+        request.tenant(),
+        {},
+        {
+          action: 'pat.created',
+          target: `token:${issued.id}`,
+          metadata: { scopes: issued.scopes },
+        },
+      );
+
       reply.header('Cache-Control', 'no-store');
       return reply.status(201).send({
         id: issued.id,
@@ -399,6 +483,17 @@ export default async function authRoutes(
         organizationId: principal.organizationId,
         tokenId,
       });
+
+      await audit(
+        request,
+        request.tenant(),
+        {},
+        {
+          action: 'pat.revoked',
+          target: `token:${tokenId}`,
+        },
+      );
+
       return reply.status(204).send();
     },
   );

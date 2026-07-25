@@ -9,6 +9,7 @@
  * rather than relying on anyone remembering (NFR-S6).
  */
 import { WidgetApi, type WidgetEvent, type WidgetState } from './api.js';
+import { createTranslator, type WidgetTranslate } from './i18n.js';
 
 const LAUNCHER_SIZE = 84;
 const PANEL = { width: 380, height: 620 } as const;
@@ -59,6 +60,10 @@ export function mount(doc: Document = document, win: Window = window): void {
   if (!root) return;
 
   const config = readConfig(win);
+  // The visitor's locale is fixed for the page load — the embedding site chose it
+  // via `data-language` and the loader forwarded it. Bind one translator now and
+  // thread it through every string the widget writes to the DOM (I18N1).
+  const t = createTranslator(config.language);
   const api = new WidgetApi(config.apiBaseUrl, config.organizationId, config.hostOrigin);
 
   const state: State = {
@@ -78,7 +83,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     uploading: false,
   };
 
-  const ui = buildUi(doc);
+  const ui = buildUi(doc, t);
   root.append(ui.panel, ui.greeting, ui.launcher);
 
   // --- Rendering -----------------------------------------------------------
@@ -94,7 +99,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     // Append only what is new: rebuilding the list would lose scroll position
     // and restart CSS animations on messages already on screen.
     for (const event of state.events.slice(renderedCount)) {
-      ui.transcript.append(renderBubble(doc, event, api, attachmentCache));
+      ui.transcript.append(renderBubble(doc, event, api, attachmentCache, t));
     }
     renderedCount = state.events.length;
     ui.transcript.scrollTop = ui.transcript.scrollHeight;
@@ -107,7 +112,7 @@ export function mount(doc: Document = document, win: Window = window): void {
    */
   function renderHeader(): void {
     const agent = state.agent;
-    ui.title.textContent = agent?.name ?? 'Chat with us';
+    ui.title.textContent = agent?.name ?? t('title.default');
     ui.avatar.replaceChildren();
     ui.avatar.hidden = agent === null;
     if (!agent) return;
@@ -130,14 +135,14 @@ export function mount(doc: Document = document, win: Window = window): void {
       return;
     }
     if (state.queuePosition !== null && state.queuePosition > 0) {
-      ui.status.textContent = `You are number ${state.queuePosition} in the queue`;
+      ui.status.textContent = t('status.queue', { n: state.queuePosition });
       ui.status.dataset['tone'] = 'wait';
       return;
     }
     if (!state.online) {
       // Honest rather than encouraging: nobody is there, and pretending
       // otherwise turns a short wait into an abandoned conversation.
-      ui.status.textContent = 'No one is available right now — leave a message and we will reply.';
+      ui.status.textContent = t('status.offline');
       ui.status.dataset['tone'] = 'wait';
       return;
     }
@@ -168,7 +173,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     // affordance once it is open.
     ui.launcher.hidden = open;
     ui.launcher.setAttribute('aria-expanded', String(open));
-    ui.launcher.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
+    ui.launcher.setAttribute('aria-label', t(open ? 'launcher.close' : 'launcher.open'));
 
     // Opening supersedes the proactive card, but does not count as dismissing it.
     if (open && state.greetingOpen) {
@@ -246,7 +251,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderHeader();
       startPolling();
     } catch (error) {
-      state.error = 'Chat is unavailable right now. Please try again shortly.';
+      state.error = t('error.connect');
       renderStatus();
       // The real reason goes nowhere near the visitor.
       console.warn('nexa widget: connect failed', error);
@@ -272,7 +277,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     } catch (error) {
       // The licence's file-sharing rules live on the server; a refusal (wrong
       // type, too large) surfaces here rather than being guessed at.
-      state.error = 'That file could not be attached.';
+      state.error = t('error.upload');
       renderStatus();
       console.warn('nexa widget: upload failed', error);
     } finally {
@@ -293,7 +298,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     const remove = doc.createElement('button');
     remove.type = 'button';
     remove.className = 'nx-chip-x';
-    remove.setAttribute('aria-label', 'Remove attachment');
+    remove.setAttribute('aria-label', t('attach.remove'));
     remove.textContent = '×';
     remove.addEventListener('click', () => {
       state.pendingAttachment = null;
@@ -340,7 +345,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.error = null;
       await refresh();
     } catch (error) {
-      state.error = 'Message not sent. Check your connection and try again.';
+      state.error = t('error.send');
       // Put the text and attachment back so neither is lost.
       ui.input.value = text;
       state.pendingAttachment = attachment;
@@ -488,7 +493,7 @@ interface Ui {
   prechatSubmit: HTMLButtonElement;
 }
 
-function buildUi(doc: Document): Ui {
+function buildUi(doc: Document, t: WidgetTranslate): Ui {
   const style = doc.createElement('style');
   // Inline so the widget is one request and cannot be left half-styled if a
   // stylesheet fails to load.
@@ -499,13 +504,13 @@ function buildUi(doc: Document): Ui {
   launcher.type = 'button';
   launcher.className = 'nx-launcher';
   launcher.setAttribute('aria-expanded', 'false');
-  launcher.setAttribute('aria-label', 'Open chat');
-  launcher.textContent = 'Chat';
+  launcher.setAttribute('aria-label', t('launcher.open'));
+  launcher.textContent = t('launcher.text');
 
   const panel = doc.createElement('section');
   panel.className = 'nx-panel';
   panel.hidden = true;
-  panel.setAttribute('aria-label', 'Customer support chat');
+  panel.setAttribute('aria-label', t('panel.label'));
 
   const header = doc.createElement('header');
   header.className = 'nx-header';
@@ -517,12 +522,12 @@ function buildUi(doc: Document): Ui {
   avatar.hidden = true;
   const title = doc.createElement('h1');
   title.className = 'nx-title';
-  title.textContent = 'Chat with us';
+  title.textContent = t('title.default');
   identity.append(avatar, title);
   const close = doc.createElement('button');
   close.type = 'button';
   close.className = 'nx-close';
-  close.setAttribute('aria-label', 'Close chat');
+  close.setAttribute('aria-label', t('launcher.close'));
   close.textContent = '×';
   header.append(identity, close);
 
@@ -532,7 +537,7 @@ function buildUi(doc: Document): Ui {
   // their place (design-brief §7).
   transcript.setAttribute('role', 'log');
   transcript.setAttribute('aria-live', 'polite');
-  transcript.setAttribute('aria-label', 'Conversation');
+  transcript.setAttribute('aria-label', t('transcript.label'));
 
   const status = doc.createElement('p');
   status.className = 'nx-status';
@@ -549,7 +554,7 @@ function buildUi(doc: Document): Ui {
   const attach = doc.createElement('button');
   attach.type = 'button';
   attach.className = 'nx-attach';
-  attach.setAttribute('aria-label', 'Attach a file');
+  attach.setAttribute('aria-label', t('attach.label'));
   // A paperclip glyph rather than an SVG, to stay inside the 50 KB budget.
   attach.textContent = '📎';
 
@@ -564,14 +569,14 @@ function buildUi(doc: Document): Ui {
   const input = doc.createElement('textarea');
   input.className = 'nx-input';
   input.rows = 2;
-  input.placeholder = 'Type your message…';
-  input.setAttribute('aria-label', 'Message');
+  input.placeholder = t('input.placeholder');
+  input.setAttribute('aria-label', t('input.label'));
   input.maxLength = 10_000;
 
   const send = doc.createElement('button');
   send.type = 'submit';
   send.className = 'nx-send';
-  send.textContent = 'Send';
+  send.textContent = t('send');
 
   form.append(attach, file, input, send);
 
@@ -582,24 +587,24 @@ function buildUi(doc: Document): Ui {
   prechat.hidden = true;
   const prechatIntro = doc.createElement('p');
   prechatIntro.className = 'nx-prechat-intro';
-  prechatIntro.textContent = 'Tell us who you are and we will get started.';
+  prechatIntro.textContent = t('prechat.intro');
   const prechatName = doc.createElement('input');
   prechatName.className = 'nx-prechat-input';
   prechatName.type = 'text';
-  prechatName.placeholder = 'Your name';
-  prechatName.setAttribute('aria-label', 'Your name');
+  prechatName.placeholder = t('prechat.name');
+  prechatName.setAttribute('aria-label', t('prechat.name'));
   prechatName.required = true;
   prechatName.maxLength = 120;
   const prechatEmail = doc.createElement('input');
   prechatEmail.className = 'nx-prechat-input';
   prechatEmail.type = 'email';
-  prechatEmail.placeholder = 'Email (optional)';
-  prechatEmail.setAttribute('aria-label', 'Email');
+  prechatEmail.placeholder = t('prechat.email');
+  prechatEmail.setAttribute('aria-label', t('prechat.emailLabel'));
   prechatEmail.maxLength = 320;
   const prechatSubmit = doc.createElement('button');
   prechatSubmit.type = 'submit';
   prechatSubmit.className = 'nx-prechat-submit';
-  prechatSubmit.textContent = 'Start chat';
+  prechatSubmit.textContent = t('prechat.submit');
   prechat.append(prechatIntro, prechatName, prechatEmail, prechatSubmit);
 
   panel.append(header, transcript, status, prechat, chip, form);
@@ -609,20 +614,20 @@ function buildUi(doc: Document): Ui {
   greeting.className = 'nx-greeting';
   greeting.hidden = true;
   greeting.setAttribute('role', 'dialog');
-  greeting.setAttribute('aria-label', 'Chat with us');
+  greeting.setAttribute('aria-label', t('greeting.label'));
   const greetMsg = doc.createElement('p');
   greetMsg.className = 'nx-greet-msg';
-  greetMsg.textContent = 'Hi there 👋 Have a question? We are happy to help.';
+  greetMsg.textContent = t('greeting.msg');
   const greetActions = doc.createElement('div');
   greetActions.className = 'nx-greet-actions';
   const greetChat = doc.createElement('button');
   greetChat.type = 'button';
   greetChat.className = 'nx-greet-chat';
-  greetChat.textContent = "Let's chat";
+  greetChat.textContent = t('greeting.chat');
   const greetBrowse = doc.createElement('button');
   greetBrowse.type = 'button';
   greetBrowse.className = 'nx-greet-browse';
-  greetBrowse.textContent = 'Just browsing';
+  greetBrowse.textContent = t('greeting.browse');
   greetActions.append(greetChat, greetBrowse);
   greeting.append(greetMsg, greetActions);
 
@@ -655,6 +660,7 @@ function renderBubble(
   event: WidgetEvent,
   api: WidgetApi,
   cache: Map<string, string>,
+  t: WidgetTranslate,
 ): HTMLElement {
   const row = doc.createElement('div');
   row.className = `nx-row nx-row--${event.author_type}`;
@@ -672,7 +678,8 @@ function renderBubble(
   // textContent, never innerHTML — this is the one place agent- and
   // customer-authored text meets the DOM.
   if (event.text) bubble.textContent = event.text;
-  if (event.attachment_url) bubble.append(renderAttachment(doc, api, event.attachment_url, cache));
+  if (event.attachment_url)
+    bubble.append(renderAttachment(doc, api, event.attachment_url, cache, t));
 
   const time = doc.createElement('time');
   time.className = 'nx-time';
@@ -698,6 +705,7 @@ function renderAttachment(
   api: WidgetApi,
   url: string,
   cache: Map<string, string>,
+  t: WidgetTranslate,
 ): HTMLElement {
   const name = url.split('/').pop() ?? 'attachment';
 
@@ -716,7 +724,7 @@ function renderAttachment(
   if (IMAGE_URL.test(url)) {
     const img = doc.createElement('img');
     img.className = 'nx-attachment-img';
-    img.alt = 'Attachment';
+    img.alt = t('attachment.alt');
     const cached = cache.get(url);
     if (cached) {
       img.src = cached;

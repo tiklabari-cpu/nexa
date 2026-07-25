@@ -847,10 +847,10 @@
             "description": "AI/Workspace/Drafts ayrımı. PRD 05.3 (Must).",
             "details": "05.3-a Skill listesi sekmeleri (All/AI/Workspace/Drafts). [XHIGH] PRD 05.3 (Must).\nNEDEN AÇIK: liste var ama AI/Workspace/Drafts sekme ayrımı yok.\nKAPSAM: role=tablist sekmeler; AI(✦)/Workspace(⚡)/Drafts ayrımı; Skill.status/kind'dan filtre.\nKK (birebir): \"AI (✦) vs Workspace (⚡) vs taslak ayrımı\". BAĞLAM: PLAN §4.4.1.",
             "testStrategy": "unit: her sekme doğru alt küme. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "32",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T22:18:34.659Z"
           },
           {
             "id": 4,
@@ -866,7 +866,7 @@
             "updatedAt": "2026-07-25T14:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-07-25T22:02:12.452Z"
+        "updatedAt": "2026-07-25T22:18:34.659Z"
       },
       {
         "id": "33",
@@ -1818,7 +1818,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T22:02:12.452Z",
+      "lastModified": "2026-07-25T22:18:34.659Z",
       "taskCount": 84,
       "completedCount": 31,
       "tags": [

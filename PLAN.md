@@ -7,14 +7,27 @@
 > Şema doğruluk kaynağı: PRD §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Son denetim:** 2026-07-25
+**Başlangıç:** 2026-07-22 · **Son denetim:** 2026-07-25 (kapsam) · **Kapsam denetimi + kırılım:** 2026-07-25 (bu tur, PLAN-EXPAND)
 
-| Faz                | PRD  | Durum                                                    |
-| ------------------ | ---- | -------------------------------------------------------- |
-| **Faz 0 — MVP**    | §5.1 | ⏳ **49 ✅ · 5 ◐ · 6 🔒** (60 satır)                     |
-| Faz 1 — v1         | §5.2 | ⏳ kısmen başlandı (Playbook/AI öne çekildi — bkz. §1.3) |
-| Faz 2 — v2         | §5.3 | ⬜ başlanmadı                                            |
-| Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                                            |
+> **Bu turda (2026-07-25) PLAN, PRD §6'nın 138 `FR-MOD` satırına ve KODA karşı yeniden
+> denetlendi.** İki `✅` iddiası koda karşı **`◐`** çıktı (02.4 Details ziyaret bilgisi, 13.8
+> e-posta bildirimi — bkz. §D19/§D20). Faz kapanışı artık **sayaca** bağlı (§F.00): bir faz
+> ancak `Must` kapsamında `0 ◐` ve `0 ⬜` kaldığında kapanır. Kalan işin atomik kırılımı §3.13
+> (Faz-0) + §4.4 (v1) + §G (düz dizin) altındadır.
+
+| Faz                | PRD  | Genel durum                          | **Must sayacı (§F.00 kapısı)** | Kapanış |
+| ------------------ | ---- | ------------------------------------ | ------------------------------ | :-----: |
+| **Faz 0 — MVP**    | §5.1 | 51 ✅ · 3 ◐ (§3) · gruplu-🔒 v1'e    | **45 ✅ · 6 ◐ · 0 ⬜**          | ❌ AÇIK  |
+| Faz 1 — v1         | §5.2 | kısmen (Playbook/AI öne çekildi §1.3) | denetlendi §4 — çoğu ⬜/◐       | ❌ AÇIK  |
+| Faz 2 — v2         | §5.3 | ⬜ başlanmadı                         | —                              |    —    |
+| Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                         | —                              |    —    |
+
+**Faz-0 kapanmadı.** `Must` kapsamında **6 `◐`** var: 01.3 (sağ panel switcher — Copilot v1'e
+bağlı), **02.4** (Details ziyaret bilgisi — koda karşı bulundu), **13.8** (e-posta bildirim kanalı),
+EK-A.1 / EK-A.2 / EK-B.1 (çapraz-kesit form/liste desenleri). Kırılım: §3.13. Sayım yöntemi:
+§3 tablolarındaki `Must`/`Must (MVP temel)` satırları elle değil **sayılarak** (✅=teslim+test,
+◐=çekirdek var/KK eksik). `Should (MVP)` kalemleri kapanışı bloklamaz (§F.00) ama §3.13'te ismen
+listelenir.
 
 ---
 
@@ -96,7 +109,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | ----------------------------- | :-: | :-: | :-: | :--: | :---------------------------------------------: |
 | MOD-00 Auth + trial           |  ●  |     |     |      |                 ✅ (00.4 dahil)                 |
 | MOD-01 Global shell + ⌘K      |  ●  |  ○  |  ○  |      |            ◐ ⌘K+rozet ✅, Copilot v1            |
-| MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      |      ✅ chat+ticket + Copy chat link (§F)       |
+| MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      |   ◐ chat+ticket+Copy link ✅ · **02.4 ziyaret bilgisi ⬜ (§D19)**   |
 | MOD-03.1 Real-time traffic    |  ○  |  ○  |  ○  |      |               ✅ sekmeler (tm 19)               |
 | MOD-03.2 Contacts CRM         |  ●  |  ○  |     |      |                       ✅                        |
 | MOD-03.3 Campaigns            |     |  ●  |  ○  |      |                       ⬜                        |
@@ -157,7 +170,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | 02.3.4                                           | Message type (Reply / Internal note)                                                                         | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
 | 02.3.5                                           | Composer araçları (canned `#`, tag, emoji, **attach**)                                                       | Must (MVP)       |  ✅   | F5 (`#` ✅) · attach → **Dilim 13**                                                                                                      |
 | 02.3.6                                           | Send (optimistic, disabled/loading/error)                                                                    | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
-| 02.4.1–.6                                        | Details paneli (info/tags/visited pages/visit info)                                                          | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
+| 02.4.1–.6                                        | Details paneli (info/tags/visited pages/visit info)                                                          | Must (MVP)       |  ◐   | Chat info/tags/assignee/ID/Started ✅ (`DetailsPanel.tsx`) · **Visited pages + Visit info (Device/Referring/Duration/IP) ⬜** — veri var (`Visit` şeması, `getCustomer`) ama inbox `getChat`'e bağlı değil (§D19, denetim 2026-07-25) → §3.13/T3 |
 | 02.6                                             | **Create ticket** / Copy chat link / Reopen                                                                  | Must (MVP)       |  ✅   | Reopen ✅ (`/chats/{id}/resume`) · Create ticket ✅ (Dilim 11) · Copy chat link ✅ (§F kapanış — transcript başlığı, `?chat=` deep-link) |
 | 02.8                                             | Archive (salt-okuma transcript)                                                                              | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
 | 02.1.2, 02.1.4, 02.2.1, 02.3.2, 02.5, 02.7, 02.9 | AI Agents grubu, kanal görünümleri, sıralama, Reply Suggestions, Copilot özeti, Tickets grid, typing preview | v1               |  🔒   | v1                                                                                                                                       |
@@ -239,7 +252,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | PRD  | Gereksinim                                        | Öncelik    | Durum | Nerede               |
 | ---- | ------------------------------------------------- | ---------- | :---: | -------------------- |
-| 13.8 | **Notifications** (ses/masaüstü/tarayıcı/e-posta) | Must (MVP) |  ✅   | **Dilim 14** (tm 16) |
+| 13.8 | **Notifications** (ses/masaüstü/tarayıcı/e-posta) | Must (MVP) |  ◐   | Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `notifications.ts`) · **e-posta bildirim kanalı ⬜** (KK 08.2 e-posta içerir; SMTP mock A4 var, bağlı değil) — mobil push 🔒 v1 (§11.1/8) → §3.13/T7 · §D20 |
 
 ### 3.11 Faz-0 dilim planı
 
@@ -286,6 +299,175 @@ pozitiflerden önce kuruldu (MASTER-PROMPT §Zorluk Etiketleri).
 - **T4** — Davet üzerinden yetki yükseltme (agent'ın owner daveti üretmesi).
 - **T5** — Daveti başka lisansa kabul ettirme (cross-tenant).
 - **T6** — Signup'ın kötüye kullanımı (kayıt spam'i) — anonim rate limit'e tabi.
+
+---
+
+### 3.13 Faz-0 Kalan Kalem Kırılımı (kapanış kapısı §F.00'ın girdisi)
+
+> **Denetim 2026-07-25 (koda karşı).** Faz-0 `Must` kapsamında **6 `◐`** kaldı. Aşağıdaki
+> atomik alt-görevlerin **hepsi** ✅ olmadan Faz-0 kapanmaz. Her alt-görev tek temiz pencerede
+> DoD kapısından (CONVENTIONS.md) **ve** kendi PRD KK'sından geçer. KK maddeleri PRD'den
+> **birebir** alındı; "KK doğrulama" her maddenin hangi test/komutla kanıtlanacağını söyler.
+
+#### T3 · 02.4 — Details paneli: Visited pages + Visit info *(Must, MVP)* `[XHIGH]`
+
+Kapanışı bloklayan `◐`. İki alt-görev (kontrat/backend + ekran — tm 6/7 deseni).
+
+**T3-a — `getChat` yanıtına ziyaret bilgisi ekle (kontrat + backend)** `[XHIGH]`
+- **PRD kimliği:** FR-MOD-02.4.1–.6 (+ NFR-S5 IDOR: ziyaret verisi tenant-scoped)
+- **Neden açık:** `getChat` (`packages/contract/openapi/paths/chats.yaml`) yanıtı ziyaret bilgisi
+  taşımıyor; veri var (`Visit` şeması `openapi.yaml:886`; `visits` tablosu widget'tan doluyor,
+  `getCustomer` okuyor) ama chat yüzeyine bağlı değil.
+- **Kapsam:** kontrat → `ChatDetail` yanıtına `visitor` bloğu (`visited_pages[]`, `visit_info:
+  {device, referrer, duration_seconds, ip}`); backend `chat-service`/`customer-service` müşterinin
+  son ziyaretini chat'e bağlar. Contract-first.
+- **KK (PRD birebir):** _"Bölümler katlanır; tag/assignee anında kaydeder; süre/ziyaret canlı"_
+  → **KK-türetilmiş** (PRD KK yalnız davranışı söylüyor; alan listesi Açıklama sütunundan:
+  _"Visited pages, Visit info (Device/Referring/Duration/IP)"_). Türetilmiş kriter §C-A10'a yazıldı.
+- **KK doğrulama:** `test/integration/chats.test.ts` — `getChat` yanıtında ziyaret alanları var;
+  **cross-tenant:** başka lisansın chat'inde ziyaret verisi sızmıyor (404). `contract-parity` yeşil.
+- **Zorunlu testler:** integration (alanların dolması + IP/referrer null-güvenli) + cross-tenant negatif.
+- **Bağımlılıklar:** yok (visits zaten yazılıyor).
+- **Kapsam dışı:** canlı süre WS push'u (T3-b'de UI hesaplar); 13.2 Engage 360° panel (v2).
+- **Tahmin:** 1 pencere.
+
+**T3-b — Details panelinde Visited pages + Visit info bölümleri** `[XHIGH]`
+- **PRD kimliği:** FR-MOD-02.4.1–.6
+- **Neden açık:** `apps/web/src/features/inbox/DetailsPanel.tsx` yalnız Conversation/Tags/Teams
+  render ediyor (denetim §D19).
+- **Kapsam:** iki katlanır bölüm daha — "Visited pages" (sıralı liste) + "Visit info"
+  (Device/Referring/Duration/IP satırları); veri T3-a'dan. Empty state: ziyaret yoksa anlamlı metin.
+- **KK (PRD birebir):** _"Bölümler katlanır; tag/assignee anında kaydeder; süre/ziyaret canlı"_.
+- **KK doğrulama:** `DetailsPanel` render testi (ziyaret verisiyle sayfa listesi + device/IP görünür;
+  veri yokken empty state); E2E `demo-flow.spec.ts`'e ziyaret-bilgisi görünürlük iddiası.
+- **Zorunlu testler:** unit (render + empty state) + E2E görünürlük.
+- **Bağımlılıklar:** **T3-a** (veri yolu).
+- **Kapsam dışı:** IP coğrafi çözümleme; harita; canlı ziyaretçi akışı (03.1.x).
+- **Tahmin:** 1 pencere.
+
+#### T1 · 01.3 — Sağ panel switcher (Details ↔ Expand; Copilot v1'e) *(Must, MVP)* `[XHIGH]`
+
+**T1-a — Sağ panel aç/kapa + Expand + tercih persist** `[XHIGH]`
+- **PRD kimliği:** FR-MOD-01.3
+- **Neden açık:** Details paneli her zaman görünür (`InboxPage.tsx`); panel anahtarı (aç/kapa),
+  **Expand** (geniş transcript) ve tercih kalıcılığı yok. Copilot sekmesi ⬜ (MOD-12 = **v1**).
+- **Kapsam:** sağ panel toggle + Expand modu (transcript tam genişlik) + tercih `localStorage`/
+  hesap tercihinde persist. **Copilot sekmesi kapsam DIŞI** (v1 — bkz. §D22 daraltma).
+- **KK (PRD birebir):** _"Panel açılır/kapanır; Details/Copilot geçişi persist"_ → MVP payında
+  **Details/Expand** geçişi persist (Copilot v1'e ayrıldı, §D22).
+- **KK doğrulama:** unit (toggle + Expand + reload sonrası tercih korunur); E2E panel aç/kapa.
+- **Zorunlu testler:** unit (persist) + E2E.
+- **Bağımlılıklar:** yok.
+- **Kapsam dışı:** Copilot sekmesi/paneli (12.1–12.3, v1); reply suggestions.
+- **Tahmin:** 1 pencere.
+
+#### T7 · 13.8 — E-posta bildirim kanalı *(Must, MVP)* `[XHIGH]`
+
+**T7-a — Bildirim tercihine e-posta + sunucu tarafı tetik (yeni sohbet/atama)** `[XHIGH]`
+- **PRD kimliği:** FR-MOD-13.8 (+ FR-MOD-08.2)
+- **Neden açık:** `notifications.ts` yalnız `{enabled, sound, desktop}`; e-posta kanalı yok
+  (denetim §D20). SMTP mock (`services/mail/mailer.ts`, A4) var ama bildirime bağlı değil.
+- **Kapsam:** kullanıcı tercihi `email: boolean`; sunucu tarafı tetik — yeni sohbet/atama/mention
+  olayında ilgili ajanlara `FileMailer` ile e-posta (mock, `.data/mail`). Tercih kullanıcı bazında.
+- **KK (PRD birebir):** _"Bkz. FR-MOD-08.2; kanallar arası tutarlı"_ · 08.2: _"ses/masaüstü/
+  e-posta/tarayıcı bildirim tercihleri (yeni sohbet/atama/mention); kullanıcı bazında"_.
+- **KK doğrulama:** integration — atama olayında hedef ajanın posta kutusuna (`.data/mail`) mesaj
+  düşüyor; tercih kapalıyken düşmüyor; **cross-tenant:** başka lisansın ajanına gitmiyor.
+- **Zorunlu testler:** integration (tetik + tercih gating + cross-tenant) + unit (karar fonksiyonu).
+- **Bağımlılıklar:** yok.
+- **Kapsam dışı:** mobil push (🔒 v1); e-posta şablon markası (08.7.5, v1); gerçek SMTP (§9).
+- **Tahmin:** 1 pencere.
+
+#### T4 · EK-A.1 — Tek form validasyon primitifi + alan-altı hata *(Must, MVP)* `[XHIGH]`
+
+Frontend formları elle doğruluyor; ortak kütüphane/desen yok (denetim: web'de 0 zod importu).
+
+**T4-a — Ortak form-validasyon primitifi + pilot iki form** `[XHIGH]`
+- **PRD kimliği:** FR-EK-A.1
+- **Neden açık:** `apps/web/src` içinde form validasyonu her ekranda elle; alan-altı hata /
+  submit-disabled deseni tekrar ediyor, tek kaynak yok. (Backend zod ✅ — bu iş **frontend**.)
+- **Kapsam:** tek doğrulama primitifi (hafif hook/şema — bağımlılık eklenecekse `zod` zaten
+  lockfile'da, frontend'e import edilir); alan-altı hata + geçersizken submit pasif + Error/
+  Disabled/Loading durumları. Pilot: **Invite teammates** (`InviteTeammates.tsx`) + **Add website**
+  (`WebsiteWidgets.tsx`).
+- **KK (PRD birebir):** _"Tek form/validasyon kütüphanesi; alan-altı hata mesajı"_.
+- **KK doğrulama:** unit (geçersiz alan → alan-altı hata + submit pasif) iki pilot formda; E2E
+  Invite akışında geçersiz email satır-içi hata.
+- **Zorunlu testler:** unit (her durum) + E2E pilot.
+- **Bağımlılıklar:** yok.
+- **Kapsam dışı:** kalan formların migrasyonu (**T4-b**); Forms builder (08.7.7, v1).
+- **Tahmin:** 1 pencere.
+
+**T4-b — Kalan Must formlarını primitife taşı** `[XHIGH]`
+- **PRD kimliği:** FR-EK-A.1
+- **Neden açık:** T4-a yalnız 2 pilot; kalan Must formlar (Signup, Reset, New canned, New tag,
+  Payment mock, Channels ekle) hâlâ elle.
+- **Kapsam:** kalan formları primitife taşı; her birinde alan-altı hata + submit-disabled.
+- **KK (PRD birebir):** _"Tek form/validasyon kütüphanesi; alan-altı hata mesajı"_.
+- **KK doğrulama:** her taşınan formda unit; regresyon (mevcut E2E'ler yeşil kalır).
+- **Zorunlu testler:** unit (form başına) + regresyon E2E.
+- **Bağımlılıklar:** **T4-a**.
+- **Kapsam dışı:** v1 formları (Forms builder, Custom fields).
+- **Tahmin:** 1–2 pencere (çok form → 2+ ise T4-b tekrar bölünür).
+
+#### T5 · EK-A.2 — Ortak girdi davranışları (yarım-form kapatma onayı) *(Must, MVP)* `[XHIGH]`
+
+**T5-a — Yarım-form kapatma onayı + ortak dropdown/stepper/optimistic birleştirme** `[XHIGH]`
+- **PRD kimliği:** FR-EK-A.2
+- **Neden açık:** debounce/stepper/optimistic toggle dağınık uygulanmış; **yarım-form kapatma
+  onayı** (kirli formu kapatırken uyar) hiçbir modalda yok.
+- **Kapsam:** ortak "dirty guard" (kirli form kapatma → onay), ortak dropdown/stepper davranış
+  sarmalayıcı; optimistic + hata geri alma deseni tekilleştir.
+- **KK (PRD birebir):** _"Tutarlı davranış; optimistic + hata geri alma"_.
+- **KK doğrulama:** unit (kirli form kapatma → onay; optimistic hata → geri alma); E2E Invite modal
+  yarım doldurup kapatma → onay.
+- **Zorunlu testler:** unit + E2E.
+- **Bağımlılıklar:** T4-a ile aynı form katmanına dokunur (sıra: T4-a → T5-a önerilir).
+- **Kapsam dışı:** yeni ekranlar; drag-reorder (06.2.4, v1).
+- **Tahmin:** 1 pencere.
+
+#### T6 · EK-B.1 — Virtualization + skeleton + anlamlı empty state *(Must, MVP)* `[XHIGH]`
+
+P4 (10k satır 60fps) bu kaleme bağlı; P6 (büyük liste sorgusu) çoğunlukla ✅ (keyset + partition).
+
+**T6-a — Virtualized liste primitifi (Contacts/Teammates/Skills/Tickets)** `[XHIGH]`
+- **PRD kimliği:** FR-EK-B.1 (+ NFR-P4)
+- **Neden açık:** listeler keyset paginate ediyor (✅) ama DOM'a tüm satırlar giriyor;
+  virtualization yok → 10k satırda P4 hedefi ölçülemez.
+- **Kapsam:** tek virtualized liste primitifi; Contacts + Teammates + Skills + Tickets ona taşınır.
+- **KK (PRD birebir):** _"10.000+ satırda 60fps; skeleton; her boş liste için anlamlı empty state
+  (boş dikdörtgen yok)"_ (bu alt-görev: virtualization + 60fps payı).
+- **KK doğrulama:** unit (yalnız görünür satır DOM'da — sanal pencere testi); perf ölçümü
+  (10k satır render bütçesi) HANDOFF'a kanıt.
+- **Zorunlu testler:** unit (görünür-satır) + perf ölçüm notu.
+- **Bağımlılıklar:** yok.
+- **Kapsam dışı:** skeleton + empty state (**T6-b**); Apps/Campaigns/Knowledge gridleri (v1 listeleri).
+- **Tahmin:** 1 pencere.
+
+**T6-b — Skeleton + anlamlı empty state deseni (tüm Must listeler)** `[XHIGH]`
+- **PRD kimliği:** FR-EK-B.1
+- **Neden açık:** empty state tutarsız (kimi liste boş dikdörtgen); skeleton kısmi.
+- **Kapsam:** ortak skeleton + "anlamlı empty state" bileşeni; Must listelerine uygulanır
+  (Contacts/Teammates/Tickets/Inbox listeleri).
+- **KK (PRD birebir):** _"…skeleton; her boş liste için anlamlı empty state (boş dikdörtgen yok)"_.
+- **KK doğrulama:** unit (boş liste → anlamlı empty state, boş dikdörtgen değil) her listede.
+- **Zorunlu testler:** unit (empty state) liste başına.
+- **Bağımlılıklar:** **T6-a** (aynı liste primitifi).
+- **Kapsam dışı:** v1 gridleri.
+- **Tahmin:** 1 pencere.
+
+#### Faz-0 `Should` kalemleri (kapanışı **bloklamaz** — §F.00, ismen)
+
+- **EK-C.2** *(Should, MVP)* — banner/dropdown/panel/modal tek tasarım sistemi: `◐`. Bileşenler
+  var, tek "design system" soyutlaması gevşek. **Kabul edilen borç** olarak §D'ye taşınabilir ya
+  da T4/T5/T6 ile birlikte kapanır. Faz-0'ı bloklamaz.
+- **03.1.1 kalan sekmeler** (Supervised/Invited/Browsing) — teslim edilen 4 sekme (All/Chatting/
+  Queued/Waiting) `Must temel`'i karşılıyor; kalan 3 sekme `v2 gelişmiş` (§4/13.2). Bloklamaz.
+
+**Faz-0 kapanış kapısı (§F.00):** yukarıdaki **T1-a · T3-a · T3-b · T4-a · T4-b · T5-a · T6-a ·
+T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `Must` sayacı `45+6=51 ✅ ·
+0 ◐ · 0 ⬜` olur ve **§F.1'in 10 maddesi tam sürüm** çalıştırılıp faz kapanır. `Should` (EK-C.2,
+03.1.1-kalan) ismen v1'e taşınır.
 
 ---
 
@@ -364,6 +546,287 @@ pozitiflerden önce kuruldu (MASTER-PROMPT §Zorluk Etiketleri).
 
 ---
 
+### 4.4 v1 Kırılımı (koda karşı denetlendi 2026-07-25)
+
+> **Denetim.** §4.1/4.2/4.3 durumları koda karşı doğrulandı: Playbook backend skill CRUD +
+> compile + preview + knowledge CRUD **var** (`routes/playbook.ts`, contract `playbook.yaml`);
+> UI skill listesi + editör + knowledge paneli **var** (`PlaybookPage.tsx`, `SkillEditor.tsx`).
+> **Eksik (grep/okuma ile doğrulandı):** şablon galerisi (05.1/05.2 — 0 eşleşme), Drafts/tab
+> ayrımı (05.3), drag-reorder (06.2.4 — 0 eşleşme), website crawl (06.3.2 — POST yalnız `content`
+> indeksler, crawl yok), AI Agent Profile/Performance UI (06.4/06.5), Copilot (12.x — api/contract'ta
+> ~0 ref). `webhooks` tablosu + `webhooks--*` scope var, **route/servis yok** (08.8.4 ⬜).
+>
+> **v1 kapanış kapısı (§F.00):** v1 `Must` kalemleri = 05.1/05.3/05.5, 06.1–06.4, 08.5.4–.6,
+> 08.8.4, 02.1.2, 04.2, 13.8-mobil-push(🔒). Bunların `0 ◐/⬜` olması gerekir. `Should`'lar
+> bloklamaz. Aşağıdaki kırılım atomiktir; her alt-görev PRD KK'sını **birebir** taşır.
+
+#### 4.4.1 · MOD-05 Playbook (öne çekildi — tamamlanacak)
+
+**05.1-a — Browse templates galerisi + tür seçimi → editör** `[XHIGH]` · PRD 05.1
+- **Neden açık:** `PlaybookPage.tsx`'te "Browse templates" / şablon galerisi yok (grep 0).
+- **Kapsam:** header "Browse templates" → şablon kartı galerisi; kart seç → skill editörüne
+  ön-doldurulmuş açılır. Şablonlar deterministik yerel katalog (dış servis yok).
+- **KK (birebir):** _"Şablon galerisi; tür seçimi → editör"_.
+- **KK doğrulama:** unit (galeri render + seç → editör ön-dolu); E2E şablondan skill oluşturma.
+- **Testler:** unit + E2E. **Bağımlılık:** yok. **Kapsam dışı:** Workspace workflow türü (⛔ ADR-14).
+- **Tahmin:** 1 pencere.
+
+**05.2-a — Recommended skills kartları (Try this / See more)** `[XHIGH]` · PRD 05.2 *(Should)*
+- **Neden açık:** önerilen şablon kartları yok.
+- **Kapsam:** Prebuilt/AI/Trending kategorili kartlar; "Try this" → şablonu kopyalayıp editöre açar;
+  entegrasyon gerektiren şablon uyarır.
+- **KK (birebir):** _"[Try this] şablonu kopyalayıp editöre açar; entegrasyon gerektirenler uyarır"_.
+- **KK doğrulama:** unit (Try this → editör kopya; entegrasyon-gerekli kart uyarı). **Bağımlılık:** 05.1-a.
+- **Tahmin:** 1 pencere.
+
+**05.3-a — Skill listesi sekmeleri (All/AI/Workspace/Drafts)** `[XHIGH]` · PRD 05.3
+- **Neden açık:** liste var ama AI/Workspace/Drafts sekme ayrımı yok.
+- **Kapsam:** `role=tablist` sekmeler; AI (✦) vs Workspace (⚡) vs Drafts (taslak) ayrımı;
+  `Skill.status`/`kind` alanından filtre.
+- **KK (birebir):** _"AI (✦) vs Workspace (⚡) vs taslak ayrımı"_.
+- **KK doğrulama:** unit (her sekme doğru alt küme). **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+
+**05.4-a — Liste kontrolleri (Search/Sort/Filter)** `[XHIGH]` · PRD 05.4 *(Should)*
+- **Kapsam:** ada göre debounce arama + tür/durum/sahip filtre + sıralama.
+- **KK (birebir):** _"Ada göre arama; tür/durum/sahip filtre"_.
+- **KK doğrulama:** unit (arama/filtre daraltır). **Bağımlılık:** 05.3-a, T4-a (form deseni). **Tahmin:** 1 pencere.
+
+#### 4.4.2 · MOD-06 AI Agent + Knowledge/RAG (öne çekildi — tamamlanacak)
+
+**06.1-a — AI Agent sekmeleri (Performance/Profile/Skills/Knowledge) + readiness check** `[XHIGH]` · PRD 06.1
+- **Neden açık:** UI Skills + Knowledge panelini gösteriyor ama sekmeli AI Agent üst yapısı +
+  readiness uyarısı yok.
+- **Kapsam:** sekme kabuğu (Performance/Profile/Skills/Knowledge); KB/skill boşsa "AI'ı açma" uyarısı.
+- **KK (birebir):** _"Tek yerde persona+yetenek+bilgi+performans; readiness check (KB/skill boşsa
+  açma uyarısı)"_.
+- **KK doğrulama:** unit (boş KB+skill → readiness uyarısı, aktive engeli). **Bağımlılık:** 06.4-a, 06.5-a.
+- **Tahmin:** 1 pencere.
+
+**06.2.4-a — Ordered steps: drag reorder + klavye alternatifi** `[MAX]` ↑ · PRD 06.2.4 · NFR-A11Y4
+- **Neden açık:** adımlar var (`SkillEditor.tsx`) ama reorder yok (grep 0); a11y klavye alternatifi yok.
+- **Yukarı yuvarlama gerekçesi (↑):** NFR-A11Y4 "sürükle-bırak yeniden sıralamaya klavye alternatifi"
+  **kaynakta eksik, Nexa kritik** olarak işaretli — a11y sınırı + skill sırası davranışı değiştirir.
+- **Kapsam:** adım reorder (drag) + **klavye ile taşıma** (yukarı/aşağı, ARIA duyuru); zorunlu
+  parametre (transfer hedefi) boşsa hata.
+- **KK (birebir):** _"Her adım araç çağrısı; drag reorder (+ klavye alternatifi); zorunlu parametre
+  (ör. transfer hedefi) boşsa hata"_.
+- **KK doğrulama:** unit (klavye reorder sıra değiştirir; boş zorunlu param → hata); a11y (odak +
+  duyuru). **Negatif:** transfer hedefi boş → kaydetme reddi.
+- **Testler:** unit + a11y + negatif. **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+
+**06.3.1-a — Knowledge alt sekmeler (All/Websites/Files/Articles/FAQ)** `[XHIGH]` · PRD 06.3.1
+- **Kapsam:** tür bazlı filtre sekmeleri (`KnowledgeSource.type`).
+- **KK (birebir):** _"Tür bazlı filtre"_.
+- **KK doğrulama:** unit (her sekme doğru tür). **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+
+**06.3.2-a — + New source: Website crawl + geçersiz URL/tür reddi** `[MAX]` ↑ · PRD 06.3.2 · NFR-S7-benzeri
+- **Neden açık:** POST `/knowledge-sources` yalnız verilen `content`'i indeksliyor; **website crawl**
+  yok (dış URL çekme → SSRF sınırı).
+- **Yukarı yuvarlama gerekçesi (↑):** dış URL çekme = **SSRF** yüzeyi (private/loopback reddi,
+  redirect kapalı) — 08.8.4 ile aynı güvenlik sınırı; koda karşı negatif test şart.
+- **Kapsam:** Website türü için crawl+parse (mock fetcher, deterministik) → chunk+embedding;
+  geçersiz URL/tür reddi; SSRF guard (private IP/loopback/link-local reddi).
+- **KK (birebir):** _"Geçersiz URL/tür reddi; crawl/parse; RAG indeksleme; bulk/CSV import (Nexa)"_.
+- **KK doğrulama:** integration (crawl → chunk sayısı >0; geçersiz URL → 4xx; **SSRF negatif:**
+  `http://169.254.169.254` / `localhost` → reddedilir). **Negatif testler pozitiften önce.**
+- **Testler:** integration + SSRF negatif + cross-tenant. **Bağımlılık:** yok. **Kapsam dışı:** bulk/CSV (ayrı Should).
+- **Tahmin:** 1–2 pencere (SSRF + crawl ayrışabilir).
+
+**06.4-a — Profile (persona: Name/Avatar/Tone/Language/Answer length) UI + canlı preview** `[XHIGH]` · PRD 06.4
+- **Neden açık:** `AiAgent` şemasında `persona`/`tone`/`languages`/`name`/`avatarUrl` var, `PATCH
+  /ai-agents/:id` served; **Profile düzenleme UI'ı yok** (yalnız okunuyor).
+- **Kapsam:** Profile formu (isim zorunlu, avatar, tone, language çoklu, answer length) → `PATCH`;
+  canlı preview; widget persona'ya bağlanır (11.3 zaten ✅).
+- **KK (birebir):** _"Widget'ta persona görünür; çok dilli; zorunlu isim"_.
+- **KK doğrulama:** unit (zorunlu isim boş → submit pasif); integration (PATCH persist); E2E persona
+  widget'ta görünür. **Bağımlılık:** T4-a (form deseni). **Tahmin:** 1 pencere.
+
+**06.5-a — Performance (Resolution rate/AI chats/CSAT/Transferred %) + düşük-baz uyarısı** `[XHIGH]` · PRD 06.5 *(Should)*
+- **Neden açık:** AI performans KPI ekranı yok (07.4 raporuyla akraba).
+- **Kapsam:** KPI kartları (mevcut reports sorgularından); düşük-baz uyarısı; AI-off arşiv ayrımı.
+- **KK (birebir):** _"KPI kartları; düşük-baz uyarısı; AI off iken arşiv ayrımı"_.
+- **KK doğrulama:** unit (düşük-baz → uyarı; sayılar reports=fatura ADR-09). **Bağımlılık:** 07.4-a ile paylaşımlı sorgu. **Tahmin:** 1 pencere.
+
+#### 4.4.3 · 08.8.4 Webhooks `[MAX]` (NFR-S7 · risk R1/R2 · v2-04 §6)
+
+En yüksek güvenlik yüzeyi. Negatif testler pozitiflerden **önce** yazılır ve kırmızı görülür.
+
+**08.8.4-a — Webhook kayıt API + kontrat (register/list/unregister)** `[XHIGH]` · PRD 08.8.4
+- **Neden açık:** `webhooks` tablosu + `webhooks--all:rw` scope var (`principal.ts:107`), route/servis yok.
+- **Kapsam:** kontrat → `POST/GET/DELETE /webhooks`; secret üretimi (bir kez gösterilir, hash saklanır).
+- **KK payı (birebir):** _"register/list/unregister"_ · _"secret log'a yazılmaz"_.
+- **KK doğrulama:** integration (CRUD + secret bir kez); **cross-tenant** (başka lisansın webhook'u görünmez).
+- **Testler:** integration + cross-tenant. **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+
+**08.8.4-b — HMAC-SHA256 imzalama + timestamp/nonce** `[MAX]` · PRD 08.8.4 · NFR-S7
+- **Kapsam:** çıkışta `X-Webhook-Signature` = HMAC-SHA256(secret, timestamp+body); ±5 dk pencere;
+  nonce; `timingSafeEqual` doğrulama helper'ı; secret log'a **yazılmaz**.
+- **KK payı (birebir):** _"HMAC-SHA256 imza (Nexa) + timestamp/nonce"_.
+- **KK doğrulama:** unit (imza determinizmi + timingSafeEqual); **negatif:** yanlış imza/eski timestamp reddi.
+- **Testler:** unit + negatif (önce). **Bağımlılık:** 08.8.4-a. **Tahmin:** 1 pencere.
+
+**08.8.4-c — SSRF koruması (private/loopback/link-local reddi; redirect kapalı; http(s))** `[MAX]` · PRD 08.8.4 · NFR-S7
+- **Kapsam:** hedef URL doğrulama — private/loopback/link-local IP reddi, DNS rebinding koruması,
+  redirect kapalı, yalnız http(s).
+- **KK payı (birebir):** _"SSRF koruması"_.
+- **KK doğrulama:** **negatif (önce):** `127.0.0.1`/`10.x`/`169.254.169.254`/`file://`/redirect → reddedilir;
+  pozitif: public https → geçer.
+- **Testler:** negatif (önce) + pozitif. **Bağımlılık:** 08.8.4-a. **Tahmin:** 1 pencere.
+- **Not:** 06.3.2-a (KB crawl) aynı SSRF guard'ı paylaşabilir — ortak `lib/ssrf.ts`.
+
+**08.8.4-d — Teslimat + retry (3×) + her teslimat/retry loglanır** `[XHIGH]` · PRD 08.8.4 · NFR-M5/U4
+- **Kapsam:** olay → kuyruk → teslim; 3× exponential retry; her deneme loglanır; başarısızlık işaretlenir.
+- **KK payı (birebir):** _"retry (3×)"_ · (NFR-M5) _"her webhook teslimi/retry loglanır"_.
+- **KK doğrulama:** integration (2 hata → 3. başarı; kalıcı hata → log + işaret). **Bağımlılık:** 08.8.4-a/b/c.
+- **Tahmin:** 1 pencere.
+
+#### 4.4.4 · MOD-08.5 Omnichannel adaptörleri (MOCK) `[XHIGH]`
+
+Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal başına.
+
+**08.5-adapter-a — Ortak kanal adaptör arayüzü + `channels` tablo tüketicisi** `[XHIGH]` · PRD 08.5.4–.6
+- **Neden açık:** `channels` tablosu 0 tüketicili (§8); MVP kanalları `Website`+email kullanıyor.
+- **Kapsam:** `ChannelAdapter` arayüzü (inbound→chat, outbound→gönder); `channels` tablosuna kayıt;
+  mock provider iskeleti.
+- **KK payı (birebir, ortak):** _"mesaj → inbox chat"_ / _"mesaj → chat"_.
+- **KK doğrulama:** integration (mock inbound → chat oluşur; cross-tenant izole). **Tahmin:** 1 pencere.
+
+**08.5.4-a Messenger (Facebook OAuth MOCK)** · **08.5.5-a Twilio SMS (MOCK)** · **08.5.6-a WhatsApp (MOCK)** — her biri `[XHIGH]`, ayrı alt-görev · PRD 08.5.4/.5/.6
+- **Kapsam (her biri):** mock OAuth/kimlik + inbound webhook → chat + outbound gönder.
+- **KK (birebir):** 08.5.4 _"OAuth; mesaj → inbox chat"_ · 08.5.5 _"Twilio kimlik/numara; SMS
+  gönder-al"_ · 08.5.6 _"WhatsApp bağlama; mesaj → chat"_.
+- **KK doğrulama (her biri):** integration (inbound→chat, outbound kaydı) + cross-tenant.
+- **Bağımlılık:** 08.5-adapter-a. **Kapsam dışı:** gerçek sağlayıcı imzası/numara (§9 mock). **Tahmin:** her biri 1 pencere.
+
+#### 4.4.5 · MOD-12 Copilot (agent-assist) — *Should (v1)*
+
+**12.2-a — Copilot ayrı bilgi tabanı (RAG, ajana-özel)** `[MAX]` ↑ · PRD 12.2
+- **↑ gerekçe:** ayrı tenant-scoped KB + "müşteriye açık değil" sınırı (yetki/izolasyon yüzeyi).
+- **Neden açık:** api/contract'ta copilot ~0 ref. **Kapsam:** `/copilot/knowledge` CRUD; AI Agent
+  KB'sinden **ayrı**; yalnız ajan yüzeyi. **KK (birebir):** _"Ajana-özel bilgi kaynakları; müşteriye
+  açık değil"_. **KK doğrulama:** integration (müşteri token'ı erişemez → 404; cross-tenant izole).
+- **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+
+**12.1-a — Copilot butonu + sağ panel sekmesi** `[XHIGH]` · PRD 12.1 — **KK (birebir):** _"Panel
+  açılır; bağlamda yardım; Assisted metriğini besler"_ · doğrulama: unit (panel açılır) + Assisted
+  sayacı 07.3.2 ile hizalı. **Bağımlılık:** T1-a (sağ panel switcher). **Tahmin:** 1 pencere.
+
+**12.3-a — Özet (→internal note) + reply yardımı (enhance/rephrase)** `[XHIGH]` · PRD 12.3 · 02.5
+  — **KK (birebir):** _"Özet internal note; reply taslak composer'a; ton/dilbilgisi geliştirme"_ ·
+  doğrulama: integration (özet internal note olur, arşivde görünür) + unit (reply taslak composer'a).
+  **Bağımlılık:** 12.1-a, 12.2-a (`packages/ai-mock`). **Tahmin:** 1 pencere. *(02.5 bu alt-görevle kapanır.)*
+
+#### 4.4.6 · MOD-02 Inbox v1 kalemleri
+
+- **02.1.2-a — AI Agents grubu (AI agent/Solved)** `[XHIGH]` · *Must v1* — KK: _"AI konuşmalarını
+  insan kuyruğundan ayırır; Solved → AI resolution sayacı"_ · doğrulama: integration (AI chat ayrı
+  grup; Solved=ADR-09 sayacı). **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+- **02.3.2-a — Reply Suggestions çipleri (Space ile)** `[XHIGH]` · *Should* — KK: _"Çip →
+  composer'a düzenlenebilir metin"_ · doğrulama: unit (çip→composer). **Bağımlılık:** 12.x (ai-mock). **Tahmin:** 1 pencere.
+- **02.7-a — Tickets grid (sıralanabilir, deep-link)** `[XHIGH]` · *Should* — KK: _"Satır → ticket
+  konuşması; URL param sıralama"_ · doğrulama: unit + E2E deep-link. **Bağımlılık:** T6-a (virtualization). **Tahmin:** 1 pencere.
+- **02.9-a — Live typing preview (sneak-peek)** `[XHIGH]` · *Should* — KK: _"RTM sender_typing/
+  send_typing_indicator; sneak-peek"_ · doğrulama: integration (RTM typing push) + widget/agent görünüm.
+  **Bağımlılık:** RTM (✅ Dilim 5). **Tahmin:** 1 pencere. *(11.8 ile akraba — birlikte kapanabilir.)*
+- **02.1.4-a — Views grubu (kanal görünümleri + custom saved views)** `[XHIGH]` · *Should* — KK:
+  _"Kanal bağlı değilse channel-promo; custom saved views eklenebilir"_ · doğrulama: unit (kanal yok→promo).
+  **Bağımlılık:** 08.5 adaptörleri. **Tahmin:** 1 pencere.
+
+#### 4.4.7 · MOD-03 Customers/Campaigns v1
+
+- **03.1.3-a — Ziyaretçi tablosu + satır aksiyonları (Start chat/Supervise/Assign)** `[XHIGH]` ·
+  *Should* — KK: _"Proaktif temas; 'Chatting with' insan+AI ajanı gösterir"_ · doğrulama:
+  integration (traffic akışı) + unit satır aksiyonları. **Bağımlılık:** 03.1.1 (✅ tm 19). **Tahmin:** 1 pencere.
+- **03.3.1-a — Campaigns alt sekmeler (All/Ongoing/Scheduled/Inactive)** `[XHIGH]` · *Should* —
+  `campaigns` tablosu 0 tüketicili (§8) — KK: _"Durum bazlı filtre"_ · doğrulama: unit (durum filtre).
+  **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+- **03.3.2-a — New campaign builder (koşul+mesaj+zamanlama → otomatik gönderim)** `[MAX]` ↑ ·
+  *Should* — **↑ gerekçe:** tetikleyici motoru + eşleşen ziyaretçiye otomatik gönderim (eşzamanlılık/
+  yanlış-tetik riski). KK: _"Tetikleyici+mesaj zorunlu; kayıt sonrası eşleşen ziyaretçiye otomatik
+  gönderim"_ · doğrulama: integration (koşul eşleşince gönderim; eşleşmeyince gönderilmez) + cross-tenant.
+  **Bağımlılık:** 03.3.1-a, T4-a. **Tahmin:** 1–2 pencere.
+- **03.3.3-a — Kampanya kartı (Edit/View report; active toggle)** `[XHIGH]` · *Should* — KK:
+  _"Düzenleme + performans (Displayed/Chats/Conversion)"_ · doğrulama: unit. **Bağımlılık:** 03.3.2-a. **Tahmin:** 1 pencere.
+
+#### 4.4.8 · MOD-07 Reports v1
+
+- **07.4-a — AI Agent raporu (resolution/deflection)** `[XHIGH]` · *Should* — KK: _"Billing
+  sayacıyla ilişkili"_ · doğrulama: integration (rapor=fatura ADR-09). **Bağımlılık:** yok (sorgu ADR-09 ✅). *(06.5-a ile paylaşımlı.)* **Tahmin:** 1 pencere.
+- **07.8-a — Reviews/Ratings raporu (CSAT donut + günlük bar)** `[XHIGH]` · *Should* — `ratings`
+  yalnız yazma (§8) — KK: _"CSAT donut; günlük bar; e-ticaret satış izleme"_ · doğrulama: integration
+  (rating okuma; oy yoksa null). **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+- **07.7-a — Rapor grupları + Export (CSV)** `[XHIGH]` · *Should (v1–v2)* — KK: _"İzin bazlı
+  görünürlük; export; benchmark karşılaştırma"_ · doğrulama: integration (CSV export; izin gating).
+  **Bağımlılık:** yok. **Tahmin:** 1 pencere. **Kapsam dışı:** PDF/benchmark (v2).
+
+#### 4.4.9 · MOD-08 Settings/Inbox araçları v1
+
+- **08.6.2-a — Ticket rules (atama/etiket/öncelik)** `[XHIGH]` · *Should* — KK: _"Koşul+eylem
+  zorunlu"_ · doğrulama: integration (kural → otomatik atama). **Bağımlılık:** T4-a. **Tahmin:** 1 pencere.
+- **08.7.3-a — Chat timeout (boşta/ölü sohbet otomatik kapanma)** `[XHIGH]` · *Should* — KK:
+  _"Pozitif süre; ölü sohbet otomatik kapanma"_ · doğrulama: integration (timeout → kapanır) + negatif (0/negatif reddi). **Tahmin:** 1 pencere.
+- **08.7.4-a — Chat transcripts (otomatik e-posta)** `[XHIGH]` · *Should* — KK: _"Bitişte müşteri/
+  ekibe transcript e-postası"_ · doğrulama: integration (`.data/mail`). **Bağımlılık:** T7-a (mailer deseni). **Tahmin:** 1 pencere.
+- **08.7.5-a — Ticket email templates (markalı, değişkenli)** `[XHIGH]` · *Should* — KK:
+  _"Geçersiz değişken/format engeli"_ · doğrulama: unit (geçersiz değişken → hata). **Bağımlılık:** T4-a. **Tahmin:** 1 pencere.
+- **08.7.6-a — Custom fields (ticket/contact)** `[XHIGH]` · *Should* — KK: _"Tip/zorunluluk;
+  Details+CRM'de görünür"_ · doğrulama: integration (alan yaz→Details/CRM'de oku). **Bağımlılık:** T4-a. **Tahmin:** 1 pencere.
+- **08.7.7-a — Forms builder (pre/post-chat) + widget'ta gösterim** `[MAX]` ↑ · *Should* — **↑
+  gerekçe:** widget → contact/ticket yazma yolu (müşteri girdisi sınırı). KK: _"En az bir alan; tip
+  validasyon; widget'ta gösterim → contact/ticket'a yazma"_ · doğrulama: integration (form→ticket) +
+  negatif (geçersiz alan). **Bağımlılık:** T4-a, 11.2 (✅). **Tahmin:** 1–2 pencere.
+- **08.8.1-a — Apps (marketplace) girişi** `[XHIGH]` · *Should* — KK: _"Üçüncü parti dizin (detay
+  MOD-09)"_ · doğrulama: unit (giriş → 09.1). **Bağımlılık:** 09.1-a. **Tahmin:** 1 pencere.
+
+#### 4.4.10 · MOD-09 Apps Marketplace v1
+
+- **09.1-a — Entegrasyon kartları gridi + OAuth akışı (MOCK)** `[XHIGH]` · *Should* — KK: _"Kart →
+  izin/OAuth akışı; bağlanınca veri sohbet içinde"_ · doğrulama: integration (mock OAuth → kurulu
+  görünür). **Bağımlılık:** T6-a. **Tahmin:** 1 pencere.
+- **09.2-a — Tam entegrasyon listesi (15–20 kart)** `[XHIGH]` · *Should* — KK: _"Her biri OAuth/API
+  key; kanal-tipli olanlar Channels'ta da yönetilir"_ · doğrulama: unit (liste + kanal-tipli çapraz).
+  **Bağımlılık:** 09.1-a. **Tahmin:** 1 pencere.
+
+#### 4.4.11 · MOD-10 Billing v1
+
+- **10.1.4-a — AI resolutions meter + stepper + %80 uyarı (UI)** `[XHIGH]` · *Must v1* — metering ✅
+  (ADR-13), UI ⬜ — KK: _"Sayaç 'N/limit (% used)'; aşım paketi; %80 proaktif uyarı (Nexa)"_ ·
+  doğrulama: unit (%80'de uyarı; sayaç metering'den). **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+- **10.1.5-a — API calls aşım paketi + sayaç** `[XHIGH]` · *Should* — KK: _"Aşım faturaya; sayaç"_ ·
+  doğrulama: integration (aşım → usage_records). **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+- **10.3-a — Invoices + payment details yönetimi** `[XHIGH]` · *Should* — KK: _"Fatura listesi/
+  indirme; ödeme yöntemi güncelleme"_ · doğrulama: integration (fatura listesi mock). **Kapsam dışı:**
+  gerçek kart (§9, PRD §11.1/1). **Tahmin:** 1 pencere.
+
+#### 4.4.12 · MOD-11 Widget v1
+
+- **11.7-a — Widget customization (Appearance/Position/Mobile) + canlı önizleme** `[XHIGH]` ·
+  *Should* — KK: _"Tema/renk/konum; mobil tam ekran; çok dilli; WCAG"_ · doğrulama: unit (tema uygular)
+  + bundle P3 bütçesi korunur. **Bağımlılık:** i18n ✅ (tm 26). **Tahmin:** 1 pencere.
+- **11.8-a — Typing indicator (sneak-peek)** `[XHIGH]` · *Could* — KK: _"RTM sneak-peek; ajan müşteri
+  yazarken görür"_ · 02.9-a ile birlikte. **Tahmin:** 02.9-a'ya dahil.
+
+#### 4.4.13 · MOD-04 Team v1
+
+- **04.2-a — AI Agents (team tarafı) performance + Copilot knowledge girişi** `[XHIGH]` · *Must v1* —
+  KK: _"Per-agent performance; Copilot knowledge yönetimi"_ · doğrulama: unit + 12.2-a bağı.
+  **Bağımlılık:** 06.5-a, 12.2-a. **Tahmin:** 1 pencere.
+- **04.6-a — Chatbots / Suspended agents sekmeleri** `[XHIGH]` · *Should* — KK: _"Bot hesabı
+  ücretsiz; suspend/unsuspend"_ · doğrulama: integration (suspend → oturum/atama durur; bot faturasız).
+  **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+
+#### 4.4.14 · MOD-13 Home / HelpDesk v1
+
+- **13.1-a — Home dashboard (checklist + gerçek-zaman kartları + haftalık performans)** `[XHIGH]` ·
+  *Should* — KK: _"Aktivasyon checklist; canlı gerçek-zaman kartları; haftalık performans"_ ·
+  doğrulama: unit (kartlar) + integration (canlı sayaç). **Bağımlılık:** 03.1.1 (✅). **Tahmin:** 1–2 pencere.
+- **13.6-a — Omnichannel Ticketing / HelpDesk katmanı (merge/priority/followers)** `[MAX]` ↑ ·
+  *Should* — **↑ gerekçe:** ticket yaşam döngüsü + merge/unmerge veri bütünlüğü + audit. KK:
+  _"Chat↔ticket köprüsü; ticket yaşam döngüsü; birleşik (ayrı ürün değil)"_ · doğrulama: integration
+  (merge/unmerge invariant + audit). **Bağımlılık:** ticketing (✅ Dilim 11). **Tahmin:** 2+ pencere (böl).
+- **13.7 Mobil uygulamalar** — 🔒 web-öncelikli (PRD §11.1/8 ile hizalı). v1 kapanışını **bloklamaz**;
+  gerekçe: web parite önce.
+
 ## 5. FAZ 2 — v2 (PRD §5.3)
 
 **PRD amacı:** _"Skill builder + Copilot BI + gelişmiş operasyon."_
@@ -389,6 +852,37 @@ pozitiflerden önce kuruldu (MASTER-PROMPT §Zorluk Etiketleri).
 | —      | Work scheduler / staffing prediction              | v2 (§5.3)        |                                                     |
 | —      | Multibrand                                        | v2 (§5.3)        |                                                     |
 
+### 5.1 v2 orta-derinlik kırılımı (derinlik politikası: faz başlarken bölünür)
+
+> **Neden orta derinlik (uzunluk değil, bayatlama):** v2 başlarken kod tabanı değişmiş olacak;
+> bugün yazılan ince kırılım yanlış güven verir (§1.2). İş kalemi + etiket + tahmini alt-görev
+> sayısı + bağımlılık verilir; atomik KK kırılımı faz başında (§F.0 mini denetimle) yapılır.
+> **İstisna (tam derinlik serbest):** saf güvenlik kuralları — 08.9.5 CC-masking, 08.9.3 spam
+> filtre — kod tabanı değişse de değişmez; istenirse şimdi atomik bölünebilir.
+
+| PRD  | İş kalemi                          | Etiket   | ~Alt-görev | Bağımlılık                    |
+| ---- | ---------------------------------- | -------- | :--------: | ----------------------------- |
+| 07.5 | Metrics breakdown (kanal/saat)     | `[XHIGH]`|   2–3      | reports ✅ (gün/ajan zaten)   |
+| 07.6 | Chat topics (AI kümeleme)          | `[XHIGH]`|   2        | ai-mock; yeterli-veri empty   |
+| 08.5.7| Instagram (DM, MOCK)              | `[XHIGH]`|   2        | 08.5-adapter-a (v1)           |
+| 08.6.3| Skills-based routing + takeover   | `[MAX]`  |   3–4      | routing ✅; supervision yeni  |
+| 08.8.3| MCP server (search/list/report)   | `[MAX]` ↑|   3        | OAuth scope ✅; tenant izole   |
+| 08.9.2| Banned customers                  | `[XHIGH]`|   1–2      | `Customer.banned` ✅ (ban ✅)  |
+| 08.9.3| Spam filtre                       | `[MAX]` ↑|   2        | güvenlik kuralı — tam derinlik serbest |
+| 08.9.5| CC masking (Luhn, yazma anında)   | `[MAX]` ↑|   2        | NFR-C5/S9 — yazma anında maskeleme; tam derinlik serbest |
+| 09.3 | API istek paketleri               | `[XHIGH]`|   1–2      | billing ✅                    |
+| 09.4 | Zapier/Make + Build-your-app      | `[XHIGH]`|   2–3      | 08.8.4 (v1) webhooks          |
+| 13.2 | Engage/Traffic (gelişmiş filtre)  | `[XHIGH]`|   2–3      | `visits` ✅ · 03.1.x          |
+| 13.3 | Goals (huni)                      | `[XHIGH]`|   2–3      | `goals` tablo ✅ · reports     |
+| 13.4 | Görsel Workflow builder           | ⛔        |     0      | **ADR-14 — UI yapılmaz**       |
+| 13.5 | Sales tracker                     | `[XHIGH]`|   2        | 07.8-a · 13.3                 |
+| —    | Public KB (SEO self-servis)       | `[XHIGH]`|   2–3      | knowledge ✅                  |
+| —    | Work scheduler / staffing         | `[XHIGH]`|   2–3      | reports · presence            |
+| —    | Multibrand                        | `[MAX]` ↑|   3–4      | tenant/RLS (izolasyon sınırı) |
+
+**v2 `↑` yukarı yuvarlananlar:** 08.8.3 (MCP — tool yüzeyi + tenant izolasyon), 08.9.3/08.9.5
+(güvenlik kuralı), Multibrand (tenant izolasyon genişlemesi). ~toplam **35–45 alt-görev** (kaba).
+
 ---
 
 ## 6. FAZ 3 — Enterprise (PRD §5.4)
@@ -407,6 +901,26 @@ pozitiflerden önce kuruldu (MASTER-PROMPT §Zorluk Etiketleri).
 | —      | Gerçek zamanlı canlı çeviri · sesli sentiment    | ⛔ MVP–v2 kapsam dışı (PRD §11.1/4)                       |
 | —      | Veri ambarı export (Snowflake/BigQuery)          | ⛔ P3 (PRD §11.1/5)                                       |
 
+### 6.1 Enterprise orta-derinlik kırılımı
+
+> Orta derinlik (bayatlama gerekçesi §5.1 ile aynı). Uyumluluk kalemleri kod değil **süreç/denetim**
+> ağırlıklı (takvim uzun — dış denetim 6–12 ay, PRD §10.2).
+
+| PRD    | İş kalemi                                | Etiket   | ~Alt-görev | Not                                        |
+| ------ | ---------------------------------------- | -------- | :--------: | ------------------------------------------ |
+| 08.5.8 | Telegram (TR pazarı önceliği)            | `[XHIGH]`|   2        | 08.5-adapter-a                             |
+| 08.9.6 | IP allowlist / oturum güvenliği          | `[MAX]` ↑|   2        | güvenlik sınırı                            |
+| —      | SAML 2.0 SSO + SCIM provisioning         | `[MAX]` ↑|   4–5      | NFR-S11; kimlik sınırı                     |
+| —      | HIPAA BAA + bölgesel barındırma          | `[MAX]` ↑|   3–4      | ADR-12 tek bölge (`eu`) yeniden açılır     |
+| —      | SOC2 Type II · ISO 27001 · audit+SIEM    | `[MAX]` ↑|   süreç    | NFR-C6/C7/S12; audit yazıcı ✅ temeli var  |
+| —      | White-label widget · SLA · sandbox       | `[XHIGH]`|   3–4      | 11.5 · widget ✅                           |
+| —      | Sesli/telefon (voice/IVR)                | ⛔        |     0      | PRD §11.1/3 kapsam dışı                     |
+| —      | Gerçek zamanlı çeviri · sesli sentiment  | ⛔        |     0      | PRD §11.1/4 kapsam dışı                     |
+| —      | Veri ambarı export                       | ⛔        |     0      | P3 (§11.1/5)                                |
+
+**Enterprise:** çoğu `[MAX]` (güvenlik/uyumluluk/kimlik sınırları). Kod ~alt-görev **20–25** +
+sertifikasyon **süreç** işi (takvim-belirleyici).
+
 ---
 
 ## 7. Çapraz Kesit ve NFR Kapıları (PRD §6 FR-EK + §7)
@@ -417,9 +931,9 @@ Bunlar bir dilim değil, **her dilimin kabul koşulu**. Yeni ekran/endpoint ekle
 
 | PRD    | Desen                                                                                                     | Öncelik      |                      Durum                       |
 | ------ | --------------------------------------------------------------------------------------------------------- | ------------ | :----------------------------------------------: |
-| EK-A.1 | Form & girdi mantığı — tek validasyon kütüphanesi, alan-altı hata, geçersizken submit pasif               | Must (MVP)   | ◐ Dilim 12–14'te ilk kez ciddi form yükü gelecek |
-| EK-A.2 | Ortak girdi davranışları — debounce arama, dropdown, stepper, optimistic toggle, yarım-form kapatma onayı | Must (MVP)   |                        ◐                         |
-| EK-B.1 | Sayfalama & yükleme — virtualized grid, infinite scroll, skeleton, **anlamlı empty state**                | Must (MVP)   |              ◐ keyset pagination ✅              |
+| EK-A.1 | Form & girdi mantığı — tek validasyon kütüphanesi, alan-altı hata, geçersizken submit pasif               | Must (MVP)   | ◐ **denetim:** backend zod (18 dosya) ✅ ama **frontend form validasyonu elle**, ortak kütüphane/alan-altı hata deseni ⬜ (§3.13/T4) |
+| EK-A.2 | Ortak girdi davranışları — debounce arama, dropdown, stepper, optimistic toggle, yarım-form kapatma onayı | Must (MVP)   |         ◐ debounce/stepper/optimistic dağınık var, yarım-form kapatma onayı ⬜ (§3.13/T5)         |
+| EK-B.1 | Sayfalama & yükleme — virtualized grid, infinite scroll, skeleton, **anlamlı empty state**                | Must (MVP)   |     ◐ keyset pagination ✅ · **virtualization (10k satır) ⬜**, empty state tutarsız (§3.13/T6)     |
 | EK-C.1 | Realtime katman — WebSocket push (polling değil) + reconnect telafi                                       | Must (MVP)   |                    ✅ Dilim 5                    |
 | EK-C.2 | Banner/dropdown/panel/modal — tek tasarım sistemi                                                         | Should (MVP) |                        ◐                         |
 
@@ -431,10 +945,10 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | -------- | --------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | P1       | RTM fan-out gecikmesi                               |                                                                                                                                                                              ✅ ölçüldü (13 ms)                                                                                                                                                                              |
 | P3       | Widget bundle bütçesi                               |                                                                                                                                                                         ✅ 5.3 KB gzip (bütçe 50 KB)                                                                                                                                                                         |
-| P4/P6    | Virtualized liste + büyük liste sorguları           |                                                                                                                                                                                      ◐                                                                                                                                                                                       |
+| P4/P6    | Virtualized liste + büyük liste sorguları           |                                                                                                                                                                                      ◐ — **P6** (büyük liste sorgusu) çoğunlukla ✅ (keyset + `events` RANGE partition). **P4** (10k satır 60fps) ⬜ → kırılım **§3.13/T6-a** (virtualization). Faz-0 Must ◐.                                                                                                                                                                                       |
 | S1–S5    | Auth · token · scope · **tenant izolasyonu** · IDOR |                                                                                                                                                                         ✅ Dilim 2 (negatif testli)                                                                                                                                                                          |
 | S6       | Widget izolasyonu (`innerHTML` yasak)               |                                                                                                                                                                          ✅ Dilim 6 (eslint kuralı)                                                                                                                                                                          |
-| **S7**   | **Webhook HMAC + SSRF**                             |                                                                                                                                                       ⬜ v1 (08.8.4 ile birlikte — sonradan eklemek kırıcı değişiklik)                                                                                                                                                       |
+| **S7**   | **Webhook HMAC + SSRF**                             |                                                                                                                                                       ⬜ v1 — kırılım **§4.4.3** (08.8.4-b HMAC + 08.8.4-c SSRF, ikisi de `[MAX]`; negatif testler önce). Ortak `lib/ssrf.ts` 06.3.2-a (KB crawl) ile paylaşılır.                                                                                                                                                       |
 | S8       | Rate limiting                                       |                                                                                                                                                                                  ✅ ADR-07                                                                                                                                                                                   |
 | **S10**  | **File sharing güvenliği**                          |                                                                                                                                                                 ✅ Dilim 13 (fail-closed virüs tarama, tm 4)                                                                                                                                                                 |
 | S12      | Audit log (append-only)                             |                                                                                                                           ✅ yazıcı bağlandı (tm 23): 12 güvenlik olayı INSERT ediliyor · UPDATE/DELETE DB'de reddi · cross-tenant izole · PII yok                                                                                                                           |
@@ -448,18 +962,22 @@ Faz-0 kapanışında doğrulanacak olanlar:
 
 ## 8. Veri Modeli (PRD §8.4) — tablo durumu
 
-41 tablo migrate edildi, tümünde RLS (Dilim 3). Şemada **var ama henüz kullanılmayan** tablolar
-— her biri bir gereksinimi bekliyor:
+41 model migrate edildi (`schema.prisma`), tümünde RLS (Dilim 3). **Tüketici taraması (denetim
+2026-07-25):** `apps/api/src` içinde her modelin `prisma.<model>.*` çağrıları sayıldı. Sonuç:
 
-| Tablo       | Bekleyen gereksinim | Faz                                        |
-| ----------- | ------------------- | ------------------------------------------ |
-| `webhooks`  | 08.8.4              | v1                                         |
-| `campaigns` | 03.3.x              | v1                                         |
-| `channels`  | 08.5.4–.6           | v1                                         |
-| `ratings`   | 07.8                | v1 (yazma yolu ✅ `/customer/chat/rating`) |
-| `goals`     | 13.3                | v2                                         |
-| `visits`    | 13.2 / 03.1.3       | v2                                         |
-| `workflows` | 13.4                | ⛔ ADR-14 — tablo kalır, UI yapılmaz       |
+| Tablo       | Tüketici (2026-07-25 sayım)          | Bekleyen gereksinim | Faz / karar                                |
+| ----------- | ------------------------------------ | ------------------- | ------------------------------------------ |
+| `webhooks`  | **0** (yalnız `webhooks--*` scope)   | 08.8.4              | v1 → §4.4                                  |
+| `campaigns` | **0**                                | 03.3.x              | v1 → §4.4                                  |
+| `channels`  | **0** (MVP kanalları `Website`+email-inbound kullanır, bu tabloyu değil) | 08.5.4–.6 | v1 → §4.4         |
+| `ratings`   | **1** (yalnız yazma `/customer/chat/rating`) | 07.8       | v1 (okuma/rapor ⬜) → §4.4                  |
+| `goals`     | **0**                                | 13.3                | v2                                         |
+| `visits`    | **3** (✅ yazma widget + okuma `getCustomer`) | 13.2 / 02.4 inbox | **kullanılıyor**; kalan tüketici: 02.4 (§3.13/T3) + 13.2 (v2). §8'in eski "kullanılmayan" iddiası düzeltildi (§D21) |
+| `workflows` | **0**                                | 13.4                | ⛔ ADR-14 — tablo kalır, UI yapılmaz       |
+
+**Karar:** `visits` dışındaki 0-tüketicili tablolar bir eksik özelliği bekliyor (silme kararı
+yok — hepsinin bir PRD kimliği + fazı var; §G'de iş kalemi olarak izlenir). `workflows` bilinçli
+artık (ADR-14). Silinen tablo yok.
 
 ---
 
@@ -478,6 +996,130 @@ Faz-0 kapanışında doğrulanacak olanlar:
 
 **Ek olarak bu projeye özgü:** dış servisler MOCK (LLM `packages/ai-mock`, SMTP dosyaya,
 Stripe lokal, object storage `.data/uploads`) · prodüksiyon deploy/DNS yok · tek bölge (`eu`, ADR-12).
+
+---
+
+## G. İş Kırılımı Dizini (Task Master aktarımı için)
+
+> Bu tablo Task Master'a aktarımın kaynağıdır; her satır bir alt-görevdir ve §3.13/§4.4'teki tam
+> alanları taşır. **Kullanıcı aktaracak** — bu turda aktarım yapılmadı. Her satır kendi kendine
+> yeter; bağımlılıklar ID ile verilmiştir. Detay (KK birebir + doğrulama + testler) §3.13 (Faz-0)
+> ve §4.4 (v1) altındadır.
+
+### Önerilen dilim gruplaması
+
+3–8 kalemlik dilimler; her dilimin bir teması, bir **§F.00 kapanış kapısı** ve bir **§F.0 mini
+denetim** noktası olur. **Faz-0 önce kapanır** (§1.3 — v1 dilimine geçmeden).
+
+| Dilim | Tema | Kalemler | Kapı |
+| --- | --- | --- | --- |
+| **F0-1** | Inbox ziyaret bilgisi + sağ panel | T1-a · T3-a · T3-b | 02.4/01.3 ◐→✅ |
+| **F0-2** | Form katmanı (validasyon + davranış) | T4-a · T4-b · T5-a | EK-A.1/A.2 ◐→✅ |
+| **F0-3** | Liste katmanı + e-posta bildirim | T6-a · T6-b · T7-a | EK-B.1/13.8 ◐→✅ · **Faz-0 kapanır** |
+| **V1-Playbook** | Skill şablon + liste | 05.1-a · 05.2-a · 05.3-a · 05.4-a | — |
+| **V1-AI** | AI Agent tamamlama | 06.1-a · 06.2.4-a · 06.3.1-a · 06.3.2-a · 06.4-a · 06.5-a | 06.x Must |
+| **V1-Webhook** | Webhooks `[MAX]` | 08.8.4-a/-b/-c/-d | S7 kapısı |
+| **V1-Channels** | Omnichannel MOCK | 08.5-adapter-a · 08.5.4-a · 08.5.5-a · 08.5.6-a | 08.5.x Must |
+| **V1-Copilot** | Copilot | 12.2-a · 12.1-a · 12.3-a (+02.5) | — |
+| **V1-Inbox** | Inbox v1 | 02.1.2-a · 02.1.4-a · 02.3.2-a · 02.7-a · 02.9-a(+11.8) | 02.1.2 Must |
+| **V1-Customers** | Customers/Campaigns | 03.1.3-a · 03.3.1-a · 03.3.2-a · 03.3.3-a | — |
+| **V1-Reports** | Reports v1 | 07.4-a · 07.7-a · 07.8-a | — |
+| **V1-Settings** | Inbox araçları | 08.6.2-a · 08.7.3-a · 08.7.4-a · 08.7.5-a · 08.7.6-a · 08.7.7-a · 08.8.1-a | — |
+| **V1-Apps** | Marketplace | 09.1-a · 09.2-a | — |
+| **V1-Billing** | Billing v1 | 10.1.4-a · 10.1.5-a · 10.3-a | 10.1.4 Must |
+| **V1-Widget** | Widget custom | 11.7-a | — |
+| **V1-Team** | Team v1 | 04.2-a · 04.6-a | 04.2 Must |
+| **V1-Home** | Home/HelpDesk | 13.1-a · 13.6-a `[MAX]` | — |
+
+### Toplamlar
+
+- **Atomik alt-görev:** **~59** (Faz-0 **9** + v1 **~50**). v2/v3 orta derinlik (item-level):
+  v2 **~35–45**, v3 **~20–25** + sertifikasyon süreç işi (§5.1/§6.1).
+- **Etiket dağılımı (Faz-0+v1):** `[MAX]` **8** (06.2.4-a, 06.3.2-a, 08.8.4-b, 08.8.4-c, 12.2-a,
+  03.3.2-a, 08.7.7-a, 13.6-a — hepsi ↑ güvenlik/eşzamanlılık/izolasyon) · `[XHIGH]` **~51**.
+- **Faz dağılımı:** Faz-0 = 9 (hepsi Must ◐ kapatıcı) · v1 = ~50 (Must ~18, Should ~32).
+- **Tahmini pencere:** Faz-0 **~10** · v1 **~55–65** (kaba; `[MAX]` ve 2-pencere kalemler dahil).
+
+### Kritik yol (en uzun bağımlılık zinciri)
+
+`T4-a → T4-b` (Faz-0 form katmanı) **→ Faz-0 kapanır →** `07.4-a → 06.5-a → 06.1-a → 04.2-a`
+(AI performans zinciri; 04.2-a hem 06.5-a hem 12.2-a bekler). Paralel uzun hat: `12.2-a → 12.1-a
+→ 12.3-a → 02.3.2-a`. En uzun tekil kalem: **13.6-a** (HelpDesk, 2+ pencere, bölünecek).
+
+### Faz kapanışını bloklayanlar (`Must` — §F.00 girdisi)
+
+- **Faz-0:** T1-a · T3-a · T3-b · T4-a · T4-b · T5-a · T6-a · T6-b · T7-a (9 — hepsi). `Should`
+  (EK-C.2, 03.1.1-kalan) bloklamaz, v1'e taşınır.
+- **v1:** 05.1-a · 05.3-a · 06.1-a · 06.2.4-a · 06.3.1-a · 06.3.2-a · 06.4-a · 08.5-adapter-a ·
+  08.5.4-a · 08.5.5-a · 08.5.6-a · 08.8.4-a/-b/-c/-d · 02.1.2-a · 10.1.4-a · 04.2-a (~18).
+
+### Düz tablo (aktarım kaynağı)
+
+`ID | Başlık | PRD | Etiket | Bağımlılıklar | Faz | Dilim | ~Pencere`
+
+| ID | Başlık | PRD | Etiket | Bağımlılık | Faz | Dilim | Pen |
+| --- | --- | --- | --- | --- | --- | --- | :-: |
+| T1-a | Sağ panel aç/kapa + Expand + persist | 01.3 | XHIGH | — | 0 | F0-1 | 1 |
+| T3-a | getChat ziyaret bilgisi (kontrat+backend) | 02.4 | XHIGH | — | 0 | F0-1 | 1 |
+| T3-b | Details ziyaret bölümleri (UI) | 02.4 | XHIGH | T3-a | 0 | F0-1 | 1 |
+| T4-a | Form validasyon primitifi + 2 pilot | EK-A.1 | XHIGH | — | 0 | F0-2 | 1 |
+| T4-b | Kalan Must formları taşı | EK-A.1 | XHIGH | T4-a | 0 | F0-2 | 1–2 |
+| T5-a | Yarım-form kapatma onayı + davranış | EK-A.2 | XHIGH | T4-a | 0 | F0-2 | 1 |
+| T6-a | Virtualized liste primitifi | EK-B.1/P4 | XHIGH | — | 0 | F0-3 | 1 |
+| T6-b | Skeleton + anlamlı empty state | EK-B.1 | XHIGH | T6-a | 0 | F0-3 | 1 |
+| T7-a | E-posta bildirim kanalı | 13.8 | XHIGH | — | 0 | F0-3 | 1 |
+| 05.1-a | Browse templates galerisi | 05.1 | XHIGH | — | 1 | V1-Playbook | 1 |
+| 05.2-a | Recommended skills kartları | 05.2 | XHIGH | 05.1-a | 1 | V1-Playbook | 1 |
+| 05.3-a | Skill listesi sekmeleri | 05.3 | XHIGH | — | 1 | V1-Playbook | 1 |
+| 05.4-a | Liste kontrolleri (search/sort/filter) | 05.4 | XHIGH | 05.3-a·T4-a | 1 | V1-Playbook | 1 |
+| 06.1-a | AI Agent sekmeleri + readiness | 06.1 | XHIGH | 06.4-a·06.5-a | 1 | V1-AI | 1 |
+| 06.2.4-a | Steps drag reorder + klavye | 06.2.4 | MAX↑ | — | 1 | V1-AI | 1 |
+| 06.3.1-a | Knowledge alt sekmeler | 06.3.1 | XHIGH | — | 1 | V1-AI | 1 |
+| 06.3.2-a | KB website crawl + SSRF | 06.3.2 | MAX↑ | — | 1 | V1-AI | 1–2 |
+| 06.4-a | Profile (persona) UI + preview | 06.4 | XHIGH | T4-a | 1 | V1-AI | 1 |
+| 06.5-a | AI Performance KPI | 06.5 | XHIGH | 07.4-a | 1 | V1-AI | 1 |
+| 08.8.4-a | Webhook register API + kontrat | 08.8.4 | XHIGH | — | 1 | V1-Webhook | 1 |
+| 08.8.4-b | HMAC-SHA256 imzalama | 08.8.4 | MAX | 08.8.4-a | 1 | V1-Webhook | 1 |
+| 08.8.4-c | SSRF koruması | 08.8.4 | MAX | 08.8.4-a | 1 | V1-Webhook | 1 |
+| 08.8.4-d | Teslimat + retry 3× + log | 08.8.4 | XHIGH | 08.8.4-a/-b/-c | 1 | V1-Webhook | 1 |
+| 08.5-adapter-a | Kanal adaptör arayüzü + channels | 08.5.4–.6 | XHIGH | — | 1 | V1-Channels | 1 |
+| 08.5.4-a | Messenger (OAuth MOCK) | 08.5.4 | XHIGH | 08.5-adapter-a | 1 | V1-Channels | 1 |
+| 08.5.5-a | Twilio SMS (MOCK) | 08.5.5 | XHIGH | 08.5-adapter-a | 1 | V1-Channels | 1 |
+| 08.5.6-a | WhatsApp (MOCK) | 08.5.6 | XHIGH | 08.5-adapter-a | 1 | V1-Channels | 1 |
+| 12.2-a | Copilot ayrı KB (RAG) | 12.2 | MAX↑ | — | 1 | V1-Copilot | 1 |
+| 12.1-a | Copilot butonu + panel sekmesi | 12.1 | XHIGH | T1-a | 1 | V1-Copilot | 1 |
+| 12.3-a | Özet→note + reply yardımı | 12.3/02.5 | XHIGH | 12.1-a·12.2-a | 1 | V1-Copilot | 1 |
+| 02.1.2-a | AI Agents grubu (AI/Solved) | 02.1.2 | XHIGH | — | 1 | V1-Inbox | 1 |
+| 02.1.4-a | Views grubu + custom views | 02.1.4 | XHIGH | 08.5.x | 1 | V1-Inbox | 1 |
+| 02.3.2-a | Reply Suggestions çipleri | 02.3.2 | XHIGH | 12.x | 1 | V1-Inbox | 1 |
+| 02.7-a | Tickets grid (deep-link) | 02.7 | XHIGH | T6-a | 1 | V1-Inbox | 1 |
+| 02.9-a | Live typing preview (+11.8) | 02.9 | XHIGH | — | 1 | V1-Inbox | 1 |
+| 03.1.3-a | Ziyaretçi tablosu + aksiyonlar | 03.1.3 | XHIGH | — | 1 | V1-Customers | 1 |
+| 03.3.1-a | Campaigns alt sekmeler | 03.3.1 | XHIGH | — | 1 | V1-Customers | 1 |
+| 03.3.2-a | New campaign builder | 03.3.2 | MAX↑ | 03.3.1-a·T4-a | 1 | V1-Customers | 1–2 |
+| 03.3.3-a | Kampanya kartı | 03.3.3 | XHIGH | 03.3.2-a | 1 | V1-Customers | 1 |
+| 07.4-a | AI Agent raporu | 07.4 | XHIGH | — | 1 | V1-Reports | 1 |
+| 07.7-a | Rapor grupları + Export CSV | 07.7 | XHIGH | — | 1 | V1-Reports | 1 |
+| 07.8-a | Reviews/Ratings raporu | 07.8 | XHIGH | — | 1 | V1-Reports | 1 |
+| 08.6.2-a | Ticket rules | 08.6.2 | XHIGH | T4-a | 1 | V1-Settings | 1 |
+| 08.7.3-a | Chat timeout | 08.7.3 | XHIGH | — | 1 | V1-Settings | 1 |
+| 08.7.4-a | Chat transcripts (e-posta) | 08.7.4 | XHIGH | T7-a | 1 | V1-Settings | 1 |
+| 08.7.5-a | Ticket email templates | 08.7.5 | XHIGH | T4-a | 1 | V1-Settings | 1 |
+| 08.7.6-a | Custom fields | 08.7.6 | XHIGH | T4-a | 1 | V1-Settings | 1 |
+| 08.7.7-a | Forms builder (pre/post-chat) | 08.7.7 | MAX↑ | T4-a | 1 | V1-Settings | 1–2 |
+| 08.8.1-a | Apps (marketplace) girişi | 08.8.1 | XHIGH | 09.1-a | 1 | V1-Settings | 1 |
+| 09.1-a | Entegrasyon grid + OAuth MOCK | 09.1 | XHIGH | T6-a | 1 | V1-Apps | 1 |
+| 09.2-a | Entegrasyon listesi (15–20) | 09.2 | XHIGH | 09.1-a | 1 | V1-Apps | 1 |
+| 10.1.4-a | AI resolutions meter + %80 UI | 10.1.4 | XHIGH | — | 1 | V1-Billing | 1 |
+| 10.1.5-a | API calls aşım + sayaç | 10.1.5 | XHIGH | — | 1 | V1-Billing | 1 |
+| 10.3-a | Invoices + payment yönetimi | 10.3 | XHIGH | — | 1 | V1-Billing | 1 |
+| 11.7-a | Widget customization | 11.7 | XHIGH | — | 1 | V1-Widget | 1 |
+| 04.2-a | Team AI Agents performance | 04.2 | XHIGH | 06.5-a·12.2-a | 1 | V1-Team | 1 |
+| 04.6-a | Chatbots/Suspended sekmeleri | 04.6 | XHIGH | — | 1 | V1-Team | 1 |
+| 13.1-a | Home dashboard | 13.1 | XHIGH | 03.1.1 | 1 | V1-Home | 1–2 |
+| 13.6-a | Omnichannel HelpDesk katmanı | 13.6 | MAX↑ | ticketing✅ | 1 | V1-Home | 2+ |
+
+> v2/v3 satırları §5.1 / §6.1'de item-level verildi (orta derinlik — faz başında atomik bölünür).
 
 ---
 
@@ -986,6 +1628,11 @@ görüneceği en son yerdir.
   (varsayılan açık) — açıkken flagged mesaj ticket üretmez; (4) `INBOUND_EMAIL_SECRET` **opsiyonel**
   kenar-kimliği (set ise `X-Inbound-Secret` zorunlu, dev/test'te açık — sağlayıcı imzası dağıtım
   işi, SMTP mock A4 gibi); (5) iptal edilmiş lisans → 404.
+- **A10 (kapsam denetimi 2026-07-25):** FR-MOD-02.4'ün PRD **KK** sütunu yalnız davranışı söylüyor
+  (_"Bölümler katlanır; tag/assignee anında kaydeder; süre/ziyaret canlı"_); gösterilecek **alan
+  listesi** (Visited pages; Visit info = Device/Referring/Duration/IP) **Açıklama** sütunundan
+  türetildi. T3-a/T3-b bu türetilmiş kriteri taşır (`KK-türetilmiş`). Duration = ziyaret süresi
+  (client hesaplar); IP zaten `visits`'te; Device/Referrer `Visit` şemasında var.
 
 ## D. Deviations (sapmalar)
 
@@ -1069,6 +1716,32 @@ görüneceği en son yerdir.
   kapsamı** sayılır — Faz-0 kapanış sayacına dâhil **değildir** (🔒). Kapanış turu bunları "erken
   teslim" işaretler, Faz-0 borcu olarak değil. Yeni iş **alınmaz**; mevcut yüzey v1'de tamamlanır.
 
+- **D19 (kapsam denetimi, 2026-07-25 · koda karşı bulundu):** PLAN 02.4.1–.6'yı `✅` gösteriyordu
+  ama `apps/web/src/features/inbox/DetailsPanel.tsx` yalnız Chat info (Status/Chat ID/Assignee/
+  Queue/Started) + Tags + Teams render ediyor. PRD FR-MOD-02.4'ün **açıkça** istediği **Visited
+  pages** ve **Visit info (Device/Referring/Duration/IP)** panelde **yok**. Veri var (`Visit`
+  şeması: `referrer`/`pages`/`avg_duration`; `visits` tablosu widget'tan doluyor) ama yalnız
+  `getCustomer` yüzeyinde; inbox `getChat` bunu taşımıyor. → Durum `✅`→`◐`. Kapanışı bloklayan
+  Must ◐. Kırılım §3.13/T3. (Denetim yöntemi: dosyayı okuma + grep "visited|visit_info|referrer"
+  → inbox'ta 0 eşleşme.)
+- **D20 (kapsam denetimi, 2026-07-25 · koda karşı bulundu):** PLAN 13.8'i `✅` gösteriyordu ama
+  `apps/web/src/features/notifications/notifications.ts` `NotificationPrefs = { enabled, sound,
+  desktop }` — yani ses + masaüstü/tarayıcı (Notification API) + sekme başlığı. PRD 13.8 (+ 08.2)
+  **e-posta** bildirim kanalını da Must (MVP) sayıyor; e-posta yolu ⬜ (SMTP mock A4 var, bağlı
+  değil). Mobil push zaten 🔒 v1 (§11.1/8). → Durum `✅`→`◐`. Kırılım §3.13/T7. Düşük-orta ağırlık
+  (çekirdek in-app bildirim çalışıyor).
+- **D21 (kapsam denetimi, 2026-07-25 · §8 düzeltmesi):** §8 `visits` tablosunu "var ama
+  kullanılmayan" listeliyordu; tüketici taraması `visits`'in **3** tüketicisi olduğunu gösterdi
+  (widget yazması + `getCustomer` okuması, F4'te bağlandı). `visits` **kullanılıyor**; kalan
+  tüketici 02.4 inbox (T3) ve 13.2 Engage (v2). §8 tablosu düzeltildi. (Gerçekten 0-tüketicili:
+  `webhooks`, `campaigns`, `channels`, `goals`, `workflows`.)
+- **D22 (kapsam denetimi 2026-07-25 · bilinçli daraltma):** FR-MOD-01.3'ün KK'sı _"Details/Copilot
+  geçişi persist"_ diyor ama **Copilot (MOD-12) PRD'de v1'dir**; Faz-0'da Copilot yüzeyi yok. Bu
+  yüzden 01.3'ün **MVP payı** = sağ panel aç/kapa + **Expand** + tercih persist (T1-a); **Copilot
+  sekmesi/geçişi v1'e ayrıldı** (12.1–12.3 ile birlikte). §F.00 "kapsamı daralt + kalanı gerekçeli
+  yeni kaleme ayır" kuralının uygulanışı — 01.3 Faz-0 `Must` sayacından Copilot payıyla değil,
+  T1-a ✅ ile düşer.
+
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 
 - v2-03 §8.5 başlığı "~63 scope" diyor, tablosu **58** sayıyor. Tablo esas alındı.
@@ -1104,6 +1777,56 @@ görüneceği en son yerdir.
 PRD'nin MVP'sinin %30'u yazılmamıştı ve bir v1 özelliği MVP'nin önüne geçmişti (§1.3).
 Yeşil test, kapsamın tam olduğunu göstermez — yalnız **yazılan** kodun çalıştığını gösterir.
 Kapanış turu, kapsamı kodun kendisine sordurur.
+
+### F.00 — Faz Kapanış Kapısı (sayaca bağlı) — GENEL KURAL
+
+Faz kapanışı düzyazı bir karar değildir; **sayaca** bağlıdır. §3.11'in Faz-0'a özel kapısı
+buraya genelleştirildi ve **her fazın** tablosunun sonuna kendi kapısı eklenir.
+
+> **Bir faz ancak o fazın `Must` kapsamında `0 ◐` ve `0 ⬜` kaldığında kapanır.**
+
+Uygulama detayları (yoruma bırakılmaz):
+
+- **Sayım kaynağı:** o fazın §3/§4/§5/§6 tablolarındaki işaretler; sayaç **sayılarak** üretilir
+  (§1.2). Baştaki özet tablosuna her faz için `Must` sütunu eklendi — kapı o sütundan okunur.
+- **`Should` kalemleri** kapanışı **bloklamaz** ama kapanış raporunda **ismen** listelenir ve ya
+  sonraki faza taşınır ya §D'ye "kabul edilen borç" yazılır. Sessizce düşemez.
+- **`🔒` ve `⛔`** sayaca girmez ama her birinin gerekçesi satırında yazılı olmalı; gerekçesiz
+  `🔒` bir kapanış engelidir (gizlenmiş `⬜` olabilir).
+- **`◐` kaldıramaz:** "çekirdek var, KK eksik" tam olarak yarım kalmış işin kendisidir (§F.1/1).
+  Kapatmanın iki yolu: tamamla, ya da kapsamı daralt + kalanı gerekçeli yeni kaleme ayır (§D sapma).
+- **Kapanış anında** §F.1'in **10 maddesinin tamamı** çalışır (mini sürüm yetmez). Rapor
+  `HANDOFF.md`'ye: sayaç (✅/◐/⬜/🔒/⛔), taşınan `Should` kalemleri, yeni sapmalar.
+
+**Faz-0 kapısı (bugün):** **45 ✅ · 6 ◐ · 0 ⬜** (Must) → **AÇIK**. Bloklayan 6 ◐: 01.3, 02.4,
+13.8(e-posta), EK-A.1, EK-A.2, EK-B.1. Kırılım §3.13. Faz-0 ancak bu 6'sı ✅ olunca kapanır.
+
+### F.0 — Periyodik Denetim (mini kapanış turu)
+
+§F yalnız **en sonda** çalışan bir protokoldü; §1.3'teki 18 eksik gereksinim denetim sona
+bırakıldığı için **aylarca** görünmedi. Bu yüzden §F.1'in çekirdeği **periyodik** hâle getirilir.
+
+**Tetikleyiciler (üçünden herhangi biri):**
+
+- Her **dilim sınırı** (bir dilim kapanırken — zorunlu).
+- Her **5 task'ta bir** (dilim uzunsa ortada bir kez daha).
+- Bir task **blocked** kapandığında (bloke, çoğu zaman plan hatasının ilk belirtisidir).
+
+**Her tetiklemede çalışacak çekirdek (§F.1'in hafif sürümü):**
+
+| # | §F.1 maddesi     | Mini sürümde ne yapılır                                   | Kanıt                 |
+| - | ---------------- | -------------------------------------------------------- | --------------------- |
+| 1 | Kapsam süpürmesi | Yalnız **o dilimin** `FR-MOD` satırları koda karşı denetlenir | Route/dosya listesi |
+| 2 | Faz sızıntısı    | Dilimde başka fazdan iş var mı                           | Evet/Hayır + §D kaydı |
+| 3 | NFR kapıları     | Dilimin dokunduğu NFR'ler **ölçülür** (tahmin değil)     | Ölçüm çıktısı         |
+| 5 | Kontrat bütünlüğü| `contract-parity` testi çalıştırılır                     | exit code             |
+| 6 | Sessiz borç      | Dilimde eklenen `TODO`/`skip`/`@ts-expect-error` taranır | grep çıktısı          |
+| 8 | Doküman tazeliği | Test sayısı + sayaç + "sıradaki adım" gerçekle uyuşuyor mu | Güncellenmiş satırlar |
+
+**Tam sürüm (10 maddenin hepsi)** yalnız **faz kapanışında** ve projenin en sonunda çalışır.
+
+**Kural:** Mini denetim kırmızıysa dilim kapanmaz. Bulgular ya düzeltilir ya yeni alt-görev olarak
+plana girer ya gerekçesiyle §D'ye yazılır — dördüncü seçenek yoktur.
 
 ### F.1 Orkestratörün yapacağı denetim
 

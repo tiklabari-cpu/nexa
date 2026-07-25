@@ -17,6 +17,8 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
 import { describeStep, type AiAgent, type KnowledgeSource, type Skill } from './types.js';
 import { SkillEditor } from './SkillEditor.js';
+import { TemplateGallery } from './TemplateGallery.js';
+import { templateToDraft, type SkillTemplate } from './templates.js';
 
 export function PlaybookPage(): ReactElement {
   const api = useApiClient();
@@ -25,6 +27,7 @@ export function PlaybookPage(): ReactElement {
   const canEdit = scopes.includes('agents-bot--all:rw');
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
 
   const skills = useQuery({
     queryKey: ['playbook', 'skills'],
@@ -64,6 +67,34 @@ export function PlaybookPage(): ReactElement {
     },
   });
 
+  // Minting a skill from a template posts the whole draft — name, instruction
+  // and the already-valid compiled steps — so the editor it selects into opens
+  // filled in, not blank. The steps are the same shapes `POST /skills` validates
+  // (proven in templates.test.ts), so a chosen template never 400s here.
+  const createFromTemplate = useMutation({
+    mutationFn: (template: SkillTemplate) => {
+      const aiAgentId = agents.data?.items.find((a) => a.kind === 'ai_agent')?.id;
+      return api.post<Skill>('/skills', {
+        ...templateToDraft(template),
+        ...(aiAgentId ? { ai_agent_id: aiAgentId } : {}),
+      });
+    },
+    onSuccess: (skill) => {
+      // Seed the list cache synchronously *before* selecting: an invalidate
+      // alone leaves a render where the refetch is still in flight, and the
+      // guard effect below would see the new id missing from `items` and clear
+      // the selection out from under us — the editor would never open. With the
+      // skill already in the cache, the selection sticks; the invalidate then
+      // reconciles ordering with the server.
+      queryClient.setQueryData<{ items: Skill[] }>(['playbook', 'skills'], (old) =>
+        old ? { items: [skill, ...old.items.filter((s) => s.id !== skill.id)] } : { items: [skill] },
+      );
+      setSelectedId(skill.id);
+      setGalleryOpen(false);
+      invalidate();
+    },
+  });
+
   const items = skills.data?.items ?? [];
   const selected = items.find((s) => s.id === selectedId) ?? null;
 
@@ -79,14 +110,23 @@ export function PlaybookPage(): ReactElement {
       description="Skills the AI runs on incoming messages, and what it answers from."
       actions={
         canEdit && (
-          <button
-            type="button"
-            disabled={createSkill.isPending}
-            onClick={() => createSkill.mutate(`New skill ${items.length + 1}`)}
-            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-          >
-            {createSkill.isPending ? 'Creating…' : 'New skill'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setGalleryOpen(true)}
+              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-2"
+            >
+              Browse templates
+            </button>
+            <button
+              type="button"
+              disabled={createSkill.isPending}
+              onClick={() => createSkill.mutate(`New skill ${items.length + 1}`)}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+            >
+              {createSkill.isPending ? 'Creating…' : 'New skill'}
+            </button>
+          </div>
         )
       }
     >
@@ -223,6 +263,23 @@ export function PlaybookPage(): ReactElement {
           </div>
 
           <KnowledgePanel canEdit={canEdit} aiAgentId={aiAgent?.id ?? null} />
+
+          <TemplateGallery
+            open={galleryOpen}
+            onClose={() => setGalleryOpen(false)}
+            onUse={(template) => createFromTemplate.mutate(template)}
+            pendingId={
+              createFromTemplate.isPending ? (createFromTemplate.variables?.id ?? null) : null
+            }
+          />
+
+          {createFromTemplate.isError && (
+            <p role="alert" className="text-2xs text-danger">
+              {createFromTemplate.error instanceof ApiClientError
+                ? createFromTemplate.error.message
+                : 'Could not start a skill from that template.'}
+            </p>
+          )}
         </>
       )}
     </Page>

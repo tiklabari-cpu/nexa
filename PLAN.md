@@ -11,7 +11,7 @@
 
 | Faz                | PRD  | Durum                                                    |
 | ------------------ | ---- | -------------------------------------------------------- |
-| **Faz 0 — MVP**    | §5.1 | ⏳ **49 ✅ · 5 ◐ · 6 🔒** (60 satır)                    |
+| **Faz 0 — MVP**    | §5.1 | ⏳ **49 ✅ · 5 ◐ · 6 🔒** (60 satır)                     |
 | Faz 1 — v1         | §5.2 | ⏳ kısmen başlandı (Playbook/AI öne çekildi — bkz. §1.3) |
 | Faz 2 — v2         | §5.3 | ⬜ başlanmadı                                            |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                                            |
@@ -92,30 +92,30 @@ v1 işi alınmıyor**. Dilim tarihçesi §A'da korundu.
 PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 (● = fazın ana teslimi · ○ = o fazda başlar/derinleşir)
 
-| Modül                         | MVP | v1  | v2  | Ent. |               **Durum**                |
-| ----------------------------- | :-: | :-: | :-: | :--: | :------------------------------------: |
-| MOD-00 Auth + trial           |  ●  |     |     |      |          ✅ (00.4 dahil)           |
-| MOD-01 Global shell + ⌘K      |  ●  |  ○  |  ○  |      |        ◐ ⌘K+rozet ✅, Copilot v1         |
-| MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      |  ✅ chat+ticket + Copy chat link (§F)   |
-| MOD-03.1 Real-time traffic    |  ○  |  ○  |  ○  |      | ✅ sekmeler (tm 19) |
-| MOD-03.2 Contacts CRM         |  ●  |  ○  |     |      |                   ✅                   |
-| MOD-03.3 Campaigns            |     |  ●  |  ○  |      |                   ⬜                   |
-| Engage/Goals + Sales tracker  |     |     |  ●  |      |                   ⬜                   |
-| MOD-04 Team/roller/teams      |  ●  |  ○  |  ○  |  ○   |      ✅ (invite Dilim 12)      |
-| MOD-05 Playbook               |     |  ●  |  ○  |      |        ◐ **(v1 — öne çekildi)**        |
-| MOD-06 AI Agent + RAG         |     |  ●  |  ○  |  ○   |        ◐ **(v1 — öne çekildi)**        |
-| Görsel Workflow builder       |     |     |  ●  |      |           ⛔ ADR-14 (UI yok)           |
-| MOD-07 Reports                |  ○  |  ○  |  ●  |  ○   |             ◐ Overview ✅              |
-| MOD-08.5 Channels             |  ○  |  ●  |     |  ○   |    ✅ MVP kanalları (grid/website/email/chat-page)    |
-| MOD-08.6 Routing              |  ○  |  ○  |  ●  |  ○   |            ✅ (MVP kapsamı)            |
-| MOD-08.7 Inbox araçları       |  ○  |  ●  |     |      |    ✅ canned + tag kütüphanesi (tm 17)    |
-| MOD-08.8 API access / MCP     |  ○  |  ○  |  ●  |      |      ✅ (PAT/API), webhook v1'de       |
-| MOD-08.9 Security             |  ○  |  ○  |  ●  |  ●   | ✅ trusted domains + file sharing |
-| MOD-09 Apps marketplace       |     |  ○  |  ○  |  ○   |                   ⬜                   |
-| MOD-10 Billing                |  ●  |  ○  |     |  ○   |     ✅ checkout (MOCK) + trial     |
-| MOD-11 Customer widget        |  ●  |  ○  |     |  ○   |  ✅ launcher/greeting/persona/attach  |
-| MOD-12 Copilot                |  ○  |  ●  |  ○  |      |                   ⬜                   |
-| Mobil app                     |     |  ●  |  ○  |      |                   ⬜                   |
+| Modül                         | MVP | v1  | v2  | Ent. |                    **Durum**                    |
+| ----------------------------- | :-: | :-: | :-: | :--: | :---------------------------------------------: |
+| MOD-00 Auth + trial           |  ●  |     |     |      |                 ✅ (00.4 dahil)                 |
+| MOD-01 Global shell + ⌘K      |  ●  |  ○  |  ○  |      |            ◐ ⌘K+rozet ✅, Copilot v1            |
+| MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      |      ✅ chat+ticket + Copy chat link (§F)       |
+| MOD-03.1 Real-time traffic    |  ○  |  ○  |  ○  |      |               ✅ sekmeler (tm 19)               |
+| MOD-03.2 Contacts CRM         |  ●  |  ○  |     |      |                       ✅                        |
+| MOD-03.3 Campaigns            |     |  ●  |  ○  |      |                       ⬜                        |
+| Engage/Goals + Sales tracker  |     |     |  ●  |      |                       ⬜                        |
+| MOD-04 Team/roller/teams      |  ●  |  ○  |  ○  |  ○   |              ✅ (invite Dilim 12)               |
+| MOD-05 Playbook               |     |  ●  |  ○  |      |            ◐ **(v1 — öne çekildi)**             |
+| MOD-06 AI Agent + RAG         |     |  ●  |  ○  |  ○   |            ◐ **(v1 — öne çekildi)**             |
+| Görsel Workflow builder       |     |     |  ●  |      |               ⛔ ADR-14 (UI yok)                |
+| MOD-07 Reports                |  ○  |  ○  |  ●  |  ○   |                  ◐ Overview ✅                  |
+| MOD-08.5 Channels             |  ○  |  ●  |     |  ○   | ✅ MVP kanalları (grid/website/email/chat-page) |
+| MOD-08.6 Routing              |  ○  |  ○  |  ●  |  ○   |                ✅ (MVP kapsamı)                 |
+| MOD-08.7 Inbox araçları       |  ○  |  ●  |     |      |       ✅ canned + tag kütüphanesi (tm 17)       |
+| MOD-08.8 API access / MCP     |  ○  |  ○  |  ●  |      |           ✅ (PAT/API), webhook v1'de           |
+| MOD-08.9 Security             |  ○  |  ○  |  ●  |  ●   |        ✅ trusted domains + file sharing        |
+| MOD-09 Apps marketplace       |     |  ○  |  ○  |  ○   |                       ⬜                        |
+| MOD-10 Billing                |  ●  |  ○  |     |  ○   |           ✅ checkout (MOCK) + trial            |
+| MOD-11 Customer widget        |  ●  |  ○  |     |  ○   |       ✅ launcher/greeting/persona/attach       |
+| MOD-12 Copilot                |  ○  |  ●  |  ○  |      |                       ⬜                        |
+| Mobil app                     |     |  ●  |  ○  |      |                       ⬜                        |
 
 ---
 
@@ -128,49 +128,49 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 ### 3.0 FR-MOD-00 — Ön-Uygulama / Kimlik Doğrulama
 
-| PRD  | Gereksinim                                     | Öncelik      | Durum | Nerede                  |
-| ---- | ---------------------------------------------- | ------------ | :---: | ----------------------- |
-| 00.1 | Login (email+parola; SSO/2FA opsiyonel)        | Must (MVP)   |  ✅   | Dilim 2 · `/auth/login` |
-| 00.2 | **Signup + 14 gün kartsız trial başlatma**     | Must (MVP)   |  ✅   | Dilim 12                |
-| 00.3 | **Forgot password** (süreli token, nötr mesaj) | Must (MVP)   |  ✅   | Dilim 12                |
+| PRD  | Gereksinim                                     | Öncelik      | Durum | Nerede                                                                            |
+| ---- | ---------------------------------------------- | ------------ | :---: | --------------------------------------------------------------------------------- |
+| 00.1 | Login (email+parola; SSO/2FA opsiyonel)        | Must (MVP)   |  ✅   | Dilim 2 · `/auth/login`                                                           |
+| 00.2 | **Signup + 14 gün kartsız trial başlatma**     | Must (MVP)   |  ✅   | Dilim 12                                                                          |
+| 00.3 | **Forgot password** (süreli token, nötr mesaj) | Must (MVP)   |  ✅   | Dilim 12                                                                          |
 | 00.4 | **Onboarding sihirbazı** + tohum veri          | Should (MVP) |  ✅   | tm 22 · `/onboarding/*` + AppShell gate + `onboarding_seed_demo` SECURITY DEFINER |
 
 ### 3.1 FR-MOD-01 — Global Shell / Navigation
 
-| PRD                      | Gereksinim                                               | Öncelik          | Durum | Nerede                                      |
-| ------------------------ | -------------------------------------------------------- | ---------------- | :---: | ------------------------------------------- |
+| PRD                      | Gereksinim                                               | Öncelik          | Durum | Nerede                                                                                |
+| ------------------------ | -------------------------------------------------------- | ---------------- | :---: | ------------------------------------------------------------------------------------- |
 | 01.1.3                   | **Command Palette (⌘K)** — içerik arama + rota atlama    | Must (MVP temel) |  ✅   | Dilim 14 (tm 18) — müşteri/sohbet/ticket arama + modül atlama, scope-gated, deep-link |
-| 01.1.6                   | Trial rozeti "N days" + Subscribe CTA                    | Must (MVP)       |   ✅   | Dilim 14 (tm 15) — trial rozeti + Subscribe CTA |
-| 01.2                     | Sol ikon rayı                                            | Must (MVP)       |  ✅   | F2 · `AppShell.tsx`                         |
-| 01.3                     | Sağ panel anahtarı (Details ↔ Copilot ↔ Expand)          | Must (MVP)       |   ◐   | Dilim 7 (Details ✅, Copilot v1)            |
-| 01.1.1/.4/.5, 01.4, 01.5 | Hamburger, presence avatarları, Invite +N, banner, unpin | Should/Could     |  🔒   | v1+                                         |
+| 01.1.6                   | Trial rozeti "N days" + Subscribe CTA                    | Must (MVP)       |  ✅   | Dilim 14 (tm 15) — trial rozeti + Subscribe CTA                                       |
+| 01.2                     | Sol ikon rayı                                            | Must (MVP)       |  ✅   | F2 · `AppShell.tsx`                                                                   |
+| 01.3                     | Sağ panel anahtarı (Details ↔ Copilot ↔ Expand)          | Must (MVP)       |   ◐   | Dilim 7 (Details ✅, Copilot v1)                                                      |
+| 01.1.1/.4/.5, 01.4, 01.5 | Hamburger, presence avatarları, Invite +N, banner, unpin | Should/Could     |  🔒   | v1+                                                                                   |
 
 ### 3.2 FR-MOD-02 — Inbox / Chats
 
-| PRD                                              | Gereksinim                                                                                                   | Öncelik          | Durum | Nerede                                                                                            |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ---------------- | :---: | ------------------------------------------------------------------------------------------------- |
-| 02.1.1                                           | Chats grubu (All/My/Queued/Unassigned/Supervised/Archived)                                                   | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
-| 02.1.3                                           | **Tickets grubu** (All/Unassigned/My open)                                                                   | Must (MVP temel) |  ✅   | Dilim 11                                                                                          |
-| 02.2.2                                           | Sohbet liste öğesi (unread, typing)                                                                          | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
-| 02.3.1                                           | Transcript — canlı akış                                                                                      | Must (MVP)       |  ✅   | Dilim 4+5+7                                                                                       |
-| 02.3.3                                           | Composer (Enter/Shift+Enter)                                                                                 | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
-| 02.3.4                                           | Message type (Reply / Internal note)                                                                         | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
-| 02.3.5                                           | Composer araçları (canned `#`, tag, emoji, **attach**)                                                       | Must (MVP)       |   ✅   | F5 (`#` ✅) · attach → **Dilim 13**                                                               |
-| 02.3.6                                           | Send (optimistic, disabled/loading/error)                                                                    | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
-| 02.4.1–.6                                        | Details paneli (info/tags/visited pages/visit info)                                                          | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
-| 02.6                                             | **Create ticket** / Copy chat link / Reopen                                                                  | Must (MVP)       |   ✅   | Reopen ✅ (`/chats/{id}/resume`) · Create ticket ✅ (Dilim 11) · Copy chat link ✅ (§F kapanış — transcript başlığı, `?chat=` deep-link) |
-| 02.8                                             | Archive (salt-okuma transcript)                                                                              | Must (MVP)       |  ✅   | Dilim 7                                                                                           |
-| 02.1.2, 02.1.4, 02.2.1, 02.3.2, 02.5, 02.7, 02.9 | AI Agents grubu, kanal görünümleri, sıralama, Reply Suggestions, Copilot özeti, Tickets grid, typing preview | v1               |  🔒   | v1                                                                                                |
-| 02.2.3                                           | "Take tour" banner                                                                                           | Could            |  🔒   | —                                                                                                 |
+| PRD                                              | Gereksinim                                                                                                   | Öncelik          | Durum | Nerede                                                                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ---------------- | :---: | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 02.1.1                                           | Chats grubu (All/My/Queued/Unassigned/Supervised/Archived)                                                   | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
+| 02.1.3                                           | **Tickets grubu** (All/Unassigned/My open)                                                                   | Must (MVP temel) |  ✅   | Dilim 11                                                                                                                                 |
+| 02.2.2                                           | Sohbet liste öğesi (unread, typing)                                                                          | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
+| 02.3.1                                           | Transcript — canlı akış                                                                                      | Must (MVP)       |  ✅   | Dilim 4+5+7                                                                                                                              |
+| 02.3.3                                           | Composer (Enter/Shift+Enter)                                                                                 | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
+| 02.3.4                                           | Message type (Reply / Internal note)                                                                         | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
+| 02.3.5                                           | Composer araçları (canned `#`, tag, emoji, **attach**)                                                       | Must (MVP)       |  ✅   | F5 (`#` ✅) · attach → **Dilim 13**                                                                                                      |
+| 02.3.6                                           | Send (optimistic, disabled/loading/error)                                                                    | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
+| 02.4.1–.6                                        | Details paneli (info/tags/visited pages/visit info)                                                          | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
+| 02.6                                             | **Create ticket** / Copy chat link / Reopen                                                                  | Must (MVP)       |  ✅   | Reopen ✅ (`/chats/{id}/resume`) · Create ticket ✅ (Dilim 11) · Copy chat link ✅ (§F kapanış — transcript başlığı, `?chat=` deep-link) |
+| 02.8                                             | Archive (salt-okuma transcript)                                                                              | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
+| 02.1.2, 02.1.4, 02.2.1, 02.3.2, 02.5, 02.7, 02.9 | AI Agents grubu, kanal görünümleri, sıralama, Reply Suggestions, Copilot özeti, Tickets grid, typing preview | v1               |  🔒   | v1                                                                                                                                       |
+| 02.2.3                                           | "Take tour" banner                                                                                           | Could            |  🔒   | —                                                                                                                                        |
 
 ### 3.3 FR-MOD-03 — Customers (CRM)
 
-| PRD                            | Gereksinim                                                    | Öncelik            | Durum | Nerede                                       |
-| ------------------------------ | ------------------------------------------------------------- | ------------------ | :---: | -------------------------------------------- |
-| 03.1.1                         | Real-time sekmeleri (All/Chatting/Queued/Waiting)             | Should (MVP temel) |   ✅   | Dilim 14 (tm 19) — All/Chatting/Queued/Waiting + canlı sayaç    |
-| 03.2.1                         | Contacts header + arama + filter                              | Must (MVP)         |  ✅   | F4                                           |
-| 03.2.3                         | Contacts tablosu (Name/Email/Phone/Country/Chats/**Tickets**) | Must (MVP)         |  ✅   | F4 — `tickets_count` artık gerçek (Dilim 11) |
-| 03.1.2, 03.1.3, 03.2.2, 03.3.x | Empty state, ziyaretçi tablosu, alt sekmeler, Campaigns       | Should/v1          |  🔒   | v1                                           |
+| PRD                            | Gereksinim                                                    | Öncelik            | Durum | Nerede                                                       |
+| ------------------------------ | ------------------------------------------------------------- | ------------------ | :---: | ------------------------------------------------------------ |
+| 03.1.1                         | Real-time sekmeleri (All/Chatting/Queued/Waiting)             | Should (MVP temel) |  ✅   | Dilim 14 (tm 19) — All/Chatting/Queued/Waiting + canlı sayaç |
+| 03.2.1                         | Contacts header + arama + filter                              | Must (MVP)         |  ✅   | F4                                                           |
+| 03.2.3                         | Contacts tablosu (Name/Email/Phone/Country/Chats/**Tickets**) | Must (MVP)         |  ✅   | F4 — `tickets_count` artık gerçek (Dilim 11)                 |
+| 03.1.2, 03.1.3, 03.2.2, 03.3.x | Empty state, ziyaretçi tablosu, alt sekmeler, Campaigns       | Should/v1          |  🔒   | v1                                                           |
 
 ### 3.4 FR-MOD-04 — Team
 
@@ -186,74 +186,74 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 ### 3.5 FR-MOD-06 — AI Agent (yalnız MVP payı)
 
-| PRD  | Gereksinim                             | Öncelik            | Durum | Nerede            |
-| ---- | -------------------------------------- | ------------------ | :---: | ----------------- |
+| PRD  | Gereksinim                             | Öncelik            | Durum | Nerede                                                                                                   |
+| ---- | -------------------------------------- | ------------------ | :---: | -------------------------------------------------------------------------------------------------------- |
 | 06.6 | Chatbot (kural-tabanlı, deterministik) | Should (MVP temel) |  ✅   | F6 skill motoru — NOT: PRD'nin ayrı LLM'siz kural-botu değil; öne çekilen v1 AI Agent bu payı karşılıyor |
 
 ### 3.6 FR-MOD-07 — Reports (yalnız MVP payı)
 
-| PRD    | Gereksinim                                                             | Öncelik            | Durum | Nerede                                                              |
-| ------ | ---------------------------------------------------------------------- | ------------------ | :---: | ------------------------------------------------------------------- |
-| 07.1   | Reports kenar çubuğu (Overview/AI Agent/Breakdown)                     | Should (MVP temel) |   ◐   | Dilim 9 (Overview ✅)                                               |
-| 07.3.1 | Overview header — range tabs (7/30/90/365 + custom) + vs. önceki dönem | Should             |   ◐   | Dilim 9 (aralık ✅, karşılaştırma ⬜)                               |
+| PRD    | Gereksinim                                                             | Öncelik            | Durum | Nerede                                                                                                                    |
+| ------ | ---------------------------------------------------------------------- | ------------------ | :---: | ------------------------------------------------------------------------------------------------------------------------- |
+| 07.1   | Reports kenar çubuğu (Overview/AI Agent/Breakdown)                     | Should (MVP temel) |   ◐   | Dilim 9 (Overview ✅)                                                                                                     |
+| 07.3.1 | Overview header — range tabs (7/30/90/365 + custom) + vs. önceki dönem | Should             |   ◐   | Dilim 9 (aralık ✅, karşılaştırma ⬜)                                                                                     |
 | 07.3.2 | KPI kartları — Manual/Assisted/**Automated** + Total cases             | Must (MVP temel)   |  ✅   | Manual/Assisted/Automated 3'lü ayrım + Total cases (tm 20). automated ADR-09 KORUNDU; manual+assisted+automated = closed. |
-| 07.3.3 | Chats bölümü kartları (automated chats/hour, durations, response)      | Should             |   ◐   | Dilim 9                                                             |
-| 07.2   | Onboarding survey popover                                              | Could              |  🔒   | —                                                                   |
+| 07.3.3 | Chats bölümü kartları (automated chats/hour, durations, response)      | Should             |   ◐   | Dilim 9                                                                                                                   |
+| 07.2   | Onboarding survey popover                                              | Could              |  🔒   | —                                                                                                                         |
 
 ### 3.7 FR-MOD-08 — Settings (yalnız MVP payı)
 
-| PRD    | Gereksinim                                         | Öncelik    | Durum | Nerede                                           |
-| ------ | -------------------------------------------------- | ---------- | :---: | ------------------------------------------------ |
-| 08.5.1 | **All channels kart gridi**                        | Must (MVP) |  ✅   | **Dilim 13**                                     |
-| 08.5.2 | **Website widgets** (+Add website / Install code)  | Must (MVP) |  ✅   | **Dilim 13** — `Website` modeli var              |
-| 08.5.3 | **Email (forwarding → ticket)**                    | Must (MVP) |  ✅   | **Dilim 13** (kanal yüzeyiyle)                   |
-| 08.5.9 | **Chat page** (hosted link)                        | Must (MVP) |  ✅   | **Dilim 13**                                     |
-| 08.6.1 | Chat routing kural motoru + fallback               | Must (MVP) |  ✅   | Dilim 8 · ADR-08                                 |
-| 08.7.1 | **Tags kütüphanesi CRUD** (grup kapsamı)           | Must (MVP) |   ✅   | Chat başına etiket ✅ · kütüphane CRUD ✅ Dilim 14 (tm 17) |
-| 08.7.2 | Canned responses (`#` shortcut, grup kapsamı)      | Must (MVP) |  ✅   | F5                                               |
-| 08.8.2 | API access — APIs & SDKs + PAT                     | Must (MVP) |  ✅   | Dilim 2 · F5                                     |
-| 08.9.1 | Trusted domains (widget allowlist)                 | Must (MVP) |  ✅   | Dilim 2 · F5                                     |
-| 08.9.4 | **File sharing** (izinli tür/boyut + virüs tarama) | Must (MVP) |  ✅   | **Dilim 13** — NFR-S10                           |
+| PRD    | Gereksinim                                         | Öncelik    | Durum | Nerede                                                     |
+| ------ | -------------------------------------------------- | ---------- | :---: | ---------------------------------------------------------- |
+| 08.5.1 | **All channels kart gridi**                        | Must (MVP) |  ✅   | **Dilim 13**                                               |
+| 08.5.2 | **Website widgets** (+Add website / Install code)  | Must (MVP) |  ✅   | **Dilim 13** — `Website` modeli var                        |
+| 08.5.3 | **Email (forwarding → ticket)**                    | Must (MVP) |  ✅   | **Dilim 13** (kanal yüzeyiyle)                             |
+| 08.5.9 | **Chat page** (hosted link)                        | Must (MVP) |  ✅   | **Dilim 13**                                               |
+| 08.6.1 | Chat routing kural motoru + fallback               | Must (MVP) |  ✅   | Dilim 8 · ADR-08                                           |
+| 08.7.1 | **Tags kütüphanesi CRUD** (grup kapsamı)           | Must (MVP) |  ✅   | Chat başına etiket ✅ · kütüphane CRUD ✅ Dilim 14 (tm 17) |
+| 08.7.2 | Canned responses (`#` shortcut, grup kapsamı)      | Must (MVP) |  ✅   | F5                                                         |
+| 08.8.2 | API access — APIs & SDKs + PAT                     | Must (MVP) |  ✅   | Dilim 2 · F5                                               |
+| 08.9.1 | Trusted domains (widget allowlist)                 | Must (MVP) |  ✅   | Dilim 2 · F5                                               |
+| 08.9.4 | **File sharing** (izinli tür/boyut + virüs tarama) | Must (MVP) |  ✅   | **Dilim 13** — NFR-S10                                     |
 
 ### 3.8 FR-MOD-10 — Billing / Trial
 
-| PRD    | Gereksinim                                       | Öncelik    | Durum | Nerede                                                                              |
-| ------ | ------------------------------------------------ | ---------- | :---: | ----------------------------------------------------------------------------------- |
-| 10.1.1 | **Plan + Change plan**                           | Must (MVP) |  ✅   | **Dilim 14** (tm 13) — checkout API                                                                        |
+| PRD    | Gereksinim                                       | Öncelik    | Durum | Nerede                                                                                      |
+| ------ | ------------------------------------------------ | ---------- | :---: | ------------------------------------------------------------------------------------------- |
+| 10.1.1 | **Plan + Change plan**                           | Must (MVP) |  ✅   | **Dilim 14** (tm 13) — checkout API                                                         |
 | 10.1.2 | **Billing cycle** (Monthly/Annual + indirim)     | Must (MVP) |  ✅   | **Dilim 14** (tm 13)                                                                        |
 | 10.1.3 | **Users stepper** ($/user/mo × qty)              | Must (MVP) |  ✅   | **Dilim 14** (tm 13)                                                                        |
 | 10.1.6 | **Subscription summary + Enter payment details** | Must (MVP) |  ✅   | **Dilim 14** (tm 14) — ⚠️ PRD §11.1/1: gerçek kart girişi kapsam DIŞI; Stripe MOCK (ADR-13) |
-| 10.2   | 14 günlük trial mantığı (rozet + kısıtlama)      | Must (MVP) |  ✅   | Dilim 9 · ADR-10                                                                    |
+| 10.2   | 14 günlük trial mantığı (rozet + kısıtlama)      | Must (MVP) |  ✅   | Dilim 9 · ADR-10                                                                            |
 
 ### 3.9 FR-MOD-11 — Customer Widget
 
-| PRD  | Gereksinim                                   | Öncelik    | Durum | Nerede                                              |
-| ---- | -------------------------------------------- | ---------- | :---: | --------------------------------------------------- |
-| 11.1 | Launcher bubble + unread rozeti              | Must (MVP) |  ✅   | Dilim 6                                             |
-| 11.2 | **Greeting card + quick replies**            | Must (MVP) |  ✅   | **Dilim 13**                                        |
-| 11.3 | Agent identity (AI persona / insan adı)      | Must (MVP) |   ✅   | Dilim 6 (bot kimliği ✅) · persona ✅ Dilim 13      |
-| 11.4 | Composer (mesaj + **attach** + emoji + send) | Must (MVP) |  ✅   | attach ✅ Dilim 13                                   |
-| 11.6 | Embed snippet (async JS + `window.__lc`)     | Must (MVP) |  ✅   | Dilim 6                                             |
+| PRD  | Gereksinim                                   | Öncelik    | Durum | Nerede                                         |
+| ---- | -------------------------------------------- | ---------- | :---: | ---------------------------------------------- |
+| 11.1 | Launcher bubble + unread rozeti              | Must (MVP) |  ✅   | Dilim 6                                        |
+| 11.2 | **Greeting card + quick replies**            | Must (MVP) |  ✅   | **Dilim 13**                                   |
+| 11.3 | Agent identity (AI persona / insan adı)      | Must (MVP) |  ✅   | Dilim 6 (bot kimliği ✅) · persona ✅ Dilim 13 |
+| 11.4 | Composer (mesaj + **attach** + emoji + send) | Must (MVP) |  ✅   | attach ✅ Dilim 13                             |
+| 11.6 | Embed snippet (async JS + `window.__lc`)     | Must (MVP) |  ✅   | Dilim 6                                        |
 
 ### 3.10 FR-MOD-13 — (yalnız MVP payı)
 
-| PRD  | Gereksinim                                        | Öncelik    | Durum | Nerede       |
-| ---- | ------------------------------------------------- | ---------- | :---: | ------------ |
+| PRD  | Gereksinim                                        | Öncelik    | Durum | Nerede               |
+| ---- | ------------------------------------------------- | ---------- | :---: | -------------------- |
 | 13.8 | **Notifications** (ses/masaüstü/tarayıcı/e-posta) | Must (MVP) |  ✅   | **Dilim 14** (tm 16) |
 
 ### 3.11 Faz-0 dilim planı
 
-| #      | Dilim                                  | PRD kapsamı                                                            | Neden bu sıra                                                                                                                          |
-| ------ | -------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| ~~11~~ | **Ticketing çekirdeği** ✅             | 02.1.3 ✅ · 02.6 (create) ✅ · 03.2.3 ✅ · 07.3.2 ✅                   | Teslim edildi (merge `0ec1b56`). Kapsamdan çıkanlar: 08.5.3 → Dilim 13, 02.6'nın "Copy chat link"i → Dilim 14.                         |
-| ~~12~~ | **Hesap yaşam döngüsü** ✅             | 00.2 ✅ · 00.3 ✅ · 04.3.1 ✅ · 04.4 ✅                                | Teslim edildi. Onboarding sihirbazı (00.4, Should) Dilim 14'e taşındı — Must'lar önce. Tarayıcıda bulunan iki hata için bkz. §D13/D14. |
-| ~~13~~ | **Kanallar + dosya + greeting** ✅     | 08.5.1 ✅ · 08.5.2 ✅ · 08.5.3 ✅ · 08.5.9 ✅ · 08.9.4 ✅ · 11.2 ✅ · 11.3 ✅ · 02.3.5/11.4 attach ✅ | Teslim edildi (merge `d6de3a6`). 08.5.3 (kaynak Dilim 11'de kapsam dışıydı) burada teslim edildi. Yeni: `website_exists` hata tipi (§D15), chat-page allowlist muafiyeti (§C-A8), email inbound (§C-A9). |
-| ~~14~~ | **Checkout + bildirim + shell kalanı** ✅ | 10.1.1–.3 ✅ · 10.1.6 ✅ · 13.8 ✅ · 01.1.3 ✅ · 01.1.6 ✅ · 08.7.1 ✅ · 03.1.1 ✅ | Teslim edildi (merge `13b6f6b`). Checkout Stripe MOCK (ADR-13). Kalan borç (kapsamdan çıktı): 00.4 Onboarding sihirbazı (Should). 02.6 Copy chat link §F kapanışında teslim edildi. |
+| #      | Dilim                                     | PRD kapsamı                                                                                           | Neden bu sıra                                                                                                                                                                                            |
+| ------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~11~~ | **Ticketing çekirdeği** ✅                | 02.1.3 ✅ · 02.6 (create) ✅ · 03.2.3 ✅ · 07.3.2 ✅                                                  | Teslim edildi (merge `0ec1b56`). Kapsamdan çıkanlar: 08.5.3 → Dilim 13, 02.6'nın "Copy chat link"i → Dilim 14.                                                                                           |
+| ~~12~~ | **Hesap yaşam döngüsü** ✅                | 00.2 ✅ · 00.3 ✅ · 04.3.1 ✅ · 04.4 ✅                                                               | Teslim edildi. Onboarding sihirbazı (00.4, Should) Dilim 14'e taşındı — Must'lar önce. Tarayıcıda bulunan iki hata için bkz. §D13/D14.                                                                   |
+| ~~13~~ | **Kanallar + dosya + greeting** ✅        | 08.5.1 ✅ · 08.5.2 ✅ · 08.5.3 ✅ · 08.5.9 ✅ · 08.9.4 ✅ · 11.2 ✅ · 11.3 ✅ · 02.3.5/11.4 attach ✅ | Teslim edildi (merge `d6de3a6`). 08.5.3 (kaynak Dilim 11'de kapsam dışıydı) burada teslim edildi. Yeni: `website_exists` hata tipi (§D15), chat-page allowlist muafiyeti (§C-A8), email inbound (§C-A9). |
+| ~~14~~ | **Checkout + bildirim + shell kalanı** ✅ | 10.1.1–.3 ✅ · 10.1.6 ✅ · 13.8 ✅ · 01.1.3 ✅ · 01.1.6 ✅ · 08.7.1 ✅ · 03.1.1 ✅                    | Teslim edildi (merge `13b6f6b`). Checkout Stripe MOCK (ADR-13). Kalan borç (kapsamdan çıktı): 00.4 Onboarding sihirbazı (Should). 02.6 Copy chat link §F kapanışında teslim edildi.                      |
 
 **Faz-0 kapanış kapısı:** 52 gereksinimin tamamı ✅ veya gerekçeli ⛔ · §7 NFR kapısı geçildi ·
 `make dev` temiz kurulumdan demo akışını çalıştırıyor.
 
-> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** ✅ (07.3.2 Manual/Assisted — teslim edildi) → tm **21** (07.1/07.3.1/07.3.3 Reports Breakdown) · tm **22** ✅ (00.4 Onboarding sihirbazı — teslim edildi) · tm **23** ✅ (S12 audit yazıcısı) · tm **24** ✅ (C8 retention) · tm **25** (M5 OTel) · tm **26** (i18n). Bu bakiye kapanana dek Faz-0 **"kapandı" sayılmaz**; `run-loop.sh` sırayla işler (kalan öncelik: 25 · 26 → 21). Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
+> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** ✅ (07.3.2 Manual/Assisted — teslim edildi) → tm **21** (07.1/07.3.1/07.3.3 Reports Breakdown) · tm **22** ✅ (00.4 Onboarding sihirbazı — teslim edildi) · tm **23** ✅ (S12 audit yazıcısı) · tm **24** ✅ (C8 retention) · tm **25** ✅ (M5 OTel — teslim edildi) · tm **26** (i18n). Bu bakiye kapanana dek Faz-0 **"kapandı" sayılmaz**; `run-loop.sh` sırayla işler (kalan öncelik: 26 → 21). Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
 
 ---
 
@@ -427,22 +427,22 @@ Bunlar bir dilim değil, **her dilimin kabul koşulu**. Yeni ekran/endpoint ekle
 
 Faz-0 kapanışında doğrulanacak olanlar:
 
-| NFR      | Hedef                                               |                              Durum                               |
-| -------- | --------------------------------------------------- | :--------------------------------------------------------------: |
-| P1       | RTM fan-out gecikmesi                               |                        ✅ ölçüldü (13 ms)                        |
-| P3       | Widget bundle bütçesi                               |                   ✅ 5.3 KB gzip (bütçe 50 KB)                   |
-| P4/P6    | Virtualized liste + büyük liste sorguları           |                                ◐                                 |
-| S1–S5    | Auth · token · scope · **tenant izolasyonu** · IDOR |                   ✅ Dilim 2 (negatif testli)                    |
-| S6       | Widget izolasyonu (`innerHTML` yasak)               |                    ✅ Dilim 6 (eslint kuralı)                    |
-| **S7**   | **Webhook HMAC + SSRF**                             | ⬜ v1 (08.8.4 ile birlikte — sonradan eklemek kırıcı değişiklik) |
-| S8       | Rate limiting                                       |                            ✅ ADR-07                             |
-| **S10**  | **File sharing güvenliği**                          |                  ✅ Dilim 13 (fail-closed virüs tarama, tm 4)                   |
-| S12      | Audit log (append-only)                             | ✅ yazıcı bağlandı (tm 23): 12 güvenlik olayı INSERT ediliyor · UPDATE/DELETE DB'de reddi · cross-tenant izole · PII yok |
-| A11Y1–6  | WCAG 2.1 AA · klavye · ⌘K                           |                    ✅ 01.1.3 (⌘K) Dilim 14 (tm 18)                    |
-| I18N1/2  | Widget + panel i18n                                 |                                ⬜                                |
+| NFR      | Hedef                                               |                                                                                                                                                                                    Durum                                                                                                                                                                                     |
+| -------- | --------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| P1       | RTM fan-out gecikmesi                               |                                                                                                                                                                              ✅ ölçüldü (13 ms)                                                                                                                                                                              |
+| P3       | Widget bundle bütçesi                               |                                                                                                                                                                         ✅ 5.3 KB gzip (bütçe 50 KB)                                                                                                                                                                         |
+| P4/P6    | Virtualized liste + büyük liste sorguları           |                                                                                                                                                                                      ◐                                                                                                                                                                                       |
+| S1–S5    | Auth · token · scope · **tenant izolasyonu** · IDOR |                                                                                                                                                                         ✅ Dilim 2 (negatif testli)                                                                                                                                                                          |
+| S6       | Widget izolasyonu (`innerHTML` yasak)               |                                                                                                                                                                          ✅ Dilim 6 (eslint kuralı)                                                                                                                                                                          |
+| **S7**   | **Webhook HMAC + SSRF**                             |                                                                                                                                                       ⬜ v1 (08.8.4 ile birlikte — sonradan eklemek kırıcı değişiklik)                                                                                                                                                       |
+| S8       | Rate limiting                                       |                                                                                                                                                                                  ✅ ADR-07                                                                                                                                                                                   |
+| **S10**  | **File sharing güvenliği**                          |                                                                                                                                                                 ✅ Dilim 13 (fail-closed virüs tarama, tm 4)                                                                                                                                                                 |
+| S12      | Audit log (append-only)                             |                                                                                                                           ✅ yazıcı bağlandı (tm 23): 12 güvenlik olayı INSERT ediliyor · UPDATE/DELETE DB'de reddi · cross-tenant izole · PII yok                                                                                                                           |
+| A11Y1–6  | WCAG 2.1 AA · klavye · ⌘K                           |                                                                                                                                                                       ✅ 01.1.3 (⌘K) Dilim 14 (tm 18)                                                                                                                                                                        |
+| I18N1/2  | Widget + panel i18n                                 |                                                                                                                                                                                      ⬜                                                                                                                                                                                      |
 | C1/C2/C8 | GDPR · KVKK · retention                             | ✅ retention job bağlandı (tm 24): tenant-döngülü hard-delete (kapanmış thread→event/tag cascade · visit telemetri · `.data` mail) · `retention_list_tenants()` SECURITY DEFINER sayımı + RLS-scoped `withTenant` silme (cross-tenant fiziksel imkânsız) · pozitif-pencere guard · **dry-run varsayılan** (`--apply` ile siler) · idempotent · audit `data.retention_pruned` |
-| M4       | Test piramidi (unit + integration + contract + E2E) |                           ✅ 752 test (258 unit + 454 integration + 40 E2E)                            |
-| M5       | Gözlemlenebilirlik (`request_id`, OTel, metrikler)  |                    ◐ `request_id` ✅, OTel ⬜                    |
+| M4       | Test piramidi (unit + integration + contract + E2E) |                                                                                                                                                              ✅ 752 test (258 unit + 454 integration + 40 E2E)                                                                                                                                                               |
+| M5       | Gözlemlenebilirlik (`request_id`, OTel, metrikler)  |                 ✅ OTel bağlandı (tm 25): request/route SERVER span'i + `request_id` attribute (log `reqId` + `X-Request-Id` ile aynı) · `http.server.requests`/`.request.duration`/`.errors` metrikleri · konsol exporter (collector yok — sınır) · `OTEL_ENABLED` ile aç/kapa (test'te varsayılan kapalı) · in-memory exporter'a karşı 3 entegrasyon testi                 |
 
 ---
 

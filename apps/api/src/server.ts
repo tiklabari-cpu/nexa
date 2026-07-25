@@ -5,6 +5,8 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { Env } from './config/env.js';
 import errorHandler from './plugins/error-handler.js';
+import telemetryPlugin from './plugins/telemetry.js';
+import { createTelemetry, type Telemetry } from './telemetry/telemetry.js';
 import auth from './plugins/auth.js';
 import audit from './plugins/audit.js';
 import database from './plugins/database.js';
@@ -39,12 +41,25 @@ export interface BuildServerOptions {
    * behind, and the tests that care about delivery pass their own.
    */
   mailer?: Mailer;
+  /**
+   * OpenTelemetry instrumentation. Omitted, it follows `env.otelEnabled`
+   * (console exporter in dev/prod, off under test). Pass an instance to inject
+   * in-memory exporters, or `null` to force it off.
+   */
+  telemetry?: Telemetry | null;
 }
 
 export async function buildServer({
   env,
   mailer = env.NODE_ENV === 'test' ? new NullMailer() : new FileMailer(env.MAIL_DIR),
+  telemetry,
 }: BuildServerOptions): Promise<FastifyInstance> {
+  const telemetryInstance =
+    telemetry !== undefined
+      ? telemetry
+      : env.otelEnabled
+        ? createTelemetry({ serviceName: 'nexa-api', serviceVersion: VERSION })
+        : null;
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
@@ -75,6 +90,9 @@ export async function buildServer({
   });
 
   await app.register(errorHandler);
+  // Registered before the rest so its onRequest span opens ahead of auth and
+  // rate limiting, and its onResponse metrics see the final status code.
+  await app.register(telemetryPlugin, { telemetry: telemetryInstance });
   await app.register(sensible);
   await app.register(helmet, {
     // The API serves JSON only; a restrictive default CSP is right here and the

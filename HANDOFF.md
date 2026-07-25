@@ -6,6 +6,30 @@
 
 ## Task log (newest-first)
 
+### 25 — M5 Gözlemlenebilirlik: OpenTelemetry span + metrik (request_id köprüsü) — done — 2026-07-25 UTC
+- Yapıldı: NFR-M5 (§7.2 ◐→✅). Gerçek OTel SDK (2.10) bağlandı. `apps/api/src/telemetry/telemetry.ts`:
+  `BasicTracerProvider` (SimpleSpanProcessor) + `MeterProvider` (PeriodicExportingMetricReader). Exporter
+  seçimi: dev/prod **konsol** (collector yok — sınır), test/enjekte **in-memory**. `apps/api/src/plugins/telemetry.ts`:
+  `onRequest`→SERVER span aç (`GET /route`, attribute'ler: `http.request.method`, `http.route` (düşük
+  kardinalite: `routeOptions.url`), `url.path`, **`request_id`**=`request.id`), `onError`→`recordException`,
+  `onResponse`→`http.server.requests`/`.request.duration`(s)/`.errors` metrikleri + `http.response.status_code`
+  + 5xx'te span status ERROR + span.end, `onClose`→shutdown. Telemetri kapalıyken **sıfır** hook/maliyet.
+- Köprü: span'deki `request_id` = pino log `reqId` = `X-Request-Id` yanıt başlığı (server.ts `genReqId`) —
+  aynı id üçünü birbirine bağlar (canlı sunucu smoke ile doğrulandı: `request_id: smoke-otel-1`).
+- Anahtar: `OTEL_ENABLED` (env.ts). Boşsa ortamı izler: dev/prod açık, **test kapalı** (suite'ler hızlı kalır).
+  `buildServer({telemetry})` ile enjekte edilebilir (null = kapat). `.env.example` belgelendi.
+- Doğrulama (**yeşil**): `pnpm -w typecheck` (0) · `lint` (0) · `build` (0) · `@nexa/api` tam suite **581**
+  (yeni `test/integration/telemetry.test.ts` 3: in-memory exporter'a span düştü + `request_id` attribute + 5xx
+  ERROR + istisna + request/duration/error metrikleri) · `pnpm -w test:integration` (turbo --concurrency=1) **492**.
+- Varsayımlar: SimpleSpanProcessor + konsol exporter yeterli (prod deploy yok — sınır). Metrik push aralığı
+  60 s; testler `flushMetrics()` (forceFlush) ile deterministik okur. Attribute `request_id` (semconv değil,
+  görev gereği). Providers global KAYDEDİLMEZ (tek süreçte çok sunucu → span sızıntısı olmasın).
+- Sonraki pencereye not: `pnpm -w test` (varsayılan eşzamanlı) @nexa/api + @nexa/rtm entegrasyon suite'lerini
+  **paylaşılan Postgres**'te yarıştırır → sahte kırmızı (rtm izole **65/65** ✅, api **581** ✅). DB suite'lerini
+  **paket başına seri** koştur (bilinen konu). `@nexa/e2e` webServer'ı soğuk başlatınca `apps/rtm` env'i (`.env`
+  yüklenmeden) düşüyor — **bu görevden önce de vardı**, dokunmadım (backend-only değişiklik, UI/akış yok).
+  Faz-0 bakiyesinde kalan öncelik **26 (i18n) → 21 (Reports breakdown)**.
+
 ### 22 — 00.4 Onboarding sihirbazı + tohum veri — done — 2026-07-25 UTC
 - Yapıldı: Signup **boş** çalışma alanı açıyordu (grup/website/sohbet yok) → yeni sahip boş inbox'a
   düşüyordu. Eklenen ilk-kurulum sihirbazı (§3.0 00.4 ⬜→✅). Contract-first: `openapi/paths/onboarding.yaml`

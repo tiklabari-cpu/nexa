@@ -94,6 +94,17 @@ const envSchema = z.object({
   VIRUS_SCANNER: z.enum(['mock', 'unavailable']).default('mock'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+
+  /**
+   * OpenTelemetry tracing + metrics (NFR-M5). Left unset it follows the
+   * environment: on in dev/prod (console exporter — there is no collector here,
+   * a project boundary), off under test so the suites stay fast. Set it to
+   * `true`/`false` to override either way.
+   */
+  OTEL_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
 });
 
 export type Env = z.infer<typeof envSchema> & {
@@ -101,6 +112,8 @@ export type Env = z.infer<typeof envSchema> & {
   runtimeDatabaseUrl: string;
   isProduction: boolean;
   isTest: boolean;
+  /** Whether OpenTelemetry instrumentation is active for this process. */
+  otelEnabled: boolean;
 };
 
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
@@ -134,5 +147,6 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     runtimeDatabaseUrl: env.DATABASE_APP_URL ?? env.DATABASE_URL,
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
+    otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',
   };
 }

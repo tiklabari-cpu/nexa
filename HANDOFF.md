@@ -6,6 +6,41 @@
 
 ## Task log (newest-first)
 
+### 32.4 — 05.4-a · Liste kontrolleri (Search/Sort/Filter) — done — 2026-07-26 UTC
+- Yapıldı:
+  - **Saf kontrol modülü** `apps/web/src/features/playbook/skill-filter.ts`: `applySkillControls`
+    (ada göre arama + tür/durum/sahip filtre + sıralama; filtreler yalnız daraltır, girdi
+    mutasyonsuz), `skillMatchesControls` (satır-başı yordam), `hasActiveSkillFilters`,
+    `skillOwnerOptions` (listede fiilen bulunan sahipleri "All owners / <ajan> / Unassigned"
+    olarak türetir). **tür** = `kind` (AI `ai_agent` vs Workspace, on/off'tan bağımsız — sekmelerden
+    farkı bu), **durum** = `active` (On/Off), **sahip** = `ai_agent_id`. Sıralama: Name A–Z / Z–A /
+    Recently updated / Most used.
+  - **PlaybookPage bağlandı:** sekmelerin (32.3) ALTINA arama kutusu (200 ms debounce → `query`) +
+    Type/Status/Owner/Sort `<select>` (jenerik `FilterSelect` alt-bileşen, `htmlFor`-kardeş label) +
+    koşullu **Clear**. Sekme = kaba kesit, kontroller = ince:
+    `applySkillControls(filterSkillsByTab(items, tab), controls)`. Filtre hiçbir şeyle eşleşmezse
+    ayrı "No skills match" + "Clear filters" boş-durumu; sahip listeden düşerse select "All"e döner.
+    Backend/şema/kontrat **dokunulmadı**.
+- KK (birebir): _"Ada göre arama; tür/durum/sahip filtre"_ ✅ (+ scope: sıralama ✅).
+- **Test (yeni):** unit `skill-filter.test.ts` (16) — her eksen tek+bileşik daraltır, sıralama saf
+  yeniden-sıralar (girdi mutasyonsuz), owner-opsiyon türetimi. web unit 208 (yeni 16 dahil).
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` ·
+  `pnpm -w test:unit` (web 208) · `pnpm -w test:integration` (**507**, backend'e dokunulmadı) ·
+  `pnpm -w test:e2e` (**50/50** — `.env` source'lanıp taze sunucularla).
+- **E2E'de yakalanan gerçek regresyon (düzeltildi):** ilk kontrol sürümü `getByLabel('Name')`
+  strict-mode'unu bozdu — Playwright substring eşler, benim eklerimdeki "name" jetonu iki yere
+  sızıyordu: (1) aramanın "…by name" sr-only etiketi, (2) Sort `<select>`'i `<label>` ile SARILDIĞI
+  için option metinleri ("Name A–Z"…) kontrolün erişilebilir adına katılıyordu. Düzeltme: arama
+  etiketi "Search skills", `FilterSelect` label'ı select'i sarmaz (kardeş `htmlFor`) → editörün Name
+  alanıyla çakışma kalktı, ekran okuyucu için de daha temiz.
+- Varsayımlar: **"sahip" (sahip filtresi) = skill'in bağlı olduğu AI ajanı (`ai_agent_id`)** — skill
+  kontratında insan yaratıcı alanı (`created_by` serialise edilmiyor) yok; kontratı genişletmek 05.4
+  (frontend liste kontrolü) kapsamı dışı olurdu.
+- Sonraki pencereye not: 32.4 parent **32**'nin (FR-MOD-05) SON alt-görevi → parent **done**; PLAN
+  §4.1 05.1–05.4 tümü ✅ (tm-plan-conflict bulguları böylece kapanır). **E2E ipucu:** tam suite'i
+  koşarken önce bayat `:4000/:4001` dev sunucularını öldür ve `.env`'i source'la — reuse edilen api
+  raised rate-limit (`RATE_LIMIT_ANON_PER_MIN=2000`) taşımaz, taze spawn ise DB/secret env'e muhtaç.
+
 ### 32.2 — 05.2-a · Recommended skills kartları (Try this / See more) — done — 2026-07-26 UTC
 - Yapıldı:
   - **Önerilen şablon şeridi** `apps/web/src/features/playbook/RecommendedSkills.tsx`: PlaybookPage'de

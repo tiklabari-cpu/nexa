@@ -7,7 +7,7 @@
  * serves customers, so what it shows is what will happen.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { VirtualList } from '../../components/VirtualList.js';
@@ -21,6 +21,16 @@ import { TemplateGallery } from './TemplateGallery.js';
 import { RecommendedSkills } from './RecommendedSkills.js';
 import { templateToDraft, type SkillTemplate } from './templates.js';
 import { countSkillsByTab, filterSkillsByTab, type SkillTab } from './skill-tabs.js';
+import {
+  applySkillControls,
+  hasActiveSkillFilters,
+  skillOwnerOptions,
+  type SkillControls,
+  type SkillOwnerFilter,
+  type SkillSort,
+  type SkillStatusFilter,
+  type SkillTypeFilter,
+} from './skill-filter.js';
 
 /**
  * The tabs split the list the way an admin reasons about it: what the AI runs
@@ -55,6 +65,21 @@ export function PlaybookPage(): ReactElement {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [tab, setTab] = useState<SkillTab>('all');
+
+  // List controls (FR-MOD-05.4). `search` is the raw input; it settles into
+  // `query` after a beat so filtering a long list does not run on every
+  // keystroke. Type/status/owner narrow; sort reorders.
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const [type, setType] = useState<SkillTypeFilter>('all');
+  const [status, setStatus] = useState<SkillStatusFilter>('all');
+  const [owner, setOwner] = useState<SkillOwnerFilter>('all');
+  const [sort, setSort] = useState<SkillSort>('name-asc');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), 200);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const skills = useQuery({
     queryKey: ['playbook', 'skills'],
@@ -126,12 +151,41 @@ export function PlaybookPage(): ReactElement {
   // Selection is looked up across the whole list, not the current tab: a skill
   // stays open when you switch tabs, even to a tab that does not contain it.
   const selected = items.find((s) => s.id === selectedId) ?? null;
-  const visibleItems = filterSkillsByTab(items, tab);
   const tabCounts = countSkillsByTab(items);
+
+  const controls: SkillControls = { query, type, status, owner, sort };
+  // The tab is the coarse cut; the controls refine within it. Owner options are
+  // built from the whole list (not the current tab) so the choice survives a
+  // tab switch, and resolved to agent names from the roster.
+  const agentNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const agent of agents.data?.items ?? []) map.set(agent.id, agent.name);
+    return map;
+  }, [agents.data]);
+  const ownerOptions = useMemo(
+    () => skillOwnerOptions(items, (id) => agentNameById.get(id)),
+    [items, agentNameById],
+  );
+  const tabItems = filterSkillsByTab(items, tab);
+  const visibleItems = applySkillControls(tabItems, controls);
+
+  const clearFilters = () => {
+    setSearch('');
+    setQuery('');
+    setType('all');
+    setStatus('all');
+    setOwner('all');
+  };
 
   useEffect(() => {
     if (selectedId && !items.some((s) => s.id === selectedId)) setSelectedId(null);
   }, [items, selectedId]);
+
+  // If the selected owner disappears from the list (e.g. its last skill was
+  // deleted), fall back to All rather than leave the select on a dead value.
+  useEffect(() => {
+    if (owner !== 'all' && !ownerOptions.some((option) => option.value === owner)) setOwner('all');
+  }, [owner, ownerOptions]);
 
   const aiAgent = agents.data?.items.find((a) => a.kind === 'ai_agent') ?? null;
 
@@ -240,6 +294,70 @@ export function PlaybookPage(): ReactElement {
                   })}
                 </div>
               )}
+
+              {items.length > 0 && (
+                <div className="mt-2 flex flex-col gap-2">
+                  <label className="flex items-center">
+                    <span className="sr-only">Search skills</span>
+                    <input
+                      type="search"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Search skills…"
+                      className="w-full rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                    />
+                  </label>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <FilterSelect
+                      label="Type"
+                      value={type}
+                      onChange={setType}
+                      options={[
+                        ['all', 'All types'],
+                        ['ai', 'AI'],
+                        ['workspace', 'Workspace'],
+                      ]}
+                    />
+                    <FilterSelect
+                      label="Status"
+                      value={status}
+                      onChange={setStatus}
+                      options={[
+                        ['all', 'Any status'],
+                        ['on', 'On'],
+                        ['off', 'Off'],
+                      ]}
+                    />
+                    <FilterSelect
+                      label="Owner"
+                      value={owner}
+                      onChange={setOwner}
+                      options={ownerOptions.map((option) => [option.value, option.label] as const)}
+                    />
+                    <FilterSelect
+                      label="Sort"
+                      value={sort}
+                      onChange={setSort}
+                      options={[
+                        ['name-asc', 'Name A–Z'],
+                        ['name-desc', 'Name Z–A'],
+                        ['recent', 'Recently updated'],
+                        ['runs', 'Most used'],
+                      ]}
+                    />
+                    {hasActiveSkillFilters(controls) && (
+                      <button
+                        type="button"
+                        onClick={clearFilters}
+                        className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <Card>
                 <div role="tabpanel" id="skills-tabpanel" aria-labelledby={`skills-tab-${tab}`}>
                 {skills.isPending ? (
@@ -249,8 +367,22 @@ export function PlaybookPage(): ReactElement {
                     title="No skills yet"
                     description="A skill decides what the AI does with an incoming message."
                   />
-                ) : visibleItems.length === 0 ? (
+                ) : tabItems.length === 0 ? (
                   <EmptyState title="Nothing here" description={EMPTY_BY_TAB[tab]} />
+                ) : visibleItems.length === 0 ? (
+                  <EmptyState
+                    title="No skills match"
+                    description="Try a different search, or clear the filters to see them all."
+                    action={
+                      <button
+                        type="button"
+                        onClick={clearFilters}
+                        className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-2"
+                      >
+                        Clear filters
+                      </button>
+                    }
+                  />
                 ) : (
                   <VirtualList
                     items={visibleItems}
@@ -496,6 +628,46 @@ function KnowledgePanel({
         )}
       </Card>
     </Section>
+  );
+}
+
+/**
+ * A labelled <select> for one list-control axis. Generic over its value type so
+ * each control keeps its own union (SkillTypeFilter, SkillSort, …) end to end,
+ * with no `any` at the callsite.
+ */
+function FilterSelect<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: readonly (readonly [T, string])[];
+}): ReactElement {
+  const id = `skill-filter-${label.toLowerCase()}`;
+  // The label is a sibling tied by htmlFor, not a wrapper: wrapping the <select>
+  // folds its option text ("Name A–Z"…) into the control's accessible name,
+  // which then collides with getByLabel('Name') in the editor. A sibling label
+  // keeps the accessible name exactly the axis word ("Sort", "Type", …).
+  return (
+    <span className="inline-flex items-center gap-1.5 text-2xs text-content-tertiary">
+      <label htmlFor={id}>{label}</label>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value as T)}
+        className="rounded-md border border-border bg-inset px-2 py-1 text-xs text-content outline-none"
+      >
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+    </span>
   );
 }
 

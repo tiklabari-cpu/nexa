@@ -834,12 +834,12 @@
             "description": "Try this / See more; entegrasyon uyarısı. PRD 05.2 (Should).",
             "details": "05.2-a Recommended skills kartları. [XHIGH] PRD 05.2 (Should).\nKAPSAM: Prebuilt/AI/Trending kategorili kartlar; 'Try this' → şablonu kopyalayıp editöre açar; entegrasyon\ngerektiren şablon uyarır.\nKK (birebir): \"[Try this] şablonu kopyalayıp editöre açar; entegrasyon gerektirenler uyarır\".\nBAĞLAM: PLAN §4.4.1. Bağımlılık: 32.1.",
             "testStrategy": "unit: Try this → editör kopya; entegrasyon-gerekli kart uyarı. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "32",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T22:34:12.309Z"
           },
           {
             "id": 3,
@@ -866,7 +866,7 @@
             "updatedAt": "2026-07-25T14:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-07-25T22:18:34.659Z"
+        "updatedAt": "2026-07-25T22:34:12.309Z"
       },
       {
         "id": "33",
@@ -1818,7 +1818,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T22:18:34.659Z",
+      "lastModified": "2026-07-25T22:34:12.309Z",
       "taskCount": 84,
       "completedCount": 31,
       "tags": [

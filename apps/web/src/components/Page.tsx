@@ -6,6 +6,7 @@
  * each invent their own spacing (design-brief §4).
  */
 import type { ReactElement, ReactNode } from 'react';
+import { Skeleton } from './Skeleton.js';
 
 export function Page({
   title,
@@ -121,11 +122,7 @@ export function CardSkeleton({ rows = 3 }: { rows?: number }): ReactElement {
       className="animate-pulse rounded-lg border border-border bg-surface p-4"
     >
       {Array.from({ length: rows }, (_, i) => (
-        <div
-          key={i}
-          className="mb-2 h-3 rounded-sm bg-inset last:mb-0"
-          style={{ width: `${90 - i * 15}%` }}
-        />
+        <Skeleton key={i} width={`${90 - i * 15}%`} className="mb-2 last:mb-0" />
       ))}
     </div>
   );

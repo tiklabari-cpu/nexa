@@ -6,6 +6,37 @@
 
 ## Task log (newest-first)
 
+### 30.2 — EK-B.1 T6-b Skeleton + anlamlı empty state deseni (tüm Must listeler) — done — 2026-07-25T20:13Z UTC
+- Yapıldı:
+  - **Ortak skeleton primitifi** (`components/Skeleton.tsx`): tasarım-sistemi `Skeleton` atomu
+    (tek `bg-inset` shimmer bar, width/height CSS uzunluğu) + `ListSkeleton` (Must listeler için
+    iki-satırlık satır iskeletleri, `rows` sayısı). Kap tek `aria-hidden` + `animate-pulse`;
+    yer-tutucu erişilebilirlik ağacına GİRMEZ → ekran okuyucu boş satır dinlemez ve
+    `getByRole('list'/'table'/'row')` yalnız gerçek veriyi yakalar.
+  - **4 el-yapımı skeleton kaldırıldı, tek desende birleşti:** `TableSkeleton` (CustomersPage) →
+    `ListSkeleton`; yerel `ListSkeleton` (InboxPage) → paylaşılan; TicketPane satır-içi skeleton →
+    `ListSkeleton rows={3}`; Teammates tablosu `CardSkeleton rows={4}` → `ListSkeleton rows={4}`.
+    `Page.tsx`'teki `CardSkeleton` (Reports/Billing/CustomerDetail/Teams grid kullanır) artık
+    `Skeleton` atomunun üstünde — aynı çıktı, tek kaynak.
+  - **Anlamlı empty state** zaten `EmptyState` bileşeniyle 4 Must listede bağlıydı (Contacts:
+    arama-vs-boş; Teammates; Tickets; Inbox sohbet listesi tab-farkındalıklı) — "boş dikdörtgen"
+    yok (design-brief §1.5). Refactor bu kabloları bozmadan korudu.
+- KK (PRD birebir): _"...skeleton; her boş liste için anlamlı empty state (boş dikdörtgen yok)"_.
+- **Test (yeni):** `components/Skeleton.test.tsx` (7 test) — atom width/height; `ListSkeleton`
+  satır sayısı + varsayılan 5 + a11y ağacında GÖRÜNMEZ; gerçek Must liste (Tickets) üç durum:
+  yüklenirken→skeleton (list rolü yok), boş→anlamlı empty state (başlık + sonraki adım metni,
+  boş dikdörtgen değil), veri→gerçek `role=list`.
+- Doğrulama (hepsi yeşil, exit 0): `pnpm -w typecheck` (11 pkg) · `pnpm -w lint` (8 pkg) ·
+  `pnpm -w build` (7 pkg) · `pnpm -w test` seri+env (11 task: web **157**, api 594, rtm 65,
+  widget 34, ai-mock 42, types 26, e2e 48) · `pnpm -w test:integration` **505/505** · e2e tam
+  **48/48** (customers/team/inbox-tabs/inbox-panel dahil — tablo/list/empty sözleşmeleri sağlam).
+- Not: `pnpm -w test` turbo varsayılan paralelde api↔e2e Postgres yarışı + e2e webServer'ın kök
+  `.env`'i görmemesi → env yükleyip `--concurrency=1` ile seri koş (hafıza notu:
+  parallel-DB). Kod değişikliği salt-frontend; backend/rtm/env'e dokunulmadı.
+- Sonraki pencereye not: EK-B.1 (tm 30) tümüyle kapandı (30.1 virtualization + 30.2 skeleton/empty).
+  v1 gridleri (Apps/Campaigns/Knowledge) hâlâ kapsam dışı — değişken-yükseklik + grid iskeletleri
+  o zaman gelir.
+
 ### 30.1 — EK-B.1 T6-a Virtualized liste primitifi (Contacts/Teammates/Skills/Tickets) — done — 2026-07-25T17:56Z UTC
 - Yapıldı:
   - **Virtualized liste primitifi** (`components/VirtualList.tsx`): saf `computeVirtualWindow()`

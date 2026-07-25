@@ -18,6 +18,7 @@ import {
   Section,
 } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
@@ -114,7 +115,7 @@ export function TeamPage(): ReactElement {
           <Section title="Teammates">
             <Card>
               {agents.isPending ? (
-                <CardSkeleton rows={4} />
+                <ListSkeleton rows={4} />
               ) : items.length === 0 ? (
                 <EmptyState
                   title="No teammates yet"

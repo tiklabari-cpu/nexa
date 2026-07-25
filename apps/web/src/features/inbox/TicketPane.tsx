@@ -9,6 +9,7 @@
  */
 import { useState, type ReactElement } from 'react';
 import { EmptyState } from '../../components/EmptyState.js';
+import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { useTicket, useUpdateTicket } from './useTickets.js';
@@ -36,16 +37,7 @@ export function TicketList({
   onSelect: (id: string) => void;
 }): ReactElement {
   if (loading) {
-    return (
-      <ul aria-hidden="true" className="animate-pulse">
-        {[0, 1, 2].map((i) => (
-          <li key={i} className="border-b border-border px-4 py-3">
-            <div className="mb-2 h-3 w-2/3 rounded-sm bg-inset" />
-            <div className="h-3 w-1/3 rounded-sm bg-inset" />
-          </li>
-        ))}
-      </ul>
-    );
+    return <ListSkeleton rows={3} />;
   }
 
   if (tickets.length === 0) {

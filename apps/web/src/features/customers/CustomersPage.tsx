@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
@@ -144,7 +145,7 @@ export function CustomersPage(): ReactElement {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
           <Card>
             {list.isPending ? (
-              <TableSkeleton />
+              <ListSkeleton />
             ) : items.length === 0 ? (
               <EmptyState
                 title={debounced ? 'Nobody matches that search' : 'No customers yet'}
@@ -248,18 +249,5 @@ function Th({
     >
       {children}
     </th>
-  );
-}
-
-function TableSkeleton(): ReactElement {
-  return (
-    <ul aria-hidden="true" className="animate-pulse">
-      {[0, 1, 2, 3, 4].map((i) => (
-        <li key={i} className="border-b border-border px-4 py-3 last:border-0">
-          <div className="mb-2 h-3 w-1/3 rounded-sm bg-inset" />
-          <div className="h-2.5 w-1/2 rounded-sm bg-inset" />
-        </li>
-      ))}
-    </ul>
   );
 }

@@ -10,6 +10,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth-store.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { ListSkeleton } from '../../components/Skeleton.js';
 import { Composer } from './Composer.js';
 import { DetailsPanel } from './DetailsPanel.js';
 import { Transcript } from './Transcript.js';
@@ -449,19 +450,6 @@ function ConnectionBadge({ status }: { status: string }): ReactElement {
     status === 'live' ? 'success' : status === 'offline' ? 'danger' : ('warning' as const);
   const label = status === 'live' ? 'Live' : status === 'offline' ? 'Offline' : 'Reconnecting';
   return <StatusDot tone={tone} label={label} />;
-}
-
-function ListSkeleton(): ReactElement {
-  return (
-    <ul aria-hidden="true" className="animate-pulse">
-      {[0, 1, 2, 3].map((i) => (
-        <li key={i} className="border-b border-border px-4 py-3">
-          <div className="mb-2 h-3 w-1/2 rounded-sm bg-inset" />
-          <div className="h-3 w-3/4 rounded-sm bg-inset" />
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 /**

@@ -665,7 +665,7 @@
         "description": "Inbox Details panelinde eksik olan Visited pages + Visit info (denetim §D19). Must (MVP).",
         "details": "ÜST GÖREV (parent). 02.4 Details paneli ziyaret bilgisi — Must (MVP), Faz-0 kapanışını bloklayan ◐ (§D19).\nIki subtask sırayla: 27.1 (kontrat+backend) → 27.2 (UI). Her subtask kendi DoD kapısından TEK TEK geçer.\nDenetim bulgusu: DetailsPanel.tsx yalnız Chat info/Tags/Teams gösteriyor; Visited pages + Visit info YOK.\nBağlam: PLAN.md §3.13/T3, §D19, §C-A10. Kapanış: her iki subtask ✅ olunca parent done.",
         "testStrategy": "Alt-görev bazlı; parent ancak 27.1+27.2 DoD+KK yeşil olunca done.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -675,10 +675,10 @@
             "description": "ChatDetail yanıtına visited_pages + visit_info (device/referrer/duration/ip). Contract-first. PRD FR-MOD-02.4.",
             "details": "T3-a — getChat yanıtına ziyaret bilgisi (kontrat + backend). [XHIGH]\nPRD: FR-MOD-02.4.1-.6 (+ NFR-S5 IDOR: ziyaret verisi tenant-scoped).\nNEDEN AÇIK: getChat (packages/contract/openapi/paths/chats.yaml) yanıtı ziyaret bilgisi taşımıyor. Veri VAR:\n`Visit` şeması (openapi.yaml:886 civarı: referrer/pages/avg_duration), `visits` tablosu widget'tan doluyor,\n`getCustomer` okuyor — ama chat yüzeyine bağlı değil.\nKAPSAM (contract-first): (1) kontrat — ChatDetail yanıtına `visitor` bloğu: visited_pages[] + visit_info\n{device, referrer, duration_seconds, ip}; `pnpm --filter @nexa/contract generate`. (2) backend — chat-service/\ncustomer-service müşterinin son ziyaretini chat'e bağlar (apps/api/src/services/chat + customers).\nKK (PRD birebir): \"Bölümler katlanır; tag/assignee anında kaydeder; süre/ziyaret canlı\".\nKK-TÜRETİLMİŞ (§C-A10): gösterilecek alanlar (Visited pages; Device/Referring/Duration/IP) PRD Açıklama\nsütunundan türetildi.\nKAPSAM DIŞI: canlı süre WS push (T3-b UI hesaplar); 13.2 Engage 360° panel (v2); IP coğrafi çözümleme.\nBAĞLAM: PLAN.md §3.13/T3-a, §D19, §C-A10, ADR-04 (resource-based REST). Bağımlılık: yok (visits zaten yazılıyor).",
             "testStrategy": "integration `test/integration/chats.test.ts`: getChat yanıtında ziyaret alanları dolu (IP/referrer null-güvenli).\nCROSS-TENANT negatif: başka lisansın chat'inde ziyaret verisi sızmıyor (404). contract-parity yeşil (yeni alanlar\nkontratta). DoD kapısı: typecheck+lint+unit+integration+build+e2e.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "27",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T13:35:07.816Z"
           },
           {
             "id": 2,
@@ -686,15 +686,15 @@
             "description": "DetailsPanel.tsx'e iki katlanır bölüm. Veri T3-a'dan. PRD FR-MOD-02.4.",
             "details": "T3-b — Details panelinde Visited pages + Visit info bölümleri (UI). [XHIGH]\nPRD: FR-MOD-02.4.1-.6.\nNEDEN AÇIK: apps/web/src/features/inbox/DetailsPanel.tsx yalnız Conversation (Status/Chat ID/Assignee/Queue/\nStarted) + Tags + Teams render ediyor (§D19).\nKAPSAM: iki katlanır `<Section>` daha — \"Visited pages\" (sıralı liste) + \"Visit info\" (Device/Referring/\nDuration/IP satırları); veri T3-a'dan (getChat). Ziyaret yoksa anlamlı empty state (boş dikdörtgen değil).\nKK (PRD birebir): \"Bölümler katlanır; tag/assignee anında kaydeder; süre/ziyaret canlı\".\nKAPSAM DIŞI: harita; IP coğrafi; canlı ziyaretçi akışı (03.1.x, v1).\nBAĞLAM: PLAN.md §3.13/T3-b. Bağımlılık: 27.1 (T3-a veri yolu) — ÖNCE o biter.",
             "testStrategy": "unit (React render): ziyaret verisiyle sayfa listesi + device/IP görünür; veri yokken empty state metni.\nE2E `apps/e2e/tests/demo-flow.spec.ts`'e ziyaret-bilgisi görünürlük iddiası. DoD kapısı tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "27",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T13:35:07.829Z"
           }
         ],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-25T13:35:07.829Z"
       },
       {
         "id": "28",
@@ -702,11 +702,11 @@
         "description": "Sağ panel aç/kapa + Expand + tercih persist. Copilot sekmesi v1'e ayrıldı (§D22). PRD FR-MOD-01.3.",
         "details": "01.3 — Sağ panel switcher (Details/Expand + persist). [XHIGH] · Must (MVP), Faz-0 ◐.\nPRD: FR-MOD-01.3.\nNEDEN AÇIK: Details paneli InboxPage.tsx'te her zaman görünür; panel anahtarı (aç/kapa), Expand (geniş\ntranscript) ve tercih kalıcılığı yok. Copilot sekmesi ⬜ ama o MOD-12 = v1 (§D22 daraltma).\nKAPSAM: sağ panel toggle + Expand modu (transcript tam genişlik) + tercih localStorage/hesap tercihinde persist.\nKK (PRD birebir): \"Panel açılır/kapanır; Details/Copilot geçişi persist\" → MVP payında Details/Expand geçişi\npersist (Copilot v1'e ayrıldı, §D22).\nKAPSAM DIŞI: Copilot sekmesi/paneli (12.1-12.3, v1 tm 36); reply suggestions.\nBAĞLAM: PLAN.md §3.13/T1-a, §D22. Bağımlılık: yok. (12.1-a bu görevin üstüne oturur → tm 36 buna bağımlı.)",
         "testStrategy": "unit: toggle + Expand + reload sonrası tercih korunur. E2E: panel aç/kapa. DoD kapısı tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-25T14:00:43.222Z"
       },
       {
         "id": "29",
@@ -714,7 +714,7 @@
         "description": "Frontend form validasyonu elle; ortak kütüphane/desen yok (denetim). Must (MVP).",
         "details": "ÜST GÖREV (parent). EK-A Form & girdi katmanı — Must (MVP), Faz-0 ◐ (EK-A.1 + EK-A.2).\nÜç subtask: 29.1 (primitif+pilot) → 29.2 (kalan formlar) + 29.3 (davranış). 29.2 ve 29.3 29.1'e bağımlı.\nDenetim: web'de 0 zod importu — frontend form validasyonu elle (backend zod ✅, bu iş FRONTEND).\nHer subtask kendi DoD+KK kapısından geçer. Bağlam: PLAN.md §3.13/T4,T5.",
         "testStrategy": "Subtask bazlı; parent 29.1+29.2+29.3 yeşil olunca done.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -724,10 +724,10 @@
             "description": "Tek doğrulama primitifi + alan-altı hata + submit-disabled; pilot Invite + Add website. FR-EK-A.1.",
             "details": "T4-a — Ortak form-validasyon primitifi + pilot iki form. [XHIGH]\nPRD: FR-EK-A.1.\nNEDEN AÇIK: apps/web/src içinde form validasyonu her ekranda elle; alan-altı hata / submit-disabled deseni\ntekrar ediyor, tek kaynak yok. (Backend zod ✅ 18 dosya — bu iş FRONTEND.)\nKAPSAM: tek doğrulama primitifi (hafif hook/şema; `zod` zaten pnpm-lock'ta, frontend'e import edilebilir) +\nalan-altı hata + geçersizken submit pasif + Error/Disabled/Loading. PİLOT: Invite teammates\n(features/team/InviteTeammates.tsx) + Add website (features/settings/WebsiteWidgets.tsx).\nKK (PRD birebir): \"Tek form/validasyon kütüphanesi; alan-altı hata mesajı\".\nKAPSAM DIŞI: kalan formların migrasyonu (29.2/T4-b); Forms builder (08.7.7, v1).\nBAĞLAM: PLAN.md §3.13/T4-a. Bağımlılık: yok. (29.2, 29.3 + v1 form görevleri 47/50/51/52/43 bu desene dayanır.)",
             "testStrategy": "unit: geçersiz alan → alan-altı hata + submit pasif (iki pilot formda, her durum). E2E: Invite akışında\ngeçersiz email satır-içi hata. DoD kapısı tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "29",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T16:35:11.075Z"
           },
           {
             "id": 2,
@@ -735,12 +735,12 @@
             "description": "Signup/Reset/New canned/New tag/Payment/Channels formları. FR-EK-A.1.",
             "details": "T4-b — Kalan Must formlarını primitife taşı. [XHIGH]\nPRD: FR-EK-A.1.\nNEDEN AÇIK: 29.1 yalnız 2 pilot; kalan Must formlar (Signup, Reset, New canned, New tag, Payment mock,\nChannels ekle) hâlâ elle.\nKAPSAM: kalan formları 29.1 primitifine taşı; her birinde alan-altı hata + submit-disabled.\nKK (PRD birebir): \"Tek form/validasyon kütüphanesi; alan-altı hata mesajı\".\nKAPSAM DIŞI: v1 formları (Forms builder, Custom fields — ayrı görevler).\nBAĞLAM: PLAN.md §3.13/T4-b. Bağımlılık: 29.1 (T4-a primitif). Tahmin 1-2 pencere — çok form; 2+ ise böl.",
             "testStrategy": "unit: her taşınan formda validasyon. Regresyon: mevcut E2E'ler (billing/settings/onboarding) yeşil kalır.\nDoD kapısı tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "29",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T17:00:58.283Z"
           },
           {
             "id": 3,
@@ -748,15 +748,15 @@
             "description": "Dirty guard + dropdown/stepper/optimistic tekilleştirme. FR-EK-A.2.",
             "details": "T5-a — Yarım-form kapatma onayı + ortak dropdown/stepper/optimistic birleştirme. [XHIGH]\nPRD: FR-EK-A.2.\nNEDEN AÇIK: debounce/stepper/optimistic toggle dağınık uygulanmış; YARIM-FORM KAPATMA ONAYI (kirli formu\nkapatırken uyar) hiçbir modalda yok.\nKAPSAM: ortak \"dirty guard\" (kirli form kapatma → onay); ortak dropdown/stepper davranış sarmalayıcı;\noptimistic + hata geri alma desenini tekilleştir.\nKK (PRD birebir): \"Tutarlı davranış; optimistic + hata geri alma\".\nKAPSAM DIŞI: yeni ekranlar; drag-reorder (06.2.4, v1).\nBAĞLAM: PLAN.md §3.13/T5-a. Bağımlılık: 29.1 (aynı form katmanı; sıra 29.1 → 29.3).",
             "testStrategy": "unit: kirli form kapatma → onay; optimistic hata → geri alma. E2E: Invite modal yarım doldurup kapatma →\nonay. DoD kapısı tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "29",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T17:23:10.066Z"
           }
         ],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-25T17:23:10.066Z"
       },
       {
         "id": "30",
@@ -764,7 +764,7 @@
         "description": "Listeler keyset paginate ediyor ama virtualization yok; empty state tutarsız. Must (MVP).",
         "details": "ÜST GÖREV (parent). EK-B.1 Liste katmanı — Must (MVP), Faz-0 ◐. P4 buna bağlı; P6 çoğunlukla ✅\n(keyset + events RANGE partition). İki subtask: 30.1 (virtualization) → 30.2 (skeleton+empty). Her biri kendi\nDoD+KK kapısından geçer. Bağlam: PLAN.md §3.13/T6, §7.2 P4/P6.",
         "testStrategy": "Subtask bazlı; parent 30.1+30.2 yeşil olunca done.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -774,10 +774,10 @@
             "description": "Contacts/Teammates/Skills/Tickets; yalnız görünür satır DOM'da (NFR-P4). FR-EK-B.1.",
             "details": "T6-a — Virtualized liste primitifi (Contacts/Teammates/Skills/Tickets). [XHIGH]\nPRD: FR-EK-B.1 (+ NFR-P4).\nNEDEN AÇIK: listeler keyset paginate ediyor (✅) ama DOM'a tüm satırlar giriyor; virtualization yok →\n10k satırda P4 (60fps) ölçülemez.\nKAPSAM: tek virtualized liste primitifi; Contacts + Teammates + Skills + Tickets ona taşınır.\nKK (PRD birebir, bu payı): \"10.000+ satırda 60fps; ... yalnız görünür satır DOM'da\".\nKAPSAM DIŞI: skeleton + empty state (30.2/T6-b); Apps/Campaigns/Knowledge gridleri (v1).\nBAĞLAM: PLAN.md §3.13/T6-a, §7.2 P4. Bağımlılık: yok. (40 Tickets grid + 53 Apps buna dayanır.)",
             "testStrategy": "unit: yalnız görünür satır DOM'da (sanal pencere testi). PERF ölçümü: 10k satır render bütçesi → HANDOFF'a\nkanıt. DoD kapısı tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "30",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T17:55:40.203Z"
           },
           {
             "id": 2,
@@ -785,15 +785,15 @@
             "description": "Boş dikdörtgen yerine anlamlı empty state; skeleton. FR-EK-B.1.",
             "details": "T6-b — Skeleton + anlamlı empty state deseni (tüm Must listeler). [XHIGH]\nPRD: FR-EK-B.1.\nNEDEN AÇIK: empty state tutarsız (kimi liste boş dikdörtgen); skeleton kısmi.\nKAPSAM: ortak skeleton + \"anlamlı empty state\" bileşeni; Must listelerine uygulanır (Contacts/Teammates/\nTickets/Inbox listeleri).\nKK (PRD birebir): \"...skeleton; her boş liste için anlamlı empty state (boş dikdörtgen yok)\".\nKAPSAM DIŞI: v1 gridleri.\nBAĞLAM: PLAN.md §3.13/T6-b. Bağımlılık: 30.1 (aynı liste primitifi).",
             "testStrategy": "unit: boş liste → anlamlı empty state (boş dikdörtgen değil) her listede. DoD kapısı tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "30",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T18:17:51.549Z"
           }
         ],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-25T18:17:51.549Z"
       },
       {
         "id": "31",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T13:09:32.278Z",
+      "lastModified": "2026-07-25T18:17:51.550Z",
       "taskCount": 84,
-      "completedCount": 26,
+      "completedCount": 30,
       "tags": [
         "master"
       ]

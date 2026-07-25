@@ -5,12 +5,34 @@
  * than coercing to zero. "No data" and "zero" are different facts, and a
  * dashboard that shows 0% for an unrated period reads as a catastrophe rather
  * than as silence.
+ *
+ * The Intl-backed helpers format against the active UI locale (I18N2). The
+ * locale is held module-level and updated by the i18n store rather than threaded
+ * through every call site, so a `formatDate(iso)` in a component simply follows
+ * whatever language the agent chose. Passing an explicit locale still works and
+ * is what the unit tests do, since a default argument is read at call time.
  */
 
+/**
+ * The locale the Intl helpers format against when a call does not name one.
+ * `undefined` means "the runtime's default", which is the state in a bare unit
+ * test that never touched i18n — so importing this module in isolation behaves
+ * exactly as it did before the locale binding existed.
+ */
+let activeLocale: string | undefined;
+
+/** Point the Intl helpers at a locale. Called by the i18n store on every change. */
+export function setFormatLocale(locale: string | undefined): void {
+  activeLocale = locale;
+}
+
 /** `142` → `"142"`, with thousands separators. */
-export function formatCount(value: number | null | undefined): string | null {
+export function formatCount(
+  value: number | null | undefined,
+  locale: string | undefined = activeLocale,
+): string | null {
   if (value == null || !Number.isFinite(value)) return null;
-  return new Intl.NumberFormat().format(value);
+  return new Intl.NumberFormat(locale).format(value);
 }
 
 /** `0.873` → `"87%"`. Rates arrive as fractions, never as percentages. */
@@ -49,15 +71,22 @@ export function formatDuration(seconds: number | null | undefined): string | nul
 }
 
 /** Cents → `"$99.00"`. Money is stored in cents; never format a float. */
-export function formatMoney(cents: number | null | undefined, currency = 'USD'): string | null {
+export function formatMoney(
+  cents: number | null | undefined,
+  currency = 'USD',
+  locale: string | undefined = activeLocale,
+): string | null {
   if (cents == null || !Number.isFinite(cents)) return null;
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(cents / 100);
+  return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(cents / 100);
 }
 
 /** ISO timestamp → a short absolute date. */
-export function formatDate(iso: string | null | undefined): string | null {
+export function formatDate(
+  iso: string | null | undefined,
+  locale: string | undefined = activeLocale,
+): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date);
 }

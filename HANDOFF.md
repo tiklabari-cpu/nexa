@@ -6,6 +6,38 @@
 
 ## Task log (newest-first)
 
+### 26.3 — I18N1/2 widget string kataloglama (bundle bütçesi P3) — done — 2026-07-25 UTC
+- Yapıldı: 26.1/26.2 pencerelerinden çalışma ağacında bekleyen `apps/widget/src/i18n.ts`
+  iskeletini (tr/en düz katalog + `createTranslator`/`resolveWidgetLocale`, panelle aynı
+  fallback zinciri: aktif locale → İngilizce → anahtar) **widget'ın görünür yüzeyine bağladım**.
+  `widget.ts` — `mount()` içinde `createTranslator(config.language)` ile locale'e bir kez bağlanan
+  `t()`; `buildUi(doc, t)` + tüm render kapanışları + `renderBubble`/`renderAttachment`'a geçirildi.
+  Katalanan metinler: launcher (text/open/close), header title, durum (queue `{n}` interpolasyon /
+  offline), hatalar (connect/upload/send), transcript/panel aria, composer (input placeholder/label,
+  send, attach etiketleri), pre-chat (intro/name/email/emailLabel/submit), greeting (label/msg/chat/
+  browse), attachment-alt. Dekoratif `×`/`📎` glyph'leri ve boş durum metni çevrilmez (a11y aria ile).
+- Doğrulama (**tam kapı yeşil**): `pnpm -w typecheck` (11/11 · exit 0) · `pnpm -w lint` (8/8 · exit 0) ·
+  `pnpm -w build` (7/7 · exit 0) · `pnpm -w test:unit` (10/10; widget **31** = yeni `i18n.test.ts` 7 +
+  mevcut `bundle-size` 2 + `loader` 22, web 88) · `pnpm -w test:integration` (**seri** · api 22 dosya /
+  **492**) · `make test-e2e` (**44/44**, 13 widget spec dâhil — greeting, "Let's chat" pre-chat, agent
+  identity, ekler). **Bundle P3**: widget app **7.57 KB gzip** (20.53→22.80 KB raw / 6.76→7.57 KB gzip,
+  +~0.8 KB), loader **1.18 KB gzip** (dokunulmadı) — ikisi de 50 KB bütçenin çok altında; taze dist'e
+  karşı `test/bundle-size.test.ts` (`describe.skipIf`) yeşil.
+- Kapsam disiplini: **yalnız 3 widget dosyası** commit'lendi (`i18n.ts`, `i18n.test.ts`, `widget.ts` ·
+  `feat/widget-i18n` → main ff). İlgisiz çalışma-ağacı değişiklikleri (CLAUDE.md/MASTER-PROMPT.md,
+  kanit .png'leri, autorun/convention .md'leri, run-loop.sh) **staged edilmedi**.
+- Varsayımlar: İngilizce katalog değerleri eski sabit metinlerle **birebir aynı** → varsayılan (en)
+  widget çıktısı bayt-özdeş, e2e'nin İngilizce metin iddiaları etkilenmez. `loader.ts`'in host-sayfa
+  erişilebilirlik etiketleri ('Chat'/'Customer support chat') **İngilizce bırakıldı**: P3 bütçesi tam
+  da loader'la ilgili, katalogu loader'a import etmek onu şişirir; widget'ın kendi panel etiketi
+  ('Customer support chat') iframe içinde zaten çevrili. `data-language` → loader query → `readConfig`
+  → `createTranslator` bağlantı yolu uçtan uca tam.
+- Sonraki pencereye not: **26.4** (test genişletme) — widget için `createTranslator` fallback unit'i +
+  `bundle-size` testi **artık var**; kalan = widget-**mount locale smoke** (tr ile mount → Türkçe metin
+  görünür) istenirse. Parent **26** ancak 26.4 bitince done; o zaman `PLAN.md §7.2 I18N ⬜→✅` güncellenir
+  (henüz **değil**). Widget locale'i sayfa-yükü boyunca sabit (site `data-language` seçer, değişmez) —
+  panel gibi runtime dil değiştirici yok, gerekmiyor.
+
 ### 26.2 — I18N1/2 panel string kataloglama + Intl helper locale bağı — done — 2026-07-25 UTC
 - Yapıldı: 26.1'in çekirdeğini panelin **görünür chrome'una** bağladım. `AppShell.tsx` — trial banner
   (`shell.trial.*` + `{days}`/`{s}` interpolasyon), abonelik linki, ikon rayı `aria-label`'i, hesap menüsü

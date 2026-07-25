@@ -633,11 +633,12 @@
             "id": 3,
             "title": "Widget string katalogla (bundle butcesi P3)",
             "description": "apps/widget; boyut korunur.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T06:35:21.088Z"
           },
           {
             "id": 4,
@@ -650,12 +651,12 @@
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-25T06:19:30.324Z"
+        "updatedAt": "2026-07-25T06:35:21.088Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T06:19:30.324Z",
+      "lastModified": "2026-07-25T06:35:21.088Z",
       "taskCount": 26,
       "completedCount": 24,
       "tags": [

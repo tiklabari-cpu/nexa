@@ -51,6 +51,45 @@ routingStatus:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+notificationPreferences:
+  put:
+    tags: [Configuration]
+    operationId: setMyNotificationPreferences
+    summary: Set the caller's notification channel preferences
+    description: |
+      Controls the server-driven notification channels for the caller. Today that
+      is e-mail (FR-MOD-13.8): when `email` is off, chats assigned to the caller
+      no longer trigger a notification e-mail. Sound, desktop and tab-title alerts
+      are browser-side and set in the client, not here.
+
+      The preference is per user and per license, so the same person can opt in on
+      one workspace and out on another (FR-MOD-08.2).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email]
+            properties:
+              email:
+                type: boolean
+                description: Receive an e-mail when a chat assigned to you has new activity.
+    responses:
+      "200":
+        description: Preferences updated
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: boolean }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 agents:
   get:
     tags: [Configuration]

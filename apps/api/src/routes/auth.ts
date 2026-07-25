@@ -352,7 +352,7 @@ export default async function authRoutes(
             where: {
               licenseId_agentId: { licenseId: principal.licenseId, agentId: principal.accountId },
             },
-            select: { routingStatus: true, concurrentChatsLimit: true },
+            select: { routingStatus: true, concurrentChatsLimit: true, notifyEmail: true },
           }),
           // The onboarding gate: the shell reads this to decide whether to send a
           // new owner to the first-run wizard, so it rides along with the profile
@@ -378,6 +378,7 @@ export default async function authRoutes(
         scopes: principal.scopes,
         routing_status: profile.membership?.routingStatus ?? 'offline',
         concurrent_chats_limit: profile.membership?.concurrentChatsLimit ?? 0,
+        notify_email: profile.membership?.notifyEmail ?? true,
         onboarding_completed: profile.license?.onboardingCompletedAt != null,
       });
     },

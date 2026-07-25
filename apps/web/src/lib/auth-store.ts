@@ -29,6 +29,12 @@ export interface CurrentAgent {
   license_id: string;
   scopes: string[];
   routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
+  /**
+   * The e-mail notification channel (FR-MOD-13.8). Account-level and per license,
+   * so unlike the browser-side sound/desktop toggles it follows the agent. Absent
+   * on older tokens — treat as on, matching the server default.
+   */
+  notify_email?: boolean;
   /** First-run setup gate (FR-MOD-00.4). Absent on older tokens — treat as done. */
   onboarding_completed?: boolean;
 }
@@ -45,6 +51,8 @@ interface AuthState {
   signIn: (email: string, password: string, licenseId: string) => Promise<void>;
   signOut: () => Promise<void>;
   setRoutingStatus: (status: CurrentAgent['routing_status']) => Promise<void>;
+  /** Turn the e-mail notification channel on or off for the caller (FR-MOD-13.8). */
+  setNotifyEmail: (email: boolean) => Promise<void>;
   /** Flip the local gate once the wizard has told the server setup is done. */
   markOnboarded: () => void;
 }
@@ -225,6 +233,23 @@ export const useAuth = create<AuthState>((set, get) => {
       const client = new ApiClient({ getAccessToken: () => accessToken });
       await client.request('PUT', '/agents/me/routing-status', { routing_status: status });
       set({ agent: { ...agent, routing_status: status } });
+    },
+
+    async setNotifyEmail(email) {
+      const { accessToken, agent } = get();
+      if (!accessToken || !agent) return;
+
+      // Optimistic: reflect the toggle immediately, then roll back if the write
+      // fails so the switch never lies about the server state.
+      const previous = agent.notify_email ?? true;
+      set({ agent: { ...agent, notify_email: email } });
+      try {
+        const client = new ApiClient({ getAccessToken: () => accessToken });
+        await client.request('PUT', '/agents/me/notification-preferences', { email });
+      } catch (error) {
+        set({ agent: { ...get().agent!, notify_email: previous } });
+        throw error;
+      }
     },
 
     markOnboarded() {

@@ -21,6 +21,7 @@ import { AiResponder } from '../services/ai/ai-responder.js';
 import { LocalStore } from '../services/storage/local-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
 import type { Mailer } from '../services/mail/mailer.js';
+import { shouldEmailAssignee } from '../services/notifications/assignee-email.js';
 
 const startSchema = z
   .object({
@@ -77,25 +78,46 @@ export default async function customerRoutes(
    */
   async function notifyAssignee(request: FastifyRequest, chatId: string): Promise<void> {
     try {
-      const assignee = await request.withTenant(async (tx) => {
+      const licenseId = request.tenant().licenseId;
+      const channel = await request.withTenant(async (tx) => {
         const thread = await tx.thread.findFirst({
           where: { chatId, active: true },
           orderBy: { createdAt: 'desc' },
           select: { assigneeId: true },
         });
         if (!thread?.assigneeId) return null;
-        return tx.account.findUnique({
-          where: { id: thread.assigneeId },
-          select: { email: true, name: true },
-        });
+
+        // The account carries the address; the membership carries the per-user,
+        // per-license opt-in — read together so the decision has both.
+        const [account, membership] = await Promise.all([
+          tx.account.findUnique({
+            where: { id: thread.assigneeId },
+            select: { email: true, name: true },
+          }),
+          tx.agentMembership.findUnique({
+            where: { licenseId_agentId: { licenseId, agentId: thread.assigneeId } },
+            select: { notifyEmail: true },
+          }),
+        ]);
+
+        return {
+          email: account?.email ?? null,
+          name: account?.name ?? null,
+          // No membership row would be an inconsistency, not an opt-out; default
+          // on, matching the column default.
+          emailEnabled: membership?.notifyEmail ?? true,
+        };
       });
-      if (!assignee?.email) return;
+
+      // Honours the opt-out and the no-assignee/no-address cases in one place
+      // (FR-MOD-13.8); the guard narrows `email` to a string for the send.
+      if (!shouldEmailAssignee(channel)) return;
 
       await mailer.send({
-        to: assignee.email,
+        to: channel.email,
         kind: 'notification',
         subject: 'New message from a visitor',
-        body: `Hi ${assignee.name ?? 'there'},\n\nA visitor sent a new message in a conversation assigned to you.\n\nOpen it here:\n${env.WEB_APP_URL}/app/inbox`,
+        body: `Hi ${channel.name ?? 'there'},\n\nA visitor sent a new message in a conversation assigned to you.\n\nOpen it here:\n${env.WEB_APP_URL}/app/inbox`,
       });
     } catch (error) {
       // The realtime push already reached the agent; the e-mail is a courtesy.

@@ -119,4 +119,34 @@ describe('agent e-mail notifications', () => {
     const notifications = (await mailer.outbox()).filter((m) => m.kind === 'notification');
     expect(notifications).toHaveLength(1);
   });
+
+  it('does not e-mail an agent who turned the e-mail channel off (FR-MOD-08.2)', async () => {
+    // The whole point of the preference: with it off, the assignment still
+    // happens and realtime still fires, but no e-mail goes out.
+    await owner.agentMembership.update({
+      where: {
+        licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId },
+      },
+      data: { notifyEmail: false },
+    });
+
+    const token = await widgetToken();
+    await server.post('/customer/chat/events', { text: 'quietly, please' }, auth(token));
+
+    const notifications = (await mailer.outbox()).filter((m) => m.kind === 'notification');
+    expect(notifications).toHaveLength(0);
+  });
+
+  it('e-mails only the assignee on the same license, never another tenant', async () => {
+    // Tenant B has its own agent with the same defaults; a message routed inside
+    // tenant A must never reach them. Proven on the address, since the spool is
+    // the one place a cross-tenant leak would surface.
+    const token = await widgetToken();
+    await server.post('/customer/chat/events', { text: 'for A only' }, auth(token));
+
+    const notifications = (await mailer.outbox()).filter((m) => m.kind === 'notification');
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]!.to).toBe(fx.a.agentEmail);
+    expect(notifications.some((m) => m.to === fx.b.agentEmail)).toBe(false);
+  });
 });

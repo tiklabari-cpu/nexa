@@ -108,6 +108,26 @@ function NotificationSettings(): ReactElement {
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
   const [permission, setPermission] = useState<Permission>('default');
 
+  // The e-mail channel is server-side (FR-MOD-13.8): the API sends it, so the
+  // preference lives on the account rather than in this browser. Read it from
+  // the signed-in agent and write it back through the store.
+  const notifyEmail = useAuth((s) => s.agent?.notify_email ?? true);
+  const setNotifyEmail = useAuth((s) => s.setNotifyEmail);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailError, setEmailError] = useState(false);
+
+  async function toggleEmail(next: boolean): Promise<void> {
+    setEmailBusy(true);
+    setEmailError(false);
+    try {
+      await setNotifyEmail(next);
+    } catch {
+      setEmailError(true);
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
   // Read once on mount — `loadPrefs` touches `localStorage`, which is not a
   // render-time value.
   useEffect(() => {
@@ -136,7 +156,7 @@ function NotificationSettings(): ReactElement {
   return (
     <Section
       title="Notifications"
-      description="How you are alerted to new messages on this device. These settings are per-browser."
+      description="How you are alerted to new messages. Sound and desktop are per-browser; e-mail follows your account."
     >
       <Card>
         <div className="divide-y divide-border">
@@ -206,6 +226,27 @@ function NotificationSettings(): ReactElement {
               </button>
             )}
           </div>
+
+          <label className="flex items-center gap-3 p-4">
+            <input
+              type="checkbox"
+              checked={notifyEmail}
+              disabled={emailBusy}
+              onChange={(event) => void toggleEmail(event.target.checked)}
+            />
+            <span className="flex-1 text-sm">
+              Email notifications
+              <span className="block text-2xs text-content-tertiary">
+                {emailError
+                  ? 'Could not save — please try again.'
+                  : 'Emailed when a visitor writes in a chat assigned to you, even when Nexa is closed. Applies to your account.'}
+              </span>
+            </span>
+            <StatusDot
+              tone={notifyEmail ? 'success' : 'neutral'}
+              label={notifyEmail ? 'On' : 'Off'}
+            />
+          </label>
         </div>
       </Card>
     </Section>

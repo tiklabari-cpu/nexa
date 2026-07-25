@@ -880,6 +880,32 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/agents/me/notification-preferences': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set the caller's notification channel preferences
+     * @description Controls the server-driven notification channels for the caller. Today that
+     *     is e-mail (FR-MOD-13.8): when `email` is off, chats assigned to the caller
+     *     no longer trigger a notification e-mail. Sound, desktop and tab-title alerts
+     *     are browser-side and set in the client, not here.
+     *
+     *     The preference is per user and per license, so the same person can opt in on
+     *     one workspace and out on another (FR-MOD-08.2).
+     */
+    put: operations['setMyNotificationPreferences'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/groups': {
     parameters: {
       query?: never;
@@ -2953,6 +2979,12 @@ export interface operations {
              *     wizard on this without a second request (FR-MOD-00.4).
              */
             onboarding_completed?: boolean;
+            /**
+             * @description Agent principals only. Whether the caller receives the e-mail
+             *     notification channel for chats assigned to them — per user, per
+             *     license (FR-MOD-13.8 / 08.2).
+             */
+            notify_email?: boolean;
           };
         };
       };
@@ -4270,6 +4302,39 @@ export interface operations {
              *     `accepting_chats`.
              */
             assigned_from_queue: string[];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setMyNotificationPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Receive an e-mail when a chat assigned to you has new activity. */
+          email: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Preferences updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            email: boolean;
           };
         };
       };

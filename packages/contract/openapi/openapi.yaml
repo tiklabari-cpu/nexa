@@ -146,6 +146,8 @@ paths:
     $ref: "./paths/agents.yaml#/agents"
   /agents/me/routing-status:
     $ref: "./paths/agents.yaml#/routingStatus"
+  /agents/me/notification-preferences:
+    $ref: "./paths/agents.yaml#/notificationPreferences"
   /groups:
     $ref: "./paths/agents.yaml#/groups"
 

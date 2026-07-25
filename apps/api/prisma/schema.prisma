@@ -118,6 +118,8 @@ model AgentMembership {
   routingStatus        String   @default("offline") @map("routing_status")
   concurrentChatsLimit Int      @default(6) @map("concurrent_chats_limit")
   twoFactorEnabled     Boolean  @default(false) @map("two_factor_enabled")
+  /// Per-user, per-license opt-out for the e-mail notification channel (FR-MOD-13.8).
+  notifyEmail          Boolean  @default(true) @map("notify_email")
   awaitingApproval     Boolean  @default(false) @map("awaiting_approval")
   suspended            Boolean  @default(false) @map("suspended")
   /// Tie-breaker for round-robin assignment (ADR-08 step 4).

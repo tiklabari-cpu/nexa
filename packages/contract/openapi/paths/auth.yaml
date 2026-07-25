@@ -222,6 +222,12 @@ me:
                     Agent principals only. Whether the workspace has finished (or
                     skipped) first-run setup — the shell gates the onboarding
                     wizard on this without a second request (FR-MOD-00.4).
+                notify_email:
+                  type: boolean
+                  description: |
+                    Agent principals only. Whether the caller receives the e-mail
+                    notification channel for chats assigned to them — per user, per
+                    license (FR-MOD-13.8 / 08.2).
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
 
 personalAccessTokens:

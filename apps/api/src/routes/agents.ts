@@ -14,6 +14,7 @@ import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { RoutingService } from '../services/routing/routing-service.js';
 
 const routingStatusBody = z.object({ routing_status: z.enum(ROUTING_STATUSES) });
+const notificationPrefsBody = z.object({ email: z.boolean() });
 
 export default async function agentRoutes(app: FastifyInstance): Promise<void> {
   const routing = new RoutingService();
@@ -69,6 +70,33 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         routing_status: status,
         assigned_from_queue: drained.map((d) => d.chatId),
       });
+    },
+  );
+
+  app.put(
+    '/agents/me/notification-preferences',
+    { config: { scopes: ['agents--my:rw', 'agents--all:rw'], principals: ['agent'] } },
+    async (request, reply) => {
+      const parsed = notificationPrefsBody.safeParse(request.body);
+      if (!parsed.success) throw ApiError.validation('email must be a boolean.');
+
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'agent') throw ApiError.authorization();
+
+      const tenant = request.tenant();
+      // Per user, per license (FR-MOD-08.2): the update is keyed on both, so the
+      // same person opting out here does not affect their other workspaces, and
+      // RLS keeps it inside the caller's tenant.
+      await request.withTenant((tx) =>
+        tx.agentMembership.update({
+          where: {
+            licenseId_agentId: { licenseId: tenant.licenseId, agentId: principal.accountId },
+          },
+          data: { notifyEmail: parsed.data.email },
+        }),
+      );
+
+      return reply.send({ email: parsed.data.email });
     },
   );
 

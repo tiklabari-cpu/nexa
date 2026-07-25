@@ -19,6 +19,31 @@ import { describeStep, type AiAgent, type KnowledgeSource, type Skill } from './
 import { SkillEditor } from './SkillEditor.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { templateToDraft, type SkillTemplate } from './templates.js';
+import { countSkillsByTab, filterSkillsByTab, type SkillTab } from './skill-tabs.js';
+
+/**
+ * The tabs split the list the way an admin reasons about it: what the AI runs
+ * (✦), what a workspace automation runs (⚡), and what is not on yet (Drafts).
+ * The glyphs are decorative — the visible word is what a screen reader reads.
+ */
+const SKILL_TABS: { id: SkillTab; label: string; glyph?: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'ai', label: 'AI', glyph: '✦' },
+  { id: 'workspace', label: 'Workspace', glyph: '⚡' },
+  { id: 'drafts', label: 'Drafts' },
+];
+
+/**
+ * Tab-specific empty copy, shown when the whole list has skills but this tab
+ * has none. `all` is only ever non-empty here (if there are skills at all, the
+ * All tab holds them), so its copy is a never-reached fallback.
+ */
+const EMPTY_BY_TAB: Record<SkillTab, string> = {
+  all: 'No skills match.',
+  ai: 'No AI skills are on yet. Turn a skill on to have the agent run it.',
+  workspace: 'No workspace automations yet.',
+  drafts: 'No drafts — every skill here is on.',
+};
 
 export function PlaybookPage(): ReactElement {
   const api = useApiClient();
@@ -28,6 +53,7 @@ export function PlaybookPage(): ReactElement {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [tab, setTab] = useState<SkillTab>('all');
 
   const skills = useQuery({
     queryKey: ['playbook', 'skills'],
@@ -96,7 +122,11 @@ export function PlaybookPage(): ReactElement {
   });
 
   const items = skills.data?.items ?? [];
+  // Selection is looked up across the whole list, not the current tab: a skill
+  // stays open when you switch tabs, even to a tab that does not contain it.
   const selected = items.find((s) => s.id === selectedId) ?? null;
+  const visibleItems = filterSkillsByTab(items, tab);
+  const tabCounts = countSkillsByTab(items);
 
   useEffect(() => {
     if (selectedId && !items.some((s) => s.id === selectedId)) setSelectedId(null);
@@ -168,7 +198,39 @@ export function PlaybookPage(): ReactElement {
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,360px)_1fr]">
             <Section title="Skills">
+              {items.length > 0 && (
+                <div role="tablist" aria-label="Skills" className="flex gap-1 border-b border-border">
+                  {SKILL_TABS.map((t) => {
+                    const active = tab === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="tab"
+                        id={`skills-tab-${t.id}`}
+                        aria-selected={active}
+                        aria-controls="skills-tabpanel"
+                        onClick={() => setTab(t.id)}
+                        className={`-mb-px flex items-center gap-1 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                          active
+                            ? 'border-brand-500 text-content'
+                            : 'border-transparent text-content-secondary hover:text-content'
+                        }`}
+                      >
+                        {t.glyph && (
+                          <span aria-hidden="true" className="text-brand-500">
+                            {t.glyph}
+                          </span>
+                        )}
+                        <span>{t.label}</span>
+                        <span className="text-2xs text-content-tertiary">{tabCounts[t.id]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <Card>
+                <div role="tabpanel" id="skills-tabpanel" aria-labelledby={`skills-tab-${tab}`}>
                 {skills.isPending ? (
                   <p className="p-4 text-sm text-content-secondary">Loading…</p>
                 ) : items.length === 0 ? (
@@ -176,9 +238,11 @@ export function PlaybookPage(): ReactElement {
                     title="No skills yet"
                     description="A skill decides what the AI does with an incoming message."
                   />
+                ) : visibleItems.length === 0 ? (
+                  <EmptyState title="Nothing here" description={EMPTY_BY_TAB[tab]} />
                 ) : (
                   <VirtualList
-                    items={items}
+                    items={visibleItems}
                     rowHeight={56}
                     label="Skills"
                     renderRow={(skill) => (
@@ -232,6 +296,7 @@ export function PlaybookPage(): ReactElement {
                     )}
                   />
                 )}
+                </div>
               </Card>
 
               {toggleSkill.isError && (

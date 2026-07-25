@@ -6,6 +6,33 @@
 
 ## Task log (newest-first)
 
+### 32.3 — 05.3-a · Skill listesi sekmeleri (All/AI/Workspace/Drafts) — done — 2026-07-26 UTC
+- Yapıldı:
+  - **Saf sınıflandırma modülü** `apps/web/src/features/playbook/skill-tabs.ts`: `classifySkill`
+    (aktif değil → `drafts`; aktif + `kind==='ai_agent'` → `ai`; aktif + diğer kind → `workspace`),
+    `filterSkillsByTab`, `countSkillsByTab`. **Bölüntü (partition):** her skill tam bir sekmeye
+    düşer → `All = AI ∪ Workspace ∪ Drafts` (çakışma yok, kayıp yok).
+  - **PlaybookPage bağlandı:** "Skills" bölümünün üstünde `role="tablist"` (All / AI ✦ / Workspace ⚡ /
+    Drafts), sekme başına sayaç; liste seçili sekmeye göre filtrelenir (`role="tabpanel"` ile ilişkili).
+    Seçim tüm liste üzerinden aranır → sekme değişince açık skill kapanmaz. Sekmeye özel boş-durum
+    metinleri; hiç skill yokken tablist gizli, onboarding empty korunur. Glyph'ler `aria-hidden`,
+    ekran okuyucu sadece "AI"/"Workspace" kelimesini okur (mevcut Reports tablist deseniyle aynı).
+  - Backend/şema/kontrat **dokunulmadı** — mevcut `Skill.kind`/`active` alanlarından türetilir
+    (ADR-14: `workflow` UI'si yok → Workspace sekmesi bugünkü seed'de boş, ileride kind gelince dolar).
+- KK (birebir): _"AI (✦) vs Workspace (⚡) vs taslak ayrımı"_ ✅ (tablist + kind/active filtresi).
+- **Test (yeni):** unit `skill-tabs.test.ts` (12) — her sekmenin doğru alt kümesi + partition
+  invariantı (disjoint & tam) + sayaçlar + sıra korunur + input mutasyonu yok.
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` ·
+  `pnpm -w test:integration` (**507**, backend'e dokunulmadı → regresyon yok) · web unit (**181**,
+  yeni 12 dahil) · api unit (**601**) · e2e `playbook.spec.ts` (PlaybookPage değişti → yeşil doğrulandı).
+  `pnpm -w test` (turbo) api+e2e'yi paylaşılan Postgres'e **paralel** koşup seed FK yarışına
+  (`tags_license_id_fkey`) düşüyor — bilinen altyapı sorunu (memory: DB süitleri seri koş); her paket
+  **seri** koşulunca yeşil. Full e2e'deki 3 flake (settings/team, login anon rate-limit throttle)
+  izole koşuda 14/14 yeşil — 32.1 notundaki bilinen durumla aynı, bu değişiklikle ilgisiz.
+- Sonraki pencereye not: **32.2** (Recommended skills kartları, 32.1'e bağımlı) ve **32.4** (liste
+  kontrolleri Search/Sort/Filter, **32.3'e bağımlı** — artık açık) kaldı. 32.4 bu sekme filtresinin
+  üstüne kurulur (`filterSkillsByTab` sonucu → arama/sıralama). Parent 32 hâlâ in-progress (32.2/32.4 açık).
+
 ### 32.1 — 05.1-a · Browse templates galerisi — done — 2026-07-26 UTC
 - Yapıldı:
   - **Şablon galerisi** `TemplateGallery.tsx` (modal, a11y: labelled dialog, Escape/backdrop kapatır,

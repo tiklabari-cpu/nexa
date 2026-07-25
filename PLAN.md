@@ -253,7 +253,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 **Faz-0 kapanış kapısı:** 52 gereksinimin tamamı ✅ veya gerekçeli ⛔ · §7 NFR kapısı geçildi ·
 `make dev` temiz kurulumdan demo akışını çalıştırıyor.
 
-> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** ✅ (07.3.2 Manual/Assisted — teslim edildi) → tm **21** (07.1/07.3.1/07.3.3 Reports Breakdown) · tm **22** (00.4 Onboarding) · tm **23** (S12 audit yazıcısı) · tm **24** (C8 retention) · tm **25** (M5 OTel) · tm **26** (i18n). Bu bakiye kapanana dek Faz-0 **"kapandı" sayılmaz**; `run-loop.sh` sırayla işler (kalan öncelik: 23 · 24 → 22 · 25 · 26 → 21). Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
+> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** ✅ (07.3.2 Manual/Assisted — teslim edildi) → tm **21** (07.1/07.3.1/07.3.3 Reports Breakdown) · tm **22** (00.4 Onboarding) · tm **23** ✅ (S12 audit yazıcısı) · tm **24** ✅ (C8 retention) · tm **25** (M5 OTel) · tm **26** (i18n). Bu bakiye kapanana dek Faz-0 **"kapandı" sayılmaz**; `run-loop.sh` sırayla işler (kalan öncelik: 22 · 25 · 26 → 21). Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
 
 ---
 
@@ -440,7 +440,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | S12      | Audit log (append-only)                             | ✅ yazıcı bağlandı (tm 23): 12 güvenlik olayı INSERT ediliyor · UPDATE/DELETE DB'de reddi · cross-tenant izole · PII yok |
 | A11Y1–6  | WCAG 2.1 AA · klavye · ⌘K                           |                    ✅ 01.1.3 (⌘K) Dilim 14 (tm 18)                    |
 | I18N1/2  | Widget + panel i18n                                 |                                ⬜                                |
-| C1/C2/C8 | GDPR · KVKK · retention                             |          ◐ silme CASCADE ✅ (Dilim 3), retention job ⬜          |
+| C1/C2/C8 | GDPR · KVKK · retention                             | ✅ retention job bağlandı (tm 24): tenant-döngülü hard-delete (kapanmış thread→event/tag cascade · visit telemetri · `.data` mail) · `retention_list_tenants()` SECURITY DEFINER sayımı + RLS-scoped `withTenant` silme (cross-tenant fiziksel imkânsız) · pozitif-pencere guard · **dry-run varsayılan** (`--apply` ile siler) · idempotent · audit `data.retention_pruned` |
 | M4       | Test piramidi (unit + integration + contract + E2E) |                           ✅ 752 test (258 unit + 454 integration + 40 E2E)                            |
 | M5       | Gözlemlenebilirlik (`request_id`, OTel, metrikler)  |                    ◐ `request_id` ✅, OTel ⬜                    |
 

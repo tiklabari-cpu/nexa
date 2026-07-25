@@ -63,6 +63,16 @@ const envSchema = z.object({
   RATE_LIMIT_ANON_PER_MIN: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_RTM_PER_SEC: z.coerce.number().int().positive().default(10),
 
+  /**
+   * Data retention windows in days (NFR-C8). Each is a positive integer; the
+   * pruning job hard-deletes data older than its window. Defaults sit at the top
+   * of the PRD's configurable tiers (conversations 365) and tighter for pure
+   * telemetry and transient mail. See services/retention/policy.ts.
+   */
+  RETENTION_THREAD_DAYS: z.coerce.number().int().positive().default(365),
+  RETENTION_VISIT_DAYS: z.coerce.number().int().positive().default(90),
+  RETENTION_MAIL_DAYS: z.coerce.number().int().positive().default(30),
+
   TRIAL_DAYS: z.coerce.number().int().positive().default(14),
   UNIT_PRICE_CENTS: z.coerce.number().int().nonnegative().default(9900),
   AI_RESOLUTIONS_INCLUDED: z.coerce.number().int().nonnegative().default(200),

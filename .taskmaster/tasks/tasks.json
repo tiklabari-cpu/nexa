@@ -436,7 +436,7 @@
         "description": "`audit_log` tablosu + RLS policy Dilim 12'de kuruldu (schema.prisma:911 AuditLogEntry, @@map audit_log) ama HICBIR olay INSERT edilmiyor — yazici yok (§D16). PRD NFR S12 append-only denetim izi istiyor. Guvenlik-hassas eylemlerde olay yaz. Sema DEGISMEZ.",
         "details": "1) Olay kumesi (append-only): login basari/basarisiz, parola sifirlama, rol/uyelik degisikligi, ayar degisiklikleri (security/routing/billing), PAT olustur/iptal, trusted domain degisikligi. PRD S12.\n2) Merkezi yazici: apps/api/src icinde writeAuditEntry(ctx, action, target, meta); withTenant/RLS uyumlu; append-only (UPDATE/DELETE policy ile reddedildigini dogrula). Ilgili route handler'larina cagri ekle.\n3) Alanlar: actor, tenant, action, target, request_id (server.ts mevcut); PII minimizasyonu (parola/deger YAZMA).\n4) Okuma/export UI KAPSAM DISI (v1) — bu task yalniz YAZICI.\nPRD: NFR S12 · PLAN.md §7.2 · §D16.",
         "testStrategy": "DoD kapisi + guvenlik. Her guvenlik eyleminde tam 1 append (integration); append-only ihlali (UPDATE/DELETE) reddi; cross-tenant gorunmezlik (negatif test ZORUNLU); PII sizmadigi. Efor [MAX] — tamper-direnci/append-only dogrulugu kritik. Bitince PLAN.md §7.2 S12 ⬜→✅ ve §D16 kapatildi olarak guncellenir.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -444,42 +444,46 @@
             "id": 1,
             "title": "Olay kumesi + alan sozlesmesi",
             "description": "actor/tenant/action/target/request_id; PII-min; hangi eylemler yazilir.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T00:50:01.360Z"
           },
           {
             "id": 2,
             "title": "Merkezi writeAuditEntry (withTenant/RLS, append-only dogrula)",
             "description": "Tek giris noktasi; UPDATE/DELETE policy reddini dogrula.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "1"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T00:50:01.363Z"
           },
           {
             "id": 3,
             "title": "Guvenlik-hassas handler'lara cagri ekle",
             "description": "auth/settings/billing/PAT/trusted-domains handler'larinda writeAuditEntry cagrilari.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T00:50:01.364Z"
           },
           {
             "id": 4,
             "title": "Testler: integration (append/eylem, append-only red, cross-tenant) + unit",
             "description": "Her eylemde 1 append; UPDATE/DELETE red; cross-tenant negatif; PII yok.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T00:50:01.375Z"
           }
         ],
-        "updatedAt": "2026-07-25T00:00:00.000Z"
+        "updatedAt": "2026-07-25T00:50:01.375Z"
       },
       {
         "id": "24",
@@ -487,7 +491,7 @@
         "description": "Silme CASCADE var (Dilim 3) ama retention job YOK (§7.2 C8 ◐). PRD C1/C2/C8: saklama suresi gecmis veriyi (or. eski anonim ziyaretci/konusma/olay, .data mail) periyodik, tenant-kapsamli, geri-donusu-olmayan sekilde buda. Prod scheduler yok (sinir) — manuel/mock tetik.",
         "details": "1) Saklama politikasi: hangi tablo/kolon TTL'i (events/threads yasi, anonim customer, mail .data). PRD C8 + ADR-12 (tek bolge eu).\n2) Job: apps/api/src altinda calistirilabilir script + package.json script (retention:run). GERCEK cron/prod scheduler YOK; SECURITY DEFINER + tenant dongusu, RLS-guvenli, batch + idempotent.\n3) Guvenlik: yanlislikla cross-tenant veya suresi GECMEMIS satiri SILMEME — kesin WHERE + dry-run modu + sayac log.\nPRD: NFR C1/C2/C8 · PLAN.md §7.2. Sinir: prod scheduler/DNS yok.",
         "testStrategy": "DoD kapisi + guvenlik: irreversible silme icin siki testler. Integration: suresi gecen silinir, gecmeyen KALIR, cross-tenant DOKUNULMAZ, idempotent (tekrar calistir -> ek etki yok), dry-run YAZMAZ (yalniz sayar). Efor [MAX] — geri donusu yok + compliance. Bitince PLAN.md §7.2 C1/C2/C8 ◐→✅ guncellenir.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -495,42 +499,46 @@
             "id": 1,
             "title": "Saklama politikasi (tablo->TTL) + dry-run tasarimi",
             "description": "Hangi veri ne kadar tutulur; dry-run/uygula ayrimi.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T01:20:39.148Z"
           },
           {
             "id": 2,
             "title": "retention:run script + SECURITY DEFINER tenant-dongulu budama",
             "description": "package.json script; batch, idempotent, RLS-guvenli.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "1"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T01:20:39.152Z"
           },
           {
             "id": 3,
             "title": "Guvenlik guard'lari",
             "description": "Kesin WHERE; dry-run; silinen sayaci log; cross-tenant koruma.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T01:20:39.154Z"
           },
           {
             "id": 4,
             "title": "Testler: integration (gecen siler / gecmeyen kalir / cross-tenant / idempotent / dry-run)",
             "description": "Tam kapsama negatif+pozitif.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T01:20:39.155Z"
           }
         ],
-        "updatedAt": "2026-07-25T00:00:00.000Z"
+        "updatedAt": "2026-07-25T01:20:39.155Z"
       },
       {
         "id": "25",
@@ -637,9 +645,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T00:10:56.614Z",
+      "lastModified": "2026-07-25T01:20:39.155Z",
       "taskCount": 26,
-      "completedCount": 20,
+      "completedCount": 22,
       "tags": [
         "master"
       ]

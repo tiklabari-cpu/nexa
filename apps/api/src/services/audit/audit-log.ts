@@ -47,6 +47,9 @@ export const AUDIT_ACTIONS = [
   // Credentials
   'pat.created',
   'pat.revoked',
+  // Data lifecycle — a retention sweep hard-deleted expired data (NFR-C8). The
+  // record is metadata (counts), not the data itself, so it is safe to retain.
+  'data.retention_pruned',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

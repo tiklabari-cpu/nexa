@@ -6,6 +6,39 @@
 
 ## Task log (newest-first)
 
+### 24 — C8 veri saklama (retention) budama işi [MAX] — done — 2026-07-25 UTC
+- Yapıldı: Silme CASCADE vardı (Dilim 3) ama süresi geçen veriyi budayan **periyodik iş yoktu**
+  (§7.2 C8 ◐). Eklenen `services/retention/`: `policy.ts` (tablo→pencere — kapanmış thread 365g ·
+  visit telemetri 90g · `.data` mail 30g; env'den override; `cutoffFor` **pozitif-pencere guard'ı**
+  = "her şeyi silme" footgun'ını reddeder), `retention.ts` (`RetentionRunner` — tenant-döngülü
+  hard-delete), `run.ts` (`retention:run` CLI). **Prod scheduler YOK** (sınır) — manuel tetik.
+- Mekanizma: Yeni migration `retention_list_tenants()` **SECURITY DEFINER** (auth_* deseni) tüm
+  tenant'ları sayar (RLS-bağlı `nexa_app` bunları tek başına göremez). Silmeler tenant başına
+  `withTenant` içinde → **RLS cross-tenant'ı fiziksel imkânsız kılar** (WHERE hatası bile başka
+  tenant'a ulaşamaz), owner+SECURITY DEFINER silme yerine (o RLS ağını kaybederdi). Kapanmış thread
+  silinince event+thread_tag **cascade** düşer (en büyük tablo hiç adlandırılmadan budanır).
+  Batch (500) + kısa tx + idempotent.
+- Güvenlik: iki bağımsız guard — (1) her ifade `... < cutoff` yaş-guard'ı, guard'sız silme yolu
+  YOK; (2) RLS tenant-scope. **dry-run varsayılan** (`--apply` olmadan yalnız sayar — irreversible).
+  Silme audit'e `data.retention_pruned` (system aktör + sayaçlar) yazılır — metadata, veri değil.
+- Doğrulama (DoD tam yeşil, exit 0): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` ·
+  api unit+integration **570/570** (yeni: 6 birim policy + 8 integration retention) ·
+  `pnpm -w test:integration` (serialize) **481/481** · rtm **65/65** · **e2e 41/41** · prettier temiz ·
+  `retention:run` dry-run canlı DB'de koştu (SECURITY DEFINER 2 tenant döndürdü, 0 silme).
+  Integration kanıtı `test/integration/retention.test.ts`: süresi geçen thread+event cascade
+  **silinir** · recent+active thread **KALIR** · visit geçen silinir/recent kalır · **cross-tenant
+  DOKUNULMAZ** (A bağlamında silme B'nin aynı satırını bırakır — RLS) · **idempotent** (2. koşu 0) ·
+  **dry-run YAZMAZ** (sayar, silmez, audit yok) · audit tam 1 sistem-atıflı sayaçlı giriş ·
+  mail dosyaları geçen süpürülür/recent kalır.
+- Varsayımlar: (1) Retention hedefi = kapanmış thread (→event/tag cascade) + visit telemetri +
+  `.data` mail. **Müşteri satırı silme kapsam dışı** — "right to erasure" API'si (GDPR Md.17, tekil
+  özne) + per-tenant retention kolonu (`security_settings`) ayrı/sonraki iş (v1 borcu). (2) Pencereler
+  env-yapılandırılabilir varsayılan (365/90/30), PRD'nin 30/60/365 kademesiyle hizalı. (3) Mail
+  dosyaları tenant-etiketsiz olduğundan global süpürülür (yerel dev artefaktı). Şema DEĞİŞMEDİ
+  (yalnız 1 SECURITY DEFINER fonksiyon migration'ı); `db:check-drift` etkilenmez (Prisma fonksiyon modellemez).
+- Sonraki pencereye not: Faz-0 bakiyesinde sıradaki öncelik tm **22** (00.4 Onboarding) → 25 (OTel) ·
+  26 (i18n) → 21. `retention:run` prod'da cron'a bağlanacak (sınır: scheduler yok).
+
 ### 23 — S12 audit_log yazıcısı (append-only olay yazımı) [MAX] — done — 2026-07-25 UTC
 - Yapıldı: `audit_log` tablosu + RLS Dilim 12'de vardı ama **hiçbir olay yazılmıyordu** (§D16).
   Merkezi tek yazıcı `services/audit/audit-log.ts` → `writeAuditEntry(tx, ctx, entry)`: verilen

@@ -322,7 +322,7 @@
         "description": "Reports bugun yalniz Overview (Dilim 9). Eksik Should payi: 07.1 kenar cubugu sekmeleri (Overview/AI Agent/Breakdown); 07.3.1 aralik tablarina 365+custom ve vs-onceki donem karsilastirmasi; 07.3.3 Chats bolumu kartlari (automated chats/hour, sure/response dagilimlari). §2 MOD-07 ◐.",
         "details": "1) Kontrat: reports.yaml -> breakdown + ai-agent yanitlari; overview'a previous_period (delta) blogu. types generate.\n2) Backend: reports.ts — verilen range icin onceki esit-uzunluk donemi hesapla + delta don; 365/custom aralik (query param dogrulama); breakdown/ai-agent aggregation.\n3) Web: ReportsPage.tsx — sol sekme (Overview/AI Agent/Breakdown), range tabs 7/30/90/365 + custom date picker, her KPI'da vs-onceki delta rozeti, Chats bolumu kartlari.\nPRD: FR-MOD-07.1/07.3.1/07.3.3 · PLAN.md §3.6 · §2 MOD-07. Bagimlilik: task 20 (KPI kirilimi Breakdown'da yeniden kullanilir).",
         "testStrategy": "DoD kapisi. Ozel: previous-period delta integration testi (esit uzunluk donem dogru); custom range param dogrulama; breakdown rakamlari; e2e Reports sekme gezinme (Overview/AI Agent/Breakdown). Bitince PLAN.md §3.6 (07.1/07.3.1/07.3.3) ◐→✅ ve §2 MOD-07 guncellenir. Kanit: Breakdown + AI Agent sekmesi screenshot.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "20"
         ],
@@ -332,52 +332,57 @@
             "id": 1,
             "title": "Kontrat: breakdown/ai-agent + previous_period delta",
             "description": "reports.yaml yeni yanitlar + overview delta blogu; types generate.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T07:24:02.612Z"
           },
           {
             "id": 2,
             "title": "Backend: previous-period delta + 365/custom range + breakdown/ai-agent aggregation",
             "description": "reports.ts onceki donem + delta; range dogrulama; yeni aggregation sorgulari.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "1"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T07:24:02.619Z"
           },
           {
             "id": 3,
             "title": "Web: sol sekmeler (Overview/AI Agent/Breakdown)",
             "description": "ReportsPage sekme yapisi + rota/durum.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T07:24:02.624Z"
           },
           {
             "id": 4,
             "title": "Web: range tabs 365+custom + vs-onceki delta rozetleri + Chats kartlari",
             "description": "Date picker; delta rozetleri; Chats bolumu kartlari.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T07:24:02.627Z"
           },
           {
             "id": 5,
             "title": "Testler: integration (delta + custom range) + unit + e2e sekme gezinme",
             "description": "Delta dogrulugu; custom range; e2e navigasyon.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "4"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T07:24:02.630Z"
           }
         ],
-        "updatedAt": "2026-07-25T00:00:00.000Z"
+        "updatedAt": "2026-07-25T07:24:02.630Z"
       },
       {
         "id": "22",
@@ -653,13 +658,1169 @@
           }
         ],
         "updatedAt": "2026-07-25T06:44:31.405Z"
+      },
+      {
+        "id": "27",
+        "title": "02.4 — Details paneli ziyaret bilgisi",
+        "description": "Inbox Details panelinde eksik olan Visited pages + Visit info (denetim §D19). Must (MVP).",
+        "details": "ÜST GÖREV (parent). 02.4 Details paneli ziyaret bilgisi — Must (MVP), Faz-0 kapanışını bloklayan ◐ (§D19).\nIki subtask sırayla: 27.1 (kontrat+backend) → 27.2 (UI). Her subtask kendi DoD kapısından TEK TEK geçer.\nDenetim bulgusu: DetailsPanel.tsx yalnız Chat info/Tags/Teams gösteriyor; Visited pages + Visit info YOK.\nBağlam: PLAN.md §3.13/T3, §D19, §C-A10. Kapanış: her iki subtask ✅ olunca parent done.",
+        "testStrategy": "Alt-görev bazlı; parent ancak 27.1+27.2 DoD+KK yeşil olunca done.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "T3-a — getChat yanıtına ziyaret bilgisi (kontrat+backend)",
+            "description": "ChatDetail yanıtına visited_pages + visit_info (device/referrer/duration/ip). Contract-first. PRD FR-MOD-02.4.",
+            "details": "T3-a — getChat yanıtına ziyaret bilgisi (kontrat + backend). [XHIGH]\nPRD: FR-MOD-02.4.1-.6 (+ NFR-S5 IDOR: ziyaret verisi tenant-scoped).\nNEDEN AÇIK: getChat (packages/contract/openapi/paths/chats.yaml) yanıtı ziyaret bilgisi taşımıyor. Veri VAR:\n`Visit` şeması (openapi.yaml:886 civarı: referrer/pages/avg_duration), `visits` tablosu widget'tan doluyor,\n`getCustomer` okuyor — ama chat yüzeyine bağlı değil.\nKAPSAM (contract-first): (1) kontrat — ChatDetail yanıtına `visitor` bloğu: visited_pages[] + visit_info\n{device, referrer, duration_seconds, ip}; `pnpm --filter @nexa/contract generate`. (2) backend — chat-service/\ncustomer-service müşterinin son ziyaretini chat'e bağlar (apps/api/src/services/chat + customers).\nKK (PRD birebir): \"Bölümler katlanır; tag/assignee anında kaydeder; süre/ziyaret canlı\".\nKK-TÜRETİLMİŞ (§C-A10): gösterilecek alanlar (Visited pages; Device/Referring/Duration/IP) PRD Açıklama\nsütunundan türetildi.\nKAPSAM DIŞI: canlı süre WS push (T3-b UI hesaplar); 13.2 Engage 360° panel (v2); IP coğrafi çözümleme.\nBAĞLAM: PLAN.md §3.13/T3-a, §D19, §C-A10, ADR-04 (resource-based REST). Bağımlılık: yok (visits zaten yazılıyor).",
+            "testStrategy": "integration `test/integration/chats.test.ts`: getChat yanıtında ziyaret alanları dolu (IP/referrer null-güvenli).\nCROSS-TENANT negatif: başka lisansın chat'inde ziyaret verisi sızmıyor (404). contract-parity yeşil (yeni alanlar\nkontratta). DoD kapısı: typecheck+lint+unit+integration+build+e2e.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "27",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "T3-b — Details panelinde Visited pages + Visit info (UI)",
+            "description": "DetailsPanel.tsx'e iki katlanır bölüm. Veri T3-a'dan. PRD FR-MOD-02.4.",
+            "details": "T3-b — Details panelinde Visited pages + Visit info bölümleri (UI). [XHIGH]\nPRD: FR-MOD-02.4.1-.6.\nNEDEN AÇIK: apps/web/src/features/inbox/DetailsPanel.tsx yalnız Conversation (Status/Chat ID/Assignee/Queue/\nStarted) + Tags + Teams render ediyor (§D19).\nKAPSAM: iki katlanır `<Section>` daha — \"Visited pages\" (sıralı liste) + \"Visit info\" (Device/Referring/\nDuration/IP satırları); veri T3-a'dan (getChat). Ziyaret yoksa anlamlı empty state (boş dikdörtgen değil).\nKK (PRD birebir): \"Bölümler katlanır; tag/assignee anında kaydeder; süre/ziyaret canlı\".\nKAPSAM DIŞI: harita; IP coğrafi; canlı ziyaretçi akışı (03.1.x, v1).\nBAĞLAM: PLAN.md §3.13/T3-b. Bağımlılık: 27.1 (T3-a veri yolu) — ÖNCE o biter.",
+            "testStrategy": "unit (React render): ziyaret verisiyle sayfa listesi + device/IP görünür; veri yokken empty state metni.\nE2E `apps/e2e/tests/demo-flow.spec.ts`'e ziyaret-bilgisi görünürlük iddiası. DoD kapısı tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "27",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "28",
+        "title": "01.3 — Sağ panel switcher (Details/Expand + persist)",
+        "description": "Sağ panel aç/kapa + Expand + tercih persist. Copilot sekmesi v1'e ayrıldı (§D22). PRD FR-MOD-01.3.",
+        "details": "01.3 — Sağ panel switcher (Details/Expand + persist). [XHIGH] · Must (MVP), Faz-0 ◐.\nPRD: FR-MOD-01.3.\nNEDEN AÇIK: Details paneli InboxPage.tsx'te her zaman görünür; panel anahtarı (aç/kapa), Expand (geniş\ntranscript) ve tercih kalıcılığı yok. Copilot sekmesi ⬜ ama o MOD-12 = v1 (§D22 daraltma).\nKAPSAM: sağ panel toggle + Expand modu (transcript tam genişlik) + tercih localStorage/hesap tercihinde persist.\nKK (PRD birebir): \"Panel açılır/kapanır; Details/Copilot geçişi persist\" → MVP payında Details/Expand geçişi\npersist (Copilot v1'e ayrıldı, §D22).\nKAPSAM DIŞI: Copilot sekmesi/paneli (12.1-12.3, v1 tm 36); reply suggestions.\nBAĞLAM: PLAN.md §3.13/T1-a, §D22. Bağımlılık: yok. (12.1-a bu görevin üstüne oturur → tm 36 buna bağımlı.)",
+        "testStrategy": "unit: toggle + Expand + reload sonrası tercih korunur. E2E: panel aç/kapa. DoD kapısı tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "29",
+        "title": "EK-A — Form & girdi katmanı (validasyon + davranış)",
+        "description": "Frontend form validasyonu elle; ortak kütüphane/desen yok (denetim). Must (MVP).",
+        "details": "ÜST GÖREV (parent). EK-A Form & girdi katmanı — Must (MVP), Faz-0 ◐ (EK-A.1 + EK-A.2).\nÜç subtask: 29.1 (primitif+pilot) → 29.2 (kalan formlar) + 29.3 (davranış). 29.2 ve 29.3 29.1'e bağımlı.\nDenetim: web'de 0 zod importu — frontend form validasyonu elle (backend zod ✅, bu iş FRONTEND).\nHer subtask kendi DoD+KK kapısından geçer. Bağlam: PLAN.md §3.13/T4,T5.",
+        "testStrategy": "Subtask bazlı; parent 29.1+29.2+29.3 yeşil olunca done.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "T4-a — Ortak form-validasyon primitifi + 2 pilot form",
+            "description": "Tek doğrulama primitifi + alan-altı hata + submit-disabled; pilot Invite + Add website. FR-EK-A.1.",
+            "details": "T4-a — Ortak form-validasyon primitifi + pilot iki form. [XHIGH]\nPRD: FR-EK-A.1.\nNEDEN AÇIK: apps/web/src içinde form validasyonu her ekranda elle; alan-altı hata / submit-disabled deseni\ntekrar ediyor, tek kaynak yok. (Backend zod ✅ 18 dosya — bu iş FRONTEND.)\nKAPSAM: tek doğrulama primitifi (hafif hook/şema; `zod` zaten pnpm-lock'ta, frontend'e import edilebilir) +\nalan-altı hata + geçersizken submit pasif + Error/Disabled/Loading. PİLOT: Invite teammates\n(features/team/InviteTeammates.tsx) + Add website (features/settings/WebsiteWidgets.tsx).\nKK (PRD birebir): \"Tek form/validasyon kütüphanesi; alan-altı hata mesajı\".\nKAPSAM DIŞI: kalan formların migrasyonu (29.2/T4-b); Forms builder (08.7.7, v1).\nBAĞLAM: PLAN.md §3.13/T4-a. Bağımlılık: yok. (29.2, 29.3 + v1 form görevleri 47/50/51/52/43 bu desene dayanır.)",
+            "testStrategy": "unit: geçersiz alan → alan-altı hata + submit pasif (iki pilot formda, her durum). E2E: Invite akışında\ngeçersiz email satır-içi hata. DoD kapısı tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "29",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "T4-b — Kalan Must formlarını primitife taşı",
+            "description": "Signup/Reset/New canned/New tag/Payment/Channels formları. FR-EK-A.1.",
+            "details": "T4-b — Kalan Must formlarını primitife taşı. [XHIGH]\nPRD: FR-EK-A.1.\nNEDEN AÇIK: 29.1 yalnız 2 pilot; kalan Must formlar (Signup, Reset, New canned, New tag, Payment mock,\nChannels ekle) hâlâ elle.\nKAPSAM: kalan formları 29.1 primitifine taşı; her birinde alan-altı hata + submit-disabled.\nKK (PRD birebir): \"Tek form/validasyon kütüphanesi; alan-altı hata mesajı\".\nKAPSAM DIŞI: v1 formları (Forms builder, Custom fields — ayrı görevler).\nBAĞLAM: PLAN.md §3.13/T4-b. Bağımlılık: 29.1 (T4-a primitif). Tahmin 1-2 pencere — çok form; 2+ ise böl.",
+            "testStrategy": "unit: her taşınan formda validasyon. Regresyon: mevcut E2E'ler (billing/settings/onboarding) yeşil kalır.\nDoD kapısı tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "29",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "T5-a — Yarım-form kapatma onayı + ortak davranış",
+            "description": "Dirty guard + dropdown/stepper/optimistic tekilleştirme. FR-EK-A.2.",
+            "details": "T5-a — Yarım-form kapatma onayı + ortak dropdown/stepper/optimistic birleştirme. [XHIGH]\nPRD: FR-EK-A.2.\nNEDEN AÇIK: debounce/stepper/optimistic toggle dağınık uygulanmış; YARIM-FORM KAPATMA ONAYI (kirli formu\nkapatırken uyar) hiçbir modalda yok.\nKAPSAM: ortak \"dirty guard\" (kirli form kapatma → onay); ortak dropdown/stepper davranış sarmalayıcı;\noptimistic + hata geri alma desenini tekilleştir.\nKK (PRD birebir): \"Tutarlı davranış; optimistic + hata geri alma\".\nKAPSAM DIŞI: yeni ekranlar; drag-reorder (06.2.4, v1).\nBAĞLAM: PLAN.md §3.13/T5-a. Bağımlılık: 29.1 (aynı form katmanı; sıra 29.1 → 29.3).",
+            "testStrategy": "unit: kirli form kapatma → onay; optimistic hata → geri alma. E2E: Invite modal yarım doldurup kapatma →\nonay. DoD kapısı tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "29",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "30",
+        "title": "EK-B.1 — Liste katmanı (virtualization + empty state)",
+        "description": "Listeler keyset paginate ediyor ama virtualization yok; empty state tutarsız. Must (MVP).",
+        "details": "ÜST GÖREV (parent). EK-B.1 Liste katmanı — Must (MVP), Faz-0 ◐. P4 buna bağlı; P6 çoğunlukla ✅\n(keyset + events RANGE partition). İki subtask: 30.1 (virtualization) → 30.2 (skeleton+empty). Her biri kendi\nDoD+KK kapısından geçer. Bağlam: PLAN.md §3.13/T6, §7.2 P4/P6.",
+        "testStrategy": "Subtask bazlı; parent 30.1+30.2 yeşil olunca done.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "T6-a — Virtualized liste primitifi",
+            "description": "Contacts/Teammates/Skills/Tickets; yalnız görünür satır DOM'da (NFR-P4). FR-EK-B.1.",
+            "details": "T6-a — Virtualized liste primitifi (Contacts/Teammates/Skills/Tickets). [XHIGH]\nPRD: FR-EK-B.1 (+ NFR-P4).\nNEDEN AÇIK: listeler keyset paginate ediyor (✅) ama DOM'a tüm satırlar giriyor; virtualization yok →\n10k satırda P4 (60fps) ölçülemez.\nKAPSAM: tek virtualized liste primitifi; Contacts + Teammates + Skills + Tickets ona taşınır.\nKK (PRD birebir, bu payı): \"10.000+ satırda 60fps; ... yalnız görünür satır DOM'da\".\nKAPSAM DIŞI: skeleton + empty state (30.2/T6-b); Apps/Campaigns/Knowledge gridleri (v1).\nBAĞLAM: PLAN.md §3.13/T6-a, §7.2 P4. Bağımlılık: yok. (40 Tickets grid + 53 Apps buna dayanır.)",
+            "testStrategy": "unit: yalnız görünür satır DOM'da (sanal pencere testi). PERF ölçümü: 10k satır render bütçesi → HANDOFF'a\nkanıt. DoD kapısı tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "30",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "T6-b — Skeleton + anlamlı empty state deseni",
+            "description": "Boş dikdörtgen yerine anlamlı empty state; skeleton. FR-EK-B.1.",
+            "details": "T6-b — Skeleton + anlamlı empty state deseni (tüm Must listeler). [XHIGH]\nPRD: FR-EK-B.1.\nNEDEN AÇIK: empty state tutarsız (kimi liste boş dikdörtgen); skeleton kısmi.\nKAPSAM: ortak skeleton + \"anlamlı empty state\" bileşeni; Must listelerine uygulanır (Contacts/Teammates/\nTickets/Inbox listeleri).\nKK (PRD birebir): \"...skeleton; her boş liste için anlamlı empty state (boş dikdörtgen yok)\".\nKAPSAM DIŞI: v1 gridleri.\nBAĞLAM: PLAN.md §3.13/T6-b. Bağımlılık: 30.1 (aynı liste primitifi).",
+            "testStrategy": "unit: boş liste → anlamlı empty state (boş dikdörtgen değil) her listede. DoD kapısı tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "30",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "31",
+        "title": "13.8 — E-posta bildirim kanalı",
+        "description": "Bildirim tercihine e-posta + sunucu tetik (yeni sohbet/atama) → FileMailer (A4). PRD 13.8/08.2 Must (§D20).",
+        "details": "T7-a — E-posta bildirim kanalı. [XHIGH] · Must (MVP), Faz-0 ◐ (§D20).\nPRD: FR-MOD-13.8 (+ FR-MOD-08.2).\nNEDEN AÇIK: apps/web/src/features/notifications/notifications.ts yalnız {enabled, sound, desktop}; e-posta\nkanalı yok. SMTP mock (apps/api/src/services/mail/mailer.ts, A4) var ama bildirime bağlı değil.\nKAPSAM: kullanıcı tercihi `email: boolean`; sunucu tarafı tetik — yeni sohbet/atama/mention olayında ilgili\najanlara FileMailer ile e-posta (mock, .data/mail). Tercih kullanıcı bazında.\nKK (PRD birebir): \"Bkz. FR-MOD-08.2; kanallar arası tutarlı\" · 08.2: \"ses/masaüstü/e-posta/tarayıcı bildirim\ntercihleri (yeni sohbet/atama/mention); kullanıcı bazında\".\nKAPSAM DIŞI: mobil push (🔒 v1); e-posta şablon markası (08.7.5, v1); gerçek SMTP (§9).\nBAĞLAM: PLAN.md §3.13/T7-a, §D20, A4. Bağımlılık: yok. (49 Chat transcripts bu mailer desenine dayanır.)",
+        "testStrategy": "integration: atama olayında hedef ajanın posta kutusuna (.data/mail) mesaj düşüyor; tercih kapalıyken düşmüyor.\nCROSS-TENANT: başka lisansın ajanına gitmiyor. unit: karar fonksiyonu (hangi kanal ateşlenir). DoD kapısı tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "32",
+        "title": "05 — Playbook tamamlama",
+        "description": "Playbook çekirdeği var (öne çekildi); şablon galerisi/sekmeler/kontroller eksik. PRD MOD-05 (v1).",
+        "details": "PARENT. 05 Playbook tamamlama (öne çekilen v1 yüzeyi). Backend skill CRUD+compile+preview VAR\n(routes/playbook.ts); UI PlaybookPage.tsx/SkillEditor.tsx VAR. Eksik: şablon galerisi/sekmeler/kontroller.\n4 subtask; her biri DoD+KK'dan geçer. Bağlam: PLAN §4.4.1.",
+        "testStrategy": "Subtask bazlı; parent tüm subtask yeşil olunca done.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "05.1-a — Browse templates galerisi",
+            "description": "Şablon galerisi + tür seçimi → editör. PRD 05.1 (Must).",
+            "details": "05.1-a Browse templates galerisi. [XHIGH] PRD 05.1 (Must).\nNEDEN AÇIK: PlaybookPage.tsx'te 'Browse templates'/şablon galerisi yok (grep 0).\nKAPSAM: header 'Browse templates' → şablon kartı galerisi; kart seç → skill editörüne ön-doldurulmuş açılır.\nŞablonlar deterministik yerel katalog (dış servis yok).\nKK (birebir): \"Şablon galerisi; tür seçimi → editör\".\nKAPSAM DIŞI: Workspace workflow türü (⛔ ADR-14). BAĞLAM: PLAN §4.4.1.",
+            "testStrategy": "unit: galeri render + seç → editör ön-dolu. E2E: şablondan skill oluşturma. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "32",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "05.2-a — Recommended skills kartları",
+            "description": "Try this / See more; entegrasyon uyarısı. PRD 05.2 (Should).",
+            "details": "05.2-a Recommended skills kartları. [XHIGH] PRD 05.2 (Should).\nKAPSAM: Prebuilt/AI/Trending kategorili kartlar; 'Try this' → şablonu kopyalayıp editöre açar; entegrasyon\ngerektiren şablon uyarır.\nKK (birebir): \"[Try this] şablonu kopyalayıp editöre açar; entegrasyon gerektirenler uyarır\".\nBAĞLAM: PLAN §4.4.1. Bağımlılık: 32.1.",
+            "testStrategy": "unit: Try this → editör kopya; entegrasyon-gerekli kart uyarı. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "32",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "05.3-a — Skill listesi sekmeleri (All/AI/Workspace/Drafts)",
+            "description": "AI/Workspace/Drafts ayrımı. PRD 05.3 (Must).",
+            "details": "05.3-a Skill listesi sekmeleri (All/AI/Workspace/Drafts). [XHIGH] PRD 05.3 (Must).\nNEDEN AÇIK: liste var ama AI/Workspace/Drafts sekme ayrımı yok.\nKAPSAM: role=tablist sekmeler; AI(✦)/Workspace(⚡)/Drafts ayrımı; Skill.status/kind'dan filtre.\nKK (birebir): \"AI (✦) vs Workspace (⚡) vs taslak ayrımı\". BAĞLAM: PLAN §4.4.1.",
+            "testStrategy": "unit: her sekme doğru alt küme. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "32",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "05.4-a — Liste kontrolleri (Search/Sort/Filter)",
+            "description": "Ada göre arama + tür/durum/sahip filtre. PRD 05.4 (Should).",
+            "details": "05.4-a Liste kontrolleri (Search/Sort/Filter). [XHIGH] PRD 05.4 (Should).\nKAPSAM: ada göre debounce arama + tür/durum/sahip filtre + sıralama.\nKK (birebir): \"Ada göre arama; tür/durum/sahip filtre\". BAĞLAM: PLAN §4.4.1. Bağımlılık: 32.3 + form deseni (tm 29).",
+            "testStrategy": "unit: arama/filtre daraltır. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              3
+            ],
+            "parentId": "32",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "33",
+        "title": "06 — AI Agent + Knowledge tamamlama [MAX]",
+        "description": "AI Agent backend var, UI kısmi. Şablon galerisi/reorder/crawl/profile/performance eksik. PRD MOD-06 (v1).",
+        "details": "PARENT [MAX]. 06 AI Agent + Knowledge tamamlama. AiAgent şeması persona/tone/languages/name/avatarUrl VAR;\nPATCH /ai-agents/:id served. 6 subtask (2'si [MAX]: reorder a11y + KB crawl SSRF). Bağlam: PLAN §4.4.2.",
+        "testStrategy": "Subtask bazlı; [MAX] subtask'larda negatif testler pozitiften ÖNCE.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "06.1-a — AI Agent sekmeleri + readiness check",
+            "description": "Performance/Profile/Skills/Knowledge sekme kabuğu + readiness. PRD 06.1 (Must).",
+            "details": "06.1-a AI Agent sekmeleri (Performance/Profile/Skills/Knowledge) + readiness check. [XHIGH] PRD 06.1 (Must).\nNEDEN AÇIK: UI Skills+Knowledge gösteriyor ama sekmeli AI Agent üst yapısı + readiness uyarısı yok.\nKAPSAM: sekme kabuğu; KB/skill boşsa 'AI'ı açma' uyarısı.\nKK (birebir): \"Tek yerde persona+yetenek+bilgi+performans; readiness check (KB/skill boşsa açma uyarısı)\".\nBAĞLAM: PLAN §4.4.2. Bağımlılık: 33.5 (Profile) + 33.6 (Performance).",
+            "testStrategy": "unit: boş KB+skill → readiness uyarısı + aktive engeli. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              5,
+              6
+            ],
+            "parentId": "33",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "06.2.4-a — Ordered steps: drag reorder + klavye [MAX]",
+            "description": "Reorder + klavye alternatifi (NFR-A11Y4) + zorunlu param. PRD 06.2.4 (Must).",
+            "details": "06.2.4-a Ordered steps: drag reorder + klavye alternatifi. [MAX] ↑ PRD 06.2.4 · NFR-A11Y4.\n↑ GEREKÇE: NFR-A11Y4 'sürükle-bırak yeniden sıralamaya klavye alternatifi' kaynakta eksik, Nexa kritik — a11y\nsınırı + skill sırası davranışı.\nNEDEN AÇIK: adımlar var (SkillEditor.tsx) ama reorder yok (grep 0); klavye alternatifi yok.\nKAPSAM: adım reorder (drag) + klavye ile taşıma (yukarı/aşağı + ARIA duyuru); zorunlu param (transfer hedefi) boşsa hata.\nKK (birebir): \"Her adım araç çağrısı; drag reorder (+ klavye alternatifi); zorunlu parametre (ör. transfer hedefi) boşsa hata\".\nBAĞLAM: PLAN §4.4.2.",
+            "testStrategy": "unit: klavye reorder sıra değiştirir; NEGATİF (önce): transfer hedefi boş → kaydetme reddi. a11y: odak+duyuru. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "33",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "06.3.1-a — Knowledge alt sekmeler",
+            "description": "All/Websites/Files/Articles/FAQ tür filtre. PRD 06.3.1 (Must).",
+            "details": "06.3.1-a Knowledge alt sekmeler (All/Websites/Files/Articles/FAQ). [XHIGH] PRD 06.3.1 (Must).\nKAPSAM: tür bazlı filtre sekmeleri (KnowledgeSource.type).\nKK (birebir): \"Tür bazlı filtre\". BAĞLAM: PLAN §4.4.2.",
+            "testStrategy": "unit: her sekme doğru tür. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "33",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "06.3.2-a — KB website crawl + SSRF [MAX]",
+            "description": "Website crawl+parse + geçersiz URL/tür reddi + SSRF guard. PRD 06.3.2 (Must).",
+            "details": "06.3.2-a + New source: Website crawl + geçersiz URL/tür reddi. [MAX] ↑ PRD 06.3.2 · NFR-S7-benzeri.\n↑ GEREKÇE: dış URL çekme = SSRF yüzeyi (private/loopback reddi, redirect kapalı) — 08.8.4 ile aynı sınır.\nNEDEN AÇIK: POST /knowledge-sources yalnız verilen content'i indeksliyor (routes/playbook.ts:340); website crawl yok.\nKAPSAM: Website türü için crawl+parse (mock fetcher, deterministik) → chunk+embedding; geçersiz URL/tür reddi;\nSSRF guard (private/loopback/link-local reddi). ORTAK: lib/ssrf.ts 08.8.4-c ile paylaşılır.\nKK (birebir): \"Geçersiz URL/tür reddi; crawl/parse; RAG indeksleme; bulk/CSV import (Nexa)\".\nKAPSAM DIŞI: bulk/CSV (ayrı Should). BAĞLAM: PLAN §4.4.2, §7.2 S7.",
+            "testStrategy": "integration: crawl → chunk >0; geçersiz URL → 4xx. SSRF NEGATİF (önce): 127.0.0.1/10.x/169.254.169.254/localhost/file:// → reddedilir. cross-tenant. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "33",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 5,
+            "title": "06.4-a — Profile (persona) UI + preview",
+            "description": "Name/Avatar/Tone/Language/Answer length → PATCH; canlı preview. PRD 06.4 (Must).",
+            "details": "06.4-a Profile (persona: Name/Avatar/Tone/Language/Answer length) UI + canlı preview. [XHIGH] PRD 06.4 (Must).\nNEDEN AÇIK: AiAgent şemasında persona/tone/languages/name/avatarUrl var, PATCH /ai-agents/:aiAgentId served\n(playbook.ts:110); Profile düzenleme UI'ı yok (yalnız okunuyor).\nKAPSAM: Profile formu (isim zorunlu, avatar, tone, language çoklu, answer length) → PATCH; canlı preview;\nwidget persona'ya bağlanır (11.3 ✅).\nKK (birebir): \"Widget'ta persona görünür; çok dilli; zorunlu isim\".\nBAĞLAM: PLAN §4.4.2. Bağımlılık: form deseni (tm 29).",
+            "testStrategy": "unit: zorunlu isim boş → submit pasif. integration: PATCH persist. E2E: persona widget'ta görünür. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "33",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 6,
+            "title": "06.5-a — AI Performance KPI",
+            "description": "Resolution/CSAT/Transferred + düşük-baz uyarısı. PRD 06.5 (Should).",
+            "details": "06.5-a Performance (Resolution/AI chats/CSAT/Transferred %) + düşük-baz uyarısı. [XHIGH] PRD 06.5 (Should).\nKAPSAM: KPI kartları (mevcut reports sorgularından, ADR-09); düşük-baz uyarısı; AI-off arşiv ayrımı.\nKK (birebir): \"KPI kartları; düşük-baz uyarısı; AI off iken arşiv ayrımı\".\nBAĞLAM: PLAN §4.4.2. tm 44 (07.4-a) ile paylaşımlı sorgu.",
+            "testStrategy": "unit: düşük-baz → uyarı; sayılar reports=fatura (ADR-09). DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "33",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "34",
+        "title": "08.8.4 — Webhooks [MAX]",
+        "description": "webhooks tablosu + scope var, route/servis yok. En yüksek güvenlik yüzeyi. PRD 08.8.4 (v1, Must).",
+        "details": "PARENT [MAX]. 08.8.4 Webhooks — en yüksek güvenlik yüzeyi (NFR-S7, R1/R2). webhooks tablosu +\nwebhooks--all:rw scope (principal.ts:107) var, route/servis YOK. 4 subtask; negatif testler pozitiften ÖNCE.\nBağlam: PLAN §4.4.3, §7.2 S7.",
+        "testStrategy": "Subtask bazlı; -b/-c [MAX] negatif-önce.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "08.8.4-a — Webhook kayıt API + kontrat",
+            "description": "register/list/unregister; secret bir kez. PRD 08.8.4.",
+            "details": "08.8.4-a Webhook kayıt API + kontrat (register/list/unregister). [XHIGH] PRD 08.8.4.\nKAPSAM: kontrat → POST/GET/DELETE /webhooks; secret üretimi (bir kez gösterilir, hash saklanır).\nKK payı (birebir): \"register/list/unregister\" · \"secret log'a yazılmaz\". BAĞLAM: PLAN §4.4.3.",
+            "testStrategy": "integration: CRUD + secret bir kez. CROSS-TENANT: başka lisansın webhook'u görünmez. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "34",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "08.8.4-b — HMAC-SHA256 imzalama [MAX]",
+            "description": "X-Webhook-Signature + timestamp/nonce + timingSafeEqual. NFR-S7.",
+            "details": "08.8.4-b HMAC-SHA256 imzalama + timestamp/nonce. [MAX] PRD 08.8.4 · NFR-S7.\nKAPSAM: çıkışta X-Webhook-Signature = HMAC-SHA256(secret, timestamp+body); ±5 dk; nonce; timingSafeEqual; secret log'a YAZILMAZ.\nKK payı (birebir): \"HMAC-SHA256 imza (Nexa) + timestamp/nonce\". BAĞLAM: PLAN §4.4.3. Bağımlılık: 34.1.",
+            "testStrategy": "unit: imza determinizmi + timingSafeEqual. NEGATİF (önce): yanlış imza/eski timestamp reddi. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "34",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "08.8.4-c — SSRF koruması [MAX]",
+            "description": "private/loopback/link-local reddi; redirect kapalı; http(s). NFR-S7. Negatif önce.",
+            "details": "08.8.4-c SSRF koruması. [MAX] PRD 08.8.4 · NFR-S7.\nKAPSAM: hedef URL doğrulama — private/loopback/link-local IP reddi, DNS-rebinding koruması, redirect kapalı, yalnız http(s).\nORTAK: lib/ssrf.ts 06.3.2-a ile paylaşılır.\nKK payı (birebir): \"SSRF koruması\". BAĞLAM: PLAN §4.4.3. Bağımlılık: 34.1.",
+            "testStrategy": "NEGATİF (önce): 127.0.0.1/10.x/169.254.169.254/file:///redirect → reddedilir. POZİTİF: public https → geçer. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "34",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "08.8.4-d — Teslimat + retry 3× + log",
+            "description": "Kuyruk + 3× retry + her teslimat loglanır. NFR-M5/U4.",
+            "details": "08.8.4-d Teslimat + retry (3×) + her teslimat/retry loglanır. [XHIGH] PRD 08.8.4 · NFR-M5/U4.\nKAPSAM: olay → kuyruk → teslim; 3× exponential retry; her deneme loglanır; kalıcı hata işaretlenir.\nKK payı (birebir): \"retry (3×)\" · (NFR-M5) \"her webhook teslimi/retry loglanır\". BAĞLAM: PLAN §4.4.3. Bağımlılık: 34.1/2/3.",
+            "testStrategy": "integration: 2 hata → 3. başarı; kalıcı hata → log + işaret. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1,
+              2,
+              3
+            ],
+            "parentId": "34",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "35",
+        "title": "08.5 — Omnichannel adaptörleri (MOCK)",
+        "description": "channels tablosu 0 tüketicili; MVP kanalları Website+email kullanıyor. PRD 08.5.4-.6 (v1, Must).",
+        "details": "PARENT. 08.5 Omnichannel adaptörleri (MOCK). channels tablosu 0 tüketicili (§8); MVP kanalları\nWebsite+email kullanıyor. adapter-a ortak arayüzü kurar, sonra 3 kanal. Bağlam: PLAN §4.4.4.",
+        "testStrategy": "Subtask bazlı; kanal subtask'ları adapter-a'ya bağımlı.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "08.5-adapter-a — Ortak kanal adaptör arayüzü + channels",
+            "description": "ChannelAdapter (inbound→chat, outbound→gönder); channels tablo tüketicisi. PRD 08.5.4-.6.",
+            "details": "08.5-adapter-a Ortak kanal adaptör arayüzü + channels tablo tüketicisi. [XHIGH] PRD 08.5.4-.6.\nKAPSAM: ChannelAdapter arayüzü (inbound→chat, outbound→gönder); channels tablosuna kayıt; mock provider iskeleti.\nKK payı (birebir, ortak): \"mesaj → inbox chat\" / \"mesaj → chat\". BAĞLAM: PLAN §4.4.4.",
+            "testStrategy": "integration: mock inbound → chat oluşur; CROSS-TENANT izole. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "35",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "08.5.4-a — Messenger (OAuth MOCK)",
+            "description": "Mock OAuth + inbound→chat + outbound. PRD 08.5.4.",
+            "details": "08.5.4-a Messenger (Facebook OAuth MOCK). [XHIGH] PRD 08.5.4 (Must).\nKAPSAM: mock OAuth + inbound webhook → chat + outbound gönder.\nKK (birebir): \"OAuth; mesaj → inbox chat\". KAPSAM DIŞI: gerçek sağlayıcı imzası (§9). Bağımlılık: 35.1.",
+            "testStrategy": "integration: inbound→chat + outbound kaydı + CROSS-TENANT. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "35",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "08.5.5-a — Twilio SMS (MOCK)",
+            "description": "Mock kimlik/numara + SMS gönder-al. PRD 08.5.5.",
+            "details": "08.5.5-a Twilio SMS (MOCK). [XHIGH] PRD 08.5.5 (Must).\nKAPSAM: mock kimlik/numara + inbound → chat + SMS gönder.\nKK (birebir): \"Twilio kimlik/numara; SMS gönder-al\". Bağımlılık: 35.1.",
+            "testStrategy": "integration: inbound→chat + outbound + CROSS-TENANT. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "35",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "08.5.6-a — WhatsApp (MOCK)",
+            "description": "Mock bağlama + mesaj→chat. PRD 08.5.6.",
+            "details": "08.5.6-a WhatsApp (Business MOCK). [XHIGH] PRD 08.5.6 (Must).\nKAPSAM: mock bağlama + inbound → chat + gönder.\nKK (birebir): \"WhatsApp bağlama; mesaj → chat\". Bağımlılık: 35.1.",
+            "testStrategy": "integration: inbound→chat + outbound + CROSS-TENANT. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "35",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "36",
+        "title": "12 — Copilot [MAX]",
+        "description": "Copilot api/contract'ta ~0 ref. Sağ panel switcher (28) üstüne oturur. PRD MOD-12 (v1, Should).",
+        "details": "PARENT [MAX]. 12 Copilot (agent-assist). api/contract'ta ~0 ref. 12.2-a (ayrı KB [MAX]) → 12.1-a\n(buton, 28/T1-a üstüne) → 12.3-a. Bağlam: PLAN §4.4.5. Bağımlılık: tm 28 (sağ panel switcher).",
+        "testStrategy": "Subtask bazlı; 12.2-a izolasyon negatifleri.",
+        "status": "pending",
+        "dependencies": [
+          "28"
+        ],
+        "priority": "low",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "12.2-a — Copilot ayrı KB (RAG) [MAX]",
+            "description": "/copilot/knowledge; AI Agent KB'sinden ayrı; müşteriye kapalı. PRD 12.2.",
+            "details": "12.2-a Copilot ayrı bilgi tabanı (RAG, ajana-özel). [MAX] ↑ PRD 12.2 (Should).\n↑ GEREKÇE: ayrı tenant-scoped KB + 'müşteriye açık değil' sınırı (yetki/izolasyon yüzeyi).\nKAPSAM: /copilot/knowledge CRUD; AI Agent KB'sinden AYRI; yalnız ajan yüzeyi.\nKK (birebir): \"Ajana-özel bilgi kaynakları; müşteriye açık değil\". BAĞLAM: PLAN §4.4.5.",
+            "testStrategy": "integration: müşteri token'ı erişemez → 404; CROSS-TENANT izole. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "36",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "12.1-a — Copilot butonu + panel sekmesi",
+            "description": "Sağ panel sekmesi (T1-a üstüne); Assisted metriğini besler. PRD 12.1.",
+            "details": "12.1-a Copilot butonu + sağ panel sekmesi. [XHIGH] PRD 12.1 (Should).\nKAPSAM: her sohbette Copilot butonu → sağ panel sekmesi (28/T1-a switcher üstüne); Assisted metriğini besler.\nKK (birebir): \"Panel açılır; bağlamda yardım; Assisted metriğini besler\". Bağımlılık: 36.1 + tm 28.",
+            "testStrategy": "unit: panel açılır; Assisted sayacı 07.3.2 ile hizalı. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "36",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "12.3-a — Özet→note + reply yardımı (+02.5)",
+            "description": "Özet internal note + reply taslak + enhance/rephrase. PRD 12.3/02.5.",
+            "details": "12.3-a Özet (→internal note) + reply yardımı (enhance/rephrase). [XHIGH] PRD 12.3 · 02.5.\nKAPSAM: özet internal note; reply taslak composer'a; ton/dilbilgisi geliştirme (packages/ai-mock).\nKK (birebir): \"Özet internal note; reply taslak composer'a; ton/dilbilgisi geliştirme\". (02.5 bununla kapanır.) Bağımlılık: 36.1/36.2.",
+            "testStrategy": "integration: özet internal note olur + arşivde görünür. unit: reply taslak composer'a. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1,
+              2
+            ],
+            "parentId": "36",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "37",
+        "title": "02.1.2-a — Inbox AI Agents grubu (AI/Solved)",
+        "description": "AI konuşmalarını insan kuyruğundan ayırır; Solved=ADR-09 sayacı. PRD 02.1.2 (Must v1).",
+        "details": "02.1.2-a Inbox AI Agents grubu (AI agent/Solved). [XHIGH] PRD 02.1.2 (Must v1).\nKAPSAM: AI konuşmalarını insan kuyruğundan ayıran grup; Solved → AI resolution sayacı (ADR-09).\nKK (birebir): \"AI konuşmalarını insan kuyruğundan ayırır; Solved → AI resolution sayacı\". BAĞLAM: PLAN §4.4.6.",
+        "testStrategy": "integration: AI chat ayrı grup; Solved=ADR-09 sayacı. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "38",
+        "title": "02.1.4-a — Inbox Views grubu + custom views",
+        "description": "Kanal görünümleri (kanal yok→promo) + custom saved views. PRD 02.1.4 (Should).",
+        "details": "02.1.4-a Views grubu (kanal görünümleri + custom saved views). [XHIGH] PRD 02.1.4 (Should).\nKAPSAM: kanal görünümleri (kanal yok→channel-promo); custom saved views.\nKK (birebir): \"Kanal bağlı değilse channel-promo; custom saved views eklenebilir\". BAĞLAM: PLAN §4.4.6. Bağımlılık: tm 35.",
+        "testStrategy": "unit: kanal yok→promo; custom view eklenir. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "35"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "39",
+        "title": "02.3.2-a — Reply Suggestions çipleri",
+        "description": "Çip → composer'a düzenlenebilir metin (Space). PRD 02.3.2 (Should).",
+        "details": "02.3.2-a Reply Suggestions çipleri (Space ile). [XHIGH] PRD 02.3.2 (Should).\nKAPSAM: AI çipleri → composer'a düzenlenebilir metin.\nKK (birebir): \"Çip → composer'a düzenlenebilir metin\". BAĞLAM: PLAN §4.4.6. Bağımlılık: tm 36 (ai-mock).",
+        "testStrategy": "unit: çip→composer düzenlenebilir. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "36"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "40",
+        "title": "02.7-a — Tickets grid (deep-link)",
+        "description": "Sıralanabilir tablo + URL param + deep-link. PRD 02.7 (Should). T6-a virtualization gerekir.",
+        "details": "02.7-a Tickets grid (sıralanabilir, deep-link). [XHIGH] PRD 02.7 (Should).\nKAPSAM: sıralanabilir tablo; satır → ticket konuşması; URL param sıralama; deep-link.\nKK (birebir): \"Satır → ticket konuşması; URL param sıralama\". BAĞLAM: PLAN §4.4.6. Bağımlılık: tm 30 (T6-a virtualization).",
+        "testStrategy": "unit + E2E deep-link. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "30"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "41",
+        "title": "02.9-a — Live typing preview (+11.8)",
+        "description": "RTM sender_typing/sneak-peek; ajan+müşteri görünüm. PRD 02.9 + 11.8 (Should/Could).",
+        "details": "02.9-a Live typing preview (sneak-peek) (+11.8). [XHIGH] PRD 02.9 (Should) + 11.8 (Could).\nKAPSAM: RTM sender_typing/send_typing_indicator; sneak-peek (müşteri yazarken ajana önizleme). RTM ✅ (Dilim 5).\nKK (birebir): \"RTM sender_typing/send_typing_indicator; sneak-peek (müşteri yazarken)\". BAĞLAM: PLAN §4.4.6/§4.4.12.",
+        "testStrategy": "integration: RTM typing push; widget+agent görünüm. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "42",
+        "title": "03.1.3-a — Ziyaretçi tablosu + satır aksiyonları",
+        "description": "Start chat/Supervise/Assign; 'Chatting with' insan+AI. PRD 03.1.3 (Should).",
+        "details": "03.1.3-a Ziyaretçi tablosu + satır aksiyonları (Start chat/Supervise/Assign). [XHIGH] PRD 03.1.3 (Should).\nKAPSAM: ziyaretçi tablosu; 'Chatting with' insan+AI ajanı; satır aksiyonları.\nKK (birebir): \"Proaktif temas; 'Chatting with' insan+AI ajanı gösterir (ör. 'Hazal AI')\". BAĞLAM: PLAN §4.4.7. Bağımlılık: 03.1.1 (✅ tm 19).",
+        "testStrategy": "integration: traffic akışı + unit satır aksiyonları. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "43",
+        "title": "03.3 — Campaigns [MAX]",
+        "description": "campaigns tablosu 0 tüketicili. PRD MOD-03.3 (v1, Should).",
+        "details": "PARENT [MAX]. 03.3 Campaigns. campaigns tablosu 0 tüketicili (§8). 3 subtask; 03.3.2-a [MAX]\n(tetik motoru + otomatik gönderim). Bağlam: PLAN §4.4.7. Bağımlılık: tm 29 (form deseni).",
+        "testStrategy": "Subtask bazlı.",
+        "status": "pending",
+        "dependencies": [
+          "29"
+        ],
+        "priority": "low",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "03.3.1-a — Campaigns alt sekmeler",
+            "description": "All/Ongoing/Scheduled/Inactive durum filtre. PRD 03.3.1 (Should).",
+            "details": "03.3.1-a Campaigns alt sekmeler (All/Ongoing/Scheduled/Inactive). [XHIGH] PRD 03.3.1 (Should).\nKAPSAM: durum bazlı filtre sekmeleri. KK (birebir): \"Durum bazlı filtre\". BAĞLAM: PLAN §4.4.7.",
+            "testStrategy": "unit: durum filtre. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "43",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "03.3.2-a — New campaign builder [MAX]",
+            "description": "Koşul+mesaj+zamanlama → eşleşen ziyaretçiye otomatik gönderim. PRD 03.3.2 (Should).",
+            "details": "03.3.2-a New campaign builder (koşul+mesaj+zamanlama → otomatik gönderim). [MAX] ↑ PRD 03.3.2 (Should).\n↑ GEREKÇE: tetikleyici motoru + eşleşen ziyaretçiye otomatik gönderim (eşzamanlılık/yanlış-tetik riski).\nKAPSAM: builder (koşul+mesaj zorunlu) → kayıt sonrası eşleşen ziyaretçiye otomatik gönderim.\nKK (birebir): \"Tetikleyici+mesaj zorunlu; kayıt sonrası eşleşen ziyaretçiye otomatik gönderim\". BAĞLAM: PLAN §4.4.7. Bağımlılık: 43.1 + tm 29.",
+            "testStrategy": "integration: koşul eşleşince gönderim; eşleşmeyince gönderilmez; CROSS-TENANT. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "43",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "03.3.3-a — Kampanya kartı",
+            "description": "Edit/View report + active toggle + performans. PRD 03.3.3 (Should).",
+            "details": "03.3.3-a Kampanya kartı (Edit/View report; active toggle). [XHIGH] PRD 03.3.3 (Should).\nKAPSAM: düzenleme + performans (Displayed/Chats/Conversion) + active toggle.\nKK (birebir): \"Düzenleme + performans (Displayed/Chats/Conversion)\". BAĞLAM: PLAN §4.4.7. Bağımlılık: 43.2.",
+            "testStrategy": "unit. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              2
+            ],
+            "parentId": "43",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "44",
+        "title": "07.4-a — AI Agent raporu (resolution/deflection)",
+        "description": "Billing sayacıyla hizalı (ADR-09). 06.5-a ile paylaşımlı sorgu. PRD 07.4 (Should).",
+        "details": "07.4-a AI Agent raporu (resolution/deflection). [XHIGH] PRD 07.4 (Should).\nKAPSAM: resolution/deflection/AI resolution raporu; billing sayacıyla ilişkili (ADR-09).\nKK (birebir): \"Billing sayacıyla ilişkili\". BAĞLAM: PLAN §4.4.8. tm 33.6 (06.5-a) ile paylaşımlı sorgu.",
+        "testStrategy": "integration: rapor=fatura (ADR-09). DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "45",
+        "title": "07.8-a — Reviews/Ratings raporu",
+        "description": "CSAT donut + günlük bar; ratings okuma yolu. PRD 07.8 (Should).",
+        "details": "07.8-a Reviews/Ratings raporu (CSAT donut + günlük bar). [XHIGH] PRD 07.8 (Should).\nNEDEN AÇIK: ratings yalnız yazma yolu var (§8), okuma/rapor yok.\nKAPSAM: CSAT donut; günlük bar; e-ticaret satış izleme iskeleti.\nKK (birebir): \"CSAT donut; günlük bar; e-ticaret satış izleme\". BAĞLAM: PLAN §4.4.8.",
+        "testStrategy": "integration: rating okuma; oy yoksa null (%0 değil). DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "46",
+        "title": "07.7-a — Rapor grupları + Export CSV",
+        "description": "İzin bazlı görünürlük + CSV export. PRD 07.7 (Should). PDF/benchmark v2.",
+        "details": "07.7-a Rapor grupları + Export (CSV). [XHIGH] PRD 07.7 (Should v1-v2).\nKAPSAM: izin bazlı görünürlük + CSV export.\nKK (birebir): \"İzin bazlı görünürlük; export; benchmark karşılaştırma\". KAPSAM DIŞI: PDF/benchmark (v2). BAĞLAM: PLAN §4.4.8.",
+        "testStrategy": "integration: CSV export + izin gating. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "47",
+        "title": "08.6.2-a — Ticket rules (atama/etiket/öncelik)",
+        "description": "Koşul+eylem → otomatik atama. PRD 08.6.2 (Should).",
+        "details": "08.6.2-a Ticket rules (atama/etiket/öncelik). [XHIGH] PRD 08.6.2 (Should).\nKAPSAM: koşul+eylem → otomatik atama/etiket/öncelik.\nKK (birebir): \"Koşul+eylem zorunlu\". BAĞLAM: PLAN §4.4.9. Bağımlılık: tm 29 (form deseni).",
+        "testStrategy": "integration: kural → otomatik atama. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "29"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "48",
+        "title": "08.7.3-a — Chat timeout",
+        "description": "Boşta/ölü sohbet otomatik kapanma; pozitif süre. PRD 08.7.3 (Should).",
+        "details": "08.7.3-a Chat timeout (boşta/ölü sohbet otomatik kapanma). [XHIGH] PRD 08.7.3 (Should).\nKAPSAM: pozitif süre eşiği; ölü sohbet otomatik kapanma.\nKK (birebir): \"Pozitif süre; ölü sohbet otomatik kapanma\". BAĞLAM: PLAN §4.4.9.",
+        "testStrategy": "integration: timeout → kapanır; NEGATİF: 0/negatif süre reddi. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "49",
+        "title": "08.7.4-a — Chat transcripts (e-posta)",
+        "description": "Bitişte müşteri/ekibe transcript e-postası (mailer). PRD 08.7.4 (Should).",
+        "details": "08.7.4-a Chat transcripts (otomatik e-posta). [XHIGH] PRD 08.7.4 (Should).\nKAPSAM: bitişte müşteri/ekibe transcript e-postası (FileMailer, A4).\nKK (birebir): \"Bitişte müşteri/ekibe transcript e-postası\". BAĞLAM: PLAN §4.4.9. Bağımlılık: tm 31 (mailer deseni).",
+        "testStrategy": "integration: bitişte .data/mail'e transcript. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "31"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "50",
+        "title": "08.7.5-a — Ticket email templates",
+        "description": "Markalı, değişkenli; geçersiz değişken engeli. PRD 08.7.5 (Should).",
+        "details": "08.7.5-a Ticket email templates (markalı, değişkenli). [XHIGH] PRD 08.7.5 (Should).\nKAPSAM: markalı, değişkenli şablon; geçersiz değişken/format engeli.\nKK (birebir): \"Geçersiz değişken/format engeli\". BAĞLAM: PLAN §4.4.9. Bağımlılık: tm 29.",
+        "testStrategy": "unit: geçersiz değişken → hata. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "29"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "51",
+        "title": "08.7.6-a — Custom fields (ticket/contact)",
+        "description": "Tip/zorunluluk; Details+CRM'de görünür. PRD 08.7.6 (Should).",
+        "details": "08.7.6-a Custom fields (ticket/contact). [XHIGH] PRD 08.7.6 (Should).\nKAPSAM: tip/zorunluluk; Details + CRM'de görünür (Nexa: player ID/KYC/bakiye).\nKK (birebir): \"Tip/zorunluluk; Details+CRM'de görünür\". BAĞLAM: PLAN §4.4.9. Bağımlılık: tm 29.",
+        "testStrategy": "integration: alan yaz → Details/CRM'de oku. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "29"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "52",
+        "title": "08.7.7-a — Forms builder (pre/post-chat) [MAX]",
+        "description": "Alan builder + widget'ta gösterim → contact/ticket'a yazma. PRD 08.7.7 (Should).",
+        "details": "08.7.7-a Forms builder (pre/post-chat) + widget'ta gösterim. [MAX] ↑ PRD 08.7.7 (Should).\n↑ GEREKÇE: widget → contact/ticket yazma yolu (müşteri girdisi sınırı).\nKAPSAM: alan builder (en az bir alan; tip validasyon); widget'ta gösterim → contact/ticket'a yazma.\nKK (birebir): \"En az bir alan; tip validasyon; widget'ta gösterim → contact/ticket'a yazma\". BAĞLAM: PLAN §4.4.9. Bağımlılık: tm 29 + 11.2 (✅).",
+        "testStrategy": "integration: form → ticket; NEGATİF: geçersiz alan. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "29"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "53",
+        "title": "09 — Apps Marketplace",
+        "description": "Marketplace + OAuth app framework (MOCK). PRD MOD-09 (v1, Should).",
+        "details": "PARENT. 09 Apps Marketplace + OAuth app framework (MOCK). 3 subtask. Bağlam: PLAN §4.4.10.\nBağımlılık: tm 30 (T6-a virtualization).",
+        "testStrategy": "Subtask bazlı.",
+        "status": "pending",
+        "dependencies": [
+          "30"
+        ],
+        "priority": "low",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "09.1-a — Entegrasyon grid + OAuth MOCK",
+            "description": "Kart → izin/OAuth akışı; bağlanınca veri sohbette. PRD 09.1 (Should).",
+            "details": "09.1-a Entegrasyon kartları gridi + OAuth akışı (MOCK). [XHIGH] PRD 09.1 (Should).\nKAPSAM: kart → izin/OAuth akışı (mock); bağlanınca veri sohbet içinde (Details/Copilot).\nKK (birebir): \"Kart → izin/OAuth akışı; bağlanınca veri sohbet içinde\". BAĞLAM: PLAN §4.4.10. Bağımlılık: tm 30.",
+            "testStrategy": "integration: mock OAuth → kurulu görünür. DoD tam.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "53",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "09.2-a — Entegrasyon listesi (15–20)",
+            "description": "Her biri OAuth/API key; kanal-tipli çapraz. PRD 09.2 (Should).",
+            "details": "09.2-a Tam entegrasyon listesi (15-20 kart). [XHIGH] PRD 09.2 (Should).\nKAPSAM: 15-20 kart; her biri OAuth/API key; kanal-tipli olanlar Channels'ta da.\nKK (birebir): \"Her biri OAuth/API key; kanal-tipli olanlar Channels'ta da yönetilir\". BAĞLAM: PLAN §4.4.10. Bağımlılık: 53.1.",
+            "testStrategy": "unit: liste + kanal-tipli çapraz. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "53",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "08.8.1-a — Apps (marketplace) girişi",
+            "description": "Settings'ten marketplace girişi. PRD 08.8.1 (Should).",
+            "details": "08.8.1-a Apps (marketplace) girişi. [XHIGH] PRD 08.8.1 (Should).\nKAPSAM: Settings → Integrations'tan marketplace girişi (detay MOD-09).\nKK (birebir): \"Üçüncü parti dizin (detay MOD-09)\". BAĞLAM: PLAN §4.4.9. Bağımlılık: 53.1.",
+            "testStrategy": "unit: giriş → 09.1. DoD tam.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "parentId": "53",
+            "updatedAt": "2026-07-25T14:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "54",
+        "title": "10.1.4-a — AI resolutions meter + %80 UI",
+        "description": "Sayaç N/limit (% used) + aşım paketi + %80 uyarı. metering ✅, UI ⬜. PRD 10.1.4 (Must v1).",
+        "details": "10.1.4-a AI resolutions meter + stepper + %80 uyarı (UI). [XHIGH] PRD 10.1.4 (Must v1).\nNEDEN AÇIK: metering ✅ (ADR-13) ama UI ⬜.\nKAPSAM: sayaç 'N/limit (% used)' + aşım paketi + %80 proaktif uyarı.\nKK (birebir): \"Sayaç 'N/limit (% used)'; aşım paketi; %80 proaktif uyarı (Nexa)\". BAĞLAM: PLAN §4.4.11.",
+        "testStrategy": "unit: %80'de uyarı; sayaç metering'den. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "55",
+        "title": "10.1.5-a — API calls aşım + sayaç",
+        "description": "Aşım → usage_records; sayaç. PRD 10.1.5 (Should).",
+        "details": "10.1.5-a API calls (aşım paketi + sayaç). [XHIGH] PRD 10.1.5 (Should).\nKAPSAM: aşım faturaya (usage_records); sayaç.\nKK (birebir): \"Aşım faturaya; sayaç\". BAĞLAM: PLAN §4.4.11.",
+        "testStrategy": "integration: aşım → usage_records. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "56",
+        "title": "10.3-a — Invoices + payment yönetimi",
+        "description": "Fatura listesi/indirme (mock); ödeme yöntemi. Gerçek kart §9 dışı. PRD 10.3 (Should).",
+        "details": "10.3-a Invoices + payment details yönetimi. [XHIGH] PRD 10.3 (Should).\nKAPSAM: fatura listesi/indirme (mock); ödeme yöntemi güncelleme.\nKK (birebir): \"Fatura listesi/indirme; ödeme yöntemi güncelleme\". KAPSAM DIŞI: gerçek kart (§9, PRD §11.1/1). BAĞLAM: PLAN §4.4.11.",
+        "testStrategy": "integration: fatura listesi (mock). DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "57",
+        "title": "11.7-a — Widget customization",
+        "description": "Appearance/Position/Mobile + canlı önizleme; bundle P3 korunur. PRD 11.7 (Should).",
+        "details": "11.7-a Widget customization (Appearance/Position/Mobile) + canlı önizleme. [XHIGH] PRD 11.7 (Should).\nKAPSAM: tema/renk/konum; mobil tam ekran; çok dilli (i18n ✅ tm 26); WCAG.\nKK (birebir): \"Tema/renk/konum; mobil tam ekran; çok dilli; WCAG\". BAĞLAM: PLAN §4.4.12.\nNOT: FR-MOD-11.5 'Powered by' alt bilgisi (kaldırılabilir) bu ekranın parçası; white-label kaldırma v3 tm 84.",
+        "testStrategy": "unit: tema uygular + bundle P3 bütçesi korunur. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "58",
+        "title": "04.2-a — Team AI Agents performance",
+        "description": "Per-agent performance + Copilot knowledge girişi. PRD 04.2 (Must v1).",
+        "details": "04.2-a AI Agents (team tarafı) performance + Copilot knowledge girişi. [XHIGH] PRD 04.2 (Must v1).\nKAPSAM: per-agent performance + Copilot knowledge yönetimi girişi.\nKK (birebir): \"Per-agent performance; Copilot knowledge yönetimi\". BAĞLAM: PLAN §4.4.13. Bağımlılık: tm 33 (06.5-a) + tm 36 (12.2-a).",
+        "testStrategy": "unit + 12.2-a bağı. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "33",
+          "36"
+        ],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "59",
+        "title": "04.6-a — Chatbots/Suspended sekmeleri",
+        "description": "Bot hesabı ücretsiz; suspend/unsuspend. PRD 04.6 (Should).",
+        "details": "04.6-a Chatbots / Suspended agents sekmeleri. [XHIGH] PRD 04.6 (Should).\nKAPSAM: bot hesabı ücretsiz; suspend/unsuspend.\nKK (birebir): \"Bot hesabı ücretsiz; suspend/unsuspend\". BAĞLAM: PLAN §4.4.13.",
+        "testStrategy": "integration: suspend → oturum/atama durur; bot faturasız. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "60",
+        "title": "13.1-a — Home dashboard",
+        "description": "Aktivasyon checklist + gerçek-zaman kartları + haftalık performans. PRD 13.1 (Should).",
+        "details": "13.1-a Home dashboard (checklist + gerçek-zaman kartları + haftalık performans). [XHIGH] PRD 13.1 (Should).\nKAPSAM: aktivasyon checklist; canlı gerçek-zaman kartları (online/ongoing/agents); haftalık performans.\nKK (birebir): \"Aktivasyon checklist; canlı gerçek-zaman kartları; haftalık performans\". BAĞLAM: PLAN §4.4.14. Bağımlılık: 03.1.1 (✅).",
+        "testStrategy": "unit (kartlar) + integration (canlı sayaç). DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "61",
+        "title": "13.6-a — Omnichannel HelpDesk katmanı [MAX]",
+        "description": "Chat↔ticket köprüsü + merge/priority/followers + audit. Başında bölünür. PRD 13.6 (Should).",
+        "details": "13.6-a Omnichannel Ticketing / HelpDesk katmanı (merge/priority/followers). [MAX] ↑ PRD 13.6 (Should).\n↑ GEREKÇE: ticket yaşam döngüsü + merge/unmerge veri bütünlüğü + audit. BAŞINDA BÖLÜNÜR (2+ pencere).\nKAPSAM: chat↔ticket köprüsü; ticket yaşam döngüsü; merge/unmerge/followers/priority; birleşik (ayrı ürün değil).\nKK (birebir): \"Chat↔ticket köprüsü; ticket yaşam döngüsü; birleşik (ayrı ürün değil)\". BAĞLAM: PLAN §4.4.14. Bağımlılık: ticketing (✅ Dilim 11).",
+        "testStrategy": "integration: merge/unmerge invariant + audit. NOT: başında subtask'lara bölünmeli. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T14:00:00.000Z"
+      },
+      {
+        "id": "62",
+        "title": "EK-C.2 — Banner/dropdown/panel/modal tek tasarım sistemi",
+        "description": "FR-EK-C.2 · Should (MVP) · Faz-0 ◐ (bloklamaz).",
+        "details": "FR-EK-C.2 · Should (MVP) · Faz-0 ◐ (bloklamaz).\nNEDEN AÇIK: banner/dropdown/panel/modal bileşenleri var ama tek 'design system' soyutlaması gevşek (denetim §7.1).\nKAPSAM: dismiss/CTA banner + hover/click dropdown + kalıcı sağ panel + modallar tek tasarım sistemine oturur;\nsegmentli/kapatılabilir banner. T4-a/T5-a/T6-b form+liste katmanıyla birlikte kapanabilir.\nKK (birebir): \"Tutarlı davranış; segmentli/kapatılabilir banner\".\nKAPSAM DIŞI: yeni ekran. BAĞLAM: PLAN §3.13 (Should), §7.1 EK-C.2. §F.00: Faz-0 kapanışını bloklamaz.",
+        "testStrategy": "unit: banner dismiss kalıcı; dropdown/panel/modal tutarlı davranış. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "63",
+        "title": "07.5 — Metrics breakdown (ajan/takım/kanal/saat)",
+        "description": "FR-MOD-07.5 · Should (v2).",
+        "details": "FR-MOD-07.5 · Should (v2).\nNEDEN: MVP payı gün+ajan split ✅ (tm 21); kanal/saat boyutları eksik. Kanal boyutu thread/chat'te yok → şema dokunuşu gerekebilir.\nKAPSAM: reports'a ajan/takım/kanal/saat boyutlu kırılım.\nKK (birebir): \"Boyutlu kırılım\". BAĞLAM: PLAN §5.1. ~2-3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: her boyutta doğru gruplama; ADR-09 tutarlı. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "64",
+        "title": "07.6 — Chat topics (AI kümeleme)",
+        "description": "FR-MOD-07.6 · Could (v2) · LLM.",
+        "details": "FR-MOD-07.6 · Could (v2) · LLM.\nKAPSAM: sohbetleri konu kümelerine ayır (ai-mock); hacim/trend; yeterli veri yoksa empty.\nKK (birebir): \"AI kümeleme; hacim/trend; yeterli veri yoksa empty\". BAĞLAM: PLAN §5.1. ~2 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: kümeleme + yetersiz-veri empty. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "65",
+        "title": "08.5.7 — Instagram (DM, MOCK)",
+        "description": "FR-MOD-08.5.7 · Should (Ent./v2).",
+        "details": "FR-MOD-08.5.7 · Should (Ent./v2).\nKAPSAM: Coming soon → Get notified → tam entegrasyon (mock adaptör, 08.5-adapter-a üstüne).\nKK (birebir): \"Coming soon → Get notified → tam entegrasyon\". BAĞLAM: PLAN §5.1. Bağımlılık: tm 35.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: mock inbound→chat + CROSS-TENANT. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "35"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "66",
+        "title": "08.6.3 — Skills-based routing + supervision/takeover [MAX]",
+        "description": "FR-MOD-08.6.3 · Could (v2) · [MAX] ↑.",
+        "details": "FR-MOD-08.6.3 · Could (v2) · [MAX] ↑.\n↑ GEREKÇE: routing çekirdeğine (ADR-08) uzmanlık katmanı + supervisor takeover (eşzamanlılık/yetki sınırı).\nKAPSAM: uzmanlık/skill bazlı yönlendirme; supervisor takeover.\nKK (birebir): \"Uzmanlık/skill bazlı; supervisor takeover\". BAĞLAM: PLAN §5.1. ~3-4 subtask (başında böl).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: skill-eşleşmeli atama + takeover; CROSS-TENANT. NEGATİF: yetkisiz takeover reddi. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "67",
+        "title": "08.8.3 — MCP server (search_tickets/list_chats/get_report) [MAX]",
+        "description": "FR-MOD-08.8.3 · Could (v2) · [MAX] ↑ · §7, LLM.",
+        "details": "FR-MOD-08.8.3 · Could (v2) · [MAX] ↑ · §7, LLM.\n↑ GEREKÇE: tool yüzeyi + OAuth scope bazlı yetki + tenant izolasyon (güvenlik sınırı). scope altyapısı ✅.\nKAPSAM: MCP sunucu (mcp URL + Claude setup); search_tickets/list_chats/get_report/summarize_chat tool'ları.\nKK (birebir): \"search_tickets/list_chats/get_report/summarize_chat tool'ları; OAuth scope bazlı; tenant izole\".\nBAĞLAM: PLAN §5.1. ~3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: her tool scope'a tabi; CROSS-TENANT izole. NEGATİF: scope'suz tool → reddedilir. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "68",
+        "title": "08.9.2 — Banned customers (IP/visitor yasak)",
+        "description": "FR-MOD-08.9.2 · Should (v2).",
+        "details": "FR-MOD-08.9.2 · Should (v2).\nNEDEN: Customer.banned alanı + ban yazma yolu ✅ (F4); yönetim UI + IP yasağı eksik.\nKAPSAM: banned müşteri yönetim ekranı + IP/visitor yasağı; yasaklı sohbet başlatamaz.\nKK (birebir): \"Yasaklı sohbet başlatamaz\". BAĞLAM: PLAN §5.1 (§8 ratings/banned).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: yasaklı müşteri/IP → chat başlatamaz (403); CROSS-TENANT. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "69",
+        "title": "08.9.3 — Spam filtre [MAX]",
+        "description": "FR-MOD-08.9.3 · Should (v2) · [MAX] ↑.",
+        "details": "FR-MOD-08.9.3 · Should (v2) · [MAX] ↑.\n↑ GEREKÇE: dış girdi sınırı + otomatik filtre (yanlış-pozitif/negatif riski). Güvenlik kuralı — tam derinlik serbest (§5.1).\nKAPSAM: spam sohbet/ticket otomatik filtre (SecuritySettings.spamFilterEnabled zaten var, email-inbound kullanıyor).\nKK (birebir): \"Spam sohbet/ticket otomatik filtre\". BAĞLAM: PLAN §5.1, §C-A9 (email spam bağı).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: spam → ticket/chat üretmez; temiz → geçer. NEGATİF: yanlış-pozitif sınırı. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "70",
+        "title": "08.9.5 — CC masking (Luhn, yazma anında) [MAX]",
+        "description": "FR-MOD-08.9.5 · Should (v2) · [MAX] ↑ · NFR-C5/S9.",
+        "details": "FR-MOD-08.9.5 · Should (v2) · [MAX] ↑ · NFR-C5/S9.\n↑ GEREKÇE: PII sınırı — DB/log'a maskeli yazma (yazma anında, yalnız UI değil). Güvenlik kuralı — tam derinlik serbest.\nKAPSAM: kart no Luhn tespiti + yazma anında maskeleme (event/log); PCI SAQ A.\nKK (birebir): \"PCI SAQ A; DB/log'a maskeli yazılır (yalnız UI değil)\". BAĞLAM: PLAN §5.1.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "unit: Luhn tespit + maskeleme. integration: DB'de maskeli saklanır (ham kart yok). NEGATİF: log'a ham kart sızmaz. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "71",
+        "title": "09.3 — API istek paketleri (Essential/Pro/Pro+)",
+        "description": "FR-MOD-09.3 · Could (v2) · MOD-10.",
+        "details": "FR-MOD-09.3 · Could (v2) · MOD-10.\nKAPSAM: fiyatlı API paketleri satışı (Essential 100K / Pro/Pro+ 500K); billing ✅ üstüne.\nKK (birebir): \"Fiyatlı API paketleri satışı\". BAĞLAM: PLAN §5.1. Bağımlılık kavramsal: billing (✅).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: paket satın alma → kota artışı (mock). DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "72",
+        "title": "09.4 — Zapier/Make + Build-your-app",
+        "description": "FR-MOD-09.4 · Could (v2) · MOD-08.8.4.",
+        "details": "FR-MOD-09.4 · Could (v2) · MOD-08.8.4.\nKAPSAM: 700+ Zapier bağı + partner/creator portalı; webhooks (tm 34) üstüne.\nKK (birebir): \"700+ Zapier; partner/creator portalı\". BAĞLAM: PLAN §5.1. Bağımlılık: tm 34 (webhooks).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: partner app kaydı + webhook tetik. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "34"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "73",
+        "title": "13.2 — Engage/Traffic (gelişmiş filtre + 360° ziyaretçi)",
+        "description": "FR-MOD-13.2 · Should (v2) · MOD-03.1.",
+        "details": "FR-MOD-13.2 · Should (v2) · MOD-03.1.\nNEDEN: visits ✅ yazılıyor/okunuyor; 03.1.1'in kalan sekmeleri (Supervised/Invited/Browsing) BURAYA (v2 gelişmiş, §3.13).\nKAPSAM: Match all filters + Add filter; ziyaretçi 360° panel (pre-chat form, returning N visits, came from, groups, visited pages).\nKK (birebir): \"Gelişmiş filtre; ziyaretçi geçmişi; proaktif aksiyon\". BAĞLAM: PLAN §5.1 + §3.13 (03.1.1-kalan). ~2-3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: gelişmiş filtre + ziyaretçi geçmişi. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "74",
+        "title": "13.3 — Goals (ziyaretçi→sohbet→dönüşüm hunisi)",
+        "description": "FR-MOD-13.3 · Should (v2) · MOD-07.",
+        "details": "FR-MOD-13.3 · Should (v2) · MOD-07.\nNEDEN: goals tablosu ✅ var (§8, 0 tüketici) — bu iş onu bağlar.\nKAPSAM: 3 aşamalı huni; Create goal; Reports 'Achieved goals' entegrasyonu.\nKK (birebir): \"3 aşamalı huni; hedef tanımı; rapor entegrasyonu\". BAĞLAM: PLAN §5.1, §8 goals. ~2-3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: huni tanımı + achieved goals raporu. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "75",
+        "title": "13.5 — Sales tracker (Ecommerce/Tracked sales)",
+        "description": "FR-MOD-13.5 · Could (v2) · MOD-07.8/13.3.",
+        "details": "FR-MOD-13.5 · Could (v2) · MOD-07.8/13.3.\nKAPSAM: satış/dönüşüm izleme kodu/kuralı; Reports Ecommerce ile ilişki.\nKK (birebir): \"İzleme yapılandırması; Reports Ecommerce ile ilişki\". BAĞLAM: PLAN §5.1. Bağımlılık: tm 45 (07.8-a) + tm 74 (Goals).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: satış izleme → Reports Ecommerce. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "45",
+          "74"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "76",
+        "title": "Public KB (SEO'lu self-servis bilgi tabanı)",
+        "description": "PRD §5.3 (v2) · KK-türetilmiş (kaynak: §5.3 'Public KB').",
+        "details": "PRD §5.3 (v2) · KK-türetilmiş (kaynak: §5.3 'Public KB').\nKAPSAM: knowledge kaynaklarından SEO'lu public makale/self-servis KB; knowledge ✅ üstüne.\nKK-TÜRETİLMİŞ: \"Public, indekslenebilir self-servis makaleler; arama; knowledge kaynağından türetilir\" (§5.3'ten türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §5.1. ~2-3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: public makale render + arama; yetkisiz erişim (public). DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "77",
+        "title": "Work scheduler / staffing prediction",
+        "description": "PRD §5.3 (v2) · KK-türetilmiş.",
+        "details": "PRD §5.3 (v2) · KK-türetilmiş.\nKAPSAM: vardiya planlama + staffing tahmini (reports + presence verisinden).\nKK-TÜRETİLMİŞ: \"Ajan vardiya planı + geçmiş hacimden staffing tahmini\" (§5.3'ten türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §5.1. ~2-3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: tahmin hesabı + plan görünümü. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "78",
+        "title": "Multibrand (tek hesapta çok marka) [MAX]",
+        "description": "PRD §5.3 (v2) · [MAX] ↑ · KK-türetilmiş.",
+        "details": "PRD §5.3 (v2) · [MAX] ↑ · KK-türetilmiş.\n↑ GEREKÇE: tenant/RLS izolasyon sınırının genişlemesi (marka-içi izolasyon) — veri bütünlüğü.\nKAPSAM: tek lisans altında çok marka; marka bazlı widget/persona/routing; marka-içi izolasyon.\nKK-TÜRETİLMİŞ: \"Marka başına ayrı widget/persona/rapor; markalar arası veri sızmaz\" (§5.3'ten türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §5.1, ADR (RLS). ~3-4 subtask (başında böl).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: marka izolasyonu; CROSS-BRAND negatif (sızma yok). DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "79",
+        "title": "08.5.8 — Telegram (TR pazarı önceliği, MOCK)",
+        "description": "FR-MOD-08.5.8 · Should (Ent.).",
+        "details": "FR-MOD-08.5.8 · Should (Ent.).\nKAPSAM: Get notified → tam entegrasyon (mock adaptör, 08.5-adapter-a üstüne). TR pazarında öncelik.\nKK (birebir): \"Get notified → tam entegrasyon (TR pazarında öncelik)\". BAĞLAM: PLAN §6.1. Bağımlılık: tm 35.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: mock inbound→chat + CROSS-TENANT. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "35"
+        ],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "80",
+        "title": "08.9.6 — IP allowlist / oturum güvenliği [MAX]",
+        "description": "FR-MOD-08.9.6 · Could (Ent.) · [MAX] ↑ · §7.",
+        "details": "FR-MOD-08.9.6 · Could (Ent.) · [MAX] ↑ · §7.\n↑ GEREKÇE: erişim sınırı (IP kısıtı + oturum politikaları).\nKAPSAM: hesap bazlı IP allowlist; oturum politikaları (süre/eşzamanlı oturum).\nKK (birebir): \"IP kısıtı; oturum politikaları\". BAĞLAM: PLAN §6.1.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: allowlist dışı IP → reddedilir; CROSS-TENANT. NEGATİF: politika ihlali reddi. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "81",
+        "title": "SAML 2.0 SSO + SCIM provisioning [MAX]",
+        "description": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-S11 · KK-türetilmiş.",
+        "details": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-S11 · KK-türetilmiş.\n↑ GEREKÇE: kimlik sınırı (SAML federasyon + SCIM otomatik provizyon).\nKAPSAM: SAML 2.0 SSO (IdP entegrasyonu) + SCIM kullanıcı provizyon/deprovizyon.\nKK-TÜRETİLMİŞ: \"SAML IdP ile SSO girişi; SCIM ile kullanıcı yaşam döngüsü\" (NFR-S11'den türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §6.1, NFR-S11. ~4-5 subtask (başında böl).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: SAML login + SCIM provision/deprovision; CROSS-TENANT. NEGATİF: geçersiz assertion reddi. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "82",
+        "title": "HIPAA BAA + bölgesel barındırma [MAX]",
+        "description": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C4 · KK-türetilmiş.",
+        "details": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C4 · KK-türetilmiş.\n↑ GEREKÇE: uyumluluk + bölge sınırı (ADR-12 tek bölge yeniden açılır).\nKAPSAM: imzalı BAA akışı + bölgesel barındırma (US/EU); region immutable kuralının genişletilmesi.\nKK-TÜRETİLMİŞ: \"BAA imzalı hesapta HIPAA kapsamı; region seçimi (US/EU); yanlış bölge → misdirected_request\" (NFR-C4/C9'dan türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §6.1, ADR-12, NFR-C4/C9. ~3-4 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: bölge zorlaması (token+RTM); NEGATİF: yanlış bölge → misdirected_request. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "83",
+        "title": "SOC2 Type II · ISO 27001 · tam audit+SIEM [MAX]",
+        "description": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C6/C7/S12 · KK-türetilmiş.",
+        "details": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C6/C7/S12 · KK-türetilmiş.\n↑ GEREKÇE: uyumluluk (çoğu SÜREÇ işi; kod payı: genişletilmiş audit + SIEM export). audit yazıcı ✅ (tm 23) temeli var.\nKAPSAM: genişletilmiş audit log + SIEM export; SOC2/ISO kontrol kanıtları (kod payı). Sertifikasyon = dış denetim süreci (takvim-belirleyici, PRD §10.2).\nKK-TÜRETİLMİŞ: \"Genişletilmiş audit + SIEM'e export; kontrol kanıtları\" (NFR-C6/C7/S12'den türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §6.1, §7.2 S12 (✅ temel). SÜREÇ + ~2-3 kod subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "integration: audit → SIEM export; append-only korunur; CROSS-TENANT. DoD tam (kod payı).",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
+      },
+      {
+        "id": "84",
+        "title": "White-label widget · SLA yönetimi · sandbox",
+        "description": "PRD §5.4 (Ent.) · FR-MOD-11.5 (white-label) · KK-türetilmiş.",
+        "details": "PRD §5.4 (Ent.) · FR-MOD-11.5 (white-label) · KK-türetilmiş.\nKAPSAM: white-label widget ('Powered by' kaldırma — 11.5); SLA yönetimi; sandbox ortamı.\nKK (birebir, 11.5): \"Marka linki; Enterprise'da white-label\" + KK-türetilmiş (SLA/sandbox §5.4).\nBAĞLAM: PLAN §6.1, widget ✅. 11.5 'Powered by' footer kaldırma bu kapsamda. ~3-4 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
+        "testStrategy": "unit: white-label bayrağı → 'Powered by' gizlenir. DoD tam.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [],
+        "updatedAt": "2026-07-25T15:15:00.000Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T06:44:31.405Z",
-      "taskCount": 26,
-      "completedCount": 25,
+      "lastModified": "2026-07-25T15:15:00.000Z",
+      "taskCount": 84,
+      "completedCount": 26,
       "tags": [
         "master"
       ]

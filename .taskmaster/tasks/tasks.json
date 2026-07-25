@@ -813,7 +813,7 @@
         "description": "Playbook çekirdeği var (öne çekildi); şablon galerisi/sekmeler/kontroller eksik. PRD MOD-05 (v1).",
         "details": "PARENT. 05 Playbook tamamlama (öne çekilen v1 yüzeyi). Backend skill CRUD+compile+preview VAR\n(routes/playbook.ts); UI PlaybookPage.tsx/SkillEditor.tsx VAR. Eksik: şablon galerisi/sekmeler/kontroller.\n4 subtask; her biri DoD+KK'dan geçer. Bağlam: PLAN §4.4.1.",
         "testStrategy": "Subtask bazlı; parent tüm subtask yeşil olunca done.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -823,10 +823,10 @@
             "description": "Şablon galerisi + tür seçimi → editör. PRD 05.1 (Must).",
             "details": "05.1-a Browse templates galerisi. [XHIGH] PRD 05.1 (Must).\nNEDEN AÇIK: PlaybookPage.tsx'te 'Browse templates'/şablon galerisi yok (grep 0).\nKAPSAM: header 'Browse templates' → şablon kartı galerisi; kart seç → skill editörüne ön-doldurulmuş açılır.\nŞablonlar deterministik yerel katalog (dış servis yok).\nKK (birebir): \"Şablon galerisi; tür seçimi → editör\".\nKAPSAM DIŞI: Workspace workflow türü (⛔ ADR-14). BAĞLAM: PLAN §4.4.1.",
             "testStrategy": "unit: galeri render + seç → editör ön-dolu. E2E: şablondan skill oluşturma. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "32",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T22:02:12.452Z"
           },
           {
             "id": 2,
@@ -866,7 +866,7 @@
             "updatedAt": "2026-07-25T14:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-25T22:02:12.452Z"
       },
       {
         "id": "33",
@@ -1818,7 +1818,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T18:40:32.573Z",
+      "lastModified": "2026-07-25T22:02:12.452Z",
       "taskCount": 84,
       "completedCount": 31,
       "tags": [

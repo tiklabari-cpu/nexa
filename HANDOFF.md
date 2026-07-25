@@ -6,6 +6,37 @@
 
 ## Task log (newest-first)
 
+### 32.1 — 05.1-a · Browse templates galerisi — done — 2026-07-26 UTC
+- Yapıldı:
+  - **Şablon galerisi** `TemplateGallery.tsx` (modal, a11y: labelled dialog, Escape/backdrop kapatır,
+    focus içeri) + deterministik yerel katalog `templates.ts` (Prebuilt/AI/Trending; her şablon
+    `POST /skills`'in doğruladığı `SkillStep` şekillerinde — `templates.test.ts` bunu ispatlar;
+    entegrasyon gerektirenler kartta uyarır).
+  - **PlaybookPage bağlandı:** header'a "Browse templates" → galeri; kart "Use template" →
+    `POST /skills {name,instruction,steps,ai_agent_id?}` (templateToDraft) → yeni skill seçilir →
+    editör **ön-dolu** açılır (KK: "Şablon galerisi; tür seçimi → editör").
+  - **Bug bulundu + düzeltildi:** create sonrası editör açılmıyordu — `invalidate()` refetch
+    penceresinde guard-effect (`selectedId ∉ items → null`) seçimi sıfırlıyordu. Çözüm:
+    `queryClient.setQueryData` ile listeyi **senkron** seed'le, sonra seç, sonra invalidate.
+    (E2E önce bu yüzden kırmızıydı, sonra yeşil.)
+- KK (birebir): _"Şablon galerisi; tür seçimi → editör"_.
+- **Test (yeni):** unit `templates.test.ts` (7) + `TemplateGallery.test.tsx` (5) · E2E
+  `apps/e2e/tests/playbook.spec.ts` (galeri aç → kart seç → editör ön-dolu: name/instruction/steps).
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w test:unit` (web 169) ·
+  `pnpm -w test:integration` (**507**, backend'e dokunulmadı → regresyon yok) · `pnpm -w build` ·
+  e2e `playbook` yeşil. Full e2e'de team/settings 3 test **login anon rate-limit** throttle'ına
+  takıldı (playwright config'in uyardığı, reuse edilen api server'da limit yükseltilmemiş) →
+  izole tekrar koşuda 14/14 yeşil, benim değişikliğimle ilgisiz.
+- **Kapsam notu (ÖNEMLİ):** Önceki pencere 32.1-32.4 dosyalarını topluca bırakmış ama PlaybookPage'i
+  yarım bağlamış (importlar var, JSX yok; `VirtualList` importu düşmüş). 32.2/32.3/32.4 dosyaları
+  (`RecommendedSkills*`, `SkillBrowser*`, `skill-filters*`) **tipcheck'i kırıyordu** ve kapsam dışıydı;
+  silmedim → `/.parked-playbook/`'a taşıdım. Sonraki pencereler oradan devam edebilir veya task
+  tanımına göre sıfırdan kurabilir.
+- Sonraki pencereye not: **32.2** (Recommended skills, 32.1'e bağlı) — `templateToDraft` + galeri
+  deseni hazır; PlaybookPage'e RecommendedSkills'i "Try this → editör kopya" olarak benzer şekilde bağla
+  (parked dosya bir başlangıç). **32.3** liste sekmeleri + **32.4** Search/Sort/Filter sırada.
+  Parent **32** in-progress kalır (32.2-32.4 pending).
+
 ### 31 — T7-a · 13.8 E-posta bildirim kanalı (kullanıcı tercihi + gating) — done — 2026-07-25T20:40Z UTC
 - Yapıldı:
   - **Denetim bulgusu düzeltildi:** e-posta kanalı ZATEN vardı (tm 16, `customer.ts#notifyAssignee`

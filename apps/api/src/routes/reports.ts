@@ -8,6 +8,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
+import { resolutionRate, round } from './reports-metrics.js';
 import type { Env } from '../config/env.js';
 import type { TenantClient, TenantContext } from '../lib/tenant.js';
 import { currentPeriod, trialState, usageSummary } from '../services/billing/metering.js';
@@ -122,6 +123,8 @@ export default async function reportRoutes(
           total_chats: bigint;
           closed_chats: bigint;
           automated: bigint;
+          assisted: bigint;
+          manual: bigint;
           avg_first_response_seconds: number | null;
           avg_duration_seconds: number | null;
         }>
@@ -129,8 +132,12 @@ export default async function reportRoutes(
         SELECT
           count(*)                                            AS total_chats,
           count(*) FILTER (WHERE NOT t.active)                AS closed_chats,
-          -- ADR-09: a thread with no agent-authored event resolved without a
-          -- human. Same predicate the billing counter uses.
+          -- PRD 07.3.2 splits every closed case three ways. The predicates are
+          -- built so the three are mutually exclusive and cover all of closed,
+          -- which is what lets manual + assisted + automated = closed hold.
+          --
+          -- ADR-09 (KEPT VERBATIM): a thread with no agent-authored event
+          -- resolved without a human. Same predicate the billing counter uses.
           count(*) FILTER (
             WHERE NOT t.active
               AND NOT EXISTS (
@@ -138,6 +145,33 @@ export default async function reportRoutes(
                 WHERE e.thread_id = t.id AND e.author_type = 'agent'
               )
           )                                                   AS automated,
+          -- An agent replied *and* a skill ran on the chat. Skill runs key on
+          -- chat_id (a chat can span several threads); the license filter keeps
+          -- the correlation inside the tenant even if RLS were ever bypassed.
+          count(*) FILTER (
+            WHERE NOT t.active
+              AND EXISTS (
+                SELECT 1 FROM events e
+                WHERE e.thread_id = t.id AND e.author_type = 'agent'
+              )
+              AND EXISTS (
+                SELECT 1 FROM skill_runs sr
+                WHERE sr.chat_id = t.chat_id AND sr.license_id = t.license_id
+              )
+          )                                                   AS assisted,
+          -- An agent replied with no skill involved. The remainder of closed
+          -- once automated and assisted are removed, so the three sum to closed.
+          count(*) FILTER (
+            WHERE NOT t.active
+              AND EXISTS (
+                SELECT 1 FROM events e
+                WHERE e.thread_id = t.id AND e.author_type = 'agent'
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM skill_runs sr
+                WHERE sr.chat_id = t.chat_id AND sr.license_id = t.license_id
+              )
+          )                                                   AS manual,
           avg(EXTRACT(EPOCH FROM (t.first_response_at - t.created_at)))
             FILTER (WHERE t.first_response_at IS NOT NULL)    AS avg_first_response_seconds,
           avg(EXTRACT(EPOCH FROM (t.closed_at - t.created_at)))
@@ -201,6 +235,8 @@ export default async function reportRoutes(
     const rated = good + bad;
     const totalChats = Number(report.totals?.total_chats ?? 0n);
     const automated = Number(report.totals?.automated ?? 0n);
+    const assisted = Number(report.totals?.assisted ?? 0n);
+    const manual = Number(report.totals?.manual ?? 0n);
     const closed = Number(report.totals?.closed_chats ?? 0n);
 
     return reply.send({
@@ -213,11 +249,19 @@ export default async function reportRoutes(
         // "total cases" quotes the same number.
         total_cases: totalChats + report.tickets,
         closed,
-        // Share of *closed* conversations, not all of them: an open chat has
-        // not resolved either way, and counting it would make the figure drop
-        // whenever the inbox is busy.
+        // PRD 07.3.2's three-way split of closed cases. Sent as three counts
+        // (not left for the client to derive) so every surface agrees, and by
+        // construction manual + assisted + automated === closed.
+        manual,
+        assisted,
+        // `automated` keeps ADR-09 unchanged — it is the invoice's number too.
         automated,
-        automated_rate: closed === 0 ? null : round(automated / closed),
+        // Shares of *closed* conversations, not all of them: an open chat has
+        // not resolved either way, and counting it would make the figures drop
+        // whenever the inbox is busy. Null (not 0%) when nothing closed.
+        manual_rate: resolutionRate(manual, closed),
+        assisted_rate: resolutionRate(assisted, closed),
+        automated_rate: resolutionRate(automated, closed),
         queued_now: report.queued,
       },
       response_times: {
@@ -314,10 +358,6 @@ export default async function reportRoutes(
       });
     },
   );
-}
-
-function round(value: number): number {
-  return Math.round(value * 1000) / 1000;
 }
 
 function roundOrNull(value: number | null | undefined): number | null {

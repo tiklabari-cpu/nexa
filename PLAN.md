@@ -196,7 +196,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | ------ | ---------------------------------------------------------------------- | ------------------ | :---: | ------------------------------------------------------------------- |
 | 07.1   | Reports kenar çubuğu (Overview/AI Agent/Breakdown)                     | Should (MVP temel) |   ◐   | Dilim 9 (Overview ✅)                                               |
 | 07.3.1 | Overview header — range tabs (7/30/90/365 + custom) + vs. önceki dönem | Should             |   ◐   | Dilim 9 (aralık ✅, karşılaştırma ⬜)                               |
-| 07.3.2 | KPI kartları — Manual/Assisted/**Automated** + Total cases             | Must (MVP temel)   |  ◐   | automated ✅ + total_cases ✅ (Dilim 11) · **Manual/Assisted ayrımı ⬜ (kodda yok)** |
+| 07.3.2 | KPI kartları — Manual/Assisted/**Automated** + Total cases             | Must (MVP temel)   |  ✅   | Manual/Assisted/Automated 3'lü ayrım + Total cases (tm 20). automated ADR-09 KORUNDU; manual+assisted+automated = closed. |
 | 07.3.3 | Chats bölümü kartları (automated chats/hour, durations, response)      | Should             |   ◐   | Dilim 9                                                             |
 | 07.2   | Onboarding survey popover                                              | Could              |  🔒   | —                                                                   |
 
@@ -253,7 +253,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 **Faz-0 kapanış kapısı:** 52 gereksinimin tamamı ✅ veya gerekçeli ⛔ · §7 NFR kapısı geçildi ·
 `make dev` temiz kurulumdan demo akışını çalıştırıyor.
 
-> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** (07.3.2 Manual/Assisted, Must) → tm **21** (07.1/07.3.1/07.3.3 Reports Breakdown) · tm **22** (00.4 Onboarding) · tm **23** (S12 audit yazıcısı) · tm **24** (C8 retention) · tm **25** (M5 OTel) · tm **26** (i18n). Bu bakiye kapanana dek Faz-0 **"kapandı" sayılmaz**; `run-loop.sh` sırayla işler (öncelik sırası: 20 · 23 · 24 → 22 · 25 · 26 → 21). Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
+> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** ✅ (07.3.2 Manual/Assisted — teslim edildi) → tm **21** (07.1/07.3.1/07.3.3 Reports Breakdown) · tm **22** (00.4 Onboarding) · tm **23** (S12 audit yazıcısı) · tm **24** (C8 retention) · tm **25** (M5 OTel) · tm **26** (i18n). Bu bakiye kapanana dek Faz-0 **"kapandı" sayılmaz**; `run-loop.sh` sırayla işler (kalan öncelik: 23 · 24 → 22 · 25 · 26 → 21). Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
 
 ---
 
@@ -1052,10 +1052,12 @@ görüneceği en son yerdir.
   ama Faz-0'da **olay yazıcısı bağlanmadı** — hiçbir güvenlik olayı INSERT edilmiyor; §7.2 S12
   kapısı bu yüzden ⬜. Gerekçe: Faz-0 Must yüzeyleri önce; audit üretimi + tüketimi (yazım +
   export UI) v1 borcu. Tablo/policy hazır olduğundan v1'de yalnız yazıcı eklenecek — şema değişmez.
-- **D17 (§F kapanış turu, 2026-07-25):** Reports 07.3.2 yalnız **otomatik** çözüm oranını ve
-  `total_cases = chats + tickets` (Dilim 11) ölçüyor; PRD'nin **Manual/Assisted** ayrımı Faz-0'da
-  **yok** (durum ◐). Gerekçe: ayrım agent-attributed bir resolution event'i gerektiriyor; o veri
-  yolu v1 kapsamında. Sayaç bu kalemi ◐ sayar.
+- **D17 (§F kapanış turu, 2026-07-25 · ÇÖZÜLDÜ tm 20):** ~~Reports 07.3.2 yalnız **otomatik**
+  çözüm oranını ölçüyordu; Manual/Assisted ayrımı yoktu.~~ tm 20'de üç-sınıf ayrım eklendi:
+  **Automated** = kapanmış, agent-yazımlı event yok (ADR-09 birebir korundu, fatura ile aynı sorgu) ·
+  **Assisted** = agent event VAR + o chat'e ait `skill_runs` VAR · **Manual** = agent event VAR,
+  skill YOK. Üçü kapanmış vakayı tam bölüyor (manual+assisted+automated = closed); veri zaten
+  vardı (`events` + `skill_runs`), yeni tablo/kolon gerekmedi.
 - **D18 (§F kapanış turu — faz sızıntısı, 2026-07-25):** MOD-05 (Playbook) ve MOD-06 (AI Agent)
   **v1 payları** Faz-0 kod tabanında mevcut (bkz. §1.3 ve §4.1/4.2 "öne çekildi"). Bunlar **v1
   kapsamı** sayılır — Faz-0 kapanış sayacına dâhil **değildir** (🔒). Kapanış turu bunları "erken

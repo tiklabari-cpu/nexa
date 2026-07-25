@@ -968,7 +968,7 @@ components:
             to: { type: string, format: date-time }
         totals:
           type: object
-          required: [chats, tickets, total_cases, closed, automated, queued_now]
+          required: [chats, tickets, total_cases, closed, manual, assisted, automated, queued_now]
           properties:
             chats: { type: integer }
             tickets:
@@ -981,7 +981,25 @@ components:
                 client to add up, so every surface quoting "total cases" quotes
                 the same number.
             closed: { type: integer }
+            # PRD 07.3.2 splits every *closed* case three ways, and the three
+            # always sum back to `closed` — so a client can trust the parts
+            # against the whole:
+            #   manual    — an agent replied and no skill ran.
+            #   assisted  — an agent replied *and* a skill ran on the chat.
+            #   automated — no agent-authored event at all (ADR-09). This is the
+            #     same definition the invoice's AI-resolution counter uses, so
+            #     the two never drift.
+            manual: { type: integer }
+            assisted: { type: integer }
             automated: { type: integer }
+            manual_rate:
+              type: number
+              nullable: true
+              description: Share of *closed* chats an agent resolved unaided. Null when nothing closed.
+            assisted_rate:
+              type: number
+              nullable: true
+              description: Share of *closed* chats an agent resolved with a skill. Null when nothing closed.
             automated_rate:
               type: number
               nullable: true

@@ -6,6 +6,27 @@
 
 ## Task log (newest-first)
 
+### 20 — Reports KPI: Manual/Assisted/Automated ayrımı + Total cases (07.3.2) — done — 2026-07-25 UTC
+- Yapıldı: Reports Overview'a PRD 07.3.2'nin **üç-sınıf çözüm ayrımı**. **Automated** = kapanmış,
+  agent-yazımlı event yok (ADR-09 birebir korundu — faturanın AI-resolution sayacıyla aynı sorgu) ·
+  **Assisted** = agent event VAR + o chat'e ait `skill_runs` VAR · **Manual** = agent event VAR, skill YOK.
+  Üçü kapanmış vakayı tam bölüyor: `manual + assisted + automated = closed` (SQL FILTER'lar karşılıklı
+  dışlayan + kapsayan). Yeni tablo/kolon/migration YOK — veri zaten `events` + `skill_runs`'ta.
+- Sözleşme: `openapi.yaml` `ReportsOverview.totals`'a `manual`/`assisted` (+`_rate`) alanları;
+  `pnpm --filter @nexa/contract generate` ile `dist/openapi.json` + `src/generated/api.ts` yenilendi.
+- Backend: `routes/reports.ts` overview SQL'ine `assisted`/`manual` FILTER'ları; rate mantığı
+  saf `routes/reports-metrics.ts`'e (`resolutionRate` + `round`) çıkarıldı (closed=0 → null guard).
+- Web: `ReportsPage.tsx` — yeni **Resolution** bölümü (Manual/Assisted/Automated 3 kart) + Volume'a
+  **Total cases** kartı; mevcut automated kartı (tone/rate hint) korundu.
+- Doğrulama (DoD tam yeşil): typecheck 0 · lint 0 · unit (api `reports-metrics` 6/6 dâhil) 0 ·
+  integration **457/457** (yeni 3 reports testi: 3-sınıf toplam=closed · ADR-09 skill-run automated'ı
+  bozmaz · cross-tenant izolasyon; contract-parity + tenant-isolation dâhil) · build 0 ·
+  e2e reports+demo-flow 4/4. Kanıt: `apps/e2e/kanit/20-reports-resolution.png` (Manual 2·100% / Assisted 0 / Automated 0, closed=2).
+- PLAN: §3.6 07.3.2 ◐→✅ · §F bakiye sayacında tm 20 ✅ · §D17 ÇÖZÜLDÜ olarak işaretlendi.
+- Sonraki pencereye not: Faz-0 bakiyesinde sıradaki öncelik tm **23** (S12 audit yazıcısı). Assisted'in
+  chat↔skill eşlemesi `chat_id` üzerinden (skill_runs thread'e değil chat'e bağlı); ileride thread-zamanlı
+  daha ince eşleme istenirse `skill_runs`'a `thread_id`/zaman penceresi gerekir (şu an kapsam dışı).
+
 ### §F — Faz-0 kapanış turu (bakiye kapatma) — done — 2026-07-25 UTC
 - Yapıldı: 02.6 **Copy chat link** — inbox transcript başlığına "Copy link" düğmesi (`CopyLinkButton`);
   `${origin}/app/inbox?chat=<id>` mutlak deep-link'ini panoya kopyalar (komut paleti + InboxPage'in

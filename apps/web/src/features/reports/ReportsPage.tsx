@@ -26,8 +26,14 @@ interface ReportsOverview {
   range: { from: string; to: string };
   totals: {
     chats: number;
+    tickets: number;
+    total_cases: number;
     closed: number;
+    manual: number;
+    assisted: number;
     automated: number;
+    manual_rate: number | null;
+    assisted_rate: number | null;
     automated_rate: number | null;
     queued_now: number;
   };
@@ -45,6 +51,15 @@ const RANGES = [
   { days: 30, label: 'Last 30 days' },
   { days: 90, label: 'Last 90 days' },
 ] as const;
+
+/**
+ * Hint under a resolution KPI: its share of *closed* conversations, or a plain
+ * note when nothing closed. A rate is null (not 0%) for an empty window, and
+ * "0% of closed" would read as a failure rather than as an absence of data.
+ */
+function closedShare(rate: number | null): string {
+  return rate === null ? 'Nothing closed in this window' : `${formatRate(rate)} of closed`;
+}
 
 export function ReportsPage(): ReactElement {
   const [days, setDays] = useState<number>(30);
@@ -91,28 +106,47 @@ export function ReportsPage(): ReactElement {
         </>
       ) : (
         <>
-          <Section
-            title="Volume"
-            description="Automated is the share of closed conversations an AI resolved without a human."
-          >
+          <Section title="Volume" description="Conversations and tickets in the selected window.">
             <KpiGrid>
               <Kpi label="Conversations" value={formatCount(data.totals.chats)} />
-              <Kpi label="Closed" value={formatCount(data.totals.closed)} />
               <Kpi
-                label="Automated"
-                value={formatCount(data.totals.automated)}
-                hint={
-                  data.totals.automated_rate === null
-                    ? 'Nothing closed in this window'
-                    : `${formatRate(data.totals.automated_rate)} of closed`
-                }
-                tone="good"
+                label="Total cases"
+                value={formatCount(data.totals.total_cases)}
+                hint={`${formatCount(data.totals.chats)} chats + ${formatCount(
+                  data.totals.tickets,
+                )} tickets`}
               />
+              <Kpi label="Closed" value={formatCount(data.totals.closed)} />
               <Kpi
                 label="In queue now"
                 value={formatCount(data.totals.queued_now)}
                 tone={data.totals.queued_now > 0 ? 'warn' : 'neutral'}
                 hint={data.totals.queued_now > 0 ? 'Waiting for an agent' : 'Nobody waiting'}
+              />
+            </KpiGrid>
+          </Section>
+
+          <Section
+            title="Resolution"
+            description="How closed conversations were handled (PRD §7.3.2). Manual, assisted and automated add up to every closed case."
+          >
+            <KpiGrid>
+              <Kpi
+                label="Manual"
+                value={formatCount(data.totals.manual)}
+                hint={closedShare(data.totals.manual_rate)}
+              />
+              <Kpi
+                label="Assisted"
+                value={formatCount(data.totals.assisted)}
+                hint={closedShare(data.totals.assisted_rate)}
+                tone="good"
+              />
+              <Kpi
+                label="Automated"
+                value={formatCount(data.totals.automated)}
+                hint={closedShare(data.totals.automated_rate)}
+                tone="good"
               />
             </KpiGrid>
           </Section>

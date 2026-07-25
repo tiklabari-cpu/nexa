@@ -2240,7 +2240,13 @@ export interface components {
          */
         total_cases: number;
         closed: number;
+        manual: number;
+        assisted: number;
         automated: number;
+        /** @description Share of *closed* chats an agent resolved unaided. Null when nothing closed. */
+        manual_rate?: number | null;
+        /** @description Share of *closed* chats an agent resolved with a skill. Null when nothing closed. */
+        assisted_rate?: number | null;
         /** @description Share of *closed* chats. Null when nothing closed. */
         automated_rate?: number | null;
         queued_now: number;

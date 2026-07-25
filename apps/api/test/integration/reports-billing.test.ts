@@ -116,6 +116,22 @@ describe('reports and billing', () => {
     return chatId;
   }
 
+  /**
+   * Record that a skill ran on a chat — the fact that turns an agent-handled
+   * case from "manual" into "assisted" (PRD 07.3.2). Timing is irrelevant: the
+   * split keys on the run existing for the chat, so this may be called after the
+   * chat has already closed.
+   */
+  async function runSkillOn(chatId: string): Promise<void> {
+    const skill = await owner.skill.create({
+      data: { licenseId: fx.a.licenseId, name: 'Auto-tag', kind: 'workspace' },
+      select: { id: true },
+    });
+    await owner.skillRun.create({
+      data: { skillId: skill.id, chatId, licenseId: fx.a.licenseId, status: 'succeeded' },
+    });
+  }
+
   // =========================================================================
 
   describe('AI resolutions', () => {
@@ -236,6 +252,60 @@ describe('reports and billing', () => {
       const report = await server.get('/reports/overview', auth);
       expect(report.json().totals.closed).toBe(1);
       expect(report.json().totals.automated_rate).toBe(1);
+    });
+
+    it('splits closed cases into manual, assisted and automated (PRD 07.3.2)', async () => {
+      await conversation({ agentReplies: false, customerName: 'Bot only' }); // automated
+      await conversation({ agentReplies: true, customerName: 'Human only' }); // manual
+      const assistedChat = await conversation({ agentReplies: true, customerName: 'Helped' });
+      await runSkillOn(assistedChat); // agent + skill → assisted
+
+      const totals = (await server.get('/reports/overview', auth)).json().totals;
+      expect(totals.automated).toBe(1);
+      expect(totals.assisted).toBe(1);
+      expect(totals.manual).toBe(1);
+      // The invariant the KPI cards rely on: the three parts are exactly closed.
+      expect(totals.manual + totals.assisted + totals.automated).toBe(totals.closed);
+      expect(totals.closed).toBe(3);
+      // Each is a third of closed; the rates share automated's one definition.
+      expect(totals.manual_rate).toBe(0.333);
+      expect(totals.assisted_rate).toBe(0.333);
+      expect(totals.automated_rate).toBe(0.333);
+    });
+
+    it('keeps a skill-run chat with no agent message automated, never assisted (ADR-09)', async () => {
+      // A skill ran but no human ever wrote: assisted requires an agent event,
+      // and automated is exactly ADR-09 — unchanged by the skill run.
+      const chatId = await conversation({ agentReplies: false });
+      await runSkillOn(chatId);
+
+      const totals = (await server.get('/reports/overview', auth)).json().totals;
+      expect(totals.automated).toBe(1);
+      expect(totals.assisted).toBe(0);
+      expect(totals.manual).toBe(0);
+      // Still the invoice's number.
+      expect((await server.get('/billing/usage', auth)).json().ai_resolutions.used).toBe(1);
+    });
+
+    it('scopes the manual/assisted/automated split to one tenant', async () => {
+      await conversation({ agentReplies: false, customerName: 'A-auto' }); // automated in A
+      const assisted = await conversation({ agentReplies: true, customerName: 'A-assisted' });
+      await runSkillOn(assisted); // assisted in A, with a skill_run owned by A
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const totals = (
+        await server.get('/reports/overview', { authorization: `Bearer ${theirToken}` })
+      ).json().totals;
+      // B shares none of A's cases — and A's skill_run must not leak across.
+      expect(totals.closed).toBe(0);
+      expect(totals.manual).toBe(0);
+      expect(totals.assisted).toBe(0);
+      expect(totals.automated).toBe(0);
     });
 
     it('breaks down by agent and by tag', async () => {

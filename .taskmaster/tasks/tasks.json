@@ -256,55 +256,65 @@
         "description": "Reports Overview KPI'lari bugun yalniz `automated` + `total_cases` gosteriyor (apps/api/src/routes/reports.ts ~124-220; ADR-09: agent-yazimli event'i olmayan kapanmis thread = automated). PRD 07.3.2 uc kirilim istiyor: Manual / Assisted / Automated. Veri zaten var (skill_executions + events); eksik olan ayrimi yapan aggregation + kartlar. Must (MVP temel), §D17.",
         "details": "Tanim: Automated = kapanmis, hic agent-yazimli event yok (ADR-09, KORUNUR). Assisted = kapanmis, agent event VAR + o thread'e ait skill_execution VAR. Manual = kapanmis, agent event VAR, skill YOK. Manual+Assisted+Automated = toplam kapanmis vaka.\n1) Kontrat: packages/contract/openapi/paths/reports.yaml overview yanitina manual/assisted (+ *_rate) alanlari (automated'in yanina). openapi.yaml:201-206 mevcut /reports/* yollari. `pnpm --filter @nexa/types generate`.\n2) Aggregation: reports.ts overview SQL (~124-220). Kapanmis her vakayi uc sinifa ayir (skill_executions LEFT JOIN + agent-authored event kontrolu). ADR-09 automated tanimini bozma.\n3) manual_rate/assisted_rate; automated_rate mevcut mantikla ayni (closed=0 -> null).\n4) Web: apps/web/src/features/reports/ReportsPage.tsx — 3 KPI karti (Manual/Assisted/Automated) + Total cases; mevcut automated karti korunur.\nPRD: FR-MOD-07.3.2 · PLAN.md §3.6 · §D17. Kapsam: yalniz bu KPI kirilimi; Breakdown sayfasi task 21.",
         "testStrategy": "DoD kapisi (typecheck/lint/unit/integration/build/e2e exit 0). Ozel: reports integration testinde uc sinifin (manual/assisted/automated) fixtür'leri; siniflandirma dogru; manual+assisted+automated = toplam closed; automated ADR-09 ile birebir ayni kalir; cross-tenant izolasyon ZORUNLU. api unit: rate hesaplari + closed=0 null guard. Bitince PLAN.md §3.6 07.3.2 satiri ◐→✅ ve §F sayaci guncellenir. Kanit: 3 kartli Reports ekrani screenshot.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
           {
-            "id": "1",
+            "id": 1,
             "title": "Kontrat: reports.yaml overview -> manual/assisted (+rate) alanlari",
             "description": "openapi paths/reports.yaml overview yanitina manual, assisted, manual_rate, assisted_rate ekle; @nexa/types generate.",
-            "status": "pending",
-            "dependencies": []
+            "status": "done",
+            "dependencies": [],
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T00:10:56.602Z"
           },
           {
-            "id": "2",
+            "id": 2,
             "title": "Aggregation: reports.ts SQL uc-sinif siniflandirmasi",
             "description": "skill_executions + agent-authored event ile Manual/Assisted/Automated ayrimi; ADR-09 automated korunur.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "1"
-            ]
+            ],
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T00:10:56.605Z"
           },
           {
-            "id": "3",
+            "id": 3,
             "title": "Rate hesaplari + null guard",
             "description": "manual_rate/assisted_rate; closed=0 -> null; automated_rate mevcut mantikla tutarli.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "2"
-            ]
+            ],
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T00:10:56.609Z"
           },
           {
-            "id": "4",
+            "id": 4,
             "title": "Web: ReportsPage 3 KPI karti + Total cases",
             "description": "ReportsPage.tsx uc kart (Manual/Assisted/Automated) + Total cases; automated karti korunur.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "3"
-            ]
+            ],
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T00:10:56.611Z"
           },
           {
-            "id": "5",
+            "id": 5,
             "title": "Testler: integration (3 sinif + toplam + cross-tenant) + unit (rate)",
             "description": "Fixtür'ler; toplam=closed; automated=ADR-09; cross-tenant negatif; rate unit.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "4"
-            ]
+            ],
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T00:10:56.614Z"
           }
         ],
-        "updatedAt": "2026-07-25T00:00:00.000Z"
+        "updatedAt": "2026-07-25T00:10:56.614Z"
       },
       {
         "id": "21",
@@ -319,47 +329,52 @@
         "priority": "medium",
         "subtasks": [
           {
-            "id": "1",
+            "id": 1,
             "title": "Kontrat: breakdown/ai-agent + previous_period delta",
             "description": "reports.yaml yeni yanitlar + overview delta blogu; types generate.",
             "status": "pending",
-            "dependencies": []
+            "dependencies": [],
+            "parentId": "undefined"
           },
           {
-            "id": "2",
+            "id": 2,
             "title": "Backend: previous-period delta + 365/custom range + breakdown/ai-agent aggregation",
             "description": "reports.ts onceki donem + delta; range dogrulama; yeni aggregation sorgulari.",
             "status": "pending",
             "dependencies": [
               "1"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "3",
+            "id": 3,
             "title": "Web: sol sekmeler (Overview/AI Agent/Breakdown)",
             "description": "ReportsPage sekme yapisi + rota/durum.",
             "status": "pending",
             "dependencies": [
               "2"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "4",
+            "id": 4,
             "title": "Web: range tabs 365+custom + vs-onceki delta rozetleri + Chats kartlari",
             "description": "Date picker; delta rozetleri; Chats bolumu kartlari.",
             "status": "pending",
             "dependencies": [
               "3"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "5",
+            "id": 5,
             "title": "Testler: integration (delta + custom range) + unit + e2e sekme gezinme",
             "description": "Delta dogrulugu; custom range; e2e navigasyon.",
             "status": "pending",
             "dependencies": [
               "4"
-            ]
+            ],
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-25T00:00:00.000Z"
@@ -375,38 +390,42 @@
         "priority": "medium",
         "subtasks": [
           {
-            "id": "1",
+            "id": 1,
             "title": "Adim kapsami + tamamlanma durumu modeli",
             "description": "Adimlari netlestir; onboarding flag / state ucu tasarimi.",
             "status": "pending",
-            "dependencies": []
+            "dependencies": [],
+            "parentId": "undefined"
           },
           {
-            "id": "2",
+            "id": 2,
             "title": "Backend: tenant-kapsamli tohum veri SECURITY DEFINER fonksiyonu + state ucu",
             "description": "Demo veri seed fn (RLS uyumlu) + tamamlanma durumu.",
             "status": "pending",
             "dependencies": [
               "1"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "3",
+            "id": 3,
             "title": "Web: onboarding sihirbazi rotasi + adimlar + skip",
             "description": "Persona/website/invite/seed adimlari; mevcut bilesenleri yeniden kullan; atla.",
             "status": "pending",
             "dependencies": [
               "2"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "4",
+            "id": 4,
             "title": "Testler: integration (seed izolasyon) + e2e (signup->wizard->inbox)",
             "description": "Cross-tenant seed; skip ve complete e2e yollari.",
             "status": "pending",
             "dependencies": [
               "3"
-            ]
+            ],
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-25T00:00:00.000Z"
@@ -422,38 +441,42 @@
         "priority": "high",
         "subtasks": [
           {
-            "id": "1",
+            "id": 1,
             "title": "Olay kumesi + alan sozlesmesi",
             "description": "actor/tenant/action/target/request_id; PII-min; hangi eylemler yazilir.",
             "status": "pending",
-            "dependencies": []
+            "dependencies": [],
+            "parentId": "undefined"
           },
           {
-            "id": "2",
+            "id": 2,
             "title": "Merkezi writeAuditEntry (withTenant/RLS, append-only dogrula)",
             "description": "Tek giris noktasi; UPDATE/DELETE policy reddini dogrula.",
             "status": "pending",
             "dependencies": [
               "1"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "3",
+            "id": 3,
             "title": "Guvenlik-hassas handler'lara cagri ekle",
             "description": "auth/settings/billing/PAT/trusted-domains handler'larinda writeAuditEntry cagrilari.",
             "status": "pending",
             "dependencies": [
               "2"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "4",
+            "id": 4,
             "title": "Testler: integration (append/eylem, append-only red, cross-tenant) + unit",
             "description": "Her eylemde 1 append; UPDATE/DELETE red; cross-tenant negatif; PII yok.",
             "status": "pending",
             "dependencies": [
               "3"
-            ]
+            ],
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-25T00:00:00.000Z"
@@ -469,38 +492,42 @@
         "priority": "high",
         "subtasks": [
           {
-            "id": "1",
+            "id": 1,
             "title": "Saklama politikasi (tablo->TTL) + dry-run tasarimi",
             "description": "Hangi veri ne kadar tutulur; dry-run/uygula ayrimi.",
             "status": "pending",
-            "dependencies": []
+            "dependencies": [],
+            "parentId": "undefined"
           },
           {
-            "id": "2",
+            "id": 2,
             "title": "retention:run script + SECURITY DEFINER tenant-dongulu budama",
             "description": "package.json script; batch, idempotent, RLS-guvenli.",
             "status": "pending",
             "dependencies": [
               "1"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "3",
+            "id": 3,
             "title": "Guvenlik guard'lari",
             "description": "Kesin WHERE; dry-run; silinen sayaci log; cross-tenant koruma.",
             "status": "pending",
             "dependencies": [
               "2"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "4",
+            "id": 4,
             "title": "Testler: integration (gecen siler / gecmeyen kalir / cross-tenant / idempotent / dry-run)",
             "description": "Tam kapsama negatif+pozitif.",
             "status": "pending",
             "dependencies": [
               "3"
-            ]
+            ],
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-25T00:00:00.000Z"
@@ -516,38 +543,42 @@
         "priority": "medium",
         "subtasks": [
           {
-            "id": "1",
+            "id": 1,
             "title": "OTel SDK kurulum + tracer + mock/konsol exporter",
             "description": "Node OTel; test-kapatilabilir exporter.",
             "status": "pending",
-            "dependencies": []
+            "dependencies": [],
+            "parentId": "undefined"
           },
           {
-            "id": "2",
+            "id": 2,
             "title": "HTTP/route span'leri + request_id korelasyonu",
             "description": "server.ts; span attribute request_id.",
             "status": "pending",
             "dependencies": [
               "1"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "3",
+            "id": 3,
             "title": "Temel metrikler (istek/sure/hata) kritik yollarda",
             "description": "auth/chats/reports.",
             "status": "pending",
             "dependencies": [
               "2"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "4",
+            "id": 4,
             "title": "Testler: span uretimi + request_id attribute (mock exporter)",
             "description": "Span dustu + attribute assertion.",
             "status": "pending",
             "dependencies": [
               "3"
-            ]
+            ],
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-25T00:00:00.000Z"
@@ -563,38 +594,42 @@
         "priority": "medium",
         "subtasks": [
           {
-            "id": "1",
+            "id": 1,
             "title": "i18n yaklasimi + katalog (tr/en) + t() + locale kaynagi",
             "description": "Hafif cozum; fallback; locale secimi.",
             "status": "pending",
-            "dependencies": []
+            "dependencies": [],
+            "parentId": "undefined"
           },
           {
-            "id": "2",
+            "id": 2,
             "title": "Panel string katalogla + Intl helper'lari locale'e bagla",
             "description": "apps/web string'leri + format.ts locale.",
             "status": "pending",
             "dependencies": [
               "1"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "3",
+            "id": 3,
             "title": "Widget string katalogla (bundle butcesi P3)",
             "description": "apps/widget; boyut korunur.",
             "status": "pending",
             "dependencies": [
               "2"
-            ]
+            ],
+            "parentId": "undefined"
           },
           {
-            "id": "4",
+            "id": 4,
             "title": "Testler: t() fallback unit + locale smoke + widget boyut",
             "description": "Fallback; locale-degisim; P3 boyut.",
             "status": "pending",
             "dependencies": [
               "3"
-            ]
+            ],
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-25T00:00:00.000Z"
@@ -602,9 +637,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T00:00:00.000Z",
+      "lastModified": "2026-07-25T00:10:56.614Z",
       "taskCount": 26,
-      "completedCount": 19,
+      "completedCount": 20,
       "tags": [
         "master"
       ]

@@ -1548,11 +1548,11 @@
         "description": "FR-MOD-07.5 · Should (v2).",
         "details": "FR-MOD-07.5 · Should (v2).\nNEDEN: MVP payı gün+ajan split ✅ (tm 21); kanal/saat boyutları eksik. Kanal boyutu thread/chat'te yok → şema dokunuşu gerekebilir.\nKAPSAM: reports'a ajan/takım/kanal/saat boyutlu kırılım.\nKK (birebir): \"Boyutlu kırılım\". BAĞLAM: PLAN §5.1. ~2-3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: her boyutta doğru gruplama; ADR-09 tutarlı. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.212Z"
       },
       {
         "id": "64",
@@ -1560,11 +1560,11 @@
         "description": "FR-MOD-07.6 · Could (v2) · LLM.",
         "details": "FR-MOD-07.6 · Could (v2) · LLM.\nKAPSAM: sohbetleri konu kümelerine ayır (ai-mock); hacim/trend; yeterli veri yoksa empty.\nKK (birebir): \"AI kümeleme; hacim/trend; yeterli veri yoksa empty\". BAĞLAM: PLAN §5.1. ~2 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: kümeleme + yetersiz-veri empty. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.236Z"
       },
       {
         "id": "65",
@@ -1572,13 +1572,13 @@
         "description": "FR-MOD-08.5.7 · Should (Ent./v2).",
         "details": "FR-MOD-08.5.7 · Should (Ent./v2).\nKAPSAM: Coming soon → Get notified → tam entegrasyon (mock adaptör, 08.5-adapter-a üstüne).\nKK (birebir): \"Coming soon → Get notified → tam entegrasyon\". BAĞLAM: PLAN §5.1. Bağımlılık: tm 35.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: mock inbound→chat + CROSS-TENANT. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [
           "35"
         ],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.241Z"
       },
       {
         "id": "66",
@@ -1586,11 +1586,11 @@
         "description": "FR-MOD-08.6.3 · Could (v2) · [MAX] ↑.",
         "details": "FR-MOD-08.6.3 · Could (v2) · [MAX] ↑.\n↑ GEREKÇE: routing çekirdeğine (ADR-08) uzmanlık katmanı + supervisor takeover (eşzamanlılık/yetki sınırı).\nKAPSAM: uzmanlık/skill bazlı yönlendirme; supervisor takeover.\nKK (birebir): \"Uzmanlık/skill bazlı; supervisor takeover\". BAĞLAM: PLAN §5.1. ~3-4 subtask (başında böl).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: skill-eşleşmeli atama + takeover; CROSS-TENANT. NEGATİF: yetkisiz takeover reddi. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.243Z"
       },
       {
         "id": "67",
@@ -1598,11 +1598,11 @@
         "description": "FR-MOD-08.8.3 · Could (v2) · [MAX] ↑ · §7, LLM.",
         "details": "FR-MOD-08.8.3 · Could (v2) · [MAX] ↑ · §7, LLM.\n↑ GEREKÇE: tool yüzeyi + OAuth scope bazlı yetki + tenant izolasyon (güvenlik sınırı). scope altyapısı ✅.\nKAPSAM: MCP sunucu (mcp URL + Claude setup); search_tickets/list_chats/get_report/summarize_chat tool'ları.\nKK (birebir): \"search_tickets/list_chats/get_report/summarize_chat tool'ları; OAuth scope bazlı; tenant izole\".\nBAĞLAM: PLAN §5.1. ~3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: her tool scope'a tabi; CROSS-TENANT izole. NEGATİF: scope'suz tool → reddedilir. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.245Z"
       },
       {
         "id": "68",
@@ -1610,11 +1610,11 @@
         "description": "FR-MOD-08.9.2 · Should (v2).",
         "details": "FR-MOD-08.9.2 · Should (v2).\nNEDEN: Customer.banned alanı + ban yazma yolu ✅ (F4); yönetim UI + IP yasağı eksik.\nKAPSAM: banned müşteri yönetim ekranı + IP/visitor yasağı; yasaklı sohbet başlatamaz.\nKK (birebir): \"Yasaklı sohbet başlatamaz\". BAĞLAM: PLAN §5.1 (§8 ratings/banned).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: yasaklı müşteri/IP → chat başlatamaz (403); CROSS-TENANT. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.247Z"
       },
       {
         "id": "69",
@@ -1622,11 +1622,11 @@
         "description": "FR-MOD-08.9.3 · Should (v2) · [MAX] ↑.",
         "details": "FR-MOD-08.9.3 · Should (v2) · [MAX] ↑.\n↑ GEREKÇE: dış girdi sınırı + otomatik filtre (yanlış-pozitif/negatif riski). Güvenlik kuralı — tam derinlik serbest (§5.1).\nKAPSAM: spam sohbet/ticket otomatik filtre (SecuritySettings.spamFilterEnabled zaten var, email-inbound kullanıyor).\nKK (birebir): \"Spam sohbet/ticket otomatik filtre\". BAĞLAM: PLAN §5.1, §C-A9 (email spam bağı).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: spam → ticket/chat üretmez; temiz → geçer. NEGATİF: yanlış-pozitif sınırı. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.249Z"
       },
       {
         "id": "70",
@@ -1634,11 +1634,11 @@
         "description": "FR-MOD-08.9.5 · Should (v2) · [MAX] ↑ · NFR-C5/S9.",
         "details": "FR-MOD-08.9.5 · Should (v2) · [MAX] ↑ · NFR-C5/S9.\n↑ GEREKÇE: PII sınırı — DB/log'a maskeli yazma (yazma anında, yalnız UI değil). Güvenlik kuralı — tam derinlik serbest.\nKAPSAM: kart no Luhn tespiti + yazma anında maskeleme (event/log); PCI SAQ A.\nKK (birebir): \"PCI SAQ A; DB/log'a maskeli yazılır (yalnız UI değil)\". BAĞLAM: PLAN §5.1.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "unit: Luhn tespit + maskeleme. integration: DB'de maskeli saklanır (ham kart yok). NEGATİF: log'a ham kart sızmaz. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.251Z"
       },
       {
         "id": "71",
@@ -1646,11 +1646,11 @@
         "description": "FR-MOD-09.3 · Could (v2) · MOD-10.",
         "details": "FR-MOD-09.3 · Could (v2) · MOD-10.\nKAPSAM: fiyatlı API paketleri satışı (Essential 100K / Pro/Pro+ 500K); billing ✅ üstüne.\nKK (birebir): \"Fiyatlı API paketleri satışı\". BAĞLAM: PLAN §5.1. Bağımlılık kavramsal: billing (✅).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: paket satın alma → kota artışı (mock). DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.254Z"
       },
       {
         "id": "72",
@@ -1658,13 +1658,13 @@
         "description": "FR-MOD-09.4 · Could (v2) · MOD-08.8.4.",
         "details": "FR-MOD-09.4 · Could (v2) · MOD-08.8.4.\nKAPSAM: 700+ Zapier bağı + partner/creator portalı; webhooks (tm 34) üstüne.\nKK (birebir): \"700+ Zapier; partner/creator portalı\". BAĞLAM: PLAN §5.1. Bağımlılık: tm 34 (webhooks).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: partner app kaydı + webhook tetik. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [
           "34"
         ],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.257Z"
       },
       {
         "id": "73",
@@ -1672,11 +1672,11 @@
         "description": "FR-MOD-13.2 · Should (v2) · MOD-03.1.",
         "details": "FR-MOD-13.2 · Should (v2) · MOD-03.1.\nNEDEN: visits ✅ yazılıyor/okunuyor; 03.1.1'in kalan sekmeleri (Supervised/Invited/Browsing) BURAYA (v2 gelişmiş, §3.13).\nKAPSAM: Match all filters + Add filter; ziyaretçi 360° panel (pre-chat form, returning N visits, came from, groups, visited pages).\nKK (birebir): \"Gelişmiş filtre; ziyaretçi geçmişi; proaktif aksiyon\". BAĞLAM: PLAN §5.1 + §3.13 (03.1.1-kalan). ~2-3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: gelişmiş filtre + ziyaretçi geçmişi. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.259Z"
       },
       {
         "id": "74",
@@ -1684,11 +1684,11 @@
         "description": "FR-MOD-13.3 · Should (v2) · MOD-07.",
         "details": "FR-MOD-13.3 · Should (v2) · MOD-07.\nNEDEN: goals tablosu ✅ var (§8, 0 tüketici) — bu iş onu bağlar.\nKAPSAM: 3 aşamalı huni; Create goal; Reports 'Achieved goals' entegrasyonu.\nKK (birebir): \"3 aşamalı huni; hedef tanımı; rapor entegrasyonu\". BAĞLAM: PLAN §5.1, §8 goals. ~2-3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: huni tanımı + achieved goals raporu. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.261Z"
       },
       {
         "id": "75",
@@ -1696,14 +1696,14 @@
         "description": "FR-MOD-13.5 · Could (v2) · MOD-07.8/13.3.",
         "details": "FR-MOD-13.5 · Could (v2) · MOD-07.8/13.3.\nKAPSAM: satış/dönüşüm izleme kodu/kuralı; Reports Ecommerce ile ilişki.\nKK (birebir): \"İzleme yapılandırması; Reports Ecommerce ile ilişki\". BAĞLAM: PLAN §5.1. Bağımlılık: tm 45 (07.8-a) + tm 74 (Goals).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: satış izleme → Reports Ecommerce. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [
           "45",
           "74"
         ],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.263Z"
       },
       {
         "id": "76",
@@ -1711,11 +1711,11 @@
         "description": "PRD §5.3 (v2) · KK-türetilmiş (kaynak: §5.3 'Public KB').",
         "details": "PRD §5.3 (v2) · KK-türetilmiş (kaynak: §5.3 'Public KB').\nKAPSAM: knowledge kaynaklarından SEO'lu public makale/self-servis KB; knowledge ✅ üstüne.\nKK-TÜRETİLMİŞ: \"Public, indekslenebilir self-servis makaleler; arama; knowledge kaynağından türetilir\" (§5.3'ten türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §5.1. ~2-3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: public makale render + arama; yetkisiz erişim (public). DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.265Z"
       },
       {
         "id": "77",
@@ -1723,11 +1723,11 @@
         "description": "PRD §5.3 (v2) · KK-türetilmiş.",
         "details": "PRD §5.3 (v2) · KK-türetilmiş.\nKAPSAM: vardiya planlama + staffing tahmini (reports + presence verisinden).\nKK-TÜRETİLMİŞ: \"Ajan vardiya planı + geçmiş hacimden staffing tahmini\" (§5.3'ten türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §5.1. ~2-3 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: tahmin hesabı + plan görünümü. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.266Z"
       },
       {
         "id": "78",
@@ -1735,11 +1735,11 @@
         "description": "PRD §5.3 (v2) · [MAX] ↑ · KK-türetilmiş.",
         "details": "PRD §5.3 (v2) · [MAX] ↑ · KK-türetilmiş.\n↑ GEREKÇE: tenant/RLS izolasyon sınırının genişlemesi (marka-içi izolasyon) — veri bütünlüğü.\nKAPSAM: tek lisans altında çok marka; marka bazlı widget/persona/routing; marka-içi izolasyon.\nKK-TÜRETİLMİŞ: \"Marka başına ayrı widget/persona/rapor; markalar arası veri sızmaz\" (§5.3'ten türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §5.1, ADR (RLS). ~3-4 subtask (başında böl).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: marka izolasyonu; CROSS-BRAND negatif (sızma yok). DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.268Z"
       },
       {
         "id": "79",
@@ -1747,13 +1747,13 @@
         "description": "FR-MOD-08.5.8 · Should (Ent.).",
         "details": "FR-MOD-08.5.8 · Should (Ent.).\nKAPSAM: Get notified → tam entegrasyon (mock adaptör, 08.5-adapter-a üstüne). TR pazarında öncelik.\nKK (birebir): \"Get notified → tam entegrasyon (TR pazarında öncelik)\". BAĞLAM: PLAN §6.1. Bağımlılık: tm 35.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: mock inbound→chat + CROSS-TENANT. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [
           "35"
         ],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.269Z"
       },
       {
         "id": "80",
@@ -1761,11 +1761,11 @@
         "description": "FR-MOD-08.9.6 · Could (Ent.) · [MAX] ↑ · §7.",
         "details": "FR-MOD-08.9.6 · Could (Ent.) · [MAX] ↑ · §7.\n↑ GEREKÇE: erişim sınırı (IP kısıtı + oturum politikaları).\nKAPSAM: hesap bazlı IP allowlist; oturum politikaları (süre/eşzamanlı oturum).\nKK (birebir): \"IP kısıtı; oturum politikaları\". BAĞLAM: PLAN §6.1.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: allowlist dışı IP → reddedilir; CROSS-TENANT. NEGATİF: politika ihlali reddi. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.271Z"
       },
       {
         "id": "81",
@@ -1773,11 +1773,11 @@
         "description": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-S11 · KK-türetilmiş.",
         "details": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-S11 · KK-türetilmiş.\n↑ GEREKÇE: kimlik sınırı (SAML federasyon + SCIM otomatik provizyon).\nKAPSAM: SAML 2.0 SSO (IdP entegrasyonu) + SCIM kullanıcı provizyon/deprovizyon.\nKK-TÜRETİLMİŞ: \"SAML IdP ile SSO girişi; SCIM ile kullanıcı yaşam döngüsü\" (NFR-S11'den türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §6.1, NFR-S11. ~4-5 subtask (başında böl).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: SAML login + SCIM provision/deprovision; CROSS-TENANT. NEGATİF: geçersiz assertion reddi. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.273Z"
       },
       {
         "id": "82",
@@ -1785,11 +1785,11 @@
         "description": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C4 · KK-türetilmiş.",
         "details": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C4 · KK-türetilmiş.\n↑ GEREKÇE: uyumluluk + bölge sınırı (ADR-12 tek bölge yeniden açılır).\nKAPSAM: imzalı BAA akışı + bölgesel barındırma (US/EU); region immutable kuralının genişletilmesi.\nKK-TÜRETİLMİŞ: \"BAA imzalı hesapta HIPAA kapsamı; region seçimi (US/EU); yanlış bölge → misdirected_request\" (NFR-C4/C9'dan türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §6.1, ADR-12, NFR-C4/C9. ~3-4 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: bölge zorlaması (token+RTM); NEGATİF: yanlış bölge → misdirected_request. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.275Z"
       },
       {
         "id": "83",
@@ -1797,11 +1797,11 @@
         "description": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C6/C7/S12 · KK-türetilmiş.",
         "details": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C6/C7/S12 · KK-türetilmiş.\n↑ GEREKÇE: uyumluluk (çoğu SÜREÇ işi; kod payı: genişletilmiş audit + SIEM export). audit yazıcı ✅ (tm 23) temeli var.\nKAPSAM: genişletilmiş audit log + SIEM export; SOC2/ISO kontrol kanıtları (kod payı). Sertifikasyon = dış denetim süreci (takvim-belirleyici, PRD §10.2).\nKK-TÜRETİLMİŞ: \"Genişletilmiş audit + SIEM'e export; kontrol kanıtları\" (NFR-C6/C7/S12'den türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §6.1, §7.2 S12 (✅ temel). SÜREÇ + ~2-3 kod subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "integration: audit → SIEM export; append-only korunur; CROSS-TENANT. DoD tam (kod payı).",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.276Z"
       },
       {
         "id": "84",
@@ -1809,16 +1809,16 @@
         "description": "PRD §5.4 (Ent.) · FR-MOD-11.5 (white-label) · KK-türetilmiş.",
         "details": "PRD §5.4 (Ent.) · FR-MOD-11.5 (white-label) · KK-türetilmiş.\nKAPSAM: white-label widget ('Powered by' kaldırma — 11.5); SLA yönetimi; sandbox ortamı.\nKK (birebir, 11.5): \"Marka linki; Enterprise'da white-label\" + KK-türetilmiş (SLA/sandbox §5.4).\nBAĞLAM: PLAN §6.1, widget ✅. 11.5 'Powered by' footer kaldırma bu kapsamda. ~3-4 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
         "testStrategy": "unit: white-label bayrağı → 'Powered by' gizlenir. DoD tam.",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-25T13:09:32.278Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T15:15:00.000Z",
+      "lastModified": "2026-07-25T13:09:32.278Z",
       "taskCount": 84,
       "completedCount": 26,
       "tags": [

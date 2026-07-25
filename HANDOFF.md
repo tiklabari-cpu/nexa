@@ -6,6 +6,35 @@
 
 ## Task log (newest-first)
 
+### 26.4 — I18N1/2 testler: t() fallback unit + locale smoke + widget boyut — done — 2026-07-25 UTC
+- Yapıldı: 26.1–26.3 zaten fallback unit (panel `apps/web/src/lib/i18n.test.ts` + widget
+  `apps/widget/src/i18n.test.ts`), panel locale-switch smoke (`i18n.smoke.test.tsx`) ve widget
+  bundle-P3 boyut testini (`test/bundle-size.test.ts`) bırakmıştı. Tek eksik **widget mount-locale
+  smoke**'tu: yeni `apps/widget/src/i18n.smoke.test.ts` (3 test) gerçek widget'ı jsdom'da
+  `language=tr` ile mount edip görünür chrome'un (launcher `Sohbet`/aria `Sohbeti aç`, panel aria
+  `Müşteri destek sohbeti`, başlık `Bizimle sohbet edin`, send `Gönder`) fiilen Türkçe geldiğini —
+  ve İngilizce varsayılanın kaybolduğunu — kanıtlıyor; ayrıca dilsiz→İngilizce fallback ve
+  bölge-etiketli `tr-TR`→tr çözümü. Bu, `data-language → readConfig → createTranslator → DOM`
+  zincirini uçtan uca doğruluyor (panelin locale smoke'unun widget karşılığı; widget'ta runtime
+  dil değiştirici yok, locale sayfa-yükü boyunca sabit). Kaynak koda dokunulmadı — yalnız test.
+- Doğrulama (**tam kapı yeşil, exit 0**): `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7; widget **7.57 KB gzip** ≪ 50 KB P3) · `pnpm -w test:unit` (web **88** +
+  widget **34** = yeni `i18n.smoke.test.ts` 3 + mevcut `i18n.test.ts` 7 + `bundle-size` 2 [taze
+  dist'e karşı **skip değil**] + `loader` 22) · `pnpm -w test:integration` (**seri** · api 22 dosya /
+  **492**) · `make test-e2e` (**44/44**, 13 widget spec dâhil). Task kabul kriteri (fallback unit +
+  locale smoke + widget boyut) karşılandı.
+- Kapsam disiplini: **yalnız 2 dosya** commit'lendi (`apps/widget/src/i18n.smoke.test.ts` + PLAN.md
+  §7.2 I18N ⬜→✅) + taskmaster durum. İlgisiz çalışma-ağacı değişiklikleri (CLAUDE.md/
+  MASTER-PROMPT.md, kanit .png'leri, autorun/convention .md'leri, run-loop.sh) **staged edilmedi**.
+- Varsayımlar: e2e'nin İngilizce metin iddiaları (ör. "Let's chat") etkilenmez — demo host sayfası
+  `data-language` set etmez, varsayılan `en` çıktısı 26.3'ten bu yana bayt-özdeş. Bundle-P3 testinin
+  gerçekten koşması için (skipIf dist yokken atlar) unit'ten önce `build` çalıştırıldı; kapı sırasında
+  build zaten var.
+- Sonraki pencereye not: **Parent 26 done** (tüm alt-görevler kapandı) ve **PLAN.md §7.2 I18N ✅**.
+  i18n = katalog + tr/en (canlı/otomatik çeviri §9 kapsam dışı, kasıtlı). Panelde çevrilmemiş ekran
+  metinleri hâlâ fallback ile İngilizce'ye düşer (iskelet + eksik-anahtar güvenliği tasarımı);
+  ileride ekran-bazı katalog genişletmesi ayrı task olur.
+
 ### 26.3 — I18N1/2 widget string kataloglama (bundle bütçesi P3) — done — 2026-07-25 UTC
 - Yapıldı: 26.1/26.2 pencerelerinden çalışma ağacında bekleyen `apps/widget/src/i18n.ts`
   iskeletini (tr/en düz katalog + `createTranslator`/`resolveWidgetLocale`, panelle aynı

@@ -813,7 +813,7 @@
         "description": "Playbook çekirdeği var (öne çekildi); şablon galerisi/sekmeler/kontroller eksik. PRD MOD-05 (v1).",
         "details": "PARENT. 05 Playbook tamamlama (öne çekilen v1 yüzeyi). Backend skill CRUD+compile+preview VAR\n(routes/playbook.ts); UI PlaybookPage.tsx/SkillEditor.tsx VAR. Eksik: şablon galerisi/sekmeler/kontroller.\n4 subtask; her biri DoD+KK'dan geçer. Bağlam: PLAN §4.4.1.",
         "testStrategy": "Subtask bazlı; parent tüm subtask yeşil olunca done.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -858,15 +858,15 @@
             "description": "Ada göre arama + tür/durum/sahip filtre. PRD 05.4 (Should).",
             "details": "05.4-a Liste kontrolleri (Search/Sort/Filter). [XHIGH] PRD 05.4 (Should).\nKAPSAM: ada göre debounce arama + tür/durum/sahip filtre + sıralama.\nKK (birebir): \"Ada göre arama; tür/durum/sahip filtre\". BAĞLAM: PLAN §4.4.1. Bağımlılık: 32.3 + form deseni (tm 29).",
             "testStrategy": "unit: arama/filtre daraltır. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3
             ],
             "parentId": "32",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-25T23:09:26.730Z"
           }
         ],
-        "updatedAt": "2026-07-25T22:34:12.309Z"
+        "updatedAt": "2026-07-25T23:09:26.730Z"
       },
       {
         "id": "33",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T22:34:12.309Z",
+      "lastModified": "2026-07-25T23:09:26.730Z",
       "taskCount": 84,
-      "completedCount": 31,
+      "completedCount": 32,
       "tags": [
         "master"
       ]

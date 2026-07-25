@@ -14,6 +14,7 @@ import { Composer } from './Composer.js';
 import { DetailsPanel } from './DetailsPanel.js';
 import { Transcript } from './Transcript.js';
 import { useChat, useChatList, useRealtime, useTranscript, useViewCounts } from './useInbox.js';
+import { useRightPanel } from './rightPanel.js';
 import { useNotifications } from '../notifications/useNotifications.js';
 import { TicketDetailPane, TicketList } from './TicketPane.js';
 import { useTicketList } from './useTickets.js';
@@ -88,6 +89,10 @@ export function InboxPage(): ReactElement {
 
   const agent = useAuth((s) => s.agent);
   const setRoutingStatus = useAuth((s) => s.setRoutingStatus);
+
+  // Whether the right-hand Details panel is shown or collapsed to give the
+  // transcript the full width. The choice is remembered across reloads.
+  const rightPanel = useRightPanel();
 
   const chats = useMemo(() => list.data?.items ?? [], [list.data]);
 
@@ -344,6 +349,10 @@ export function InboxPage(): ReactElement {
                     setSelectedTicketId(ticketId);
                   }}
                 />
+                {/* When the panel is open it is collapsed from its own header
+                    (the transcript header is tight at this width); when it is
+                    hidden, this is the way back to it. */}
+                {rightPanel.expanded && <ShowDetailsButton onShow={() => rightPanel.setExpanded(false)} />}
               </header>
 
               <Transcript
@@ -363,11 +372,35 @@ export function InboxPage(): ReactElement {
         </main>
       )}
 
-      {/* Details */}
-      {!onTickets && selectedId && chat.data && (
-        <DetailsPanel chat={chat.data} chatId={selectedId} />
+      {/* Details — hidden in Expand mode so the transcript takes the full width */}
+      {!onTickets && selectedId && chat.data && !rightPanel.expanded && (
+        <DetailsPanel
+          chat={chat.data}
+          chatId={selectedId}
+          onCollapse={() => rightPanel.setExpanded(true)}
+        />
       )}
     </>
+  );
+}
+
+/**
+ * Brings the Details panel back after it has been collapsed (FR-MOD-01.3). It
+ * only renders in Expand mode, where the transcript is wide and the header has
+ * room; collapsing happens from the panel's own header, which stays reachable
+ * while the transcript here is narrow.
+ */
+function ShowDetailsButton({ onShow }: { onShow: () => void }): ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onShow}
+      aria-label="Show details panel"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
+    >
+      <span aria-hidden="true">◧</span>
+      Details
+    </button>
   );
 }
 

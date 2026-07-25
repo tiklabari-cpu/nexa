@@ -6,6 +6,31 @@
 
 ## Task log (newest-first)
 
+### 28 — 01.3 Sağ panel switcher (Details/Expand + persist) — done — 2026-07-25 UTC
+- Yapıldı:
+  - **Tercih deposu:** `apps/web/src/features/inbox/rightPanel.ts` — `nexa.inbox.right-panel`
+    localStorage anahtarı (`'details' | 'expanded'`), `loadRightPanel`/`saveRightPanel` (safeStorage;
+    bilinmeyen/bozuk değer → `'details'`) + `useRightPanel()` hook (lazy init = reload'da tercih
+    okunur). i18n/notifications ile aynı `nexa.*` deseni; **backend/kontrat değişmedi** (§D22 MVP payı).
+  - **InboxPage:** Details paneli yalnız `!expanded` iken render; expand modda transcript tam
+    genişlik (`main` flex-1). Panel AÇIKKEN dar transcript header'ına buton EKLENMEZ — kapatma
+    panelin kendi başlığındaki `⇥` ("Collapse details panel", `onCollapse`) ile; panel KAPALIYKEN
+    geniş header'daki "Show details panel" geri getirir. (Header'a her koşulda buton koymak 1280px'de
+    paneli aside'ın altına taşıyıp tıklamayı kesiyordu → iki bağlamlı kontrol, taşma yok.)
+  - **DetailsPanel:** opsiyonel `onCollapse` prop + başlıkta collapse butonu (prop yoksa eski davranış).
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` ✅ (11/11) · `pnpm -w lint` ✅ (8/8) ·
+  `pnpm -w build` ✅ (7/7) · web unit **98** (+ yeni `rightPanel.test.tsx`: store + hook
+  toggle/expand/reload) ✅ · `turbo run test --concurrency=1` api **594** ✅ ·
+  `pnpm -w test:integration` api **505** ✅ · `pnpm --filter @nexa/e2e test inbox-panel` **1 passed**
+  ✅ (aç/kapa + reload sonrası kalıcı; `kanit/28-panel-expanded.png`).
+- Varsayımlar: tercih **cihaz-başı localStorage** (hesap tercihi değil) — ekran genişliği makineye
+  ait, KK "localStorage/hesap" ikisini de kabul ediyor. Copilot sekmesi kapsam dışı (v1, tm 36).
+- Sonraki pencereye not: E2E'den önce kök **`.env` export** şart (rtm kendi yüklemiyor; 27'deki notla
+  aynı) → `set -a && . ./.env && set +a`. Task Master durumu diskte güncellendi ama bu commit'e
+  alınmadı (dalın deseni: tm 27 status'u da uncommitted bırakılmıştı — periyodik `chore(taskmaster)`
+  batch'liyor). **tm 36 (12.1-a Copilot)** T1-a üstüne oturur: `ShowDetailsButton`, üç-yollu
+  Details/Copilot/Expand switcher'a dönüşecek.
+
 ### 27 — 02.4 Details paneli ziyaret bilgisi (Visited pages + Visit info) — done — 2026-07-25 UTC
 - Yapıldı:
   - **27.1 (T3-a) Kontrat+Backend:** `Chat` yanıtına nullable `visitor` bloğu — yeni `ChatVisitor`

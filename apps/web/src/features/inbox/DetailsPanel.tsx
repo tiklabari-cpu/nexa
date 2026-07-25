@@ -12,7 +12,16 @@ import type { ChatDetail } from './types.js';
  * Sections are collapsible because an agent working a queue wants the composer
  * as tall as possible, and this is the pane they give up first.
  */
-export function DetailsPanel({ chat, chatId }: { chat: ChatDetail; chatId: string }): ReactElement {
+export function DetailsPanel({
+  chat,
+  chatId,
+  onCollapse,
+}: {
+  chat: ChatDetail;
+  chatId: string;
+  /** When present, the header shows a control that hides this panel (FR-MOD-01.3). */
+  onCollapse?: () => void;
+}): ReactElement {
   const [newTag, setNewTag] = useState('');
   const api = useApiClient();
   const actions = useChatAction(chatId);
@@ -45,8 +54,18 @@ export function DetailsPanel({ chat, chatId }: { chat: ChatDetail; chatId: strin
       aria-label="Conversation details"
       className="flex w-details shrink-0 flex-col overflow-y-auto border-l border-border bg-surface"
     >
-      <header className="flex h-topbar items-center border-b border-border px-4">
+      <header className="flex h-topbar items-center justify-between border-b border-border px-4">
         <h2 className="text-sm font-semibold">Details</h2>
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Collapse details panel"
+            className="rounded-md p-1 text-content-tertiary hover:bg-surface-2 hover:text-content"
+          >
+            <span aria-hidden="true">⇥</span>
+          </button>
+        )}
       </header>
 
       <Section title="Conversation">

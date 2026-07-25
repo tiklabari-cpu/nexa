@@ -1596,6 +1596,53 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/breakdown': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Resolution split by day and by agent
+     * @description The Overview's manual / assisted / automated split (FR-MOD-07.3.2) resolved
+     *     over two dimensions — each UTC day in the window and each assigned agent —
+     *     for the Metrics breakdown tab (FR-MOD-07.5). Defaults to the last 30 days.
+     *
+     *     `automated` keeps ADR-09's definition in every row, so a breakdown never
+     *     disagrees with the Overview or the invoice.
+     */
+    get: operations['getReportsBreakdown'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/ai-agent': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * AI Agent performance
+     * @description AI-specific metrics for the AI Agent tab (FR-MOD-07.4): resolutions (ADR-09,
+     *     the invoice's number), the share of closed chats resolved without a human,
+     *     hand-offs to a human and how many skills ran. Defaults to the last 30 days.
+     */
+    get: operations['getReportsAiAgent'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/billing/subscription': {
     parameters: {
       query?: never;
@@ -2328,6 +2375,32 @@ export interface components {
         /** Format: date-time */
         to: string;
       };
+      /**
+       * @description The equal-length window immediately before `range`, so every headline
+       *     KPI can carry a vs-previous delta (FR-MOD-07.3.1). The comparable
+       *     figures are sent rather than a pre-computed delta, so a client shows
+       *     the change and the baseline both, and a rounding choice stays on one
+       *     side of the wire.
+       */
+      previous_period: {
+        range: {
+          /** Format: date-time */
+          from: string;
+          /** Format: date-time */
+          to: string;
+        };
+        chats: number;
+        tickets: number;
+        total_cases: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+        avg_first_response_seconds?: number | null;
+        avg_duration_seconds?: number | null;
+        /** @description Null when nobody rated the previous window. */
+        satisfaction_score?: number | null;
+      };
       totals: {
         chats: number;
         /** @description Tickets created in the range. */
@@ -2350,6 +2423,18 @@ export interface components {
         automated_rate?: number | null;
         queued_now: number;
       };
+      /**
+       * @description Operational chat metrics for the Chats section cards (FR-MOD-07.3.3):
+       *     how fast the AI is clearing conversations and how long they run.
+       */
+      chats: {
+        /** @description Automated resolutions per hour across the window (0 for an empty window). */
+        automated_per_hour: number;
+        /** @description Average open-to-close time of automated chats. Null when none closed automated. */
+        automated_avg_duration_seconds?: number | null;
+        /** @description Summed open-to-close time of every closed chat. */
+        total_duration_seconds: number;
+      };
       response_times: {
         avg_first_response_seconds?: number | null;
         avg_duration_seconds?: number | null;
@@ -2371,6 +2456,68 @@ export interface components {
         name: string;
         count: number;
       }[];
+    };
+    /**
+     * @description The Overview's resolution split (manual / assisted / automated,
+     *     FR-MOD-07.3.2) resolved over two dimensions — each UTC day in the window
+     *     and each assigned agent — for the Metrics breakdown tab (FR-MOD-07.5).
+     *     `manual + assisted + automated === closed` holds inside every row, the
+     *     same invariant the Overview cards rely on.
+     */
+    ReportsBreakdown: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      by_day: {
+        /** @description UTC day as `YYYY-MM-DD`. */
+        date: string;
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+      }[];
+      by_agent: {
+        /** Format: uuid */
+        agent_id: string;
+        name?: string | null;
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+      }[];
+    };
+    /**
+     * @description AI Agent performance for its own report tab (FR-MOD-07.4). `resolutions`
+     *     is ADR-09's figure — the same one the invoice's AI-resolution counter
+     *     uses — so this surface never disagrees with the bill.
+     */
+    ReportsAiAgent: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /** @description Chats closed with no agent-authored event (ADR-09). */
+      resolutions: number;
+      /** @description Share of *closed* chats the AI resolved. Null when nothing closed. */
+      resolution_rate?: number | null;
+      /** @description AI→human hand-offs in the window (transfer events). */
+      transfers: number;
+      /**
+       * @description Share of AI-finished chats handed to a human — transfers over
+       *     transfers plus resolutions. Null when the AI finished none either way.
+       */
+      transfer_rate?: number | null;
+      /** @description Skills that ran in the window. */
+      skill_runs: number;
+      /** @description Average open-to-close time of automated chats. Null when none. */
+      avg_automated_duration_seconds?: number | null;
     };
     CustomerChatState: {
       /** @description Whether any agent is currently accepting chats. */
@@ -5408,6 +5555,60 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ReportsOverview'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsBreakdown: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Breakdown for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsBreakdown'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsAiAgent: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description AI Agent metrics for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsAiAgent'];
         };
       };
       400: components['responses']['BadRequest'];

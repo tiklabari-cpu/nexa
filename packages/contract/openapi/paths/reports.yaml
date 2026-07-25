@@ -39,6 +39,63 @@ overview:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+breakdown:
+  get:
+    tags: [Reports]
+    operationId: getReportsBreakdown
+    summary: Resolution split by day and by agent
+    description: |
+      The Overview's manual / assisted / automated split (FR-MOD-07.3.2) resolved
+      over two dimensions — each UTC day in the window and each assigned agent —
+      for the Metrics breakdown tab (FR-MOD-07.5). Defaults to the last 30 days.
+
+      `automated` keeps ADR-09's definition in every row, so a breakdown never
+      disagrees with the Overview or the invoice.
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: Breakdown for the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsBreakdown" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiAgent:
+  get:
+    tags: [Reports]
+    operationId: getReportsAiAgent
+    summary: AI Agent performance
+    description: |
+      AI-specific metrics for the AI Agent tab (FR-MOD-07.4): resolutions (ADR-09,
+      the invoice's number), the share of closed chats resolved without a human,
+      hand-offs to a human and how many skills ran. Defaults to the last 30 days.
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: AI Agent metrics for the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsAiAgent" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 subscription:
   get:
     tags: [Billing]

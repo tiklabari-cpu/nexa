@@ -132,6 +132,34 @@ describe('reports and billing', () => {
     });
   }
 
+  /**
+   * Record an AI→human hand-off on a chat — the transfer system event the AI
+   * Agent report counts. Written directly (like {@link runSkillOn}) so the test
+   * exercises the aggregation without dragging in the whole transfer flow; the
+   * shape matches what `chat-service` emits: `system_event: chat_transferred`.
+   */
+  async function recordTransfer(chatId: string): Promise<void> {
+    const thread = await owner.thread.findFirstOrThrow({ where: { chatId } });
+    await owner.event.create({
+      data: {
+        id: `${thread.id}_transfer`,
+        threadId: thread.id,
+        chatId,
+        licenseId: fx.a.licenseId,
+        type: 'system_message',
+        authorType: 'system',
+        recipients: 'all',
+        properties: { system_event: 'chat_transferred' },
+      },
+    });
+  }
+
+  /** Move a chat's thread back in time, to land it in an earlier report window. */
+  async function backdateChat(chatId: string, createdAt: Date): Promise<void> {
+    await owner.thread.updateMany({ where: { chatId }, data: { createdAt } });
+    await owner.chat.update({ where: { id: chatId }, data: { createdAt } });
+  }
+
   // =========================================================================
 
   describe('AI resolutions', () => {
@@ -348,6 +376,184 @@ describe('reports and billing', () => {
         authorization: `Bearer ${weak}`,
       });
       expect(response.statusCode).toBe(403);
+    });
+  });
+
+  // =========================================================================
+
+  describe('period comparison (07.3.1)', () => {
+    it('compares against the equal-length window immediately before', async () => {
+      // Two chats land in the current 10-day window; one is backdated into the
+      // 10 days before it. A "vs previous" delta is only honest if it looks at
+      // exactly that preceding, equal-length span.
+      await conversation({ agentReplies: true, customerName: 'Now A' });
+      await conversation({ agentReplies: true, customerName: 'Now B' });
+      const earlier = await conversation({ agentReplies: true, customerName: 'Earlier' });
+      await backdateChat(earlier, new Date(Date.now() - 15 * 86_400_000));
+
+      const to = new Date();
+      const from = new Date(to.getTime() - 10 * 86_400_000);
+      const report = (
+        await server.get(
+          `/reports/overview?from=${from.toISOString()}&to=${to.toISOString()}`,
+          auth,
+        )
+      ).json();
+
+      expect(report.totals.chats).toBe(2);
+      expect(report.previous_period.chats).toBe(1);
+      // The previous window ends exactly where the current one begins (one ms
+      // short, so no instant is double-counted) — proof it is the preceding span.
+      expect(Date.parse(report.previous_period.range.to)).toBe(
+        Date.parse(report.range.from) - 1,
+      );
+      const currentSpan = Date.parse(report.range.to) - Date.parse(report.range.from);
+      const previousSpan =
+        Date.parse(report.previous_period.range.to) -
+        Date.parse(report.previous_period.range.from);
+      expect(currentSpan - previousSpan).toBe(1);
+    });
+
+    it('accepts a year-long custom range and still rejects a backwards one', async () => {
+      const to = new Date();
+      const yearAgo = new Date(to.getTime() - 365 * 86_400_000);
+      const ok = await server.get(
+        `/reports/overview?from=${yearAgo.toISOString()}&to=${to.toISOString()}`,
+        auth,
+      );
+      expect(ok.statusCode).toBe(200);
+
+      const backwards = await server.get('/reports/overview?from=2026-08-01&to=2026-07-01', auth);
+      expect(backwards.statusCode).toBe(400);
+    });
+
+    it('reports the Chats-section operational figures', async () => {
+      await conversation({ agentReplies: false }); // automated, some duration
+      const report = (await server.get('/reports/overview', auth)).json();
+      expect(report.chats.automated_per_hour).toBeGreaterThanOrEqual(0);
+      // One chat opened and closed within the run → a positive total duration.
+      expect(report.chats.total_duration_seconds).toBeGreaterThanOrEqual(0);
+      expect(report.chats).toHaveProperty('automated_avg_duration_seconds');
+    });
+  });
+
+  // =========================================================================
+
+  describe('breakdown (07.5)', () => {
+    it('splits manual / assisted / automated by day and by agent', async () => {
+      await conversation({ agentReplies: false, customerName: 'Bot only' }); // automated
+      await conversation({ agentReplies: true, customerName: 'Human only' }); // manual
+      const assisted = await conversation({ agentReplies: true, customerName: 'Helped' });
+      await runSkillOn(assisted); // assisted
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+
+      // by_day: all three closed within this run, so they collapse into today's
+      // UTC bucket. Summed across days, the split is 1/1/1 and sums to closed.
+      interface SplitRow {
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+      }
+      const day = (breakdown.by_day as SplitRow[]).reduce(
+        (acc: SplitRow, row: SplitRow) => ({
+          chats: acc.chats + row.chats,
+          closed: acc.closed + row.closed,
+          manual: acc.manual + row.manual,
+          assisted: acc.assisted + row.assisted,
+          automated: acc.automated + row.automated,
+        }),
+        { chats: 0, closed: 0, manual: 0, assisted: 0, automated: 0 },
+      );
+      expect(day.manual).toBe(1);
+      expect(day.assisted).toBe(1);
+      expect(day.automated).toBe(1);
+      expect(day.manual + day.assisted + day.automated).toBe(day.closed);
+      expect(breakdown.by_day[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+      // by_agent: all three were assigned to the owner (assign_to_me), so the
+      // same invariant holds inside the row — automated included.
+      const owner = breakdown.by_agent.find(
+        (row: { agent_id: string }) => row.agent_id === fx.a.ownerAccountId,
+      );
+      expect(owner).toBeTruthy();
+      expect(owner.manual + owner.assisted + owner.automated).toBe(owner.closed);
+      expect(owner.automated).toBe(1);
+    });
+
+    it('never counts another tenant', async () => {
+      await conversation({ agentReplies: false });
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/reports/breakdown', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      expect(theirs.by_day).toEqual([]);
+      expect(theirs.by_agent).toEqual([]);
+    });
+  });
+
+  // =========================================================================
+
+  describe('AI Agent report (07.4)', () => {
+    it('agrees with the overview and the invoice on resolutions', async () => {
+      await conversation({ agentReplies: false, customerName: 'A' }); // automated
+      await conversation({ agentReplies: false, customerName: 'B' }); // automated
+      await conversation({ agentReplies: true, customerName: 'C' }); // manual
+
+      const [ai, overview, usage] = await Promise.all([
+        server.get('/reports/ai-agent', auth),
+        server.get('/reports/overview', auth),
+        server.get('/billing/usage', auth),
+      ]);
+
+      // One definition of "the AI resolved it" (ADR-09), everywhere.
+      expect(ai.json().resolutions).toBe(2);
+      expect(ai.json().resolutions).toBe(overview.json().totals.automated);
+      expect(ai.json().resolutions).toBe(usage.json().ai_resolutions.used);
+      // Two of three closed cases were automated.
+      expect(ai.json().resolution_rate).toBe(0.667);
+    });
+
+    it('counts hand-offs and derives the transfer rate', async () => {
+      await conversation({ agentReplies: false }); // one AI resolution
+      const handedOff = await conversation({ agentReplies: true });
+      await recordTransfer(handedOff); // one hand-off
+
+      const ai = (await server.get('/reports/ai-agent', auth)).json();
+      expect(ai.transfers).toBe(1);
+      // Of the two chats the AI finished (1 resolved + 1 transferred), half were
+      // handed off.
+      expect(ai.transfer_rate).toBe(0.5);
+    });
+
+    it('counts the skills that ran', async () => {
+      const chatId = await conversation({ agentReplies: true });
+      await runSkillOn(chatId);
+      const ai = (await server.get('/reports/ai-agent', auth)).json();
+      expect(ai.skill_runs).toBe(1);
+    });
+
+    it('never counts another tenant', async () => {
+      await conversation({ agentReplies: false });
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/reports/ai-agent', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      expect(theirs.resolutions).toBe(0);
+      expect(theirs.transfers).toBe(0);
+      expect(theirs.skill_runs).toBe(0);
     });
   });
 

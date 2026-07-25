@@ -25,4 +25,25 @@ test.describe('reports overview', () => {
 
     await agentPage.screenshot({ path: 'kanit/20-reports-resolution.png', fullPage: true });
   });
+
+  test('navigates the Overview / AI Agent / Breakdown tabs (07.1)', async ({ agentPage }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    // Overview is the default tab.
+    await expect(agentPage.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    // AI Agent (FR-MOD-07.4): its own resolution/deflection cards.
+    await agentPage.getByRole('tab', { name: 'AI Agent' }).click();
+    await expect(agentPage.getByText('AI resolutions', { exact: true })).toBeVisible();
+    await agentPage.screenshot({ path: 'kanit/21-reports-ai-agent.png', fullPage: true });
+
+    // Breakdown (FR-MOD-07.5): the split resolved by day and by agent.
+    await agentPage.getByRole('tab', { name: 'Breakdown' }).click();
+    await expect(agentPage.getByRole('region', { name: 'By day' })).toBeVisible();
+    await agentPage.screenshot({ path: 'kanit/21-reports-breakdown.png', fullPage: true });
+  });
 });

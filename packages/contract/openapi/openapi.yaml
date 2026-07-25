@@ -209,6 +209,10 @@ paths:
 
   /reports/overview:
     $ref: "./paths/reports.yaml#/overview"
+  /reports/breakdown:
+    $ref: "./paths/reports.yaml#/breakdown"
+  /reports/ai-agent:
+    $ref: "./paths/reports.yaml#/aiAgent"
   /billing/subscription:
     $ref: "./paths/reports.yaml#/subscription"
   /billing/usage:
@@ -1000,7 +1004,8 @@ components:
 
     ReportsOverview:
       type: object
-      required: [range, totals, response_times, satisfaction, by_agent, top_tags]
+      required:
+        [range, previous_period, totals, chats, response_times, satisfaction, by_agent, top_tags]
       properties:
         range:
           type: object
@@ -1008,6 +1013,36 @@ components:
           properties:
             from: { type: string, format: date-time }
             to: { type: string, format: date-time }
+        previous_period:
+          type: object
+          description: |
+            The equal-length window immediately before `range`, so every headline
+            KPI can carry a vs-previous delta (FR-MOD-07.3.1). The comparable
+            figures are sent rather than a pre-computed delta, so a client shows
+            the change and the baseline both, and a rounding choice stays on one
+            side of the wire.
+          required:
+            [range, chats, tickets, total_cases, closed, manual, assisted, automated]
+          properties:
+            range:
+              type: object
+              required: [from, to]
+              properties:
+                from: { type: string, format: date-time }
+                to: { type: string, format: date-time }
+            chats: { type: integer }
+            tickets: { type: integer }
+            total_cases: { type: integer }
+            closed: { type: integer }
+            manual: { type: integer }
+            assisted: { type: integer }
+            automated: { type: integer }
+            avg_first_response_seconds: { type: integer, nullable: true }
+            avg_duration_seconds: { type: integer, nullable: true }
+            satisfaction_score:
+              type: number
+              nullable: true
+              description: Null when nobody rated the previous window.
         totals:
           type: object
           required: [chats, tickets, total_cases, closed, manual, assisted, automated, queued_now]
@@ -1047,6 +1082,23 @@ components:
               nullable: true
               description: Share of *closed* chats. Null when nothing closed.
             queued_now: { type: integer }
+        chats:
+          type: object
+          description: |
+            Operational chat metrics for the Chats section cards (FR-MOD-07.3.3):
+            how fast the AI is clearing conversations and how long they run.
+          required: [automated_per_hour, total_duration_seconds]
+          properties:
+            automated_per_hour:
+              type: number
+              description: Automated resolutions per hour across the window (0 for an empty window).
+            automated_avg_duration_seconds:
+              type: integer
+              nullable: true
+              description: Average open-to-close time of automated chats. Null when none closed automated.
+            total_duration_seconds:
+              type: integer
+              description: Summed open-to-close time of every closed chat.
         response_times:
           type: object
           properties:
@@ -1080,6 +1132,86 @@ components:
             properties:
               name: { type: string }
               count: { type: integer }
+
+    ReportsBreakdown:
+      type: object
+      description: |
+        The Overview's resolution split (manual / assisted / automated,
+        FR-MOD-07.3.2) resolved over two dimensions — each UTC day in the window
+        and each assigned agent — for the Metrics breakdown tab (FR-MOD-07.5).
+        `manual + assisted + automated === closed` holds inside every row, the
+        same invariant the Overview cards rely on.
+      required: [range, by_day, by_agent]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        by_day:
+          type: array
+          items:
+            type: object
+            required: [date, chats, closed, manual, assisted, automated]
+            properties:
+              date: { type: string, description: "UTC day as `YYYY-MM-DD`." }
+              chats: { type: integer }
+              closed: { type: integer }
+              manual: { type: integer }
+              assisted: { type: integer }
+              automated: { type: integer }
+        by_agent:
+          type: array
+          items:
+            type: object
+            required: [agent_id, chats, closed, manual, assisted, automated]
+            properties:
+              agent_id: { type: string, format: uuid }
+              name: { type: string, nullable: true }
+              chats: { type: integer }
+              closed: { type: integer }
+              manual: { type: integer }
+              assisted: { type: integer }
+              automated: { type: integer }
+
+    ReportsAiAgent:
+      type: object
+      description: |
+        AI Agent performance for its own report tab (FR-MOD-07.4). `resolutions`
+        is ADR-09's figure — the same one the invoice's AI-resolution counter
+        uses — so this surface never disagrees with the bill.
+      required: [range, resolutions, transfers, skill_runs]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        resolutions:
+          type: integer
+          description: Chats closed with no agent-authored event (ADR-09).
+        resolution_rate:
+          type: number
+          nullable: true
+          description: Share of *closed* chats the AI resolved. Null when nothing closed.
+        transfers:
+          type: integer
+          description: AI→human hand-offs in the window (transfer events).
+        transfer_rate:
+          type: number
+          nullable: true
+          description: |
+            Share of AI-finished chats handed to a human — transfers over
+            transfers plus resolutions. Null when the AI finished none either way.
+        skill_runs:
+          type: integer
+          description: Skills that ran in the window.
+        avg_automated_duration_seconds:
+          type: integer
+          nullable: true
+          description: Average open-to-close time of automated chats. Null when none.
 
     CustomerChatState:
       type: object

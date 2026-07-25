@@ -76,11 +76,18 @@ export function Kpi({
   label,
   value,
   hint,
+  delta,
   tone = 'neutral',
 }: {
   label: string;
   value: string | null;
   hint?: string;
+  /**
+   * Optional change-since-previous line, rendered under the value. A node rather
+   * than a string so a caller can colour or annotate it (Reports' vs-previous
+   * badge); omit it and the card looks exactly as it did before.
+   */
+  delta?: ReactNode;
   tone?: 'neutral' | 'good' | 'warn';
 }): ReactElement {
   const valueColour =
@@ -94,6 +101,7 @@ export function Kpi({
       <span className={`tabular text-2xl font-bold ${valueColour}`}>
         {value ?? <span className="text-content-tertiary">—</span>}
       </span>
+      {delta}
       {hint && <span className="text-2xs text-content-tertiary">{hint}</span>}
     </div>
   );

@@ -105,7 +105,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | MOD-05 Playbook               |     |  ●  |  ○  |      |            ◐ **(v1 — öne çekildi)**             |
 | MOD-06 AI Agent + RAG         |     |  ●  |  ○  |  ○   |            ◐ **(v1 — öne çekildi)**             |
 | Görsel Workflow builder       |     |     |  ●  |      |               ⛔ ADR-14 (UI yok)                |
-| MOD-07 Reports                |  ○  |  ○  |  ●  |  ○   |                  ◐ Overview ✅                  |
+| MOD-07 Reports                |  ○  |  ○  |  ●  |  ○   |    ✅ Overview + AI Agent + Breakdown (07.5 v2) |
 | MOD-08.5 Channels             |  ○  |  ●  |     |  ○   | ✅ MVP kanalları (grid/website/email/chat-page) |
 | MOD-08.6 Routing              |  ○  |  ○  |  ●  |  ○   |                ✅ (MVP kapsamı)                 |
 | MOD-08.7 Inbox araçları       |  ○  |  ●  |     |      |       ✅ canned + tag kütüphanesi (tm 17)       |
@@ -194,10 +194,10 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | PRD    | Gereksinim                                                             | Öncelik            | Durum | Nerede                                                                                                                    |
 | ------ | ---------------------------------------------------------------------- | ------------------ | :---: | ------------------------------------------------------------------------------------------------------------------------- |
-| 07.1   | Reports kenar çubuğu (Overview/AI Agent/Breakdown)                     | Should (MVP temel) |   ◐   | Dilim 9 (Overview ✅)                                                                                                     |
-| 07.3.1 | Overview header — range tabs (7/30/90/365 + custom) + vs. önceki dönem | Should             |   ◐   | Dilim 9 (aralık ✅, karşılaştırma ⬜)                                                                                     |
+| 07.1   | Reports kenar çubuğu (Overview/AI Agent/Breakdown)                     | Should (MVP temel) |  ✅   | Overview/AI Agent/Breakdown sekmeleri (tm 21). AI Agent: resolutions=ADR-09, deflection; Breakdown: split gün/ajan.        |
+| 07.3.1 | Overview header — range tabs (7/30/90/365 + custom) + vs. önceki dönem | Should             |  ✅   | 365+custom date picker + previous_period (eşit-uzunluk önceki dönem) delta rozetleri (tm 21).                              |
 | 07.3.2 | KPI kartları — Manual/Assisted/**Automated** + Total cases             | Must (MVP temel)   |  ✅   | Manual/Assisted/Automated 3'lü ayrım + Total cases (tm 20). automated ADR-09 KORUNDU; manual+assisted+automated = closed. |
-| 07.3.3 | Chats bölümü kartları (automated chats/hour, durations, response)      | Should             |   ◐   | Dilim 9                                                                                                                   |
+| 07.3.3 | Chats bölümü kartları (automated chats/hour, durations, response)      | Should             |  ✅   | Chats bölümü: automated_per_hour + automated/total chat duration (tm 21).                                                 |
 | 07.2   | Onboarding survey popover                                              | Could              |  🔒   | —                                                                                                                         |
 
 ### 3.7 FR-MOD-08 — Settings (yalnız MVP payı)
@@ -253,7 +253,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 **Faz-0 kapanış kapısı:** 52 gereksinimin tamamı ✅ veya gerekçeli ⛔ · §7 NFR kapısı geçildi ·
 `make dev` temiz kurulumdan demo akışını çalıştırıyor.
 
-> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** ✅ (07.3.2 Manual/Assisted — teslim edildi) → tm **21** (07.1/07.3.1/07.3.3 Reports Breakdown) · tm **22** ✅ (00.4 Onboarding sihirbazı — teslim edildi) · tm **23** ✅ (S12 audit yazıcısı) · tm **24** ✅ (C8 retention) · tm **25** ✅ (M5 OTel — teslim edildi) · tm **26** (i18n). Bu bakiye kapanana dek Faz-0 **"kapandı" sayılmaz**; `run-loop.sh` sırayla işler (kalan öncelik: 26 → 21). Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
+> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** ✅ (07.3.2 Manual/Assisted — teslim edildi) · tm **21** ✅ (07.1/07.3.1/07.3.3 Reports Breakdown/AI Agent/vs-önceki dönem — teslim edildi) · tm **22** ✅ (00.4 Onboarding sihirbazı — teslim edildi) · tm **23** ✅ (S12 audit yazıcısı) · tm **24** ✅ (C8 retention) · tm **25** ✅ (M5 OTel — teslim edildi) · tm **26** ✅ (i18n — teslim edildi). **Faz-0 bakiyesi kapandı.** Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
 
 ---
 

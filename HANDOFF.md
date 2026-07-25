@@ -6,6 +6,43 @@
 
 ## Task log (newest-first)
 
+### 21 — 07.1/07.3.1/07.3.3 Reports: Breakdown + AI Agent sekmeleri + vs-önceki dönem + Chats kartları — done — 2026-07-25 UTC
+- Yapıldı:
+  - **Kontrat** (`packages/contract/openapi/`): overview yanıtına `previous_period` (eşit-uzunluk
+    önceki dönem: range + karşılaştırılabilir sayılar) + `chats` blogu (automated_per_hour,
+    automated/total chat duration); iki yeni yol **`GET /reports/breakdown`** (ReportsBreakdown:
+    by_day + by_agent split) ve **`GET /reports/ai-agent`** (ReportsAiAgent: resolutions/rate,
+    transfers/rate, skill_runs, avg automated duration). `pnpm --filter @nexa/contract generate`
+    ile bundle + `src/generated/api.ts` yenilendi.
+  - **Backend** (`apps/api/src/routes/reports.ts`): sınıflandırma tek yerden — paylaşılan
+    `AGENT_EVENT`/`SKILL_RUN`/`SPLIT_COUNTS` SQL fragmanları + `windowTotals`/`ticketCount`/
+    `satisfactionCounts`/`satisfactionScore` yardımcıları (Overview/Breakdown/AI Agent aynı ADR-09
+    otomatik tanımını paylaşır, drift edemez). Overview önceki dönemi (`from-1ms` bitişli, çakışmasız)
+    hesaplayıp delta için döndürür; breakdown gün (UTC bucket) + ajan kırılımı; ai-agent transfer
+    olayını (`properties @> {system_event: chat_transferred}`, GIN-dostu) + skill_runs sayar.
+  - **Web** (`apps/web/src/features/reports/ReportsPage.tsx`): sol `role=tablist` sekmeler
+    (Overview/AI Agent/Breakdown); range 7/30/90/**365** + **Custom** date picker (geçersiz/geriye
+    aralık → boş durum, sorgu atılmaz); her Overview KPI'ında nötr **vs-önceki delta** rozeti
+    (`Kpi`'a opsiyonel `delta` slotu eklendi — geriye dönük uyumlu); **Chats** bölümü kartları;
+    AI Agent (resolution/deflection) + Breakdown (gün/ajan split tabloları) panelleri.
+- Doğrulama (**tam kapı yeşil, exit 0**): `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7; OpenAPI bundle spec-hatasız) · unit (web **88**, rtm **65**, api unit +
+  widget/contract/types/ai-mock) · integration (**seri**, `turbo … --concurrency=1`) api **590**
+  (yeni reports testleri: previous-period eşit-uzunluk delta, 365/custom range, breakdown split
+  gün/ajan + toplam=closed, ai-agent=overview=fatura, transfer_rate, cross-tenant ×2; +
+  **contract-parity** yeni 2 yolu doğruladı) · e2e reports **2/2** (tab gezinme + kanıt
+  screenshot'ları `kanit/21-reports-ai-agent.png` + `kanit/21-reports-breakdown.png`). Task kabul
+  kriteri (delta + custom range + breakdown + e2e sekme + kanıt) karşılandı.
+- Varsayımlar: **07.5 Metrics breakdown**'un tam boyut kümesi (kanal/saat) v2; MVP payı gün+ajan
+  split. AI Agent `transfer` metriği `chat_transferred` sistem olayını sayar (chat-service'in
+  yazdığı şekil). Kanal boyutu şemada thread/chat'te yok → breakdown'a alınmadı.
+- Sonraki pencereye not: **Faz-0 bakiyesi (tm 20–26) kapandı** (PLAN §3.6 07.1/07.3.1/07.3.3 ✅,
+  §2 MOD-07 ✅). E2E **rate-limit uyarısı**: reused `:4000` api `.env`'den `RATE_LIMIT_ANON_PER_MIN=200`
+  alır; **tüm** e2e suite'i tek seferde koşarsan sona doğru anon bucket dolar ve alâkasız
+  widget/settings testleri login fixture'ında **429** verir (üründe hata değil — playwright config
+  test sunucusunu 2000 ile başlatır ama reuse edince 200 kalır). İzole koşumda hepsi yeşil; kapı
+  için ya taze api başlat ya seri/pencere-bekleyerek koş.
+
 ### 26.4 — I18N1/2 testler: t() fallback unit + locale smoke + widget boyut — done — 2026-07-25 UTC
 - Yapıldı: 26.1–26.3 zaten fallback unit (panel `apps/web/src/lib/i18n.test.ts` + widget
   `apps/widget/src/i18n.test.ts`), panel locale-switch smoke (`i18n.smoke.test.tsx`) ve widget

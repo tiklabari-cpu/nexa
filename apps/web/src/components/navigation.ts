@@ -4,10 +4,16 @@
  * Both the icon rail (which renders them) and the command palette (which jumps
  * to them) read from here, so a module added to the product appears in both
  * without either drifting from the other.
+ *
+ * Labels are catalogue keys (`nav.inbox`), not literal text: the rail and the
+ * palette resolve them through `t()` so a language switch moves both at once
+ * (I18N1). Keywords stay literal — they are extra search aliases, not display
+ * text, and translating them is a v1 concern.
  */
 export interface NavDestination {
   to: string;
-  label: string;
+  /** i18n key resolved with `t()` for the display label + accessible name. */
+  labelKey: string;
   icon: string;
   /**
    * Extra words the palette should match besides the label — an agent reaching
@@ -18,23 +24,23 @@ export interface NavDestination {
 }
 
 export const MODULES: NavDestination[] = [
-  { to: '/app/inbox', label: 'Inbox', icon: '▤', keywords: ['conversations', 'chats', 'tickets'] },
-  { to: '/app/customers', label: 'Customers', icon: '◫', keywords: ['people', 'crm', 'leads'] },
-  { to: '/app/team', label: 'Team', icon: '◑', keywords: ['agents', 'groups'] },
-  { to: '/app/playbook', label: 'Playbook', icon: '✦', keywords: ['skills', 'canned', 'ai'] },
-  { to: '/app/reports', label: 'Reports', icon: '◆', keywords: ['analytics', 'metrics', 'kpi'] },
+  { to: '/app/inbox', labelKey: 'nav.inbox', icon: '▤', keywords: ['conversations', 'chats', 'tickets'] },
+  { to: '/app/customers', labelKey: 'nav.customers', icon: '◫', keywords: ['people', 'crm', 'leads'] },
+  { to: '/app/team', labelKey: 'nav.team', icon: '◑', keywords: ['agents', 'groups'] },
+  { to: '/app/playbook', labelKey: 'nav.playbook', icon: '✦', keywords: ['skills', 'canned', 'ai'] },
+  { to: '/app/reports', labelKey: 'nav.reports', icon: '◆', keywords: ['analytics', 'metrics', 'kpi'] },
 ];
 
 export const FOOTER: NavDestination[] = [
   {
     to: '/app/billing',
-    label: 'Billing',
+    labelKey: 'nav.billing',
     icon: '◈',
     keywords: ['subscription', 'plan', 'invoice', 'payment'],
   },
   {
     to: '/app/settings',
-    label: 'Settings',
+    labelKey: 'nav.settings',
     icon: '⚙',
     keywords: ['channels', 'tags', 'notifications', 'preferences'],
   },

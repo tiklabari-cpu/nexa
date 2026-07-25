@@ -24,6 +24,7 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApiClient, useAuth } from '../lib/auth-store.js';
+import { useTranslate } from '../lib/i18n.js';
 import type { CustomerSummary } from '../features/customers/types.js';
 import type { ChatSummary, Ticket } from '../features/inbox/types.js';
 import { NAV_DESTINATIONS } from './navigation.js';
@@ -53,6 +54,7 @@ export function CommandPalette(): ReactElement | null {
 
   const navigate = useNavigate();
   const api = useApiClient();
+  const t = useTranslate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const has = useCallback(
     (allowed: string[]) => allowed.some((scope) => scopes.includes(scope)),
@@ -149,15 +151,16 @@ export function CommandPalette(): ReactElement | null {
     const list: Command[] = [];
 
     for (const dest of NAV_DESTINATIONS) {
+      const label = t(dest.labelKey);
       const matches =
         !routeNeedle ||
-        dest.label.toLowerCase().includes(routeNeedle) ||
+        label.toLowerCase().includes(routeNeedle) ||
         (dest.keywords ?? []).some((keyword) => keyword.includes(routeNeedle));
       if (!matches) continue;
       list.push({
         id: `route:${dest.to}`,
-        group: 'Go to',
-        label: dest.label,
+        group: t('palette.group.goTo'),
+        label,
         icon: dest.icon,
         run: () => {
           navigate(dest.to);
@@ -170,8 +173,8 @@ export function CommandPalette(): ReactElement | null {
       for (const customer of customers.data?.items ?? []) {
         list.push({
           id: `customer:${customer.id}`,
-          group: 'Customers',
-          label: customer.name ?? customer.email ?? customer.phone ?? 'Unnamed visitor',
+          group: t('palette.group.customers'),
+          label: customer.name ?? customer.email ?? customer.phone ?? t('palette.unnamedVisitor'),
           sub: customer.email ?? customer.phone ?? undefined,
           icon: '◫',
           run: () => {
@@ -184,8 +187,8 @@ export function CommandPalette(): ReactElement | null {
       for (const chat of chatMatches) {
         list.push({
           id: `chat:${chat.id}`,
-          group: 'Conversations',
-          label: chat.customer_name ?? 'Visitor',
+          group: t('palette.group.conversations'),
+          label: chat.customer_name ?? t('palette.visitor'),
           sub: chat.last_event?.text ?? chat.id,
           icon: '▤',
           run: () => {
@@ -198,7 +201,7 @@ export function CommandPalette(): ReactElement | null {
       for (const ticket of tickets.data?.items ?? []) {
         list.push({
           id: `ticket:${ticket.id}`,
-          group: 'Tickets',
+          group: t('palette.group.tickets'),
           label: ticket.subject,
           sub: `#${ticket.id}${ticket.customer_name ? ` · ${ticket.customer_name}` : ''}`,
           icon: '▦',
@@ -211,7 +214,7 @@ export function CommandPalette(): ReactElement | null {
     }
 
     return list;
-  }, [rawQuery, searching, customers.data, chatMatches, tickets.data, navigate, close]);
+  }, [rawQuery, searching, customers.data, chatMatches, tickets.data, navigate, close, t]);
 
   // Any change to the result set puts the highlight back on the first row, so
   // Enter never fires a stale selection left over from the previous query.
@@ -256,7 +259,7 @@ export function CommandPalette(): ReactElement | null {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        aria-label={t('palette.label')}
         className="flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -273,8 +276,8 @@ export function CommandPalette(): ReactElement | null {
             aria-activedescendant={
               commands[activeIndex] ? `command-option-${activeIndex}` : undefined
             }
-            aria-label="Search or jump to"
-            placeholder="Search customers, conversations, tickets — or jump to a module…"
+            aria-label={t('palette.search')}
+            placeholder={t('palette.placeholder')}
             value={rawQuery}
             onChange={(event) => setRawQuery(event.target.value)}
             onKeyDown={onInputKeyDown}
@@ -288,7 +291,7 @@ export function CommandPalette(): ReactElement | null {
         <ul id="command-palette-list" role="listbox" ref={listRef} className="overflow-y-auto py-1">
           {commands.length === 0 ? (
             <li role="presentation" className="px-4 py-6 text-center text-sm text-content-secondary">
-              {busy ? 'Searching…' : 'No matches.'}
+              {busy ? t('palette.searching') : t('palette.noMatches')}
             </li>
           ) : (
             commands.map((command, index) => {

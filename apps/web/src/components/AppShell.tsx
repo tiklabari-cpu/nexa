@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth } from '../lib/auth-store.js';
+import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { CommandPalette } from './CommandPalette.js';
 import { FOOTER, MODULES, type NavDestination } from './navigation.js';
 
@@ -52,6 +53,7 @@ interface TrialInfo {
  */
 function TrialBanner(): ReactElement | null {
   const api = useApiClient();
+  const t = useTranslate();
   const { data } = useQuery({
     queryKey: ['billing', 'subscription'],
     queryFn: () => api.get<TrialInfo>('/billing/subscription'),
@@ -62,7 +64,7 @@ function TrialBanner(): ReactElement | null {
   if (!data || data.access === 'active') return null;
 
   const readOnly = data.access === 'read_only';
-  const days = data.trial.days_remaining;
+  const days = data.trial.days_remaining ?? 0;
 
   return (
     <div
@@ -73,23 +75,24 @@ function TrialBanner(): ReactElement | null {
       <span aria-hidden="true">◈</span>
       <span>
         {readOnly
-          ? 'Your trial has ended — subscribe to start new conversations.'
-          : `${days ?? 0} day${days === 1 ? '' : 's'} left in your trial.`}
+          ? t('shell.trial.ended')
+          : t('shell.trial.remaining', { days, s: days === 1 ? '' : 's' })}
       </span>
       <NavLink
         to="/app/billing"
         className="font-semibold text-brand-600 underline-offset-2 hover:underline"
       >
-        Subscribe
+        {t('shell.subscribe')}
       </NavLink>
     </div>
   );
 }
 
 function IconRail(): ReactElement {
+  const t = useTranslate();
   return (
     <nav
-      aria-label="Modules"
+      aria-label={t('shell.modules')}
       className="flex w-rail shrink-0 flex-col items-center gap-1 bg-rail py-3"
     >
       <span
@@ -100,12 +103,12 @@ function IconRail(): ReactElement {
       </span>
 
       {MODULES.map((item) => (
-        <RailButton key={item.label} item={item} />
+        <RailButton key={item.to} item={item} />
       ))}
 
       <div className="mt-auto flex flex-col items-center gap-1">
         {FOOTER.map((item) => (
-          <RailButton key={item.label} item={item} />
+          <RailButton key={item.to} item={item} />
         ))}
         <AccountMenu />
       </div>
@@ -114,14 +117,16 @@ function IconRail(): ReactElement {
 }
 
 function RailButton({ item }: { item: NavDestination }): ReactElement {
+  const t = useTranslate();
+  const label = t(item.labelKey);
   const shared =
     'relative flex h-9 w-9 items-center justify-center rounded-md text-base transition-colors';
 
   return (
     <NavLink
       to={item.to}
-      aria-label={item.label}
-      title={item.label}
+      aria-label={label}
+      title={label}
       className={({ isActive }) =>
         `${shared} ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:bg-white/5 hover:text-white'}`
       }
@@ -154,6 +159,8 @@ function RailButton({ item }: { item: NavDestination }): ReactElement {
 function AccountMenu(): ReactElement {
   const agent = useAuth((s) => s.agent);
   const signOut = useAuth((s) => s.signOut);
+  const t = useTranslate();
+  const { locale, setLocale } = useLocale();
   const ref = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(false);
 
@@ -206,8 +213,8 @@ function AccountMenu(): ReactElement {
         // whether it is currently open. Both have to be stated.
         role="button"
         aria-expanded={open}
-        aria-label="Account"
-        title={agent?.email ?? 'Account'}
+        aria-label={t('shell.account')}
+        title={agent?.email ?? t('shell.account')}
         className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full bg-white/10 text-2xs font-semibold text-white marker:content-none"
       >
         {initials}
@@ -218,9 +225,28 @@ function AccountMenu(): ReactElement {
         // so a downward menu would open off-screen.
         className="absolute bottom-11 left-0 z-20 hidden w-56 rounded-lg border border-border bg-surface p-3 shadow-md group-open:block"
       >
-        <p className="truncate text-sm font-medium">{agent?.name ?? 'Agent'}</p>
+        <p className="truncate text-sm font-medium">
+          {agent?.name ?? t('shell.account.agentFallback')}
+        </p>
         <p className="truncate text-xs text-content-secondary">{agent?.email}</p>
         <p className="mt-1 text-2xs uppercase tracking-wide text-content-tertiary">{agent?.role}</p>
+
+        {/* Language switcher (I18N1): a plain labelled select so the whole panel
+            re-renders in the chosen language the instant it changes. */}
+        <label className="mt-3 block text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+          {t('shell.account.language')}
+          <select
+            value={locale}
+            onChange={(event) => setLocale(event.target.value as (typeof LOCALES)[number])}
+            className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm normal-case tracking-normal text-content"
+          >
+            {LOCALES.map((code) => (
+              <option key={code} value={code}>
+                {LOCALE_NAMES[code]}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <button
           type="button"
@@ -230,7 +256,7 @@ function AccountMenu(): ReactElement {
           }}
           className="mt-3 w-full rounded-md border border-border px-2 py-1.5 text-sm hover:bg-surface-2"
         >
-          Sign out
+          {t('shell.account.signOut')}
         </button>
       </div>
     </details>

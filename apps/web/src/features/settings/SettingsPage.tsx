@@ -13,6 +13,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { FieldError, required, useForm } from '../../lib/form.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { ChannelsGrid } from './Channels.js';
 import {
@@ -480,11 +481,9 @@ function FileSharing({ canEdit }: { canEdit: boolean }): ReactElement {
 
 // --- Canned responses --------------------------------------------------------
 
-function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
+export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const [shortcut, setShortcut] = useState('');
-  const [text, setText] = useState('');
 
   const list = useQuery({
     queryKey: ['settings', 'canned-responses'],
@@ -501,11 +500,7 @@ function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
   const create = useMutation({
     mutationFn: (body: { shortcut: string; text: string }) =>
       api.post<CannedResponse>('/settings/canned-responses', body),
-    onSuccess: () => {
-      setShortcut('');
-      setText('');
-      invalidate();
-    },
+    onSuccess: invalidate,
   });
 
   const remove = useMutation({
@@ -513,11 +508,22 @@ function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
     onSuccess: invalidate,
   });
 
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    if (!shortcut.trim() || !text.trim()) return;
-    create.mutate({ shortcut: shortcut.trim(), text: text.trim() });
-  }
+  // The one validation primitive: both fields required, Submit disabled until
+  // they are, the fields cleared on success (FR-EK-A.1).
+  const form = useForm({
+    initial: { shortcut: '', text: '' },
+    validators: { shortcut: required('Enter a shortcut.'), text: required('Enter the reply text.') },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await create.mutateAsync({ shortcut: values.shortcut.trim(), text: values.text.trim() });
+        reset();
+      } catch (error) {
+        setSubmitError(error instanceof ApiClientError ? error.message : 'Could not save that reply.');
+      }
+    },
+  });
+  const shortcutError = form.errorFor('shortcut');
+  const textError = form.errorFor('text');
 
   return (
     <Section title="Saved replies" description="Agents insert these by typing # in the composer.">
@@ -526,7 +532,7 @@ function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
       ) : (
         <Card>
           {canEdit && (
-            <form onSubmit={submit} className="flex flex-col gap-3 border-b border-border p-4">
+            <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3 border-b border-border p-4">
               <div className="flex flex-wrap items-end gap-3">
                 <label htmlFor="new-shortcut" className="flex w-48 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -538,12 +544,16 @@ function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
                     </span>
                     <input
                       id="new-shortcut"
-                      value={shortcut}
-                      onChange={(event) => setShortcut(event.target.value)}
+                      value={form.values.shortcut}
+                      onChange={(event) => form.setValue('shortcut', event.target.value)}
+                      onBlur={() => form.blur('shortcut')}
+                      aria-invalid={shortcutError ? true : undefined}
+                      aria-describedby={shortcutError ? 'new-shortcut-error' : undefined}
                       placeholder="shipping"
                       className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                     />
                   </div>
+                  <FieldError id="new-shortcut-error" message={shortcutError} />
                 </label>
 
                 <label htmlFor="new-reply" className="flex min-w-56 flex-1 flex-col gap-1">
@@ -552,27 +562,29 @@ function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
                   </span>
                   <input
                     id="new-reply"
-                    value={text}
-                    onChange={(event) => setText(event.target.value)}
+                    value={form.values.text}
+                    onChange={(event) => form.setValue('text', event.target.value)}
+                    onBlur={() => form.blur('text')}
+                    aria-invalid={textError ? true : undefined}
+                    aria-describedby={textError ? 'new-reply-error' : undefined}
                     placeholder="Standard delivery takes 3-5 working days."
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                   />
+                  <FieldError id="new-reply-error" message={textError} />
                 </label>
 
                 <button
                   type="submit"
-                  disabled={!shortcut.trim() || !text.trim() || create.isPending}
+                  disabled={!form.canSubmit}
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                 >
-                  {create.isPending ? 'Saving…' : 'Save reply'}
+                  {form.isSubmitting ? 'Saving…' : 'Save reply'}
                 </button>
               </div>
 
-              {create.isError && (
+              {form.submitError && (
                 <p role="alert" className="text-2xs text-danger">
-                  {create.error instanceof ApiClientError
-                    ? create.error.message
-                    : 'Could not save that reply.'}
+                  {form.submitError}
                 </p>
               )}
             </form>
@@ -624,10 +636,9 @@ function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement {
  * suggest tags, and `usage_count` shows which labels are actually earning their
  * place.
  */
-function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
+export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const [name, setName] = useState('');
 
   const list = useQuery({
     queryKey: ['settings', 'tags'],
@@ -643,10 +654,7 @@ function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
 
   const create = useMutation({
     mutationFn: (body: { name: string }) => api.post<Tag>('/settings/tags', body),
-    onSuccess: () => {
-      setName('');
-      invalidate();
-    },
+    onSuccess: invalidate,
   });
 
   const remove = useMutation({
@@ -654,11 +662,21 @@ function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
     onSuccess: invalidate,
   });
 
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    if (!name.trim()) return;
-    create.mutate({ name: name.trim() });
-  }
+  // The one validation primitive: a name is required, Submit disabled until it
+  // is present, the field cleared on success (FR-EK-A.1).
+  const form = useForm({
+    initial: { name: '' },
+    validators: { name: required('Enter a tag name.') },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await create.mutateAsync({ name: values.name.trim() });
+        reset();
+      } catch (error) {
+        setSubmitError(error instanceof ApiClientError ? error.message : 'Could not add that tag.');
+      }
+    },
+  });
+  const nameError = form.errorFor('name');
 
   return (
     <Section
@@ -670,7 +688,7 @@ function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
       ) : (
         <Card>
           {canEdit && (
-            <form onSubmit={submit} className="flex flex-col gap-3 border-b border-border p-4">
+            <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3 border-b border-border p-4">
               <div className="flex flex-wrap items-end gap-3">
                 <label htmlFor="new-tag-name" className="flex min-w-56 flex-1 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -678,28 +696,30 @@ function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
                   </span>
                   <input
                     id="new-tag-name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
+                    value={form.values.name}
+                    onChange={(event) => form.setValue('name', event.target.value)}
+                    onBlur={() => form.blur('name')}
+                    aria-invalid={nameError ? true : undefined}
+                    aria-describedby={nameError ? 'new-tag-name-error' : undefined}
                     placeholder="vip"
                     maxLength={64}
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                   />
+                  <FieldError id="new-tag-name-error" message={nameError} />
                 </label>
 
                 <button
                   type="submit"
-                  disabled={!name.trim() || create.isPending}
+                  disabled={!form.canSubmit}
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                 >
-                  {create.isPending ? 'Adding…' : 'Add tag'}
+                  {form.isSubmitting ? 'Adding…' : 'Add tag'}
                 </button>
               </div>
 
-              {create.isError && (
+              {form.submitError && (
                 <p role="alert" className="text-2xs text-danger">
-                  {create.error instanceof ApiClientError
-                    ? create.error.message
-                    : 'Could not add that tag.'}
+                  {form.submitError}
                 </p>
               )}
             </form>

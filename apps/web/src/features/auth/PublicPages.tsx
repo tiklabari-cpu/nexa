@@ -6,11 +6,23 @@
  * app shell. Each ends by handing off to the same sign-in the product already
  * had — creating a workspace and joining one both leave you with credentials,
  * and issuing tokens from three places would mean three places to get wrong.
+ *
+ * Validation is the one form primitive (FR-EK-A.1): each field owns its
+ * error line and Submit stays disabled until every field passes — no bespoke
+ * `email.includes('@')` or `valid` boolean per page.
  */
-import { useEffect, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
+import {
+  FieldError,
+  compose,
+  email as emailRule,
+  minLength,
+  required,
+  useForm,
+} from '../../lib/form.js';
 
 const anonymous = new ApiClient();
 
@@ -47,12 +59,19 @@ function AuthCard({
   );
 }
 
+/**
+ * One input row wired to the form primitive: it shows the field-under error and
+ * points `aria-describedby` at it (and at any hint), so every public page spells
+ * "invalid" the same way (FR-EK-A.1).
+ */
 function Field({
   id,
   label,
   type = 'text',
   value,
   onChange,
+  onBlur,
+  error,
   hint,
   autoFocus,
 }: {
@@ -61,9 +80,13 @@ function Field({
   type?: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
+  error?: string | null;
   hint?: string;
   autoFocus?: boolean;
 }): ReactElement {
+  const describedBy =
+    [error ? `${id}-error` : null, hint ? `${id}-hint` : null].filter(Boolean).join(' ') || undefined;
   return (
     <div className="mb-4">
       <label htmlFor={id} className="mb-1.5 block text-sm font-medium">
@@ -75,8 +98,12 @@ function Field({
         value={value}
         autoFocus={autoFocus}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
         className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
       />
+      <FieldError id={`${id}-error`} message={error ?? null} />
       {hint && (
         <p id={`${id}-hint`} className="mt-1 text-2xs text-content-tertiary">
           {hint}
@@ -86,11 +113,11 @@ function Field({
   );
 }
 
-function Submit({ children, busy }: { children: ReactNode; busy: boolean }): ReactElement {
+function Submit({ children, disabled }: { children: ReactNode; disabled: boolean }): ReactElement {
   return (
     <button
       type="submit"
-      disabled={busy}
+      disabled={disabled}
       className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
     >
       {children}
@@ -111,39 +138,39 @@ const MIN_PASSWORD = 12;
 
 /** FR-MOD-00.2 — create a workspace and its first owner. */
 export function SignUpPage(): ReactElement {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [organization, setOrganization] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
   const signIn = useAuth((s) => s.signIn);
 
-  const onSubmit = async (event: FormEvent): Promise<void> => {
-    event.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      const session = await anonymous.post<{ memberships: Array<{ license_id: string }> }>(
-        '/auth/signup',
-        { email, password, name, organization_name: organization },
-      );
-      // Straight into the workspace. Making someone sign in again immediately
-      // after choosing a password is a step with nothing behind it.
-      await signIn(email, password, session.memberships[0]!.license_id);
-    } catch (failure) {
-      setError(
-        failure instanceof ApiClientError && failure.type === 'account_exists'
-          ? 'An account already exists for that email — sign in instead.'
-          : 'Could not create that workspace.',
-      );
-      setBusy(false);
-    }
-  };
-
-  const valid =
-    email.includes('@') && password.length >= MIN_PASSWORD && name.trim() && organization.trim();
+  const form = useForm({
+    initial: { organization: '', name: '', email: '', password: '' },
+    validators: {
+      organization: required('Enter a workspace name.'),
+      name: required('Enter your name.'),
+      email: compose(required('Enter your email.'), emailRule()),
+      password: minLength(MIN_PASSWORD, `Use at least ${MIN_PASSWORD} characters.`),
+    },
+    onSubmit: async (values, { setSubmitError }) => {
+      try {
+        const session = await anonymous.post<{ memberships: Array<{ license_id: string }> }>(
+          '/auth/signup',
+          {
+            email: values.email.trim(),
+            password: values.password,
+            name: values.name.trim(),
+            organization_name: values.organization.trim(),
+          },
+        );
+        // Straight into the workspace. Making someone sign in again immediately
+        // after choosing a password is a step with nothing behind it.
+        await signIn(values.email.trim(), values.password, session.memberships[0]!.license_id);
+      } catch (failure) {
+        setSubmitError(
+          failure instanceof ApiClientError && failure.type === 'account_exists'
+            ? 'An account already exists for that email — sign in instead.'
+            : 'Could not create that workspace.',
+        );
+      }
+    },
+  });
 
   return (
     <AuthCard
@@ -155,26 +182,51 @@ export function SignUpPage(): ReactElement {
         </>
       }
     >
-      <form onSubmit={(event) => void onSubmit(event)}>
-        <ErrorNote message={error} />
-        <Field id="org" label="Workspace name" value={organization} onChange={setOrganization} autoFocus />
-        <Field id="name" label="Your name" value={name} onChange={setName} />
-        <Field id="email" label="Email" type="email" value={email} onChange={setEmail} />
+      <form onSubmit={form.handleSubmit} noValidate>
+        <ErrorNote message={form.submitError} />
+        <Field
+          id="org"
+          label="Workspace name"
+          value={form.values.organization}
+          onChange={(value) => form.setValue('organization', value)}
+          onBlur={() => form.blur('organization')}
+          error={form.errorFor('organization')}
+          autoFocus
+        />
+        <Field
+          id="name"
+          label="Your name"
+          value={form.values.name}
+          onChange={(value) => form.setValue('name', value)}
+          onBlur={() => form.blur('name')}
+          error={form.errorFor('name')}
+        />
+        <Field
+          id="email"
+          label="Email"
+          type="email"
+          value={form.values.email}
+          onChange={(value) => form.setValue('email', value)}
+          onBlur={() => form.blur('email')}
+          error={form.errorFor('email')}
+        />
         <Field
           id="password"
           label="Password"
           type="password"
-          value={password}
-          onChange={setPassword}
+          value={form.values.password}
+          onChange={(value) => form.setValue('password', value)}
+          onBlur={() => form.blur('password')}
+          error={form.errorFor('password')}
           hint={`At least ${MIN_PASSWORD} characters. Length is the only rule.`}
         />
         {/* Disabled until the form can actually succeed (FR-EK-A.1). */}
         <button
           type="submit"
-          disabled={!valid || busy}
+          disabled={!form.canSubmit}
           className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {busy ? 'Creating…' : 'Create workspace'}
+          {form.isSubmitting ? 'Creating…' : 'Create workspace'}
         </button>
       </form>
     </AuthCard>
@@ -183,20 +235,19 @@ export function SignUpPage(): ReactElement {
 
 /** FR-MOD-00.3 — ask for a link. The answer never says whether you got one. */
 export function ForgotPasswordPage(): ReactElement {
-  const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
-  const [busy, setBusy] = useState(false);
 
-  const onSubmit = async (event: FormEvent): Promise<void> => {
-    event.preventDefault();
-    setBusy(true);
+  const form = useForm({
+    initial: { email: '' },
+    validators: { email: compose(required('Enter your email.'), emailRule()) },
     // Deliberately no error branch: the server answers 202 either way, and a UI
     // that showed a failure for one address and not another would reopen the
     // enumeration channel the endpoint closes.
-    await anonymous.post('/auth/password-reset', { email }).catch(() => undefined);
-    setSent(true);
-    setBusy(false);
-  };
+    onSubmit: async (values) => {
+      await anonymous.post('/auth/password-reset', { email: values.email.trim() }).catch(() => undefined);
+      setSent(true);
+    },
+  });
 
   return (
     <AuthCard
@@ -209,9 +260,18 @@ export function ForgotPasswordPage(): ReactElement {
           If an account exists for that address, we sent a link. It expires in an hour.
         </p>
       ) : (
-        <form onSubmit={(event) => void onSubmit(event)}>
-          <Field id="email" label="Email" type="email" value={email} onChange={setEmail} autoFocus />
-          <Submit busy={busy || !email.includes('@')}>{busy ? 'Sending…' : 'Send link'}</Submit>
+        <form onSubmit={form.handleSubmit} noValidate>
+          <Field
+            id="email"
+            label="Email"
+            type="email"
+            value={form.values.email}
+            onChange={(value) => form.setValue('email', value)}
+            onBlur={() => form.blur('email')}
+            error={form.errorFor('email')}
+            autoFocus
+          />
+          <Submit disabled={!form.canSubmit}>{form.isSubmitting ? 'Sending…' : 'Send link'}</Submit>
         </form>
       )}
     </AuthCard>
@@ -222,23 +282,20 @@ export function ForgotPasswordPage(): ReactElement {
 export function ResetPasswordPage(): ReactElement {
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const [busy, setBusy] = useState(false);
 
-  const onSubmit = async (event: FormEvent): Promise<void> => {
-    event.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      await anonymous.post('/auth/password-reset/confirm', { token, password });
-      setDone(true);
-    } catch {
-      setError('This link is no longer valid. Ask for a new one.');
-    }
-    setBusy(false);
-  };
+  const form = useForm({
+    initial: { password: '' },
+    validators: { password: minLength(MIN_PASSWORD, `Use at least ${MIN_PASSWORD} characters.`) },
+    onSubmit: async (values, { setSubmitError }) => {
+      try {
+        await anonymous.post('/auth/password-reset/confirm', { token, password: values.password });
+        setDone(true);
+      } catch {
+        setSubmitError('This link is no longer valid. Ask for a new one.');
+      }
+    },
+  });
 
   return (
     <AuthCard
@@ -251,20 +308,20 @@ export function ResetPasswordPage(): ReactElement {
           Your password is set, and any other sessions have been signed out. You can sign in now.
         </p>
       ) : (
-        <form onSubmit={(event) => void onSubmit(event)}>
-          <ErrorNote message={error} />
+        <form onSubmit={form.handleSubmit} noValidate>
+          <ErrorNote message={form.submitError} />
           <Field
             id="password"
             label="New password"
             type="password"
-            value={password}
-            onChange={setPassword}
+            value={form.values.password}
+            onChange={(value) => form.setValue('password', value)}
+            onBlur={() => form.blur('password')}
+            error={form.errorFor('password')}
             hint={`At least ${MIN_PASSWORD} characters.`}
             autoFocus
           />
-          <Submit busy={busy || password.length < MIN_PASSWORD}>
-            {busy ? 'Saving…' : 'Set password'}
-          </Submit>
+          <Submit disabled={!form.canSubmit}>{form.isSubmitting ? 'Saving…' : 'Set password'}</Submit>
         </form>
       )}
     </AuthCard>
@@ -286,10 +343,6 @@ export function JoinPage(): ReactElement {
 
   const [preview, setPreview] = useState<Preview | null>(null);
   const [invalid, setInvalid] = useState(false);
-  const [name, setName] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const signIn = useAuth((s) => s.signIn);
 
@@ -308,31 +361,39 @@ export function JoinPage(): ReactElement {
     };
   }, [token]);
 
-  const onSubmit = async (event: FormEvent): Promise<void> => {
-    event.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      const session = await anonymous.post<{ memberships: Array<{ license_id: string }> }>(
-        '/auth/invitations/accept',
-        {
-          token,
-          ...(preview?.needs_password ? { name, password } : {}),
-        },
-      );
+  // An existing account only accepts — no fields, so nothing to validate. A new
+  // account must name itself and pick a password before Join enables.
+  const needsPassword = preview?.needs_password ?? false;
+  const form = useForm({
+    initial: { name: '', password: '' },
+    validators: needsPassword
+      ? {
+          name: required('Enter your name.'),
+          password: minLength(MIN_PASSWORD, `Use at least ${MIN_PASSWORD} characters.`),
+        }
+      : undefined,
+    onSubmit: async (values, { setSubmitError }) => {
+      try {
+        const session = await anonymous.post<{ memberships: Array<{ license_id: string }> }>(
+          '/auth/invitations/accept',
+          {
+            token,
+            ...(needsPassword ? { name: values.name.trim(), password: values.password } : {}),
+          },
+        );
 
-      if (preview?.needs_password) {
-        await signIn(preview.email, password, session.memberships.at(-1)!.license_id);
-      } else {
-        // They already had an account, and we never asked for its password —
-        // so send them to sign in rather than pretending we can log them in.
-        navigate('/signin');
+        if (needsPassword && preview) {
+          await signIn(preview.email, values.password, session.memberships.at(-1)!.license_id);
+        } else {
+          // They already had an account, and we never asked for its password —
+          // so send them to sign in rather than pretending we can log them in.
+          navigate('/signin');
+        }
+      } catch {
+        setSubmitError('Could not accept that invitation.');
       }
-    } catch {
-      setError('Could not accept that invitation.');
-      setBusy(false);
-    }
-  };
+    },
+  });
 
   if (invalid) {
     return (
@@ -354,24 +415,32 @@ export function JoinPage(): ReactElement {
     );
   }
 
-  const valid = !preview.needs_password || (name.trim() && password.length >= MIN_PASSWORD);
-
   return (
     <AuthCard
       title={`Join ${preview.organization_name}`}
       subtitle={`Invited as ${preview.role} · ${preview.email}`}
     >
-      <form onSubmit={(event) => void onSubmit(event)}>
-        <ErrorNote message={error} />
+      <form onSubmit={form.handleSubmit} noValidate>
+        <ErrorNote message={form.submitError} />
         {preview.needs_password ? (
           <>
-            <Field id="name" label="Your name" value={name} onChange={setName} autoFocus />
+            <Field
+              id="name"
+              label="Your name"
+              value={form.values.name}
+              onChange={(value) => form.setValue('name', value)}
+              onBlur={() => form.blur('name')}
+              error={form.errorFor('name')}
+              autoFocus
+            />
             <Field
               id="password"
               label="Choose a password"
               type="password"
-              value={password}
-              onChange={setPassword}
+              value={form.values.password}
+              onChange={(value) => form.setValue('password', value)}
+              onBlur={() => form.blur('password')}
+              error={form.errorFor('password')}
               hint={`At least ${MIN_PASSWORD} characters.`}
             />
           </>
@@ -382,10 +451,10 @@ export function JoinPage(): ReactElement {
         )}
         <button
           type="submit"
-          disabled={!valid || busy}
+          disabled={!form.canSubmit}
           className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {busy ? 'Joining…' : 'Join workspace'}
+          {form.isSubmitting ? 'Joining…' : 'Join workspace'}
         </button>
       </form>
     </AuthCard>

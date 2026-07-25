@@ -6,6 +6,36 @@
 
 ## Task log (newest-first)
 
+### 29.2 — EK-A T4-b Kalan Must formlarını primitife taşı — done — 2026-07-25 UTC
+- Yapıldı:
+  - **Auth formları** (`features/auth/PublicPages.tsx`): SignUp / ForgotPassword / ResetPassword /
+    Join → elle `valid` boolean + `email.includes('@')` kaldırıldı, hepsi `useForm` primitifine
+    taşındı. Ortak `Field` helper'ı alan-altı hata + `aria-invalid`/`aria-describedby` gösterecek
+    şekilde genişletildi; `Submit` prop'u `busy`→`disabled`. Server-hata haritaları korundu
+    (account_exists, enumeration-safe forgot).
+  - **Sign-in** (`features/auth/SignInPage.tsx`): email/parola `useForm` (email = required+email,
+    parola = required); geçersizken "Sign in" pasif, alan-altı hata. İki-adım (workspace seçimi)
+    korundu; choose hatası artık adım-2'de de görünüyor.
+  - **Settings** (`features/settings/SettingsPage.tsx`): New canned (shortcut+text) ve New tag
+    (name) → `useForm({required})`; başarıda `form.reset()` alanları temizler. `CannedResponses`
+    ve `Tags` test için `export` edildi.
+  - **Kapsam dışı bırakıldı (gerekçeli):** Payment mock = `disabled` inputlar (ADR-13, hiçbir şey
+    toplanmıyor → doğrulanacak alan yok); Channels grid = "ekle" formu zaten 29.1 pilotu (Website).
+    TrustedDomains = `domain()` katı validatörü "pasted URL → hostname" E2E'sini kırardı → elle bırakıldı.
+  - **Testler:** `PublicPages.test.tsx` (SignUp/Reset/Forgot validasyon), `SignInPage.test.tsx`,
+    `settings/SettingsForms.test.tsx` (canned+tag: submit-disabled + alan-altı hata). +9 unit.
+- Doğrulama (DoD kapısı tam yeşil): typecheck ✅ · lint ✅ · unit ✅ (web 126, api 89) ·
+  integration ✅ (api 505, rtm 42) · build ✅ · **E2E tam suite 46/46** ✅ (signup/sign-in/canned/
+  tags/payment/channels dahil). Not: rtm integration tek seferlik stateful flake verdi
+  (`rtm.test.ts:290` thread-id çakışması, 3-günlük DB birikimi) — izole + temiz koşuda 42/42 geçti,
+  frontend değişikliğiyle alakasız.
+- Varsayımlar: Sign-in + Join enumerasyona ek olarak taşındı (enumere listede yoktu ama "kalan Must
+  form" kapsamında; tek form katmanı hedefi). Auth email validatörü artık katı (regex) — in-app
+  oluşturulan tüm hesaplar zaten regex-geçerli.
+- Sonraki pencereye not: **29.3** (T5-a) hazır — dirty-guard + ortak dropdown/stepper/optimistic
+  tekilleştirme; `form.isDirty` primitifte mevcut. Invite modalı zaten `isDirty` dirty-guard'ı
+  kullanıyor (29.1); 29.3 bunu ortak bir sarmalayıcıya çıkarıp diğer modallara yayacak.
+
 ### 29.1 — EK-A T4-a Ortak form-validasyon primitifi + 2 pilot form — done — 2026-07-25 UTC
 - Yapıldı:
   - **Tek primitif:** `apps/web/src/lib/form.tsx` — bağımlılıksız `useForm` hook + validatörler

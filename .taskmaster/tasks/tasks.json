@@ -622,11 +622,12 @@
             "id": 2,
             "title": "Panel string katalogla + Intl helper'lari locale'e bagla",
             "description": "apps/web string'leri + format.ts locale.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "1"
             ],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T06:19:30.324Z"
           },
           {
             "id": 3,
@@ -649,12 +650,12 @@
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-25T06:06:01.838Z"
+        "updatedAt": "2026-07-25T06:19:30.324Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T06:06:01.838Z",
+      "lastModified": "2026-07-25T06:19:30.324Z",
       "taskCount": 26,
       "completedCount": 24,
       "tags": [

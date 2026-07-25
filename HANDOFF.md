@@ -6,6 +6,35 @@
 
 ## Task log (newest-first)
 
+### 26.2 — I18N1/2 panel string kataloglama + Intl helper locale bağı — done — 2026-07-25 UTC
+- Yapıldı: 26.1'in çekirdeğini panelin **görünür chrome'una** bağladım. `AppShell.tsx` — trial banner
+  (`shell.trial.*` + `{days}`/`{s}` interpolasyon), abonelik linki, ikon rayı `aria-label`'i, hesap menüsü
+  (ad/çıkış fallback) `t()`'ye taşındı; hesap menüsüne **dil değiştirici** (`<select>` → `useLocale().setLocale`)
+  eklendi. `navigation.ts` — kırıcı değişim: `label` → **`labelKey`** (katalog anahtarı); ray ve komut paleti
+  aynı anahtardan çözer (`RailButton key` de `item.to`'ya çekildi). `CommandPalette.tsx` — grup başlıkları,
+  placeholder/aria, "Searching…/No matches", isimsiz ziyaretçi/visitor fallback'leri `t()`'ye taşındı, `t`
+  useMemo bağımlılığına eklendi. `format.ts` locale bağı zaten 26.1'de (title'ın 2. yarısı) tamam.
+- Doğrulama (**tam kapı yeşil**): `pnpm -w typecheck` (11/11 · exit 0) · `pnpm -w lint` (exit 0) ·
+  `pnpm -w build` (7/7; widget 6.76 kB gzip ≪ 50 KB P3, dokunulmadı) · `pnpm -w test:unit` (web **88**,
+  yeni `i18n.smoke.test.tsx` dâhil) · `pnpm -w test:integration` (**seri** · 22 dosya / **492**) ·
+  `pnpm -w test:e2e` (**44/44**). Not: e2e ilk koşuda 5 widget testi **429 rate-limit** ile düştü — sebep
+  playwright'ın port 4000'de **bayat api dev sunucusunu** (raised `RATE_LIMIT_ANON_PER_MIN=2000` olmadan)
+  `reuseExistingServer` ile yeniden kullanması; bayat süreci öldürüp taze sunucuyla tekrar koşunca **44/44 yeşil**.
+  Kodumla (yalnız panel chrome) ilgisiz. Ayrıca e2e için kabuk env'ini `.env`'den export etmek gerekti
+  (`tsx watch` dev komutu dotenv yüklemez; `make test-e2e` `include .env` ile çalışır).
+- Kapsam disiplini: **yalnız 4 panel dosyası** commit'lendi (`AppShell.tsx`, `CommandPalette.tsx`,
+  `navigation.ts`, `i18n.smoke.test.tsx` · commit `3bd3979` → main). `apps/widget/src/i18n.ts` (26.3) çalışma
+  ağacında **commit'siz** bırakıldı; ilgisiz değişiklikler (CLAUDE.md/MASTER-PROMPT.md, kanit .png'leri, autorun
+  .md'leri, run-loop.sh) staged edilmedi.
+- Varsayımlar: "panel string" = her ekranda görünen **iskelet** chrome (shell/nav/palet); çevrilmemiş ekranlar
+  fallback ile İngilizce'ye düşer (parent detay madde-2: "iskelet + eksik-anahtar güvenliği"). Task'ın
+  "smoke/e2e" istediği locale-değişim kanıtı **smoke** dalıyla karşılandı (gerçek shell render → tr'ye çevir →
+  ray etiketleri Türkçe, İngilizce kaybolur); ayrı e2e i18n spec'i eklenmedi.
+- Sonraki pencereye not: **26.3** (widget) — `apps/widget/src/i18n.ts` iskeleti çalışma ağacında hazır bekliyor,
+  bundle P3 (50 KB) bütçesini koru. **26.4** (test genişletme) — smoke + fallback unit'leri var; widget boyut
+  testi kalabilir. Parent **26** ancak 26.3+26.4 bitince done; o zaman `PLAN.md §7.2 I18N ⬜→✅` güncellenir
+  (henüz değil).
+
 ### 26.1 — I18N1/2 panel i18n çekirdeği (katalog + t() + locale kaynağı) — done — 2026-07-25 UTC
 - Yapıldı: Bağımlılıksız hafif i18n temeli. `apps/web/src/lib/i18n.ts`: düz `tr/en` mesaj katalogu +
   `translate(locale,key,params)` (fallback zinciri **aktif locale → İngilizce → anahtarın kendisi** =

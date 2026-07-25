@@ -18,6 +18,7 @@ import { formatDate } from '../../lib/format.js';
 import { describeStep, type AiAgent, type KnowledgeSource, type Skill } from './types.js';
 import { SkillEditor } from './SkillEditor.js';
 import { TemplateGallery } from './TemplateGallery.js';
+import { RecommendedSkills } from './RecommendedSkills.js';
 import { templateToDraft, type SkillTemplate } from './templates.js';
 import { countSkillsByTab, filterSkillsByTab, type SkillTab } from './skill-tabs.js';
 
@@ -194,6 +195,16 @@ export function PlaybookPage(): ReactElement {
                 </p>
               )}
             </Card>
+          )}
+
+          {canEdit && (
+            <RecommendedSkills
+              onTry={(template) => createFromTemplate.mutate(template)}
+              onBrowseAll={() => setGalleryOpen(true)}
+              pendingId={
+                createFromTemplate.isPending ? (createFromTemplate.variables?.id ?? null) : null
+              }
+            />
           )}
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,360px)_1fr]">

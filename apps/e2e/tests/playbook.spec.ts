@@ -48,4 +48,28 @@ test.describe('playbook — browse templates', () => {
 
     await agentPage.screenshot({ path: 'kanit/32-playbook-template-editor.png', fullPage: true });
   });
+
+  test('"Try this" on a recommended card opens a pre-filled editor (FR-MOD-05.2)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/playbook');
+
+    // The recommended strip is inline on the page, not behind the gallery.
+    const strip = agentPage.getByRole('region', { name: 'Recommended skills' });
+    await expect(strip).toBeVisible();
+
+    // A card whose skill needs an external system warns here too, before you pick it.
+    await expect(strip.getByText(/Shopify app connected/)).toBeVisible();
+
+    // Featured order: the first "Try this" is "Where is my order?".
+    await strip.getByRole('button', { name: 'Try this' }).first().click();
+
+    // Try this copies the template into a real, persisted skill and opens the
+    // editor on it — same round trip as the gallery, reached from a single click.
+    await expect(agentPage.getByLabel('Name')).toHaveValue('Where is my order?');
+    await expect(agentPage.getByLabel('Instruction')).toHaveValue(/ask for their order number/);
+    await expect(agentPage.getByRole('region', { name: 'Where is my order?' })).toBeVisible();
+
+    await agentPage.screenshot({ path: 'kanit/32-recommended-try-this.png', fullPage: true });
+  });
 });

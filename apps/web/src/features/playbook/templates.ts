@@ -225,3 +225,36 @@ export function templatesByCategory(category: TemplateCategory): SkillTemplate[]
 export function findTemplate(id: string): SkillTemplate | undefined {
   return SKILL_TEMPLATES.find((template) => template.id === id);
 }
+
+/** The display metadata (icon + label) for a category, for a card's type badge. */
+export function findCategoryMeta(category: TemplateCategory): TemplateCategoryMeta | undefined {
+  return TEMPLATE_CATEGORIES.find((meta) => meta.id === category);
+}
+
+/**
+ * The templates featured in the Playbook's "Recommended skills" strip, in the
+ * order shown (FR-MOD-05.2). A curated shortlist rather than the whole gallery:
+ * all three categories are represented — interleaved so the first row spans them
+ * — and one card needs an integration, so the strip carries the same up-front
+ * warning the full gallery does. Anything not featured here is a "See more"
+ * click away.
+ */
+export const RECOMMENDED_TEMPLATE_IDS: readonly string[] = [
+  'order-status', // prebuilt
+  'greet-and-route', // ai
+  'shopify-order-lookup', // trending (needs Shopify)
+  'returns-policy', // prebuilt
+  'collect-then-handover', // ai
+  'csat-followup', // trending
+];
+
+/**
+ * The recommended templates resolved against the catalogue, order preserved. An
+ * id that no longer resolves (a rename, a removal) is dropped rather than left
+ * as a hole, so the strip can never render a blank card or throw.
+ */
+export function recommendedTemplates(): SkillTemplate[] {
+  return RECOMMENDED_TEMPLATE_IDS.map(findTemplate).filter(
+    (template): template is SkillTemplate => template !== undefined,
+  );
+}

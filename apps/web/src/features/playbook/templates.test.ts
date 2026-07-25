@@ -8,9 +8,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  RECOMMENDED_TEMPLATE_IDS,
   SKILL_TEMPLATES,
   TEMPLATE_CATEGORIES,
+  findCategoryMeta,
   findTemplate,
+  recommendedTemplates,
   templateToDraft,
   templatesByCategory,
   type SkillTemplate,
@@ -71,6 +74,44 @@ describe('skill template catalogue', () => {
     const standalone = SKILL_TEMPLATES.filter((t) => !t.requiresIntegration);
     expect(needsIntegration.length).toBeGreaterThan(0);
     expect(standalone.length).toBeGreaterThan(0);
+  });
+});
+
+describe('recommendedTemplates', () => {
+  it('resolves every featured id against the catalogue', () => {
+    const templates = recommendedTemplates();
+    expect(templates).toHaveLength(RECOMMENDED_TEMPLATE_IDS.length);
+    expect(templates.every((t) => t !== undefined)).toBe(true);
+  });
+
+  it('preserves the featured order', () => {
+    expect(recommendedTemplates().map((t) => t.id)).toEqual([...RECOMMENDED_TEMPLATE_IDS]);
+  });
+
+  it('spans all three categories, so the strip advertises each kind', () => {
+    const categories = new Set(recommendedTemplates().map((t) => t.category));
+    for (const category of TEMPLATE_CATEGORIES) {
+      expect(categories.has(category.id), category.id).toBe(true);
+    }
+  });
+
+  it('features at least one integration-required card, so the strip carries a warning', () => {
+    expect(recommendedTemplates().some((t) => t.requiresIntegration)).toBe(true);
+  });
+
+  it('drops ids that no longer resolve rather than leaving a hole', () => {
+    // The public helper only surfaces real templates: its length equals the count
+    // of ids that map to a catalogue entry, never the raw id-list length blindly.
+    const resolvable = RECOMMENDED_TEMPLATE_IDS.filter((id) => findTemplate(id));
+    expect(recommendedTemplates()).toHaveLength(resolvable.length);
+  });
+});
+
+describe('findCategoryMeta', () => {
+  it('returns the icon and label for every advertised category', () => {
+    for (const category of TEMPLATE_CATEGORIES) {
+      expect(findCategoryMeta(category.id)).toEqual(category);
+    }
   });
 });
 

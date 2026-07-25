@@ -6,6 +6,36 @@
 
 ## Task log (newest-first)
 
+### 32.2 — 05.2-a · Recommended skills kartları (Try this / See more) — done — 2026-07-26 UTC
+- Yapıldı:
+  - **Önerilen şablon şeridi** `apps/web/src/features/playbook/RecommendedSkills.tsx`: PlaybookPage'de
+    inline `Section` (galeriden ayrı — modal değil). Kartlar kategori rozetli (Prebuilt ◆ / AI ✦ /
+    Trending ↗); **"Try this"** şablonu kopyalayıp editörü ön-dolu açar — galerinin "Use template"
+    akışıyla **aynı** `createFromTemplate` round-trip'i; **"See more"** tam galeriyi açar.
+  - **Entegrasyon uyarısı:** `requiresIntegration` taşıyan kart ("Needs the Shopify app connected.")
+    şeritte de, seçmeden önce uyarır.
+  - **templates.ts** eklendi: `RECOMMENDED_TEMPLATE_IDS` (3 kategoriyi kapsayan, biri Shopify=entegrasyon
+    gerektiren kürasyonlu kısa liste; sıra korunur), `recommendedTemplates()` (çözülmeyen id'yi delik
+    bırakmadan düşürür), `findCategoryMeta()` (kart rozeti için ikon+etiket).
+  - **PlaybookPage bağlandı:** AI-agent kartından sonra, Skills/Editor grid'inden önce; `canEdit`-gated
+    (yalnız düzenleyebilen skill üretebilir). `onTry`→`createFromTemplate.mutate`, `onBrowseAll`→galeri.
+    Backend/şema/kontrat **dokunulmadı**.
+- KK (birebir): _"[Try this] şablonu kopyalayıp editöre açar; entegrasyon gerektirenler uyarır"_ ✅.
+- **Test (yeni):** unit `RecommendedSkills.test.tsx` (5) — kategori etiketleri, Try this→doğru şablon,
+  entegrasyon kartı uyarır, See more→galeri, pending yalnız o kartı meşgul eder; `templates.test.ts`
+  (+6) — recommended id'ler çözülür/sıra korunur/3 kategoriyi kapsar/entegrasyon kartı var + findCategoryMeta.
+  E2E `playbook.spec.ts` (+1) — recommended "Try this" → ön-dolu editör (kanit/32-recommended-try-this.png).
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` ·
+  `pnpm -w test:integration` (**507**, backend'e dokunulmadı → regresyon yok) · web unit (**192**,
+  yeni 11 dahil) · api unit (**601**) · rtm (65)/widget (34)/types (26)/ai-mock (42) ·
+  e2e `playbook.spec.ts` (**2/2**, yeni Try-this akışı dahil).
+  `pnpm -w test` (turbo, tümü paralel) uzun api süiti + paylaşılan Postgres yarışı yüzünden zaman
+  aşımına uğruyor — bilinen altyapı sorunu (memory: DB süitleri seri koş); paket-paket **seri**
+  koşulunca hepsi yeşil.
+- Sonraki pencereye not: **32.4** (liste kontrolleri Search/Sort/Filter — 32.3'e + form desenine
+  bağımlı) kaldı → 32 parent'ın son subtask'ı; 32.1/32.2/32.3 done. Recommended şerit `canEdit`
+  false iken gizli (görüntüleyen zaten skill üretemez).
+
 ### 32.3 — 05.3-a · Skill listesi sekmeleri (All/AI/Workspace/Drafts) — done — 2026-07-26 UTC
 - Yapıldı:
   - **Saf sınıflandırma modülü** `apps/web/src/features/playbook/skill-tabs.ts`: `classifySkill`

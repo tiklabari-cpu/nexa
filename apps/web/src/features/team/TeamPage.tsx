@@ -18,6 +18,7 @@ import {
   Section,
 } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
@@ -120,59 +121,60 @@ export function TeamPage(): ReactElement {
                   description="Invite colleagues so conversations can be shared out."
                 />
               ) : (
-                <table className="w-full text-sm">
-                  <caption className="sr-only">Agents on this licence</caption>
-                  <thead>
-                    <tr className="border-b border-border text-left">
-                      <Th>Name</Th>
-                      <Th>Role</Th>
-                      <Th>Availability</Th>
-                      <Th align="right">Chat limit</Th>
-                      <Th>2FA</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((agent) => (
-                      <tr key={agent.id} className="border-b border-border last:border-0">
-                        <td className="px-4 py-2.5">
-                          <div className="flex items-center gap-2.5">
-                            <Avatar name={agent.name} email={agent.email} />
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">
-                                {agent.name}
-                                {agent.id === currentAgentId && (
-                                  <span className="ml-1.5 text-2xs text-content-tertiary">you</span>
-                                )}
-                              </p>
-                              <p className="truncate text-2xs text-content-tertiary">
-                                {agent.email}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2.5 capitalize text-content-secondary">
-                          {agent.role}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <StatusDot
-                            tone={STATUS_TONE[agent.routing_status]}
-                            label={STATUS_LABEL[agent.routing_status]}
-                          />
-                        </td>
-                        <td className="tabular px-4 py-2.5 text-right">
-                          {agent.concurrent_chats_limit}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {/* Absence of 2FA is worth surfacing, not just its presence. */}
-                          <StatusDot
-                            tone={agent.two_factor_enabled ? 'success' : 'warning'}
-                            label={agent.two_factor_enabled ? 'On' : 'Off'}
-                          />
-                        </td>
+                <VirtualTable
+                  items={items}
+                  rowHeight={56}
+                  caption="Agents on this licence"
+                  colSpan={5}
+                  head={
+                    <thead>
+                      <tr className="border-b border-border text-left">
+                        <Th>Name</Th>
+                        <Th>Role</Th>
+                        <Th>Availability</Th>
+                        <Th align="right">Chat limit</Th>
+                        <Th>2FA</Th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                  }
+                  renderRow={(agent) => (
+                    <tr key={agent.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar name={agent.name} email={agent.email} />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">
+                              {agent.name}
+                              {agent.id === currentAgentId && (
+                                <span className="ml-1.5 text-2xs text-content-tertiary">you</span>
+                              )}
+                            </p>
+                            <p className="truncate text-2xs text-content-tertiary">{agent.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 capitalize text-content-secondary">
+                        {agent.role}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <StatusDot
+                          tone={STATUS_TONE[agent.routing_status]}
+                          label={STATUS_LABEL[agent.routing_status]}
+                        />
+                      </td>
+                      <td className="tabular px-4 py-2.5 text-right">
+                        {agent.concurrent_chats_limit}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {/* Absence of 2FA is worth surfacing, not just its presence. */}
+                        <StatusDot
+                          tone={agent.two_factor_enabled ? 'success' : 'warning'}
+                          label={agent.two_factor_enabled ? 'On' : 'Off'}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                />
               )}
             </Card>
           </Section>

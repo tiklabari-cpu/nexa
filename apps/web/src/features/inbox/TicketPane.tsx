@@ -9,6 +9,7 @@
  */
 import { useState, type ReactElement } from 'react';
 import { EmptyState } from '../../components/EmptyState.js';
+import { VirtualList } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { useTicket, useUpdateTicket } from './useTickets.js';
 import type { Ticket, TicketStatus } from './types.js';
@@ -57,9 +58,13 @@ export function TicketList({
   }
 
   return (
-    <ul>
-      {tickets.map((ticket) => (
-        <li key={ticket.id}>
+    <VirtualList
+      items={tickets}
+      rowHeight={60}
+      maxHeight="100%"
+      label="Tickets"
+      renderRow={(ticket) => (
+        <div key={ticket.id} role="listitem">
           <button
             type="button"
             onClick={() => onSelect(ticket.id)}
@@ -74,9 +79,9 @@ export function TicketList({
               <StatusDot tone={toneFor(ticket.status)} label={ticket.status} />
             </span>
           </button>
-        </li>
-      ))}
-    </ul>
+        </div>
+      )}
+    />
   );
 }
 

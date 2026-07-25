@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate } from '../../lib/format.js';
@@ -154,63 +155,66 @@ export function CustomersPage(): ReactElement {
                 }
               />
             ) : (
-              <table className="w-full text-sm">
-                <caption className="sr-only">Customers</caption>
-                <thead>
-                  <tr className="border-b border-border text-left">
-                    <Th>Name</Th>
-                    <Th>Country</Th>
-                    <Th align="right">Chats</Th>
-                    <Th>Last active</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((customer) => (
-                    <tr
-                      key={customer.id}
-                      aria-selected={selectedId === customer.id}
-                      className={`cursor-pointer border-b border-border last:border-0 transition-colors ${
-                        selectedId === customer.id
-                          ? 'bg-brand-100 dark:bg-brand-950'
-                          : 'hover:bg-surface-2'
-                      }`}
-                      onClick={() => setSelectedId(customer.id)}
-                    >
-                      <td className="px-4 py-2.5">
-                        <button
-                          type="button"
-                          // The row is clickable for the mouse; this keeps it
-                          // reachable by keyboard without an interactive <tr>.
-                          onClick={() => setSelectedId(customer.id)}
-                          className="text-left"
-                        >
-                          <span className="flex items-center gap-2 font-medium">
-                            {customer.name ?? (
-                              <span className="italic text-content-tertiary">Unnamed visitor</span>
-                            )}
-                            {customer.is_lead && (
-                              <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-normal text-content-secondary">
-                                lead
-                              </span>
-                            )}
-                            {customer.banned && <StatusDot tone="danger" label="Banned" />}
-                          </span>
-                          <span className="block truncate text-2xs text-content-tertiary">
-                            {customer.email ?? customer.phone ?? 'No contact details'}
-                          </span>
-                        </button>
-                      </td>
-                      <td className="px-4 py-2.5 text-content-secondary">
-                        {customer.country ?? customer.country_code ?? '—'}
-                      </td>
-                      <td className="tabular px-4 py-2.5 text-right">{customer.chats_count}</td>
-                      <td className="px-4 py-2.5 text-content-secondary">
-                        {formatDate(customer.last_activity_at) ?? 'Never'}
-                      </td>
+              <VirtualTable
+                items={items}
+                rowHeight={56}
+                caption="Customers"
+                colSpan={4}
+                head={
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <Th>Name</Th>
+                      <Th>Country</Th>
+                      <Th align="right">Chats</Th>
+                      <Th>Last active</Th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                }
+                renderRow={(customer) => (
+                  <tr
+                    key={customer.id}
+                    aria-selected={selectedId === customer.id}
+                    className={`cursor-pointer border-b border-border last:border-0 transition-colors ${
+                      selectedId === customer.id
+                        ? 'bg-brand-100 dark:bg-brand-950'
+                        : 'hover:bg-surface-2'
+                    }`}
+                    onClick={() => setSelectedId(customer.id)}
+                  >
+                    <td className="px-4 py-2.5">
+                      <button
+                        type="button"
+                        // The row is clickable for the mouse; this keeps it
+                        // reachable by keyboard without an interactive <tr>.
+                        onClick={() => setSelectedId(customer.id)}
+                        className="text-left"
+                      >
+                        <span className="flex items-center gap-2 font-medium">
+                          {customer.name ?? (
+                            <span className="italic text-content-tertiary">Unnamed visitor</span>
+                          )}
+                          {customer.is_lead && (
+                            <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-normal text-content-secondary">
+                              lead
+                            </span>
+                          )}
+                          {customer.banned && <StatusDot tone="danger" label="Banned" />}
+                        </span>
+                        <span className="block truncate text-2xs text-content-tertiary">
+                          {customer.email ?? customer.phone ?? 'No contact details'}
+                        </span>
+                      </button>
+                    </td>
+                    <td className="px-4 py-2.5 text-content-secondary">
+                      {customer.country ?? customer.country_code ?? '—'}
+                    </td>
+                    <td className="tabular px-4 py-2.5 text-right">{customer.chats_count}</td>
+                    <td className="px-4 py-2.5 text-content-secondary">
+                      {formatDate(customer.last_activity_at) ?? 'Never'}
+                    </td>
+                  </tr>
+                )}
+              />
             )}
           </Card>
 

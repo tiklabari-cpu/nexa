@@ -6,6 +6,47 @@
 
 ## Task log (newest-first)
 
+### 30.1 — EK-B.1 T6-a Virtualized liste primitifi (Contacts/Teammates/Skills/Tickets) — done — 2026-07-25T17:56Z UTC
+- Yapıldı:
+  - **Virtualized liste primitifi** (`components/VirtualList.tsx`): saf `computeVirtualWindow()`
+    (pencere matematiği) + `useVirtualRows` hook (scroll + `ResizeObserver` ile viewport ölçümü,
+    `viewportHeight` verilirse ölçmeyi atlar). İki yüzey tek çekirdeği paylaşır: **`VirtualList`**
+    (role="list", spacer `<div>`) ve **`VirtualTable`** (spacer `<tr>`, `<table>`/`<caption>`/kolon
+    korunur). DOM'a yalnız görünür pencere + overscan girer; spacer'lar `aria-hidden`.
+  - **4 Must liste taşındı:** Contacts (`CustomersPage` → VirtualTable, `<table name="Customers">`
+    korundu), Teammates (`TeamPage` → VirtualTable), Skills (`PlaybookPage` → VirtualList),
+    Tickets (`TicketPane`/`TicketList` → VirtualList, `maxHeight:100%` pane'i doldurur).
+  - **Tasarım kararı:** iki tablo listesi `<table>`/`<tr>`/caption semantiğini korudu — E2E
+    `getByRole('table'/'row')` sözleşmesi + kolon hizası bozulmasın diye (tablo varyantı
+    spacer-`<tr>`). Sabit satır yüksekliği + overscan; değişken-yükseklik ölçümü v1 gridlerine
+    ertelendi (kapsam dışı).
+- KK (PRD birebir, bu pay): _"10.000+ satırda 60fps; ... yalnız görünür satır DOM'da"_.
+- **PERF KANITI (NFR-P4):** `VirtualList.test.tsx` "NFR-P4 budget" → **10.000 veri satırı → 14 DOM
+  satırı, render 0.8ms**. Paint maliyeti düğüm sayısıyla orantılı → sabit ~viewport düğüm = ölçülebilir
+  60fps vekili. Sanal-pencere testi ayrıca kanıtlıyor: 10k'da yalnız pencere DOM'da, scroll ile
+  pencere kayıyor (üst satır çıkar, derin satır girer).
+- Doğrulama (hepsi yeşil): `pnpm -w typecheck` (11 pkg) · `pnpm -w lint` (8 pkg) · `pnpm -w build`
+  (7 pkg) · web unit **150** (10 yeni: `VirtualList.test.tsx`) · `pnpm -w test:integration` **505/505**
+  · e2e **48/48** (temiz seed'de).
+- Varsayımlar:
+  - E2E ilk koşularımda 2–3 flaky kırmızı verdi; kök neden **benim tekrar eden widget-e2e
+    koşularımın** paylaşılan DB'ye biriktirdiği ~33 anonim ziyaretçi müşterisiydi (seed upsert eder,
+    truncate etmez) → seed müşterileri (Alex/Mira/Robin) sanal pencerenin altına gömüldü ve
+    filtresiz "all" listesinde tıklanamadı. `test:integration` DB'yi truncate ettikten + e2e
+    globalSetup temiz seed (3 müşteri) verdikten sonra **48/48 yeşil**. Kod kusuru değil, veri-hacmi
+    artefaktı (izole `customers.spec` baştan 8/8 geçmişti).
+  - Sanal liste tasarım gereği yalnız görünür satırı DOM'a koyar → çok uzun listede belirli satıra
+    ulaşmak scroll/arama ister (agent'ın olağan yolu; arama/filtre testleri yeşil). Prisma
+    `migrate reset` AI-guard + sınır ("DB drop yok") nedeniyle KULLANILMADI; temizlik integration
+    truncate + temiz seed ile yapıldı.
+- Sonraki pencereye not:
+  - **30.2 (T6-b skeleton + anlamlı empty state)** bu primitife bağımlı; aynı liste bileşenlerine
+    uygulanacak. **40** (Tickets grid deep-link), **53** (Apps grid), **02.7-a** de buna dayanır.
+  - Commit yalnız 6 kaynak dosya + bu HANDOFF notu içerir. `tasks.json` / `CLAUDE.md` /
+    `MASTER-PROMPT.md` + `kanit/*.png` + untracked infra dosyaları **dal (plan-expand) işine ait,
+    benim commit'ime DAHİL EDİLMEDİ** (kapsam disiplini §5). 30.1 `done` Task Master dosyasında
+    yazılı ama tasks.json'da ilgisiz bekleyen değişiklikler olduğundan commit edilmedi.
+
 ### 29.3 — EK-A T5-a Yarım-form kapatma onayı + ortak davranış — done — 2026-07-25T17:22Z UTC
 - Yapıldı:
   - **Dirty guard** (`lib/dirty-guard.tsx`): saf `confirmDiscard(isDirty, message?, confirm?)` +

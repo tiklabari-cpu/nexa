@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { VirtualList } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
@@ -136,9 +137,16 @@ export function PlaybookPage(): ReactElement {
                     description="A skill decides what the AI does with an incoming message."
                   />
                 ) : (
-                  <ul className="divide-y divide-border">
-                    {items.map((skill) => (
-                      <li key={skill.id}>
+                  <VirtualList
+                    items={items}
+                    rowHeight={56}
+                    label="Skills"
+                    renderRow={(skill) => (
+                      <div
+                        key={skill.id}
+                        role="listitem"
+                        className="border-b border-border last:border-0"
+                      >
                         <div
                           className={`flex items-center gap-2 px-4 py-2.5 ${
                             selectedId === skill.id ? 'bg-brand-100 dark:bg-brand-950' : ''
@@ -180,9 +188,9 @@ export function PlaybookPage(): ReactElement {
                             Needs at least one step before it can be turned on.
                           </p>
                         )}
-                      </li>
-                    ))}
-                  </ul>
+                      </div>
+                    )}
+                  />
                 )}
               </Card>
 

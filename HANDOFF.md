@@ -6,6 +6,33 @@
 
 ## Task log (newest-first)
 
+### 26.1 — I18N1/2 panel i18n çekirdeği (katalog + t() + locale kaynağı) — done — 2026-07-25 UTC
+- Yapıldı: Bağımlılıksız hafif i18n temeli. `apps/web/src/lib/i18n.ts`: düz `tr/en` mesaj katalogu +
+  `translate(locale,key,params)` (fallback zinciri **aktif locale → İngilizce → anahtarın kendisi** =
+  eksik-anahtar güvenliği; `{name}` interpolasyon). Locale kaynağı: `localStorage('nexa.locale')` → tarayıcı
+  dili → İngilizce (`detectLocale`, bölge eki kırpılır); zustand store + `useTranslate`/`useLocale` hook'ları;
+  locale değişiminde `<html lang>` + `setFormatLocale` senkronu. `format.ts` Intl helper'ları (`formatCount`/
+  `formatMoney`/`formatDate`) modül-düzeyi `activeLocale`'e bağlandı — **varsayılan argüman → geriye dönük
+  uyumlu** (mevcut çağrı yerleri değişmez, testler açık locale geçirmeye devam eder).
+- Doğrulama (**yeşil**): `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) · `pnpm -w build` (7/7) ·
+  `@nexa/web` vitest **88** (yeni `i18n.test.ts` 7: fallback/interpolasyon/detectLocale + `format.test.ts` 5:
+  locale bağı; mevcut AppShell/CommandPalette suite'leri hâlâ yeşil) · api/rtm entegrasyon **seri** koşuda yeşil
+  (api 581). Not: `pnpm -w test` DB suite'lerini paylaşılan Postgres'te yarıştırır (bilinen konu — memory) →
+  seri koştum; i18n saf frontend, backend'e dokunmaz.
+- Kapsam: **yalnız 26.1** commit'lendi — `{i18n.ts, i18n.test.ts, format.ts, format.test.ts}` (commit `5883d5a`,
+  `feat/i18n-foundation` → main ff). 26.2 (panel string'leri: AppShell/CommandPalette/navigation), 26.3 (widget
+  `apps/widget/src/i18n.ts`) ve 26.4 (`i18n.smoke.test.tsx` + widget boyut testi) çalışması çalışma ağacında
+  **commit'siz** bırakıldı — kendi pencerelerinde kapanacak. (navigation.ts `label`→`labelKey` kırıcı değişimi
+  AppShell/CommandPalette ile bağlı; birlikte commit'lenmeli.)
+- Varsayımlar: İki locale + bu string sayısında ICU/plural kütüphanesi gereksiz (widget 50KB P3 bütçesine de
+  ağırlık bindirmez). İngilizce **doğruluk kaynağı** — her anahtar `en`'de var, `tr` kısmi olabilir. Canlı/makine
+  çevirisi kapsam dışı (PRD §9). format binding'i 26.1'e dâhil edildi (parent detay madde-1: "format.ts locale'e
+  bağla"; ayrıca `i18n.ts` `setFormatLocale`'e derleme-zamanı bağımlı).
+- Sonraki pencereye not: **26.2** → `useTranslate()` ile panel string'lerini katalogla; rail/palette `labelKey`'i
+  `t()` ile çöz (navigation.ts zaten `labelKey`). **26.3** → widget `createTranslator(data-language)` bağla, boyut
+  bütçesini koru. **26.4** → smoke + widget boyut testi + PLAN.md §7.2 `I18N1/2` ⬜→✅ (yalnız tüm 26 kapanınca).
+  Task 26 hâlâ `in-progress`.
+
 ### 25 — M5 Gözlemlenebilirlik: OpenTelemetry span + metrik (request_id köprüsü) — done — 2026-07-25 UTC
 - Yapıldı: NFR-M5 (§7.2 ◐→✅). Gerçek OTel SDK (2.10) bağlandı. `apps/api/src/telemetry/telemetry.ts`:
   `BasicTracerProvider` (SimpleSpanProcessor) + `MeterProvider` (PeriodicExportingMetricReader). Exporter

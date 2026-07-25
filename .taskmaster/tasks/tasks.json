@@ -605,7 +605,7 @@
         "description": "i18n altyapisi YOK (§7.2 I18N ⬜); metinler kod icinde sabit, tarih/sayi Intl ile dagink (apps/web/src/lib/format.ts, Transcript.tsx). PRD I18N1/2: panel (apps/web) + widget (apps/widget) cevrilebilir olsun. Canli/otomatik ceviri kapsam disi (§9) — yalniz katalog + tr/en.",
         "details": "1) Hafif i18n: harici agir bagimlilik gerekmez — mesaj katalogu (tr/en) + t() yardimci; locale kaynagi (kullanici/tarayici). Mevcut Intl format helper'larini (format.ts) locale'e bagla.\n2) Panel: apps/web gorunur string'leri katalogla; tr/en iskelet + eksik-anahtar guvenligi (fallback).\n3) Widget: apps/widget string'leri katalogla; P3 bundle butcesi (50KB, mevcut 5.3KB) korunur.\nPRD: NFR I18N1/2 · PLAN.md §7.2.",
         "testStrategy": "DoD kapisi + widget bundle butcesi (P3) korunur (describe.skipIf boyut testi yesil). Ozel: t() eksik-anahtar fallback unit; locale degisince metin degisir smoke/e2e; widget boyut kontrolu. Bitince PLAN.md §7.2 I18N ⬜→✅ guncellenir.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -613,9 +613,10 @@
             "id": 1,
             "title": "i18n yaklasimi + katalog (tr/en) + t() + locale kaynagi",
             "description": "Hafif cozum; fallback; locale secimi.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-25T06:06:01.838Z"
           },
           {
             "id": 2,
@@ -648,12 +649,12 @@
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-25T00:00:00.000Z"
+        "updatedAt": "2026-07-25T06:06:01.838Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T02:22:42.073Z",
+      "lastModified": "2026-07-25T06:06:01.838Z",
       "taskCount": 26,
       "completedCount": 24,
       "tags": [

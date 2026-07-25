@@ -1,0 +1,57 @@
+/**
+ * Pilot form under the shared primitive (FR-EK-A.1): an invalid address shows a
+ * field-under error and keeps Submit disabled; a valid one enables it.
+ */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { InviteTeammates } from './InviteTeammates.js';
+import { useAuth } from '../../lib/auth-store.js';
+
+function renderInvite() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <InviteTeammates />
+    </QueryClientProvider>,
+  );
+}
+
+beforeEach(() => {
+  useAuth.setState({ status: 'signed-in', accessToken: 'test-token', agent: null });
+});
+
+async function openModal() {
+  await userEvent.click(screen.getByRole('button', { name: 'Invite teammates' }));
+}
+
+describe('InviteTeammates validation', () => {
+  it('disables Submit until an address is entered', async () => {
+    renderInvite();
+    await openModal();
+    expect(screen.getByRole('button', { name: /^Invite/ })).toBeDisabled();
+  });
+
+  it('shows a field-under error for a bad address and keeps Submit disabled', async () => {
+    renderInvite();
+    await openModal();
+
+    const field = screen.getByLabelText('Email addresses');
+    await userEvent.type(field, 'not-an-email');
+    // Disabled the moment it is invalid, before the field is even blurred.
+    expect(screen.getByRole('button', { name: /^Invite/ })).toBeDisabled();
+
+    await userEvent.tab(); // blur reveals the message
+    expect(screen.getByRole('alert')).toHaveTextContent('Not a valid address: not-an-email');
+  });
+
+  it('enables Submit once every address is valid', async () => {
+    renderInvite();
+    await openModal();
+
+    await userEvent.type(screen.getByLabelText('Email addresses'), 'robin@example.com');
+    expect(screen.getByRole('button', { name: /^Invite/ })).toBeEnabled();
+    expect(screen.queryByText(/Not a valid address/)).not.toBeInTheDocument();
+  });
+});

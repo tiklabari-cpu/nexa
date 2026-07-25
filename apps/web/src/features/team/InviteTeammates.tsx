@@ -10,10 +10,11 @@
  * server only ever returns a token once, so this is the one moment it exists;
  * the list on the team page cannot re-issue it.
  */
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { FieldError, emailList, splitList, useForm } from '../../lib/form.js';
 
 interface Invitation {
   id: string;
@@ -41,21 +42,10 @@ export function useRevokeInvitation() {
   });
 }
 
-/** Splits on commas, newlines and spaces — however the addresses were pasted. */
-function parseEmails(raw: string): string[] {
-  return raw
-    .split(/[,\n\s]+/)
-    .map((value) => value.trim())
-    .filter(Boolean);
-}
-
 export function InviteTeammates(): ReactElement {
   const [open, setOpen] = useState(false);
-  const [raw, setRaw] = useState('');
   const [role, setRole] = useState<'admin' | 'agent'>('admin');
-  const [invalid, setInvalid] = useState<string[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const api = useApiClient();
   const client = useQueryClient();
@@ -67,45 +57,49 @@ export function InviteTeammates(): ReactElement {
       await client.invalidateQueries({ queryKey: ['invitations'] });
       const link = result.items[0]?.accept_url;
       if (link) setCopied(link);
-      setRaw('');
-      setInvalid([]);
     },
   });
 
-  const emails = parseEmails(raw);
+  // The one validation primitive: the address list is valid when it is non-empty
+  // and every line parses, and Submit stays disabled until it is (FR-EK-A.1).
+  const form = useForm({
+    initial: { emails: '' },
+    validators: { emails: emailList() },
+    onSubmit: async (values, { setFieldError, setSubmitError, reset }) => {
+      try {
+        await invite.mutateAsync({ emails: splitList(values.emails), role });
+        reset();
+      } catch (failure) {
+        // The server is the final word on an address; surface its verdict under
+        // the same field the person was typing into.
+        if (failure instanceof ApiClientError && failure.type === 'validation') {
+          const bad = failure.details?.['invalid_emails'];
+          if (Array.isArray(bad)) {
+            setFieldError('emails', `Not a valid address: ${(bad as string[]).join(', ')}`);
+            return;
+          }
+        }
+        setSubmitError(
+          failure instanceof ApiClientError && failure.type === 'authorization'
+            ? 'You cannot invite someone above your own role.'
+            : 'Could not send those invitations.',
+        );
+      }
+    },
+  });
+
+  const emailsError = form.errorFor('emails');
+  const emailCount = splitList(form.values.emails).length;
 
   function close(): void {
     // Half-typed input is work; losing it to a stray click is not a small thing
     // when it was ten addresses (FR-EK-A.2).
-    if (raw.trim() && !window.confirm('Discard the addresses you have typed?')) return;
+    if (form.isDirty && !window.confirm('Discard the addresses you have typed?')) return;
     setOpen(false);
-    setRaw('');
-    setInvalid([]);
-    setError(null);
+    setRole('admin');
     setCopied(null);
+    form.reset();
     invite.reset();
-  }
-
-  async function onSubmit(event: FormEvent): Promise<void> {
-    event.preventDefault();
-    setError(null);
-    setInvalid([]);
-    try {
-      await invite.mutateAsync({ emails, role });
-    } catch (failure) {
-      if (failure instanceof ApiClientError && failure.type === 'validation') {
-        const bad = failure.details?.['invalid_emails'];
-        if (Array.isArray(bad)) {
-          setInvalid(bad as string[]);
-          return;
-        }
-      }
-      setError(
-        failure instanceof ApiClientError && failure.type === 'authorization'
-          ? 'You cannot invite someone above your own role.'
-          : 'Could not send those invitations.',
-      );
-    }
   }
 
   if (!open) {
@@ -133,10 +127,10 @@ export function InviteTeammates(): ReactElement {
           One address per line, or separated by commas.
         </p>
 
-        <form onSubmit={(event) => void onSubmit(event)}>
-          {error && (
+        <form onSubmit={form.handleSubmit} noValidate>
+          {form.submitError && (
             <p role="alert" className="mb-3 text-sm text-danger">
-              {error}
+              {form.submitError}
             </p>
           )}
 
@@ -146,18 +140,15 @@ export function InviteTeammates(): ReactElement {
           <textarea
             id="invite-emails"
             rows={4}
-            value={raw}
+            value={form.values.emails}
             autoFocus
-            onChange={(event) => setRaw(event.target.value)}
+            onChange={(event) => form.setValue('emails', event.target.value)}
+            onBlur={() => form.blur('emails')}
+            aria-invalid={emailsError ? true : undefined}
+            aria-describedby={emailsError ? 'invite-emails-error' : undefined}
             className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
           />
-          {invalid.length > 0 && (
-            <ul role="alert" className="mb-3 text-xs text-danger">
-              {invalid.map((address) => (
-                <li key={address}>Not a valid address: {address}</li>
-              ))}
-            </ul>
-          )}
+          <FieldError id="invite-emails-error" message={emailsError} />
 
           <label htmlFor="invite-role" className="mb-1.5 mt-3 block text-sm font-medium">
             Role
@@ -197,10 +188,10 @@ export function InviteTeammates(): ReactElement {
             </button>
             <button
               type="submit"
-              disabled={emails.length === 0 || invite.isPending}
+              disabled={!form.canSubmit}
               className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
             >
-              {invite.isPending ? 'Sending…' : `Invite ${emails.length || ''}`.trim()}
+              {form.isSubmitting ? 'Sending…' : `Invite ${emailCount || ''}`.trim()}
             </button>
           </div>
         </form>

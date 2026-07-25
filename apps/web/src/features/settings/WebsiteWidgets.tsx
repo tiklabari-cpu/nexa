@@ -13,12 +13,13 @@
  * on the site the instant it is added.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { ApiClientError, type ApiClient } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { FieldError, compose, domain as domainRule, required, useForm } from '../../lib/form.js';
 
 interface Website {
   id: string;
@@ -39,7 +40,6 @@ const STATUS: Record<Website['status'], { tone: StatusTone; label: string }> = {
 export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement {
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const [domain, setDomain] = useState('');
   const [setup, setSetup] = useState<Website['setup']>('manual');
   const [openSnippet, setOpenSnippet] = useState<string | null>(null);
 
@@ -64,7 +64,6 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
       return website;
     },
     onSuccess: (website) => {
-      setDomain('');
       setSetup('manual');
       setOpenSnippet(website.id); // reveal the snippet to paste straight away
       invalidate();
@@ -76,11 +75,22 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
     onSuccess: invalidate,
   });
 
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    if (!domain.trim()) return;
-    add.mutate({ domain: domain.trim(), setup });
-  }
+  // The one validation primitive owns "is this a domain?" and "may I submit?".
+  const form = useForm({
+    initial: { domain: '' },
+    validators: { domain: compose(required('Enter a website domain.'), domainRule()) },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await add.mutateAsync({ domain: values.domain.trim(), setup });
+        reset();
+      } catch (error) {
+        setSubmitError(
+          error instanceof ApiClientError ? error.message : 'Could not add that website.',
+        );
+      }
+    },
+  });
+  const domainError = form.errorFor('domain');
 
   return (
     <Section
@@ -93,7 +103,8 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
         <Card>
           {canEdit && (
             <form
-              onSubmit={submit}
+              onSubmit={form.handleSubmit}
+              noValidate
               className="flex flex-wrap items-end gap-3 border-b border-border p-4"
             >
               <label htmlFor="new-website" className="flex min-w-56 flex-1 flex-col gap-1">
@@ -102,11 +113,15 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
                 </span>
                 <input
                   id="new-website"
-                  value={domain}
-                  onChange={(event) => setDomain(event.target.value)}
+                  value={form.values.domain}
+                  onChange={(event) => form.setValue('domain', event.target.value)}
+                  onBlur={() => form.blur('domain')}
+                  aria-invalid={domainError ? true : undefined}
+                  aria-describedby={domainError ? 'new-website-error' : undefined}
                   placeholder="shop.example"
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
+                <FieldError id="new-website-error" message={domainError} />
               </label>
 
               <label htmlFor="new-website-setup" className="flex w-44 flex-col gap-1">
@@ -126,17 +141,15 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
 
               <button
                 type="submit"
-                disabled={!domain.trim() || add.isPending}
+                disabled={!form.canSubmit}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {add.isPending ? 'Adding…' : 'Add website'}
+                {form.isSubmitting ? 'Adding…' : 'Add website'}
               </button>
 
-              {add.isError && (
+              {form.submitError && (
                 <p role="alert" className="w-full text-2xs text-danger">
-                  {add.error instanceof ApiClientError
-                    ? add.error.message
-                    : 'Could not add that website.'}
+                  {form.submitError}
                 </p>
               )}
             </form>

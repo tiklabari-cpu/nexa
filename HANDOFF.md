@@ -6,6 +6,38 @@
 
 ## Task log (newest-first)
 
+### 29.1 — EK-A T4-a Ortak form-validasyon primitifi + 2 pilot form — done — 2026-07-25 UTC
+- Yapıldı:
+  - **Tek primitif:** `apps/web/src/lib/form.tsx` — bağımlılıksız `useForm` hook + validatörler
+    (`required`, `email`, `emailList`, `domain`, `minLength`, `compose`, `splitList`) + `FieldError`
+    bileşeni. Frontend'de `zod` yok (web `package.json`'da bağımlı değil, lock churn riski) → KK
+    "tek form/validasyon kütüphanesi" için hafif yerli şema tercih edildi. Hook: alan-altı hata
+    (touched/submit sonrası görünür), geçersizken `canSubmit=false`, `isSubmitting` (Loading),
+    server-hata → `setFieldError`/`setSubmitError`, `isDirty` (29.3 dirty-guard için hazır).
+  - **Pilot 1 — Invite teammates** (`features/team/InviteTeammates.tsx`): elle `parseEmails` +
+    `invalid[]` + `error` state'leri kaldırıldı → `useForm({emails: emailList()})`. Geçersiz adres →
+    alan-altı hata (`role="alert"` FieldError), geçersizken "Invite" pasif. Server `invalid_emails`/
+    `authorization` haritalaması korundu (helper'lar). Yarım-form kapatma onayı `form.isDirty`'ye bağlı.
+  - **Pilot 2 — Add website** (`features/settings/WebsiteWidgets.tsx`): `domain` state →
+    `useForm({domain: compose(required, domainRule)})`. Alan-altı hata + "Add website" geçersizken pasif.
+    `domain` validatörü `.localhost`/tireli/rakamlı label'ları kabul eder (E2E dev-domain regresyonu).
+  - **Backend/kontrat DEĞİŞMEDİ** — yalnız `apps/web/src` (6 dosya). api/rtm kaynağı el değmedi.
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` ✅ (11/11) · `pnpm -w lint` ✅ (8/8) ·
+  `pnpm -w build` ✅ (7/7) · web unit **117** (98→117, +19: `form.test.tsx` 13 = validatör+hook,
+  `InviteTeammates.test.tsx` 3, `WebsiteWidgets.test.tsx` 3 — her pilotta "geçersiz→alan-altı hata+
+  submit pasif" ve "geçerli→submit aktif") ✅ · E2E `settings.spec -g "site goes Connected"`
+  **1 passed** (değişen Add-website akışı uçtan uca; `.env` export şart) ✅.
+- Varsayımlar: `zod` yerine yerli primitif (KK "hafif hook/şema"yı açıkça izin veriyor; lock churn'den
+  kaçınıldı) — 29.2/29.3 + v1 form görevleri (47/50/51/52/43) bu `useForm`/validatör API'sine dayanır.
+  Invite'ta geçersiz satır artık submit'i tümden pasifleştirir (KK "geçersizken submit pasif" > eski
+  "kısmi kabul" felsefesi); server yine güvenlik ağı. Select'ler (role/setup) validasyonsuz → form dışı
+  local state.
+- Sonraki pencereye not: 29.2 (kalan Must formları) ve 29.3 (dirty-guard tekilleştirme) `lib/form.tsx`
+  primitifine bağımlı — aynı API'yi kullan. E2E'den önce kök **`.env` export** (rtm self-load etmiyor):
+  `set -a && . ./.env && set +a`. Task Master 29.1 diskte **done**; tasks.json bu commit'e alınmadı
+  (dalın deseni: periyodik `chore(taskmaster)`). Integration suite koşulmadı — bu iş frontend-only,
+  api/rtm kaynağı değişmedi (git diff = yalnız apps/web).
+
 ### 28 — 01.3 Sağ panel switcher (Details/Expand + persist) — done — 2026-07-25 UTC
 - Yapıldı:
   - **Tercih deposu:** `apps/web/src/features/inbox/rightPanel.ts` — `nexa.inbox.right-panel`

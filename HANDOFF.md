@@ -6,6 +6,33 @@
 
 ## Task log (newest-first)
 
+### 29.3 — EK-A T5-a Yarım-form kapatma onayı + ortak davranış — done — 2026-07-25T17:22Z UTC
+- Yapıldı:
+  - **Dirty guard** (`lib/dirty-guard.tsx`): saf `confirmDiscard(isDirty, message?, confirm?)` +
+    `useCloseGuard({isDirty,onClose,message?,confirm?})`. Kirli form kapatma → onay; temiz form
+    onaysız kapanır. Confirmer enjekte edilebilir (test için). InviteTeammates modalındaki elle
+    `window.confirm` bloğu bu primitife taşındı — artık tek kaynak (FR-EK-A.2).
+  - **Optimistic + rollback** (`lib/optimistic.ts`): `optimisticCacheUpdate({queryClient,queryKey,
+    update,invalidateKeys?})` → `{onMutate,onError,onSettled}`. cancel→snapshot→guess→hata'da
+    rollback→settle'da invalidate deseni tek yerde. İki tüketici: `useInbox.useSendMessage`
+    (elle yazılmış optimistic dance yerine helper) + `SettingsPage` routing-rule `toggle`
+    (artık optimistic; hata'da geri döner). "Tutarlı davranış; optimistic + hata geri alma" KK ✅.
+  - **Stepper** (`lib/stepper.ts`): `useStepper(count)` → index + clamp'li next/back/goTo + isFirst/
+    isLast. OnboardingWizard elle `stepIndex` state'i bu hook'a taşındı; sınır aşımı imkânsız.
+  - **Kapsam kararı**: ayrı "dropdown wrapper" YAZILMADI — native `<select>`'ler zaten tutarlı,
+    tekilleştirilecek tekrar yok (form.tsx felsefesi: gereksiz soyutlamadan kaçın). Notlandı.
+- Doğrulama (hepsi yeşil): `pnpm -w typecheck` (11 pkg) · `pnpm -w lint` (8 pkg) ·
+  web unit 140 (14 yeni: dirty-guard 6, optimistic 3, stepper 5) · api unit+integration 594 ·
+  `pnpm -w test:integration` 505 · `pnpm -w build` (7 pkg) · e2e 48/48 (yeni `team.spec.ts`:
+  invite modal yarım-doldur→kapat→onay + temiz modal onaysız kapanır).
+- Varsayımlar: `pnpm -w test` (birleşik) api+e2e'yi paylaşılan Postgres'e paralel sürdüğü için
+  yarışıp kırmızı verir (bilinen harness artefaktı, kod değil) → DB suite'leri per-package/serial
+  koştum, ikisi de yeşil. E2E dev-server'ları RTM env'i process'ten okuduğu için kök `.env`
+  export edilerek koşuldu.
+- Sonraki pencereye not: EK-A (parent 29) tamamlandı — 29.1+29.2+29.3 done. v1 form görevleri
+  (47/50/51/52/43 — Forms builder, Custom fields) bu üç primitife (useForm + dirty-guard +
+  optimistic + stepper) dayanabilir.
+
 ### 29.2 — EK-A T4-b Kalan Must formlarını primitife taşı — done — 2026-07-25 UTC
 - Yapıldı:
   - **Auth formları** (`features/auth/PublicPages.tsx`): SignUp / ForgotPassword / ResetPassword /

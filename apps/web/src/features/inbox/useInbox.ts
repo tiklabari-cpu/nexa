@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RtmClient, type PushHandler, type RtmStatus } from '../../lib/realtime.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import type { ChatDetail, ChatEvent, ChatSummary, InboxView } from './types.js';
 
 const RTM_URL = import.meta.env['VITE_RTM_URL'] ?? 'ws://localhost:4001/v1/agent/rtm/ws';
@@ -51,13 +52,45 @@ export function useTranscript(chatId: string | null) {
   });
 }
 
+type SendInput = { text: string; recipients: 'all' | 'agents'; attachmentUrl?: string };
+
 export function useSendMessage(chatId: string | null) {
   const api = useApiClient();
   const queryClient = useQueryClient();
   const agent = useAuth((s) => s.agent);
 
+  // The optimistic transcript update, through the one shared helper every other
+  // optimistic mutation uses: append the pending message now, roll the whole
+  // list back if the send fails, reconcile with the server once settled
+  // (FR-EK-A.2). The chat list shows last-message and time, so it settles too.
+  const optimistic = optimisticCacheUpdate<{ items: ChatEvent[] }, SendInput>({
+    queryClient,
+    queryKey: eventsKey(chatId ?? ''),
+    update: (current, input) => ({
+      items: [
+        ...(current?.items ?? []),
+        {
+          // An agent who sees nothing happen presses enter again — show the
+          // message immediately, marked pending until the server confirms it.
+          id: `pending-${Date.now()}`,
+          chat_id: chatId ?? '',
+          thread_id: '',
+          type: 'message',
+          text: input.text,
+          author_id: agent?.account_id ?? null,
+          author_type: 'agent',
+          recipients: input.recipients,
+          attachment_url: input.attachmentUrl ?? null,
+          properties: { pending: true },
+          created_at: new Date().toISOString(),
+        },
+      ],
+    }),
+    invalidateKeys: [['chats']],
+  });
+
   return useMutation({
-    mutationFn: (input: { text: string; recipients: 'all' | 'agents'; attachmentUrl?: string }) =>
+    mutationFn: (input: SendInput) =>
       api.post<ChatEvent>(`/chats/${chatId}/events`, {
         type: 'message',
         text: input.text,
@@ -66,43 +99,11 @@ export function useSendMessage(chatId: string | null) {
         // Survives a retry after a timeout without sending twice.
         idempotency_key: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       }),
-
-    onMutate: async (input) => {
-      if (!chatId) return;
-      await queryClient.cancelQueries({ queryKey: eventsKey(chatId) });
-      const previous = queryClient.getQueryData<{ items: ChatEvent[] }>(eventsKey(chatId));
-
-      // Optimistic: an agent who sees nothing happen presses enter again.
-      const optimistic: ChatEvent = {
-        id: `pending-${Date.now()}`,
-        chat_id: chatId,
-        thread_id: '',
-        type: 'message',
-        text: input.text,
-        author_id: agent?.account_id ?? null,
-        author_type: 'agent',
-        recipients: input.recipients,
-        attachment_url: input.attachmentUrl ?? null,
-        properties: { pending: true },
-        created_at: new Date().toISOString(),
-      };
-      queryClient.setQueryData(eventsKey(chatId), {
-        items: [...(previous?.items ?? []), optimistic],
-      });
-      return { previous };
-    },
-
-    onError: (_error, _input, context) => {
-      // Put the transcript back rather than leaving a message that looks sent.
-      if (chatId && context?.previous) {
-        queryClient.setQueryData(eventsKey(chatId), context.previous);
-      }
-    },
-
-    onSettled: () => {
-      if (chatId) void queryClient.invalidateQueries({ queryKey: eventsKey(chatId) });
-      void queryClient.invalidateQueries({ queryKey: ['chats'] });
-    },
+    // No open chat means no transcript to touch; skip straight to the request.
+    onMutate: (input) =>
+      chatId ? optimistic.onMutate(input) : Promise.resolve({ previous: undefined }),
+    onError: optimistic.onError,
+    onSettled: optimistic.onSettled,
   });
 }
 

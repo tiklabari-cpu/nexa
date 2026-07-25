@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import type { OnboardingSeedResult } from '@nexa/types';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { useStepper } from '../../lib/stepper.js';
 
 type StepId = 'welcome' | 'website' | 'team' | 'sample';
 
@@ -34,8 +35,10 @@ export function OnboardingWizard(): ReactElement {
   const agentName = useAuth((s) => s.agent?.name ?? null);
   const markOnboarded = useAuth((s) => s.markOnboarded);
 
-  const [stepIndex, setStepIndex] = useState(0);
-  const step = STEPS[stepIndex]!;
+  // The shared stepper owns the index and its bounds; the wizard only says how
+  // many steps there are and what the last one does (FR-EK-A.2).
+  const steps = useStepper(STEPS.length);
+  const step = STEPS[steps.index]!;
 
   // Completing and skipping are the same server call — the workspace is set up
   // either way. On success the local gate flips and the shell takes over.
@@ -47,12 +50,10 @@ export function OnboardingWizard(): ReactElement {
     },
   });
 
-  const isLast = stepIndex === STEPS.length - 1;
   const goNext = (): void => {
-    if (isLast) finish.mutate();
-    else setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
+    if (steps.isLast) finish.mutate();
+    else steps.next();
   };
-  const goBack = (): void => setStepIndex((i) => Math.max(i - 1, 0));
 
   return (
     <div className="flex min-h-full items-center justify-center bg-canvas px-4 py-10 text-content">
@@ -61,7 +62,7 @@ export function OnboardingWizard(): ReactElement {
           <div>
             <h1 className="text-base font-semibold">Set up your workspace</h1>
             <p className="text-2xs text-content-tertiary">
-              Step {stepIndex + 1} of {STEPS.length}
+              Step {steps.current} of {steps.count}
             </p>
           </div>
           <button
@@ -74,7 +75,7 @@ export function OnboardingWizard(): ReactElement {
           </button>
         </header>
 
-        <Stepper current={stepIndex} />
+        <Stepper current={steps.index} />
 
         <div className="px-6 py-6">
           {step.id === 'welcome' && <WelcomeStep name={agentName} />}
@@ -86,8 +87,8 @@ export function OnboardingWizard(): ReactElement {
         <footer className="flex items-center justify-between gap-3 border-t border-border px-6 py-4">
           <button
             type="button"
-            onClick={goBack}
-            disabled={stepIndex === 0 || finish.isPending}
+            onClick={steps.back}
+            disabled={steps.isFirst || finish.isPending}
             className="rounded-md border border-border px-3 py-1.5 text-sm text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
           >
             Back
@@ -105,7 +106,7 @@ export function OnboardingWizard(): ReactElement {
               disabled={finish.isPending}
               className="rounded-md bg-brand-500 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
-              {isLast ? (finish.isPending ? 'Finishing…' : 'Finish setup') : 'Continue'}
+              {steps.isLast ? (finish.isPending ? 'Finishing…' : 'Finish setup') : 'Continue'}
             </button>
           </div>
         </footer>

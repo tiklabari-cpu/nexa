@@ -14,6 +14,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
+import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { ChannelsGrid } from './Channels.js';
 import {
@@ -777,11 +778,22 @@ function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
     queryFn: () => api.get<{ items: RoutingRule[] }>('/settings/routing-rules'),
   });
 
+  // Flip the switch under the pointer at once: a toggle that waits for the round
+  // trip feels broken. The shared optimistic helper writes the new state now and
+  // rolls it back if the server refuses, so the UI never keeps a change that did
+  // not take (FR-EK-A.2).
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       api.patch<RoutingRule>(`/settings/routing-rules/${id}`, { enabled }),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: ['settings', 'routing-rules'] }),
+    ...optimisticCacheUpdate<{ items: RoutingRule[] }, { id: string; enabled: boolean }>({
+      queryClient,
+      queryKey: ['settings', 'routing-rules'],
+      update: (current, { id, enabled }) => ({
+        items: (current?.items ?? []).map((rule) =>
+          rule.id === id ? { ...rule, enabled } : rule,
+        ),
+      }),
+    }),
   });
 
   return (

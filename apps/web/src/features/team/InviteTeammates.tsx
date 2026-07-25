@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, emailList, splitList, useForm } from '../../lib/form.js';
+import { useCloseGuard } from '../../lib/dirty-guard.js';
 
 interface Invitation {
   id: string;
@@ -91,16 +92,20 @@ export function InviteTeammates(): ReactElement {
   const emailsError = form.errorFor('emails');
   const emailCount = splitList(form.values.emails).length;
 
-  function close(): void {
-    // Half-typed input is work; losing it to a stray click is not a small thing
-    // when it was ten addresses (FR-EK-A.2).
-    if (form.isDirty && !window.confirm('Discard the addresses you have typed?')) return;
-    setOpen(false);
-    setRole('admin');
-    setCopied(null);
-    form.reset();
-    invite.reset();
-  }
+  // Half-typed input is work; losing ten addresses to a stray click is not a
+  // small thing. The shared dirty guard asks before discarding and lets a clean
+  // (or already-sent) form close without nagging (FR-EK-A.2).
+  const close = useCloseGuard({
+    isDirty: form.isDirty,
+    message: 'Discard the addresses you have typed?',
+    onClose: () => {
+      setOpen(false);
+      setRole('admin');
+      setCopied(null);
+      form.reset();
+      invite.reset();
+    },
+  });
 
   if (!open) {
     return (

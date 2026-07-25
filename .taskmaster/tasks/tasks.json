@@ -801,11 +801,11 @@
         "description": "Bildirim tercihine e-posta + sunucu tetik (yeni sohbet/atama) → FileMailer (A4). PRD 13.8/08.2 Must (§D20).",
         "details": "T7-a — E-posta bildirim kanalı. [XHIGH] · Must (MVP), Faz-0 ◐ (§D20).\nPRD: FR-MOD-13.8 (+ FR-MOD-08.2).\nNEDEN AÇIK: apps/web/src/features/notifications/notifications.ts yalnız {enabled, sound, desktop}; e-posta\nkanalı yok. SMTP mock (apps/api/src/services/mail/mailer.ts, A4) var ama bildirime bağlı değil.\nKAPSAM: kullanıcı tercihi `email: boolean`; sunucu tarafı tetik — yeni sohbet/atama/mention olayında ilgili\najanlara FileMailer ile e-posta (mock, .data/mail). Tercih kullanıcı bazında.\nKK (PRD birebir): \"Bkz. FR-MOD-08.2; kanallar arası tutarlı\" · 08.2: \"ses/masaüstü/e-posta/tarayıcı bildirim\ntercihleri (yeni sohbet/atama/mention); kullanıcı bazında\".\nKAPSAM DIŞI: mobil push (🔒 v1); e-posta şablon markası (08.7.5, v1); gerçek SMTP (§9).\nBAĞLAM: PLAN.md §3.13/T7-a, §D20, A4. Bağımlılık: yok. (49 Chat transcripts bu mailer desenine dayanır.)",
         "testStrategy": "integration: atama olayında hedef ajanın posta kutusuna (.data/mail) mesaj düşüyor; tercih kapalıyken düşmüyor.\nCROSS-TENANT: başka lisansın ajanına gitmiyor. unit: karar fonksiyonu (hangi kanal ateşlenir). DoD kapısı tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-25T18:40:32.573Z"
       },
       {
         "id": "32",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T18:17:51.550Z",
+      "lastModified": "2026-07-25T18:40:32.573Z",
       "taskCount": 84,
-      "completedCount": 30,
+      "completedCount": 31,
       "tags": [
         "master"
       ]

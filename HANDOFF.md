@@ -6,6 +6,34 @@
 
 ## Task log (newest-first)
 
+### 31 — T7-a · 13.8 E-posta bildirim kanalı (kullanıcı tercihi + gating) — done — 2026-07-25T20:40Z UTC
+- Yapıldı:
+  - **Denetim bulgusu düzeltildi:** e-posta kanalı ZATEN vardı (tm 16, `customer.ts#notifyAssignee`
+    atanan ajana `.data/mail`'e yazıyor) ama **tercihe bağlı değildi**. Açık olan tek şey buydu.
+  - **Kullanıcı tercihi:** `agent_memberships.notify_email` (default `true`) + migration
+    `20260725110000_notify_email_preference`. Lisans başına + kullanıcı başına → RLS tenant'a kilitler
+    (FR-MOD-08.2 "kullanıcı bazında").
+  - **Saf karar fonksiyonu** `services/notifications/assignee-email.ts#shouldEmailAssignee`
+    (type-guard): assignee yok / opt-out / adres yok → gönderme. `notifyAssignee` bununla geçitli;
+    membership.notify_email okunuyor.
+  - **Ayarlanabilir:** `PUT /agents/me/notification-preferences {email}` (agents.ts) +
+    `/auth/me` içinde `notify_email`. Web: Settings bildirimler kartına hesap-düzeyli
+    "Email notifications" toggle (optimistic + rollback, `auth-store#setNotifyEmail`).
+  - **Contract:** openapi.yaml + paths/agents.yaml + auth.yaml + generated types regenerate
+    (`setMyNotificationPreferences`). contract-parity yeşil.
+- KK (PRD birebir): _"Bkz. FR-MOD-08.2; kanallar arası tutarlı" · 08.2 "…e-posta… tercihleri; kullanıcı bazında"_.
+- **Test (yeni):** unit `assignee-email.test.ts` (5, karar fonksiyonu) · integration
+  `notifications.test.ts`'e +2: tercih kapalıyken düşmüyor · cross-tenant (yalnız aynı lisansın
+  ajanına, `fx.b.agentEmail`'e asla).
+- Doğrulama (hepsi yeşil, exit 0): `pnpm -w typecheck` (11) · `pnpm -w lint` (8) · `pnpm -w test:unit` ·
+  `pnpm -w test:integration` (**507**, notifications 5 + contract-parity 5 + tenant-isolation dahil) ·
+  `pnpm -w build` (7) · e2e `notifications`+`settings`+`demo-flow`+`widget` (29) yeşil.
+- Varsayımlar: `notify_email` default `true` → mevcut davranış (tm 16 mutlu-yol testi) korunur; tercih
+  membership'te (Account'ta değil) çünkü kişi her lisansa ayrı üye. Tetik mesaj-bazlı (mevcut desen);
+  "yeni sohbet/atama/mention" bunun üstünde — mention'a özel ayrı kanal v1'e bırakıldı (kapsam dışı).
+- Sonraki pencereye not: mailer deseni artık tercih-farkında; **08.7.4-a Chat transcripts** (Should, v1)
+  bu mailer'a dayanır. Faz-0 sayacı: T7-a ✅ (13.8 `◐→✅`).
+
 ### 30.2 — EK-B.1 T6-b Skeleton + anlamlı empty state deseni (tüm Must listeler) — done — 2026-07-25T20:13Z UTC
 - Yapıldı:
   - **Ortak skeleton primitifi** (`components/Skeleton.tsx`): tasarım-sistemi `Skeleton` atomu

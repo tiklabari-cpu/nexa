@@ -6,6 +6,30 @@
 
 ## Task log (newest-first)
 
+### 22 — 00.4 Onboarding sihirbazı + tohum veri — done — 2026-07-25 UTC
+- Yapıldı: Signup **boş** çalışma alanı açıyordu (grup/website/sohbet yok) → yeni sahip boş inbox'a
+  düşüyordu. Eklenen ilk-kurulum sihirbazı (§3.0 00.4 ⬜→✅). Contract-first: `openapi/paths/onboarding.yaml`
+  + `@nexa/types` (`OnboardingState`, `OnboardingSeedResult`). Yeni uçlar: `GET /onboarding/state`,
+  `POST /onboarding/complete` (bitir **ve** atla — aynı çağrı, idempotent), `POST /onboarding/seed-demo`.
+  `/auth/me`'ye `onboarding_completed` eklendi (shell kapısı — ikinci istek maliyeti yok).
+- Mekanizma: `licenses` tablosuna 2 bayrak (`onboarding_completed_at`, `demo_seeded_at`) — **lisans
+  düzeyi** (workspace kurulu = tek sefer). Tohum veri yeni migration `onboarding_seed_demo(...)`
+  **SECURITY DEFINER** (auth_*/retention_* deseni): tenant id'lerini açıkça alır, yalnız onları yazar
+  (org-kapsamlı ziyaretçi + lisans-kapsamlı sohbet/thread/event atomik); `demo_seeded_at` ile idempotent.
+  3 canned + 2 tag + 1 örnek ziyaretçi + owner'a atanmış **aktif** örnek sohbet (owner unrestricted →
+  grup gerekmez). Web: `App.tsx` kapısı (`agent.onboarding_completed === false` → tüm yollar
+  `/app/onboarding`'e); `OnboardingWizard` mevcut website/invite/settings akışlarını yeniden kullanır,
+  her adım atlanabilir. Seed (demo tenant'lar) baştan onboarded işaretlendi + eski kayıtlar için backfill.
+- Doğrulama (hepsi **yeşil**): `pnpm -w typecheck` · `lint` · `test:unit` (164) · `test:integration`
+  (489 — yeni `onboarding.test.ts` 8: cross-tenant seed izolasyonu + iki kapı [scope+rol] + idempotent) ·
+  `build` · `test:e2e` (44 — yeni `onboarding.spec.ts` 3: signup→sihirbaz→skip & complete→inbox).
+  Kanıt: `apps/e2e/kanit/22-onboarding-wizard.png`.
+- Varsayımlar: Yazma uçları `properties.configuration:rw` (ADMIN_SCOPES) + rol admin+ (iki kapı).
+  E2E anon rate-limit: signup akışları tek IP'de anon kovayı zorluyordu → `playwright.config` api
+  webServer'ına `RATE_LIMIT_ANON_PER_MIN=2000` headroom (limitin kendisi integration'da test edilir).
+- Sonraki pencereye not: Faz-0 bakiyesinde kalan öncelik **25 (OTel) · 26 (i18n) → 21 (Reports breakdown)**.
+  `contract/dist/openapi.json` gitignore'lu (build artefaktı); `src/generated/api.ts` commit'lendi.
+
 ### 24 — C8 veri saklama (retention) budama işi [MAX] — done — 2026-07-25 UTC
 - Yapıldı: Silme CASCADE vardı (Dilim 3) ama süresi geçen veriyi budayan **periyodik iş yoktu**
   (§7.2 C8 ◐). Eklenen `services/retention/`: `policy.ts` (tablo→pencere — kapanmış thread 365g ·

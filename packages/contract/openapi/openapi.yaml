@@ -43,6 +43,8 @@ tags:
     description: AI agents, skills and the knowledge they answer from.
   - name: Settings
     description: Workspace configuration — trusted domains, saved replies, routing.
+  - name: Onboarding
+    description: First-run setup wizard for a freshly signed-up workspace.
   - name: Reports
     description: Aggregate analytics.
   - name: Billing
@@ -184,6 +186,13 @@ paths:
     $ref: "./paths/settings.yaml#/tag"
   /settings/security:
     $ref: "./paths/settings.yaml#/securitySettings"
+
+  /onboarding/state:
+    $ref: "./paths/onboarding.yaml#/state"
+  /onboarding/complete:
+    $ref: "./paths/onboarding.yaml#/complete"
+  /onboarding/seed-demo:
+    $ref: "./paths/onboarding.yaml#/seedDemo"
 
   /websites:
     $ref: "./paths/websites.yaml#/websites"
@@ -627,6 +636,39 @@ components:
         spam_filter_enabled: { type: boolean }
         require_two_factor: { type: boolean }
         updated_at: { type: string, format: date-time, nullable: true }
+
+    OnboardingState:
+      type: object
+      description: |
+        First-run setup state (FR-MOD-00.4). `completed` is a per-license fact —
+        the workspace is set up — set once the owner finishes or skips the wizard.
+      required: [completed, completed_at, demo_seeded, demo_seeded_at]
+      properties:
+        completed: { type: boolean }
+        completed_at: { type: string, format: date-time, nullable: true }
+        demo_seeded:
+          type: boolean
+          description: Whether the sample data has been laid down.
+        demo_seeded_at: { type: string, format: date-time, nullable: true }
+
+    OnboardingSeedResult:
+      type: object
+      required: [seeded, counts, state]
+      properties:
+        seeded:
+          type: boolean
+          description: |
+            False when the demo was already present — the call is idempotent, so
+            the counts below are all zero in that case.
+        counts:
+          type: object
+          required: [canned_responses, tags, customers, chats]
+          properties:
+            canned_responses: { type: integer }
+            tags: { type: integer }
+            customers: { type: integer }
+            chats: { type: integer }
+        state: { $ref: "#/components/schemas/OnboardingState" }
 
     CannedResponse:
       type: object

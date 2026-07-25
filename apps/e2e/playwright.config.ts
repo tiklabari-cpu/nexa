@@ -54,6 +54,13 @@ export default defineConfig({
       reuseExistingServer: !process.env['CI'],
       timeout: 60_000,
       cwd: '../..',
+      // The whole suite shares one IP, so every widget-token mint, sign-in and
+      // signup lands in a single anonymous bucket. The production default (30/min)
+      // is deliberately tight; the signup-driven onboarding flow pushed a
+      // full-suite run past even a raised local limit. Give the test server
+      // ample headroom so a 429 never masquerades as a product failure — the
+      // limiter itself is covered by the integration suite, not here.
+      env: { ...process.env, RATE_LIMIT_ANON_PER_MIN: '2000' },
     },
     {
       command: 'pnpm --filter @nexa/rtm dev',

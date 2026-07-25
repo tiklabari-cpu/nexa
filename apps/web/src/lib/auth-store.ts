@@ -29,6 +29,8 @@ export interface CurrentAgent {
   license_id: string;
   scopes: string[];
   routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
+  /** First-run setup gate (FR-MOD-00.4). Absent on older tokens — treat as done. */
+  onboarding_completed?: boolean;
 }
 
 interface AuthState {
@@ -43,6 +45,8 @@ interface AuthState {
   signIn: (email: string, password: string, licenseId: string) => Promise<void>;
   signOut: () => Promise<void>;
   setRoutingStatus: (status: CurrentAgent['routing_status']) => Promise<void>;
+  /** Flip the local gate once the wizard has told the server setup is done. */
+  markOnboarded: () => void;
 }
 
 const REFRESH_KEY = 'nexa.refresh_token';
@@ -221,6 +225,12 @@ export const useAuth = create<AuthState>((set, get) => {
       const client = new ApiClient({ getAccessToken: () => accessToken });
       await client.request('PUT', '/agents/me/routing-status', { routing_status: status });
       set({ agent: { ...agent, routing_status: status } });
+    },
+
+    markOnboarded() {
+      const { agent } = get();
+      if (!agent) return;
+      set({ agent: { ...agent, onboarding_completed: true } });
     },
   };
 });

@@ -216,6 +216,12 @@ me:
                 routing_status:
                   type: string
                   enum: [accepting_chats, not_accepting_chats, offline]
+                onboarding_completed:
+                  type: boolean
+                  description: |
+                    Agent principals only. Whether the workspace has finished (or
+                    skipped) first-run setup — the shell gates the onboarding
+                    wizard on this without a second request (FR-MOD-00.4).
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
 
 personalAccessTokens:

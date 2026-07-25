@@ -186,3 +186,34 @@ export interface ChatEvent {
   properties: Record<string, unknown>;
   created_at: string;
 }
+
+// --- Onboarding (FR-MOD-00.4) -----------------------------------------------
+
+/**
+ * First-run setup state for a workspace. `completed` flips once the new owner
+ * finishes or skips the wizard — a per-license fact (the workspace is set up),
+ * not a per-agent one — so it gates the wizard for the whole workspace exactly
+ * once. `demo_seeded` records whether the sample data has been laid down, so the
+ * seed step never runs twice.
+ */
+export interface OnboardingState {
+  completed: boolean;
+  completed_at: string | null;
+  demo_seeded: boolean;
+  demo_seeded_at: string | null;
+}
+
+/**
+ * Outcome of the sample-data step. `seeded` is false when the demo was already
+ * laid down (the call is idempotent), in which case the counts are all zero.
+ */
+export interface OnboardingSeedResult {
+  seeded: boolean;
+  counts: {
+    canned_responses: number;
+    tags: number;
+    customers: number;
+    chats: number;
+  };
+  state: OnboardingState;
+}

@@ -1,0 +1,71 @@
+# Onboarding — first-run setup for a freshly signed-up workspace (FR-MOD-00.4).
+#
+# Signup creates an empty workspace: no groups, no website, no conversations.
+# The wizard walks the new owner through connecting a site, inviting the team
+# and laying down sample data, so the product opens on something that works
+# instead of a blank inbox. `completed` is a per-license fact — the workspace is
+# set up — so the wizard gates once for the whole workspace, whether the owner
+# finished every step or skipped straight through.
+
+state:
+  get:
+    tags: [Onboarding]
+    operationId: getOnboardingState
+    summary: First-run setup state for the workspace
+    description: |
+      Whether the setup wizard has been completed (or skipped) and whether the
+      sample data has been laid down. The agent app also reads `onboarding_completed`
+      from `/auth/me`, so the shell can gate the wizard without a second request;
+      this endpoint is what the wizard itself reads to reflect progress.
+    responses:
+      "200":
+        description: Current onboarding state
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/OnboardingState" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+complete:
+  post:
+    tags: [Onboarding]
+    operationId: completeOnboarding
+    summary: Mark first-run setup finished or skipped
+    description: |
+      Sets the workspace's onboarding as complete so the wizard is not shown
+      again. Used for both the "finish" and the "skip setup" paths — the outcome
+      is the same either way: the workspace is considered set up. Idempotent; a
+      second call returns the same already-completed state.
+    responses:
+      "200":
+        description: Onboarding marked complete
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/OnboardingState" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+seedDemo:
+  post:
+    tags: [Onboarding]
+    operationId: seedOnboardingDemo
+    summary: Lay down sample data for the workspace
+    description: |
+      Creates a few saved replies, tags, a sample visitor and one sample
+      conversation so the inbox has something to show on first run. Everything is
+      scoped to the calling workspace by a `SECURITY DEFINER` function that takes
+      the tenant ids explicitly and writes only those — a leak would surface as
+      visibly wrong data in another workspace, which is what the isolation test
+      guards against. Idempotent: once the demo exists, a second call is a no-op
+      and reports `seeded: false` with zero counts.
+    responses:
+      "200":
+        description: Sample data laid down (or already present)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/OnboardingSeedResult" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

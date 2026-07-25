@@ -11,7 +11,7 @@
 
 | Faz                | PRD  | Durum                                                    |
 | ------------------ | ---- | -------------------------------------------------------- |
-| **Faz 0 — MVP**    | §5.1 | ⏳ **48 ✅ · 5 ◐ · 1 ⬜ · 6 🔒** (60 satır)             |
+| **Faz 0 — MVP**    | §5.1 | ⏳ **49 ✅ · 5 ◐ · 6 🔒** (60 satır)                    |
 | Faz 1 — v1         | §5.2 | ⏳ kısmen başlandı (Playbook/AI öne çekildi — bkz. §1.3) |
 | Faz 2 — v2         | §5.3 | ⬜ başlanmadı                                            |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                                            |
@@ -94,7 +94,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | Modül                         | MVP | v1  | v2  | Ent. |               **Durum**                |
 | ----------------------------- | :-: | :-: | :-: | :--: | :------------------------------------: |
-| MOD-00 Auth + trial           |  ●  |     |     |      |     ✅ (onboarding 00.4 hariç)     |
+| MOD-00 Auth + trial           |  ●  |     |     |      |          ✅ (00.4 dahil)           |
 | MOD-01 Global shell + ⌘K      |  ●  |  ○  |  ○  |      |        ◐ ⌘K+rozet ✅, Copilot v1         |
 | MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      |  ✅ chat+ticket + Copy chat link (§F)   |
 | MOD-03.1 Real-time traffic    |  ○  |  ○  |  ○  |      | ✅ sekmeler (tm 19) |
@@ -133,7 +133,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | 00.1 | Login (email+parola; SSO/2FA opsiyonel)        | Must (MVP)   |  ✅   | Dilim 2 · `/auth/login` |
 | 00.2 | **Signup + 14 gün kartsız trial başlatma**     | Must (MVP)   |  ✅   | Dilim 12                |
 | 00.3 | **Forgot password** (süreli token, nötr mesaj) | Must (MVP)   |  ✅   | Dilim 12                |
-| 00.4 | **Onboarding sihirbazı** + tohum veri          | Should (MVP) |  ⬜   | Dilim 14'te yapılmadı — kalan borç (Should)  |
+| 00.4 | **Onboarding sihirbazı** + tohum veri          | Should (MVP) |  ✅   | tm 22 · `/onboarding/*` + AppShell gate + `onboarding_seed_demo` SECURITY DEFINER |
 
 ### 3.1 FR-MOD-01 — Global Shell / Navigation
 
@@ -253,7 +253,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 **Faz-0 kapanış kapısı:** 52 gereksinimin tamamı ✅ veya gerekçeli ⛔ · §7 NFR kapısı geçildi ·
 `make dev` temiz kurulumdan demo akışını çalıştırıyor.
 
-> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** ✅ (07.3.2 Manual/Assisted — teslim edildi) → tm **21** (07.1/07.3.1/07.3.3 Reports Breakdown) · tm **22** (00.4 Onboarding) · tm **23** ✅ (S12 audit yazıcısı) · tm **24** ✅ (C8 retention) · tm **25** (M5 OTel) · tm **26** (i18n). Bu bakiye kapanana dek Faz-0 **"kapandı" sayılmaz**; `run-loop.sh` sırayla işler (kalan öncelik: 22 · 25 · 26 → 21). Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
+> **Kalan Faz-0 bakiyesi — Task Master'a alındı (2026-07-25):** tm **20** ✅ (07.3.2 Manual/Assisted — teslim edildi) → tm **21** (07.1/07.3.1/07.3.3 Reports Breakdown) · tm **22** ✅ (00.4 Onboarding sihirbazı — teslim edildi) · tm **23** ✅ (S12 audit yazıcısı) · tm **24** ✅ (C8 retention) · tm **25** (M5 OTel) · tm **26** (i18n). Bu bakiye kapanana dek Faz-0 **"kapandı" sayılmaz**; `run-loop.sh` sırayla işler (kalan öncelik: 25 · 26 → 21). Her biri tam alt-görevli; gerekçeler §D16–D18 + §7.2.
 
 ---
 

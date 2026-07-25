@@ -1337,6 +1337,78 @@ export interface paths {
     patch: operations['updateSecuritySettings'];
     trace?: never;
   };
+  '/onboarding/state': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * First-run setup state for the workspace
+     * @description Whether the setup wizard has been completed (or skipped) and whether the
+     *     sample data has been laid down. The agent app also reads `onboarding_completed`
+     *     from `/auth/me`, so the shell can gate the wizard without a second request;
+     *     this endpoint is what the wizard itself reads to reflect progress.
+     */
+    get: operations['getOnboardingState'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/onboarding/complete': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mark first-run setup finished or skipped
+     * @description Sets the workspace's onboarding as complete so the wizard is not shown
+     *     again. Used for both the "finish" and the "skip setup" paths — the outcome
+     *     is the same either way: the workspace is considered set up. Idempotent; a
+     *     second call returns the same already-completed state.
+     */
+    post: operations['completeOnboarding'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/onboarding/seed-demo': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Lay down sample data for the workspace
+     * @description Creates a few saved replies, tags, a sample visitor and one sample
+     *     conversation so the inbox has something to show on first run. Everything is
+     *     scoped to the calling workspace by a `SECURITY DEFINER` function that takes
+     *     the tenant ids explicitly and writes only those — a leak would surface as
+     *     visibly wrong data in another workspace, which is what the isolation test
+     *     guards against. Idempotent: once the demo exists, a second call is a no-op
+     *     and reports `seeded: false` with zero counts.
+     */
+    post: operations['seedOnboardingDemo'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/websites': {
     parameters: {
       query?: never;
@@ -1945,6 +2017,33 @@ export interface components {
       require_two_factor: boolean;
       /** Format: date-time */
       updated_at?: string | null;
+    };
+    /**
+     * @description First-run setup state (FR-MOD-00.4). `completed` is a per-license fact —
+     *     the workspace is set up — set once the owner finishes or skips the wizard.
+     */
+    OnboardingState: {
+      completed: boolean;
+      /** Format: date-time */
+      completed_at: string | null;
+      /** @description Whether the sample data has been laid down. */
+      demo_seeded: boolean;
+      /** Format: date-time */
+      demo_seeded_at: string | null;
+    };
+    OnboardingSeedResult: {
+      /**
+       * @description False when the demo was already present — the call is idempotent, so
+       *     the counts below are all zero in that case.
+       */
+      seeded: boolean;
+      counts: {
+        canned_responses: number;
+        tags: number;
+        customers: number;
+        chats: number;
+      };
+      state: components['schemas']['OnboardingState'];
     };
     CannedResponse: {
       /** Format: uuid */
@@ -2671,6 +2770,12 @@ export interface operations {
             scopes: string[];
             /** @enum {string} */
             routing_status?: 'accepting_chats' | 'not_accepting_chats' | 'offline';
+            /**
+             * @description Agent principals only. Whether the workspace has finished (or
+             *     skipped) first-run setup — the shell gates the onboarding
+             *     wizard on this without a second request (FR-MOD-00.4).
+             */
+            onboarding_completed?: boolean;
           };
         };
       };
@@ -4904,6 +5009,75 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getOnboardingState: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current onboarding state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OnboardingState'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  completeOnboarding: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Onboarding marked complete */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OnboardingState'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  seedOnboardingDemo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sample data laid down (or already present) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OnboardingSeedResult'];
+        };
+      };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];

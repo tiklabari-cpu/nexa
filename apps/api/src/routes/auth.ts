@@ -343,7 +343,7 @@ export default async function authRoutes(
       }
 
       const profile = await request.withTenant(async (tx) => {
-        const [account, membership] = await Promise.all([
+        const [account, membership, license] = await Promise.all([
           tx.account.findUnique({
             where: { id: principal.accountId },
             select: { email: true, name: true, avatarUrl: true },
@@ -354,8 +354,15 @@ export default async function authRoutes(
             },
             select: { routingStatus: true, concurrentChatsLimit: true },
           }),
+          // The onboarding gate: the shell reads this to decide whether to send a
+          // new owner to the first-run wizard, so it rides along with the profile
+          // the app already fetches on load rather than costing a second request.
+          tx.license.findUnique({
+            where: { id: principal.licenseId },
+            select: { onboardingCompletedAt: true },
+          }),
         ]);
-        return { account, membership };
+        return { account, membership, license };
       });
 
       return reply.send({
@@ -371,6 +378,7 @@ export default async function authRoutes(
         scopes: principal.scopes,
         routing_status: profile.membership?.routingStatus ?? 'offline',
         concurrent_chats_limit: profile.membership?.concurrentChatsLimit ?? 0,
+        onboarding_completed: profile.license?.onboardingCompletedAt != null,
       });
     },
   );

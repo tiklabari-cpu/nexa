@@ -15,11 +15,13 @@ import { SettingsPage } from './features/settings/SettingsPage.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
 import { ReportsPage } from './features/reports/ReportsPage.js';
 import { TeamPage } from './features/team/TeamPage.js';
+import { OnboardingWizard } from './features/onboarding/OnboardingWizard.js';
 import { useAuth } from './lib/auth-store.js';
 
 export function App(): ReactElement {
   const status = useAuth((s) => s.status);
   const restore = useAuth((s) => s.restore);
+  const agent = useAuth((s) => s.agent);
 
   useEffect(() => {
     if (status === 'unknown') void restore();
@@ -51,6 +53,20 @@ export function App(): ReactElement {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/join" element={<JoinPage />} />
         <Route path="*" element={<SignInPage />} />
+      </Routes>
+    );
+  }
+
+  // A workspace created through signup opens empty, so a brand-new owner is sent
+  // through the first-run wizard before the shell. The flag is explicitly `false`
+  // only for such a workspace; older sessions without the field are treated as
+  // already set up, so this never traps an existing user. While it holds, every
+  // path leads to the wizard — deep-linking to a module cannot slip past setup.
+  if (agent?.onboarding_completed === false) {
+    return (
+      <Routes>
+        <Route path="/app/onboarding" element={<OnboardingWizard />} />
+        <Route path="*" element={<Navigate to="/app/onboarding" replace />} />
       </Routes>
     );
   }

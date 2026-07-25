@@ -51,6 +51,12 @@ model License {
   billingCycle   String    @default("monthly") @map("billing_cycle")
   trialEndsAt    DateTime? @map("trial_ends_at") @db.Timestamptz(6)
   status         String    @default("trialing")
+  /// First-run setup (FR-MOD-00.4): null until the new owner finishes or skips
+  /// the wizard. A per-license fact — the workspace is set up — so the wizard
+  /// gates once for the whole workspace.
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at") @db.Timestamptz(6)
+  /// When the onboarding sample data was laid down, so the seed never runs twice.
+  demoSeededAt   DateTime? @map("demo_seeded_at") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   organization  Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)

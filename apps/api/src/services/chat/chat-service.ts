@@ -27,6 +27,12 @@ import { withTenant, type TenantClient, type TenantContext } from '../../lib/ten
 import type { Principal } from '../auth/principal.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { recordAiResolution, threadWasAiResolved } from '../billing/metering.js';
+import type { Mailer } from '../mail/mailer.js';
+import {
+  renderTranscript,
+  transcriptRecipients,
+  type TranscriptLine,
+} from '../notifications/chat-transcript.js';
 import { RoutingService, type RoutingContext } from '../routing/routing-service.js';
 import {
   canSeeChat,
@@ -67,6 +73,8 @@ interface RedisLike {
 /** Everything the shared close path produces that the realtime fan-out needs. */
 interface CloseResult {
   detail: ChatDetail;
+  /** The thread that was just closed — what the transcript e-mail reads from. */
+  threadId: string;
   audience: { groupIds: number[]; agentIds: string[]; customerId: string };
   drained: Array<{ chatId: string; threadId: string; assigneeId: string }>;
 }
@@ -87,6 +95,12 @@ export class ChatService {
       aiOverageCents: 50,
       aiIncluded: 200,
     },
+    /**
+     * Sends the end-of-chat transcript (FR-MOD-08.7.4). Optional for the same
+     * reason `publisher` is: a service built without one still closes chats,
+     * it just skips the courtesy e-mail — never a precondition for the close.
+     */
+    private readonly mailer?: Mailer,
   ) {}
 
   /**
@@ -557,6 +571,7 @@ export class ChatService {
     });
 
     await this.#publishDeactivation(tenant, chatId, result, actorOf(principal));
+    await this.#emailTranscript(tenant, chatId, result.threadId);
     return result.detail;
   }
 
@@ -599,6 +614,7 @@ export class ChatService {
 
     if (!result) return null;
     await this.#publishDeactivation(tenant, chatId, result, null);
+    await this.#emailTranscript(tenant, chatId, result.threadId);
     return result.detail;
   }
 
@@ -651,7 +667,12 @@ export class ChatService {
     }
 
     const drained = await this.routing.drainQueue(tx, tenant.licenseId);
-    return { detail: serialiseChat(reloaded), audience: this.#audienceFor(chat), drained };
+    return {
+      detail: serialiseChat(reloaded),
+      threadId: thread.id,
+      audience: this.#audienceFor(chat),
+      drained,
+    };
   }
 
   /** Newest event time for a thread, falling back to its start when it has none. */
@@ -686,6 +707,135 @@ export class ChatService {
       thread_id: result.detail.thread?.id ?? null,
       requester_id: requesterId,
     });
+  }
+
+  /**
+   * Mail the closed conversation to the visitor and to the agent who handled it
+   * (FR-MOD-08.7.4).
+   *
+   * Runs after the close transaction commits, never inside it: a mail is a
+   * side effect that must not be able to roll a close back or hold its lock, and
+   * it is a courtesy — the chat is already archived and delivered — so a failure
+   * is swallowed rather than surfaced. Reads through `withTenant`, so RLS scopes
+   * every lookup to this workspace exactly as the close was; a transcript can no
+   * more cross a tenant boundary than the conversation it copies.
+   *
+   * The customer's copy honours the one invariant this service exists to keep —
+   * an internal note never reaches a customer — because `renderTranscript` builds
+   * it from the `all`-recipient events only.
+   */
+  async #emailTranscript(tenant: TenantContext, chatId: string, threadId: string): Promise<void> {
+    const mailer = this.mailer;
+    if (!mailer) return;
+
+    try {
+      const data = await withTenant(this.db, tenant, async (tx) => {
+        const chat = await tx.chat.findUnique({
+          where: { id: chatId },
+          select: { customer: { select: { name: true, email: true } } },
+        });
+        if (!chat) return null;
+
+        const thread = await tx.thread.findUnique({
+          where: { id: threadId },
+          select: { assigneeId: true },
+        });
+
+        // Oldest-first so the transcript reads top to bottom like the chat did.
+        const events = await tx.event.findMany({
+          where: { threadId },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            authorType: true,
+            authorId: true,
+            text: true,
+            type: true,
+            recipients: true,
+            createdAt: true,
+          },
+        });
+
+        // Resolve agent authors to names in one query, so a transcript reads
+        // "Ada:" rather than an opaque account id. Only agents need it — the
+        // visitor and the AI are labelled from context.
+        const agentIds = [
+          ...new Set(
+            events
+              .filter((e) => e.authorType === 'agent' && e.authorId)
+              .map((e) => e.authorId as string),
+          ),
+        ];
+        const accounts = agentIds.length
+          ? await tx.account.findMany({
+              where: { id: { in: agentIds } },
+              select: { id: true, name: true },
+            })
+          : [];
+        const nameById = new Map(accounts.map((a) => [a.id, a.name]));
+
+        // The assignee's address and their per-license e-mail opt-in, read
+        // together the way `notifyAssignee` does so the decision has both.
+        let assignee: { email: string | null; name: string | null; emailEnabled: boolean } | null =
+          null;
+        if (thread?.assigneeId) {
+          const [account, membership] = await Promise.all([
+            tx.account.findUnique({
+              where: { id: thread.assigneeId },
+              select: { email: true, name: true },
+            }),
+            tx.agentMembership.findUnique({
+              where: { licenseId_agentId: { licenseId: tenant.licenseId, agentId: thread.assigneeId } },
+              select: { notifyEmail: true },
+            }),
+          ]);
+          assignee = {
+            email: account?.email ?? null,
+            name: account?.name ?? null,
+            emailEnabled: membership?.notifyEmail ?? true,
+          };
+        }
+
+        return { customer: chat.customer, assignee, events, nameById };
+      });
+      if (!data) return;
+
+      const recipients = transcriptRecipients({
+        customer: { email: data.customer?.email ?? null, name: data.customer?.name ?? null },
+        assignee: data.assignee,
+      });
+      if (recipients.length === 0) return;
+
+      const lines: TranscriptLine[] = data.events.map((e) => ({
+        authorType: e.authorType,
+        authorName:
+          e.authorType === 'agent' && e.authorId ? (data.nameById.get(e.authorId) ?? null) : null,
+        text: e.text,
+        type: e.type,
+        recipients: e.recipients,
+        createdAt: e.createdAt,
+      }));
+
+      for (const recipient of recipients) {
+        const content = renderTranscript({
+          audience: recipient.party,
+          chatId,
+          customerName: data.customer?.name ?? null,
+          lines,
+        });
+        // Nothing worth sending this party (e.g. a chat of only system events).
+        if (!content) continue;
+        await mailer.send({
+          to: recipient.to,
+          kind: 'notification',
+          subject: content.subject,
+          body: content.body,
+        });
+      }
+    } catch {
+      // Best-effort: the conversation is closed and already delivered, and this
+      // service holds no logger. A transcript that fails to send must not turn a
+      // successful close into an error the caller sees.
+    }
   }
 
   async resume(tenant: TenantContext, principal: Principal, chatId: string): Promise<ChatDetail> {

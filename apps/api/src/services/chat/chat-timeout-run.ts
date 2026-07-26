@@ -19,6 +19,7 @@ loadEnvFile();
 
 import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
+import { FileMailer } from '../mail/mailer.js';
 import { ChatService } from './chat-service.js';
 import { ChatTimeoutSweeper } from './chat-timeout.js';
 
@@ -37,11 +38,17 @@ async function main(): Promise<void> {
   try {
     // No publisher: realtime fan-out is an enhancement over polling, and a
     // background sweep has no socket to push to. Agents see the close on their
-    // next poll.
-    const chats = new ChatService(db, NO_REDIS, undefined, undefined, {
-      aiOverageCents: env.AI_OVERAGE_CENTS,
-      aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
-    });
+    // next poll. A mailer, though, is wired: an idle chat closed by the sweep
+    // gets its transcript e-mailed exactly as a hand-archived one does
+    // (FR-MOD-08.7.4), written to disk like all outgoing mail (PLAN A4).
+    const chats = new ChatService(
+      db,
+      NO_REDIS,
+      undefined,
+      undefined,
+      { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
+      new FileMailer(env.MAIL_DIR),
+    );
     const report = await new ChatTimeoutSweeper(db, chats).run();
 
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

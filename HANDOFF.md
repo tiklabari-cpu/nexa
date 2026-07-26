@@ -6,6 +6,37 @@
 
 ## Task log (newest-first)
 
+### 49 — 08.7.4-a · Chat transcripts (otomatik e-posta) `[XHIGH]` — done — 2026-07-26 UTC
+
+- Kapsam: FR-MOD-08.7.4 (`Should v1`) — bitişte müşteri/ekibe transcript e-postası. KK (birebir)
+  _"Bitişte müşteri/ekibe transcript e-postası"_, doğrulama _"integration (`.data/mail`)"_. Bağımlılık
+  tm 31 (T7-a, FileMailer / e-posta bildirim kanalı, ✅). PLAN satır 533 (08.7.4) → `✅` + §D44.
+  **Yeni API yolu/şema yok → OpenAPI/contract-parity değişmedi.**
+- Yapıldı:
+  - **Saf modül** `services/notifications/chat-transcript.ts` (assignee-email kardeş deseni) —
+    `transcriptRecipients` (müşteri: adres varsa · ekip: atama var + `notifyEmail` opt-in [FR-MOD-08.2];
+    queued/AI-only = atama yok → ekip kopyası yok) + `renderTranscript` (müşteri kopyası **yalnız**
+    `recipients='all'` olaylardan → internal note müşteriye sızmaz; yalnız sistem-olayı sohbeti = mail yok).
+    Unit `chat-transcript.test.ts`(9).
+  - **Paylaşımlı kapanış yolu** `chat-service.ts`: opsiyonel 6. ctor param `mailer` + `#emailTranscript`
+    (kapanış tx **commit'ten sonra** çağrılır — yan etki close'u bozamaz; `withTenant` okur → RLS ile
+    tenant-scoped; best-effort, hata yutulur). `deactivate` (ajan arşivi) **ve** `deactivateByTimeout`
+    (idle sweep, tm 48) ikisi de çağırır; `CloseResult`'a `threadId` eklendi; ajan yazar isimleri tek sorguda.
+  - **Bağlama**: `chats.ts` rotası + `server.ts` register → `mailer`; `chat-timeout-run.ts` sweeper CLI →
+    `new FileMailer(env.MAIL_DIR)` (idle-close da transcript atar). Integration `chat-transcript.test.ts`(6).
+- Doğrulama (bu pencere, exit 0): typecheck 11/11 · lint 8/8 · build 7/7 · test api **923** (50 dosya;
+  yeni unit 9 + integration 6 + contract-parity 5/5) · rtm 71 — DB süitleri **paket-paket seri** koşuldu
+  ([[nexa-test-gate-parallel-db]]; `pnpm -w test` api+rtm paralelinde Postgres deadlock'u verir = harness
+  yarışı, gerçek hata değil). **E2E:** backend-only mailer, tarayıcı akışı yok → kapsanan "akış" =
+  `.data/mail`'i okuyan integration testi (tm 47 backend-dilim emsali).
+- Varsayımlar / notlar:
+  - **Ekip kopyası = atanan ajan** (tm 31 gibi), tüm katılımcılar değil; ajanın `notifyEmail` opt-out'una
+    saygı gösterir (transcript de bir e-posta bildirimidir). Müşteri, adresi varsa her zaman alır (kendi
+    konuşma kaydı). Bu iki karar §D44'te + modül yorumunda gerekçeli.
+  - **Sonraki pencere:** 08.7.5-a (Ticket email templates, markalı/değişkenli) transcript'in gövde
+    şablonunu markalayabilir; şu an düz-metin (A4 stub). Kalan borç yok; çalışma alanı temiz
+    (`.parked-playbook/` izlenmiyor, bu task'a ait değil — commit'e katılmadı).
+
 ### 47 — 08.6.2-a · Ticket rules (atama/etiket/öncelik) `[XHIGH]` — done — 2026-07-26 UTC
 
 - Kapsam: FR-MOD-08.6.2 (`Should v1`) — koşul+eylem → otomatik atama/etiket/öncelik. KK (birebir)

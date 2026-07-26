@@ -136,7 +136,7 @@ export async function buildServer({
       await api.register(healthRoutes, { env, version: VERSION });
       await api.register(authRoutes, { env });
       await api.register(accountLifecycleRoutes, { env, mailer });
-      await api.register(chatRoutes, { env });
+      await api.register(chatRoutes, { env, mailer });
       await api.register(agentRoutes);
       await api.register(customerRoutes, { env, mailer });
       await api.register(customerDirectoryRoutes);

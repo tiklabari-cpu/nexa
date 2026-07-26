@@ -5,6 +5,7 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { hasChatScope } from '../services/chat/access.js';
+import type { Mailer } from '../services/mail/mailer.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { LocalStore } from '../services/storage/local-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
@@ -76,7 +77,7 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 export default async function chatRoutes(
   app: FastifyInstance,
-  { env }: { env: Env },
+  { env, mailer }: { env: Env; mailer: Mailer },
 ): Promise<void> {
   const store = new LocalStore(env.STORAGE_LOCAL_DIR);
   const chats = new ChatService(
@@ -85,6 +86,8 @@ export default async function chatRoutes(
     new RealtimePublisher(app.redis, app.log),
     undefined,
     { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
+    // The agent-archive path mails the transcript on close (FR-MOD-08.7.4).
+    mailer,
   );
 
   // An attachment may only be a file this licence uploaded through `/uploads`

@@ -519,7 +519,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 03.3.1–.3  | Campaigns (alt sekmeler, builder, kart)                                                                | Should (v1)    |               ⬜ `Campaign` modeli var                |
 | 04.2       | AI Agents (team tarafı) — performance                                                                  | Must (v1)      |                          ⬜                           |
 | 04.6       | Chatbots / Suspended agents sekmeleri                                                                  | Should (v1)    |                          ⬜                           |
-| 07.4       | AI Agent raporu (resolution/deflection)                                                                | Should (v1)    |                          ⬜                           |
+| 07.4       | AI Agent raporu (resolution/deflection)                                                                | Should (v1)    | ✅ resolution/deflection — resolutions=ADR-09 (fatura ile aynı sorgu) · tm 44 · §D29 |
 | 07.7       | Rapor grupları + Export (CSV)                                                                          | Should (v1–v2) |                          ⬜                           |
 | 07.8       | Reviews / Ratings                                                                                      | Should (v1)    |                ⬜ `Rating` modeli var                 |
 | 08.5.4     | Messenger (Facebook OAuth)                                                                             | Must (v1)      |             ✅ **MOCK adaptör** (tm 35)              |
@@ -1804,6 +1804,21 @@ görüneceği en son yerdir.
   kendi türü, All hiçbir kaynağı düşürmez, tam partition, bilinmeyen tür All'da) · web paketi 265/265 ·
   typecheck exit 0. → §4.2'de 06.3.1 `◐`→`✅`. Not: bu satır **yalnız alt sekme/süzme** kapsamıdır;
   06.3.2 (website crawl) ayrı satırda `◐` kalır — ona dokunulmadı. (Bu satır dışına dokunulmadı.)
+- **D29 (07.4-a · tm 44 · 2026-07-26 · koda karşı doğrulandı):** §4.4 (kalan kapsam) satırı 07.4'ü `⬜`
+  gösteriyordu ama tm 21 (`done`) AI Agent raporunu tam teslim etmiş; 07.4-a KK'sı _"Billing sayacıyla
+  ilişkili"_ üç katmanda karşılanıyor: **(1) API** — `/reports/ai-agent` (`routes/reports.ts`)
+  `resolutions` = ADR-09 `automated` (kapanışta agent-yazımlı event yok) ve fatura sayacıyla
+  (`/billing/usage` `ai_resolutions.used`) TEK paylaşımlı sorgudan gelir; deflection metrikleri
+  `transfers`/`transfer_rate` (`chat_transferred` sistem olayı) + `skill_runs` + `resolution_rate`.
+  Kontrat `/reports/ai-agent` OpenAPI'de. **(2) UI** — `ReportsPage` AiAgentTab "AI resolution"
+  (resolutions/rate/otomatik süre) + "Deflection" (transfers/transfer rate/skills) kartları; başlık
+  altında açıkça _"the same figure the invoice bills (ADR-09)"_ yazar. **(3) Test** — YENİ web testi
+  `ReportsPage.test.tsx` (4/4 — resolution+deflection kartları render · fatura-ADR-09 ibaresi görünür ·
+  paylaşımlı `/reports/ai-agent?from=&to=` sorgusu · boş pencere → 0% değil `—`); integration
+  `reports-billing` _"AI Agent report (07.4) — agrees with the overview and the invoice on resolutions"_
+  (rapor=fatura). DoD kapısı bu tur yeşil: typecheck/lint/build exit 0 · unit web 277/277 · integration
+  581/581 · e2e `reports.spec.ts` 2/2 (AI Agent sekmesi). → §4.4'te 07.4 `⬜`→`✅`. Not: 06.5-a aynı
+  `/reports/ai-agent` sorgusunu AI Performance ekranında tüketir (ayrı satır — dokunulmadı).
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

@@ -6,6 +6,31 @@
 
 ## Task log (newest-first)
 
+### 44 — 07.4-a · AI Agent raporu (resolution/deflection) [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı (çelişki denetimi + kapsam kapatma — rapor tm 21'de erken teslim edilmişti, KK doğrulandı):
+  - **KK doğrulaması ("Billing sayacıyla ilişkili"):** `/reports/ai-agent` (`routes/reports.ts`)
+    `resolutions` alanı = ADR-09 `automated` (kapanışta agent-yazımlı event yok) ve fatura sayacıyla
+    (`/billing/usage` `ai_resolutions.used`) **tek paylaşımlı sorgudan** üretiliyor — iki sayaç
+    ayrışamaz. Ek deflection: `transfers`/`transfer_rate` (`chat_transferred`), `skill_runs`,
+    `resolution_rate`. Kontrat `/reports/ai-agent` OpenAPI'de; UI `ReportsPage` AiAgentTab "AI
+    resolution" + "Deflection" kartları, başlıkta açıkça _"the same figure the invoice bills (ADR-09)"_.
+  - **Yeni kod (test — gerçek boşluk kapatıldı):** `apps/web/src/features/reports/ReportsPage.test.tsx`
+    (4) — AI Agent sekmesini açar (userEvent), resolution+deflection kartlarını, fatura-ADR-09
+    ibaresini, paylaşımlı `/reports/ai-agent?from=&to=` sorgusunu ve boş-pencere `—` (0% değil)
+    davranışını doğrular. ReportsPage'in daha önce hiç web testi yoktu.
+  - **PLAN:** §4.4'te 07.4 `⬜`→`✅`; §D29 denetim notu (D28 stilinde). Ayrıca prior-window'un
+    commit edilmemiş **D28 (06.3.1)** PLAN notu ayrı bir `docs(plan)` commit'iyle kurtarıldı.
+- Doğrulama (DoD kapısı — bu tur koşuldu, hepsi yeşil): `typecheck` exit 0 · `lint` exit 0 ·
+  `test:unit` exit 0 (**web 277/277** — +4 `ReportsPage.test.tsx`) · `test:integration` **581/581**
+  (`reports-billing` → _"AI Agent report (07.4) — agrees with the overview and the invoice on
+  resolutions"_ = rapor=fatura ADR-09) · `build` exit 0 · e2e `reports.spec.ts` **2/2** (AI Agent sekmesi).
+- Varsayımlar: yok. Rapor+backend+kontrat+entegrasyon testi zaten mevcuttu (tm 21); bu pencere KK'yı
+  objektif doğruladı, UI test boşluğunu kapattı ve PLAN'ı hizaladı — kapsam dışına çıkılmadı.
+- Sonraki pencereye not: 06.5-a (tm 33.6) aynı `/reports/ai-agent` sorgusunu AI Performance ekranında
+  tüketir; PLAN 06.5 satırı hâlâ `⬜` ama `AiPerformance.tsx`+testi kodda — ayrı bir denetim/kapatma
+  bekliyor (bu pencerede dokunulmadı). `.parked-playbook/` bilerek commit dışı (bkz. e807983).
+
 ### 42 — 03.1.3-a · Ziyaretçi tablosu + satır aksiyonları (Traffic) [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı (contract-first; MOD-03 Customers'ın "Real-time" yüzü — canlı ziyaretçi panosu):

@@ -1343,13 +1343,13 @@
         "description": "Markalı, değişkenli; geçersiz değişken engeli. PRD 08.7.5 (Should).",
         "details": "08.7.5-a Ticket email templates (markalı, değişkenli). [XHIGH] PRD 08.7.5 (Should).\nKAPSAM: markalı, değişkenli şablon; geçersiz değişken/format engeli.\nKK (birebir): \"Geçersiz değişken/format engeli\". BAĞLAM: PLAN §4.4.9. Bağımlılık: tm 29.",
         "testStrategy": "unit: geçersiz değişken → hata. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "29"
         ],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T20:53:10.365Z"
       },
       {
         "id": "51",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T20:13:20.301Z",
+      "lastModified": "2026-07-26T20:53:10.366Z",
       "taskCount": 84,
-      "completedCount": 58,
+      "completedCount": 59,
       "tags": [
         "master"
       ]

@@ -15,6 +15,7 @@ import { Prisma } from '@prisma/client';
 import { generateShortId, hasAnyScope } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import type { Principal } from '../auth/principal.js';
 
 export const TICKET_STATUSES = ['open', 'pending', 'solved', 'closed', 'spam'] as const;
@@ -45,6 +46,7 @@ export interface TicketSummary {
   id: string;
   subject: string;
   status: TicketStatus;
+  priority: number;
   assignee_id: string | null;
   assignee_name: string | null;
   group_id: number | null;
@@ -52,12 +54,22 @@ export interface TicketSummary {
   customer_name: string | null;
   customer_email: string | null;
   source_chat_id: string | null;
+  /** The primary this ticket is folded into, or null when it stands alone. */
+  merged_into_id: string | null;
   last_message_at: string | null;
   created_at: string;
 }
 
+export interface TicketFollowerSummary {
+  account_id: string;
+  name: string | null;
+}
+
 export interface TicketDetail extends TicketSummary {
   source_chat: { id: string; active: boolean; created_at: string } | null;
+  followers: TicketFollowerSummary[];
+  /** Ids of the tickets merged *into* this one (empty unless it is a primary). */
+  merged_ticket_ids: string[];
 }
 
 export interface CreateInput {
@@ -72,6 +84,7 @@ export interface CreateInput {
 export interface UpdateInput {
   subject?: string;
   status?: TicketStatus;
+  priority?: number;
   assignee_id?: string | null;
   group_id?: number | null;
 }
@@ -95,6 +108,11 @@ export class TicketService {
   ): Promise<{ items: TicketSummary[]; total: number; nextPageId?: string }> {
     const visibility = await resolveVisibility(tx, principal, 'read');
     const where = {
+      // A merged ticket is folded under its primary and never appears in a list
+      // on its own — the whole point of a merge is that it stops being separate
+      // work. It is still reachable directly via `get` and shown under the
+      // primary's `merged_ticket_ids`.
+      mergedIntoId: null,
       ...visibilityFilter(visibility),
       ...viewFilter(options.view, visibility.actorId),
       ...queryFilter(options.query),
@@ -118,7 +136,10 @@ export class TicketService {
     const hasMore = rows.length > options.limit;
     const page = hasMore ? rows.slice(0, options.limit) : rows;
     const last = page.at(-1);
-    const names = await assigneeNames(tx, page);
+    const names = await accountNames(
+      tx,
+      page.map((row) => row.assigneeId),
+    );
 
     return {
       items: page.map((row) => serialise(row, names)),
@@ -132,7 +153,7 @@ export class TicketService {
   async get(tx: TenantClient, principal: Principal, ticketId: string): Promise<TicketDetail> {
     const visibility = await resolveVisibility(tx, principal, 'read');
     const ticket = await loadVisible(tx, visibility, ticketId);
-    return serialiseDetail(ticket, await assigneeNames(tx, [ticket]));
+    return toDetail(tx, ticket);
   }
 
   async create(
@@ -204,7 +225,7 @@ export class TicketService {
         data: { ...data, id: await allocateId(tx) },
         include: TICKET_INCLUDE,
       });
-      return serialiseDetail(created, await assigneeNames(tx, [created]));
+      return toDetail(tx, created);
     } catch (error) {
       // The check above loses to a request that inserted between it and here.
       // The partial unique index is what actually holds the rule; this only
@@ -252,11 +273,18 @@ export class TicketService {
     tx: TenantClient,
     tenant: TenantContext,
     principal: Principal,
+    audit: AuditContext,
     ticketId: string,
     patch: UpdateInput,
   ): Promise<TicketDetail> {
     const visibility = await resolveVisibility(tx, principal, 'write');
     const existing = await loadVisible(tx, visibility, ticketId);
+
+    // A merged ticket is folded under its primary; editing it in place would
+    // desync the two halves of the merge. Unmerge it first.
+    if (existing.mergedIntoId) {
+      throw ApiError.validation('Ticket is merged; unmerge it before editing.');
+    }
 
     const nextGroupId =
       patch.group_id !== undefined
@@ -273,6 +301,7 @@ export class TicketService {
       data: {
         ...(patch.subject !== undefined ? { subject: patch.subject.trim() } : {}),
         ...(patch.status !== undefined ? { status: patch.status } : {}),
+        ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
         ...(patch.assignee_id !== undefined ? { assigneeId: patch.assignee_id } : {}),
         ...(patch.group_id !== undefined
           ? { groupId: patch.group_id != null ? BigInt(patch.group_id) : null }
@@ -282,29 +311,247 @@ export class TicketService {
       },
       include: TICKET_INCLUDE,
     });
-    return serialiseDetail(updated, await assigneeNames(tx, [updated]));
+
+    // Lifecycle and priority are auditable HelpDesk events (FR-MOD-13.6). Only a
+    // real transition writes a row — a PATCH that sets a field to what it already
+    // was should not litter the append-only log.
+    if (patch.status !== undefined && patch.status !== existing.status) {
+      await writeAuditEntry(tx, audit, {
+        action: 'ticket.status_changed',
+        target: `ticket:${ticketId}`,
+        metadata: { from: existing.status, to: patch.status },
+      });
+    }
+    if (patch.priority !== undefined && patch.priority !== existing.priority) {
+      await writeAuditEntry(tx, audit, {
+        action: 'ticket.priority_changed',
+        target: `ticket:${ticketId}`,
+        metadata: { from: existing.priority, to: patch.priority },
+      });
+    }
+
+    return toDetail(tx, updated);
+  }
+
+  /**
+   * Merge one ticket into another (FR-MOD-13.6).
+   *
+   * The merge is *non-destructive*: it only sets the secondary's `mergedIntoId`,
+   * so nothing about either ticket is rewritten and `unmerge` is an exact inverse
+   * rather than a reconstruction. The invariants keep the merge graph a
+   * one-level star — a secondary points at a primary and nothing deeper:
+   *
+   *   - a ticket cannot merge into itself (also a DB CHECK);
+   *   - the source must not already be merged (unmerge it first);
+   *   - the target must be a primary, not itself a secondary (no chains);
+   *   - the source must have no tickets merged into it (it is not a primary).
+   *
+   * Cross-tenant is handled for free: `loadVisible` 404s on a ticket in another
+   * workspace, so neither id can name one the caller cannot see.
+   */
+  async merge(
+    tx: TenantClient,
+    _tenant: TenantContext,
+    principal: Principal,
+    audit: AuditContext,
+    ticketId: string,
+    intoId: string,
+  ): Promise<TicketDetail> {
+    if (ticketId === intoId) {
+      throw ApiError.validation('A ticket cannot be merged into itself.');
+    }
+
+    const visibility = await resolveVisibility(tx, principal, 'write');
+    const source = await loadVisible(tx, visibility, ticketId);
+    const target = await loadVisible(tx, visibility, intoId);
+
+    if (source.mergedIntoId) {
+      throw ApiError.validation('Ticket is already merged; unmerge it before merging again.');
+    }
+    if (target.mergedIntoId) {
+      throw ApiError.validation('Cannot merge into a ticket that is itself merged.');
+    }
+    const childCount = await tx.ticket.count({ where: { mergedIntoId: ticketId } });
+    if (childCount > 0) {
+      throw ApiError.validation('Cannot merge a ticket that has other tickets merged into it.');
+    }
+
+    const merged = await tx.ticket.update({
+      where: { id: ticketId },
+      data: { mergedIntoId: intoId, lastMessageAt: new Date() },
+      include: TICKET_INCLUDE,
+    });
+
+    await writeAuditEntry(tx, audit, {
+      action: 'ticket.merged',
+      target: `ticket:${ticketId}`,
+      metadata: { into: intoId },
+    });
+
+    return toDetail(tx, merged);
+  }
+
+  /** Undo a merge (FR-MOD-13.6). Clears the pointer — the exact inverse of merge. */
+  async unmerge(
+    tx: TenantClient,
+    _tenant: TenantContext,
+    principal: Principal,
+    audit: AuditContext,
+    ticketId: string,
+  ): Promise<TicketDetail> {
+    const visibility = await resolveVisibility(tx, principal, 'write');
+    const ticket = await loadVisible(tx, visibility, ticketId);
+
+    if (!ticket.mergedIntoId) {
+      throw ApiError.validation('Ticket is not merged.');
+    }
+
+    const restored = await tx.ticket.update({
+      where: { id: ticketId },
+      data: { mergedIntoId: null, lastMessageAt: new Date() },
+      include: TICKET_INCLUDE,
+    });
+
+    await writeAuditEntry(tx, audit, {
+      action: 'ticket.unmerged',
+      target: `ticket:${ticketId}`,
+      metadata: { from: ticket.mergedIntoId },
+    });
+
+    return toDetail(tx, restored);
+  }
+
+  /**
+   * Add a follower to a ticket (FR-MOD-13.6). Idempotent: following a ticket the
+   * agent already follows is a no-op and writes no second audit row.
+   */
+  async addFollower(
+    tx: TenantClient,
+    tenant: TenantContext,
+    principal: Principal,
+    audit: AuditContext,
+    ticketId: string,
+    accountId: string,
+  ): Promise<TicketDetail> {
+    const visibility = await resolveVisibility(tx, principal, 'write');
+    await loadVisible(tx, visibility, ticketId);
+    await assertFollower(tx, tenant, accountId);
+
+    const already = await tx.ticketFollower.findUnique({
+      where: { ticketId_accountId: { ticketId, accountId } },
+      select: { ticketId: true },
+    });
+    if (!already) {
+      await tx.ticketFollower.create({ data: { ticketId, accountId } });
+      await writeAuditEntry(tx, audit, {
+        action: 'ticket.follower_added',
+        target: `ticket:${ticketId}`,
+        metadata: { account_id: accountId },
+      });
+    }
+
+    return toDetail(tx, await loadVisible(tx, visibility, ticketId));
+  }
+
+  /** Remove a follower (FR-MOD-13.6). Idempotent, mirroring `addFollower`. */
+  async removeFollower(
+    tx: TenantClient,
+    _tenant: TenantContext,
+    principal: Principal,
+    audit: AuditContext,
+    ticketId: string,
+    accountId: string,
+  ): Promise<TicketDetail> {
+    const visibility = await resolveVisibility(tx, principal, 'write');
+    await loadVisible(tx, visibility, ticketId);
+
+    const existing = await tx.ticketFollower.findUnique({
+      where: { ticketId_accountId: { ticketId, accountId } },
+      select: { ticketId: true },
+    });
+    if (existing) {
+      await tx.ticketFollower.delete({ where: { ticketId_accountId: { ticketId, accountId } } });
+      await writeAuditEntry(tx, audit, {
+        action: 'ticket.follower_removed',
+        target: `ticket:${ticketId}`,
+        metadata: { account_id: accountId },
+      });
+    }
+
+    return toDetail(tx, await loadVisible(tx, visibility, ticketId));
   }
 }
 
 /**
- * Assignee display names, in one query for the whole page.
+ * Account display names, in one query for a whole set of ids.
  *
- * `tickets.assignee_id` is a bare uuid — PRD §8.4 gives it no foreign key, so
- * Prisma cannot `include` the account and there is nothing to join on. Batched
- * rather than resolved per row, because the per-row version is the N+1 that
- * only shows up once a queue has a few hundred tickets in it.
+ * `tickets.assignee_id` and `ticket_followers.account_id` are bare uuids — PRD
+ * §8.4 gives the assignee no foreign key, and the follower join carries only the
+ * id. Prisma cannot `include` an account off the assignee, so names are resolved
+ * in a single batched lookup: the per-row alternative is the N+1 that only shows
+ * up once a queue has a few hundred tickets in it.
  */
-async function assigneeNames(
+async function accountNames(
   tx: TenantClient,
-  rows: Array<{ assigneeId: string | null }>,
+  ids: Array<string | null | undefined>,
 ): Promise<Map<string, string>> {
-  const ids = [...new Set(rows.map((r) => r.assigneeId).filter((id): id is string => id !== null))];
-  if (ids.length === 0) return new Map();
+  const unique = [...new Set(ids.filter((id): id is string => typeof id === 'string'))];
+  if (unique.length === 0) return new Map();
   const accounts = await tx.account.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: unique } },
     select: { id: true, name: true },
   });
   return new Map(accounts.map((a) => [a.id, a.name]));
+}
+
+/**
+ * Assemble a ticket's full detail: its followers and the ids of any tickets
+ * merged into it, resolved fresh from the database rather than from the passed
+ * row, so a caller that has just changed followers or a merge sees the result.
+ */
+async function toDetail(tx: TenantClient, row: TicketRow): Promise<TicketDetail> {
+  const [followers, children] = await Promise.all([
+    tx.ticketFollower.findMany({
+      where: { ticketId: row.id },
+      select: { accountId: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    tx.ticket.findMany({
+      where: { mergedIntoId: row.id },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    }),
+  ]);
+  const followerIds = followers.map((f) => f.accountId);
+  const names = await accountNames(tx, [row.assigneeId, ...followerIds]);
+  return serialiseDetail(
+    row,
+    names,
+    followerIds,
+    children.map((c) => c.id),
+  );
+}
+
+/**
+ * Reject a follower who is not a member of the licence.
+ *
+ * Suspended members are allowed: following is passive watching, not work, so
+ * there is no "assigning to someone who cannot sign in" problem that
+ * `assertAssignable` guards against. What matters is that the account belongs to
+ * the workspace at all — a uuid from another tenant is refused.
+ */
+async function assertFollower(
+  tx: TenantClient,
+  context: TenantContext,
+  accountId: string,
+): Promise<void> {
+  const membership = await tx.agentMembership.findFirst({
+    where: { agentId: accountId, licenseId: context.licenseId },
+    select: { agentId: true },
+  });
+  if (!membership) {
+    throw ApiError.validation('Follower is not a member of this licence.');
+  }
 }
 
 const TICKET_INCLUDE = {
@@ -451,6 +698,7 @@ function serialise(row: TicketRow, names: Map<string, string>): TicketSummary {
     id: row.id,
     subject: row.subject,
     status: row.status as TicketStatus,
+    priority: row.priority,
     assignee_id: row.assigneeId,
     assignee_name: row.assigneeId ? (names.get(row.assigneeId) ?? null) : null,
     group_id: row.groupId != null ? Number(row.groupId) : null,
@@ -458,12 +706,18 @@ function serialise(row: TicketRow, names: Map<string, string>): TicketSummary {
     customer_name: row.customer?.name ?? null,
     customer_email: row.customer?.email ?? null,
     source_chat_id: row.sourceChatId,
+    merged_into_id: row.mergedIntoId,
     last_message_at: row.lastMessageAt?.toISOString() ?? null,
     created_at: row.createdAt.toISOString(),
   };
 }
 
-function serialiseDetail(row: TicketRow, names: Map<string, string>): TicketDetail {
+function serialiseDetail(
+  row: TicketRow,
+  names: Map<string, string>,
+  followerIds: string[],
+  mergedTicketIds: string[],
+): TicketDetail {
   return {
     ...serialise(row, names),
     source_chat: row.sourceChat
@@ -473,6 +727,8 @@ function serialiseDetail(row: TicketRow, names: Map<string, string>): TicketDeta
           created_at: row.sourceChat.createdAt.toISOString(),
         }
       : null,
+    followers: followerIds.map((id) => ({ account_id: id, name: names.get(id) ?? null })),
+    merged_ticket_ids: mergedTicketIds,
   };
 }
 

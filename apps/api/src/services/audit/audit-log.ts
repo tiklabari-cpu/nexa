@@ -49,6 +49,15 @@ export const AUDIT_ACTIONS = [
   'settings.trusted_domain_removed',
   'billing.subscription_updated',
   'billing.payment_method_updated',
+  // Ticketing / HelpDesk (FR-MOD-13.6) — the lifecycle and structural changes an
+  // async ticket goes through. Merge/unmerge affect data integrity across two
+  // tickets, so they are recorded as much for the audit trail as for support.
+  'ticket.status_changed',
+  'ticket.priority_changed',
+  'ticket.merged',
+  'ticket.unmerged',
+  'ticket.follower_added',
+  'ticket.follower_removed',
   // Credentials
   'pat.created',
   'pat.revoked',

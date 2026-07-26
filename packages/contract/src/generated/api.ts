@@ -833,6 +833,87 @@ export interface paths {
     patch: operations['updateTicket'];
     trace?: never;
   };
+  '/tickets/{ticketId}/merge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Merge this ticket into another
+     * @description Folds this ticket into the primary named by `into`. The merge is
+     *     non-destructive — it only points the secondary at the primary, and a
+     *     merged ticket drops out of the lists and reappears under the primary's
+     *     `merged_ticket_ids`. `DELETE` on the same path is an exact inverse.
+     *
+     *     Refused (`400`) for a self-merge, a source that is already merged, a target
+     *     that is itself merged (no chains), or a source that is itself a primary.
+     *     A ticket in another tenant is `404`, never `403` (NFR-S5).
+     */
+    post: operations['mergeTicket'];
+    /**
+     * Undo a merge
+     * @description Clears the ticket's `merged_into_id`, restoring it as a standalone ticket
+     *     in the lists. `400` if the ticket was not merged.
+     */
+    delete: operations['unmergeTicket'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tickets/{ticketId}/followers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a follower
+     * @description Adds an agent as a follower — someone watching the ticket without owning
+     *     it. Idempotent: following a ticket already followed changes nothing and
+     *     writes no second audit entry. The account must be a member of the licence.
+     */
+    post: operations['addTicketFollower'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tickets/{ticketId}/followers/{accountId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+        accountId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Remove a follower
+     * @description Idempotent, mirroring the add — removing a follower who is not following changes nothing.
+     */
+    delete: operations['removeTicketFollower'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customers/{customerId}/ban': {
     parameters: {
       query?: never;
@@ -3015,6 +3096,11 @@ export interface components {
       subject: string;
       /** @enum {string} */
       status: 'open' | 'pending' | 'solved' | 'closed' | 'spam';
+      /**
+       * @description Queue priority (FR-MOD-13.6). Higher is more urgent; 0 is the
+       *     default. Bounded to [-100, 100].
+       */
+      priority: number;
       /** Format: uuid */
       assignee_id?: string | null;
       assignee_name?: string | null;
@@ -3027,6 +3113,11 @@ export interface components {
       customer_email?: string | null;
       /** @description The conversation this followed on from, if any. */
       source_chat_id?: string | null;
+      /**
+       * @description The primary ticket this one is folded into (FR-MOD-13.6), or null
+       *     when it stands alone. A merged ticket is hidden from the lists.
+       */
+      merged_into_id?: string | null;
       /** Format: date-time */
       last_message_at?: string | null;
       /** Format: date-time */
@@ -3043,6 +3134,14 @@ export interface components {
         /** Format: date-time */
         created_at?: string;
       } | null;
+      /** @description Agents watching this ticket without owning it (FR-MOD-13.6). */
+      followers: {
+        /** Format: uuid */
+        account_id: string;
+        name?: string | null;
+      }[];
+      /** @description Ids of the tickets merged into this one (empty unless it is a primary). */
+      merged_ticket_ids: string[];
     };
     CustomerDetail: components['schemas']['CustomerSummary'] & {
       /** Format: date-time */
@@ -5112,6 +5211,133 @@ export interface operations {
     };
     responses: {
       /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  mergeTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The primary ticket to merge this one into. */
+          into: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Merged; the secondary now carries `merged_into_id`. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  unmergeTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Unmerged. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  addTicketFollower: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          account_id: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The ticket, with the follower present. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  removeTicketFollower: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+        accountId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The ticket, with the follower gone. */
       200: {
         headers: {
           [name: string]: unknown;

@@ -60,6 +60,15 @@ export type TransferReason = (typeof TRANSFER_REASONS)[number];
 export const TICKET_STATUSES = ['open', 'pending', 'solved', 'closed', 'spam'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
+/**
+ * Ticket queue priority (FR-MOD-13.6, HelpDesk layer). A signed integer — higher
+ * is more urgent, `0` is the default. Bounded so the column stays a small int and
+ * a UI has a finite scale to render rather than an open-ended number field.
+ */
+export const TICKET_PRIORITY_MIN = -100;
+export const TICKET_PRIORITY_MAX = 100;
+export const TICKET_PRIORITY_DEFAULT = 0;
+
 // --- AI ---------------------------------------------------------------------
 
 export const AI_AGENT_KINDS = ['ai_agent', 'copilot'] as const;

@@ -6,6 +6,46 @@
 
 ## Task log (newest-first)
 
+### 61.1 — 13.6-a · Omnichannel HelpDesk katmanı (backend) [MAX] — done — 2026-07-26 UTC
+
+- Kapsam kararı: Task 61 (13.6-a) `[MAX]`, testStrategy "başında subtask'lara bölünmeli / 2+ pencere".
+  Başta **61.1 backend veri-bütünlüğü** (bu pencere) + **61.2 frontend HelpDesk yüzeyi** (pending) olarak
+  bölündü. Parent 61 hâlâ `in-progress` (61.2 kaldı). PLAN satır 544 → `◐` (§D38).
+- Yapıldı:
+  - **merge/unmerge** — `Ticket.mergedIntoId` self-FK; **non-destructive pointer** (merge işaretçiyi
+    kurar, unmerge temizler → tam ters, "invariant" testi kesin). Invariantlar: self-merge (DB CHECK +
+    servis), zincir yok (hedef primary), primary-with-children merge edilemez, already-merged kaynak
+    reddi, cross-tenant→404. Merged ticket listeden gizli (`mergedIntoId: null` süzgeci), primary'de
+    `merged_ticket_ids`.
+  - **followers** — `ticket_followers` join tablosu (license_id yok → `thread_tags` gibi ticket
+    üzerinden RLS EXISTS + GRANT). add/remove idempotent, üyelik doğrulaması (`assertFollower`).
+  - **priority** — `Ticket.priority Int @default(0)`, PATCH ile ayarlanır, `@nexa/types`
+    `TICKET_PRIORITY_MIN/MAX` (-100..100).
+  - **ticket audit** — yeni `AUDIT_ACTIONS`: `ticket.status_changed`/`priority_changed`/`merged`/
+    `unmerged`/`follower_added`/`follower_removed`; `writeAuditEntry` servis içinde tx'te (agents.ts
+    deseni). Ticket lifecycle (status geçişi) artık audit'li — "ticket yaşam döngüsü" KK'sı.
+  - **API/kontrat:** `routes/tickets.ts` +4 route (POST/DELETE `/tickets/:id/merge`, POST
+    `/tickets/:id/followers`, DELETE `/tickets/:id/followers/:accountId`); OpenAPI `paths/tickets.yaml`
+    +3 yol (`mergeTicket`/`unmergeTicket`/`addTicketFollower`/`removeTicketFollower`) + `Ticket`/
+    `TicketDetail` alanları; `contract:generate` ile bundle+client yeniden üretildi.
+  - **migration** `20260726160000_ticket_helpdesk` — Prisma-yapısal DDL + hand-added CHECK/RLS/GRANT;
+    `prisma migrate deploy` uygulandı, `db:check-drift` temiz.
+- Doğrulama (exit 0): `pnpm -w typecheck` 11/11 · `pnpm -w lint` 8/8 · seri `turbo run test
+  --concurrency=1 --filter=!@nexa/e2e` → **api 849/849** (+15 `tickets-helpdesk.test.ts`) · `pnpm -w
+  test:integration` 698 · `pnpm -w build` 7/7 · `pnpm -w test:e2e` 55/55 · `contract-parity` 5/5.
+- Varsayımlar: priority = işaretli int (kaynak HelpDesk `priority:-10` gibi), enum değil — UI/sıralama
+  61.2'ye ertelendi (mevcut liste sıralaması `last_message_at` bozulmadı). Merge conflict'leri yeni
+  kilitli hata tipi yerine `validation` (400) / `not_found` (404) ile — katalog/contract error enum'a
+  dokunulmadı.
+- Sonraki pencereye not:
+  - **tm 61.2 (frontend):** `TicketPane.tsx`'e priority selector + followers add/remove + merge/unmerge
+    aksiyonu + merged-child göstergesi; `useTickets.ts` hooks; web unit + e2e. Backend + typed client
+    hazır (`@nexa/contract` generated api.ts'te yollar var).
+  - `pnpm -w test` **paralel paket DB yarışı** verir (api+rtm aynı Postgres); DoD için `--concurrency=1`
+    kullan ([[nexa-test-gate-parallel-db]]).
+  - Çalışma alanında **`.parked-playbook/`** (untracked, skills 05.2 WIP) bu pencereden ÖNCE vardı —
+    bana ait değil, dokunulmadı, bırakıldı.
+
 ### 60 — 13.1-a · Home dashboard [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı:

@@ -45,50 +45,50 @@ model Organization {
 /// is created in the RLS migration and starts at 1000001, so ids never resemble
 /// row counts or test fixtures.
 model License {
-  id             BigInt    @id @default(autoincrement())
-  organizationId String    @map("organization_id") @db.Uuid
-  plan           String    @default("growth")
-  billingCycle   String    @default("monthly") @map("billing_cycle")
-  trialEndsAt    DateTime? @map("trial_ends_at") @db.Timestamptz(6)
-  status         String    @default("trialing")
+  id                    BigInt    @id @default(autoincrement())
+  organizationId        String    @map("organization_id") @db.Uuid
+  plan                  String    @default("growth")
+  billingCycle          String    @default("monthly") @map("billing_cycle")
+  trialEndsAt           DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  status                String    @default("trialing")
   /// First-run setup (FR-MOD-00.4): null until the new owner finishes or skips
   /// the wizard. A per-license fact — the workspace is set up — so the wizard
   /// gates once for the whole workspace.
   onboardingCompletedAt DateTime? @map("onboarding_completed_at") @db.Timestamptz(6)
   /// When the onboarding sample data was laid down, so the seed never runs twice.
-  demoSeededAt   DateTime? @map("demo_seeded_at") @db.Timestamptz(6)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  demoSeededAt          DateTime? @map("demo_seeded_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  organization  Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  memberships   AgentMembership[]
-  apiTokens     ApiToken[]
-  refreshTokens OauthRefreshToken[]
-  groups        Group[]
-  chats         Chat[]
-  tags          Tag[]
-  tickets       Ticket[]
-  cannedResponses CannedResponse[]
-  campaigns     Campaign[]
-  goals         Goal[]
-  aiAgents      AiAgent[]
-  skills        Skill[]
-  workflows     Workflow[]
-  routingRules  RoutingRule[]
-  channels      Channel[]
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships       AgentMembership[]
+  apiTokens         ApiToken[]
+  refreshTokens     OauthRefreshToken[]
+  groups            Group[]
+  chats             Chat[]
+  tags              Tag[]
+  tickets           Ticket[]
+  cannedResponses   CannedResponse[]
+  campaigns         Campaign[]
+  goals             Goal[]
+  aiAgents          AiAgent[]
+  skills            Skill[]
+  workflows         Workflow[]
+  routingRules      RoutingRule[]
+  channels          Channel[]
   channelIdentities ChannelIdentity[]
   channelMessages   ChannelMessage[]
-  websites      Website[]
-  webhooks      Webhook[]
+  websites          Website[]
+  webhooks          Webhook[]
   webhookDeliveries WebhookDelivery[]
-  subscriptions Subscription[]
-  usageRecords  UsageRecord[]
-  paymentMethod    PaymentMethod?
-  auditEntries  AuditLogEntry[]
-  securitySettings SecuritySettings?
-  inboxSettings    InboxSettings?
-  widgetSettings   WidgetSettings?
+  subscriptions     Subscription[]
+  usageRecords      UsageRecord[]
+  paymentMethod     PaymentMethod?
+  auditEntries      AuditLogEntry[]
+  securitySettings  SecuritySettings?
+  inboxSettings     InboxSettings?
+  widgetSettings    WidgetSettings?
 
-  invitations      Invitation[]
+  invitations Invitation[]
 
   @@index([organizationId])
   @@map("licenses")
@@ -111,6 +111,7 @@ model Account {
   groupMemberships   GroupAgent[]
   passwordResets     PasswordResetToken[]
   invitationsSent    Invitation[]
+  ticketFollows      TicketFollower[]
 
   @@map("accounts")
 }
@@ -118,19 +119,19 @@ model Account {
 /// Membership carries the role, availability and routing capacity of an agent
 /// within one license. PRD §8.4.
 model AgentMembership {
-  licenseId            BigInt   @map("license_id")
-  agentId              String   @map("agent_id") @db.Uuid
+  licenseId            BigInt    @map("license_id")
+  agentId              String    @map("agent_id") @db.Uuid
   role                 String
-  routingStatus        String   @default("offline") @map("routing_status")
-  concurrentChatsLimit Int      @default(6) @map("concurrent_chats_limit")
-  twoFactorEnabled     Boolean  @default(false) @map("two_factor_enabled")
+  routingStatus        String    @default("offline") @map("routing_status")
+  concurrentChatsLimit Int       @default(6) @map("concurrent_chats_limit")
+  twoFactorEnabled     Boolean   @default(false) @map("two_factor_enabled")
   /// Per-user, per-license opt-out for the e-mail notification channel (FR-MOD-13.8).
-  notifyEmail          Boolean  @default(true) @map("notify_email")
-  awaitingApproval     Boolean  @default(false) @map("awaiting_approval")
-  suspended            Boolean  @default(false) @map("suspended")
+  notifyEmail          Boolean   @default(true) @map("notify_email")
+  awaitingApproval     Boolean   @default(false) @map("awaiting_approval")
+  suspended            Boolean   @default(false) @map("suspended")
   /// Tie-breaker for round-robin assignment (ADR-08 step 4).
   lastAssignedAt       DateTime? @map("last_assigned_at") @db.Timestamptz(6)
-  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   agent   Account @relation(fields: [agentId], references: [id], onDelete: Cascade)
@@ -233,9 +234,9 @@ model Customer {
   bannedAt       DateTime? @map("banned_at") @db.Timestamptz(6)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  chats   Chat[]
-  tickets Ticket[]
-  visits  Visit[]
+  chats             Chat[]
+  tickets           Ticket[]
+  visits            Visit[]
   channelIdentities ChannelIdentity[]
 
   @@index([organizationId, lastActivityAt(sort: Desc)])
@@ -249,14 +250,14 @@ model Customer {
 /// allowlist retrofitted after integrators depend on the open behaviour is a
 /// breaking change nobody wants to make.
 model TrustedDomain {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  licenseId      BigInt   @map("license_id")
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  licenseId         BigInt   @map("license_id")
   /// Hostname only, lowercase, no scheme or port, e.g. `shop.example.com`.
-  domain         String
+  domain            String
   /// Also allow `*.domain`. Never permits a bare public suffix.
-  includeSubdomains Boolean @default(false) @map("include_subdomains")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  includeSubdomains Boolean  @default(false) @map("include_subdomains")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@unique([organizationId, domain])
   @@index([licenseId])
@@ -345,13 +346,13 @@ model Chat {
   active     Boolean  @default(true)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  license  License    @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  customer Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  threads  Thread[]
-  users    ChatUser[]
-  access   ChatAccess[]
-  ratings  Rating[]
-  tickets  Ticket[]
+  license   License      @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer  Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  threads   Thread[]
+  users     ChatUser[]
+  access    ChatAccess[]
+  ratings   Rating[]
+  tickets   Ticket[]
   skillRuns SkillRun[]
 
   @@index([licenseId, createdAt(sort: Desc)])
@@ -425,12 +426,12 @@ model Event {
 
 /// Who is in a chat, and how much of it they have seen.
 model ChatUser {
-  chatId    String    @map("chat_id") @db.VarChar(12)
-  userId    String    @map("user_id")
-  userType  String    @map("user_type")
-  present   Boolean   @default(true)
-  seenUpTo  DateTime? @map("seen_up_to") @db.Timestamptz(6)
-  joinedAt  DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+  chatId   String    @map("chat_id") @db.VarChar(12)
+  userId   String    @map("user_id")
+  userType String    @map("user_type")
+  present  Boolean   @default(true)
+  seenUpTo DateTime? @map("seen_up_to") @db.Timestamptz(6)
+  joinedAt DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
 
   chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
@@ -483,6 +484,14 @@ model ThreadTag {
 }
 
 /// Asynchronous conversations (email and the like), as opposed to live chats.
+///
+/// The HelpDesk layer (FR-MOD-13.6) adds three things on top of the ticket core:
+///   - `priority` — an integer the queue can be worked by; higher is more urgent.
+///   - `mergedIntoId` — a self reference. A merge is *non-destructive*: it only
+///     points the secondary at its primary, so an unmerge is a clean inverse
+///     (clear the pointer) rather than a reconstruction. A merged ticket is
+///     folded under its primary and hidden from the lists.
+///   - `followers` — agents watching a ticket without owning it.
 model Ticket {
   id            String    @id @db.VarChar(12)
   licenseId     BigInt    @map("license_id")
@@ -490,20 +499,49 @@ model Ticket {
   sourceChatId  String?   @map("source_chat_id") @db.VarChar(12)
   subject       String
   status        String    @default("open")
+  /// Queue priority (FR-MOD-13.6). Higher is more urgent; 0 is the default. A
+  /// signed integer rather than an enum so the ordering is the database's, not
+  /// a lookup the query has to carry.
+  priority      Int       @default(0)
   assigneeId    String?   @map("assignee_id") @db.Uuid
   groupId       BigInt?   @map("group_id")
+  /// The primary this ticket was merged into, or null when it stands alone. The
+  /// FK is `ON DELETE SET NULL`, and a CHECK in the migration forbids pointing at
+  /// itself; "no chains" (a merged ticket cannot itself be a target) is enforced
+  /// in the service.
+  mergedIntoId  String?   @map("merged_into_id") @db.VarChar(12)
   lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(6)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  license    License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  sourceChat Chat?     @relation(fields: [sourceChatId], references: [id], onDelete: SetNull)
+  license       License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer      Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  sourceChat    Chat?            @relation(fields: [sourceChatId], references: [id], onDelete: SetNull)
+  mergedInto    Ticket?          @relation("TicketMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedTickets Ticket[]         @relation("TicketMerge")
+  followers     TicketFollower[]
 
   @@index([licenseId, status, lastMessageAt(sort: Desc)])
   @@index([assigneeId])
   @@index([licenseId, lastMessageAt(sort: Desc), id(sort: Desc)], map: "tickets_license_last_message_idx")
   @@index([licenseId, assigneeId, lastMessageAt(sort: Desc)], map: "tickets_license_assignee_idx")
+  @@index([mergedIntoId])
   @@map("tickets")
+}
+
+/// Agents watching a ticket (FR-MOD-13.6 "followers"). Like `thread_tags` it has
+/// no license column of its own — it inherits tenant visibility from the ticket
+/// it hangs off, and the RLS policy in the migration scopes it through that FK.
+model TicketFollower {
+  ticketId  String   @map("ticket_id") @db.VarChar(12)
+  accountId String   @map("account_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  ticket  Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, accountId])
+  @@index([accountId])
+  @@map("ticket_followers")
 }
 
 /// Password recovery (PRD FR-MOD-00.3). Not in §8.4 — see PLAN §D12.
@@ -703,13 +741,13 @@ model Skill {
 /// Audit trail for skill executions — what ran, against which chat, and why it
 /// did what it did.
 model SkillRun {
-  id      String   @id @default(uuid()) @db.Uuid
-  skillId String   @map("skill_id") @db.Uuid
-  chatId  String?  @map("chat_id") @db.VarChar(12)
-  licenseId BigInt @map("license_id")
-  status  String   @default("succeeded")
-  log     Json     @default("[]")
-  ranAt   DateTime @default(now()) @map("ran_at") @db.Timestamptz(6)
+  id        String   @id @default(uuid()) @db.Uuid
+  skillId   String   @map("skill_id") @db.Uuid
+  chatId    String?  @map("chat_id") @db.VarChar(12)
+  licenseId BigInt   @map("license_id")
+  status    String   @default("succeeded")
+  log       Json     @default("[]")
+  ranAt     DateTime @default(now()) @map("ran_at") @db.Timestamptz(6)
 
   skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
   chat  Chat? @relation(fields: [chatId], references: [id], onDelete: SetNull)
@@ -750,7 +788,7 @@ model KnowledgeSource {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  aiAgent AiAgent           @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
+  aiAgent AiAgent          @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
   chunks  KnowledgeChunk[]
 
   @@index([aiAgentId, type])
@@ -761,14 +799,14 @@ model KnowledgeSource {
 /// Retrieval unit. The embedding column is pgvector; its ivfflat index is
 /// created in the migration because Prisma cannot express index methods.
 model KnowledgeChunk {
-  id         String                @id @default(uuid()) @db.Uuid
-  sourceId   String                @map("source_id") @db.Uuid
-  licenseId  BigInt                @map("license_id")
-  chunkText  String                @map("chunk_text")
+  id         String                       @id @default(uuid()) @db.Uuid
+  sourceId   String                       @map("source_id") @db.Uuid
+  licenseId  BigInt                       @map("license_id")
+  chunkText  String                       @map("chunk_text")
   embedding  Unsupported("vector(1536)")?
-  tokenCount Int?                  @map("token_count")
-  position   Int                   @default(0)
-  createdAt  DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  tokenCount Int?                         @map("token_count")
+  position   Int                          @default(0)
+  createdAt  DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
 
   source KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 

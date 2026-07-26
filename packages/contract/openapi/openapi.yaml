@@ -143,6 +143,12 @@ paths:
     $ref: "./paths/tickets.yaml#/tickets"
   /tickets/{ticketId}:
     $ref: "./paths/tickets.yaml#/ticket"
+  /tickets/{ticketId}/merge:
+    $ref: "./paths/tickets.yaml#/ticketMerge"
+  /tickets/{ticketId}/followers:
+    $ref: "./paths/tickets.yaml#/ticketFollowers"
+  /tickets/{ticketId}/followers/{accountId}:
+    $ref: "./paths/tickets.yaml#/ticketFollower"
   /customers/{customerId}/ban:
     $ref: "./paths/customers.yaml#/ban"
 
@@ -1115,13 +1121,18 @@ components:
 
     Ticket:
       type: object
-      required: [id, subject, status, created_at]
+      required: [id, subject, status, priority, created_at]
       properties:
         id: { type: string, maxLength: 12 }
         subject: { type: string }
         status:
           type: string
           enum: [open, pending, solved, closed, spam]
+        priority:
+          type: integer
+          description: |
+            Queue priority (FR-MOD-13.6). Higher is more urgent; 0 is the
+            default. Bounded to [-100, 100].
         assignee_id: { type: string, format: uuid, nullable: true }
         assignee_name: { type: string, nullable: true }
         group_id: { type: integer, format: int64, nullable: true }
@@ -1136,6 +1147,13 @@ components:
           nullable: true
           maxLength: 12
           description: The conversation this followed on from, if any.
+        merged_into_id:
+          type: string
+          nullable: true
+          maxLength: 12
+          description: |
+            The primary ticket this one is folded into (FR-MOD-13.6), or null
+            when it stands alone. A merged ticket is hidden from the lists.
         last_message_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
 
@@ -1143,6 +1161,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/Ticket"
         - type: object
+          required: [followers, merged_ticket_ids]
           properties:
             source_chat:
               nullable: true
@@ -1155,6 +1174,19 @@ components:
                 id: { type: string, maxLength: 12 }
                 active: { type: boolean }
                 created_at: { type: string, format: date-time }
+            followers:
+              type: array
+              description: Agents watching this ticket without owning it (FR-MOD-13.6).
+              items:
+                type: object
+                required: [account_id]
+                properties:
+                  account_id: { type: string, format: uuid }
+                  name: { type: string, nullable: true }
+            merged_ticket_ids:
+              type: array
+              description: Ids of the tickets merged into this one (empty unless it is a primary).
+              items: { type: string, maxLength: 12 }
 
     CustomerDetail:
       allOf:

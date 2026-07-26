@@ -176,3 +176,137 @@ ticket:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# HelpDesk layer (FR-MOD-13.6): merge/unmerge and followers on the ticket core.
+# The unified inbox holds tickets alongside chats — this is the async side of it,
+# not a separate HelpDesk product.
+ticketMerge:
+  parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: { type: string, maxLength: 12 }
+
+  post:
+    tags: [Tickets]
+    operationId: mergeTicket
+    summary: Merge this ticket into another
+    description: |
+      Folds this ticket into the primary named by `into`. The merge is
+      non-destructive — it only points the secondary at the primary, and a
+      merged ticket drops out of the lists and reappears under the primary's
+      `merged_ticket_ids`. `DELETE` on the same path is an exact inverse.
+
+      Refused (`400`) for a self-merge, a source that is already merged, a target
+      that is itself merged (no chains), or a source that is itself a primary.
+      A ticket in another tenant is `404`, never `403` (NFR-S5).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [into]
+            properties:
+              into:
+                type: string
+                maxLength: 12
+                description: The primary ticket to merge this one into.
+    responses:
+      "200":
+        description: Merged; the secondary now carries `merged_into_id`.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Tickets]
+    operationId: unmergeTicket
+    summary: Undo a merge
+    description: |
+      Clears the ticket's `merged_into_id`, restoring it as a standalone ticket
+      in the lists. `400` if the ticket was not merged.
+    responses:
+      "200":
+        description: Unmerged.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ticketFollowers:
+  parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: { type: string, maxLength: 12 }
+
+  post:
+    tags: [Tickets]
+    operationId: addTicketFollower
+    summary: Add a follower
+    description: |
+      Adds an agent as a follower — someone watching the ticket without owning
+      it. Idempotent: following a ticket already followed changes nothing and
+      writes no second audit entry. The account must be a member of the licence.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [account_id]
+            properties:
+              account_id: { type: string, format: uuid }
+    responses:
+      "200":
+        description: The ticket, with the follower present.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ticketFollower:
+  parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: { type: string, maxLength: 12 }
+    - name: accountId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  delete:
+    tags: [Tickets]
+    operationId: removeTicketFollower
+    summary: Remove a follower
+    description: Idempotent, mirroring the add — removing a follower who is not following changes nothing.
+    responses:
+      "200":
+        description: The ticket, with the follower gone.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

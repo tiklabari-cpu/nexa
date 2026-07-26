@@ -10,6 +10,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { TICKET_PRIORITY_MAX, TICKET_PRIORITY_MIN } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { TICKET_STATUSES, TicketService } from '../services/tickets/ticket-service.js';
 
@@ -47,12 +48,17 @@ const updateBody = z
   .object({
     subject: z.string().trim().min(1).max(200).optional(),
     status: z.enum(TICKET_STATUSES).optional(),
+    priority: z.number().int().min(TICKET_PRIORITY_MIN).max(TICKET_PRIORITY_MAX).optional(),
     assignee_id: z.string().uuid().nullable().optional(),
     group_id: z.number().int().positive().nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
+const mergeBody = z.object({ into: z.string().min(1).max(12) });
+const followerBody = z.object({ account_id: z.string().uuid() });
+
 const ticketIdSchema = z.string().min(1).max(12);
+const accountIdSchema = z.string().uuid();
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -129,12 +135,82 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
       const principal = request.requirePrincipal();
 
       const ticket = await request.withTenant((tx) =>
-        tickets.update(tx, tenant, principal, ticketId, {
+        tickets.update(tx, tenant, principal, request.auditContext(), ticketId, {
           ...(body.subject !== undefined ? { subject: body.subject } : {}),
           ...(body.status !== undefined ? { status: body.status } : {}),
+          ...(body.priority !== undefined ? { priority: body.priority } : {}),
           ...(body.assignee_id !== undefined ? { assignee_id: body.assignee_id } : {}),
           ...(body.group_id !== undefined ? { group_id: body.group_id } : {}),
         }),
+      );
+
+      return reply.send(ticket);
+    },
+  );
+
+  // --- HelpDesk layer (FR-MOD-13.6): merge / unmerge / followers -------------
+
+  app.post<{ Params: { ticketId: string } }>(
+    '/tickets/:ticketId/merge',
+    { config: { scopes: WRITE_SCOPES } },
+    async (request, reply) => {
+      const ticketId = parse(ticketIdSchema, request.params.ticketId);
+      const { into } = parse(mergeBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      const ticket = await request.withTenant((tx) =>
+        tickets.merge(tx, tenant, principal, request.auditContext(), ticketId, into),
+      );
+
+      return reply.send(ticket);
+    },
+  );
+
+  app.delete<{ Params: { ticketId: string } }>(
+    '/tickets/:ticketId/merge',
+    { config: { scopes: WRITE_SCOPES } },
+    async (request, reply) => {
+      const ticketId = parse(ticketIdSchema, request.params.ticketId);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      const ticket = await request.withTenant((tx) =>
+        tickets.unmerge(tx, tenant, principal, request.auditContext(), ticketId),
+      );
+
+      return reply.send(ticket);
+    },
+  );
+
+  app.post<{ Params: { ticketId: string } }>(
+    '/tickets/:ticketId/followers',
+    { config: { scopes: WRITE_SCOPES } },
+    async (request, reply) => {
+      const ticketId = parse(ticketIdSchema, request.params.ticketId);
+      const { account_id } = parse(followerBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      const ticket = await request.withTenant((tx) =>
+        tickets.addFollower(tx, tenant, principal, request.auditContext(), ticketId, account_id),
+      );
+
+      return reply.send(ticket);
+    },
+  );
+
+  app.delete<{ Params: { ticketId: string; accountId: string } }>(
+    '/tickets/:ticketId/followers/:accountId',
+    { config: { scopes: WRITE_SCOPES } },
+    async (request, reply) => {
+      const ticketId = parse(ticketIdSchema, request.params.ticketId);
+      const accountId = parse(accountIdSchema, request.params.accountId);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      const ticket = await request.withTenant((tx) =>
+        tickets.removeFollower(tx, tenant, principal, request.auditContext(), ticketId, accountId),
       );
 
       return reply.send(ticket);

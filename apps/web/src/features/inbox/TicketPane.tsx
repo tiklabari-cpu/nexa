@@ -313,12 +313,29 @@ function MergeSection({
   );
 }
 
+/** "← Tickets" — returns from a ticket record to the grid (FR-MOD-02.7). */
+function BackToTickets({ onBack }: { onBack: () => void }): ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onBack}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
+    >
+      <span aria-hidden="true">←</span>
+      Tickets
+    </button>
+  );
+}
+
 export function TicketDetailPane({
   ticketId,
   candidates,
+  onBack,
 }: {
   ticketId: string | null;
   candidates: Ticket[];
+  /** When set, the pane shows a "← Tickets" control back to the grid. */
+  onBack?: () => void;
 }): ReactElement {
   const ticket = useTicket(ticketId);
   const update = useUpdateTicket(ticketId);
@@ -328,9 +345,14 @@ export function TicketDetailPane({
   if (!ticketId || !ticket.data) {
     return (
       <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+        {onBack && (
+          <header className="flex h-topbar shrink-0 items-center border-b border-border bg-surface px-4">
+            <BackToTickets onBack={onBack} />
+          </header>
+        )}
         <EmptyState
           title="No ticket selected"
-          description="Pick a ticket from the list to see it here."
+          description="Pick a ticket from the grid to see it here."
         />
       </main>
     );
@@ -348,6 +370,7 @@ export function TicketDetailPane({
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-canvas">
       <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+        {onBack && <BackToTickets onBack={onBack} />}
         <h2 className="flex-1 truncate text-sm font-semibold">{data.subject}</h2>
         <PriorityPill value={data.priority} />
         <span className="font-mono text-2xs text-content-tertiary">{data.id}</span>

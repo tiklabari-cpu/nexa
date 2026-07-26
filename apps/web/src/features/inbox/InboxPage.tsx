@@ -35,10 +35,20 @@ import {
   type SavedView,
 } from './views.js';
 import { useNotifications } from '../notifications/useNotifications.js';
-import { TicketDetailPane, TicketList } from './TicketPane.js';
+import { TicketDetailPane } from './TicketPane.js';
+import { TicketGrid } from './TicketGrid.js';
 import { useTicketList } from './useTickets.js';
 import { CreateTicketButton } from './CreateTicketButton.js';
 import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
+import {
+  clearTicketSort,
+  hasTicketSortParams,
+  parseTicketSort,
+  sortTickets,
+  toggleTicketSort,
+  writeTicketSort,
+  type TicketSortKey,
+} from './ticket-grid.js';
 import type { InboxView, TicketView, TrafficTab } from './types.js';
 
 const VIEWS: Array<{ id: InboxView; label: string; icon: string }> = [
@@ -87,25 +97,63 @@ export function InboxPage(): ReactElement {
   // shared URL). The record's own detail query loads it regardless of which
   // list view is showing, so all this has to do is point the selection at it
   // under the "All" view and then consume the parameter.
+  //
+  // A "sorted grid" link (`?ticket_sort=…`, FR-MOD-02.7) is different: the sort
+  // params are the grid's state, not a one-shot target, so they open the tickets
+  // grid but stay in the URL rather than being stripped like `?chat`/`?ticket`.
   useEffect(() => {
     const chatId = searchParams.get('chat');
     const ticketId = searchParams.get('ticket');
-    if (!chatId && !ticketId) return;
-    if (chatId) {
-      setSelection({ kind: 'chat', view: 'all' });
-      setSelectedId(chatId);
-    } else if (ticketId) {
-      setSelection({ kind: 'ticket', view: 'all' });
-      setSelectedTicketId(ticketId);
+    if (chatId || ticketId) {
+      if (chatId) {
+        setSelection({ kind: 'chat', view: 'all' });
+        setSelectedId(chatId);
+      } else if (ticketId) {
+        setSelection({ kind: 'ticket', view: 'all' });
+        setSelectedTicketId(ticketId);
+      }
+      const next = new URLSearchParams(searchParams);
+      next.delete('chat');
+      next.delete('ticket');
+      setSearchParams(next, { replace: true });
+      return;
     }
-    const next = new URLSearchParams(searchParams);
-    next.delete('chat');
-    next.delete('ticket');
-    setSearchParams(next, { replace: true });
+    if (hasTicketSortParams(searchParams)) {
+      setSelection((current) =>
+        current.kind === 'ticket' ? current : { kind: 'ticket', view: 'all' },
+      );
+    }
   }, [searchParams, setSearchParams]);
 
   const onTickets = selection.kind === 'ticket';
   const view = selection.kind === 'chat' ? selection.view : 'all';
+  const ticketView: TicketView = selection.kind === 'ticket' ? selection.view : 'all';
+
+  // The Tickets grid sort is the URL's job (FR-MOD-02.7), so a sorted view is
+  // shareable and survives a reload. The rows are re-ordered client-side on the
+  // loaded page rather than refetched — see `ticket-grid.ts`.
+  const ticketSort = useMemo(() => parseTicketSort(searchParams), [searchParams]);
+
+  // Switching to a chat view drops the grid's sort params so a stale
+  // `?ticket_sort` does not linger in the URL (and re-open the grid on reload).
+  const selectChatView = (next: InboxView): void => {
+    setSelection({ kind: 'chat', view: next });
+    if (hasTicketSortParams(searchParams)) {
+      setSearchParams(clearTicketSort(searchParams), { replace: true });
+    }
+  };
+
+  // A ticket view always lands on the grid, not a stale open ticket.
+  const selectTicketView = (next: TicketView): void => {
+    setSelection({ kind: 'ticket', view: next });
+    setSelectedTicketId(null);
+  };
+
+  const changeTicketSort = (key: TicketSortKey): void => {
+    setSearchParams(writeTicketSort(searchParams, toggleTicketSort(ticketSort, key)), {
+      replace: true,
+    });
+  };
 
   // Turn incoming messages into sound / desktop / tab-title alerts. The socket
   // is shared: the same push updates the cache and drives the notification.
@@ -134,7 +182,7 @@ export function InboxPage(): ReactElement {
 
   // Applying a saved view sets its base view and real-time tab in one click.
   const applySavedView = (saved: SavedView): void => {
-    setSelection({ kind: 'chat', view: saved.base });
+    selectChatView(saved.base);
     setTrafficTab(saved.traffic);
   };
 
@@ -153,10 +201,7 @@ export function InboxPage(): ReactElement {
   // list below — switching tabs filters what is shown without dropping the
   // open conversation, which would yank the transcript out from under the agent.
   const trafficCounts = useMemo(() => trafficTabCounts(chats), [chats]);
-  const visibleChats = useMemo(
-    () => filterByTrafficTab(chats, trafficTab),
-    [chats, trafficTab],
-  );
+  const visibleChats = useMemo(() => filterByTrafficTab(chats, trafficTab), [chats, trafficTab]);
 
   // Keep a selection valid as the list changes underneath — a chat can be
   // transferred away while it is open. Gated on `list.data` so a deep-linked
@@ -171,13 +216,18 @@ export function InboxPage(): ReactElement {
   }, [chats, selectedId, onTickets, list.data]);
 
   const ticketItems = useMemo(() => tickets.data?.items ?? [], [tickets.data]);
+  const sortedTickets = useMemo(
+    () => sortTickets(ticketItems, ticketSort),
+    [ticketItems, ticketSort],
+  );
 
+  // Grid-first: nothing is auto-selected, so opening the Tickets group lands on
+  // the grid rather than jumping into a record. A selection that drops out of
+  // the list (solved into another view, merged away) falls back to the grid.
   useEffect(() => {
     if (!onTickets || !tickets.data) return;
     if (selectedTicketId && !ticketItems.some((t) => t.id === selectedTicketId)) {
-      setSelectedTicketId(ticketItems[0]?.id ?? null);
-    } else if (!selectedTicketId && ticketItems.length > 0) {
-      setSelectedTicketId(ticketItems[0]!.id);
+      setSelectedTicketId(null);
     }
   }, [ticketItems, selectedTicketId, onTickets, tickets.data]);
 
@@ -201,7 +251,7 @@ export function InboxPage(): ReactElement {
                 icon={item.icon}
                 active={selection.kind === 'chat' && selection.view === item.id}
                 count={counts[item.id]}
-                onClick={() => setSelection({ kind: 'chat', view: item.id })}
+                onClick={() => selectChatView(item.id)}
               />
             </li>
           ))}
@@ -218,7 +268,7 @@ export function InboxPage(): ReactElement {
                 icon={item.icon}
                 active={selection.kind === 'chat' && selection.view === item.id}
                 count={counts[item.id]}
-                onClick={() => setSelection({ kind: 'chat', view: item.id })}
+                onClick={() => selectChatView(item.id)}
               />
             </li>
           ))}
@@ -234,7 +284,7 @@ export function InboxPage(): ReactElement {
                 label={item.label}
                 icon={item.icon}
                 active={selection.kind === 'ticket' && selection.view === item.id}
-                onClick={() => setSelection({ kind: 'ticket', view: item.id })}
+                onClick={() => selectTicketView(item.id)}
               />
             </li>
           ))}
@@ -275,218 +325,240 @@ export function InboxPage(): ReactElement {
         </div>
       </nav>
 
-      {/* Conversation list */}
-      <section
-        aria-label={onTickets ? 'Tickets' : 'Conversations'}
-        className="flex w-list shrink-0 flex-col border-r border-border bg-surface"
-      >
-        <header className="flex h-topbar items-center justify-between border-b border-border px-4">
-          <h2 className="text-sm font-semibold">
-            {onTickets
-              ? TICKET_VIEWS.find((v) => v.id === selection.view)?.label
-              : [...VIEWS, ...AI_VIEWS].find((v) => v.id === view)?.label}
-          </h2>
-          <span className="tabular text-2xs text-content-tertiary">
-            {onTickets ? ticketItems.length : visibleChats.length}
-          </span>
-        </header>
-
-        {/* Real-time tabs (FR-MOD-03.1.1): a live segmentation of the chat list.
-            Chats only — tickets are asynchronous and have their own views. */}
-        {!onTickets && (
-          <div
-            role="tablist"
-            aria-label="Real-time tabs"
-            className="flex gap-1 border-b border-border px-2 py-1.5"
-          >
-            {TRAFFIC_TABS.map((tab) => {
-              const active = trafficTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setTrafficTab(tab.id)}
-                  className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
-                    active
-                      ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
-                      : 'text-content-secondary hover:bg-surface-2'
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  <span
-                    aria-hidden="true"
-                    className={`tabular rounded-sm px-1 text-2xs ${
-                      active ? 'bg-brand-200 dark:bg-brand-900' : 'bg-inset text-content-tertiary'
-                    }`}
-                  >
-                    {trafficCounts[tab.id]}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto" role={onTickets ? undefined : 'tabpanel'}>
-          {onTickets ? (
-            <TicketList
-              tickets={ticketItems}
-              loading={tickets.isPending}
-              selectedId={selectedTicketId}
-              onSelect={setSelectedTicketId}
-            />
-          ) : list.isPending ? (
-            <ListSkeleton />
-          ) : visibleChats.length === 0 ? (
-            <EmptyState
-              title={
-                chats.length > 0 && trafficTab !== 'all' ? 'Nothing in this tab' : 'Nothing here yet'
-              }
-              description={
-                chats.length > 0 && trafficTab !== 'all'
-                  ? 'No conversations match this tab right now.'
-                  : view === 'archived'
-                    ? 'Closed conversations will appear here.'
-                    : view === 'ai'
-                      ? 'Conversations the AI agent is handling appear here.'
-                      : view === 'ai_solved'
-                        ? 'Conversations the AI resolved on its own appear here.'
-                        : 'New conversations land here as they arrive.'
-              }
-            />
-          ) : (
-            <ul>
-              {visibleChats.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(item.id)}
-                    aria-current={selectedId === item.id ? 'true' : undefined}
-                    className={`flex w-full flex-col gap-1 border-b border-border px-4 py-3 text-left transition-colors ${
-                      selectedId === item.id
-                        ? 'bg-brand-100 dark:bg-brand-950'
-                        : 'hover:bg-surface-2'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className="flex-1 truncate text-sm font-medium">
-                        {item.customer_name ?? 'Visitor'}
-                      </span>
-                      {item.queue_position !== null && (
-                        <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-warning">
-                          #{item.queue_position} in queue
-                        </span>
-                      )}
-                      {item.unread_count > 0 && (
-                        <span
-                          aria-label={`${item.unread_count} unread`}
-                          className="h-2 w-2 rounded-full bg-brand-500"
-                        />
-                      )}
-                    </span>
-                    <span className="truncate text-xs text-content-secondary">
-                      {item.last_event?.text ?? 'No messages yet'}
-                    </span>
-                    {item.tags.length > 0 && (
-                      <span className="flex flex-wrap gap-1">
-                        {item.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-tertiary"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      {/* Transcript, or the ticket record */}
       {onTickets ? (
-        <TicketDetailPane ticketId={selectedTicketId} candidates={ticketItems} />
-      ) : (
-        <main className="flex min-w-0 flex-1 flex-col bg-canvas">
-          {selectedId && chat.data ? (
-            <>
-              <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
-                <h2 className="flex-1 truncate text-sm font-semibold">
-                  {chats.find((c) => c.id === selectedId)?.customer_name ?? 'Visitor'}
-                </h2>
-                <span className="font-mono text-2xs text-content-tertiary">{selectedId}</span>
-                <StatusDot
-                  tone={chat.data.active ? 'success' : 'neutral'}
-                  label={chat.data.active ? 'Active' : 'Archived'}
-                />
-                <CopyLinkButton chatId={selectedId} />
-                <CreateTicketButton
-                  chatId={selectedId}
-                  customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
-                  onOpenTicket={(ticketId) => {
-                    setSelection({ kind: 'ticket', view: 'all' });
-                    setSelectedTicketId(ticketId);
-                  }}
-                />
-                {/* Copilot (FR-MOD-12.1): opens the assist panel for this chat,
-                    bringing the right panel back if it was collapsed. */}
-                <CopilotButton
-                  onOpen={() => {
-                    setPanelTab('copilot');
-                    rightPanel.setExpanded(false);
-                  }}
-                />
-                {/* When the panel is open it is collapsed from its own header
-                    (the transcript header is tight at this width); when it is
-                    hidden, this is the way back to it. */}
-                {rightPanel.expanded && <ShowDetailsButton onShow={() => rightPanel.setExpanded(false)} />}
-              </header>
-
-              <Transcript
-                events={transcript.data?.items ?? []}
-                loading={transcript.isPending}
-                currentAgentId={agent?.account_id ?? null}
-              />
-
-              <TypingIndicator
-                chatId={selectedId}
-                customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
-              />
-
-              <Composer chatId={selectedId} disabled={!chat.data.active} />
-            </>
-          ) : (
-            <EmptyState
-              title="No conversation selected"
-              description="Pick a conversation from the list to see it here."
-            />
-          )}
-        </main>
-      )}
-
-      {/* Right panel — Details or Copilot. Hidden in Expand mode so the
-          transcript takes the full width (FR-MOD-01.3 / 12.1). */}
-      {!onTickets && selectedId && chat.data && !rightPanel.expanded && (
-        panelTab === 'copilot' ? (
-          <CopilotPanel
-            chatId={selectedId}
-            chatActive={chat.data.active}
-            onShowDetails={() => setPanelTab('details')}
-            onCollapse={() => rightPanel.setExpanded(true)}
+        /* Tickets (FR-MOD-02.7): a full-width sortable grid, or the ticket
+           record once a row is opened. The grid spans the list + transcript
+           columns — tickets are compared across columns, not scanned in a
+           narrow rail, and the row is the link to the conversation behind it. */
+        selectedTicketId ? (
+          <TicketDetailPane
+            ticketId={selectedTicketId}
+            candidates={ticketItems}
+            onBack={() => setSelectedTicketId(null)}
           />
         ) : (
-          <DetailsPanel
-            chat={chat.data}
-            chatId={selectedId}
-            onCollapse={() => rightPanel.setExpanded(true)}
-          />
+          <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+            <header className="flex h-topbar shrink-0 items-center justify-between border-b border-border bg-surface px-4">
+              <h2 className="text-sm font-semibold">
+                {TICKET_VIEWS.find((v) => v.id === ticketView)?.label}
+              </h2>
+              <span className="tabular text-2xs text-content-tertiary">{sortedTickets.length}</span>
+            </header>
+            <div className="min-h-0 flex-1 overflow-hidden p-4">
+              <TicketGrid
+                tickets={sortedTickets}
+                loading={tickets.isPending}
+                sort={ticketSort}
+                onSort={changeTicketSort}
+                onOpen={setSelectedTicketId}
+                selectedId={selectedTicketId}
+              />
+            </div>
+          </main>
         )
+      ) : (
+        <>
+          {/* Conversation list */}
+          <section
+            aria-label="Conversations"
+            className="flex w-list shrink-0 flex-col border-r border-border bg-surface"
+          >
+            <header className="flex h-topbar items-center justify-between border-b border-border px-4">
+              <h2 className="text-sm font-semibold">
+                {[...VIEWS, ...AI_VIEWS].find((v) => v.id === view)?.label}
+              </h2>
+              <span className="tabular text-2xs text-content-tertiary">{visibleChats.length}</span>
+            </header>
+
+            {/* Real-time tabs (FR-MOD-03.1.1): a live segmentation of the chat list. */}
+            <div
+              role="tablist"
+              aria-label="Real-time tabs"
+              className="flex gap-1 border-b border-border px-2 py-1.5"
+            >
+              {TRAFFIC_TABS.map((tab) => {
+                const active = trafficTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setTrafficTab(tab.id)}
+                    className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
+                      active
+                        ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                        : 'text-content-secondary hover:bg-surface-2'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      aria-hidden="true"
+                      className={`tabular rounded-sm px-1 text-2xs ${
+                        active ? 'bg-brand-200 dark:bg-brand-900' : 'bg-inset text-content-tertiary'
+                      }`}
+                    >
+                      {trafficCounts[tab.id]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex-1 overflow-y-auto" role="tabpanel">
+              {list.isPending ? (
+                <ListSkeleton />
+              ) : visibleChats.length === 0 ? (
+                <EmptyState
+                  title={
+                    chats.length > 0 && trafficTab !== 'all'
+                      ? 'Nothing in this tab'
+                      : 'Nothing here yet'
+                  }
+                  description={
+                    chats.length > 0 && trafficTab !== 'all'
+                      ? 'No conversations match this tab right now.'
+                      : view === 'archived'
+                        ? 'Closed conversations will appear here.'
+                        : view === 'ai'
+                          ? 'Conversations the AI agent is handling appear here.'
+                          : view === 'ai_solved'
+                            ? 'Conversations the AI resolved on its own appear here.'
+                            : 'New conversations land here as they arrive.'
+                  }
+                />
+              ) : (
+                <ul>
+                  {visibleChats.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(item.id)}
+                        aria-current={selectedId === item.id ? 'true' : undefined}
+                        className={`flex w-full flex-col gap-1 border-b border-border px-4 py-3 text-left transition-colors ${
+                          selectedId === item.id
+                            ? 'bg-brand-100 dark:bg-brand-950'
+                            : 'hover:bg-surface-2'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className="flex-1 truncate text-sm font-medium">
+                            {item.customer_name ?? 'Visitor'}
+                          </span>
+                          {item.queue_position !== null && (
+                            <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-warning">
+                              #{item.queue_position} in queue
+                            </span>
+                          )}
+                          {item.unread_count > 0 && (
+                            <span
+                              aria-label={`${item.unread_count} unread`}
+                              className="h-2 w-2 rounded-full bg-brand-500"
+                            />
+                          )}
+                        </span>
+                        <span className="truncate text-xs text-content-secondary">
+                          {item.last_event?.text ?? 'No messages yet'}
+                        </span>
+                        {item.tags.length > 0 && (
+                          <span className="flex flex-wrap gap-1">
+                            {item.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-tertiary"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+
+          {/* Transcript */}
+          <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+            {selectedId && chat.data ? (
+              <>
+                <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+                  <h2 className="flex-1 truncate text-sm font-semibold">
+                    {chats.find((c) => c.id === selectedId)?.customer_name ?? 'Visitor'}
+                  </h2>
+                  <span className="font-mono text-2xs text-content-tertiary">{selectedId}</span>
+                  <StatusDot
+                    tone={chat.data.active ? 'success' : 'neutral'}
+                    label={chat.data.active ? 'Active' : 'Archived'}
+                  />
+                  <CopyLinkButton chatId={selectedId} />
+                  <CreateTicketButton
+                    chatId={selectedId}
+                    customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
+                    onOpenTicket={(ticketId) => {
+                      setSelection({ kind: 'ticket', view: 'all' });
+                      setSelectedTicketId(ticketId);
+                    }}
+                  />
+                  {/* Copilot (FR-MOD-12.1): opens the assist panel for this chat,
+                      bringing the right panel back if it was collapsed. */}
+                  <CopilotButton
+                    onOpen={() => {
+                      setPanelTab('copilot');
+                      rightPanel.setExpanded(false);
+                    }}
+                  />
+                  {/* When the panel is open it is collapsed from its own header
+                      (the transcript header is tight at this width); when it is
+                      hidden, this is the way back to it. */}
+                  {rightPanel.expanded && (
+                    <ShowDetailsButton onShow={() => rightPanel.setExpanded(false)} />
+                  )}
+                </header>
+
+                <Transcript
+                  events={transcript.data?.items ?? []}
+                  loading={transcript.isPending}
+                  currentAgentId={agent?.account_id ?? null}
+                />
+
+                <TypingIndicator
+                  chatId={selectedId}
+                  customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
+                />
+
+                <Composer chatId={selectedId} disabled={!chat.data.active} />
+              </>
+            ) : (
+              <EmptyState
+                title="No conversation selected"
+                description="Pick a conversation from the list to see it here."
+              />
+            )}
+          </main>
+
+          {/* Right panel — Details or Copilot. Hidden in Expand mode so the
+              transcript takes the full width (FR-MOD-01.3 / 12.1). */}
+          {selectedId &&
+            chat.data &&
+            !rightPanel.expanded &&
+            (panelTab === 'copilot' ? (
+              <CopilotPanel
+                chatId={selectedId}
+                chatActive={chat.data.active}
+                onShowDetails={() => setPanelTab('details')}
+                onCollapse={() => rightPanel.setExpanded(true)}
+              />
+            ) : (
+              <DetailsPanel
+                chat={chat.data}
+                chatId={selectedId}
+                onCollapse={() => rightPanel.setExpanded(true)}
+              />
+            ))}
+        </>
       )}
     </>
   );

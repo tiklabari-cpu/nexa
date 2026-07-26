@@ -6,6 +6,43 @@
 
 ## Task log (newest-first)
 
+### 40 — 02.7-a · Tickets grid (sıralanabilir, deep-link) — done — 2026-07-26 UTC
+
+- Kapsam: FR-MOD-02.7 (`Should v1`) `[XHIGH]` — sıralanabilir Tickets grid + URL param sıralama + deep-link.
+  Bağımlılık **T6-a** (VirtualTable, done). PLAN satır 519 (02.7) + §4.4.6 kalemi → `✅`. **Frontend-only, additive**
+  — hiçbir route/şema/OpenAPI/migration/backend'e dokunmadı (kontrat-parity etkilenmez; api/rtm testleri cache-hit).
+- Yapıldı:
+  - **Saf `ticket-grid.ts`** (`views.ts`/`traffic.ts` deseni): `sortTickets` (kolon başına değer, **nulls-last her iki
+    yönde**, stabil **id-desc tiebreak** = server `(last_message_at desc nulls last, id desc)` sırasıyla uyumlu),
+    `parseTicketSort`/`writeTicketSort`/`clearTicketSort`/`hasTicketSortParams` (URL `ticket_sort`+`ticket_order`,
+    yarım linke toleranslı), `toggleTicketSort` (aynı kolon yön çevirir, yeni kolon kendi default'u), `ariaSortFor`.
+  - **`TicketGrid.tsx`**: `VirtualTable` (T6-a) üstüne sıralanabilir tablo — `<th aria-sort>` + başlık butonu; satır
+    tıklanır (Customers grid deseni: `tr onClick` + hücrede klavye-erişilebilir buton) → `onOpen`. loading→skeleton,
+    boş→EmptyState.
+  - **`InboxPage.tsx`**: tickets yüzeyi artık **grid-first** — dar `TicketList` yerine tam-genişlik grid; satıra
+    tıklayınca `TicketDetailPane` (yeni `onBack` → `← Tickets`). Sıralama URL'de (`ticketSort = parseTicketSort`),
+    başlık tıklama `changeTicketSort` (replace). Deep-link effect: `?ticket_sort=…` → grid'i açar (params kalıcı,
+    strip edilmez); chat view'e geçince `clearTicketSort`. `?ticket=<id>` (satır→konuşma deep-link) korunur.
+    `TicketList` **silinmedi** (hâlâ export + `TicketPane.test.tsx`/`Skeleton.test.tsx` test eder), sadece
+    InboxPage'de kullanılmıyor.
+- Karar: **client-side sort** = yüklü sayfa (hook `limit=50`, keyset newest-first). Grid "sıralanabilir" KK'sını
+  karşılar; tam server-side çok-kolon sort backend değişikliği ister (ADR-09/fatura ile alakasız, bu Should diliminin
+  kapsamı değil). Virtualization (T6-a) render P4'ü zaten karşılıyor. Sort kararları saf modülde, tamamen testli.
+- Doğrulama (exit code'larla): `pnpm -w typecheck` ✓ (11/11) · `pnpm -w lint` ✓ (8/8) · `pnpm -w build` ✓ (7/7) ·
+  `pnpm -w test` ✓ (web **413** incl. yeni `ticket-grid.test.ts` **12** + `TicketGrid.test.tsx` **6**; backend cache-hit) ·
+  `pnpm -w test:integration` ✓ (api **713** + rtm; contract-parity ✅) · **e2e task akışı** `tickets.spec.ts` ✓ **2/2**
+  (temiz DB'de) — yeni test "sorts the tickets grid from the URL and opens a ticket from a row" (header→URL,
+  `?ticket_sort=subject&ticket_order=desc` reload→`aria-sort=descending`, satır→konuşma). Regresyon: `command-palette`/
+  `inbox-tabs`/`inbox-panel` e2e ✓ (6/6 — chat render + `?chat` deep-link + paneller sağlam).
+- **⚠️ Sonraki pencereye — ilgisiz PRE-EXISTING e2e kırığı (bu task DEĞİL):** `demo-flow.spec.ts:58` hâlâ
+  `getByPlaceholder('Type your reply…')` seçiyor ama **tm 39** (Reply Suggestions) composer placeholder'ını
+  `"Type your reply, or press Space for suggestions…"` yaptı → substring eşleşmiyor → `demo-flow` kırmızı. Composer.tsx
+  ve demo-flow.spec.ts'e **dokunmadım** (kapsam disiplini, CONVENTIONS §5). Fix = tek satır selector güncellemesi
+  (`'Type your reply'` substring, satır 58 + 84) — ayrı task olarak açılmalı.
+- e2e temiz-DB notu: e2e çalıştırmadan önce `.env` source edilmeli (rtm dev env ister) + tenant tabloları truncate
+  (biriken ticket'lar `demo`-idempotent seed'i sıfırlamaz → test 1 "Open it" yolu Details panel'e takılır). Truncate =
+  `apps/api/test/helpers/fixtures.ts` `resetDatabase` (TRUNCATE, drop DEĞİL), sonra global-setup `db:seed` reseed'ler.
+
 ### 39 — 02.3.2-a · Reply Suggestions çipleri (Space ile) — done — 2026-07-26 UTC
 
 - Kapsam: FR-MOD-02.3.2 (`Should v1`) `[XHIGH]` — composer'da AI yanıt öneri çipleri. Bağımlılık tm 36

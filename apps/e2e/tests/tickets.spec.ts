@@ -60,4 +60,60 @@ test.describe('ticket HelpDesk surface', () => {
     }
     await expect(removeButton.first()).toBeVisible();
   });
+
+  /**
+   * The Tickets grid (FR-MOD-02.7). The unit suite proves the sort maths and the
+   * URL round-trip; what only the live stack proves is that the sort actually
+   * rides in the URL — a header click that lands in the address bar, and a pasted
+   * link that reopens the grid already sorted — and that a row is the way into
+   * the ticket conversation. The seed carries no tickets, so one is created (or
+   * reused on a re-run) first, exactly as the priority test does.
+   */
+  test('sorts the tickets grid from the URL and opens a ticket from a row', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/inbox');
+
+    // Ensure at least one ticket exists. The create resolves to the ticket pane
+    // (a fresh chat) or an "Open it" prompt (a chat that already carries one, on
+    // a re-run) — either way a ticket now exists, which is all the grid needs.
+    await agentPage
+      .getByRole('region', { name: 'Conversations' })
+      .getByRole('button')
+      .first()
+      .click();
+    await agentPage.getByRole('button', { name: 'Create ticket', exact: true }).click();
+    await agentPage.getByRole('button', { name: 'Create', exact: true }).click();
+    await agentPage
+      .getByRole('button', { name: 'Tickets', exact: true })
+      .or(agentPage.getByRole('button', { name: 'Open it' }))
+      .first()
+      .waitFor();
+
+    // Open the grid from the nav (works from the pane or the chat alike).
+    await agentPage.getByRole('button', { name: 'All tickets' }).click();
+
+    // The grid is a sortable table; a header click writes the sort into the URL.
+    const grid = agentPage.getByRole('table', { name: 'Tickets' });
+    await expect(grid).toBeVisible();
+    await agentPage.getByRole('button', { name: 'Subject' }).click();
+    await expect(agentPage).toHaveURL(/ticket_sort=subject/);
+    await expect(agentPage.getByRole('columnheader', { name: /Subject/ })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+
+    // A pasted link reopens the grid already sorted — the point of URL sorting.
+    await agentPage.goto('/app/inbox?ticket_sort=subject&ticket_order=desc');
+    const sortedGrid = agentPage.getByRole('table', { name: 'Tickets' });
+    await expect(sortedGrid).toBeVisible();
+    await expect(agentPage.getByRole('columnheader', { name: /Subject/ })).toHaveAttribute(
+      'aria-sort',
+      'descending',
+    );
+
+    // A row opens the ticket conversation behind it.
+    await sortedGrid.getByRole('row').nth(1).getByRole('button').first().click();
+    await expect(agentPage.getByRole('button', { name: 'Tickets', exact: true })).toBeVisible();
+  });
 });

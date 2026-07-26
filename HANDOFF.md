@@ -6,7 +6,52 @@
 
 ## Task log (newest-first)
 
+### 34 — 08.8.4 · Webhooks [MAX] — done — 2026-07-26 UTC
+
+- Yapıldı (4 alt-görev, contract-first; negatif testler pozitiften önce):
+  - **34.1-a Kayıt API + kontrat:** `packages/contract/openapi/paths/webhooks.yaml` +
+    `openapi.yaml` (Webhook/WebhookRegistration/WebhookAction şemaları, `Webhooks` etiketi,
+    `/webhooks` + `/webhooks/{webhookId}` yolları) → `contract generate`. `routes/webhooks.ts`
+    (POST/GET/DELETE; scope `webhooks--all:rw`/`:ro`). `services/webhooks/webhook-service.ts`
+    (register/list/unregister). **Secret bir kez** register yanıtında döner; `list` `secret_key`
+    kolonunu **hiç seçmez** (SAFE_SELECT). server.ts'e register edildi.
+  - **34.2-b HMAC-SHA256 [MAX]:** `services/webhooks/signature.ts` — `signWebhook`
+    (`X-Webhook-Timestamp/Nonce/Signature: sha256=…`, imza = `HMAC(secret, "{ts}.{nonce}.{body}")`,
+    v2-04 §6.2) + `verifyWebhook` (±5 dk pencere, nonce tekilliği, `constantTimeEqual`).
+    Secret asla loglanmaz/gövdede taşınmaz.
+  - **34.3-c SSRF [MAX]:** `lib/ssrf.ts`'e `assertPublicHttpUrlResolved` eklendi — literal guard
+    (mevcut `assertPublicHttpUrl`) + **DNS çözümleme** ve her çözülen IP için `isBlockedHost`
+    (rebinding/TOCTOU). Kayıtta literal guard (400), teslimat yolunda resolved guard **her
+    gönderimde tekrar**; sender `redirect:'manual'` → 3xx başarısızlık (redirect izlenmez), yalnız http(s).
+  - **34.4-d Teslimat + retry + log:** `services/webhooks/webhook-dispatcher.ts` — 3× exponential
+    retry, **her deneme** `webhook_deliveries`'e bir satır (NFR-M5), son başarısız denemede
+    `permanent=true`. Yeni migration `20260726090000_webhook_deliveries` (tablo + FK cascade +
+    `attempt>=1` check + RLS `webhook_deliveries_tenant` + `nexa_app` grant); Prisma `WebhookDelivery`
+    modeli + License/Webhook ilişkileri. Sender/resolver/sleep enjekte edilebilir (ağ mock'lu).
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w test:unit` ✅
+  (api: signature 10 + ssrf 15 dahil 125; web 251) · `pnpm --filter @nexa/api test:integration` ✅
+  (25 dosya / **536 test**, contract-parity + route-config dahil; `webhooks.test.ts` 12 test) ·
+  `pnpm -w build` ✅. Yeni migration DB'ye `migrate deploy` ile uygulandı, Prisma client generate edildi.
+- Varsayımlar:
+  - **Signing key saklanır (hash değil).** Alt-görev notu "hash saklanır" der; ama HMAC simetrik —
+    sunucu her **giden** teslimatı bu secret ile **imzalar**, dolayısıyla hash imzalamayı imkânsız
+    kılardı. Şema kolonu da `secret_key` (verifier değil). "Bir kez gösterilir" tek mümkün yolla
+    sağlandı: register'da döner, `list` asla döndürmez. (Kod + bu notta gerekçe var.)
+  - **Kayıtta literal SSRF, teslimatta resolved SSRF.** Kayıtta DNS çözümlemesi çevrimdışı/CI'da
+    pozitif hostu (`hooks.example.test`) kırardı ve TOCTOU nedeniyle asıl koruma zaten teslimat
+    anındadır — bu yüzden kayıt literal guard, teslimat resolved+redirect guard yapar.
+  - **Kuyruk = in-process dispatch-with-retry** (ağ mock ilkesiyle tutarlı). Kalıcı kuyruk
+    (Redis/BullMQ) yalnız `dispatch`'in çağrıldığı yeri değiştirir, teslimat mantığını değil.
+- Sonraki pencereye not:
+  - Dispatcher **üretici uçlara henüz bağlı değil** — domain olayları (chat_started/deactivated/
+    transferred, event_created, ticket_created) `WebhookDispatcher.dispatch(action, payload)` çağırmalı.
+    Bu ayrı bir entegrasyon işi (chat/ticket servislerine dokunur), 34'ün KK'sı dışında bırakıldı.
+  - Alıcı-taraf `verifyWebhook` referans olarak sağlandı; nonce store production'da Redis SETNX+TTL≈310s olmalı.
+  - E2E: bu görev arka-uç/server-to-server, yeni UI akışı yok → yeni Playwright akışı N/A;
+    kapsanan akış (register→deliver) integration ile uçtan uca doğrulandı.
+
 ### PARK — `.parked-playbook/` (commit'lenmedi) — 2026-07-26 UTC
+
 - Depo kökündeki `.parked-playbook/` **bilinçli olarak commit dışı** bırakıldı (düzeltme
   penceresi, 2026-07-26). İçerik: `RecommendedSkills.{tsx,test.tsx}`, `SkillBrowser.{tsx,test.tsx}`,
   `skill-filters.{ts,test.ts}` — 05.x Skills modülünün **eski/alternatif** implementasyonu.
@@ -17,6 +62,7 @@
   yoksa temizlik turunda silinebilir. (`.gitignore`'a eklenmedi; kasıtlı görünür bırakıldı.)
 
 ### 33 — 06 · AI Agent + Knowledge tamamlama [MAX] — done — 2026-07-26 UTC
+
 - Yapıldı (6 alt-görev, contract-first):
   - **06.1-a Sekmeler + readiness:** `PlaybookPage` artık tek "AI Agent" yüzeyi —
     `role=tablist` (Performance/Profile/Skills/Knowledge; landing = Skills, E2E uyumu için).
@@ -43,9 +89,9 @@
     (updateAiAgent/createKnowledgeSource gövdeleri) güncellendi, generated types + bundle yeniden üretildi
     (parity path-düzeyinde korunur — yeni endpoint yok, mevcut genişletildi).
 - KK (birebir): 06.1 "tek yerde persona+yetenek+bilgi+performans; readiness" ✅ · 06.2.4 "drag reorder
-  + klavye; zorunlu param boşsa hata" ✅ · 06.3.1 "tür bazlı filtre" ✅ · 06.3.2 "geçersiz URL/tür reddi;
-  crawl/parse; RAG indeksleme" ✅ (bulk/CSV kapsam dışı) · 06.4 "widget'ta persona; çok dilli; zorunlu
-  isim" ✅ · 06.5 "KPI kartları; düşük-baz uyarısı; AI off arşiv ayrımı" ✅.
+  - klavye; zorunlu param boşsa hata" ✅ · 06.3.1 "tür bazlı filtre" ✅ · 06.3.2 "geçersiz URL/tür reddi;
+    crawl/parse; RAG indeksleme" ✅ (bulk/CSV kapsam dışı) · 06.4 "widget'ta persona; çok dilli; zorunlu
+    isim" ✅ · 06.5 "KPI kartları; düşük-baz uyarısı; AI off arşiv ayrımı" ✅.
 - **Test (yeni):** web unit +6 dosya (readiness/knowledge-tabs/step-reorder/performance saf + ProfileForm/
   AiPerformance/SkillEditor bileşen) → web unit **251**. api unit +2 (ssrf/web-crawler) → **109**.
   integration +2 (ai-agent-profile 6, knowledge-crawl 11 — **SSRF negatifleri pozitiften önce** +
@@ -63,6 +109,7 @@
   - **08.8.4-c webhook** artık `lib/ssrf.ts`'i paylaşacak (import et, yeniden yazma).
 
 ### 32.4 — 05.4-a · Liste kontrolleri (Search/Sort/Filter) — done — 2026-07-26 UTC
+
 - Yapıldı:
   - **Saf kontrol modülü** `apps/web/src/features/playbook/skill-filter.ts`: `applySkillControls`
     (ada göre arama + tür/durum/sahip filtre + sıralama; filtreler yalnız daraltır, girdi
@@ -98,6 +145,7 @@
   raised rate-limit (`RATE_LIMIT_ANON_PER_MIN=2000`) taşımaz, taze spawn ise DB/secret env'e muhtaç.
 
 ### 32.2 — 05.2-a · Recommended skills kartları (Try this / See more) — done — 2026-07-26 UTC
+
 - Yapıldı:
   - **Önerilen şablon şeridi** `apps/web/src/features/playbook/RecommendedSkills.tsx`: PlaybookPage'de
     inline `Section` (galeriden ayrı — modal değil). Kartlar kategori rozetli (Prebuilt ◆ / AI ✦ /
@@ -128,6 +176,7 @@
   false iken gizli (görüntüleyen zaten skill üretemez).
 
 ### 32.3 — 05.3-a · Skill listesi sekmeleri (All/AI/Workspace/Drafts) — done — 2026-07-26 UTC
+
 - Yapıldı:
   - **Saf sınıflandırma modülü** `apps/web/src/features/playbook/skill-tabs.ts`: `classifySkill`
     (aktif değil → `drafts`; aktif + `kind==='ai_agent'` → `ai`; aktif + diğer kind → `workspace`),
@@ -155,6 +204,7 @@
   üstüne kurulur (`filterSkillsByTab` sonucu → arama/sıralama). Parent 32 hâlâ in-progress (32.2/32.4 açık).
 
 ### 32.1 — 05.1-a · Browse templates galerisi — done — 2026-07-26 UTC
+
 - Yapıldı:
   - **Şablon galerisi** `TemplateGallery.tsx` (modal, a11y: labelled dialog, Escape/backdrop kapatır,
     focus içeri) + deterministik yerel katalog `templates.ts` (Prebuilt/AI/Trending; her şablon
@@ -186,6 +236,7 @@
   Parent **32** in-progress kalır (32.2-32.4 pending).
 
 ### 31 — T7-a · 13.8 E-posta bildirim kanalı (kullanıcı tercihi + gating) — done — 2026-07-25T20:40Z UTC
+
 - Yapıldı:
   - **Denetim bulgusu düzeltildi:** e-posta kanalı ZATEN vardı (tm 16, `customer.ts#notifyAssignee`
     atanan ajana `.data/mail`'e yazıyor) ama **tercihe bağlı değildi**. Açık olan tek şey buydu.
@@ -214,6 +265,7 @@
   bu mailer'a dayanır. Faz-0 sayacı: T7-a ✅ (13.8 `◐→✅`).
 
 ### 30.2 — EK-B.1 T6-b Skeleton + anlamlı empty state deseni (tüm Must listeler) — done — 2026-07-25T20:13Z UTC
+
 - Yapıldı:
   - **Ortak skeleton primitifi** (`components/Skeleton.tsx`): tasarım-sistemi `Skeleton` atomu
     (tek `bg-inset` shimmer bar, width/height CSS uzunluğu) + `ListSkeleton` (Must listeler için
@@ -245,6 +297,7 @@
   o zaman gelir.
 
 ### 30.1 — EK-B.1 T6-a Virtualized liste primitifi (Contacts/Teammates/Skills/Tickets) — done — 2026-07-25T17:56Z UTC
+
 - Yapıldı:
   - **Virtualized liste primitifi** (`components/VirtualList.tsx`): saf `computeVirtualWindow()`
     (pencere matematiği) + `useVirtualRows` hook (scroll + `ResizeObserver` ile viewport ölçümü,
@@ -286,13 +339,14 @@
     yazılı ama tasks.json'da ilgisiz bekleyen değişiklikler olduğundan commit edilmedi.
 
 ### 29.3 — EK-A T5-a Yarım-form kapatma onayı + ortak davranış — done — 2026-07-25T17:22Z UTC
+
 - Yapıldı:
   - **Dirty guard** (`lib/dirty-guard.tsx`): saf `confirmDiscard(isDirty, message?, confirm?)` +
     `useCloseGuard({isDirty,onClose,message?,confirm?})`. Kirli form kapatma → onay; temiz form
     onaysız kapanır. Confirmer enjekte edilebilir (test için). InviteTeammates modalındaki elle
     `window.confirm` bloğu bu primitife taşındı — artık tek kaynak (FR-EK-A.2).
   - **Optimistic + rollback** (`lib/optimistic.ts`): `optimisticCacheUpdate({queryClient,queryKey,
-    update,invalidateKeys?})` → `{onMutate,onError,onSettled}`. cancel→snapshot→guess→hata'da
+update,invalidateKeys?})` → `{onMutate,onError,onSettled}`. cancel→snapshot→guess→hata'da
     rollback→settle'da invalidate deseni tek yerde. İki tüketici: `useInbox.useSendMessage`
     (elle yazılmış optimistic dance yerine helper) + `SettingsPage` routing-rule `toggle`
     (artık optimistic; hata'da geri döner). "Tutarlı davranış; optimistic + hata geri alma" KK ✅.
@@ -313,6 +367,7 @@
   optimistic + stepper) dayanabilir.
 
 ### 29.2 — EK-A T4-b Kalan Must formlarını primitife taşı — done — 2026-07-25 UTC
+
 - Yapıldı:
   - **Auth formları** (`features/auth/PublicPages.tsx`): SignUp / ForgotPassword / ResetPassword /
     Join → elle `valid` boolean + `email.includes('@')` kaldırıldı, hepsi `useForm` primitifine
@@ -343,6 +398,7 @@
   kullanıyor (29.1); 29.3 bunu ortak bir sarmalayıcıya çıkarıp diğer modallara yayacak.
 
 ### 29.1 — EK-A T4-a Ortak form-validasyon primitifi + 2 pilot form — done — 2026-07-25 UTC
+
 - Yapıldı:
   - **Tek primitif:** `apps/web/src/lib/form.tsx` — bağımlılıksız `useForm` hook + validatörler
     (`required`, `email`, `emailList`, `domain`, `minLength`, `compose`, `splitList`) + `FieldError`
@@ -375,6 +431,7 @@
   api/rtm kaynağı değişmedi (git diff = yalnız apps/web).
 
 ### 28 — 01.3 Sağ panel switcher (Details/Expand + persist) — done — 2026-07-25 UTC
+
 - Yapıldı:
   - **Tercih deposu:** `apps/web/src/features/inbox/rightPanel.ts` — `nexa.inbox.right-panel`
     localStorage anahtarı (`'details' | 'expanded'`), `loadRightPanel`/`saveRightPanel` (safeStorage;
@@ -400,6 +457,7 @@
   Details/Copilot/Expand switcher'a dönüşecek.
 
 ### 27 — 02.4 Details paneli ziyaret bilgisi (Visited pages + Visit info) — done — 2026-07-25 UTC
+
 - Yapıldı:
   - **27.1 (T3-a) Kontrat+Backend:** `Chat` yanıtına nullable `visitor` bloğu — yeni `ChatVisitor`
     şeması (`visited_pages[]` + `visit_info{device,referrer,duration_seconds,ip}`);
@@ -422,6 +480,7 @@
   widget.spec 429 verir (kapı düşer, kod değil).
 
 ### 21 — 07.1/07.3.1/07.3.3 Reports: Breakdown + AI Agent sekmeleri + vs-önceki dönem + Chats kartları — done — 2026-07-25 UTC
+
 - Yapıldı:
   - **Kontrat** (`packages/contract/openapi/`): overview yanıtına `previous_period` (eşit-uzunluk
     önceki dönem: range + karşılaştırılabilir sayılar) + `chats` blogu (automated_per_hour,
@@ -459,6 +518,7 @@
   için ya taze api başlat ya seri/pencere-bekleyerek koş.
 
 ### 26.4 — I18N1/2 testler: t() fallback unit + locale smoke + widget boyut — done — 2026-07-25 UTC
+
 - Yapıldı: 26.1–26.3 zaten fallback unit (panel `apps/web/src/lib/i18n.test.ts` + widget
   `apps/widget/src/i18n.test.ts`), panel locale-switch smoke (`i18n.smoke.test.tsx`) ve widget
   bundle-P3 boyut testini (`test/bundle-size.test.ts`) bırakmıştı. Tek eksik **widget mount-locale
@@ -488,6 +548,7 @@
   ileride ekran-bazı katalog genişletmesi ayrı task olur.
 
 ### 26.3 — I18N1/2 widget string kataloglama (bundle bütçesi P3) — done — 2026-07-25 UTC
+
 - Yapıldı: 26.1/26.2 pencerelerinden çalışma ağacında bekleyen `apps/widget/src/i18n.ts`
   iskeletini (tr/en düz katalog + `createTranslator`/`resolveWidgetLocale`, panelle aynı
   fallback zinciri: aktif locale → İngilizce → anahtar) **widget'ın görünür yüzeyine bağladım**.
@@ -520,6 +581,7 @@
   panel gibi runtime dil değiştirici yok, gerekmiyor.
 
 ### 26.2 — I18N1/2 panel string kataloglama + Intl helper locale bağı — done — 2026-07-25 UTC
+
 - Yapıldı: 26.1'in çekirdeğini panelin **görünür chrome'una** bağladım. `AppShell.tsx` — trial banner
   (`shell.trial.*` + `{days}`/`{s}` interpolasyon), abonelik linki, ikon rayı `aria-label`'i, hesap menüsü
   (ad/çıkış fallback) `t()`'ye taşındı; hesap menüsüne **dil değiştirici** (`<select>` → `useLocale().setLocale`)
@@ -549,6 +611,7 @@
   (henüz değil).
 
 ### 26.1 — I18N1/2 panel i18n çekirdeği (katalog + t() + locale kaynağı) — done — 2026-07-25 UTC
+
 - Yapıldı: Bağımlılıksız hafif i18n temeli. `apps/web/src/lib/i18n.ts`: düz `tr/en` mesaj katalogu +
   `translate(locale,key,params)` (fallback zinciri **aktif locale → İngilizce → anahtarın kendisi** =
   eksik-anahtar güvenliği; `{name}` interpolasyon). Locale kaynağı: `localStorage('nexa.locale')` → tarayıcı
@@ -576,13 +639,14 @@
   Task 26 hâlâ `in-progress`.
 
 ### 25 — M5 Gözlemlenebilirlik: OpenTelemetry span + metrik (request_id köprüsü) — done — 2026-07-25 UTC
+
 - Yapıldı: NFR-M5 (§7.2 ◐→✅). Gerçek OTel SDK (2.10) bağlandı. `apps/api/src/telemetry/telemetry.ts`:
   `BasicTracerProvider` (SimpleSpanProcessor) + `MeterProvider` (PeriodicExportingMetricReader). Exporter
   seçimi: dev/prod **konsol** (collector yok — sınır), test/enjekte **in-memory**. `apps/api/src/plugins/telemetry.ts`:
   `onRequest`→SERVER span aç (`GET /route`, attribute'ler: `http.request.method`, `http.route` (düşük
   kardinalite: `routeOptions.url`), `url.path`, **`request_id`**=`request.id`), `onError`→`recordException`,
   `onResponse`→`http.server.requests`/`.request.duration`(s)/`.errors` metrikleri + `http.response.status_code`
-  + 5xx'te span status ERROR + span.end, `onClose`→shutdown. Telemetri kapalıyken **sıfır** hook/maliyet.
+  - 5xx'te span status ERROR + span.end, `onClose`→shutdown. Telemetri kapalıyken **sıfır** hook/maliyet.
 - Köprü: span'deki `request_id` = pino log `reqId` = `X-Request-Id` yanıt başlığı (server.ts `genReqId`) —
   aynı id üçünü birbirine bağlar (canlı sunucu smoke ile doğrulandı: `request_id: smoke-otel-1`).
 - Anahtar: `OTEL_ENABLED` (env.ts). Boşsa ortamı izler: dev/prod açık, **test kapalı** (suite'ler hızlı kalır).
@@ -600,14 +664,15 @@
   Faz-0 bakiyesinde kalan öncelik **26 (i18n) → 21 (Reports breakdown)**.
 
 ### 22 — 00.4 Onboarding sihirbazı + tohum veri — done — 2026-07-25 UTC
+
 - Yapıldı: Signup **boş** çalışma alanı açıyordu (grup/website/sohbet yok) → yeni sahip boş inbox'a
   düşüyordu. Eklenen ilk-kurulum sihirbazı (§3.0 00.4 ⬜→✅). Contract-first: `openapi/paths/onboarding.yaml`
-  + `@nexa/types` (`OnboardingState`, `OnboardingSeedResult`). Yeni uçlar: `GET /onboarding/state`,
-  `POST /onboarding/complete` (bitir **ve** atla — aynı çağrı, idempotent), `POST /onboarding/seed-demo`.
-  `/auth/me`'ye `onboarding_completed` eklendi (shell kapısı — ikinci istek maliyeti yok).
+  - `@nexa/types` (`OnboardingState`, `OnboardingSeedResult`). Yeni uçlar: `GET /onboarding/state`,
+    `POST /onboarding/complete` (bitir **ve** atla — aynı çağrı, idempotent), `POST /onboarding/seed-demo`.
+    `/auth/me`'ye `onboarding_completed` eklendi (shell kapısı — ikinci istek maliyeti yok).
 - Mekanizma: `licenses` tablosuna 2 bayrak (`onboarding_completed_at`, `demo_seeded_at`) — **lisans
   düzeyi** (workspace kurulu = tek sefer). Tohum veri yeni migration `onboarding_seed_demo(...)`
-  **SECURITY DEFINER** (auth_*/retention_* deseni): tenant id'lerini açıkça alır, yalnız onları yazar
+  **SECURITY DEFINER** (auth__/retention__ deseni): tenant id'lerini açıkça alır, yalnız onları yazar
   (org-kapsamlı ziyaretçi + lisans-kapsamlı sohbet/thread/event atomik); `demo_seeded_at` ile idempotent.
   3 canned + 2 tag + 1 örnek ziyaretçi + owner'a atanmış **aktif** örnek sohbet (owner unrestricted →
   grup gerekmez). Web: `App.tsx` kapısı (`agent.onboarding_completed === false` → tüm yollar
@@ -624,6 +689,7 @@
   `contract/dist/openapi.json` gitignore'lu (build artefaktı); `src/generated/api.ts` commit'lendi.
 
 ### 24 — C8 veri saklama (retention) budama işi [MAX] — done — 2026-07-25 UTC
+
 - Yapıldı: Silme CASCADE vardı (Dilim 3) ama süresi geçen veriyi budayan **periyodik iş yoktu**
   (§7.2 C8 ◐). Eklenen `services/retention/`: `policy.ts` (tablo→pencere — kapanmış thread 365g ·
   visit telemetri 90g · `.data` mail 30g; env'den override; `cutoffFor` **pozitif-pencere guard'ı**
@@ -657,6 +723,7 @@
   26 (i18n) → 21. `retention:run` prod'da cron'a bağlanacak (sınır: scheduler yok).
 
 ### 23 — S12 audit_log yazıcısı (append-only olay yazımı) [MAX] — done — 2026-07-25 UTC
+
 - Yapıldı: `audit_log` tablosu + RLS Dilim 12'de vardı ama **hiçbir olay yazılmıyordu** (§D16).
   Merkezi tek yazıcı `services/audit/audit-log.ts` → `writeAuditEntry(tx, ctx, entry)`: verilen
   **tenant transaction'ı** içinde tam 1 satır INSERT eder (RLS `WITH CHECK` yanlış tenant'ı reddeder),
@@ -688,6 +755,7 @@
   sıradaki öncelik tm **24** (C8 retention).
 
 ### 20 — Reports KPI: Manual/Assisted/Automated ayrımı + Total cases (07.3.2) — done — 2026-07-25 UTC
+
 - Yapıldı: Reports Overview'a PRD 07.3.2'nin **üç-sınıf çözüm ayrımı**. **Automated** = kapanmış,
   agent-yazımlı event yok (ADR-09 birebir korundu — faturanın AI-resolution sayacıyla aynı sorgu) ·
   **Assisted** = agent event VAR + o chat'e ait `skill_runs` VAR · **Manual** = agent event VAR, skill YOK.
@@ -709,6 +777,7 @@
   daha ince eşleme istenirse `skill_runs`'a `thread_id`/zaman penceresi gerekir (şu an kapsam dışı).
 
 ### §F — Faz-0 kapanış turu (bakiye kapatma) — done — 2026-07-25 UTC
+
 - Yapıldı: 02.6 **Copy chat link** — inbox transcript başlığına "Copy link" düğmesi (`CopyLinkButton`);
   `${origin}/app/inbox?chat=<id>` mutlak deep-link'ini panoya kopyalar (komut paleti + InboxPage'in
   zaten tükettiği `?chat=` parametresi, tek kaynak). 02.6 artık tam ✅ (Reopen + Create ticket + Copy link).
@@ -727,16 +796,17 @@
   OTel (M5) · retention job (C8) · i18n · PAT UI (08.8.2).
 
 ### 19 — Inbox real-time sekmeleri (All/Chatting/Queued/Waiting) — done — 2026-07-24 UTC
+
 - Yapıldı: FR-MOD-03.1.1. **Yalnız frontend** (yeni uç/DB yok — mevcut `/chats?view=` listesi
   istemci tarafında bölünüyor). Yeni saf modül `features/inbox/traffic.ts`: `matchesTrafficTab`
-  + `filterByTrafficTab` + `trafficTabCounts`. Kova mantığı — **All** tüm liste; **Queued**
-  `queue_position!=null`; **Waiting** aktif + son olay müşteriden (yanıt bekliyor); **Chatting**
-  aktif + kuyrukta değil + son olay müşteriden değil. Chatting/Queued/Waiting **karşılıklı dışlayan**
-  (bir sohbet tek kovada), toplamları All'a eşit. `InboxPage.tsx`: konuşma listesi başlığının
-  altına yatay `role="tablist"` şeridi (aria-selected, sohbet görünümünde; ticket'larda yok);
-  her sekmede canlı sayaç rozeti. Sayaçlar RTM ile canlı — push `['chats']`'i invalidate ediyor,
-  liste + kovalar aynı state'ten türüyor. Seçim geçerliliği tam liste üzerinde kalıyor (sekme
-  değişince açık transcript düşmez); sadece render süzülür. Boş sekmede özel boş-durum metni.
+  - `filterByTrafficTab` + `trafficTabCounts`. Kova mantığı — **All** tüm liste; **Queued**
+    `queue_position!=null`; **Waiting** aktif + son olay müşteriden (yanıt bekliyor); **Chatting**
+    aktif + kuyrukta değil + son olay müşteriden değil. Chatting/Queued/Waiting **karşılıklı dışlayan**
+    (bir sohbet tek kovada), toplamları All'a eşit. `InboxPage.tsx`: konuşma listesi başlığının
+    altına yatay `role="tablist"` şeridi (aria-selected, sohbet görünümünde; ticket'larda yok);
+    her sekmede canlı sayaç rozeti. Sayaçlar RTM ile canlı — push `['chats']`'i invalidate ediyor,
+    liste + kovalar aynı state'ten türüyor. Seçim geçerliliği tam liste üzerinde kalıyor (sekme
+    değişince açık transcript düşmez); sadece render süzülür. Boş sekmede özel boş-durum metni.
 - Doğrulama: `pnpm -w typecheck` 0 · `pnpm -w lint` 0 · unit (web 72 / api 525) yeşil ·
   `pnpm -w test:integration` 454 yeşil · `pnpm -w build` 0 · `pnpm exec playwright test` 40 yeşil
   (yeni `apps/e2e/tests/inbox-tabs.spec.ts` dahil). Birim: `traffic.test.ts` (kova + sayaç +
@@ -746,9 +816,10 @@
   olarak uygulandı (Supervised/Invited/Browsing kapsam dışı — task başlığı 4 sekmeyle sınırlı).
 - Sonraki pencereye not: `pnpm -w test` (turbo, paralel) çalışan dev sunucusuyla api/rtm/e2e'de
   DB/port çakışması verir; kapı için serial script'leri kullan (`test:integration`, `playwright
-  test` tek başına). Supervised/Invited/Browsing sekmeleri ileri bir MOD-03 task'ında eklenebilir.
+test` tek başına). Supervised/Invited/Browsing sekmeleri ileri bir MOD-03 task'ında eklenebilir.
 
 ### 18 — Command Palette (⌘K): içerik arama + rota atlama — done — 2026-07-24 UTC
+
 - Yapıldı: FR-MOD-01.1.3. **Yalnız frontend** (yeni uç yok — mevcut `/customers?query`,
   `/tickets?query`, `/chats` kullanıldı). Yeni `components/CommandPalette.tsx`: ⌘K/Ctrl-K ile
   her modülden açılır dialog; combobox + listbox (klavye: ↑/↓/Enter/Esc, `aria-activedescendant`,
@@ -778,6 +849,7 @@
   yalnız tm 18 dosyaları + 18-command-palette.png alındı.
 
 ### 17 — Tags kütüphanesi CRUD (grup kapsamı) — done — 2026-07-24 UTC
+
 - Yapıldı: Merkezi etiket kütüphanesi (FR-MOD-08.7.1). **Kontrat:** `openapi.yaml`'a `Tag`
   şeması (`group_ids`, `usage_count`, `author_id`) + `paths/settings.yaml`'a `listTags`/
   `createTag`/`updateTag`/`deleteTag`; tipler yeniden generate edildi. **Backend:**
@@ -802,6 +874,7 @@
   değişiklikleri) hâlâ untracked/kirli — kapsam disiplini gereği bu commit'e alınmadı.
 
 ### 16 — Bildirimler (ses/masaüstü/tarayıcı/e-posta) — done — 2026-07-24 UTC
+
 - Yapıldı: Yeni müşteri mesajında ajan bildirimi (FR-MOD-13.8). **İstemci:** saf karar
   çekirdeği `features/notifications/notifications.ts` (`decideNotification` + localStorage
   tercih IO) + efekt hook'u `useNotifications.ts` (ses = Web Audio çan, masaüstü = Notification
@@ -827,6 +900,7 @@
   konvansiyonu gereği git'e alınmıyor.
 
 ### 15 — Trial rozeti 'N gün' + Subscribe CTA (shell) — done — 2026-07-24 UTC
+
 - Yapıldı: `AppShell` flex-col'e alındı, ince üst `TrialBanner` eklendi —
   `useQuery(['billing','subscription'])` ile BillingPage ile paylaşımlı cache;
   `trialing` → "N days left", `read_only` → "trial bitti, abone ol", `active` → banner yok.

@@ -1494,6 +1494,61 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/webhooks': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Webhooks registered for the workspace
+     * @description Never includes the signing secret — that is shown only once, when the
+     *     webhook is registered.
+     */
+    get: operations['listWebhooks'];
+    put?: never;
+    /**
+     * Register an outbound webhook
+     * @description The `url` must be a public `http(s)` address; a private, loopback or
+     *     link-local target is rejected at registration (SSRF, NFR-S7), and checked
+     *     again at delivery in case DNS changes underneath it.
+     *
+     *     The response carries the signing `secret` **once**. Store it: every
+     *     delivery is signed `HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")` in
+     *     the `X-Webhook-Signature` header, and there is no way to retrieve the
+     *     secret again — a lost secret means deleting and re-registering.
+     */
+    post: operations['registerWebhook'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/webhooks/{webhookId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhookId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Unregister a webhook
+     * @description Stops all future deliveries to this endpoint. Past delivery log entries
+     *     are removed with it.
+     */
+    delete: operations['unregisterWebhook'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/channels/email/inbound': {
     parameters: {
       query?: never;
@@ -2094,6 +2149,49 @@ export interface components {
        *     this same value.
        */
       snippet: string;
+    };
+    /**
+     * @description The workspace event that triggers a delivery. A closed vocabulary so a
+     *     typo is rejected at registration rather than silently never firing.
+     * @enum {string}
+     */
+    WebhookAction:
+      'chat_started' | 'chat_deactivated' | 'chat_transferred' | 'event_created' | 'ticket_created';
+    /**
+     * @description A registered outbound webhook (FR-MOD-08.8.4). The signing secret is
+     *     deliberately absent — it is returned only once, by the register call
+     *     (see `WebhookRegistration`).
+     */
+    Webhook: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * Format: uri
+       * @description The public http(s) endpoint deliveries are POSTed to.
+       */
+      url: string;
+      action: components['schemas']['WebhookAction'];
+      /**
+       * @description Workspace-wide (`license`) or scoped to one bot client (`bot`).
+       * @enum {string}
+       */
+      type: 'license' | 'bot';
+      /** @description Whether deliveries currently fire for this webhook. */
+      enabled: boolean;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
+     * @description The register response. Carries the signing `secret` in addition to the
+     *     webhook fields — the **only** time it is ever returned.
+     */
+    WebhookRegistration: components['schemas']['Webhook'] & {
+      /**
+       * @description The HMAC signing key. Store it now; it is never shown again.
+       *     Deliveries are signed
+       *     `HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")`.
+       */
+      secret: string;
     };
     /**
      * @description Permission to store one file, issued by `POST /uploads` once the
@@ -5456,6 +5554,97 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listWebhooks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's webhooks */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Webhook'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  registerWebhook: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * Format: uri
+           * @description Public http(s) endpoint that receives the POST.
+           */
+          url: string;
+          action: components['schemas']['WebhookAction'];
+          /**
+           * @description `license` for a workspace integration, `bot` for one scoped to
+           *     a single bot client. Defaults to `license`.
+           * @default license
+           * @enum {string}
+           */
+          type?: 'license' | 'bot';
+        };
+      };
+    };
+    responses: {
+      /** @description Registered — the secret is present on this response only */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WebhookRegistration'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  unregisterWebhook: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        webhookId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Unregistered */
       204: {
         headers: {
           [name: string]: unknown;

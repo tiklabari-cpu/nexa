@@ -16,6 +16,7 @@
  * must additionally resolve the host and re-check the resolved IP, and pin it for
  * the connection. That belongs in the fetcher; this function guards the URL.
  */
+import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { ApiError } from './api-error.js';
 
@@ -46,7 +47,9 @@ export function assertPublicHttpUrl(raw: string): URL {
   if (!host) throw ApiError.validation('Enter a valid URL, like https://example.com/help.');
 
   if (isBlockedHost(host)) {
-    throw ApiError.validation('That address points at a private or internal host and cannot be fetched.');
+    throw ApiError.validation(
+      'That address points at a private or internal host and cannot be fetched.',
+    );
   }
 
   return url;
@@ -55,6 +58,59 @@ export function assertPublicHttpUrl(raw: string): URL {
 /** Strip the brackets URL keeps around an IPv6 literal, and lowercase the host. */
 function normaliseHost(hostname: string): string {
   return hostname.replace(/^\[/, '').replace(/\]$/, '').toLowerCase();
+}
+
+/**
+ * Resolve a hostname to its addresses. Injectable so a test needs no real DNS,
+ * and so a deployment can swap in a resolver that pins the address for the
+ * connection that follows.
+ */
+export type HostResolver = (hostname: string) => Promise<string[]>;
+
+const defaultResolver: HostResolver = async (hostname) => {
+  const results = await lookup(hostname, { all: true });
+  return results.map((record) => record.address);
+};
+
+/**
+ * The literal guard (`assertPublicHttpUrl`) plus the DNS re-check it deliberately
+ * leaves to its caller: resolve the host and refuse if *any* resolved address is
+ * private, loopback or link-local.
+ *
+ * This is what closes the DNS-rebinding gap — `hooks.evil.example` that passes
+ * the literal check because it is a name, then resolves to `169.254.169.254`.
+ * Because DNS can change between registration and delivery (TOCTOU), the webhook
+ * path runs this again immediately before every send, not only when the URL is
+ * first stored.
+ */
+export async function assertPublicHttpUrlResolved(
+  raw: string,
+  resolver: HostResolver = defaultResolver,
+): Promise<URL> {
+  const url = assertPublicHttpUrl(raw);
+
+  const host = normaliseHost(url.hostname);
+  // A literal IP was already range-checked by assertPublicHttpUrl; there is
+  // nothing to resolve, and calling DNS on an IP would be pointless.
+  if (isIP(host)) return url;
+
+  let addresses: string[];
+  try {
+    addresses = await resolver(host);
+  } catch {
+    throw ApiError.validation('That host could not be resolved.');
+  }
+  if (addresses.length === 0) {
+    throw ApiError.validation('That host could not be resolved.');
+  }
+  for (const address of addresses) {
+    if (isBlockedHost(address)) {
+      throw ApiError.validation(
+        'That address resolves to a private or internal host and cannot be fetched.',
+      );
+    }
+  }
+  return url;
 }
 
 /** True when a host names this machine or a private/reserved network. */
@@ -101,7 +157,12 @@ function isPrivateV6(ip: string): boolean {
   if (host.startsWith('::')) return true;
 
   const head = host.split(':')[0] ?? '';
-  if (head.startsWith('fe8') || head.startsWith('fe9') || head.startsWith('fea') || head.startsWith('feb')) {
+  if (
+    head.startsWith('fe8') ||
+    head.startsWith('fe9') ||
+    head.startsWith('fea') ||
+    head.startsWith('feb')
+  ) {
     return true; // fe80::/10 link-local
   }
   if (head.startsWith('fc') || head.startsWith('fd')) return true; // fc00::/7 unique-local

@@ -49,6 +49,8 @@ tags:
     description: Aggregate analytics.
   - name: Billing
     description: Subscription, usage metering, trial.
+  - name: Webhooks
+    description: Outbound webhooks — signed, SSRF-guarded event delivery.
 
 paths:
   /health:
@@ -200,6 +202,11 @@ paths:
     $ref: "./paths/websites.yaml#/websites"
   /websites/{websiteId}:
     $ref: "./paths/websites.yaml#/website"
+
+  /webhooks:
+    $ref: "./paths/webhooks.yaml#/webhooks"
+  /webhooks/{webhookId}:
+    $ref: "./paths/webhooks.yaml#/webhook"
 
   /channels/email/inbound:
     $ref: "./paths/channels.yaml#/emailInbound"
@@ -471,7 +478,8 @@ components:
         name: { type: string }
         kind: { type: string, enum: [ai_agent, copilot] }
         tone: { type: string, nullable: true }
-        avatar_url: { type: string, nullable: true, description: The face shown next to the persona. }
+        avatar_url:
+          { type: string, nullable: true, description: The face shown next to the persona. }
         languages:
           type: array
           description: Locale codes the persona answers in (FR-MOD-06.4).
@@ -586,7 +594,8 @@ components:
         name: { type: string }
         type: { type: string, enum: [website, file, article, faq] }
         status: { type: string }
-        source_url: { type: string, nullable: true, description: The crawled URL, for website sources. }
+        source_url:
+          { type: string, nullable: true, description: The crawled URL, for website sources. }
         chunk_count: { type: integer }
         updated_at: { type: string, format: date-time }
 
@@ -643,6 +652,57 @@ components:
             the async widget loader. Identical across a workspace's sites — the
             embedding origin is resolved at runtime — so "get code" per row shows
             this same value.
+
+    WebhookAction:
+      type: string
+      description: |
+        The workspace event that triggers a delivery. A closed vocabulary so a
+        typo is rejected at registration rather than silently never firing.
+      enum:
+        - chat_started
+        - chat_deactivated
+        - chat_transferred
+        - event_created
+        - ticket_created
+
+    Webhook:
+      type: object
+      description: |
+        A registered outbound webhook (FR-MOD-08.8.4). The signing secret is
+        deliberately absent — it is returned only once, by the register call
+        (see `WebhookRegistration`).
+      required: [id, url, action, type, enabled, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        url:
+          type: string
+          format: uri
+          description: The public http(s) endpoint deliveries are POSTed to.
+        action: { $ref: "#/components/schemas/WebhookAction" }
+        type:
+          type: string
+          enum: [license, bot]
+          description: Workspace-wide (`license`) or scoped to one bot client (`bot`).
+        enabled:
+          type: boolean
+          description: Whether deliveries currently fire for this webhook.
+        created_at: { type: string, format: date-time }
+
+    WebhookRegistration:
+      description: |
+        The register response. Carries the signing `secret` in addition to the
+        webhook fields — the **only** time it is ever returned.
+      allOf:
+        - $ref: "#/components/schemas/Webhook"
+        - type: object
+          required: [secret]
+          properties:
+            secret:
+              type: string
+              description: |
+                The HMAC signing key. Store it now; it is never shown again.
+                Deliveries are signed
+                `HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")`.
 
     UploadGrant:
       type: object
@@ -1030,7 +1090,18 @@ components:
     SubscriptionView:
       type: object
       required:
-        [plan, status, access, seats, min_seats, unit_price_cents, billing_cycle, usage, estimated_total_cents, provider]
+        [
+          plan,
+          status,
+          access,
+          seats,
+          min_seats,
+          unit_price_cents,
+          billing_cycle,
+          usage,
+          estimated_total_cents,
+          provider,
+        ]
       properties:
         plan: { type: string }
         billing_cycle: { type: string, enum: [monthly, annual] }
@@ -1081,8 +1152,7 @@ components:
             figures are sent rather than a pre-computed delta, so a client shows
             the change and the baseline both, and a rounding choice stays on one
             side of the wire.
-          required:
-            [range, chats, tickets, total_cases, closed, manual, assisted, automated]
+          required: [range, chats, tickets, total_cases, closed, manual, assisted, automated]
           properties:
             range:
               type: object

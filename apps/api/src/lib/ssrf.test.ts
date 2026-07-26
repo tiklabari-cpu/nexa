@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertPublicHttpUrl, isBlockedHost } from './ssrf.js';
+import { assertPublicHttpUrl, assertPublicHttpUrlResolved, isBlockedHost } from './ssrf.js';
 import { isApiError } from './api-error.js';
 
 /** Asserts the call throws a `validation` ApiError (a 4xx the client can act on). */
@@ -73,5 +73,61 @@ describe('assertPublicHttpUrl — SSRF guard', () => {
     expect(isBlockedHost('169.254.169.254')).toBe(true);
     expect(isBlockedHost('localhost')).toBe(true);
     expect(isBlockedHost('example.com')).toBe(false);
+  });
+});
+
+describe('assertPublicHttpUrlResolved — DNS-rebinding guard', () => {
+  const PUBLIC_IP = '93.184.216.34'; // example.com, not in any blocked range
+  /** A resolver that fails the test if DNS is consulted at all. */
+  const neverResolve = () => {
+    throw new Error('resolver should not be called');
+  };
+
+  async function expectResolvedRejected(url: string, resolver: (h: string) => Promise<string[]>) {
+    try {
+      await assertPublicHttpUrlResolved(url, resolver);
+    } catch (error) {
+      expect(isApiError(error) && error.type === 'validation').toBe(true);
+      return;
+    }
+    throw new Error(`expected ${url} to be rejected`);
+  }
+
+  // --- Negative first: a public name resolving inward is the attack. ---
+
+  it('rejects a public host that resolves to a private address (rebinding)', async () => {
+    await expectResolvedRejected('https://hooks.evil.example/', async () => ['10.0.0.5']);
+    await expectResolvedRejected('https://hooks.evil.example/', async () => ['169.254.169.254']);
+    await expectResolvedRejected('https://hooks.evil.example/', async () => ['::1']);
+  });
+
+  it('rejects when any one of several resolved addresses is internal', async () => {
+    await expectResolvedRejected('https://split.example/', async () => [PUBLIC_IP, '127.0.0.1']);
+  });
+
+  it('rejects a host that does not resolve', async () => {
+    await expectResolvedRejected('https://nx.example/', async () => []);
+    await expectResolvedRejected('https://nx.example/', async () => {
+      throw new Error('ENOTFOUND');
+    });
+  });
+
+  it('still rejects a literal private IP before any lookup', async () => {
+    await expectResolvedRejected('http://10.0.0.1/', neverResolve);
+    await expectResolvedRejected('http://169.254.169.254/', neverResolve);
+  });
+
+  // --- Then the positive: a public name resolving to a public IP passes. ---
+
+  it('allows a public host resolving to a public address', async () => {
+    const url = await assertPublicHttpUrlResolved('https://hooks.example.com/webhook', async () => [
+      PUBLIC_IP,
+    ]);
+    expect(url.hostname).toBe('hooks.example.com');
+  });
+
+  it('does not resolve a literal public IP', async () => {
+    const url = await assertPublicHttpUrlResolved(`http://${PUBLIC_IP}/hook`, neverResolve);
+    expect(url.hostname).toBe(PUBLIC_IP);
   });
 });

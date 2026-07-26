@@ -26,6 +26,7 @@ import reportRoutes from './routes/reports.js';
 import settingsRoutes from './routes/settings.js';
 import onboardingRoutes from './routes/onboarding.js';
 import websiteRoutes from './routes/websites.js';
+import webhookRoutes from './routes/webhooks.js';
 import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
 import healthRoutes from './routes/health.js';
@@ -138,6 +139,7 @@ export async function buildServer({
       await api.register(settingsRoutes);
       await api.register(onboardingRoutes);
       await api.register(websiteRoutes, { env });
+      await api.register(webhookRoutes);
       await api.register(uploadRoutes, { env });
       await api.register(playbookRoutes);
     },

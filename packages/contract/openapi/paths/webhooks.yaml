@@ -1,0 +1,103 @@
+# Outbound webhooks — FR-MOD-08.8.4 (v1, Must).
+#
+# A workspace registers a URL to be POSTed when something happens in Nexa
+# (a chat starts, a thread closes, …). This is the platform's highest-risk
+# egress surface (NFR-S7, risk R1/R2): the *server* makes a request to a
+# customer-supplied URL, so registration and delivery are both guarded against
+# SSRF, and every delivery is signed with HMAC-SHA256 (v2-04 §6.2/§6.3).
+#
+# The signing secret is returned exactly once, from the register call. It is
+# stored to sign later deliveries but never echoed back by list — a secret a
+# list endpoint re-exposed would turn read access into the ability to forge
+# signatures.
+
+webhooks:
+  get:
+    tags: [Webhooks]
+    operationId: listWebhooks
+    summary: Webhooks registered for the workspace
+    description: |
+      Never includes the signing secret — that is shown only once, when the
+      webhook is registered.
+    responses:
+      "200":
+        description: The workspace's webhooks
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Webhook" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Webhooks]
+    operationId: registerWebhook
+    summary: Register an outbound webhook
+    description: |
+      The `url` must be a public `http(s)` address; a private, loopback or
+      link-local target is rejected at registration (SSRF, NFR-S7), and checked
+      again at delivery in case DNS changes underneath it.
+
+      The response carries the signing `secret` **once**. Store it: every
+      delivery is signed `HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")` in
+      the `X-Webhook-Signature` header, and there is no way to retrieve the
+      secret again — a lost secret means deleting and re-registering.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [url, action]
+            properties:
+              url:
+                type: string
+                format: uri
+                maxLength: 2048
+                description: Public http(s) endpoint that receives the POST.
+              action:
+                $ref: "../openapi.yaml#/components/schemas/WebhookAction"
+              type:
+                type: string
+                enum: [license, bot]
+                default: license
+                description: |
+                  `license` for a workspace integration, `bot` for one scoped to
+                  a single bot client. Defaults to `license`.
+    responses:
+      "201":
+        description: Registered — the secret is present on this response only
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/WebhookRegistration" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+webhook:
+  parameters:
+    - name: webhookId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  delete:
+    tags: [Webhooks]
+    operationId: unregisterWebhook
+    summary: Unregister a webhook
+    description: |
+      Stops all future deliveries to this endpoint. Past delivery log entries
+      are removed with it.
+    responses:
+      "204": { description: Unregistered }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

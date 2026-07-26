@@ -77,6 +77,7 @@ model License {
   channels      Channel[]
   websites      Website[]
   webhooks      Webhook[]
+  webhookDeliveries WebhookDelivery[]
   subscriptions Subscription[]
   usageRecords  UsageRecord[]
   auditEntries  AuditLogEntry[]
@@ -843,10 +844,36 @@ model Webhook {
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  license    License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
 
   @@index([licenseId, action, enabled])
   @@map("webhooks")
+}
+
+/// One outbound delivery attempt (FR-MOD-08.8.4 · NFR-M5).
+///
+/// Every attempt — first try and each of the three retries — writes a row, so
+/// the trail of what was sent and how it fared is complete and auditable.
+/// `permanent` marks the row that exhausted the retries, the single flag that
+/// distinguishes "gave up" from "still trying"/"succeeded".
+model WebhookDelivery {
+  id         String   @id @default(uuid()) @db.Uuid
+  licenseId  BigInt   @map("license_id")
+  webhookId  String   @map("webhook_id") @db.Uuid
+  action     String
+  attempt    Int
+  ok         Boolean
+  statusCode Int?     @map("status_code")
+  error      String?
+  permanent  Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, webhookId, createdAt])
+  @@map("webhook_deliveries")
 }
 
 /// Per-license security configuration (PRD §8.4 `security_settings`).

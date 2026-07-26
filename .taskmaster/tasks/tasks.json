@@ -956,7 +956,7 @@
         "description": "webhooks tablosu + scope var, route/servis yok. En yüksek güvenlik yüzeyi. PRD 08.8.4 (v1, Must).",
         "details": "PARENT [MAX]. 08.8.4 Webhooks — en yüksek güvenlik yüzeyi (NFR-S7, R1/R2). webhooks tablosu +\nwebhooks--all:rw scope (principal.ts:107) var, route/servis YOK. 4 subtask; negatif testler pozitiften ÖNCE.\nBağlam: PLAN §4.4.3, §7.2 S7.",
         "testStrategy": "Subtask bazlı; -b/-c [MAX] negatif-önce.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -966,10 +966,10 @@
             "description": "register/list/unregister; secret bir kez. PRD 08.8.4.",
             "details": "08.8.4-a Webhook kayıt API + kontrat (register/list/unregister). [XHIGH] PRD 08.8.4.\nKAPSAM: kontrat → POST/GET/DELETE /webhooks; secret üretimi (bir kez gösterilir, hash saklanır).\nKK payı (birebir): \"register/list/unregister\" · \"secret log'a yazılmaz\". BAĞLAM: PLAN §4.4.3.",
             "testStrategy": "integration: CRUD + secret bir kez. CROSS-TENANT: başka lisansın webhook'u görünmez. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "34",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T03:49:30.333Z"
           },
           {
             "id": 2,
@@ -977,12 +977,12 @@
             "description": "X-Webhook-Signature + timestamp/nonce + timingSafeEqual. NFR-S7.",
             "details": "08.8.4-b HMAC-SHA256 imzalama + timestamp/nonce. [MAX] PRD 08.8.4 · NFR-S7.\nKAPSAM: çıkışta X-Webhook-Signature = HMAC-SHA256(secret, timestamp+body); ±5 dk; nonce; timingSafeEqual; secret log'a YAZILMAZ.\nKK payı (birebir): \"HMAC-SHA256 imza (Nexa) + timestamp/nonce\". BAĞLAM: PLAN §4.4.3. Bağımlılık: 34.1.",
             "testStrategy": "unit: imza determinizmi + timingSafeEqual. NEGATİF (önce): yanlış imza/eski timestamp reddi. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "34",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T03:49:30.344Z"
           },
           {
             "id": 3,
@@ -990,12 +990,12 @@
             "description": "private/loopback/link-local reddi; redirect kapalı; http(s). NFR-S7. Negatif önce.",
             "details": "08.8.4-c SSRF koruması. [MAX] PRD 08.8.4 · NFR-S7.\nKAPSAM: hedef URL doğrulama — private/loopback/link-local IP reddi, DNS-rebinding koruması, redirect kapalı, yalnız http(s).\nORTAK: lib/ssrf.ts 06.3.2-a ile paylaşılır.\nKK payı (birebir): \"SSRF koruması\". BAĞLAM: PLAN §4.4.3. Bağımlılık: 34.1.",
             "testStrategy": "NEGATİF (önce): 127.0.0.1/10.x/169.254.169.254/file:///redirect → reddedilir. POZİTİF: public https → geçer. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "34",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T03:49:30.360Z"
           },
           {
             "id": 4,
@@ -1003,17 +1003,17 @@
             "description": "Kuyruk + 3× retry + her teslimat loglanır. NFR-M5/U4.",
             "details": "08.8.4-d Teslimat + retry (3×) + her teslimat/retry loglanır. [XHIGH] PRD 08.8.4 · NFR-M5/U4.\nKAPSAM: olay → kuyruk → teslim; 3× exponential retry; her deneme loglanır; kalıcı hata işaretlenir.\nKK payı (birebir): \"retry (3×)\" · (NFR-M5) \"her webhook teslimi/retry loglanır\". BAĞLAM: PLAN §4.4.3. Bağımlılık: 34.1/2/3.",
             "testStrategy": "integration: 2 hata → 3. başarı; kalıcı hata → log + işaret. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               2,
               3
             ],
             "parentId": "34",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T03:49:30.365Z"
           }
         ],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T03:49:30.365Z"
       },
       {
         "id": "35",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T00:04:00.096Z",
+      "lastModified": "2026-07-26T03:49:30.365Z",
       "taskCount": 84,
-      "completedCount": 33,
+      "completedCount": 34,
       "tags": [
         "master"
       ]

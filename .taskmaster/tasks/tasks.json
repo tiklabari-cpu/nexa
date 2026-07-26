@@ -1203,11 +1203,11 @@
         "description": "Start chat/Supervise/Assign; 'Chatting with' insan+AI. PRD 03.1.3 (Should).",
         "details": "03.1.3-a Ziyaretçi tablosu + satır aksiyonları (Start chat/Supervise/Assign). [XHIGH] PRD 03.1.3 (Should).\nKAPSAM: ziyaretçi tablosu; 'Chatting with' insan+AI ajanı; satır aksiyonları.\nKK (birebir): \"Proaktif temas; 'Chatting with' insan+AI ajanı gösterir (ör. 'Hazal AI')\". BAĞLAM: PLAN §4.4.7. Bağımlılık: 03.1.1 (✅ tm 19).",
         "testStrategy": "integration: traffic akışı + unit satır aksiyonları. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T07:58:28.251Z"
       },
       {
         "id": "43",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T05:46:53.505Z",
+      "lastModified": "2026-07-26T07:58:28.251Z",
       "taskCount": 84,
-      "completedCount": 38,
+      "completedCount": 39,
       "tags": [
         "master"
       ]

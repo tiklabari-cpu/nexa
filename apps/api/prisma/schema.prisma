@@ -84,6 +84,7 @@ model License {
   usageRecords  UsageRecord[]
   auditEntries  AuditLogEntry[]
   securitySettings SecuritySettings?
+  inboxSettings    InboxSettings?
 
   invitations      Invitation[]
 
@@ -932,6 +933,26 @@ model SecuritySettings {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@map("security_settings")
+}
+
+/// Per-license inbox behaviour (FR-MOD-08.7, "Settings/Inbox tools").
+///
+/// A singleton keyed by license, like `SecuritySettings`. Signup does not create
+/// the row — the settings endpoint upserts it on first save, and a read with no
+/// row falls back to the schema defaults — so a workspace that has never touched
+/// these behaves as "everything off".
+model InboxSettings {
+  licenseId          BigInt   @id @map("license_id")
+  /// Auto-close a chat after this many seconds with no activity (FR-MOD-08.7.3).
+  /// Null disables it. Only a positive value is ever written — enforced at the
+  /// settings endpoint and re-checked by the sweep, so a zero or negative window
+  /// (which would close every live chat at once) can never take effect.
+  chatTimeoutSeconds Int?     @map("chat_timeout_seconds")
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("inbox_settings")
 }
 
 // ===========================================================================

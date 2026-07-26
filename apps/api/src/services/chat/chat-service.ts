@@ -64,6 +64,13 @@ interface RedisLike {
   get(key: string): Promise<string | null>;
 }
 
+/** Everything the shared close path produces that the realtime fan-out needs. */
+interface CloseResult {
+  detail: ChatDetail;
+  audience: { groupIds: number[]; agentIds: string[]; customerId: string };
+  drained: Array<{ chatId: string; threadId: string; assigneeId: string }>;
+}
+
 export class ChatService {
   constructor(
     private readonly db: PrismaClient,
@@ -542,47 +549,126 @@ export class ChatService {
       const thread = chat.threads.find((t) => t.active);
       if (!chat.active || !thread) throw ApiError.chatInactive('Chat is already closed.');
 
-      const closedAt = new Date();
-      await tx.thread.update({
-        where: { id: thread.id },
-        data: { active: false, closedAt, queuePosition: null, queuedAt: null },
-      });
-      await tx.chat.update({ where: { id: chat.id }, data: { active: false } });
-      await tx.chatUser.updateMany({ where: { chatId: chat.id }, data: { present: false } });
-
-      await this.#appendEvent(tx, {
-        licenseId: tenant.licenseId,
-        chatId: chat.id,
-        threadId: thread.id,
+      return this.#closeConversation(tx, tenant, chat, thread, {
         authorId: actorOf(principal),
-        authorType: 'system',
-        input: {
-          type: 'system_message',
-          text: 'Chat archived',
-          recipients: 'all',
-          properties: { system_event: 'chat_deactivated' },
-        },
+        text: 'Chat archived',
+        properties: { system_event: 'chat_deactivated' },
       });
-
-      const reloaded = await tx.chat.findUniqueOrThrow({
-        where: { id: chat.id },
-        include: chatInclude,
-      });
-      // ADR-09: a thread that closes with no agent-authored event resolved
-      // without a human. Counted here, in the same transaction that closes it,
-      // so the billing figure and the conversation can never disagree.
-      if (await threadWasAiResolved(tx, thread.id)) {
-        await recordAiResolution(tx, tenant, this.billing.aiOverageCents, this.billing.aiIncluded);
-      }
-
-      // Closing frees a slot, so whoever is waiting can be assigned now rather
-      // than on the next arrival — otherwise a quiet period leaves customers
-      // queued behind an agent who is already free.
-      const drained = await this.routing.drainQueue(tx, tenant.licenseId);
-
-      return { detail: serialiseChat(reloaded), audience: this.#audienceFor(chat), drained };
     });
 
+    await this.#publishDeactivation(tenant, chatId, result, actorOf(principal));
+    return result.detail;
+  }
+
+  /**
+   * Close an idle chat on behalf of the system (FR-MOD-08.7.3).
+   *
+   * The same close as `deactivate`, but with no principal: it is driven by the
+   * timeout sweep, so the archive event is authored by the system and the
+   * queue-drain, AI-resolution accounting and realtime fan-out all go through
+   * the one shared path — a timed-out AI conversation is billed and reported
+   * exactly like one an agent archived by hand.
+   *
+   * `cutoff` is re-checked inside the transaction that closes the chat. A chat
+   * that received a message between being listed by the sweep and being closed
+   * here is left alone, so a reply landing mid-sweep can never be archived out
+   * from under the customer. Returns null when there is nothing to close —
+   * already archived, or activity resumed — which keeps the sweep idempotent.
+   */
+  async deactivateByTimeout(
+    tenant: TenantContext,
+    chatId: string,
+    cutoff: Date,
+  ): Promise<ChatDetail | null> {
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      const chat = await tx.chat.findUnique({ where: { id: chatId }, include: chatInclude });
+      const thread = chat?.threads.find((t) => t.active);
+      if (!chat || !chat.active || !thread) return null;
+
+      // Idle when listed; confirm it is still idle, in the same transaction that
+      // closes it. Last activity is the newest event, or the thread's own start
+      // when it has none yet.
+      if ((await this.#lastActivityAt(tx, thread.id, thread.createdAt)) >= cutoff) return null;
+
+      return this.#closeConversation(tx, tenant, chat, thread, {
+        authorId: null,
+        text: 'Chat closed after inactivity',
+        properties: { system_event: 'chat_deactivated', reason: 'timeout' },
+      });
+    });
+
+    if (!result) return null;
+    await this.#publishDeactivation(tenant, chatId, result, null);
+    return result.detail;
+  }
+
+  /**
+   * The close cascade shared by `deactivate` and `deactivateByTimeout`: archive
+   * the thread, deactivate the chat, mark everyone absent, record the close as a
+   * system event, count an AI resolution when no human ever replied (ADR-09),
+   * and drain the queue so the slot this frees is filled now rather than on the
+   * next arrival — otherwise a quiet period leaves customers queued behind an
+   * agent who is already free.
+   */
+  async #closeConversation(
+    tx: TenantClient,
+    tenant: TenantContext,
+    chat: ChatRow,
+    thread: { id: string },
+    close: { authorId: string | null; text: string; properties: Record<string, unknown> },
+  ): Promise<CloseResult> {
+    const closedAt = new Date();
+    await tx.thread.update({
+      where: { id: thread.id },
+      data: { active: false, closedAt, queuePosition: null, queuedAt: null },
+    });
+    await tx.chat.update({ where: { id: chat.id }, data: { active: false } });
+    await tx.chatUser.updateMany({ where: { chatId: chat.id }, data: { present: false } });
+
+    await this.#appendEvent(tx, {
+      licenseId: tenant.licenseId,
+      chatId: chat.id,
+      threadId: thread.id,
+      authorId: close.authorId,
+      authorType: 'system',
+      input: {
+        type: 'system_message',
+        text: close.text,
+        recipients: 'all',
+        properties: close.properties,
+      },
+    });
+
+    const reloaded = await tx.chat.findUniqueOrThrow({
+      where: { id: chat.id },
+      include: chatInclude,
+    });
+    // ADR-09: a thread that closes with no agent-authored event resolved without
+    // a human. Counted here, in the same transaction that closes it, so the
+    // billing figure and the conversation can never disagree.
+    if (await threadWasAiResolved(tx, thread.id)) {
+      await recordAiResolution(tx, tenant, this.billing.aiOverageCents, this.billing.aiIncluded);
+    }
+
+    const drained = await this.routing.drainQueue(tx, tenant.licenseId);
+    return { detail: serialiseChat(reloaded), audience: this.#audienceFor(chat), drained };
+  }
+
+  /** Newest event time for a thread, falling back to its start when it has none. */
+  async #lastActivityAt(tx: TenantClient, threadId: string, createdAt: Date): Promise<Date> {
+    const rows = await tx.$queryRaw<Array<{ last: Date | null }>>`
+      SELECT max(created_at) AS last FROM events WHERE thread_id = ${threadId}
+    `;
+    return rows[0]?.last ?? createdAt;
+  }
+
+  /** Fan out a close: assign anyone the freed slot lets in, then notify the room. */
+  async #publishDeactivation(
+    tenant: TenantContext,
+    chatId: string,
+    result: CloseResult,
+    requesterId: string | null,
+  ): Promise<void> {
     for (const assignment of result.drained) {
       await this.publisher?.publish(
         tenant,
@@ -598,9 +684,8 @@ export class ChatService {
     await this.publisher?.publish(tenant, 'chat_deactivated', result.audience, {
       chat_id: chatId,
       thread_id: result.detail.thread?.id ?? null,
-      requester_id: actorOf(principal),
+      requester_id: requesterId,
     });
-    return result.detail;
   }
 
   async resume(tenant: TenantContext, principal: Principal, chatId: string): Promise<ChatDetail> {

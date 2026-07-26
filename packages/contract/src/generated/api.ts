@@ -1430,6 +1430,35 @@ export interface paths {
     patch: operations['updateSecuritySettings'];
     trace?: never;
   };
+  '/settings/chat-timeout': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Idle-chat auto-close window
+     * @description The idle window before a conversation is auto-closed (FR-MOD-08.7.3).
+     *     `chat_timeout_seconds` is null when the feature is off, which is also what
+     *     a workspace that has never saved it reads — there is no row until then, so
+     *     the read has no side effect.
+     */
+    get: operations['getChatTimeout'];
+    /**
+     * Set or disable the idle-chat auto-close window
+     * @description Creates the row on first write. `chat_timeout_seconds` must be a positive
+     *     integer (up to 30 days) or null to disable — a zero or negative window is
+     *     rejected, since reaching the sweep it would close every live chat at once.
+     */
+    put: operations['setChatTimeout'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/onboarding/state': {
     parameters: {
       query?: never;
@@ -2555,6 +2584,22 @@ export interface components {
       require_two_factor: boolean;
       /** Format: date-time */
       updated_at?: string | null;
+    };
+    /**
+     * @description Per-license idle-chat auto-close window (FR-MOD-08.7.3, `inbox_settings`).
+     *
+     *     `chat_timeout_seconds` is null when auto-close is off — which is also
+     *     what a workspace that has never saved it reads, since no row exists yet.
+     *     A stored value is always a positive integer.
+     */
+    ChatTimeoutSettings: {
+      /**
+       * Format: int32
+       * @description Seconds of inactivity before auto-close, or null when disabled.
+       */
+      chat_timeout_seconds: number | null;
+      /** Format: date-time */
+      updated_at: string | null;
     };
     /**
      * @description First-run setup state (FR-MOD-00.4). `completed` is a per-license fact —
@@ -5888,6 +5933,63 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['SecuritySettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getChatTimeout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatTimeoutSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setChatTimeout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * Format: int32
+           * @description Seconds of inactivity before auto-close; null disables it.
+           */
+          chat_timeout_seconds: number | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatTimeoutSettings'];
         };
       };
       400: components['responses']['BadRequest'];

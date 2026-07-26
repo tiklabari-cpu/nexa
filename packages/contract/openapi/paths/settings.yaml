@@ -256,6 +256,60 @@ securitySettings:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+chatTimeout:
+  get:
+    tags: [Settings]
+    operationId: getChatTimeout
+    summary: Idle-chat auto-close window
+    description: |
+      The idle window before a conversation is auto-closed (FR-MOD-08.7.3).
+      `chat_timeout_seconds` is null when the feature is off, which is also what
+      a workspace that has never saved it reads — there is no row until then, so
+      the read has no side effect.
+    responses:
+      "200":
+        description: The current window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ChatTimeoutSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Settings]
+    operationId: setChatTimeout
+    summary: Set or disable the idle-chat auto-close window
+    description: |
+      Creates the row on first write. `chat_timeout_seconds` must be a positive
+      integer (up to 30 days) or null to disable — a zero or negative window is
+      rejected, since reaching the sweep it would close every live chat at once.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [chat_timeout_seconds]
+            properties:
+              chat_timeout_seconds:
+                type: integer
+                format: int32
+                minimum: 1
+                maximum: 2592000
+                nullable: true
+                description: Seconds of inactivity before auto-close; null disables it.
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ChatTimeoutSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 routingRules:
   get:
     tags: [Settings]

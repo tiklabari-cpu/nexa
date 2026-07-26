@@ -6,6 +6,38 @@
 
 ## Task log (newest-first)
 
+### 48 — 08.7.3-a · Chat timeout (boşta/ölü sohbet otomatik kapanma) [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı:
+  - **Şema + migration (`20260726130000_inbox_settings`):** yeni `inbox_settings` per-license
+    singleton (SecuritySettings deseni) — tek alan `chat_timeout_seconds Int?` (null=kapalı).
+    RLS policy + `nexa_app` grant. Sürüklenme yok (`db:check-drift` temiz).
+  - **Kontrat (contract-first):** `GET/PUT /settings/chat-timeout` + `ChatTimeoutSettings` şeması
+    (`paths/settings.yaml#/chatTimeout` + `openapi.yaml`). Pozitif tamsayı (≤30 gün) **veya** null;
+    0/negatif reddi (`.positive()`). Bundle yeniden üretildi (82 path). contract-parity yeşil.
+  - **Backend:** `routes/settings.ts` — GET (satır yoksa `{chat_timeout_seconds:null}`, yan etkisiz)
+    + PUT (upsert, audit `settings.chat_timeout_updated`). `access_rules:rw` yazma / `:ro` okuma.
+  - **Kapatma yolu (DRY refactor):** `deactivate` içindeki kapatma kaskadı `#closeConversation`'a
+    çıkarıldı; yeni `deactivateByTimeout(tenant, chatId, cutoff)` **sistem aktörüyle** aynı yolu
+    kullanır → ADR-09 AI-resolution sayımı + queue-drain + RTM fan-out (`#publishDeactivation`) tek
+    yerde. Kapatma olayı `system_event: chat_deactivated`, `reason: timeout`.
+  - **Sweep (`services/chat/chat-timeout.ts` + CLI `chat-timeout:run`):** retention deseni —
+    `retention_list_tenants()` ile tenant sayımı, her tenant `withTenant` (RLS), pozitif pencere yoksa
+    atla. "Ölü" = son olay (yoksa thread.createdAt) < cutoff. **Yarış güvenliği:** kapatma tx'inde
+    cutoff yeniden kontrol edilir → mid-sweep gelen yanıt sohbeti bağışlar. İdempotent.
+- Doğrulama (hepsi yeşil, exit 0): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w test:unit` (151) ·
+  `pnpm --filter @nexa/api test:integration` (28 dosya / 618) · `pnpm -w build` · e2e (55) ·
+  `db:check-drift`. Yeni test: `test/integration/chat-timeout.test.ts` (8: timeout→kapanır, pencere
+  içi aktivite hayatta kalır, kapalı/non-pozitif atlanır, cross-tenant RLS izolasyonu, idempotent,
+  AI-resolution parity) + `settings.test.ts` chat-timeout bloğu (9: defaults/enable/disable/0-negatif
+  reddi/non-integer/boş gövde/scope/tenant izolasyonu). Test helper'a `put` eklendi.
+- Varsayımlar: Depolama `SecuritySettings` yerine ayrı `inbox_settings` (MOD-08 "Inbox tools"
+  semantiği; gelecekteki 08.7.x buraya büyür). Zorunlu maks 30 gün (mantıksız pencere reddi).
+  Prod scheduler yok (proje sınırı) → sweep bir CLI; UI eklenmedi (kapsam dışı, API+sözleşme yeterli).
+- Sonraki pencereye not: Kalan MOD-08 inbox araçları (08.6.2-a, 08.7.4-a…08.7.7-a) hâlâ `⬜`.
+  08.7.4-a (transcripts otomatik e-posta) `inbox_settings`'i genişletebilir. Sweep'i çalıştıracak bir
+  host cron/scheduler prod dışıdır; şu an operatör `chat-timeout:run` ile tetikler.
+
 ### 46 — 07.7-a · Rapor grupları + Export (CSV) [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı (resume — önceki pencere `reports-export.ts` modülü + unit testi yazmış, `reports.ts`'e

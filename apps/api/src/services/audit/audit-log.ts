@@ -41,6 +41,7 @@ export const AUDIT_ACTIONS = [
   // Workspace configuration
   'settings.security_updated',
   'settings.routing_rule_updated',
+  'settings.chat_timeout_updated',
   'settings.trusted_domain_added',
   'settings.trusted_domain_removed',
   'billing.subscription_updated',

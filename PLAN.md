@@ -526,7 +526,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 08.5.5     | Twilio SMS                                                                                             | Must (v1)      |             ✅ **MOCK adaptör** (tm 35)              |
 | 08.5.6     | WhatsApp (Business)                                                                                    | Must (v1)      |             ✅ **MOCK adaptör** (tm 35)              |
 | 08.6.2     | Ticket rules (atama/etiket/öncelik)                                                                    | Should (v1)    |                          ⬜                           |
-| 08.7.3     | Chat timeout                                                                                           | Should (v1)    |                          ⬜                           |
+| 08.7.3     | Chat timeout                                                                                           | Should (v1)    |          ✅ **idle auto-close sweep** (tm 48)          |
 | 08.7.4     | Chat transcripts (e-posta)                                                                             | Should (v1)    |                          ⬜                           |
 | 08.7.5     | Ticket email templates                                                                                 | Should (v1)    |                          ⬜                           |
 | 08.7.6     | Custom fields                                                                                          | Should (v1)    |                          ⬜                           |
@@ -764,8 +764,11 @@ Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal baş�
 
 - **08.6.2-a — Ticket rules (atama/etiket/öncelik)** `[XHIGH]` · *Should* — KK: _"Koşul+eylem
   zorunlu"_ · doğrulama: integration (kural → otomatik atama). **Bağımlılık:** T4-a. **Tahmin:** 1 pencere.
-- **08.7.3-a — Chat timeout (boşta/ölü sohbet otomatik kapanma)** `[XHIGH]` · *Should* — KK:
-  _"Pozitif süre; ölü sohbet otomatik kapanma"_ · doğrulama: integration (timeout → kapanır) + negatif (0/negatif reddi). **Tahmin:** 1 pencere.
+- **08.7.3-a — Chat timeout (boşta/ölü sohbet otomatik kapanma)** `[XHIGH]` · *Should* — **✅ tm 48**
+  · KK: _"Pozitif süre; ölü sohbet otomatik kapanma"_ · doğrulama: integration (timeout → kapanır) +
+  negatif (0/negatif reddi). `inbox_settings.chat_timeout_seconds` (per-license, RLS) +
+  `ChatTimeoutSweeper` (deactivateByTimeout paylaşımlı kapatma yolu; ADR-09 AI-resolution + queue-drain
+  ortak). Endpoint `PUT/GET /settings/chat-timeout` (pozitif zorunlu). CLI: `chat-timeout:run`.
 - **08.7.4-a — Chat transcripts (otomatik e-posta)** `[XHIGH]` · *Should* — KK: _"Bitişte müşteri/
   ekibe transcript e-postası"_ · doğrulama: integration (`.data/mail`). **Bağımlılık:** T7-a (mailer deseni). **Tahmin:** 1 pencere.
 - **08.7.5-a — Ticket email templates (markalı, değişkenli)** `[XHIGH]` · *Should* — KK:

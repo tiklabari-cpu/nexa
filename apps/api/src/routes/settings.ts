@@ -76,6 +76,22 @@ const SECURITY_DEFAULTS = {
   requireTwoFactor: false,
 } as const;
 
+/**
+ * 30 days. A window longer than this is indistinguishable from "off" but still
+ * a real number the sweep would act on, so it is rejected rather than stored.
+ */
+const CHAT_TIMEOUT_MAX_SECONDS = 2_592_000;
+
+/**
+ * The idle window before a chat auto-closes (FR-MOD-08.7.3). `null` disables it.
+ * A stored value is always a positive integer: `.positive()` is what rejects a
+ * zero or negative window, which — reaching the sweep — would close every live
+ * chat at once. The database column and the sweep both assume this holds.
+ */
+const updateChatTimeoutBody = z.object({
+  chat_timeout_seconds: z.number().int().positive().max(CHAT_TIMEOUT_MAX_SECONDS).nullable(),
+});
+
 const updateSecurityBody = z
   .object({
     file_sharing_enabled: z.boolean().optional(),
@@ -399,6 +415,49 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     },
   );
 
+  // --- Chat timeout (inbox behaviour) ----------------------------------------
+
+  app.get(
+    '/settings/chat-timeout',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
+    async (request, reply) => {
+      // `findFirst` with no `where`: RLS narrows it to this license, and the
+      // id-by-licenseId key means there is at most one row. No row means the
+      // feature was never turned on, which reads as disabled.
+      const row = await request.withTenant((tx) => tx.inboxSettings.findFirst());
+      return reply.send(serialiseInbox(row));
+    },
+  );
+
+  app.put(
+    '/settings/chat-timeout',
+    { config: { scopes: ['access_rules:rw'] } },
+    async (request, reply) => {
+      const body = parse(updateChatTimeoutBody, request.body);
+      const tenant = request.tenant();
+
+      // Upsert because signup leaves no row: a workspace enabling this for the
+      // first time would otherwise get a 404 for a setting it can plainly see.
+      const updated = await request.withTenant(async (tx) => {
+        const row = await tx.inboxSettings.upsert({
+          where: { licenseId: tenant.licenseId },
+          create: {
+            licenseId: tenant.licenseId,
+            chatTimeoutSeconds: body.chat_timeout_seconds,
+          },
+          update: { chatTimeoutSeconds: body.chat_timeout_seconds },
+        });
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.chat_timeout_updated',
+          metadata: { chat_timeout_seconds: body.chat_timeout_seconds },
+        });
+        return row;
+      });
+
+      return reply.send(serialiseInbox(updated));
+    },
+  );
+
   // --- Routing rules ---------------------------------------------------------
 
   app.get(
@@ -666,6 +725,13 @@ function serialiseSecurity(
     max_file_size_bytes: value.maxFileSizeBytes,
     spam_filter_enabled: value.spamFilterEnabled,
     require_two_factor: value.requireTwoFactor,
+    updated_at: row ? row.updatedAt.toISOString() : null,
+  };
+}
+
+function serialiseInbox(row: { chatTimeoutSeconds: number | null; updatedAt: Date } | null) {
+  return {
+    chat_timeout_seconds: row?.chatTimeoutSeconds ?? null,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

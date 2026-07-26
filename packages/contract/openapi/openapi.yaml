@@ -195,6 +195,8 @@ paths:
     $ref: "./paths/settings.yaml#/tag"
   /settings/security:
     $ref: "./paths/settings.yaml#/securitySettings"
+  /settings/chat-timeout:
+    $ref: "./paths/settings.yaml#/chatTimeout"
 
   /onboarding/state:
     $ref: "./paths/onboarding.yaml#/state"
@@ -823,6 +825,24 @@ components:
           description: Per-file ceiling. 100 MiB is the hard maximum.
         spam_filter_enabled: { type: boolean }
         require_two_factor: { type: boolean }
+        updated_at: { type: string, format: date-time, nullable: true }
+
+    ChatTimeoutSettings:
+      type: object
+      description: |
+        Per-license idle-chat auto-close window (FR-MOD-08.7.3, `inbox_settings`).
+
+        `chat_timeout_seconds` is null when auto-close is off — which is also
+        what a workspace that has never saved it reads, since no row exists yet.
+        A stored value is always a positive integer.
+      required: [chat_timeout_seconds, updated_at]
+      properties:
+        chat_timeout_seconds:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 1
+          description: Seconds of inactivity before auto-close, or null when disabled.
         updated_at: { type: string, format: date-time, nullable: true }
 
     OnboardingState:

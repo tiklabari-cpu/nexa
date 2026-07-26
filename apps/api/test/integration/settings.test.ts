@@ -677,4 +677,116 @@ describe('settings', () => {
       expect(theirs?.fileSharingEnabled).toBe(false);
     });
   });
+
+  // --- Chat timeout (idle auto-close) ----------------------------------------
+
+  describe('chat timeout', () => {
+    // FR-MOD-08.7.3: the positive window a "dead" chat is auto-closed after. The
+    // property that matters is that a non-positive window can never be stored —
+    // reaching the sweep it would close every live chat at once — so the
+    // rejection is tested on the endpoint, not just asserted about the column.
+
+    it('reads as disabled until it is set, without writing a row', async () => {
+      const none = await owner.inboxSettings.findUnique({
+        where: { licenseId: fx.a.licenseId },
+      });
+      expect(none).toBeNull();
+
+      const response = await server.get('/settings/chat-timeout', auth(readToken));
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ chat_timeout_seconds: null, updated_at: null });
+
+      // No row was written to answer a read.
+      expect(
+        await owner.inboxSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+      ).toBeNull();
+    });
+
+    it('enables a positive window on first save and reads it back', async () => {
+      const saved = await server.put(
+        '/settings/chat-timeout',
+        { chat_timeout_seconds: 3600 },
+        auth(adminToken),
+      );
+      expect(saved.statusCode).toBe(200);
+      expect((saved.json() as { chat_timeout_seconds: number }).chat_timeout_seconds).toBe(3600);
+
+      const after = await server.get('/settings/chat-timeout', auth(readToken));
+      expect((after.json() as { chat_timeout_seconds: number }).chat_timeout_seconds).toBe(3600);
+      expect((after.json() as { updated_at: string | null }).updated_at).not.toBeNull();
+    });
+
+    it('disables again by saving null', async () => {
+      await server.put('/settings/chat-timeout', { chat_timeout_seconds: 900 }, auth(adminToken));
+      const disabled = await server.put(
+        '/settings/chat-timeout',
+        { chat_timeout_seconds: null },
+        auth(adminToken),
+      );
+      expect(disabled.statusCode).toBe(200);
+      expect((disabled.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds).toBeNull();
+    });
+
+    it.each([0, -1, -3600])('rejects the non-positive window %j', async (seconds) => {
+      const response = await server.put(
+        '/settings/chat-timeout',
+        { chat_timeout_seconds: seconds },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(400);
+      expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
+      // Nothing was stored — a rejected window must not leave a row behind.
+      expect(
+        await owner.inboxSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+      ).toBeNull();
+    });
+
+    it('rejects a non-integer or absurdly large window', async () => {
+      for (const bad of [1.5, 2_592_001]) {
+        const response = await server.put(
+          '/settings/chat-timeout',
+          { chat_timeout_seconds: bad },
+          auth(adminToken),
+        );
+        expect(response.statusCode, `${bad} should be rejected`).toBe(400);
+      }
+    });
+
+    it('requires the field rather than treating an empty body as disable', async () => {
+      const response = await server.put('/settings/chat-timeout', {}, auth(adminToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('requires write scope to change the window', async () => {
+      const response = await server.put(
+        '/settings/chat-timeout',
+        { chat_timeout_seconds: 60 },
+        auth(readToken),
+      );
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("never reads or writes another tenant's window", async () => {
+      await owner.inboxSettings.create({
+        data: { licenseId: fx.b.licenseId, chatTimeoutSeconds: 120 },
+      });
+
+      // Their row must not leak into our read…
+      const read = await server.get('/settings/chat-timeout', auth(readToken));
+      expect((read.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds).toBeNull();
+
+      // …and our write must not reach it.
+      const written = await server.put(
+        '/settings/chat-timeout',
+        { chat_timeout_seconds: 999 },
+        auth(adminToken),
+      );
+      expect(written.statusCode).toBe(200);
+
+      const theirs = await owner.inboxSettings.findUnique({
+        where: { licenseId: fx.b.licenseId },
+      });
+      expect(theirs?.chatTimeoutSeconds).toBe(120);
+    });
+  });
 });

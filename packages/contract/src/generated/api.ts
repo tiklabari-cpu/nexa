@@ -1694,6 +1694,57 @@ export interface paths {
     patch: operations['updateTag'];
     trace?: never;
   };
+  '/settings/ticket-rules': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List ticket rules
+     * @description In evaluation order — `position` ascending, then oldest first.
+     */
+    get: operations['listTicketRules'];
+    put?: never;
+    /**
+     * Create a ticket rule
+     * @description Both a condition and an action are required (FR-MOD-08.6.2): a rule that
+     *     could match nobody, or that would do nothing, is rejected. An action that
+     *     assigns to an agent or team is validated against the tenant now, so a rule
+     *     cannot be saved pointing at nothing.
+     */
+    post: operations['createTicketRule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/ticket-rules/{ruleId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete a ticket rule */
+    delete: operations['deleteTicketRule'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit a ticket rule or toggle it on/off
+     * @description Only the fields present in the body change. The result must still be a
+     *     valid rule — an edit cannot strip the condition or action out of one.
+     */
+    patch: operations['updateTicketRule'];
+    trace?: never;
+  };
   '/settings/security': {
     parameters: {
       query?: never;
@@ -3266,6 +3317,52 @@ export interface components {
       performance: components['schemas']['CampaignPerformance'];
     };
     /**
+     * @description A ticket rule's trigger (FR-MOD-08.6.2). Every key set must hold (AND).
+     *     An empty predicate matches nothing, so a rule with no condition is
+     *     rejected rather than saved to fire at every ticket.
+     */
+    TicketRuleConditions: {
+      /** @description Case-insensitive substring the ticket subject must contain. */
+      subject_contains?: string;
+      /**
+       * @description Restrict to tickets opened from a chat, or forwarded by email.
+       * @enum {string}
+       */
+      source?: 'chat' | 'email';
+    };
+    /**
+     * @description What a matching rule does (FR-MOD-08.6.2): assign, prioritise, tag — or
+     *     any combination. At least one action must be set; a rule that does
+     *     nothing is rejected rather than saved inert.
+     */
+    TicketRuleActions: {
+      /**
+       * Format: uuid
+       * @description Assign the ticket to this agent.
+       */
+      assign_agent_id?: string;
+      /** @description Assign the ticket to this team. */
+      assign_group_id?: number;
+      /** @description Set the ticket's queue priority (higher is more urgent). */
+      priority?: number;
+      /** @description Apply this tag (created in the tag library if new). */
+      add_tag?: string;
+    };
+    /** @description Condition + action automation over tickets (FR-MOD-08.6.2). */
+    TicketRule: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      conditions: components['schemas']['TicketRuleConditions'];
+      actions: components['schemas']['TicketRuleActions'];
+      /** @description Whether the rule fires. Off keeps it configured without acting. */
+      enabled: boolean;
+      /** @description Evaluation order; lower runs first, so a later rule's assignment wins. */
+      position: number;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
      * @description The account and the workspaces it may sign in to. Deliberately carries
      *     no tokens: the caller picks a workspace and continues through
      *     `/auth/authorize`, so one code path issues credentials rather than
@@ -3366,6 +3463,8 @@ export interface components {
       }[];
       /** @description Ids of the tickets merged into this one (empty unless it is a primary). */
       merged_ticket_ids: string[];
+      /** @description Tag names on the ticket — what a ticket rule's "add tag" writes (FR-MOD-08.6.2). */
+      tags: string[];
     };
     CustomerDetail: components['schemas']['CustomerSummary'] & {
       /** Format: date-time */
@@ -6958,6 +7057,129 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listTicketRules: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The ticket rules */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['TicketRule'][];
+            total: number;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createTicketRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          conditions: components['schemas']['TicketRuleConditions'];
+          actions: components['schemas']['TicketRuleActions'];
+          /** @description Whether the rule fires; defaults to true. */
+          enabled?: boolean;
+          /** @description Evaluation order; lower runs first. */
+          position?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteTicketRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateTicketRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          conditions?: components['schemas']['TicketRuleConditions'];
+          actions?: components['schemas']['TicketRuleActions'];
+          enabled?: boolean;
+          position?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

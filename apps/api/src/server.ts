@@ -22,6 +22,7 @@ import customerDirectoryRoutes from './routes/customers.js';
 import trafficRoutes from './routes/traffic.js';
 import campaignRoutes from './routes/campaigns.js';
 import ticketRoutes from './routes/tickets.js';
+import ticketRuleRoutes from './routes/ticket-rules.js';
 import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { FileMailer, NullMailer, type Mailer } from './services/mail/mailer.js';
@@ -142,6 +143,7 @@ export async function buildServer({
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);
       await api.register(ticketRoutes);
+      await api.register(ticketRuleRoutes);
       await api.register(channelRoutes, { env });
       await api.register(reportRoutes, { env });
       await api.register(homeRoutes);

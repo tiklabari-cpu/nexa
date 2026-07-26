@@ -17,6 +17,7 @@ import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import type { Principal } from '../auth/principal.js';
+import { applyTicketRules } from './apply-ticket-rules.js';
 
 export const TICKET_STATUSES = ['open', 'pending', 'solved', 'closed', 'spam'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
@@ -70,6 +71,8 @@ export interface TicketDetail extends TicketSummary {
   followers: TicketFollowerSummary[];
   /** Ids of the tickets merged *into* this one (empty unless it is a primary). */
   merged_ticket_ids: string[];
+  /** Tag names on the ticket — what a ticket rule's "add tag" writes (08.6.2). */
+  tags: string[];
 }
 
 export interface CreateInput {
@@ -225,7 +228,16 @@ export class TicketService {
         data: { ...data, id: await allocateId(tx) },
         include: TICKET_INCLUDE,
       });
-      return toDetail(tx, created);
+      // Ticket rules (FR-MOD-08.6.2): auto-assign / prioritise / tag the fresh
+      // ticket before it is ever returned, so it is never briefly visible
+      // untriaged. `manual` is a ticket opened straight through the API — a
+      // `source` condition targets `chat` or `email`, never it.
+      await applyTicketRules(tx, tenant.licenseId, created.id, {
+        subject: created.subject,
+        source: input.source_chat_id ? 'chat' : 'manual',
+      });
+      const fresh = await tx.ticket.findUnique({ where: { id: created.id }, include: TICKET_INCLUDE });
+      return toDetail(tx, fresh ?? created);
     } catch (error) {
       // The check above loses to a request that inserted between it and here.
       // The partial unique index is what actually holds the rule; this only
@@ -254,11 +266,12 @@ export class TicketService {
     tenant: TenantContext,
     input: { subject: string; customerId: string },
   ): Promise<{ id: string }> {
-    return tx.ticket.create({
+    const subject = input.subject.trim() || '(no subject)';
+    const created = await tx.ticket.create({
       data: {
         id: await allocateId(tx),
         licenseId: tenant.licenseId,
-        subject: input.subject.trim() || '(no subject)',
+        subject,
         status: 'open',
         customerId: input.customerId,
         // Set on creation so the ticket sorts from its first moment, matching
@@ -267,6 +280,11 @@ export class TicketService {
       },
       select: { id: true },
     });
+    // Ticket rules (FR-MOD-08.6.2): a forwarded email arrives with no agent
+    // behind it, so auto-triage matters most here — `source: 'email'` lets a
+    // rule target exactly this origin.
+    await applyTicketRules(tx, tenant.licenseId, created.id, { subject, source: 'email' });
+    return created;
   }
 
   async update(
@@ -510,7 +528,7 @@ async function accountNames(
  * row, so a caller that has just changed followers or a merge sees the result.
  */
 async function toDetail(tx: TenantClient, row: TicketRow): Promise<TicketDetail> {
-  const [followers, children] = await Promise.all([
+  const [followers, children, tags] = await Promise.all([
     tx.ticketFollower.findMany({
       where: { ticketId: row.id },
       select: { accountId: true },
@@ -521,6 +539,11 @@ async function toDetail(tx: TenantClient, row: TicketRow): Promise<TicketDetail>
       select: { id: true },
       orderBy: { id: 'asc' },
     }),
+    tx.ticketTag.findMany({
+      where: { ticketId: row.id },
+      select: { tag: { select: { name: true } } },
+      orderBy: { taggedAt: 'asc' },
+    }),
   ]);
   const followerIds = followers.map((f) => f.accountId);
   const names = await accountNames(tx, [row.assigneeId, ...followerIds]);
@@ -529,6 +552,7 @@ async function toDetail(tx: TenantClient, row: TicketRow): Promise<TicketDetail>
     names,
     followerIds,
     children.map((c) => c.id),
+    tags.map((t) => t.tag.name),
   );
 }
 
@@ -717,6 +741,7 @@ function serialiseDetail(
   names: Map<string, string>,
   followerIds: string[],
   mergedTicketIds: string[],
+  tags: string[],
 ): TicketDetail {
   return {
     ...serialise(row, names),
@@ -729,6 +754,7 @@ function serialiseDetail(
       : null,
     followers: followerIds.map((id) => ({ account_id: id, name: names.get(id) ?? null })),
     merged_ticket_ids: mergedTicketIds,
+    tags,
   };
 }
 

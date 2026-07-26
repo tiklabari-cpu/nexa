@@ -75,6 +75,7 @@ model License {
   skills            Skill[]
   workflows         Workflow[]
   routingRules      RoutingRule[]
+  ticketRules       TicketRule[]
   channels          Channel[]
   channelIdentities ChannelIdentity[]
   channelMessages   ChannelMessage[]
@@ -467,9 +468,49 @@ model Tag {
 
   license License     @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   threads ThreadTag[]
+  tickets TicketTag[]
 
   @@unique([licenseId, name])
   @@map("tags")
+}
+
+/// A tag applied to a ticket (FR-MOD-08.6.2). Like `thread_tags` it has no
+/// license column of its own — it inherits tenant visibility from the ticket it
+/// hangs off, and RLS scopes it through that foreign key. Reuses the same `Tag`
+/// library the inbox and thread tagging draw on.
+model TicketTag {
+  ticketId String   @map("ticket_id") @db.VarChar(12)
+  tagId    String   @map("tag_id") @db.Uuid
+  taggedAt DateTime @default(now()) @map("tagged_at") @db.Timestamptz(6)
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, tagId])
+  @@index([tagId])
+  @@map("ticket_tags")
+}
+
+/// Ticket automation (FR-MOD-08.6.2): a condition plus an action. When a ticket
+/// is opened, every enabled rule whose condition matches applies its action —
+/// auto-assign, set priority, or tag. Both a condition and an action are
+/// required (KK "koşul+eylem zorunlu"); the shapes live in the JSON columns so a
+/// new condition or action kind needs no migration. Rules run in `position`
+/// order, so a later rule's assignment wins over an earlier one's.
+model TicketRule {
+  id         String   @id @default(uuid()) @db.Uuid
+  licenseId  BigInt   @map("license_id")
+  name       String
+  conditions Json     @default("{}")
+  actions    Json     @default("{}")
+  enabled    Boolean  @default(true)
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, enabled, position])
+  @@map("ticket_rules")
 }
 
 model ThreadTag {
@@ -521,6 +562,7 @@ model Ticket {
   mergedInto    Ticket?          @relation("TicketMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
   mergedTickets Ticket[]         @relation("TicketMerge")
   followers     TicketFollower[]
+  tags          TicketTag[]
 
   @@index([licenseId, status, lastMessageAt(sort: Desc)])
   @@index([assigneeId])

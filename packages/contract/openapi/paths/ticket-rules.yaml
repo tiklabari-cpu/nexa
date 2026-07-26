@@ -1,0 +1,123 @@
+# Ticket rules — condition + action automation over tickets (FR-MOD-08.6.2).
+#
+# A rule is a trigger (subject substring, origin) plus an action (assign, set
+# priority, tag). When a ticket is opened, every enabled rule whose condition
+# matches applies its action, in `position` order. Both a condition and an
+# action are required (KK "koşul+eylem zorunlu"): a rule that could match nobody,
+# or that would do nothing, is rejected rather than saved inert.
+#
+# Managed under /settings alongside routing rules and the tag library, on the
+# tenant-wide ticket scopes: reads take `tickets--all:ro`, writes
+# `tickets--all:rw` — configuring how every ticket is triaged is an admin action.
+
+ticketRules:
+  get:
+    tags: [Tickets]
+    operationId: listTicketRules
+    summary: List ticket rules
+    description: In evaluation order — `position` ascending, then oldest first.
+    responses:
+      "200":
+        description: The ticket rules
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/TicketRule" }
+                total: { type: integer }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Tickets]
+    operationId: createTicketRule
+    summary: Create a ticket rule
+    description: |
+      Both a condition and an action are required (FR-MOD-08.6.2): a rule that
+      could match nobody, or that would do nothing, is rejected. An action that
+      assigns to an agent or team is validated against the tenant now, so a rule
+      cannot be saved pointing at nothing.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, conditions, actions]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              conditions: { $ref: "../openapi.yaml#/components/schemas/TicketRuleConditions" }
+              actions: { $ref: "../openapi.yaml#/components/schemas/TicketRuleActions" }
+              enabled:
+                type: boolean
+                description: Whether the rule fires; defaults to true.
+              position:
+                type: integer
+                minimum: 0
+                maximum: 1000
+                description: Evaluation order; lower runs first.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ticketRule:
+  parameters:
+    - name: ruleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Tickets]
+    operationId: updateTicketRule
+    summary: Edit a ticket rule or toggle it on/off
+    description: |
+      Only the fields present in the body change. The result must still be a
+      valid rule — an edit cannot strip the condition or action out of one.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              conditions: { $ref: "../openapi.yaml#/components/schemas/TicketRuleConditions" }
+              actions: { $ref: "../openapi.yaml#/components/schemas/TicketRuleActions" }
+              enabled: { type: boolean }
+              position: { type: integer, minimum: 0, maximum: 1000 }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Tickets]
+    operationId: deleteTicketRule
+    summary: Delete a ticket rule
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

@@ -219,6 +219,10 @@ paths:
     $ref: "./paths/settings.yaml#/tags"
   /settings/tags/{tagId}:
     $ref: "./paths/settings.yaml#/tag"
+  /settings/ticket-rules:
+    $ref: "./paths/ticket-rules.yaml#/ticketRules"
+  /settings/ticket-rules/{ruleId}:
+    $ref: "./paths/ticket-rules.yaml#/ticketRule"
   /settings/security:
     $ref: "./paths/settings.yaml#/securitySettings"
   /settings/chat-timeout:
@@ -1139,6 +1143,64 @@ components:
         created_at: { type: string, format: date-time }
         performance: { $ref: "#/components/schemas/CampaignPerformance" }
 
+    TicketRuleConditions:
+      type: object
+      description: |
+        A ticket rule's trigger (FR-MOD-08.6.2). Every key set must hold (AND).
+        An empty predicate matches nothing, so a rule with no condition is
+        rejected rather than saved to fire at every ticket.
+      properties:
+        subject_contains:
+          type: string
+          maxLength: 2048
+          description: Case-insensitive substring the ticket subject must contain.
+        source:
+          type: string
+          enum: [chat, email]
+          description: Restrict to tickets opened from a chat, or forwarded by email.
+
+    TicketRuleActions:
+      type: object
+      description: |
+        What a matching rule does (FR-MOD-08.6.2): assign, prioritise, tag — or
+        any combination. At least one action must be set; a rule that does
+        nothing is rejected rather than saved inert.
+      properties:
+        assign_agent_id:
+          type: string
+          format: uuid
+          description: Assign the ticket to this agent.
+        assign_group_id:
+          type: integer
+          description: Assign the ticket to this team.
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          description: Set the ticket's queue priority (higher is more urgent).
+        add_tag:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Apply this tag (created in the tag library if new).
+
+    TicketRule:
+      type: object
+      description: Condition + action automation over tickets (FR-MOD-08.6.2).
+      required: [id, name, conditions, actions, enabled, position, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        conditions: { $ref: "#/components/schemas/TicketRuleConditions" }
+        actions: { $ref: "#/components/schemas/TicketRuleActions" }
+        enabled:
+          type: boolean
+          description: Whether the rule fires. Off keeps it configured without acting.
+        position:
+          type: integer
+          description: Evaluation order; lower runs first, so a later rule's assignment wins.
+        created_at: { type: string, format: date-time }
+
     Session:
       type: object
       description: |
@@ -1237,7 +1299,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/Ticket"
         - type: object
-          required: [followers, merged_ticket_ids]
+          required: [followers, merged_ticket_ids, tags]
           properties:
             source_chat:
               nullable: true
@@ -1263,6 +1325,10 @@ components:
               type: array
               description: Ids of the tickets merged into this one (empty unless it is a primary).
               items: { type: string, maxLength: 12 }
+            tags:
+              type: array
+              description: Tag names on the ticket — what a ticket rule's "add tag" writes (FR-MOD-08.6.2).
+              items: { type: string }
 
     CustomerDetail:
       allOf:

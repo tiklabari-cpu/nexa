@@ -286,3 +286,58 @@ export interface Campaign {
   created_at: string;
   performance: CampaignPerformance;
 }
+
+// --- Ticket rules (FR-MOD-08.6.2) -------------------------------------------
+
+/**
+ * Where a ticket came from — the one non-text condition a ticket rule can key
+ * on. `chat` is a ticket opened from a conversation, `email` one forwarded in
+ * through an inbound channel. A ticket created directly through the API has
+ * neither origin and is never matched by a `source` condition.
+ */
+export const TICKET_RULE_SOURCES = ['chat', 'email'] as const;
+export type TicketRuleSource = (typeof TICKET_RULE_SOURCES)[number];
+
+/**
+ * A ticket rule's trigger (FR-MOD-08.6.2). Every key that is set must hold
+ * (AND). An empty predicate matches nothing: a rule with no condition is not
+ * "apply to every ticket", it is simply not ready — which is what keeps the
+ * "condition required" half of the KK honest even for a row that reached the
+ * engine without one. The shape stays open so future condition kinds slot in
+ * without a contract change.
+ */
+export interface TicketRuleConditions {
+  /** Case-insensitive substring the ticket subject must contain. */
+  subject_contains?: string;
+  /** Restrict the rule to tickets opened from a chat, or forwarded by email. */
+  source?: TicketRuleSource;
+}
+
+/**
+ * What a matching rule does to the ticket (FR-MOD-08.6.2): assign it, set its
+ * priority, tag it — or any combination. At least one action must be set: a
+ * rule that does nothing is rejected rather than saved inert (the "action
+ * required" half of the KK).
+ */
+export interface TicketRuleActions {
+  /** Assign the ticket to this agent (account uuid). */
+  assign_agent_id?: string;
+  /** Assign the ticket to this team. */
+  assign_group_id?: number;
+  /** Set the ticket's queue priority (higher is more urgent). */
+  priority?: number;
+  /** Apply this tag (by name, created in the tag library if new). */
+  add_tag?: string;
+}
+
+export interface TicketRule {
+  id: string;
+  name: string;
+  conditions: TicketRuleConditions;
+  actions: TicketRuleActions;
+  /** Whether the rule fires. Off keeps it configured without acting. */
+  enabled: boolean;
+  /** Evaluation order; lower runs first, so a later rule's assignment wins. */
+  position: number;
+  created_at: string;
+}

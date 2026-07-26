@@ -6,6 +6,44 @@
 
 ## Task log (newest-first)
 
+### 47 — 08.6.2-a · Ticket rules (atama/etiket/öncelik) `[XHIGH]` — done — 2026-07-26 UTC
+
+- Kapsam: FR-MOD-08.6.2 (`Should v1`) — koşul+eylem → otomatik atama/etiket/öncelik. KK (birebir)
+  _"Koşul+eylem zorunlu"_, doğrulama _"integration (kural → otomatik atama)"_. Bağımlılık tm 29 (form
+  deseni, ✅). PLAN satır 531 (08.6.2) → `✅` + §D43. Kardeş desen: campaigns (tm 43) trigger engine.
+- Yapıldı:
+  - **Model/migration** `20260726180000_ticket_rules`: `ticket_rules` (license-scoped, RLS=campaigns;
+    `conditions`/`actions` JSONB) + `ticket_tags` (join, `thread_tags` gibi ticket üzerinden RLS EXISTS +
+    GRANT SELECT/INSERT/DELETE; paylaşılan `tags` kütüphanesi). Yapısal SQL `prisma migrate diff`'ten,
+    RLS/policy/GRANT el ile (ticket_helpdesk deseni). **Drift temiz.**
+  - **Saf çekirdek** `services/tickets/ticket-rule-matching.ts` (`hasCondition`/`hasAction`/
+    `matchesTicketRule`) — KK'nın iki yarısı ayrı kapı; koşul-yok → hiçbiriyle eşleşmez; `priority:0`
+    gerçek eylem. Unit `(7)`.
+  - **Motor** `apply-ticket-rules.ts` — ticket açılışında (create source=chat/manual + createFromEmail
+    source=email) eşleşen kuralları `position` sırasında uygular (sonraki atama kazanır, etiket birikir);
+    geçersiz hedefi (askılı ajan/silinmiş takım) **atlar** — bozuk kural ticket oluşturmayı bozmaz.
+  - **CRUD** `ticket-rule-service.ts` (create/edit'te koşul-yok/eylem-yok → 400 + `assertActionsResolvable`
+    atama hedefi tenant kontrolü) + rota `routes/ticket-rules.ts` `/settings/ticket-rules`
+    (`tickets--all:rw`/`:ro`), server.ts'e register.
+  - **Web** Settings "Ticket rules" bölümü (`SettingsPage.tsx` `TicketRules`) — form-primitifiyle koşul
+    (subject-contains, zorunlu) + eylem select (öncelik/etiket, değer zorunlu) + optimistic toggle + delete.
+  - **Contract** OpenAPI `TicketRule`/`TicketRuleConditions`/`TicketRuleActions` + `paths/ticket-rules.yaml`
+    (4 op) + `TicketDetail.tags` alanı; re-bundle. `TicketDetail` DTO'ya `tags: string[]` eklendi.
+  - **@nexa/types** `TicketRule*` + `TICKET_RULE_SOURCES`.
+- Doğrulama (bu pencere, exit 0): typecheck 11/11 · lint 8/8 · build 7/7 · test:unit (web 428 incl.
+  `SettingsForms.test.tsx` +2; api unit incl. matcher 7) · test:integration api **738**
+  (`--concurrency=1`) incl. yeni `ticket-rules.test.ts` **12** (kural→otomatik atama · koşul/eylem zorunlu ·
+  non-existent agent reddi · disabled no-op · source-gating · position · cross-tenant · scope split) +
+  contract-parity 5/5 + regresyon yok (tickets/tickets-helpdesk/channels-adapters yeşil).
+- Varsayımlar / notlar:
+  - **UI eylem kapsamı:** editör öncelik + etiket sunar (self-contained). Ajan/takım **atama** kuralları
+    backend+API+integration'da tam (KK başlık örneği, `ticket-rules.test.ts` ile test'li) — UI'da team seçici
+    `/groups` scope kuplajından kaçınmak için eklenmedi; sonraki pencere isterse team picker ekleyebilir.
+  - **E2E:** ilgili yüzey (Settings/tickets) E2E'si yeşil (12). Canlı-chat composer akışı (settings.spec
+    "composer shortcuts" 2 + **dokunulmamış** `demo-flow.spec.ts` 1) bu sandbox'ta widget→RTM canlı-chat
+    pipeline'ının çalışmamasından **önceden kırık** — task'ın akışı değil, değişikliğim bu yola dokunmuyor
+    (demo-flow dokunulmamış kodda aynı adımda düşüyor). Kalan borç değil; env sorunu.
+
 ### 43 — 03.3 · Campaigns `[MAX]` (alt sekmeler + builder + kart) — done — 2026-07-26 UTC
 
 - Kapsam: FR-MOD-03.3 (`Should v1`) — parent `[MAX]`, 3 alt-görev (43.1 alt sekmeler `[XHIGH]`, 43.2 builder

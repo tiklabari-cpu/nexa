@@ -21,7 +21,7 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
 });
 
 // Imported after the mock so the components pick up the stubbed client.
-const { CannedResponses, Tags } = await import('./SettingsPage.js');
+const { CannedResponses, Tags, TicketRules } = await import('./SettingsPage.js');
 
 function renderComponent(ui: ReactElement): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -63,5 +63,30 @@ describe('Tags validation', () => {
 
     await userEvent.type(screen.getByPlaceholderText('vip'), 'billing');
     expect(submit).toBeEnabled();
+  });
+});
+
+describe('TicketRules validation', () => {
+  it('keeps Add rule disabled until name, condition and action are all filled', async () => {
+    renderComponent(<TicketRules canEdit />);
+    const submit = await screen.findByRole('button', { name: 'Add rule' });
+    expect(submit).toBeDisabled(); // both condition and action still empty
+
+    await userEvent.type(screen.getByPlaceholderText('Refunds'), 'Refund desk');
+    expect(submit).toBeDisabled(); // no condition yet
+
+    await userEvent.type(screen.getByPlaceholderText('refund'), 'refund');
+    expect(submit).toBeDisabled(); // action value still empty
+
+    await userEvent.type(screen.getByPlaceholderText('50'), '50');
+    expect(submit).toBeEnabled();
+  });
+
+  it('shows a field-under error when the subject condition is left empty', async () => {
+    renderComponent(<TicketRules canEdit />);
+    const subject = await screen.findByPlaceholderText('refund');
+    await userEvent.click(subject);
+    await userEvent.tab(); // blur the empty field
+    expect(screen.getByText('Enter the text the subject must contain.')).toBeInTheDocument();
   });
 });

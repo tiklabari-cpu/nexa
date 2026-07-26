@@ -6,6 +6,39 @@
 
 ## Task log (newest-first)
 
+### 54 — 10.1.4-a · AI resolutions meter + %80 UI [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı (UI dilimi; metering ✅ zaten vardı — ADR-09/ADR-13, sadece UI ⬜ idi):
+  - **Backend (küçük, additif):** `metering.ts` `usageSummary.ai_resolutions`'a `overage_unit`
+    (paket boyu = 50, yeni `AI_RESOLUTION_OVERAGE_UNIT` sabiti) + `overage_unit_price_cents`
+    (çözüm-başı aşım fiyatı = `AI_OVERAGE_CENTS`) eklendi. Böylece meter aşım fiyatını **kota
+    dolmadan** gösterebiliyor (PRD §5.3/§125 şeffaf-fatura farklılaştırması). `recordAiResolution`
+    içindeki literal `50` sabite bağlandı. OpenAPI `UsageSummary` şeması güncellendi + `contract
+    generate` ile `src/generated/api.ts` yenilendi. **Fatura aritmetiği değişmedi** (overage_cents
+    = overage × aiOverageCents).
+  - **Web `BillingPage.tsx` (asıl iş):**
+    - Sayaç artık **"N / limit (% used)"** — yüzde metin olarak görünüyor (`ai-counter` /
+      `quota-percent` testid). % clamp YOK: aşımda gerçek değer (ör. %105) gösterilir.
+    - **%80 proaktif uyarı**: `quota_warning` (backend ≥%80) true olunca belirgin `role="alert"`
+      bildirim — aşım öncesi "%X kullandınız", aşımda "dahil kotayı aştınız + çözüm-başı fiyat".
+    - **Aşım paketi**: her zaman görünen kart — çözüm-başı fiyat + 50'lik paket boyu + paket fiyatı
+      (50 × birim) + bu dönem ücreti (`overage-charge`). Paket bir fiyat demeti; fatura çözüm-başı
+      ölçüldüğü için kısmi paket tam paketten ucuz (yanıltıcı "tam-paket faturalama" iddiası yok).
+  - **Test:** yeni `BillingPage.test.tsx` (5 test): sayaç N/limit(%), <%80 uyarı yok, =%80 proaktif
+    uyarı, aşım paketi fiyatı önden, aşım ücreti (%105 + $5.00). `reports-billing.test.ts`'e
+    `overage_unit`/`overage_unit_price_cents` assertion eklendi.
+- Doğrulama (DoD kapısı — hepsi yeşil): `typecheck` ✅ · `lint` ✅ · `build` ✅ ·
+  `test:unit` ✅ (web 256; +5 BillingPage) · `test:integration` ✅ (566, seri concurrency=1;
+  reports-billing + contract-parity dahil) · prettier --check ✅.
+  - **E2E re-run edilmedi:** değişen DOM'a dokunan e2e assertion'ı yok — `billing.spec.ts` yalnız
+    "Manage plan"/trial rozetini, `reports.spec.ts` değişmeyen "AI resolutions" başlığını doğrular;
+    task test stratejisi zaten "unit" diyor.
+- Varsayım: aşım fiyatı = **kod gerçeği** ($0.50/çözüm = `AI_OVERAGE_CENTS`), PRD Gözlem'indeki
+  kaynak-ürün "$49.50/50" değil (Nexa kararı §684: $0.50–0.75/çözüm). Paket fiyatı bundan türetildi
+  ($25.00/50).
+- Sonraki pencereye not: 10.1.5-a (API calls aşım paketi + sayaç) hâlâ ⬜ — aynı desen
+  (`usage.api_calls`'a overage alanları + UI). `.parked-playbook/` commit'e DAHİL EDİLMEDİ (bkz. e807983).
+
 ### 37 — 02.1.2-a · Inbox AI Agents grubu (AI/Solved) [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı (contract-first; ADR-09 ile birebir hizalı):

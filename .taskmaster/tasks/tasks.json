@@ -1317,11 +1317,11 @@
         "description": "Boşta/ölü sohbet otomatik kapanma; pozitif süre. PRD 08.7.3 (Should).",
         "details": "08.7.3-a Chat timeout (boşta/ölü sohbet otomatik kapanma). [XHIGH] PRD 08.7.3 (Should).\nKAPSAM: pozitif süre eşiği; ölü sohbet otomatik kapanma.\nKK (birebir): \"Pozitif süre; ölü sohbet otomatik kapanma\". BAĞLAM: PLAN §4.4.9.",
         "testStrategy": "integration: timeout → kapanır; NEGATİF: 0/negatif süre reddi. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T09:47:55.229Z"
       },
       {
         "id": "49",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T09:18:52.102Z",
+      "lastModified": "2026-07-26T09:47:55.229Z",
       "taskCount": 84,
-      "completedCount": 42,
+      "completedCount": 43,
       "tags": [
         "master"
       ]

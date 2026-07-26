@@ -498,7 +498,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 06.2.3 | Doğal dil talimat textarea (~10.000 karakter)             | Must (v1)   |               ✅               |
 | 06.2.4 | Ordered steps (6 adım tipi; reorder + klavye alternatifi) | Must (v1)   | ◐ adımlar ✅, drag-reorder ⬜  |
 | 06.2.5 | Preview (canlı simülasyon)                                | Must (v1)   |               ✅               |
-| 06.3.1 | Knowledge alt sekmeler (All/Websites/Files/Articles/FAQ)  | Must (v1)   |               ◐                |
+| 06.3.1 | Knowledge alt sekmeler (All/Websites/Files/Articles/FAQ)  | Must (v1)   | ✅ 5 alt sekme (All/Websites/Files/Articles/FAQ) `role="tablist"` — `PlaybookPage.tsx` `KnowledgePanel` (`['all', ...KNOWLEDGE_TYPES]` + sekme sayaçları + tür bazlı süzme + sekme başına boş durum) · saf partition `knowledge-tabs.ts` `filterSourcesByTab`/`countSourcesByTab` (All = Websites ∪ Files ∪ Articles ∪ FAQ) · şema `@nexa/types` `KNOWLEDGE_SOURCE_TYPES` (§8 knowledge_sources) · test `knowledge-tabs.test.ts` (4) · tm 33.3 · §D28 |
 | 06.3.2 | + New source (chunk+embedding)                            | Must (v1)   | ◐ article ✅, website crawl ⬜ |
 | 06.3.3 | Kaynak tablosu (düzenle/sil/yeniden indeksle)             | Must (v1)   |               ✅               |
 | 06.4   | Profile (persona: Tone/Language/Answer length)            | Must (v1)   | ✅ Name/Avatar/Tone/Language/Answer length + canlı Preview — `ProfileForm.tsx` · API `playbook.ts` PATCH `/ai-agents/:id` (answer_length→persona jsonb) · test `ProfileForm.test.tsx` (6) + `ai-agent-profile.test.ts` · tm 11/33.5 · §D25 |
@@ -1791,6 +1791,19 @@ görüneceği en son yerdir.
   `role="alert"` banner ("Not ready to turn on…") ile uygular — PRD KK4/US-7 birebir. Test yeşil (bu tur
   koşuldu): `readiness.test.ts` (5/5 — boş KB+skill→engel + un-indexed/stepless negatifleri + iki hazır
   yol). → §4.2'de 06.1 `◐`→`✅`. (Bu satır dışına dokunulmadı.)
+- **D28 (çelişki denetimi 2026-07-26 · koda karşı doğrulandı):** §4.2 satırı 06.3.1'i `◐` gösteriyordu
+  (Nerede boş) ama tm 33.3 (`done`) payı kodda tam. PRD FR-MOD-06.3.1 KK "Tür bazlı filtre" (All /
+  Websites / Files / Articles / FAQ) üç katmanda karşılanıyor: **(1) Şema** — `@nexa/types`
+  `KNOWLEDGE_SOURCE_TYPES = ['website','file','article','faq']` (§8 knowledge_sources) + kontrat
+  `type: 'website'|'file'|'article'|'faq'`. **(2) Süzme** — saf partition `knowledge-tabs.ts`
+  `filterSourcesByTab` (sekmeye göre tür süzer) + `countSourcesByTab` (All = Websites ∪ Files ∪
+  Articles ∪ FAQ, çakışmasız/kayıpsız; bilinmeyen tür yalnız All'da). **(3) UI** — `PlaybookPage.tsx`
+  `KnowledgePanel` `['all', ...KNOWLEDGE_TYPES]`'ı tek `role="tablist"` (`aria-label="Knowledge types"`,
+  `aria-selected`) altında 5 sekme + sekme sayaçları + tür bazlı süzülmüş liste + sekme başına boş durum
+  olarak render eder. Test yeşil (bu tur koşuldu): `knowledge-tabs.test.ts` (4/4 — her tür sekmesi yalnız
+  kendi türü, All hiçbir kaynağı düşürmez, tam partition, bilinmeyen tür All'da) · web paketi 265/265 ·
+  typecheck exit 0. → §4.2'de 06.3.1 `◐`→`✅`. Not: bu satır **yalnız alt sekme/süzme** kapsamıdır;
+  06.3.2 (website crawl) ayrı satırda `◐` kalır — ona dokunulmadı. (Bu satır dışına dokunulmadı.)
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

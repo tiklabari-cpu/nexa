@@ -6,6 +6,16 @@
 
 ## Task log (newest-first)
 
+### PARK — `.parked-playbook/` (commit'lenmedi) — 2026-07-26 UTC
+- Depo kökündeki `.parked-playbook/` **bilinçli olarak commit dışı** bırakıldı (düzeltme
+  penceresi, 2026-07-26). İçerik: `RecommendedSkills.{tsx,test.tsx}`, `SkillBrowser.{tsx,test.tsx}`,
+  `skill-filters.{ts,test.ts}` — 05.x Skills modülünün **eski/alternatif** implementasyonu.
+- Neden park: uygulamadaki güncel sürüm bunların yerini aldı. `apps/web/.../RecommendedSkills.tsx`
+  yeni imzayla (`onTry`/`onBrowseAll`, `recommendedTemplates()`, `findCategoryMeta`) canlı;
+  `SkillBrowser`/`skill-filters` ise app'te **hiçbir yerde referanslanmıyor** (grep temiz) — yani
+  ölü/deneysel kod. Build'e girmiyor. Bu yüzden repoya alınmadı; ihtiyaç olursa buradan diriltilir,
+  yoksa temizlik turunda silinebilir. (`.gitignore`'a eklenmedi; kasıtlı görünür bırakıldı.)
+
 ### 33 — 06 · AI Agent + Knowledge tamamlama [MAX] — done — 2026-07-26 UTC
 - Yapıldı (6 alt-görev, contract-first):
   - **06.1-a Sekmeler + readiness:** `PlaybookPage` artık tek "AI Agent" yüzeyi —

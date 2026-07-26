@@ -1,0 +1,49 @@
+# Real-time traffic — the live-visitor side of Customers (FR-MOD-03.1).
+#
+# A different question from `GET /customers`: not "who has ever contacted us"
+# but "who is on the site right now, and what are they doing". A row is a person
+# with either an active conversation or a visit inside the live window, and its
+# headline fact is the **Chatting with** column — the human agent or the AI
+# persona the visitor is currently talking to (FR-MOD-03.1.3). That column is
+# what lets a supervisor decide, at a glance, whether to step in.
+
+traffic:
+  get:
+    tags: [Customers]
+    operationId: listTraffic
+    summary: Live visitors on the site right now
+    description: |
+      Everyone with an active conversation, plus everyone whose most recent
+      visit falls inside the live window (30 minutes) — the union, one row per
+      person, ordered by most recent activity.
+
+      `activity` is where they are in the funnel:
+        - `browsing` — on the site, no conversation yet.
+        - `queued`   — wrote in, still waiting in the routing queue.
+        - `waiting`  — an agent has the chat, the visitor's last message is unanswered.
+        - `chatting` — mid-conversation, the ball is not in the visitor's court.
+
+      `chatting_with` is who is answering: a human assignee wins over the AI
+      persona, exactly as the widget header resolves it (FR-MOD-11.3). Null while
+      nobody is (a browsing or freshly queued visitor).
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: The live visitors
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/TrafficVisitor" }
+                total:
+                  type: integer
+                  description: Live visitors returned — capped at `limit`.
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

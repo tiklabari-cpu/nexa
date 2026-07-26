@@ -862,6 +862,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/traffic': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Live visitors on the site right now
+     * @description Everyone with an active conversation, plus everyone whose most recent
+     *     visit falls inside the live window (30 minutes) — the union, one row per
+     *     person, ordered by most recent activity.
+     *
+     *     `activity` is where they are in the funnel:
+     *       - `browsing` — on the site, no conversation yet.
+     *       - `queued`   — wrote in, still waiting in the routing queue.
+     *       - `waiting`  — an agent has the chat, the visitor's last message is unanswered.
+     *       - `chatting` — mid-conversation, the ball is not in the visitor's court.
+     *
+     *     `chatting_with` is who is answering: a human assignee wins over the AI
+     *     persona, exactly as the widget header resolves it (FR-MOD-11.3). Null while
+     *     nobody is (a browsing or freshly queued visitor).
+     */
+    get: operations['listTraffic'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/agents': {
     parameters: {
       query?: never;
@@ -2539,6 +2571,46 @@ export interface components {
       last_activity_at?: string | null;
       /** Format: date-time */
       created_at?: string;
+    };
+    /**
+     * @description Who a visitor is currently talking to (FR-MOD-03.1.3 "Chatting with").
+     *     `kind` is the human/AI distinction the table draws — a person on the
+     *     other end reads very differently from a persona answering first.
+     */
+    TrafficRespondent: {
+      /**
+       * @description A human agent, or the customer-facing AI persona.
+       * @enum {string}
+       */
+      kind: 'human' | 'ai';
+      /** @description The agent's name, or the persona's (e.g. "Hazal"). */
+      name: string;
+      avatar_url?: string | null;
+    };
+    /**
+     * @description One live visitor row (FR-MOD-03.1.3). Keyed by the customer, since a
+     *     person browsing without a conversation still belongs in the table.
+     */
+    TrafficVisitor: {
+      /** Format: uuid */
+      customer_id: string;
+      /** @description Null for a visitor who never introduced themselves. */
+      name: string | null;
+      email: string | null;
+      /**
+       * @description Where the visitor is in the funnel — see `listTraffic`.
+       * @enum {string}
+       */
+      activity: 'browsing' | 'queued' | 'waiting' | 'chatting';
+      /** @description The active conversation, when there is one; null while browsing. */
+      chat_id: string | null;
+      /** @description Who is answering, or null while nobody is. */
+      chatting_with: components['schemas']['TrafficRespondent'] | null;
+      /**
+       * Format: date-time
+       * @description Most recent signal from this visitor — the table's sort key.
+       */
+      last_activity_at?: string | null;
     };
     /**
      * @description The account and the workspaces it may sign in to. Deliberately carries
@@ -4606,6 +4678,36 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listTraffic: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The live visitors */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['TrafficVisitor'][];
+            /** @description Live visitors returned — capped at `limit`. */
+            total: number;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

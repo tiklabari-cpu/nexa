@@ -20,6 +20,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate } from '../../lib/format.js';
 import { CustomerDetailPanel } from './CustomerDetailPanel.js';
+import { CustomersTabs } from './CustomersTabs.js';
 import type { CustomerSummary, Segment } from './types.js';
 
 const SEGMENTS: Array<{ id: Segment; label: string }> = [
@@ -104,16 +105,19 @@ export function CustomersPage(): ReactElement {
           : 'People who have contacted this workspace.'
       }
       actions={
-        <label className="flex items-center gap-2">
-          <span className="sr-only">Search customers</span>
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Name, email or phone…"
-            className="w-64 rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
-          />
-        </label>
+        <div className="flex items-center gap-3">
+          <CustomersTabs />
+          <label className="flex items-center gap-2">
+            <span className="sr-only">Search customers</span>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Name, email or phone…"
+              className="w-64 rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+            />
+          </label>
+        </div>
       }
     >
       <div

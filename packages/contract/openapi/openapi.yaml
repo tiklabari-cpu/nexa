@@ -146,6 +146,9 @@ paths:
   /customers/{customerId}/ban:
     $ref: "./paths/customers.yaml#/ban"
 
+  /traffic:
+    $ref: "./paths/traffic.yaml#/traffic"
+
   /agents:
     $ref: "./paths/agents.yaml#/agents"
   /agents/me/routing-status:
@@ -936,6 +939,55 @@ components:
         tickets_count: { type: integer }
         last_activity_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
+
+    TrafficRespondent:
+      type: object
+      description: |
+        Who a visitor is currently talking to (FR-MOD-03.1.3 "Chatting with").
+        `kind` is the human/AI distinction the table draws — a person on the
+        other end reads very differently from a persona answering first.
+      required: [kind, name]
+      properties:
+        kind:
+          type: string
+          enum: [human, ai]
+          description: A human agent, or the customer-facing AI persona.
+        name:
+          type: string
+          description: The agent's name, or the persona's (e.g. "Hazal").
+        avatar_url: { type: string, nullable: true }
+
+    TrafficVisitor:
+      type: object
+      description: |
+        One live visitor row (FR-MOD-03.1.3). Keyed by the customer, since a
+        person browsing without a conversation still belongs in the table.
+      required: [customer_id, name, email, activity, chat_id, chatting_with]
+      properties:
+        customer_id: { type: string, format: uuid }
+        name:
+          type: string
+          nullable: true
+          description: Null for a visitor who never introduced themselves.
+        email: { type: string, nullable: true }
+        activity:
+          type: string
+          enum: [browsing, queued, waiting, chatting]
+          description: Where the visitor is in the funnel — see `listTraffic`.
+        chat_id:
+          type: string
+          nullable: true
+          description: The active conversation, when there is one; null while browsing.
+        chatting_with:
+          description: Who is answering, or null while nobody is.
+          allOf:
+            - $ref: "#/components/schemas/TrafficRespondent"
+          nullable: true
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Most recent signal from this visitor — the table's sort key.
 
     Session:
       type: object

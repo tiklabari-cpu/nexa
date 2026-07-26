@@ -18,6 +18,7 @@ import agentRoutes from './routes/agents.js';
 import chatRoutes from './routes/chats.js';
 import customerRoutes from './routes/customer.js';
 import customerDirectoryRoutes from './routes/customers.js';
+import trafficRoutes from './routes/traffic.js';
 import ticketRoutes from './routes/tickets.js';
 import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
@@ -133,6 +134,7 @@ export async function buildServer({
       await api.register(agentRoutes);
       await api.register(customerRoutes, { env, mailer });
       await api.register(customerDirectoryRoutes);
+      await api.register(trafficRoutes);
       await api.register(ticketRoutes);
       await api.register(channelRoutes, { env });
       await api.register(reportRoutes, { env });

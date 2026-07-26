@@ -6,6 +6,38 @@
 
 ## Task log (newest-first)
 
+### 42 — 03.1.3-a · Ziyaretçi tablosu + satır aksiyonları (Traffic) [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı (contract-first; MOD-03 Customers'ın "Real-time" yüzü — canlı ziyaretçi panosu):
+  - **Kontrat:** OpenAPI'ye `GET /traffic` (operationId `listTraffic`, 200+4xx) + `TrafficVisitor` /
+    `TrafficRespondent` şemaları eklendi; `contract generate` ile `dist/openapi.json` + `api.ts`
+    yenilendi. contract-parity ✅ (route belgeli **ve** servis ediliyor).
+  - **Backend:** `TrafficService.listLive` — aktif sohbeti olan + son 30 dk içinde ziyareti olan
+    müşterilerin birleşimi, kişi başı tek satır. `activity` ∈ browsing/queued/waiting/chatting.
+    **"Chatting with"** çekirdek KK: insan atanmış → `{kind:'human'}`, yoksa aktif AI persona →
+    `{kind:'ai'}` (ör. "Hazal"); insan AI'ı yener (FR-MOD-11.3 widget başlığıyla aynı çözümleme).
+    `routes/traffic.ts` scope `customers:ro|:rw`, salt-okur; org+license süzme + RLS ile izolasyon.
+  - **Frontend:** `TrafficPage` (Customers başlığı, `Live visitors` tablosu: Visitor / Activity /
+    Chatting with / Actions; 8 sn poll — RTM traffic feed'i ayrı, daha büyük dilim [FR-EK-C.1]).
+    Saf `visitorRowActions(visitor, ctx)` — satır aksiyonlarının durum×yetki mantığı (Start chat /
+    Supervise / Assign to me / Edit; uygulanmayan aksiyon `enabled:false`, gizlenmez). Aksiyon
+    kablolaması mevcut uçlar: Start → `POST /chats {assign_to_me}`, Assign → `POST /chats/:id/transfer
+    {agent_id:self}`, Supervise/aç → `/app/inbox?chat=:id`, Edit → `/app/customers?customer=:id`.
+    Alt-navigasyon `CustomersTabs` (Contacts | Real-time) iki sayfanın header'ında; rota
+    `/app/customers/real-time` (deep-link'lenebilir).
+- Doğrulama (DoD kapısı — hepsi exit 0): `typecheck` ✅ · `lint` ✅ · `test:unit` ✅ (web 273; +8
+  `rowActions.test.ts`) · `test:integration` ✅ (581; **+9** `traffic.test.ts` — isolation/scope/
+  browsing/live-window/human/ai(Hazal)/human-wins/queued/waiting/limit) · `build` ✅ · `test:e2e` ✅
+  (traffic smoke + customers/command-palette regresyonu geçti; kanıt `kanit/03-traffic-board.png`).
+- Varsayımlar: (1) "Canlı ziyaretçi" = aktif sohbet **veya** son 30 dk'da ziyaret; `visits.ended_at`
+  bu sistemde hiç yazılmıyor → yalnız `started_at` penceresi ölçüt. (2) Supervise, ayrı bir salt-izleme
+  backend'i yerine sohbeti inbox'ta açar (Supervised sekmesi 03.1.1-kalan olarak v1'de). (3) Pano
+  RTM push yerine poll eder — canlı-yeterli, gerçek RTM traffic feed'i FR-EK-C.1 kapsamı.
+- Sonraki pencereye not: **PLAN.md 03.1.3'ü `⬜`→`✅` çevir** (§4.2 satır 518 + §4.4.7) — bu pencerede
+  PLAN.md'ye DOKUNMADIM: dalda ilgisiz, commit edilmemiş bir D28 doküman düzenlemesi vardı, aynı dosyada
+  entangle etmemek için bıraktım. Geliştirmeler (v1): RTM traffic push (03.1.1-kalan/13.2), gerçek
+  Supervised sekmesi + salt-izleme erişimi, ziyaretçi 360° panel (came from / visited pages — 13.2).
+
 ### 41 — 02.9-a · Live typing preview (sneak-peek) (+11.8) [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı (contract-first; iki taşıyıcı asimetrisi bilinçli — ajan socket'te, ziyaretçi poll'da):

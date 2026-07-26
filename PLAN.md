@@ -155,7 +155,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | 01.1.3                   | **Command Palette (⌘K)** — içerik arama + rota atlama    | Must (MVP temel) |  ✅   | Dilim 14 (tm 18) — müşteri/sohbet/ticket arama + modül atlama, scope-gated, deep-link |
 | 01.1.6                   | Trial rozeti "N days" + Subscribe CTA                    | Must (MVP)       |  ✅   | Dilim 14 (tm 15) — trial rozeti + Subscribe CTA                                       |
 | 01.2                     | Sol ikon rayı                                            | Must (MVP)       |  ✅   | F2 · `AppShell.tsx`                                                                   |
-| 01.3                     | Sağ panel anahtarı (Details ↔ Copilot ↔ Expand)          | Must (MVP)       |   ◐   | Dilim 7 (Details ✅, Copilot v1)                                                      |
+| 01.3                     | Sağ panel anahtarı (Details ↔ Copilot ↔ Expand)          | Must (MVP)       |   ✅   | tm 28 · sağ panel aç/kapa + **Expand** + tercih persist (`rightPanel.ts`/`InboxPage.tsx`, unit `rightPanel.test.tsx` + E2E `inbox-panel.spec.ts`). Copilot v1'e ayrıldı (§D22/§D23, tm 36) |
 | 01.1.1/.4/.5, 01.4, 01.5 | Hamburger, presence avatarları, Invite +N, banner, unpin | Should/Could     |  🔒   | v1+                                                                                   |
 
 ### 3.2 FR-MOD-02 — Inbox / Chats
@@ -170,7 +170,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | 02.3.4                                           | Message type (Reply / Internal note)                                                                         | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
 | 02.3.5                                           | Composer araçları (canned `#`, tag, emoji, **attach**)                                                       | Must (MVP)       |  ✅   | F5 (`#` ✅) · attach → **Dilim 13**                                                                                                      |
 | 02.3.6                                           | Send (optimistic, disabled/loading/error)                                                                    | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
-| 02.4.1–.6                                        | Details paneli (info/tags/visited pages/visit info)                                                          | Must (MVP)       |  ◐   | Chat info/tags/assignee/ID/Started ✅ (`DetailsPanel.tsx`) · **Visited pages + Visit info (Device/Referring/Duration/IP) ⬜** — veri var (`Visit` şeması, `getCustomer`) ama inbox `getChat`'e bağlı değil (§D19, denetim 2026-07-25) → §3.13/T3 |
+| 02.4.1–.6                                        | Details paneli (info/tags/visited pages/visit info)                                                          | Must (MVP)       |  ✅   | Chat info/tags/assignee/ID/Started ✅ · **Visited pages + Visit info (Device/Referring/Duration/IP) ✅** — inbox `getChat` visitor'ı taşıyor (`chat-service.ts` `get`→`#latestVisitor`, agent-only/NFR-S9), UI `DetailsPanel.tsx` iki bölümü + boş durumları render eder; test: `DetailsPanel.test.tsx` (3) + `chats.test.ts` "visitor context" (4, IDOR dahil). tm 27/27.1/27.2 · §D24 (D19 kapandı) |
 | 02.6                                             | **Create ticket** / Copy chat link / Reopen                                                                  | Must (MVP)       |  ✅   | Reopen ✅ (`/chats/{id}/resume`) · Create ticket ✅ (Dilim 11) · Copy chat link ✅ (§F kapanış — transcript başlığı, `?chat=` deep-link) |
 | 02.8                                             | Archive (salt-okuma transcript)                                                                              | Must (MVP)       |  ✅   | Dilim 7                                                                                                                                  |
 | 02.1.2, 02.1.4, 02.2.1, 02.3.2, 02.5, 02.7, 02.9 | AI Agents grubu, kanal görünümleri, sıralama, Reply Suggestions, Copilot özeti, Tickets grid, typing preview | v1               |  🔒   | v1                                                                                                                                       |
@@ -482,10 +482,10 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 
 | PRD  | Gereksinim                                        | Öncelik     |              Durum              |
 | ---- | ------------------------------------------------- | ----------- | :-----------------------------: |
-| 05.1 | Header — Browse templates + Create skill ▾        | Must (v1)   | ◐ create ✅, şablon galerisi ⬜ |
-| 05.2 | Recommended skills (şablon kartları)              | Should (v1) |               ⬜                |
-| 05.3 | Skill listesi sekmeleri (All/AI/Workspace/Drafts) | Must (v1)   |     ◐ liste ✅, sekmeler ⬜     |
-| 05.4 | Liste kontrolleri (Search/Sort/Filter)            | Should      |               ⬜                |
+| 05.1 | Header — Browse templates + Create skill ▾        | Must (v1)   |               ✅                |
+| 05.2 | Recommended skills (şablon kartları)              | Should (v1) |               ✅                |
+| 05.3 | Skill listesi sekmeleri (All/AI/Workspace/Drafts) | Must (v1)   |               ✅                |
+| 05.4 | Liste kontrolleri (Search/Sort/Filter)            | Should      |               ✅                |
 | 05.5 | Skill satırı ("N runs" + sahip + toggle)          | Must (v1)   |               ✅                |
 
 ### 4.2 FR-MOD-06 — AI Agent + Knowledge/RAG _(öne çekildi)_
@@ -1741,6 +1741,23 @@ görüneceği en son yerdir.
   sekmesi/geçişi v1'e ayrıldı** (12.1–12.3 ile birlikte). §F.00 "kapsamı daralt + kalanı gerekçeli
   yeni kaleme ayır" kuralının uygulanışı — 01.3 Faz-0 `Must` sayacından Copilot payıyla değil,
   T1-a ✅ ile düşer.
+- **D23 (çelişki denetimi 2026-07-26 · koda karşı doğrulandı):** §2 matrisi 01.3'ü `◐` gösteriyordu
+  ("Details ✅, Copilot v1") ama tm 28 (= T1-a) `done` ve MVP payı kodda tam: sağ panel toggle +
+  Expand (transcript tam genişlik) + `localStorage` persist (`rightPanel.ts`, `InboxPage.tsx`;
+  `ShowDetailsButton`/`DetailsPanel.onCollapse`), unit `rightPanel.test.tsx` (7 test, toggle+expand+
+  reload persist) + E2E `inbox-panel.spec.ts` yeşil. Copilot §D22 ile bilinçli olarak v1'e (tm 36)
+  ayrıldığından MVP KK'sı karşılanmış → §3.1'de 01.3 `◐`→`✅`. Kalan Copilot payı §D22/T1'de v1 kaydı
+  olarak durur (bu satır dışına dokunulmadı).
+- **D24 (çelişki denetimi 2026-07-26 · koda karşı doğrulandı):** §3.2 satırı 02.4.1–.6'yı `◐`
+  gösteriyordu (D19: "veri var ama inbox `getChat`'e bağlı değil, denetim 2026-07-25") ama D19'dan
+  sonra gelen tm 27/27.1/27.2 boşluğu kapatmış. Koda karşı: backend `chat-service.ts` `get()`
+  müşteri-olmayan principal için `detail.visitor`'ı `#latestVisitor` ile dolduruyor (Visit'ten
+  `visited_pages` + `visit_info` Device/Referring/Duration/IP; IP yalnız agent/bot'a — NFR-S9);
+  kontrat `ChatDetail.visitor`; UI `DetailsPanel.tsx` "Visited pages" + "Visit info" bölümlerini +
+  boş durumlarını render ediyor. Testler yeşil: frontend `DetailsPanel.test.tsx` (3) + integration
+  `chats.test.ts` "visitor context" (4 — yüzey + boş durum + widget'a sızmama + başka lisans IDOR).
+  → §3.2'de 02.4.1–.6 `◐`→`✅`; D19 çözüldü. (Bu satır dışına dokunulmadı; §2/§8'deki D19/T3
+  referansları kendi denetim turlarında güncellenir.)
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

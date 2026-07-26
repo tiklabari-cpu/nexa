@@ -20,6 +20,7 @@ function makeTicket(i: number): Ticket {
     id: `t${i}`,
     subject: `Ticket ${i}`,
     status: 'open',
+    priority: 0,
     assignee_id: null,
     assignee_name: null,
     group_id: null,
@@ -27,6 +28,7 @@ function makeTicket(i: number): Ticket {
     customer_name: `Customer ${i}`,
     customer_email: null,
     source_chat_id: null,
+    merged_into_id: null,
     last_message_at: null,
     created_at: new Date(0).toISOString(),
   };

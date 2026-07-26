@@ -6,6 +6,37 @@
 
 ## Task log (newest-first)
 
+### 61.2 — 13.6-a · Omnichannel HelpDesk katmanı (frontend) [XHIGH] — done — 2026-07-26 UTC
+
+- Kapsam: 61.1'in backend HelpDesk katmanını `apps/web` inbox'ına bağlar. Parent **61 artık done**
+  (61.1 + 61.2). PLAN satır 544 → `✅` (§D38·§D39). Frontend-only — backend/contract'a dokunulmadı.
+- Yapıldı:
+  - **Priority seçici** — `TicketDetailPane`'de 4 seviyeli select (Urgent/High/Normal/Low). Yeni
+    `ticket-priority.ts`: `nearestPriority` API'nin döndürdüğü keyfi int'i (±100) en yakın seviyeye
+    snap'ler (eşitlikte daha acil kazanır); `hasElevatedPriority` liste rozeti için. `TicketList`
+    satırında priority pill.
+  - **Followers** — agent picker'dan ekle (`/agents`), satırdan çıkar; `FollowersSection`.
+  - **Merge/unmerge** — standalone ticket aday listesinden birleşir; **primary** kendi panelinde
+    folded child'ları listeler ve her birini oradan unmerge eder (child'lar listeden gizli olduğu için
+    UI'da onlara ulaşmanın tek yolu); merged ticket read-only + banner (kendi banner'ından da unmerge).
+  - **Hook'lar** — `useTickets.ts`: `useMergeTicket`/`useUnmergeTicket`/`useAddFollower`/
+    `useRemoveFollower`/`useAgents` (id mutate-time'da, tek id'ye bağlı değil); `useTicket` →
+    `TicketDetail`; `settle()` yardımcısı (dönen detail'i cache'e yaz + tüm ticket sorgularını invalidate).
+  - **Tipler** — `types.ts`: `Ticket`'e `priority`/`merged_into_id`; yeni `TicketFollower` + `TicketDetail`.
+- Doğrulama (DoD, exit 0): typecheck 11/11 · lint 8/8 · test (api 849 + web 320, turbo `--concurrency=1`) ·
+  test:integration 698 · build 7/7 · **e2e 56/56** (yeni `tickets.spec.ts` dahil) · contract-parity 5/5 ·
+  drift temiz. Yeni: `TicketPane.test.tsx` (8) + `ticket-priority.test.ts` (6) + `tickets.spec.ts` (1).
+- Varsayımlar / notlar:
+  - **Merge/unmerge e2e'de değil, unit'te** — e2e seed truncate'siz reseed eder (idempotent); merge çapraz-
+    ticket kalıcı durum bırakır → tekrar koşuda kırılgan. Merge/unmerge (child+primary) `TicketPane.test.tsx`'te
+    birebir istek assertion'larıyla kanıtlı; e2e smoke idempotent priority+follower'ı kapsar.
+  - **e2e çalıştırma:** [[nexa-e2e-clean-db]] gereği `set -a; . ./.env; set +a` ile koşuldu (dev server'lar
+    env ister). `tickets.spec.ts` geniş viewport kullanır (dar transcript header'da "Create ticket" details
+    paneli altına kayıyordu — mevcut layout darlığı, bu pencerede değişmedi).
+- Sonraki pencereye not: **Ertelenen** — liste satırında merged-child sayaç rozeti, liste özet payload'una
+  `merged_ticket_ids`/`merged_count` alanı (backend + OpenAPI + contract-parity) gerektirir; KK'nın parçası
+  değil, ayrı küçük bir iş olarak açılabilir.
+
 ### 61.1 — 13.6-a · Omnichannel HelpDesk katmanı (backend) [MAX] — done — 2026-07-26 UTC
 
 - Kapsam kararı: Task 61 (13.6-a) `[MAX]`, testStrategy "başında subtask'lara bölünmeli / 2+ pencere".

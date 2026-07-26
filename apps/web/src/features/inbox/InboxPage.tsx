@@ -360,7 +360,7 @@ export function InboxPage(): ReactElement {
 
       {/* Transcript, or the ticket record */}
       {onTickets ? (
-        <TicketDetailPane ticketId={selectedTicketId} />
+        <TicketDetailPane ticketId={selectedTicketId} candidates={ticketItems} />
       ) : (
         <main className="flex min-w-0 flex-1 flex-col bg-canvas">
           {selectedId && chat.data ? (

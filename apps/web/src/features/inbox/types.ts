@@ -84,10 +84,17 @@ export interface Agent {
 export type TicketStatus = 'open' | 'pending' | 'solved' | 'closed' | 'spam';
 export type TicketView = 'all' | 'unassigned' | 'my_open' | 'solved';
 
+/**
+ * A ticket as it appears in a list (the summary the `/tickets` collection
+ * returns). `priority` and `merged_into_id` are HelpDesk fields (FR-MOD-13.6);
+ * a merged ticket never appears in a list on its own, so `merged_into_id` is
+ * always `null` here — it is meaningful only on {@link TicketDetail}.
+ */
 export interface Ticket {
   id: string;
   subject: string;
   status: TicketStatus;
+  priority: number;
   assignee_id: string | null;
   assignee_name: string | null;
   group_id: number | null;
@@ -95,7 +102,24 @@ export interface Ticket {
   customer_name: string | null;
   customer_email: string | null;
   source_chat_id: string | null;
+  merged_into_id: string | null;
   last_message_at: string | null;
   created_at: string;
-  source_chat?: { id: string; active: boolean; created_at: string } | null;
+}
+
+/** An agent watching a ticket without owning it (FR-MOD-13.6). */
+export interface TicketFollower {
+  account_id: string;
+  name: string | null;
+}
+
+/**
+ * The single-ticket view, which carries what a list omits: the originating
+ * chat, the followers, and — when this ticket is a merge primary — the ids of
+ * the tickets folded into it (FR-MOD-13.6).
+ */
+export interface TicketDetail extends Ticket {
+  source_chat: { id: string; active: boolean; created_at: string } | null;
+  followers: TicketFollower[];
+  merged_ticket_ids: string[];
 }

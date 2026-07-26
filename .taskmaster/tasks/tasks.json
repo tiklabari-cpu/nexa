@@ -1561,11 +1561,11 @@
         "description": "FR-EK-C.2 · Should (MVP) · Faz-0 ◐ (bloklamaz).",
         "details": "FR-EK-C.2 · Should (MVP) · Faz-0 ◐ (bloklamaz).\nNEDEN AÇIK: banner/dropdown/panel/modal bileşenleri var ama tek 'design system' soyutlaması gevşek (denetim §7.1).\nKAPSAM: dismiss/CTA banner + hover/click dropdown + kalıcı sağ panel + modallar tek tasarım sistemine oturur;\nsegmentli/kapatılabilir banner. T4-a/T5-a/T6-b form+liste katmanıyla birlikte kapanabilir.\nKK (birebir): \"Tutarlı davranış; segmentli/kapatılabilir banner\".\nKAPSAM DIŞI: yeni ekran. BAĞLAM: PLAN §3.13 (Should), §7.1 EK-C.2. §F.00: Faz-0 kapanışını bloklamaz.",
         "testStrategy": "unit: banner dismiss kalıcı; dropdown/panel/modal tutarlı davranış. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T15:15:00.000Z"
+        "updatedAt": "2026-07-26T15:14:40.027Z"
       },
       {
         "id": "63",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T14:52:46.577Z",
+      "lastModified": "2026-07-26T15:14:40.027Z",
       "taskCount": 84,
-      "completedCount": 49,
+      "completedCount": 50,
       "tags": [
         "master"
       ]

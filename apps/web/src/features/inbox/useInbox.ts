@@ -240,6 +240,10 @@ export function useViewCounts(): Record<InboxView, number | undefined> {
   const queued = useChatList('queued');
   const unassigned = useChatList('unassigned');
   const archived = useChatList('archived');
+  // The AI Agents group (PRD 02.1.2): AI-handled conversations, kept out of the
+  // human queue, and the AI resolutions ("Solved") counter.
+  const ai = useChatList('ai');
+  const aiSolved = useChatList('ai_solved');
 
   return useMemo(
     () => ({
@@ -248,7 +252,9 @@ export function useViewCounts(): Record<InboxView, number | undefined> {
       queued: queued.data?.items.length,
       unassigned: unassigned.data?.items.length,
       archived: archived.data?.items.length,
+      ai: ai.data?.items.length,
+      ai_solved: aiSolved.data?.items.length,
     }),
-    [all.data, mine.data, queued.data, unassigned.data, archived.data],
+    [all.data, mine.data, queued.data, unassigned.data, archived.data, ai.data, aiSolved.data],
   );
 }

@@ -41,7 +41,7 @@ const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
 const ID_GENERATION_ATTEMPTS = 5;
 
 export interface ChatListOptions {
-  view: 'all' | 'my' | 'queued' | 'unassigned' | 'archived';
+  view: 'all' | 'my' | 'queued' | 'unassigned' | 'archived' | 'ai' | 'ai_solved';
   customerId?: string;
   groupId?: bigint;
   sort: 'newest' | 'oldest';
@@ -1068,6 +1068,35 @@ function viewFilter(view: ChatListOptions['view'], actorId: string): Record<stri
       };
     case 'archived':
       return { active: false };
+    // The AI Agents group (PRD 02.1.2): the two views that keep AI-handled
+    // conversations out of the human queue and surface the AI's own workload.
+    case 'ai':
+      // The AI is actively handling it: the bot has spoken and no human agent
+      // has. Requiring a bot event is what separates this from a chat merely
+      // waiting in the human queue (queued/unassigned), which also has no agent
+      // event yet — the KK is "AI konuşmalarını insan kuyruğundan ayırır".
+      return {
+        active: true,
+        threads: {
+          some: {
+            active: true,
+            AND: [
+              { events: { some: { authorType: 'bot' } } },
+              { events: { none: { authorType: 'agent' } } },
+            ],
+          },
+        },
+      };
+    case 'ai_solved':
+      // AI resolutions: closed with no agent-authored event. This is ADR-09's
+      // exact predicate — the same line Reports "Automated" and the invoice
+      // read (reports.ts `automated = NOT active AND NOT agent-event`). The
+      // Solved list and the billing counter must never disagree, so this must
+      // not gain an extra condition (e.g. "has a bot event") the counter lacks.
+      return {
+        active: false,
+        threads: { some: { events: { none: { authorType: 'agent' } } } },
+      };
     case 'all':
     default:
       return {};

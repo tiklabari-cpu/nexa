@@ -897,6 +897,171 @@ describe('agent chat api', () => {
   });
 
   // =========================================================================
+  // AI Agents group (PRD 02.1.2): AI-handled chats get their own home, kept
+  // out of the human queue, and "Solved" is the AI-resolution set ADR-09 bills
+  // for — the same predicate Reports reads as "Automated".
+  // =========================================================================
+
+  describe('AI Agents group', () => {
+    /**
+     * An AI-handled conversation: the bot has replied and no human agent has,
+     * with nobody assigned — the state that belongs in the AI group. Built
+     * directly (like the billing tests) so no routing or agent write slips an
+     * agent event in. The event suffixes are high so the system event a later
+     * deactivate appends (sequence 1) cannot collide with them.
+     */
+    async function aiChat(name: string): Promise<string> {
+      const customer = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name },
+        select: { id: true },
+      });
+      const chatId = generateShortId();
+      const threadId = generateShortId();
+      await owner.chat.create({
+        data: { id: chatId, licenseId: fx.a.licenseId, customerId: customer.id, active: true },
+      });
+      await owner.thread.create({
+        data: { id: threadId, chatId, licenseId: fx.a.licenseId, active: true },
+      });
+      await owner.event.createMany({
+        data: [
+          {
+            id: `${threadId}_50`,
+            threadId,
+            chatId,
+            licenseId: fx.a.licenseId,
+            type: 'message',
+            text: 'Is my order shipped?',
+            authorType: 'customer',
+            recipients: 'all',
+          },
+          {
+            id: `${threadId}_99`,
+            threadId,
+            chatId,
+            licenseId: fx.a.licenseId,
+            type: 'message',
+            text: 'Yes — it left today.',
+            authorType: 'bot',
+            recipients: 'all',
+          },
+        ],
+      });
+      return chatId;
+    }
+
+    /**
+     * A visitor waiting in the human queue: unassigned, no bot has engaged, no
+     * agent yet. Crucially it has no agent event either — so only the AI group's
+     * requirement of a bot event keeps it out of that group.
+     */
+    async function waitingChat(name: string): Promise<string> {
+      const customer = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name },
+        select: { id: true },
+      });
+      const chatId = generateShortId();
+      const threadId = generateShortId();
+      await owner.chat.create({
+        data: { id: chatId, licenseId: fx.a.licenseId, customerId: customer.id, active: true },
+      });
+      await owner.thread.create({
+        data: { id: threadId, chatId, licenseId: fx.a.licenseId, active: true },
+      });
+      await owner.event.create({
+        data: {
+          id: `${threadId}_50`,
+          threadId,
+          chatId,
+          licenseId: fx.a.licenseId,
+          type: 'message',
+          text: 'Anyone there?',
+          authorType: 'customer',
+          recipients: 'all',
+        },
+      });
+      return chatId;
+    }
+
+    const ids = (r: { json(): { items: Array<{ id: string }> } }): string[] =>
+      r.json().items.map((c) => c.id);
+
+    it('gives AI-handled chats their own group, distinct from the human queue', async () => {
+      const ai = await aiChat('AI Visitor');
+      const waiting = await waitingChat('Waiting Visitor');
+
+      // The AI group holds the AI chat and *only* the AI chat: the waiting
+      // visitor stays out of it even though it, too, has no agent event. The
+      // difference is the bot — that is what "AI konuşmalarını insan
+      // kuyruğundan ayırır" means here.
+      const aiView = await server.get('/chats?view=ai', auth(acmeAdminToken));
+      expect(ids(aiView)).toEqual([ai]);
+
+      // The waiting visitor is still in the human queue where a human can pick
+      // it up; the AI chat is in neither the assigned nor the queued human view.
+      expect(ids(await server.get('/chats?view=unassigned', auth(acmeAdminToken)))).toContain(
+        waiting,
+      );
+      expect(ids(await server.get('/chats?view=my', auth(acmeAdminToken)))).not.toContain(ai);
+      expect(ids(await server.get('/chats?view=queued', auth(acmeAdminToken)))).not.toContain(ai);
+    });
+
+    it('drops a conversation out of the AI group once a human agent replies', async () => {
+      const chatId = await aiChat('Escalated');
+      // One agent-authored event is the line ADR-09 draws: it stops being an AI
+      // conversation, in the inbox and on the invoice alike.
+      await server.post(
+        `/chats/${chatId}/events`,
+        { type: 'message', text: 'A human here now — let me look.' },
+        auth(acmeAdminToken),
+      );
+
+      expect(ids(await server.get('/chats?view=ai', auth(acmeAdminToken)))).not.toContain(chatId);
+    });
+
+    it('moves solved AI chats into Solved and counts them exactly as ADR-09 bills', async () => {
+      const first = await aiChat('Solved A');
+      const second = await aiChat('Solved B');
+      // A human-handled conversation, closed too: it must land in neither Solved
+      // nor the AI-resolution counter.
+      const person = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Human closed' },
+        select: { id: true },
+      });
+      const human = await startChat(acmeAdminToken, {
+        customerId: person.id,
+        text: 'A person — handled by me.',
+      });
+
+      // Close all three through the real endpoint, so ADR-09 accounting runs in
+      // the same transaction that closes each one.
+      for (const id of [first, second, human.id]) {
+        expect(
+          (await server.post(`/chats/${id}/deactivate`, undefined, auth(acmeAdminToken))).statusCode,
+        ).toBe(200);
+      }
+
+      // Solved lists exactly the two AI resolutions; the human chat is excluded
+      // because an agent wrote in it.
+      const solvedIds = ids(await server.get('/chats?view=ai_solved', auth(acmeAdminToken)));
+      expect([...solvedIds].sort()).toEqual([first, second].sort());
+      expect(solvedIds).not.toContain(human.id);
+
+      // Closing them empties the active AI group — a resolved chat is no longer
+      // one the AI is handling.
+      expect(ids(await server.get('/chats?view=ai', auth(acmeAdminToken)))).toHaveLength(0);
+
+      // The whole point of ADR-09: the Solved list and the billing counter read
+      // one predicate, so they cannot disagree.
+      const usage = await owner.usageRecord.findFirst({
+        where: { licenseId: fx.a.licenseId, metric: 'ai_resolutions' },
+      });
+      expect(Number(usage?.quantity ?? 0n)).toBe(2);
+      expect(solvedIds).toHaveLength(Number(usage?.quantity ?? 0n));
+    });
+  });
+
+  // =========================================================================
   // Visitor context on the Details panel (FR-MOD-02.4)
   // =========================================================================
 

@@ -1,10 +1,42 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-26 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı; tm 33/34/35 burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-07-26 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı; tm 33/34/35/37 burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
 
 ## Task log (newest-first)
+
+### 37 — 02.1.2-a · Inbox AI Agents grubu (AI/Solved) [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı (contract-first; ADR-09 ile birebir hizalı):
+  - **Kontrat:** `paths/chats.yaml` `view` enum'una `ai` + `ai_solved` eklendi (+ açıklama);
+    `contract generate` ile `dist/openapi.json` + `src/generated/api.ts` yenilendi.
+  - **Backend:** `chats.ts` route enum + `chat-service.ts` `ChatListOptions.view` + `viewFilter`:
+    - `ai` = aktif chat, aktif thread'de **bot event var + agent event yok** → AI'ın fiilen
+      yürüttüğü konuşma. Bot-event şartı, agent event'i olmayan **bekleyen insan-kuyruğu** chat'i
+      ile karışmayı önler → KK _"AI konuşmalarını insan kuyruğundan ayırır"_.
+    - `ai_solved` = kapalı chat + agent event yok → **ADR-09'un birebir predicate'i** (reports.ts
+      `automated = NOT active AND NOT agent-event` ile aynı satır). Solved listesi ile fatura sayacı
+      asla ayrışmasın diye Solved'a ekstra koşul (ör. "bot event olmalı") **EKLENMEDİ**.
+  - **Frontend:** `types.ts` `InboxView` + `useInbox.ts` `useViewCounts` (2 yeni sayaç) +
+    `InboxPage.tsx` kenar çubuğunda "AI Agents" grubu (AI agent ✦ / Solved ✓) + boş-durum metinleri.
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w test:unit` ✅
+  (web 251) · `pnpm -w test:integration` ✅ (**26 dosya / 565 test**; `chats.test.ts` "AI Agents group"
+  **3 yeni test**: AI chat ayrı grup + insan kuyruğundan ayrık · agent yanıtı → gruptan düşer ·
+  Solved=ADR-09 [Solved listesi == `usage_records.ai_resolutions`] + human-closed ne Solved'da ne
+  sayaçta) · `pnpm -w build` ✅ · contract-parity ✅.
+- Varsayımlar:
+  - **`ai` = aktif + bot-event + agent-event-yok:** AI responder olaylarını `author_type='bot'`
+    yazar, insan atamaz (`ai-responder.ts`); bot-event şartı AI'yı boş insan-kuyruğundan ayırır.
+  - **`unassigned` semantiği değiştirilmedi:** bot yanıtlayıp çözemeyen chat gerçekten bir insanı
+    bekliyor (`ai-responder.ts`'in kendi yorumu); onu human-queue'dan silmek kapsam + regresyon
+    riski. Ayrım "AI grubunun kendi listesi" ile sağlandı (grup, insan-kuyruğu chat'ini yutmuyor).
+- Sonraki pencereye not:
+  - **E2E:** Kabul kriteri task test-stratejisi gereği **integration** ile doğrulandı; UI eklemesi
+    deklaratif (heading + 2 ViewButton), web unit + build yeşil, mevcut e2e nav iddiaları (demo-flow
+    'Inbox views' badge, inbox-tabs traffic tablist) etkilenmez → yeni E2E akışı yok (tm 34/35 deseni).
+  - PRD 02.1.2 derin rotalar (`/inbox/ai-agents/{uuid}/active`) uygulanmadı — grup listesi + Solved
+    sayacı KK'yı karşılıyor; per-AI-agent uuid alt-rotaları MOD-04/06 kapsamında.
 
 ### 35 — 08.5 · Omnichannel adaptörleri (MOCK) [XHIGH] — done — 2026-07-26 UTC
 

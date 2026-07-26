@@ -32,6 +32,17 @@ const VIEWS: Array<{ id: InboxView; label: string; icon: string }> = [
 ];
 
 /**
+ * The AI Agents group (PRD 02.1.2): conversations the AI agent is handling, kept
+ * out of the human queue, and the ones it resolved on its own. "Solved" is the
+ * AI-resolution set ADR-09 bills for — the same conversations Reports counts as
+ * "Automated".
+ */
+const AI_VIEWS: Array<{ id: InboxView; label: string; icon: string }> = [
+  { id: 'ai', label: 'AI agent', icon: '✦' },
+  { id: 'ai_solved', label: 'Solved', icon: '✓' },
+];
+
+/**
  * The PRD keeps chats and tickets in one inbox under two groups, so the
  * selection is one value with two shapes rather than two independent states —
  * two states drift, and the pane ends up rendering a chat under a ticket
@@ -157,6 +168,23 @@ export function InboxPage(): ReactElement {
         </ul>
 
         <h2 className="px-4 pb-1 pt-4 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+          AI Agents
+        </h2>
+        <ul className="flex flex-col gap-0.5 px-2">
+          {AI_VIEWS.map((item) => (
+            <li key={item.id}>
+              <ViewButton
+                label={item.label}
+                icon={item.icon}
+                active={selection.kind === 'chat' && selection.view === item.id}
+                count={counts[item.id]}
+                onClick={() => setSelection({ kind: 'chat', view: item.id })}
+              />
+            </li>
+          ))}
+        </ul>
+
+        <h2 className="px-4 pb-1 pt-4 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
           Tickets
         </h2>
         <ul className="flex flex-col gap-0.5 px-2">
@@ -204,7 +232,7 @@ export function InboxPage(): ReactElement {
           <h2 className="text-sm font-semibold">
             {onTickets
               ? TICKET_VIEWS.find((v) => v.id === selection.view)?.label
-              : VIEWS.find((v) => v.id === view)?.label}
+              : [...VIEWS, ...AI_VIEWS].find((v) => v.id === view)?.label}
           </h2>
           <span className="tabular text-2xs text-content-tertiary">
             {onTickets ? ticketItems.length : visibleChats.length}
@@ -269,7 +297,11 @@ export function InboxPage(): ReactElement {
                   ? 'No conversations match this tab right now.'
                   : view === 'archived'
                     ? 'Closed conversations will appear here.'
-                    : 'New conversations land here as they arrive.'
+                    : view === 'ai'
+                      ? 'Conversations the AI agent is handling appear here.'
+                      : view === 'ai_solved'
+                        ? 'Conversations the AI resolved on its own appear here.'
+                        : 'New conversations land here as they arrive.'
               }
             />
           ) : (

@@ -3685,9 +3685,12 @@ export interface operations {
         /**
          * @description `my` — assigned to the caller · `queued` — waiting for an agent ·
          *     `unassigned` — routed but unclaimed · `archived` — closed ·
-         *     `all` — every chat the caller may see.
+         *     `ai` — the AI agent is handling it (a bot has replied and no human
+         *     has), kept out of the human queue · `ai_solved` — closed with no
+         *     human reply, i.e. an AI resolution (ADR-09, the same line billing
+         *     counts) · `all` — every chat the caller may see.
          */
-        view?: 'all' | 'my' | 'queued' | 'unassigned' | 'archived';
+        view?: 'all' | 'my' | 'queued' | 'unassigned' | 'archived' | 'ai' | 'ai_solved';
         customer_id?: string;
         group_id?: number;
         sort?: 'newest' | 'oldest';

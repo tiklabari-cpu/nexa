@@ -135,6 +135,71 @@ reviews:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+groups:
+  get:
+    tags: [Reports]
+    operationId: getReportGroups
+    summary: Report groups this caller may see
+    description: |
+      Permission-based visibility (FR-MOD-07.7): a report is a group with a
+      required scope, and the caller sees only the groups their token satisfies.
+
+      Deliberately not scope-gated — a token without `reports_read` gets an empty
+      list, **not** a 403. "Here is what you can see" answers honestly with
+      nothing rather than refusing to answer; the 403 belongs to the export
+      endpoint, where a caller is asking for data rather than a menu.
+    responses:
+      "200":
+        description: The groups visible to this token (possibly empty)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportGroups" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+export:
+  get:
+    tags: [Reports]
+    operationId: exportReport
+    summary: Export a report group as CSV
+    description: |
+      CSV export of one report group (FR-MOD-07.7). Gated on the union of every
+      group's scope, so a token holding none is refused; a group whose own scope
+      the token lacks is refused too. Defaults to the last 30 days.
+
+      The two time-series groups (`breakdown`, `reviews`) serialise one row per
+      UTC day; the two window summaries (`overview`, `ai-agent`) serialise as
+      `metric,value` pairs. Every figure is the same one the group's JSON report
+      exposes, so a download never disagrees with the screen it came from.
+
+      User-influenced fields (tags, agent names) are neutralised against
+      spreadsheet formula injection, and the body is `no-store`: a report is a
+      point-in-time snapshot, never served from a shared cache.
+
+      PDF and benchmark comparison are v2 (PLAN §4.4.8) and not offered here.
+    parameters:
+      - name: group
+        in: query
+        required: true
+        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`."
+        schema: { type: string }
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: The group rendered as CSV
+        content:
+          text/csv:
+            schema: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 subscription:
   get:
     tags: [Billing]

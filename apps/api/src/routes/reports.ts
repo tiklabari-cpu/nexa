@@ -8,9 +8,19 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { hasAnyScope } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { resolutionRate, round } from './reports-metrics.js';
+import {
+  EXPORT_SCOPES,
+  exportFilename,
+  reportGroup,
+  toCsv,
+  visibleReportGroups,
+  type CsvCell,
+} from './reports-export.js';
+import { scopesOf } from '../services/auth/principal.js';
 import type { Env } from '../config/env.js';
 import type { TenantClient, TenantContext } from '../lib/tenant.js';
 import { currentPeriod, trialState, usageSummary } from '../services/billing/metering.js';
@@ -46,6 +56,9 @@ const rangeQuery = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
 });
+
+/** An export request: which report group, over which window (defaults to 30d). */
+const exportQuery = rangeQuery.extend({ group: z.string().min(1).max(64) });
 
 /** Default window: the last 30 days, the span every dashboard opens on. */
 function resolveRange(query: z.infer<typeof rangeQuery>): { from: Date; to: Date } {
@@ -222,6 +235,174 @@ async function satisfactionByDay(
     ORDER BY 1
   `;
   return rows.map((row) => ({ date: row.date, good: Number(row.good), bad: Number(row.bad) }));
+}
+
+interface DaySplit {
+  date: string;
+  chats: number;
+  closed: number;
+  automated: number;
+  assisted: number;
+  manual: number;
+}
+
+/**
+ * The resolution split (manual / assisted / automated) per UTC day. Feeds both
+ * the Breakdown tab's time series and the CSV export's `breakdown` group, so the
+ * two can never quote a different split for the same day — the same reason the
+ * split itself lives in one SQL fragment. `AT TIME ZONE 'UTC'` pins the bucket
+ * boundary regardless of server timezone.
+ */
+async function breakdownByDay(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<DaySplit[]> {
+  const rows = await tx.$queryRaw<
+    Array<{
+      date: string;
+      chats: bigint;
+      closed: bigint;
+      automated: bigint;
+      assisted: bigint;
+      manual: bigint;
+    }>
+  >`
+    SELECT to_char((t.created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date,
+      ${SPLIT_COUNTS}
+    FROM threads t
+    WHERE t.license_id = ${licenseId}
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+    GROUP BY 1
+    ORDER BY 1
+  `;
+  return rows.map((row) => ({
+    date: row.date,
+    chats: Number(row.chats),
+    closed: Number(row.closed),
+    automated: Number(row.automated),
+    assisted: Number(row.assisted),
+    manual: Number(row.manual),
+  }));
+}
+
+/**
+ * AI→human hand-offs in a window — the `chat_transferred` system event. Feeds
+ * both the AI Agent report and its CSV export. Containment (`@>`) rather than
+ * `->>` so the jsonb GIN index can serve it.
+ */
+async function transferCount(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<number> {
+  const [row] = await tx.$queryRaw<Array<{ transfers: bigint }>>`
+    SELECT count(*) AS transfers
+    FROM events e
+    WHERE e.license_id = ${licenseId}
+      AND e.properties @> '{"system_event": "chat_transferred"}'::jsonb
+      AND e.created_at >= ${from} AND e.created_at <= ${to}
+  `;
+  return Number(row?.transfers ?? 0n);
+}
+
+/**
+ * One report group rendered as a CSV table — a header row and its data rows —
+ * for {@link toCsv}. The two time-series groups (breakdown, reviews) serialise as
+ * one row per UTC day; the two window summaries (overview, ai-agent) serialise as
+ * `metric,value` pairs, the honest tabular shape for a dashboard of headline
+ * figures. Every figure is the *same* one its JSON report exposes — the export
+ * reuses the report's aggregation helpers rather than recomputing — so a CSV can
+ * never disagree with the screen it was exported from.
+ */
+async function buildGroupCsv(
+  tx: TenantClient,
+  licenseId: bigint,
+  groupId: string,
+  from: Date,
+  to: Date,
+): Promise<{ headers: string[]; rows: CsvCell[][] }> {
+  switch (groupId) {
+    case 'overview': {
+      const totals = await windowTotals(tx, licenseId, from, to);
+      const tickets = await ticketCount(tx, licenseId, from, to);
+      const satisfaction = await satisfactionCounts(tx, licenseId, from, to);
+      const chats = Number(totals.total_chats);
+      const closed = Number(totals.closed_chats);
+      const automated = Number(totals.automated);
+      const assisted = Number(totals.assisted);
+      const manual = Number(totals.manual);
+      return {
+        headers: ['metric', 'value'],
+        rows: [
+          ['chats', chats],
+          ['tickets', tickets],
+          ['total_cases', chats + tickets],
+          ['closed', closed],
+          ['manual', manual],
+          ['assisted', assisted],
+          ['automated', automated],
+          ['automated_rate', resolutionRate(automated, closed)],
+          ['avg_first_response_seconds', roundOrNull(totals.avg_first_response_seconds)],
+          ['avg_duration_seconds', roundOrNull(totals.avg_duration_seconds)],
+          ['satisfaction_score', satisfactionScore(satisfaction)],
+          ['satisfaction_responses', satisfaction.good + satisfaction.bad],
+        ],
+      };
+    }
+    case 'breakdown': {
+      const byDay = await breakdownByDay(tx, licenseId, from, to);
+      return {
+        headers: ['date', 'chats', 'closed', 'manual', 'assisted', 'automated'],
+        rows: byDay.map((row) => [
+          row.date,
+          row.chats,
+          row.closed,
+          row.manual,
+          row.assisted,
+          row.automated,
+        ]),
+      };
+    }
+    case 'ai-agent': {
+      const totals = await windowTotals(tx, licenseId, from, to);
+      const transfers = await transferCount(tx, licenseId, from, to);
+      const skillRuns = await tx.skillRun.count({
+        where: { licenseId, ranAt: { gte: from, lte: to } },
+      });
+      const automated = Number(totals.automated);
+      const closed = Number(totals.closed_chats);
+      const finished = automated + transfers;
+      return {
+        headers: ['metric', 'value'],
+        rows: [
+          ['resolutions', automated],
+          ['resolution_rate', resolutionRate(automated, closed)],
+          ['transfers', transfers],
+          ['transfer_rate', finished === 0 ? null : round(transfers / finished)],
+          ['skill_runs', skillRuns],
+          ['avg_automated_duration_seconds', roundOrNull(totals.avg_automated_duration_seconds)],
+        ],
+      };
+    }
+    case 'reviews': {
+      const byDay = await satisfactionByDay(tx, licenseId, from, to);
+      return {
+        headers: ['date', 'good', 'bad', 'responses', 'score'],
+        rows: byDay.map((row) => {
+          const csat = csatSummary(row);
+          return [row.date, csat.good, csat.bad, csat.responses, csat.score];
+        }),
+      };
+    }
+    default:
+      // Unreachable: the route validates the id through reportGroup() first. A
+      // throw keeps the switch exhaustive rather than silently emitting an empty
+      // file if a group is ever added to the catalogue but not here.
+      throw ApiError.validation(`No exporter for report group: ${groupId}.`);
+  }
 }
 
 /**
@@ -443,26 +624,9 @@ export default async function reportRoutes(
     const tenant = request.tenant();
 
     const data = await request.withTenant(async (tx) => {
-      // The resolution split per UTC day. `AT TIME ZONE 'UTC'` pins the bucket
-      // boundary regardless of server timezone, so a day never drifts.
-      const byDay = await tx.$queryRaw<
-        Array<{
-          date: string;
-          chats: bigint;
-          closed: bigint;
-          automated: bigint;
-          assisted: bigint;
-          manual: bigint;
-        }>
-      >`
-        SELECT to_char((t.created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date,
-          ${SPLIT_COUNTS}
-        FROM threads t
-        WHERE t.license_id = ${tenant.licenseId}
-          AND t.created_at >= ${from} AND t.created_at <= ${to}
-        GROUP BY 1
-        ORDER BY 1
-      `;
+      // The resolution split per UTC day — the same helper the CSV export uses,
+      // so the tab and its download can never quote a different split for a day.
+      const byDay = await breakdownByDay(tx, tenant.licenseId, from, to);
 
       // The same split per assigned agent. An automated chat can still carry an
       // assignee (nobody replied), so it shows against the agent it sat with.
@@ -496,11 +660,11 @@ export default async function reportRoutes(
       range: { from: from.toISOString(), to: to.toISOString() },
       by_day: data.byDay.map((row) => ({
         date: row.date,
-        chats: Number(row.chats),
-        closed: Number(row.closed),
-        manual: Number(row.manual),
-        assisted: Number(row.assisted),
-        automated: Number(row.automated),
+        chats: row.chats,
+        closed: row.closed,
+        manual: row.manual,
+        assisted: row.assisted,
+        automated: row.automated,
       })),
       by_agent: data.byAgent.map((row) => ({
         agent_id: row.agent_id,
@@ -523,21 +687,15 @@ export default async function reportRoutes(
     const data = await request.withTenant(async (tx) => {
       const totals = await windowTotals(tx, tenant.licenseId, from, to);
 
-      // Hand-offs to a human — the transfer system event (chat_transferred).
-      // Containment (`@>`) rather than `->>` so the jsonb GIN index can serve it.
-      const [transfersRow] = await tx.$queryRaw<Array<{ transfers: bigint }>>`
-        SELECT count(*) AS transfers
-        FROM events e
-        WHERE e.license_id = ${tenant.licenseId}
-          AND e.properties @> '{"system_event": "chat_transferred"}'::jsonb
-          AND e.created_at >= ${from} AND e.created_at <= ${to}
-      `;
+      // Hand-offs to a human — the transfer system event (chat_transferred). The
+      // same helper the CSV export uses, so the two agree on the count.
+      const transfers = await transferCount(tx, tenant.licenseId, from, to);
 
       const skillRuns = await tx.skillRun.count({
         where: { licenseId: tenant.licenseId, ranAt: { gte: from, lte: to } },
       });
 
-      return { totals, transfers: Number(transfersRow?.transfers ?? 0n), skillRuns };
+      return { totals, transfers, skillRuns };
     });
 
     const automated = Number(data.totals.automated);
@@ -599,6 +757,56 @@ export default async function reportRoutes(
         currency: null,
       },
     });
+  });
+
+  // The report groups this caller may see (FR-MOD-07.7 permission-based
+  // visibility). Deliberately *not* scope-gated at the route: a token without
+  // `reports_read` gets an empty catalogue, not a 403 — "here is what you can
+  // see" answers honestly with nothing rather than refusing to answer. Any
+  // authenticated agent/bot may ask; the scope filter is the answer's content.
+  app.get('/reports/groups', async (request, reply) => {
+    const granted = scopesOf(request.requirePrincipal());
+    return reply.send({
+      groups: visibleReportGroups(granted).map((group) => ({ id: group.id, label: group.label })),
+    });
+  });
+
+  // CSV export of one report group (FR-MOD-07.7). Route-gated on the union of
+  // every group's scope, so a token holding none is refused before any group is
+  // resolved; the per-group check below then refuses a group whose own scope the
+  // token lacks. PDF and benchmark comparison are v2 (PLAN §4.4.8) — not here.
+  app.get('/reports/export', { config: { scopes: EXPORT_SCOPES } }, async (request, reply) => {
+    const parsed = exportQuery.safeParse(request.query);
+    if (!parsed.success) throw ApiError.validation('Invalid export request.');
+    const { from, to } = resolveRange(parsed.data);
+
+    const group = reportGroup(parsed.data.group);
+    // A 400, not a 404: the group is a request parameter the caller got wrong,
+    // not a resource whose existence is a tenant secret.
+    if (!group) throw ApiError.validation(`Unknown report group: ${parsed.data.group}.`);
+
+    // The route gate proved the caller holds *some* export scope; this proves
+    // they hold *this group's*. Identical today (every group needs reports_read),
+    // but a group gated on a different scope in future is refused here, not leaked.
+    if (!hasAnyScope(scopesOf(request.requirePrincipal()), group.scopes)) {
+      throw ApiError.authorization(`This token cannot export the ${group.id} report.`);
+    }
+
+    const tenant = request.tenant();
+    const table = await request.withTenant((tx) =>
+      buildGroupCsv(tx, tenant.licenseId, group.id, from, to),
+    );
+    const csv = toCsv(table.headers, table.rows);
+
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      // A download, named for the group and window so two exports do not collide.
+      .header('content-disposition', `attachment; filename="${exportFilename(group.id, from, to)}"`)
+      // A report is a point-in-time snapshot; never let a shared cache serve a
+      // stale one, and never let a browser sniff the bytes into something active.
+      .header('x-content-type-options', 'nosniff')
+      .header('cache-control', 'no-store')
+      .send(csv);
   });
 
   app.get(

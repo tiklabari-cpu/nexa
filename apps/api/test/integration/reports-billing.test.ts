@@ -691,6 +691,143 @@ describe('reports and billing', () => {
 
   // =========================================================================
 
+  describe('report groups + CSV export (07.7)', () => {
+    /** Grant a token with a chosen scope set — for the permission-gating cases. */
+    function scopedToken(scopes: string[]): Promise<string> {
+      return grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes,
+      });
+    }
+
+    describe('permission-based visibility', () => {
+      it('lists every group a reader can see', async () => {
+        const groups = (await server.get('/reports/groups', auth)).json().groups;
+        expect(groups.map((g: { id: string }) => g.id)).toEqual([
+          'overview',
+          'breakdown',
+          'ai-agent',
+          'reviews',
+        ]);
+        expect(groups[0]).toEqual({ id: 'overview', label: 'Overview' });
+      });
+
+      it('shows an empty catalogue — not a 403 — to a token without reports_read', async () => {
+        // "What can you see" answers honestly with nothing; the 403 is the
+        // export endpoint's job, not the catalogue's.
+        const weak = await scopedToken(['chats--all:ro']);
+        const response = await server.get('/reports/groups', {
+          authorization: `Bearer ${weak}`,
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json().groups).toEqual([]);
+      });
+    });
+
+    describe('CSV export', () => {
+      /** Split a CSV body into its non-empty lines (rows are CRLF-terminated). */
+      const lines = (body: string): string[] => body.split('\r\n').filter((line) => line !== '');
+
+      it('exports the breakdown as a dated CSV download', async () => {
+        await conversation({ agentReplies: false }); // one automated chat, closed today
+
+        const response = await server.get('/reports/export?group=breakdown', auth);
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['content-type']).toContain('text/csv');
+        expect(response.headers['content-disposition']).toMatch(
+          /^attachment; filename="nexa-breakdown-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+        );
+        expect(response.headers['cache-control']).toBe('no-store');
+
+        const rows = lines(response.body);
+        expect(rows[0]).toBe('date,chats,closed,manual,assisted,automated');
+        // The single automated chat: 1 chat, 1 closed, 0/0/1 across the split.
+        expect(rows).toHaveLength(2);
+        expect(rows[1]).toMatch(/^\d{4}-\d{2}-\d{2},1,1,0,0,1$/);
+      });
+
+      it('exports the overview as metric/value pairs, matching the JSON report', async () => {
+        await conversation({ agentReplies: false });
+
+        const response = await server.get('/reports/export?group=overview', auth);
+        expect(response.statusCode).toBe(200);
+        const rows = lines(response.body);
+        expect(rows[0]).toBe('metric,value');
+        // The export reuses the report's aggregation, so `automated` here is the
+        // same figure the JSON overview quotes — ADR-09's number, once.
+        expect(rows).toContain('automated,1');
+        expect(rows).toContain('closed,1');
+        const overview = (await server.get('/reports/overview', auth)).json();
+        expect(rows).toContain(`chats,${overview.totals.chats}`);
+      });
+
+      it('exports the AI Agent summary', async () => {
+        await conversation({ agentReplies: false });
+        const response = await server.get('/reports/export?group=ai-agent', auth);
+        expect(response.statusCode).toBe(200);
+        expect(lines(response.body)).toContain('resolutions,1');
+      });
+
+      it('exports reviews CSAT bucketed by day', async () => {
+        const chatId = await conversation({ agentReplies: true });
+        await owner.rating.create({ data: { chatId, licenseId: fx.a.licenseId, value: 'good' } });
+
+        const response = await server.get('/reports/export?group=reviews', auth);
+        expect(response.statusCode).toBe(200);
+        const rows = lines(response.body);
+        expect(rows[0]).toBe('date,good,bad,responses,score');
+        expect(rows[1]).toMatch(/^\d{4}-\d{2}-\d{2},1,0,1,1$/);
+      });
+
+      it('exports only the caller’s tenant', async () => {
+        await conversation({ agentReplies: false }); // in A
+
+        const theirToken = await grantToken(owner, {
+          licenseId: fx.b.licenseId,
+          organizationId: fx.b.organizationId,
+          ownerId: fx.b.ownerAccountId,
+          scopes: ['reports_read'],
+        });
+        const response = await server.get('/reports/export?group=breakdown', {
+          authorization: `Bearer ${theirToken}`,
+        });
+        expect(response.statusCode).toBe(200);
+        // B shares none of A's chats: the header, and not a single data row.
+        expect(response.body).toBe('date,chats,closed,manual,assisted,automated\r\n');
+      });
+
+      it('rejects an unknown group with 400', async () => {
+        const response = await server.get('/reports/export?group=made-up', auth);
+        expect(response.statusCode).toBe(400);
+      });
+
+      it('rejects a missing group with 400', async () => {
+        const response = await server.get('/reports/export', auth);
+        expect(response.statusCode).toBe(400);
+      });
+
+      it('rejects a backwards date range', async () => {
+        const response = await server.get(
+          '/reports/export?group=overview&from=2026-08-01&to=2026-07-01',
+          auth,
+        );
+        expect(response.statusCode).toBe(400);
+      });
+
+      it('refuses a token without an export scope — permission gating', async () => {
+        const weak = await scopedToken(['chats--all:ro']);
+        const response = await server.get('/reports/export?group=overview', {
+          authorization: `Bearer ${weak}`,
+        });
+        expect(response.statusCode).toBe(403);
+      });
+    });
+  });
+
+  // =========================================================================
+
   describe('subscription and the trial gate', () => {
     it('bills nothing during the trial', async () => {
       const response = await server.get('/billing/subscription', auth);

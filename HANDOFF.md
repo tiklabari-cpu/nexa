@@ -6,6 +6,41 @@
 
 ## Task log (newest-first)
 
+### 46 — 07.7-a · Rapor grupları + Export (CSV) [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı (resume — önceki pencere `reports-export.ts` modülü + unit testi yazmış, `reports.ts`'e
+  import'ları eklemiş ama route'ları bağlamamıştı; yarım kalan kısım tamamlandı):
+  - **Kontrat (contract-first):** `GET /reports/groups` + `GET /reports/export` OpenAPI'ye eklendi
+    (`paths/reports.yaml#/groups,#/export` + `ReportGroups` şeması); export yanıtı `text/csv`.
+    Typed client yeniden üretildi (`contract:generate`, 81 path).
+  - **Backend (`routes/reports.ts` + `routes/reports-export.ts`):**
+    - **İzin bazlı görünürlük (KK):** `/reports/groups` — bilerek route-scope'suz; `reports_read`
+      olmayan token **boş liste** alır, 403 değil ("ne görebilirsin" dürüstçe hiç ile cevaplar;
+      403 export'un işi). Görünürlük kuralı `visibleReportGroups(scopesOf(principal))`.
+    - **CSV export (KK):** `/reports/export?group=` — route `EXPORT_SCOPES` (grup scope'larının
+      birleşimi) ile kapılı + grup-başına scope kontrolü (bugün hepsi `reports_read`, ama gelecekte
+      farklı scope'lu grup sızmadan reddedilir). Bilinmeyen/eksik grup→400, ters aralık→400.
+      Tenant-scoped (`withTenant`), CSV formül-enjeksiyonu (`=+-@`) etkisizleştirilir, `no-store`
+      + `content-disposition: attachment; filename="nexa-<grup>-<from>-<to>.csv"`.
+    - **Sıfır sürüklenme:** `breakdownByDay`/`transferCount` paylaşımlı helper'lara çıkarıldı;
+      export her figürü ilgili JSON raporunun **aynı** helper'ından üretir → CSV ekranla asla
+      çelişmez. Zaman serisi grupları (breakdown/reviews) gün başına satır; pencere özetleri
+      (overview/ai-agent) `metric,value` çiftleri.
+  - **KAPSAM DIŞI (v2, PLAN §4.4.8):** PDF export + benchmark karşılaştırma — eklenmedi.
+  - **Test:** 11 yeni integration testi (`report groups + CSV export (07.7)`: görünürlük listesi/boş,
+    4 grubun CSV export'u, tenant izolasyonu, bilinmeyen/eksik grup, ters aralık, scope gating).
+    `reports-export.test.ts`'te önceki pencereden kalan sütun-uyuşmazlığı olan bir assertion
+    düzeltildi (1 sütun başlık ↔ 2 hücre satır).
+- Doğrulama (DoD kapısı — bu tur koşuldu, hepsi yeşil): `typecheck` exit 0 · `lint` exit 0 ·
+  `test:unit` **api 151 · web** · `test:integration` **600/600** (11 yeni 07.7 testi dahil) ·
+  `build` exit 0 · **e2e 55/55** (`reports.spec.ts` sekmeleri dahil).
+- Varsayımlar: her grup bugün tek `reports_read` scope'una bağlı; katalog scope'u grup-başına
+  taşıdığından gelecekte farklı scope'lu grup (ör. billing export) görünürlük/guard değişmeden eklenir.
+- Sonraki pencereye not: e2e için `.env` **source'lanmalı** (RTM/web/widget dev sunucuları .env'i
+  kendileri yüklemez — ilk e2e denemem RTM env eksikliğinden server boot'ta patladı; `set -a; . ./.env;
+  set +a` ile çözüldü) + 4000/4001/5173/5174 portları boş olmalı. e2e reseed sırasında `kanit/*.png`
+  görselleri yeniden üretildi; bunlar bu task'ın çıktısı değil, commit'e alınmadı (kapsam disiplini).
+
 ### 45 — 07.8-a · Reviews/Ratings raporu (CSAT donut + günlük bar) [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı (yeni okuma yolu — `ratings` şimdiye dek yalnız yazma vardı, §8):

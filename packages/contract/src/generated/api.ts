@@ -1960,6 +1960,65 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/groups': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Report groups this caller may see
+     * @description Permission-based visibility (FR-MOD-07.7): a report is a group with a
+     *     required scope, and the caller sees only the groups their token satisfies.
+     *
+     *     Deliberately not scope-gated — a token without `reports_read` gets an empty
+     *     list, **not** a 403. "Here is what you can see" answers honestly with
+     *     nothing rather than refusing to answer; the 403 belongs to the export
+     *     endpoint, where a caller is asking for data rather than a menu.
+     */
+    get: operations['getReportGroups'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Export a report group as CSV
+     * @description CSV export of one report group (FR-MOD-07.7). Gated on the union of every
+     *     group's scope, so a token holding none is refused; a group whose own scope
+     *     the token lacks is refused too. Defaults to the last 30 days.
+     *
+     *     The two time-series groups (`breakdown`, `reviews`) serialise one row per
+     *     UTC day; the two window summaries (`overview`, `ai-agent`) serialise as
+     *     `metric,value` pairs. Every figure is the same one the group's JSON report
+     *     exposes, so a download never disagrees with the screen it came from.
+     *
+     *     User-influenced fields (tags, agent names) are neutralised against
+     *     spreadsheet formula injection, and the body is `no-store`: a report is a
+     *     point-in-time snapshot, never served from a shared cache.
+     *
+     *     PDF and benchmark comparison are v2 (PLAN §4.4.8) and not offered here.
+     */
+    get: operations['exportReport'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/billing/subscription': {
     parameters: {
       query?: never;
@@ -3047,6 +3106,20 @@ export interface components {
         /** @description ISO 4217 code for the revenue figure. Null until configured. */
         currency: string | null;
       };
+    };
+    /**
+     * @description The report groups a caller may see (FR-MOD-07.7 permission-based
+     *     visibility) — filtered to the groups this token's scopes satisfy, so the
+     *     list may be empty. Each id doubles as the `group` query the export
+     *     endpoint accepts and the tab the web client renders.
+     */
+    ReportGroups: {
+      groups: {
+        /** @description Group id: `overview`, `breakdown`, `ai-agent` or `reviews`. */
+        id: string;
+        /** @description Human-readable tab name. */
+        label: string;
+      }[];
     };
     /**
      * @description A satisfaction tally over some span: the donut's `good` / `bad` counts,
@@ -6548,6 +6621,57 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ReportsReviews'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportGroups: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The groups visible to this token (possibly empty) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportGroups'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  exportReport: {
+    parameters: {
+      query: {
+        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`. */
+        group: string;
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The group rendered as CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
         };
       };
       400: components['responses']['BadRequest'];

@@ -239,6 +239,10 @@ paths:
     $ref: "./paths/reports.yaml#/aiAgent"
   /reports/reviews:
     $ref: "./paths/reports.yaml#/reviews"
+  /reports/groups:
+    $ref: "./paths/reports.yaml#/groups"
+  /reports/export:
+    $ref: "./paths/reports.yaml#/export"
   /billing/subscription:
     $ref: "./paths/reports.yaml#/subscription"
   /billing/usage:
@@ -1528,6 +1532,26 @@ components:
               type: string
               nullable: true
               description: ISO 4217 code for the revenue figure. Null until configured.
+
+    ReportGroups:
+      type: object
+      description: |
+        The report groups a caller may see (FR-MOD-07.7 permission-based
+        visibility) — filtered to the groups this token's scopes satisfy, so the
+        list may be empty. Each id doubles as the `group` query the export
+        endpoint accepts and the tab the web client renders.
+      required: [groups]
+      properties:
+        groups:
+          type: array
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id:
+                type: string
+                description: "Group id: `overview`, `breakdown`, `ai-agent` or `reviews`."
+              label: { type: string, description: Human-readable tab name. }
 
     CsatSummary:
       type: object

@@ -6,6 +6,31 @@
 
 ## Task log (newest-first)
 
+### 45 — 07.8-a · Reviews/Ratings raporu (CSAT donut + günlük bar) [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı (yeni okuma yolu — `ratings` şimdiye dek yalnız yazma vardı, §8):
+  - **Kontrat (contract-first):** `GET /reports/reviews` OpenAPI'ye eklendi (`paths/reports.yaml#/reviews`
+    + `ReportsReviews`/`CsatSummary` şemaları); typed client yeniden üretildi (`contract:generate`, 79 path).
+  - **Backend (`routes/reports.ts`):** `reports_read` scope'lu endpoint. `csat` (good/bad/responses/score;
+    **oy yoksa score=null, %0 değil** — Overview satisfaction ile aynı kural, `satisfactionScore` paylaşımlı),
+    `previous_period` (eşit uzunlukta önceki pencere — 67% vs 57% karşılaştırması, Overview 07.3.1 deseni),
+    `by_day` (UTC gün başına good/bad — günlük bar; breakdown by_day ile aynı `AT TIME ZONE 'UTC'` deseni),
+    ve `ecommerce` iskeleti (`configured=false`, alanlar null — satış izleme FR-MOD-13.5 v2, uydurma sıfır yok).
+  - **Frontend (`ReportsPage.tsx`):** "Reviews" sekmesi (AI Agent ↔ Breakdown arası). CSAT donut (SVG ring,
+    merkezde skor, erişilebilir aria-label), günlük bar (gün başına yığılı good/bad, en yoğun güne ölçekli),
+    ecommerce "not set up" boş durumu (configured→gerçek KPI dalı da mevcut).
+  - **PLAN:** MOD-07 modül tablosu "+ Reviews (07.8)"; §4.4.8 07.8-a bülteni ✅ tm 45.
+- Doğrulama (DoD kapısı — bu tur koşuldu, hepsi yeşil): `typecheck` exit 0 · `lint` exit 0 ·
+  `test` (serial, DB yarışı için `--concurrency=1`) **api 729 · web 283** · `test:integration` **589/589**
+  (`Reviews report (07.8)`: rating okuma, oy yoksa null, iki-dönem, günlük bar, ecommerce iskeleti, tenant
+  izolasyonu, scope/aralık reddi) · `build` exit 0 · **e2e 55/55** (`reports.spec.ts` → Reviews sekmesi 07.8,
+  kanıt `kanit/22-reports-reviews.png`).
+- Varsayımlar: e-ticaret satış izleme MVP'de veri kaynağı yok (FR-MOD-13.5 Could/v2) → iskelet
+  `configured=false` + null alanlar (dürüst "kurulmadı", uydurma sıfır değil).
+- Sonraki pencereye not: **07.7-a** (Rapor grupları + CSV export + izin gating) aynı `/reports/*`
+  ailesini genişletir — Reviews de export kapsamına girmeli. e2e için: `.env` source'lanmalı +
+  4000/4001 portları boşaltılmalı (bu turda eski `tsx watch` sunucuları temizlendi).
+
 ### 44 — 07.4-a · AI Agent raporu (resolution/deflection) [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı (çelişki denetimi + kapsam kapatma — rapor tm 21'de erken teslim edilmişti, KK doğrulandı):

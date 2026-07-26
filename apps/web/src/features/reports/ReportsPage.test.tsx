@@ -170,3 +170,133 @@ describe('ReportsPage — AI Agent report (07.4)', () => {
     expect(screen.getByText('The AI finished nothing in this window')).toBeInTheDocument();
   });
 });
+
+// ===========================================================================
+
+interface DayRow {
+  date: string;
+  good: number;
+  bad: number;
+  responses: number;
+  score: number | null;
+}
+
+const REVIEWS_BASE = {
+  range: OVERVIEW.range,
+  csat: { good: 0, bad: 0, responses: 0, score: null as number | null },
+  previous_period: {
+    range: OVERVIEW.previous_period.range,
+    good: 0,
+    bad: 0,
+    responses: 0,
+    score: null as number | null,
+  },
+  by_day: [] as DayRow[],
+  ecommerce: {
+    configured: false,
+    tracked_sales: null as number | null,
+    attributed_revenue_cents: null as number | null,
+    currency: null as string | null,
+  },
+};
+
+function mockReviews(overrides: Partial<typeof REVIEWS_BASE>): void {
+  const payload = { ...REVIEWS_BASE, ...overrides };
+  api.get.mockImplementation((path: string) => {
+    if (path.startsWith('/reports/reviews')) return Promise.resolve(payload);
+    if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    return Promise.reject(new Error(`unexpected ${path}`));
+  });
+}
+
+async function openReviewsTab(): Promise<void> {
+  await userEvent.click(screen.getByRole('tab', { name: 'Reviews' }));
+  await screen.findByText('Satisfaction (CSAT)');
+}
+
+describe('ReportsPage — Reviews report (07.8)', () => {
+  it('shows the CSAT donut split and the previous-period comparison', async () => {
+    mockReviews({
+      csat: { good: 67, bad: 33, responses: 100, score: 0.67 },
+      previous_period: {
+        range: OVERVIEW.previous_period.range,
+        good: 57,
+        bad: 43,
+        responses: 100,
+        score: 0.57,
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    // The donut centre carries the current CSAT; the note carries the baseline —
+    // the PRD's "67% vs 57%" made visible on one card.
+    expect(screen.getByText('67%')).toBeInTheDocument();
+    expect(screen.getByText('vs 57% previous period')).toBeInTheDocument();
+    // The good/bad split the donut draws.
+    expect(screen.getByText('Rated good')).toBeInTheDocument();
+    expect(screen.getByText('67')).toBeInTheDocument();
+    expect(screen.getByText('33')).toBeInTheDocument();
+  });
+
+  it('reads an unrated window as unknown, not as 0%', async () => {
+    mockReviews({});
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    // Nobody rated: an empty state, never a red 0% that reads as a catastrophe.
+    expect(screen.getByText('No ratings yet')).toBeInTheDocument();
+    expect(screen.getByText('No ratings in this window')).toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+  });
+
+  it('renders a daily bar row for each rated day', async () => {
+    mockReviews({
+      by_day: [
+        { date: '2026-07-20', good: 3, bad: 1, responses: 4, score: 0.75 },
+        { date: '2026-07-21', good: 0, bad: 2, responses: 2, score: 0 },
+      ],
+    });
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    expect(screen.getByText('2026-07-20')).toBeInTheDocument();
+    expect(screen.getByText('2026-07-21')).toBeInTheDocument();
+    // A day that did get rated shows its real CSAT — including a true 0% when
+    // every rating that day was bad. That 0% is data, not the unknown case.
+    expect(screen.getByText('75%')).toBeInTheDocument();
+    expect(screen.getByText('0%')).toBeInTheDocument();
+  });
+
+  it('shows the tracked-sales skeleton as not set up (FR-MOD-13.5, v2)', async () => {
+    mockReviews({});
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    expect(screen.getByText('Sales tracking not set up')).toBeInTheDocument();
+  });
+
+  it('renders tracked sales once a source is configured', async () => {
+    mockReviews({
+      ecommerce: {
+        configured: true,
+        tracked_sales: 12,
+        attributed_revenue_cents: 34_500,
+        currency: 'USD',
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    expect(within(kpi('Tracked sales')).getByText('12')).toBeInTheDocument();
+    expect(within(kpi('Attributed revenue')).getByText('$345.00')).toBeInTheDocument();
+  });
+
+  it('queries the reviews endpoint with the selected range', async () => {
+    mockReviews({});
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/reviews\?from=.*&to=/));
+  });
+});

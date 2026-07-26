@@ -118,7 +118,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | MOD-05 Playbook               |     |  ●  |  ○  |      |            ◐ **(v1 — öne çekildi)**             |
 | MOD-06 AI Agent + RAG         |     |  ●  |  ○  |  ○   |            ◐ **(v1 — öne çekildi)**             |
 | Görsel Workflow builder       |     |     |  ●  |      |               ⛔ ADR-14 (UI yok)                |
-| MOD-07 Reports                |  ○  |  ○  |  ●  |  ○   |    ✅ Overview + AI Agent + Breakdown (07.5 v2) |
+| MOD-07 Reports                |  ○  |  ○  |  ●  |  ○   | ✅ Overview + AI Agent + Breakdown + Reviews (07.8, tm 45) |
 | MOD-08.5 Channels             |  ○  |  ●  |     |  ○   | ✅ MVP kanalları (grid/website/email/chat-page) |
 | MOD-08.6 Routing              |  ○  |  ○  |  ●  |  ○   |                ✅ (MVP kapsamı)                 |
 | MOD-08.7 Inbox araçları       |  ○  |  ●  |     |      |       ✅ canned + tag kütüphanesi (tm 17)       |
@@ -752,9 +752,10 @@ Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal baş�
 
 - **07.4-a — AI Agent raporu (resolution/deflection)** `[XHIGH]` · *Should* — KK: _"Billing
   sayacıyla ilişkili"_ · doğrulama: integration (rapor=fatura ADR-09). **Bağımlılık:** yok (sorgu ADR-09 ✅). *(06.5-a ile paylaşımlı.)* **Tahmin:** 1 pencere.
-- **07.8-a — Reviews/Ratings raporu (CSAT donut + günlük bar)** `[XHIGH]` · *Should* — `ratings`
-  yalnız yazma (§8) — KK: _"CSAT donut; günlük bar; e-ticaret satış izleme"_ · doğrulama: integration
-  (rating okuma; oy yoksa null). **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+- **07.8-a — Reviews/Ratings raporu (CSAT donut + günlük bar)** `[XHIGH]` · *Should* — **✅ tm 45**
+  `GET /reports/reviews`: CSAT donut (good/bad/score, oy yoksa null) + günlük bar (UTC gün) + iki-dönem
+  karşılaştırma (67% vs 57%) + e-ticaret satış izleme iskeleti (configured=false, §13.5 v2). KK:
+  _"CSAT donut; günlük bar; e-ticaret satış izleme"_ · doğrulama: integration (rating okuma; oy yoksa null) ✅.
 - **07.7-a — Rapor grupları + Export (CSV)** `[XHIGH]` · *Should (v1–v2)* — KK: _"İzin bazlı
   görünürlük; export; benchmark karşılaştırma"_ · doğrulama: integration (CSV export; izin gating).
   **Bağımlılık:** yok. **Tahmin:** 1 pencere. **Kapsam dışı:** PDF/benchmark (v2).

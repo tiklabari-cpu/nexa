@@ -1926,6 +1926,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/reviews': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Reviews / Ratings — CSAT and daily rating volume
+     * @description The Reviews report (FR-MOD-07.8): customer satisfaction read back from the
+     *     ratings the widget writes (§8 only wrote them until now). It gives the CSAT
+     *     donut its `good` / `bad` split, a per-UTC-day series for the daily bar, and
+     *     the same equal-length previous window the Overview uses, so the tab can show
+     *     the two-period comparison the PRD calls for (the reference "67% vs 57%").
+     *
+     *     `score` is `null`, never `0`, when nobody rated — in the window, in the
+     *     previous window, or on a given day. An unrated span is unknown, not a zero
+     *     score, and 0% would read as a catastrophe. This mirrors `satisfaction.score`
+     *     on the Overview.
+     *
+     *     `ecommerce` is the tracked-sales skeleton. Sales tracking (FR-MOD-13.5) is a
+     *     v2 capability with no data source wired yet, so `configured` is `false` and
+     *     the figures are `null` — the shape is present for the surface to render an
+     *     honest "not set up" state rather than a fabricated zero.
+     */
+    get: operations['getReportsReviews'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/billing/subscription': {
     parameters: {
       query?: never;
@@ -2964,6 +2998,68 @@ export interface components {
       skill_runs: number;
       /** @description Average open-to-close time of automated chats. Null when none. */
       avg_automated_duration_seconds?: number | null;
+    };
+    /**
+     * @description The Reviews / Ratings report (FR-MOD-07.8): CSAT read back from the
+     *     ratings the widget writes. `csat` feeds the donut, `by_day` the daily bar,
+     *     and `previous_period` the two-period comparison. Every `score` is `null`
+     *     (not `0`) for an unrated span — the same rule the Overview's satisfaction
+     *     follows. `ecommerce` is the tracked-sales skeleton (FR-MOD-13.5, v2): its
+     *     shape is present but `configured` is `false` until a sales source is wired.
+     */
+    ReportsReviews: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      csat: components['schemas']['CsatSummary'];
+      /**
+       * @description CSAT for the equal-length window immediately before this one, so the
+       *     tab can show a vs-previous delta (the PRD's "67% vs 57%").
+       */
+      previous_period?: {
+        range: {
+          /** Format: date-time */
+          from: string;
+          /** Format: date-time */
+          to: string;
+        };
+      } & components['schemas']['CsatSummary'];
+      /** @description One row per UTC day with at least one rating, ascending by date. */
+      by_day: ({
+        /** @description UTC day as `YYYY-MM-DD`. */
+        date: string;
+      } & components['schemas']['CsatSummary'])[];
+      /**
+       * @description Tracked-sales skeleton (FR-MOD-13.5, v2). `configured` is `false` and
+       *     every figure `null` until a sales source is wired — an honest "not set
+       *     up" placeholder, never a fabricated zero.
+       */
+      ecommerce: {
+        /** @description Whether a sales-tracking source is wired. Always false in v1. */
+        configured: boolean;
+        /** @description Attributed orders. Null until configured. */
+        tracked_sales: number | null;
+        /** @description Revenue attributed to supported conversations. Null until configured. */
+        attributed_revenue_cents: number | null;
+        /** @description ISO 4217 code for the revenue figure. Null until configured. */
+        currency: string | null;
+      };
+    };
+    /**
+     * @description A satisfaction tally over some span: the donut's `good` / `bad` counts,
+     *     their total `responses`, and `score` = good / responses. `score` is `null`
+     *     (not `0`) when `responses` is 0 — an unrated span is unknown, not a zero.
+     */
+    CsatSummary: {
+      good: number;
+      bad: number;
+      /** @description good + bad — how many ratings the span had. */
+      responses: number;
+      /** @description good / responses, rounded to three decimals. Null when unrated. */
+      score: number | null;
     };
     CustomerChatState: {
       /** @description Whether any agent is currently accepting chats. */
@@ -6425,6 +6521,33 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ReportsAiAgent'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsReviews: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reviews metrics for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsReviews'];
         };
       };
       400: components['responses']['BadRequest'];

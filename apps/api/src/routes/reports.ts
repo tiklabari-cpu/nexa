@@ -177,6 +177,53 @@ function satisfactionScore(counts: { good: number; bad: number }): number | null
   return rated === 0 ? null : round(counts.good / rated);
 }
 
+interface CsatSummary {
+  good: number;
+  bad: number;
+  responses: number;
+  score: number | null;
+}
+
+/**
+ * The full CSAT tally the Reviews report exposes for one span: the donut's
+ * good/bad counts, their total, and the score (null when unrated). Built once so
+ * the window, the previous window and every daily bucket describe CSAT the same
+ * way — the same reason the resolution split lives in a single SQL fragment.
+ */
+function csatSummary(counts: { good: number; bad: number }): CsatSummary {
+  return {
+    good: counts.good,
+    bad: counts.bad,
+    responses: counts.good + counts.bad,
+    score: satisfactionScore(counts),
+  };
+}
+
+/**
+ * Ratings tallied per UTC day for the daily bar (FR-MOD-07.8). `AT TIME ZONE
+ * 'UTC'` pins the bucket boundary regardless of server timezone, exactly as the
+ * breakdown's by-day split does, so a rating never lands on the wrong day. Only
+ * days with a rating appear; an empty window yields an empty series.
+ */
+async function satisfactionByDay(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Array<{ date: string; good: number; bad: number }>> {
+  const rows = await tx.$queryRaw<Array<{ date: string; good: bigint; bad: bigint }>>`
+    SELECT to_char((created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date,
+      count(*) FILTER (WHERE value = 'good') AS good,
+      count(*) FILTER (WHERE value = 'bad')  AS bad
+    FROM ratings
+    WHERE license_id = ${licenseId}
+      AND created_at >= ${from} AND created_at <= ${to}
+    GROUP BY 1
+    ORDER BY 1
+  `;
+  return rows.map((row) => ({ date: row.date, good: Number(row.good), bad: Number(row.bad) }));
+}
+
 /**
  * The full subscription view (`SubscriptionView`), built the same way for a read
  * and for the reply after a change — so `PATCH` returns exactly what the next
@@ -508,6 +555,49 @@ export default async function reportRoutes(
       transfer_rate: finished === 0 ? null : round(data.transfers / finished),
       skill_runs: data.skillRuns,
       avg_automated_duration_seconds: roundOrNull(data.totals.avg_automated_duration_seconds),
+    });
+  });
+
+  app.get('/reports/reviews', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
+    const parsed = rangeQuery.safeParse(request.query);
+    if (!parsed.success) throw ApiError.validation('Invalid date range.');
+    const { from, to } = resolveRange(parsed.data);
+    const tenant = request.tenant();
+
+    // The equal-length window immediately before this one, so the tab can show a
+    // vs-previous CSAT delta (the PRD's "67% vs 57%") — the same construction the
+    // Overview uses for its period comparison (FR-MOD-07.3.1).
+    const spanMs = to.getTime() - from.getTime();
+    const prevTo = new Date(from.getTime() - 1);
+    const prevFrom = new Date(from.getTime() - spanMs);
+
+    const data = await request.withTenant(async (tx) => {
+      // Sequential, not Promise.all: withTenant is one interactive transaction
+      // and Prisma forbids concurrent queries on its client.
+      const counts = await satisfactionCounts(tx, tenant.licenseId, from, to);
+      const prevCounts = await satisfactionCounts(tx, tenant.licenseId, prevFrom, prevTo);
+      const byDay = await satisfactionByDay(tx, tenant.licenseId, from, to);
+      return { counts, prevCounts, byDay };
+    });
+
+    return reply.send({
+      range: { from: from.toISOString(), to: to.toISOString() },
+      csat: csatSummary(data.counts),
+      previous_period: {
+        range: { from: prevFrom.toISOString(), to: prevTo.toISOString() },
+        ...csatSummary(data.prevCounts),
+      },
+      by_day: data.byDay.map((row) => ({ date: row.date, ...csatSummary(row) })),
+      // Tracked-sales skeleton (FR-MOD-13.5, v2). No sales source is wired yet, so
+      // the shape is present but nothing is claimed: `configured` false and every
+      // figure null, so the surface renders an honest "not set up" state rather
+      // than a fabricated zero.
+      ecommerce: {
+        configured: false,
+        tracked_sales: null,
+        attributed_revenue_cents: null,
+        currency: null,
+      },
     });
   });
 

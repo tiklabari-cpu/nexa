@@ -96,6 +96,45 @@ aiAgent:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+reviews:
+  get:
+    tags: [Reports]
+    operationId: getReportsReviews
+    summary: Reviews / Ratings — CSAT and daily rating volume
+    description: |
+      The Reviews report (FR-MOD-07.8): customer satisfaction read back from the
+      ratings the widget writes (§8 only wrote them until now). It gives the CSAT
+      donut its `good` / `bad` split, a per-UTC-day series for the daily bar, and
+      the same equal-length previous window the Overview uses, so the tab can show
+      the two-period comparison the PRD calls for (the reference "67% vs 57%").
+
+      `score` is `null`, never `0`, when nobody rated — in the window, in the
+      previous window, or on a given day. An unrated span is unknown, not a zero
+      score, and 0% would read as a catastrophe. This mirrors `satisfaction.score`
+      on the Overview.
+
+      `ecommerce` is the tracked-sales skeleton. Sales tracking (FR-MOD-13.5) is a
+      v2 capability with no data source wired yet, so `configured` is `false` and
+      the figures are `null` — the shape is present for the surface to render an
+      honest "not set up" state rather than a fabricated zero.
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: Reviews metrics for the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsReviews" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 subscription:
   get:
     tags: [Billing]

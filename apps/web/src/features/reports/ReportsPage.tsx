@@ -26,7 +26,7 @@ import {
 import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import type { ApiClient } from '../../lib/api-client.js';
-import { formatCount, formatDuration, formatRate } from '../../lib/format.js';
+import { formatCount, formatDuration, formatMoney, formatRate } from '../../lib/format.js';
 
 interface Period {
   range: { from: string; to: string };
@@ -96,9 +96,30 @@ interface ReportsAiAgent {
   avg_automated_duration_seconds: number | null;
 }
 
+interface CsatSummary {
+  good: number;
+  bad: number;
+  responses: number;
+  score: number | null;
+}
+
+interface ReportsReviews {
+  range: { from: string; to: string };
+  csat: CsatSummary;
+  previous_period: CsatSummary & { range: { from: string; to: string } };
+  by_day: Array<CsatSummary & { date: string }>;
+  ecommerce: {
+    configured: boolean;
+    tracked_sales: number | null;
+    attributed_revenue_cents: number | null;
+    currency: string | null;
+  };
+}
+
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'ai-agent', label: 'AI Agent' },
+  { id: 'reviews', label: 'Reviews' },
   { id: 'breakdown', label: 'Breakdown' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -199,6 +220,8 @@ export function ReportsPage(): ReactElement {
           <OverviewTab rangeKey={rangeKey} range={range} />
         ) : tab === 'ai-agent' ? (
           <AiAgentTab rangeKey={rangeKey} range={range} />
+        ) : tab === 'reviews' ? (
+          <ReviewsTab rangeKey={rangeKey} range={range} />
         ) : (
           <BreakdownTab rangeKey={rangeKey} range={range} />
         )}
@@ -504,6 +527,244 @@ function AiAgentTab(props: TabProps): ReactElement {
         </KpiGrid>
       </Section>
     </>
+  );
+}
+
+/**
+ * Reviews / Ratings (FR-MOD-07.8). CSAT read back from the ratings the widget
+ * writes: a donut for the good/bad split, a daily bar for volume over time, and
+ * the previous-window score beside the current one (the PRD's "67% vs 57%").
+ *
+ * A CSAT is null, never 0%, when nobody rated — an unrated span is unknown, not a
+ * failure — so an empty window shows an empty state, not a red zero. Ecommerce is
+ * the tracked-sales skeleton (§13.5, v2): honest "not set up" until a source is
+ * wired, never a fabricated figure.
+ */
+function ReviewsTab(props: TabProps): ReactElement {
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<ReportsReviews>('reviews', api, props);
+
+  if (error) {
+    return (
+      <ErrorNotice message="Could not load the Reviews report. Check that the API is reachable and try again." />
+    );
+  }
+  if (isPending) {
+    return (
+      <>
+        <CardSkeleton rows={3} />
+        <CardSkeleton rows={4} />
+      </>
+    );
+  }
+
+  const csat = data.csat;
+  const prev = data.previous_period;
+
+  return (
+    <>
+      <Section
+        title="Satisfaction (CSAT)"
+        description="Rated good as a share of all ratings (PRD §7.8). Null, never 0%, when nobody rated."
+      >
+        <Card>
+          {csat.responses === 0 ? (
+            <EmptyState
+              title="No ratings yet"
+              description="Once customers rate their conversations, the good / bad split shows up here."
+            />
+          ) : (
+            <div className="flex flex-wrap items-center gap-8 p-2">
+              <CsatDonut good={csat.good} bad={csat.bad} score={csat.score} />
+              <div className="flex min-w-[11rem] flex-col gap-2 text-sm">
+                <CsatLegend swatch="bg-success" label="Rated good" value={csat.good} />
+                <CsatLegend swatch="bg-danger" label="Rated bad" value={csat.bad} />
+                <p className="pt-1 text-content-secondary">
+                  {formatCount(csat.responses)} rating{csat.responses === 1 ? '' : 's'}
+                </p>
+                <p className="text-2xs text-content-tertiary">
+                  {prev.score === null
+                    ? 'No ratings in the previous period'
+                    : `vs ${formatRate(prev.score)} previous period`}
+                </p>
+              </div>
+            </div>
+          )}
+        </Card>
+      </Section>
+
+      <Section
+        title="Ratings by day"
+        description="Daily rating volume, good vs bad, over each UTC day in the window."
+      >
+        <Card>
+          {data.by_day.length === 0 ? (
+            <EmptyState
+              title="No ratings in this window"
+              description="Once customers rate conversations, each day's ratings show up here."
+            />
+          ) : (
+            <DailyBar rows={data.by_day} />
+          )}
+        </Card>
+      </Section>
+
+      <Section
+        title="Ecommerce"
+        description="Sales attributed to supported conversations (PRD §7.8, tracked sales §13.5)."
+      >
+        <Card>
+          {data.ecommerce.configured ? (
+            <KpiGrid>
+              <Kpi label="Tracked sales" value={formatCount(data.ecommerce.tracked_sales ?? 0)} />
+              <Kpi
+                label="Attributed revenue"
+                value={
+                  formatMoney(
+                    data.ecommerce.attributed_revenue_cents,
+                    data.ecommerce.currency ?? undefined,
+                  ) ?? '—'
+                }
+              />
+            </KpiGrid>
+          ) : (
+            <EmptyState
+              title="Sales tracking not set up"
+              description="Connect a sales source to attribute revenue to supported conversations. Tracked sales arrive in a later release."
+            />
+          )}
+        </Card>
+      </Section>
+    </>
+  );
+}
+
+/**
+ * The CSAT donut: the full ring in the "bad" colour with the good arc laid over
+ * it from twelve o'clock, so the covered fraction *is* the good share. The score
+ * sits in the middle; the descriptive `aria-label` carries the same for AT.
+ */
+function CsatDonut({
+  good,
+  bad,
+  score,
+}: {
+  good: number;
+  bad: number;
+  score: number | null;
+}): ReactElement {
+  const responses = good + bad;
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  const goodLength = responses > 0 ? (good / responses) * circumference : 0;
+  const label = `CSAT ${formatRate(score) ?? 'unknown'}: ${good} of ${responses} rated good.`;
+
+  return (
+    <svg viewBox="0 0 120 120" className="h-36 w-36 shrink-0" role="img" aria-label={label}>
+      <circle cx="60" cy="60" r={radius} fill="none" className="stroke-danger" strokeWidth="14" />
+      <circle
+        cx="60"
+        cy="60"
+        r={radius}
+        fill="none"
+        className="stroke-success"
+        strokeWidth="14"
+        strokeDasharray={`${goodLength} ${circumference - goodLength}`}
+        transform="rotate(-90 60 60)"
+      />
+      <text
+        x="60"
+        y="60"
+        textAnchor="middle"
+        dominantBaseline="central"
+        className="fill-content text-xl font-semibold"
+        aria-hidden="true"
+      >
+        {formatRate(score) ?? '—'}
+      </text>
+    </svg>
+  );
+}
+
+/** One legend row: a colour swatch, its label, and the count aligned right. */
+function CsatLegend({
+  swatch,
+  label,
+  value,
+}: {
+  swatch: string;
+  label: string;
+  value: number;
+}): ReactElement {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${swatch}`} aria-hidden="true" />
+      <span className="text-content-secondary">{label}</span>
+      <span className="tabular ml-auto font-medium text-content">{formatCount(value)}</span>
+    </div>
+  );
+}
+
+/**
+ * The daily bar: one row per UTC day, a stacked good/bad bar whose length is the
+ * day's rating volume against the busiest day, plus the counts and that day's
+ * CSAT (— when the day somehow carries no rating). Scaling to the busiest day,
+ * not the total, keeps a quiet day's bar legible next to a busy one.
+ */
+function DailyBar({ rows }: { rows: Array<CsatSummary & { date: string }> }): ReactElement {
+  const max = Math.max(1, ...rows.map((row) => row.responses));
+  const numeric = 'w-20 px-4 py-2 text-right text-xs font-medium text-content-secondary';
+  return (
+    <table className="w-full text-sm">
+      <caption className="sr-only">Ratings per day, split good and bad</caption>
+      <thead>
+        <tr className="border-b border-border text-left">
+          <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
+            Day
+          </th>
+          <th scope="col" className="w-2/5 px-4 py-2 text-xs font-medium text-content-secondary">
+            Ratings
+          </th>
+          <th scope="col" className={numeric}>
+            Good
+          </th>
+          <th scope="col" className={numeric}>
+            Bad
+          </th>
+          <th scope="col" className={numeric}>
+            CSAT
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.date} className="border-b border-border last:border-0">
+            <td className="tabular px-4 py-2">{row.date}</td>
+            <td className="px-4 py-2">
+              <DayBar good={row.good} bad={row.bad} max={max} />
+            </td>
+            <td className="tabular px-4 py-2 text-right text-success">{formatCount(row.good)}</td>
+            <td className="tabular px-4 py-2 text-right text-danger">{formatCount(row.bad)}</td>
+            <td className="tabular px-4 py-2 text-right">{formatRate(row.score) ?? '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** A single day's stacked bar: good (success) then bad (danger), scaled to `max`. */
+function DayBar({ good, bad, max }: { good: number; bad: number; max: number }): ReactElement {
+  const responses = good + bad;
+  const width = max > 0 ? (responses / max) * 100 : 0;
+  const goodShare = responses > 0 ? (good / responses) * 100 : 0;
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-inset" aria-hidden="true">
+      <div className="flex h-full rounded-full" style={{ width: `${Math.max(2, width)}%` }}>
+        <div className="h-full bg-success" style={{ width: `${goodShare}%` }} />
+        <div className="h-full bg-danger" style={{ width: `${100 - goodShare}%` }} />
+      </div>
+    </div>
   );
 }
 

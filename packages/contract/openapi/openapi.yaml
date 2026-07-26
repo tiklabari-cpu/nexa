@@ -237,6 +237,8 @@ paths:
     $ref: "./paths/reports.yaml#/breakdown"
   /reports/ai-agent:
     $ref: "./paths/reports.yaml#/aiAgent"
+  /reports/reviews:
+    $ref: "./paths/reports.yaml#/reviews"
   /billing/subscription:
     $ref: "./paths/reports.yaml#/subscription"
   /billing/usage:
@@ -1458,6 +1460,92 @@ components:
           type: integer
           nullable: true
           description: Average open-to-close time of automated chats. Null when none.
+
+    ReportsReviews:
+      type: object
+      description: |
+        The Reviews / Ratings report (FR-MOD-07.8): CSAT read back from the
+        ratings the widget writes. `csat` feeds the donut, `by_day` the daily bar,
+        and `previous_period` the two-period comparison. Every `score` is `null`
+        (not `0`) for an unrated span — the same rule the Overview's satisfaction
+        follows. `ecommerce` is the tracked-sales skeleton (FR-MOD-13.5, v2): its
+        shape is present but `configured` is `false` until a sales source is wired.
+      required: [range, csat, by_day, ecommerce]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        csat:
+          $ref: "#/components/schemas/CsatSummary"
+        previous_period:
+          description: |
+            CSAT for the equal-length window immediately before this one, so the
+            tab can show a vs-previous delta (the PRD's "67% vs 57%").
+          allOf:
+            - type: object
+              required: [range]
+              properties:
+                range:
+                  type: object
+                  required: [from, to]
+                  properties:
+                    from: { type: string, format: date-time }
+                    to: { type: string, format: date-time }
+            - $ref: "#/components/schemas/CsatSummary"
+        by_day:
+          type: array
+          description: One row per UTC day with at least one rating, ascending by date.
+          items:
+            allOf:
+              - type: object
+                required: [date]
+                properties:
+                  date: { type: string, description: "UTC day as `YYYY-MM-DD`." }
+              - $ref: "#/components/schemas/CsatSummary"
+        ecommerce:
+          type: object
+          description: |
+            Tracked-sales skeleton (FR-MOD-13.5, v2). `configured` is `false` and
+            every figure `null` until a sales source is wired — an honest "not set
+            up" placeholder, never a fabricated zero.
+          required: [configured, tracked_sales, attributed_revenue_cents, currency]
+          properties:
+            configured:
+              type: boolean
+              description: Whether a sales-tracking source is wired. Always false in v1.
+            tracked_sales:
+              type: integer
+              nullable: true
+              description: Attributed orders. Null until configured.
+            attributed_revenue_cents:
+              type: integer
+              nullable: true
+              description: Revenue attributed to supported conversations. Null until configured.
+            currency:
+              type: string
+              nullable: true
+              description: ISO 4217 code for the revenue figure. Null until configured.
+
+    CsatSummary:
+      type: object
+      description: |
+        A satisfaction tally over some span: the donut's `good` / `bad` counts,
+        their total `responses`, and `score` = good / responses. `score` is `null`
+        (not `0`) when `responses` is 0 — an unrated span is unknown, not a zero.
+      required: [good, bad, responses, score]
+      properties:
+        good: { type: integer }
+        bad: { type: integer }
+        responses:
+          type: integer
+          description: good + bad — how many ratings the span had.
+        score:
+          type: number
+          nullable: true
+          description: good / responses, rounded to three decimals. Null when unrated.
 
     CustomerChatState:
       type: object

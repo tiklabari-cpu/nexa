@@ -46,4 +46,19 @@ test.describe('reports overview', () => {
     await expect(agentPage.getByRole('region', { name: 'By day' })).toBeVisible();
     await agentPage.screenshot({ path: 'kanit/21-reports-breakdown.png', fullPage: true });
   });
+
+  test('opens the Reviews tab with CSAT, the daily bar and the sales skeleton (07.8)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await agentPage.getByRole('tab', { name: 'Reviews' }).click();
+
+    // The three sections of the Reviews report (FR-MOD-07.8): the CSAT donut, the
+    // daily rating bar, and the tracked-sales skeleton — each its own region.
+    await expect(agentPage.getByRole('region', { name: 'Satisfaction (CSAT)' })).toBeVisible();
+    await expect(agentPage.getByRole('region', { name: 'Ratings by day' })).toBeVisible();
+    await expect(agentPage.getByRole('region', { name: 'Ecommerce' })).toBeVisible();
+
+    await agentPage.screenshot({ path: 'kanit/22-reports-reviews.png', fullPage: true });
+  });
 });

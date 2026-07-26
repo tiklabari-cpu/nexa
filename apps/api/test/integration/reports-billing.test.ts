@@ -566,6 +566,131 @@ describe('reports and billing', () => {
 
   // =========================================================================
 
+  describe('Reviews report (07.8)', () => {
+    /** Attach a rating to a chat, optionally landing it in an earlier day/window. */
+    async function rate(chatId: string, value: 'good' | 'bad', createdAt?: Date): Promise<void> {
+      await owner.rating.create({
+        data: {
+          chatId,
+          licenseId: fx.a.licenseId,
+          value,
+          ...(createdAt ? { createdAt } : {}),
+        },
+      });
+    }
+
+    it('reads good/bad ratings back and scores the CSAT donut', async () => {
+      const a = await conversation({ agentReplies: true, customerName: 'A' });
+      const b = await conversation({ agentReplies: true, customerName: 'B' });
+      const c = await conversation({ agentReplies: true, customerName: 'C' });
+      await rate(a, 'good');
+      await rate(b, 'good');
+      await rate(c, 'bad');
+
+      const reviews = (await server.get('/reports/reviews', auth)).json();
+      expect(reviews.csat.good).toBe(2);
+      expect(reviews.csat.bad).toBe(1);
+      expect(reviews.csat.responses).toBe(3);
+      // 2 of 3 rated good.
+      expect(reviews.csat.score).toBe(0.667);
+    });
+
+    it('reports an unrated window as unknown, not zero', async () => {
+      await conversation({ agentReplies: true });
+      const reviews = (await server.get('/reports/reviews', auth)).json();
+      // 0% would read as a catastrophe; nobody rated is simply unknown — the same
+      // rule the Overview's satisfaction follows.
+      expect(reviews.csat.score).toBeNull();
+      expect(reviews.csat.responses).toBe(0);
+      expect(reviews.csat.good).toBe(0);
+      expect(reviews.csat.bad).toBe(0);
+      expect(reviews.by_day).toEqual([]);
+    });
+
+    it('compares CSAT against the previous equal-length window', async () => {
+      const now = await conversation({ agentReplies: true, customerName: 'Now' });
+      const then = await conversation({ agentReplies: true, customerName: 'Then' });
+      await rate(now, 'good');
+      // 45 days back lands in the previous 30-day window (default range is 30d).
+      await rate(then, 'bad', new Date(Date.now() - 45 * 86_400_000));
+
+      const reviews = (await server.get('/reports/reviews', auth)).json();
+      expect(reviews.csat.score).toBe(1);
+      expect(reviews.csat.responses).toBe(1);
+      // The prior window saw one bad rating — a real baseline for the delta.
+      expect(reviews.previous_period.responses).toBe(1);
+      expect(reviews.previous_period.score).toBe(0);
+      expect(reviews.previous_period.range.from).toBeDefined();
+    });
+
+    it('buckets ratings by UTC day for the daily bar', async () => {
+      const older = await conversation({ agentReplies: true, customerName: 'Older' });
+      const newer = await conversation({ agentReplies: true, customerName: 'Newer' });
+      const dayA = new Date(Date.now() - 5 * 86_400_000);
+      const dayB = new Date(Date.now() - 2 * 86_400_000);
+      await rate(older, 'good', dayA);
+      await rate(newer, 'bad', dayB);
+
+      const reviews = (await server.get('/reports/reviews', auth)).json();
+      expect(reviews.by_day).toHaveLength(2);
+      // Ascending by date, each carrying its own good/bad tally and null-safe score.
+      expect(reviews.by_day[0].date).toBe(dayA.toISOString().slice(0, 10));
+      expect(reviews.by_day[0].good).toBe(1);
+      expect(reviews.by_day[0].score).toBe(1);
+      expect(reviews.by_day[1].date).toBe(dayB.toISOString().slice(0, 10));
+      expect(reviews.by_day[1].bad).toBe(1);
+      expect(reviews.by_day[1].score).toBe(0);
+    });
+
+    it('exposes the tracked-sales skeleton as not configured (FR-MOD-13.5, v2)', async () => {
+      const reviews = (await server.get('/reports/reviews', auth)).json();
+      // Sales tracking has no source wired yet: an honest "not set up" shape, not
+      // a fabricated zero.
+      expect(reviews.ecommerce.configured).toBe(false);
+      expect(reviews.ecommerce.tracked_sales).toBeNull();
+      expect(reviews.ecommerce.attributed_revenue_cents).toBeNull();
+      expect(reviews.ecommerce.currency).toBeNull();
+    });
+
+    it('never counts another tenant', async () => {
+      const mine = await conversation({ agentReplies: true });
+      await rate(mine, 'good');
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/reports/reviews', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      expect(theirs.csat.responses).toBe(0);
+      expect(theirs.csat.score).toBeNull();
+      expect(theirs.by_day).toEqual([]);
+    });
+
+    it('rejects a backwards date range', async () => {
+      const response = await server.get('/reports/reviews?from=2026-08-01&to=2026-07-01', auth);
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('requires the reports_read scope', async () => {
+      const scopeless = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      const response = await server.get('/reports/reviews', {
+        authorization: `Bearer ${scopeless}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
+  // =========================================================================
+
   describe('subscription and the trial gate', () => {
     it('bills nothing during the trial', async () => {
       const response = await server.get('/billing/subscription', auth);

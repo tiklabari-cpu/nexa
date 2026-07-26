@@ -19,6 +19,7 @@ import {
   Page,
   Section,
 } from '../../components/Page.js';
+import { Banner } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatCount, formatDate, formatMoney } from '../../lib/format.js';
 
@@ -152,13 +153,10 @@ export function BillingPage(): ReactElement {
   return (
     <Page title="Billing" description={`Plan, usage and charges for period ${use.period_label}.`}>
       {sub.access === 'read_only' && (
-        <div role="alert" className="rounded-lg border border-border bg-surface p-4">
-          <p className="text-sm font-medium text-warning">This workspace is read-only.</p>
-          <p className="mt-1 text-sm text-content-secondary">
-            The trial has ended. Existing conversations stay readable and exportable and nothing has
-            been deleted — but new conversations cannot be started until a plan is active.
-          </p>
-        </div>
+        <Banner tone="warning" role="alert" title="This workspace is read-only.">
+          The trial has ended. Existing conversations stay readable and exportable and nothing has
+          been deleted — but new conversations cannot be started until a plan is active.
+        </Banner>
       )}
 
       {sub.access === 'trialing' && sub.trial.days_remaining !== null && (

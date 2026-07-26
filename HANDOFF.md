@@ -6,6 +6,42 @@
 
 ## Task log (newest-first)
 
+### 62 — EK-C.2 · Banner/dropdown/panel/modal tek tasarım sistemi [XHIGH] — done — 2026-07-26 UTC
+
+- Kapsam: FR-EK-C.2 (`Should`, Faz-0'ı bloklamaz — erken teslim). Denetim (§7.1) notu: bileşenler
+  vardı ama tek "design system" soyutlaması gevşekti — her ekran kendi banner/dropdown/panel/modal
+  `<div>`'ini elde yazmıştı. Frontend-only; backend/contract/DB'ye **dokunulmadı** (yeni route yok →
+  contract-parity etkilenmez). PLAN satır 461 + §7.1 tablo (951) → `✅`.
+- Yapıldı:
+  - **Yeni tek katman** `apps/web/src/components/ui/`: `Banner`, `Dropdown`, `Modal`, `Panel`
+    (+`PanelSection`), `cn`, `index.ts`. Her biri dağınık kopyalardan davranışı çıkarıp tekleştirir.
+  - **Banner** — segmentli tone (info/success/warning/danger/brand/neutral, renk hep ikon+metinle
+    eşli), opsiyonel `cta`, **kapatılabilir + kalıcı dismiss** (`id` verilirse `localStorage`
+    `nexa.banner.dismissed.<id>`; `id`siz oturumluk; storage yoksa sessizce oturumluk).
+  - **Dropdown** — `<details>` tabanlı; Escape kapatır + odağı tetikleyiciye verir, dış tık kapatır,
+    `aria-expanded`, panel `hidden group-open:block` (absolute konumda kapalı `<details>` çocuklarını
+    tarayıcı gizlemez — AppShell'de patlayan regresyon; sınıf mekanizması korunur).
+  - **Modal** — overlay + `role=dialog aria-modal`; Escape ve arka-plan tık **tek** `onClose`'a gider
+    (dirty-guard bu tek kapıya oturur), panelde başlayan mousedown dismiss sayılmaz, açılışta odak
+    içeri (içerik `autoFocus` istediyse ona dokunmaz), kapanışta tetikleyiciye döner.
+  - **Panel/PanelSection** — adlandırılmış `<aside>` + başlık + opsiyonel collapse; katlanabilir
+    bölümler (varsayılan açık).
+  - **Mevcut kopyalar oturtuldu (ölü kod değil):** AppShell hesap menüsü→`Dropdown`, InviteTeammates
+    modalı→`Modal`, DetailsPanel→`Panel`/`PanelSection`, Billing read-only + TicketPane merged→`Banner`.
+- Doğrulama (DoD, exit 0): typecheck 11/11 · lint 8/8 · build 7/7 · test 10/10 (web **342**, +22 yeni:
+  Banner 7 · Dropdown 6 · Modal 6 · Panel 3). Test stratejisi birebir karşılandı ("banner dismiss
+  kalıcı" + "dropdown/panel/modal tutarlı davranış"). Mevcut AppShell/InviteTeammates/DetailsPanel/
+  TicketPane/Billing testleri refactor sonrası yeşil.
+- Varsayımlar / notlar:
+  - **integration/e2e koşulmadı** — değişiklik saf UI (yalnız `apps/web`), API/DB/OpenAPI yüzeyi yok;
+    task'ın kabul kriteri unit seviyesinde (tm 60/57/61.2 gibi frontend-only kapanışlarla tutarlı).
+  - **Shell TrialBanner bilinçli olarak Banner'a alınmadı** — o tam-genişlik krom şeridi (status bar),
+    kart-tarzı notice değil; Banner primitifi in-content notice kartları içindir. Gerekirse `flush`
+    varyantı sonradan eklenebilir.
+  - Canlı `dismissible` Banner örneği eklenmedi (mevcut banner'ların hiçbiri kullanıcı-dostu biçimde
+    kapatılabilir değil — ör. ödeme uyarısını gizletmek istemeyiz). Kapatma+kalıcılık yeteneği
+    primitifte hazır ve unit testle kanıtlı; sonraki uygun notice onu kullanır.
+
 ### 61.2 — 13.6-a · Omnichannel HelpDesk katmanı (frontend) [XHIGH] — done — 2026-07-26 UTC
 
 - Kapsam: 61.1'in backend HelpDesk katmanını `apps/web` inbox'ına bağlar. Parent **61 artık done**

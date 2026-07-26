@@ -11,12 +11,13 @@
  * so that branch is gone rather than kept as untested code.
  */
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { type ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth } from '../lib/auth-store.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { CommandPalette } from './CommandPalette.js';
 import { FOOTER, MODULES, type NavDestination } from './navigation.js';
+import { Dropdown } from './ui/index.js';
 
 export function AppShell(): ReactElement {
   return (
@@ -147,52 +148,18 @@ function RailButton({ item }: { item: NavDestination }): ReactElement {
 }
 
 /**
- * Account menu, built on `<details>` so it is keyboard-operable without a
- * popover library or a focus trap of our own.
- *
- * The panel is hidden with an explicit `hidden group-open:block` rather than by
- * letting the browser hide a closed `<details>`'s children. That default does
- * not survive `position: absolute`: the panel kept its 224×130 box, stayed in
- * the accessibility tree with a reachable "Sign out", and painted behind the
- * page — invisible on screen but present to a screen reader and to tab order.
+ * Account menu — the shared Dropdown primitive (FR-EK-C.2), which carries the
+ * `<details>`-based keyboard operability, Escape-to-close-and-return-focus, the
+ * outside-click dismiss, and the `hidden group-open:block` hiding this menu
+ * proved out (a closed `<details>`'s children are not hidden once absolutely
+ * positioned — they keep their box, hit area and place in the accessibility
+ * tree). Every menu in the app now inherits that rather than re-deriving it.
  */
 function AccountMenu(): ReactElement {
   const agent = useAuth((s) => s.agent);
   const signOut = useAuth((s) => s.signOut);
   const t = useTranslate();
   const { locale, setLocale } = useLocale();
-  const ref = useRef<HTMLDetailsElement>(null);
-  const [open, setOpen] = useState(false);
-
-  const close = (returnFocus: boolean): void => {
-    const details = ref.current;
-    if (!details?.open) return;
-    details.open = false;
-    setOpen(false);
-    if (returnFocus) details.querySelector('summary')?.focus();
-  };
-
-  // Escape closes it, as a menu is expected to.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') close(true);
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  // Clicking anywhere else closes it, rather than leaving a stray panel open
-  // over whatever the agent moved on to.
-  useEffect(() => {
-    const onPointerDown = (event: PointerEvent): void => {
-      const details = ref.current;
-      if (!details?.open) return;
-      if (event.target instanceof Node && details.contains(event.target)) return;
-      close(false);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, []);
 
   const initials = (agent?.name ?? agent?.email ?? '?')
     .split(/[\s@.]+/)
@@ -202,63 +169,54 @@ function AccountMenu(): ReactElement {
     .join('');
 
   return (
-    <details
-      ref={ref}
-      className="group relative"
-      onToggle={(event) => setOpen((event.currentTarget as HTMLDetailsElement).open)}
+    <Dropdown
+      label={t('shell.account')}
+      triggerTitle={agent?.email ?? t('shell.account')}
+      trigger={initials}
+      triggerClassName="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-2xs font-semibold text-white"
+      // Anchored above the trigger: the rail sits at the bottom of the screen,
+      // so a downward menu would open off-screen.
+      panelClassName="bottom-11 left-0 w-56 p-3"
     >
-      <summary
-        // `<summary>` alone is announced as a plain grouping element, which
-        // tells a screen reader user neither that it opens something nor
-        // whether it is currently open. Both have to be stated.
-        role="button"
-        aria-expanded={open}
-        aria-label={t('shell.account')}
-        title={agent?.email ?? t('shell.account')}
-        className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full bg-white/10 text-2xs font-semibold text-white marker:content-none"
-      >
-        {initials}
-      </summary>
+      {({ close }) => (
+        <>
+          <p className="truncate text-sm font-medium">
+            {agent?.name ?? t('shell.account.agentFallback')}
+          </p>
+          <p className="truncate text-xs text-content-secondary">{agent?.email}</p>
+          <p className="mt-1 text-2xs uppercase tracking-wide text-content-tertiary">
+            {agent?.role}
+          </p>
 
-      <div
-        // Anchored above the trigger: the rail sits at the bottom of the screen,
-        // so a downward menu would open off-screen.
-        className="absolute bottom-11 left-0 z-20 hidden w-56 rounded-lg border border-border bg-surface p-3 shadow-md group-open:block"
-      >
-        <p className="truncate text-sm font-medium">
-          {agent?.name ?? t('shell.account.agentFallback')}
-        </p>
-        <p className="truncate text-xs text-content-secondary">{agent?.email}</p>
-        <p className="mt-1 text-2xs uppercase tracking-wide text-content-tertiary">{agent?.role}</p>
+          {/* Language switcher (I18N1): a plain labelled select so the whole panel
+              re-renders in the chosen language the instant it changes. */}
+          <label className="mt-3 block text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('shell.account.language')}
+            <select
+              value={locale}
+              onChange={(event) => setLocale(event.target.value as (typeof LOCALES)[number])}
+              className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm normal-case tracking-normal text-content"
+            >
+              {LOCALES.map((code) => (
+                <option key={code} value={code}>
+                  {LOCALE_NAMES[code]}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        {/* Language switcher (I18N1): a plain labelled select so the whole panel
-            re-renders in the chosen language the instant it changes. */}
-        <label className="mt-3 block text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-          {t('shell.account.language')}
-          <select
-            value={locale}
-            onChange={(event) => setLocale(event.target.value as (typeof LOCALES)[number])}
-            className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm normal-case tracking-normal text-content"
+          <button
+            type="button"
+            onClick={() => {
+              close(false);
+              void signOut();
+            }}
+            className="mt-3 w-full rounded-md border border-border px-2 py-1.5 text-sm hover:bg-surface-2"
           >
-            {LOCALES.map((code) => (
-              <option key={code} value={code}>
-                {LOCALE_NAMES[code]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <button
-          type="button"
-          onClick={() => {
-            close(false);
-            void signOut();
-          }}
-          className="mt-3 w-full rounded-md border border-border px-2 py-1.5 text-sm hover:bg-surface-2"
-        >
-          {t('shell.account.signOut')}
-        </button>
-      </div>
-    </details>
+            {t('shell.account.signOut')}
+          </button>
+        </>
+      )}
+    </Dropdown>
   );
 }

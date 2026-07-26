@@ -458,16 +458,19 @@ P4 (10k satır 60fps) bu kaleme bağlı; P6 (büyük liste sorgusu) çoğunlukla
 
 #### Faz-0 `Should` kalemleri (kapanışı **bloklamaz** — §F.00, ismen)
 
-- **EK-C.2** *(Should, MVP)* — banner/dropdown/panel/modal tek tasarım sistemi: `◐`. Bileşenler
-  var, tek "design system" soyutlaması gevşek. **Kabul edilen borç** olarak §D'ye taşınabilir ya
-  da T4/T5/T6 ile birlikte kapanır. Faz-0'ı bloklamaz.
+- **EK-C.2** *(Should, MVP)* — banner/dropdown/panel/modal tek tasarım sistemi: `✅`. Tek design-system
+  soyutlaması kuruldu — `apps/web/src/components/ui/{Banner,Dropdown,Modal,Panel}` — ve mevcut dağınık
+  kopyalar ona oturtuldu: AppShell hesap menüsü→`Dropdown`, InviteTeammates→`Modal`, DetailsPanel→
+  `Panel`/`PanelSection`, Billing read-only + TicketPane merged→`Banner`. `Banner` segmentli (tone) +
+  kalıcı dismiss (localStorage). test `components/ui/*.test.tsx` (22) · tm 62. `Should` idi; Faz-0'ı
+  bloklamıyordu, erken kapatıldı.
 - **03.1.1 kalan sekmeler** (Supervised/Invited/Browsing) — teslim edilen 4 sekme (All/Chatting/
   Queued/Waiting) `Must temel`'i karşılıyor; kalan 3 sekme `v2 gelişmiş` (§4/13.2). Bloklamaz.
 
 **Faz-0 kapanış kapısı (§F.00):** yukarıdaki **T1-a · T3-a · T3-b · T4-a · T4-b · T5-a · T6-a ·
 T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `Must` sayacı `45+6=51 ✅ ·
-0 ◐ · 0 ⬜` olur ve **§F.1'in 10 maddesi tam sürüm** çalıştırılıp faz kapanır. `Should` (EK-C.2,
-03.1.1-kalan) ismen v1'e taşınır.
+0 ◐ · 0 ⬜` olur ve **§F.1'in 10 maddesi tam sürüm** çalıştırılıp faz kapanır. `Should`ler: EK-C.2
+✅ erken teslim (tm 62); 03.1.1-kalan ismen v1'e taşınır.
 
 ---
 
@@ -945,7 +948,7 @@ Bunlar bir dilim değil, **her dilimin kabul koşulu**. Yeni ekran/endpoint ekle
 | EK-A.2 | Ortak girdi davranışları — debounce arama, dropdown, stepper, optimistic toggle, yarım-form kapatma onayı | Must (MVP)   |         ◐ debounce/stepper/optimistic dağınık var, yarım-form kapatma onayı ⬜ (§3.13/T5)         |
 | EK-B.1 | Sayfalama & yükleme — virtualized grid, infinite scroll, skeleton, **anlamlı empty state**                | Must (MVP)   |     ◐ keyset pagination ✅ · **virtualization (10k satır) ⬜**, empty state tutarsız (§3.13/T6)     |
 | EK-C.1 | Realtime katman — WebSocket push (polling değil) + reconnect telafi                                       | Must (MVP)   |                    ✅ Dilim 5                    |
-| EK-C.2 | Banner/dropdown/panel/modal — tek tasarım sistemi                                                         | Should (MVP) |                        ◐                         |
+| EK-C.2 | Banner/dropdown/panel/modal — tek tasarım sistemi                                                         | Should (MVP) | ✅ tek design-system `components/ui/{Banner,Dropdown,Modal,Panel}` — mevcut kopyalar oturtuldu · Banner segmentli + kalıcı dismiss · test (22) · tm 62 |
 
 ### 7.2 NFR kapıları (PRD §7 — 58 madde)
 
@@ -1058,8 +1061,8 @@ denetim** noktası olur. **Faz-0 önce kapanır** (§1.3 — v1 dilimine geçmed
 
 ### Faz kapanışını bloklayanlar (`Must` — §F.00 girdisi)
 
-- **Faz-0:** T1-a · T3-a · T3-b · T4-a · T4-b · T5-a · T6-a · T6-b · T7-a (9 — hepsi). `Should`
-  (EK-C.2, 03.1.1-kalan) bloklamaz, v1'e taşınır.
+- **Faz-0:** T1-a · T3-a · T3-b · T4-a · T4-b · T5-a · T6-a · T6-b · T7-a (9 — hepsi). `Should`:
+  EK-C.2 ✅ (tm 62); 03.1.1-kalan bloklamaz, v1'e taşınır.
 - **v1:** 05.1-a · 05.3-a · 06.1-a · 06.2.4-a · 06.3.1-a · 06.3.2-a · 06.4-a · 08.5-adapter-a ·
   08.5.4-a · 08.5.5-a · 08.5.6-a · 08.8.4-a/-b/-c/-d · 02.1.2-a · 10.1.4-a · 04.2-a (~18).
 

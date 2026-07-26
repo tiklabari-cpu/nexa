@@ -16,6 +16,7 @@ import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, emailList, splitList, useForm } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
+import { Modal } from '../../components/ui/index.js';
 
 interface Invitation {
   id: string;
@@ -120,88 +121,80 @@ export function InviteTeammates(): ReactElement {
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Invite teammates"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+    <Modal
+      onClose={close}
+      title="Invite teammates"
+      description="One address per line, or separated by commas."
     >
-      <div className="w-full max-w-md rounded-lg border border-border bg-surface p-5">
-        <h2 className="mb-1 text-base font-semibold">Invite teammates</h2>
-        <p className="mb-4 text-xs text-content-secondary">
-          One address per line, or separated by commas.
-        </p>
+      <form onSubmit={form.handleSubmit} noValidate>
+        {form.submitError && (
+          <p role="alert" className="mb-3 text-sm text-danger">
+            {form.submitError}
+          </p>
+        )}
 
-        <form onSubmit={form.handleSubmit} noValidate>
-          {form.submitError && (
-            <p role="alert" className="mb-3 text-sm text-danger">
-              {form.submitError}
+        <label htmlFor="invite-emails" className="mb-1.5 block text-sm font-medium">
+          Email addresses
+        </label>
+        <textarea
+          id="invite-emails"
+          rows={4}
+          value={form.values.emails}
+          autoFocus
+          onChange={(event) => form.setValue('emails', event.target.value)}
+          onBlur={() => form.blur('emails')}
+          aria-invalid={emailsError ? true : undefined}
+          aria-describedby={emailsError ? 'invite-emails-error' : undefined}
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <FieldError id="invite-emails-error" message={emailsError} />
+
+        <label htmlFor="invite-role" className="mb-1.5 mt-3 block text-sm font-medium">
+          Role
+        </label>
+        <select
+          id="invite-role"
+          value={role}
+          onChange={(event) => setRole(event.target.value as 'admin')}
+          className="mb-4 w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
+        >
+          <option value="admin">Admin</option>
+          <option value="agent">Agent</option>
+        </select>
+
+        {copied && (
+          <div className="mb-4 rounded-md border border-border bg-inset p-3">
+            <p role="status" className="mb-2 text-xs text-content-secondary">
+              Invitations sent. This link works once and lasts seven days — it is not shown again.
             </p>
-          )}
-
-          <label htmlFor="invite-emails" className="mb-1.5 block text-sm font-medium">
-            Email addresses
-          </label>
-          <textarea
-            id="invite-emails"
-            rows={4}
-            value={form.values.emails}
-            autoFocus
-            onChange={(event) => form.setValue('emails', event.target.value)}
-            onBlur={() => form.blur('emails')}
-            aria-invalid={emailsError ? true : undefined}
-            aria-describedby={emailsError ? 'invite-emails-error' : undefined}
-            className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-          />
-          <FieldError id="invite-emails-error" message={emailsError} />
-
-          <label htmlFor="invite-role" className="mb-1.5 mt-3 block text-sm font-medium">
-            Role
-          </label>
-          <select
-            id="invite-role"
-            value={role}
-            onChange={(event) => setRole(event.target.value as 'admin')}
-            className="mb-4 w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
-          >
-            <option value="admin">Admin</option>
-            <option value="agent">Agent</option>
-          </select>
-
-          {copied && (
-            <div className="mb-4 rounded-md border border-border bg-inset p-3">
-              <p role="status" className="mb-2 text-xs text-content-secondary">
-                Invitations sent. This link works once and lasts seven days — it is not shown again.
-              </p>
-              <button
-                type="button"
-                onClick={() => void navigator.clipboard?.writeText(copied)}
-                className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
-              >
-                Copy invite link
-              </button>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={close}
-              className="rounded-md border border-border px-3 py-1.5 text-sm"
+              onClick={() => void navigator.clipboard?.writeText(copied)}
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
             >
-              {copied ? 'Done' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              disabled={!form.canSubmit}
-              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-            >
-              {form.isSubmitting ? 'Sending…' : `Invite ${emailCount || ''}`.trim()}
+              Copy invite link
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={close}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            {copied ? 'Done' : 'Cancel'}
+          </button>
+          <button
+            type="submit"
+            disabled={!form.canSubmit}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {form.isSubmitting ? 'Sending…' : `Invite ${emailCount || ''}`.trim()}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -234,9 +227,7 @@ export function PendingInvitations(): ReactElement | null {
           <tr key={invite.id} className="border-b border-border last:border-0">
             <td className="px-4 py-2.5">{invite.email}</td>
             <td className="px-4 py-2.5 text-content-secondary">{invite.role}</td>
-            <td className="px-4 py-2.5 text-content-secondary">
-              {invite.invited_by_name ?? '—'}
-            </td>
+            <td className="px-4 py-2.5 text-content-secondary">{invite.invited_by_name ?? '—'}</td>
             <td className="px-4 py-2.5 text-right">
               <button
                 type="button"

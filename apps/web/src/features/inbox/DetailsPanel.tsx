@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { StatusDot } from '../../components/StatusDot.js';
+import { Panel, PanelSection } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useChatAction } from './useInbox.js';
 import type { ChatDetail } from './types.js';
@@ -50,25 +51,14 @@ export function DetailsPanel({
   };
 
   return (
-    <aside
-      aria-label="Conversation details"
-      className="flex w-details shrink-0 flex-col overflow-y-auto border-l border-border bg-surface"
+    <Panel
+      label="Conversation details"
+      title="Details"
+      className="w-details shrink-0 overflow-y-auto border-l border-border"
+      onCollapse={onCollapse}
+      collapseLabel="Collapse details panel"
     >
-      <header className="flex h-topbar items-center justify-between border-b border-border px-4">
-        <h2 className="text-sm font-semibold">Details</h2>
-        {onCollapse && (
-          <button
-            type="button"
-            onClick={onCollapse}
-            aria-label="Collapse details panel"
-            className="rounded-md p-1 text-content-tertiary hover:bg-surface-2 hover:text-content"
-          >
-            <span aria-hidden="true">⇥</span>
-          </button>
-        )}
-      </header>
-
-      <Section title="Conversation">
+      <PanelSection title="Conversation">
         <Row label="Status">
           <StatusDot
             tone={chat.active ? 'success' : 'neutral'}
@@ -89,9 +79,9 @@ export function DetailsPanel({
         <Row label="Started">
           <span className="text-xs">{new Date(chat.created_at).toLocaleString()}</span>
         </Row>
-      </Section>
+      </PanelSection>
 
-      <Section title="Tags">
+      <PanelSection title="Tags">
         {tags.length === 0 ? (
           <p className="text-xs text-content-tertiary">No tags yet.</p>
         ) : (
@@ -147,20 +137,20 @@ export function DetailsPanel({
             Add
           </button>
         </div>
-      </Section>
+      </PanelSection>
 
-      <Section title="Teams">
+      <PanelSection title="Teams">
         {chat.access.group_ids.length === 0 ? (
           <p className="text-xs text-content-tertiary">Not routed to a team.</p>
         ) : (
           <p className="text-xs">{chat.access.group_ids.join(', ')}</p>
         )}
-      </Section>
+      </PanelSection>
 
       {/* Where this visitor has been and on what — the context an agent reads
           before replying (FR-MOD-02.4). Both sections stay visible with an
           explicit empty state so a quiet panel never reads as a loading bug. */}
-      <Section title="Visited pages">
+      <PanelSection title="Visited pages">
         {visitedPages.length === 0 ? (
           <p className="text-xs text-content-tertiary">No pages recorded for this visitor.</p>
         ) : (
@@ -185,9 +175,9 @@ export function DetailsPanel({
             ))}
           </ol>
         )}
-      </Section>
+      </PanelSection>
 
-      <Section title="Visit info">
+      <PanelSection title="Visit info">
         {visitInfo === null ? (
           <p className="text-xs text-content-tertiary">No visit information yet.</p>
         ) : (
@@ -206,7 +196,7 @@ export function DetailsPanel({
             </Row>
           </>
         )}
-      </Section>
+      </PanelSection>
 
       <div className="mt-auto border-t border-border p-3">
         {chat.active ? (
@@ -229,18 +219,7 @@ export function DetailsPanel({
           </button>
         )}
       </div>
-    </aside>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }): ReactElement {
-  return (
-    <details open className="border-b border-border">
-      <summary className="cursor-pointer px-4 py-3 text-2xs font-semibold uppercase tracking-wide text-content-tertiary">
-        {title}
-      </summary>
-      <div className="flex flex-col gap-2 px-4 pb-4">{children}</div>
-    </details>
+    </Panel>
   );
 }
 

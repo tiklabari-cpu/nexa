@@ -17,6 +17,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
+import { Banner } from '../../components/ui/index.js';
 import {
   useAddFollower,
   useAgents,
@@ -122,23 +123,23 @@ function MergedBanner({
   pending: boolean;
 }): ReactElement {
   return (
-    <div
-      role="status"
-      className="mb-6 flex max-w-xl items-center gap-3 rounded-md border border-border bg-surface-2 px-3 py-2 text-sm"
+    <Banner
+      tone="neutral"
+      className="mb-6 max-w-xl"
+      cta={
+        <button
+          type="button"
+          onClick={onUnmerge}
+          disabled={pending}
+          className="rounded-md border border-border px-2.5 py-1 text-xs font-medium disabled:opacity-40"
+        >
+          Unmerge
+        </button>
+      }
     >
-      <span className="flex-1">
-        Merged into <span className="font-mono text-xs">{ticket.merged_into_id}</span>. It is folded
-        under that ticket and hidden from lists until you unmerge it.
-      </span>
-      <button
-        type="button"
-        onClick={onUnmerge}
-        disabled={pending}
-        className="rounded-md border border-border px-2.5 py-1 text-xs font-medium disabled:opacity-40"
-      >
-        Unmerge
-      </button>
-    </div>
+      Merged into <span className="font-mono text-xs">{ticket.merged_into_id}</span>. It is folded
+      under that ticket and hidden from lists until you unmerge it.
+    </Banner>
   );
 }
 

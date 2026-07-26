@@ -1279,11 +1279,11 @@
         "description": "CSAT donut + günlük bar; ratings okuma yolu. PRD 07.8 (Should).",
         "details": "07.8-a Reviews/Ratings raporu (CSAT donut + günlük bar). [XHIGH] PRD 07.8 (Should).\nNEDEN AÇIK: ratings yalnız yazma yolu var (§8), okuma/rapor yok.\nKAPSAM: CSAT donut; günlük bar; e-ticaret satış izleme iskeleti.\nKK (birebir): \"CSAT donut; günlük bar; e-ticaret satış izleme\". BAĞLAM: PLAN §4.4.8.",
         "testStrategy": "integration: rating okuma; oy yoksa null (%0 değil). DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T08:42:43.632Z"
       },
       {
         "id": "46",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T08:15:50.925Z",
+      "lastModified": "2026-07-26T08:42:43.632Z",
       "taskCount": 84,
-      "completedCount": 40,
+      "completedCount": 41,
       "tags": [
         "master"
       ]

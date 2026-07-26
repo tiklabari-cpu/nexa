@@ -18,6 +18,7 @@ import type { Env } from '../config/env.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { CustomerService } from '../services/customers/customer-service.js';
+import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { LocalStore } from '../services/storage/local-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
@@ -37,6 +38,12 @@ const startSchema = z
     /** Optional pre-chat form values. */
     name: z.string().trim().max(120).optional(),
     email: z.string().email().max(320).optional(),
+    /**
+     * Pre-chat form answers (FR-MOD-08.7.7): a map of contact custom-field id →
+     * value, validated against each field's definition (type + required) and
+     * written to the contact. A `null` clears a field.
+     */
+    custom_fields: z.record(z.string().max(5000).nullable()).optional(),
     idempotency_key: z.string().min(1).max(128).optional(),
   })
   .refine((body) => Boolean(body.text?.trim()) || Boolean(body.attachment_url), {
@@ -73,6 +80,7 @@ export default async function customerRoutes(
   const publisher = new RealtimePublisher(app.redis, app.log);
   const chats = new ChatService(app.db, app.redis, publisher);
   const customerDirectory = new CustomerService();
+  const customFields = new CustomFieldService();
   const ai = new AiResponder(chats, publisher);
   const store = new LocalStore(env.STORAGE_LOCAL_DIR);
 
@@ -254,6 +262,17 @@ export default async function customerRoutes(
               lastActivityAt: new Date(),
             },
           }),
+        );
+      }
+
+      // Pre-chat form answers (FR-MOD-08.7.7): validated against their contact
+      // custom-field definitions and written to the contact, one transaction so
+      // it is all-or-nothing. An ill-typed value or a blank required field throws
+      // a 400 here — before any chat is opened, so a bad form never leaves a
+      // half-started conversation behind.
+      if (body.custom_fields && Object.keys(body.custom_fields).length > 0) {
+        await request.withTenant((tx) =>
+          customFields.setValues(tx, tenant, 'contact', principal.customerId, body.custom_fields!),
         );
       }
 

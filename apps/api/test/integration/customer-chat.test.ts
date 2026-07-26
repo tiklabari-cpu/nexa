@@ -679,4 +679,101 @@ describe('customer chat api', () => {
       );
     });
   });
+
+  // The forms builder (FR-MOD-08.7.7): a workspace's pre-chat fields are contact
+  // custom fields flagged `pre_chat`. They ride the token to the widget, and the
+  // answers ride the first message to the contact — validated by type on the way.
+  describe('pre-chat form', () => {
+    async function preChatField(
+      label: string,
+      type: 'text' | 'number' = 'text',
+      required = false,
+    ): Promise<string> {
+      const created = await owner.customFieldDefinition.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          entity: 'contact',
+          label,
+          type,
+          required,
+          formPlacement: 'pre_chat',
+        },
+        select: { id: true },
+      });
+      return created.id;
+    }
+
+    it('delivers the configured fields on the widget token (KK "widget\'ta gösterim")', async () => {
+      await preChatField('Order number');
+
+      const response = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId },
+        { origin: `https://${fx.a.trustedDomain}` },
+      );
+      const body = response.json() as {
+        pre_chat_form: Array<{ definition_id: string; label: string; type: string; required: boolean }>;
+      };
+      expect(body.pre_chat_form.map((field) => field.label)).toContain('Order number');
+    });
+
+    it('writes an answer to the contact (KK "contact\'a yazma")', async () => {
+      const fieldId = await preChatField('Order number', 'text', true);
+      const { token, customer_id } = await widgetToken();
+
+      const sent = await server.post(
+        '/customer/chat/events',
+        { text: 'My order is late', custom_fields: { [fieldId]: 'ORD-42' } },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(201);
+
+      // The answer is on the contact, readable by an agent through the CRM detail.
+      const detail = await server.get(`/customers/${customer_id}`, auth(agentToken));
+      expect(detail.statusCode).toBe(200);
+      const stored = (
+        detail.json() as { custom_fields: Array<{ definition_id: string; value: string | null }> }
+      ).custom_fields.find((field) => field.definition_id === fieldId);
+      expect(stored?.value).toBe('ORD-42');
+    });
+
+    it('rejects an answer of the wrong type and opens no chat (KK negatif: geçersiz alan)', async () => {
+      const fieldId = await preChatField('Balance', 'number');
+      const { token } = await widgetToken();
+
+      const sent = await server.post(
+        '/customer/chat/events',
+        { text: 'Hi', custom_fields: { [fieldId]: 'not-a-number' } },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(400);
+      expect((sent.json() as { error: { type: string } }).error.type).toBe('validation');
+      // The bad form is refused before any conversation is created.
+      expect(await owner.chat.count()).toBe(0);
+    });
+
+    it('refuses to write another tenant\'s field id', async () => {
+      // A field that belongs to tenant B, offered to a tenant-A visitor. RLS on
+      // the definitions means A cannot see it, so it reads as an unknown field.
+      const foreign = await owner.customFieldDefinition.create({
+        data: {
+          licenseId: fx.b.licenseId,
+          entity: 'contact',
+          label: 'Secret',
+          type: 'text',
+          formPlacement: 'pre_chat',
+        },
+        select: { id: true },
+      });
+      const { token } = await widgetToken();
+
+      const sent = await server.post(
+        '/customer/chat/events',
+        { text: 'Hi', custom_fields: { [foreign.id]: 'x' } },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(400);
+      expect(await owner.chat.count()).toBe(0);
+    });
+  });
 });

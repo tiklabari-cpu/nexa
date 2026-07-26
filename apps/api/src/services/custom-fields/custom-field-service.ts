@@ -22,6 +22,8 @@ import {
   type CustomFieldEntity,
   type CustomFieldType,
   type CustomFieldValue,
+  type FormPlacement,
+  type PreChatFormField,
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
@@ -31,11 +33,14 @@ export interface DefinitionInput {
   label: string;
   type: CustomFieldType;
   required?: boolean;
+  /** Ask this contact field on the widget's pre-chat form (FR-MOD-08.7.7). */
+  formPlacement?: FormPlacement | null;
 }
 
 export interface DefinitionPatch {
   label?: string;
   required?: boolean;
+  formPlacement?: FormPlacement | null;
 }
 
 interface DefinitionRow {
@@ -44,6 +49,7 @@ interface DefinitionRow {
   label: string;
   type: string;
   required: boolean;
+  formPlacement: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -115,6 +121,11 @@ export class CustomFieldService {
     if (!CUSTOM_FIELD_TYPES.includes(input.type)) {
       throw ApiError.validation(`type: must be one of ${CUSTOM_FIELD_TYPES.join(', ')}.`);
     }
+    // A form placement only makes sense on a contact field: the pre-chat form
+    // runs before any ticket exists, so a ticket field has nothing to write to.
+    if (input.formPlacement && input.entity !== 'contact') {
+      throw ApiError.validation('form_placement: only a contact field can be a pre-chat form field.');
+    }
 
     try {
       const created = await tx.customFieldDefinition.create({
@@ -124,6 +135,7 @@ export class CustomFieldService {
           label,
           type: input.type,
           required: input.required ?? false,
+          formPlacement: input.formPlacement ?? null,
         },
       });
       return toDefinitionDto(created);
@@ -159,6 +171,14 @@ export class CustomFieldService {
       data.label = label;
     }
     if (patch.required !== undefined) data.required = patch.required;
+    if (patch.formPlacement !== undefined) {
+      if (patch.formPlacement && existing.entity !== 'contact') {
+        throw ApiError.validation(
+          'form_placement: only a contact field can be a pre-chat form field.',
+        );
+      }
+      data.formPlacement = patch.formPlacement;
+    }
 
     try {
       const updated = await tx.customFieldDefinition.update({ where: { id }, data });
@@ -177,6 +197,26 @@ export class CustomFieldService {
       where: { id, licenseId: tenant.licenseId },
     });
     if (count === 0) throw ApiError.notFound('Custom field not found.');
+  }
+
+  /**
+   * The workspace's pre-chat form (FR-MOD-08.7.7): the contact fields flagged
+   * `pre_chat`, in creation order, shaped for the widget to render one input per
+   * row. Read on every widget token mint, so it stays a single indexed query and
+   * returns only what the widget needs — never the whole definition.
+   */
+  async listPreChatForm(tx: TenantClient, tenant: TenantContext): Promise<PreChatFormField[]> {
+    const rows = await tx.customFieldDefinition.findMany({
+      where: { licenseId: tenant.licenseId, entity: 'contact', formPlacement: 'pre_chat' },
+      orderBy: [{ createdAt: 'asc' }],
+      select: { id: true, label: true, type: true, required: true },
+    });
+    return rows.map((row) => ({
+      definition_id: row.id,
+      label: row.label,
+      type: row.type as CustomFieldType,
+      required: row.required,
+    }));
   }
 
   // --- Values ----------------------------------------------------------------
@@ -262,6 +302,7 @@ function toDefinitionDto(row: DefinitionRow): CustomFieldDefinition {
     label: row.label,
     type: row.type as CustomFieldType,
     required: row.required,
+    form_placement: (row.formPlacement as FormPlacement | null) ?? null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };

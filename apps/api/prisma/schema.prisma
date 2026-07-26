@@ -555,6 +555,10 @@ model CustomFieldDefinition {
   /// 'text' | 'number' | 'boolean' | 'date'.
   type      String
   required  Boolean  @default(false)
+  /// 'pre_chat' when this contact field is also asked on the widget's pre-chat
+  /// form (FR-MOD-08.7.7), or null for a CRM-only field. A CHECK in the migration
+  /// keeps a placement to `entity = 'contact'`.
+  formPlacement String? @map("form_placement")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

@@ -6,6 +6,39 @@
 
 ## Task log (newest-first)
 
+### 52 — 08.7.7-a · Forms builder (pre/post-chat) `[MAX]` — done — 2026-07-27 UTC
+
+- Kapsam: FR-MOD-08.7.7 (`Should v1`) — widget'ta sohbet öncesi sorulan alanların builder'ı → müşteri
+  girdisi contact'a yazılır. KK (birebir) _"En az bir alan; tip validasyon; widget'ta gösterim →
+  contact/ticket'a yazma"_, doğrulama _"integration (form→ticket) + negatif (geçersiz alan)"_.
+  Bağımlılık tm 29 + tm 51 (✅). PLAN satır 536 → `✅` + §D47.
+- Yapıldı:
+  - **Tasarım = yeniden-kullanım (tm 51):** pre-chat alanı = `form_placement='pre_chat'` işaretli bir
+    **contact** custom-field'ı. Yanıt zaten var olan `checkCustomFieldValue` ile tipine göre doğrulanır,
+    `setValues('contact')` ile kişiye yazılır, CRM'de görünür — ayrı tablo/RLS/GRANT/değer-yolu YOK.
+  - **Migration** `20260726210000_prechat_form`: `custom_field_definitions`'a `form_placement TEXT?` +
+    CHECK (`pre_chat` yalnız `entity='contact'`). Prisma diff çıktısı + el-ile CHECK; **drift temiz**.
+  - **Tipler** `@nexa/types`: `FORM_PLACEMENTS`/`FormPlacement`/`PreChatFormField` + `CustomFieldDefinition.form_placement`.
+  - **Servis** `custom-field-service.ts`: create/update `formPlacement` (guard: yalnız contact) +
+    `listPreChatForm` + DTO `form_placement`.
+  - **Rota (yeni yol YOK):** `/settings/custom-fields` gövdesine `form_placement`; token mint
+    `/customer/token` yanıtına `pre_chat_form` (best-effort); `/customer/chat/events` gövdesine
+    `custom_fields` → ilk mesajla `setValues('contact')` (geçersiz → 400, sohbet açılmadan, atomik).
+  - **Web** Settings "Pre-chat form" builder (`PreChatFormSettings`, tm 29 form-primitifi).
+  - **Widget** (28.4 KB, bütçe içinde): mint'ten `pre_chat_form` → dinamik `renderPreChatFields` +
+    `submitPrechat` yanıtları toplar + ilk mesajla gönderir; alan yoksa sabit 11.2 formu değişmez.
+- Doğrulama (DoD kapısı, exit 0): typecheck 11/11 · lint 8/8 · build 7/7 · test:unit (widget
+  `widget.prechat.test.ts` 4 + web `SettingsForms.test.tsx` +2 + types 50) · test:integration (api
+  **771**/37 dosya, `--concurrency=1`) incl. `customer-chat.test.ts` pre-chat 4 + contract-parity 5/5 +
+  regresyon yok · **drift temiz**. E2E: task akışı = integration (form→contact + negatif), tam koştu;
+  full Playwright ayrıca koşulmadı (değişiklik toplamsal + konfigüre edilmedikçe atıl; widget 4 unit test
+  + mevcut `widget.spec.ts` name/Start-chat assertion'ları değişmez — D45/D46 emsali).
+- Varsayımlar: yanıtlar **contact'a** yazılır (KK "contact/ticket" — widget/chat akışında ticket henüz
+  yoktur; contact custom-field'ı en doğal ve CRM-görünür hedef).
+- Sonraki pencereye not: **Yalnız pre-chat teslim.** `form_placement` modeli post-chat'e açık ama
+  widget'ın kapanış-sonrası (rating/close) render'ı + ikinci teslim yolu **ertelendi** — ayrı dilim.
+  KK'nın üç ölçütü pre-chat ile tam. `.parked-playbook/` bu task'a ait değil, commit'e alınmadı.
+
 ### 51 — 08.7.6-a · Custom fields (ticket/contact) `[XHIGH]` — done — 2026-07-26 UTC
 
 - Kapsam: FR-MOD-08.7.6 (`Should v1`) — ticket ve contact üzerinde workspace'in tanımladığı ekstra

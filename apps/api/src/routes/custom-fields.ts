@@ -9,7 +9,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CUSTOM_FIELD_ENTITIES, CUSTOM_FIELD_TYPES } from '@nexa/types';
+import { CUSTOM_FIELD_ENTITIES, CUSTOM_FIELD_TYPES, FORM_PLACEMENTS } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 
@@ -22,12 +22,15 @@ const createBody = z.object({
   label: z.string().trim().min(1).max(120),
   type: z.enum(CUSTOM_FIELD_TYPES),
   required: z.boolean().optional(),
+  /** Ask this contact field on the widget's pre-chat form (FR-MOD-08.7.7). */
+  form_placement: z.enum(FORM_PLACEMENTS).nullable().optional(),
 });
 
 const updateBody = z
   .object({
     label: z.string().trim().min(1).max(120).optional(),
     required: z.boolean().optional(),
+    form_placement: z.enum(FORM_PLACEMENTS).nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -72,6 +75,7 @@ export default async function customFieldRoutes(app: FastifyInstance): Promise<v
           label: body.label,
           type: body.type,
           ...(body.required !== undefined ? { required: body.required } : {}),
+          ...(body.form_placement !== undefined ? { formPlacement: body.form_placement } : {}),
         }),
       );
       return reply.status(201).send(definition);
@@ -89,6 +93,7 @@ export default async function customFieldRoutes(app: FastifyInstance): Promise<v
         fields.updateDefinition(tx, tenant, id, {
           ...(body.label !== undefined ? { label: body.label } : {}),
           ...(body.required !== undefined ? { required: body.required } : {}),
+          ...(body.form_placement !== undefined ? { formPlacement: body.form_placement } : {}),
         }),
       );
       return reply.send(definition);

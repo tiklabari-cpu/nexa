@@ -8,7 +8,7 @@
  * with `textContent`. Never `innerHTML` — the eslint config bans it outright
  * rather than relying on anyone remembering (NFR-S6).
  */
-import type { WidgetAppearance } from '@nexa/types';
+import type { PreChatFormField, WidgetAppearance } from '@nexa/types';
 import { WidgetApi, type WidgetEvent, type WidgetState } from './api.js';
 import { createTranslator, type WidgetTranslate } from './i18n.js';
 
@@ -77,6 +77,10 @@ interface State {
   prechat: boolean;
   /** Pre-chat details to attach to the first message the visitor sends. */
   pendingDetails: { name?: string; email?: string } | null;
+  /** The workspace's configurable pre-chat form fields (FR-MOD-08.7.7). */
+  preChatFields: PreChatFormField[];
+  /** Pre-chat form answers (field id → value) riding the first message. */
+  pendingCustomFields: Record<string, string> | null;
   error: string | null;
   sending: boolean;
   /** A file the visitor picked and we uploaded, waiting to be sent. */
@@ -107,6 +111,8 @@ export function mount(doc: Document = document, win: Window = window): void {
     greetingOpen: false,
     prechat: false,
     pendingDetails: null,
+    preChatFields: [],
+    pendingCustomFields: null,
     error: null,
     sending: false,
     pendingAttachment: null,
@@ -338,11 +344,77 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.chip.hidden = showForm || state.pendingAttachment === null;
   }
 
+  /**
+   * Build the workspace's configurable pre-chat fields (FR-MOD-08.7.7) into the
+   * form. Rebuilt whenever the mint reports them; `replaceChildren` keeps it
+   * idempotent so a re-connect does not stack duplicates. Each input carries its
+   * definition id and type so `submitPrechat` can read the answers back.
+   */
+  function renderPreChatFields(): void {
+    ui.prechatFields.replaceChildren();
+    for (const field of state.preChatFields) {
+      const marked = field.required ? `${field.label} *` : field.label;
+
+      if (field.type === 'boolean') {
+        const wrap = doc.createElement('label');
+        wrap.className = 'nx-prechat-check';
+        const box = doc.createElement('input');
+        box.type = 'checkbox';
+        box.dataset.defId = field.definition_id;
+        box.dataset.fieldType = field.type;
+        box.setAttribute('aria-label', field.label);
+        const span = doc.createElement('span');
+        span.textContent = marked;
+        wrap.append(box, span);
+        ui.prechatFields.append(wrap);
+        continue;
+      }
+
+      const input = doc.createElement('input');
+      input.className = 'nx-prechat-input';
+      input.type = field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text';
+      input.placeholder = marked;
+      input.setAttribute('aria-label', field.label);
+      input.dataset.defId = field.definition_id;
+      input.dataset.fieldType = field.type;
+      if (field.required) input.required = true;
+      if (field.type === 'text') input.maxLength = 5000;
+      ui.prechatFields.append(input);
+    }
+  }
+
   function submitPrechat(): void {
     const name = ui.prechatName.value.trim();
     if (!name) return;
+
+    // The configurable fields (FR-MOD-08.7.7). A required one must be answered
+    // before the chat can start; types are validated authoritatively server-side
+    // when the answers ride the first message. An empty optional field is left
+    // out rather than sent blank.
+    const custom: Record<string, string> = {};
+    const inputs =
+      ui.prechatFields.querySelectorAll<HTMLInputElement>('input[data-def-id]');
+    for (const el of inputs) {
+      const id = el.dataset.defId ?? '';
+      if (!id) continue;
+      if (el.dataset.fieldType === 'boolean') {
+        custom[id] = el.checked ? 'true' : 'false';
+        continue;
+      }
+      const value = el.value.trim();
+      if (!value) {
+        if (el.required) {
+          el.focus();
+          return;
+        }
+        continue;
+      }
+      custom[id] = value;
+    }
+
     const email = ui.prechatEmail.value.trim();
     state.pendingDetails = { name, ...(email ? { email } : {}) };
+    state.pendingCustomFields = Object.keys(custom).length > 0 ? custom : null;
     state.prechat = false;
     renderPrechat();
     ui.input.focus();
@@ -360,6 +432,11 @@ export function mount(doc: Document = document, win: Window = window): void {
         appearance = appearanceFromApi(api.appearance);
         applyAppearance();
       }
+      // …and the pre-chat form (FR-MOD-08.7.7). Rendered here rather than at build
+      // time because it is per-workspace and only known once the token is minted;
+      // an empty list leaves the fixed name/email form untouched.
+      state.preChatFields = api.preChatForm;
+      renderPreChatFields();
       state.connected = true;
       state.online = snapshot.online;
       state.chatId = snapshot.chat?.id ?? null;
@@ -462,17 +539,20 @@ export function mount(doc: Document = document, win: Window = window): void {
     state.pendingAttachment = null;
     renderChip();
 
-    // Pre-chat name/email ride along with the first message. Captured before
-    // the await so a failed send can put them back.
+    // Pre-chat name/email and form answers ride along with the first message.
+    // Captured before the await so a failed send can put them back.
     const details = state.pendingDetails;
+    const customFields = state.pendingCustomFields;
     try {
       const result = await api.send(text, {
         url: hostPageUrl(win),
         ...(attachment ? { attachment_url: attachment.fileUrl } : {}),
         ...(details ?? {}),
+        ...(customFields ? { custom_fields: customFields } : {}),
       });
       state.chatId = result.chat_id;
       state.pendingDetails = null;
+      state.pendingCustomFields = null;
       state.error = null;
       await refresh();
     } catch (error) {
@@ -628,6 +708,8 @@ interface Ui {
   prechat: HTMLFormElement;
   prechatName: HTMLInputElement;
   prechatEmail: HTMLInputElement;
+  /** Holds the workspace's configurable pre-chat fields (FR-MOD-08.7.7). */
+  prechatFields: HTMLDivElement;
   prechatSubmit: HTMLButtonElement;
   poweredBy: HTMLElement;
 }
@@ -748,11 +830,17 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   prechatEmail.placeholder = t('prechat.email');
   prechatEmail.setAttribute('aria-label', t('prechat.emailLabel'));
   prechatEmail.maxLength = 320;
+  // The workspace's configurable fields (FR-MOD-08.7.7) are appended here after
+  // the token mint reports them — empty (and so invisible) when none are set, so
+  // the fixed name/email form above is unchanged for a workspace that has no
+  // form builder configured.
+  const prechatFields = doc.createElement('div');
+  prechatFields.className = 'nx-prechat-fields';
   const prechatSubmit = doc.createElement('button');
   prechatSubmit.type = 'submit';
   prechatSubmit.className = 'nx-prechat-submit';
   prechatSubmit.textContent = t('prechat.submit');
-  prechat.append(prechatIntro, prechatName, prechatEmail, prechatSubmit);
+  prechat.append(prechatIntro, prechatName, prechatEmail, prechatFields, prechatSubmit);
 
   // "Powered by Nexa" (FR-MOD-11.5): shown by default, hidden when a workspace
   // removes it. A link, opened in a new tab so it never navigates the panel away
@@ -812,6 +900,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     prechat,
     prechatName,
     prechatEmail,
+    prechatFields,
     prechatSubmit,
     poweredBy,
   };
@@ -1184,6 +1273,11 @@ body {
   font: inherit; color: inherit; padding: 9px 11px; border-radius: 8px;
   border: 1px solid var(--nx-border); background: transparent;
 }
+/* Configurable pre-chat fields (FR-MOD-08.7.7). Collapsed when empty so a
+   workspace with no form builder configured sees the fixed form unchanged. */
+.nx-prechat-fields { display: flex; flex-direction: column; gap: 10px; }
+.nx-prechat-fields:empty { display: none; }
+.nx-prechat-check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--nx-muted); }
 .nx-prechat-submit {
   border: 0; border-radius: 8px; padding: 9px 12px;
   background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;

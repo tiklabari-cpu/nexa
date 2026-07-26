@@ -122,6 +122,7 @@ export function SettingsPage(): ReactElement {
       <TicketRules canEdit={canManageTicketRules} />
       <TicketEmailTemplates canEdit={canManageTicketRules} />
       <CustomFieldsSettings canEdit={canManageAccess} />
+      <PreChatFormSettings canEdit={canManageAccess} />
     </Page>
   );
 }
@@ -1592,6 +1593,183 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
                   <span className="flex-1 text-sm font-medium">{field.label}</span>
                   <span className="text-2xs text-content-tertiary">
                     {field.entity === 'ticket' ? 'Ticket' : 'Contact'} · {field.type}
+                    {field.required ? ' · required' : ''}
+                  </span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => remove.mutate(field.id)}
+                      aria-label={`Delete field ${field.label}`}
+                      className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+    </Section>
+  );
+}
+
+/**
+ * Pre-chat form builder (FR-MOD-08.7.7).
+ *
+ * A field asked in the widget before the conversation starts. Each is a contact
+ * custom field flagged `pre_chat`, so an answer is validated by its `type` (KK
+ * "tip validasyon") and lands on the contact like any other field (KK "widget'ta
+ * gösterim → contact'a yazma") — visible in the CRM, no parallel store. "At least
+ * one field": the widget shows the form only once one exists here.
+ */
+export function PreChatFormSettings({ canEdit }: { canEdit: boolean }): ReactElement {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  const [isRequired, setIsRequired] = useState(false);
+
+  const list = useQuery({
+    queryKey: ['settings', 'custom-fields', 'pre-chat'],
+    queryFn: () =>
+      api.get<{ items: CustomFieldDefinition[] }>('/settings/custom-fields?entity=contact'),
+  });
+
+  // Prefix-invalidate so the CRM custom-fields list refreshes too: a pre-chat
+  // field is a contact custom field, and it appears in both places.
+  const invalidate = () =>
+    void queryClient.invalidateQueries({ queryKey: ['settings', 'custom-fields'] });
+
+  const create = useMutation({
+    mutationFn: (body: { label: string; type: CustomFieldType; required: boolean }) =>
+      api.post<CustomFieldDefinition>('/settings/custom-fields', {
+        entity: 'contact',
+        form_placement: 'pre_chat',
+        ...body,
+      }),
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/settings/custom-fields/${id}`),
+    onSuccess: invalidate,
+  });
+
+  const form = useForm({
+    initial: { label: '', type: 'text' },
+    validators: { label: required('Name the field.') },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await create.mutateAsync({
+          label: values.label.trim(),
+          type: values.type as CustomFieldType,
+          required: isRequired,
+        });
+        reset();
+        setIsRequired(false);
+      } catch (error) {
+        setSubmitError(
+          error instanceof ApiClientError ? error.message : 'Could not add that field.',
+        );
+      }
+    },
+  });
+  const labelError = form.errorFor('label');
+
+  // Only the pre-chat fields: the query returns every contact field, but this
+  // builder is about the ones that show in the widget.
+  const fields = (list.data?.items ?? []).filter((field) => field.form_placement === 'pre_chat');
+
+  return (
+    <Section
+      title="Pre-chat form"
+      description="Ask visitors for details before the chat starts. Answers are saved to the contact and shown in the CRM."
+    >
+      {list.error ? (
+        <ErrorNotice message="Could not load the pre-chat form." />
+      ) : (
+        <Card>
+          {canEdit && (
+            <form
+              onSubmit={form.handleSubmit}
+              noValidate
+              className="flex flex-wrap items-end gap-3 border-b border-border p-4"
+            >
+              <label htmlFor="pcf-label" className="flex w-48 flex-col gap-1">
+                <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                  Label
+                </span>
+                <input
+                  id="pcf-label"
+                  value={form.values.label}
+                  onChange={(event) => form.setValue('label', event.target.value)}
+                  onBlur={() => form.blur('label')}
+                  aria-invalid={labelError ? true : undefined}
+                  aria-describedby={labelError ? 'pcf-label-error' : undefined}
+                  placeholder="Order number"
+                  maxLength={120}
+                  className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                />
+                <FieldError id="pcf-label-error" message={labelError} />
+              </label>
+
+              <label htmlFor="pcf-type" className="flex w-32 flex-col gap-1">
+                <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                  Type
+                </span>
+                <select
+                  id="pcf-type"
+                  value={form.values.type}
+                  onChange={(event) => form.setValue('type', event.target.value)}
+                  className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+                >
+                  {CUSTOM_FIELD_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex items-center gap-2 pb-1.5 text-sm text-content-secondary">
+                <input
+                  type="checkbox"
+                  checked={isRequired}
+                  onChange={(event) => setIsRequired(event.target.checked)}
+                />
+                Required
+              </label>
+
+              <button
+                type="submit"
+                disabled={!form.canSubmit}
+                className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              >
+                {form.isSubmitting ? 'Adding…' : 'Add field'}
+              </button>
+
+              {form.submitError && (
+                <p role="alert" className="w-full text-2xs text-danger">
+                  {form.submitError}
+                </p>
+              )}
+            </form>
+          )}
+
+          {list.isPending ? (
+            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+          ) : fields.length === 0 ? (
+            <EmptyState
+              title="No pre-chat questions"
+              description="Add a field to ask visitors for details — an order number, an account id — before they start chatting."
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {fields.map((field) => (
+                <li key={field.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="flex-1 text-sm font-medium">{field.label}</span>
+                  <span className="text-2xs text-content-tertiary">
+                    {field.type}
                     {field.required ? ' · required' : ''}
                   </span>
                   {canEdit && (

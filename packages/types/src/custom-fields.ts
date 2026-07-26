@@ -20,6 +20,17 @@ export const CUSTOM_FIELD_ENTITIES = ['ticket', 'contact'] as const;
 export type CustomFieldEntity = (typeof CUSTOM_FIELD_ENTITIES)[number];
 
 /**
+ * Where a contact field is also asked as a form in the widget (FR-MOD-08.7.7,
+ * "Forms builder (pre/post-chat)"). `pre_chat` shows the field on the widget's
+ * pre-chat form, before the conversation starts; a `null` placement is a plain
+ * CRM field that is never asked in the widget. Only `contact` fields may carry a
+ * placement — there is no ticket to hang a value on before a chat exists — which
+ * a CHECK in the migration enforces. `post_chat` is reserved for a later slice.
+ */
+export const FORM_PLACEMENTS = ['pre_chat'] as const;
+export type FormPlacement = (typeof FORM_PLACEMENTS)[number];
+
+/**
  * How a value is validated and rendered. `text` is free text; `number` a finite
  * number; `boolean` a true/false; `date` a calendar day. Adding a type is a
  * one-line change here that the validator and the authoring form both pick up.
@@ -35,8 +46,27 @@ export interface CustomFieldDefinition {
   type: CustomFieldType;
   /** When true, a value may not be left blank (KK "zorunluluk"). */
   required: boolean;
+  /**
+   * Where this field is asked as a widget form, or `null` for a CRM-only field
+   * (FR-MOD-08.7.7). Only meaningful on `contact` fields.
+   */
+  form_placement: FormPlacement | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * A contact field as the widget needs it to render one row of the pre-chat form
+ * (FR-MOD-08.7.7): the label to prompt with, the `type` that picks the input and
+ * validates the answer, whether it is `required`, and the `definition_id` the
+ * answer is written back under. The widget imports this type-only; the answer it
+ * collects rides along with the first message and is stored on the contact.
+ */
+export interface PreChatFormField {
+  definition_id: string;
+  label: string;
+  type: CustomFieldType;
+  required: boolean;
 }
 
 /**

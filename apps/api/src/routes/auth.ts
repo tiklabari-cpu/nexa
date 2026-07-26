@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   isScope,
   normalizeWidgetAppearance,
+  type PreChatFormField,
   type Scope,
   type WidgetAppearance,
 } from '@nexa/types';
@@ -11,6 +12,7 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { originHost } from '../lib/origin.js';
 import { withTenant, type TenantContext } from '../lib/tenant.js';
+import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import {
   writeAuditEntry,
   type AuditContext,
@@ -603,9 +605,14 @@ export default async function authRoutes(
 
     // The widget's appearance (FR-MOD-11.7), so the hosted Chat page — which has
     // no snippet to bake it into — and any embed running a stale snippet theme
-    // themselves from the server as the source of truth. Best-effort: the widget
-    // falls back to the shipped look, so a read failure must not deny a token.
-    const widget = await widgetAppearance(app.db, tenant, request);
+    // themselves from the server as the source of truth. Alongside it, the
+    // pre-chat form (FR-MOD-08.7.7): the fields the widget asks before the chat
+    // starts. Both best-effort — the widget falls back to the shipped look and no
+    // extra fields, so a read failure must never deny a token.
+    const [widget, preChatForm] = await Promise.all([
+      widgetAppearance(app.db, tenant, request),
+      readPreChatForm(app.db, tenant, request),
+    ]);
 
     reply.header('Cache-Control', 'no-store');
     return reply.send({
@@ -614,6 +621,7 @@ export default async function authRoutes(
       customer_id: customerId,
       organization_id: match.organization_id,
       widget,
+      pre_chat_form: preChatForm,
     });
   });
 }
@@ -644,6 +652,25 @@ async function widgetAppearance(
   } catch (error) {
     request.log.warn({ err: error }, 'failed to read widget appearance');
     return normalizeWidgetAppearance(null);
+  }
+}
+
+/**
+ * The workspace's pre-chat form fields (FR-MOD-08.7.7), or an empty list when
+ * none are configured or the read fails. Guarded like the appearance so a form
+ * lookup never breaks token issuance — the widget simply shows no extra fields.
+ */
+async function readPreChatForm(
+  db: PrismaClient,
+  tenant: TenantContext,
+  request: FastifyRequest,
+): Promise<PreChatFormField[]> {
+  try {
+    const fields = new CustomFieldService();
+    return await withTenant(db, tenant, (tx) => fields.listPreChatForm(tx, tenant));
+  } catch (error) {
+    request.log.warn({ err: error }, 'failed to read pre-chat form');
+    return [];
   }
 }
 

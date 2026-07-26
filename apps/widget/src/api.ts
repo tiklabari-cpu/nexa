@@ -6,7 +6,7 @@
  * retry policy and typed routes it will never use.
  */
 
-import type { WidgetAppearance } from '@nexa/types';
+import type { PreChatFormField, WidgetAppearance } from '@nexa/types';
 
 export interface WidgetEvent {
   id: string;
@@ -31,6 +31,7 @@ export interface WidgetState {
 export class WidgetApi {
   #token: string | null = null;
   #appearance: WidgetAppearance | null = null;
+  #preChatForm: PreChatFormField[] = [];
 
   /**
    * The workspace's widget appearance from the last token mint (FR-MOD-11.7), or
@@ -40,6 +41,16 @@ export class WidgetApi {
    */
   get appearance(): WidgetAppearance | null {
     return this.#appearance;
+  }
+
+  /**
+   * The workspace's pre-chat form fields from the last token mint
+   * (FR-MOD-08.7.7), or an empty list before connect / when none are configured.
+   * The widget renders one input per field and rides the answers along with the
+   * visitor's first message.
+   */
+  get preChatForm(): PreChatFormField[] {
+    return this.#preChatForm;
   }
 
   constructor(
@@ -78,13 +89,15 @@ export class WidgetApi {
     });
     if (!response.ok) throw new WidgetApiError(await describe(response));
 
-    const { token, customer_id, widget } = (await response.json()) as {
+    const { token, customer_id, widget, pre_chat_form } = (await response.json()) as {
       token: string;
       customer_id: string;
       widget?: WidgetAppearance;
+      pre_chat_form?: PreChatFormField[];
     };
     this.#token = token;
     if (widget) this.#appearance = widget;
+    this.#preChatForm = Array.isArray(pre_chat_form) ? pre_chat_form : [];
     safeSetItem('nexa.customer_id', customer_id);
 
     return this.state();
@@ -96,7 +109,14 @@ export class WidgetApi {
 
   async send(
     text: string,
-    options: { url?: string; name?: string; email?: string; attachment_url?: string } = {},
+    options: {
+      url?: string;
+      name?: string;
+      email?: string;
+      attachment_url?: string;
+      /** Pre-chat form answers: contact custom-field id → value (FR-MOD-08.7.7). */
+      custom_fields?: Record<string, string>;
+    } = {},
   ): Promise<{ chat_id: string; event: WidgetEvent | null }> {
     return this.#request('POST', '/customer/chat/events', {
       // An attachment may travel without text (FR-MOD-11.4), so an empty string

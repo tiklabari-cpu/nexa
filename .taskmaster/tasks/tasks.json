@@ -1485,14 +1485,14 @@
         "description": "Per-agent performance + Copilot knowledge girişi. PRD 04.2 (Must v1).",
         "details": "04.2-a AI Agents (team tarafı) performance + Copilot knowledge girişi. [XHIGH] PRD 04.2 (Must v1).\nKAPSAM: per-agent performance + Copilot knowledge yönetimi girişi.\nKK (birebir): \"Per-agent performance; Copilot knowledge yönetimi\". BAĞLAM: PLAN §4.4.13. Bağımlılık: tm 33 (06.5-a) + tm 36 (12.2-a).",
         "testStrategy": "unit + 12.2-a bağı. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "33",
           "36"
         ],
         "priority": "medium",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T16:19:47.443Z"
       },
       {
         "id": "59",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T15:58:18.391Z",
+      "lastModified": "2026-07-26T16:19:47.443Z",
       "taskCount": 84,
-      "completedCount": 51,
+      "completedCount": 52,
       "tags": [
         "master"
       ]

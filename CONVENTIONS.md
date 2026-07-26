@@ -14,6 +14,10 @@ doğrulanır; "gözle baktım oldu" geçersizdir.
 - [ ] İlgili E2E/smoke geçiyor — `pnpm -w test:e2e` (task'ın kapsadığı akış)
 - [ ] Task'ın kendi kabul kriteri (Task Master'daki test stratejisi / PRD FR KK) karşılandı
 - [ ] Yeni kod için test yazıldı (kapsam anlamlı; çıplak endpoint/servis testsiz kalmaz)
+- [ ] **PLAN.md gereksinim satırı güncellendi** — task'ın PRD kodundaki satır(lar) `⬜`/`◐` → `✅`
+      ve kanıt yazılı. Doğrulama: `grep -n '| <PRD kodu>' PLAN.md` çıktısındaki **durum damgalı**
+      satırlarda `⬜` kalmamalı. Bir task birden çok satır kapatıyorsa hepsi. Kısmen karşılandıysa
+      `◐` + eksik açıklaması doğru cevaptır; `✅` uydurmak bu kutuyu geçmez.
 
 > Not: repo script adları farklıysa `package.json`'daki gerçek script'leri kullan; yoksa
 > önce onları ekle. Kapı komutları repo büyüdükçe bu dosyada güncellenir.

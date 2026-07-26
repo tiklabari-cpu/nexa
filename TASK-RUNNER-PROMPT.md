@@ -10,8 +10,16 @@ Sırayla oku:
 2. `CONVENTIONS.md` — Definition of Done (DoD) kapısı, git kuralları, handoff formatı.
 3. Task Master'dan HEDEF TASK'ı çek (get_task / show): başlık, detay, test stratejisi, kabul
    kriteri, bağımlılıklar, alt-görevler.
-4. `git log --oneline -20` + `git status` — repo şu an nerede.
-5. Task'ın dokunacağı mevcut dosyalar.
+4. `PLAN.md` — **baştan sona OKUMA** (≈168 KB, bağlamı boşa harcar). Şu iki adımı yap:
+   a. Task başlığındaki iş kalemi kimliğini (ör. `11.7-a`) `### Düz tablo (aktarım kaynağı)`
+      bölümünde ara → `PRD` sütunu sana gereksinim kodunu verir (`11.7`). Eşleme burada
+      yazılıdır, tahmin etme.
+   b. O kodun gereksinim satır(lar)ını bul: `grep -n '| 11\.7' PLAN.md`. Senin hedefin
+      **durum damgası (`⬜`/`◐`/`✅`) taşıyan** satırlar; Düz tablo / dilim tablosu satırları
+      değil. Bir task birden çok satır kapatabilir (ör. `02.9-a` → hem `02.9` hem `11.8`).
+   §5'te bu satırları güncelleyeceksin — şimdi yalnız yerlerini ve mevcut durumlarını not al.
+5. `git log --oneline -20` + `git status` — repo şu an nerede.
+6. Task'ın dokunacağı mevcut dosyalar.
 
 ## 1) Resume kontrolü (yeniden deneme olabilir)
 Bu task daha önce yarım kalmış olabilir. ÖNCE mevcut durumu tespit et: ilgili dosyalar/branch
@@ -33,13 +41,23 @@ Kapı kırmızıysa düzelt ve yeniden doğrula. Bu pencerede makul sayıda dene
 tahmine dayalı "herhalde oldu" DEME.
 
 ## 5) Kapanış
-- **Kapı YEŞİL ise:**
-  1. `git add -A` → Conventional Commit (`feat(<alan>): ...` / `fix: ...`), CONVENTIONS'a uygun.
-  2. `git push` (task dalı → main; CONVENTIONS'taki branch kuralı).
-  3. Task Master'da task'ı **done** işaretle (set-status done); alt-görevler bittiyse onları da.
-  4. `HANDOFF.md`'ye kısa not ekle (CONVENTIONS formatı): ne yapıldı / varsayımlar / bir sonraki
+- **Kapı YEŞİL ise:** (sıra önemli — 1–2 dosya değişikliği, 3 onları commit'ler)
+  1. **`PLAN.md`'yi güncelle** — §0.4'te bulduğun gereksinim satır(lar)ının durum damgasını
+     `⬜`/`◐` → `✅` yap ve **kanıt** yaz: tabloda `Nerede` sütunu varsa oraya, yoksa (Faz-1
+     tabloları 4 sütunlu) `Durum` hücresinin içine, mevcut ✅ satırlarındaki biçimde:
+     ``✅ <ne yapıldı> — `<dosya>` · test `<dosya>` (n) · tm <id>``.
+     Task'ın kapattığı **her** satırı güncelle. Gereksinimi yalnız kısmen karşıladıysan `◐`
+     bırak ve eksiği yaz — kapanış uğruna `✅` UYDURMA.
+  2. `HANDOFF.md`'ye kısa not ekle (CONVENTIONS formatı): ne yapıldı / varsayımlar / bir sonraki
      pencere için notlar.
-  5. Son çıktı olarak JSON döndür: `{"status":"done","task_id":"<id>","summary":"<1 cümle>"}`.
+  3. `git add -A` → Conventional Commit (`feat(<alan>): ...` / `fix: ...`), CONVENTIONS'a uygun.
+     PLAN.md ve HANDOFF.md düzenlemeleri **bu commit'in içinde** olmalı — ayrı commit'e bırakma,
+     çalışma alanını kirli BIRAKMA.
+  4. `git push` (task dalı → main; CONVENTIONS'taki branch kuralı).
+  5. Task Master'da task'ı **done** işaretle (set-status done); alt-görevler bittiyse onları da.
+  6. `git status` ile son kontrol: çalışma alanı temiz olmalı. Değilse kalan değişikliği ya
+     commit'le ya da neden bırakıldığını HANDOFF'a yaz.
+  7. Son çıktı olarak JSON döndür: `{"status":"done","task_id":"<id>","summary":"<1 cümle>"}`.
 - **Kapı hâlâ KIRMIZI ise (düzeltemedin):**
   1. Bozuk kodu main'e MERGE ETME. İstersen WIP'i task dalına commit et.
   2. `HANDOFF.md`'ye BLOCKED notu: hangi adım, son hata mesajı, denenen çözümler.

@@ -514,8 +514,8 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 02.3.2     | Reply Suggestions çipleri                                                                              | Should (v1)    |                          ⬜                           |
 | 02.5       | Copilot özeti → internal note                                                                          | Should (v1)    |                          ⬜                           |
 | 02.7       | Tickets grid (sıralanabilir, deep-link)                                                                | Should (v1)    |                          ⬜                           |
-| 02.9       | Live typing preview                                                                                    | Should (v1)    |                          ⬜                           |
-| 03.1.3     | Ziyaretçi tablosu + satır aksiyonları                                                                  | Should (v1)    |                          ⬜                           |
+| 02.9       | Live typing preview                                                                                    | Should (v1)    | ✅ çift yönlü — ajan→ziyaretçi (`Composer.tsx` → `send_typing_indicator` → RTM `dispatcher.ts` #typing (chat yetki denetimli) → `TypingService.setAgentTyping` Redis TTL → Customer poll `/customer/chat` `agent_typing` → widget `renderTyping`) + ziyaretçi→ajan sneak-peek (widget `notifyTyping` → `POST /customer/chat/typing` → `chat-service.ts` `publishCustomerTyping` → `incoming_typing_indicator`/`incoming_sneak_peek` (yalnız ajanlara) → `useInbox.ts` → `TypingIndicator.tsx` önizleme) · şema `@nexa/types` `typingStateKey`/`SNEAK_PEEK_MAX_LENGTH` · test `typing.test.ts`(5)+`TypingIndicator.test.tsx`(4)+rtm `typing.test.ts`(6)+integration `customer-chat.test.ts` · OpenAPI `/customer/chat/typing` · tm 41 · §D30 |
+| 03.1.3     | Ziyaretçi tablosu + satır aksiyonları                                                                  | Should (v1)    | ✅ Live-visitor board — tablo Visitor/Activity/**Chatting with**/Actions; "Chatting with" insan kazanır > AI persona (ör. "Hazal", widget FR-11.3 ile aynı çözümleme) · salt-okur API `GET /traffic` (`routes/traffic.ts` scope customers:ro\|:rw → `traffic-service.ts` `listLive`; OpenAPI `paths/traffic.yaml`, contract-parity ✅) · web `TrafficPage.tsx` + saf `rowActions.ts` `visitorRowActions` (Start chat/Supervise/Assign to me/Edit, durum×yetki) · rota `/app/customers/real-time` · test integration `traffic.test.ts`(9)+unit `rowActions.test.ts`(8)+e2e `traffic.spec.ts` · tm 42 · §D32 |
 | 03.3.1–.3  | Campaigns (alt sekmeler, builder, kart)                                                                | Should (v1)    |               ⬜ `Campaign` modeli var                |
 | 04.2       | AI Agents (team tarafı) — performance                                                                  | Must (v1)      |                          ⬜                           |
 | 04.6       | Chatbots / Suspended agents sekmeleri                                                                  | Should (v1)    |                          ⬜                           |
@@ -537,8 +537,8 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 10.1.4     | AI resolutions meter + stepper                                                                         | Must (v1)      |             ◐ metering ✅ (ADR-13), UI ⬜             |
 | 10.1.5     | API calls (aşım paketi)                                                                                | Should (v1)    |                     ✅ tm 55                          |
 | 10.3       | Invoices + payment details yönetimi                                                                    | Should (v1)    |                     ✅ tm 56                          |
-| 11.7       | Widget customization (Appearance/Position/Mobile)                                                      | Should (v1)    |                          ⬜                           |
-| 11.8       | Typing indicator (sneak-peek)                                                                          | Could (v1)     |                          ⬜                           |
+| 11.7       | Widget customization (Appearance/Position/Mobile)                                                      | Should (v1)    | ✅ tema/renk/konum + mobil tam ekran + canlı önizleme + WCAG — license-singleton `widget_settings` (RLS+CHECK) · GET/PUT `/settings/widget` (`routes/settings.ts`, Zod+audit+upsert) · widget `applyAppearance` (`--nx-brand`/`data-nx-theme`/`.nx-left`/`.nx-mobile-full`+`@media(max-width:480px)`, mount + token'dan) · web `WidgetCustomization.tsx` **canlı preview** · çok dilli = I18N1/2 tr/en (tm 26) `data-language`→locale fallback (PRD "45+ dil" hedef, KK "çok dilli") · test `widget.appearance.test.ts`(9)/`loader.appearance.test.ts`(5)/`WidgetCustomization.test.tsx`(5)+integration `settings.test.ts` · OpenAPI `/settings/widget` · tm 57 · §D33 |
+| 11.8       | Typing indicator (sneak-peek)                                                                          | Could (v1)     | ✅ ziyaretçi→ajan sneak-peek (11.8 KK) — widget `notifyTyping` → `POST /customer/chat/typing` (`SNEAK_PEEK_MAX_LENGTH`) → `chat-service.ts` `publishCustomerTyping` → `incoming_sneak_peek` **yalnız ajanlara** → `useInbox.ts` → `TypingIndicator.tsx` önizleme metni · aynı tm 41 bundle'ı (`+11.8`, 02.9 satırı ile ortak kod) · test integration `customer-chat.test.ts` (sneak-peek yalnız-ajana fan-out, metin doğrulanır) + web `typing.test.ts`(5)/`TypingIndicator.test.tsx`(4) + rtm `typing.test.ts`(6) · OpenAPI `/customer/chat/typing` · tm 41 · §D31 |
 | 12.1–12.3  | **Copilot** (buton, ayrı KB, özet + yanıt yardımı)                                                     | Should (v1)    |                          ⬜                           |
 | 13.1       | Home dashboard                                                                                         | Should (v1)    |                          ⬜                           |
 | 13.6       | Omnichannel Ticketing / HelpDesk katmanı                                                               | Should (v1)    |                          ⬜                           |
@@ -1829,6 +1829,80 @@ görüneceği en son yerdir.
   (rapor=fatura). DoD kapısı bu tur yeşil: typecheck/lint/build exit 0 · unit web 277/277 · integration
   581/581 · e2e `reports.spec.ts` 2/2 (AI Agent sekmesi). → §4.4'te 07.4 `⬜`→`✅`. Not: 06.5-a aynı
   `/reports/ai-agent` sorgusunu AI Performance ekranında tüketir (ayrı satır — dokunulmadı).
+
+- **D30 (02.9-a · tm 41 · 2026-07-26 · koda karşı doğrulandı):** §4.3 satırı 02.9'u `⬜` (Nerede boş)
+  gösteriyordu ama tm 41 (`done`) Live typing preview'i çift yönlü tam teslim etmiş — çelişki tm 41
+  kapanışında DoD-8 (PLAN satırı güncelleme) atlanmasıydı. FR-MOD-02.9 KK'sı _"RTM `sender_typing`/
+  `send_typing_indicator`; sneak-peek (müşteri yazarken)"_ (+11.8) iki yönde de kodda karşılanıyor:
+  **(1) ajan→ziyaretçi** — `Composer.tsx` `signalTyping` → `realtime.ts` `send_typing_indicator` → RTM
+  `dispatcher.ts` #typing (`TypingService.canType` chat-yetki denetimi, erişilemeyen chat = `not_found`)
+  → `setAgentTyping` Redis TTL bayrağı → widget'ın `/customer/chat` poll'u `agent_typing` okur →
+  `renderTyping`. **(2) ziyaretçi→ajan (sneak-peek)** — widget `notifyTyping` (throttle + `blur`/send'de
+  `stopTyping`) → `POST /customer/chat/typing` (`SNEAK_PEEK_MAX_LENGTH` sınırlı) → `chat-service.ts`
+  `publishCustomerTyping` → `incoming_typing_indicator` + `incoming_sneak_peek` **yalnız ajanlara**
+  (ziyaretçiye asla echo) → `useInbox.ts` → `TypingIndicator.tsx` önizleme metni. Kontrat
+  `/customer/chat/typing` OpenAPI'de (contract-parity yeşil). **Test (bu tur çalıştırıldı):** web
+  `typing.test.ts` (5) + `TypingIndicator.test.tsx` (4) = 9/9 yeşil · rtm `typing.test.ts` 6/6 yeşil ·
+  integration `customer-chat.test.ts` "live typing preview" (sneak-peek yalnız-ajana fan-out). Done
+  görev geri açılmadı. → §4.3'te 02.9 `⬜`→`✅` + Nerede kanıtı yazıldı. **Kapsam notu:** 11.8 (§4.3
+  satır 541, "Could") aynı tm 41'in bundle'ıdır (`+11.8`) ve aynı sneak-peek koduyla karşılanır; bu
+  pencere yalnız 02.9'a kapsamlandığından 541 satırına DOKUNULMADI — ikiz `⬜`/done çelişkisi ayrı bir
+  düzeltme penceresine bırakıldı.
+
+- **D31 (11.8 · tm 41 · 2026-07-26 · koda karşı doğrulandı):** §4.3 satırı 541 (11.8 "Typing indicator
+  (sneak-peek)", Could) `⬜` (Nerede boş) gösteriyordu — D30'un açıkça bıraktığı ikiz çelişki. FR-MOD-11.8
+  KK'sı _"müşteri yazarken ajana önizleme; RTM sneak-peek; ajan müşteri yazarken görür"_ tam olarak
+  ziyaretçi→ajan sneak-peek yoludur ve kodda uçtan uca karşılanıyor: widget `notifyTyping` (throttle +
+  `blur`/send'de `stopTyping`) → `api.typing(true, text)` → `POST /customer/chat/typing` (`typingSchema`,
+  `SNEAK_PEEK_MAX_LENGTH` sınırı) → `chat-service.ts` `publishCustomerTyping` → `incoming_typing_indicator`
+  + `incoming_sneak_peek` **yalnız ajanlara** (`recipients: 'agents'`, ziyaretçiye asla echo; audience yoksa
+  no-op) → agent `useInbox.ts` (`incoming_sneak_peek` aboneliği) → `useTypingStore.noteCustomer` →
+  `TypingIndicator.tsx` önizleme metni. Kontrat `/customer/chat/typing` OpenAPI'de + generated `api.ts`
+  (contract-parity yeşil). **Test (bu tur çalıştırıldı):** rtm `typing.test.ts` 6/6 · web `typing.test.ts`(5)
+  + `TypingIndicator.test.tsx`(4) = 9/9; integration `customer-chat.test.ts` "live typing preview" sneak-peek
+  metnini (`'my order is la'`) yalnız-ajana fan-out olarak doğrular (D30 bu turda aynı tm 41 kodu için yeşil
+  koştu; kod değişmedi). tm 41 (`done`) geri açılmadı — yeni görev gerekmedi (iş bitmiş). → 541 `⬜`→`✅` +
+  Nerede kanıtı yazıldı. Yalnız bu satıra dokunuldu.
+
+- **D32 (03.1.3 · tm 42 · 2026-07-26 · koda karşı doğrulandı):** §4.3 satırı 518 (03.1.3 "Ziyaretçi
+  tablosu + satır aksiyonları", Should/v1) `⬜` (Nerede boş) gösteriyordu ama tm 42 (`done`, HANDOFF #42)
+  canlı-ziyaretçi panosunu tam teslim etmiş — çelişki tm 42 kapanışında DoD-8 (PLAN satırı güncelleme)
+  atlanmasıydı (HANDOFF açıkça "PLAN.md'ye DOKUNMADIM" notu düşmüş: dalda ilgisiz, commit edilmemiş bir D28
+  düzenlemesiyle aynı dosyada entangle etmemek için bırakılmış). FR-MOD-03.1.3 KK'sı _"Proaktif temas;
+  'Chatting with' insan+AI ajanı gösterir (ör. 'Hazal AI')"_ kodda uçtan uca karşılanıyor: salt-okur
+  `GET /traffic` (`routes/traffic.ts`, scope `customers:ro|:rw`; org+license süzme + RLS izolasyon) →
+  `traffic-service.ts` `listLive` aktif sohbeti olan ∪ son 30 dk ziyaret eden müşterileri kişi başı tek
+  satıra birleştirir, `activity` ∈ browsing/queued/waiting/chatting; **"Chatting with"** çekirdek KK'sını
+  insan atanmış→`{kind:'human'}`, yoksa aktif AI persona→`{kind:'ai'}` (ör. "Hazal") olarak çözer — insan
+  kazanır, widget başlığı FR-11.3 ile aynı çözümleme. Web `TrafficPage.tsx` (Customers başlığı + `CustomersTabs`
+  Contacts|Real-time, rota `/app/customers/real-time`) tablo kolonları Visitor/Activity/**Chatting with**/Actions;
+  saf `rowActions.ts` `visitorRowActions` satır aksiyonlarını durum×yetki ile üretir (Start chat/Supervise/
+  Assign to me/Edit; uygulanmayan aksiyon `enabled:false`, gizlenmez). Kontrat `paths/traffic.yaml` OpenAPI'de +
+  generated `api.ts` (contract-parity yeşil). **DoD kapısı (bu tur çalıştırıldı — hepsi exit 0):** typecheck
+  ✅ (11/11) · lint ✅ (8/8) · unit ✅ web 295/295 (incl `rowActions.test.ts` 8) · integration ✅ 670/670
+  (incl `traffic.test.ts` 9 [isolation / scope-red / browsing / live-window / human / ai-"Hazal" / human-wins /
+  queued / limit] + `contract-parity` 5) · build ✅ (7/7); e2e `traffic.spec.ts` tm 42 kapanışında yeşildi ve
+  bu tur yalnız markdown düzenlemesi yapıldığından etkilenmez. tm 42 (`done`) geri açılmadı — yeni görev
+  gerekmedi (iş bitmiş). → §4.3'te 518 `⬜`→`✅` + Nerede kanıtı yazıldı. Yalnız bu satıra dokunuldu (186/737/
+  1035/1107'deki 03.1.3 toplu/backlog satırları başka gereksinimlerle bundle olduğundan kapsam dışı).
+
+- **D33 (11.7-a · tm 57 · 2026-07-26 · koda karşı doğrulandı):** §4.3 satırı 540 (11.7 "Widget
+  customization", Should/v1) `⬜` (Nerede boş) gösteriyordu ama tm 57 (`done`, commit `505cbbf`) widget
+  görünüm özelleştirmesini tam teslim etmiş — çelişki tm 57 kapanışında PLAN satırının güncellenmemesiydi.
+  FR-MOD-11.7 KK'sı _"Tema/renk/konum; mobil tam ekran; çok dilli; WCAG"_ (§4.4.12 planı ile birebir) kodda
+  uçtan uca karşılanıyor: license-singleton `widget_settings` (RLS + CHECK) → GET/PUT `/settings/widget`
+  (`routes/settings.ts`, scope `access_rules:ro|rw`, Zod + audit + upsert) → snippet görünümü bake eder,
+  customer-token yanıtı taşır; widget `applyAppearance` renk (`--nx-brand`), tema (`data-nx-theme`), konum
+  (`.nx-left`), mobil tam ekran (`.nx-mobile-full` + `@media(max-width:480px)`) uygular (mount + token'dan
+  yeniden). Web `WidgetCustomization.tsx` kontroller + **canlı önizleme**. "Çok dilli" = proje i18n kararı
+  I18N1/2 (tm 26) tr/en katalog + `data-language`→locale fallback zinciri (widget `createTranslator`); PRD
+  özellik sütunundaki "45+ dil" bir hedeftir, kabul kriteri (KK) "çok dilli"dir ve karşılanıyor. WCAG:
+  `:focus-visible`/`aria-live`/`role`/`prefers-reduced-motion`/`color-scheme`. **DoD kapısı (bu tur
+  çalıştırıldı):** widget unit `widget.appearance.test.ts` (9) + `loader.appearance.test.ts` (5) ✅ · web
+  `WidgetCustomization.test.tsx` (5) ✅ — KK "unit (tema uygular)" doğrulaması yeşil; integration
+  `settings.test.ts` (49) + bundle P3 bütçesi tm 57 kapanışında yeşildi ve bu tur yalnız markdown düzenlemesi
+  yapıldığından etkilenmez. tm 57 (`done`) geri açılmadı — yeni görev gerekmedi (iş bitmiş). → §4.3'te 540
+  `⬜`→`✅` + Nerede kanıtı yazıldı. Yalnız bu satıra dokunuldu.
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

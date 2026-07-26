@@ -1291,11 +1291,11 @@
         "description": "İzin bazlı görünürlük + CSV export. PRD 07.7 (Should). PDF/benchmark v2.",
         "details": "07.7-a Rapor grupları + Export (CSV). [XHIGH] PRD 07.7 (Should v1-v2).\nKAPSAM: izin bazlı görünürlük + CSV export.\nKK (birebir): \"İzin bazlı görünürlük; export; benchmark karşılaştırma\". KAPSAM DIŞI: PDF/benchmark (v2). BAĞLAM: PLAN §4.4.8.",
         "testStrategy": "integration: CSV export + izin gating. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T09:18:52.101Z"
       },
       {
         "id": "47",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T08:42:43.632Z",
+      "lastModified": "2026-07-26T09:18:52.102Z",
       "taskCount": 84,
-      "completedCount": 41,
+      "completedCount": 42,
       "tags": [
         "master"
       ]

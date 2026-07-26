@@ -5,7 +5,7 @@
  * which lives inside the not-errored branch — renders in isolation.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
@@ -21,7 +21,7 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
 });
 
 // Imported after the mock so the components pick up the stubbed client.
-const { CannedResponses, Tags, TicketRules } = await import('./SettingsPage.js');
+const { CannedResponses, Tags, TicketRules, TicketEmailTemplates } = await import('./SettingsPage.js');
 
 function renderComponent(ui: ReactElement): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -88,5 +88,42 @@ describe('TicketRules validation', () => {
     await userEvent.click(subject);
     await userEvent.tab(); // blur the empty field
     expect(screen.getByText('Enter the text the subject must contain.')).toBeInTheDocument();
+  });
+});
+
+describe('TicketEmailTemplates validation (FR-MOD-08.7.5)', () => {
+  // fireEvent sets the raw value: user-event treats `{{` as an escape for a
+  // literal `{`, which would fight the very braces these fields are about.
+  it('keeps Add template disabled until name, subject and body are valid', async () => {
+    renderComponent(<TicketEmailTemplates canEdit />);
+    const submit = await screen.findByRole('button', { name: 'Add template' });
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(screen.getByPlaceholderText('Ticket received'), 'Ack');
+    fireEvent.change(screen.getByPlaceholderText(/We received your ticket/), {
+      target: { value: 'Ticket {{ticket.id}}' },
+    });
+    expect(submit).toBeDisabled(); // body still empty
+
+    fireEvent.change(screen.getByPlaceholderText(/^Hi /), {
+      target: { value: 'Hi {{customer.name}}' },
+    });
+    expect(submit).toBeEnabled();
+  });
+
+  it('shows a field-under error and blocks submit on an unknown variable (KK)', async () => {
+    renderComponent(<TicketEmailTemplates canEdit />);
+    const submit = await screen.findByRole('button', { name: 'Add template' });
+    await userEvent.type(screen.getByPlaceholderText('Ticket received'), 'Ack');
+    fireEvent.change(screen.getByPlaceholderText(/We received your ticket/), {
+      target: { value: 'Hello' },
+    });
+
+    const body = screen.getByPlaceholderText(/^Hi /);
+    fireEvent.change(body, { target: { value: 'Hi {{customer.foo}}' } });
+    fireEvent.blur(body);
+
+    expect(screen.getByText(/Unknown variable/)).toBeInTheDocument();
+    expect(submit).toBeDisabled();
   });
 });

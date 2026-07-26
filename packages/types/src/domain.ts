@@ -341,3 +341,22 @@ export interface TicketRule {
   position: number;
   created_at: string;
 }
+
+/**
+ * A branded, variabled ticket e-mail template (FR-MOD-08.7.5). `subject` and
+ * `body` may carry `{{ group.field }}` placeholders drawn from the fixed
+ * `TEMPLATE_VARIABLES` catalogue; both are validated on save so a template can
+ * never be stored naming a variable the product cannot fill (KK "Geçersiz
+ * değişken/format engeli"). The placeholder catalogue, validator and renderer
+ * live in `template-variables.ts`.
+ */
+export interface TicketEmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  /** Whether the template is offered to agents. Off keeps it authored but hidden. */
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}

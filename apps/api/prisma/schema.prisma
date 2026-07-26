@@ -76,6 +76,7 @@ model License {
   workflows         Workflow[]
   routingRules      RoutingRule[]
   ticketRules       TicketRule[]
+  ticketEmailTemplates TicketEmailTemplate[]
   channels          Channel[]
   channelIdentities ChannelIdentity[]
   channelMessages   ChannelMessage[]
@@ -511,6 +512,29 @@ model TicketRule {
 
   @@index([licenseId, enabled, position])
   @@map("ticket_rules")
+}
+
+/// Branded, variabled ticket e-mail template (FR-MOD-08.7.5): reusable subject +
+/// body a workspace authors once, carrying `{{ group.field }}` placeholders
+/// filled in per ticket at send time. Both halves are validated against the
+/// fixed variable catalogue on every save, so a template can never be stored
+/// naming a variable the product cannot fill (KK "Geçersiz değişken/format
+/// engeli"). License-scoped like ticket rules; RLS narrows every row to its
+/// workspace.
+model TicketEmailTemplate {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  name      String
+  subject   String
+  body      String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, createdAt])
+  @@map("ticket_email_templates")
 }
 
 model ThreadTag {

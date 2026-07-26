@@ -223,6 +223,10 @@ paths:
     $ref: "./paths/ticket-rules.yaml#/ticketRules"
   /settings/ticket-rules/{ruleId}:
     $ref: "./paths/ticket-rules.yaml#/ticketRule"
+  /settings/ticket-email-templates:
+    $ref: "./paths/ticket-email-templates.yaml#/ticketEmailTemplates"
+  /settings/ticket-email-templates/{templateId}:
+    $ref: "./paths/ticket-email-templates.yaml#/ticketEmailTemplate"
   /settings/security:
     $ref: "./paths/settings.yaml#/securitySettings"
   /settings/chat-timeout:
@@ -1200,6 +1204,25 @@ components:
           type: integer
           description: Evaluation order; lower runs first, so a later rule's assignment wins.
         created_at: { type: string, format: date-time }
+
+    TicketEmailTemplate:
+      type: object
+      description: |
+        A branded, variabled ticket e-mail template (FR-MOD-08.7.5). The subject
+        and body may carry `{{ group.field }}` placeholders from the fixed
+        variable catalogue; both are validated on save, so a stored template can
+        never name a variable the product cannot fill.
+      required: [id, name, subject, body, enabled, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        subject: { type: string }
+        body: { type: string }
+        enabled:
+          type: boolean
+          description: Whether agents may pick the template. Off keeps it authored but hidden.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     Session:
       type: object

@@ -6,6 +6,40 @@
 
 ## Task log (newest-first)
 
+### 50 — 08.7.5-a · Ticket email templates (markalı, değişkenli) `[XHIGH]` — done — 2026-07-26 UTC
+
+- Kapsam: FR-MOD-08.7.5 (`Should v1`) — markalı, değişkenli ticket e-posta şablonu; geçersiz
+  değişken/format engeli. KK (birebir) _"Geçersiz değişken/format engeli"_, doğrulama
+  _"unit (geçersiz değişken → hata)"_. Bağımlılık tm 29 (T4-a, form-primitifi, ✅). PLAN satır 534
+  (08.7.5) → `✅` + §D45.
+- **Resume:** iş bu pencereden önce çalışma ağacında hazırdı (contract+migration+backend+frontend+
+  testler yazılıydı; DB'ye migration uygulanmış, Prisma client üretilmişti). Bu pencere sıfırdan
+  yapmadı → DoD kapısını koştu, PLAN/HANDOFF'u kapadı, commit+push+done.
+- Yapıldı (mevcut çalışmanın doğrulanıp kapatılması):
+  - **Paylaşımlı katalog/doğrulayıcı/renderer** `packages/types/src/template-variables.ts` —
+    `TEMPLATE_VARIABLES` (tek doğruluk kaynağı; form ve endpoint aynı listeyle "geçerli" der),
+    `findTemplateProblems`/`findTemplateProblemsIn` (bilinmeyen değişken → `unknown_variable`;
+    boş/kötü-adlı/dengesiz/iç-içe brace → `malformed`), `renderTemplate` (bağlamda olmayan değişken
+    boş; ham brace bırakmaz). Unit `template-variables.test.ts`(15).
+  - **Servis** `services/tickets/ticket-email-template-service.ts` — `assertPlaceholdersValid` her
+    create + subject/body dokunan her edit'te (KK enforcement); license-scoped CRUD (id-tek-başına
+    başka tenant'a erişemez). **Model** `ticket_email_templates` (migration `20260726190000`, RLS
+    policy ALL + GRANT nexa_app — ticket_rules deseni). **Rota** `/settings/ticket-email-templates`
+    (`tickets--all:ro`/`:rw`). Integration `ticket-email-templates.test.ts`(10).
+  - **Web** `SettingsPage.tsx` `TicketEmailTemplates` — canlı alan-altı hata (aynı `@nexa/types`
+    kataloğu), Submit geçerli olana dek kapalı, optimistik enable/disable. `SettingsForms.test.tsx` +2.
+  - **Contract/tip** OpenAPI `TicketEmailTemplate` + 2 yol · `@nexa/types` `TicketEmailTemplate` DTO
+    + `template-variables.ts` export. Bundle yeniden üretildi (contract-parity yeni yolları tanıyor).
+- Doğrulama (bu pencere, exit 0): typecheck 11/11 · lint 8/8 · build 7/7 · test:unit (types 15 +
+  web 430 incl. yeni +2) · test:integration api **754** (36 dosya; yeni 10 + contract-parity 5/5),
+  `--concurrency=1` ([[nexa-test-gate-parallel-db]]). **E2E:** `settings.spec.ts` **10 geçti** (yeni
+  bölüm mevcut akışları bozmadı); aynı dosyadaki 2 `composer shortcuts` testi **önceden kırık**
+  (canlı visitor→agent RTM routing bu sandbox'ta çalışmıyor) — `git stash` ile tracked değişiklikler
+  çıkarılıp baseline'da aynı 2 test birebir aynı hatayla düştü → değişikliğimden bağımsız (D43 emsali).
+- Sonraki pencereye not: `.parked-playbook/` (skill-browser: RecommendedSkills/SkillBrowser/
+  skill-filters) bu task'a **ait değil**, önceki park edilmiş iş — commit'e alınmadı, çalışma ağacında
+  duruyor. RTM canlı-chat e2e (composer/demo-flow) sandbox'ta önceden kırık; ayrı bir sorun.
+
 ### 49 — 08.7.4-a · Chat transcripts (otomatik e-posta) `[XHIGH]` — done — 2026-07-26 UTC
 
 - Kapsam: FR-MOD-08.7.4 (`Should v1`) — bitişte müşteri/ekibe transcript e-postası. KK (birebir)

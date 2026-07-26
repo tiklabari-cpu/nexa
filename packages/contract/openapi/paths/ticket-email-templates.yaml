@@ -1,0 +1,118 @@
+# Ticket e-mail templates — branded, variabled ticket mail (FR-MOD-08.7.5).
+#
+# A template is reusable subject + body text a workspace authors once, carrying
+# `{{ group.field }}` placeholders filled in per ticket at send time. Both halves
+# are validated on save against the fixed variable catalogue: a template naming a
+# variable the product cannot fill, or a malformed placeholder, is rejected
+# rather than stored (KK "Geçersiz değişken/format engeli").
+#
+# Managed under /settings alongside ticket rules and the tag library, on the
+# tenant-wide ticket scopes: reads take `tickets--all:ro`, writes
+# `tickets--all:rw` — configuring the mail every ticket can send is an admin act.
+
+ticketEmailTemplates:
+  get:
+    tags: [Tickets]
+    operationId: listTicketEmailTemplates
+    summary: List ticket e-mail templates
+    description: In authoring order — oldest first.
+    responses:
+      "200":
+        description: The ticket e-mail templates
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/TicketEmailTemplate" }
+                total: { type: integer }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Tickets]
+    operationId: createTicketEmailTemplate
+    summary: Create a ticket e-mail template
+    description: |
+      The subject and body may carry `{{ group.field }}` placeholders. Both are
+      validated against the variable catalogue (FR-MOD-08.7.5): a placeholder
+      naming an unknown variable, or a malformed `{{…}}`, is a 400 rather than a
+      stored template that would render broken mail.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, subject, body]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              subject: { type: string, minLength: 1, maxLength: 200 }
+              body: { type: string, minLength: 1, maxLength: 10000 }
+              enabled:
+                type: boolean
+                description: Whether agents may pick the template; defaults to true.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketEmailTemplate" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ticketEmailTemplate:
+  parameters:
+    - name: templateId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Tickets]
+    operationId: updateTicketEmailTemplate
+    summary: Edit a ticket e-mail template or toggle it on/off
+    description: |
+      Only the fields present in the body change. A changed subject or body is
+      re-validated against the variable catalogue, so an edit can no more
+      introduce an invalid placeholder than a create can.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              subject: { type: string, minLength: 1, maxLength: 200 }
+              body: { type: string, minLength: 1, maxLength: 10000 }
+              enabled: { type: boolean }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketEmailTemplate" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Tickets]
+    operationId: deleteTicketEmailTemplate
+    summary: Delete a ticket e-mail template
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

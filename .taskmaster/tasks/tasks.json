@@ -874,7 +874,7 @@
         "description": "AI Agent backend var, UI kısmi. Şablon galerisi/reorder/crawl/profile/performance eksik. PRD MOD-06 (v1).",
         "details": "PARENT [MAX]. 06 AI Agent + Knowledge tamamlama. AiAgent şeması persona/tone/languages/name/avatarUrl VAR;\nPATCH /ai-agents/:id served. 6 subtask (2'si [MAX]: reorder a11y + KB crawl SSRF). Bağlam: PLAN §4.4.2.",
         "testStrategy": "Subtask bazlı; [MAX] subtask'larda negatif testler pozitiften ÖNCE.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -884,13 +884,13 @@
             "description": "Performance/Profile/Skills/Knowledge sekme kabuğu + readiness. PRD 06.1 (Must).",
             "details": "06.1-a AI Agent sekmeleri (Performance/Profile/Skills/Knowledge) + readiness check. [XHIGH] PRD 06.1 (Must).\nNEDEN AÇIK: UI Skills+Knowledge gösteriyor ama sekmeli AI Agent üst yapısı + readiness uyarısı yok.\nKAPSAM: sekme kabuğu; KB/skill boşsa 'AI'ı açma' uyarısı.\nKK (birebir): \"Tek yerde persona+yetenek+bilgi+performans; readiness check (KB/skill boşsa açma uyarısı)\".\nBAĞLAM: PLAN §4.4.2. Bağımlılık: 33.5 (Profile) + 33.6 (Performance).",
             "testStrategy": "unit: boş KB+skill → readiness uyarısı + aktive engeli. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               5,
               6
             ],
             "parentId": "33",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T00:04:00.066Z"
           },
           {
             "id": 2,
@@ -898,10 +898,10 @@
             "description": "Reorder + klavye alternatifi (NFR-A11Y4) + zorunlu param. PRD 06.2.4 (Must).",
             "details": "06.2.4-a Ordered steps: drag reorder + klavye alternatifi. [MAX] ↑ PRD 06.2.4 · NFR-A11Y4.\n↑ GEREKÇE: NFR-A11Y4 'sürükle-bırak yeniden sıralamaya klavye alternatifi' kaynakta eksik, Nexa kritik — a11y\nsınırı + skill sırası davranışı.\nNEDEN AÇIK: adımlar var (SkillEditor.tsx) ama reorder yok (grep 0); klavye alternatifi yok.\nKAPSAM: adım reorder (drag) + klavye ile taşıma (yukarı/aşağı + ARIA duyuru); zorunlu param (transfer hedefi) boşsa hata.\nKK (birebir): \"Her adım araç çağrısı; drag reorder (+ klavye alternatifi); zorunlu parametre (ör. transfer hedefi) boşsa hata\".\nBAĞLAM: PLAN §4.4.2.",
             "testStrategy": "unit: klavye reorder sıra değiştirir; NEGATİF (önce): transfer hedefi boş → kaydetme reddi. a11y: odak+duyuru. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "33",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T00:04:00.079Z"
           },
           {
             "id": 3,
@@ -909,10 +909,10 @@
             "description": "All/Websites/Files/Articles/FAQ tür filtre. PRD 06.3.1 (Must).",
             "details": "06.3.1-a Knowledge alt sekmeler (All/Websites/Files/Articles/FAQ). [XHIGH] PRD 06.3.1 (Must).\nKAPSAM: tür bazlı filtre sekmeleri (KnowledgeSource.type).\nKK (birebir): \"Tür bazlı filtre\". BAĞLAM: PLAN §4.4.2.",
             "testStrategy": "unit: her sekme doğru tür. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "33",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T00:04:00.090Z"
           },
           {
             "id": 4,
@@ -920,10 +920,10 @@
             "description": "Website crawl+parse + geçersiz URL/tür reddi + SSRF guard. PRD 06.3.2 (Must).",
             "details": "06.3.2-a + New source: Website crawl + geçersiz URL/tür reddi. [MAX] ↑ PRD 06.3.2 · NFR-S7-benzeri.\n↑ GEREKÇE: dış URL çekme = SSRF yüzeyi (private/loopback reddi, redirect kapalı) — 08.8.4 ile aynı sınır.\nNEDEN AÇIK: POST /knowledge-sources yalnız verilen content'i indeksliyor (routes/playbook.ts:340); website crawl yok.\nKAPSAM: Website türü için crawl+parse (mock fetcher, deterministik) → chunk+embedding; geçersiz URL/tür reddi;\nSSRF guard (private/loopback/link-local reddi). ORTAK: lib/ssrf.ts 08.8.4-c ile paylaşılır.\nKK (birebir): \"Geçersiz URL/tür reddi; crawl/parse; RAG indeksleme; bulk/CSV import (Nexa)\".\nKAPSAM DIŞI: bulk/CSV (ayrı Should). BAĞLAM: PLAN §4.4.2, §7.2 S7.",
             "testStrategy": "integration: crawl → chunk >0; geçersiz URL → 4xx. SSRF NEGATİF (önce): 127.0.0.1/10.x/169.254.169.254/localhost/file:// → reddedilir. cross-tenant. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "33",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T00:04:00.092Z"
           },
           {
             "id": 5,
@@ -931,10 +931,10 @@
             "description": "Name/Avatar/Tone/Language/Answer length → PATCH; canlı preview. PRD 06.4 (Must).",
             "details": "06.4-a Profile (persona: Name/Avatar/Tone/Language/Answer length) UI + canlı preview. [XHIGH] PRD 06.4 (Must).\nNEDEN AÇIK: AiAgent şemasında persona/tone/languages/name/avatarUrl var, PATCH /ai-agents/:aiAgentId served\n(playbook.ts:110); Profile düzenleme UI'ı yok (yalnız okunuyor).\nKAPSAM: Profile formu (isim zorunlu, avatar, tone, language çoklu, answer length) → PATCH; canlı preview;\nwidget persona'ya bağlanır (11.3 ✅).\nKK (birebir): \"Widget'ta persona görünür; çok dilli; zorunlu isim\".\nBAĞLAM: PLAN §4.4.2. Bağımlılık: form deseni (tm 29).",
             "testStrategy": "unit: zorunlu isim boş → submit pasif. integration: PATCH persist. E2E: persona widget'ta görünür. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "33",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T00:04:00.094Z"
           },
           {
             "id": 6,
@@ -942,13 +942,13 @@
             "description": "Resolution/CSAT/Transferred + düşük-baz uyarısı. PRD 06.5 (Should).",
             "details": "06.5-a Performance (Resolution/AI chats/CSAT/Transferred %) + düşük-baz uyarısı. [XHIGH] PRD 06.5 (Should).\nKAPSAM: KPI kartları (mevcut reports sorgularından, ADR-09); düşük-baz uyarısı; AI-off arşiv ayrımı.\nKK (birebir): \"KPI kartları; düşük-baz uyarısı; AI off iken arşiv ayrımı\".\nBAĞLAM: PLAN §4.4.2. tm 44 (07.4-a) ile paylaşımlı sorgu.",
             "testStrategy": "unit: düşük-baz → uyarı; sayılar reports=fatura (ADR-09). DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "33",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T00:04:00.096Z"
           }
         ],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T00:04:00.096Z"
       },
       {
         "id": "34",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-25T23:09:26.730Z",
+      "lastModified": "2026-07-26T00:04:00.096Z",
       "taskCount": 84,
-      "completedCount": 32,
+      "completedCount": 33,
       "tags": [
         "master"
       ]

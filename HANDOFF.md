@@ -6,6 +6,52 @@
 
 ## Task log (newest-first)
 
+### 33 — 06 · AI Agent + Knowledge tamamlama [MAX] — done — 2026-07-26 UTC
+- Yapıldı (6 alt-görev, contract-first):
+  - **06.1-a Sekmeler + readiness:** `PlaybookPage` artık tek "AI Agent" yüzeyi —
+    `role=tablist` (Performance/Profile/Skills/Knowledge; landing = Skills, E2E uyumu için).
+    Saf `readiness.ts` (`evaluateReadiness`): KB **ve** skill boşsa "not ready" → ajan kartında
+    "Resume" **pasif** + gerekçe uyarısı. Skills görünümü eski liste/filtre/editor'ü aynen taşır.
+  - **06.2.4-a Ordered steps [MAX]:** `step-reorder.ts` (`moveStep` + `describeMove` +
+    `stepIssues`). SkillEditor adımları **drag** + **klavye** (↑/↓, `aria-label`, `aria-live`
+    duyuru; adımlar stabil id ile anahtarlanıp odak taşınır). `transfer_to_team` için **düzenlenebilir
+    Team alanı**; zorunlu param boşsa satır-altı hata + **Save pasif** ("Fix N steps").
+  - **06.3.1-a Knowledge alt-sekmeler:** `knowledge-tabs.ts` (All/Websites/Files/Articles/FAQ tür
+    partisyonu) → KnowledgePanel'de sekme şeridi + sayaçlar.
+  - **06.3.2-a Website crawl + SSRF [MAX]:** `lib/ssrf.ts` (`assertPublicHttpUrl` — http/s dışı,
+    kimlik, private/loopback/link-local/CGNAT/mapped-IPv6/`localhost` reddi; **08.8.4-c ile paylaşılacak
+    ortak modül**). `services/ai/web-crawler.ts` (deterministik mock fetcher + gerçek HTML→text parse).
+    `POST /knowledge-sources` genişletildi: `type=website` → SSRF guard (tx dışında) → crawl → chunk+embed;
+    `source_url` saklanır; içerik/URL `type`'a göre superRefine ile zorunlu.
+  - **06.4-a Profile (persona):** GET/PATCH `/ai-agents` persona alanlarını açar
+    (`avatar_url`/`languages[]`/`answer_length` → persona JSON'a **merge**, imza korunur). `ProfileForm.tsx`
+    (zorunlu isim → Save pasif; canlı persona önizleme). Widget persona'yı zaten okuyor (11.3).
+  - **06.5-a Performance:** `performance.ts` (`/reports/ai-agent`+overview'dan KPI; **düşük-baz uyarısı**;
+    ADR-09 = fatura ile aynı sayı). `AiPerformance.tsx` (Kpi kartları; AI-off → "historical" ayrımı;
+    `reports_read` yoksa erişim mesajı).
+  - **Kontrat:** `openapi.yaml` (AiAgent persona alanları, KnowledgeSource `source_url`) + `playbook.yaml`
+    (updateAiAgent/createKnowledgeSource gövdeleri) güncellendi, generated types + bundle yeniden üretildi
+    (parity path-düzeyinde korunur — yeni endpoint yok, mevcut genişletildi).
+- KK (birebir): 06.1 "tek yerde persona+yetenek+bilgi+performans; readiness" ✅ · 06.2.4 "drag reorder
+  + klavye; zorunlu param boşsa hata" ✅ · 06.3.1 "tür bazlı filtre" ✅ · 06.3.2 "geçersiz URL/tür reddi;
+  crawl/parse; RAG indeksleme" ✅ (bulk/CSV kapsam dışı) · 06.4 "widget'ta persona; çok dilli; zorunlu
+  isim" ✅ · 06.5 "KPI kartları; düşük-baz uyarısı; AI off arşiv ayrımı" ✅.
+- **Test (yeni):** web unit +6 dosya (readiness/knowledge-tabs/step-reorder/performance saf + ProfileForm/
+  AiPerformance/SkillEditor bileşen) → web unit **251**. api unit +2 (ssrf/web-crawler) → **109**.
+  integration +2 (ai-agent-profile 6, knowledge-crawl 11 — **SSRF negatifleri pozitiften önce** +
+  cross-tenant) → **524**. E2E +1 (`ai-agent.spec`: sekmeler + persona round-trip + website crawl) → **53**.
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` · `pnpm -w test:unit` ·
+  `pnpm -w test:integration` (**524**, contract-parity dahil) · `pnpm -w test:e2e` (**53/53**).
+- Varsayımlar: `answer_length` şemada ayrı kolon değil → persona JSON'da (`answerLength`). Website fetcher
+  MOCK (deterministik, ağ yok) — SSRF guard yine de URL'i doğrular; **gerçek fetcher DNS-rebinding için
+  çözümlenen IP'yi de tekrar kontrol etmeli** (ssrf.ts'te not var).
+- Sonraki pencereye not:
+  - **E2E temiz DB ister:** global-setup seed'i idempotent — mevcut tenant'ı SIFIRLAMAZ; suite'i
+    kirli veriyle art arda koşarsan customers/settings testleri kırılır. Koşmadan önce (bu pencerede
+    yapıldığı gibi) tabloları truncate + `pnpm db:seed`, `.env`'i source'la, portları (4000/4001/5173/5174)
+    boşalt ki Playwright sunucuları `RATE_LIMIT_ANON_PER_MIN=2000` ile başlatsın.
+  - **08.8.4-c webhook** artık `lib/ssrf.ts`'i paylaşacak (import et, yeniden yazma).
+
 ### 32.4 — 05.4-a · Liste kontrolleri (Search/Sort/Filter) — done — 2026-07-26 UTC
 - Yapıldı:
   - **Saf kontrol modülü** `apps/web/src/features/playbook/skill-filter.ts`: `applySkillControls`

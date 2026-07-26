@@ -1357,13 +1357,13 @@
         "description": "Tip/zorunluluk; Details+CRM'de görünür. PRD 08.7.6 (Should).",
         "details": "08.7.6-a Custom fields (ticket/contact). [XHIGH] PRD 08.7.6 (Should).\nKAPSAM: tip/zorunluluk; Details + CRM'de görünür (Nexa: player ID/KYC/bakiye).\nKK (birebir): \"Tip/zorunluluk; Details+CRM'de görünür\". BAĞLAM: PLAN §4.4.9. Bağımlılık: tm 29.",
         "testStrategy": "integration: alan yaz → Details/CRM'de oku. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "29"
         ],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T21:29:03.569Z"
       },
       {
         "id": "52",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T20:53:10.366Z",
+      "lastModified": "2026-07-26T21:29:03.570Z",
       "taskCount": 84,
-      "completedCount": 59,
+      "completedCount": 60,
       "tags": [
         "master"
       ]

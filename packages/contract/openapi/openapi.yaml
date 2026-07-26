@@ -208,6 +208,16 @@ paths:
   /webhooks/{webhookId}:
     $ref: "./paths/webhooks.yaml#/webhook"
 
+  /channels:
+    $ref: "./paths/channels.yaml#/channels"
+  /channels/{type}/connect:
+    $ref: "./paths/channels.yaml#/channelConnect"
+  /channels/{type}/disconnect:
+    $ref: "./paths/channels.yaml#/channelDisconnect"
+  /channels/{type}/messages:
+    $ref: "./paths/channels.yaml#/channelMessages"
+  /channels/{type}/webhook:
+    $ref: "./paths/channels.yaml#/channelWebhook"
   /channels/email/inbound:
     $ref: "./paths/channels.yaml#/emailInbound"
 
@@ -652,6 +662,49 @@ components:
             the async widget loader. Identical across a workspace's sites — the
             embedding origin is resolved at runtime — so "get code" per row shows
             this same value.
+
+    ChannelType:
+      type: string
+      description: |
+        A connected omnichannel adapter (FR-MOD-08.5.4-.6). SMS is `twilio`, its
+        provider. The Website widget and e-mail forwarding are not adapters and
+        are not listed here.
+      enum: [messenger, twilio, whatsapp]
+
+    ConnectedChannel:
+      type: object
+      description: A channel the workspace has connected through an adapter.
+      required: [type, status, connected, created_at]
+      properties:
+        type: { $ref: "#/components/schemas/ChannelType" }
+        status:
+          type: string
+          description: "`connected` while on, `off` once disconnected."
+          enum: [connected, off, soon]
+        address:
+          type: string
+          nullable: true
+          description: The workspace's channel address (page id / phone number) while on.
+        connected:
+          type: boolean
+          description: Whether inbound and outbound currently flow for this channel.
+        created_at: { type: string, format: date-time }
+
+    ChannelSendResult:
+      type: object
+      description: The record of a mock outbound send (FR-MOD-08.5.4-.6).
+      required: [provider_message_id, external_id]
+      properties:
+        provider_message_id:
+          type: string
+          description: The (mocked) provider id for the sent message.
+        external_id:
+          type: string
+          description: The recipient channel identity the message was addressed to.
+        chat_id:
+          type: string
+          nullable: true
+          description: The chat the reply belonged to, when addressed by chat.
 
     WebhookAction:
       type: string
@@ -1507,6 +1560,12 @@ components:
       required: true
       description: Short base32 chat token.
       schema: { type: string, minLength: 10, maxLength: 12 }
+    ChannelTypePath:
+      name: type
+      in: path
+      required: true
+      description: The adapter channel.
+      schema: { $ref: "#/components/schemas/ChannelType" }
     Limit:
       name: limit
       in: query

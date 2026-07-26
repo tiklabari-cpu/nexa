@@ -1021,7 +1021,7 @@
         "description": "channels tablosu 0 tüketicili; MVP kanalları Website+email kullanıyor. PRD 08.5.4-.6 (v1, Must).",
         "details": "PARENT. 08.5 Omnichannel adaptörleri (MOCK). channels tablosu 0 tüketicili (§8); MVP kanalları\nWebsite+email kullanıyor. adapter-a ortak arayüzü kurar, sonra 3 kanal. Bağlam: PLAN §4.4.4.",
         "testStrategy": "Subtask bazlı; kanal subtask'ları adapter-a'ya bağımlı.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -1031,10 +1031,10 @@
             "description": "ChannelAdapter (inbound→chat, outbound→gönder); channels tablo tüketicisi. PRD 08.5.4-.6.",
             "details": "08.5-adapter-a Ortak kanal adaptör arayüzü + channels tablo tüketicisi. [XHIGH] PRD 08.5.4-.6.\nKAPSAM: ChannelAdapter arayüzü (inbound→chat, outbound→gönder); channels tablosuna kayıt; mock provider iskeleti.\nKK payı (birebir, ortak): \"mesaj → inbox chat\" / \"mesaj → chat\". BAĞLAM: PLAN §4.4.4.",
             "testStrategy": "integration: mock inbound → chat oluşur; CROSS-TENANT izole. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "35",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T04:29:11.558Z"
           },
           {
             "id": 2,
@@ -1042,12 +1042,12 @@
             "description": "Mock OAuth + inbound→chat + outbound. PRD 08.5.4.",
             "details": "08.5.4-a Messenger (Facebook OAuth MOCK). [XHIGH] PRD 08.5.4 (Must).\nKAPSAM: mock OAuth + inbound webhook → chat + outbound gönder.\nKK (birebir): \"OAuth; mesaj → inbox chat\". KAPSAM DIŞI: gerçek sağlayıcı imzası (§9). Bağımlılık: 35.1.",
             "testStrategy": "integration: inbound→chat + outbound kaydı + CROSS-TENANT. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "35",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T04:29:11.576Z"
           },
           {
             "id": 3,
@@ -1055,12 +1055,12 @@
             "description": "Mock kimlik/numara + SMS gönder-al. PRD 08.5.5.",
             "details": "08.5.5-a Twilio SMS (MOCK). [XHIGH] PRD 08.5.5 (Must).\nKAPSAM: mock kimlik/numara + inbound → chat + SMS gönder.\nKK (birebir): \"Twilio kimlik/numara; SMS gönder-al\". Bağımlılık: 35.1.",
             "testStrategy": "integration: inbound→chat + outbound + CROSS-TENANT. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "35",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T04:29:11.580Z"
           },
           {
             "id": 4,
@@ -1068,15 +1068,15 @@
             "description": "Mock bağlama + mesaj→chat. PRD 08.5.6.",
             "details": "08.5.6-a WhatsApp (Business MOCK). [XHIGH] PRD 08.5.6 (Must).\nKAPSAM: mock bağlama + inbound → chat + gönder.\nKK (birebir): \"WhatsApp bağlama; mesaj → chat\". Bağımlılık: 35.1.",
             "testStrategy": "integration: inbound→chat + outbound + CROSS-TENANT. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "35",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T04:29:11.582Z"
           }
         ],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T04:29:11.582Z"
       },
       {
         "id": "36",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T03:49:30.365Z",
+      "lastModified": "2026-07-26T04:29:11.582Z",
       "taskCount": 84,
-      "completedCount": 34,
+      "completedCount": 35,
       "tags": [
         "master"
       ]

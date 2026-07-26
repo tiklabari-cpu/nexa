@@ -81,3 +81,171 @@ emailInbound:
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+# --- Omnichannel adapters (MOCK) — FR-MOD-08.5.4/.5/.6 (v1, Must) -------------
+#
+# Messenger, Twilio SMS and WhatsApp behind one adapter shape. Connecting a
+# channel is the mock provider handshake (OAuth exchange / number provisioning /
+# business linking); inbound is a provider webhook that becomes an inbox chat;
+# outbound is an agent reply leaving through the channel. Providers are mocked in
+# this build (MASTER-PROMPT §5) — no network leaves the process.
+
+channels:
+  get:
+    tags: [Configuration]
+    operationId: listChannels
+    summary: Channels the workspace has connected
+    description: |
+      Every adapter channel (Messenger/SMS/WhatsApp) the workspace has connected,
+      each with whether it is currently on and the channel address it answers at.
+    responses:
+      "200":
+        description: The workspace's channels
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/ConnectedChannel" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+channelConnect:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ChannelTypePath"
+  post:
+    tags: [Configuration]
+    operationId: connectChannel
+    summary: Connect a channel (mock)
+    description: |
+      Runs the channel's mock connect step and marks it on. The body differs by
+      channel — a Messenger OAuth `code` + `page_id`, a Twilio `account_sid` +
+      `auth_token` + `phone_number`, or a WhatsApp `waba_id` + `phone_number` —
+      and the resulting channel *address* (page id / phone number) becomes the
+      key inbound webhooks resolve to this workspace. A credential in the body
+      (Twilio's `auth_token`) is verified but never stored back on the channel.
+
+      Idempotent on the channel type: connecting again re-configures the existing
+      channel rather than creating a second.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: Channel-specific connect fields (see description).
+            additionalProperties: true
+    responses:
+      "200":
+        description: Connected
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ConnectedChannel" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+channelDisconnect:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ChannelTypePath"
+  post:
+    tags: [Configuration]
+    operationId: disconnectChannel
+    summary: Disconnect a channel
+    description: |
+      Turns the channel off. Inbound webhooks for it stop resolving at once. The
+      channel row and its message-log history are kept, so re-connecting later
+      keeps the trail.
+    responses:
+      "204": { description: Disconnected }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+channelMessages:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ChannelTypePath"
+  post:
+    tags: [Configuration]
+    operationId: sendChannelMessage
+    summary: Send an outbound message through a channel (mock)
+    description: |
+      Delivers a message out through a connected channel and records it. Address
+      the recipient either by the `chat_id` the reply belongs to (their channel
+      identity is looked up) or directly by `external_id` — exactly one. Refused
+      if the channel is not connected, or if a `chat_id` has no identity on this
+      channel.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [text]
+            properties:
+              text: { type: string, minLength: 1, maxLength: 10000 }
+              chat_id:
+                type: string
+                description: The chat the reply belongs to. Mutually exclusive with external_id.
+              external_id:
+                type: string
+                description: The recipient's channel identity. Mutually exclusive with chat_id.
+    responses:
+      "200":
+        description: Sent — the mock provider accepted it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ChannelSendResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+channelWebhook:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ChannelTypePath"
+  post:
+    tags: [Configuration]
+    operationId: ingestChannelWebhook
+    summary: Ingest an inbound channel message (mock provider webhook)
+    description: |
+      The webhook a channel provider calls when a message arrives. The body's
+      channel address (the recipient page id / number) routes it to a workspace —
+      the same SECURITY DEFINER resolve the e-mail and hosted-chat paths use,
+      because no session exists yet. The sender is matched to a customer by their
+      per-channel identity (reused on return), then the message opens or continues
+      a chat exactly as the widget does.
+
+      Public and unsigned in this build (the provider is mocked, MASTER-PROMPT
+      §5); a real deployment verifies the provider signature at the edge.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: The provider's inbound webhook body (shape differs per channel).
+            additionalProperties: true
+    responses:
+      "200":
+        description: Accepted — the message became a chat event
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, chat_id, customer_id]
+              properties:
+                status: { type: string, enum: [accepted] }
+                chat_id: { type: string }
+                customer_id: { type: string, format: uuid }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

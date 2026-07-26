@@ -1,10 +1,52 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-25 · **Branch:** `main` (Dilim 14 merge edildi) · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-07-26 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı; tm 33/34/35 burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
 
 ## Task log (newest-first)
+
+### 35 — 08.5 · Omnichannel adaptörleri (MOCK) [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı (4 alt-görev, contract-first; negatif/izolasyon testleri pozitiften önce):
+  - **35.1-a Ortak adaptör + `channels` tüketicisi:** `services/channels/channel-adapter.ts`
+    (`ChannelAdapter`: `parseConnect`/`parseInbound`/`send`; `CHANNEL_TYPES=messenger/twilio/whatsapp`)
+    + `registry.ts`. `channel-service.ts` `channels` tablosunu **ilk kez** tüketir (connect→status
+    `connected`+`config.address`; list; disconnect→`off`). İki yeni tablo (migration
+    `20260726120000_omnichannel_adapters`): `channel_identities` (license,type,external_id → customer;
+    dönüş yapan gönderici tek geçmiş) + `channel_messages` (inbound/outbound denetim izi). Pre-tenant
+    `channel_resolve_license(type,address)` **SECURITY DEFINER** (e-posta/chat-page ile aynı desen).
+    Hepsi RLS + `nexa_app` grant.
+  - **35.2/.3/.4 Messenger/Twilio/WhatsApp (MOCK):** `messenger.ts`/`twilio.ts`/`whatsapp.ts` — her
+    biri mock connect (OAuth code→page token · Twilio SID+numara · WABA linking), provider webhook
+    parse, mock outbound (`mid.`/`SM`/`wamid.` id). Inbound → widget'ın kullandığı
+    `ChatService.start`/`sendEvent` ile **aynı çekirdek** (routing, realtime, invariant, AI-resolution
+    muhasebesi bedava). Outbound → `adapter.send` + `channel_messages` kaydı.
+  - **Kontrat:** `paths/channels.yaml` 5 yeni operasyon (list/connect/disconnect/messages/webhook) +
+    `openapi.yaml` şemalar (`ChannelType`/`ConnectedChannel`/`ChannelSendResult`) + `ChannelTypePath`;
+    `channels--all:ro/rw` scope (`@nexa/types` + `ADMIN_SCOPES`). `contract generate` çalıştırıldı.
+- Doğrulama (hepsi exit 0): `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w test:unit` ✅
+  (api `adapters.test.ts` 15 test) · `pnpm -w test:integration` ✅ (**26 dosya / 562 test**; yeni
+  `channels-adapters.test.ts` 26 test: inbound→chat · returning-sender reuse · outbound by-chat/
+  by-external · cross-tenant × 3 · scope · connect/list/disconnect; contract-parity + route-config
+  dahil) · `pnpm -w build` ✅ · `db:check-drift` ✅ (drift yok). Migration `migrate deploy` ile
+  uygulandı, Prisma client generate edildi.
+- Varsayımlar:
+  - **Kanal adresi (page_id/telefon) global tekil** — gerçekte bir sayfa/numara tek workspace'e aittir;
+    `channel_resolve_license` `(type,address)` ile eşler, cross-tenant testler farklı adres kullanır.
+  - **SMS kanal tipi = `twilio`** — `channels_type_check`'in izin verdiği değer (`'sms'` değil; status
+    da `'connected'`/`'off'`, `'on'` değil). Bu iki kısıt yeni tablo değil, mevcut `channels` içindi.
+  - **Outbound producer-side wiring 34'teki gibi ayrı bırakıldı:** ajan yanıtı otomatik kanala
+    çıkmıyor; `POST /channels/:type/messages` + `sendOutbound` ile test edilir. `ChatService.sendEvent`'i
+    kanala bağlamak ayrı entegrasyon işi (chat core'a dokunur, 35 KK dışı).
+  - **Twilio auth_token connect'te doğrulanır, saklanmaz** (secret kanal config'inde tutulmaz).
+- Sonraki pencereye not:
+  - **E2E N/A:** arka-uç/server-to-server, yeni UI akışı yok (tm 34 ile aynı gerekçe); kapsanan akış
+    (connect→inbound→chat→outbound) integration ile uçtan uca doğrulandı.
+  - Instagram (08.5.7) / Telegram (08.5.8) aynı adapter deseniyle eklenir; `channels_type_check`
+    ikisine de zaten izin veriyor (yeni migration gerekmez, sadece adapter + registry kaydı).
+  - Inbound webhook **public + imzasız** (mock provider); production'da provider imzası edge'de
+    doğrulanmalı (§9, kapsam dışı).
 
 ### 34 — 08.8.4 · Webhooks [MAX] — done — 2026-07-26 UTC
 

@@ -75,6 +75,8 @@ model License {
   workflows     Workflow[]
   routingRules  RoutingRule[]
   channels      Channel[]
+  channelIdentities ChannelIdentity[]
+  channelMessages   ChannelMessage[]
   websites      Website[]
   webhooks      Webhook[]
   webhookDeliveries WebhookDelivery[]
@@ -231,6 +233,7 @@ model Customer {
   chats   Chat[]
   tickets Ticket[]
   visits  Visit[]
+  channelIdentities ChannelIdentity[]
 
   @@index([organizationId, lastActivityAt(sort: Desc)])
   @@index([organizationId, email])
@@ -809,6 +812,45 @@ model Channel {
 
   @@unique([licenseId, type])
   @@map("channels")
+}
+
+/// Maps a channel's external sender identity (a Messenger PSID, a phone number)
+/// to a customer (FR-MOD-08.5.4-.6). A returning contact is matched here, so
+/// their history is one thread rather than a new stranger each time, and an
+/// outbound reply is addressed by looking the external id back up from the chat.
+model ChannelIdentity {
+  id          String   @id @default(uuid()) @db.Uuid
+  licenseId   BigInt   @map("license_id")
+  channelType String   @map("channel_type")
+  externalId  String   @map("external_id")
+  customerId  String   @map("customer_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license  License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, channelType, externalId])
+  @@map("channel_identities")
+}
+
+/// One message that crossed a channel adapter — the audit trail of what entered
+/// (inbound) and left (outbound) the workspace over Messenger/SMS/WhatsApp.
+/// `chat_id` is a soft reference (no FK): the record outlives the conversation.
+model ChannelMessage {
+  id                String   @id @default(uuid()) @db.Uuid
+  licenseId         BigInt   @map("license_id")
+  channelType       String   @map("channel_type")
+  direction         String
+  externalId        String   @map("external_id")
+  chatId            String?  @map("chat_id")
+  text              String?
+  providerMessageId String?  @map("provider_message_id")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, channelType, createdAt])
+  @@map("channel_messages")
 }
 
 /// A site the widget is installed on.

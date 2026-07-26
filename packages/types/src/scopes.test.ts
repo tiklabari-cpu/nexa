@@ -15,6 +15,11 @@ const NEXA_ADDED_SCOPES = [
   'tickets--access:ro',
   'tickets--all:rw',
   'tickets--access:rw',
+  // Connected channels are managed through account settings in the source
+  // platform, not a scoped resource. The v1 omnichannel adapters make them a
+  // first-class resource (FR-MOD-08.5.4-.6), so Nexa adds channel scopes.
+  'channels--all:ro',
+  'channels--all:rw',
 ];
 
 const SOURCE_SCOPE_COUNT = 58;

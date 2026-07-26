@@ -1549,6 +1549,141 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/channels': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Channels the workspace has connected
+     * @description Every adapter channel (Messenger/SMS/WhatsApp) the workspace has connected,
+     *     each with whether it is currently on and the channel address it answers at.
+     */
+    get: operations['listChannels'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/{type}/connect': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The adapter channel. */
+        type: components['parameters']['ChannelTypePath'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Connect a channel (mock)
+     * @description Runs the channel's mock connect step and marks it on. The body differs by
+     *     channel — a Messenger OAuth `code` + `page_id`, a Twilio `account_sid` +
+     *     `auth_token` + `phone_number`, or a WhatsApp `waba_id` + `phone_number` —
+     *     and the resulting channel *address* (page id / phone number) becomes the
+     *     key inbound webhooks resolve to this workspace. A credential in the body
+     *     (Twilio's `auth_token`) is verified but never stored back on the channel.
+     *
+     *     Idempotent on the channel type: connecting again re-configures the existing
+     *     channel rather than creating a second.
+     */
+    post: operations['connectChannel'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/{type}/disconnect': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The adapter channel. */
+        type: components['parameters']['ChannelTypePath'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Disconnect a channel
+     * @description Turns the channel off. Inbound webhooks for it stop resolving at once. The
+     *     channel row and its message-log history are kept, so re-connecting later
+     *     keeps the trail.
+     */
+    post: operations['disconnectChannel'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/{type}/messages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The adapter channel. */
+        type: components['parameters']['ChannelTypePath'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send an outbound message through a channel (mock)
+     * @description Delivers a message out through a connected channel and records it. Address
+     *     the recipient either by the `chat_id` the reply belongs to (their channel
+     *     identity is looked up) or directly by `external_id` — exactly one. Refused
+     *     if the channel is not connected, or if a `chat_id` has no identity on this
+     *     channel.
+     */
+    post: operations['sendChannelMessage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/{type}/webhook': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The adapter channel. */
+        type: components['parameters']['ChannelTypePath'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ingest an inbound channel message (mock provider webhook)
+     * @description The webhook a channel provider calls when a message arrives. The body's
+     *     channel address (the recipient page id / number) routes it to a workspace —
+     *     the same SECURITY DEFINER resolve the e-mail and hosted-chat paths use,
+     *     because no session exists yet. The sender is matched to a customer by their
+     *     per-channel identity (reused on return), then the message opens or continues
+     *     a chat exactly as the widget does.
+     *
+     *     Public and unsigned in this build (the provider is mocked, MASTER-PROMPT
+     *     §5); a real deployment verifies the provider signature at the edge.
+     */
+    post: operations['ingestChannelWebhook'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/channels/email/inbound': {
     parameters: {
       query?: never;
@@ -2149,6 +2284,37 @@ export interface components {
        *     this same value.
        */
       snippet: string;
+    };
+    /**
+     * @description A connected omnichannel adapter (FR-MOD-08.5.4-.6). SMS is `twilio`, its
+     *     provider. The Website widget and e-mail forwarding are not adapters and
+     *     are not listed here.
+     * @enum {string}
+     */
+    ChannelType: 'messenger' | 'twilio' | 'whatsapp';
+    /** @description A channel the workspace has connected through an adapter. */
+    ConnectedChannel: {
+      type: components['schemas']['ChannelType'];
+      /**
+       * @description `connected` while on, `off` once disconnected.
+       * @enum {string}
+       */
+      status: 'connected' | 'off' | 'soon';
+      /** @description The workspace's channel address (page id / phone number) while on. */
+      address?: string | null;
+      /** @description Whether inbound and outbound currently flow for this channel. */
+      connected: boolean;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /** @description The record of a mock outbound send (FR-MOD-08.5.4-.6). */
+    ChannelSendResult: {
+      /** @description The (mocked) provider id for the sent message. */
+      provider_message_id: string;
+      /** @description The recipient channel identity the message was addressed to. */
+      external_id: string;
+      /** @description The chat the reply belonged to, when addressed by chat. */
+      chat_id?: string | null;
     };
     /**
      * @description The workspace event that triggers a delivery. A closed vocabulary so a
@@ -2847,6 +3013,8 @@ export interface components {
     PageId: string;
     /** @description Short base32 chat token. */
     ChatId: string;
+    /** @description The adapter channel. */
+    ChannelTypePath: components['schemas']['ChannelType'];
     Limit: number;
   };
   requestBodies: never;
@@ -5655,6 +5823,165 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  listChannels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's channels */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ConnectedChannel'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  connectChannel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The adapter channel. */
+        type: components['parameters']['ChannelTypePath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description Connected */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ConnectedChannel'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  disconnectChannel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The adapter channel. */
+        type: components['parameters']['ChannelTypePath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Disconnected */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  sendChannelMessage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The adapter channel. */
+        type: components['parameters']['ChannelTypePath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          text: string;
+          /** @description The chat the reply belongs to. Mutually exclusive with external_id. */
+          chat_id?: string;
+          /** @description The recipient's channel identity. Mutually exclusive with chat_id. */
+          external_id?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Sent — the mock provider accepted it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChannelSendResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  ingestChannelWebhook: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The adapter channel. */
+        type: components['parameters']['ChannelTypePath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          [key: string]: unknown;
+        };
+      };
+    };
+    responses: {
+      /** @description Accepted — the message became a chat event */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            status: 'accepted';
+            chat_id: string;
+            /** Format: uuid */
+            customer_id: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      404: components['responses']['NotFound'];
     };
   };
   ingestInboundEmail: {

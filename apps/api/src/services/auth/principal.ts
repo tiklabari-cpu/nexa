@@ -105,6 +105,9 @@ export const ADMIN_SCOPES: Scope[] = [
   'tags--all:rw',
   'canned_responses--all:rw',
   'webhooks--all:rw',
+  // Connecting Messenger/SMS/WhatsApp and sending through them is workspace
+  // configuration — owners and admins do it, ordinary agents work the inbox.
+  'channels--all:rw',
   'access_rules:rw',
   'properties.configuration:rw',
   'reports_read',

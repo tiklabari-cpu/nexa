@@ -62,6 +62,13 @@ export const SCOPES = [
   'tickets--access:ro',
   'tickets--all:rw',
   'tickets--access:rw',
+  // Channel. Also a Nexa addition: the source platform manages connected
+  // channels through account settings, not a scoped resource. The v1
+  // omnichannel adapters (Messenger/SMS/WhatsApp, FR-MOD-08.5.4-.6) make
+  // channels a first-class resource an integration connects and sends through,
+  // so they get their own scopes rather than borrowing an unrelated one.
+  'channels--all:ro',
+  'channels--all:rw',
   // Customer
   'customers.ban:rw',
   'customers:own',

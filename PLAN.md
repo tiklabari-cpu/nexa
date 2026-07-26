@@ -522,9 +522,9 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 07.4       | AI Agent raporu (resolution/deflection)                                                                | Should (v1)    |                          ⬜                           |
 | 07.7       | Rapor grupları + Export (CSV)                                                                          | Should (v1–v2) |                          ⬜                           |
 | 07.8       | Reviews / Ratings                                                                                      | Should (v1)    |                ⬜ `Rating` modeli var                 |
-| 08.5.4     | Messenger (Facebook OAuth)                                                                             | Must (v1)      |                  ⬜ **MOCK adaptör**                  |
-| 08.5.5     | Twilio SMS                                                                                             | Must (v1)      |                  ⬜ **MOCK adaptör**                  |
-| 08.5.6     | WhatsApp (Business)                                                                                    | Must (v1)      |                  ⬜ **MOCK adaptör**                  |
+| 08.5.4     | Messenger (Facebook OAuth)                                                                             | Must (v1)      |             ✅ **MOCK adaptör** (tm 35)              |
+| 08.5.5     | Twilio SMS                                                                                             | Must (v1)      |             ✅ **MOCK adaptör** (tm 35)              |
+| 08.5.6     | WhatsApp (Business)                                                                                    | Must (v1)      |             ✅ **MOCK adaptör** (tm 35)              |
 | 08.6.2     | Ticket rules (atama/etiket/öncelik)                                                                    | Should (v1)    |                          ⬜                           |
 | 08.7.3     | Chat timeout                                                                                           | Should (v1)    |                          ⬜                           |
 | 08.7.4     | Chat transcripts (e-posta)                                                                             | Should (v1)    |                          ⬜                           |

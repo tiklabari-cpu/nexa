@@ -2115,6 +2115,90 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/billing/invoices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List invoices
+     * @description Invoices for the workspace, newest period first (FR-MOD-10.3). Billing is
+     *     mocked (ADR-13): these are derived from the subscription and the per-period
+     *     usage records rather than issued by an external provider, so the current
+     *     invoice's total is exactly the `estimated_total_cents` the subscription
+     *     view quotes.
+     *
+     *     The current period always appears as an `open` invoice — the standing plan
+     *     charge is visible before the period closes. While the workspace is on a
+     *     trial the statement is `trial` and owes nothing.
+     */
+    get: operations['listInvoices'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/invoices/{period}/download': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download one invoice as CSV
+     * @description The invoice for one period (`yyyymm`) as an injection-safe CSV download
+     *     (FR-MOD-10.3, "indirme"). 404 if the workspace has no invoice for that
+     *     period. Mocked billing — a real provider would hand back a PDF here.
+     */
+    get: operations['downloadInvoice'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/payment-method': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The payment method on file
+     * @description The masked payment method on file, or `null` when none is set
+     *     (FR-MOD-10.3). Billing is mocked (ADR-13) and real card entry is out of
+     *     scope (PRD §11.1/1), so this is only the brand, last four, expiry and
+     *     holder a processor would return after tokenising a card — never a full
+     *     card number.
+     */
+    get: operations['getPaymentMethod'];
+    /**
+     * Set or replace the payment method
+     * @description Store the masked payment method (FR-MOD-10.3, "ödeme yöntemi güncelleme").
+     *     No card is charged and no full card number is accepted — only the brand,
+     *     last four, expiry and holder. An expired card is rejected.
+     *
+     *     Writable even while the workspace is read-only: putting a card on file is
+     *     part of how an expired trial comes back, so this is never blocked by the
+     *     trial gate.
+     */
+    put: operations['updatePaymentMethod'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2968,6 +3052,58 @@ export interface components {
       annual_savings_cents?: number;
       /** @enum {string} */
       provider: 'mock';
+    };
+    Invoice: {
+      /** @description Invoice number, `NEXA-<yyyymm>`. */
+      number: string;
+      /** @description Billing period as `yyyymm`. */
+      period: string;
+      /** @description Friendly period label, e.g. `July 2026`. */
+      period_label: string;
+      /** Format: date-time */
+      issued_at: string;
+      /**
+       * @description `paid` for a settled past period, `open` for the current one still
+       *     accruing, `trial` while the workspace owes nothing.
+       * @enum {string}
+       */
+      status: 'paid' | 'open' | 'trial';
+      /** @enum {string} */
+      currency: 'usd';
+      line_items: {
+        description: string;
+        amount_cents: number;
+      }[];
+      subtotal_cents: number;
+      total_cents: number;
+    };
+    /**
+     * @description A masked payment method. Billing is mocked (ADR-13) and real card entry
+     *     is out of scope (PRD §11.1/1) — never a full card number.
+     */
+    PaymentMethod: {
+      /** @enum {string} */
+      brand: 'visa' | 'mastercard' | 'amex' | 'discover';
+      /** @description Last four digits — the only card fragment stored. */
+      last4: string;
+      exp_month: number;
+      exp_year: number;
+      holder_name: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description The masked fields a processor returns after tokenising a card. There is
+     *     deliberately no full-card-number field — the out-of-scope data cannot be
+     *     submitted.
+     */
+    PaymentMethodInput: {
+      /** @enum {string} */
+      brand: 'visa' | 'mastercard' | 'amex' | 'discover';
+      last4: string;
+      exp_month: number;
+      exp_year: number;
+      holder_name: string;
     };
     ReportsOverview: {
       range: {
@@ -6880,6 +7016,112 @@ export interface operations {
           };
         };
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listInvoices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's invoices */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            invoices: components['schemas']['Invoice'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  downloadInvoice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Billing period as `yyyymm`. */
+        period: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The invoice rendered as CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getPaymentMethod: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The payment method, or null when none is on file */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            payment_method: components['schemas']['PaymentMethod'] | null;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updatePaymentMethod: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PaymentMethodInput'];
+      };
+    };
+    responses: {
+      /** @description The stored payment method */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PaymentMethod'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];

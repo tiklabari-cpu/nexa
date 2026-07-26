@@ -1,11 +1,12 @@
 /**
- * Billing checkout — FR-MOD-10.1.1–.3, .6.
+ * Billing checkout + invoices + payment method — FR-MOD-10.1.1–.3, .6, 10.3.
  *
  * The demo workspace is on a trial, so nothing is billed now; what this proves
  * is that the levers work end to end — the cycle toggle and seats stepper
- * persist through `PATCH /billing/subscription`, the summary recomputes, and
- * "Enter payment details" reveals the mocked payment form (ADR-13 — no card is
- * collected or charged).
+ * persist through `PATCH /billing/subscription` and the summary recomputes —
+ * that invoices list and download (10.3), and that the masked payment method
+ * saves through `PUT /billing/payment-method` (ADR-13 — no card is collected or
+ * charged, and real card entry is out of scope, PRD §11.1/1).
  *
  * The seed is idempotent and does not reset a subscription a previous run left
  * behind, so the test starts from whatever cycle it finds and puts it back to
@@ -14,7 +15,9 @@
 import { expect, test } from './fixtures.js';
 
 test.describe('billing checkout', () => {
-  test('changes seats and cycle, and reveals the mocked payment form', async ({ agentPage }) => {
+  test('changes seats and cycle, lists invoices, and saves a payment method', async ({
+    agentPage,
+  }) => {
     await agentPage.goto('/app/billing');
     await expect(agentPage.getByRole('heading', { name: 'Billing', level: 1 })).toBeVisible();
 
@@ -38,15 +41,29 @@ test.describe('billing checkout', () => {
     await manage.getByRole('button', { name: 'Remove a seat' }).click();
     await expect(seatCount).toHaveText(String(before));
 
-    // Enter payment details reveals the mocked form, honest about being mocked.
-    await manage.getByRole('button', { name: 'Enter payment details' }).click();
-    const panel = manage.getByTestId('payment-panel');
-    await expect(panel).toBeVisible();
-    await expect(panel).toContainText(/mocked/i);
-    await expect(panel).toContainText('Billed now');
+    // Invoices list (10.3): at least the current period's statement, downloadable.
+    const invoices = agentPage.getByRole('region', { name: 'Invoices' });
+    await expect(invoices).toBeVisible();
+    await expect(invoices.getByTestId('invoice-row').first()).toBeVisible();
+    await expect(
+      invoices.getByRole('button', { name: /Download invoice/i }).first(),
+    ).toBeVisible();
 
-    // Annual recomputes the summary and states the saving. Capture the proof
-    // here, where the saving line and the payment panel are both on screen.
+    // Payment method (10.3): the form saves the masked card and the section
+    // then shows it — honest about being mocked, with no full card number field.
+    const payment = agentPage.getByRole('region', { name: 'Payment method' });
+    await expect(payment).toBeVisible();
+    await payment.getByRole('button', { name: /payment method/i }).click();
+    const form = payment.getByTestId('payment-form');
+    await expect(form).toBeVisible();
+    await expect(form).toContainText(/masked/i);
+    await expect(form.getByLabel(/card number/i)).toHaveCount(0);
+    await form.getByLabel('Last 4 digits').fill('4242');
+    await form.getByLabel('Cardholder name').fill('Demo Owner');
+    await form.getByRole('button', { name: 'Save' }).click();
+    await expect(payment.getByTestId('payment-method')).toContainText('ending 4242');
+
+    // Annual recomputes the summary and states the saving.
     await annual.click();
     await expect(summary).toContainText(/saving/i);
     await agentPage.screenshot({ path: 'kanit/14-billing-checkout.png', fullPage: true });

@@ -6,6 +6,41 @@
 
 ## Task log (newest-first)
 
+### 56 — 10.3-a · Invoices + payment yönetimi [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı:
+  - **Faturalar (liste + indirme):** yeni `services/billing/invoice-service.ts` — faturalar ayrı
+    tablo yerine **subscription + usage_records'tan türetilir** (ADR-13 mock). Her dönem için bir
+    fatura + her zaman **açık (open)** cari dönem; toplam = seat charge (priceSeats) + AI aşımı
+    (birim) + API aşımı (blok). Cari faturanın toplamı = `estimated_total_cents` (tek aritmetik, asla
+    ayrışamaz). Trial'de her fatura `trial` durumunda ve $0. `GET /billing/invoices` (newest-first),
+    `GET /billing/invoices/:period/download` → injection-safe CSV (`toCsv`, nosniff, no-store),
+    bilinmeyen dönem 404, bozuk dönem 400.
+  - **Ödeme yöntemi (güncelleme):** yeni `payment_methods` tablosu (license-singleton, RLS) +
+    migration `20260726140000_payment_method` + `services/billing/payment-method-service.ts`. Yalnız
+    **maskeli** alanlar: brand/last4/exp/holder — **gerçek PAN alanı YOK** (PRD §11.1/1 kapsam dışı,
+    teknik olarak girilemez). `GET/PUT /billing/payment-method`; PUT read-only'de bile yazılabilir
+    (trial dönüş yolu), süresi geçmiş kartı reddeder, audit `billing.payment_method_updated`
+    (yalnız brand+last4).
+  - **Sözleşme:** OpenAPI'ye 3 yol (`/billing/invoices`, `/billing/invoices/{period}/download`,
+    `/billing/payment-method` GET+PUT) + `Invoice`/`PaymentMethod`/`PaymentMethodInput` şemaları;
+    `contract:generate`. `contract-parity` + `route-config` integration testleri yeşil.
+  - **UI:** BillingPage — yeni **Invoices** bölümü (tablo: no/dönem/tarih/durum/tutar + Download) ve
+    yeni **Payment method** bölümü (maskeli kart formu, PUT ile kaydeder, kart-no alanı yok). Eski
+    ManagePlan içindeki mock "Enter payment details" paneli kaldırıldı (yerini gerçek bölüm aldı).
+    `ApiClient.put` eklendi.
+- Doğrulama (hepsi yeşil): `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w build` ✅ ·
+  `pnpm -w test` (api 793 + web 290) ✅ · `pnpm -w test:integration` (642; reports-billing 85, +21
+  yeni: fatura liste/indirme/tenant/trial/404/400 · ödeme yöntemi CRUD/expired/scope/read-only/
+  audit/tenant) ✅ · billing e2e 2/2 ✅ (BillingPage yeni akış).
+- Varsayımlar: Faturalar türetilir (kalıcı tablo yok) — geçmiş dönem seat charge'ı **cari**
+  subscription'dan hesaplanır (tarihsel seat sayısı tutulmuyor; mock için kabul, overage tam). Cari
+  dönem hep `open` fatura olarak listelenir (liste boş kalmaz). Ödeme yöntemi maskeli (last4) —
+  last4 saklamak PCI-güvenli; tam kart numarası ne kabul edilir ne saklanır.
+- Sonraki pencereye not: e2e için `.env` **environment'a source edilmeli** (rtm/web/widget dev
+  server'ları .env'i kendisi yüklemiyor). Gerçek Stripe entegrasyonu v2/kapsam dışı — invoice PDF ve
+  gerçek kart ödemesi ileride.
+
 ### 55 — 10.1.5-a · API calls aşım + sayaç [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı:

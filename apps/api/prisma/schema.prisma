@@ -82,6 +82,7 @@ model License {
   webhookDeliveries WebhookDelivery[]
   subscriptions Subscription[]
   usageRecords  UsageRecord[]
+  paymentMethod    PaymentMethod?
   auditEntries  AuditLogEntry[]
   securitySettings SecuritySettings?
   inboxSettings    InboxSettings?
@@ -958,6 +959,29 @@ model InboxSettings {
 // ===========================================================================
 // Billing (ADR-13 — Stripe is mocked)
 // ===========================================================================
+
+/// The payment method on file (FR-MOD-10.3, "ödeme yöntemi güncelleme").
+///
+/// A singleton per license, like `SecuritySettings`. Billing is mocked
+/// (ADR-13), and real card entry is out of scope (PRD §11.1/1) — so this stores
+/// only the *masked* representation a real processor would hand back after
+/// tokenising a card (`brand` + `last4` + expiry + holder), never a full PAN.
+/// Nothing here is PCI-sensitive and nothing is charged.
+model PaymentMethod {
+  licenseId  BigInt   @id @map("license_id")
+  /// Card network — `visa`, `mastercard`, `amex`, `discover`.
+  brand      String
+  /// Last four digits only — the one card fragment that is safe to store.
+  last4      String   @db.Char(4)
+  expMonth   Int      @map("exp_month")
+  expYear    Int      @map("exp_year")
+  holderName String   @map("holder_name")
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("payment_methods")
+}
 
 model Subscription {
   id                    String    @id @default(uuid()) @db.Uuid

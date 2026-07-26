@@ -9,7 +9,7 @@
  * ended" without that reads as "your data is gone".
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactElement } from 'react';
+import { useState, type FormEvent, type ReactElement } from 'react';
 import {
   Card,
   CardSkeleton,
@@ -65,6 +65,34 @@ interface Usage extends UsageSummary {
   quota_warning: boolean;
   period_label: string;
 }
+
+interface InvoiceLineItem {
+  description: string;
+  amount_cents: number;
+}
+
+interface Invoice {
+  number: string;
+  period: string;
+  period_label: string;
+  issued_at: string;
+  status: 'paid' | 'open' | 'trial';
+  currency: string;
+  line_items: InvoiceLineItem[];
+  subtotal_cents: number;
+  total_cents: number;
+}
+
+interface PaymentMethod {
+  brand: string;
+  last4: string;
+  exp_month: number;
+  exp_year: number;
+  holder_name: string;
+  updated_at: string;
+}
+
+const CARD_BRANDS = ['visa', 'mastercard', 'amex', 'discover'] as const;
 
 export function BillingPage(): ReactElement {
   const api = useApiClient();
@@ -309,6 +337,10 @@ export function BillingPage(): ReactElement {
         </Card>
       </Section>
 
+      <PaymentMethodSection readOnly={sub.access === 'read_only'} />
+
+      <InvoicesSection />
+
       <p className="text-2xs text-content-tertiary">
         Payment provider: {sub.provider}. No external charge is made — usage figures and the
         arithmetic above are real.
@@ -344,7 +376,7 @@ function QuotaBar({ fraction, warning }: { fraction: number; warning: boolean })
 }
 
 /**
- * The checkout levers (FR-MOD-10.1.1–.3, .6): billing cycle, seats and payment.
+ * The checkout levers (FR-MOD-10.1.1–.3): billing cycle, seats and the summary.
  *
  * Every change persists straight away through `PATCH /billing/subscription` and
  * the page re-reads from the reply, so the summary is the server's arithmetic,
@@ -352,9 +384,8 @@ function QuotaBar({ fraction, warning }: { fraction: number; warning: boolean })
  * headcount (`min_seats`) — the minus button disables at the floor rather than
  * letting the request fail.
  *
- * Payment is mocked (ADR-13): the panel is a labelled placeholder, not a real
- * card form. Nothing is collected or charged, and during the trial the amount
- * billed now is $0 (FR-MOD-10.1.6).
+ * The payment method itself lives in its own section (FR-MOD-10.3); during the
+ * trial the amount billed now is $0 (FR-MOD-10.1.6).
  */
 function ManagePlan({
   sub,
@@ -365,7 +396,6 @@ function ManagePlan({
   onChange: (body: { billing_cycle?: string; seats?: number }) => void;
   pending: boolean;
 }): ReactElement {
-  const [showPayment, setShowPayment] = useState(false);
   const annual = sub.billing_cycle === 'annual';
   const cycleUnit = annual ? 'year' : 'month';
   const trialing = sub.access === 'trialing';
@@ -482,57 +512,389 @@ function ManagePlan({
               </p>
             )}
           </div>
+        </div>
+      </Card>
+    </Section>
+  );
+}
 
-          {/* Enter payment details — mocked (FR-MOD-10.1.6, ADR-13) */}
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowPayment((v) => !v)}
-              className="rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600"
-            >
-              Enter payment details
-            </button>
+/**
+ * The payment method on file (FR-MOD-10.3, "ödeme yöntemi güncelleme").
+ *
+ * Billing is mocked (ADR-13) and real card entry is out of scope (PRD §11.1/1),
+ * so the form collects only the masked fields a processor would return —
+ * brand, last four, expiry and holder — never a full card number. Saving it
+ * persists through `PUT /billing/payment-method`; the section then reads the
+ * stored method back, so what is shown is the server's copy, not the form's.
+ *
+ * Editable even while the workspace is read-only — putting a card on file is
+ * part of how an expired trial comes back.
+ */
+function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
 
-            {showPayment && (
-              <div
-                data-testid="payment-panel"
-                role="group"
-                aria-label="Payment details"
-                className="mt-3 rounded-md border border-border p-3"
+  const query = useQuery({
+    queryKey: ['billing', 'payment-method'],
+    queryFn: () => api.get<{ payment_method: PaymentMethod | null }>('/billing/payment-method'),
+  });
+
+  const save = useMutation({
+    mutationFn: (body: {
+      brand: string;
+      last4: string;
+      exp_month: number;
+      exp_year: number;
+      holder_name: string;
+    }) => api.put<PaymentMethod>('/billing/payment-method', body),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['billing', 'payment-method'], { payment_method: updated });
+      setEditing(false);
+    },
+  });
+
+  const description =
+    'Billing is mocked — no card is charged and no full card number is collected.';
+
+  if (query.isPending) {
+    return (
+      <Section title="Payment method" description={description}>
+        <CardSkeleton rows={1} />
+      </Section>
+    );
+  }
+  if (query.error) {
+    return (
+      <Section title="Payment method" description={description}>
+        <ErrorNotice message="Could not load the payment method." />
+      </Section>
+    );
+  }
+
+  const method = query.data.payment_method;
+
+  return (
+    <Section title="Payment method" description={description}>
+      <Card>
+        <div className="flex flex-col gap-4 p-4">
+          {method ? (
+            <div data-testid="payment-method" className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-medium capitalize">{method.brand}</span>
+              <span className="text-content-secondary">ending {method.last4}</span>
+              <span className="text-content-tertiary">
+                · expires {String(method.exp_month).padStart(2, '0')}/{method.exp_year}
+              </span>
+              <span className="text-content-tertiary">· {method.holder_name}</span>
+            </div>
+          ) : (
+            <p data-testid="payment-method-empty" className="text-sm text-content-secondary">
+              No payment method on file yet.
+            </p>
+          )}
+
+          {editing ? (
+            <PaymentMethodForm
+              method={method}
+              pending={save.isPending}
+              error={save.error ? 'Could not save the payment method. Check the details.' : null}
+              onCancel={() => setEditing(false)}
+              onSubmit={(body) => save.mutate(body)}
+            />
+          ) : (
+            <div>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600"
               >
-                <p className="mb-3 text-2xs text-content-tertiary">
-                  Payment is mocked (ADR-13). No card is collected or charged — a real Stripe form
-                  would mount here. Billed now{' '}
-                  <span className="font-medium text-content">
-                    {trialing ? formatMoney(0) : formatMoney(sub.estimated_total_cents)}
-                  </span>
-                  .
+                {method ? 'Update payment method' : 'Add payment method'}
+              </button>
+              {readOnly && (
+                <p className="mt-2 text-2xs text-content-tertiary">
+                  You can still update your payment method while the workspace is read-only.
                 </p>
-                <div className="flex flex-col gap-2">
-                  <input
-                    aria-label="Card number"
-                    placeholder="Card number (mocked)"
-                    disabled
-                    className="rounded-md border border-border bg-inset px-3 py-2 text-sm"
-                  />
-                  <div className="flex gap-2">
-                    <input
-                      aria-label="Expiry"
-                      placeholder="MM / YY"
-                      disabled
-                      className="w-24 rounded-md border border-border bg-inset px-3 py-2 text-sm"
-                    />
-                    <input
-                      aria-label="CVC"
-                      placeholder="CVC"
-                      disabled
-                      className="w-20 rounded-md border border-border bg-inset px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Card>
+    </Section>
+  );
+}
+
+/**
+ * The masked-card form. Deliberately has no full-card-number field — the
+ * out-of-scope data (PRD §11.1/1) has nowhere to be entered.
+ */
+function PaymentMethodForm({
+  method,
+  pending,
+  error,
+  onCancel,
+  onSubmit,
+}: {
+  method: PaymentMethod | null;
+  pending: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onSubmit: (body: {
+    brand: string;
+    last4: string;
+    exp_month: number;
+    exp_year: number;
+    holder_name: string;
+  }) => void;
+}): ReactElement {
+  const thisYear = new Date().getFullYear();
+  const [brand, setBrand] = useState(method?.brand ?? 'visa');
+  const [last4, setLast4] = useState(method?.last4 ?? '');
+  const [expMonth, setExpMonth] = useState(String(method?.exp_month ?? 1));
+  // Default a year ahead, not the current year — a card expiring this January
+  // would already be in the past for most of the year and the save would be
+  // rejected as expired.
+  const [expYear, setExpYear] = useState(String(method?.exp_year ?? thisYear + 1));
+  const [holder, setHolder] = useState(method?.holder_name ?? '');
+
+  const last4Valid = /^\d{4}$/.test(last4);
+  const canSubmit = last4Valid && holder.trim().length > 0 && !pending;
+
+  const submit = (event: FormEvent): void => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    onSubmit({
+      brand,
+      last4,
+      exp_month: Number(expMonth),
+      exp_year: Number(expYear),
+      holder_name: holder.trim(),
+    });
+  };
+
+  const field = 'rounded-md border border-border bg-inset px-3 py-2 text-sm';
+
+  return (
+    <form
+      data-testid="payment-form"
+      onSubmit={submit}
+      role="group"
+      aria-label="Payment method"
+      className="flex flex-col gap-3 rounded-md border border-border p-3"
+    >
+      <div className="flex flex-col gap-1">
+        <label htmlFor="pm-brand" className="text-2xs font-medium text-content-secondary">
+          Card brand
+        </label>
+        <select
+          id="pm-brand"
+          value={brand}
+          onChange={(e) => setBrand(e.target.value)}
+          className={`${field} capitalize`}
+        >
+          {CARD_BRANDS.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="pm-last4" className="text-2xs font-medium text-content-secondary">
+          Last 4 digits
+        </label>
+        <input
+          id="pm-last4"
+          inputMode="numeric"
+          maxLength={4}
+          value={last4}
+          onChange={(e) => setLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          placeholder="4242"
+          className={`w-24 ${field}`}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <span className="text-2xs font-medium text-content-secondary">Expiry</span>
+        <div className="flex gap-2">
+          <select
+            aria-label="Expiry month"
+            value={expMonth}
+            onChange={(e) => setExpMonth(e.target.value)}
+            className={`w-20 ${field}`}
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+              <option key={m} value={m}>
+                {String(m).padStart(2, '0')}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Expiry year"
+            value={expYear}
+            onChange={(e) => setExpYear(e.target.value)}
+            className={`w-28 ${field}`}
+          >
+            {Array.from({ length: 11 }, (_, i) => thisYear + i).map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="pm-holder" className="text-2xs font-medium text-content-secondary">
+          Cardholder name
+        </label>
+        <input
+          id="pm-holder"
+          value={holder}
+          onChange={(e) => setHolder(e.target.value)}
+          placeholder="Jane Doe"
+          className={field}
+        />
+      </div>
+
+      {error && (
+        <p role="alert" className="text-2xs text-danger">
+          {error}
+        </p>
+      )}
+      <p className="text-2xs text-content-tertiary">
+        A real Stripe card element would mount here. Only the masked details are stored.
+      </p>
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
+        >
+          {pending ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-border px-3 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-2"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** How each invoice status reads and colours in the list. */
+const INVOICE_STATUS: Record<Invoice['status'], { label: string; className: string }> = {
+  paid: { label: 'Paid', className: 'text-success' },
+  open: { label: 'Open', className: 'text-content-secondary' },
+  trial: { label: 'Trial', className: 'text-content-tertiary' },
+};
+
+/**
+ * Invoices (FR-MOD-10.3, "fatura listesi/indirme").
+ *
+ * A list of statements, newest first, each downloadable as CSV. The figures are
+ * derived server-side from the subscription and usage records (ADR-13) — the
+ * current period's total matches the estimated total above.
+ */
+function InvoicesSection(): ReactElement {
+  const api = useApiClient();
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const query = useQuery({
+    queryKey: ['billing', 'invoices'],
+    queryFn: () => api.get<{ invoices: Invoice[] }>('/billing/invoices'),
+  });
+
+  const download = async (invoice: Invoice): Promise<void> => {
+    setDownloading(invoice.period);
+    try {
+      const blob = await api.getBlob(`/billing/invoices/${invoice.period}/download`);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `nexa-invoice-${invoice.period}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  if (query.isPending) {
+    return (
+      <Section title="Invoices" description="Your billing statements.">
+        <CardSkeleton rows={3} />
+      </Section>
+    );
+  }
+  if (query.error) {
+    return (
+      <Section title="Invoices" description="Your billing statements.">
+        <ErrorNotice message="Could not load invoices." />
+      </Section>
+    );
+  }
+
+  const invoices = query.data.invoices;
+
+  return (
+    <Section title="Invoices" description="Your billing statements, newest first.">
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid="invoices-table">
+            <thead>
+              <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-content-tertiary">
+                <th className="px-4 py-2 font-medium">Invoice</th>
+                <th className="px-4 py-2 font-medium">Issued</th>
+                <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 text-right font-medium">Amount</th>
+                <th className="px-4 py-2 text-right font-medium">
+                  <span className="sr-only">Download</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((invoice) => {
+                const status = INVOICE_STATUS[invoice.status];
+                return (
+                  <tr
+                    key={invoice.period}
+                    data-testid="invoice-row"
+                    className="border-b border-border last:border-0"
+                  >
+                    <td className="px-4 py-2">
+                      <span className="font-medium">{invoice.number}</span>
+                      <span className="ml-2 text-content-tertiary">{invoice.period_label}</span>
+                    </td>
+                    <td className="px-4 py-2 text-content-secondary">
+                      {formatDate(invoice.issued_at)}
+                    </td>
+                    <td className={`px-4 py-2 font-medium ${status.className}`}>{status.label}</td>
+                    <td className="tabular px-4 py-2 text-right">
+                      {formatMoney(invoice.total_cents, invoice.currency.toUpperCase())}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <button
+                        type="button"
+                        aria-label={`Download invoice ${invoice.number}`}
+                        disabled={downloading === invoice.period}
+                        onClick={() => void download(invoice)}
+                        className="rounded-md border border-border px-2 py-1 text-2xs font-medium text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
+                      >
+                        {downloading === invoice.period ? 'Downloading…' : 'Download'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </Card>
     </Section>

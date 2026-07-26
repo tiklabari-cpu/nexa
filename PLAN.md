@@ -536,7 +536,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 09.2       | Entegrasyon listesi (15–20)                                                                            | Should (v1)    |                          ⬜                           |
 | 10.1.4     | AI resolutions meter + stepper                                                                         | Must (v1)      |             ◐ metering ✅ (ADR-13), UI ⬜             |
 | 10.1.5     | API calls (aşım paketi)                                                                                | Should (v1)    |                     ✅ tm 55                          |
-| 10.3       | Invoices + payment details yönetimi                                                                    | Should (v1)    |                          ⬜                           |
+| 10.3       | Invoices + payment details yönetimi                                                                    | Should (v1)    |                     ✅ tm 56                          |
 | 11.7       | Widget customization (Appearance/Position/Mobile)                                                      | Should (v1)    |                          ⬜                           |
 | 11.8       | Typing indicator (sneak-peek)                                                                          | Could (v1)     |                          ⬜                           |
 | 12.1–12.3  | **Copilot** (buton, ayrı KB, özet + yanıt yardımı)                                                     | Should (v1)    |                          ⬜                           |
@@ -800,9 +800,13 @@ Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal baş�
   faturaya; sayaç"_ · doğrulama: integration (aşım → usage_records). Her PAT API çağrısı `onSend`
   hook'unda `usage_records.api_calls` sayacını arttırır; aşım blok başına ($29.50/100k) fiyatlanıp
   `estimated_total_cents`'e eklenir. **Bağımlılık:** yok. **Tahmin:** 1 pencere.
-- **10.3-a — Invoices + payment details yönetimi** `[XHIGH]` · *Should* — KK: _"Fatura listesi/
-  indirme; ödeme yöntemi güncelleme"_ · doğrulama: integration (fatura listesi mock). **Kapsam dışı:**
-  gerçek kart (§9, PRD §11.1/1). **Tahmin:** 1 pencere.
+- **10.3-a — Invoices + payment details yönetimi** `[XHIGH]` · *Should* — **✅ tm 56** · KK: _"Fatura
+  listesi/indirme; ödeme yöntemi güncelleme"_ · doğrulama: integration (fatura listesi mock).
+  Faturalar subscription + usage_records'tan **türetilir** (ADR-13, ayrı tablo yok) — açık dönemin
+  toplamı = `estimated_total_cents`; CSV indirme (injection-safe). Ödeme yöntemi: license-singleton
+  `payment_methods` tablosu, yalnız **maskeli** alanlar (brand/last4/exp/holder), gerçek PAN alanı YOK.
+  `PUT /billing/payment-method` read-only'de bile yazılabilir. **Kapsam dışı:** gerçek kart (§9, PRD
+  §11.1/1). **Tahmin:** 1 pencere.
 
 #### 4.4.12 · MOD-11 Widget v1
 

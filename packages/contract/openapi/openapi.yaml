@@ -249,6 +249,12 @@ paths:
     $ref: "./paths/reports.yaml#/subscription"
   /billing/usage:
     $ref: "./paths/reports.yaml#/usage"
+  /billing/invoices:
+    $ref: "./paths/reports.yaml#/invoices"
+  /billing/invoices/{period}/download:
+    $ref: "./paths/reports.yaml#/invoiceDownload"
+  /billing/payment-method:
+    $ref: "./paths/reports.yaml#/paymentMethod"
 
 components:
   securitySchemes:
@@ -1292,6 +1298,61 @@ components:
           type: integer
           description: What annual billing saves versus twelve monthly charges. 0 on monthly.
         provider: { type: string, enum: [mock] }
+
+    Invoice:
+      type: object
+      required:
+        [number, period, period_label, issued_at, status, currency, line_items, subtotal_cents, total_cents]
+      properties:
+        number: { type: string, description: "Invoice number, `NEXA-<yyyymm>`." }
+        period: { type: string, description: "Billing period as `yyyymm`." }
+        period_label: { type: string, description: "Friendly period label, e.g. `July 2026`." }
+        issued_at: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [paid, open, trial]
+          description: |
+            `paid` for a settled past period, `open` for the current one still
+            accruing, `trial` while the workspace owes nothing.
+        currency: { type: string, enum: [usd] }
+        line_items:
+          type: array
+          items:
+            type: object
+            required: [description, amount_cents]
+            properties:
+              description: { type: string }
+              amount_cents: { type: integer }
+        subtotal_cents: { type: integer }
+        total_cents: { type: integer }
+
+    PaymentMethod:
+      type: object
+      description: |
+        A masked payment method. Billing is mocked (ADR-13) and real card entry
+        is out of scope (PRD §11.1/1) — never a full card number.
+      required: [brand, last4, exp_month, exp_year, holder_name, updated_at]
+      properties:
+        brand: { type: string, enum: [visa, mastercard, amex, discover] }
+        last4: { type: string, description: "Last four digits — the only card fragment stored." }
+        exp_month: { type: integer, minimum: 1, maximum: 12 }
+        exp_year: { type: integer }
+        holder_name: { type: string }
+        updated_at: { type: string, format: date-time }
+
+    PaymentMethodInput:
+      type: object
+      description: |
+        The masked fields a processor returns after tokenising a card. There is
+        deliberately no full-card-number field — the out-of-scope data cannot be
+        submitted.
+      required: [brand, last4, exp_month, exp_year, holder_name]
+      properties:
+        brand: { type: string, enum: [visa, mastercard, amex, discover] }
+        last4: { type: string, pattern: "^[0-9]{4}$" }
+        exp_month: { type: integer, minimum: 1, maximum: 12 }
+        exp_year: { type: integer, minimum: 2000, maximum: 2100 }
+        holder_name: { type: string, minLength: 1, maxLength: 120 }
 
     ReportsOverview:
       type: object

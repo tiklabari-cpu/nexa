@@ -1155,4 +1155,294 @@ describe('reports and billing', () => {
       expect(response.json().seats).toBe(3);
     });
   });
+
+  // =========================================================================
+  // FR-MOD-10.3: invoices (list + download) and the payment method. Billing is
+  // mocked (ADR-13); real card entry is out of scope (PRD §11.1/1).
+  describe('invoices (10.3)', () => {
+    const period = new Date().toISOString().slice(0, 7).replace('-', '');
+
+    /** Take the trial off and put an active subscription on file. */
+    async function activate(seats = 2): Promise<void> {
+      await owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { status: 'active', trialEndsAt: null },
+      });
+      await owner.subscription.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          status: 'active',
+          seats,
+          unitPriceCents: 9900,
+          aiResolutionsIncluded: 200,
+        },
+      });
+    }
+
+    it('always lists the current period as an open invoice', async () => {
+      await activate();
+      const invoices = (await server.get('/billing/invoices', auth)).json().invoices;
+
+      const open = invoices.find((i: { period: string }) => i.period === period);
+      expect(open).toBeTruthy();
+      expect(open.number).toBe(`NEXA-${period}`);
+      expect(open.status).toBe('open');
+      // The standing seat charge, visible before the period closes.
+      expect(open.total_cents).toBe(2 * 9900);
+    });
+
+    it('matches the current invoice total to estimated_total_cents (one arithmetic)', async () => {
+      await activate();
+      // 210 AI resolutions against 200 included → 10 over at $0.50 = $5.00.
+      await owner.usageRecord.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          metric: 'ai_resolutions',
+          period,
+          quantity: 210n,
+          included: 200n,
+          overageUnit: 50,
+          overageUnitPriceCents: 50,
+        },
+      });
+
+      const [invoices, sub] = await Promise.all([
+        server.get('/billing/invoices', auth),
+        server.get('/billing/subscription', auth),
+      ]);
+      const open = invoices.json().invoices.find((i: { period: string }) => i.period === period);
+      // Seats ($198) + the AI overage ($5) — the same figure the subscription
+      // view quotes, so the invoice and the estimate can never disagree.
+      expect(open.total_cents).toBe(2 * 9900 + 500);
+      expect(open.total_cents).toBe(sub.json().estimated_total_cents);
+      // The overage is an itemised line, not folded silently into the total.
+      const items = open.line_items.map((l: { description: string }) => l.description);
+      expect(items.some((d: string) => /overage/i.test(d))).toBe(true);
+    });
+
+    it('bills nothing on the invoice during the trial', async () => {
+      // The fixture license is trialing; the statement owes nothing.
+      const open = (await server.get('/billing/invoices', auth)).json().invoices[0];
+      expect(open.status).toBe('trial');
+      expect(open.total_cents).toBe(0);
+    });
+
+    it('lists a past period with usage as a settled invoice', async () => {
+      await activate();
+      await owner.usageRecord.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          metric: 'ai_resolutions',
+          period: '202601',
+          quantity: 260n,
+          included: 200n,
+          overageUnit: 50,
+          overageUnitPriceCents: 50,
+        },
+      });
+
+      const invoices = (await server.get('/billing/invoices', auth)).json().invoices;
+      const past = invoices.find((i: { period: string }) => i.period === '202601');
+      expect(past).toBeTruthy();
+      expect(past.status).toBe('paid');
+      // Seats ($198) + 60 over at $0.50 ($30) = $228.
+      expect(past.total_cents).toBe(2 * 9900 + 60 * 50);
+      // Newest first: the current period sorts ahead of an old one.
+      expect(invoices[0].period.localeCompare('202601')).toBeGreaterThan(0);
+    });
+
+    it('downloads one invoice as an injection-safe CSV', async () => {
+      await activate();
+      const response = await server.get(`/billing/invoices/${period}/download`, auth);
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toContain('text/csv');
+      expect(response.headers['content-disposition']).toBe(
+        `attachment; filename="nexa-invoice-${period}.csv"`,
+      );
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+
+      const rows = response.body.split('\r\n').filter((l: string) => l !== '');
+      expect(rows[0]).toBe('item,amount_cents');
+      // The subscription line and a total row summing to the seat charge.
+      expect(rows).toContain('Total,19800');
+    });
+
+    it('404s a period with no invoice', async () => {
+      const response = await server.get('/billing/invoices/209912/download', auth);
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('400s a malformed period', async () => {
+      const response = await server.get('/billing/invoices/not-a-period/download', auth);
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('needs a reading scope', async () => {
+      const weak = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:ro'],
+      });
+      const response = await server.get('/billing/invoices', {
+        authorization: `Bearer ${weak}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('never shows another tenant an invoice', async () => {
+      await activate();
+      await owner.usageRecord.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          metric: 'ai_resolutions',
+          period: '202601',
+          quantity: 260n,
+          included: 200n,
+          overageUnit: 50,
+          overageUnitPriceCents: 50,
+        },
+      });
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/billing/invoices', { authorization: `Bearer ${theirToken}` })
+      ).json().invoices;
+      // B sees only its own open invoice — none of A's past periods.
+      expect(theirs.every((i: { period: string }) => i.period === period)).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  describe('payment method (10.3)', () => {
+    const validCard = {
+      brand: 'visa',
+      last4: '4242',
+      exp_month: 12,
+      exp_year: 2030,
+      holder_name: 'Jane Doe',
+    };
+
+    it('is empty until one is set', async () => {
+      const response = await server.get('/billing/payment-method', auth);
+      expect(response.statusCode).toBe(200);
+      expect(response.json().payment_method).toBeNull();
+    });
+
+    it('stores the masked method and reads it back — never a full card number', async () => {
+      const put = await server.put('/billing/payment-method', validCard, auth);
+      expect(put.statusCode).toBe(200);
+      expect(put.json()).toMatchObject({
+        brand: 'visa',
+        last4: '4242',
+        exp_month: 12,
+        exp_year: 2030,
+        holder_name: 'Jane Doe',
+      });
+      // Only the last four is kept — there is no field for a full PAN.
+      expect(put.json()).not.toHaveProperty('card_number');
+
+      const get = (await server.get('/billing/payment-method', auth)).json().payment_method;
+      expect(get.last4).toBe('4242');
+      // Persisted in the row, masked.
+      const row = await owner.paymentMethod.findUniqueOrThrow({
+        where: { licenseId: fx.a.licenseId },
+      });
+      expect(row.last4).toBe('4242');
+    });
+
+    it('replaces the method on a second save', async () => {
+      await server.put('/billing/payment-method', validCard, auth);
+      await server.put(
+        '/billing/payment-method',
+        { ...validCard, brand: 'mastercard', last4: '1111' },
+        auth,
+      );
+      const get = (await server.get('/billing/payment-method', auth)).json().payment_method;
+      expect(get.brand).toBe('mastercard');
+      expect(get.last4).toBe('1111');
+      // One row, not two — the singleton was updated, not appended to.
+      expect(await owner.paymentMethod.count({ where: { licenseId: fx.a.licenseId } })).toBe(1);
+    });
+
+    it('rejects an expired card', async () => {
+      const response = await server.put(
+        '/billing/payment-method',
+        { ...validCard, exp_month: 1, exp_year: 2020 },
+        auth,
+      );
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.type).toBe('validation');
+    });
+
+    it('rejects a bad last four', async () => {
+      const response = await server.put(
+        '/billing/payment-method',
+        { ...validCard, last4: '12' },
+        auth,
+      );
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('rejects an unknown card brand', async () => {
+      const response = await server.put(
+        '/billing/payment-method',
+        { ...validCard, brand: 'sofort' },
+        auth,
+      );
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('needs a billing scope, not merely reports_read', async () => {
+      const readOnly = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const response = await server.put('/billing/payment-method', validCard, {
+        authorization: `Bearer ${readOnly}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('stays writable while the trial is read-only — a card is the way back', async () => {
+      await owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { trialEndsAt: new Date(Date.now() - 86_400_000) },
+      });
+      const response = await server.put('/billing/payment-method', validCard, auth);
+      expect(response.statusCode).toBe(200);
+    });
+
+    it('writes an audit entry recording who set the card', async () => {
+      await server.put('/billing/payment-method', validCard, auth);
+      const entry = await owner.auditLogEntry.findFirst({
+        where: { licenseId: fx.a.licenseId, action: 'billing.payment_method_updated' },
+      });
+      expect(entry).not.toBeNull();
+      // Brand and last four only — never the expiry or holder.
+      expect(entry!.metadata).toMatchObject({ brand: 'visa', last4: '4242' });
+    });
+
+    it('never leaks a card across tenants', async () => {
+      await server.put('/billing/payment-method', validCard, auth);
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/billing/payment-method', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      expect(theirs.payment_method).toBeNull();
+    });
+  });
 });

@@ -30,8 +30,31 @@ import {
   updateSubscription,
   type BillingCycle,
 } from '../services/billing/subscription-service.js';
+import {
+  buildInvoices,
+  invoiceCsvRows,
+  invoiceFilename,
+} from '../services/billing/invoice-service.js';
+import {
+  PAYMENT_BRANDS,
+  getPaymentMethod,
+  upsertPaymentMethod,
+} from '../services/billing/payment-method-service.js';
 
 const BILLING_WRITE_SCOPES = ['billing_manage', 'billing_admin'];
+
+/** Who may read billing: either billing scope, or the plain reports reader. */
+const BILLING_READ_SCOPES = ['billing_manage', 'billing_admin', 'reports_read'];
+
+const paymentMethodBody = z.object({
+  brand: z.enum(PAYMENT_BRANDS),
+  // Last four only — a full card number is out of scope (PRD §11.1/1) and has no
+  // field to land in.
+  last4: z.string().regex(/^\d{4}$/, 'must be four digits'),
+  exp_month: z.number().int().min(1).max(12),
+  exp_year: z.number().int().min(2000).max(2100),
+  holder_name: z.string().trim().min(1).max(120),
+});
 
 const updateSubscriptionBody = z
   .object({
@@ -899,6 +922,86 @@ export default async function reportRoutes(
         quota_warning: included > 0 && used / included >= 0.8,
         period_label: currentPeriod(),
       });
+    },
+  );
+
+  // Invoices (FR-MOD-10.3). Derived from the subscription and usage records, not
+  // an external provider (ADR-13) — the current invoice's total is the same
+  // `estimated_total_cents` the subscription view quotes.
+  app.get('/billing/invoices', { config: { scopes: BILLING_READ_SCOPES } }, async (request, reply) => {
+    const tenant = request.tenant();
+    const invoices = await request.withTenant((tx) => buildInvoices(tx, tenant, env));
+    return reply.send({ invoices });
+  });
+
+  // Download one period's invoice as CSV ("fatura indirme"). 404 if the
+  // workspace has no invoice for that period.
+  app.get(
+    '/billing/invoices/:period/download',
+    { config: { scopes: BILLING_READ_SCOPES } },
+    async (request, reply) => {
+      const { period } = parse(z.object({ period: z.string().regex(/^\d{6}$/) }), request.params);
+      const tenant = request.tenant();
+
+      const invoice = await request.withTenant(async (tx) => {
+        const invoices = await buildInvoices(tx, tenant, env);
+        return invoices.find((i) => i.period === period);
+      });
+      if (!invoice) throw ApiError.notFound(`No invoice for period ${period}.`);
+
+      const { headers, rows } = invoiceCsvRows(invoice);
+      const csv = toCsv(headers, rows);
+      return reply
+        .header('content-type', 'text/csv; charset=utf-8')
+        .header('content-disposition', `attachment; filename="${invoiceFilename(period)}"`)
+        // A statement snapshot: never let a shared cache serve a stale one, and
+        // never let a browser sniff the bytes into something active.
+        .header('x-content-type-options', 'nosniff')
+        .header('cache-control', 'no-store')
+        .send(csv);
+    },
+  );
+
+  // The payment method on file (FR-MOD-10.3). Masked only — no card is charged
+  // and a full card number has nowhere to land (PRD §11.1/1).
+  app.get(
+    '/billing/payment-method',
+    { config: { scopes: BILLING_READ_SCOPES } },
+    async (request, reply) => {
+      const tenant = request.tenant();
+      const paymentMethod = await request.withTenant((tx) => getPaymentMethod(tx, tenant));
+      return reply.send({ payment_method: paymentMethod });
+    },
+  );
+
+  app.put(
+    '/billing/payment-method',
+    // Writable while read-only, like the subscription PATCH: putting a card on
+    // file is part of how an expired trial comes back, so the trial gate must
+    // not block it. Changing the payment method still needs a billing scope.
+    { config: { scopes: BILLING_WRITE_SCOPES, allowWhenReadOnly: true } },
+    async (request, reply) => {
+      const body = parse(paymentMethodBody, request.body);
+      const tenant = request.tenant();
+
+      const paymentMethod = await request.withTenant(async (tx) => {
+        const stored = await upsertPaymentMethod(tx, tenant, {
+          brand: body.brand,
+          last4: body.last4,
+          expMonth: body.exp_month,
+          expYear: body.exp_year,
+          holderName: body.holder_name,
+        });
+        // Record who set the card and which brand/last four — never the expiry or
+        // holder, which the audit log has no reason to keep.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'billing.payment_method_updated',
+          metadata: { brand: stored.brand, last4: stored.last4 },
+        });
+        return stored;
+      });
+
+      return reply.send(paymentMethod);
     },
   );
 }

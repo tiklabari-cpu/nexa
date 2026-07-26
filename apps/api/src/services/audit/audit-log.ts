@@ -45,6 +45,7 @@ export const AUDIT_ACTIONS = [
   'settings.trusted_domain_added',
   'settings.trusted_domain_removed',
   'billing.subscription_updated',
+  'billing.payment_method_updated',
   // Credentials
   'pat.created',
   'pat.revoked',

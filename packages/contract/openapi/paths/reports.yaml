@@ -297,3 +297,116 @@ usage:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+invoices:
+  get:
+    tags: [Billing]
+    operationId: listInvoices
+    summary: List invoices
+    description: |
+      Invoices for the workspace, newest period first (FR-MOD-10.3). Billing is
+      mocked (ADR-13): these are derived from the subscription and the per-period
+      usage records rather than issued by an external provider, so the current
+      invoice's total is exactly the `estimated_total_cents` the subscription
+      view quotes.
+
+      The current period always appears as an `open` invoice — the standing plan
+      charge is visible before the period closes. While the workspace is on a
+      trial the statement is `trial` and owes nothing.
+    responses:
+      "200":
+        description: The workspace's invoices
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoices]
+              properties:
+                invoices:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Invoice" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+invoiceDownload:
+  get:
+    tags: [Billing]
+    operationId: downloadInvoice
+    summary: Download one invoice as CSV
+    description: |
+      The invoice for one period (`yyyymm`) as an injection-safe CSV download
+      (FR-MOD-10.3, "indirme"). 404 if the workspace has no invoice for that
+      period. Mocked billing — a real provider would hand back a PDF here.
+    parameters:
+      - name: period
+        in: path
+        required: true
+        description: "Billing period as `yyyymm`."
+        schema: { type: string, pattern: "^[0-9]{6}$" }
+    responses:
+      "200":
+        description: The invoice rendered as CSV
+        content:
+          text/csv:
+            schema: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+paymentMethod:
+  get:
+    tags: [Billing]
+    operationId: getPaymentMethod
+    summary: The payment method on file
+    description: |
+      The masked payment method on file, or `null` when none is set
+      (FR-MOD-10.3). Billing is mocked (ADR-13) and real card entry is out of
+      scope (PRD §11.1/1), so this is only the brand, last four, expiry and
+      holder a processor would return after tokenising a card — never a full
+      card number.
+    responses:
+      "200":
+        description: The payment method, or null when none is on file
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payment_method]
+              properties:
+                payment_method:
+                  oneOf:
+                    - $ref: "../openapi.yaml#/components/schemas/PaymentMethod"
+                    - type: "null"
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  put:
+    tags: [Billing]
+    operationId: updatePaymentMethod
+    summary: Set or replace the payment method
+    description: |
+      Store the masked payment method (FR-MOD-10.3, "ödeme yöntemi güncelleme").
+      No card is charged and no full card number is accepted — only the brand,
+      last four, expiry and holder. An expired card is rejected.
+
+      Writable even while the workspace is read-only: putting a card on file is
+      part of how an expired trial comes back, so this is never blocked by the
+      trial gate.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PaymentMethodInput" }
+    responses:
+      "200":
+        description: The stored payment method
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PaymentMethod" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

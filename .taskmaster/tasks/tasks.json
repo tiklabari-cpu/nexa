@@ -1524,7 +1524,7 @@
         "description": "Chat↔ticket köprüsü + merge/priority/followers + audit. Başında bölünür. PRD 13.6 (Should).",
         "details": "13.6-a Omnichannel Ticketing / HelpDesk katmanı (merge/priority/followers). [MAX] ↑ PRD 13.6 (Should).\n↑ GEREKÇE: ticket yaşam döngüsü + merge/unmerge veri bütünlüğü + audit. BAŞINDA BÖLÜNÜR (2+ pencere).\nKAPSAM: chat↔ticket köprüsü; ticket yaşam döngüsü; merge/unmerge/followers/priority; birleşik (ayrı ürün değil).\nKK (birebir): \"Chat↔ticket köprüsü; ticket yaşam döngüsü; birleşik (ayrı ürün değil)\". BAĞLAM: PLAN §4.4.14. Bağımlılık: ticketing (✅ Dilim 11).",
         "testStrategy": "integration: merge/unmerge invariant + audit. NOT: başında subtask'lara bölünmeli. DoD tam.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [
@@ -1544,15 +1544,16 @@
             "title": "Frontend HelpDesk surface — priority selector, followers, merge/unmerge actions in TicketPane",
             "description": "[XHIGH] follow-up. Wire the backend HelpDesk layer into apps/web: priority selector + followers add/remove + merge/unmerge action in TicketDetailPane; useTickets hooks; merged-child indication in the ticket list. Web unit tests + e2e smoke. Depends on 61.1.",
             "details": "",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "61.1"
             ],
             "parentTaskId": 61,
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-26T14:52:46.576Z"
           }
         ],
-        "updatedAt": "2026-07-26T14:20:03.250Z"
+        "updatedAt": "2026-07-26T14:52:46.576Z"
       },
       {
         "id": "62",
@@ -1842,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T14:20:03.250Z",
+      "lastModified": "2026-07-26T14:52:46.577Z",
       "taskCount": 84,
-      "completedCount": 48,
+      "completedCount": 49,
       "tags": [
         "master"
       ]

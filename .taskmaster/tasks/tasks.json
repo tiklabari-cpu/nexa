@@ -1137,11 +1137,11 @@
         "description": "AI konuşmalarını insan kuyruğundan ayırır; Solved=ADR-09 sayacı. PRD 02.1.2 (Must v1).",
         "details": "02.1.2-a Inbox AI Agents grubu (AI agent/Solved). [XHIGH] PRD 02.1.2 (Must v1).\nKAPSAM: AI konuşmalarını insan kuyruğundan ayıran grup; Solved → AI resolution sayacı (ADR-09).\nKK (birebir): \"AI konuşmalarını insan kuyruğundan ayırır; Solved → AI resolution sayacı\". BAĞLAM: PLAN §4.4.6.",
         "testStrategy": "integration: AI chat ayrı grup; Solved=ADR-09 sayacı. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T04:52:08.088Z"
       },
       {
         "id": "38",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T04:29:11.582Z",
+      "lastModified": "2026-07-26T04:52:08.088Z",
       "taskCount": 84,
-      "completedCount": 35,
+      "completedCount": 36,
       "tags": [
         "master"
       ]

@@ -252,7 +252,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | PRD  | Gereksinim                                        | Öncelik    | Durum | Nerede               |
 | ---- | ------------------------------------------------- | ---------- | :---: | -------------------- |
-| 13.8 | **Notifications** (ses/masaüstü/tarayıcı/e-posta) | Must (MVP) |  ◐   | Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `notifications.ts`) · **e-posta bildirim kanalı ⬜** (KK 08.2 e-posta içerir; SMTP mock A4 var, bağlı değil) — mobil push 🔒 v1 (§11.1/8) → §3.13/T7 · §D20 |
+| 13.8 | **Notifications** (ses/masaüstü/tarayıcı/e-posta) | Must (MVP) |  ✅   | Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `notifications.ts`) · **e-posta bildirim kanalı ✅** (tm 31): karar `assignee-email.ts` `shouldEmailAssignee` + route tetik `customer.ts` (atanan ajana FileMailer) · kullanıcı bazında opt-out `notify_email` (migration `20260725110000`, Settings `SettingsPage.tsx`/`auth-store.ts`, `agents.ts`/`auth.ts`) · KK 08.2 karşılandı · test: `assignee-email.test.ts` (5) + `notifications.test.ts` integration (5, opt-out/idempotent/cross-tenant dahil) — mobil push 🔒 v1 (§11.1/8) → FR-MOD-13.7/§3.13/T7 · §D20/§D26 |
 
 ### 3.11 Faz-0 dilim planı
 
@@ -501,7 +501,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 06.3.1 | Knowledge alt sekmeler (All/Websites/Files/Articles/FAQ)  | Must (v1)   |               ◐                |
 | 06.3.2 | + New source (chunk+embedding)                            | Must (v1)   | ◐ article ✅, website crawl ⬜ |
 | 06.3.3 | Kaynak tablosu (düzenle/sil/yeniden indeksle)             | Must (v1)   |               ✅               |
-| 06.4   | Profile (persona: Tone/Language/Answer length)            | Must (v1)   |       ◐ `tone` alanı var       |
+| 06.4   | Profile (persona: Tone/Language/Answer length)            | Must (v1)   | ✅ Name/Avatar/Tone/Language/Answer length + canlı Preview — `ProfileForm.tsx` · API `playbook.ts` PATCH `/ai-agents/:id` (answer_length→persona jsonb) · test `ProfileForm.test.tsx` (6) + `ai-agent-profile.test.ts` · tm 11/33.5 · §D25 |
 | 06.5   | Performance (resolution rate, CSAT, transfer)             | Should (v1) |               ⬜               |
 
 ### 4.3 Diğer v1 modülleri
@@ -1758,6 +1758,28 @@ görüneceği en son yerdir.
   `chats.test.ts` "visitor context" (4 — yüzey + boş durum + widget'a sızmama + başka lisans IDOR).
   → §3.2'de 02.4.1–.6 `◐`→`✅`; D19 çözüldü. (Bu satır dışına dokunulmadı; §2/§8'deki D19/T3
   referansları kendi denetim turlarında güncellenir.)
+- **D25 (çelişki denetimi 2026-07-26 · koda karşı doğrulandı):** §4.2 satırı 06.4'ü `◐ tone alanı
+  var` gösteriyordu ama tm 11 + tm 33.5 (`done`) payı kodda tam. PRD KK1/FR-MOD-06.4 tüm alanları
+  karşılanıyor: UI `ProfileForm.tsx` Name (zorunlu) + Avatar URL + Tone + Languages (çok-seçim) +
+  Answer length **ve sağda canlı `PersonaPreview`** (widget başlığı); backend `playbook.ts` PATCH
+  `/ai-agents/:id` beş alanı da doğruluyor, `answer_length` `persona` jsonb'ına merge ediliyor
+  (signature'ı düşürmeden; `null`→sadece o anahtar silinir). Testler yeşil: frontend
+  `ProfileForm.test.tsx` (6 — isim kapısı/preview/answer_length PATCH/dil toggle/salt-okunur, bu tur
+  koşuldu 6/6) + integration `ai-agent-profile.test.ts` (listeleme + persist + persona merge + null
+  temizleme). → §4.2'de 06.4 `◐`→`✅`. (Bu satır dışına dokunulmadı.)
+
+- **D26 (çelişki denetimi 2026-07-26 · koda karşı doğrulandı):** §3.10 satırı 13.8'i `◐ e-posta
+  bildirim kanalı ⬜` gösteriyordu (SMTP mock var ama bağlı değil notu); ancak tm 31 (`done`) payı
+  kodda tam. PRD FR-MOD-13.8 (KK: "Bkz. FR-MOD-08.2") MVP payı — ses/masaüstü/tarayıcı/**e-posta** —
+  karşılanıyor: karar saf fonksiyon `services/notifications/assignee-email.ts` `shouldEmailAssignee`
+  (assignee yok / opt-out / adres yok negatifleri), route tetiği `routes/customer.ts` atanan ajana
+  `mailer.send({kind:'notification'})` ile e-posta atıyor; kullanıcı bazında opt-out `notify_email`
+  membership kolonu (migration `20260725110000_notify_email_preference`, FR-MOD-08.2 "kullanıcı
+  bazında"), Settings yüzeyi `SettingsPage.tsx` toggle + optimistic `auth-store.ts`, kalıcılık
+  `agents.ts` PATCH + profilde `auth.ts`. Testler yeşil (bu tur koşuldu): web `notifications.test.ts`
+  (16/16), api unit `assignee-email.test.ts` (5/5), integration `notifications.test.ts` (5/5 —
+  opt-out/idempotent replay/cross-tenant izolasyon dahil). Mobil push kapsam dışı (🔒 v1 →
+  FR-MOD-13.7). → §3.10'da 13.8 `◐`→`✅`. (Bu satır dışına dokunulmadı.)
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

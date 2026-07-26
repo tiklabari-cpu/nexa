@@ -6,6 +6,46 @@
 
 ## Task log (newest-first)
 
+### 51 — 08.7.6-a · Custom fields (ticket/contact) `[XHIGH]` — done — 2026-07-26 UTC
+
+- Kapsam: FR-MOD-08.7.6 (`Should v1`) — ticket ve contact üzerinde workspace'in tanımladığı ekstra
+  alanlar (Nexa: player ID/KYC/bakiye). KK (birebir) _"Tip/zorunluluk; Details+CRM'de görünür"_,
+  doğrulama _"integration (alan yaz→Details/CRM'de oku)"_. Bağımlılık tm 29 (T4-a form-primitifi, ✅).
+  PLAN satır 535 (08.7.6) → `✅` + §D46.
+- Yapıldı:
+  - **Paylaşımlı tip-kataloğu+doğrulayıcı** `packages/types/src/custom-fields.ts` — `CUSTOM_FIELD_ENTITIES`
+    (ticket/contact) + `CUSTOM_FIELD_TYPES` (text/number/boolean/date); `checkCustomFieldValue` bir ham
+    değeri tipine göre doğrular+kanonikleştirir, boş değer zorunluda hata/opsiyonelde `null`;
+    `customFieldError` form-yüzü. Tek kaynak: form + endpoint aynı fonksiyonla "geçerli" der. Unit
+    `custom-fields.test.ts`(9).
+  - **Model** iki license-scoped tablo: `custom_field_definitions` (entity/label/type/required,
+    unique(license,entity,label)) + `custom_field_values` (definition + ticket_id|customer_id, bir-varlık
+    CHECK, varlık başına tek değer). Migration `20260726200000` (yapısal DDL + CHECK'ler + RLS + GRANT,
+    ticket_email_templates emsali); FK'ler onDelete Cascade; **drift temiz**.
+  - **Servis** `services/custom-fields/custom-field-service.ts` — tanım CRUD (dup-label 400, entity/type
+    immutable) + `setValues` (tanıma karşı doğrula: yanlış tip/zorunlu-boş/bilinmeyen-alan reddi;
+    null→sil) + standalone `readCustomFieldValues` (tanım⋈değer, her tanım için bir giriş). ticket ve
+    customer detail servisleri bunu gömer → `custom_fields` her detay yanıtında.
+  - **Rota** `/settings/custom-fields` (tanım CRUD, `access_rules:ro/rw`) + `PUT /tickets/:id/custom-fields`
+    (`tickets--*:rw`) + `PUT /customers/:id/custom-fields` (`customers:rw`). Integration
+    `custom-fields.test.ts`(13: yaz→Details/CRM oku · tip/zorunluluk · cascade · scope · cross-tenant).
+  - **Web** Settings "Custom fields" tanım formu (`CustomFieldsSettings`, form-primitif) + paylaşımlı
+    `features/custom-fields/CustomFields.tsx` (tipli kontroller + canlı alan-altı hata + değişen-yalnız
+    kaydet) → CustomerDetailPanel (CRM) + TicketPane (Details). Web `CustomFields.test.tsx`(6) +
+    `SettingsForms.test.tsx`(+2).
+  - **OpenAPI** `CustomFieldDefinition`/`CustomFieldValue`/`CustomFieldValuesInput` + `custom-fields.yaml`
+    (4 yol) + tickets/customers PUT anchor (2 yol); `TicketDetail`/`CustomerDetail`'e `custom_fields`.
+    Bundle 106 yol; contract-parity 5/5.
+- Doğrulama (DoD kapısı, exit 0): typecheck 11/11 · lint 8/8 · build 7/7 · test (types 9 · web 438/63
+  dosya) · test:integration api **767**/37 dosya (`--concurrency=1`) incl. yeni `custom-fields.test.ts` 13
+  + contract-parity 5/5 + regresyon yok.
+- Varsayımlar: `required`, değer-yazma yolunda **enforce** edilir (zorunlu alan boşa/null'a set edilemez);
+  varlığın tüm zorunlu alanlarının dolu olması dayatılmaz (o forms-builder 08.7.7 işi). `type` immutable
+  (re-tip = yeni alan) — depolanmış değerlerin geçerliliğini korur.
+- Sonraki pencereye not: 08.7.7-a (Forms builder [MAX]) widget→contact/ticket yazma yolunu ekler; custom
+  fields değer-yazma servisi (`setValues`/`checkCustomFieldValue`) orada yeniden kullanılabilir. E2E ayrıca
+  koşulmadı (task stratejisi integration; Settings bölümü tanım yokken render etmez → mevcut akışlara etkisiz).
+
 ### 50 — 08.7.5-a · Ticket email templates (markalı, değişkenli) `[XHIGH]` — done — 2026-07-26 UTC
 
 - Kapsam: FR-MOD-08.7.5 (`Should v1`) — markalı, değişkenli ticket e-posta şablonu; geçersiz

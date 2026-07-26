@@ -77,6 +77,8 @@ model License {
   routingRules      RoutingRule[]
   ticketRules       TicketRule[]
   ticketEmailTemplates TicketEmailTemplate[]
+  customFieldDefinitions CustomFieldDefinition[]
+  customFieldValues      CustomFieldValue[]
   channels          Channel[]
   channelIdentities ChannelIdentity[]
   channelMessages   ChannelMessage[]
@@ -242,6 +244,7 @@ model Customer {
   visits            Visit[]
   channelIdentities ChannelIdentity[]
   campaignSends     CampaignSend[]
+  customFieldValues CustomFieldValue[]
 
   @@index([organizationId, lastActivityAt(sort: Desc)])
   @@index([organizationId, email])
@@ -537,6 +540,59 @@ model TicketEmailTemplate {
   @@map("ticket_email_templates")
 }
 
+/// A custom field a workspace has defined on tickets or contacts (FR-MOD-08.7.6):
+/// an extra field the product does not ship with — a player id, a KYC status, an
+/// account balance. Two properties carry the requirement (KK "Tip/zorunluluk"):
+/// `type` decides how a value is validated, `required` whether it may be blank.
+/// License-scoped like ticket rules; RLS narrows every row to its workspace. A
+/// label is unique per (license, entity) so a field cannot be defined twice.
+model CustomFieldDefinition {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  /// 'ticket' or 'contact'.
+  entity    String
+  label     String
+  /// 'text' | 'number' | 'boolean' | 'date'.
+  type      String
+  required  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  values  CustomFieldValue[]
+
+  @@unique([licenseId, entity, label])
+  @@map("custom_field_definitions")
+}
+
+/// A value stored for one custom field on one ticket or one contact
+/// (FR-MOD-08.7.6). Exactly one of `ticketId` / `customerId` is set — a CHECK in
+/// the migration enforces that — and it points at the entity the definition is
+/// for. The value is kept as text in its canonical form (see checkCustomFieldValue
+/// in @nexa/types); one value per field per entity. Deleting the definition, the
+/// ticket or the contact cascades the value away.
+model CustomFieldValue {
+  id           String   @id @default(uuid()) @db.Uuid
+  licenseId    BigInt   @map("license_id")
+  definitionId String   @map("definition_id") @db.Uuid
+  ticketId     String?  @map("ticket_id") @db.VarChar(12)
+  customerId   String?  @map("customer_id") @db.Uuid
+  value        String
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license    License               @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  definition CustomFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  ticket     Ticket?               @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  customer   Customer?             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([definitionId, ticketId])
+  @@unique([definitionId, customerId])
+  @@index([ticketId])
+  @@index([customerId])
+  @@map("custom_field_values")
+}
+
 model ThreadTag {
   threadId String   @map("thread_id") @db.VarChar(12)
   tagId    String   @map("tag_id") @db.Uuid
@@ -587,6 +643,7 @@ model Ticket {
   mergedTickets Ticket[]         @relation("TicketMerge")
   followers     TicketFollower[]
   tags          TicketTag[]
+  customFieldValues CustomFieldValue[]
 
   @@index([licenseId, status, lastMessageAt(sort: Desc)])
   @@index([assigneeId])

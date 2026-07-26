@@ -1,3 +1,5 @@
+import type { CustomFieldValue } from '@nexa/types';
+
 export type Segment = 'all' | 'leads' | 'recent' | 'banned';
 
 export interface CustomerSummary {
@@ -35,4 +37,6 @@ export interface CustomerDetail extends CustomerSummary {
     created_at: string;
     last_event_at: string | null;
   }>;
+  /** Custom fields defined for contacts, with this contact's values (FR-MOD-08.7.6). */
+  custom_fields: CustomFieldValue[];
 }

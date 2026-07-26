@@ -12,11 +12,12 @@
  * follow-up work (ADR-04 keeps resources distinct).
  */
 import { Prisma } from '@prisma/client';
-import { generateShortId, hasAnyScope } from '@nexa/types';
+import { generateShortId, hasAnyScope, type CustomFieldValue } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import type { Principal } from '../auth/principal.js';
+import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
 import { applyTicketRules } from './apply-ticket-rules.js';
 
 export const TICKET_STATUSES = ['open', 'pending', 'solved', 'closed', 'spam'] as const;
@@ -73,6 +74,8 @@ export interface TicketDetail extends TicketSummary {
   merged_ticket_ids: string[];
   /** Tag names on the ticket — what a ticket rule's "add tag" writes (08.6.2). */
   tags: string[];
+  /** Custom fields defined for tickets, with this ticket's values (08.7.6). */
+  custom_fields: CustomFieldValue[];
 }
 
 export interface CreateInput {
@@ -528,7 +531,7 @@ async function accountNames(
  * row, so a caller that has just changed followers or a merge sees the result.
  */
 async function toDetail(tx: TenantClient, row: TicketRow): Promise<TicketDetail> {
-  const [followers, children, tags] = await Promise.all([
+  const [followers, children, tags, customFields] = await Promise.all([
     tx.ticketFollower.findMany({
       where: { ticketId: row.id },
       select: { accountId: true },
@@ -544,6 +547,7 @@ async function toDetail(tx: TenantClient, row: TicketRow): Promise<TicketDetail>
       select: { tag: { select: { name: true } } },
       orderBy: { taggedAt: 'asc' },
     }),
+    readCustomFieldValues(tx, row.licenseId, 'ticket', row.id),
   ]);
   const followerIds = followers.map((f) => f.accountId);
   const names = await accountNames(tx, [row.assigneeId, ...followerIds]);
@@ -553,6 +557,7 @@ async function toDetail(tx: TenantClient, row: TicketRow): Promise<TicketDetail>
     followerIds,
     children.map((c) => c.id),
     tags.map((t) => t.tag.name),
+    customFields,
   );
 }
 
@@ -742,6 +747,7 @@ function serialiseDetail(
   followerIds: string[],
   mergedTicketIds: string[],
   tags: string[],
+  customFields: CustomFieldValue[],
 ): TicketDetail {
   return {
     ...serialise(row, names),
@@ -755,6 +761,7 @@ function serialiseDetail(
     followers: followerIds.map((id) => ({ account_id: id, name: names.get(id) ?? null })),
     merged_ticket_ids: mergedTicketIds,
     tags,
+    custom_fields: customFields,
   };
 }
 

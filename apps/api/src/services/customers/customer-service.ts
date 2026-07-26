@@ -15,7 +15,9 @@
  * include conversations they can never open.
  */
 import type { Prisma } from '@prisma/client';
+import type { CustomFieldValue } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
 
 export type CustomerSegment = 'all' | 'leads' | 'recent' | 'banned';
 
@@ -58,6 +60,8 @@ export interface CustomerDetail extends CustomerSummary {
     created_at: string;
     last_event_at: string | null;
   }>;
+  /** Custom fields defined for contacts, with this contact's values (08.7.6). */
+  custom_fields: CustomFieldValue[];
 }
 
 /** Ordering is (last_activity_at DESC, id DESC), so the cursor carries both. */
@@ -144,9 +148,17 @@ export class CustomerService {
     });
     if (!customer) return null;
 
+    const customFields = await readCustomFieldValues(
+      tx,
+      tenant.licenseId,
+      'contact',
+      customer.id,
+    );
+
     return {
       ...toSummary(customer),
       banned_at: customer.bannedAt?.toISOString() ?? null,
+      custom_fields: customFields,
       visits: customer.visits.map((visit) => ({
         id: visit.id,
         came_from: visit.cameFrom,

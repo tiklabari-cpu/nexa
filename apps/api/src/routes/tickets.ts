@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { TICKET_PRIORITY_MAX, TICKET_PRIORITY_MIN } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { TICKET_STATUSES, TicketService } from '../services/tickets/ticket-service.js';
+import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 
 const READ_SCOPES = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
 const WRITE_SCOPES = ['tickets--all:rw', 'tickets--access:rw'];
@@ -57,6 +58,12 @@ const updateBody = z
 const mergeBody = z.object({ into: z.string().min(1).max(12) });
 const followerBody = z.object({ account_id: z.string().uuid() });
 
+// A map of definition id → value, where `null` clears a field. The values are
+// validated against their definitions (type + required) in the service.
+const customFieldsBody = z.object({
+  values: z.record(z.string().max(5000).nullable()),
+});
+
 const ticketIdSchema = z.string().min(1).max(12);
 const accountIdSchema = z.string().uuid();
 
@@ -73,6 +80,7 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 export default async function ticketRoutes(app: FastifyInstance): Promise<void> {
   const tickets = new TicketService();
+  const customFields = new CustomFieldService();
 
   app.get('/tickets', { config: { scopes: READ_SCOPES } }, async (request, reply) => {
     const query = parse(listQuery, request.query);
@@ -143,6 +151,32 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
           ...(body.group_id !== undefined ? { group_id: body.group_id } : {}),
         }),
       );
+
+      return reply.send(ticket);
+    },
+  );
+
+  // Custom fields (FR-MOD-08.7.6): set this ticket's values for the fields a
+  // workspace has defined. Each is validated against its definition — a wrong
+  // type, or a blank on a required field, is a 400. Returns the fresh detail,
+  // whose `custom_fields` now carries the stored values (visible in Details).
+  app.put<{ Params: { ticketId: string } }>(
+    '/tickets/:ticketId/custom-fields',
+    { config: { scopes: WRITE_SCOPES } },
+    async (request, reply) => {
+      const ticketId = parse(ticketIdSchema, request.params.ticketId);
+      const { values } = parse(customFieldsBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      const ticket = await request.withTenant(async (tx) => {
+        // Visibility + existence first: `get` throws 404 for a ticket this
+        // caller cannot see, so a value is never written against one they
+        // could not otherwise touch.
+        await tickets.get(tx, principal, ticketId);
+        await customFields.setValues(tx, tenant, 'ticket', ticketId, values);
+        return tickets.get(tx, principal, ticketId);
+      });
 
       return reply.send(ticket);
     },

@@ -1,0 +1,118 @@
+# Custom field definitions (FR-MOD-08.7.6).
+#
+# A workspace declares extra fields on tickets or contacts — a player id, a KYC
+# status, an account balance — each with a `type` (how a value is validated) and
+# a `required` flag (KK "Tip/zorunluluk"). Managed under /settings on the
+# workspace-admin scopes (`access_rules:ro`/`:rw`), because a definition spans
+# both entities and is an admin act. The values themselves are set on the ticket
+# and customer resources.
+
+customFields:
+  get:
+    tags: [Settings]
+    operationId: listCustomFields
+    summary: List custom field definitions
+    description: In authoring order — oldest first. Optionally filtered to one entity.
+    parameters:
+      - name: entity
+        in: query
+        required: false
+        schema: { type: string, enum: [ticket, contact] }
+    responses:
+      "200":
+        description: The custom field definitions
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/CustomFieldDefinition" }
+                total: { type: integer }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: createCustomField
+    summary: Define a custom field
+    description: |
+      A label is unique per (workspace, entity): defining a second field with
+      the same label on the same entity is a 400. The `type` is immutable once
+      set — a re-typed field is a new field.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [entity, label, type]
+            properties:
+              entity: { type: string, enum: [ticket, contact] }
+              label: { type: string, minLength: 1, maxLength: 120 }
+              type: { type: string, enum: [text, number, boolean, date] }
+              required:
+                type: boolean
+                description: Whether a value may be left blank. Defaults to false.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomFieldDefinition" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+customField:
+  parameters:
+    - name: fieldId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Settings]
+    operationId: updateCustomField
+    summary: Rename a custom field or change whether it is required
+    description: |
+      Only the fields present in the body change. The `entity` and `type` are
+      immutable — changing a field's type would leave stored values validated
+      against a rule that no longer holds.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              label: { type: string, minLength: 1, maxLength: 120 }
+              required: { type: boolean }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomFieldDefinition" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Settings]
+    operationId: deleteCustomField
+    summary: Delete a custom field
+    description: Its stored values on every ticket or contact are removed with it.
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

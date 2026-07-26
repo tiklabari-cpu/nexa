@@ -157,3 +157,36 @@ ban:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+customerCustomFields:
+  parameters:
+    - name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  put:
+    tags: [Customers]
+    operationId: setCustomerCustomFields
+    summary: Set this contact's custom field values
+    description: |
+      A map of definition id → value (FR-MOD-08.7.6), where null clears a field.
+      Each value is validated against its definition: a wrong type, or a blank on
+      a required field, is a 400. Returns the contact, whose `custom_fields` now
+      carries the stored values.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CustomFieldValuesInput" }
+    responses:
+      "200":
+        description: The contact, with its custom field values applied.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CustomerDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

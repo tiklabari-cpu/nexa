@@ -151,8 +151,12 @@ paths:
     $ref: "./paths/tickets.yaml#/ticketFollowers"
   /tickets/{ticketId}/followers/{accountId}:
     $ref: "./paths/tickets.yaml#/ticketFollower"
+  /tickets/{ticketId}/custom-fields:
+    $ref: "./paths/tickets.yaml#/ticketCustomFields"
   /customers/{customerId}/ban:
     $ref: "./paths/customers.yaml#/ban"
+  /customers/{customerId}/custom-fields:
+    $ref: "./paths/customers.yaml#/customerCustomFields"
 
   /traffic:
     $ref: "./paths/traffic.yaml#/traffic"
@@ -227,6 +231,10 @@ paths:
     $ref: "./paths/ticket-email-templates.yaml#/ticketEmailTemplates"
   /settings/ticket-email-templates/{templateId}:
     $ref: "./paths/ticket-email-templates.yaml#/ticketEmailTemplate"
+  /settings/custom-fields:
+    $ref: "./paths/custom-fields.yaml#/customFields"
+  /settings/custom-fields/{fieldId}:
+    $ref: "./paths/custom-fields.yaml#/customField"
   /settings/security:
     $ref: "./paths/settings.yaml#/securitySettings"
   /settings/chat-timeout:
@@ -1224,6 +1232,65 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
+    CustomFieldDefinition:
+      type: object
+      description: |
+        A custom field a workspace has defined on tickets or contacts
+        (FR-MOD-08.7.6) — an extra field the product does not ship with. The
+        two properties that carry the requirement are `type` (how a value is
+        validated) and `required` (whether it may be blank).
+      required: [id, entity, label, type, required, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        entity:
+          type: string
+          enum: [ticket, contact]
+          description: What the field hangs off.
+        label: { type: string }
+        type:
+          type: string
+          enum: [text, number, boolean, date]
+          description: How a value is validated. Immutable once set.
+        required:
+          type: boolean
+          description: When true, a value may not be left blank.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CustomFieldValue:
+      type: object
+      description: |
+        A custom field as it appears on one entity (FR-MOD-08.7.6): the
+        definition's metadata joined with the stored value, or null when nothing
+        is set. One entry per definition, so a defined-but-empty field still
+        shows.
+      required: [definition_id, label, type, required, value]
+      properties:
+        definition_id: { type: string, format: uuid }
+        label: { type: string }
+        type:
+          type: string
+          enum: [text, number, boolean, date]
+        required: { type: boolean }
+        value:
+          type: string
+          nullable: true
+          description: The stored value in canonical form, or null when unset.
+
+    CustomFieldValuesInput:
+      type: object
+      description: |
+        A map of custom field definition id → value, where null clears a field.
+        Each value is validated against its definition (type + required); a
+        wrong type or a blank on a required field is a 400.
+      required: [values]
+      properties:
+        values:
+          type: object
+          additionalProperties:
+            type: string
+            nullable: true
+
     Session:
       type: object
       description: |
@@ -1322,7 +1389,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/Ticket"
         - type: object
-          required: [followers, merged_ticket_ids, tags]
+          required: [followers, merged_ticket_ids, tags, custom_fields]
           properties:
             source_chat:
               nullable: true
@@ -1352,14 +1419,22 @@ components:
               type: array
               description: Tag names on the ticket — what a ticket rule's "add tag" writes (FR-MOD-08.6.2).
               items: { type: string }
+            custom_fields:
+              type: array
+              description: Custom fields defined for tickets, with this ticket's values (FR-MOD-08.7.6).
+              items: { $ref: "#/components/schemas/CustomFieldValue" }
 
     CustomerDetail:
       allOf:
         - $ref: "#/components/schemas/CustomerSummary"
         - type: object
-          required: [visits, chats]
+          required: [visits, chats, custom_fields]
           properties:
             banned_at: { type: string, format: date-time, nullable: true }
+            custom_fields:
+              type: array
+              description: Custom fields defined for contacts, with this contact's values (FR-MOD-08.7.6).
+              items: { $ref: "#/components/schemas/CustomFieldValue" }
             visits:
               type: array
               description: Most recent first.

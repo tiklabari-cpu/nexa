@@ -12,6 +12,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
+import { CustomFields } from '../custom-fields/CustomFields.js';
 import type { CustomerDetail } from './types.js';
 
 interface Props {
@@ -61,6 +62,12 @@ export function CustomerDetailPanel({
   }
 
   const customer = detail.data;
+
+  const saveCustomFields = async (values: Record<string, string | null>): Promise<void> => {
+    await api.put<CustomerDetail>(`/customers/${customer.id}/custom-fields`, { values });
+    void detail.refetch();
+    onChanged();
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -125,6 +132,17 @@ export function CustomerDetailPanel({
           </div>
         )}
       </Card>
+
+      {customer.custom_fields.length > 0 && (
+        <Card>
+          <h3 className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-content-tertiary">
+            Custom fields
+          </h3>
+          <div className="px-4 py-3">
+            <CustomFields fields={customer.custom_fields} canEdit={canEdit} save={saveCustomFields} />
+          </div>
+        </Card>
+      )}
 
       <Card>
         <h3 className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-content-tertiary">

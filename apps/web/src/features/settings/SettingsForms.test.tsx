@@ -21,7 +21,8 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
 });
 
 // Imported after the mock so the components pick up the stubbed client.
-const { CannedResponses, Tags, TicketRules, TicketEmailTemplates } = await import('./SettingsPage.js');
+const { CannedResponses, Tags, TicketRules, TicketEmailTemplates, CustomFieldsSettings } =
+  await import('./SettingsPage.js');
 
 function renderComponent(ui: ReactElement): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -125,5 +126,24 @@ describe('TicketEmailTemplates validation (FR-MOD-08.7.5)', () => {
 
     expect(screen.getByText(/Unknown variable/)).toBeInTheDocument();
     expect(submit).toBeDisabled();
+  });
+});
+
+describe('CustomFieldsSettings validation (FR-MOD-08.7.6)', () => {
+  it('keeps Add field disabled until a label is entered', async () => {
+    renderComponent(<CustomFieldsSettings canEdit />);
+    const submit = await screen.findByRole('button', { name: 'Add field' });
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(screen.getByPlaceholderText('Player ID'), 'KYC status');
+    expect(submit).toBeEnabled();
+  });
+
+  it('shows a field-under error when the label is left empty', async () => {
+    renderComponent(<CustomFieldsSettings canEdit />);
+    const label = await screen.findByPlaceholderText('Player ID');
+    await userEvent.click(label);
+    await userEvent.tab(); // blur the empty field
+    expect(screen.getByText('Name the field.')).toBeInTheDocument();
   });
 });

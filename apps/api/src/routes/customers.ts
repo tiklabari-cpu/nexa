@@ -10,6 +10,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import { CustomerService } from '../services/customers/customer-service.js';
+import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 
 const listQuery = z.object({
   query: z.string().trim().max(320).optional(),
@@ -46,8 +47,15 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 const customerIdSchema = z.string().uuid();
 
+// A map of definition id → value, where `null` clears a field. Validated
+// against the field definitions (type + required) in the service.
+const customFieldsBody = z.object({
+  values: z.record(z.string().max(5000).nullable()),
+});
+
 export default async function customerDirectoryRoutes(app: FastifyInstance): Promise<void> {
   const customers = new CustomerService();
+  const customFields = new CustomFieldService();
 
   app.get(
     '/customers',
@@ -118,6 +126,33 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
           },
         });
 
+        return customers.get(tx, tenant, customerId);
+      });
+
+      return reply.send(updated);
+    },
+  );
+
+  // Custom fields (FR-MOD-08.7.6): set this contact's values for the fields a
+  // workspace has defined. Each is validated against its definition — a wrong
+  // type, or a blank on a required field, is a 400. Returns the fresh detail,
+  // whose `custom_fields` now carries the stored values (visible in the CRM).
+  app.put<{ Params: { customerId: string } }>(
+    '/customers/:customerId/custom-fields',
+    { config: { scopes: ['customers:rw'] } },
+    async (request, reply) => {
+      const customerId = parse(customerIdSchema, request.params.customerId);
+      const { values } = parse(customFieldsBody, request.body);
+      const tenant = request.tenant();
+
+      const updated = await request.withTenant(async (tx) => {
+        const existing = await tx.customer.findFirst({
+          where: { id: customerId },
+          select: { id: true },
+        });
+        if (!existing) throw ApiError.notFound('Customer not found.');
+
+        await customFields.setValues(tx, tenant, 'contact', customerId, values);
         return customers.get(tx, tenant, customerId);
       });
 

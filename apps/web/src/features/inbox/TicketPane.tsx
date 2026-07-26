@@ -23,11 +23,13 @@ import {
   useAgents,
   useMergeTicket,
   useRemoveFollower,
+  useSetTicketCustomFields,
   useTicket,
   useUnmergeTicket,
   useUpdateTicket,
 } from './useTickets.js';
 import { TICKET_PRIORITIES, hasElevatedPriority, nearestPriority } from './ticket-priority.js';
+import { CustomFields } from '../custom-fields/CustomFields.js';
 import type { Ticket, TicketDetail, TicketStatus } from './types.js';
 
 const STATUSES: TicketStatus[] = ['open', 'pending', 'solved', 'closed', 'spam'];
@@ -140,6 +142,30 @@ function MergedBanner({
       Merged into <span className="font-mono text-xs">{ticket.merged_into_id}</span>. It is folded
       under that ticket and hidden from lists until you unmerge it.
     </Banner>
+  );
+}
+
+/**
+ * Custom fields on the ticket (FR-MOD-08.7.6). Renders nothing when the
+ * workspace has defined none, so the pane stays uncluttered until a field
+ * exists. The values are set through the ticket's own PUT and validated against
+ * their definitions.
+ */
+function TicketCustomFieldsSection({ ticket }: { ticket: TicketDetail }): ReactElement | null {
+  const setFields = useSetTicketCustomFields(ticket.id);
+  if (ticket.custom_fields.length === 0) return null;
+
+  return (
+    <section className="mt-8 max-w-xl border-t border-border pt-6">
+      <h3 className="mb-3 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+        Custom fields
+      </h3>
+      <CustomFields
+        fields={ticket.custom_fields}
+        canEdit
+        save={(values) => setFields.mutateAsync(values).then(() => undefined)}
+      />
+    </section>
   );
 }
 
@@ -492,6 +518,7 @@ export function TicketDetailPane({
             merges belong to its primary — so these are hidden while it is folded in. */}
         {!merged && (
           <>
+            <TicketCustomFieldsSection ticket={data} />
             <FollowersSection ticket={data} />
             <MergeSection ticket={data} candidates={candidates} />
           </>

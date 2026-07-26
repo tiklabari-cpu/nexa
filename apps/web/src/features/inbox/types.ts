@@ -1,3 +1,5 @@
+import type { CustomFieldValue } from '@nexa/types';
+
 export interface ChatEvent {
   id: string;
   chat_id: string;
@@ -122,4 +124,6 @@ export interface TicketDetail extends Ticket {
   source_chat: { id: string; active: boolean; created_at: string } | null;
   followers: TicketFollower[];
   merged_ticket_ids: string[];
+  /** Custom fields defined for tickets, with this ticket's values (FR-MOD-08.7.6). */
+  custom_fields: CustomFieldValue[];
 }

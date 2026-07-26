@@ -914,6 +914,31 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/tickets/{ticketId}/custom-fields': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set this ticket's custom field values
+     * @description A map of definition id → value (FR-MOD-08.7.6), where null clears a field.
+     *     Each value is validated against its definition: a wrong type, or a blank on
+     *     a required field, is a 400. Returns the ticket, whose `custom_fields` now
+     *     carries the stored values.
+     */
+    put: operations['setTicketCustomFields'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customers/{customerId}/ban': {
     parameters: {
       query?: never;
@@ -938,6 +963,31 @@ export interface paths {
     post: operations['banCustomer'];
     /** Lift a ban */
     delete: operations['unbanCustomer'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/customers/{customerId}/custom-fields': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set this contact's custom field values
+     * @description A map of definition id → value (FR-MOD-08.7.6), where null clears a field.
+     *     Each value is validated against its definition: a wrong type, or a blank on
+     *     a required field, is a 400. Returns the contact, whose `custom_fields` now
+     *     carries the stored values.
+     */
+    put: operations['setCustomerCustomFields'];
+    post?: never;
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -1743,6 +1793,112 @@ export interface paths {
      *     valid rule — an edit cannot strip the condition or action out of one.
      */
     patch: operations['updateTicketRule'];
+    trace?: never;
+  };
+  '/settings/ticket-email-templates': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List ticket e-mail templates
+     * @description In authoring order — oldest first.
+     */
+    get: operations['listTicketEmailTemplates'];
+    put?: never;
+    /**
+     * Create a ticket e-mail template
+     * @description The subject and body may carry `{{ group.field }}` placeholders. Both are
+     *     validated against the variable catalogue (FR-MOD-08.7.5): a placeholder
+     *     naming an unknown variable, or a malformed `{{…}}`, is a 400 rather than a
+     *     stored template that would render broken mail.
+     */
+    post: operations['createTicketEmailTemplate'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/ticket-email-templates/{templateId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        templateId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete a ticket e-mail template */
+    delete: operations['deleteTicketEmailTemplate'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit a ticket e-mail template or toggle it on/off
+     * @description Only the fields present in the body change. A changed subject or body is
+     *     re-validated against the variable catalogue, so an edit can no more
+     *     introduce an invalid placeholder than a create can.
+     */
+    patch: operations['updateTicketEmailTemplate'];
+    trace?: never;
+  };
+  '/settings/custom-fields': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List custom field definitions
+     * @description In authoring order — oldest first. Optionally filtered to one entity.
+     */
+    get: operations['listCustomFields'];
+    put?: never;
+    /**
+     * Define a custom field
+     * @description A label is unique per (workspace, entity): defining a second field with
+     *     the same label on the same entity is a 400. The `type` is immutable once
+     *     set — a re-typed field is a new field.
+     */
+    post: operations['createCustomField'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/custom-fields/{fieldId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fieldId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a custom field
+     * @description Its stored values on every ticket or contact are removed with it.
+     */
+    delete: operations['deleteCustomField'];
+    options?: never;
+    head?: never;
+    /**
+     * Rename a custom field or change whether it is required
+     * @description Only the fields present in the body change. The `entity` and `type` are
+     *     immutable — changing a field's type would leave stored values validated
+     *     against a rule that no longer holds.
+     */
+    patch: operations['updateCustomField'];
     trace?: never;
   };
   '/settings/security': {
@@ -3363,6 +3519,78 @@ export interface components {
       created_at: string;
     };
     /**
+     * @description A branded, variabled ticket e-mail template (FR-MOD-08.7.5). The subject
+     *     and body may carry `{{ group.field }}` placeholders from the fixed
+     *     variable catalogue; both are validated on save, so a stored template can
+     *     never name a variable the product cannot fill.
+     */
+    TicketEmailTemplate: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      subject: string;
+      body: string;
+      /** @description Whether agents may pick the template. Off keeps it authored but hidden. */
+      enabled: boolean;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description A custom field a workspace has defined on tickets or contacts
+     *     (FR-MOD-08.7.6) — an extra field the product does not ship with. The
+     *     two properties that carry the requirement are `type` (how a value is
+     *     validated) and `required` (whether it may be blank).
+     */
+    CustomFieldDefinition: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * @description What the field hangs off.
+       * @enum {string}
+       */
+      entity: 'ticket' | 'contact';
+      label: string;
+      /**
+       * @description How a value is validated. Immutable once set.
+       * @enum {string}
+       */
+      type: 'text' | 'number' | 'boolean' | 'date';
+      /** @description When true, a value may not be left blank. */
+      required: boolean;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description A custom field as it appears on one entity (FR-MOD-08.7.6): the
+     *     definition's metadata joined with the stored value, or null when nothing
+     *     is set. One entry per definition, so a defined-but-empty field still
+     *     shows.
+     */
+    CustomFieldValue: {
+      /** Format: uuid */
+      definition_id: string;
+      label: string;
+      /** @enum {string} */
+      type: 'text' | 'number' | 'boolean' | 'date';
+      required: boolean;
+      /** @description The stored value in canonical form, or null when unset. */
+      value: string | null;
+    };
+    /**
+     * @description A map of custom field definition id → value, where null clears a field.
+     *     Each value is validated against its definition (type + required); a
+     *     wrong type or a blank on a required field is a 400.
+     */
+    CustomFieldValuesInput: {
+      values: {
+        [key: string]: string | null;
+      };
+    };
+    /**
      * @description The account and the workspaces it may sign in to. Deliberately carries
      *     no tokens: the caller picks a workspace and continues through
      *     `/auth/authorize`, so one code path issues credentials rather than
@@ -3465,10 +3693,14 @@ export interface components {
       merged_ticket_ids: string[];
       /** @description Tag names on the ticket — what a ticket rule's "add tag" writes (FR-MOD-08.6.2). */
       tags: string[];
+      /** @description Custom fields defined for tickets, with this ticket's values (FR-MOD-08.7.6). */
+      custom_fields: components['schemas']['CustomFieldValue'][];
     };
     CustomerDetail: components['schemas']['CustomerSummary'] & {
       /** Format: date-time */
       banned_at?: string | null;
+      /** @description Custom fields defined for contacts, with this contact's values (FR-MOD-08.7.6). */
+      custom_fields: components['schemas']['CustomFieldValue'][];
       /** @description Most recent first. */
       visits: components['schemas']['Visit'][];
       chats: {
@@ -5677,6 +5909,38 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  setTicketCustomFields: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ticketId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CustomFieldValuesInput'];
+      };
+    };
+    responses: {
+      /** @description The ticket, with its custom field values applied. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   banCustomer: {
     parameters: {
       query?: never;
@@ -5723,6 +5987,37 @@ export interface operations {
           'application/json': components['schemas']['CustomerDetail'];
         };
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setCustomerCustomFields: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CustomFieldValuesInput'];
+      };
+    };
+    responses: {
+      /** @description The contact, with its custom field values applied. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomerDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
@@ -7174,6 +7469,248 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['TicketRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listTicketEmailTemplates: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The ticket e-mail templates */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['TicketEmailTemplate'][];
+            total: number;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createTicketEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          subject: string;
+          body: string;
+          /** @description Whether agents may pick the template; defaults to true. */
+          enabled?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketEmailTemplate'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteTicketEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        templateId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateTicketEmailTemplate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        templateId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          subject?: string;
+          body?: string;
+          enabled?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketEmailTemplate'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listCustomFields: {
+    parameters: {
+      query?: {
+        entity?: 'ticket' | 'contact';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The custom field definitions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['CustomFieldDefinition'][];
+            total: number;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createCustomField: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          entity: 'ticket' | 'contact';
+          label: string;
+          /** @enum {string} */
+          type: 'text' | 'number' | 'boolean' | 'date';
+          /** @description Whether a value may be left blank. Defaults to false. */
+          required?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomFieldDefinition'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteCustomField: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fieldId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateCustomField: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        fieldId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          label?: string;
+          required?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CustomFieldDefinition'];
         };
       };
       400: components['responses']['BadRequest'];

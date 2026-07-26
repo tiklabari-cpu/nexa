@@ -40,6 +40,7 @@ function makeDetail(overrides: Partial<TicketDetail> = {}): TicketDetail {
     source_chat: null,
     followers: [],
     merged_ticket_ids: [],
+    custom_fields: [],
     ...overrides,
   };
 }

@@ -64,6 +64,21 @@ export function useUpdateTicket(ticketId: string | null) {
   });
 }
 
+/**
+ * Set a ticket's custom field values (FR-MOD-08.7.6). The response carries the
+ * ticket with its `custom_fields` applied, which seeds the detail cache through
+ * `settle` so the pane shows the saved values without a refetch flash.
+ */
+export function useSetTicketCustomFields(ticketId: string | null) {
+  const api = useApiClient();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (values: Record<string, string | null>) =>
+      api.put<TicketDetail>(`/tickets/${ticketId}/custom-fields`, { values }),
+    onSuccess: (data) => settle(client, data),
+  });
+}
+
 /** Merge one ticket into another (FR-MOD-13.6). */
 export function useMergeTicket() {
   const api = useApiClient();

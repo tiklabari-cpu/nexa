@@ -1215,7 +1215,7 @@
         "description": "campaigns tablosu 0 tüketicili. PRD MOD-03.3 (v1, Should).",
         "details": "PARENT [MAX]. 03.3 Campaigns. campaigns tablosu 0 tüketicili (§8). 3 subtask; 03.3.2-a [MAX]\n(tetik motoru + otomatik gönderim). Bağlam: PLAN §4.4.7. Bağımlılık: tm 29 (form deseni).",
         "testStrategy": "Subtask bazlı.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "29"
         ],
@@ -1227,10 +1227,10 @@
             "description": "All/Ongoing/Scheduled/Inactive durum filtre. PRD 03.3.1 (Should).",
             "details": "03.3.1-a Campaigns alt sekmeler (All/Ongoing/Scheduled/Inactive). [XHIGH] PRD 03.3.1 (Should).\nKAPSAM: durum bazlı filtre sekmeleri. KK (birebir): \"Durum bazlı filtre\". BAĞLAM: PLAN §4.4.7.",
             "testStrategy": "unit: durum filtre. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "43",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T19:18:39.030Z"
           },
           {
             "id": 2,
@@ -1238,12 +1238,12 @@
             "description": "Koşul+mesaj+zamanlama → eşleşen ziyaretçiye otomatik gönderim. PRD 03.3.2 (Should).",
             "details": "03.3.2-a New campaign builder (koşul+mesaj+zamanlama → otomatik gönderim). [MAX] ↑ PRD 03.3.2 (Should).\n↑ GEREKÇE: tetikleyici motoru + eşleşen ziyaretçiye otomatik gönderim (eşzamanlılık/yanlış-tetik riski).\nKAPSAM: builder (koşul+mesaj zorunlu) → kayıt sonrası eşleşen ziyaretçiye otomatik gönderim.\nKK (birebir): \"Tetikleyici+mesaj zorunlu; kayıt sonrası eşleşen ziyaretçiye otomatik gönderim\". BAĞLAM: PLAN §4.4.7. Bağımlılık: 43.1 + tm 29.",
             "testStrategy": "integration: koşul eşleşince gönderim; eşleşmeyince gönderilmez; CROSS-TENANT. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "43",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T19:18:39.034Z"
           },
           {
             "id": 3,
@@ -1251,15 +1251,15 @@
             "description": "Edit/View report + active toggle + performans. PRD 03.3.3 (Should).",
             "details": "03.3.3-a Kampanya kartı (Edit/View report; active toggle). [XHIGH] PRD 03.3.3 (Should).\nKAPSAM: düzenleme + performans (Displayed/Chats/Conversion) + active toggle.\nKK (birebir): \"Düzenleme + performans (Displayed/Chats/Conversion)\". BAĞLAM: PLAN §4.4.7. Bağımlılık: 43.2.",
             "testStrategy": "unit. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2
             ],
             "parentId": "43",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T19:18:39.038Z"
           }
         ],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T19:18:39.038Z"
       },
       {
         "id": "44",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T18:32:52.197Z",
+      "lastModified": "2026-07-26T19:18:39.038Z",
       "taskCount": 84,
-      "completedCount": 55,
+      "completedCount": 56,
       "tags": [
         "master"
       ]

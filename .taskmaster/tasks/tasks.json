@@ -1177,13 +1177,13 @@
         "description": "Sıralanabilir tablo + URL param + deep-link. PRD 02.7 (Should). T6-a virtualization gerekir.",
         "details": "02.7-a Tickets grid (sıralanabilir, deep-link). [XHIGH] PRD 02.7 (Should).\nKAPSAM: sıralanabilir tablo; satır → ticket konuşması; URL param sıralama; deep-link.\nKK (birebir): \"Satır → ticket konuşması; URL param sıralama\". BAĞLAM: PLAN §4.4.6. Bağımlılık: tm 30 (T6-a virtualization).",
         "testStrategy": "unit + E2E deep-link. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "30"
         ],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T18:32:52.197Z"
       },
       {
         "id": "41",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T17:56:15.302Z",
+      "lastModified": "2026-07-26T18:32:52.197Z",
       "taskCount": 84,
-      "completedCount": 54,
+      "completedCount": 55,
       "tags": [
         "master"
       ]

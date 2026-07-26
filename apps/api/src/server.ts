@@ -32,6 +32,7 @@ import websiteRoutes from './routes/websites.js';
 import webhookRoutes from './routes/webhooks.js';
 import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
+import copilotRoutes from './routes/copilot.js';
 import healthRoutes from './routes/health.js';
 
 export const API_PREFIX = '/api/v1';
@@ -148,6 +149,7 @@ export async function buildServer({
       await api.register(webhookRoutes);
       await api.register(uploadRoutes, { env });
       await api.register(playbookRoutes);
+      await api.register(copilotRoutes, { env });
     },
     { prefix: API_PREFIX },
   );

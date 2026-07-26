@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useSendMessage } from './useInbox.js';
 import { useTypingStore } from './typing.js';
+import { useCopilotDraftStore } from './copilotDraft.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { uploadAttachment, type UploadedAttachment } from './uploadAttachment.js';
 import {
@@ -90,6 +91,19 @@ export function Composer({
   // Emit a final "stop" when the open chat changes or the composer unmounts —
   // otherwise the previous visitor is left with a frozen "…is typing".
   useEffect(() => stopTyping, [stopTyping]);
+
+  // A suggestion handed over from Copilot (FR-MOD-12.3). It fills the reply —
+  // always a customer-facing reply, never a note — and the agent edits and
+  // sends it. Consumed on arrival so the same draft is not re-applied on the
+  // next render.
+  const copilotDraft = useCopilotDraftStore((state) => state.byChat[chatId]);
+  useEffect(() => {
+    if (copilotDraft === undefined) return;
+    setText(copilotDraft);
+    setMode('all');
+    useCopilotDraftStore.getState().clear(chatId);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [copilotDraft, chatId]);
 
   const submit = (): void => {
     if (!canSend) return;

@@ -6,6 +6,41 @@
 
 ## Task log (newest-first)
 
+### 36 — 12 · Copilot (agent-assist) [MAX] — done — 2026-07-26 UTC
+
+- Kapsam: FR-MOD-12 (`Should`, v1) `[MAX]` parent — 3 alt-görev tek pencerede, contract-first. PLAN
+  satır 130 (MOD-12) + 518 (02.5) + 545 (12.1–12.3) → `✅` (§D40). Backend + frontend + OpenAPI + e2e.
+- Yapıldı:
+  - **12.2-a ayrı KB** — Copilot bilgi tabanı `kind:'copilot'` AiAgent'a asılı, AI-agent KB'sinden
+    **çift yönlü izole** (`/knowledge-sources` `ai_agent`'a, `/copilot/knowledge` copilot ajanına
+    süzülür). `GET/POST/DELETE /copilot/knowledge` (`routes/copilot.ts` → `services/ai/copilot-service.ts`;
+    SSRF-guard'lı website crawl + eşzamanlı indeks, playbook KB deseni). **Müşteri token'ı → 404**
+    (agent+bot default principals; boundary=404 bedavaya geldi), cross-tenant izole.
+  - **12.1-a buton + panel** — transcript header'da **Copilot butonu** (`InboxPage`) → sağ panel
+    Copilot sekmesi (`CopilotPanel.tsx`; `panelTab` details↔copilot, chat değişince reset, Expand
+    ile gizlenir). **Assisted metriğini besler**: her assist bir `skill_run` yazar = reports 07.3.2
+    "assisted" sorgusunun tam anahtarı (`recordAssist`, copilot `workspace`-kind skill).
+  - **12.3-a özet + yanıt + enhance (+02.5)** — özet → **internal note** (`chats.sendEvent`
+    recipients=agents, RTM fan-out, arşivde görünür, archived→409); yanıt taslağı copilot KB'den RAG
+    (eşleşme yoksa boş, uydurmaz) → `copilotDraft` store ile **composer'a** (`Composer` reply moduna
+    geçer); enhance rephrase/friendly/formal/grammar (`@nexa/ai-mock` `enhanceText`/`summariseConversation`,
+    deterministik stub). OpenAPI 5 yol (`paths/copilot.yaml`), `/skills`+`/knowledge-sources`
+    `ai_agent`'a filtrelendi (copilot sızmaz), seed'e copilot KB eklendi (demo'da "Draft a reply" çalışır).
+- Doğrulama (DoD, exit 0): typecheck 11/11 · lint 8/8 · build 7/7 · test (api **864** + web **354** +
+  ai-mock **56**, turbo `--concurrency=1`) — integration dahil: contract-parity 5/5, `copilot.test.ts`
+  15/15 · e2e `copilot.spec.ts` 1/1 + `inbox-panel`/`inbox-tabs` regresyonsuz. Yeni test: `assist.test.ts`(14)
+  + `copilot.test.ts`(15) + `CopilotPanel.test.tsx`(7) + `copilotDraft.test.ts`(3) + `Composer.copilot.test.tsx`(2).
+- Varsayımlar / notlar:
+  - Copilot skill'i `kind:'workspace'` (`skills_kind_check` 'copilot'e izin vermiyor; 'workspace'
+    zaten assisted-metrik run kind'i) — migration gerekmedi. Ajanı/skill'i **lazy find-or-create**
+    (fixtures seed'lemez).
+  - **e2e viewport 1680** — transcript header darlığı (tickets.spec emsali) copilot butonunu details
+    paneli altına kaydırıyordu; feature'ın yeni sorunu değil, mevcut header darlığı. [[nexa-e2e-clean-db]]
+    gereği e2e `.env` source'lanarak koşuldu.
+- Sonraki pencereye not: **Ertelenen** — Copilot KB **yönetim UI**'si (kaynak ekle/sil) 04.2-a
+  (Team tarafı, ayrı task) kapsamında; backend `/copilot/knowledge` hazır. §2 satır 111 "MOD-01 …
+  Copilot v1" MOD-01 rollup hücresi — copilot panel teslim ama o hücre MOD-01 kapsamı, dokunulmadı.
+
 ### 62 — EK-C.2 · Banner/dropdown/panel/modal tek tasarım sistemi [XHIGH] — done — 2026-07-26 UTC
 
 - Kapsam: FR-EK-C.2 (`Should`, Faz-0'ı bloklamaz — erken teslim). Denetim (§7.1) notu: bileşenler

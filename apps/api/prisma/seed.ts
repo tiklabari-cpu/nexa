@@ -337,9 +337,44 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
     select: { id: true },
   });
 
-  await prisma.aiAgent.create({
+  // Copilot is a second AI surface with its own, agent-only knowledge base
+  // (FR-MOD-12.2) — internal guidance a customer never sees. Seeded with a
+  // playbook so "Draft a reply" has something to answer from in the demo.
+  const copilotAgent = await prisma.aiAgent.create({
     data: { licenseId, kind: 'copilot', name: 'Copilot', active: true },
+    select: { id: true },
   });
+
+  const copilotSource = await prisma.knowledgeSource.create({
+    data: {
+      aiAgentId: copilotAgent.id,
+      licenseId,
+      type: 'article',
+      name: 'Agent playbook',
+      status: 'ready',
+      addedBy: owner.id,
+      content: 'Internal escalation and refund guidance for agents.',
+    },
+    select: { id: true },
+  });
+
+  const copilotChunks = [
+    'A refund over five hundred dollars must be approved by a manager before it is promised.',
+    'Escalate an angry or threatening customer to the duty lead rather than handling it alone.',
+    'Always confirm the order number before giving a delivery date.',
+  ];
+  for (const [index, text] of copilotChunks.entries()) {
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding, token_count, position)
+       VALUES (gen_random_uuid(), $1::uuid, $2::bigint, $3, $4::vector, $5, $6)`,
+      copilotSource.id,
+      licenseId.toString(),
+      text,
+      toVectorLiteral(embed(text)),
+      Math.ceil(text.length / 4),
+      index,
+    );
+  }
 
   await prisma.skill.create({
     data: {

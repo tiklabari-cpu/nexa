@@ -1,0 +1,190 @@
+knowledge:
+  get:
+    tags: [Copilot]
+    operationId: listCopilotKnowledge
+    summary: Copilot's own knowledge sources
+    description: |
+      The agent-assist knowledge base (FR-MOD-12.2) — separate from the
+      customer-facing AI agent's sources, and reachable only by an agent/bot
+      token. A customer token gets a 404, not a 403, so the widget surface cannot
+      be used to probe for it.
+    responses:
+      "200":
+        description: Sources
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/KnowledgeSource" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Copilot]
+    operationId: createCopilotKnowledge
+    summary: Add a source to the copilot knowledge base and index it
+    description: |
+      Chunked and embedded on save, answerable immediately. A `website` source is
+      crawled from `source_url` (guarded against private/internal targets, SSRF —
+      NFR-S7); every other type indexes `content`. Exactly one is required.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 200 }
+              content: { type: string, minLength: 1, maxLength: 100000 }
+              source_url: { type: string, minLength: 1, maxLength: 2048, description: "Required when type is website." }
+              type: { type: string, enum: [website, file, article, faq], default: article }
+    responses:
+      "201":
+        description: Indexed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeSource" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeSource:
+  parameters:
+    - name: sourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  delete:
+    tags: [Copilot]
+    operationId: deleteCopilotKnowledge
+    summary: Remove a copilot source and everything indexed from it
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+summary:
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      schema: { type: string }
+
+  post:
+    tags: [Copilot]
+    operationId: copilotSummary
+    summary: Summarise a conversation into an internal note
+    description: |
+      Writes the summary as an internal note on the chat (FR-MOD-12.3 / 02.5) —
+      visible to the team, never to the customer, and preserved in the archived
+      transcript. Records a copilot assist, so the chat counts as "assisted" in
+      Reports (07.3.2).
+    responses:
+      "201":
+        description: Summary written as an internal note
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [summary, note_event_id]
+              properties:
+                summary: { type: string }
+                note_event_id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+reply:
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      schema: { type: string }
+
+  post:
+    tags: [Copilot]
+    operationId: copilotReply
+    summary: Draft a reply from the copilot knowledge base
+    description: |
+      Retrieves from the copilot knowledge base using the customer's latest
+      message and returns a suggested reply for the agent to edit and send
+      (FR-MOD-12.3). Returns an empty draft when nothing relevant is found rather
+      than inventing an answer.
+    responses:
+      "200":
+        description: A suggested reply
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [draft, sources]
+              properties:
+                draft: { type: string }
+                sources:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, score]
+                    properties:
+                      name: { type: string }
+                      score: { type: number }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+enhance:
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      schema: { type: string }
+
+  post:
+    tags: [Copilot]
+    operationId: copilotEnhance
+    summary: Rewrite a draft in a chosen register
+    description: |
+      Improves the grammar or tone of a draft reply (FR-MOD-12.3) — rephrase,
+      friendlier, more formal, or a plain grammar tidy. Deterministic, so the
+      same draft always yields the same rewrite.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [text]
+            properties:
+              text: { type: string, minLength: 1, maxLength: 10000 }
+              mode: { type: string, enum: [rephrase, friendly, formal, grammar], default: rephrase }
+    responses:
+      "200":
+        description: The rewritten draft
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, mode]
+              properties:
+                text: { type: string }
+                mode: { type: string, enum: [rephrase, friendly, formal, grammar] }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

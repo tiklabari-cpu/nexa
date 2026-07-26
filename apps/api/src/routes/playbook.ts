@@ -172,7 +172,13 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
 
   app.get('/skills', { config: { scopes: READ } }, async (request, reply) => {
     const skills = await request.withTenant((tx) =>
-      tx.skill.findMany({ orderBy: [{ active: 'desc' }, { updatedAt: 'desc' }] }),
+      // AI-agent skills only. Copilot owns a `kind: 'copilot'` skill purely to
+      // anchor its assist runs (FR-MOD-12) — it is not something an admin wrote
+      // and must not appear in the Playbook list beside the real ones.
+      tx.skill.findMany({
+        where: { kind: 'ai_agent' },
+        orderBy: [{ active: 'desc' }, { updatedAt: 'desc' }],
+      }),
     );
     return reply.send({ items: skills.map(serialiseSkill) });
   });
@@ -348,6 +354,10 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
   app.get('/knowledge-sources', { config: { scopes: READ } }, async (request, reply) => {
     const sources = await request.withTenant((tx) =>
       tx.knowledgeSource.findMany({
+        // The customer-facing AI agent's sources only. Copilot keeps its own base
+        // (FR-MOD-12.2) on a `kind: 'copilot'` agent, reachable through
+        // `/copilot/knowledge` — the two must never show each other's sources.
+        where: { aiAgent: { kind: 'ai_agent' } },
         orderBy: { updatedAt: 'desc' },
         include: { _count: { select: { chunks: true } } },
       }),

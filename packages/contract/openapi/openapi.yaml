@@ -41,6 +41,8 @@ tags:
     description: Groups, agents, tags, canned responses, routing, channels.
   - name: Playbook
     description: AI agents, skills and the knowledge they answer from.
+  - name: Copilot
+    description: Agent-assist — a separate knowledge base and in-chat help (summary, reply draft, rewrite).
   - name: Settings
     description: Workspace configuration — trusted domains, saved replies, routing.
   - name: Onboarding
@@ -184,6 +186,17 @@ paths:
     $ref: "./paths/playbook.yaml#/knowledgeSources"
   /knowledge-sources/{sourceId}:
     $ref: "./paths/playbook.yaml#/knowledgeSource"
+
+  /copilot/knowledge:
+    $ref: "./paths/copilot.yaml#/knowledge"
+  /copilot/knowledge/{sourceId}:
+    $ref: "./paths/copilot.yaml#/knowledgeSource"
+  /copilot/chats/{chatId}/summary:
+    $ref: "./paths/copilot.yaml#/summary"
+  /copilot/chats/{chatId}/reply:
+    $ref: "./paths/copilot.yaml#/reply"
+  /copilot/chats/{chatId}/enhance:
+    $ref: "./paths/copilot.yaml#/enhance"
 
   /settings/trusted-domains:
     $ref: "./paths/settings.yaml#/trustedDomains"

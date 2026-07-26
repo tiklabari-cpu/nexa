@@ -1319,6 +1319,128 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/copilot/knowledge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Copilot's own knowledge sources
+     * @description The agent-assist knowledge base (FR-MOD-12.2) — separate from the
+     *     customer-facing AI agent's sources, and reachable only by an agent/bot
+     *     token. A customer token gets a 404, not a 403, so the widget surface cannot
+     *     be used to probe for it.
+     */
+    get: operations['listCopilotKnowledge'];
+    put?: never;
+    /**
+     * Add a source to the copilot knowledge base and index it
+     * @description Chunked and embedded on save, answerable immediately. A `website` source is
+     *     crawled from `source_url` (guarded against private/internal targets, SSRF —
+     *     NFR-S7); every other type indexes `content`. Exactly one is required.
+     */
+    post: operations['createCopilotKnowledge'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/copilot/knowledge/{sourceId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Remove a copilot source and everything indexed from it */
+    delete: operations['deleteCopilotKnowledge'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/copilot/chats/{chatId}/summary': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Summarise a conversation into an internal note
+     * @description Writes the summary as an internal note on the chat (FR-MOD-12.3 / 02.5) —
+     *     visible to the team, never to the customer, and preserved in the archived
+     *     transcript. Records a copilot assist, so the chat counts as "assisted" in
+     *     Reports (07.3.2).
+     */
+    post: operations['copilotSummary'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/copilot/chats/{chatId}/reply': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Draft a reply from the copilot knowledge base
+     * @description Retrieves from the copilot knowledge base using the customer's latest
+     *     message and returns a suggested reply for the agent to edit and send
+     *     (FR-MOD-12.3). Returns an empty draft when nothing relevant is found rather
+     *     than inventing an answer.
+     */
+    post: operations['copilotReply'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/copilot/chats/{chatId}/enhance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Rewrite a draft in a chosen register
+     * @description Improves the grammar or tone of a draft reply (FR-MOD-12.3) — rephrase,
+     *     friendlier, more formal, or a plain grammar tidy. Deterministic, so the
+     *     same draft always yields the same rewrite.
+     */
+    post: operations['copilotEnhance'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/trusted-domains': {
     parameters: {
       query?: never;
@@ -5995,6 +6117,199 @@ export interface operations {
         };
         content?: never;
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listCopilotKnowledge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sources */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['KnowledgeSource'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createCopilotKnowledge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          content?: string;
+          /** @description Required when type is website. */
+          source_url?: string;
+          /**
+           * @default article
+           * @enum {string}
+           */
+          type?: 'website' | 'file' | 'article' | 'faq';
+        };
+      };
+    };
+    responses: {
+      /** @description Indexed */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeSource'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteCopilotKnowledge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  copilotSummary: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Summary written as an internal note */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            summary: string;
+            note_event_id: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  copilotReply: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A suggested reply */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            draft: string;
+            sources: {
+              name: string;
+              score: number;
+            }[];
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  copilotEnhance: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          text: string;
+          /**
+           * @default rephrase
+           * @enum {string}
+           */
+          mode?: 'rephrase' | 'friendly' | 'formal' | 'grammar';
+        };
+      };
+    };
+    responses: {
+      /** @description The rewritten draft */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            text: string;
+            /** @enum {string} */
+            mode: 'rephrase' | 'friendly' | 'formal' | 'grammar';
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];

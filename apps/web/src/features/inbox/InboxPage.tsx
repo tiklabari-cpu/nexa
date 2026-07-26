@@ -13,6 +13,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { Composer } from './Composer.js';
 import { DetailsPanel } from './DetailsPanel.js';
+import { CopilotPanel } from './CopilotPanel.js';
 import { Transcript } from './Transcript.js';
 import { TypingIndicator } from './TypingIndicator.js';
 import { useChat, useChatList, useRealtime, useTranscript, useViewCounts } from './useInbox.js';
@@ -106,6 +107,14 @@ export function InboxPage(): ReactElement {
   // Whether the right-hand Details panel is shown or collapsed to give the
   // transcript the full width. The choice is remembered across reloads.
   const rightPanel = useRightPanel();
+
+  // Which pane fills the right panel: the persisted Details context, or Copilot
+  // (FR-MOD-12.1). Copilot is per-conversation, not a remembered layout
+  // preference, so it resets to Details whenever the open chat changes.
+  const [panelTab, setPanelTab] = useState<'details' | 'copilot'>('details');
+  useEffect(() => {
+    setPanelTab('details');
+  }, [selectedId]);
 
   const chats = useMemo(() => list.data?.items ?? [], [list.data]);
 
@@ -383,6 +392,14 @@ export function InboxPage(): ReactElement {
                     setSelectedTicketId(ticketId);
                   }}
                 />
+                {/* Copilot (FR-MOD-12.1): opens the assist panel for this chat,
+                    bringing the right panel back if it was collapsed. */}
+                <CopilotButton
+                  onOpen={() => {
+                    setPanelTab('copilot');
+                    rightPanel.setExpanded(false);
+                  }}
+                />
                 {/* When the panel is open it is collapsed from its own header
                     (the transcript header is tight at this width); when it is
                     hidden, this is the way back to it. */}
@@ -411,13 +428,23 @@ export function InboxPage(): ReactElement {
         </main>
       )}
 
-      {/* Details — hidden in Expand mode so the transcript takes the full width */}
+      {/* Right panel — Details or Copilot. Hidden in Expand mode so the
+          transcript takes the full width (FR-MOD-01.3 / 12.1). */}
       {!onTickets && selectedId && chat.data && !rightPanel.expanded && (
-        <DetailsPanel
-          chat={chat.data}
-          chatId={selectedId}
-          onCollapse={() => rightPanel.setExpanded(true)}
-        />
+        panelTab === 'copilot' ? (
+          <CopilotPanel
+            chatId={selectedId}
+            chatActive={chat.data.active}
+            onShowDetails={() => setPanelTab('details')}
+            onCollapse={() => rightPanel.setExpanded(true)}
+          />
+        ) : (
+          <DetailsPanel
+            chat={chat.data}
+            chatId={selectedId}
+            onCollapse={() => rightPanel.setExpanded(true)}
+          />
+        )
       )}
     </>
   );
@@ -439,6 +466,24 @@ function ShowDetailsButton({ onShow }: { onShow: () => void }): ReactElement {
     >
       <span aria-hidden="true">◧</span>
       Details
+    </button>
+  );
+}
+
+/**
+ * Opens the Copilot assist panel for the open conversation (FR-MOD-12.1). Sits
+ * in the transcript header next to Copy link and Create ticket, so agent-assist
+ * is one click from any chat.
+ */
+function CopilotButton({ onOpen }: { onOpen: () => void }): ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
+    >
+      <span aria-hidden="true">✧</span>
+      Copilot
     </button>
   );
 }

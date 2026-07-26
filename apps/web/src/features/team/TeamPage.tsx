@@ -6,7 +6,7 @@
  * *because* a team they belong to has access to it, and routing picks between
  * available agents using their priority within that team (ADR-08).
  */
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, type ReactElement } from 'react';
 import {
   Card,
@@ -25,15 +25,26 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
 import { InviteTeammates, PendingInvitations } from './InviteTeammates.js';
 
+type Role = 'owner' | 'viceowner' | 'admin' | 'agent';
+
 interface Agent {
   id: string;
   name: string;
   email: string;
   avatar_url: string | null;
-  role: 'owner' | 'viceowner' | 'admin' | 'agent';
+  role: Role;
   routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
   concurrent_chats_limit: number;
   two_factor_enabled: boolean;
+  suspended: boolean;
+}
+
+interface Chatbot {
+  id: string;
+  name: string;
+  active: boolean;
+  avatar_url: string | null;
+  skills_count: number;
 }
 
 interface Group {
@@ -41,6 +52,32 @@ interface Group {
   name: string;
   language_code: string;
   agents: Array<{ agent_id: string; priority: 'primary' | 'first' | 'normal' | 'last' }>;
+}
+
+/** Roles are coarse ranks; the server enforces the same order (ROLE_RANK). */
+const ROLE_RANK: Record<Role, number> = { owner: 3, viceowner: 2, admin: 1, agent: 0 };
+
+function roleAtLeast(role: string | null, minimum: Role): boolean {
+  return role != null && role in ROLE_RANK && ROLE_RANK[role as Role] >= ROLE_RANK[minimum];
+}
+
+/**
+ * Suspend / reinstate an agent (FR-MOD-04.6). Invalidates both rosters so the
+ * agent hops between the Teammates and Suspended lists without a manual refresh.
+ */
+export function useSuspension() {
+  const api = useApiClient();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, suspended }: { id: string; suspended: boolean }) =>
+      api.put(`/agents/${id}/suspension`, { suspended }),
+    onSuccess: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['team', 'agents'] }),
+        client.invalidateQueries({ queryKey: ['team', 'suspended'] }),
+      ]);
+    },
+  });
 }
 
 const STATUS_LABEL: Record<Agent['routing_status'], string> = {
@@ -61,10 +98,22 @@ const PRIORITY_ORDER = ['primary', 'first', 'normal', 'last'] as const;
 export function TeamPage(): ReactElement {
   const api = useApiClient();
   const currentAgentId = useAuth((s) => s.agent?.account_id ?? null);
+  const currentRole = useAuth((s) => s.agent?.role ?? null);
+  const suspension = useSuspension();
 
   const agents = useQuery({
     queryKey: ['team', 'agents'],
     queryFn: () => api.get<{ items: Agent[] }>('/agents'),
+  });
+
+  const suspended = useQuery({
+    queryKey: ['team', 'suspended'],
+    queryFn: () => api.get<{ items: Agent[] }>('/agents?status=suspended'),
+  });
+
+  const chatbots = useQuery({
+    queryKey: ['team', 'chatbots'],
+    queryFn: () => api.get<{ items: Chatbot[] }>('/ai-agents'),
   });
 
   const groups = useQuery({
@@ -73,12 +122,24 @@ export function TeamPage(): ReactElement {
   });
 
   const items = useMemo(() => agents.data?.items ?? [], [agents.data]);
+  const suspendedItems = useMemo(() => suspended.data?.items ?? [], [suspended.data]);
+  const botItems = useMemo(() => chatbots.data?.items ?? [], [chatbots.data]);
   const accepting = items.filter((a) => a.routing_status === 'accepting_chats').length;
   const capacity = items
     .filter((a) => a.routing_status === 'accepting_chats')
     .reduce((sum, a) => sum + a.concurrent_chats_limit, 0);
 
   const byId = useMemo(() => new Map(items.map((a) => [a.id, a])), [items]);
+
+  // Who this admin may act on. The server is the final word (roles + scope), but
+  // an unusable button is worse than an absent one, so the UI mirrors the rule:
+  // owner/admin only, never the owner as a target, never yourself.
+  const canManage = roleAtLeast(currentRole, 'admin');
+  const canSuspend = (agent: Agent): boolean =>
+    canManage &&
+    agent.id !== currentAgentId &&
+    agent.role !== 'owner' &&
+    roleAtLeast(currentRole, agent.role);
 
   return (
     <Page title="Team" description="Teammates, availability and the teams routing sends work to.">
@@ -104,6 +165,11 @@ export function TeamPage(): ReactElement {
               hint="Concurrent conversations before queueing"
             />
             <Kpi label="Teams" value={formatCount(groups.data?.items.length ?? null)} />
+            <Kpi
+              label="Chatbots"
+              value={formatCount(chatbots.data ? botItems.length : null)}
+              hint="Free — bots never use a seat"
+            />
           </KpiGrid>
 
           <Section title="Pending invitations">
@@ -126,7 +192,7 @@ export function TeamPage(): ReactElement {
                   items={items}
                   rowHeight={56}
                   caption="Agents on this licence"
-                  colSpan={5}
+                  colSpan={canManage ? 6 : 5}
                   head={
                     <thead>
                       <tr className="border-b border-border text-left">
@@ -135,6 +201,7 @@ export function TeamPage(): ReactElement {
                         <Th>Availability</Th>
                         <Th align="right">Chat limit</Th>
                         <Th>2FA</Th>
+                        {canManage && <Th align="right">Manage</Th>}
                       </tr>
                     </thead>
                   }
@@ -173,9 +240,135 @@ export function TeamPage(): ReactElement {
                           label={agent.two_factor_enabled ? 'On' : 'Off'}
                         />
                       </td>
+                      {canManage && (
+                        <td className="px-4 py-2.5 text-right">
+                          {canSuspend(agent) && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                suspension.mutate({ id: agent.id, suspended: true })
+                              }
+                              disabled={suspension.isPending}
+                              className="text-xs text-danger underline disabled:opacity-40"
+                            >
+                              Suspend
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   )}
                 />
+              )}
+            </Card>
+          </Section>
+
+          <Section
+            title="Chatbots"
+            description="Bot accounts answer on their own. They are free — a bot never uses a seat (FR-MOD-04.6)."
+          >
+            <Card>
+              {chatbots.isPending ? (
+                <ListSkeleton rows={2} />
+              ) : botItems.length === 0 ? (
+                <EmptyState
+                  title="No chatbots yet"
+                  description="Create an AI agent in the Playbook to answer common questions automatically."
+                />
+              ) : (
+                <table className="w-full text-sm">
+                  <caption className="sr-only">Bot accounts on this licence</caption>
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <Th>Name</Th>
+                      <Th>Status</Th>
+                      <Th align="right">Skills</Th>
+                      <Th align="right">Seat cost</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {botItems.map((bot) => (
+                      <tr key={bot.id} className="border-b border-border last:border-0">
+                        <td className="px-4 py-2.5 font-medium">{bot.name}</td>
+                        <td className="px-4 py-2.5">
+                          <StatusDot
+                            tone={bot.active ? 'success' : 'neutral'}
+                            label={bot.active ? 'Active' : 'Off'}
+                          />
+                        </td>
+                        <td className="tabular px-4 py-2.5 text-right text-content-secondary">
+                          {formatCount(bot.skills_count)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-2xs font-medium text-success">
+                          Free
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </Card>
+          </Section>
+
+          <Section
+            title="Suspended"
+            description="Suspended agents keep their teams and history but cannot sign in, take chats or use a seat until reinstated."
+          >
+            <Card>
+              {suspended.isPending ? (
+                <ListSkeleton rows={2} />
+              ) : suspendedItems.length === 0 ? (
+                <EmptyState
+                  title="Nobody is suspended"
+                  description="Suspend a teammate from the list above when they should no longer be assigned work."
+                />
+              ) : (
+                <table className="w-full text-sm">
+                  <caption className="sr-only">Suspended agents</caption>
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <Th>Name</Th>
+                      <Th>Role</Th>
+                      {canManage && <Th align="right">Manage</Th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {suspendedItems.map((agent) => (
+                      <tr key={agent.id} className="border-b border-border last:border-0">
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <Avatar name={agent.name} email={agent.email} />
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{agent.name}</p>
+                              <p className="truncate text-2xs text-content-tertiary">
+                                {agent.email}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 capitalize text-content-secondary">
+                          {agent.role}
+                        </td>
+                        {canManage && (
+                          <td className="px-4 py-2.5 text-right">
+                            {roleAtLeast(currentRole, agent.role) && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  suspension.mutate({ id: agent.id, suspended: false })
+                                }
+                                disabled={suspension.isPending}
+                                className="text-xs text-brand-600 underline disabled:opacity-40 dark:text-brand-400"
+                              >
+                                Reinstate
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </Card>
           </Section>

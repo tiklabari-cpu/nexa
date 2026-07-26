@@ -6,6 +6,37 @@
 
 ## Task log (newest-first)
 
+### 59 — 04.6-a · Chatbots / Suspended agents sekmeleri [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı:
+  - **Suspend/unsuspend endpoint:** yeni `PUT /agents/{agentId}/suspension` (`agents--all:rw`) —
+    çift kapı (scope + rol: owner/admin). Owner **asla** askıya alınamaz; admin **kendini** ya da
+    **rütbesinin üstünü** askıya alamaz; cross-tenant hedef RLS ile **404**. Değişiklik token'da
+    değil **üyelikte** durduğu için mevcut oturumlar **bir sonraki istekte** düşer (token-service
+    zaten `suspended` okuyor) ve routing o andan itibaren atamayı durdurur (routing-service
+    `AND NOT m.suspended`). Aynı duruma set (no-op) audit yazmaz. Yeni AUDIT_ACTIONS:
+    `member.suspended` / `member.unsuspended`.
+  - **Liste filtresi:** `GET /agents?status=active|suspended|all` (varsayılan `active` — mevcut
+    çağıranlar/atama seçicileri hiç değişmez); her item artık `suspended` bayrağı taşır.
+  - **Bot faturasız:** botlar ayrı `ai_agents` tablosunda; koltuk sayımı yalnız askıda-olmayan
+    `agent_memberships` (`min_seats`) → bot **koltuk tüketmez**, askıya alınan ajan koltuğunu boşaltır.
+  - **Sözleşme:** OpenAPI `agents.yaml` (`listAgents` status param + `setAgentSuspension`) +
+    `Agent.suspended`; `contract:generate` ile yeniden üretildi. `contract-parity` yeşil.
+  - **UI (Team):** `TeamPage.tsx` — **Chatbots** bölümü ("Free" rozeti + skills sayısı, `/ai-agents`),
+    **Suspended** bölümü (Reinstate), Teammates satırlarına **Suspend** aksiyonu + "Chatbots" KPI.
+    Rol/self/owner kapısı UI'da da yansıtılır; mutation her iki roster'ı invalidate eder.
+- Doğrulama (exit 0): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` · `turbo run test
+  --concurrency=1` (seri) **api 821/821** (+13 yeni `agents-suspension.test.ts`: liste ↔ suspended,
+  oturum-durur, routing-durur, yetki guard'ları, cross-tenant 404, audit, bot-faturasız) + tüm
+  paketler yeşil · **e2e `team.spec.ts` 2/2** (.env source'lanarak). KK birebir kanıtlı: suspend →
+  oturum/atama durur; bot faturasız.
+- Varsayımlar: (1) Suspend anında PAT/oturumu **socket kick** ile öldürmek eklenmedi — token bir
+  sonraki istekte reddedilir (mevcut auth davranışı; KK için yeterli). (2) suspend `routingStatus`'u
+  ellemez (routing zaten `suspended`'e bakar, unsuspend eski durumu korur). (3) Full e2e stack yerine
+  yalnız ilgili `team.spec.ts` koşuldu (ağır/flaky — bkz. e2e memory).
+- Sonraki pencereye not: Rol-değiştir / approve (`awaitingApproval`) yüzeyleri hâlâ ayrı borç (04.x).
+  Suspend anında socket kick istenirse `RealtimePublisher` ile eklenebilir.
+
 ### 57 — 11.7-a · Widget customization (Appearance/Position/Mobile) + canlı önizleme [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı:

@@ -38,6 +38,8 @@ export const AUDIT_ACTIONS = [
   // Team membership
   'member.invited',
   'member.invitation_revoked',
+  'member.suspended',
+  'member.unsuspended',
   // Workspace configuration
   'settings.security_updated',
   'settings.routing_rule_updated',

@@ -903,11 +903,51 @@ export interface paths {
     };
     /**
      * List agents on the license
-     * @description Suspended agents are omitted: they cannot be assigned work, and offering
-     *     them in an assignee picker only produces a failed transfer.
+     * @description Defaults to the active roster: suspended agents are omitted, because they
+     *     cannot be assigned work and offering them in an assignee picker only
+     *     produces a failed transfer.
+     *
+     *     Pass `status=suspended` for the Suspended tab (FR-MOD-04.6), or
+     *     `status=all` to see everyone regardless of state. Each item carries a
+     *     `suspended` flag so a combined list can be split client-side.
      */
     get: operations['listAgents'];
     put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/agents/{agentId}/suspension': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Suspend or reinstate an agent
+     * @description Suspending an agent takes effect immediately on their existing sessions
+     *     (FR-MOD-04.6): the change lives on the membership, not the token, so the
+     *     next request any of their tokens makes is rejected, and routing stops
+     *     assigning them work from that moment. Reinstating (`suspended: false`) is
+     *     the exact reverse — nothing is deleted in between, so their teams,
+     *     capacity and history are all still there.
+     *
+     *     A suspended agent frees the seat they held: billing counts only
+     *     non-suspended agents, so this is also how a workspace stops paying for
+     *     someone who has left. Bots are not agents and never occupy a seat.
+     *
+     *     Admin or owner only (both the scope and the role are checked). The owner
+     *     cannot be suspended, and an admin cannot suspend themselves — either would
+     *     be a way to lock the workspace's last key inside it.
+     */
+    put: operations['setAgentSuspension'];
     post?: never;
     delete?: never;
     options?: never;
@@ -3019,6 +3059,12 @@ export interface components {
       /** @description Routing never assigns past this. Over-limit means queued. */
       concurrent_chats_limit: number;
       two_factor_enabled?: boolean;
+      /**
+       * @description A suspended agent is reachable through this list (with
+       *     `status=suspended` or `status=all`) but cannot be assigned work and
+       *     does not occupy a billed seat (FR-MOD-04.6).
+       */
+      suspended?: boolean;
     };
     Group: {
       /** Format: int64 */
@@ -5135,7 +5181,10 @@ export interface operations {
   };
   listAgents: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Which slice of the roster to return. */
+        status?: 'active' | 'suspended' | 'all';
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -5153,8 +5202,43 @@ export interface operations {
           };
         };
       };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setAgentSuspension: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description True to suspend, false to reinstate. */
+          suspended: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description The agent, with its new suspension state. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Agent'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

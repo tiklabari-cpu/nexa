@@ -151,6 +151,8 @@ paths:
 
   /agents:
     $ref: "./paths/agents.yaml#/agents"
+  /agents/{agentId}/suspension:
+    $ref: "./paths/agents.yaml#/agentSuspension"
   /agents/me/routing-status:
     $ref: "./paths/agents.yaml#/routingStatus"
   /agents/me/notification-preferences:
@@ -1211,6 +1213,12 @@ components:
           type: integer
           description: Routing never assigns past this. Over-limit means queued.
         two_factor_enabled: { type: boolean }
+        suspended:
+          type: boolean
+          description: |
+            A suspended agent is reachable through this list (with
+            `status=suspended` or `status=all`) but cannot be assigned work and
+            does not occupy a billed seat (FR-MOD-04.6).
 
     Group:
       type: object

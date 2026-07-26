@@ -1385,7 +1385,7 @@
         "description": "Marketplace + OAuth app framework (MOCK). PRD MOD-09 (v1, Should).",
         "details": "PARENT. 09 Apps Marketplace + OAuth app framework (MOCK). 3 subtask. Bağlam: PLAN §4.4.10.\nBağımlılık: tm 30 (T6-a virtualization).",
         "testStrategy": "Subtask bazlı.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "30"
         ],
@@ -1397,10 +1397,10 @@
             "description": "Kart → izin/OAuth akışı; bağlanınca veri sohbette. PRD 09.1 (Should).",
             "details": "09.1-a Entegrasyon kartları gridi + OAuth akışı (MOCK). [XHIGH] PRD 09.1 (Should).\nKAPSAM: kart → izin/OAuth akışı (mock); bağlanınca veri sohbet içinde (Details/Copilot).\nKK (birebir): \"Kart → izin/OAuth akışı; bağlanınca veri sohbet içinde\". BAĞLAM: PLAN §4.4.10. Bağımlılık: tm 30.",
             "testStrategy": "integration: mock OAuth → kurulu görünür. DoD tam.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "53",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T22:28:13.452Z"
           },
           {
             "id": 2,
@@ -1429,7 +1429,7 @@
             "updatedAt": "2026-07-25T14:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T22:28:13.452Z"
       },
       {
         "id": "54",
@@ -1843,7 +1843,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T22:18:26.398Z",
+      "lastModified": "2026-07-26T22:28:13.452Z",
       "taskCount": 84,
       "completedCount": 61,
       "tags": [

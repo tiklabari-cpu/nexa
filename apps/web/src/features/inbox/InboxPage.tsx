@@ -5,8 +5,8 @@
  * list, and a transcript that takes the remaining width. Every colour and size
  * comes from a token; no component hard-codes a hex value.
  */
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth-store.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -16,8 +16,24 @@ import { DetailsPanel } from './DetailsPanel.js';
 import { CopilotPanel } from './CopilotPanel.js';
 import { Transcript } from './Transcript.js';
 import { TypingIndicator } from './TypingIndicator.js';
-import { useChat, useChatList, useRealtime, useTranscript, useViewCounts } from './useInbox.js';
+import {
+  useChat,
+  useChatList,
+  useConnectedChannels,
+  useRealtime,
+  useTranscript,
+  useViewCounts,
+} from './useInbox.js';
 import { useRightPanel } from './rightPanel.js';
+import {
+  canReadChannels,
+  connectedChannelViews,
+  showChannelPromo,
+  useSavedViews,
+  SAVED_VIEW_NAME_MAX,
+  type ConnectedChannelLike,
+  type SavedView,
+} from './views.js';
 import { useNotifications } from '../notifications/useNotifications.js';
 import { TicketDetailPane, TicketList } from './TicketPane.js';
 import { useTicketList } from './useTickets.js';
@@ -108,6 +124,20 @@ export function InboxPage(): ReactElement {
   // transcript the full width. The choice is remembered across reloads.
   const rightPanel = useRightPanel();
 
+  // The "Views" group (FR-MOD-02.1.4): channel views and custom saved views.
+  // Channel state is owner/admin-only, so an ordinary agent never fires the
+  // request — their Views group is just their own saved views.
+  const canChannels = canReadChannels(agent?.scopes ?? []);
+  const channels = useConnectedChannels(canChannels);
+  const channelItems = channels.data?.items ?? [];
+  const savedViews = useSavedViews();
+
+  // Applying a saved view sets its base view and real-time tab in one click.
+  const applySavedView = (saved: SavedView): void => {
+    setSelection({ kind: 'chat', view: saved.base });
+    setTrafficTab(saved.traffic);
+  };
+
   // Which pane fills the right panel: the persisted Details context, or Copilot
   // (FR-MOD-12.1). Copilot is per-conversation, not a remembered layout
   // preference, so it resets to Details whenever the open chat changes.
@@ -156,7 +186,7 @@ export function InboxPage(): ReactElement {
       {/* Views */}
       <nav
         aria-label="Inbox views"
-        className="flex w-sidebar shrink-0 flex-col border-r border-border bg-surface"
+        className="flex w-sidebar shrink-0 flex-col overflow-y-auto border-r border-border bg-surface"
       >
         <header className="flex h-topbar items-center justify-between px-4">
           <h1 className="text-lg font-semibold">Inbox</h1>
@@ -209,6 +239,18 @@ export function InboxPage(): ReactElement {
             </li>
           ))}
         </ul>
+
+        {/* Views (FR-MOD-02.1.4): channel views — or a promo when no channel is
+            connected — plus the agent's own saved filters. */}
+        <ViewsGroup
+          canReadChannels={canChannels}
+          channels={channelItems}
+          channelsResolved={!channels.isPending}
+          savedViews={savedViews.views}
+          onSelectSaved={applySavedView}
+          onAddSavedView={(name) => savedViews.add({ name, base: view, traffic: trafficTab })}
+          onRemoveSavedView={savedViews.remove}
+        />
 
         <div className="mt-auto border-t border-border p-3">
           {/* `htmlFor` matters here: without it this is an unnamed combobox,
@@ -520,6 +562,172 @@ function ViewButton({
         <span className="tabular text-2xs text-content-tertiary">{count}</span>
       )}
     </button>
+  );
+}
+
+/**
+ * The Views group (FR-MOD-02.1.4). Channel views sit up top — one per connected
+ * channel, or a promo pointing at Settings when none is connected (the "no
+ * channel → channel-promo" criterion) — and the agent's own saved views below.
+ * The channel section only renders for owners/admins, who can read and connect
+ * channels; an ordinary agent sees just their saved views.
+ */
+function ViewsGroup({
+  canReadChannels,
+  channels,
+  channelsResolved,
+  savedViews,
+  onSelectSaved,
+  onAddSavedView,
+  onRemoveSavedView,
+}: {
+  canReadChannels: boolean;
+  channels: ConnectedChannelLike[];
+  channelsResolved: boolean;
+  savedViews: SavedView[];
+  onSelectSaved: (view: SavedView) => void;
+  onAddSavedView: (name: string) => SavedView | null;
+  onRemoveSavedView: (id: string) => void;
+}): ReactElement {
+  return (
+    <>
+      <h2 className="px-4 pb-1 pt-4 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+        Views
+      </h2>
+
+      {/* Channel views. Gated on `channelsResolved` so the promo does not flash
+          before the first `/channels` response settles. */}
+      {canReadChannels &&
+        channelsResolved &&
+        (showChannelPromo(channels) ? (
+          <div
+            data-testid="channel-promo"
+            className="mx-2 rounded-md border border-dashed border-border p-3"
+          >
+            <p className="text-2xs text-content-secondary">
+              Connect Messenger, WhatsApp or SMS to see their conversations here.
+            </p>
+            <Link
+              to="/app/settings"
+              className="mt-1.5 inline-block text-2xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+            >
+              Connect a channel →
+            </Link>
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-0.5 px-2">
+            {connectedChannelViews(channels).map((channel) => (
+              <li key={channel.type}>
+                <Link
+                  to="/app/settings"
+                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm text-content-secondary transition-colors hover:bg-surface-2"
+                >
+                  <span aria-hidden="true">{channel.icon}</span>
+                  <span className="flex-1">{channel.label}</span>
+                  <StatusDot tone="success" label="Connected" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ))}
+
+      {/* Custom saved views (FR-MOD-02.1.4): the agent's own named filters. */}
+      {savedViews.length > 0 && (
+        <ul className="flex flex-col gap-0.5 px-2 pt-0.5">
+          {savedViews.map((saved) => (
+            <li key={saved.id} className="group flex items-center">
+              <button
+                type="button"
+                onClick={() => onSelectSaved(saved)}
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm text-content-secondary transition-colors hover:bg-surface-2"
+              >
+                <span aria-hidden="true" className="text-content-tertiary">
+                  ★
+                </span>
+                <span className="flex-1 truncate">{saved.name}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onRemoveSavedView(saved.id)}
+                aria-label={`Remove saved view ${saved.name}`}
+                className="shrink-0 rounded-md px-1.5 py-1 text-2xs text-content-tertiary opacity-0 transition-opacity hover:text-danger focus:opacity-100 group-hover:opacity-100"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <AddSavedView onAdd={onAddSavedView} />
+    </>
+  );
+}
+
+/**
+ * The "Save current view" control: a plain button that reveals a name field.
+ * Naming happens inline rather than in a modal — the saved filter is the
+ * current one, so the only missing piece is what to call it. An empty name is
+ * rejected by the store, so the input stays open until a real name is given.
+ */
+function AddSavedView({ onAdd }: { onAdd: (name: string) => SavedView | null }): ReactElement {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+
+  const submit = (event: FormEvent): void => {
+    event.preventDefault();
+    if (onAdd(name)) {
+      setName('');
+      setOpen(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <div className="px-2 pb-1 pt-0.5">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-2xs font-medium text-content-tertiary transition-colors hover:bg-surface-2"
+        >
+          <span aria-hidden="true">＋</span>
+          Save current view
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-1.5 px-2 pb-1 pt-0.5">
+      <input
+        autoFocus
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        maxLength={SAVED_VIEW_NAME_MAX}
+        placeholder="Name this view"
+        aria-label="Saved view name"
+        className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
+      />
+      <div className="flex gap-1.5">
+        <button
+          type="submit"
+          disabled={name.trim().length === 0}
+          className="rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setName('');
+            setOpen(false);
+          }}
+          className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

@@ -305,3 +305,29 @@ export function useViewCounts(): Record<InboxView, number | undefined> {
     [all.data, mine.data, queued.data, unassigned.data, archived.data, ai.data, aiSolved.data],
   );
 }
+
+/** One connected channel, as the `/channels` list reports it (FR-MOD-08.5.4-.6). */
+export interface ConnectedChannel {
+  type: string;
+  status: string;
+  address: string | null;
+  connected: boolean;
+  created_at: string;
+}
+
+/**
+ * The workspace's connected channels, for the inbox Views group (FR-MOD-02.1.4).
+ * Gated on `enabled`: only owners/admins hold the `channels--all` scope, so the
+ * inbox passes `false` for an ordinary agent and the request never fires (it
+ * would only 403). Channel connections change rarely, so this is cached longer
+ * than the live chat lists.
+ */
+export function useConnectedChannels(enabled: boolean) {
+  const api = useApiClient();
+  return useQuery({
+    queryKey: ['channels'],
+    queryFn: () => api.get<{ items: ConnectedChannel[] }>('/channels'),
+    enabled,
+    staleTime: 60_000,
+  });
+}

@@ -6,6 +6,35 @@
 
 ## Task log (newest-first)
 
+### 38 — 02.1.4-a · Inbox Views grubu (kanal görünümleri + custom saved views) — done — 2026-07-26 UTC
+
+- Kapsam: FR-MOD-02.1.4 (`Should v1`) `[XHIGH]` — inbox kenar çubuğuna **Views** grubu. Bağımlılık tm 35
+  (08.5 adaptörleri, done). PLAN satır 516 (02.1.4) + §4.4.6 kalemi → `✅` (§D42). **Frontend-only, additive**
+  — hiçbir route/şema/OpenAPI/backend'e dokunmadı (kontrat-parity etkilenmez).
+- Yapıldı:
+  - **Saf `views.ts`** (`traffic.ts`/`rightPanel.ts` deseni): `showChannelPromo`/`connectedChannelViews`
+    (kanal yok→promo; bağlıysa sabit Messenger→WhatsApp→SMS sırası, `twilio`→"SMS"), `canReadChannels`
+    (owner/admin `channels--all` kapısı), custom saved views (`SavedView{base:InboxView,traffic:TrafficTab}`,
+    `localStorage`, `addSavedView`/`removeSavedView`/`useSavedViews` — ad trim+40 cap, boş ad reddi,
+    malformed satır düşer, reload'da kalıcı).
+  - **`InboxPage.tsx`** Views grubu: kanal yok→**channel-promo** (dashed CTA → `/app/settings`), bağlıysa
+    kanal satırları (Connected → Settings); custom saved views listesi (seç = base+traffic tek tıkta uygular,
+    sil) + "Save current view" inline ad formu. Kanal bölümü yalnız `canReadChannels` iken (owner/admin) ve
+    `/channels` çözüldükten sonra render (promo flaş yok). `nav`'a `overflow-y-auto`.
+  - **`useConnectedChannels(enabled)`** (`useInbox.ts`): `GET /channels`, `enabled=canReadChannels` → ajan
+    403 yemez (scope yok), sorgu hiç atılmaz.
+- Doğrulama (exit 0): `pnpm -w typecheck` ✓ (11/11) · `pnpm -w lint` ✓ (8/8) · `pnpm -w build` ✓ (7/7) ·
+  `pnpm -w test` ✓ (web **383** incl. yeni `views.test.ts` **19**; api 864/rtm 71/widget 48/types 26/ai-mock 56
+  — backend cache-hit) · `pnpm -w test:integration` ✓ (api 713 + rtm 42, `--concurrency=1`; DB 5433/Redis 6380).
+- e2e: bu yüzeye özel akış yok; değişiklik additive (mevcut inbox `nav` içine yeni grup) → mevcut specs
+  etkilenmez. Task KK'sı "unit (kanal yok→promo)" olduğundan (D36 frontend-only deseni) tam Playwright
+  koşusu bu additive UI için koşulmadı.
+- Dürüstlük/kalan borç: **kanal→chat filtresi (per-kanal) yok** — `ChatSummary`'de kanal/source alanı yok;
+  gerçek per-kanal süzme, `ChatSummary`'ye kanal etiketi ekleyen ayrı bir backend task ister. Bu yüzden kanal
+  satırları yönetime (Settings) linkler; uydurma filtre kurulmadı. KK yalnız promo + saved views'ı şart koşar,
+  ikisi de tam teslim. Sonraki pencere isterse: `ChatSummary.channel` + `/chats?channel=` → kanal görünümleri
+  gerçek filtreye döner.
+
 ### 58 — 04.2-a · Team AI Agents performance + Copilot knowledge girişi — done — 2026-07-26 UTC
 
 - Kapsam: FR-MOD-04.2 (`Must v1`) `[XHIGH]` — Team ekranının iki AI girişi. Bağımlılık tm 33 (06.5-a

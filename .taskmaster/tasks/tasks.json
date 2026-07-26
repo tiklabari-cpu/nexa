@@ -1512,11 +1512,11 @@
         "description": "Aktivasyon checklist + gerçek-zaman kartları + haftalık performans. PRD 13.1 (Should).",
         "details": "13.1-a Home dashboard (checklist + gerçek-zaman kartları + haftalık performans). [XHIGH] PRD 13.1 (Should).\nKAPSAM: aktivasyon checklist; canlı gerçek-zaman kartları (online/ongoing/agents); haftalık performans.\nKK (birebir): \"Aktivasyon checklist; canlı gerçek-zaman kartları; haftalık performans\". BAĞLAM: PLAN §4.4.14. Bağımlılık: 03.1.1 (✅).",
         "testStrategy": "unit (kartlar) + integration (canlı sayaç). DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T13:17:58.821Z"
       },
       {
         "id": "61",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T11:58:37.287Z",
+      "lastModified": "2026-07-26T13:17:58.821Z",
       "taskCount": 84,
-      "completedCount": 47,
+      "completedCount": 48,
       "tags": [
         "master"
       ]

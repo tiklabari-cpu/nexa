@@ -1371,13 +1371,13 @@
         "description": "Alan builder + widget'ta gösterim → contact/ticket'a yazma. PRD 08.7.7 (Should).",
         "details": "08.7.7-a Forms builder (pre/post-chat) + widget'ta gösterim. [MAX] ↑ PRD 08.7.7 (Should).\n↑ GEREKÇE: widget → contact/ticket yazma yolu (müşteri girdisi sınırı).\nKAPSAM: alan builder (en az bir alan; tip validasyon); widget'ta gösterim → contact/ticket'a yazma.\nKK (birebir): \"En az bir alan; tip validasyon; widget'ta gösterim → contact/ticket'a yazma\". BAĞLAM: PLAN §4.4.9. Bağımlılık: tm 29 + 11.2 (✅).",
         "testStrategy": "integration: form → ticket; NEGATİF: geçersiz alan. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "29"
         ],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T22:18:26.397Z"
       },
       {
         "id": "53",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T21:29:03.570Z",
+      "lastModified": "2026-07-26T22:18:26.398Z",
       "taskCount": 84,
-      "completedCount": 60,
+      "completedCount": 61,
       "tags": [
         "master"
       ]

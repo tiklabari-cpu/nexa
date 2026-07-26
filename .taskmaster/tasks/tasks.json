@@ -1084,7 +1084,7 @@
         "description": "Copilot api/contract'ta ~0 ref. Sağ panel switcher (28) üstüne oturur. PRD MOD-12 (v1, Should).",
         "details": "PARENT [MAX]. 12 Copilot (agent-assist). api/contract'ta ~0 ref. 12.2-a (ayrı KB [MAX]) → 12.1-a\n(buton, 28/T1-a üstüne) → 12.3-a. Bağlam: PLAN §4.4.5. Bağımlılık: tm 28 (sağ panel switcher).",
         "testStrategy": "Subtask bazlı; 12.2-a izolasyon negatifleri.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "28"
         ],
@@ -1096,10 +1096,10 @@
             "description": "/copilot/knowledge; AI Agent KB'sinden ayrı; müşteriye kapalı. PRD 12.2.",
             "details": "12.2-a Copilot ayrı bilgi tabanı (RAG, ajana-özel). [MAX] ↑ PRD 12.2 (Should).\n↑ GEREKÇE: ayrı tenant-scoped KB + 'müşteriye açık değil' sınırı (yetki/izolasyon yüzeyi).\nKAPSAM: /copilot/knowledge CRUD; AI Agent KB'sinden AYRI; yalnız ajan yüzeyi.\nKK (birebir): \"Ajana-özel bilgi kaynakları; müşteriye açık değil\". BAĞLAM: PLAN §4.4.5.",
             "testStrategy": "integration: müşteri token'ı erişemez → 404; CROSS-TENANT izole. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "36",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T15:58:18.386Z"
           },
           {
             "id": 2,
@@ -1107,12 +1107,12 @@
             "description": "Sağ panel sekmesi (T1-a üstüne); Assisted metriğini besler. PRD 12.1.",
             "details": "12.1-a Copilot butonu + sağ panel sekmesi. [XHIGH] PRD 12.1 (Should).\nKAPSAM: her sohbette Copilot butonu → sağ panel sekmesi (28/T1-a switcher üstüne); Assisted metriğini besler.\nKK (birebir): \"Panel açılır; bağlamda yardım; Assisted metriğini besler\". Bağımlılık: 36.1 + tm 28.",
             "testStrategy": "unit: panel açılır; Assisted sayacı 07.3.2 ile hizalı. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "36",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T15:58:18.389Z"
           },
           {
             "id": 3,
@@ -1120,16 +1120,16 @@
             "description": "Özet internal note + reply taslak + enhance/rephrase. PRD 12.3/02.5.",
             "details": "12.3-a Özet (→internal note) + reply yardımı (enhance/rephrase). [XHIGH] PRD 12.3 · 02.5.\nKAPSAM: özet internal note; reply taslak composer'a; ton/dilbilgisi geliştirme (packages/ai-mock).\nKK (birebir): \"Özet internal note; reply taslak composer'a; ton/dilbilgisi geliştirme\". (02.5 bununla kapanır.) Bağımlılık: 36.1/36.2.",
             "testStrategy": "integration: özet internal note olur + arşivde görünür. unit: reply taslak composer'a. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               2
             ],
             "parentId": "36",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-26T15:58:18.391Z"
           }
         ],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T15:58:18.391Z"
       },
       {
         "id": "37",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T15:14:40.027Z",
+      "lastModified": "2026-07-26T15:58:18.391Z",
       "taskCount": 84,
-      "completedCount": 50,
+      "completedCount": 51,
       "tags": [
         "master"
       ]

@@ -1449,11 +1449,11 @@
         "description": "Aşım → usage_records; sayaç. PRD 10.1.5 (Should).",
         "details": "10.1.5-a API calls (aşım paketi + sayaç). [XHIGH] PRD 10.1.5 (Should).\nKAPSAM: aşım faturaya (usage_records); sayaç.\nKK (birebir): \"Aşım faturaya; sayaç\". BAĞLAM: PLAN §4.4.11.",
         "testStrategy": "integration: aşım → usage_records. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T10:14:20.083Z"
       },
       {
         "id": "56",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T09:47:55.229Z",
+      "lastModified": "2026-07-26T10:14:20.084Z",
       "taskCount": 84,
-      "completedCount": 43,
+      "completedCount": 44,
       "tags": [
         "master"
       ]

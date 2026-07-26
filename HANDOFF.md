@@ -6,6 +6,35 @@
 
 ## Task log (newest-first)
 
+### 39 — 02.3.2-a · Reply Suggestions çipleri (Space ile) — done — 2026-07-26 UTC
+
+- Kapsam: FR-MOD-02.3.2 (`Should v1`) `[XHIGH]` — composer'da AI yanıt öneri çipleri. Bağımlılık tm 36
+  (Copilot agent-assist / ai-mock, done). PLAN satır 517 (02.3.2) + §4.4.6 kalemi → `✅`. **Frontend-only, additive**
+  — hiçbir route/şema/OpenAPI/backend'e dokunmadı (kontrat-parity etkilenmez).
+- Yapıldı:
+  - **Saf `replySuggestions.ts`** (`views.ts`/`rowActions.ts` deseni; deterministik, ai-mock felsefesi —
+    @nexa/ai-mock'a bağımlılık **eklemeden**, web yalnız @nexa/types'a bağlı): `replySuggestions(turns)` → son
+    müşteri mesajına göre lead (selam/soru/iade/teşekkür/genel) + her zaman 2 güvenli bekletme yanıtı, dedupe, ≤4;
+    boş konuşmada bile çip döner. PRD §108 katman-3 "hafif mikro-özellik" (Copilot'tan ayrı: KB/retrieval/assist yok).
+  - **`Composer.tsx`**: **Space** (boş reply alanı + mode='all' + picker kapalı) → `event.preventDefault()` + cache'teki
+    transcript'ten (`eventsKey`, fetch yok) çipleri türet, `role="group"` satırında göster. Çip tıklama → `setText`
+    (müşteri yanıtı, note değil), caret sonda, çipler çekilir = **düzenlenebilir** (KK). **Escape** kapatır (geri
+    alınabilir), yazınca çekilir, internal-note moduna geçince kapanır. Reply placeholder'a "…press Space for
+    suggestions" ipucu.
+- Doğrulama (exit 0): `pnpm -w typecheck` ✓ (11/11) · `pnpm -w lint` ✓ (8/8) · `pnpm -w build` ✓ (7/7) ·
+  `pnpm -w test` ✓ (web **395** incl. yeni `replySuggestions.test.ts` **7** + `Composer.suggestions.test.tsx` **5**;
+  backend paketler cache-hit, değişmedi).
+- Varsayım: Reply Suggestions (PRD katman-3), Copilot'un backend `/copilot/chats/:id/reply` KB-draft'ından **ayrı**
+  ve daha hafif olduğu için frontend saf-fonksiyon + cache transcript ile çözüldü — yeni API route/OpenAPI **yok**
+  (kontrat-parity ve DB'ye dokunmadan; "her saniye müşteri bekliyor" hız KK'sıyla uyumlu, anlık). Bağımlılık 12.x
+  ai-mock "felsefe olarak" karşılandı (import değil).
+- e2e/integration: backend/kontrat/şema yüzeyine dokunulmadı → bu yüzeyler etkilenmez, çalıştırılmadı; task KK'sı
+  "unit (çip→composer)" olup `Composer.suggestions.test.tsx` ile birebir pinlendi.
+- Sonraki pencereye not: Bir sonraki müşteri mesajı geldiğinde çipler açıksa RTM otomatik yenilemez — öneriler
+  Space anında hesaplanır (kasıtlı, anlık/stateless). İstenirse `useTranscript` reaktif aboneliğiyle canlı yenileme
+  ayrı bir iyileştirme olur; KK için gerekmez. Çipler client-side üretildiğinden assist sayacı (07.3.2) tetiklemez —
+  bu Copilot'a özgü, Reply Suggestions'a değil.
+
 ### 38 — 02.1.4-a · Inbox Views grubu (kanal görünümleri + custom saved views) — done — 2026-07-26 UTC
 
 - Kapsam: FR-MOD-02.1.4 (`Should v1`) `[XHIGH]` — inbox kenar çubuğuna **Views** grubu. Bağımlılık tm 35

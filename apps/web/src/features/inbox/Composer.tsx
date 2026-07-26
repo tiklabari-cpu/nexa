@@ -7,11 +7,14 @@ import {
   type KeyboardEvent,
   type ReactElement,
 } from 'react';
-import { useSendMessage } from './useInbox.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { eventsKey, useSendMessage } from './useInbox.js';
 import { useTypingStore } from './typing.js';
 import { useCopilotDraftStore } from './copilotDraft.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { uploadAttachment, type UploadedAttachment } from './uploadAttachment.js';
+import { replySuggestions, type SuggestionTurn } from './replySuggestions.js';
+import type { ChatEvent } from './types.js';
 import {
   activeShortcutQuery,
   applyShortcut,
@@ -47,10 +50,13 @@ export function Composer({
   const [attachment, setAttachment] = useState<UploadedAttachment | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Reply Suggestions (FR-MOD-02.3.2): `null` closed, an array of chips open.
+  const [suggestions, setSuggestions] = useState<string[] | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const send = useSendMessage(chatId);
   const api = useApiClient();
+  const queryClient = useQueryClient();
 
   const canned = useCannedResponses();
   const matches = useMatchingResponses(canned.data?.items, shortcut?.query ?? null);
@@ -160,7 +166,56 @@ export function Composer({
     });
   };
 
+  // Reply Suggestions (FR-MOD-02.3.2). The agent asks for them by pressing Space
+  // in an empty reply field; they are drawn from the transcript already in cache,
+  // so no fetch and no round-trip stand between the keystroke and the chips.
+  const openSuggestions = (): void => {
+    const cached = queryClient.getQueryData<{ items: ChatEvent[] }>(eventsKey(chatId));
+    const turns: SuggestionTurn[] = (cached?.items ?? [])
+      .filter(
+        (event) =>
+          event.type === 'message' &&
+          event.recipients === 'all' &&
+          (event.text ?? '').trim().length > 0,
+      )
+      .map((event) => ({
+        role: event.author_type === 'customer' ? 'customer' : 'agent',
+        text: event.text ?? '',
+      }));
+    setSuggestions(replySuggestions(turns));
+  };
+
+  // A chip fills the reply field with editable text — never a note — and the
+  // agent edits and sends it, exactly like a Copilot draft. The caret lands at
+  // the end so the agent can keep typing.
+  const applySuggestion = (suggestion: string): void => {
+    setText(suggestion);
+    setMode('all');
+    setSuggestions(null);
+    setShortcut(null);
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(suggestion.length, suggestion.length);
+    });
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    // Space in an *empty* reply field opens Reply Suggestions rather than typing a
+    // space — and only when empty, so it never fires mid-sentence (v2-01 §307).
+    // Escape closes them again, so the shortcut is always reversible (v2-01 §276).
+    if (event.key === ' ' && text.length === 0 && mode === 'all' && !pickerOpen) {
+      event.preventDefault();
+      if (suggestions === null) openSuggestions();
+      return;
+    }
+    if (event.key === 'Escape' && suggestions !== null && !pickerOpen) {
+      event.preventDefault();
+      setSuggestions(null);
+      return;
+    }
+
     if (pickerOpen) {
       // While the picker is open these keys belong to it. Enter in particular:
       // sending the raw `#shipping` the agent was still choosing would be worse
@@ -226,8 +281,12 @@ export function Composer({
               onClick={() => {
                 setMode(option.id);
                 // Switching to a note is not customer-visible — retract any
-                // "agent is typing" the reply draft was broadcasting.
-                if (option.id === 'agents') stopTyping();
+                // "agent is typing" the reply draft was broadcasting, and close
+                // Reply Suggestions (they only make sense for a customer reply).
+                if (option.id === 'agents') {
+                  stopTyping();
+                  setSuggestions(null);
+                }
               }}
               className={`rounded-sm px-2 py-1 text-2xs font-medium transition-colors ${
                 mode === option.id
@@ -261,6 +320,36 @@ export function Composer({
             aria-label="Remove attachment"
             onClick={() => setAttachment(null)}
             className="ml-auto rounded-sm px-1 text-content-tertiary hover:bg-surface-2 hover:text-content"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {suggestions !== null && !isNote && (
+        <div
+          role="group"
+          aria-label="Reply suggestions"
+          className="mb-2 flex flex-wrap items-start gap-1.5"
+        >
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              onClick={() => applySuggestion(suggestion)}
+              className="max-w-full truncate rounded-full border border-border bg-inset px-3 py-1 text-left text-2xs text-content-secondary transition-colors hover:bg-brand-100 hover:text-content dark:hover:bg-brand-950"
+            >
+              {suggestion}
+            </button>
+          ))}
+          <button
+            type="button"
+            aria-label="Dismiss reply suggestions"
+            onClick={() => {
+              setSuggestions(null);
+              requestAnimationFrame(() => inputRef.current?.focus());
+            }}
+            className="rounded-full px-2 py-1 text-2xs text-content-tertiary hover:text-content"
           >
             ×
           </button>
@@ -311,6 +400,9 @@ export function Composer({
             const value = event.target.value;
             setText(value);
             syncShortcut(value, event.target.selectionStart);
+            // The suggestion chips are for the empty field; once the agent types,
+            // they no longer fit — retract them.
+            if (value.length > 0 && suggestions !== null) setSuggestions(null);
             // A reply is shown to the visitor; an internal note is not, so only a
             // reply-in-progress broadcasts "the agent is typing".
             if (value.trim() && mode === 'all') signalTyping();
@@ -326,7 +418,9 @@ export function Composer({
           onKeyDown={onKeyDown}
           rows={3}
           maxLength={10_000}
-          placeholder={isNote ? 'Add a note for your team…' : 'Type your reply…'}
+          placeholder={
+            isNote ? 'Add a note for your team…' : "Type your reply, or press Space for suggestions…"
+          }
           className="w-full resize-none rounded-md border border-border bg-inset px-3 py-2 text-sm outline-none placeholder:text-content-tertiary"
         />
       </div>

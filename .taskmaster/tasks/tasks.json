@@ -1163,13 +1163,13 @@
         "description": "Çip → composer'a düzenlenebilir metin (Space). PRD 02.3.2 (Should).",
         "details": "02.3.2-a Reply Suggestions çipleri (Space ile). [XHIGH] PRD 02.3.2 (Should).\nKAPSAM: AI çipleri → composer'a düzenlenebilir metin.\nKK (birebir): \"Çip → composer'a düzenlenebilir metin\". BAĞLAM: PLAN §4.4.6. Bağımlılık: tm 36 (ai-mock).",
         "testStrategy": "unit: çip→composer düzenlenebilir. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "36"
         ],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T17:56:15.301Z"
       },
       {
         "id": "40",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T17:43:23.594Z",
+      "lastModified": "2026-07-26T17:56:15.302Z",
       "taskCount": 84,
-      "completedCount": 53,
+      "completedCount": 54,
       "tags": [
         "master"
       ]

@@ -1149,13 +1149,13 @@
         "description": "Kanal görünümleri (kanal yok→promo) + custom saved views. PRD 02.1.4 (Should).",
         "details": "02.1.4-a Views grubu (kanal görünümleri + custom saved views). [XHIGH] PRD 02.1.4 (Should).\nKAPSAM: kanal görünümleri (kanal yok→channel-promo); custom saved views.\nKK (birebir): \"Kanal bağlı değilse channel-promo; custom saved views eklenebilir\". BAĞLAM: PLAN §4.4.6. Bağımlılık: tm 35.",
         "testStrategy": "unit: kanal yok→promo; custom view eklenir. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "35"
         ],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T17:43:23.594Z"
       },
       {
         "id": "39",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T16:19:47.443Z",
+      "lastModified": "2026-07-26T17:43:23.594Z",
       "taskCount": 84,
-      "completedCount": 52,
+      "completedCount": 53,
       "tags": [
         "master"
       ]

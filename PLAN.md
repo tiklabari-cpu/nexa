@@ -17,7 +17,7 @@
 
 | Faz                | PRD  | Genel durum                          | **Must sayacı (§F.00 kapısı)** | Kapanış |
 | ------------------ | ---- | ------------------------------------ | ------------------------------ | :-----: |
-| **Faz 0 — MVP**    | §5.1 | 51 ✅ · 3 ◐ (§3) · gruplu-🔒 v1'e    | **45 ✅ · 6 ◐ · 0 ⬜**          | ❌ AÇIK  |
+| **Faz 0 — MVP**    | §5.1 | 54 ✅ · 0 ◐ (§3) · gruplu-🔒 v1'e    | **45 ✅ · 6 ◐ · 0 ⬜**          | ❌ AÇIK  |
 | Faz 1 — v1         | §5.2 | kısmen (Playbook/AI öne çekildi §1.3) | denetlendi §4 — çoğu ⬜/◐       | ❌ AÇIK  |
 | Faz 2 — v2         | §5.3 | ⬜ başlanmadı                         | —                              |    —    |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                         | —                              |    —    |
@@ -1796,6 +1796,7 @@ görüneceği en son yerdir.
 
 - v2-03 §8.5 başlığı "~63 scope" diyor, tablosu **58** sayıyor. Tablo esas alındı.
 - v2-03 §1.8 tablosu **24** hata tipi listeliyor (master prompt 23 diyor). Tablo esas alındı.
+- **Faz-0 özet satırı (satır 20) bayatlamıştı** (denetim 2026-07-26): "Genel durum" sütunu `51 ✅ · 3 ◐` gösteriyordu; §3.0–§3.10 gereksinim tabloları elle sayıldığında `54 ✅ · 0 ◐` çıkıyor. Sebep: üç `◐` kalemi (01.3, 02.4, 13.8) D23/D24/D26 çelişki denetimlerinde koda karşı doğrulanıp sırasıyla `◐`→`✅` çevrildi (satır işaretleri güncel), ancak özet satırı güncellenmedi — satır eklenmedi/silinmedi, `✅`+`◐` toplamı 54 sabit kaldı, yalnız 3 satır `◐`'den `✅`'e geçti. Özet gerçek sayıma göre düzeltildi (yalnız "Genel durum" sütunu; gereksinim işaretlerine dokunulmadı).
 
 ---
 

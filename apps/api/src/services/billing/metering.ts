@@ -11,6 +11,16 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 export type LicenseAccess = 'active' | 'trialing' | 'read_only';
 
+/**
+ * Overage is sold in packs of this many AI resolutions (PRD §10.1.4, the
+ * "aşım paketi"). The pack is a pricing bundle, not a billing quantum — the
+ * invoice still meters per resolution (see `overage_cents`), so a workspace a
+ * few over its allowance pays for those few, not for a whole pack it did not
+ * use. Named here so the value the meter shows and the value a usage record is
+ * stamped with can never disagree.
+ */
+export const AI_RESOLUTION_OVERAGE_UNIT = 50;
+
 export interface TrialState {
   status: string;
   access: LicenseAccess;
@@ -20,7 +30,16 @@ export interface TrialState {
 
 export interface UsageSummary {
   period: string;
-  ai_resolutions: { used: number; included: number; overage: number; overage_cents: number };
+  ai_resolutions: {
+    used: number;
+    included: number;
+    overage: number;
+    overage_cents: number;
+    /** Pack size the overage is priced in (`AI_RESOLUTION_OVERAGE_UNIT`). */
+    overage_unit: number;
+    /** Price of one AI resolution beyond the allowance, in cents. */
+    overage_unit_price_cents: number;
+  };
   api_calls: { used: number; included: number };
 }
 
@@ -62,7 +81,7 @@ export async function recordAiResolution(
       (id, license_id, metric, period, quantity, included, overage_unit, overage_unit_price_cents, updated_at)
     VALUES
       (gen_random_uuid(), ${tenant.licenseId}, 'ai_resolutions', ${currentPeriod()},
-       1, ${BigInt(includedPerMonth)}, 50, ${overageUnitPriceCents}, now())
+       1, ${BigInt(includedPerMonth)}, ${AI_RESOLUTION_OVERAGE_UNIT}, ${overageUnitPriceCents}, now())
     ON CONFLICT (license_id, metric, period)
     DO UPDATE SET quantity = usage_records.quantity + 1, updated_at = now()
   `;
@@ -92,6 +111,12 @@ export async function usageSummary(
       included,
       overage,
       overage_cents: overage * config.aiOverageCents,
+      // The pack size and the same per-resolution price `overage_cents` is
+      // computed from, so the meter can quote the overage price up front — the
+      // "predictable AI bill" the PRD sells (§5.3) — instead of only after the
+      // first unit is spent.
+      overage_unit: AI_RESOLUTION_OVERAGE_UNIT,
+      overage_unit_price_cents: config.aiOverageCents,
     },
     api_calls: {
       used: Number(api?.quantity ?? 0n),

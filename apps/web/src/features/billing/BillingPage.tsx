@@ -24,7 +24,16 @@ import { formatCount, formatDate, formatMoney } from '../../lib/format.js';
 
 interface UsageSummary {
   period: string;
-  ai_resolutions: { used: number; included: number; overage: number; overage_cents: number };
+  ai_resolutions: {
+    used: number;
+    included: number;
+    overage: number;
+    overage_cents: number;
+    // The overage pack size and per-resolution price, so the meter can quote the
+    // extra-usage price before the allowance runs out (FR-MOD-10.1.4).
+    overage_unit: number;
+    overage_unit_price_cents: number;
+  };
   api_calls: { used: number; included: number };
 }
 
@@ -89,8 +98,17 @@ export function BillingPage(): ReactElement {
 
   const sub = subscription.data;
   const use = usage.data;
-  const quotaFraction =
-    use.ai_resolutions.included > 0 ? use.ai_resolutions.used / use.ai_resolutions.included : 0;
+  const ai = use.ai_resolutions;
+  const quotaFraction = ai.included > 0 ? ai.used / ai.included : 0;
+  // The percentage the counter shows next to "N / limit" (FR-MOD-10.1.4). Not
+  // clamped — a workspace over its allowance sees the real figure (e.g. 130%),
+  // not a reassuring 100%.
+  const quotaPercent = Math.round(quotaFraction * 100);
+  const aiOver = ai.overage > 0;
+  // What a full overage pack costs: pack size × per-resolution price. The pack
+  // is a pricing bundle; the invoice still meters per resolution, so a partial
+  // pack costs less than this.
+  const packPriceCents = ai.overage_unit * ai.overage_unit_price_cents;
 
   return (
     <Page title="Billing" description={`Plan, usage and charges for period ${use.period_label}.`}>
@@ -146,36 +164,97 @@ export function BillingPage(): ReactElement {
         title="AI resolutions"
         description="A conversation an AI closed without a human ever replying."
       >
+        {/* Proactive warning from 80% (PRD §8.3 flow 5, KR2.3): the quota is
+            surfaced before it is exceeded. A limit that only announces itself at
+            100% arrives as a support ticket — the "surprise overage" complaint
+            Nexa's transparent pricing is meant to eliminate. */}
+        {use.quota_warning && (
+          <div
+            role="alert"
+            data-testid="quota-warning"
+            className="rounded-lg border border-border bg-surface p-4"
+          >
+            <p className="text-sm font-medium text-warning">
+              {aiOver
+                ? 'Past your included AI resolutions'
+                : `You have used ${quotaPercent}% of your AI resolutions`}
+            </p>
+            <p className="mt-1 text-sm text-content-secondary">
+              {aiOver ? (
+                <>
+                  {formatCount(ai.overage)} beyond the included {formatCount(ai.included)} this
+                  period. Each extra resolution bills at {formatMoney(ai.overage_unit_price_cents)}{' '}
+                  — no surprise on the invoice.
+                </>
+              ) : (
+                <>
+                  {formatCount(ai.used)} of {formatCount(ai.included)} used. Beyond the allowance,
+                  resolutions bill at {formatMoney(ai.overage_unit_price_cents)} each.
+                </>
+              )}
+            </p>
+          </div>
+        )}
+
         <Card>
           <div className="p-4">
             <div className="mb-2 flex items-baseline justify-between">
-              <span className="tabular text-2xl font-bold">
-                {formatCount(use.ai_resolutions.used)}
+              <span data-testid="ai-counter" className="tabular text-2xl font-bold">
+                {formatCount(ai.used)}
                 <span className="text-base font-normal text-content-tertiary">
                   {' / '}
-                  {formatCount(use.ai_resolutions.included)}
+                  {formatCount(ai.included)}{' '}
+                  <span data-testid="quota-percent">({quotaPercent}% used)</span>
                 </span>
               </span>
               {use.quota_warning && (
                 <span className="text-xs font-medium text-warning">
-                  {use.ai_resolutions.overage > 0
-                    ? 'Over the included allowance'
-                    : 'Nearing the limit'}
+                  {aiOver ? 'Over the included allowance' : 'Nearing the limit'}
                 </span>
               )}
             </div>
 
             <QuotaBar fraction={quotaFraction} warning={use.quota_warning} />
 
-            {use.ai_resolutions.overage > 0 && (
+            {aiOver && (
               <p className="mt-3 text-sm text-content-secondary">
-                {formatCount(use.ai_resolutions.overage)} beyond the included allowance —{' '}
+                {formatCount(ai.overage)} beyond the included allowance —{' '}
                 <span className="tabular font-medium text-content">
-                  {formatMoney(use.ai_resolutions.overage_cents)}
+                  {formatMoney(ai.overage_cents)}
                 </span>{' '}
                 this period.
               </p>
             )}
+          </div>
+        </Card>
+
+        {/* Overage package (aşım paketi, FR-MOD-10.1.4). Shown even at zero
+            overage: the price of extra usage is visible before you reach the
+            limit, not discovered on the bill. */}
+        <Card>
+          <div
+            data-testid="overage-package"
+            className="flex flex-wrap items-baseline justify-between gap-2 p-4"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Overage package</p>
+              <p className="mt-0.5 text-sm text-content-secondary">
+                Beyond the included {formatCount(ai.included)}, AI resolutions bill at{' '}
+                <span className="font-medium text-content">
+                  {formatMoney(ai.overage_unit_price_cents)}
+                </span>{' '}
+                each — sold in packs of {formatCount(ai.overage_unit)} (
+                {formatMoney(packPriceCents)} per pack).
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                This period
+              </p>
+              <p data-testid="overage-charge" className="tabular text-lg font-semibold">
+                {formatMoney(ai.overage_cents)}
+              </p>
+            </div>
           </div>
         </Card>
       </Section>
@@ -309,7 +388,10 @@ function ManagePlan({
               >
                 −
               </button>
-              <span data-testid="seat-count" className="tabular w-8 text-center text-lg font-semibold">
+              <span
+                data-testid="seat-count"
+                className="tabular w-8 text-center text-lg font-semibold"
+              >
                 {sub.seats}
               </span>
               <button
@@ -340,8 +422,8 @@ function ManagePlan({
                 </p>
                 <p className="text-content-secondary">
                   After the trial:{' '}
-                  <span className="font-semibold text-content">{formatMoney(recurringCents)}</span> /{' '}
-                  {cycleUnit}
+                  <span className="font-semibold text-content">{formatMoney(recurringCents)}</span>{' '}
+                  / {cycleUnit}
                 </p>
               </>
             ) : (

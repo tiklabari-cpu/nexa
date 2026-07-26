@@ -237,6 +237,16 @@ describe('reports and billing', () => {
       expect(usage.json().ai_resolutions.overage).toBe(10);
       expect(usage.json().ai_resolutions.overage_cents).toBe(500);
     });
+
+    it('quotes the overage pack size and unit price up front', async () => {
+      // No usage record yet: the meter still states the extra-usage price, so a
+      // workspace sees it before the allowance runs out (FR-MOD-10.1.4).
+      const ai = (await server.get('/billing/usage', auth)).json().ai_resolutions;
+      expect(ai.overage_unit).toBe(50);
+      // The same per-resolution price `overage_cents` is computed from — one
+      // number, so the quote and the charge can never disagree.
+      expect(ai.overage_unit_price_cents).toBe(50);
+    });
   });
 
   // =========================================================================
@@ -404,13 +414,10 @@ describe('reports and billing', () => {
       expect(report.previous_period.chats).toBe(1);
       // The previous window ends exactly where the current one begins (one ms
       // short, so no instant is double-counted) — proof it is the preceding span.
-      expect(Date.parse(report.previous_period.range.to)).toBe(
-        Date.parse(report.range.from) - 1,
-      );
+      expect(Date.parse(report.previous_period.range.to)).toBe(Date.parse(report.range.from) - 1);
       const currentSpan = Date.parse(report.range.to) - Date.parse(report.range.from);
       const previousSpan =
-        Date.parse(report.previous_period.range.to) -
-        Date.parse(report.previous_period.range.from);
+        Date.parse(report.previous_period.range.to) - Date.parse(report.previous_period.range.from);
       expect(currentSpan - previousSpan).toBe(1);
     });
 
@@ -682,7 +689,11 @@ describe('reports and billing', () => {
     it('switching back to monthly drops the saving to zero', async () => {
       await activate();
       await server.patch('/billing/subscription', { billing_cycle: 'annual', seats: 2 }, auth);
-      const monthly = await server.patch('/billing/subscription', { billing_cycle: 'monthly' }, auth);
+      const monthly = await server.patch(
+        '/billing/subscription',
+        { billing_cycle: 'monthly' },
+        auth,
+      );
       expect(monthly.json().estimated_total_cents).toBe(2 * 9900);
       expect(monthly.json().annual_savings_cents).toBe(0);
     });
@@ -702,7 +713,11 @@ describe('reports and billing', () => {
     });
 
     it('rejects an unknown billing cycle', async () => {
-      const response = await server.patch('/billing/subscription', { billing_cycle: 'weekly' }, auth);
+      const response = await server.patch(
+        '/billing/subscription',
+        { billing_cycle: 'weekly' },
+        auth,
+      );
       expect(response.statusCode).toBe(400);
     });
 

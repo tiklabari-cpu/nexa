@@ -1123,7 +1123,7 @@ components:
         period: { type: string, description: "`yyyymm`." }
         ai_resolutions:
           type: object
-          required: [used, included, overage, overage_cents]
+          required: [used, included, overage, overage_cents, overage_unit, overage_unit_price_cents]
           properties:
             used:
               type: integer
@@ -1133,6 +1133,15 @@ components:
             included: { type: integer }
             overage: { type: integer }
             overage_cents: { type: integer }
+            overage_unit:
+              type: integer
+              description: |
+                Pack size the overage is priced in — the "aşım paketi"
+                (PRD §10.1.4). A pricing bundle, not a billing quantum: the
+                invoice still meters per resolution via `overage_cents`.
+            overage_unit_price_cents:
+              type: integer
+              description: Price of one AI resolution beyond the allowance, in cents.
         api_calls:
           type: object
           required: [used, included]

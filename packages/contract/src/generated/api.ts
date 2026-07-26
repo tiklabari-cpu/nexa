@@ -2671,6 +2671,14 @@ export interface components {
         included: number;
         overage: number;
         overage_cents: number;
+        /**
+         * @description Pack size the overage is priced in — the "aşım paketi"
+         *     (PRD §10.1.4). A pricing bundle, not a billing quantum: the
+         *     invoice still meters per resolution via `overage_cents`.
+         */
+        overage_unit: number;
+        /** @description Price of one AI resolution beyond the allowance, in cents. */
+        overage_unit_price_cents: number;
       };
       api_calls: {
         used: number;

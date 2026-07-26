@@ -5,6 +5,7 @@ import { Panel, PanelSection } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useChatAction } from './useInbox.js';
 import type { ChatDetail } from './types.js';
+import type { AppChatData } from '@nexa/types';
 
 /**
  * Right-hand context panel: who this is, what the conversation is tagged with,
@@ -42,6 +43,16 @@ export function DetailsPanel({
   const suggestions = (library.data?.items ?? [])
     .map((item) => item.name)
     .filter((name) => !tags.includes(name));
+
+  // Data from connected marketplace apps for this customer (FR-MOD-09.1). The
+  // query failing (an agent without chat read scope, say) simply leaves the
+  // section empty rather than blocking the panel.
+  const apps = useQuery({
+    queryKey: ['chat-apps', chatId],
+    queryFn: () => api.get<{ items: AppChatData[] }>(`/chats/${chatId}/apps`),
+    staleTime: 30_000,
+  });
+  const connectedApps = apps.data?.items ?? [];
 
   const addTag = (): void => {
     const value = newTag.trim();
@@ -144,6 +155,31 @@ export function DetailsPanel({
           <p className="text-xs text-content-tertiary">Not routed to a team.</p>
         ) : (
           <p className="text-xs">{chat.access.group_ids.join(', ')}</p>
+        )}
+      </PanelSection>
+
+      {/* Data pulled from connected marketplace apps (FR-MOD-09.1): a CRM's
+          lifecycle stage, a store's order count — the context an integration is
+          connected to provide. Empty until an app is connected in Settings. */}
+      <PanelSection title="Apps">
+        {connectedApps.length === 0 ? (
+          <p className="text-xs text-content-tertiary">No connected apps.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {connectedApps.map((app) => (
+              <div key={app.app_id} data-testid={`chat-app-${app.app_id}`}>
+                <div className="mb-1 flex items-center gap-1.5 text-2xs font-medium text-content-secondary">
+                  <span aria-hidden="true">{app.icon}</span>
+                  <span className="truncate">{app.data_label}</span>
+                </div>
+                {app.fields.map((field) => (
+                  <Row key={field.label} label={field.label}>
+                    <span className="text-xs">{field.value}</span>
+                  </Row>
+                ))}
+              </div>
+            ))}
+          </div>
         )}
       </PanelSection>
 

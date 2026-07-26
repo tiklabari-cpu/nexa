@@ -92,6 +92,7 @@ model License {
   securitySettings  SecuritySettings?
   inboxSettings     InboxSettings?
   widgetSettings    WidgetSettings?
+  appInstallations  AppInstallation[]
 
   invitations Invitation[]
 
@@ -1272,4 +1273,29 @@ model AuditLogEntry {
   @@index([licenseId, createdAt(sort: Desc)])
   @@index([licenseId, action, createdAt(sort: Desc)])
   @@map("audit_log")
+}
+
+// ===========================================================================
+// Apps marketplace (FR-MOD-09.1)
+// ===========================================================================
+
+/// A third-party integration a workspace has connected through the (mock) OAuth
+/// flow. The catalogue of *available* apps is static (@nexa/types APP_CATALOG);
+/// this table records only which of them a licence has connected, one row per
+/// app. `externalAccount` is the account label the mock grant returned; the
+/// granted scopes are the catalogue entry's, so they are not stored again here.
+model AppInstallation {
+  id              String   @id @default(uuid()) @db.Uuid
+  licenseId       BigInt   @map("license_id")
+  appId           String   @map("app_id")
+  status          String   @default("connected")
+  externalAccount String   @map("external_account")
+  connectedAt     DateTime @default(now()) @map("connected_at") @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, appId])
+  @@map("app_installations")
 }

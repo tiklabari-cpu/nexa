@@ -471,6 +471,16 @@ components:
         name: { type: string }
         kind: { type: string, enum: [ai_agent, copilot] }
         tone: { type: string, nullable: true }
+        avatar_url: { type: string, nullable: true, description: The face shown next to the persona. }
+        languages:
+          type: array
+          description: Locale codes the persona answers in (FR-MOD-06.4).
+          items: { type: string }
+        answer_length:
+          type: string
+          nullable: true
+          enum: [short, medium, long, null]
+          description: How long an answer the persona aims for.
         active: { type: boolean }
         skills_count: { type: integer }
 
@@ -576,6 +586,7 @@ components:
         name: { type: string }
         type: { type: string, enum: [website, file, article, faq] }
         status: { type: string }
+        source_url: { type: string, nullable: true, description: The crawled URL, for website sources. }
         chunk_count: { type: integer }
         updated_at: { type: string, format: date-time }
 

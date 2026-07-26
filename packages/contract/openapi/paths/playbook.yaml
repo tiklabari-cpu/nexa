@@ -37,8 +37,11 @@ aiAgent:
   patch:
     tags: [Playbook]
     operationId: updateAiAgent
-    summary: Rename an agent or turn it on and off
+    summary: Edit the persona, or turn the agent on and off
     description: |
+      Sets the customer-facing persona (name, avatar, tone, languages, answer
+      length) the widget shows (FR-MOD-06.4), and the on/off switch.
+
       Deactivating an agent stops every skill under it at once, which is what an
       admin reaches for when automation is misbehaving. It does not delete
       anything.
@@ -53,6 +56,12 @@ aiAgent:
               name: { type: string, minLength: 1, maxLength: 120 }
               active: { type: boolean }
               tone: { type: string, maxLength: 40, nullable: true }
+              avatar_url: { type: string, maxLength: 2048, nullable: true }
+              languages:
+                type: array
+                maxItems: 20
+                items: { type: string, minLength: 1, maxLength: 20 }
+              answer_length: { type: string, enum: [short, medium, long], nullable: true }
     responses:
       "200":
         description: Updated
@@ -329,17 +338,22 @@ knowledgeSources:
     description: |
       Chunked and embedded on save, so it is answerable immediately rather than
       after a background job an admin cannot see.
+
+      A `website` source is crawled from `source_url` (the fetch is guarded
+      against private/internal targets — SSRF, NFR-S7); every other type indexes
+      the `content` supplied. Exactly one of the two is required, per `type`.
     requestBody:
       required: true
       content:
         application/json:
           schema:
             type: object
-            required: [name, content, ai_agent_id]
+            required: [name, ai_agent_id]
             properties:
               ai_agent_id: { type: string, format: uuid }
               name: { type: string, minLength: 1, maxLength: 200 }
               content: { type: string, minLength: 1, maxLength: 100000 }
+              source_url: { type: string, minLength: 1, maxLength: 2048, description: "Required when type is website." }
               type: { type: string, enum: [website, file, article, faq], default: article }
     responses:
       "201":

@@ -23,11 +23,16 @@ export interface Skill {
   updated_at: string;
 }
 
+export type AnswerLength = 'short' | 'medium' | 'long';
+
 export interface AiAgent {
   id: string;
   name: string;
   kind: 'ai_agent' | 'copilot';
   tone: string | null;
+  avatar_url: string | null;
+  languages: string[];
+  answer_length: AnswerLength | null;
   active: boolean;
   skills_count: number;
 }
@@ -54,6 +59,7 @@ export interface KnowledgeSource {
   name: string;
   type: string;
   status: string;
+  source_url: string | null;
   chunk_count: number;
   updated_at: string;
 }

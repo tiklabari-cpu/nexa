@@ -8,10 +8,13 @@
  * not start answering customers the instant it is saved.
  */
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { compileInstruction, validateSteps } from '@nexa/ai-mock';
 import { ApiError } from '../lib/api-error.js';
+import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { KnowledgeService } from '../services/ai/knowledge-service.js';
+import { crawl } from '../services/ai/web-crawler.js';
 import { SkillEngine } from '../services/ai/skill-engine.js';
 
 const READ = ['agents-bot--all:ro', 'agents-bot--all:rw'];
@@ -43,18 +46,39 @@ const previewBody = z.object({
   ai_agent_id: uuid.nullable().optional(),
 });
 
-const createSourceBody = z.object({
-  ai_agent_id: uuid,
-  name: z.string().trim().min(1).max(200),
-  content: z.string().trim().min(1).max(100_000),
-  type: z.enum(['website', 'file', 'article', 'faq']).default('article'),
-});
+const ANSWER_LENGTHS = ['short', 'medium', 'long'] as const;
+
+/**
+ * A website source is crawled from a URL; every other type indexes the text the
+ * admin pasted. So exactly one of `source_url` (website) or `content` (the rest)
+ * is required — enforced here rather than left for the handler to re-check.
+ */
+const createSourceBody = z
+  .object({
+    ai_agent_id: uuid,
+    name: z.string().trim().min(1).max(200),
+    content: z.string().trim().min(1).max(100_000).optional(),
+    source_url: z.string().trim().min(1).max(2048).optional(),
+    type: z.enum(['website', 'file', 'article', 'faq']).default('article'),
+  })
+  .superRefine((body, ctx) => {
+    if (body.type === 'website') {
+      if (!body.source_url) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['source_url'], message: 'a website source needs a URL to crawl' });
+      }
+    } else if (!body.content) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['content'], message: 'content is required' });
+    }
+  });
 
 const updateAgentBody = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
     active: z.boolean().optional(),
     tone: z.string().trim().max(40).nullable().optional(),
+    avatar_url: z.string().trim().max(2048).nullable().optional(),
+    languages: z.array(z.string().trim().min(1).max(20)).max(20).optional(),
+    answer_length: z.enum(ANSWER_LENGTHS).nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -94,16 +118,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       }),
     );
 
-    return reply.send({
-      items: agents.map((a) => ({
-        id: a.id,
-        name: a.name,
-        kind: a.kind,
-        tone: a.tone,
-        active: a.active,
-        skills_count: a._count.skills,
-      })),
-    });
+    return reply.send({ items: agents.map(serialiseAgent) });
   });
 
   app.patch<{ Params: { aiAgentId: string } }>(
@@ -114,8 +129,26 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       const body = parse(updateAgentBody, request.body);
 
       const updated = await request.withTenant(async (tx) => {
-        const existing = await tx.aiAgent.findFirst({ where: { id }, select: { id: true } });
+        const existing = await tx.aiAgent.findFirst({
+          where: { id },
+          select: { id: true, persona: true },
+        });
         if (!existing) throw ApiError.notFound('AI agent not found.');
+
+        // `answer_length` lives inside the persona JSON alongside anything else
+        // an admin has set (a signature, say), so merge rather than overwrite —
+        // clearing it removes just that key.
+        let persona: Prisma.InputJsonValue | undefined;
+        if (body.answer_length !== undefined) {
+          const current =
+            existing.persona && typeof existing.persona === 'object' && !Array.isArray(existing.persona)
+              ? (existing.persona as Record<string, unknown>)
+              : {};
+          const next = { ...current };
+          if (body.answer_length === null) delete next['answerLength'];
+          else next['answerLength'] = body.answer_length;
+          persona = next as Prisma.InputJsonValue;
+        }
 
         return tx.aiAgent.update({
           where: { id },
@@ -123,19 +156,15 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
             ...(body.name !== undefined ? { name: body.name } : {}),
             ...(body.active !== undefined ? { active: body.active } : {}),
             ...(body.tone !== undefined ? { tone: body.tone } : {}),
+            ...(body.avatar_url !== undefined ? { avatarUrl: body.avatar_url } : {}),
+            ...(body.languages !== undefined ? { languages: body.languages } : {}),
+            ...(persona !== undefined ? { persona } : {}),
           },
           include: { _count: { select: { skills: true } } },
         });
       });
 
-      return reply.send({
-        id: updated.id,
-        name: updated.name,
-        kind: updated.kind,
-        tone: updated.tone,
-        active: updated.active,
-        skills_count: updated._count.skills,
-      });
+      return reply.send(serialiseAgent(updated));
     },
   );
 
@@ -331,6 +360,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         name: s.name,
         type: s.type,
         status: s.status,
+        source_url: s.sourceUrl,
         chunk_count: s._count.chunks,
         updated_at: s.updatedAt.toISOString(),
       })),
@@ -341,6 +371,18 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
     const body = parse(createSourceBody, request.body);
     const tenant = request.tenant();
     const principal = request.requirePrincipal();
+
+    // A website is crawled *before* the transaction: the SSRF guard rejects a
+    // private/internal target with a 400 (`source_url` never reaches a fetcher),
+    // and the fetch+parse — even mocked — has no business holding a DB row open.
+    let content = body.content ?? '';
+    let sourceUrl: string | null = null;
+    if (body.type === 'website') {
+      const url = assertPublicHttpUrl(body.source_url ?? '');
+      const page = await crawl(url);
+      content = page.text;
+      sourceUrl = url.toString();
+    }
 
     const created = await request.withTenant(async (tx) => {
       const agent = await tx.aiAgent.findFirst({
@@ -355,7 +397,8 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
           licenseId: tenant.licenseId,
           type: body.type,
           name: body.name,
-          content: body.content,
+          content,
+          sourceUrl,
           status: 'indexing',
           addedBy: principal.kind === 'agent' ? principal.accountId : null,
           updatedAt: new Date(),
@@ -364,7 +407,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
 
       // Indexed in the same transaction: a source that exists but is not
       // searchable looks ready and answers nothing.
-      const chunks = await knowledge.index(tx, tenant, source.id, body.content);
+      const chunks = await knowledge.index(tx, tenant, source.id, content);
 
       return { source, chunks };
     });
@@ -375,6 +418,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       name: created.source.name,
       type: created.source.type,
       status: created.chunks > 0 ? 'ready' : 'empty',
+      source_url: created.source.sourceUrl,
       chunk_count: created.chunks,
       updated_at: created.source.updatedAt.toISOString(),
     });
@@ -395,6 +439,36 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       return reply.status(204).send();
     },
   );
+}
+
+/** One shape for an AI agent, so a read and the reply after a PATCH never drift. */
+function serialiseAgent(agent: {
+  id: string;
+  name: string;
+  kind: string;
+  tone: string | null;
+  avatarUrl: string | null;
+  languages: string[];
+  persona: unknown;
+  active: boolean;
+  _count: { skills: number };
+}) {
+  const persona =
+    agent.persona && typeof agent.persona === 'object' && !Array.isArray(agent.persona)
+      ? (agent.persona as Record<string, unknown>)
+      : {};
+  const answerLength = persona['answerLength'];
+  return {
+    id: agent.id,
+    name: agent.name,
+    kind: agent.kind,
+    tone: agent.tone,
+    avatar_url: agent.avatarUrl,
+    languages: agent.languages,
+    answer_length: typeof answerLength === 'string' ? answerLength : null,
+    active: agent.active,
+    skills_count: agent._count.skills,
+  };
 }
 
 function serialiseSkill(skill: {

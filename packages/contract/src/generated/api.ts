@@ -961,8 +961,11 @@ export interface paths {
     options?: never;
     head?: never;
     /**
-     * Rename an agent or turn it on and off
-     * @description Deactivating an agent stops every skill under it at once, which is what an
+     * Edit the persona, or turn the agent on and off
+     * @description Sets the customer-facing persona (name, avatar, tone, languages, answer
+     *     length) the widget shows (FR-MOD-06.4), and the on/off switch.
+     *
+     *     Deactivating an agent stops every skill under it at once, which is what an
      *     admin reaches for when automation is misbehaving. It does not delete
      *     anything.
      */
@@ -1104,6 +1107,10 @@ export interface paths {
      * Add a source and index it
      * @description Chunked and embedded on save, so it is answerable immediately rather than
      *     after a background job an admin cannot see.
+     *
+     *     A `website` source is crawled from `source_url` (the fetch is guarded
+     *     against private/internal targets — SSRF, NFR-S7); every other type indexes
+     *     the `content` supplied. Exactly one of the two is required, per `type`.
      */
     post: operations['createKnowledgeSource'];
     delete?: never;
@@ -1926,6 +1933,15 @@ export interface components {
       /** @enum {string} */
       kind: 'ai_agent' | 'copilot';
       tone?: string | null;
+      /** @description The face shown next to the persona. */
+      avatar_url?: string | null;
+      /** @description Locale codes the persona answers in (FR-MOD-06.4). */
+      languages?: string[];
+      /**
+       * @description How long an answer the persona aims for.
+       * @enum {string|null}
+       */
+      answer_length?: 'short' | 'medium' | 'long' | null;
       active: boolean;
       skills_count?: number;
     };
@@ -2022,6 +2038,8 @@ export interface components {
       /** @enum {string} */
       type: 'website' | 'file' | 'article' | 'faq';
       status: string;
+      /** @description The crawled URL */
+      source_url?: string | null;
       chunk_count: number;
       /** Format: date-time */
       updated_at?: string;
@@ -4409,6 +4427,10 @@ export interface operations {
           name?: string;
           active?: boolean;
           tone?: string | null;
+          avatar_url?: string | null;
+          languages?: string[];
+          /** @enum {string|null} */
+          answer_length?: 'short' | 'medium' | 'long' | null;
         };
       };
     };
@@ -4718,7 +4740,9 @@ export interface operations {
           /** Format: uuid */
           ai_agent_id: string;
           name: string;
-          content: string;
+          content?: string;
+          /** @description Required when type is website. */
+          source_url?: string;
           /**
            * @default article
            * @enum {string}

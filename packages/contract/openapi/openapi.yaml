@@ -157,6 +157,11 @@ paths:
   /traffic:
     $ref: "./paths/traffic.yaml#/traffic"
 
+  /campaigns:
+    $ref: "./paths/campaigns.yaml#/campaigns"
+  /campaigns/{campaignId}:
+    $ref: "./paths/campaigns.yaml#/campaign"
+
   /agents:
     $ref: "./paths/agents.yaml#/agents"
   /agents/{agentId}/suspension:
@@ -1075,6 +1080,64 @@ components:
           format: date-time
           nullable: true
           description: Most recent signal from this visitor — the table's sort key.
+
+    CampaignConditions:
+      type: object
+      description: |
+        The trigger predicate (FR-MOD-03.3.2). Every key set must hold for a
+        visitor to match. `url_contains` — the one condition v1 ships — targets
+        the page they are on; an empty predicate matches nobody, so a campaign
+        with no trigger is rejected rather than sent to everyone.
+      properties:
+        url_contains:
+          type: string
+          maxLength: 2048
+          description: Case-insensitive substring the visitor's current page URL must contain.
+
+    CampaignContent:
+      type: object
+      description: What the campaign delivers to a matching visitor.
+      properties:
+        message: { type: string, minLength: 1, maxLength: 2000 }
+
+    CampaignPerformance:
+      type: object
+      description: The campaign card's numbers (FR-MOD-03.3.3), counted from its sends.
+      required: [displayed, chats, conversion]
+      properties:
+        displayed:
+          type: integer
+          description: Visitors the message was delivered to.
+        chats:
+          type: integer
+          description: Of those, how many opened a conversation.
+        conversion:
+          type: integer
+          description: Of those, how many reached a goal.
+
+    Campaign:
+      type: object
+      description: A proactive, targeted message (FR-MOD-03.3).
+      required:
+        [id, name, status, conditions, content, starts_at, ends_at, recurring, created_at, performance]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status:
+          type: string
+          enum: [ongoing, scheduled, inactive]
+          description: |
+            Lifecycle state the status tabs filter by (FR-MOD-03.3.1), resolved
+            from the on/off intent and the schedule at save time: `ongoing`
+            (running now), `scheduled` (active, not started yet), or `inactive`
+            (off, or past its end).
+        conditions: { $ref: "#/components/schemas/CampaignConditions" }
+        content: { $ref: "#/components/schemas/CampaignContent" }
+        starts_at: { type: string, format: date-time, nullable: true }
+        ends_at: { type: string, format: date-time, nullable: true }
+        recurring: { type: boolean }
+        created_at: { type: string, format: date-time }
+        performance: { $ref: "#/components/schemas/CampaignPerformance" }
 
     Session:
       type: object

@@ -226,3 +226,63 @@ export interface OnboardingSeedResult {
   };
   state: OnboardingState;
 }
+
+// --- Campaigns (FR-MOD-03.3) ------------------------------------------------
+
+/**
+ * A campaign's lifecycle state (PRD §8.4 `campaigns.status`). Computed from the
+ * owner's on/off intent plus the schedule window and stored, so the status tabs
+ * (FR-MOD-03.3.1) filter on it directly:
+ *   - `ongoing`   — active and running now.
+ *   - `scheduled` — active but its start time has not arrived.
+ *   - `inactive`  — switched off, or past its end.
+ * The card's toggle (FR-MOD-03.3.3) flips between running and `inactive`; see
+ * the `active` flag on the create/update request rather than a status enum.
+ */
+export const CAMPAIGN_STATUSES = ['ongoing', 'scheduled', 'inactive'] as const;
+export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
+
+/** The status sub-tabs (FR-MOD-03.3.1): every lifecycle state, plus "all". */
+export const CAMPAIGN_STATUS_FILTERS = ['all', ...CAMPAIGN_STATUSES] as const;
+export type CampaignStatusFilter = (typeof CAMPAIGN_STATUS_FILTERS)[number];
+
+/**
+ * The trigger predicate (FR-MOD-03.3.2). A visitor matches when every key set
+ * here holds. `url_contains` targets the page they are on — the one condition
+ * v1 ships; the shape stays an open object so geo/time rules slot in later
+ * without a contract change. An empty predicate matches nobody: a campaign with
+ * no trigger is not "send to everyone", it is simply not ready to send.
+ */
+export interface CampaignConditions {
+  /** Case-insensitive substring the visitor's current page URL must contain. */
+  url_contains?: string;
+}
+
+/** What the campaign delivers to a matching visitor (FR-MOD-03.3.2). */
+export interface CampaignContent {
+  message?: string;
+}
+
+/** Displayed / Chats / Conversion — the campaign card's numbers (FR-MOD-03.3.3). */
+export interface CampaignPerformance {
+  /** Visitors the message was delivered to. */
+  displayed: number;
+  /** Of those, how many opened a conversation. */
+  chats: number;
+  /** Of those, how many reached a goal. */
+  conversion: number;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  /** Lifecycle state the tabs filter by; see {@link CAMPAIGN_STATUSES}. */
+  status: CampaignStatus;
+  conditions: CampaignConditions;
+  content: CampaignContent;
+  starts_at: string | null;
+  ends_at: string | null;
+  recurring: boolean;
+  created_at: string;
+  performance: CampaignPerformance;
+}

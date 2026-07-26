@@ -12,6 +12,7 @@ const TABS = [
   // `end` so Contacts is not left highlighted while on the nested Real-time route.
   { to: '/app/customers', label: 'Contacts', end: true },
   { to: '/app/customers/real-time', label: 'Real-time', end: false },
+  { to: '/app/customers/campaigns', label: 'Campaigns', end: false },
 ];
 
 export function CustomersTabs(): ReactElement {

@@ -11,6 +11,7 @@ import {
 import { BillingPage } from './features/billing/BillingPage.js';
 import { CustomersPage } from './features/customers/CustomersPage.js';
 import { TrafficPage } from './features/traffic/TrafficPage.js';
+import { CampaignsPage } from './features/campaigns/CampaignsPage.js';
 import { PlaybookPage } from './features/playbook/PlaybookPage.js';
 import { SettingsPage } from './features/settings/SettingsPage.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
@@ -81,6 +82,7 @@ export function App(): ReactElement {
         <Route path="inbox" element={<InboxPage />} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/real-time" element={<TrafficPage />} />
+        <Route path="customers/campaigns" element={<CampaignsPage />} />
         <Route path="team" element={<TeamPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="billing" element={<BillingPage />} />

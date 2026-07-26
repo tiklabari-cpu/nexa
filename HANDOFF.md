@@ -6,6 +6,46 @@
 
 ## Task log (newest-first)
 
+### 43 — 03.3 · Campaigns `[MAX]` (alt sekmeler + builder + kart) — done — 2026-07-26 UTC
+
+- Kapsam: FR-MOD-03.3 (`Should v1`) — parent `[MAX]`, 3 alt-görev (43.1 alt sekmeler `[XHIGH]`, 43.2 builder
+  `[MAX]` tetik motoru, 43.3 kart `[XHIGH]`). "campaigns tablosu 0 tüketicili" → artık tüketiliyor. Bağımlılık
+  tm 29 (form deseni, ✅). PLAN satır 522 (03.3.1–.3) + 115 (modül) + 995 (tüketici tablosu) → `✅`.
+- Yapıldı:
+  - **Şema/migration** `20260726170000_campaign_sends`: yeni `campaign_sends` tablosu (campaignId+customerId
+    **unique** = visitor başına 1 gönderim; engaged/converted sayaç) + RLS `campaign_sends_tenant`
+    (`license_id = nexa_current_license()`). Mevcut `Campaign` modeli yeniden kullanıldı. **Drift ✅.**
+  - **Kilit karar — status sözlüğü:** DB'de zaten `campaigns_status_check CHECK (status IN
+    ('ongoing','scheduled','inactive'))` var (`'active'` REDDEDİLİR). Bu lifecycle sözlüğü 03.3.1 sekmeleriyle
+    birebir → API `active` boolean niyeti alır, `computeCampaignStatus(active,startsAt,endsAt,now)` yazma anında
+    status'ü türetir ve saklar (cron yok; scheduled→ongoing geçişi bir sonraki yazımda). Sözlükle savaşmak yerine
+    hizalandı.
+  - **Saf modüller (unit):** api `campaign-matching.ts` (`matchesConditions` url_contains AND, `visitorPageUrls`
+    savunmacı JSON, `computeCampaignStatus`, `campaignPerformance`) `(12)`. web `campaigns.ts`
+    (`filterCampaigns`/`campaignCounts`/`conversionRate`/`isCampaignActive`) `(9)`.
+  - **Servis** `campaign-service.ts`: list (status filtre), create (koşul+mesaj zorunlu → `#fireIfRunning` canlı
+    ziyaretçileri süzer + `campaign_sends` yazar, `skipDuplicates` idempotent), update (edit + toggle → ongoing ise
+    yeniden fire; aktifken trigger/mesaj strip edilemez; window `ends_at>starts_at` 400). **Cross-tenant:** visit
+    sorgusu `licenseId`+org kapılı + RLS.
+  - **Route** `campaigns.ts` (GET/POST/PATCH, scope `customers:ro`/`:rw` = traffic deseni) + server.ts kaydı.
+  - **Kontrat** `@nexa/types` Campaign DTO + OpenAPI `paths/campaigns.yaml` + schemas → bundle+regen
+    (contract-parity ✅).
+  - **Web** `CampaignsPage.tsx` (durum sekmeleri + kart grid + toggle + Banner "reached N"), `CampaignBuilder.tsx`
+    (`useForm`: name/trigger/message zorunlu, opsiyonel zamanlama datetime-local, dirty-guard). CustomersTabs'e
+    **Campaigns** sekmesi + App.tsx rota `/app/customers/campaigns` + ⌘K keyword.
+- Doğrulama (hepsi yeşil): `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) · `pnpm -w build` (7/7) ·
+  api `test` 46 dosya/**889** (campaigns integration 13 + matcher 12 + contract-parity 5) · rtm 71 · web 62/**426**
+  (campaigns 9+4) · `pnpm -w test:integration` (concurrency=1) **726** · e2e `campaigns.spec.ts`+customers+traffic
+  **8 passed** · drift ✅.
+- Varsayımlar: (1) scope = `customers:ro/:rw` (traffic gibi; 58-scope enum'a `campaigns` EKLENMEDİ). (2) Displayed=
+  gönderim, Chats=engaged, Conversion=converted — engaged/converted geçişleri (ziyaretçi yanıtı/goal) bu dilimde
+  otomatik tetiklenMEZ; sütunlar+agregasyon gerçek, sonraki dilimde bağlanır. (3) `url_contains` tek koşul tipi
+  (matcher genişlemeye açık). (4) `active` boolean niyet → status türetilir.
+- Sonraki pencereye not: **`pnpm -w test` api+rtm'i PARALEL koşturunca paylaşılan Postgres'te resetDatabase
+  TRUNCATE DEADLOCK olur** (bilinen yarış, kod hatası değil) — DB paketlerini seri koş (`--filter @nexa/api test`
+  sonra `--filter @nexa/rtm test`, veya `test:integration --concurrency=1`). Kalan borç: scheduled→ongoing oto-geçiş
+  cron'u (v1 kabul edilebilir), engaged/converted telemetri kancası, `url_contains` ötesi koşullar (geo/time-on-page).
+
 ### 40 — 02.7-a · Tickets grid (sıralanabilir, deep-link) — done — 2026-07-26 UTC
 
 - Kapsam: FR-MOD-02.7 (`Should v1`) `[XHIGH]` — sıralanabilir Tickets grid + URL param sıralama + deep-link.

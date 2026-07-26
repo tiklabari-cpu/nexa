@@ -26,7 +26,7 @@ export interface NavDestination {
 export const MODULES: NavDestination[] = [
   { to: '/app/home', labelKey: 'nav.home', icon: '⌂', keywords: ['dashboard', 'overview', 'start'] },
   { to: '/app/inbox', labelKey: 'nav.inbox', icon: '▤', keywords: ['conversations', 'chats', 'tickets'] },
-  { to: '/app/customers', labelKey: 'nav.customers', icon: '◫', keywords: ['people', 'crm', 'leads'] },
+  { to: '/app/customers', labelKey: 'nav.customers', icon: '◫', keywords: ['people', 'crm', 'leads', 'campaigns', 'traffic'] },
   { to: '/app/team', labelKey: 'nav.team', icon: '◑', keywords: ['agents', 'groups'] },
   { to: '/app/playbook', labelKey: 'nav.playbook', icon: '✦', keywords: ['skills', 'canned', 'ai'] },
   { to: '/app/reports', labelKey: 'nav.reports', icon: '◆', keywords: ['analytics', 'metrics', 'kpi'] },

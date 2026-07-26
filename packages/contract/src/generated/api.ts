@@ -975,6 +975,61 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/campaigns': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List campaigns
+     * @description Newest first. `status` filters by the derived lifecycle bucket
+     *     (FR-MOD-03.3.1): `ongoing`, `scheduled` (active but not started yet),
+     *     `inactive` (off, or past its end), or `all`.
+     */
+    get: operations['listCampaigns'];
+    put?: never;
+    /**
+     * Create a campaign
+     * @description Both a trigger and a message are required (FR-MOD-03.3.2): a campaign that
+     *     could not target or say anything is rejected, not saved inert. When the new
+     *     campaign is running, it fires immediately at the matching live visitors —
+     *     the returned `performance.displayed` is how many it reached.
+     */
+    post: operations['createCampaign'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/campaigns/{campaignId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        campaignId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Edit a campaign or toggle it active
+     * @description Only the fields present in the body change (FR-MOD-03.3.3). Sending `null`
+     *     on a schedule field clears it; omitting a field leaves it alone. An edit
+     *     cannot strip the trigger or message out of a campaign that stays active.
+     *     Toggling one active fires it at the matching visitors, exactly as create
+     *     does — idempotently, so no one already reached is messaged twice.
+     */
+    patch: operations['updateCampaign'];
+    trace?: never;
+  };
   '/agents': {
     parameters: {
       query?: never;
@@ -3162,6 +3217,53 @@ export interface components {
        * @description Most recent signal from this visitor — the table's sort key.
        */
       last_activity_at?: string | null;
+    };
+    /**
+     * @description The trigger predicate (FR-MOD-03.3.2). Every key set must hold for a
+     *     visitor to match. `url_contains` — the one condition v1 ships — targets
+     *     the page they are on; an empty predicate matches nobody, so a campaign
+     *     with no trigger is rejected rather than sent to everyone.
+     */
+    CampaignConditions: {
+      /** @description Case-insensitive substring the visitor's current page URL must contain. */
+      url_contains?: string;
+    };
+    /** @description What the campaign delivers to a matching visitor. */
+    CampaignContent: {
+      message?: string;
+    };
+    /** @description The campaign card's numbers (FR-MOD-03.3.3), counted from its sends. */
+    CampaignPerformance: {
+      /** @description Visitors the message was delivered to. */
+      displayed: number;
+      /** @description Of those, how many opened a conversation. */
+      chats: number;
+      /** @description Of those, how many reached a goal. */
+      conversion: number;
+    };
+    /** @description A proactive, targeted message (FR-MOD-03.3). */
+    Campaign: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      /**
+       * @description Lifecycle state the status tabs filter by (FR-MOD-03.3.1), resolved
+       *     from the on/off intent and the schedule at save time: `ongoing`
+       *     (running now), `scheduled` (active, not started yet), or `inactive`
+       *     (off, or past its end).
+       * @enum {string}
+       */
+      status: 'ongoing' | 'scheduled' | 'inactive';
+      conditions: components['schemas']['CampaignConditions'];
+      content: components['schemas']['CampaignContent'];
+      /** Format: date-time */
+      starts_at: string | null;
+      /** Format: date-time */
+      ends_at: string | null;
+      recurring: boolean;
+      /** Format: date-time */
+      created_at: string;
+      performance: components['schemas']['CampaignPerformance'];
     };
     /**
      * @description The account and the workspaces it may sign in to. Deliberately carries
@@ -5555,6 +5657,117 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listCampaigns: {
+    parameters: {
+      query?: {
+        /** @description Which lifecycle bucket to return. */
+        status?: 'all' | 'ongoing' | 'scheduled' | 'inactive';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The campaigns */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Campaign'][];
+            total: number;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createCampaign: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          /** @description On/off intent; defaults to true — a new campaign is meant to run. */
+          active?: boolean;
+          conditions: components['schemas']['CampaignConditions'];
+          content: components['schemas']['CampaignContent'];
+          /** Format: date-time */
+          starts_at?: string | null;
+          /** Format: date-time */
+          ends_at?: string | null;
+          recurring?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Created (and fired, if running) */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Campaign'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateCampaign: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        campaignId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          /** @description Toggle the campaign on or off (FR-MOD-03.3.3). */
+          active?: boolean;
+          conditions?: components['schemas']['CampaignConditions'];
+          content?: components['schemas']['CampaignContent'];
+          /** Format: date-time */
+          starts_at?: string | null;
+          /** Format: date-time */
+          ends_at?: string | null;
+          recurring?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Campaign'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

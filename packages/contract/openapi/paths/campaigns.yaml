@@ -1,0 +1,129 @@
+# Campaigns — proactive, targeted messages (FR-MOD-03.3).
+#
+# A campaign is a trigger plus a message. While it is running, the trigger
+# engine delivers the message to the visitors on the site who match the trigger
+# right now (FR-MOD-03.3.2). The card's Displayed / Chats / Conversion numbers
+# (FR-MOD-03.3.3) are counted from those sends, so they can never drift from what
+# actually went out.
+#
+# Reads take `customers:ro`, writes `customers:rw`: campaigns target the same
+# people the CRM and the live board cover, so they ride the customer scopes
+# rather than a scope the source platform never had.
+
+campaigns:
+  get:
+    tags: [Customers]
+    operationId: listCampaigns
+    summary: List campaigns
+    description: |
+      Newest first. `status` filters by the derived lifecycle bucket
+      (FR-MOD-03.3.1): `ongoing`, `scheduled` (active but not started yet),
+      `inactive` (off, or past its end), or `all`.
+    parameters:
+      - name: status
+        in: query
+        description: Which lifecycle bucket to return.
+        schema:
+          type: string
+          enum: [all, ongoing, scheduled, inactive]
+          default: all
+    responses:
+      "200":
+        description: The campaigns
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Campaign" }
+                total: { type: integer }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Customers]
+    operationId: createCampaign
+    summary: Create a campaign
+    description: |
+      Both a trigger and a message are required (FR-MOD-03.3.2): a campaign that
+      could not target or say anything is rejected, not saved inert. When the new
+      campaign is running, it fires immediately at the matching live visitors —
+      the returned `performance.displayed` is how many it reached.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, conditions, content]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              active:
+                type: boolean
+                description: On/off intent; defaults to true — a new campaign is meant to run.
+              conditions: { $ref: "../openapi.yaml#/components/schemas/CampaignConditions" }
+              content: { $ref: "../openapi.yaml#/components/schemas/CampaignContent" }
+              starts_at: { type: string, format: date-time, nullable: true }
+              ends_at: { type: string, format: date-time, nullable: true }
+              recurring: { type: boolean }
+    responses:
+      "201":
+        description: Created (and fired, if running)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Campaign" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+campaign:
+  parameters:
+    - name: campaignId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Customers]
+    operationId: updateCampaign
+    summary: Edit a campaign or toggle it active
+    description: |
+      Only the fields present in the body change (FR-MOD-03.3.3). Sending `null`
+      on a schedule field clears it; omitting a field leaves it alone. An edit
+      cannot strip the trigger or message out of a campaign that stays active.
+      Toggling one active fires it at the matching visitors, exactly as create
+      does — idempotently, so no one already reached is messaged twice.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              active:
+                type: boolean
+                description: Toggle the campaign on or off (FR-MOD-03.3.3).
+              conditions: { $ref: "../openapi.yaml#/components/schemas/CampaignConditions" }
+              content: { $ref: "../openapi.yaml#/components/schemas/CampaignContent" }
+              starts_at: { type: string, format: date-time, nullable: true }
+              ends_at: { type: string, format: date-time, nullable: true }
+              recurring: { type: boolean }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Campaign" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

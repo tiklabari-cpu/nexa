@@ -1191,11 +1191,11 @@
         "description": "RTM sender_typing/sneak-peek; ajan+müşteri görünüm. PRD 02.9 + 11.8 (Should/Could).",
         "details": "02.9-a Live typing preview (sneak-peek) (+11.8). [XHIGH] PRD 02.9 (Should) + 11.8 (Could).\nKAPSAM: RTM sender_typing/send_typing_indicator; sneak-peek (müşteri yazarken ajana önizleme). RTM ✅ (Dilim 5).\nKK (birebir): \"RTM sender_typing/send_typing_indicator; sneak-peek (müşteri yazarken)\". BAĞLAM: PLAN §4.4.6/§4.4.12.",
         "testStrategy": "integration: RTM typing push; widget+agent görünüm. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T05:46:53.505Z"
       },
       {
         "id": "42",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T05:10:40.295Z",
+      "lastModified": "2026-07-26T05:46:53.505Z",
       "taskCount": 84,
-      "completedCount": 37,
+      "completedCount": 38,
       "tags": [
         "master"
       ]

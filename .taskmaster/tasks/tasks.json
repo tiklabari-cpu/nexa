@@ -1267,11 +1267,11 @@
         "description": "Billing sayacıyla hizalı (ADR-09). 06.5-a ile paylaşımlı sorgu. PRD 07.4 (Should).",
         "details": "07.4-a AI Agent raporu (resolution/deflection). [XHIGH] PRD 07.4 (Should).\nKAPSAM: resolution/deflection/AI resolution raporu; billing sayacıyla ilişkili (ADR-09).\nKK (birebir): \"Billing sayacıyla ilişkili\". BAĞLAM: PLAN §4.4.8. tm 33.6 (06.5-a) ile paylaşımlı sorgu.",
         "testStrategy": "integration: rapor=fatura (ADR-09). DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [],
-        "updatedAt": "2026-07-25T14:00:00.000Z"
+        "updatedAt": "2026-07-26T08:15:50.925Z"
       },
       {
         "id": "45",
@@ -1818,9 +1818,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T07:58:28.251Z",
+      "lastModified": "2026-07-26T08:15:50.925Z",
       "taskCount": 84,
-      "completedCount": 39,
+      "completedCount": 40,
       "tags": [
         "master"
       ]

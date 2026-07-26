@@ -6,6 +6,36 @@
 
 ## Task log (newest-first)
 
+### 58 — 04.2-a · Team AI Agents performance + Copilot knowledge girişi — done — 2026-07-26 UTC
+
+- Kapsam: FR-MOD-04.2 (`Must v1`) `[XHIGH]` — Team ekranının iki AI girişi. Bağımlılık tm 33 (06.5-a
+  performance) + tm 36 (12.2-a Copilot KB), ikisi de done. PLAN satır 523 (04.2) → `✅` (§D41).
+  **Frontend-only, additive** — hiçbir route/şema/OpenAPI/backend'e dokunmadı (kontrat-parity etkilenmez).
+- Yapıldı:
+  - **Per-agent performance** — `TeamAiPerformance.tsx`: 06.5-a `AiPerformance` kartlarını (resolution/
+    CSAT/transfer, reports=fatura ADR-09, düşük-baz + AI-off dürüstlüğü, `reports_read` kapısı) Team
+    tarafında yeniden kullanır + `/ai-agents`'tan AI-agent roster'ı (name/status/skills, her satır →
+    `/app/playbook`). `kind:'copilot'` roster'a girmez (Copilot ayrı yönetilir).
+  - **Copilot knowledge yönetimi** — `CopilotKnowledge.tsx`: `/copilot/knowledge` (12.2-a) list/add/
+    delete. Okuma `agents-bot--all:ro|:rw`, ekle/sil `:rw`; yetkisiz → "No access". Müşteriye kapalı
+    (backend zaten 404). Metin kaynakları (article/faq/file); website crawl (SSRF) Playbook'ta kalır.
+  - `TeamPage.tsx`: iki bölüm Chatbots ile Suspended arasına (AI kümesi). 04.6-a Chatbots/Suspended
+    bozulmadı.
+- Doğrulama (exit 0): `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · web unit ✓ (55 dosya/364;
+  yeni `TeamAiPerformance.test.tsx` 5 + `CopilotKnowledge.test.tsx` 5) · `pnpm -w build` ✓ ·
+  API unit+integration ✓ (44 dosya/864, kontrat-parity dahil — regresyon yok, DB 5433/Redis 6380 canlı).
+- e2e: yeni akış eklenmedi; `team.spec.ts` yalnız invite-modal + "Team" başlığını test eder (ikisi de
+  değişmedi), başka spec Team-AI bölümlerine dokunmuyor → mevcut e2e etkilenmez. Task KK'sı "unit +
+  12.2-a bağı" olduğundan yeni e2e yazılmadı; tam Playwright koşusu (build+serve+reseed) bu additive
+  UI için koşulmadı.
+- Varsayımlar: "per-agent performance" veri modelinde chat→ai_agent atfı olmadığından resolution/CSAT
+  lisans-agregat (tek dürüst kaynak) olarak sunulur; "per-agent" boyut roster + her-ajan Playbook linki
+  ile karşılanır. Router düz olduğu için (`/app/team`, `/app/playbook`) rapor-1'deki alt-rotalar yerine
+  TeamPage bölümleri + Playbook deep-link kullanıldı.
+- Sonraki pencereye not: `.parked-playbook/` önceden beri untracked (bu task'ın parçası değil, commit
+  edilmedi). Backend'de gerçek per-ai_agent resolution atfı istenirse chat→aiAgentId + rapor filtresi
+  ayrı task olur.
+
 ### 36 — 12 · Copilot (agent-assist) [MAX] — done — 2026-07-26 UTC
 
 - Kapsam: FR-MOD-12 (`Should`, v1) `[MAX]` parent — 3 alt-görev tek pencerede, contract-first. PLAN

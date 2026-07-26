@@ -24,6 +24,8 @@ import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
 import { InviteTeammates, PendingInvitations } from './InviteTeammates.js';
+import { TeamAiPerformance } from './TeamAiPerformance.js';
+import { CopilotKnowledge } from './CopilotKnowledge.js';
 
 type Role = 'owner' | 'viceowner' | 'admin' | 'agent';
 
@@ -309,6 +311,12 @@ export function TeamPage(): ReactElement {
               )}
             </Card>
           </Section>
+
+          {/* AI agents (team side) — per-agent performance + Copilot knowledge
+              management, the two AI entries the Team screen owns (FR-MOD-04.2). */}
+          <TeamAiPerformance />
+
+          <CopilotKnowledge />
 
           <Section
             title="Suspended"

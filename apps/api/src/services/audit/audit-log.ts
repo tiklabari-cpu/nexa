@@ -42,6 +42,7 @@ export const AUDIT_ACTIONS = [
   'settings.security_updated',
   'settings.routing_rule_updated',
   'settings.chat_timeout_updated',
+  'settings.widget_updated',
   'settings.trusted_domain_added',
   'settings.trusted_domain_removed',
   'billing.subscription_updated',

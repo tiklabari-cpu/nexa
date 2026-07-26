@@ -9,6 +9,12 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import {
+  DEFAULT_WIDGET_APPEARANCE,
+  WIDGET_COLOR_PATTERN,
+  WIDGET_POSITIONS,
+  WIDGET_THEMES,
+} from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -91,6 +97,28 @@ const CHAT_TIMEOUT_MAX_SECONDS = 2_592_000;
 const updateChatTimeoutBody = z.object({
   chat_timeout_seconds: z.number().int().positive().max(CHAT_TIMEOUT_MAX_SECONDS).nullable(),
 });
+
+/**
+ * Widget appearance (FR-MOD-11.7). Every field is optional so the customisation
+ * screen can save one control at a time, but a body with none is rejected —
+ * empty is a mistake, not "reset to defaults". The colour is pinned to the same
+ * `#rrggbb` shape the database CHECK and `@nexa/types` normaliser enforce, so a
+ * value that reaches the install snippet and CSS can only ever be a colour.
+ */
+const updateWidgetBody = z
+  .object({
+    primary_color: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(WIDGET_COLOR_PATTERN, 'must be a hex colour such as #2f6bff')
+      .optional(),
+    position: z.enum(WIDGET_POSITIONS as unknown as [string, ...string[]]).optional(),
+    theme: z.enum(WIDGET_THEMES as unknown as [string, ...string[]]).optional(),
+    mobile_fullscreen: z.boolean().optional(),
+    powered_by: z.boolean().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
 const updateSecurityBody = z
   .object({
@@ -458,6 +486,68 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     },
   );
 
+  // --- Widget appearance (FR-MOD-11.7) ---------------------------------------
+
+  app.get(
+    '/settings/widget',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
+    async (request, reply) => {
+      // `findFirst` with no `where`: RLS narrows it to this license, and the
+      // id-by-licenseId key means there is at most one row. No row means the
+      // workspace has never customised the widget, which reads as the defaults.
+      const row = await request.withTenant((tx) => tx.widgetSettings.findFirst());
+      return reply.send(serialiseWidget(row));
+    },
+  );
+
+  app.put(
+    '/settings/widget',
+    { config: { scopes: ['access_rules:rw'] } },
+    async (request, reply) => {
+      const body = parse(updateWidgetBody, request.body);
+      const tenant = request.tenant();
+
+      const data = {
+        ...(body.primary_color !== undefined ? { primaryColor: body.primary_color } : {}),
+        ...(body.position !== undefined ? { position: body.position } : {}),
+        ...(body.theme !== undefined ? { theme: body.theme } : {}),
+        ...(body.mobile_fullscreen !== undefined
+          ? { mobileFullscreen: body.mobile_fullscreen }
+          : {}),
+        ...(body.powered_by !== undefined ? { poweredBy: body.powered_by } : {}),
+      };
+
+      // Upsert because signup leaves no row: a workspace customising the widget
+      // for the first time would otherwise get a 404 for settings it can see.
+      // The create fills unset fields from the defaults, so a partial first save
+      // lands a complete, valid row.
+      const updated = await request.withTenant(async (tx) => {
+        const row = await tx.widgetSettings.upsert({
+          where: { licenseId: tenant.licenseId },
+          create: {
+            licenseId: tenant.licenseId,
+            primaryColor: DEFAULT_WIDGET_APPEARANCE.primary_color,
+            position: DEFAULT_WIDGET_APPEARANCE.position,
+            theme: DEFAULT_WIDGET_APPEARANCE.theme,
+            mobileFullscreen: DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen,
+            poweredBy: DEFAULT_WIDGET_APPEARANCE.powered_by,
+            ...data,
+          },
+          update: data,
+        });
+        // Field names, not values: the trail shows what was touched without
+        // copying the configuration into an append-only table.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.widget_updated',
+          metadata: { fields: Object.keys(body) },
+        });
+        return row;
+      });
+
+      return reply.send(serialiseWidget(updated));
+    },
+  );
+
   // --- Routing rules ---------------------------------------------------------
 
   app.get(
@@ -732,6 +822,31 @@ function serialiseSecurity(
 function serialiseInbox(row: { chatTimeoutSeconds: number | null; updatedAt: Date } | null) {
   return {
     chat_timeout_seconds: row?.chatTimeoutSeconds ?? null,
+    updated_at: row ? row.updatedAt.toISOString() : null,
+  };
+}
+
+/**
+ * The widget appearance in the shared `WidgetAppearance` shape, plus when it was
+ * last changed. No row means the defaults — the same fallback the schema column
+ * defaults and the widget's own CSS encode, so all three describe one look.
+ */
+function serialiseWidget(
+  row: {
+    primaryColor: string;
+    position: string;
+    theme: string;
+    mobileFullscreen: boolean;
+    poweredBy: boolean;
+    updatedAt: Date;
+  } | null,
+) {
+  return {
+    primary_color: row?.primaryColor ?? DEFAULT_WIDGET_APPEARANCE.primary_color,
+    position: row?.position ?? DEFAULT_WIDGET_APPEARANCE.position,
+    theme: row?.theme ?? DEFAULT_WIDGET_APPEARANCE.theme,
+    mobile_fullscreen: row?.mobileFullscreen ?? DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen,
+    powered_by: row?.poweredBy ?? DEFAULT_WIDGET_APPEARANCE.powered_by,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

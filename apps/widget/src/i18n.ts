@@ -48,6 +48,7 @@ const MESSAGES: Record<WidgetLocale, Record<string, string>> = {
     'attachment.alt': 'Attachment',
     'typing.named': '{name} is typing…',
     'typing.generic': 'Typing…',
+    poweredBy: 'Powered by Nexa',
   },
   tr: {
     'title.default': 'Bizimle sohbet edin',
@@ -78,6 +79,7 @@ const MESSAGES: Record<WidgetLocale, Record<string, string>> = {
     'attachment.alt': 'Ek',
     'typing.named': '{name} yazıyor…',
     'typing.generic': 'Yazıyor…',
+    poweredBy: 'Nexa ile güçlendirilmiştir',
   },
 };
 

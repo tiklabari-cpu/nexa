@@ -6,6 +6,36 @@
 
 ## Task log (newest-first)
 
+### 57 — 11.7-a · Widget customization (Appearance/Position/Mobile) + canlı önizleme [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı:
+  - **Şema tek kaynak:** yeni `packages/types/src/widget.ts` — `WidgetAppearance`
+    (`primary_color`/`position`/`theme`/`mobile_fullscreen`/`powered_by`), `DEFAULT_WIDGET_APPEARANCE`,
+    `WIDGET_COLOR_PATTERN` (`#rrggbb`), `normalizeWidgetAppearance`. API, widget ve web tek tipi paylaşır.
+  - **API kalıcılık:** yeni `widget_settings` license-singleton tablosu (RLS + 3 CHECK: color/position/theme)
+    + migration `20260726150000_widget_settings` + Prisma modeli. `GET/PUT /settings/widget` (`access_rules`
+    scope, partial upsert, defaults dolgusu, audit `settings.widget_updated`) — `InboxSettings` desenini birebir
+    izler. Snippet artık **default'tan sapan** görünüm alanlarını `window.__nexa`'ya gömer
+    (website-service). `/customer/token` yanıtı `widget` görünümünü taşır (hosted Chat page + bayat snippet düzeltmesi).
+  - **Sözleşme:** OpenAPI `/settings/widget` (GET+PUT) + `WidgetSettings` şeması; `contract:generate`.
+    `contract-parity` yeşil.
+  - **Widget:** loader görünümü query param'a forward eder + **mobil tam ekran** iframe geometrisi
+    (host viewport ≤480px & open → tüm ekran, aksi halde köşe kartı). Widget mount'ta temayı uygular
+    (`--nx-brand`, `data-nx-theme` light/dark force, `nx-left`/`nx-mobile-full` sınıfları) ve token
+    yanıtından yeniden uygular. **"Powered by Nexa"** alt bilgisi (FR-MOD-11.5, kaldırılabilir) + i18n (en/tr).
+    Bundle P3 bütçesi korunur (loader ~1.3KB gz, toplam ~10KB gz < 50KB).
+  - **UI (canlı önizleme):** yeni `WidgetCustomization.tsx` — renk/konum/tema/mobil/powered-by kontrolleri
+    + gerçek-zamanlı önizleme (React mock, iframe değil); kaydet → `PUT /settings/widget` + snippet cache invalidate.
+    WebsiteWidgets'taki devre dışı "Customize widget" butonu artık `#widget-customization`'a link. Section'a `id` eklendi.
+- Doğrulama: `pnpm -w typecheck`/`lint`/`build` yeşil. Unit: widget 48 (tema uygular + loader geometri),
+  web 295 (WidgetCustomization 5). Integration: `test:integration` 657 (settings/widget 13 + websites snippet 3 +
+  token `widget` alanı + contract-parity). Bundle-size testi yeşil (P3 korunur).
+- Varsayımlar: Görünüm merkezi (DB) tek kaynak; snippet materyalize kopya. Chat page teması token yanıtından.
+  Full e2e stack koşulmadı (ağır/flaky — bkz. e2e memory); mevcut `widget.spec`/`settings.spec` seçicileri
+  yapıca etkilenmiyor (desktop viewport mobil yolu tetiklemez; powered-by ek eleman, rol seçicileri çakışmaz).
+- Sonraki pencereye not: White-label "Powered by" tamamen kaldırma v3 (tm 84). Widget dil seçimi hâlâ embed
+  tarafında (`data-language`); merkezi dil tercihi eklenirse `widget_settings`'e alan eklenebilir.
+
 ### 56 — 10.3-a · Invoices + payment yönetimi [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı:

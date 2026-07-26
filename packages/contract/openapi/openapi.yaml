@@ -197,6 +197,8 @@ paths:
     $ref: "./paths/settings.yaml#/securitySettings"
   /settings/chat-timeout:
     $ref: "./paths/settings.yaml#/chatTimeout"
+  /settings/widget:
+    $ref: "./paths/settings.yaml#/widgetSettings"
 
   /onboarding/state:
     $ref: "./paths/onboarding.yaml#/state"
@@ -849,6 +851,35 @@ components:
           nullable: true
           minimum: 1
           description: Seconds of inactivity before auto-close, or null when disabled.
+        updated_at: { type: string, format: date-time, nullable: true }
+
+    WidgetSettings:
+      type: object
+      description: |
+        Per-license widget appearance (FR-MOD-11.7, `widget_settings`). A
+        workspace that has never customised it reads the shipped defaults; the
+        values are baked into the install snippet and applied by the widget.
+      required:
+        [primary_color, position, theme, mobile_fullscreen, powered_by, updated_at]
+      properties:
+        primary_color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+          description: Brand colour of the launcher, header and send button, a hex.
+        position:
+          type: string
+          enum: [bottom-right, bottom-left]
+          description: Corner the launcher sits in.
+        theme:
+          type: string
+          enum: [auto, light, dark]
+          description: auto follows the visitor's device; light/dark force it.
+        mobile_fullscreen:
+          type: boolean
+          description: Open the panel edge-to-edge on phones rather than as a card.
+        powered_by:
+          type: boolean
+          description: The removable "Powered by Nexa" footer (FR-MOD-11.5).
         updated_at: { type: string, format: date-time, nullable: true }
 
     OnboardingState:

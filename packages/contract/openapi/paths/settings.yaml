@@ -310,6 +310,65 @@ chatTimeout:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+widgetSettings:
+  get:
+    tags: [Settings]
+    operationId: getWidgetSettings
+    summary: Widget appearance
+    description: |
+      The widget's appearance (FR-MOD-11.7): brand colour, corner, colour
+      scheme, mobile-fullscreen and the removable "Powered by" footer. A
+      workspace that has never customised it reads the shipped defaults, with no
+      side effect — there is no row until the first save.
+    responses:
+      "200":
+        description: The current appearance
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/WidgetSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Settings]
+    operationId: setWidgetSettings
+    summary: Change the widget appearance
+    description: |
+      Creates the row on first write, filling unset fields from the defaults, so
+      a partial save lands a complete, valid appearance. At least one field is
+      required. The colour must be a `#rrggbb` hex; position and theme their
+      enums. Takes effect on the next widget load and is baked into the snippet.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              primary_color:
+                type: string
+                pattern: "^#[0-9a-fA-F]{6}$"
+              position:
+                type: string
+                enum: [bottom-right, bottom-left]
+              theme:
+                type: string
+                enum: [auto, light, dark]
+              mobile_fullscreen: { type: boolean }
+              powered_by: { type: boolean }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/WidgetSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 routingRules:
   get:
     tags: [Settings]

@@ -38,14 +38,17 @@ export function Section({
   title,
   description,
   children,
+  id,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
+  /** Optional anchor target, for in-page links such as "Customize widget". */
+  id?: string;
 }): ReactElement {
   const headingId = `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+    <section id={id} aria-labelledby={headingId} className="flex flex-col gap-3">
       <div>
         <h2 id={headingId} className="text-sm font-semibold">
           {title}

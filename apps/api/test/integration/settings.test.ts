@@ -789,4 +789,142 @@ describe('settings', () => {
       expect(theirs?.chatTimeoutSeconds).toBe(120);
     });
   });
+
+  describe('widget appearance', () => {
+    // FR-MOD-11.7: the customisable surface of the widget. A partial save must
+    // land a complete, valid row (defaults fill the rest), and nothing but a
+    // colour/enum can be stored — the values ride in the install snippet and CSS.
+
+    it('reads the shipped defaults until it is set, without writing a row', async () => {
+      expect(
+        await owner.widgetSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+      ).toBeNull();
+
+      const response = await server.get('/settings/widget', auth(readToken));
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        primary_color: '#2f6bff',
+        position: 'bottom-right',
+        theme: 'auto',
+        mobile_fullscreen: true,
+        powered_by: true,
+        updated_at: null,
+      });
+
+      // A read must not materialise a row.
+      expect(
+        await owner.widgetSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+      ).toBeNull();
+    });
+
+    it('saves a partial change and fills the rest from the defaults', async () => {
+      const saved = await server.put(
+        '/settings/widget',
+        { primary_color: '#E11D48' },
+        auth(adminToken),
+      );
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({
+        // Normalised to lower case on the way in.
+        primary_color: '#e11d48',
+        position: 'bottom-right',
+        theme: 'auto',
+        mobile_fullscreen: true,
+        powered_by: true,
+      });
+      expect((saved.json() as { updated_at: string | null }).updated_at).not.toBeNull();
+    });
+
+    it('saves the whole appearance and reads it back', async () => {
+      await server.put(
+        '/settings/widget',
+        {
+          primary_color: '#0a7f3f',
+          position: 'bottom-left',
+          theme: 'dark',
+          mobile_fullscreen: false,
+          powered_by: false,
+        },
+        auth(adminToken),
+      );
+      const after = await server.get('/settings/widget', auth(readToken));
+      expect(after.json()).toMatchObject({
+        primary_color: '#0a7f3f',
+        position: 'bottom-left',
+        theme: 'dark',
+        mobile_fullscreen: false,
+        powered_by: false,
+      });
+    });
+
+    it.each(['red', '#12g', '#12345', 'rgb(0,0,0)'])(
+      'rejects the non-hex colour %j and stores nothing',
+      async (color) => {
+        const response = await server.put('/settings/widget', { primary_color: color }, auth(adminToken));
+        expect(response.statusCode).toBe(400);
+        expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
+        expect(
+          await owner.widgetSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+        ).toBeNull();
+      },
+    );
+
+    it.each([
+      { position: 'top-left' },
+      { theme: 'neon' },
+    ])('rejects an out-of-range enum %j', async (body) => {
+      const response = await server.put('/settings/widget', body, auth(adminToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('rejects an empty body rather than treating it as a reset', async () => {
+      const response = await server.put('/settings/widget', {}, auth(adminToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('requires write scope to change the appearance', async () => {
+      const response = await server.put(
+        '/settings/widget',
+        { theme: 'dark' },
+        auth(readToken),
+      );
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('serves the appearance in the customer token response', async () => {
+      // The hosted Chat page has no snippet to bake it into, so the server is
+      // its only source; the token mint carries it (FR-MOD-11.7).
+      await server.put('/settings/widget', { primary_color: '#0a7f3f', theme: 'dark' }, auth(adminToken));
+
+      const minted = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId, host_origin: `https://${fx.a.trustedDomain}` },
+        { origin: 'https://widget.nexa.example' },
+      );
+      expect(minted.statusCode).toBe(200);
+      expect((minted.json() as { widget: { primary_color: string; theme: string } }).widget).toMatchObject({
+        primary_color: '#0a7f3f',
+        theme: 'dark',
+      });
+    });
+
+    it("never reads or writes another tenant's appearance", async () => {
+      await owner.widgetSettings.create({
+        data: { licenseId: fx.b.licenseId, primaryColor: '#abcdef', updatedAt: new Date() },
+      });
+
+      // Their row must not leak into our read…
+      const read = await server.get('/settings/widget', auth(readToken));
+      expect((read.json() as { primary_color: string }).primary_color).toBe('#2f6bff');
+
+      // …and our write must not reach it.
+      const written = await server.put('/settings/widget', { primary_color: '#111111' }, auth(adminToken));
+      expect(written.statusCode).toBe(200);
+
+      const theirs = await owner.widgetSettings.findUnique({
+        where: { licenseId: fx.b.licenseId },
+      });
+      expect(theirs?.primaryColor).toBe('#abcdef');
+    });
+  });
 });

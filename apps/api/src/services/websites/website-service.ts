@@ -12,6 +12,11 @@
  * customer-token route (`markWebsiteConnected`), the earliest server-side proof
  * the widget is actually live on the page, rather than from the UI.
  */
+import {
+  DEFAULT_WIDGET_APPEARANCE,
+  normalizeWidgetAppearance,
+  type WidgetAppearance,
+} from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 /**
@@ -52,16 +57,26 @@ export class WebsiteService {
    */
   constructor(private readonly widgetBaseUrl: string) {}
 
+  /**
+   * The appearance is read once and threaded into every snippet, so a customised
+   * launch (FR-MOD-11.7) is baked into the code a customer pastes. Read here from
+   * the same tenant transaction; a workspace that has never customised it gets
+   * the shipped defaults and the minimal snippet it always had.
+   */
   async list(tx: TenantClient, organizationId: string): Promise<Website[]> {
     // RLS narrows to the caller's license; the order gives the table a stable
     // shape rather than insertion order.
-    const rows = await tx.website.findMany({ orderBy: { domain: 'asc' } });
-    return rows.map((row) => this.serialise(row, organizationId));
+    const [rows, appearance] = await Promise.all([
+      tx.website.findMany({ orderBy: { domain: 'asc' } }),
+      this.appearance(tx),
+    ]);
+    return rows.map((row) => this.serialise(row, organizationId, appearance));
   }
 
   async get(tx: TenantClient, organizationId: string, id: string): Promise<Website | null> {
     const row = await tx.website.findFirst({ where: { id } });
-    return row ? this.serialise(row, organizationId) : null;
+    if (!row) return null;
+    return this.serialise(row, organizationId, await this.appearance(tx));
   }
 
   /** Throws Prisma P2002 on a duplicate `[licenseId, domain]`; the route maps it. */
@@ -78,7 +93,27 @@ export class WebsiteService {
         createdBy: input.createdBy,
       },
     });
-    return this.serialise(row, tenant.organizationId);
+    return this.serialise(row, tenant.organizationId, await this.appearance(tx));
+  }
+
+  /**
+   * The workspace's widget appearance, or the shipped defaults when it has never
+   * been customised. Normalised so a value that somehow bypassed the endpoint's
+   * validation still cannot carry anything but its declared shape into a snippet.
+   */
+  private async appearance(tx: TenantClient): Promise<WidgetAppearance> {
+    const row = await tx.widgetSettings.findFirst();
+    return normalizeWidgetAppearance(
+      row
+        ? {
+            primary_color: row.primaryColor,
+            position: row.position as WidgetAppearance['position'],
+            theme: row.theme as WidgetAppearance['theme'],
+            mobile_fullscreen: row.mobileFullscreen,
+            powered_by: row.poweredBy,
+          }
+        : null,
+    );
   }
 
   /**
@@ -91,7 +126,7 @@ export class WebsiteService {
     return count;
   }
 
-  serialise(row: WebsiteRow, organizationId: string): Website {
+  serialise(row: WebsiteRow, organizationId: string, appearance: WidgetAppearance): Website {
     return {
       id: row.id,
       domain: row.domain,
@@ -99,28 +134,64 @@ export class WebsiteService {
       status: row.status as WebsiteStatus,
       connected_at: row.connectedAt ? row.connectedAt.toISOString() : null,
       created_at: row.createdAt.toISOString(),
-      snippet: this.snippet(organizationId),
+      snippet: this.snippet(organizationId, appearance),
     };
   }
 
   /**
    * The code a customer pastes before `</body>`. Identical across a workspace's
    * sites — the embedding origin is resolved at runtime against trusted domains,
-   * so the snippet only needs to name the tenant and where to load the widget.
+   * so the snippet only needs to name the tenant, where to load the widget, and
+   * how it should look.
    *
-   * `organizationId` is a validated UUID and `widgetBaseUrl` a validated URL, so
-   * neither can carry markup into the template.
+   * Only appearance that differs from the shipped defaults is emitted, so a
+   * workspace that has never customised the widget still gets the minimal
+   * snippet, and a customised one carries just its overrides (FR-MOD-11.7).
+   *
+   * `organizationId` is a validated UUID, `widgetBaseUrl` a validated URL and
+   * the appearance is normalised — a colour is only ever `#rrggbb`, position and
+   * theme only their enums — so nothing here can carry markup into the template.
    */
-  snippet(organizationId: string): string {
+  snippet(organizationId: string, appearance: WidgetAppearance = DEFAULT_WIDGET_APPEARANCE): string {
     const origin = this.widgetBaseUrl.replace(/\/+$/, '');
+    const fields = [
+      `organizationId: "${organizationId}"`,
+      `widgetOrigin: "${origin}"`,
+      ...appearanceFields(appearance),
+    ];
     return [
       '<!-- Nexa widget -->',
       '<script>',
-      `  window.__nexa = { organizationId: "${organizationId}", widgetOrigin: "${origin}" };`,
+      `  window.__nexa = { ${fields.join(', ')} };`,
       '</script>',
       `<script async src="${origin}/loader.js"></script>`,
     ].join('\n');
   }
+}
+
+/**
+ * The `window.__nexa` fields for the appearance, in the loader's camelCase, and
+ * only where they differ from the defaults. Booleans and enum strings, both
+ * already normalised, so each renders as a safe literal.
+ */
+function appearanceFields(appearance: WidgetAppearance): string[] {
+  const fields: string[] = [];
+  if (appearance.primary_color !== DEFAULT_WIDGET_APPEARANCE.primary_color) {
+    fields.push(`primaryColor: "${appearance.primary_color}"`);
+  }
+  if (appearance.position !== DEFAULT_WIDGET_APPEARANCE.position) {
+    fields.push(`position: "${appearance.position}"`);
+  }
+  if (appearance.theme !== DEFAULT_WIDGET_APPEARANCE.theme) {
+    fields.push(`theme: "${appearance.theme}"`);
+  }
+  if (appearance.mobile_fullscreen !== DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen) {
+    fields.push(`mobileFullscreen: ${appearance.mobile_fullscreen}`);
+  }
+  if (appearance.powered_by !== DEFAULT_WIDGET_APPEARANCE.powered_by) {
+    fields.push(`poweredBy: ${appearance.powered_by}`);
+  }
+  return fields;
 }
 
 /**

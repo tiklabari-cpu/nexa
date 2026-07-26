@@ -6,6 +6,8 @@
  * retry policy and typed routes it will never use.
  */
 
+import type { WidgetAppearance } from '@nexa/types';
+
 export interface WidgetEvent {
   id: string;
   text: string | null;
@@ -28,6 +30,17 @@ export interface WidgetState {
 
 export class WidgetApi {
   #token: string | null = null;
+  #appearance: WidgetAppearance | null = null;
+
+  /**
+   * The workspace's widget appearance from the last token mint (FR-MOD-11.7), or
+   * null before the first connect. The server is the source of truth, so this
+   * corrects a stale baked snippet and is the only source the hosted Chat page —
+   * which has no snippet — has at all.
+   */
+  get appearance(): WidgetAppearance | null {
+    return this.#appearance;
+  }
 
   constructor(
     private readonly baseUrl: string,
@@ -65,11 +78,13 @@ export class WidgetApi {
     });
     if (!response.ok) throw new WidgetApiError(await describe(response));
 
-    const { token, customer_id } = (await response.json()) as {
+    const { token, customer_id, widget } = (await response.json()) as {
       token: string;
       customer_id: string;
+      widget?: WidgetAppearance;
     };
     this.#token = token;
+    if (widget) this.#appearance = widget;
     safeSetItem('nexa.customer_id', customer_id);
 
     return this.state();

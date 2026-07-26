@@ -23,7 +23,21 @@ export interface NexaWidgetConfig {
   position?: 'bottom-right' | 'bottom-left';
   /** BCP-47 language tag for the widget UI. */
   language?: string;
+  // --- Appearance (FR-MOD-11.7), baked into the snippet from the workspace's
+  // widget settings. All optional: an un-customised install carries none and
+  // gets the shipped look. Validated server-side before it reaches here.
+  /** Brand colour, a `#rrggbb` hex. */
+  primaryColor?: string;
+  /** `auto` follows the visitor's OS; `light`/`dark` force it. */
+  theme?: 'auto' | 'light' | 'dark';
+  /** Open the panel edge-to-edge on phones rather than as a floating card. */
+  mobileFullscreen?: boolean;
+  /** The removable "Powered by Nexa" footer (FR-MOD-11.5). */
+  poweredBy?: boolean;
 }
+
+/** Below this host-viewport width the widget is treated as being on a phone. */
+const MOBILE_MAX_WIDTH = 480;
 
 interface NexaGlobal extends NexaWidgetConfig {
   open?: () => void;
@@ -69,10 +83,12 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
   frame.setAttribute('allowtransparency', 'true');
   frame.src = buildFrameUrl(widgetOrigin, config, hostPageUrl(win));
 
+  const corner = config.position === 'bottom-left' ? 'left' : 'right';
+
   Object.assign(frame.style, {
     position: 'fixed',
     bottom: '16px',
-    [config.position === 'bottom-left' ? 'left' : 'right']: '16px',
+    [corner]: '16px',
     width: '84px',
     height: '84px',
     border: '0',
@@ -83,6 +99,37 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
 
   win.document.body.appendChild(frame);
 
+  // The frame's own idea of how big it wants to be, updated by `nexa:resize`.
+  // Geometry is recomputed from these plus whether the panel is open, so that
+  // opening on a phone can fill the viewport (FR-MOD-11.7, "mobil tam ekran")
+  // rather than leave a 380 px card overhanging a 360 px screen.
+  let wantWidth = 84;
+  let wantHeight = 84;
+  let open = false;
+
+  const applyGeometry = (): void => {
+    if (open && config.mobileFullscreen && win.innerWidth <= MOBILE_MAX_WIDTH) {
+      // Edge-to-edge: the launcher's corner offsets would leave a gap, so clear
+      // them and pin all four sides.
+      Object.assign(frame.style, {
+        top: '0px',
+        left: '0px',
+        right: '0px',
+        bottom: '0px',
+        width: '100%',
+        height: '100%',
+      });
+      return;
+    }
+    // Floating card in its corner — the default everywhere but a phone.
+    frame.style.top = '';
+    frame.style[corner] = '16px';
+    frame.style[corner === 'left' ? 'right' : 'left'] = '';
+    frame.style.bottom = '16px';
+    frame.style.width = `${wantWidth}px`;
+    frame.style.height = `${wantHeight}px`;
+  };
+
   const onMessage = (event: MessageEvent): void => {
     // Both checks matter: the origin proves who sent it, the source proves it
     // came from our frame rather than another one on the same origin.
@@ -92,12 +139,17 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
     const data = event.data as { type?: unknown; height?: unknown; width?: unknown };
     if (typeof data?.type !== 'string' || !ALLOWED_INBOUND.has(data.type)) return;
 
+    if (data.type === 'nexa:open') open = true;
+    if (data.type === 'nexa:close') open = false;
+
     if (data.type === 'nexa:resize') {
       const height = clampDimension(data.height, 84, 720);
       const width = clampDimension(data.width, 84, 420);
-      if (height) frame.style.height = `${height}px`;
-      if (width) frame.style.width = `${width}px`;
+      if (height) wantHeight = height;
+      if (width) wantWidth = width;
     }
+
+    applyGeometry();
   };
 
   win.addEventListener('message', onMessage);
@@ -147,6 +199,14 @@ function buildFrameUrl(
   url.searchParams.set('host_origin', host.origin);
   url.searchParams.set('host_url', host.url);
   if (config.language) url.searchParams.set('language', config.language);
+  // Appearance the widget applies at mount, so the launcher is on-brand before
+  // the first open rather than flashing the default (FR-MOD-11.7). Only what the
+  // snippet actually set is forwarded; the widget fills the rest with defaults.
+  if (config.primaryColor) url.searchParams.set('color', config.primaryColor);
+  if (config.theme) url.searchParams.set('theme', config.theme);
+  if (config.position) url.searchParams.set('position', config.position);
+  if (config.mobileFullscreen === false) url.searchParams.set('mobile_full', '0');
+  if (config.poweredBy === false) url.searchParams.set('powered_by', '0');
   return url.toString();
 }
 

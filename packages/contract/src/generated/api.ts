@@ -1459,6 +1459,36 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/widget': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Widget appearance
+     * @description The widget's appearance (FR-MOD-11.7): brand colour, corner, colour
+     *     scheme, mobile-fullscreen and the removable "Powered by" footer. A
+     *     workspace that has never customised it reads the shipped defaults, with no
+     *     side effect — there is no row until the first save.
+     */
+    get: operations['getWidgetSettings'];
+    /**
+     * Change the widget appearance
+     * @description Creates the row on first write, filling unset fields from the defaults, so
+     *     a partial save lands a complete, valid appearance. At least one field is
+     *     required. The colour must be a `#rrggbb` hex; position and theme their
+     *     enums. Takes effect on the next widget load and is baked into the snippet.
+     */
+    put: operations['setWidgetSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/onboarding/state': {
     parameters: {
       query?: never;
@@ -2682,6 +2712,31 @@ export interface components {
        * @description Seconds of inactivity before auto-close, or null when disabled.
        */
       chat_timeout_seconds: number | null;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    /**
+     * @description Per-license widget appearance (FR-MOD-11.7, `widget_settings`). A
+     *     workspace that has never customised it reads the shipped defaults; the
+     *     values are baked into the install snippet and applied by the widget.
+     */
+    WidgetSettings: {
+      /** @description Brand colour of the launcher, header and send button, a hex. */
+      primary_color: string;
+      /**
+       * @description Corner the launcher sits in.
+       * @enum {string}
+       */
+      position: 'bottom-right' | 'bottom-left';
+      /**
+       * @description auto follows the visitor's device; light/dark force it.
+       * @enum {string}
+       */
+      theme: 'auto' | 'light' | 'dark';
+      /** @description Open the panel edge-to-edge on phones rather than as a card. */
+      mobile_fullscreen: boolean;
+      /** @description The removable "Powered by Nexa" footer (FR-MOD-11.5). */
+      powered_by: boolean;
       /** Format: date-time */
       updated_at: string | null;
     };
@@ -6143,6 +6198,65 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ChatTimeoutSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getWidgetSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current appearance */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WidgetSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setWidgetSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          primary_color?: string;
+          /** @enum {string} */
+          position?: 'bottom-right' | 'bottom-left';
+          /** @enum {string} */
+          theme?: 'auto' | 'light' | 'dark';
+          mobile_fullscreen?: boolean;
+          powered_by?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WidgetSettings'];
         };
       };
       400: components['responses']['BadRequest'];

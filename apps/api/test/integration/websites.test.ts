@@ -147,6 +147,33 @@ describe('websites', () => {
     expect(created.snippet).toContain('/loader.js');
   });
 
+  it('keeps the snippet minimal for a default (un-customised) appearance', async () => {
+    // A workspace that never touched the customisation screen gets exactly the
+    // snippet it always had — no appearance keys (FR-MOD-11.7).
+    const created = (await server.post('/websites', { domain: 'plain.example' }, auth(adminToken)))
+      .json() as Website;
+    expect(created.snippet).not.toContain('primaryColor');
+    expect(created.snippet).not.toContain('poweredBy');
+    expect(created.snippet).not.toContain('theme');
+  });
+
+  it('bakes a customised appearance into the install snippet', async () => {
+    // Only the overrides ride along; defaults are omitted to keep it tidy.
+    await server.put(
+      '/settings/widget',
+      { primary_color: '#e11d48', position: 'bottom-left', powered_by: false },
+      auth(adminToken),
+    );
+
+    const created = (await server.post('/websites', { domain: 'brand.example' }, auth(adminToken)))
+      .json() as Website;
+    expect(created.snippet).toContain('primaryColor: "#e11d48"');
+    expect(created.snippet).toContain('position: "bottom-left"');
+    expect(created.snippet).toContain('poweredBy: false');
+    // Theme was left at its default, so it must not appear.
+    expect(created.snippet).not.toContain('theme:');
+  });
+
   // --- Duplicate is a conflict, not a 500 ------------------------------------
 
   it('rejects a duplicate domain with a website_exists envelope, not a raw 500', async () => {

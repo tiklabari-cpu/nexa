@@ -16,6 +16,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
+import { WidgetCustomization } from './WidgetCustomization.js';
 import { ChannelsGrid } from './Channels.js';
 import {
   DEFAULT_PREFS,
@@ -84,6 +85,7 @@ export function SettingsPage(): ReactElement {
       <ChannelsGrid />
       <NotificationSettings />
       <WebsiteWidgets canEdit={canManageAccess} />
+      <WidgetCustomization canEdit={canManageAccess} />
       <TrustedDomains canEdit={canManageAccess} />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />

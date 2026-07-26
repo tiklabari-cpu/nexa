@@ -8,6 +8,7 @@
  * with `textContent`. Never `innerHTML` — the eslint config bans it outright
  * rather than relying on anyone remembering (NFR-S6).
  */
+import type { WidgetAppearance } from '@nexa/types';
 import { WidgetApi, type WidgetEvent, type WidgetState } from './api.js';
 import { createTranslator, type WidgetTranslate } from './i18n.js';
 
@@ -18,6 +19,30 @@ const GREETING = { width: 340, height: 250 } as const;
 const POLL_INTERVAL_MS = 4_000;
 /** Per-session, so a dismissed greeting stays dismissed until the tab closes. */
 const GREETING_DISMISSED_KEY = 'nexa.greeting_dismissed';
+
+/**
+ * The widget's appearance (FR-MOD-11.7), in the widget's own camelCase. The
+ * loader forwards whatever the snippet set; everything else falls back to the
+ * shipped look here, which the CSS defaults and the API defaults both mirror.
+ */
+interface Appearance {
+  primaryColor: string;
+  theme: 'auto' | 'light' | 'dark';
+  position: 'bottom-right' | 'bottom-left';
+  mobileFullscreen: boolean;
+  poweredBy: boolean;
+}
+
+const DEFAULT_APPEARANCE: Appearance = {
+  primaryColor: '#2f6bff',
+  theme: 'auto',
+  position: 'bottom-right',
+  mobileFullscreen: true,
+  poweredBy: true,
+};
+
+/** A `#rrggbb` colour — the one shape allowed to reach the `--nx-brand` var. */
+const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 interface WidgetConfig {
   organizationId: string;
@@ -31,6 +56,8 @@ interface WidgetConfig {
    * has no launcher, no host to message, and authorises against itself.
    */
   chatPage: boolean;
+  /** Appearance baked into the snippet and forwarded by the loader. */
+  appearance: Appearance;
 }
 
 interface State {
@@ -87,7 +114,36 @@ export function mount(doc: Document = document, win: Window = window): void {
   };
 
   const ui = buildUi(doc, t);
-  root.append(ui.panel, ui.greeting, ui.launcher);
+  // Non-null past the guard above; aliased so the appearance closure keeps that
+  // narrowing (TypeScript drops it for the captured `root` inside a function).
+  const rootEl = root;
+  rootEl.append(ui.panel, ui.greeting, ui.launcher);
+
+  // --- Appearance (FR-MOD-11.7) --------------------------------------------
+
+  // Applied from the snippet at mount so the launcher is on-brand before the
+  // first open, then re-applied from the token response — the server being the
+  // source of truth corrects a stale snippet and is all the hosted Chat page has.
+  let appearance = config.appearance;
+
+  function applyAppearance(): void {
+    const el = doc.documentElement;
+    if (COLOR_RE.test(appearance.primaryColor)) {
+      // Inline on `:root` beats the stylesheet's default and cascades to the
+      // launcher, header and send button alike.
+      el.style.setProperty('--nx-brand', appearance.primaryColor);
+    }
+    // Force the colour scheme, or clear the override to follow the visitor's OS.
+    if (appearance.theme === 'auto') el.removeAttribute('data-nx-theme');
+    else el.setAttribute('data-nx-theme', appearance.theme);
+    // The loader positions the iframe; these mirror the launcher and greeting
+    // inside it, and let the panel fill a full-screen mobile frame.
+    rootEl.classList.toggle('nx-left', appearance.position === 'bottom-left');
+    rootEl.classList.toggle('nx-mobile-full', appearance.mobileFullscreen);
+    ui.poweredBy.hidden = !appearance.poweredBy;
+  }
+
+  applyAppearance();
 
   // --- Rendering -----------------------------------------------------------
 
@@ -298,6 +354,12 @@ export function mount(doc: Document = document, win: Window = window): void {
     if (state.connected) return;
     try {
       const snapshot = await api.connect();
+      // The token mint carried the workspace's appearance; the server wins over
+      // whatever the snippet baked, so a colour changed after install still takes.
+      if (api.appearance) {
+        appearance = appearanceFromApi(api.appearance);
+        applyAppearance();
+      }
       state.connected = true;
       state.online = snapshot.online;
       state.chatId = snapshot.chat?.id ?? null;
@@ -567,6 +629,7 @@ interface Ui {
   prechatName: HTMLInputElement;
   prechatEmail: HTMLInputElement;
   prechatSubmit: HTMLButtonElement;
+  poweredBy: HTMLElement;
 }
 
 function buildUi(doc: Document, t: WidgetTranslate): Ui {
@@ -691,7 +754,20 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   prechatSubmit.textContent = t('prechat.submit');
   prechat.append(prechatIntro, prechatName, prechatEmail, prechatSubmit);
 
-  panel.append(header, transcript, typing, status, prechat, chip, form);
+  // "Powered by Nexa" (FR-MOD-11.5): shown by default, hidden when a workspace
+  // removes it. A link, opened in a new tab so it never navigates the panel away
+  // from a live conversation.
+  const poweredBy = doc.createElement('p');
+  poweredBy.className = 'nx-powered';
+  const poweredLink = doc.createElement('a');
+  poweredLink.className = 'nx-powered-link';
+  poweredLink.href = 'https://nexa.example';
+  poweredLink.target = '_blank';
+  poweredLink.rel = 'noopener noreferrer';
+  poweredLink.textContent = t('poweredBy');
+  poweredBy.append(poweredLink);
+
+  panel.append(header, transcript, typing, status, prechat, chip, form, poweredBy);
 
   // Greeting card — the proactive nudge that sits above a closed launcher.
   const greeting = doc.createElement('div');
@@ -737,6 +813,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     prechatName,
     prechatEmail,
     prechatSubmit,
+    poweredBy,
   };
 }
 
@@ -898,6 +975,36 @@ function readConfig(win: Window): WidgetConfig {
     // to the referrer when the widget document is opened directly.
     hostOrigin: chatPage ? win.location.origin : (params.get('host_origin') ?? referrerOrigin(win)),
     chatPage,
+    appearance: readAppearance(params),
+  };
+}
+
+/**
+ * Appearance from the loader's query params, each field defaulting to the
+ * shipped look. A booleans-as-`0` convention keeps the URL short: the flags are
+ * only present when the snippet turned them off.
+ */
+function readAppearance(params: URLSearchParams): Appearance {
+  const color = params.get('color');
+  const theme = params.get('theme');
+  const position = params.get('position');
+  return {
+    primaryColor: color && COLOR_RE.test(color) ? color.toLowerCase() : DEFAULT_APPEARANCE.primaryColor,
+    theme: theme === 'light' || theme === 'dark' ? theme : 'auto',
+    position: position === 'bottom-left' ? 'bottom-left' : 'bottom-right',
+    mobileFullscreen: params.get('mobile_full') !== '0',
+    poweredBy: params.get('powered_by') !== '0',
+  };
+}
+
+/** The widget's camelCase appearance from the API's snake_case token payload. */
+function appearanceFromApi(a: WidgetAppearance): Appearance {
+  return {
+    primaryColor: COLOR_RE.test(a.primary_color) ? a.primary_color.toLowerCase() : DEFAULT_APPEARANCE.primaryColor,
+    theme: a.theme,
+    position: a.position,
+    mobileFullscreen: a.mobile_fullscreen,
+    poweredBy: a.powered_by,
   };
 }
 
@@ -953,6 +1060,17 @@ const WIDGET_CSS = `
     --nx-customer: #1e2740;
     color-scheme: dark;
   }
+}
+/* Forced colour scheme (FR-MOD-11.7). The attribute selector outweighs the
+   prefers-color-scheme block, so a workspace choice wins over the visitor's OS
+   in both directions. */
+:root[data-nx-theme="light"] {
+  --nx-surface: #ffffff; --nx-text: #111726; --nx-muted: #4a5468;
+  --nx-border: #dde1e9; --nx-customer: #eff1f5; color-scheme: light;
+}
+:root[data-nx-theme="dark"] {
+  --nx-surface: #121829; --nx-text: #edf0f6; --nx-muted: #a6b0c4;
+  --nx-border: #232c44; --nx-customer: #1e2740; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
@@ -1069,6 +1187,18 @@ body {
 .nx-prechat-submit {
   border: 0; border-radius: 8px; padding: 9px 12px;
   background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+.nx-powered { margin: 0; padding: 6px 12px 10px; text-align: center; font-size: 11px; color: var(--nx-muted); }
+.nx-powered-link { color: inherit; text-decoration: none; }
+.nx-powered-link:hover { text-decoration: underline; }
+/* Left-corner placement (FR-MOD-11.7): mirror the launcher and greeting to the
+   edge the loader anchored the iframe to. */
+.nx-left .nx-launcher { left: 10px; right: auto; }
+.nx-left .nx-greeting { left: 10px; right: auto; }
+/* Mobile fullscreen: on a phone the loader gives the frame the whole viewport,
+   so the panel drops its floating-card inset and fills it edge-to-edge. */
+@media (max-width: 480px) {
+  .nx-mobile-full .nx-panel { inset: 0; border: 0; border-radius: 0; }
 }
 :focus-visible { outline: 2px solid var(--nx-brand); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

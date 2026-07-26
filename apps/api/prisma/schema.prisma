@@ -86,6 +86,7 @@ model License {
   auditEntries  AuditLogEntry[]
   securitySettings SecuritySettings?
   inboxSettings    InboxSettings?
+  widgetSettings   WidgetSettings?
 
   invitations      Invitation[]
 
@@ -954,6 +955,33 @@ model InboxSettings {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@map("inbox_settings")
+}
+
+/// Per-license widget appearance (FR-MOD-11.7, "Widget customization").
+///
+/// A singleton keyed by license, like `InboxSettings`. Signup does not create
+/// the row — the settings endpoint upserts it on first save, and a read with no
+/// row falls back to the schema defaults — so a workspace that has never touched
+/// these renders the shipped look. The column defaults mirror
+/// `DEFAULT_WIDGET_APPEARANCE` in `@nexa/types` value-for-value.
+model WidgetSettings {
+  licenseId        BigInt   @id @map("license_id")
+  /// Brand colour — a `#rrggbb` hex, checked by the settings endpoint and the
+  /// `widget_settings_color_check` DB invariant so nothing but a colour is ever
+  /// stored (it is embedded in the install snippet and applied to CSS).
+  primaryColor     String   @default("#2f6bff") @map("primary_color")
+  /// `bottom-right` | `bottom-left` — the `widget_settings_position_check`.
+  position         String   @default("bottom-right")
+  /// `auto` | `light` | `dark` — the `widget_settings_theme_check`.
+  theme            String   @default("auto")
+  mobileFullscreen Boolean  @default(true) @map("mobile_fullscreen")
+  /// The removable "Powered by Nexa" footer (FR-MOD-11.5).
+  poweredBy        Boolean  @default(true) @map("powered_by")
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("widget_settings")
 }
 
 // ===========================================================================

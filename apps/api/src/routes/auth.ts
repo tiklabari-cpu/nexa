@@ -1,11 +1,16 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { Prisma } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import { isScope, type Scope } from '@nexa/types';
+import {
+  isScope,
+  normalizeWidgetAppearance,
+  type Scope,
+  type WidgetAppearance,
+} from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { originHost } from '../lib/origin.js';
-import { withTenant } from '../lib/tenant.js';
+import { withTenant, type TenantContext } from '../lib/tenant.js';
 import {
   writeAuditEntry,
   type AuditContext,
@@ -596,14 +601,50 @@ export default async function authRoutes(
       request.log.warn({ err: error, host }, 'failed to mark website connected');
     }
 
+    // The widget's appearance (FR-MOD-11.7), so the hosted Chat page — which has
+    // no snippet to bake it into — and any embed running a stale snippet theme
+    // themselves from the server as the source of truth. Best-effort: the widget
+    // falls back to the shipped look, so a read failure must not deny a token.
+    const widget = await widgetAppearance(app.db, tenant, request);
+
     reply.header('Cache-Control', 'no-store');
     return reply.send({
       token,
       expires_in: expiresIn,
       customer_id: customerId,
       organization_id: match.organization_id,
+      widget,
     });
   });
+}
+
+/**
+ * The widget appearance for a resolved license, or the shipped defaults when it
+ * has never been customised or the read fails. Guarded so this never breaks
+ * token issuance: the widget renders the default look if `widget` is absent.
+ */
+async function widgetAppearance(
+  db: PrismaClient,
+  tenant: TenantContext,
+  request: FastifyRequest,
+): Promise<WidgetAppearance> {
+  try {
+    const row = await withTenant(db, tenant, (tx) => tx.widgetSettings.findFirst());
+    return normalizeWidgetAppearance(
+      row
+        ? {
+            primary_color: row.primaryColor,
+            position: row.position as WidgetAppearance['position'],
+            theme: row.theme as WidgetAppearance['theme'],
+            mobile_fullscreen: row.mobileFullscreen,
+            powered_by: row.poweredBy,
+          }
+        : null,
+    );
+  } catch (error) {
+    request.log.warn({ err: error }, 'failed to read widget appearance');
+    return normalizeWidgetAppearance(null);
+  }
 }
 
 function defaultScopesForRole(role: string): Scope[] {

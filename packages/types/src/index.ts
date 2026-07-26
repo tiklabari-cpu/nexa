@@ -4,3 +4,4 @@ export * from './scopes.js';
 export * from './rtm.js';
 export * from './ids.js';
 export * from './realtime-bus.js';
+export * from './widget.js';

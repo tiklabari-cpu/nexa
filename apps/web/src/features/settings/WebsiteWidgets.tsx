@@ -208,14 +208,12 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
             <p className="text-2xs text-content-tertiary">
               Paste the snippet immediately before <code>&lt;/body&gt;</code> on every page.
             </p>
-            <button
-              type="button"
-              disabled
-              title="Widget appearance settings are coming soon."
-              className="rounded-md border border-border px-2 py-1 text-2xs text-content-tertiary opacity-60"
+            <a
+              href="#widget-customization"
+              className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
             >
               Customize widget
-            </button>
+            </a>
           </div>
         </Card>
       )}

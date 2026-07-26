@@ -128,6 +128,8 @@ paths:
     $ref: "./paths/customer-chat.yaml#/state"
   /customer/chat/events:
     $ref: "./paths/customer-chat.yaml#/events"
+  /customer/chat/typing:
+    $ref: "./paths/customer-chat.yaml#/typing"
   /customer/chat/close:
     $ref: "./paths/customer-chat.yaml#/close"
   /customer/chat/rating:
@@ -1430,6 +1432,13 @@ components:
           properties:
             name: { type: string }
             avatar_url: { type: string, nullable: true }
+        agent_typing:
+          type: boolean
+          description: |
+            Whether an agent is currently typing a reply (FR-MOD-02.9). The widget
+            polls rather than holding a socket, so this is how the agent's live
+            typing reaches the visitor. Reflects a short-lived flag the RTM gateway
+            refreshes on each keystroke; false once it lapses.
         chat:
           type: object
           nullable: true

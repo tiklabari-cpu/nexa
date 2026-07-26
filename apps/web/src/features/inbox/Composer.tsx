@@ -1,4 +1,6 @@
 import {
+  useCallback,
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -6,6 +8,7 @@ import {
   type ReactElement,
 } from 'react';
 import { useSendMessage } from './useInbox.js';
+import { useTypingStore } from './typing.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { uploadAttachment, type UploadedAttachment } from './uploadAttachment.js';
 import {
@@ -56,8 +59,41 @@ export function Composer({
   const canSend =
     (text.trim().length > 0 || attachment !== null) && !disabled && !send.isPending && !uploading;
 
+  // Live typing preview (FR-MOD-02.9). One "start" per burst, then a trailing
+  // "stop" a few seconds after the last keystroke — both edges matter so the
+  // visitor's "…is typing" turns on promptly and clears on its own if the agent
+  // walks away mid-sentence. Refs, not state: this must never re-render the
+  // composer on every keystroke.
+  const typingActive = useRef(false);
+  const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopTyping = useCallback(() => {
+    if (stopTimer.current) {
+      clearTimeout(stopTimer.current);
+      stopTimer.current = null;
+    }
+    if (typingActive.current) {
+      typingActive.current = false;
+      useTypingStore.getState().emit(chatId, false);
+    }
+  }, [chatId]);
+
+  const signalTyping = (): void => {
+    if (!typingActive.current) {
+      typingActive.current = true;
+      useTypingStore.getState().emit(chatId, true);
+    }
+    if (stopTimer.current) clearTimeout(stopTimer.current);
+    stopTimer.current = setTimeout(stopTyping, 3_000);
+  };
+
+  // Emit a final "stop" when the open chat changes or the composer unmounts —
+  // otherwise the previous visitor is left with a frozen "…is typing".
+  useEffect(() => stopTyping, [stopTyping]);
+
   const submit = (): void => {
     if (!canSend) return;
+    stopTyping();
     send.mutate({
       text: text.trim(),
       recipients: mode,
@@ -173,7 +209,12 @@ export function Composer({
               type="button"
               role="radio"
               aria-checked={mode === option.id}
-              onClick={() => setMode(option.id)}
+              onClick={() => {
+                setMode(option.id);
+                // Switching to a note is not customer-visible — retract any
+                // "agent is typing" the reply draft was broadcasting.
+                if (option.id === 'agents') stopTyping();
+              }}
               className={`rounded-sm px-2 py-1 text-2xs font-medium transition-colors ${
                 mode === option.id
                   ? option.id === 'agents'
@@ -253,8 +294,13 @@ export function Composer({
           id="composer-input"
           value={text}
           onChange={(event) => {
-            setText(event.target.value);
-            syncShortcut(event.target.value, event.target.selectionStart);
+            const value = event.target.value;
+            setText(value);
+            syncShortcut(value, event.target.selectionStart);
+            // A reply is shown to the visitor; an internal note is not, so only a
+            // reply-in-progress broadcasts "the agent is typing".
+            if (value.trim() && mode === 'all') signalTyping();
+            else stopTyping();
           }}
           onKeyUp={(event) => {
             // Arrow keys and clicks move the caret without changing the value,

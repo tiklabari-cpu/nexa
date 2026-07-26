@@ -21,6 +21,7 @@ import { Dispatcher } from './dispatcher.js';
 import { Fanout } from './fanout.js';
 import { decodeRequest, encodeError } from './protocol.js';
 import { SyncService } from './sync.js';
+import { TypingService } from './typing.js';
 
 export const RTM_PATHS = {
   agent: '/v1/agent/rtm/ws',
@@ -59,12 +60,16 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
   const registry = new ConnectionRegistry();
   const authenticator = new SocketAuthenticator(db, env.JWT_SIGNING_KEY_CUSTOMER);
   const sync = new SyncService(db);
+  // Typing flags are written on the command connection: a subscriber-mode client
+  // may issue no other commands, so it cannot be reused for a `SET`.
+  const typing = new TypingService(db, commands);
   const fanout = new Fanout(subscriber, registry, log);
 
   const dispatcher = new Dispatcher({
     registry,
     authenticator,
     sync,
+    typing,
     log,
     messagesPerSecond: env.RATE_LIMIT_RTM_PER_SEC,
     onAuthenticated: async (_connection: Connection, principal: SocketPrincipal) => {

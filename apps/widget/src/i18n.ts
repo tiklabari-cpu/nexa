@@ -46,6 +46,8 @@ const MESSAGES: Record<WidgetLocale, Record<string, string>> = {
     'greeting.chat': "Let's chat",
     'greeting.browse': 'Just browsing',
     'attachment.alt': 'Attachment',
+    'typing.named': '{name} is typing…',
+    'typing.generic': 'Typing…',
   },
   tr: {
     'title.default': 'Bizimle sohbet edin',
@@ -74,6 +76,8 @@ const MESSAGES: Record<WidgetLocale, Record<string, string>> = {
     'greeting.chat': 'Sohbet edelim',
     'greeting.browse': 'Sadece bakıyorum',
     'attachment.alt': 'Ek',
+    'typing.named': '{name} yazıyor…',
+    'typing.generic': 'Yazıyor…',
   },
 };
 

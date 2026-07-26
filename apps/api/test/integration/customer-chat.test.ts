@@ -7,6 +7,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { licenseChannel, typingStateKey } from '@nexa/types';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -249,6 +250,127 @@ describe('customer chat api', () => {
       expect(state.statusCode).toBe(200);
       expect(state.json().chat).toBeNull();
       expect(state.json().events).toEqual([]);
+    });
+  });
+
+  // =========================================================================
+
+  describe('live typing preview', () => {
+    /** Capture the realtime envelopes published while `run` executes. */
+    async function captureBus(run: () => Promise<void>): Promise<Array<Record<string, unknown>>> {
+      const sub = server.app.redis.duplicate();
+      const seen: Array<Record<string, unknown>> = [];
+      await sub.subscribe(licenseChannel(fx.a.licenseId));
+      sub.on('message', (_channel, raw) => {
+        try {
+          seen.push(JSON.parse(raw) as Record<string, unknown>);
+        } catch {
+          /* not our shape — ignore */
+        }
+      });
+      try {
+        await run();
+        // The publish completes before the HTTP response, but the subscriber
+        // receives it a tick later.
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      } finally {
+        await sub.unsubscribe(licenseChannel(fx.a.licenseId));
+        sub.disconnect();
+      }
+      return seen;
+    }
+
+    it("fans a visitor's sneak-peek out to agents, never back to the visitor", async () => {
+      const { token } = await widgetToken();
+      await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+
+      const envelopes = await captureBus(async () => {
+        const response = await server.post(
+          '/customer/chat/typing',
+          { is_typing: true, text: 'my order is la' },
+          auth(token),
+        );
+        expect(response.statusCode).toBe(204);
+      });
+
+      const typing = envelopes.find((e) => e['action'] === 'incoming_typing_indicator');
+      const peek = envelopes.find((e) => e['action'] === 'incoming_sneak_peek');
+      expect(typing).toBeDefined();
+      expect(peek).toBeDefined();
+
+      // Addressed to agents — a visitor must never be shown their own draft.
+      for (const envelope of [typing!, peek!]) {
+        const audience = envelope['audience'] as Record<string, unknown>;
+        expect(audience['customerId']).toBeUndefined();
+        expect(audience['groupIds']).not.toEqual([]);
+      }
+
+      const indicator = (typing!['payload'] as { typing_indicator: Record<string, unknown> })
+        .typing_indicator;
+      expect(indicator['is_typing']).toBe(true);
+      expect(indicator['author_type']).toBe('customer');
+      expect(indicator['recipients']).toBe('agents');
+
+      const sneak = (peek!['payload'] as { sneak_peek: Record<string, unknown> }).sneak_peek;
+      expect(sneak['text']).toBe('my order is la');
+    });
+
+    it('sends no preview when the visitor stops typing', async () => {
+      const { token } = await widgetToken();
+      await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+
+      const envelopes = await captureBus(async () => {
+        await server.post('/customer/chat/typing', { is_typing: false }, auth(token));
+      });
+
+      expect(envelopes.some((e) => e['action'] === 'incoming_sneak_peek')).toBe(false);
+      const typing = envelopes.find((e) => e['action'] === 'incoming_typing_indicator');
+      expect(
+        (typing?.['payload'] as { typing_indicator?: { is_typing?: boolean } } | undefined)
+          ?.typing_indicator?.is_typing,
+      ).toBe(false);
+    });
+
+    it('reflects an agent-typing flag back to the visitor state (FR-MOD-02.9)', async () => {
+      const { token } = await widgetToken();
+      const started = await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+      const chatId = started.json().chat_id as string;
+      const key = typingStateKey(fx.a.licenseId, chatId);
+
+      // The RTM gateway would set this on `send_typing_indicator`; the poll reads
+      // it back because the widget holds no socket.
+      await server.app.redis.set(key, '1', 'EX', 8);
+      const typing = await server.get('/customer/chat', auth(token));
+      expect(typing.json().agent_typing).toBe(true);
+
+      await server.app.redis.del(key);
+      const idle = await server.get('/customer/chat', auth(token));
+      expect(idle.json().agent_typing).toBe(false);
+    });
+
+    it('accepts typing into a panel with no open conversation as a no-op', async () => {
+      const { token } = await widgetToken();
+      const response = await server.post(
+        '/customer/chat/typing',
+        { is_typing: true, text: 'hello?' },
+        auth(token),
+      );
+      expect(response.statusCode).toBe(204);
+    });
+
+    it('rejects a malformed typing body', async () => {
+      const { token } = await widgetToken();
+      const response = await server.post('/customer/chat/typing', { text: 'no flag' }, auth(token));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('refuses an agent token', async () => {
+      const response = await server.post(
+        '/customer/chat/typing',
+        { is_typing: true },
+        auth(agentToken),
+      );
+      expect(response.statusCode).toBe(404);
     });
   });
 

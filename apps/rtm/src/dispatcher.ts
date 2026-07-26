@@ -12,6 +12,7 @@ import type { SocketAuthenticator, SocketPrincipal } from './auth.js';
 import type { Connection, ConnectionRegistry } from './connection.js';
 import { encodeError, encodeResponse, type DecodedRequest } from './protocol.js';
 import { MAX_SYNC_CHATS, type SyncCursor, type SyncService } from './sync.js';
+import type { TypingService } from './typing.js';
 
 /** Actions a socket may send before it has logged in. */
 const PRE_AUTH_ACTIONS = new Set<RtmAction>(['login', 'ping']);
@@ -20,6 +21,7 @@ export interface DispatcherDeps {
   registry: ConnectionRegistry;
   authenticator: SocketAuthenticator;
   sync: SyncService;
+  typing: TypingService;
   log: Logger;
   onAuthenticated: (connection: Connection, principal: SocketPrincipal) => Promise<void>;
   /** Per-connection message budget, from RATE_LIMIT_RTM_PER_SEC. */
@@ -58,6 +60,8 @@ export class Dispatcher {
         return this.#unsubscribe(connection, message);
       case 'sync':
         return this.#sync(connection, message);
+      case 'send_typing_indicator':
+        return this.#typing(connection, message);
       case 'logout':
         return encodeResponse(message.request_id, 'logout', {});
       default:
@@ -165,7 +169,56 @@ export class Dispatcher {
       lastEventId: typeof lastEventId === 'string' ? lastEventId : null,
     }));
 
-    const principal: SocketPrincipal = {
+    const result = await this.deps.sync.sync(this.#principalOf(connection), cursors);
+    return encodeResponse(message.request_id, 'sync', result);
+  }
+
+  /**
+   * `send_typing_indicator` — the agent side of live typing preview (02.9).
+   *
+   * A visitor's own typing arrives over the Customer API, not here; the widget
+   * polls and has no socket, so it also cannot receive an agent's typing as a
+   * push. The bridge is a short-lived flag the visitor's poll reads back, which
+   * is all this writes. The chat is authorised first so the indicator cannot be
+   * used to probe or spoof a conversation the sender cannot see.
+   */
+  async #typing(connection: Connection, message: DecodedRequest): Promise<string> {
+    if (connection.side === 'customer') {
+      // A visitor signals typing through the Customer API's sneak-peek, where
+      // the audience (agents only, never the visitor's own side) is decided.
+      return this.#fail(
+        message,
+        'not_allowed',
+        'Customers send typing via the Customer API, not RTM.',
+      );
+    }
+
+    const chatId = message.payload['chat_id'];
+    if (typeof chatId !== 'string' || chatId === '') {
+      return this.#fail(message, 'validation', 'send_typing_indicator requires a `chat_id`.');
+    }
+    const isTyping = message.payload['is_typing'];
+    if (typeof isTyping !== 'boolean') {
+      return this.#fail(message, 'validation', '`is_typing` must be a boolean.');
+    }
+
+    const principal = this.#principalOf(connection);
+    // An inaccessible chat answers exactly as a missing one: a typing indicator
+    // must not confirm which chat ids exist.
+    if (!(await this.deps.typing.canType(principal, chatId))) {
+      return this.#fail(message, 'not_found', 'Chat not found.');
+    }
+
+    await this.deps.typing.setAgentTyping(connection.licenseId ?? '', chatId, isTyping);
+    return encodeResponse(message.request_id, 'send_typing_indicator', {
+      chat_id: chatId,
+      is_typing: isTyping,
+    });
+  }
+
+  /** The authenticated identity carried on a socket, in the shape reads expect. */
+  #principalOf(connection: Connection): SocketPrincipal {
+    return {
       kind: connection.side === 'customer' ? 'customer' : 'agent',
       actorId: connection.actorId ?? '',
       licenseId: connection.licenseId ?? '',
@@ -174,9 +227,6 @@ export class Dispatcher {
       groupIds: connection.groupIds,
       unrestricted: connection.unrestricted,
     };
-
-    const result = await this.deps.sync.sync(principal, cursors);
-    return encodeResponse(message.request_id, 'sync', result);
   }
 
   #fail(message: DecodedRequest, type: ErrorType, text: string): string {

@@ -95,6 +95,44 @@ events:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+typing:
+  post:
+    tags: [Customer]
+    operationId: sendCustomerTyping
+    summary: Tell the agent the visitor is typing (sneak-peek)
+    description: |
+      Live typing preview (FR-MOD-02.9 / 11.8). While the visitor types, the
+      widget sends this — debounced — so the agent sees "the visitor is typing"
+      and, when `text` is included, a preview of the in-progress message before it
+      is sent. On stop or send it is called once with `is_typing: false`.
+
+      Ephemeral by design: nothing is persisted. The preview reaches agents only,
+      never the visitor's own side, and is capped in length. A call with no open
+      conversation succeeds and does nothing — a visitor typing into an empty
+      panel is not an error.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [is_typing]
+            properties:
+              is_typing: { type: boolean }
+              text:
+                type: string
+                maxLength: 500
+                description: |
+                  The in-progress text, shown to the agent as a sneak-peek. Only
+                  meaningful when `is_typing` is true; capped and never stored.
+    responses:
+      "204":
+        description: Accepted — typing state fanned out to the agents on the chat
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 close:
   post:
     tags: [Customer]

@@ -17,6 +17,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import {
   buildEventId,
   generateShortId,
+  SNEAK_PEEK_MAX_LENGTH,
   type EventRecipients,
   type EventType,
   type TransferReason,
@@ -461,6 +462,72 @@ export class ChatService {
     );
 
     return { event: result.event, replayed: false };
+  }
+
+  /**
+   * Fan a visitor's live typing out to the agents on the chat (FR-MOD-02.9 /
+   * 11.8). Ephemeral and unpersisted: a sneak-peek is what the visitor is
+   * *about* to send, shown so an agent can begin composing before enter is
+   * pressed.
+   *
+   * Addressed to agents only — never back to the visitor's own side — and the
+   * preview is capped so a pasted wall of text does not travel keystroke by
+   * keystroke. Best-effort: like every other push, delivery failing must not
+   * fail anything the visitor is doing, so a missing publisher or an empty
+   * audience is simply a no-op.
+   */
+  async publishCustomerTyping(
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+    input: { isTyping: boolean; text?: string },
+  ): Promise<void> {
+    if (!this.publisher) return;
+
+    const target = await withTenant(this.db, tenant, async (tx) => {
+      const visibility = await resolveVisibility(tx, principal, 'read');
+      const chat = await this.#loadVisibleChat(tx, visibility, chatId);
+      const audience = this.#audienceFor(chat);
+      const thread = chat.threads.find((t) => t.active) ?? chat.threads[0];
+      return {
+        agents: { groupIds: audience.groupIds, agentIds: audience.agentIds },
+        threadId: thread?.id ?? null,
+      };
+    });
+
+    // Nobody is on the chat yet — an unrouted first draft has no audience. Skip
+    // rather than emit an empty one the publisher would refuse anyway.
+    if (target.agents.groupIds.length === 0 && target.agents.agentIds.length === 0) return;
+
+    const authorId = actorOf(principal);
+    const timestamp = Date.now();
+
+    await this.publisher.publish(tenant, 'incoming_typing_indicator', target.agents, {
+      chat_id: chatId,
+      thread_id: target.threadId,
+      typing_indicator: {
+        author_id: authorId,
+        author_type: 'customer',
+        recipients: 'agents',
+        timestamp,
+        is_typing: input.isTyping,
+      },
+    });
+
+    const preview = input.text?.trim();
+    if (input.isTyping && preview) {
+      await this.publisher.publish(tenant, 'incoming_sneak_peek', target.agents, {
+        chat_id: chatId,
+        thread_id: target.threadId,
+        sneak_peek: {
+          author_id: authorId,
+          author_type: 'customer',
+          recipients: 'agents',
+          timestamp,
+          text: preview.slice(0, SNEAK_PEEK_MAX_LENGTH),
+        },
+      });
+    }
   }
 
   async deactivate(

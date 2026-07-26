@@ -14,6 +14,7 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { Composer } from './Composer.js';
 import { DetailsPanel } from './DetailsPanel.js';
 import { Transcript } from './Transcript.js';
+import { TypingIndicator } from './TypingIndicator.js';
 import { useChat, useChatList, useRealtime, useTranscript, useViewCounts } from './useInbox.js';
 import { useRightPanel } from './rightPanel.js';
 import { useNotifications } from '../notifications/useNotifications.js';
@@ -392,6 +393,11 @@ export function InboxPage(): ReactElement {
                 events={transcript.data?.items ?? []}
                 loading={transcript.isPending}
                 currentAgentId={agent?.account_id ?? null}
+              />
+
+              <TypingIndicator
+                chatId={selectedId}
+                customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
               />
 
               <Composer chatId={selectedId} disabled={!chat.data.active} />

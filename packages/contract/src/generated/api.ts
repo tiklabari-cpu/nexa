@@ -635,6 +635,34 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/chat/typing': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Tell the agent the visitor is typing (sneak-peek)
+     * @description Live typing preview (FR-MOD-02.9 / 11.8). While the visitor types, the
+     *     widget sends this — debounced — so the agent sees "the visitor is typing"
+     *     and, when `text` is included, a preview of the in-progress message before it
+     *     is sent. On stop or send it is called once with `is_typing: false`.
+     *
+     *     Ephemeral by design: nothing is persisted. The preview reaches agents only,
+     *     never the visitor's own side, and is capped in length. A call with no open
+     *     conversation succeeds and does nothing — a visitor typing into an empty
+     *     panel is not an error.
+     */
+    post: operations['sendCustomerTyping'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customer/chat/close': {
     parameters: {
       query?: never;
@@ -2883,6 +2911,13 @@ export interface components {
         name: string;
         avatar_url?: string | null;
       } | null;
+      /**
+       * @description Whether an agent is currently typing a reply (FR-MOD-02.9). The widget
+       *     polls rather than holding a socket, so this is how the agent's live
+       *     typing reaches the visitor. Reflects a short-lived flag the RTM gateway
+       *     refreshes on each keystroke; false once it lapses.
+       */
+      agent_typing?: boolean;
       chat: {
         id: string;
         thread_id?: string | null;
@@ -4156,6 +4191,39 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  sendCustomerTyping: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          is_typing: boolean;
+          /**
+           * @description The in-progress text, shown to the agent as a sneak-peek. Only
+           *     meaningful when `is_typing` is true; capped and never stored.
+           */
+          text?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Accepted — typing state fanned out to the agents on the chat */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };

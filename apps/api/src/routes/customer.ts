@@ -12,6 +12,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { SNEAK_PEEK_MAX_LENGTH, typingStateKey } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import type { Env } from '../config/env.js';
 import { ChatService } from '../services/chat/chat-service.js';
@@ -45,6 +46,13 @@ const startSchema = z
 const rateSchema = z.object({
   value: z.enum(['good', 'bad']),
   comment: z.string().trim().max(1000).optional(),
+});
+
+const typingSchema = z.object({
+  is_typing: z.boolean(),
+  // The in-progress text shown to the agent as a sneak-peek. Capped here as well
+  // as at the fan-out, so an oversized body is rejected before any work.
+  text: z.string().max(SNEAK_PEEK_MAX_LENGTH).optional(),
 });
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
@@ -178,10 +186,18 @@ export default async function customerRoutes(
       ? await chats.listEvents(request.tenant(), principal, state.chat.id, { limit: 100 })
       : { items: [] };
 
+    // Whether an agent is mid-reply (FR-MOD-02.9). The widget polls and holds no
+    // socket, so an agent's typing cannot be pushed to it — the RTM gateway
+    // writes a short-lived flag on each keystroke and it is read back here.
+    const agentTyping = state.chat
+      ? (await app.redis.get(typingStateKey(request.tenant().licenseId, state.chat.id))) !== null
+      : false;
+
     return reply.send({
       // The widget shows "we're away" rather than pretending someone will
       // answer immediately.
       online: state.agentsOnline > 0,
+      agent_typing: agentTyping,
       customer: {
         id: principal.customerId,
         name: state.customer?.name ?? null,
@@ -313,6 +329,42 @@ export default async function customerRoutes(
         queue_position: chat.thread?.queue_position ?? null,
         event: events.items.at(-1) ?? null,
       });
+    },
+  );
+
+  /**
+   * Live typing preview from the visitor's side (FR-MOD-02.9 / 11.8).
+   *
+   * The widget calls this — debounced — while the visitor types, so the agent
+   * sees "the visitor is typing" and a preview of the in-progress message. It is
+   * ephemeral: nothing is written to the conversation, and the preview reaches
+   * agents only, never echoed back to the visitor. Typing into a panel with no
+   * open conversation is a no-op, not an error.
+   */
+  app.post(
+    '/customer/chat/typing',
+    { config: { principals: ['customer'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+
+      const body = parse(typingSchema, request.body);
+
+      const chat = await request.withTenant((tx) =>
+        tx.chat.findFirst({
+          where: { customerId: principal.customerId, active: true },
+          select: { id: true },
+        }),
+      );
+
+      if (chat) {
+        await chats.publishCustomerTyping(request.tenant(), principal, chat.id, {
+          isTyping: body.is_typing,
+          ...(body.text !== undefined ? { text: body.text } : {}),
+        });
+      }
+
+      return reply.status(204).send();
     },
   );
 

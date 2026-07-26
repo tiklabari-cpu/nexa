@@ -10,7 +10,13 @@
  *                     { action, type: 'push', payload }
  */
 
-import type { ChatEvent, EventRecipients, RoutingStatus, TransferReason } from './domain.js';
+import type {
+  ChatEvent,
+  EventAuthorType,
+  EventRecipients,
+  RoutingStatus,
+  TransferReason,
+} from './domain.js';
 import type { ErrorType } from './errors.js';
 
 export const RTM_VERSION = '3.6';
@@ -183,12 +189,32 @@ export interface ChatTransferredPush {
 
 export interface TypingIndicatorPush {
   chat_id: string;
-  thread_id: string;
+  thread_id: string | null;
   typing_indicator: {
     author_id: string;
+    author_type: EventAuthorType;
     recipients: EventRecipients;
     timestamp: number;
     is_typing: boolean;
+  };
+}
+
+/**
+ * A live preview of what the other side is *about* to send — the "sneak-peek"
+ * (FR-MOD-11.8). Only ever addressed to agents (`recipients: 'agents'`): the
+ * point is that an agent can start composing before the visitor presses enter,
+ * and a visitor must never be shown their own draft echoed back. Never
+ * persisted — it is superseded on the next keystroke and gone when typing stops.
+ */
+export interface SneakPeekPush {
+  chat_id: string;
+  thread_id: string | null;
+  sneak_peek: {
+    author_id: string;
+    author_type: EventAuthorType;
+    recipients: EventRecipients;
+    timestamp: number;
+    text: string;
   };
 }
 

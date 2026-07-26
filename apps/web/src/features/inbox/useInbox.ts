@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { RtmClient, type PushHandler, type RtmStatus } from '../../lib/realtime.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
+import { useTypingStore } from './typing.js';
 import type { ChatDetail, ChatEvent, ChatSummary, InboxView } from './types.js';
 
 const RTM_URL = import.meta.env['VITE_RTM_URL'] ?? 'ws://localhost:4001/v1/agent/rtm/ws';
@@ -168,6 +169,8 @@ export function useRealtime(onPush?: PushHandler): RtmStatus {
         'chat_deactivated',
         'chat_transferred',
         'routing_status_set',
+        'incoming_typing_indicator',
+        'incoming_sneak_peek',
       ],
       onStatusChange: setStatus,
       onPush: (action, payload) => {
@@ -177,8 +180,14 @@ export function useRealtime(onPush?: PushHandler): RtmStatus {
     });
 
     clientRef.current = client;
+    // The composer sends the agent's own typing through this; wired here because
+    // the socket outlives any one component that wants to emit.
+    useTypingStore.getState().setEmitter((chatId, isTyping) => client.sendTyping(chatId, isTyping));
     client.connect();
-    return () => client.disconnect();
+    return () => {
+      useTypingStore.getState().setEmitter(() => {});
+      client.disconnect();
+    };
   }, [accessToken, organizationId, queryClient]);
 
   return status;
@@ -195,6 +204,10 @@ function applyPush(
       const event = payload['event'] as ChatEvent | undefined;
       if (typeof chatId !== 'string' || !event) return;
 
+      // A message from the visitor is the end of the draft it was previewing —
+      // drop the sneak-peek so the real message is not shadowed by a stale one.
+      if (event.author_type === 'customer') useTypingStore.getState().clear(chatId);
+
       queryClient.setQueryData<{ items: ChatEvent[] }>(eventsKey(chatId), (current) => {
         if (!current) return current;
         // Deduplicate by id: a push and a refetch can both deliver the same
@@ -210,8 +223,42 @@ function applyPush(
       return;
     }
 
-    case 'incoming_chat':
+    case 'incoming_typing_indicator': {
+      // The visitor's on/off state (FR-MOD-02.9). Agent-authored indicators are
+      // the agent's own reflection; only a visitor's is worth showing here.
+      const chatId = payload['chat_id'];
+      const indicator = payload['typing_indicator'] as
+        | { is_typing?: unknown; author_type?: unknown }
+        | undefined;
+      if (typeof chatId !== 'string' || !indicator) return;
+      if (indicator.author_type !== 'customer') return;
+      useTypingStore.getState().noteCustomer(chatId, indicator.is_typing === true, null);
+      return;
+    }
+
+    case 'incoming_sneak_peek': {
+      // A preview of the visitor's in-progress message (FR-MOD-11.8).
+      const chatId = payload['chat_id'];
+      const peek = payload['sneak_peek'] as
+        | { text?: unknown; author_type?: unknown }
+        | undefined;
+      if (typeof chatId !== 'string' || !peek) return;
+      if (peek.author_type !== 'customer') return;
+      useTypingStore
+        .getState()
+        .noteCustomer(chatId, true, typeof peek.text === 'string' ? peek.text : null);
+      return;
+    }
+
     case 'chat_deactivated':
+      // A closed conversation cannot still be "typing".
+      if (typeof payload['chat_id'] === 'string') {
+        useTypingStore.getState().clear(payload['chat_id']);
+      }
+      void queryClient.invalidateQueries({ queryKey: ['chats'] });
+      return;
+
+    case 'incoming_chat':
     case 'chat_transferred':
     case 'chat_unfollowed':
     case 'chat_appeared':

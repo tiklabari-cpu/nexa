@@ -42,6 +42,8 @@ interface State {
   events: WidgetEvent[];
   /** Who the visitor is talking to, shown in the header (FR-MOD-11.3). */
   agent: { name: string; avatarUrl: string | null } | null;
+  /** An agent is mid-reply — drives the "…is typing" line (FR-MOD-02.9). */
+  agentTyping: boolean;
   /** The proactive greeting card is on screen (panel still closed). */
   greetingOpen: boolean;
   /** The pre-chat form is showing instead of the composer. */
@@ -74,6 +76,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     queuePosition: null,
     events: [],
     agent: null,
+    agentTyping: false,
     greetingOpen: false,
     prechat: false,
     pendingDetails: null,
@@ -148,6 +151,67 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
     ui.status.textContent = '';
     ui.status.dataset['tone'] = 'ok';
+  }
+
+  /**
+   * "…is typing" while an agent composes a reply (FR-MOD-02.9). The state comes
+   * from the poll — the widget holds no socket — so it is at most a poll interval
+   * behind, which is imperceptible for a courtesy indicator. Named when we know
+   * who the agent is, generic otherwise.
+   */
+  function renderTyping(): void {
+    ui.typing.hidden = !state.agentTyping;
+    if (!state.agentTyping) {
+      ui.typing.textContent = '';
+      return;
+    }
+    ui.typing.textContent = state.agent
+      ? t('typing.named', { name: state.agent.name })
+      : t('typing.generic');
+  }
+
+  // --- Outbound typing (sneak-peek) ----------------------------------------
+
+  // The visitor's own typing, sent to the agent (FR-MOD-11.8). Throttled on the
+  // leading edge so a burst of keystrokes is one request, with a trailing "stop"
+  // so the agent's preview clears if the visitor walks away mid-sentence.
+  let typingThrottle: ReturnType<typeof setTimeout> | null = null;
+  let typingStop: ReturnType<typeof setTimeout> | null = null;
+  let typingSent = false;
+
+  function notifyTyping(): void {
+    if (!state.connected || !state.chatId) return;
+    const text = ui.input.value.trim();
+    if (!text) {
+      stopTyping();
+      return;
+    }
+    if (!typingThrottle) {
+      typingSent = true;
+      void api.typing(true, text).catch(() => undefined);
+      typingThrottle = setTimeout(() => {
+        typingThrottle = null;
+      }, 800);
+    }
+    if (typingStop) clearTimeout(typingStop);
+    typingStop = setTimeout(stopTyping, 4_000);
+  }
+
+  function stopTyping(): void {
+    if (typingThrottle) {
+      clearTimeout(typingThrottle);
+      typingThrottle = null;
+    }
+    if (typingStop) {
+      clearTimeout(typingStop);
+      typingStop = null;
+    }
+    // Only retract if we actually announced typing — no spurious "stop" on send
+    // when the visitor never triggered one.
+    if (typingSent) {
+      typingSent = false;
+      void api.typing(false).catch(() => undefined);
+    }
   }
 
   /**
@@ -240,6 +304,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.queuePosition = snapshot.chat?.queue_position ?? null;
       state.events = snapshot.events;
       state.agent = toAgent(snapshot.agent);
+      state.agentTyping = snapshot.agent_typing ?? false;
       state.error = null;
       // A returning visitor already in a conversation skips the pre-chat form.
       if (snapshot.events.length > 0) {
@@ -249,6 +314,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderEvents();
       renderStatus();
       renderHeader();
+      renderTyping();
       startPolling();
     } catch (error) {
       state.error = t('error.connect');
@@ -315,6 +381,9 @@ export function mount(doc: Document = document, win: Window = window): void {
     state.sending = true;
     ui.send.disabled = true;
     ui.input.value = '';
+    // The draft is on its way — retract the sneak-peek so the agent's preview
+    // does not linger behind the real message.
+    stopTyping();
 
     // Optimistic: the message appears immediately, because a visitor who sees
     // nothing happen presses enter again.
@@ -375,11 +444,13 @@ export function mount(doc: Document = document, win: Window = window): void {
       // real ids for anything sent optimistically.
       state.events = snapshot.events;
       state.agent = toAgent(snapshot.agent);
+      state.agentTyping = snapshot.agent_typing ?? false;
       renderedCount = 0;
       ui.transcript.replaceChildren();
       renderEvents();
       renderStatus();
       renderHeader();
+      renderTyping();
     } catch (error) {
       console.warn('nexa widget: refresh failed', error);
     }
@@ -433,6 +504,10 @@ export function mount(doc: Document = document, win: Window = window): void {
       void send();
     }
   });
+  // Live typing preview: tell the agent as the visitor types (FR-MOD-11.8).
+  ui.input.addEventListener('input', () => notifyTyping());
+  // Leaving the field ends the draft-in-progress the agent was previewing.
+  ui.input.addEventListener('blur', () => stopTyping());
 
   doc.addEventListener('keydown', (event) => {
     // On the Chat page there is nothing to close to, so Escape must not blank it.
@@ -474,6 +549,7 @@ interface Ui {
   launcher: HTMLButtonElement;
   panel: HTMLElement;
   transcript: HTMLElement;
+  typing: HTMLElement;
   status: HTMLElement;
   chip: HTMLElement;
   form: HTMLFormElement;
@@ -538,6 +614,14 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   transcript.setAttribute('role', 'log');
   transcript.setAttribute('aria-live', 'polite');
   transcript.setAttribute('aria-label', t('transcript.label'));
+
+  // "…is typing" line. Announced politely so a screen-reader visitor hears it
+  // without having their reading of a reply interrupted.
+  const typing = doc.createElement('p');
+  typing.className = 'nx-typing';
+  typing.hidden = true;
+  typing.setAttribute('role', 'status');
+  typing.setAttribute('aria-live', 'polite');
 
   const status = doc.createElement('p');
   status.className = 'nx-status';
@@ -607,7 +691,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   prechatSubmit.textContent = t('prechat.submit');
   prechat.append(prechatIntro, prechatName, prechatEmail, prechatSubmit);
 
-  panel.append(header, transcript, status, prechat, chip, form);
+  panel.append(header, transcript, typing, status, prechat, chip, form);
 
   // Greeting card — the proactive nudge that sits above a closed launcher.
   const greeting = doc.createElement('div');
@@ -635,6 +719,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     launcher,
     panel,
     transcript,
+    typing,
     status,
     chip,
     form,
@@ -928,6 +1013,7 @@ body {
 .nx-time { font-size: 11px; color: var(--nx-muted); margin-top: 2px; }
 .nx-status { margin: 0; padding: 0 14px 8px; font-size: 12px; color: var(--nx-muted); }
 .nx-status[data-tone="error"] { color: #c42a2a; }
+.nx-typing { margin: 0; padding: 0 14px 6px; font-size: 12px; font-style: italic; color: var(--nx-muted); }
 .nx-form { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--nx-border); }
 .nx-input {
   flex: 1; resize: none; font: inherit; color: inherit;

@@ -286,7 +286,12 @@ describe('rtm gateway', () => {
         where: { id: conversation.threadId },
         data: { active: false, closedAt: new Date() },
       });
-      const newThreadId = `${conversation.threadId.slice(0, 9)}X`;
+      // Swap the last character for one guaranteed to differ, so the derived id
+      // can never coincide with the original — short ids end in 'X' ~1/32 of the
+      // time, which otherwise collides the "new" thread onto the old one.
+      const newThreadId = `${conversation.threadId.slice(0, 9)}${
+        conversation.threadId[9] === 'X' ? 'Y' : 'X'
+      }`;
       await db.thread.create({
         data: {
           id: newThreadId,

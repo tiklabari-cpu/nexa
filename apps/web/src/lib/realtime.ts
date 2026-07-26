@@ -63,6 +63,22 @@ export class RtmClient {
     this.#cursors.set(chatId, eventId);
   }
 
+  /**
+   * Tell the other side the agent is typing (FR-MOD-02.9).
+   *
+   * Fire-and-forget: a dropped indicator is cosmetic, and awaiting one would
+   * stall the composer. Sent only while the socket is live — queuing them across
+   * a reconnect would deliver stale "is typing" the moment it comes back.
+   */
+  sendTyping(chatId: string, isTyping: boolean): void {
+    if (this.#status !== 'live') return;
+    void this.#send('send_typing_indicator', {
+      chat_id: chatId,
+      recipients: 'all',
+      is_typing: isTyping,
+    });
+  }
+
   connect(): void {
     this.#closedByUs = false;
     this.#open();

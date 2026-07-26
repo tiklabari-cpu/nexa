@@ -17,6 +17,8 @@ export interface WidgetEvent {
 
 export interface WidgetState {
   online: boolean;
+  /** Whether an agent is mid-reply, for the "…is typing" line (FR-MOD-02.9). */
+  agent_typing?: boolean;
   customer: { id: string; name: string | null; email: string | null };
   /** Who the visitor is talking to — a person or the AI persona. */
   agent: { name: string; avatar_url: string | null } | null;
@@ -121,6 +123,19 @@ export class WidgetApi {
     });
     if (!response.ok) throw new WidgetApiError(await describe(response));
     return response.blob();
+  }
+
+  /**
+   * Live typing preview (FR-MOD-02.9 / 11.8): tell the agent the visitor is
+   * typing, and — while `isTyping` — a preview of the in-progress message. Sent
+   * fire-and-forget by the caller; a dropped indicator is cosmetic. Capped so a
+   * pasted wall of text does not travel keystroke by keystroke.
+   */
+  async typing(isTyping: boolean, text?: string): Promise<void> {
+    await this.#request('POST', '/customer/chat/typing', {
+      is_typing: isTyping,
+      ...(isTyping && text ? { text: text.slice(0, 500) } : {}),
+    });
   }
 
   async rate(value: 'good' | 'bad'): Promise<void> {

@@ -19,6 +19,25 @@ export function licenseChannel(licenseId: string | bigint): string {
 }
 
 /**
+ * Ephemeral "an agent is typing" flag for one chat (FR-MOD-02.9).
+ *
+ * The visitor's widget polls rather than holding a socket, so an agent's typing
+ * cannot be pushed to it. The RTM gateway writes this short-lived key when a
+ * `send_typing_indicator` arrives and the customer-state poll reads it. Scoped
+ * by licence id so it can never be read or written across a tenant boundary,
+ * regardless of what chat id a caller supplies.
+ */
+export function typingStateKey(licenseId: string | bigint, chatId: string): string {
+  return `nexa:typing:${licenseId}:${chatId}`;
+}
+
+/** Seconds an agent-typing flag survives without a refreshing keystroke. */
+export const AGENT_TYPING_TTL_SECONDS = 8;
+
+/** A visitor's sneak-peek text never travels longer than this. */
+export const SNEAK_PEEK_MAX_LENGTH = 500;
+
+/**
  * Who may receive a push.
  *
  * An empty audience is meaningless and is treated as "nobody" rather than

@@ -6,6 +6,39 @@
 
 ## Task log (newest-first)
 
+### 41 — 02.9-a · Live typing preview (sneak-peek) (+11.8) [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı (contract-first; iki taşıyıcı asimetrisi bilinçli — ajan socket'te, ziyaretçi poll'da):
+  - **Yön A · ziyaretçi → ajan (sneak-peek, 11.8'in özü):** widget kompozer `input`'unda
+    debounce'lu `POST /customer/chat/typing {is_typing, text}` → `ChatService.publishCustomerTyping`
+    RTM'e **yalnız ajanlara** (`recipients:'agents'`, `audience.customerId` YOK — ziyaretçiye asla
+    geri yansımaz) `incoming_typing_indicator` + `incoming_sneak_peek` yayınlar. Ajan web bunları
+    `useTypingStore`'a katlar, `TypingIndicator` transcript üstünde "Visitor is typing… / önizleme"
+    gösterir (6 sn'de veya müşteri mesajı gelince kendiliğinden temizlenir).
+  - **Yön B · ajan → ziyaretçi (02.9 ajan tarafı):** ajan kompozer debounce'lu (start-edge + 3 sn
+    trailing stop) `RtmClient.sendTyping` → RTM `send_typing_indicator` handler'ı **erişim doğrular**
+    (sync-tarzı tenant-scoped sorgu; erişilemez chat = `not_found`, chat id sızdırmaz) ve licence-scoped
+    kısa ömürlü Redis bayrağı (`typingStateKey`, 8 sn TTL) yazar. Widget poll'u (`GET /customer/chat`)
+    bayrağı `agent_typing` olarak okur → "{ajan} yazıyor…". Not modunda yazma yayılmaz (müşteriye görünmez).
+  - **Kontrat:** OpenAPI'ye `POST /customer/chat/typing` (operationId `sendCustomerTyping`, 204+4xx) +
+    `CustomerChatState.agent_typing` eklendi; `contract generate` ile `dist/openapi.json` + `api.ts`
+    yenilendi. contract-parity ✅ (route belgeli+servis ediliyor).
+  - **Tipler:** `@nexa/types`'a `typingStateKey`, `AGENT_TYPING_TTL_SECONDS=8`, `SNEAK_PEEK_MAX_LENGTH=500`,
+    `SneakPeekPush` + `TypingIndicatorPush.author_type`.
+- Doğrulama (DoD kapısı — hepsi exit 0): `typecheck` ✅ · `lint` ✅ · `test:unit` ✅ (web 265; +9:
+  typing store 5 / TypingIndicator 4 · rtm dispatcher+TypingService birim testleri) ·
+  `test:integration` ✅ (seri concurrency=1; customer-chat **+6** [sneak-peek yalnız-ajanlara fan-out,
+  stop=önizleme yok, agent_typing round-trip, no-op boş chat, 400, agent-token 404] · rtm 42) ·
+  `build` ✅ · **e2e** ✅ (demo-flow altın yol + widget suite = 16 passed).
+- **Yan düzeltme (test-robustness):** `rtm.test.ts:289` `newThreadId = threadId.slice(0,9)+'X'`
+  ~1/32 ihtimalle orijinal id'yi yeniden üretiyordu (short-id son karakteri 'X' olunca) → deterministik
+  farklı karaktere çevrildi. Kendi kodumla ilgisiz, gate'i belirlenimci yapmak için (pre-existing flake).
+- Varsayımlar: ziyaretçi RTM socket'i AÇMAZ (widget bilinçli poll — mevcut mimari); bu yüzden ajan→ziyaretçi
+  yazma bildirimi socket push değil Redis-bayrağı+poll ile taşınır. Sneak-peek asla kalıcı yazılmaz.
+- Sonraki pencereye not: `.parked-playbook/` commit'e DAHİL EDİLMEDİ (bkz. e807983). Typing tamamen
+  ephemeral (DB/migration yok). İstenirse ileride ajan→ziyaretçi için de gerçek-zamanlı push (customer
+  RTM socket) düşünülebilir ama mevcut poll yeterli (Could/Should kapsamı).
+
 ### 54 — 10.1.4-a · AI resolutions meter + %80 UI [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı (UI dilimi; metering ✅ zaten vardı — ADR-09/ADR-13, sadece UI ⬜ idi):

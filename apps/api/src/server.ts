@@ -11,6 +11,7 @@ import auth from './plugins/auth.js';
 import audit from './plugins/audit.js';
 import database from './plugins/database.js';
 import licenseGate from './plugins/license-gate.js';
+import metering from './plugins/metering.js';
 import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
 import authRoutes from './routes/auth.js';
@@ -120,6 +121,7 @@ export async function buildServer({
   await app.register(audit);
   await app.register(rateLimit, { env });
   await app.register(licenseGate);
+  await app.register(metering, { env });
 
   app.addHook('onSend', async (request, reply) => {
     reply.header('X-Request-Id', request.id);

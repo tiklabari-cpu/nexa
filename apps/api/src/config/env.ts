@@ -77,6 +77,12 @@ const envSchema = z.object({
   UNIT_PRICE_CENTS: z.coerce.number().int().nonnegative().default(9900),
   AI_RESOLUTIONS_INCLUDED: z.coerce.number().int().nonnegative().default(200),
   AI_OVERAGE_CENTS: z.coerce.number().int().nonnegative().default(50),
+  // API-call metering (FR-MOD-10.1.5). Overage is sold by the block: $29.50 per
+  // 100,000 calls beyond the included allowance (PRD §10.1.5). The defaults are
+  // the same numbers the seed stamps onto a usage record, so the meter and the
+  // seeded demo can never quote different figures.
+  API_CALLS_INCLUDED: z.coerce.number().int().nonnegative().default(100_000),
+  API_CALL_OVERAGE_CENTS: z.coerce.number().int().nonnegative().default(2_950),
 
   LLM_PROVIDER: z.enum(['mock']).default('mock'),
   MAIL_PROVIDER: z.enum(['mock']).default('mock'),

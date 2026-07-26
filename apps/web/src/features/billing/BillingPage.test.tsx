@@ -31,6 +31,8 @@ interface UsageOpts {
   overageCents?: number;
   quotaWarning?: boolean;
   access?: 'trialing' | 'active' | 'read_only';
+  /** Billed API calls this period — exercises the FR-MOD-10.1.5 counter/overage. */
+  apiUsed?: number;
 }
 
 /**
@@ -43,6 +45,12 @@ function mockBilling(opts: UsageOpts): void {
   const included = opts.included ?? 200;
   const overage = opts.overage ?? Math.max(0, used - included);
   const overageUnitPriceCents = 50;
+  // API calls: block of 100,000 at $29.50, billed by the block (FR-MOD-10.1.5).
+  const apiUsed = opts.apiUsed ?? 0;
+  const apiIncluded = 100_000;
+  const apiOverage = Math.max(0, apiUsed - apiIncluded);
+  const apiOverageUnit = 100_000;
+  const apiOverageUnitPriceCents = 2_950;
   const usage = {
     period: '202607',
     ai_resolutions: {
@@ -53,7 +61,14 @@ function mockBilling(opts: UsageOpts): void {
       overage_unit: 50,
       overage_unit_price_cents: overageUnitPriceCents,
     },
-    api_calls: { used: 0, included: 100_000 },
+    api_calls: {
+      used: apiUsed,
+      included: apiIncluded,
+      overage: apiOverage,
+      overage_cents: Math.ceil(apiOverage / apiOverageUnit) * apiOverageUnitPriceCents,
+      overage_unit: apiOverageUnit,
+      overage_unit_price_cents: apiOverageUnitPriceCents,
+    },
   };
   const access = opts.access ?? 'active';
 
@@ -146,5 +161,33 @@ describe('BillingPage — AI resolutions meter', () => {
     // 10 over at $0.50 each = $5.00, and the counter is honestly past 100%.
     expect(screen.getByTestId('overage-charge')).toHaveTextContent('$5.00');
     expect(screen.getByTestId('quota-percent')).toHaveTextContent('(105% used)');
+  });
+});
+
+describe('BillingPage — API calls (FR-MOD-10.1.5)', () => {
+  it('reads the API-call counter and quotes the block price up front', async () => {
+    mockBilling({ apiUsed: 4_812 });
+    renderBilling(<BillingPage />);
+
+    const section = (await screen.findByText('API calls')).closest('section');
+    expect(section).not.toBeNull();
+    // The counter (sayaç) and the allowance it is measured against.
+    expect(section).toHaveTextContent('4,812');
+    expect(section).toHaveTextContent('100,000');
+    // The overage price is shown before any is spent — $29.50 per 100,000.
+    const terms = screen.getByTestId('api-overage-terms');
+    expect(terms).toHaveTextContent('$29.50');
+    expect(terms).toHaveTextContent('100,000');
+  });
+
+  it('prices API-call overage by the block once past the allowance', async () => {
+    // 250,000 calls against 100,000 included → 150,000 over = two $29.50 blocks.
+    mockBilling({ apiUsed: 250_000 });
+    renderBilling(<BillingPage />);
+
+    const section = (await screen.findByText('API calls')).closest('section');
+    expect(section).toHaveTextContent('150,000'); // overage, by the call
+    // Two blocks × $29.50 = $59.00 on the invoice (aşım faturaya).
+    expect(section).toHaveTextContent('$59.00');
   });
 });

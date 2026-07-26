@@ -415,6 +415,25 @@ async function buildGroupCsv(
  * stepper enforces. `estimated_total_cents` is 0 while trialing — the trial owes
  * nothing — and otherwise the cycle-aware seat charge plus this month's overage.
  */
+/**
+ * The metering config both billing reads pass to {@link usageSummary} — one
+ * place, so the included allowances and overage prices the subscription view
+ * quotes can never diverge from the ones the usage endpoint does.
+ */
+function usageConfig(env: Env): {
+  aiOverageCents: number;
+  aiIncluded: number;
+  apiOverageCents: number;
+  apiIncluded: number;
+} {
+  return {
+    aiOverageCents: env.AI_OVERAGE_CENTS,
+    aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
+    apiOverageCents: env.API_CALL_OVERAGE_CENTS,
+    apiIncluded: env.API_CALLS_INCLUDED,
+  };
+}
+
 async function buildSubscriptionView(
   tx: TenantClient,
   tenant: TenantContext,
@@ -426,10 +445,7 @@ async function buildSubscriptionView(
       orderBy: { createdAt: 'desc' },
     }),
     trialState(tx, tenant),
-    usageSummary(tx, tenant, {
-      aiOverageCents: env.AI_OVERAGE_CENTS,
-      aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
-    }),
+    usageSummary(tx, tenant, usageConfig(env)),
     tx.agentMembership.count({ where: { suspended: false } }),
   ]);
 
@@ -451,7 +467,12 @@ async function buildSubscriptionView(
     min_seats: activeUsers,
     unit_price_cents: unitPrice,
     usage,
-    estimated_total_cents: trialing ? 0 : seatChargeCents + usage.ai_resolutions.overage_cents,
+    // Seats plus this period's metered overage — both AI resolutions and API
+    // calls land on the invoice (FR-MOD-10.1.5, "aşım faturaya"). Zero while
+    // trialing; the trial owes nothing.
+    estimated_total_cents: trialing
+      ? 0
+      : seatChargeCents + usage.ai_resolutions.overage_cents + usage.api_calls.overage_cents,
     annual_savings_cents: trialing ? 0 : annualSavingsCents,
     provider: 'mock',
   };
@@ -833,10 +854,7 @@ export default async function reportRoutes(
       const view = await request.withTenant(async (tx) => {
         const [activeUsers, usage] = await Promise.all([
           tx.agentMembership.count({ where: { suspended: false } }),
-          usageSummary(tx, tenant, {
-            aiOverageCents: env.AI_OVERAGE_CENTS,
-            aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
-          }),
+          usageSummary(tx, tenant, usageConfig(env)),
         ]);
         await updateSubscription(
           tx,
@@ -869,12 +887,7 @@ export default async function reportRoutes(
     { config: { scopes: ['billing_manage', 'billing_admin', 'reports_read'] } },
     async (request, reply) => {
       const tenant = request.tenant();
-      const usage = await request.withTenant((tx) =>
-        usageSummary(tx, tenant, {
-          aiOverageCents: env.AI_OVERAGE_CENTS,
-          aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
-        }),
-      );
+      const usage = await request.withTenant((tx) => usageSummary(tx, tenant, usageConfig(env)));
 
       const used = usage.ai_resolutions.used;
       const included = usage.ai_resolutions.included;

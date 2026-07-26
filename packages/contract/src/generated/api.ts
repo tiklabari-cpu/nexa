@@ -2919,8 +2919,25 @@ export interface components {
         overage_unit_price_cents: number;
       };
       api_calls: {
+        /** @description Billed API calls this period (FR-MOD-10.1.5) — one per PAT-authenticated request. */
         used: number;
         included: number;
+        /** @description Calls beyond the included allowance. */
+        overage: number;
+        /**
+         * @description Overage charge for the period. Billed by the block, not the call:
+         *     any part of a 100,000 block over the allowance costs one block, so
+         *     this is `ceil(overage / overage_unit) * overage_unit_price_cents`.
+         */
+        overage_cents: number;
+        /**
+         * @description Block size the overage is billed in — the "$29.50 per 100,000
+         *     extra" block (PRD §10.1.5). Unlike AI resolutions (metered per
+         *     unit), API calls bill by the whole block.
+         */
+        overage_unit: number;
+        /** @description Price of one 100,000-call block beyond the allowance, in cents. */
+        overage_unit_price_cents: number;
       };
     };
     SubscriptionView: {

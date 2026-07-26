@@ -251,6 +251,120 @@ describe('reports and billing', () => {
 
   // =========================================================================
 
+  describe('API calls (10.1.5)', () => {
+    /** `yyyymm` for the current UTC month — the period the meter writes to. */
+    const period = new Date().toISOString().slice(0, 7).replace('-', '');
+
+    it('meters one usage record per PAT-authenticated call (the sayaç)', async () => {
+      // Each PAT API call is a billed API call (FR-MOD-08.8.2). Three calls, so
+      // the counter should read exactly three — the row's quantity *is* the
+      // counter. Metering is awaited on the way out, so the count is settled by
+      // the time the response lands.
+      const calls = 3;
+      for (let i = 0; i < calls; i++) {
+        const res = await server.get('/auth/me', auth);
+        expect(res.statusCode).toBe(200);
+      }
+
+      const record = await owner.usageRecord.findFirst({
+        where: { licenseId: fx.a.licenseId, metric: 'api_calls', period },
+      });
+      expect(record).not.toBeNull();
+      expect(Number(record!.quantity)).toBe(calls);
+      // Stamped with the block conventions the meter, the invoice and the seed
+      // all share, so a period's record carries the pricing that produced it.
+      expect(record!.overageUnit).toBe(100_000);
+      expect(record!.overageUnitPriceCents).toBe(2_950);
+    });
+
+    it('does not meter a failed authentication as a call', async () => {
+      const before = await owner.usageRecord.count({
+        where: { licenseId: fx.a.licenseId, metric: 'api_calls' },
+      });
+      // No principal is resolved, so there is nothing to bill — a rejected call
+      // is not a served one.
+      const res = await server.get('/auth/me', { authorization: 'Bearer not-a-real-token' });
+      expect(res.statusCode).toBe(401);
+
+      const after = await owner.usageRecord.count({
+        where: { licenseId: fx.a.licenseId, metric: 'api_calls' },
+      });
+      expect(after).toBe(before);
+    });
+
+    it('scopes the API-call counter to one tenant', async () => {
+      await server.get('/auth/me', auth); // one call as tenant A
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/billing/usage', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      // B made no metered call of its own before reading — A's usage must not
+      // leak across the tenant boundary.
+      expect(theirs.api_calls.used).toBe(0);
+    });
+
+    it('prices the overage by the block and lands it on the invoice (aşım faturaya)', async () => {
+      await owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { status: 'active', trialEndsAt: null },
+      });
+      await owner.subscription.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          status: 'active',
+          seats: 2,
+          unitPriceCents: 9900,
+          aiResolutionsIncluded: 200,
+        },
+      });
+      // 250,000 calls against the 100,000 allowance → 150,000 over. Billed by the
+      // block: any part of a 100,000 block over the allowance costs one $29.50
+      // block, so 150,000 over is two blocks — not one and a half.
+      await owner.usageRecord.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          metric: 'api_calls',
+          period,
+          quantity: 250_000n,
+          included: 100_000n,
+          overageUnit: 100_000,
+          overageUnitPriceCents: 2_950,
+        },
+      });
+
+      const usage = (await server.get('/billing/usage', auth)).json();
+      expect(usage.api_calls.used).toBe(250_000);
+      expect(usage.api_calls.included).toBe(100_000);
+      expect(usage.api_calls.overage).toBe(150_000);
+      // Two blocks × $29.50.
+      expect(usage.api_calls.overage_cents).toBe(2 * 2_950);
+      expect(usage.api_calls.overage_unit).toBe(100_000);
+
+      const sub = (await server.get('/billing/subscription', auth)).json();
+      // Seats ($99 × 2) plus the two API-call blocks ($59.00) — the metered
+      // overage reaches the invoice, exactly as the KK asks.
+      expect(sub.estimated_total_cents).toBe(2 * 9900 + 2 * 2_950);
+    });
+
+    it('quotes the block price up front, before any overage is spent', async () => {
+      // No API-call record yet: the meter still states the extra-usage price, so
+      // an integration sees it before the allowance runs out.
+      const api = (await server.get('/billing/usage', auth)).json().api_calls;
+      expect(api.overage).toBe(0);
+      expect(api.overage_cents).toBe(0);
+      expect(api.overage_unit).toBe(100_000);
+      expect(api.overage_unit_price_cents).toBe(2_950);
+    });
+  });
+
+  // =========================================================================
+
   describe('overview report', () => {
     it('summarises volume, response time and satisfaction', async () => {
       const chatId = await conversation({ agentReplies: true });

@@ -21,6 +21,15 @@ export type LicenseAccess = 'active' | 'trialing' | 'read_only';
  */
 export const AI_RESOLUTION_OVERAGE_UNIT = 50;
 
+/**
+ * API-call overage is sold by the block (FR-MOD-10.1.5, the PRD's "$29.50 per
+ * 100,000 extra"). Unlike an AI resolution — metered one at a time — an API call
+ * is billed by the whole block: any part of a 100,000 block over the allowance
+ * costs one block. Named here so the meter, the invoice and the seed stamp the
+ * same pack size, and so `overage_cents` is computed from a single constant.
+ */
+export const API_CALL_OVERAGE_UNIT = 100_000;
+
 export interface TrialState {
   status: string;
   access: LicenseAccess;
@@ -40,7 +49,16 @@ export interface UsageSummary {
     /** Price of one AI resolution beyond the allowance, in cents. */
     overage_unit_price_cents: number;
   };
-  api_calls: { used: number; included: number };
+  api_calls: {
+    used: number;
+    included: number;
+    overage: number;
+    overage_cents: number;
+    /** Block size the overage is billed in (`API_CALL_OVERAGE_UNIT`). */
+    overage_unit: number;
+    /** Price of one 100,000-call block beyond the allowance, in cents. */
+    overage_unit_price_cents: number;
+  };
 }
 
 /** `yyyymm` for the current UTC month. */
@@ -87,10 +105,41 @@ export async function recordAiResolution(
   `;
 }
 
+/**
+ * Record one billed API call (FR-MOD-10.1.5).
+ *
+ * The same atomic-increment upsert as {@link recordAiResolution}: the row's
+ * `quantity` *is* the counter, so two concurrent calls cannot both read the old
+ * total and write the same new one. Stamped with the block size and per-block
+ * price so a period's usage record carries the pricing that produced it — the
+ * meter reads it back rather than re-deriving, and the two cannot drift.
+ */
+export async function recordApiCall(
+  tx: TenantClient,
+  tenant: TenantContext,
+  overageUnitPriceCents: number,
+  includedPerMonth: number,
+): Promise<void> {
+  await tx.$executeRaw`
+    INSERT INTO usage_records
+      (id, license_id, metric, period, quantity, included, overage_unit, overage_unit_price_cents, updated_at)
+    VALUES
+      (gen_random_uuid(), ${tenant.licenseId}, 'api_calls', ${currentPeriod()},
+       1, ${BigInt(includedPerMonth)}, ${API_CALL_OVERAGE_UNIT}, ${overageUnitPriceCents}, now())
+    ON CONFLICT (license_id, metric, period)
+    DO UPDATE SET quantity = usage_records.quantity + 1, updated_at = now()
+  `;
+}
+
 export async function usageSummary(
   tx: TenantClient,
   tenant: TenantContext,
-  config: { aiOverageCents: number; aiIncluded: number },
+  config: {
+    aiOverageCents: number;
+    aiIncluded: number;
+    apiOverageCents: number;
+    apiIncluded: number;
+  },
 ): Promise<UsageSummary> {
   const period = currentPeriod();
   const records = await tx.usageRecord.findMany({
@@ -103,6 +152,15 @@ export async function usageSummary(
   const used = Number(ai?.quantity ?? 0n);
   const included = Number(ai?.included ?? BigInt(config.aiIncluded));
   const overage = Math.max(0, used - included);
+
+  const apiUsed = Number(api?.quantity ?? 0n);
+  const apiIncluded = Number(api?.included ?? BigInt(config.apiIncluded));
+  const apiOverage = Math.max(0, apiUsed - apiIncluded);
+  // Billed by the block, not the call (FR-MOD-10.1.5): any part of a 100,000
+  // block over the allowance costs one $29.50 block. `ceil` is the difference
+  // between AI's per-unit metering and this — a workspace one call over pays for
+  // the whole block, exactly as "$29.50 per 100,000 extra" reads.
+  const apiOverageBlocks = Math.ceil(apiOverage / API_CALL_OVERAGE_UNIT);
 
   return {
     period,
@@ -119,8 +177,15 @@ export async function usageSummary(
       overage_unit_price_cents: config.aiOverageCents,
     },
     api_calls: {
-      used: Number(api?.quantity ?? 0n),
-      included: Number(api?.included ?? 100_000n),
+      used: apiUsed,
+      included: apiIncluded,
+      overage: apiOverage,
+      overage_cents: apiOverageBlocks * config.apiOverageCents,
+      // The block size and its price, quoted whether or not any overage has been
+      // spent, so an integration sees the extra-usage price before the allowance
+      // runs out — the same up-front honesty the AI meter gives.
+      overage_unit: API_CALL_OVERAGE_UNIT,
+      overage_unit_price_cents: config.apiOverageCents,
     },
   };
 }

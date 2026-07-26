@@ -535,7 +535,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 09.1       | Entegrasyon kartları gridi                                                                             | Should (v1)    |                          ⬜                           |
 | 09.2       | Entegrasyon listesi (15–20)                                                                            | Should (v1)    |                          ⬜                           |
 | 10.1.4     | AI resolutions meter + stepper                                                                         | Must (v1)      |             ◐ metering ✅ (ADR-13), UI ⬜             |
-| 10.1.5     | API calls (aşım paketi)                                                                                | Should (v1)    |                          ⬜                           |
+| 10.1.5     | API calls (aşım paketi)                                                                                | Should (v1)    |                     ✅ tm 55                          |
 | 10.3       | Invoices + payment details yönetimi                                                                    | Should (v1)    |                          ⬜                           |
 | 11.7       | Widget customization (Appearance/Position/Mobile)                                                      | Should (v1)    |                          ⬜                           |
 | 11.8       | Typing indicator (sneak-peek)                                                                          | Could (v1)     |                          ⬜                           |
@@ -796,8 +796,10 @@ Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal baş�
 - **10.1.4-a — AI resolutions meter + stepper + %80 uyarı (UI)** `[XHIGH]` · *Must v1* — metering ✅
   (ADR-13), UI ⬜ — KK: _"Sayaç 'N/limit (% used)'; aşım paketi; %80 proaktif uyarı (Nexa)"_ ·
   doğrulama: unit (%80'de uyarı; sayaç metering'den). **Bağımlılık:** yok. **Tahmin:** 1 pencere.
-- **10.1.5-a — API calls aşım paketi + sayaç** `[XHIGH]` · *Should* — KK: _"Aşım faturaya; sayaç"_ ·
-  doğrulama: integration (aşım → usage_records). **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+- **10.1.5-a — API calls aşım paketi + sayaç** `[XHIGH]` · *Should* — **✅ tm 55** · KK: _"Aşım
+  faturaya; sayaç"_ · doğrulama: integration (aşım → usage_records). Her PAT API çağrısı `onSend`
+  hook'unda `usage_records.api_calls` sayacını arttırır; aşım blok başına ($29.50/100k) fiyatlanıp
+  `estimated_total_cents`'e eklenir. **Bağımlılık:** yok. **Tahmin:** 1 pencere.
 - **10.3-a — Invoices + payment details yönetimi** `[XHIGH]` · *Should* — KK: _"Fatura listesi/
   indirme; ödeme yöntemi güncelleme"_ · doğrulama: integration (fatura listesi mock). **Kapsam dışı:**
   gerçek kart (§9, PRD §11.1/1). **Tahmin:** 1 pencere.

@@ -6,6 +6,33 @@
 
 ## Task log (newest-first)
 
+### 55 — 10.1.5-a · API calls aşım + sayaç [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı:
+  - **Sayaç (metering):** yeni `plugins/metering.ts` — `onSend` hook'u her **PAT** ile kimlik
+    doğrulanmış (`principal.kind==='agent' && tokenKind==='pat'`), 5xx olmayan API çağrısında
+    `recordApiCall` ile `usage_records.api_calls` sayacını atomik arttırır. Konsol (OAuth), bot
+    (bot token) ve widget (customer token) trafiği faturalanmaz; best-effort (hata yutulur, çağrı
+    hiç başarısız olmaz). `onSend` beklendiğinden sayaç güçlü tutarlı — çağrı kaybı yok.
+  - **Aşım → fatura:** `metering.ts` `usageSummary` artık `api_calls`'a `overage/overage_cents/
+    overage_unit/overage_unit_price_cents` ekliyor. Blok bazlı fiyat (AI'ın birim-bazlısından
+    farklı): `ceil(overage/100_000) * $29.50` — "$29.50 per 100,000 extra" (PRD §10.1.5). Aşım
+    `reports.ts`'te `estimated_total_cents`'e eklendi (seats + AI aşımı + API aşımı).
+  - **Config:** `API_CALLS_INCLUDED=100000`, `API_CALL_OVERAGE_CENTS=2950` (env.ts + .env.example).
+    Seed'in zaten kullandığı değerler (included/overageUnit=100k, price=2950) — çelişki yok.
+  - **Sözleşme + UI:** OpenAPI `UsageSummary.api_calls` genişletildi + `contract:generate`.
+    BillingPage "API calls" bölümü sayaç (Used/Included) + Overage + Overage charge + blok fiyatı.
+- Doğrulama (hepsi yeşil): `pnpm -w typecheck/lint/build` ✅ · `pnpm -w test` (774 api + web) ✅ ·
+  reports-billing integration 66/66 (5 yeni: sayaç/tenant-scope/başarısız-auth-sayılmaz/aşım→fatura/
+  ön-fiyat) ✅ · billing e2e 2/2 ✅.
+- Varsayımlar: "billed API call" = PAT çağrısı (FR-MOD-08.8.2 PAT'a bağlar); OAuth/bot/customer
+  faturalanmaz. Included=100k (seed ile hizalı; PRD plan kartındaki "20,000" pazarlama sayısı değil).
+  Metering onSend'de senkron (küçük ek gecikme) — MVP için kabul; ileride batch/async optimize edilebilir.
+- Sonraki pencereye not: `grantToken` varsayılanı PAT olduğundan tüm integration suite artık her API
+  çağrısında `api_calls` kaydı üretir (metric=`ai_resolutions` filtreleyen testler etkilenmez;
+  doğrulandı). Kanıt görselleri (`kanit/14`,`15`) değişebilir — ayrı e2e-proof turunda yenilenir.
+  Kalan Billing: **10.3-a** (Invoices + payment details).
+
 ### 48 — 08.7.3-a · Chat timeout (boşta/ölü sohbet otomatik kapanma) [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı:

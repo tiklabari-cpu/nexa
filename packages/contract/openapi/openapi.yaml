@@ -1224,10 +1224,28 @@ components:
               description: Price of one AI resolution beyond the allowance, in cents.
         api_calls:
           type: object
-          required: [used, included]
+          required: [used, included, overage, overage_cents, overage_unit, overage_unit_price_cents]
           properties:
-            used: { type: integer }
+            used:
+              type: integer
+              description: Billed API calls this period (FR-MOD-10.1.5) — one per PAT-authenticated request.
             included: { type: integer }
+            overage: { type: integer, description: Calls beyond the included allowance. }
+            overage_cents:
+              type: integer
+              description: |
+                Overage charge for the period. Billed by the block, not the call:
+                any part of a 100,000 block over the allowance costs one block, so
+                this is `ceil(overage / overage_unit) * overage_unit_price_cents`.
+            overage_unit:
+              type: integer
+              description: |
+                Block size the overage is billed in — the "$29.50 per 100,000
+                extra" block (PRD §10.1.5). Unlike AI resolutions (metered per
+                unit), API calls bill by the whole block.
+            overage_unit_price_cents:
+              type: integer
+              description: Price of one 100,000-call block beyond the allowance, in cents.
 
     SubscriptionView:
       type: object

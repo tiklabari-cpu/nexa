@@ -34,7 +34,16 @@ interface UsageSummary {
     overage_unit: number;
     overage_unit_price_cents: number;
   };
-  api_calls: { used: number; included: number };
+  api_calls: {
+    used: number;
+    included: number;
+    overage: number;
+    overage_cents: number;
+    // Block size (100,000) and its price — API-call overage bills by the block,
+    // not the call (FR-MOD-10.1.5).
+    overage_unit: number;
+    overage_unit_price_cents: number;
+  };
 }
 
 interface Subscription {
@@ -99,6 +108,8 @@ export function BillingPage(): ReactElement {
   const sub = subscription.data;
   const use = usage.data;
   const ai = use.ai_resolutions;
+  const apiCalls = use.api_calls;
+  const apiOver = apiCalls.overage > 0;
   const quotaFraction = ai.included > 0 ? ai.used / ai.included : 0;
   // The percentage the counter shows next to "N / limit" (FR-MOD-10.1.4). Not
   // clamped — a workspace over its allowance sees the real figure (e.g. 130%),
@@ -259,11 +270,43 @@ export function BillingPage(): ReactElement {
         </Card>
       </Section>
 
-      <Section title="API calls">
-        <KpiGrid>
-          <Kpi label="Used" value={formatCount(use.api_calls.used)} />
-          <Kpi label="Included" value={formatCount(use.api_calls.included)} />
-        </KpiGrid>
+      {/* API calls (FR-MOD-10.1.5): the counter (sayaç) and the overage that
+          lands on the invoice (aşım faturaya). Billed by the block — $29.50 per
+          100,000 over the allowance — with the price shown before any is spent,
+          the same up-front honesty as the AI meter. */}
+      <Section
+        title="API calls"
+        description="Requests your integrations make with a personal access token, metered per call."
+      >
+        <Card>
+          <div className="p-4">
+            <KpiGrid>
+              <Kpi
+                label="Used"
+                value={formatCount(apiCalls.used)}
+                hint={`of ${formatCount(apiCalls.included)} included`}
+              />
+              <Kpi label="Included" value={formatCount(apiCalls.included)} />
+              <Kpi
+                label="Overage"
+                value={formatCount(apiCalls.overage)}
+                tone={apiOver ? 'warn' : 'neutral'}
+              />
+              <Kpi
+                label="Overage charge"
+                value={formatMoney(apiCalls.overage_cents)}
+                hint="this period"
+              />
+            </KpiGrid>
+            <p data-testid="api-overage-terms" className="mt-3 text-2xs text-content-tertiary">
+              Beyond the included {formatCount(apiCalls.included)}, API calls bill at{' '}
+              <span className="font-medium text-content">
+                {formatMoney(apiCalls.overage_unit_price_cents)}
+              </span>{' '}
+              per {formatCount(apiCalls.overage_unit)} — billed by the block.
+            </p>
+          </div>
+        </Card>
       </Section>
 
       <p className="text-2xs text-content-tertiary">

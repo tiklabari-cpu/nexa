@@ -6,6 +6,28 @@
 
 ## Task log (newest-first)
 
+### 53.1 — 09.1-a · Apps Marketplace + OAuth (MOCK) — in-progress (committed, DoD pending) — 2026-07-27 UTC
+
+- Kapsam: FR-MOD-09.1 (`Should v1`) — kart → izin/OAuth akışı; bağlanınca veri sohbet içinde
+  (Details). Çalışma ağacında hazır duran slice **commit'lendi** (bu düzeltme penceresi yalnız
+  commit'leme yaptı; task **done DEĞİL** — DoD kapısı ve PLAN.md satırı henüz kapatılmadı).
+- Commit'ler (contract-first, atomik):
+  - `bdd10d8` feat(apps): katalog (`@nexa/types` APP_CATALOG + deterministik in-chat stub) +
+    OpenAPI path/şema, yeniden bundle'lanmış generated client.
+  - `6e83aed` feat(apps): mock OAuth connect/disconnect (HMAC-imzalı, CSRF-bağlı `state`) +
+    RLS-scoped `app_installations` tablosu/migration + Details panosunda bağlı-app verisi;
+    admin scope connect'i, agent chat scope in-chat okumayı gate'ler. Integration + unit test.
+  - `b6f1cb0` chore(taskmaster): tm 53 / 53.1 in-progress damgası.
+- Doğrulama: `pnpm -w typecheck` **yeşil (11/11, FULL TURBO)**. Diğer DoD kapıları (lint / unit /
+  integration / build / e2e / PLAN.md satırı) bu pencerede **çalıştırılmadı** — done kararı sıradaki
+  pencereye ait.
+- Commit EDİLMEYEN — parked: **`.parked-playbook/`** (SkillBrowser / RecommendedSkills /
+  skill-filters, FR-MOD-05.3/05.4 Playbook skill listesi). Apps Marketplace ile ilgisiz, ayrı bir
+  modülün deneysel işi; izlenmeyen bırakıldı. Sonraki pencere: ait olduğu task altında
+  `apps/web/src/features/playbook/`'e taşıyıp değerlendirsin ya da kalıcı sil.
+- Sonraki pencereye not: 53.1'i kapatmak için tam DoD kapısı + PLAN.md 09.1 satırı `⬜→✅`
+  gerekir. `.parked-playbook/` kapsam dışı bırakıldı — karar bekliyor.
+
 ### 52 — 08.7.7-a · Forms builder (pre/post-chat) `[MAX]` — done — 2026-07-27 UTC
 
 - Kapsam: FR-MOD-08.7.7 (`Should v1`) — widget'ta sohbet öncesi sorulan alanların builder'ı → müşteri

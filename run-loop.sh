@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Nexa — Otonom Görev Döngüsü (CANLI loglamalı)
+# Her task TEMİZ bir Claude Code penceresinde çalışır; durum Task Master + git'te.
+# Politika: full-otonom (bypassPermissions) | hata → 1 kez temiz pencerede retry
+#           → yine olmazsa DUR + bildir | efor task etiketine göre otomatik.
+# İZLEME: her pencere terminale canlı akar + tam kayıt .loop-logs/'a yazılır.
+#         Ayrı izleme:  tail -f .loop-logs/task-<id>.jsonl | ./run-loop.sh yok;
+#         basitçe bu script'in çıktısını izle veya:  tail -f .loop-logs/*.jsonl
+# ÖNCE OKU: unattended bırakmadan ilk 1-2 turu izle; `claude --help` ile
+#           --effort / --permission-mode adlarını sürümünde teyit et.
+# =============================================================================
+set -uo pipefail
+
+# --- Ayarlar -----------------------------------------------------------------
+MODEL="opus"
+EFFORT_MAX="max"            # [MAX] tasklar. opus 'max' desteklemiyorsa: "high"
+EFFORT_HIGH="xhigh"         # [XHIGH] tasklar
+PERM="bypassPermissions"   # tam otonom, prompt YOK. Güvenli alt.: "auto"
+MAX_TURNS=250
+RUNNER_PROMPT_FILE="TASK-RUNNER-PROMPT.md"
+LOG_DIR=".loop-logs"; mkdir -p "$LOG_DIR"
+MAX_CONSEC_ERRORS=5
+BACKOFF_SECS=90
+ALLOW=""                   # gerekirse: '--allowedTools Bash(git *),Bash(pnpm *)'
+
+pick_schema='{"type":"object","properties":{"has_task":{"type":"boolean"},"task_id":{"type":"string"},"effort":{"type":"string","enum":["max","high"]},"remaining":{"type":"integer"}},"required":["has_task"]}'
+result_schema='{"type":"object","properties":{"status":{"type":"string","enum":["done","blocked"]},"task_id":{"type":"string"},"summary":{"type":"string"}},"required":["status"]}'
+
+log(){ echo "[$(date -u +%H:%M:%S)] $*"; }
+
+# --- Canlı akış: stream-json olaylarını insana çevirir; jq yok/hata → raw -----
+pretty(){
+  if command -v jq >/dev/null 2>&1; then
+    jq -r --unbuffered '
+      if .type=="system" and .subtype=="init" then "   · pencere açıldı (model \(.model // "?"))"
+      elif .type=="system" and .subtype=="api_retry" then "   · API retry #\(.attempt // "?") (\(.error // ""))"
+      elif .type=="assistant" then
+        ([ .message.content[]?
+           | if .type=="text" then "   " + ((.text // "")|gsub("\n";" ")|.[0:180])
+             elif .type=="tool_use" then "   → \(.name)"
+             else empty end ] | .[])
+      elif .type=="result" then "   · [pencere sonucu alındı]"
+      else empty end' 2>/dev/null || cat
+  else
+    cat
+  fi
+}
+
+# =============================================================================
+# Sanity: doğru dizinde miyiz?
+if [ ! -f "urun-gereksinim-dokumani-PRD.md" ] || [ ! -f "$RUNNER_PROMPT_FILE" ]; then
+  log "✖ HATA: bu script Nexa proje kökünde çalışmalı (PRD + $RUNNER_PROMPT_FILE burada olmalı)."
+  exit 1
+fi
+
+# Tek seferlik BOOTSTRAP (ilk çalıştırma) — canlı akar
+if [ ! -d ".taskmaster" ]; then
+  log "⚙ İlk çalıştırma → kurulum (git + parse-prd + efor etiketleri). Canlı izliyorsun:"
+  claude -p "Bu depoyu Nexa otonom yapımına HAZIRLA. Kod YAZMA, yalnız kurulum:
+1) Oku: CLAUDE.md, MASTER-PROMPT.md, CONVENTIONS.md, urun-gereksinim-dokumani-PRD.md.
+2) Git: repo yoksa 'git init' + 'git branch -M main'; remote yoksa
+   'git remote add origin git@github.com:tiklabari-cpu/nexa.git'. .gitignore zaten var.
+   İlk commit: doküman + döngü dosyaları → 'chore: bootstrap docs + autonomous loop' → push.
+3) Task Master kurulu değilse kur+ekle; 'task-master parse-prd urun-gereksinim-dokumani-PRD.md'
+   ile PRD'yi görev ağacına çevir (MASTER-PROMPT 'MVP Kritik Yol' sırası + bağımlılıklar).
+4) MASTER-PROMPT 'Efor Kapıları'ndaki [MAX] işlere task başlığına [MAX] ekle; gerisi [XHIGH].
+5) PLAN.md + HANDOFF.md iskeleti oluştur.
+6) DUR — hiçbir Faz task'ını YAPMA." \
+    --model "$MODEL" --effort high --permission-mode "$PERM" --max-turns 80 $ALLOW \
+    --output-format stream-json --verbose \
+    2>>"$LOG_DIR/bootstrap.err" | tee -a "$LOG_DIR/bootstrap.jsonl" | pretty
+  if [ ! -d ".taskmaster" ]; then
+    log "✖ Bootstrap tamamlanamadı. Bkz. $LOG_DIR/bootstrap.err"
+    exit 1
+  fi
+  log "✓ Kurulum tamam. Döngüye giriliyor."
+fi
+
+# --- Sıradaki hazır task + efor (ucuz, sessiz) -------------------------------
+pick_next(){
+  claude -p "Task Master (MCP): bağımlılıkları tamam, durumu pending/ready bir SONRAKI task var mı? Varsa en yüksek öncelikliyi seç. İş YAPMA, kod okuma/yazma yok. Döndür: has_task, task_id, effort (başlık/detay [MAX] içeriyorsa \"max\" değilse \"high\"), remaining (kalan yapılabilir task sayısı)." \
+    --model "$MODEL" --effort low --permission-mode "$PERM" --max-turns 10 $ALLOW \
+    --output-format json --json-schema "$pick_schema" 2>>"$LOG_DIR/pick.err" \
+    | jq -c '.structured_output' 2>/dev/null
+}
+
+# --- Bir task'ı temiz pencerede çalıştır (CANLI akar; status dosyadan okunur) -
+stream_task(){
+  local id="$1" eff="$2"
+  local logf="$LOG_DIR/task-$id.jsonl"
+  : > "$logf"
+  claude -p "$(cat "$RUNNER_PROMPT_FILE")
+
+# HEDEF TASK: ${id}
+Yalnız bu task'ı baştan sona tamamla, protokolü uygula, en son JSON sonucu döndür." \
+    --model "$MODEL" --effort "$eff" --permission-mode "$PERM" --max-turns "$MAX_TURNS" $ALLOW \
+    --output-format stream-json --verbose --json-schema "$result_schema" \
+    2>>"$LOG_DIR/task-$id.err" | tee -a "$logf" | pretty
+}
+status_from(){ jq -r 'select(.type=="result") | (.structured_output.status // empty)' "$1" 2>/dev/null | tail -1; }
+
+# =============================================================================
+consec_errors=0; iteration=0
+log "▶▶ Döngü başladı. Canlı akış aşağıda; tam kayıt: $LOG_DIR/"
+
+while true; do
+  iteration=$((iteration+1))
+
+  pick=$(pick_next)
+  if [ -z "${pick:-}" ] || [ "$pick" = "null" ]; then
+    consec_errors=$((consec_errors+1))
+    log "⚠ Sıradaki task alınamadı (muhtemelen rate-limit/transient). Hata #$consec_errors, ${BACKOFF_SECS}s bekleniyor..."
+    [ "$consec_errors" -ge "$MAX_CONSEC_ERRORS" ] && { log "✖ Üst üste $MAX_CONSEC_ERRORS hata. Döngü durdu."; exit 1; }
+    sleep "$BACKOFF_SECS"; continue
+  fi
+  consec_errors=0
+
+  has_task=$(echo "$pick" | jq -r '.has_task // false')
+  if [ "$has_task" != "true" ]; then
+    log "✅ Hazır task kalmadı. Plan tamam (kalanlar bloke/beklemede olabilir). Döngü bitti."
+    break
+  fi
+  task_id=$(echo "$pick" | jq -r '.task_id // "?"')
+  remaining=$(echo "$pick" | jq -r '.remaining // "?"')
+  eff_label=$(echo "$pick" | jq -r '.effort // "high"')
+  [ "$eff_label" = "max" ] && eff="$EFFORT_MAX" || eff="$EFFORT_HIGH"
+
+  log "──────────────────────────────────────────────────────────────"
+  log "▶ Task $task_id  (effort=$eff, kalan≈$remaining)  — operasyon+kontrol başlıyor"
+  start=$SECONDS
+  stream_task "$task_id" "$eff"
+  status=$(status_from "$LOG_DIR/task-$task_id.jsonl"); [ -z "$status" ] && status="blocked"
+
+  if [ "$status" != "done" ]; then
+    log "⟳ Task $task_id ilk turda geçemedi ($status). 1 kez yeniden deneniyor (temiz pencere)..."
+    stream_task "$task_id" "$eff"
+    status=$(status_from "$LOG_DIR/task-$task_id.jsonl"); [ -z "$status" ] && status="blocked"
+  fi
+
+  el=$((SECONDS-start))
+  if [ "$status" = "done" ]; then
+    log "✔ Task $task_id BİTTİ (+commit +push +done) — ${el}s. Sıradakine geçiliyor."
+  else
+    log "✖ Task $task_id yeniden denemede de kontrol kapısını geçemedi (${el}s). Döngü DURDU."
+    log "  İncele:  $LOG_DIR/task-$task_id.err   ve   HANDOFF.md"
+    exit 2
+  fi
+done

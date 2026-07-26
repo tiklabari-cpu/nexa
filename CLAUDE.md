@@ -1,96 +1,21 @@
-# Nexa — Claude Code Talimatları
+# CLAUDE.md — Nexa (her Claude Code penceresi bunu otomatik okur)
 
-## Doğruluk kaynağı sırası
+Bu depo, **Nexa** canlı-destek + AI müşteri hizmetleri platformunun otonom yapımıdır.
+Her pencere (interaktif veya `run-loop.sh` ile açılan) aşağıdaki kurallara uyar.
 
-Bir çelişki gördüğünde yukarıdaki kazanır. Aşağıdakini düzeltirsin, yukarıdakini tartışmazsın.
+## Her zaman geçerli
+- **Kilitli kararlar + akış:** `MASTER-PROMPT.md`. Stack, contract-first sıra, sınırlar oradadır.
+- **Definition of Done + git + handoff:** `CONVENTIONS.md`. Bir iş bu kapıdan (exit code'larla)
+  geçmeden "bitti" değildir.
+- **Şema tek doğruluk kaynağı:** PRD §8.4 + `rapor-2-teknik-mimari.md` §5.3.
+  `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili).
+- **Tek orkestratör:** implementasyon subagent'a dağıtılmaz; pencere kendi araçlarıyla çalışır.
 
-1. `urun-gereksinim-dokumani-PRD.md` — **ne** yapılacak (gereksinim kimlikleri: `FR-MOD-08.5.2`)
-2. `PLAN.md` — **hangi sırada ve niçin** (ADR-01…15 kilitli, faz/dilim kırılımı, durum işaretleri)
-3. `MASTER-PROMPT.md` — **nasıl çalışılacak** (zorluk etiketleri, bitti tanımı)
-4. `.taskmaster/tasks/tasks.json` — **sıradaki iş + o işin çalışma günlüğü**
+## Otonom döngüde
+- Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → build → verify → fix → close).
+- Yalnız hedef task yapılır; done ancak DoD kapısı yeşilse + commit + push + Task Master done.
+- Bağlam hafızadan değil, Task Master + git + `HANDOFF.md`'den kurulur.
 
-**Kural:** PRD kimliği olmayan iş yapılmaz (PLAN.md §1.1). Yeni ihtiyaç doğarsa önce PRD'de
-karşılığı bulunur; yoksa PLAN.md §D'ye "PRD sapması" olarak yazılır.
-
-## Task Master'ın buradaki rolü
-
-Task Master **planlamaz, yürütür.** Yürütme defteridir: durum, bağımlılık sırası, `next`,
-ve her işin altında biriken uygulama notları.
-
-**Kullanılmayacak komutlar:** `parse-prd`, `expand`, `add-task --prompt`, `update --from` —
-hiçbiri kod tabanını görmez; ADR'lerle çelişen jenerik adımlar ("veritabanı modelini
-oluştur") yazarlar. Ayrıca **oturum içinden AI'ya giden hiçbir task-master komutu
-çağrılmaz** (`update-task`, `update-subtask`, `research` dahil): claude-code provider
-iç içe claude süreci açıp kilitleniyor (2026-07-24'te ölçüldü — 300 sn, sıfır çıktı).
-
-**Görev günlüğü bunun yerine deterministik yazılır (AI yok, anında):**
-
-```bash
-node .taskmaster/gunluk.mjs <görev-id> "not"
-```
-
-**Görev ayrıştırması Claude Code tarafından yapılır** — gerçek dosyalar okunarak — ve
-Task Master'a elle yazılır:
-
-```bash
-task-master add-task --title "..." --description "..." --details "..." \
-  --dependencies "2,3" --priority high     # --prompt YOK → LLM devreye girmez
-```
-
-Bir işe başlamadan derinlik gerekiyorsa kod **doğrudan okunur** (Read/Grep).
-`research` komutu yalnız oturum DIŞINDAN (kendi terminalinden) işe yarar; oturum
-içinden aynı kilitlenme sorununa takılır.
-
-## Oturum döngüsü — bir oturum = bir iş
-
-`PLAN.md` 89 KB'dır; her oturumda okunmaz. Tek bir görev okunur.
-
-Bu döngü `/is` komutuna gömülüdür — adımları elle yürütmek yerine `/is` çağrılır.
-Seri çalışma: `/loop /is` (döngü kuralları `.claude/commands/is.md` sonunda: soru yerine
-günlüklenmiş varsayım; işler `slice-<N>` dalında kendi commit'leriyle kapanır; `[MAX]`
-işler ayrı commit olur ve raporda **[MAX] İNCELE** bölümüyle sunulur). Dilim bitince
-döngü `/dilim-kapat`'ı kendisi uygular: PLAN.md geri yazımı, açıklamalı merge, **push**
-(otomatik push 2026-07-24'te onaylandı) ve sonraki dilimin görevleri. Faz 0'ın son
-dilimi kapanınca durur: `PLAN.md §F` kapanış raporu sunulur, Faz 1'e geçiş insan kararıdır.
-Ham adımlar referans için:
-
-1. `task-master next` → sıradaki iş
-2. `task-master show <id>` → ayrıntı; `details` alanındaki dosya yollarını oku
-3. `task-master set-status --id=<id> --status=in-progress`
-4. Planını yaz: `node .taskmaster/gunluk.mjs <id> "plan: ..."`
-5. Uygula. Öğrendiğin her şeyi (çalışan/çalışmayan) aynı günlükçüyle düş —
-   bir sonraki oturumun bağlamı budur
-6. `task-master set-status --id=<id> --status=done`
-7. **`/clear`** → yeni oturum, 1. adım
-
-## Dilim kapanışı (`/dilim-kapat` — döngüde otomatik çalışır)
-
-Bir dilimin tüm işleri bittiğinde:
-
-1. `PLAN.md §3`'teki ilgili satırların durum işaretlerini güncelle (⬜/◐ → ✅)
-2. `PLAN.md §3.11` dilim tablosunu ve baştaki faz sayacını güncelle
-   (sayaç **sayılarak** üretilir, elle yazılmaz — PLAN.md §1.2)
-3. Sapma varsa `PLAN.md §D`'ye, varsayım varsa `§C`'ye yaz
-4. `slice-<N>` dalını main'e **açıklamalı** merge et + push (mesaj şablonu
-   `.claude/commands/dilim-kapat.md` §6'da; otomatik push onaylı — 2026-07-24)
-5. Sonraki dilimin görevlerini aynı yöntemle üret: kodu oku → elle `add-task`
-6. Faz 0'ın son dilimiyse: görev kurma — `PLAN.md §F` kapanış turu → rapor → DUR
-
-## Bitti tanımı (her iş için)
-
-- PRD kabul kriteri karşılandı — "ekran duruyor" yetmez
-- Kontrat önce: yeni uç varsa `packages/contract/openapi/openapi.yaml` → generate → kod
-- Hata zarfı ADR-06: `{ error: { type, message, request_id, details? } }`
-- Her sorgu lisans kapsamlı; cross-tenant erişim testi var
-- Testler yeşil (birim + ilgili Playwright E2E)
-- Ekran/widget üreten işlerde görsel kanıt: E2E, iddianın ardından
-  `kanit/<id>-<ad>.png` kaydeder (config yalnız başarısızlıkta artefakt tutuyor;
-  otonom koşuda kimse ekrana bakmaz, insan sonradan bu dosyalara bakar)
-- `[MAX]` etiketli işlerde **negatif testler pozitiflerden önce** yazıldı
-
----
-
-## Task Master AI Instructions
-
-**Import Task Master's development workflow commands and guidelines, treat as if import is in the main CLAUDE.md file.**
-@./.taskmaster/CLAUDE.md
+## Sınırlar
+Production deploy / DNS / TLS / gerçek secret / kart / ödeme YOK. force-push, DB drop,
+history rewrite, başka repoya dokunma, referans .md/görselleri taşıma YOK. Dış servisler mock'lanır.

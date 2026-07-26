@@ -492,7 +492,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 
 | PRD    | Gereksinim                                                | Öncelik     |             Durum              |
 | ------ | --------------------------------------------------------- | ----------- | :----------------------------: |
-| 06.1   | AI Agent sekmeleri (Performance/Profile/Skills/Knowledge) | Must (v1)   |               ◐                |
+| 06.1   | AI Agent sekmeleri (Performance/Profile/Skills/Knowledge) | Must (v1)   | ✅ Sekmeli kabuk (ARIA tablist) + readiness — `PlaybookPage.tsx` (`VIEW_TABS` 4 panel) · `readiness.ts` `evaluateReadiness` → boş KB+skill'de aktive engeli + banner + devre dışı toggle · test `readiness.test.ts` (5) · tm 33.1 · §D27 |
 | 06.2.1 | Skill editör üst barı (Run log + active toggle)           | Must (v1)   |               ✅               |
 | 06.2.2 | Skill name                                                | Must (v1)   |               ✅               |
 | 06.2.3 | Doğal dil talimat textarea (~10.000 karakter)             | Must (v1)   |               ✅               |
@@ -1780,6 +1780,17 @@ görüneceği en son yerdir.
   (16/16), api unit `assignee-email.test.ts` (5/5), integration `notifications.test.ts` (5/5 —
   opt-out/idempotent replay/cross-tenant izolasyon dahil). Mobil push kapsam dışı (🔒 v1 →
   FR-MOD-13.7). → §3.10'da 13.8 `◐`→`✅`. (Bu satır dışına dokunulmadı.)
+
+- **D27 (çelişki denetimi 2026-07-26 · koda karşı doğrulandı):** §4.2 satırı 06.1'i `◐` gösteriyordu
+  (Nerede boş) ama tm 33.1 (`done`) payı kodda tam. PRD FR-MOD-06.1 iki koşulu da karşılanıyor:
+  **(1) Sekmeler** — `PlaybookPage.tsx` `VIEW_TABS` Performance/Profile/Skills/Knowledge'i tek `role="tablist"`
+  altında (`aria-selected`/`aria-controls`, tek `#ai-tabpanel`) render eder ve dördü de gerçek panel
+  gösterir: `AiPerformance`, `ProfileForm`, Skills editörü, `KnowledgePanel`. **(2) Readiness check** —
+  saf fonksiyon `readiness.ts` `evaluateReadiness` (indeksli KB **veya** adımlı skill yoksa `ready=false`);
+  sayfa bunu `blockActivation` ile "Turn on" butonunu devre dışı bırakıp `title`'a gerekçeyi koyarak ve
+  `role="alert"` banner ("Not ready to turn on…") ile uygular — PRD KK4/US-7 birebir. Test yeşil (bu tur
+  koşuldu): `readiness.test.ts` (5/5 — boş KB+skill→engel + un-indexed/stepless negatifleri + iki hazır
+  yol). → §4.2'de 06.1 `◐`→`✅`. (Bu satır dışına dokunulmadı.)
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

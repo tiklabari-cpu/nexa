@@ -1,0 +1,122 @@
+# Home dashboard — the workspace landing overview (FR-MOD-13.1).
+#
+# One read that backs the whole Home screen: an activation checklist derived
+# from real setup state, live real-time counters, and a week-over-week
+# performance summary. Every figure is computed server-side so the cards, the
+# checkmarks and the deltas quote the same numbers.
+#
+# Report-flavoured data (live operational counts + weekly performance), so it
+# rides the same `reports_read` scope the Reports module does — the audience is
+# the same. The weekly `chats`/`resolved` equal the Reports overview's
+# `chats`/`closed` for an equal 7-day window, by construction.
+
+home:
+  get:
+    tags: [Reports]
+    operationId: getHomeDashboard
+    summary: Home dashboard — activation, live counters, weekly performance
+    description: |
+      The three sections of the Home screen in one payload:
+
+      - `activation` — the setup checklist. Each step's `done` is computed from
+        whether the thing exists (a website registered, a teammate invited, the
+        widget customised, a canned response created, an AI Agent set up), so it
+        can never disagree with the workspace's actual state.
+      - `live` — real-time counters: distinct visitors on the site now (an open
+        chat, or a visit inside the 30-minute live window), conversations open
+        right now, and teammates set to accept chats.
+      - `weekly` — the last 7 days versus the 7 before, so each figure carries a
+        week-over-week delta. `chats`/`resolved` are the same window figures the
+        Reports overview reports as `chats`/`closed` for an equal range.
+    responses:
+      "200":
+        description: The home dashboard
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [activation, live, weekly]
+              properties:
+                activation:
+                  type: object
+                  required: [steps, completed, total]
+                  properties:
+                    steps:
+                      type: array
+                      items:
+                        type: object
+                        required: [key, done]
+                        properties:
+                          key:
+                            type: string
+                            enum:
+                              - install_widget
+                              - invite_teammate
+                              - customize_widget
+                              - add_canned_response
+                              - set_up_ai_agent
+                          done: { type: boolean }
+                    completed:
+                      type: integer
+                      description: How many steps are done.
+                    total:
+                      type: integer
+                      description: How many steps there are.
+                live:
+                  type: object
+                  required: [visitors_online, ongoing_chats, agents_online]
+                  properties:
+                    visitors_online:
+                      type: integer
+                      description: Distinct people on the site now (open chat or recent visit).
+                    ongoing_chats:
+                      type: integer
+                      description: Conversations open right now.
+                    agents_online:
+                      type: integer
+                      description: Teammates set to accept chats (not suspended).
+                weekly:
+                  type: object
+                  required: [range, chats, resolved, satisfaction, previous]
+                  properties:
+                    range:
+                      type: object
+                      required: [from, to]
+                      properties:
+                        from: { type: string, format: date-time }
+                        to: { type: string, format: date-time }
+                    chats:
+                      type: integer
+                      description: Conversations started in the window.
+                    resolved:
+                      type: integer
+                      description: Conversations started in the window that are now resolved.
+                    satisfaction:
+                      type: object
+                      required: [good, bad, responses, score]
+                      properties:
+                        good: { type: integer }
+                        bad: { type: integer }
+                        responses: { type: integer }
+                        score:
+                          type: number
+                          nullable: true
+                          description: Good ÷ rated, or null when nobody rated.
+                    previous:
+                      type: object
+                      required: [range, chats, resolved, satisfaction_score]
+                      properties:
+                        range:
+                          type: object
+                          required: [from, to]
+                          properties:
+                            from: { type: string, format: date-time }
+                            to: { type: string, format: date-time }
+                        chats: { type: integer }
+                        resolved: { type: integer }
+                        satisfaction_score:
+                          type: number
+                          nullable: true
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

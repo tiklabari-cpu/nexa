@@ -53,6 +53,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     'shell.account.language': 'Language',
 
     // Navigation (rail + command palette)
+    'nav.home': 'Home',
     'nav.inbox': 'Inbox',
     'nav.customers': 'Customers',
     'nav.team': 'Team',
@@ -88,6 +89,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     'shell.account.language': 'Dil',
 
     // Navigation
+    'nav.home': 'Ana Sayfa',
     'nav.inbox': 'Gelen Kutusu',
     'nav.customers': 'Müşteriler',
     'nav.team': 'Ekip',

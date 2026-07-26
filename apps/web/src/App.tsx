@@ -14,6 +14,7 @@ import { TrafficPage } from './features/traffic/TrafficPage.js';
 import { PlaybookPage } from './features/playbook/PlaybookPage.js';
 import { SettingsPage } from './features/settings/SettingsPage.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
+import { HomePage } from './features/home/HomePage.js';
 import { ReportsPage } from './features/reports/ReportsPage.js';
 import { TeamPage } from './features/team/TeamPage.js';
 import { OnboardingWizard } from './features/onboarding/OnboardingWizard.js';
@@ -76,6 +77,7 @@ export function App(): ReactElement {
     <Routes>
       <Route path="/app" element={<AppShell />}>
         <Route index element={<Navigate to="/app/inbox" replace />} />
+        <Route path="home" element={<HomePage />} />
         <Route path="inbox" element={<InboxPage />} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="customers/real-time" element={<TrafficPage />} />

@@ -6,6 +6,39 @@
 
 ## Task log (newest-first)
 
+### 60 — 13.1-a · Home dashboard [XHIGH] — done — 2026-07-26 UTC
+
+- Yapıldı:
+  - **Yeni `GET /home` (`reports_read`)** — tek okumada üç bölüm. `routes/home.ts` →
+    `services/home/home-service.ts` (`server.ts`'e kayıtlı). Şema tek kaynak `@nexa/types`
+    `HomeDashboard`; OpenAPI `paths/home.yaml` + `openapi.yaml` (88 path, `contract:generate` ile
+    yeniden üretildi, contract-parity ✅).
+  - **Aktivasyon checklist:** 5 adım _türetilir_ (stored değil) — website / (>1 üyelik ∨ bekleyen
+    davet) / widget_settings / canned / ai_agent var mı. Her adım ilgili şey gerçekten var olduğu için
+    `done`, bayatlayamaz.
+  - **Canlı kartlar (KK "canlı gerçek-zaman kartları"):** `visitors_online` = açık chat ∪ son 30 dk
+    ziyaret **UNION distinct** (raw SQL, defansif `license_id` filtresi + RLS); `ongoing_chats` = aktif
+    chat; `agents_online` = `accepting_chats & NOT suspended` (widget'ın online tanımıyla aynı).
+  - **Haftalık performans:** son 7 gün vs önceki 7 (new chats / resolved / CSAT + WoW delta).
+    `chats`/`resolved` = Reports overview `chats`/`closed` ile **aynı created-in-window taban** →
+    tam raporla çelişmez; ADR-09 automated split'e **dokunulmadı** (reports route'unda tek yerinde kalır).
+  - **Web:** `HomePage.tsx` + saf `dashboard.ts` (kart/delta view-model'leri, dependency-free →
+    unit test edilebilir). Rota `/app/home` (`App.tsx`), nav "Home" ilk modül (`navigation.ts`,
+    `nav.home` tr/en). 403 → dürüst EmptyState ("admin/owner'a açık"), diğer hata → ErrorNotice.
+- Doğrulama (exit 0): `pnpm -w typecheck` · `pnpm -w lint` · seri `turbo run test --concurrency=1
+  --filter=!@nexa/e2e` → **api 834/834** (+13 `home.test.ts`) + web 307/307 (+8 `dashboard.test.ts` +
+  4 `HomePage.test.tsx`) + `contract-parity` 5/5 · `pnpm -w build`. KK "unit (kartlar) + integration
+  (canlı sayaç)" birebir kanıtlı.
+- Varsayımlar: (1) Endpoint `reports_read` kapılı — canlı ops sayaçları + haftalık performans
+  yönetim-genel-bakış verisi, Reports ile aynı kitle; plain agent'ın `reports_read`'i yok (bkz.
+  DEFAULT_AGENT_SCOPES). (2) İndeks yönlendirmesi inbox'ta bırakıldı — Home landing yapılmadı ki
+  plain-agent login'de 403 yemesin ve mevcut e2e bozulmasın. (3) `install_widget` = website (trusted
+  domain değil) satırı var mı; PRD'de widget "install" web sitesi kaydına bağlı.
+- Sonraki pencereye not: 13.6-a HelpDesk/Ticketing katmanı ayrı `[MAX]` task (kapsam dışı bırakıldı).
+  Home'a e2e yok (KK unit+integration); istenirse `home.spec.ts` eklenebilir. Canlı kartlar poll
+  değil tek-atış; istenirse RTM push ile canlandırılabilir. Ayrı `2ff337a` commit'i D30–D33 audit +
+  protokol dokümanlarını (prior-window commit'lenmemiş) topladı; `.parked-playbook/` bilinçli commit dışı.
+
 ### 59 — 04.6-a · Chatbots / Suspended agents sekmeleri [XHIGH] — done — 2026-07-26 UTC
 
 - Yapıldı:

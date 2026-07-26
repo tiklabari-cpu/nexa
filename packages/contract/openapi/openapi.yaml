@@ -237,6 +237,9 @@ paths:
   /uploads/{key}:
     $ref: "./paths/uploads.yaml#/uploadObject"
 
+  /home:
+    $ref: "./paths/home.yaml#/home"
+
   /reports/overview:
     $ref: "./paths/reports.yaml#/overview"
   /reports/breakdown:

@@ -1949,6 +1949,37 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/home': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Home dashboard — activation, live counters, weekly performance
+     * @description The three sections of the Home screen in one payload:
+     *
+     *     - `activation` — the setup checklist. Each step's `done` is computed from
+     *       whether the thing exists (a website registered, a teammate invited, the
+     *       widget customised, a canned response created, an AI Agent set up), so it
+     *       can never disagree with the workspace's actual state.
+     *     - `live` — real-time counters: distinct visitors on the site now (an open
+     *       chat, or a visit inside the 30-minute live window), conversations open
+     *       right now, and teammates set to accept chats.
+     *     - `weekly` — the last 7 days versus the 7 before, so each figure carries a
+     *       week-over-week delta. `chats`/`resolved` are the same window figures the
+     *       Reports overview reports as `chats`/`closed` for an equal range.
+     */
+    get: operations['getHomeDashboard'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/overview': {
     parameters: {
       query?: never;
@@ -6972,6 +7003,84 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+    };
+  };
+  getHomeDashboard: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The home dashboard */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            activation: {
+              steps: {
+                /** @enum {string} */
+                key:
+                  | 'install_widget'
+                  | 'invite_teammate'
+                  | 'customize_widget'
+                  | 'add_canned_response'
+                  | 'set_up_ai_agent';
+                done: boolean;
+              }[];
+              /** @description How many steps are done. */
+              completed: number;
+              /** @description How many steps there are. */
+              total: number;
+            };
+            live: {
+              /** @description Distinct people on the site now (open chat or recent visit). */
+              visitors_online: number;
+              /** @description Conversations open right now. */
+              ongoing_chats: number;
+              /** @description Teammates set to accept chats (not suspended). */
+              agents_online: number;
+            };
+            weekly: {
+              range: {
+                /** Format: date-time */
+                from: string;
+                /** Format: date-time */
+                to: string;
+              };
+              /** @description Conversations started in the window. */
+              chats: number;
+              /** @description Conversations started in the window that are now resolved. */
+              resolved: number;
+              satisfaction: {
+                good: number;
+                bad: number;
+                responses: number;
+                /** @description Good ÷ rated, or null when nobody rated. */
+                score: number | null;
+              };
+              previous: {
+                range: {
+                  /** Format: date-time */
+                  from: string;
+                  /** Format: date-time */
+                  to: string;
+                };
+                chats: number;
+                resolved: number;
+                satisfaction_score: number | null;
+              };
+            };
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   getReportsOverview: {

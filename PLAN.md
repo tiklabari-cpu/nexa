@@ -540,7 +540,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 11.7       | Widget customization (Appearance/Position/Mobile)                                                      | Should (v1)    | ✅ tema/renk/konum + mobil tam ekran + canlı önizleme + WCAG — license-singleton `widget_settings` (RLS+CHECK) · GET/PUT `/settings/widget` (`routes/settings.ts`, Zod+audit+upsert) · widget `applyAppearance` (`--nx-brand`/`data-nx-theme`/`.nx-left`/`.nx-mobile-full`+`@media(max-width:480px)`, mount + token'dan) · web `WidgetCustomization.tsx` **canlı preview** · çok dilli = I18N1/2 tr/en (tm 26) `data-language`→locale fallback (PRD "45+ dil" hedef, KK "çok dilli") · test `widget.appearance.test.ts`(9)/`loader.appearance.test.ts`(5)/`WidgetCustomization.test.tsx`(5)+integration `settings.test.ts` · OpenAPI `/settings/widget` · tm 57 · §D33 |
 | 11.8       | Typing indicator (sneak-peek)                                                                          | Could (v1)     | ✅ ziyaretçi→ajan sneak-peek (11.8 KK) — widget `notifyTyping` → `POST /customer/chat/typing` (`SNEAK_PEEK_MAX_LENGTH`) → `chat-service.ts` `publishCustomerTyping` → `incoming_sneak_peek` **yalnız ajanlara** → `useInbox.ts` → `TypingIndicator.tsx` önizleme metni · aynı tm 41 bundle'ı (`+11.8`, 02.9 satırı ile ortak kod) · test integration `customer-chat.test.ts` (sneak-peek yalnız-ajana fan-out, metin doğrulanır) + web `typing.test.ts`(5)/`TypingIndicator.test.tsx`(4) + rtm `typing.test.ts`(6) · OpenAPI `/customer/chat/typing` · tm 41 · §D31 |
 | 12.1–12.3  | **Copilot** (buton, ayrı KB, özet + yanıt yardımı)                                                     | Should (v1)    |                          ⬜                           |
-| 13.1       | Home dashboard                                                                                         | Should (v1)    |                          ⬜                           |
+| 13.1       | Home dashboard                                                                                         | Should (v1)    | ✅ aktivasyon checklist (5 adım, gerçek state'ten türetilir: website/teammate/customize/canned/AI-agent) + canlı gerçek-zaman kartları (visitors_online = açık chat ∪ 30dk ziyaret UNION, ongoing_chats, agents_online = accepting_chats) + haftalık performans (bu hafta vs geçen: new chats/resolved/CSAT WoW delta) — `GET /home` (`reports_read`) `routes/home.ts` → `services/home/home-service.ts` (RLS + defansif license filtresi; weekly chats/resolved = Reports overview chats/closed ile aynı created-in-window taban, ADR-09 automated split'e dokunmaz) · şema `@nexa/types` `HomeDashboard` · OpenAPI `/home` (contract-parity ✅) · web `HomePage.tsx` + saf `dashboard.ts` kart view-model'leri · rota `/app/home` + nav "Home" (`nav.home` tr/en) · test unit `dashboard.test.ts`(8)+`HomePage.test.tsx`(4) [kartlar] + integration `home.test.ts`(13) [canlı sayaç + tenant isolation + scope] · tm 60 · §D34 |
 | 13.6       | Omnichannel Ticketing / HelpDesk katmanı                                                               | Should (v1)    |                          ⬜                           |
 | 13.7       | Mobil uygulamalar                                                                                      | Should (v1)    |       🔒 web-öncelikli (PRD §11.1/8 ile hizalı)       |
 
@@ -1903,6 +1903,26 @@ görüneceği en son yerdir.
   `settings.test.ts` (49) + bundle P3 bütçesi tm 57 kapanışında yeşildi ve bu tur yalnız markdown düzenlemesi
   yapıldığından etkilenmez. tm 57 (`done`) geri açılmadı — yeni görev gerekmedi (iş bitmiş). → §4.3'te 540
   `⬜`→`✅` + Nerede kanıtı yazıldı. Yalnız bu satıra dokunuldu.
+
+- **D34 (13.1-a · tm 60 · 2026-07-26 · yeni teslim):** MOD-13 Home dashboard sıfırdan inşa edildi
+  (§4.3 satır 543 `⬜`→`✅`). Üç bölüm tek okumada (`GET /home`, `reports_read`): **(1) aktivasyon
+  checklist** — 5 adım stored değil _türetilir_ (website var mı / >1 üyelik ya da bekleyen davet /
+  widget_settings / canned / ai_agent), her adımın `done`'u ilgili şey gerçekten var olduğu için doğru,
+  bayatlayamaz. **(2) canlı kartlar (KK "canlı gerçek-zaman kartları")** — `visitors_online` = açık chat
+  ∪ son 30 dk ziyaret **UNION distinct** (uzun sohbet taze page-view'süz de sayılır, çift saymaz),
+  `ongoing_chats` = aktif chat, `agents_online` = `accepting_chats & NOT suspended` (widget'ın "online"
+  tanımıyla aynı). **(3) haftalık performans** — son 7 gün vs önceki 7; `chats`/`resolved` **Reports
+  overview'ın `chats`/`closed`'ı ile aynı created-in-window taban** (bir tık ötedeki tam raporla asla
+  çelişmez) — bilinçli olarak ADR-09 manual/assisted/automated split'ine DOKUNULMADI (o tek yerinde,
+  reports route'unda kalır). **Kapsam kararı:** ölçüm reports-flavour olduğundan endpoint `reports_read`
+  kapılı (Reports ile aynı kitle); plain agent nav'dan Home'a tıklarsa 403 → dürüst EmptyState. İndeks
+  yönlendirmesi inbox'ta bırakıldı (landing değişmedi, e2e/plain-agent bozulmaz). **DoD (bu tur, exit 0):**
+  typecheck ✅ · lint ✅ · seri `turbo run test --concurrency=1` ✅ **api 834/834** (+13 `home.test.ts`:
+  scope 200/403, canlı sayaç [union distinct / stale-drop / closed-hariç / accepting-only], activation
+  türetme, weekly WoW, tenant isolation) + web 307/307 (+8 `dashboard.test.ts` + 4 `HomePage.test.tsx`) +
+  `contract-parity` ✅ (/home belgeli+kayıtlı) · build ✅. KK "unit (kartlar) + integration (canlı sayaç)"
+  birebir karşılandı. **Kapsam notu:** 03.1.1 bağımlılığı (✅) traffic/ziyaret altyapısı; 13.6-a HelpDesk
+  ayrı `[MAX]` task, bu pencerede kapsam dışı.
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

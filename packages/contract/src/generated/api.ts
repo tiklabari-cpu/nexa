@@ -1994,6 +1994,120 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/apps': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List marketplace apps and their connection status
+     * @description Every catalogue card, each flagged with whether this workspace has connected it.
+     */
+    get: operations['listApps'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/apps/{appId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        appId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Disconnect an app
+     * @description Removes the installation. A no-op app that was never connected is a 404.
+     */
+    delete: operations['disconnectApp'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/apps/{appId}/oauth/start': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        appId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Begin the (mock) OAuth flow for an app
+     * @description Returns an authorize URL to send the user to and an opaque `state` to hand
+     *     back on the callback. The flow is mocked (MASTER-PROMPT §5) — no real
+     *     provider is contacted.
+     */
+    post: operations['startAppOAuth'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/apps/{appId}/oauth/callback': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        appId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Complete the (mock) OAuth flow and connect the app
+     * @description Exchanges the `state` from the start call, plus the authorization `code`
+     *     the (mock) provider returned, for a connected installation. A state that
+     *     is tampered with, expired, or for another app is refused.
+     */
+    post: operations['completeAppOAuth'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/chats/{chatId}/apps': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Connected apps' data for this conversation's customer
+     * @description For each app the workspace has connected, the (mock) data it exposes about
+     *     this conversation's customer — what the agent reads in the Details pane.
+     *     Empty when nothing is connected.
+     */
+    get: operations['listChatApps'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/onboarding/state': {
     parameters: {
       query?: never;
@@ -3589,6 +3703,58 @@ export interface components {
       values: {
         [key: string]: string | null;
       };
+    };
+    /** @description A connected marketplace app (FR-MOD-09.1), as stored for a workspace. */
+    AppInstallation: {
+      app_id: string;
+      /** @enum {string} */
+      status: 'connected';
+      /** @description The account label the (mock) OAuth grant returned. */
+      external_account: string;
+      /** @description Permissions granted — the app's requested scopes. */
+      scopes: string[];
+      /** Format: date-time */
+      connected_at: string;
+    };
+    /**
+     * @description A marketplace card (FR-MOD-09.1) joined with whether this workspace has
+     *     connected it. `installation` carries the connected account when
+     *     `installed` is true, and is null otherwise.
+     */
+    AppListItem: {
+      id: string;
+      name: string;
+      /** @enum {string} */
+      category: 'crm' | 'ecommerce' | 'payments' | 'marketing' | 'productivity';
+      /** @enum {string} */
+      provider: 'oauth' | 'api_key';
+      icon: string;
+      description: string;
+      /** @description Permissions the app asks for, shown on the consent step. */
+      scopes: string[];
+      installed: boolean;
+      installation: components['schemas']['AppInstallation'] | null;
+    };
+    /** @description The result of starting the (mock) OAuth flow (FR-MOD-09.1). */
+    AppOAuthStart: {
+      /** @description Where to send the user to grant permission (mocked). */
+      authorize_url: string;
+      /** @description Opaque value echoed back on the callback to bind the two steps. */
+      state: string;
+    };
+    /**
+     * @description A connected app's (mock) data for one conversation's customer
+     *     (FR-MOD-09.1) — what the agent reads in the Details pane.
+     */
+    AppChatData: {
+      app_id: string;
+      app_name: string;
+      icon: string;
+      data_label: string;
+      fields: {
+        label: string;
+        value: string;
+      }[];
     };
     /**
      * @description The account and the workspaces it may sign in to. Deliberately carries
@@ -7890,6 +8056,143 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listApps: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The marketplace catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AppListItem'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  disconnectApp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        appId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Disconnected */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  startAppOAuth: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        appId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Where to send the user, and the state to echo back */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AppOAuthStart'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  completeAppOAuth: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        appId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          state: string;
+          code: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The now-connected app */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AppListItem'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listChatApps: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        chatId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description One entry per connected app */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AppChatData'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

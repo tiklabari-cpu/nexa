@@ -39,6 +39,8 @@ tags:
     description: Asynchronous follow-up work — the other half of "total cases".
   - name: Configuration
     description: Groups, agents, tags, canned responses, routing, channels.
+  - name: Apps
+    description: Marketplace of third-party integrations, connected through a (mock) OAuth flow.
   - name: Playbook
     description: AI agents, skills and the knowledge they answer from.
   - name: Copilot
@@ -241,6 +243,17 @@ paths:
     $ref: "./paths/settings.yaml#/chatTimeout"
   /settings/widget:
     $ref: "./paths/settings.yaml#/widgetSettings"
+
+  /settings/apps:
+    $ref: "./paths/apps.yaml#/apps"
+  /settings/apps/{appId}:
+    $ref: "./paths/apps.yaml#/app"
+  /settings/apps/{appId}/oauth/start:
+    $ref: "./paths/apps.yaml#/appOAuthStart"
+  /settings/apps/{appId}/oauth/callback:
+    $ref: "./paths/apps.yaml#/appOAuthCallback"
+  /chats/{chatId}/apps:
+    $ref: "./paths/apps.yaml#/chatApps"
 
   /onboarding/state:
     $ref: "./paths/onboarding.yaml#/state"
@@ -1290,6 +1303,82 @@ components:
           additionalProperties:
             type: string
             nullable: true
+
+    AppInstallation:
+      type: object
+      description: A connected marketplace app (FR-MOD-09.1), as stored for a workspace.
+      required: [app_id, status, external_account, scopes, connected_at]
+      properties:
+        app_id: { type: string }
+        status: { type: string, enum: [connected] }
+        external_account:
+          type: string
+          description: The account label the (mock) OAuth grant returned.
+        scopes:
+          type: array
+          items: { type: string }
+          description: Permissions granted — the app's requested scopes.
+        connected_at: { type: string, format: date-time }
+
+    AppListItem:
+      type: object
+      description: |
+        A marketplace card (FR-MOD-09.1) joined with whether this workspace has
+        connected it. `installation` carries the connected account when
+        `installed` is true, and is null otherwise.
+      required: [id, name, category, provider, icon, description, scopes, installed, installation]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        category:
+          type: string
+          enum: [crm, ecommerce, payments, marketing, productivity]
+        provider:
+          type: string
+          enum: [oauth, api_key]
+        icon: { type: string }
+        description: { type: string }
+        scopes:
+          type: array
+          items: { type: string }
+          description: Permissions the app asks for, shown on the consent step.
+        installed: { type: boolean }
+        installation:
+          oneOf:
+            - { $ref: "#/components/schemas/AppInstallation" }
+            - { type: "null" }
+
+    AppOAuthStart:
+      type: object
+      description: The result of starting the (mock) OAuth flow (FR-MOD-09.1).
+      required: [authorize_url, state]
+      properties:
+        authorize_url:
+          type: string
+          description: Where to send the user to grant permission (mocked).
+        state:
+          type: string
+          description: Opaque value echoed back on the callback to bind the two steps.
+
+    AppChatData:
+      type: object
+      description: |
+        A connected app's (mock) data for one conversation's customer
+        (FR-MOD-09.1) — what the agent reads in the Details pane.
+      required: [app_id, app_name, icon, data_label, fields]
+      properties:
+        app_id: { type: string }
+        app_name: { type: string }
+        icon: { type: string }
+        data_label: { type: string }
+        fields:
+          type: array
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label: { type: string }
+              value: { type: string }
 
     Session:
       type: object

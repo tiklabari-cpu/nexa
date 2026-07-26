@@ -1,6 +1,7 @@
 export * from './domain.js';
 export * from './template-variables.js';
 export * from './custom-fields.js';
+export * from './apps.js';
 export * from './errors.js';
 export * from './scopes.js';
 export * from './rtm.js';

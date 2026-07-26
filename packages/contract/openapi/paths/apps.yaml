@@ -1,0 +1,140 @@
+# Apps marketplace — FR-MOD-09.1.
+#
+# A directory of third-party integrations. A card is connected through a
+# (mocked) OAuth flow: start returns an authorize URL and a state, the callback
+# exchanges that state for a connected installation. Once connected, the app's
+# data is read into a conversation through GET /chats/{chatId}/apps. Managed on
+# the workspace-admin scopes (`access_rules:ro`/`:rw`) — connecting a third-party
+# app is an admin act; the in-chat read is on the chat scope an agent already has.
+
+apps:
+  get:
+    tags: [Apps]
+    operationId: listApps
+    summary: List marketplace apps and their connection status
+    description: Every catalogue card, each flagged with whether this workspace has connected it.
+    responses:
+      "200":
+        description: The marketplace catalogue
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AppListItem" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+appOAuthStart:
+  parameters:
+    - name: appId
+      in: path
+      required: true
+      schema: { type: string }
+  post:
+    tags: [Apps]
+    operationId: startAppOAuth
+    summary: Begin the (mock) OAuth flow for an app
+    description: |
+      Returns an authorize URL to send the user to and an opaque `state` to hand
+      back on the callback. The flow is mocked (MASTER-PROMPT §5) — no real
+      provider is contacted.
+    responses:
+      "200":
+        description: Where to send the user, and the state to echo back
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AppOAuthStart" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+appOAuthCallback:
+  parameters:
+    - name: appId
+      in: path
+      required: true
+      schema: { type: string }
+  post:
+    tags: [Apps]
+    operationId: completeAppOAuth
+    summary: Complete the (mock) OAuth flow and connect the app
+    description: |
+      Exchanges the `state` from the start call, plus the authorization `code`
+      the (mock) provider returned, for a connected installation. A state that
+      is tampered with, expired, or for another app is refused.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [state, code]
+            properties:
+              state: { type: string, minLength: 1 }
+              code: { type: string, minLength: 1 }
+    responses:
+      "200":
+        description: The now-connected app
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AppListItem" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+app:
+  parameters:
+    - name: appId
+      in: path
+      required: true
+      schema: { type: string }
+  delete:
+    tags: [Apps]
+    operationId: disconnectApp
+    summary: Disconnect an app
+    description: Removes the installation. A no-op app that was never connected is a 404.
+    responses:
+      "204": { description: Disconnected }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+chatApps:
+  parameters:
+    - name: chatId
+      in: path
+      required: true
+      schema: { type: string }
+  get:
+    tags: [Chats]
+    operationId: listChatApps
+    summary: Connected apps' data for this conversation's customer
+    description: |
+      For each app the workspace has connected, the (mock) data it exposes about
+      this conversation's customer — what the agent reads in the Details pane.
+      Empty when nothing is connected.
+    responses:
+      "200":
+        description: One entry per connected app
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AppChatData" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

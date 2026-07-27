@@ -6,6 +6,28 @@
 
 ## Task log (newest-first)
 
+### E2E bakım (düzeltme penceresi) — çalışma ağacındaki commit'siz değişiklikler — done — 2026-07-28 UTC
+
+- Kapsam: yeni özellik yok; yalnız `docs/plan-expand-audit` üzerinde biriken 33 commit'siz dosyayı
+  incele → göreve ata → anlamlı Conventional Commit'lere böl. (Diğer 2 açık bulgu — 1 info, 1 critical
+  — kapsam dışı, dokunulmadı.)
+- Yapıldı:
+  - `test(e2e)` (64820f7): `demo-flow.spec.ts` + `settings.spec.ts` composer placeholder seçicisi
+    `'Type your reply…'` → `'Type your reply'`. Gerekçe: Composer artık
+    `"Type your reply, or press Space for suggestions…"` yazıyor (`apps/web/.../Composer.tsx:422`);
+    ellipsis'li eski seçici substring olarak eşleşmiyordu. demo-flow arşiv assertion'ı da artık
+    composer'ın gerçekten kaybolduğunu doğruluyor (eski hali vacuously geçiyordu).
+  - `chore(e2e)` (801067b): 31 `apps/e2e/kanit/*.png` kanıt görüntüsü güncel UI ile yeniden üretildi
+    (tam-süit e2e refresh). Yalnız görsel; test mantığı değişmedi.
+- Doğrulama: spec değişikliği kaynak-incelemesiyle doğrulandı (Playwright string matcher'ları
+  case-insensitive substring). Bu düzeltme penceresi tam DoD/e2e kapısını **koşmadı** (kapsam yalnız
+  commit'leme); e2e/DoD kapısı bir sonraki ilgili özellik penceresinde çalışır.
+- **Commit'lenMEDİ (bilinçli):** `.parked-playbook/` (SkillBrowser/RecommendedSkills/skill-filters,
+  FR-MOD-05.3/05.4) — bu pencereye ait değil, yarım/deneysel parked iş. İzlenmiyor, dokunulmadı.
+  İlgili task açıldığında `apps/web/src/...` altına taşınıp commit'lenmeli.
+- Sonraki pencereye not: force-push/history-rewrite yapılmadı (CONVENTIONS §2). Kalan tek untracked
+  öğe `.parked-playbook/`.
+
 ### 53.3 — 08.8.1-a · Apps (marketplace) girişi — Settings→Integrations kapısı — done — 2026-07-27 UTC
 
 - Kapsam: FR-MOD-08.8.1 (`Should v1`) `[XHIGH]` — KK (birebir) _"Üçüncü parti dizin (detay MOD-09)"_;

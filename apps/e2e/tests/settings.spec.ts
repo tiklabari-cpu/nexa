@@ -331,7 +331,7 @@ test.describe('composer shortcuts', () => {
 
       // 3. The agent types the shortcut. No reload anywhere — the composer's
       //    cache was invalidated when Settings saved.
-      const composer = agentPage.getByPlaceholder('Type your reply…');
+      const composer = agentPage.getByPlaceholder('Type your reply');
       await composer.fill(`#${shortcut}`);
 
       const picker = agentPage.getByRole('listbox', { name: 'Saved replies' });
@@ -365,7 +365,7 @@ test.describe('composer shortcuts', () => {
       .first()
       .click();
 
-    const composer = agentPage.getByPlaceholder('Type your reply…');
+    const composer = agentPage.getByPlaceholder('Type your reply');
     await composer.fill('see example.com/page#anchor');
     await expect(agentPage.getByRole('listbox', { name: 'Saved replies' })).toHaveCount(0);
 

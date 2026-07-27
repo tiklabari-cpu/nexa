@@ -55,7 +55,7 @@ test('a visitor conversation reaches the agent, is answered, and is archived', a
     // --- Reply --------------------------------------------------------------
     const answer = `Bring it in and we will true the rotor — ${Date.now()}`;
     await agent.getByRole('radio', { name: 'Reply' }).click();
-    await agent.getByPlaceholder('Type your reply…').fill(answer);
+    await agent.getByPlaceholder('Type your reply').fill(answer);
     await agent.getByRole('button', { name: 'Send' }).click();
 
     await expect(widgetFrame(visitor).getByRole('log', { name: 'Conversation' })).toContainText(
@@ -81,7 +81,7 @@ test('a visitor conversation reaches the agent, is answered, and is archived', a
 
     // --- Archive ------------------------------------------------------------
     await agent.getByRole('button', { name: /Archive conversation/i }).click();
-    await expect(agent.locator('main')).not.toContainText('Type your reply…');
+    await expect(agent.locator('main')).not.toContainText('Type your reply');
   } finally {
     await visitorContext.close();
     await agentContext.close();

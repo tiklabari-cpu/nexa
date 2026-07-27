@@ -19,6 +19,7 @@ import {
   APP_CATALOG,
   appChatData,
   findApp,
+  isChannelApp,
   type AppCatalogEntry,
   type AppChatData,
   type AppListItem,
@@ -51,6 +52,19 @@ function requireApp(appId: string): AppCatalogEntry {
   return entry;
 }
 
+/**
+ * The catalogue entry for an id that can be connected *here* (09.2). A
+ * channel-typed app is managed in Settings → Channels, not the marketplace, so
+ * the connect/disconnect paths refuse it — one surface owns a channel's state.
+ */
+function requireConnectableApp(appId: string): AppCatalogEntry {
+  const entry = requireApp(appId);
+  if (isChannelApp(entry)) {
+    throw ApiError.validation('This integration is a channel — manage it in Settings → Channels.');
+  }
+  return entry;
+}
+
 /** A catalogue card joined with this workspace's connection, if any. */
 function toListItem(entry: AppCatalogEntry, row: InstallationRow | null): AppListItem {
   return {
@@ -61,6 +75,7 @@ function toListItem(entry: AppCatalogEntry, row: InstallationRow | null): AppLis
     icon: entry.icon,
     description: entry.description,
     scopes: [...entry.scopes],
+    channel: entry.channel ?? null,
     installed: row !== null,
     installation: row
       ? {
@@ -94,7 +109,7 @@ export class AppService {
    * Pure — no write happens until the app is actually connected.
    */
   oauthStart(tenant: TenantContext, appId: string): AppOAuthStart {
-    const entry = requireApp(appId);
+    const entry = requireConnectableApp(appId);
     const payload: StatePayload = {
       a: entry.id,
       l: String(tenant.licenseId),
@@ -118,7 +133,7 @@ export class AppService {
     appId: string,
     input: { state: string; code: string },
   ): Promise<AppListItem> {
-    const entry = requireApp(appId);
+    const entry = requireConnectableApp(appId);
 
     const payload = this.#verify(input.state);
     if (!payload || payload.a !== entry.id || payload.l !== String(tenant.licenseId)) {
@@ -143,7 +158,7 @@ export class AppService {
 
   /** Disconnect an app. Returns the number of rows removed — 0 means not connected. */
   async disconnect(tx: TenantClient, tenant: TenantContext, appId: string): Promise<number> {
-    requireApp(appId);
+    requireConnectableApp(appId);
     const { count } = await tx.appInstallation.deleteMany({
       where: { licenseId: tenant.licenseId, appId },
     });
@@ -168,7 +183,9 @@ export class AppService {
     const seed = chat.customer.email ?? chat.customer.id;
     return installed
       .map((row) => findApp(row.appId))
-      .filter((entry): entry is AppCatalogEntry => entry !== undefined)
+      // Only data apps surface in-chat; channel apps never reach here (they are
+      // not connectable in the marketplace), but keep the filter explicit.
+      .filter((entry): entry is AppCatalogEntry => entry !== undefined && !isChannelApp(entry))
       .map((entry) => appChatData(entry, seed));
   }
 

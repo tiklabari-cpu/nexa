@@ -1,10 +1,45 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-27 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı; tm 33/34/35/37 + 53.1 burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-07-27 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı; tm 33/34/35/37 + 53.1/53.2 burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
 
 ## Task log (newest-first)
+
+### 53.2 — 09.2-a · Apps entegrasyon dizini (15–20) + kanal çapraz-linki — done — 2026-07-27 UTC
+
+- Kapsam: FR-MOD-09.2 (`Should v1`) `[XHIGH]` — KK (birebir) _"Her biri OAuth/API key; kanal-tipli
+  olanlar Channels'ta da yönetilir"_; test stratejisi **unit** ("liste + kanal-tipli çapraz. DoD tam").
+  Bağımlılık 53.1 (09.1-a, ✅). PLAN satır 539 (09.2) `⬜`→`✅` + §D50.
+- **Resume kapanışı:** slice bu pencereden önce çalışma ağacında hazırdı (types/servis/web/OpenAPI +
+  testler yazılıydı; tasks.json 53.2 in-progress). Bu pencere **kod yazmadı** → mevcut işi doğruladı,
+  tam DoD kapısını koştu, PLAN/HANDOFF'u kapadı, commit+push+done.
+- Yapıldı (mevcut işin doğrulanıp kapatılması):
+  - **Katalog** `@nexa/types/apps.ts` `APP_CATALOG` 09.1'in 5 kartını **20**'ye büyüttü: 10 veri app'i
+    iki sağlayıcıyı da kapsıyor (OAuth: Salesforce/PayPal/Slack/Jira · API-key:
+    Intercom/Zendesk/WooCommerce/Magento/Klaviyo/Segment) + 5 kanal-tipli kart
+    (WhatsApp/Messenger/Instagram/Telegram/SMS-Twilio). Yeni kategoriler support/analytics/channels.
+  - **Kanal çapraz-linki:** kanal-tipli app `channel: ChannelType` taşır, Settings→Channels'ta kurulur →
+    `dataLabel`/`dataFields` opsiyonel (kanal app'i in-chat veri taşımaz), `isChannelApp`/`channelApps`/
+    `connectableApps` bölücüleri + `AppListItem.channel`. **Servis** `app-service.ts` `requireConnectableApp`
+    kanal app'inin OAuth-start/callback/disconnect'ini 400 ile reddeder (durumu tek yüzey yönetir);
+    `chatData` yalnız veri app'lerini yüzeye çıkarır. **Web** `AppsMarketplace.tsx` `ChannelAppCard` =
+    "In Channels" rozeti + "Manage in Channels" linki (`/app/settings#section-channels`), Connect yok.
+  - **OpenAPI** `AppListItem`: kategori enum (+support/analytics/channels) + zorunlu `channel`
+    (CHANNEL_TYPES ile birebir | null) → client yeniden üretildi (idempotent). Yeni API yolu yok.
+- Doğrulama (DoD kapısı, exit 0): typecheck 11/11 · lint 8/8 · build 7/7 · db:check-drift temiz (migration
+  yok) · test:unit (types `apps.test.ts` +2 [56] · web `AppsMarketplace.test.tsx` +1 [444]) · test:integration
+  (api **779**/38 dosya `--concurrency=1` [[nexa-test-gate-parallel-db]]) incl. `apps.test.ts` **8** (+1: tam
+  liste 15–20 · kanal app channel/category/installed=false · veri app channel=null · kanal OAuth+disconnect
+  400) + contract-parity 5/5 + regresyon yok · rtm 42. **Not:** `pnpm -w test` api+rtm DB süitlerini paralel
+  koşup Postgres deadlock (40P01) verir — gerçek hata değil; paket-paket seri koşuldu (api 958 · rtm 71 yeşil).
+- Varsayımlar: kanal-tipli app marketplace'te **keşif** için listelenir ama bağlantısı yoktur (Channels
+  yönetir) → `installed` her zaman false; iki yüzey bir kanalın durumu için çekişmez (servis 400 kapısı +
+  web link-yerine-Connect). Kanal sağlayıcı değerleri `CHANNEL_TYPES` ile birebir (yeni kanal eklenirse
+  OpenAPI enum'u da güncellenmeli).
+- Sonraki pencereye not: parent **tm 53 hâlâ in-progress** — kardeş **53.3 (08.8.1-a, satır 537)**
+  Settings→Integrations'tan marketplace girişi **pending**; o bitince parent done. `.parked-playbook/`
+  (SkillBrowser/RecommendedSkills, FR-MOD-05.3/05.4) bu task'a ait değil — dokunulmadı, izlenmiyor.
 
 ### 53.1 — 09.1-a · Apps Marketplace + OAuth (MOCK) — done — 2026-07-27 UTC
 

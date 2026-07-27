@@ -24,6 +24,8 @@ interface AppInstallation {
 interface AppListItem {
   id: string;
   name: string;
+  category: string;
+  channel: string | null;
   installed: boolean;
   installation: AppInstallation | null;
 }
@@ -184,6 +186,31 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
   it('404s the OAuth flow for an app that does not exist', async () => {
     const started = await server.post('/settings/apps/not-an-app/oauth/start', {}, auth(adminToken));
     expect(started.statusCode).toBe(404);
+  });
+
+  // --- Channel-typed apps: managed in Channels, not connected here (09.2) -----
+
+  it('lists the full directory and flags channel-typed apps, refusing to connect them here', async () => {
+    const items = await list(adminToken);
+    // The 09.2 directory is the full 15–20-card list.
+    expect(items.length).toBeGreaterThanOrEqual(15);
+    expect(items.length).toBeLessThanOrEqual(20);
+
+    // A channel-typed card carries its channel and sits under the Channels section.
+    const whatsapp = findItem(items, 'whatsapp');
+    expect(whatsapp.channel).toBe('whatsapp');
+    expect(whatsapp.category).toBe('channels');
+    expect(whatsapp.installed).toBe(false);
+
+    // A data app carries no channel — it is connected in the marketplace.
+    expect(findItem(items, APP).channel).toBeNull();
+
+    // A channel is set up in Settings → Channels, so the marketplace OAuth flow
+    // and disconnect both refuse it (KK "kanal-tipli olanlar Channels'ta da").
+    const started = await server.post('/settings/apps/whatsapp/oauth/start', {}, auth(adminToken));
+    expect(started.statusCode).toBe(400);
+    const removed = await server.del('/settings/apps/whatsapp', auth(adminToken));
+    expect(removed.statusCode).toBe(400);
   });
 
   // --- Scope split -----------------------------------------------------------

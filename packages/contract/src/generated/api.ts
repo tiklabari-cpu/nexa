@@ -3717,21 +3717,47 @@ export interface components {
       connected_at: string;
     };
     /**
-     * @description A marketplace card (FR-MOD-09.1) joined with whether this workspace has
-     *     connected it. `installation` carries the connected account when
-     *     `installed` is true, and is null otherwise.
+     * @description A marketplace card (FR-MOD-09.1 / 09.2) joined with whether this
+     *     workspace has connected it. `installation` carries the connected account
+     *     when `installed` is true, and is null otherwise. `channel` is set for a
+     *     channel-typed app managed in Settings → Channels (09.2), which is set up
+     *     there rather than connected here — for those, `installed` is always false.
      */
     AppListItem: {
       id: string;
       name: string;
       /** @enum {string} */
-      category: 'crm' | 'ecommerce' | 'payments' | 'marketing' | 'productivity';
+      category:
+        | 'crm'
+        | 'support'
+        | 'ecommerce'
+        | 'payments'
+        | 'marketing'
+        | 'productivity'
+        | 'analytics'
+        | 'channels';
       /** @enum {string} */
       provider: 'oauth' | 'api_key';
       icon: string;
       description: string;
       /** @description Permissions the app asks for, shown on the consent step. */
       scopes: string[];
+      /**
+       * @description The channel this app is managed as in Settings → Channels, or null
+       *     for a data app connected in the marketplace (09.2).
+       */
+      channel:
+        | (
+            | 'website_widget'
+            | 'email'
+            | 'messenger'
+            | 'twilio'
+            | 'whatsapp'
+            | 'instagram'
+            | 'telegram'
+            | 'chat_page'
+          )
+        | null;
       installed: boolean;
       installation: components['schemas']['AppInstallation'] | null;
     };

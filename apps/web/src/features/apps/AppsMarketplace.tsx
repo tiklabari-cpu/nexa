@@ -12,6 +12,7 @@
  * decided here, so a card can never claim to be connected when it is not.
  */
 import { useState, type ReactElement } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AppListItem, AppOAuthStart } from '@nexa/types';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
@@ -21,13 +22,19 @@ import { useApiClient } from '../../lib/auth-store.js';
 
 const APPS_KEY = ['settings', 'apps'] as const;
 
+/** Where a channel-typed card sends you to set the channel up (09.2 cross-link). */
+const CHANNELS_HREF = '/app/settings#section-channels';
+
 /** Human labels for the category chip. */
 const CATEGORY_LABEL: Record<AppListItem['category'], string> = {
   crm: 'CRM',
+  support: 'Support',
   ecommerce: 'E-commerce',
   payments: 'Payments',
   marketing: 'Marketing',
   productivity: 'Productivity',
+  analytics: 'Analytics',
+  channels: 'Channels',
 };
 
 export function AppsMarketplace(): ReactElement {
@@ -55,7 +62,51 @@ export function AppsMarketplace(): ReactElement {
   );
 }
 
+/**
+ * A card either connects here (a data app) or is set up in Channels (a
+ * channel-typed app, 09.2). The split keeps the OAuth hooks off the channel
+ * path, which has no connection of its own to manage.
+ */
 function AppCard({ app }: { app: AppListItem }): ReactElement {
+  return app.channel ? <ChannelAppCard app={app} /> : <DataAppCard app={app} />;
+}
+
+/**
+ * A channel-typed integration (WhatsApp, Messenger, …): the marketplace lists it
+ * for discovery but it is connected in Settings → Channels, so the card links
+ * there instead of offering Connect (KK 09.2 "kanal-tipli olanlar Channels'ta
+ * da yönetilir").
+ */
+function ChannelAppCard({ app }: { app: AppListItem }): ReactElement {
+  return (
+    <Card>
+      <div data-testid={`app-${app.id}`} className="flex h-full flex-col gap-2 p-4">
+        <div className="flex items-center gap-2">
+          <span aria-hidden="true" className="text-xl">
+            {app.icon}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">{app.name}</span>
+          <StatusDot tone="info" label="In Channels" />
+        </div>
+
+        <span className="self-start rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
+          {CATEGORY_LABEL[app.category]}
+        </span>
+
+        <p className="flex-1 text-2xs text-content-secondary">{app.description}</p>
+
+        <Link
+          to={CHANNELS_HREF}
+          className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+        >
+          Manage in Channels
+        </Link>
+      </div>
+    </Card>
+  );
+}
+
+function DataAppCard({ app }: { app: AppListItem }): ReactElement {
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [consenting, setConsenting] = useState(false);

@@ -1323,16 +1323,18 @@ components:
     AppListItem:
       type: object
       description: |
-        A marketplace card (FR-MOD-09.1) joined with whether this workspace has
-        connected it. `installation` carries the connected account when
-        `installed` is true, and is null otherwise.
-      required: [id, name, category, provider, icon, description, scopes, installed, installation]
+        A marketplace card (FR-MOD-09.1 / 09.2) joined with whether this
+        workspace has connected it. `installation` carries the connected account
+        when `installed` is true, and is null otherwise. `channel` is set for a
+        channel-typed app managed in Settings → Channels (09.2), which is set up
+        there rather than connected here — for those, `installed` is always false.
+      required: [id, name, category, provider, icon, description, scopes, channel, installed, installation]
       properties:
         id: { type: string }
         name: { type: string }
         category:
           type: string
-          enum: [crm, ecommerce, payments, marketing, productivity]
+          enum: [crm, support, ecommerce, payments, marketing, productivity, analytics, channels]
         provider:
           type: string
           enum: [oauth, api_key]
@@ -1342,6 +1344,14 @@ components:
           type: array
           items: { type: string }
           description: Permissions the app asks for, shown on the consent step.
+        channel:
+          description: |
+            The channel this app is managed as in Settings → Channels, or null
+            for a data app connected in the marketplace (09.2).
+          oneOf:
+            - type: string
+              enum: [website_widget, email, messenger, twilio, whatsapp, instagram, telegram, chat_page]
+            - type: "null"
         installed: { type: boolean }
         installation:
           oneOf:

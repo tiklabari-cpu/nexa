@@ -7,6 +7,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
@@ -24,7 +25,11 @@ const { AppsMarketplace } = await import('./AppsMarketplace.js');
 
 function renderComponent(ui: ReactElement): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>,
+  );
 }
 
 const notConnected = {
@@ -49,6 +54,20 @@ const connected = {
     scopes: ['contacts.read', 'deals.read'],
     connected_at: '2026-07-27T00:00:00.000Z',
   },
+};
+
+// A channel-typed app (09.2): managed in Channels, not connected in the marketplace.
+const channelApp = {
+  id: 'whatsapp',
+  name: 'WhatsApp',
+  category: 'channels',
+  provider: 'oauth',
+  icon: '📱',
+  description: 'Answer WhatsApp messages. Connected in Settings → Channels.',
+  scopes: ['whatsapp_business_messaging'],
+  channel: 'whatsapp',
+  installed: false,
+  installation: null,
 };
 
 describe('AppsMarketplace', () => {
@@ -115,5 +134,18 @@ describe('AppsMarketplace', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Disconnect' }));
     expect(api.delete).toHaveBeenCalledWith('/settings/apps/hubspot');
+  });
+
+  // KK 09.2: a channel-typed card sends you to Channels instead of Connect.
+  it('links a channel-typed app to Channels instead of offering Connect', async () => {
+    api.get.mockResolvedValue({ items: [channelApp] });
+    renderComponent(<AppsMarketplace />);
+
+    expect(await screen.findByText('WhatsApp')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Manage in Channels' });
+    expect(link).toHaveAttribute('href', '/app/settings#section-channels');
+    // No marketplace connect for a channel — it is set up in Channels.
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull();
+    expect(screen.getByText('In Channels')).toBeInTheDocument();
   });
 });

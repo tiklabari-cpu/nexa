@@ -1397,10 +1397,10 @@
             "description": "Kart → izin/OAuth akışı; bağlanınca veri sohbette. PRD 09.1 (Should).",
             "details": "09.1-a Entegrasyon kartları gridi + OAuth akışı (MOCK). [XHIGH] PRD 09.1 (Should).\nKAPSAM: kart → izin/OAuth akışı (mock); bağlanınca veri sohbet içinde (Details/Copilot).\nKK (birebir): \"Kart → izin/OAuth akışı; bağlanınca veri sohbet içinde\". BAĞLAM: PLAN §4.4.10. Bağımlılık: tm 30.",
             "testStrategy": "integration: mock OAuth → kurulu görünür. DoD tam.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "53",
-            "updatedAt": "2026-07-26T22:28:13.452Z"
+            "updatedAt": "2026-07-27T00:14:36.270Z"
           },
           {
             "id": 2,
@@ -1429,7 +1429,7 @@
             "updatedAt": "2026-07-25T14:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-07-26T22:28:13.452Z"
+        "updatedAt": "2026-07-27T00:14:36.270Z"
       },
       {
         "id": "54",
@@ -1843,7 +1843,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-26T22:28:13.452Z",
+      "lastModified": "2026-07-27T00:14:36.271Z",
       "taskCount": 84,
       "completedCount": 61,
       "tags": [

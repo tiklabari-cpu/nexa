@@ -1,32 +1,47 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-26 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı; tm 33/34/35/37 burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-07-27 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı; tm 33/34/35/37 + 53.1 burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
 
 ## Task log (newest-first)
 
-### 53.1 — 09.1-a · Apps Marketplace + OAuth (MOCK) — in-progress (committed, DoD pending) — 2026-07-27 UTC
+### 53.1 — 09.1-a · Apps Marketplace + OAuth (MOCK) — done — 2026-07-27 UTC
 
-- Kapsam: FR-MOD-09.1 (`Should v1`) — kart → izin/OAuth akışı; bağlanınca veri sohbet içinde
-  (Details). Çalışma ağacında hazır duran slice **commit'lendi** (bu düzeltme penceresi yalnız
-  commit'leme yaptı; task **done DEĞİL** — DoD kapısı ve PLAN.md satırı henüz kapatılmadı).
-- Commit'ler (contract-first, atomik):
-  - `bdd10d8` feat(apps): katalog (`@nexa/types` APP_CATALOG + deterministik in-chat stub) +
-    OpenAPI path/şema, yeniden bundle'lanmış generated client.
-  - `6e83aed` feat(apps): mock OAuth connect/disconnect (HMAC-imzalı, CSRF-bağlı `state`) +
-    RLS-scoped `app_installations` tablosu/migration + Details panosunda bağlı-app verisi;
-    admin scope connect'i, agent chat scope in-chat okumayı gate'ler. Integration + unit test.
-  - `b6f1cb0` chore(taskmaster): tm 53 / 53.1 in-progress damgası.
-- Doğrulama: `pnpm -w typecheck` **yeşil (11/11, FULL TURBO)**. Diğer DoD kapıları (lint / unit /
-  integration / build / e2e / PLAN.md satırı) bu pencerede **çalıştırılmadı** — done kararı sıradaki
-  pencereye ait.
-- Commit EDİLMEYEN — parked: **`.parked-playbook/`** (SkillBrowser / RecommendedSkills /
-  skill-filters, FR-MOD-05.3/05.4 Playbook skill listesi). Apps Marketplace ile ilgisiz, ayrı bir
-  modülün deneysel işi; izlenmeyen bırakıldı. Sonraki pencere: ait olduğu task altında
-  `apps/web/src/features/playbook/`'e taşıyıp değerlendirsin ya da kalıcı sil.
-- Sonraki pencereye not: 53.1'i kapatmak için tam DoD kapısı + PLAN.md 09.1 satırı `⬜→✅`
-  gerekir. `.parked-playbook/` kapsam dışı bırakıldı — karar bekliyor.
+- Kapsam: FR-MOD-09.1 (`Should v1`) `[XHIGH]` — KK (birebir) _"Kart → izin/OAuth akışı; bağlanınca
+  veri sohbet içinde"_; test stratejisi **integration** ("mock OAuth → kurulu görünür. DoD tam").
+  Bağımlılık tm 30 (T6-a, ✅). PLAN satır 538 (09.1) `⬜`→`✅` + §D49.
+- **Resume kapanışı:** slice önceki pencerede yazılıp commit'lenmişti (`bdd10d8` katalog+OpenAPI ·
+  `6e83aed` mock OAuth + in-chat veri + migration · `29637c1` handoff), ama DoD kapısı yalnız
+  typecheck'e kadar koşulmuş, done kararı bu pencereye bırakılmıştı. Bu pencere **kod yazmadı** →
+  mevcut işi doğruladı, tam DoD kapısını koştu, PLAN/HANDOFF'u kapadı, push + done.
+- Yapıldı (mevcut işin doğrulanıp kapatılması):
+  - **Katalog** `@nexa/types/apps.ts` `APP_CATALOG` (grid/servis/test tek doğruluk kaynağı) +
+    deterministik `appChatData` in-chat stub. **Servis** `services/apps/app-service.ts` mock OAuth:
+    HMAC-imzalı `state` (CSRF-bağlı, 10dk TTL, constant-time verify) + idempotent upsert; cross-tenant
+    chat → 404. **Model** `app_installations` (RLS, license-scoped, migration `20260727090000`).
+  - **Rota** `/settings/apps` GET (`access_rules:ro/rw`) + OAuth start/callback + DELETE
+    (`access_rules:rw`) + `GET /chats/:id/apps` (agent `chats--all:ro`/`chats--access:ro`) — admin
+    connect'i, agent in-chat okumayı gate'ler. **Web** `AppsMarketplace.tsx` grid (connect/disconnect)
+    + `/app/apps` rota + DetailsPanel **additive** "Apps" bölümü (boşsa "No connected apps").
+    **OpenAPI** `apps.yaml` 5 yol + `App*` şema + client (contract-parity 5/5).
+- Doğrulama (DoD kapısı, exit 0): typecheck 11/11 · lint 8/8 · build 7/7 · test:unit (types
+  `apps.test.ts` 4 + web `AppsMarketplace.test.tsx` 3 + api 179/rtm 29/widget 52/types 54/ai-mock 56) ·
+  test:integration api **778**/38 dosya (`--concurrency=1` [[nexa-test-gate-parallel-db]]) incl.
+  `apps.test.ts` **7** (OAuth→kurulu · in-chat veri · disconnect+404 · tampered state reddi · yok→404 ·
+  ro-admin list-var connect-yok · cross-tenant izole) + contract-parity 5/5 + regresyon yok · rtm 42 ·
+  **drift temiz** (`db:check-drift`). E2E: task stratejisi integration (tam koştu); apps için browser
+  spec yok, web additive → mevcut e2e etkilenmez, full Playwright koşulmadı (D45/D46/D47 emsali).
+- Varsayımlar: OAuth **MOCK ama CSRF gerçek** (state HMAC-SHA256 imzalı, kurcalanan/replay reddedilir) —
+  MASTER-PROMPT §5; secret JWT signing key'den domain-ayrık türetilir (yeni env yok); in-chat veri
+  deterministik stub (müşteri kimliğine göre kararlı, canlı çağrı yok).
+- Sonraki pencereye not: **Yalnız 09.1-a teslim.** Kardeş **53.2 (09.2-a, 15–20 kart listesi)** +
+  **53.3 (08.8.1-a, Settings→marketplace girişi)** pending → PLAN satır 539/537 `⬜`, parent tm 53
+  `in-progress` kalır. Bu pencere ayrıca çalışma ağacında pre-existing duran **D48/02.1.2 (tm 37)** PLAN
+  düzeltmesini ayrı docs commit (`030699f`) ile kapadı (temiz ağaç, CONVENTIONS §5 kapsam ayrımı).
+  **`.parked-playbook/`** hâlâ untracked (SkillBrowser/RecommendedSkills, FR-MOD-05.3/05.4 — bu task'a
+  ait değil, dokunulmadı); sonraki pencere ait olduğu Playbook task'ında `features/playbook/`'e taşısın
+  ya da kalıcı silsin.
 
 ### 52 — 08.7.7-a · Forms builder (pre/post-chat) `[MAX]` — done — 2026-07-27 UTC
 

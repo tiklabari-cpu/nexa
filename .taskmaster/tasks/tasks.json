@@ -1385,7 +1385,7 @@
         "description": "Marketplace + OAuth app framework (MOCK). PRD MOD-09 (v1, Should).",
         "details": "PARENT. 09 Apps Marketplace + OAuth app framework (MOCK). 3 subtask. Bağlam: PLAN §4.4.10.\nBağımlılık: tm 30 (T6-a virtualization).",
         "testStrategy": "Subtask bazlı.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "30"
         ],
@@ -1421,15 +1421,15 @@
             "description": "Settings'ten marketplace girişi. PRD 08.8.1 (Should).",
             "details": "08.8.1-a Apps (marketplace) girişi. [XHIGH] PRD 08.8.1 (Should).\nKAPSAM: Settings → Integrations'tan marketplace girişi (detay MOD-09).\nKK (birebir): \"Üçüncü parti dizin (detay MOD-09)\". BAĞLAM: PLAN §4.4.9. Bağımlılık: 53.1.",
             "testStrategy": "unit: giriş → 09.1. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "53",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-27T00:59:53.934Z"
           }
         ],
-        "updatedAt": "2026-07-27T00:51:10.142Z"
+        "updatedAt": "2026-07-27T00:59:53.934Z"
       },
       {
         "id": "54",
@@ -1843,9 +1843,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-27T00:51:10.142Z",
+      "lastModified": "2026-07-27T00:59:53.934Z",
       "taskCount": 84,
-      "completedCount": 61,
+      "completedCount": 62,
       "tags": [
         "master"
       ]

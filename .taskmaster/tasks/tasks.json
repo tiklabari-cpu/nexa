@@ -1408,12 +1408,12 @@
             "description": "Her biri OAuth/API key; kanal-tipli çapraz. PRD 09.2 (Should).",
             "details": "09.2-a Tam entegrasyon listesi (15-20 kart). [XHIGH] PRD 09.2 (Should).\nKAPSAM: 15-20 kart; her biri OAuth/API key; kanal-tipli olanlar Channels'ta da.\nKK (birebir): \"Her biri OAuth/API key; kanal-tipli olanlar Channels'ta da yönetilir\". BAĞLAM: PLAN §4.4.10. Bağımlılık: 53.1.",
             "testStrategy": "unit: liste + kanal-tipli çapraz. DoD tam.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "53",
-            "updatedAt": "2026-07-25T14:00:00.000Z"
+            "updatedAt": "2026-07-27T00:51:10.142Z"
           },
           {
             "id": 3,
@@ -1429,7 +1429,7 @@
             "updatedAt": "2026-07-25T14:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-07-27T00:14:36.270Z"
+        "updatedAt": "2026-07-27T00:51:10.142Z"
       },
       {
         "id": "54",
@@ -1843,7 +1843,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-27T00:14:36.271Z",
+      "lastModified": "2026-07-27T00:51:10.142Z",
       "taskCount": 84,
       "completedCount": 61,
       "tags": [

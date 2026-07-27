@@ -1,10 +1,37 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-27 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı; tm 33/34/35/37 + 53.1/53.2 burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-07-27 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı; tm 33/34/35/37 + 53.1/53.2/53.3 burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
 
 ## Task log (newest-first)
+
+### 53.3 — 08.8.1-a · Apps (marketplace) girişi — Settings→Integrations kapısı — done — 2026-07-27 UTC
+
+- Kapsam: FR-MOD-08.8.1 (`Should v1`) `[XHIGH]` — KK (birebir) _"Üçüncü parti dizin (detay MOD-09)"_;
+  test stratejisi **unit** ("giriş → 09.1. DoD tam"). Bağımlılık 53.1 (09.1-a, ✅). PLAN satır 537
+  (08.8.1) `⬜`→`✅` + §D51. **Parent tm 53 tümüyle done** (53.1/53.2/53.3).
+- Boşluk: 53.1 marketplace'i (`AppsMarketplacePage`, `/app/apps`) + 53.2 tam dizini yazdı ama Apps
+  rotası modül-rayında (`navigation.ts`) yoktu ve Settings'te giriş yoktu → grid yalnız URL elle
+  yazılınca erişilebilirdi. Bu task o kapıyı açar.
+- Yapıldı:
+  - `apps/web/src/features/settings/SettingsPage.tsx`: **export** `Integrations` bölümü — Channels'ın
+    hemen altına `<Section title="Integrations">` + `react-router` `Link to="/app/apps"`
+    ("Open marketplace"). Saf navigasyon (ayrı veri çağrısı yok); marketplace kendi `access_rules`
+    kapısını zaten uyguluyor, giriş linki herkese görünür.
+  - `apps/web/src/features/settings/Integrations.test.tsx` (yeni, 1 test): link href → `/app/apps`.
+- Doğrulama (DoD kapısı, exit 0): typecheck 11/11 · lint 8/8 · build 7/7 · test:unit 10/10 paket
+  (web **445**, +1 = yeni `Integrations.test.tsx`) + web settings+apps odaklı 31/31.
+- **Integration/contract-parity:** değişiklik saf web-additive — API rotası/OpenAPI/migration/servis
+  yüzeyi **yok** → api integration & contract-parity (5/5) yapısal olarak etkilenmez; DB süiti bu
+  pencerede koşulmadı (D49/D50 emsali, task stratejisi zaten unit).
+- **E2E:** `settings.spec.ts` region'ları erişilebilir ada göre seçer; yeni "Integrations" region'ı
+  hiçbiriyle çakışmaz, bölüm-sayısı iddiası yok → additive, mevcut e2e etkilenmez.
+- Varsayımlar: giriş linki komut paleti / modül-rayına EKLENMEDİ (task "Settings→Integrations girişi"
+  der; scope disiplini, CONVENTIONS §5). Erişim linki scope ile gate'lenmedi (bölüm hep render, marketplace
+  sayfası kendi yetkisini kapıda uygular — mevcut Settings bölümleri emsali).
+- Sonraki pencereye not: `.parked-playbook/` bu task'a ait değil (SkillBrowser/RecommendedSkills,
+  FR-MOD-05.3/05.4) — izlenmiyor, dokunulmadı. MOD-09 (Apps Marketplace) v1 tümüyle kapandı.
 
 ### 53.2 — 09.2-a · Apps entegrasyon dizini (15–20) + kanal çapraz-linki — done — 2026-07-27 UTC
 

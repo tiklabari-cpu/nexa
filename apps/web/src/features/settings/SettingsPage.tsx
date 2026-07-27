@@ -8,6 +8,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -111,6 +112,7 @@ export function SettingsPage(): ReactElement {
   return (
     <Page title="Settings" description="Widget installation, saved replies and routing.">
       <ChannelsGrid />
+      <Integrations />
       <NotificationSettings />
       <WebsiteWidgets canEdit={canManageAccess} />
       <WidgetCustomization canEdit={canManageAccess} />
@@ -124,6 +126,39 @@ export function SettingsPage(): ReactElement {
       <CustomFieldsSettings canEdit={canManageAccess} />
       <PreChatFormSettings canEdit={canManageAccess} />
     </Page>
+  );
+}
+
+// --- Integrations ------------------------------------------------------------
+
+/**
+ * The way into the apps marketplace (FR-MOD-08.8.1): a third-party integrations
+ * directory whose detail lives in MOD-09. Settings is where an admin wires the
+ * workspace up to the outside world — Channels sits right above — so this is
+ * where the door belongs; the marketplace itself (09.1) is the room behind it,
+ * and the Apps route is not on the module rail, so without this entry it can
+ * only be reached by typing the URL.
+ */
+export function Integrations(): ReactElement {
+  return (
+    <Section
+      title="Integrations"
+      description="Connect third-party apps — CRM, payments, e-commerce and more. A connected app shows its data right inside a conversation."
+    >
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm text-content-secondary">
+            Browse the marketplace to connect the tools your team already uses.
+          </p>
+          <Link
+            to="/app/apps"
+            className="shrink-0 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+          >
+            Open marketplace
+          </Link>
+        </div>
+      </Card>
+    </Section>
   );
 }
 

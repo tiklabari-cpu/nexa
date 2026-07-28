@@ -1633,37 +1633,110 @@
         "id": "68",
         "title": "08.9.2 — Banned customers (IP/visitor yasak)",
         "description": "FR-MOD-08.9.2 · Should (v2).",
-        "details": "FR-MOD-08.9.2 · Should (v2).\nNEDEN: Customer.banned alanı + ban yazma yolu ✅ (F4); yönetim UI + IP yasağı eksik.\nKAPSAM: banned müşteri yönetim ekranı + IP/visitor yasağı; yasaklı sohbet başlatamaz.\nKK (birebir): \"Yasaklı sohbet başlatamaz\". BAĞLAM: PLAN §5.1 (§8 ratings/banned).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
-        "testStrategy": "integration: yasaklı müşteri/IP → chat başlatamaz (403); CROSS-TENANT. DoD tam.",
-        "status": "deferred",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": [],
-        "updatedAt": "2026-07-25T13:09:32.247Z"
+        "details": "FR-MOD-08.9.2 · Should (v2).\nNEDEN: Customer.banned alanı + ban yazma yolu ✅ (F4); yönetim UI + IP yasağı eksik.\nKAPSAM: banned müşteri yönetim ekranı + IP/visitor yasağı; yasaklı sohbet başlatamaz.\nKK (birebir): \"Yasaklı sohbet başlatamaz\". BAĞLAM: PLAN §5.1 (§8 ratings/banned).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).\n\n[günlük 2026-07-28 GO-LIVE] v2'den öne çekildi (PLAN §4.5/GL-6 · §D52). Bağımlılık tm 88. KODA KARŞI (2026-07-28): visitor/customer yasağı ÇALIŞIYOR — Customer.bannedAt + segment banned + PATCH ban/unban (customers.ts:183-200) + token mint reddi (auth.ts:573 customer_banned) + chat start reddi (chat-service.ts:332). EKSİK: SecuritySettings.bannedCustomerIps kolonu şemada (schema.prisma:1126) ama HİÇBİR YERDE OKUNMUYOR (grep 0) → IP yasağı uygulanmıyor; Settings→Security yönetim yüzeyi yok. KAPSAM (PLAN §4.5/GL-6):\n(a) IP enforcement: /customer/token mint + chat start yolunda istemci IP'si bannedCustomerIps ile karşılaştırılır → customer_banned zarfı.\n(b) Kontrat: /settings/security GET/PATCH'e banned_customer_ips alanı (tm 1 deseni) + Settings→Security UI listesi.\n(c) CustomersPage'de ban/unban aksiyonunun UI'dan erişilebilirliği doğrulanır; yoksa eklenir.\nKAPANIŞ: PLAN §5 08.9.2 satırı ✅ + HANDOFF + commit + push + tm 68 done.",
+        "testStrategy": "integration: yasaklı IP → token 403 + sohbet başlatamaz; yasaklı visitor → aynı (regresyon); unban → tekrar başlatabilir; CROSS-TENANT: A lisansının yasağı B'yi etkilemez (ZORUNLU). UI unit: liste düzenleme + ban/unban aksiyonu. Kontrat: contract-parity yeşil. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "88"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "08.9.2-a1 — IP yasağı enforcement",
+            "description": "Token mint + chat start yolunda bannedCustomerIps kontrolü; customer_banned zarfı; integration + cross-tenant testler.",
+            "status": "pending",
+            "dependencies": [],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 2,
+            "title": "08.9.2-a2 — Kontrat + Security UI + müşteri ban aksiyonu",
+            "description": "banned_customer_ips kontrata + Settings→Security listesi; CustomersPage ban/unban UI doğrula/ekle; E2E görsel kanıt.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          }
+        ],
+        "updatedAt": "2026-07-28T01:23:47.977Z"
       },
       {
         "id": "69",
         "title": "08.9.3 — Spam filtre [MAX]",
         "description": "FR-MOD-08.9.3 · Should (v2) · [MAX] ↑.",
-        "details": "FR-MOD-08.9.3 · Should (v2) · [MAX] ↑.\n↑ GEREKÇE: dış girdi sınırı + otomatik filtre (yanlış-pozitif/negatif riski). Güvenlik kuralı — tam derinlik serbest (§5.1).\nKAPSAM: spam sohbet/ticket otomatik filtre (SecuritySettings.spamFilterEnabled zaten var, email-inbound kullanıyor).\nKK (birebir): \"Spam sohbet/ticket otomatik filtre\". BAĞLAM: PLAN §5.1, §C-A9 (email spam bağı).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
-        "testStrategy": "integration: spam → ticket/chat üretmez; temiz → geçer. NEGATİF: yanlış-pozitif sınırı. DoD tam.",
-        "status": "deferred",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": [],
-        "updatedAt": "2026-07-25T13:09:32.249Z"
+        "details": "FR-MOD-08.9.3 · Should (v2) · [MAX] ↑.\n↑ GEREKÇE: dış girdi sınırı + otomatik filtre (yanlış-pozitif/negatif riski). Güvenlik kuralı — tam derinlik serbest (§5.1).\nKAPSAM: spam sohbet/ticket otomatik filtre (SecuritySettings.spamFilterEnabled zaten var, email-inbound kullanıyor).\nKK (birebir): \"Spam sohbet/ticket otomatik filtre\". BAĞLAM: PLAN §5.1, §C-A9 (email spam bağı).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).\n\n[günlük 2026-07-28 GO-LIVE] v2'den öne çekildi (PLAN §4.5/GL-7 · §D52). Bağımlılık tm 88. KODA KARŞI (2026-07-28): spamFilterEnabled var ve YALNIZ email-inbound.ts kullanıyor (sağlayıcı spam bayrağı); chat yolunda filtre yok. KAPSAM (PLAN §4.5/GL-7):\n(a) DETERMİNİSTİK kural motoru services/security/spam-filter.ts — link yoğunluğu, tekrar oranı, karakter/entropi eşiği, blocklist; LLM YOK (test edilebilirlik + yanlış-pozitif denetimi).\n(b) Widget chat start / ilk mesaj yoluna bağlanır (spamFilterEnabled kapısı); email yolundaki mevcut kanca AYNI motora bağlanır (tek doğruluk kaynağı).\n(c) Spam kararının davranışı (sessiz drop mu, zarflı red mi) task içinde kararlaştırılır → PLAN §C'ye yazılır.\nKAPANIŞ: PLAN §5 08.9.3 satırı ✅ + karar §C'de + HANDOFF + commit + push + tm 69 done.",
+        "testStrategy": "[MAX] NEGATİF ÖNCE: normal müşteri mesajı GEÇER (yanlış-pozitif sınırı — gerçekçi örnek seti: kısa selamlama, link içeren meşru soru, tekrar eden ama meşru mesaj). SONRA: spam örnek seti düşer; filtre kapalıyken geçer; email + chat İKİ yol da aynı motordan; cross-tenant ayar izolasyonu. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "88"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "08.9.3-a1 — deterministik kural motoru (negatif önce)",
+            "description": "spam-filter.ts kural motoru + unit tablo-testleri; yanlış-pozitif sınırı ÖNCE kırmızı görülür.",
+            "status": "pending",
+            "dependencies": [],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 2,
+            "title": "08.9.3-a2 — chat + email yollarına bağlama",
+            "description": "Widget chat start/ilk mesaj + email-inbound aynı motora; davranış kararı §C'ye; integration iki yol + cross-tenant.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          }
+        ],
+        "updatedAt": "2026-07-28T01:23:47.977Z"
       },
       {
         "id": "70",
         "title": "08.9.5 — CC masking (Luhn, yazma anında) [MAX]",
         "description": "FR-MOD-08.9.5 · Should (v2) · [MAX] ↑ · NFR-C5/S9.",
-        "details": "FR-MOD-08.9.5 · Should (v2) · [MAX] ↑ · NFR-C5/S9.\n↑ GEREKÇE: PII sınırı — DB/log'a maskeli yazma (yazma anında, yalnız UI değil). Güvenlik kuralı — tam derinlik serbest.\nKAPSAM: kart no Luhn tespiti + yazma anında maskeleme (event/log); PCI SAQ A.\nKK (birebir): \"PCI SAQ A; DB/log'a maskeli yazılır (yalnız UI değil)\". BAĞLAM: PLAN §5.1.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
-        "testStrategy": "unit: Luhn tespit + maskeleme. integration: DB'de maskeli saklanır (ham kart yok). NEGATİF: log'a ham kart sızmaz. DoD tam.",
-        "status": "deferred",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": [],
-        "updatedAt": "2026-07-25T13:09:32.251Z"
+        "details": "FR-MOD-08.9.5 · Should (v2) · [MAX] ↑ · NFR-C5/S9.\n↑ GEREKÇE: PII sınırı — DB/log'a maskeli yazma (yazma anında, yalnız UI değil). Güvenlik kuralı — tam derinlik serbest.\nKAPSAM: kart no Luhn tespiti + yazma anında maskeleme (event/log); PCI SAQ A.\nKK (birebir): \"PCI SAQ A; DB/log'a maskeli yazılır (yalnız UI değil)\". BAĞLAM: PLAN §5.1.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).\n\n[günlük 2026-07-28 GO-LIVE] v2'den öne çekildi (kullanıcı kararı; PLAN §4.5/GL-5 · §D52). Bağımlılık tm 88 (v1 kapanışı) — faz disiplini. KODA KARŞI (2026-07-28): maskeleme yok; yalnız payment-method-service.ts kendi maskeli alanlarını tutuyor (farklı iş). KAPSAM (atomik kırılım PLAN §4.5/GL-5):\n(a) Saf lib apps/api/src/lib/cc-mask.ts — 13-19 haneli aday diziler (boşluk/tire ayraçlı varyantlar dahil) yakalanır, Luhn doğrulanır, geçenler '**** **** **** 1234' biçimine maskelenir.\n(b) TÜM event yazım yolları kaynağında maskeler: chats.ts (ajan eventi) + customer.ts (widget eventi + pre-chat custom_fields) + email-inbound.ts (konu). Kaynakta maskelendiği için RTM push + transcript e-postası otomatik maskeli.\n(c) Yan kanal doğrulaması: request log, audit_log meta, FileMailer çıktıları (.data/mail), skill/AI yollarına giden metin — ham PAN sızmaz (integration kanıtı). NFR-C5/S9 satırı güncellenir.\nKAPANIŞ: PLAN §5 08.9.5 satırı ✅ (§4.5/GL-5 referansıyla) + §7.2 NFR-C5/S9 + HANDOFF + commit + push + tm 70 done.",
+        "testStrategy": "[MAX] NEGATİF ÖNCE yazılır ve kırmızı görülür: (a) Luhn GEÇMEYEN 16 hane (sipariş no) maskelenMEZ — yanlış-pozitif sınırı; (b) telefon/UUID/timestamp dokunulmaz. SONRA pozitifler: geçerli PAN (ayraçlı/ayraçsız) → DB'de ham PAN YOK (doğrudan SQL ile doğrula), maskeli metin var; RTM push + .data/mail + audit_log meta'da ham PAN yok. Cross-tenant + iki composer (ajan/widget) + email yolu. DoD tam.",
+        "status": "pending",
+        "dependencies": [
+          "88"
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "08.9.5-a1 — cc-mask çekirdeği (negatif önce)",
+            "description": "lib/cc-mask.ts: aday yakalama + Luhn + maskeleme; unit tablo-testleri — yanlış-pozitif sınırı ÖNCE kırmızı görülür.",
+            "status": "pending",
+            "dependencies": [],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 2,
+            "title": "08.9.5-a2 — yazım yollarına bağlama",
+            "description": "chats.ts + customer.ts (+pre-chat custom_fields) + email-inbound.ts kaynağında maskeler; integration: DB'de ham PAN yok (SQL doğrulama).",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 3,
+            "title": "08.9.5-b — log/yan-kanal doğrulaması",
+            "description": "request log + audit_log + .data/mail + skill/AI giriş metni; ham PAN sızmaz integration kanıtı; NFR-C5/S9 güncelle.",
+            "status": "pending",
+            "dependencies": [
+              2
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          }
+        ],
+        "updatedAt": "2026-07-28T01:23:47.977Z"
       },
       {
         "id": "71",
@@ -1839,12 +1912,201 @@
         "priority": "low",
         "subtasks": [],
         "updatedAt": "2026-07-25T13:09:32.278Z"
+      },
+      {
+        "id": "85",
+        "title": "GL-1 · SYNC-a — PLAN v1 bayat satır senkron denetimi (06.2.4 / 06.3.2 / 10.1.4)",
+        "description": "PLAN §4.2/§4.3 üç satırı ◐ gösteriyor ama işler TM'de done (tm 33 alt-görevleri 06.2.4-a drag-reorder + 06.3.2-a website crawl; tm 54 meter UI) ve kod mevcut (step-reorder.ts + SkillEditor.tsx drag/klavye; web-crawler.ts + lib/ssrf.ts + playbook.ts type:website; BillingPage.tsx meter + quota_warning). Panelin 'TM'de bitti, PLAN'da ◐' bulgu deseninin son üç örneği. Satırlar KANITLA (odaklı test koşusuyla) ✅'a çevrilir. PLAN §4.5/GL-1 · §D52.",
+        "details": "DENETİM GÖREVİ — kod değişikliği ÇIKMAMALI; KK açığı bulunursa satır ◐ KALIR, açık §D'ye yazılır ve ayrı görev açılır (satır asla kanıtsız çevrilmez).\n1) 06.2.4 — KK (birebir): 'Her adım araç çağrısı; drag reorder (+ klavye alternatifi); zorunlu parametre (ör. transfer hedefi) boşsa hata'. Kanıt yüzeyi: apps/web/src/features/playbook/SkillEditor.tsx (draggable + ↑↓ reorder, satır ~198-230) + step-reorder.ts (moveStep/describeMove/stepIssues) + step-reorder.test.ts + SkillEditor.test.tsx. Odaklı süit koş; zorunlu-parametre-boş → hata davranışını testte GÖR. Geçerse PLAN §4.2 06.2.4 satırı ✅ (kanıt: dosya+test adları + tm 33 referansı).\n2) 06.3.2 — KK (birebir): 'Geçersiz URL/tür reddi; crawl/parse; RAG indeksleme; bulk/CSV import (Nexa)'. Kanıt yüzeyi: services/ai/web-crawler.ts (+test) + lib/ssrf.ts + routes/playbook.ts type enum website/file/article/faq. SSRF negatif testlerin (169.254.169.254 / localhost reddi) fiilen var ve yeşil olduğunu GÖR. NOT: bulk/CSV, §4.4 06.3.2-a kırılımında bilinçli kapsam dışıydı ('Kapsam dışı: bulk/CSV (ayrı Should)') → satır ✅'a çevrilirken PLAN §5.1 tablosuna yeni satır '06.3.2-bulk — bulk/CSV import (Should, v2)' eklenir; KK'nın bu payı gizlenmez.\n3) 10.1.4 — KK (birebir): 'Sayaç N/limit (% used); aşım paketi; %80 proaktif uyarı (Nexa)'. Kanıt yüzeyi: apps/web/src/features/billing/BillingPage.tsx (quota_warning, overage pack fiyat teklifi) + testleri (tm 54). Odaklı süit koş. Geçerse PLAN §4.3 10.1.4 satırı ✅.\n4) PLAN §4.4 girişindeki bayat denetim bloğu ('Eksik (grep/okuma ile doğrulandı): ... drag-reorder (06.2.4 — 0 eşleşme), website crawl ...') güncellenir — 2026-07-28 durumuyla yeniden yazılır.\n5) PLAN §2 matrisi yeniden değerlendirilir: MOD-05 ve MOD-06 satırları v1 payı tamamsa ✅'a çevrilir (sayarak, elle değil).\nPRD: FR-MOD-06.2.4 / FR-MOD-06.3.2 / FR-MOD-10.1.4 · PLAN §4.5/GL-1 · §D52.",
+        "testStrategy": "Kanıt zorunlu: satır başına odaklı süit FİİLEN koşulur — web unit (SkillEditor + step-reorder + BillingPage) + api integration (knowledge crawl + SSRF negatifler) + contract-parity; çıktı özetleri HANDOFF'a yazılır. Kod değişikliği çıkarsa DUR → §D'ye yaz, ayrı görev aç. KAPANIŞ: PLAN satırları ✅ (kanıt metniyle) + §4.4 denetim bloğu güncel + §5.1'e 06.3.2-bulk satırı + HANDOFF task log + commit (docs(plan)) + push + tm 85 done.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "06.2.4 doğrulaması + satır çevirisi",
+            "description": "SkillEditor/step-reorder odaklı süit koş; zorunlu-param-boş → hata testini gör; PLAN §4.2 satırını kanıtla ✅ yap.",
+            "status": "pending",
+            "dependencies": [],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 2,
+            "title": "06.3.2 doğrulaması + satır çevirisi + 06.3.2-bulk satırı",
+            "description": "Crawl+SSRF negatif süiti koş; PLAN §4.2 satırını ✅ yap; §5.1'e '06.3.2-bulk (Should, v2)' satırı ekle.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 3,
+            "title": "10.1.4 doğrulaması + satır çevirisi",
+            "description": "BillingPage meter/quota_warning süiti koş; PLAN §4.3 satırını ✅ yap.",
+            "status": "pending",
+            "dependencies": [
+              2
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 4,
+            "title": "§4.4 denetim bloğu + §2 matris senkronu + kapanış",
+            "description": "Bayat denetim bloğunu yeniden yaz; §2 MOD-05/06 satırlarını sayarak güncelle; HANDOFF + commit + push.",
+            "status": "pending",
+            "dependencies": [
+              3
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          }
+        ],
+        "updatedAt": "2026-07-28T01:23:47.977Z"
+      },
+      {
+        "id": "86",
+        "title": "GL-2 · PARK-a — .parked-playbook/ temizliği (izlenmeyen yarım iş)",
+        "description": ".parked-playbook/ (SkillBrowser.tsx, RecommendedSkills.tsx, skill-filters.ts + 3 test dosyası; 25 Tem) izlenmeyen yarım iş olarak duruyor (HANDOFF 'parked' notu). Teslim edilen muadilleri repo'da mevcut: TemplateGallery.tsx, RecommendedSkills.tsx, skill-tabs.ts, skill-filter.ts (tm 32, PLAN §4.1 hepsi ✅). F.1/6 'sessiz borç' ve F.1/7 'ölü kod' maddelerini kirletir — Faz-0 kapanışından (tm 87) ÖNCE çözülmeli. PLAN §4.5/GL-2 · §D52.",
+        "details": "1) Dosya-dosya diff: .parked-playbook/RecommendedSkills.tsx ↔ apps/web/src/features/playbook/RecommendedSkills.tsx; .parked-playbook/skill-filters.ts ↔ skill-filter.ts + skill-tabs.ts; .parked-playbook/SkillBrowser.tsx ↔ TemplateGallery.tsx/PlaybookPage.tsx (muadil eşlemesi burada en zayıf — dikkatli bak).\n2) KARAR: değerli fark varsa (teslim edilende olmayan davranış/test) ilgili dosyaya taşı + test yeşil; yoksa dizini SİL. Karar gerekçesiyle PLAN §D'ye yazılır (D-PARK maddesi).\n3) Sonuç: git status temiz (untracked 0); HANDOFF'taki 'Kalan tek untracked öğe .parked-playbook/' notu kapatılır.\nPLAN §4.5/GL-2 · §D52 · HANDOFF 2026-07-28 notu.",
+        "testStrategy": "Silme yolunda: repo temiz (git status untracked 0), web unit regresyonsuz. Entegre yolunda: taşınan davranışın testi + web typecheck/lint/unit yeşil. KAPANIŞ: karar §D'ye (D-PARK) + HANDOFF task log + commit + push + tm 86 done.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Diff + karar",
+            "description": "Üç kaynak dosyayı teslim edilen muadillerle karşılaştır; entegre-et/sil kararını gerekçesiyle ver.",
+            "status": "pending",
+            "dependencies": [],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 2,
+            "title": "Uygulama + kapanış",
+            "description": "Kararı uygula (taşı+test veya sil); git status temiz; §D + HANDOFF + commit + push.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          }
+        ],
+        "updatedAt": "2026-07-28T01:23:47.977Z"
+      },
+      {
+        "id": "87",
+        "title": "GL-3 · F0-KAPAT — Faz-0 §F.00 kapanış turu (§F.1 tam 10 madde) [MAX]",
+        "description": "Faz-0'ın 9 kapanış alt-görevi (T1-a/T3-a/T3-b/T4-a/T4-b/T5-a/T6-a/T6-b/T7-a) tm 27-31'de done; ama PLAN üst tablosu hâlâ '45 ✅ · 6 ◐ — ❌ AÇIK' diyor ve §F.1'in 10 maddesi TAM SÜRÜM hiç koşulmadı. Faz kendiliğinden kapanmaz — kapanış bir turdur. PLAN §4.5/GL-3 · §D52. [MAX]: kanıtsız 'geçti' yok (§F.2 uyarısı; §1.3'teki yanlış 'bitti' raporu bir kez yaşandı).",
+        "details": "1) SAYAÇ: Faz-0 Must sayacı PLAN §3 tablolarından SAYILARAK doğrulanır (beklenen 51 ✅ · 0 ◐ · 0 ⬜; elle yazılmaz — §1.2 sayım notu). Uyuşmazlık varsa DUR → satır satır incele.\n2) §F.1 TAM 10 MADDE (her biri koda karşı, kanıt HANDOFF'a):\n(1) Kapsam süpürmesi — PRD §6 Faz-0 satırları tek tek kodda aranır; her satır ✅ veya gerekçeli ⛔/🔒, ◐ SIFIR.\n(2) Faz sızıntısı — öne çekilmiş belgesiz iş var mı (belgeliler: Playbook §1.3, GL-5/6/7 §D52).\n(3) NFR kapıları — §7.2'nin Faz-0 kapsamındakiler ÖLÇÜLÜR (gecikme, bundle bütçesi P3, a11y taraması, cross-tenant negatifler); tahmin yazılmaz.\n(4) Şema artıkları — §8 tablolarının tüketicisi var mı (workflows tablosu ADR-14 gereği bilinçli UI'sız — gerekçeli).\n(5) Kontrat bütünlüğü — contract-parity koş.\n(6) Sessiz borç — TODO/FIXME/XXX/@ts-expect-error/skip(/only( grep'i, kapatılmış lint kuralları; LİSTELE.\n(7) Ölü kod & erişilemez ekran — route'suz bileşen, çağrılmayan servis, UI'sız endpoint.\n(8) Doküman tazeliği — PLAN/HANDOFF/README gerçekle uyuşuyor mu (test/endpoint sayıları, 'sıradaki adım').\n(9) Temiz kurulum provası — sıfırdan make dev → migrate → seed → demo akışı.\n(10) Kapsam dışı doğrulaması — §9'un 10 maddesi yanlışlıkla yapılmamış (özellikle gerçek ödeme, telif içerik).\n3) PLAN üst tablo Faz-0 satırı ✅ KAPALI + sayaç güncel; başlık altındaki 'Faz-0 kapanmadı' bloğu tarihçeye çevrilir.\n4) §F.2 raporu üretilir (tamamlanan kapsam / yarım kalanlar / bilinçli yapılmayanlar / sessiz borç / sapmalar / açık sorular) → HANDOFF.\nPLAN §F.00 (satır ~470) · §F.1/§F.2 · §4.5/GL-3 · §D52.",
+        "testStrategy": "[MAX] Her §F.1 maddesinin kanıtı (komut çıktısı / test adı / ölçüm) HANDOFF'a madde madde yazılır; kanıtsız madde = tur bitmemiştir. Tam DoD kapısı (typecheck/lint/unit/integration/build/e2e exit 0) + §F.1/9 temiz kurulum provası. Bulunan her açık: küçükse bu turda kapat + §D'ye, büyükse yeni tm görevi aç (bu görev bloklanmaz, raporlar). KAPANIŞ: PLAN üst tablo Faz-0 ✅ KAPALI + §F.2 raporu HANDOFF'ta + commit + push + tm 87 done.",
+        "status": "pending",
+        "dependencies": [
+          "85",
+          "86"
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Must sayacı sayımı + uyuşmazlık kontrolü",
+            "description": "PLAN §3 satırlarını say (beklenen 51✅·0◐·0⬜); üst tabloyla ve bu sayımla çelişki varsa satır satır çöz.",
+            "status": "pending",
+            "dependencies": [],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 2,
+            "title": "§F.1 maddeleri 1-5",
+            "description": "Kapsam süpürmesi (PRD §6 Faz-0) + faz sızıntısı + NFR ölçümleri + şema artıkları + contract-parity; kanıtları topla.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 3,
+            "title": "§F.1 maddeleri 6-10",
+            "description": "Sessiz borç grep + ölü kod + doküman tazeliği + temiz kurulum provası (make dev) + kapsam dışı doğrulaması; kanıtları topla.",
+            "status": "pending",
+            "dependencies": [
+              2
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 4,
+            "title": "Faz kapatma + §F.2 raporu",
+            "description": "Üst tablo Faz-0 ✅ KAPALI; §F.2 Türkçe raporu HANDOFF'a; commit + push.",
+            "status": "pending",
+            "dependencies": [
+              3
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          }
+        ],
+        "updatedAt": "2026-07-28T01:23:47.977Z"
+      },
+      {
+        "id": "88",
+        "title": "GL-4 · V1-KAPAT — v1 §F.00 kapanış turu (Must kapısı + §F.1 + tam E2E) [MAX]",
+        "description": "v1 Must kapısı (05.1/05.3/05.5 · 06.1-06.4 · 08.5.4-.6 · 08.8.4 · 02.1.2 · 04.2 · 13.8-mobil-push 🔒) tm 85 sonrası 0 ◐/⬜ bekleniyor; kapanış turu hiç koşulmadı. GL-5/6/7 (öne çekilen güvenlik kalemleri) bu görev bitmeden BAŞLAYAMAZ (faz disiplini, §D52). PLAN §4.5/GL-4 · §D52. [MAX].",
+        "details": "1) SAYAÇ: v1 Must listesi PLAN §4 satırlarından SAYILARAK doğrulanır: 05.1/05.3/05.5 · 06.1/06.2.x/06.3.x/06.4 · 08.5.4-.6 · 08.8.4 · 02.1.2 · 04.2 (hepsi ✅ beklenir) + 13.8-mobil-push (🔒 gerekçeli — bloklamaz).\n2) §F.1 TAM 10 MADDE v1 kapsamı için (tm 87 ile aynı disiplin). ÖZEL: faz-sızıntısı maddesinde GL-5/6/7 öne çekmesi §D52'de BELGELİ sapmadır, ihlal değildir — belgesiz BAŞKA sızıntı aranır.\n3) Tam E2E süiti koşulur — HANDOFF 2026-07-28 notu: son bakım penceresi tam kapıyı koşmadı; borç burada kapanır.\n4) Should kalemlerinden ⬜ kalanlar §F.2 raporunda İSMEN listelenir (06.3.2-bulk dahil; tm 85'in eklediği satır).\n5) PLAN üst tablo v1 satırı kapatılır; §F.2 raporu → HANDOFF; kullanıcıya 'GO-LIVE hardening (tm 70/68/69) hazır' bildirilir.\nPLAN §4.4 v1 kapanış kapısı (satır ~562) · §4.5/GL-4 · §D52.",
+        "testStrategy": "[MAX] tm 87 ile aynı kanıt disiplini: her §F.1 maddesi kanıtlı, HANDOFF'a madde madde. Tam DoD kapısı + TAM E2E süiti (Playwright, tüm spec'ler) exit 0. KAPANIŞ: PLAN üst tablo v1 ✅ KAPALI + §F.2 raporu + commit + push + tm 88 done → tm 70/68/69 bağımlılığı çözülür.",
+        "status": "pending",
+        "dependencies": [
+          "87"
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "v1 Must sayacı sayımı",
+            "description": "PLAN §4 satırlarından Must listesi sayılır; ◐/⬜ kalan varsa DUR → görevleştir, bu tur bekler.",
+            "status": "pending",
+            "dependencies": [],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 2,
+            "title": "§F.1 tam tur (v1 kapsamı) + faz sızıntısı kontrolü",
+            "description": "10 madde v1 için; GL-5/6/7 = belgeli sapma (§D52), belgesiz sızıntı ara.",
+            "status": "pending",
+            "dependencies": [
+              1
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 3,
+            "title": "Tam E2E + DoD borcu kapatma",
+            "description": "Tam Playwright süiti + tam DoD kapısı (son bakım penceresinin koşmadığı kapı).",
+            "status": "pending",
+            "dependencies": [
+              2
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          },
+          {
+            "id": 4,
+            "title": "Faz kapatma + §F.2 raporu",
+            "description": "Üst tablo v1 ✅ KAPALI; rapor HANDOFF'a; commit + push.",
+            "status": "pending",
+            "dependencies": [
+              3
+            ],
+            "updatedAt": "2026-07-28T01:23:47.977Z"
+          }
+        ],
+        "updatedAt": "2026-07-28T01:23:47.977Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-27T00:59:53.934Z",
-      "taskCount": 84,
+      "lastModified": "2026-07-28T01:23:47.977Z",
+      "taskCount": 88,
       "completedCount": 62,
       "tags": [
         "master"

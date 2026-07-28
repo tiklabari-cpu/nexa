@@ -1,10 +1,35 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-27 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı; tm 33/34/35/37 + 53.1/53.2/53.3 burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-07-28 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
 
 ## Task log (newest-first)
+
+### GO-LIVE planlama turu — §4.5 kırılımı + tm 85–88 + tm 68/69/70 pending — done — 2026-07-28 UTC
+
+- Kapsam: kod yok — yalnız PLAN.md + tasks.json. PRD (FR-MOD-06.2.4/06.3.2/10.1.4 + 08.9.2/3/5
+  KK'ları birebir) ve PLAN koda karşı denetlendi; kapanış + canlıya hazırlık kırılımı yazıldı.
+- Denetim bulguları (§D52'ye işlendi):
+  1. **Üç v1 satırı bayat** — 06.2.4/06.3.2/10.1.4 PLAN'da `◐` ama TM'de done (tm 33 alt-görevleri +
+     tm 54) ve kod mevcut (`step-reorder.ts`, `web-crawler.ts`+`lib/ssrf.ts`, `BillingPage` meter).
+     Satırlar çevrilMEdi (kanıt ister) → **tm 85** SYNC denetim görevi.
+  2. **Faz kapanış turları hiç görev olmamıştı** — §F.1 10 madde tam sürüm hiç koşulmadı; TM kuyruğu
+     boşalınca panel critical "run-loop duracak" verdi → **tm 87** (Faz-0) + **tm 88** (v1).
+  3. **`.parked-playbook/`** izlenmeyen yarım iş → **tm 86**.
+  4. **Öne çekme sapması (kullanıcı kararı):** hızlı canlıya geçiş; v2'nin üç saf-güvenlik kalemi
+     GL-5/6/7 olarak öne çekildi — **tm 70** CC masking (3 alt-görev) · **tm 68** banned tamamlama
+     (IP enforcement: `bannedCustomerIps` kolonu şemada ama okuyan kod 0; 2 alt-görev) · **tm 69**
+     spam filtre (ortak deterministik motor + chat yolu; 2 alt-görev). Üçü de tm 88'e bağımlı —
+     faz disiplini korunur. **Dış entegrasyonlar deferred kaldı** (tm 63–67 · 71–84).
+- PLAN değişiklikleri: yeni **§4.5 GO-LIVE turu** (GL-1…GL-7 atomik kırılım + GL→tm→PRD tablosu) ·
+  §5/§5.1 üç güvenlik satırına öne-çekme işaretleri · §G'ye 7 GL satırı · **§D52** sapma kaydı ·
+  başlık denetim tarihi satırı.
+- Sıra (run-loop için): **tm 85 → tm 86 → tm 87 → tm 88 → tm 70 / 68 / 69**. TM durumu:
+  62 done · **7 pending** · 19 deferred (toplam 88).
+- Sonraki pencereye not: tm 85 bir **denetim** görevidir — kod değişikliği çıkmamalı; KK açığı
+  bulunursa satır ◐ kalır ve ayrı görev açılır. tm 87/88 `[MAX]` — §F.1 maddeleri kanıtsız
+  "geçti" sayılmaz.
 
 ### E2E bakım (düzeltme penceresi) — çalışma ağacındaki commit'siz değişiklikler — done — 2026-07-28 UTC
 

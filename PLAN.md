@@ -7,7 +7,7 @@
 > Şema doğruluk kaynağı: PRD §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Son denetim:** 2026-07-25 (kapsam) · **Kapsam denetimi + kırılım:** 2026-07-25 (bu tur, PLAN-EXPAND)
+**Başlangıç:** 2026-07-22 · **Son denetim:** 2026-07-25 (kapsam) · **Kapsam denetimi + kırılım:** 2026-07-25 (PLAN-EXPAND) · **GO-LIVE kırılımı:** 2026-07-28 (§4.5 · §D52 · tm 85–88 + 68/69/70)
 
 > **Bu turda (2026-07-25) PLAN, PRD §6'nın 138 `FR-MOD` satırına ve KODA karşı yeniden
 > denetlendi.** İki `✅` iddiası koda karşı **`◐`** çıktı (02.4 Details ziyaret bilgisi, 13.8
@@ -851,6 +851,161 @@ Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal baş�
 - **13.7 Mobil uygulamalar** — 🔒 web-öncelikli (PRD §11.1/8 ile hizalı). v1 kapanışını **bloklamaz**;
   gerekçe: web parite önce.
 
+### 4.5 GO-LIVE turu — kapanış + canlıya hazırlık kırılımı (2026-07-28)
+
+> **Bu turun denetim bulguları (koda karşı, 2026-07-28):**
+> 1. **Üç v1 satırı bayat:** §4.2'de 06.2.4 (`◐ drag-reorder ⬜`) ve 06.3.2 (`◐ website crawl ⬜`),
+>    §4.3'te 10.1.4 (`◐ UI ⬜`) duruyor; oysa üçü de Task Master'da **done** (tm 33 alt-görevleri
+>    06.2.4-a/06.3.2-a; tm 54) ve kod mevcut (`step-reorder.ts` + `SkillEditor.tsx` drag/klavye;
+>    `web-crawler.ts` + `lib/ssrf.ts` + `playbook.ts` `type:'website'`; `BillingPage.tsx` meter +
+>    `quota_warning`). Satır çevirisi kanıt ister → GL-1 denetim görevi.
+> 2. **`.parked-playbook/`** izlenmeyen yarım iş olarak duruyor (SkillBrowser/RecommendedSkills/
+>    skill-filters, 25 Tem); teslim edilen muadilleri repo'da (`TemplateGallery.tsx`,
+>    `RecommendedSkills.tsx`, `skill-tabs.ts`, `skill-filter.ts`). → GL-2.
+> 3. **Task Master kuyruğu boş** (62 done · 0 pending · 22 deferred) → panel critical bulgusu
+>    "run-loop duracak". Faz kapanış turları hiç görev olarak açılmamıştı. → GL-3/GL-4.
+> 4. **Kullanıcı kararı (2026-07-28):** proje hızla canlıya hazırlanacak; **dış entegrasyonlar
+>    deferred kalır**; v2'nin üç saf-güvenlik kalemi (08.9.5 / 08.9.2 / 08.9.3) canlı sertleştirmesi
+>    olarak öne çekilir — §5.1'in kendi istisnası zaten izin veriyor (_"saf güvenlik kuralları …
+>    istenirse şimdi atomik bölünebilir"_). Sapma kaydı: **§D52**. Faz disiplini korunur: üçü de
+>    **GL-4 (v1 kapanışı) bittikten sonra** başlar (bağımlılıkla zorlanır).
+
+| GL | İş | PRD | tm | Bağımlılık | Tahmin |
+| --- | --- | --- | :-: | --- | :-: |
+| GL-1 | SYNC-a — v1 bayat satır senkron denetimi | 06.2.4 · 06.3.2 · 10.1.4 | 85 | — | 1 |
+| GL-2 | PARK-a — `.parked-playbook/` temizliği | 05.3/05.4 (tarihçe) | 86 | — | 1 |
+| GL-3 | F0-KAPAT — Faz-0 §F.00 kapanış turu | Faz-0 tümü | 87 | GL-1 · GL-2 | 1–2 |
+| GL-4 | V1-KAPAT — v1 §F.00 kapanış turu | v1 tümü | 88 | GL-3 | 1–2 |
+| GL-5 | 08.9.5-a/b — CC masking (Luhn, yazma anında) | 08.9.5 | 70 | GL-4 | 2 |
+| GL-6 | 08.9.2-a — Banned customers tamamlama (IP + UI) | 08.9.2 | 68 | GL-4 | 1–2 |
+| GL-7 | 08.9.3-a — Spam filtre (chat yolu + ortak motor) | 08.9.3 | 69 | GL-4 | 2 |
+
+#### GL-1 · SYNC-a — v1 bayat satır senkron denetimi `[XHIGH]` · tm 85
+
+- **Neden açık:** üç satır ile Task Master/kod arasında çelişki (yukarıdaki bulgu 1). Panelin
+  "TM'de bitti, PLAN'da ◐" bulgu deseninin son üç örneği.
+- **Kapsam:** her satır için KK **koda ve teste karşı** doğrulanır, odaklı test süiti koşulur,
+  satır kanıt metniyle `✅`'a çevrilir; §4.4 girişindeki bayat "Eksik (grep/okuma ile doğrulandı)"
+  bloğu güncellenir; §2 matrisinde MOD-05/MOD-06 satırları yeniden değerlendirilir.
+  - **06.2.4** — KK: _"Her adım araç çağrısı; drag reorder (+ klavye alternatifi); zorunlu parametre
+    (ör. transfer hedefi) boşsa hata"_ → `SkillEditor.tsx` (draggable + ↑↓) / `step-reorder.ts` /
+    `stepIssues` + testleri.
+  - **06.3.2** — KK: _"Geçersiz URL/tür reddi; crawl/parse; RAG indeksleme; bulk/CSV import (Nexa)"_
+    → `web-crawler.ts` + `lib/ssrf.ts` (SSRF negatifler) + `playbook.ts`. **Not:** bulk/CSV, 06.3.2-a
+    kırılımında bilinçli kapsam dışıydı (_"Kapsam dışı: bulk/CSV (ayrı Should)"_) → satır `✅`'a
+    çevrilirken **06.3.2-bulk** ayrı `Should` kalemi olarak §5.1 tablosuna eklenir (bayatlamaz,
+    gizlenmez).
+  - **10.1.4** — KK: _"Sayaç 'N/limit (% used)'; aşım paketi; %80 proaktif uyarı (Nexa)"_ →
+    `BillingPage.tsx` (`quota_warning`, aşım paketi fiyat teklifi) + testleri.
+- **KK doğrulama:** satır başına odaklı süit (web unit: SkillEditor/step-reorder/BillingPage; api
+  integration: knowledge crawl + SSRF negatif) **fiilen koşulur**, sonuç HANDOFF'a yazılır.
+- **Sınır:** bu bir denetim/dokümantasyon görevi — kod değişikliği ÇIKMAMALI; KK açığı bulunursa
+  satır ◐ KALIR, açık §D'ye yazılır ve ayrı görev açılır (satır asla kanıtsız çevrilmez).
+- **Testler:** yukarıdaki odaklı süitler + `contract-parity`. **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+
+#### GL-2 · PARK-a — `.parked-playbook/` temizliği `[XHIGH]` · tm 86
+
+- **Neden açık:** HANDOFF "parked" notu; izlenmeyen 6 dosya. Teslim edilen muadillerle (tm 32
+  Playbook tamamlama) örtüşüyor — F.1/6 "sessiz borç" ve F.1/7 "ölü kod" maddelerini kirletir.
+- **Kapsam:** dosya-dosya diff (parked ↔ teslim edilen muadil). Değerli fark varsa ilgili dosyaya
+  taşınır + test; yoksa dizin silinir. Karar gerekçesiyle §D'ye yazılır. Sonuç: `git status`
+  temiz (untracked 0).
+- **KK doğrulama:** silme yolunda repo temiz; entegre yolunda web unit yeşil.
+- **Testler:** dokunulan paketlerde typecheck+lint+unit. **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+
+#### GL-3 · F0-KAPAT — Faz-0 §F.00 kapanış turu `[MAX]` · tm 87
+
+- **Neden açık:** §F.00'ın 9 kapanış alt-görevi (T1-a…T7-a) tm 27–31'de done; ama üst tablo hâlâ
+  `45 ✅ · 6 ◐ — ❌ AÇIK` diyor ve **§F.1'in 10 maddesi tam sürüm hiç koşulmadı**. Faz "kendiliğinden"
+  kapanmaz — kapanış bir turdur.
+- **Kapsam:** (1) `Must` sayacı §3 satırlarından **sayılarak** doğrulanır (beklenen `51 ✅ · 0 ◐ ·
+  0 ⬜`); (2) §F.1'in **10 maddesi tam sürüm** koşulur (kapsam süpürmesi PRD §6 Faz-0 payı · faz
+  sızıntısı · NFR kapıları ölçümle · şema artıkları · contract-parity · sessiz borç grep'i · ölü
+  kod · doküman tazeliği · temiz kurulum provası `make dev` · kapsam dışı doğrulaması); (3) üst
+  tablo Faz-0 satırı ✅ KAPALI'ya çevrilir; (4) §F.2 raporu üretilir → HANDOFF.
+- **KK doğrulama:** her §F.1 maddesinin kanıtı (komut çıktısı/test adı/ölçüm) HANDOFF'a madde
+  madde yazılır. Kanıtsız "geçti" yok (§F.2 uyarısı).
+- **Testler:** tam DoD kapısı + §F.1/9 temiz kurulum provası. **Bağımlılık:** GL-1, GL-2
+  (doküman tazeliği ve sessiz-borç maddeleri bunlarsız yanlış-pozitif verir). **Tahmin:** 1–2 pencere.
+
+#### GL-4 · V1-KAPAT — v1 §F.00 kapanış turu `[MAX]` · tm 88
+
+- **Neden açık:** v1 `Must` kapısı (05.1/05.3/05.5 · 06.1–06.4 · 08.5.4–.6 · 08.8.4 · 02.1.2 ·
+  04.2 · 13.8-mobil-push 🔒) GL-1 sonrası `0 ◐/⬜` bekleniyor; kapanış turu koşulmadı.
+- **Kapsam:** (1) v1 `Must` sayacı §4 satırlarından sayılır; (2) §F.1 10 madde v1 kapsamı için
+  koşulur — **faz sızıntısı maddesinde** GL-5/6/7 öne çekmesi kontrol edilir: §D52'de belgeli
+  sapmadır, ihlal değildir (belgesiz başka sızıntı ARANIR); (3) üst tablo v1 satırı kapatılır;
+  (4) §F.2 raporu → HANDOFF. `Should` kalemlerinden ⬜ kalanlar raporda **ismen** listelenir
+  (06.3.2-bulk dahil).
+- **KK doğrulama:** GL-3 ile aynı disiplin — madde madde kanıt.
+- **Testler:** tam DoD kapısı + tam E2E süiti (HANDOFF 2026-07-28 notu: son bakım penceresi tam
+  kapıyı koşmadı — burada koşulur). **Bağımlılık:** GL-3. **Tahmin:** 1–2 pencere.
+
+#### GL-5 · 08.9.5-a/b — CC masking (Luhn, yazma anında) `[MAX]` ↑ · tm 70 *(v2'den öne — §D52)*
+
+- **Neden şimdi:** canlı müşteri trafiğinde PAN (kart numarası) sohbete yazılabilir; KK "DB/log'a
+  maskeli yazılır (yalnız UI değil)" canlıda gerçek PCI SAQ A sınırıdır. Kodda maskeleme yok
+  (yalnız `payment-method-service.ts` kendi maskeli alanlarını tutuyor — farklı iş).
+- **08.9.5-a — Maskeleme çekirdeği + yazım yolları** `[MAX]`
+  - **Kapsam:** saf lib `apps/api/src/lib/cc-mask.ts` — 13–19 haneli aday diziler (boşluk/tire
+    ayraçlı varyantlar dahil) yakalanır, **Luhn doğrulanır**, geçenler `**** **** **** 1234`
+    biçimine maskelenir. Sonra **tüm event yazım yolları** kaynağında maskeler: `chats.ts` (ajan
+    eventi), `customer.ts` (widget eventi + pre-chat `custom_fields`), `email-inbound.ts` (konu).
+    Kaynakta maskelendiği için RTM push + transcript e-postası da otomatik maskeli.
+  - **KK (birebir):** _"PCI SAQ A; DB/log'a maskeli yazılır (yalnız UI değil)"_.
+  - **KK doğrulama `[MAX]` — NEGATİF ÖNCE:** (a) Luhn **geçmeyen** 16 hane (sipariş no) MASKELENMEZ
+    (yanlış-pozitif sınırı); (b) telefon/UUID/timestamp dokunulmaz; SONRA pozitifler: geçerli PAN
+    (ayraçlı/ayraçsız) → DB'de ham PAN **yok** (doğrudan SQL ile doğrulanır), maskeli metin var.
+- **08.9.5-b — Log/yan-kanal doğrulaması** `[MAX]`
+  - **Kapsam:** request log, `audit_log` meta, FileMailer çıktıları (`.data/mail`), skill/AI
+    yollarına giden metin — ham PAN sızmadığı integration testle kanıtlanır; NFR-C5/S9 satırına
+    işlenir.
+- **Testler:** unit tablo-testleri + integration (DB + yan kanallar) + cross-tenant.
+  **Bağımlılık:** GL-4. **Tahmin:** 2 pencere.
+
+#### GL-6 · 08.9.2-a — Banned customers tamamlama (IP yasağı + UI) `[XHIGH]` · tm 68 *(v2'den öne — §D52)*
+
+- **Mevcut (koda karşı, 2026-07-28):** visitor/customer yasağı **çalışıyor** — `Customer.bannedAt`,
+  segment `banned`, PATCH ban/unban (`customers.ts`), token mint reddi (`auth.ts` `customer_banned`)
+  + chat start reddi (`chat-service.ts`). **Eksik:** `SecuritySettings.bannedCustomerIps` kolonu
+  şemada var ama **hiçbir yerde okunmuyor** (grep 0) → IP yasağı uygulanmıyor; Settings→Security'de
+  yönetim yüzeyi yok.
+- **Kapsam:** (1) IP yasağı enforcement — `/customer/token` mint + chat start yolunda istemci IP'si
+  `bannedCustomerIps` ile karşılaştırılır, yasaklıya `customer_banned` zarfı; (2) kontrata
+  `banned_customer_ips` alanı (`/settings/security` GET/PATCH, tm 1 deseni) + Settings→Security
+  UI listesi; (3) CustomersPage'de ban/unban aksiyonunun UI'dan erişilebilirliği doğrulanır
+  (yoksa eklenir).
+- **KK (birebir):** _"Yasaklı sohbet başlatamaz"_.
+- **KK doğrulama:** integration — yasaklı IP → token 403 + sohbet başlatamaz; yasaklı visitor →
+  aynı (regresyon); unban → tekrar başlatabilir; **cross-tenant:** A lisansının yasağı B'yi
+  etkilemez (ZORUNLU).
+- **Testler:** integration + cross-tenant + UI unit. **Bağımlılık:** GL-4. **Tahmin:** 1–2 pencere.
+
+#### GL-7 · 08.9.3-a — Spam filtre (ortak motor + chat yolu) `[MAX]` ↑ · tm 69 *(v2'den öne — §D52)*
+
+- **Mevcut (koda karşı):** `SecuritySettings.spamFilterEnabled` var ve **yalnız** `email-inbound.ts`
+  kullanıyor (sağlayıcı spam bayrağı). Chat yolunda hiçbir filtre yok.
+- **Kapsam:** (1) **deterministik** kural motoru `services/security/spam-filter.ts` — link
+  yoğunluğu, tekrar oranı, karakter/entropi eşiği, blocklist; **LLM yok** (test edilebilirlik +
+  yanlış-pozitif denetimi); (2) widget chat start / ilk mesaj yoluna bağlanır (`spamFilterEnabled`
+  kapısı); e-posta yolundaki mevcut kanca aynı motora bağlanır (tek doğruluk kaynağı); (3) spam
+  kararının davranışı (sessiz drop mu, zarflı red mi) task içinde kararlaştırılır → §C'ye yazılır.
+- **KK (birebir):** _"Spam sohbet/ticket otomatik filtre"_.
+- **KK doğrulama `[MAX]` — NEGATİF ÖNCE:** normal müşteri mesajı **geçer** (yanlış-pozitif sınırı,
+  gerçekçi örnek seti); SONRA: spam örnek seti düşer; filtre kapalıyken geçer; cross-tenant ayar
+  izolasyonu.
+- **Testler:** unit (kural motoru tablo-testleri) + integration (chat + email iki yol) +
+  cross-tenant. **Bağımlılık:** GL-4. **Tahmin:** 2 pencere.
+
+#### GO-LIVE sonrası deferred kalanlar (kullanıcı kararı 2026-07-28 — değişmedi)
+
+Dış entegrasyon/uyumluluk kalemleri **deferred kalır**: tm 63/64 (Reports v2) · tm 65/79
+(Instagram/Telegram) · tm 66 (skills-routing) · tm 67 (MCP) · tm 71/72 (API paketleri/Zapier) ·
+tm 73–78 (Engage/Goals/Sales/KB/scheduler/Multibrand) · tm 80–84 (Ent. güvenlik/uyumluluk).
+Gerçek servis geçişleri (Stripe/SMTP/S3/ClamAV) kod değil **yapılandırma** işidir (provider
+desenleri hazır: A4/A5, `STORAGE_PROVIDER`, `VIRUS_SCANNER`) ve PRD §11.1 + CLAUDE.md sınırı
+gereği bu depodan yapılmaz.
+
 ## 5. FAZ 2 — v2 (PRD §5.3)
 
 **PRD amacı:** _"Skill builder + Copilot BI + gelişmiş operasyon."_
@@ -863,9 +1018,9 @@ Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal baş�
 | 08.5.7 | Instagram (DM)                                    | Should (Ent./v2) |                                                     |
 | 08.6.3 | Skills-based routing + supervision/takeover       | Could (v2)       |                                                     |
 | 08.8.3 | MCP server (search_tickets/list_chats/get_report) | Could (v2)       |                                                     |
-| 08.9.2 | Banned customers                                  | Should (v2)      | `Customer.banned` alanı var                         |
-| 08.9.3 | Spam filtre                                       | Should (v2)      |                                                     |
-| 08.9.5 | CC masking (Luhn, yazma anında)                   | Should (v2)      | NFR-C5                                              |
+| 08.9.2 | Banned customers                                  | Should (v2)      | **→ öne çekildi §4.5/GL-6 (tm 68, §D52)**           |
+| 08.9.3 | Spam filtre                                       | Should (v2)      | **→ öne çekildi §4.5/GL-7 (tm 69, §D52)**           |
+| 08.9.5 | CC masking (Luhn, yazma anında)                   | Should (v2)      | NFR-C5 · **→ öne çekildi §4.5/GL-5 (tm 70, §D52)**  |
 | 09.3   | API istek paketleri                               | Could (v2)       |                                                     |
 | 09.4   | Zapier/Make + Build-your-app                      | Could (v2)       |                                                     |
 | 13.2   | Engage / Traffic (gelişmiş filtreler)             | Should (v2)      |                                                     |
@@ -891,9 +1046,9 @@ Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal baş�
 | 08.5.7| Instagram (DM, MOCK)              | `[XHIGH]`|   2        | 08.5-adapter-a (v1)           |
 | 08.6.3| Skills-based routing + takeover   | `[MAX]`  |   3–4      | routing ✅; supervision yeni  |
 | 08.8.3| MCP server (search/list/report)   | `[MAX]` ↑|   3        | OAuth scope ✅; tenant izole   |
-| 08.9.2| Banned customers                  | `[XHIGH]`|   1–2      | `Customer.banned` ✅ (ban ✅)  |
-| 08.9.3| Spam filtre                       | `[MAX]` ↑|   2        | güvenlik kuralı — tam derinlik serbest |
-| 08.9.5| CC masking (Luhn, yazma anında)   | `[MAX]` ↑|   2        | NFR-C5/S9 — yazma anında maskeleme; tam derinlik serbest |
+| 08.9.2| Banned customers                  | `[XHIGH]`|   1–2      | **→ §4.5/GL-6 (öne çekildi, atomik kırılım orada)** |
+| 08.9.3| Spam filtre                       | `[MAX]` ↑|   2        | **→ §4.5/GL-7 (öne çekildi, atomik kırılım orada)** |
+| 08.9.5| CC masking (Luhn, yazma anında)   | `[MAX]` ↑|   2        | **→ §4.5/GL-5 (öne çekildi, atomik kırılım orada)** |
 | 09.3 | API istek paketleri               | `[XHIGH]`|   1–2      | billing ✅                    |
 | 09.4 | Zapier/Make + Build-your-app      | `[XHIGH]`|   2–3      | 08.8.4 (v1) webhooks          |
 | 13.2 | Engage/Traffic (gelişmiş filtre)  | `[XHIGH]`|   2–3      | `visits` ✅ · 03.1.x          |
@@ -1142,6 +1297,13 @@ denetim** noktası olur. **Faz-0 önce kapanır** (§1.3 — v1 dilimine geçmed
 | 04.6-a | Chatbots/Suspended sekmeleri | 04.6 | XHIGH | — | 1 | V1-Team | 1 |
 | 13.1-a | Home dashboard | 13.1 | XHIGH | 03.1.1 | 1 | V1-Home | 1–2 |
 | 13.6-a | Omnichannel HelpDesk katmanı | 13.6 | MAX↑ | ticketing✅ | 1 | V1-Home | 2+ |
+| GL-1/SYNC-a | v1 bayat satır senkron denetimi (tm 85) | 06.2.4·06.3.2·10.1.4 | XHIGH | — | 1 | GO-LIVE | 1 |
+| GL-2/PARK-a | `.parked-playbook/` temizliği (tm 86) | 05.3/05.4 tarihçe | XHIGH | — | 1 | GO-LIVE | 1 |
+| GL-3/F0-KAPAT | Faz-0 §F.00 kapanış turu (tm 87) | Faz-0 tümü | MAX | GL-1·GL-2 | 0 | GO-LIVE | 1–2 |
+| GL-4/V1-KAPAT | v1 §F.00 kapanış turu (tm 88) | v1 tümü | MAX | GL-3 | 1 | GO-LIVE | 1–2 |
+| GL-5/08.9.5-a/b | CC masking (Luhn, yazma anında) (tm 70) | 08.9.5 | MAX↑ | GL-4 | v2→GL | GO-LIVE | 2 |
+| GL-6/08.9.2-a | Banned customers tamamlama (IP+UI) (tm 68) | 08.9.2 | XHIGH | GL-4 | v2→GL | GO-LIVE | 1–2 |
+| GL-7/08.9.3-a | Spam filtre (ortak motor + chat) (tm 69) | 08.9.3 | MAX↑ | GL-4 | v2→GL | GO-LIVE | 2 |
 
 > v2/v3 satırları §5.1 / §6.1'de item-level verildi (orta derinlik — faz başında atomik bölünür).
 
@@ -1958,6 +2120,7 @@ görüneceği en son yerdir.
 - **D49 (09.1-a · tm 53.1 · 2026-07-27 · resume kapanışı):** Apps Marketplace + OAuth akışı (MOCK) (FR-MOD-09.1, Should v1) — satır 538 (09.1) `⬜`→`✅`. **KK (birebir)** = _"Kart → izin/OAuth akışı; bağlanınca veri sohbet içinde"_, doğrulama ölçütü _"integration: mock OAuth → kurulu görünür"_ — ikisi de karşılanıyor. Bağımlılık tm 30 (T6-a virtualization, ✅). **Resume:** slice önceki pencerede yazılıp commit'lenmişti (`bdd10d8` katalog+OpenAPI, `6e83aed` mock OAuth + in-chat veri + migration; `29637c1` handoff) ama DoD kapısı yalnız typecheck'e kadar koşulmuş, done kararı bu pencereye bırakılmıştı. Bu pencere sıfırdan yapmadı → mevcut işi doğruladı, **tam DoD kapısını koştu**, PLAN/HANDOFF'u kapadı, push + done. **Tasarım (KK'yı taşıyan iki yarı = kart→OAuth + bağlanınca-veri):** (1) statik **katalog** `@nexa/types/apps.ts` `APP_CATALOG` — grid, servis ve testler hangi app'lerin var olduğunda anlaşsın diye tek doğruluk kaynağı; `findApp`/`isAppId` + deterministik `appChatData(entry, seed)` in-chat stub (canlı çağrı değil, müşteri kimliğine göre kararlı). (2) **servis** `services/apps/app-service.ts` yalnız *bağlantıları* yönetir: `list` (katalog ⋈ workspace kurulumları), `oauthStart` (imzalı `state` mint — saf, yazma yok), `oauthCallback` (state doğrula → `app_installations` upsert, idempotent), `disconnect` (silinen satır sayısı), `chatData` (bağlı app'lerin bu sohbetin müşterisi hakkındaki mock verisi). **OAuth MOCK ama CSRF gerçek** (MASTER-PROMPT §5): gerçek sağlayıcı yok, fakat `state` HMAC-SHA256 ile imzalanır (app+license+nonce+10dk expiry), `#verify` constant-time compare → kurcalanmış/replay state gerçek bir OAuth client gibi reddedilir; secret JWT signing key'den domain-ayrık türetilir (yeni env yok). **Model** `app_installations` (license-scoped, `@@unique(license,app_id)`, migration `20260727090000_app_installations` — yapısal DDL + RLS policy + GRANT nexa_app el ile, custom_fields emsali; **drift temiz** = `db:check-drift` no drift). **Rota** `routes/apps.ts`: yönetim `/settings/apps` (GET `access_rules:ro/rw`) + OAuth start/callback + DELETE (`access_rules:rw`) = üçüncü-parti app bağlamak admin işi; **tek istisna** `GET /chats/:id/apps` sohbeti işleyen ajanın zaten sahip olduğu chat scope'unda (`chats--all:ro`/`chats--access:ro`) — Details panosunda okunur. Bağlantı yoksa/cross-tenant → 404 (NFR-S5, chat id tenant'lar arası problanamaz). **Web** `features/apps/AppsMarketplace.tsx` (kart grid + connect/disconnect) + `App.tsx` `/app/apps` rotası + `DetailsPanel.tsx` **additive** "Apps" bölümü (`GET /chats/:id/apps` → bağlı-app alanları; boşsa/scope yoksa "No connected apps", paneli bloke etmez). **Kontrat** `@nexa/types` `App*` DTO'ları + OpenAPI `paths/apps.yaml` (5 yol) + şemalar → bundle+client yeniden üretildi (contract-parity 5/5, [[nexa-contract-parity-gate]]). **DoD gate (bu pencere, exit 0):** typecheck 11/11 · lint 8/8 · build 7/7 · test:unit (types `apps.test.ts` 4 + web `AppsMarketplace.test.tsx` 3; api 179 · rtm 29 · widget 52 · types 54 · ai-mock 56) · test:integration (api **778**/38 dosya, `--concurrency=1` [[nexa-test-gate-parallel-db]]) incl. yeni `apps.test.ts` **7** (mock OAuth→kurulu görünür · in-chat veri · disconnect+ikinci disconnect 404 · tampered/mismatch state reddi · yok-app→404 · read-only admin list-var-connect-yok · cross-tenant izole) + contract-parity 5/5 + regresyon yok · rtm 42 · drift temiz. **E2E notu:** task test stratejisi **integration** ("mock OAuth → kurulu görünür") — bu pencere onu tam koştu (7 test, KK'nın iki yarısı da: connect→installed + in-chat veri). Apps için ayrı browser e2e spec'i yok; web yüzeyi **additive** (yeni `/app/apps` rotası + DetailsPanel'e boşken "No connected apps" diyen bölüm, mevcut seçici değişmez) → mevcut e2e etkilenmez; full Playwright ayrıca koşulmadı (D45/D46/D47 integration-strateji emsali; RTM canlı-chat e2e bu sandbox'ta önceden kırık). **Kapsam sınırı (dürüstlük):** yalnız **09.1-a** (satır 538) teslim; kardeş **09.2-a** (tm 53.2, satır 539, 15–20 kart listesi) ve **08.8.1-a** (tm 53.3, satır 537, Settings→marketplace girişi) **pending** → o satırlar `⬜` bırakıldı, parent tm 53 `in-progress` kalır. **Not:** `.parked-playbook/` bu task'a ait değil (SkillBrowser/RecommendedSkills, FR-MOD-05.3/05.4) — dokunulmadı, izlenmiyor. Bu pencere ayrıca çalışma ağacında pre-existing duran D48/02.1.2 (tm 37) PLAN düzeltmesini **ayrı** docs commit'le kapadı (temiz ağaç, CONVENTIONS §5 kapsam ayrımı). Kapsam: yalnız tm 53.1 + satır 538.
 - **D50 (09.2-a · tm 53.2 · 2026-07-27 · resume kapanışı):** Apps entegrasyon dizini — tam liste (15–20) + kanal çapraz-linki (FR-MOD-09.2, Should v1) — satır 539 (09.2) `⬜`→`✅`. **KK (birebir)** = _"Her biri OAuth/API key; kanal-tipli olanlar Channels'ta da yönetilir"_, doğrulama ölçütü _"unit: liste + kanal-tipli çapraz"_ — ikisi de karşılanıyor. Bağımlılık 53.1 (09.1-a, ✅). **Resume:** slice bu pencereden önce çalışma ağacında hazırdı (types/servis/web/OpenAPI/testler + tasks.json 53.2 in-progress); bu pencere sıfırdan yapmadı → mevcut işi doğruladı, tam DoD kapısını koştu, PLAN/HANDOFF'u kapadı, commit+push+done. **Tasarım (KK'nın iki yarısı = tam liste OAuth/API-key + kanal-Channels çapraz):** (1) **Katalog büyütme** `@nexa/types/apps.ts` `APP_CATALOG` 09.1'in 5 temsili kartını **20**'ye çıkardı: 10 veri app'i **iki sağlayıcı türünü de** kapsıyor (OAuth: Salesforce/PayPal/Slack/Jira · API-key: Intercom/Zendesk/WooCommerce/Magento/Klaviyo/Segment) + 5 kanal-tipli kart (WhatsApp/Messenger/Instagram/Telegram/SMS-Twilio). Yeni kategoriler `support`/`analytics`/`channels`. (2) **Kanal çapraz-linki** = yapının kalbi: kanal-tipli app `channel: ChannelType` taşır ve **Settings→Channels'ta** kurulur, marketplace OAuth'unda değil → `dataLabel`/`dataFields` **opsiyonel** yapıldı (kanal app'i in-chat veri taşımaz), `isChannelApp`/`channelApps`/`connectableApps` katalogu ikiye böler, `appChatData` eksik alanları boş sayar. **Tek-yüzey invariant'ı servis'te zorlanır:** `app-service.ts` `requireConnectableApp` → kanal app'inin `oauthStart`/`oauthCallback`/`disconnect`'i `ApiError.validation` (400) ile reddedilir; `chatData` kanal app'lerini filtreler (zaten bağlanamazlar). **Web** `AppsMarketplace.tsx` karta göre dallanır: veri app'i = `DataAppCard` (connect/disconnect), kanal app'i = `ChannelAppCard` = "In Channels" rozeti + "Manage in Channels" linki (`/app/settings#section-channels`, `react-router` `Link`), Connect yok. **Kontrat** OpenAPI `AppListItem`: kategori enum'a support/analytics/channels + zorunlu `channel` alanı (`oneOf` string-enum [CHANNEL_TYPES ile **birebir**: website_widget…chat_page] | null) → bundle+client yeniden üretildi (idempotent, drift yok). Yeni API yolu **yok** (mevcut şema genişledi) → contract-parity 5/5. **DoD gate (bu pencere, exit 0):** typecheck 11/11 · lint 8/8 · build 7/7 · db:check-drift temiz (yeni migration yok) · test:unit (types `apps.test.ts` +2 [56 toplam: 15–20 kart & iki provider · kanal-çapraz partition, CHANNEL_TYPES doğrulaması] + web `AppsMarketplace.test.tsx` +1 [444: kanal kartı Connect yerine Channels'a linkler]) · test:integration (api **779**/38 dosya `--concurrency=1` [[nexa-test-gate-parallel-db]]) incl. `apps.test.ts` **8** (+1: tam dizin 15–20 · whatsapp channel='whatsapp'/category='channels'/installed=false · veri app channel=null · kanal OAuth-start & disconnect 400) + contract-parity 5/5 + regresyon yok · rtm 42. **Test-gate notu:** `pnpm -w test` api+rtm DB süitlerini paralel koşup Postgres deadlock (40P01) verdi — gerçek başarısızlık değil, [[nexa-test-gate-parallel-db]]; paket-paket seri koşulunca api 958 · rtm 71 tamamen yeşil. **E2E notu:** task test stratejisi **unit** ("liste + kanal-tipli çapraz") — types+web unit + api integration'da tam koşuldu. Apps için ayrı browser e2e spec'i yok; web değişikliği additive (kanal kartı yeni dal, mevcut veri-app kartı seçicileri değişmez) → mevcut e2e etkilenmez, full Playwright koşulmadı (D49 emsali). **Kapsam sınırı (dürüstlük):** yalnız **09.2-a** (satır 539) teslim; kardeş **08.8.1-a** (tm 53.3, satır 537, Settings→marketplace girişi) **pending** → satır 537 `⬜` bırakıldı, parent tm 53 `in-progress` kalır. **Not:** `.parked-playbook/` bu task'a ait değil (SkillBrowser/RecommendedSkills) — dokunulmadı, izlenmiyor. Kapsam: yalnız tm 53.2 + satır 539.
 - **D51 (08.8.1-a · tm 53.3 · 2026-07-27):** Apps (marketplace) girişi — Settings→Integrations kapısı (FR-MOD-08.8.1, Should v1) — satır 537 (08.8.1) `⬜`→`✅`; parent **tm 53 tümüyle done** (53.1/53.2/53.3). **KK (birebir)** = _"Üçüncü parti dizin (detay MOD-09)"_, doğrulama ölçütü _"unit: giriş → 09.1"_ — ikisi de karşılanıyor. Bağımlılık 53.1 (09.1-a, ✅). **Boşluk:** 53.1 marketplace'i (`AppsMarketplacePage`, `/app/apps`) + 53.2 tam dizini yazdı ama **rota modül-rayında (`navigation.ts` MODULES/FOOTER) yoktu** ve Settings'te giriş yoktu → grid yalnız URL elle yazılınca erişilebilirdi. Bu satır o kapıyı açar. **Tasarım:** `SettingsPage.tsx`'e **export** `Integrations` bölümü — Channels'ın hemen altına (dış-dünya bağlantıları bir arada) yerleşen `<Section title="Integrations">` + `react-router` `Link to="/app/apps"` ("Open marketplace"). Ayrı veri çağrısı yok (saf navigasyon); marketplace'in kendisi (`/settings/apps` GET) `access_rules` kapısını zaten kapıda uyguluyor, giriş linki herkese görünür (TrustedDomains/FileSharing gibi bölüm hep render, canEdit yalnız mutasyonu gate'ler emsali). **Kapsam (dürüstlük):** minimal giriş — komut paleti / modül-rayına Apps EKLENMEDİ (task "Settings→Integrations girişi" der, CONVENTIONS §5). **DoD gate (bu pencere, exit 0):** typecheck 11/11 · lint 8/8 · build 7/7 · test:unit 10/10 paket (web **445**, +1 = yeni `Integrations.test.tsx`: link href → `/app/apps`) + web settings+apps odaklı 31/31. **Integration/contract-parity notu:** değişiklik **saf web-additive** — API rotası/OpenAPI/migration/servis yüzeyi **yok** → api integration & contract-parity (5/5) yapısal olarak etkilenmez, bu pencere DB süitini bu-alan-değişmediği için koşmadı (D49/D50 E2E-strateji dürüstlük emsali); task test stratejisi zaten **unit**. **E2E notu:** Settings e2e (`settings.spec.ts`) region'ları erişilebilir ada göre seçer (Website widgets/Trusted domains/Channels…); yeni "Integrations" region'ı bunların hiçbiriyle çakışmaz, bölüm-sayısı iddiası yok → additive, mevcut e2e etkilenmez. **Not:** `.parked-playbook/` bu task'a ait değil — dokunulmadı, izlenmiyor. Kapsam: yalnız tm 53.3 + satır 537.
+- **D52 (GO-LIVE planlama turu · 2026-07-28):** kapanış + canlıya hazırlık kırılımı **§4.5** eklendi; tm **85–88** açıldı, tm **68/69/70** deferred→pending'e alındı. **Dört bulgu:** (1) **Üç v1 satırı bayat** — 06.2.4 / 06.3.2 / 10.1.4 `◐` duruyordu ama işler TM'de done (tm 33 alt-görevleri + tm 54) ve kod mevcut (`step-reorder.ts`+`SkillEditor.tsx`; `web-crawler.ts`+`lib/ssrf.ts`; `BillingPage.tsx` meter/`quota_warning`). Satırlar bu turda **çevrilMEdi** — çeviri kanıt (odaklı test koşusu) ister; GL-1 (tm 85) denetim görevi açıldı. Panel "TM'de bitti, PLAN'da ◐" bulgu deseninin devamı. (2) **Faz kapanış turları hiç görev olmamıştı** — Faz-0'ın 9 kapanış alt-görevi done ama §F.1 10 madde tam sürüm hiç koşulmadı, üst tablo `❌ AÇIK`; TM kuyruğu boşalınca (62 done · 0 pending) panel critical "run-loop duracak" verdi. GL-3/GL-4 (tm 87/88) açıldı. (3) **`.parked-playbook/`** izlenmeyen yarım iş — GL-2 (tm 86). (4) **Öne çekme sapması (kullanıcı kararı 2026-07-28):** hızlı canlıya geçiş için v2'nin üç saf-güvenlik kalemi 08.9.5 (CC masking) / 08.9.2 (banned tamamlama) / 08.9.3 (spam) GL-5/6/7 olarak öne çekildi. **Gerekçe:** canlı trafikte PII/kötüye-kullanım riski gerçek; üçü de dış bağımlılıksız saf kod; §5.1 istisnası (_"saf güvenlik kuralları … istenirse şimdi atomik bölünebilir"_) zaten öngörüyordu. **Faz disiplini korundu:** üçü de GL-4 (v1 kapanışı) bağımlılığıyla zorlandı — §1.3'teki "Faz-0 delikken v1 işi alındı" hatasının tekrarı değil; kapanış ÖNCE, öne çekilen iş SONRA. **Dış entegrasyonlar deferred kaldı** (tm 63–67 · 71–84; kullanıcı kararı): gerçek Stripe/SMTP/S3/ClamAV geçişleri kod değil yapılandırma (provider desenleri hazır) ve PRD §11.1 + CLAUDE.md sınırı gereği bu depodan yapılmaz. Bu tur yalnız PLAN + tasks.json değiştirdi (kod yok → DoD kod kapısı uygulanmaz; commit `docs(plan)`).
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 

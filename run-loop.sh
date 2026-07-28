@@ -127,7 +127,7 @@ while true; do
   [ "$eff_label" = "max" ] && eff="$EFFORT_MAX" || eff="$EFFORT_HIGH"
 
   log "──────────────────────────────────────────────────────────────"
-  log "▶ Task $task_id  (effort=$eff, kalan≈$remaining)  — operasyon+kontrol başlıyor"
+  log "▶ Task $task_id  (effort=$eff, kalan≈$remaining)  — tek sürekli akış başlıyor (build→doğrulama→kapanış)"
   start=$SECONDS
   stream_task "$task_id" "$eff"
   status=$(status_from "$LOG_DIR/task-$task_id.jsonl"); [ -z "$status" ] && status="blocked"

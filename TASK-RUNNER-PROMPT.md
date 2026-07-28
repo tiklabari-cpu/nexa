@@ -17,7 +17,7 @@ Sırayla oku:
    b. O kodun gereksinim satır(lar)ını bul: `grep -n '| 11\.7' PLAN.md`. Senin hedefin
       **durum damgası (`⬜`/`◐`/`✅`) taşıyan** satırlar; Düz tablo / dilim tablosu satırları
       değil. Bir task birden çok satır kapatabilir (ör. `02.9-a` → hem `02.9` hem `11.8`).
-   §5'te bu satırları güncelleyeceksin — şimdi yalnız yerlerini ve mevcut durumlarını not al.
+   §3'te (kapanış) bu satırları güncelleyeceksin — şimdi yalnız yerlerini ve mevcut durumlarını not al.
 5. `git log --oneline -20` + `git status` — repo şu an nerede.
 6. Task'ın dokunacağı mevcut dosyalar.
 
@@ -26,23 +26,31 @@ Bu task daha önce yarım kalmış olabilir. ÖNCE mevcut durumu tespit et: ilgi
 var mı, testler ne durumda, `git status` ne diyor. **Sıfırdan yapma** — kaldığı yerden devam et
 veya hatayı düzelt.
 
-## 2) Operasyon turu (build)
-Task'ı MASTER-PROMPT'taki contract-first akışıyla uygula:
-sözleşme (OpenAPI + @nexa/types) → migration → backend + unit test → frontend + typed client →
-E2E. Task neyi kapsıyorsa onu; kapsam dışına ÇIKMA (başka task'ın işini yapma).
+## 2) İşi baştan sona bitir — TEK sürekli akış (build → doğrulama → düzeltme → kapanış)
 
-## 3) Kontrol turu (verify — OBJEKTİF kapı)
-CONVENTIONS.md'deki DoD kapısını çalıştır ve **exit code'lara bak** (kendi kanaatine değil):
-typecheck, lint, unit, integration, build, ilgili smoke/E2E, ve task'ın kabul kriteri.
-Herhangi biri kırmızıysa geçme.
+Bu, "önce yaz, sonra ayrı bir kontrol turunda bak" şeklinde iki ayrı faz **DEĞİLDİR**. Aşağıdaki
+üç alt-adım aynı kesintisiz çalışmanın parçasıdır; aralarında doğal bir "durma noktası" yok —
+kapanışa (§3) ulaşmadan pencereyi bitirme.
 
-## 4) Düzeltme
-Kapı kırmızıysa düzelt ve yeniden doğrula. Bu pencerede makul sayıda dene. Yeşile dönmüyorsa
-tahmine dayalı "herhalde oldu" DEME.
+- **Build.** Task'ı MASTER-PROMPT'taki contract-first akışıyla uygula: sözleşme (OpenAPI +
+  @nexa/types) → migration → backend + unit test → frontend + typed client → E2E. Task neyi
+  kapsıyorsa onu; kapsam dışına ÇIKMA (başka task'ın işini yapma).
+- **Doğrulama (OBJEKTİF kapı).** CONVENTIONS.md'deki DoD kapısını çalıştır ve **exit code'lara
+  bak** (kendi kanaatine değil): typecheck, lint, unit, integration, build, ilgili smoke/E2E, ve
+  task'ın kabul kriteri. Herhangi biri kırmızıysa geçme.
+- **Düzeltme.** Kapı kırmızıysa düzelt ve yeniden doğrula; bu pencerede makul sayıda dene.
+  Yeşile dönmüyorsa tahmine dayalı "herhalde oldu" DEME.
 
-## 5) Kapanış
+**Tur/bütçe disiplini:** build kısmında iterasyona kilitlenip kalma. Kapanış (§3) — done da
+olsa blocked de olsa — **opsiyonel değil, bu pencerenin zorunlu son adımıdır**. Elindeki tur
+bütçesinin tamamını build'e harcayıp kapanışa hiç gelmeden pencereyi bitirmek en kötü sonuçtur
+(kod yarım, Task Master yanlış durumda, HANDOFF/PLAN güncellenmemiş). Uzayan bir düzeltme
+döngüsü fark edersen, kararı erken ver: ya yeşile çevir ya da `blocked` ilan edip §3'ün blocked
+dalını çalıştırarak kapat — ama MUTLAKA kapat.
+
+## 3) Kapanış
 - **Kapı YEŞİL ise:** (sıra önemli — 1–2 dosya değişikliği, 3 onları commit'ler)
-  1. **`PLAN.md`'yi güncelle** — §0.4'te bulduğun gereksinim satır(lar)ının durum damgasını
+  1. **`PLAN.md`'yi güncelle** — §0'da (bootstrap) bulduğun gereksinim satır(lar)ının durum damgasını
      `⬜`/`◐` → `✅` yap ve **kanıt** yaz: tabloda `Nerede` sütunu varsa oraya, yoksa (Faz-1
      tabloları 4 sütunlu) `Durum` hücresinin içine, mevcut ✅ satırlarındaki biçimde:
      ``✅ <ne yapıldı> — `<dosya>` · test `<dosya>` (n) · tm <id>``.

@@ -6,6 +6,61 @@
 
 ## Task log (newest-first)
 
+### GL-4 · V1-KAPAT — v1 §F.00 kapanış turu — done — 2026-07-31 UTC
+
+- Kapsam: **v1 (Faz 1) kapanış turu — kod DEĞİŞMEDİ (saf denetim + doküman senkronu).** §F.1'in 10 maddesi
+  **tam sürüm** v1 koduna karşı koşuldu; `Must` sayacı **sayılarak** doğrulandı; üst tablo Faz-1 → **✅ KAPALI**.
+  HANDOFF 2026-07-28'in "son bakım penceresi tam kapıyı koşmadı" borcu **tam E2E** koşularak kapatıldı.
+- Yapıldı:
+  - **Sayım (subtask 1):** v1 `Must` = §4.1/4.2/4.3'te `grep 'Must (v1)'` = **20 satır**, hepsi ✅ —
+    05.1/05.3/05.5 (3) · 06.1–06.4 (10) · 08.5.4–.6 (3 MOCK) · 08.8.4/02.1.2/04.2 (3) · 10.1.4 (1) =
+    **20 ✅ · 0 ◐ · 0 ⬜** (beklenen doğrulandı). Mobil 13.7/13.8-push 🔒 gerekçeli (§11.1/8) — sayaca girmez.
+  - **Bayatlık düzeltildi (verify+close):** GL-3'ten farklı olarak v1 modül tabloları zaten tam ✅'ti
+    (GL-1/tm 85 üç satırı senkronlamıştı) — bayatlık yalnız (a) §4.4.11 10.1.4-a **breakdown** "UI ⬜"
+    (oysa §4.3 ✅ tm 54) ve (b) §8 tablosu 3 "0-tüketici" satırı (`webhooks`/`channels`/`ratings` → v1
+    doldurdu, tm 34/35/45/60). İkisi de kanıtla güncellendi.
+  - PLAN senkron: üst tablo Faz-1 (→ ✅ KAPALI + `20 ✅ · 0 ◐ · 0 ⬜`) · header v1-kapanışı damgası ·
+    §F.00 v1 kapı satırı · §8 (3 satır + Karar re-sayım) · §4.4.11 10.1.4-a · §4.5/GL-4 "✅ Kapandı" bülteni · **§D56**.
+- Doğrulama — **tam DoD kapısı + TAM E2E, exit 0 (kanıtla; §F.2 "kanıtsız geçti yok"):**
+  - `typecheck` 0 · `lint` 0 · `build` 0 · `db:check-drift` "no drift"
+  - **unit 817** (web 445 · api 179 · rtm 29 · types 56 · ai-mock 56 · widget 52)
+  - **integration 821** (api 779/38f · rtm 42/1f, serial `--concurrency=1` — paylaşılan-PG yarışı) · **contract-parity 5/5**
+  - **e2e 59** (18 spec chromium, `demo-flow` dahil) — `.env` **source'lanarak** koşuldu (Playwright webServer
+    spawn'ları env'i process'ten alır); portlar boştu, temiz başladı
+- Varsayımlar: yok — her satır koda/teste karşı doğrulandı, kanıtsız çevirme yok.
+- Sonraki pencereye not: **v1 (Faz 1) ✅ KAPALI. GO-LIVE hardening hazır.** Sıra: **GL-5/6/7 = tm 70 (CC
+  masking) → 68 (Banned IP) → 69 (Spam filtre)** — üçünün de GL-4 bağımlılığı artık çözüldü (§D52 belgeli
+  öne-çekme). GL-4 faz-sızıntısı denetimi: bu üçü **henüz yazılmadı** (`cc-mask.ts`/`spam-filter.ts` ABSENT,
+  `bannedCustomerIps` 0 enforcement) → belgesiz sızıntı yok, disiplin korundu (kapanış ÖNCE, öne-çekilen iş
+  SONRA). Dış entegrasyonlar (tm 63–67/71–84) deferred (kullanıcı kararı §D52). **Bu commit yalnız
+  PLAN.md + HANDOFF.md + tasks.json içerir** (kod değişmedi). Pencereye açılışta zaten `M` olan harness
+  dosyaları (`TASK-RUNNER-PROMPT.md` protokol iyileştirmesi + `run-loop.sh`) ve kök `.DS_Store` (macOS
+  artefaktı) **bu turun işi değil → commit'e alınmadı**, çalışma-tepesinde bırakıldı. Tam E2E'nin yeniden
+  ürettiği `apps/e2e/kanit/*.png` (26) UI değişmediği için **geri alındı** (docs-only; refresh gerekirse ayrı `chore`).
+
+#### §F.2 — v1 (Faz 1) Kapanış Raporu (PRD §11.2 karşılaştırmalı)
+
+- **Tamamlanan kapsam (PRD kimlikleriyle):** v1 `Must` = **20/20 ✅**. FR-MOD: 05.1/05.3/05.5 (Playbook header/
+  sekmeler/satır) · 06.1–06.4 (AI Agent sekmeler/skill editör+reorder/knowledge+website-crawl-SSRF/profile) ·
+  08.5.4–.6 (Messenger/Twilio/WhatsApp MOCK adaptör) · 08.8.4 (Webhooks HMAC+SSRF+retry) · 02.1.2 (AI Agents
+  inbox grubu) · 04.2 (team AI performance) · 10.1.4 (AI resolutions meter). `Should` payı da çoğunlukla teslim:
+  05.2/05.4 · 06.5 · 02.1.4/02.3.2/02.5/02.7/02.9 · 03.1.3/03.3.x · 04.6 · 07.4/07.7/07.8 · 08.6.2/08.7.3–.7/
+  08.8.1 · 09.1/09.2 · 10.1.5/10.3 · 11.7/11.8 · 12.1–12.3 (Copilot) · 13.1/13.6 (HelpDesk merge/followers).
+- **Yarım kalan işler:** **YOK** (v1 `Must` kapsamında 0 ◐ · 0 ⬜). — `Should` kalanları aşağıda.
+- **Bilinçli yapılmayanlar (⛔/🔒, gerekçeli):** 13.7 Mobil uygulamalar 🔒 (web-öncelikli, PRD §11.1/8) ·
+  13.8-mobil-push 🔒 (aynı gerekçe) · `06.3.2-bulk` (bulk/CSV import) → v2 §5.1 (Should, ismen) · `workflows`
+  tablosu ⛔ (ADR-14, UI'sız). Bunlar kapanışı bloklamaz (§F.00: 🔒/⛔ sayaca girmez, gerekçeleri yazılı).
+- **Sessiz borç (§F.1/6):** **TEMİZ.** apps/*/src + packages/*/src'de 0 TODO/FIXME/XXX/HACK · 0 `@ts-expect-error`/
+  `@ts-ignore` · 0 test `skip`/`only` · 0 `eslint-disable` (`find`-doğrulandı).
+- **Şema artığı (§F.1/4):** v1 üç "0-tüketici" tabloyu doldurdu (webhooks tm34 · channels tm35 · ratings tm45/60);
+  yalnız `goals` (v2·13.3) + `workflows` (⛔ADR-14) 0-tüketici, ikisi de gerekçeli. Sistemsiz artık tablo yok.
+- **Faz sızıntısı (§F.1/2):** GL-5/6/7 §D52'de **belgeli** öne-çekme (v2 güvenlik → GO-LIVE); henüz yazılmadı;
+  belgesiz başka faz sızıntısı **yok**.
+- **Sapmalar (§D):** §D56 (bu tur). Önceki ilgili: §D52 (GO-LIVE kırılımı) · §D53 (GL-1 v1 bayat satır) · §D55 (GL-3 Faz-0).
+- **Karar bekleyen açık sorular (PRD §11.2):** v1 kapsamında **yok**. Sıradaki iş kullanıcı kararıyla belli:
+  GL-5/6/7 (tm 70/68/69, öne-çekilen saf-güvenlik) artık hazır; dış entegrasyon geçişleri (gerçek Stripe/SMTP/
+  S3/ClamAV) PRD §11.1 + CLAUDE.md sınırı gereği bu depodan yapılmaz (provider desenleri hazır, mock aktif).
+
 ### GL-3 · F0-KAPAT — Faz-0 §F.00 kapanış turu — done — 2026-07-31 UTC
 
 - Kapsam: **Faz-0 kapanış turu — kod DEĞİŞMEDİ (saf denetim + doküman senkronu).** §F.1'in 10 maddesi

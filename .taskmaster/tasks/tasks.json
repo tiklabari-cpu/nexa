@@ -2072,7 +2072,7 @@
         "description": "v1 Must kapısı (05.1/05.3/05.5 · 06.1-06.4 · 08.5.4-.6 · 08.8.4 · 02.1.2 · 04.2 · 13.8-mobil-push 🔒) tm 85 sonrası 0 ◐/⬜ bekleniyor; kapanış turu hiç koşulmadı. GL-5/6/7 (öne çekilen güvenlik kalemleri) bu görev bitmeden BAŞLAYAMAZ (faz disiplini, §D52). PLAN §4.5/GL-4 · §D52. [MAX].",
         "details": "1) SAYAÇ: v1 Must listesi PLAN §4 satırlarından SAYILARAK doğrulanır: 05.1/05.3/05.5 · 06.1/06.2.x/06.3.x/06.4 · 08.5.4-.6 · 08.8.4 · 02.1.2 · 04.2 (hepsi ✅ beklenir) + 13.8-mobil-push (🔒 gerekçeli — bloklamaz).\n2) §F.1 TAM 10 MADDE v1 kapsamı için (tm 87 ile aynı disiplin). ÖZEL: faz-sızıntısı maddesinde GL-5/6/7 öne çekmesi §D52'de BELGELİ sapmadır, ihlal değildir — belgesiz BAŞKA sızıntı aranır.\n3) Tam E2E süiti koşulur — HANDOFF 2026-07-28 notu: son bakım penceresi tam kapıyı koşmadı; borç burada kapanır.\n4) Should kalemlerinden ⬜ kalanlar §F.2 raporunda İSMEN listelenir (06.3.2-bulk dahil; tm 85'in eklediği satır).\n5) PLAN üst tablo v1 satırı kapatılır; §F.2 raporu → HANDOFF; kullanıcıya 'GO-LIVE hardening (tm 70/68/69) hazır' bildirilir.\nPLAN §4.4 v1 kapanış kapısı (satır ~562) · §4.5/GL-4 · §D52.",
         "testStrategy": "[MAX] tm 87 ile aynı kanıt disiplini: her §F.1 maddesi kanıtlı, HANDOFF'a madde madde. Tam DoD kapısı + TAM E2E süiti (Playwright, tüm spec'ler) exit 0. KAPANIŞ: PLAN üst tablo v1 ✅ KAPALI + §F.2 raporu + commit + push + tm 88 done → tm 70/68/69 bağımlılığı çözülür.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "87"
         ],
@@ -2082,53 +2082,53 @@
             "id": 1,
             "title": "v1 Must sayacı sayımı",
             "description": "PLAN §4 satırlarından Must listesi sayılır; ◐/⬜ kalan varsa DUR → görevleştir, bu tur bekler.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T17:30:07.926Z",
             "parentId": "undefined"
           },
           {
             "id": 2,
             "title": "§F.1 tam tur (v1 kapsamı) + faz sızıntısı kontrolü",
             "description": "10 madde v1 için; GL-5/6/7 = belgeli sapma (§D52), belgesiz sızıntı ara.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T17:30:07.930Z",
             "parentId": "undefined"
           },
           {
             "id": 3,
             "title": "Tam E2E + DoD borcu kapatma",
             "description": "Tam Playwright süiti + tam DoD kapısı (son bakım penceresinin koşmadığı kapı).",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T17:30:07.935Z",
             "parentId": "undefined"
           },
           {
             "id": 4,
             "title": "Faz kapatma + §F.2 raporu",
             "description": "Üst tablo v1 ✅ KAPALI; rapor HANDOFF'a; commit + push.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T17:30:07.939Z",
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-28T01:23:47.977Z"
+        "updatedAt": "2026-07-31T17:30:07.939Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-31T13:39:01.824Z",
+      "lastModified": "2026-07-31T17:30:07.939Z",
       "taskCount": 88,
-      "completedCount": 65,
+      "completedCount": 66,
       "tags": [
         "master"
       ]

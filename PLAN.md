@@ -7,7 +7,7 @@
 > Şema doğruluk kaynağı: PRD §8.4 + `rapor-2-teknik-mimari.md` §5.3.
 > `LiveChat_ER_Diyagram.mermaid` KULLANILMAZ (çelişkili — bkz. yeterlilik değerlendirmesi G8).
 
-**Başlangıç:** 2026-07-22 · **Son denetim:** 2026-07-25 (kapsam) · **Kapsam denetimi + kırılım:** 2026-07-25 (PLAN-EXPAND) · **GO-LIVE kırılımı:** 2026-07-28 (§4.5 · §D52 · tm 85–88 + 68/69/70) · **Faz-0 kapanışı:** 2026-07-31 (GL-3 · tm 87 · §F.2 · §D55)
+**Başlangıç:** 2026-07-22 · **Son denetim:** 2026-07-25 (kapsam) · **Kapsam denetimi + kırılım:** 2026-07-25 (PLAN-EXPAND) · **GO-LIVE kırılımı:** 2026-07-28 (§4.5 · §D52 · tm 85–88 + 68/69/70) · **Faz-0 kapanışı:** 2026-07-31 (GL-3 · tm 87 · §F.2 · §D55) · **v1 kapanışı:** 2026-07-31 (GL-4 · tm 88 · §F.2 · §D56)
 
 > **Bu turda (2026-07-25) PLAN, PRD §6'nın 138 `FR-MOD` satırına ve KODA karşı yeniden
 > denetlendi.** İki `✅` iddiası koda karşı **`◐`** çıktı (02.4 Details ziyaret bilgisi, 13.8
@@ -18,7 +18,7 @@
 | Faz                | PRD  | Genel durum                          | **Must sayacı (§F.00 kapısı)** | Kapanış |
 | ------------------ | ---- | ------------------------------------ | ------------------------------ | :-----: |
 | **Faz 0 — MVP**    | §5.1 | 54 ✅ · 0 ◐ (§3) · gruplu-🔒 v1'e    | **51 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
-| Faz 1 — v1         | §5.2 | kısmen (Playbook/AI öne çekildi §1.3) | denetlendi §4 — çoğu ⬜/◐       | ❌ AÇIK  |
+| Faz 1 — v1         | §5.2 | v1 payı teslim (Playbook+AI+omnichannel-MOCK+webhooks §1.3); Should çoğu ✅ · mobil 🔒 · 06.3.2-bulk→v2 | **20 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
 | Faz 2 — v2         | §5.3 | ⬜ başlanmadı                         | —                              |    —    |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                         | —                              |    —    |
 
@@ -30,6 +30,16 @@ raporunda + §D55. Sayım yöntemi: §3 tablolarındaki `Must`/`Must (MVP temel)
 **sayılarak** (✅=teslim+test, ◐=çekirdek var/KK eksik); `Should (MVP)` kalemleri kapanışı
 bloklamadı (§F.00) ama §3.13'te ismen listeli. _Tarihçe: kapanış öncesi üst-tablo sayacı bayattı —
 "45 ✅ · 6 ◐ — ❌ AÇIK" (2026-07-25 damgası); 01.3/02.4/13.8 çevrilince güncellenmemişti (§D55)._
+
+**v1 (Faz 1) kapandı (2026-07-31 · GL-4 · tm 88).** v1 `Must` kapısı **sayılarak** `20 ✅ · 0 ◐ · 0 ⬜`
+(§4.1/4.2/4.3'te `Must (v1)` = **20 satır**, hepsi ✅: 05.1/05.3/05.5 · 06.1–06.4 [10] · 08.5.4–.6 ·
+08.8.4 · 02.1.2 · 04.2 · 10.1.4). Mobil (13.7 · 13.8-push) gerekçeli 🔒 (PRD §11.1/8, web-öncelikli) —
+sayaca girmez. `Should` kalemleri de çoğunlukla teslim (Copilot 12.x · Campaigns · Reviews/Reports v1 ·
+Apps · Custom fields · HelpDesk merge…); tek bilinçli v2 payı `06.3.2-bulk` (bulk/CSV, §5.1). §F.1'in
+**10 maddesi tam sürüm** koda karşı koşuldu; **tam DoD kapısı + tam E2E süiti** yeşil (817 unit · 821
+integration · 59 e2e — exit 0). Kanıt HANDOFF §F.2 + §D56. GL-5/6/7 (tm 70/68/69, öne çekilen güvenlik)
+bağımlılığı **çözüldü**. _Tarihçe: kapanış öncesi sayaç "denetlendi §4 — çoğu ⬜/◐ — ❌ AÇIK" idi; öne
+çekmeler (Playbook/AI) + sonraki dilimler v1 payını doldurdu ama kapanış turu koşulmamıştı (§D56)._
 
 ---
 
@@ -817,9 +827,11 @@ Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal baş�
 
 #### 4.4.11 · MOD-10 Billing v1
 
-- **10.1.4-a — AI resolutions meter + stepper + %80 uyarı (UI)** `[XHIGH]` · *Must v1* — metering ✅
-  (ADR-13), UI ⬜ — KK: _"Sayaç 'N/limit (% used)'; aşım paketi; %80 proaktif uyarı (Nexa)"_ ·
-  doğrulama: unit (%80'de uyarı; sayaç metering'den). **Bağımlılık:** yok. **Tahmin:** 1 pencere.
+- **10.1.4-a — AI resolutions meter + stepper + %80 uyarı (UI)** `[XHIGH]` · *Must v1* — **✅ tm 54**
+  · metering ✅ (ADR-13), UI ✅ (`BillingPage.tsx` `ai-counter`/`quota-percent`/`quota-warning`/
+  `overage-package`/`overage-charge`; `/billing/usage` = fatura ADR-09; test `BillingPage.test.tsx` 12) —
+  KK: _"Sayaç 'N/limit (% used)'; aşım paketi; %80 proaktif uyarı (Nexa)"_ · doğrulama: unit (%80'de
+  uyarı; sayaç metering'den) ✅. **Bağımlılık:** yok. GL-1'de senkronlandı (§D53), GL-4'te doğrulandı.
 - **10.1.5-a — API calls aşım paketi + sayaç** `[XHIGH]` · *Should* — **✅ tm 55** · KK: _"Aşım
   faturaya; sayaç"_ · doğrulama: integration (aşım → usage_records). Her PAT API çağrısı `onSend`
   hook'unda `usage_records.api_calls` sayacını arttırır; aşım blok başına ($29.50/100k) fiyatlanıp
@@ -966,6 +978,18 @@ Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal baş�
 - **KK doğrulama:** GL-3 ile aynı disiplin — madde madde kanıt.
 - **Testler:** tam DoD kapısı + tam E2E süiti (HANDOFF 2026-07-28 notu: son bakım penceresi tam
   kapıyı koşmadı — burada koşulur). **Bağımlılık:** GL-3. **Tahmin:** 1–2 pencere.
+- **✅ Kapandı (2026-07-31 · tm 88 · §F.2 · §D56):** v1 `Must` sayacı **sayılarak** doğrulandı →
+  `20 ✅ · 0 ◐ · 0 ⬜` (grep `Must (v1)` §4.1/4.2/4.3 = 20 satır, hepsi ✅); mobil (13.7/13.8-push) 🔒
+  gerekçeli. **Kod DEĞİŞMEDİ** — saf denetim + doküman senkronu ("verify+close, don't rebuild"
+  [[nexa-early-delivered-slices-audit]]). §F.1'in **10 maddesi tam sürüm** koda karşı koşuldu, madde
+  madde kanıt HANDOFF §F.2'de. **Faz sızıntısı:** GL-5/6/7 (cc-mask/spam-filter/banned-IP) **henüz
+  yazılmadı** (dosyalar ABSENT, `bannedCustomerIps` 0 enforcement) → §D52 belgeli sapma dışında sızıntı
+  YOK. **Şema artığı (§F.1/4):** webhooks/channels/ratings artık tüketiliyor (§8 güncellendi), yalnız
+  goals(v2)+workflows(⛔ADR-14) gerekçeli 0-tüketici. **Tam DoD kapısı + TAM E2E (exit 0, kanıtla):**
+  typecheck · lint · build · unit **817** · integration **821** (contract-parity 5/5, serial
+  `--concurrency=1`) · **e2e 59** (18 spec, `.env` source'lu, demo-flow dahil) · db:check-drift "no
+  drift". Doküman tazeliği: üst tablo v1→✅ KAPALI + sayaç · §F.00 v1 kapı satırı · §8 (3 satır) ·
+  §4.4.11 10.1.4-a "UI ⬜"→✅ · §D56. **GL-5/6/7 (tm 70/68/69) bağımlılığı çözüldü.**
 
 #### GL-5 · 08.9.5-a/b — CC masking (Luhn, yazma anında) `[MAX]` ↑ · tm 70 *(v2'den öne — §D52)*
 
@@ -1173,17 +1197,19 @@ Faz-0 kapanışında doğrulanacak olanlar:
 
 | Tablo       | Tüketici (2026-07-25 sayım)          | Bekleyen gereksinim | Faz / karar                                |
 | ----------- | ------------------------------------ | ------------------- | ------------------------------------------ |
-| `webhooks`  | **0** (yalnız `webhooks--*` scope)   | 08.8.4              | v1 → §4.4                                  |
+| `webhooks`  | **2 dosya / 5 çağrı** (`webhook-service`/`webhook-dispatcher`, tm 34) | 08.8.4 ✅ | **kullanılıyor** (GL-4 re-sayım 2026-07-31) |
 | `campaigns` | **2** (✅ `CampaignService` oku/yaz + yeni `campaign_sends`) | 03.3.x ✅ | **kullanılıyor** (tm 43); trigger motoru + kart |
-| `channels`  | **0** (MVP kanalları `Website`+email-inbound kullanır, bu tabloyu değil) | 08.5.4–.6 | v1 → §4.4         |
-| `ratings`   | **1** (yalnız yazma `/customer/chat/rating`) | 07.8       | v1 (okuma/rapor ⬜) → §4.4                  |
+| `channels`  | **1 dosya / 8 çağrı** (`channel-service`, tm 35 MOCK adaptörler) | 08.5.4–.6 ✅ | **kullanılıyor** (GL-4 re-sayım) |
+| `ratings`   | **yazma** (`customer.ts`) **+ okuma** (`reports.ts` reviews 07.8 raw · `home-service` CSAT) | 07.8 ✅ | **kullanılıyor** (tm 45/60, GL-4 re-sayım) |
 | `goals`     | **0**                                | 13.3                | v2                                         |
 | `visits`    | **3** (✅ yazma widget + okuma `getCustomer`) | 13.2 / 02.4 inbox | **kullanılıyor**; kalan tüketici: 02.4 (§3.13/T3) + 13.2 (v2). §8'in eski "kullanılmayan" iddiası düzeltildi (§D21) |
 | `workflows` | **0**                                | 13.4                | ⛔ ADR-14 — tablo kalır, UI yapılmaz       |
 
-**Karar:** `visits` dışındaki 0-tüketicili tablolar bir eksik özelliği bekliyor (silme kararı
-yok — hepsinin bir PRD kimliği + fazı var; §G'de iş kalemi olarak izlenir). `workflows` bilinçli
-artık (ADR-14). Silinen tablo yok.
+**Karar:** Silinen tablo yok. **GL-4 re-sayım (2026-07-31 · §F.1/4):** v1 payı 2026-07-25'in üç
+"0-tüketici" satırını doldurdu — `webhooks` (tm 34), `channels` (tm 35), `ratings` (okuma tm 45/60).
+Geriye yalnız `goals` (v2 · 13.3) + `workflows` (⛔ ADR-14, tablo kalır UI yapılmaz) 0-tüketicili;
+ikisi de gerekçeli-bekleyen (silme kararı yok — her birinin bir PRD kimliği + fazı var; §G'de izli).
+Yani `Must` kapsamında **artık sistemsiz artık tablo yok**.
 
 ---
 
@@ -2152,6 +2178,8 @@ görüneceği en son yerdir.
 - **D54 (GL-2 · PARK-a · tm 86 · 2026-07-31 · D-PARK):** `.parked-playbook/` (6 dosya: `SkillBrowser.tsx`/`.test`, `RecommendedSkills.tsx`/`.test`, `skill-filters.ts`/`.test`; 25 Tem parked WIP) **silindi**. **Karar = SİL** (entegre etme değil), üç muadil-eşlemesinin dosya-dosya diff'iyle gerekçelendi: (1) **`RecommendedSkills.tsx`** → teslim edilen `apps/web/src/features/playbook/RecommendedSkills.tsx` (tm 32) daha eksiksiz — PlaybookPage'e bağlı, `role="list"/"listitem"` a11y, "See more" tam galeriyi (`TemplateGallery`) açıyor (parked'ın inline 4→hepsi `showAll` toggle'ı yerine üstün UX); parked'ın tek ayrık davranışı (inline genişletme) aşılmış tasarım, benzersiz değer yok; teslim tarafı `RecommendedSkills.test.tsx` ile testli. (2) **`skill-filters.ts`** → teslim, **bölünmüş süperküme**: `skill-tabs.ts` (`classifySkill`/`filterSkillsByTab`/`countSkillsByTab`) + `skill-filter.ts` (`applySkillControls`/`skillMatchesControls`/`hasActiveSkillFilters`/`skillOwnerOptions`) — parked'ın `matchesTab`/`tabCounts`/`selectSkills`/`isFiltering`'inin tümü karşılanıyor + teslim `skillOwnerOptions` ve generic `SkillFacet` tiplemesi ekliyor; ikisi de testli (`skill-filter.test.ts` 16 · `skill-tabs.test.ts` 12). (3) **`SkillBrowser.tsx`** (task'ın "en zayıf eşleme" uyardığı dosya) → ayrı 1:1 dosya yok ama tüm davranışı **`PlaybookPage.tsx`'e inline** teslim: Skills tablist+sayaçlar (`countSkillsByTab`), debounce'lu ad araması (200ms), tip/durum/sahip Select'leri, `VirtualList` satırları (enable/disable + "needs a step" ipucu), boş durumlar (`hasActiveSkillFilters` no-skills vs no-match). **Ölü kod:** repoda hiçbir yer parked dosyaları veya modül adlarını (`parked-playbook`/`skill-filters`/`SkillBrowser`) import etmiyor → §F.1/6 sessiz-borç + §F.1/7 ölü-kod kirliliği. **Not:** dir aslında `878d640` snapshot'ında commit'lenmişti (HANDOFF "untracked" notu bayattı) → `git rm -r` şimdi izlenen ölü kodu da temizledi. **Kanıt (exit 0):** web typecheck · lint · unit **445**/65 (baz D51 445 ile aynı → parked testleri web süitinde hiç yoktu, silme regresyonsuz); `git status` untracked **0**. Parked dosyalar kök `.parked-playbook/`'ta, hiçbir paketin tsconfig/eslint/vitest kapsamında değil → typecheck/lint/build/integration/e2e yapısal olarak etkilenmez (D49/D50/D51 "additive/yapısal no-op → odaklı kapı" emsali). Kapsam: yalnız tm 86 + silme + §D + HANDOFF.
 - **D55 (GL-3 · F0-KAPAT · tm 87 · 2026-07-31 · Faz-0 kapanış turu):** Faz-0 §F.00 kapandı — §F.1'in **10 maddesi tam sürüm** koda karşı koşuldu, sayaç sayılarak doğrulandı, üst tablo `✅ KAPALI`'ya çevrildi. **Sayım (§F.1/1 + subtask 1):** Faz-0 `Must` = §3.0–§3.10 modül tablolarında **48 ✅** (00:3·01:4·02:11·03:2·04:6·06:0·07:1·08:10·10:5·11:5·13:1) + 3 EK (§7.1) = **51**; beklenen `51 ✅ · 0 ◐ · 0 ⬜` doğrulandı. **Uyuşmazlık bulundu ve giderildi:** üst-tablo "Must sayacı" `45 ✅ · 6 ◐` bayattı (2026-07-25 damgası) — 01.3/02.4/13.8 D23/D24/D26'da modül tablolarında `◐`→`✅` çevrilmişti ama sayaç güncellenmemişti (§D'deki 2026-07-26 "Genel durum" düzeltmesinin ikizi, "Must sayacı" sütununda tekrarı); EK-A.1/EK-A.2/EK-B.1 ise tm 29/30'da teslim edilmiş ama §7.1 satırları `◐` kalmıştı ("TM'de bitti, PLAN'da ◐" deseni — §D52/§D53 · panel bulgusu). **3 bayat satır + NFR P4 kanıtla `◐`→`✅` (kod DEĞİŞMEDİ, "verify+close, don't rebuild"):** EK-A.1=`lib/form.tsx` (`form.test.tsx` 13), EK-A.2=`lib/dirty-guard.tsx`+`stepper.ts`+`optimistic.ts` (6+5+3), EK-B.1=`VirtualList.tsx`+`Skeleton.tsx`+`EmptyState.tsx` (10+7), P4=`VirtualList.test.tsx` "NFR-P4 budget 10k satır 60fps proxy". **§F.1 10-madde kanıt (HANDOFF §F.2):** (1) kapsam süpürmesi=sayım yukarıda, 0 ◐; (2) faz sızıntısı=YOK (§3.0–§3.10'da yalnız Faz-0 ID; v1/v2 grup-🔒, sayılmaz; belgeli öne-çekmeler §1.3/§D52); (3) NFR ölçüldü — P1 13ms·P3 gzip `bundle-size.test.ts`·P4 10k proxy·S1–S5 34 integration dosyasında cross-tenant/IDOR negatifi·a11y aria assertion'ları+⌘K; (4) şema artıkları §8 tablosu belgeli (workflows ⛔ ADR-14 UI'sız; webhooks/channels/goals 0-tüketici→v1/v2, §G'de izli); (5) contract-parity **5/5**; (6) sessiz borç **temiz** (0 TODO/FIXME/XXX/@ts-expect-error/skip/only/eslint-disable — apps+packages src; `process.exit(` yanlış-pozitifi `xit(` regex artefaktı); (7) ölü kod yok (App.tsx her feature sayfası route'lu; GL-2 `.parked-playbook` temizledi); (8) doküman tazeliği — M4 (752→**1697**), §E (595→1697), üst-tablo sayacı, §F.00 kapı satırı güncellendi; README ports/URL gerçekle uyumlu; (9) temiz kurulum provası — datastore healthy + migrate + seed (global-setup `db:seed`→"Acme Bikes") + **demo-flow e2e** yeşil; (10) kapsam dışı (§9) temiz — Stripe SDK yok (dep NONE, mock billing), apps'e telif görsel kopyalanmamış, voice/IVR/çeviri ⛔. **Tam DoD kapısı (exit 0, kanıtla — §F.2 uyarısı "kanıtsız geçti yok"):** typecheck · lint · unit **817** (web 445·api 179·rtm 29·types 56·ai-mock 56·widget 52) · integration **821** (api 779·rtm 42, serial `--concurrency=1`, paylaşılan-PG yarışı [[nexa-test-gate-parallel-db]]) · build · e2e **59** (18 spec, chromium). **E2E harness notu:** ilk koşu rtm dev'in env'siz düşmesiyle kırıldı (`DATABASE_URL/REDIS_URL/JWT/CUSTOMER_TOKEN_SECRET Required`); `set -a; . ./.env` ile source'lanıp portlar boşaltılınca 59 yeşil ([[nexa-e2e-clean-db]] "sourced .env" uyarısı). **Bulunan açık:** yalnız bayat-satır senkronu (küçük → bu turda kapatıldı); yeni tm görevi gerektiren büyük açık YOK. **Kapsam:** yalnız tm 87 + PLAN üst-tablo/§7.1/§7.2/§F.00/§4.5/§E/§D + HANDOFF §F.2; kod değişmedi → commit `docs(plan)`.
 
+- **D56 (GL-4 · V1-KAPAT · tm 88 · 2026-07-31 · v1 kapanış turu):** v1 (Faz 1) §F.00 kapandı — §F.1'in **10 maddesi tam sürüm** koda karşı koşuldu + **tam E2E süiti** koşuldu, sayaç sayılarak doğrulandı, üst tablo `❌ AÇIK → ✅ KAPALI`. **Kod DEĞİŞMEDİ** (saf denetim + doküman senkronu; "verify+close, don't rebuild" [[nexa-early-delivered-slices-audit]]). **Sayım (§F.1/1 + subtask 1):** v1 `Must` = §4.1/4.2/4.3'te `grep 'Must (v1)'` = **20 satır**, hepsi ✅ — 05.1/05.3/05.5 (3) · 06.1–06.4 (10: 06.1·06.2.1–.5·06.3.1–.3·06.4) · 08.5.4–.6 (3, MOCK) · 08.8.4/02.1.2/04.2 (3) · 10.1.4 (1); beklenen `20 ✅ · 0 ◐ · 0 ⬜` doğrulandı. Mobil (13.7 · 13.8-push) 🔒 gerekçeli (§11.1/8, web-öncelikli) — sayaca girmez. **GL-3'ten farkı:** v1 modül tabloları zaten tam ✅'ti (GL-1/tm 85 üç bayat satırı 06.2.4/06.3.2/10.1.4 senkronlamıştı) → üst-tablodaki bayatlık yalnız "sayaç hiç sayılmamıştı" idi. **Bulunan bayatlık + düzeltme:** (a) §4.4.11 10.1.4-a **breakdown** satırı "UI ⬜" diyordu ama §4.3 ✅ tm 54 (senkron kaçağı) → ✅'e çevrildi; (b) §8 tablosu 3 satır bayattı — `webhooks`/`channels`/`ratings` "0-tüketici" idi ama v1 doldurdu → re-sayıldı/güncellendi. **§F.1 10-madde kanıt (HANDOFF §F.2):** (1) kapsam süpürmesi=sayım yukarıda 0 ◐/⬜, anahtar dosyalar spot-check mevcut (`PlaybookPage`/`SkillEditor`/`step-reorder`/`web-crawler`/`ssrf`/`webhooks`/`BillingPage`); (2) **faz sızıntısı=YOK** — GL-5/6/7 (cc-mask/spam-filter/banned-IP) §D52'de belgeli öne-çekme ama **henüz yazılmadı** (`cc-mask.ts`/`spam-filter.ts` ABSENT, `bannedCustomerIps` 0 enforcement consumer) → belgesiz sızıntı yok; (3) NFR ölçüldü — webhook HMAC-SHA256+SSRF (S7) `ssrf.test`(15)/`web-crawler`(6)/integration `knowledge-crawl`(11)/`webhooks`; cross-tenant/IDOR negatifleri 38 api-integration dosyasında; A11Y4 klavye-reorder `step-reorder`(10)+`SkillEditor`(5) — hepsi 817 unit + 821 integration içinde yeşil; (4) **şema artığı** — webhooks(5 çağrı/2 dosya·tm34)·channels(8/1·tm35)·ratings(yazma+okuma tm45/60) artık tüketiliyor (§8 güncellendi); yalnız `goals`(v2·13.3)+`workflows`(⛔ADR-14) 0-tüketici, gerekçeli; (5) contract-parity **5/5**; (6) sessiz borç **temiz** — 0 TODO/FIXME/XXX/HACK/@ts-ignore/@ts-expect-error/eslint-disable + 0 skip/only (apps+packages, `find`-doğrulandı); (7) ölü kod yok — `App.tsx` v1 feature sayfaları route'lu (playbook/billing/apps/traffic/campaigns/home/settings); (8) doküman tazeliği — üst tablo v1→✅+sayaç · §F.00 v1 kapı satırı · §8 (3 satır+Karar) · §4.4.11 10.1.4-a · header · §4.5/GL-4 bülteni · §D56; test sayıları (817/821/59) gerçekle uyumlu; (9) temiz kurulum provası — datastore healthy (nexa-db:5433/nexa-redis:6380) + e2e global-setup migrate+seed ("Acme Bikes") + **demo-flow e2e** yeşil + `db:check-drift` "no drift"; (10) kapsam dışı (§9) temiz — 0 Stripe SDK dep (mock billing ADR-13), `payment_methods` yalnız maskeli (PAN alanı yok), apps'e telif görsel kopyalanmadı. **Tam DoD kapısı + TAM E2E (exit 0, kanıtla — §F.2 "kanıtsız geçti yok"):** typecheck · lint · build · unit **817** (web 445·api 179·rtm 29·types 56·ai-mock 56·widget 52) · integration **821** (api 779·rtm 42, serial `--concurrency=1`, paylaşılan-PG yarışı [[nexa-test-gate-parallel-db]]) · **e2e 59** (18 spec chromium, `.env` **source'lu** — Playwright webServer spawn'ları env'i process'ten alır [[nexa-e2e-clean-db]], demo-flow dahil). Bu tur HANDOFF 2026-07-28'in "son bakım penceresi tam kapıyı koşmadı" borcunu kapattı. **Bulunan açık:** yeni tm görevi gerektiren büyük açık YOK (breakdown/§8 bayatlığı küçük → bu turda kapatıldı). **Kapsam:** yalnız tm 88 + PLAN (header/üst-tablo/§F.00/§8/§4.4.11/§4.5/§D) + HANDOFF §F.2; kod değişmedi → commit `docs(plan)`. **GL-5/6/7 (tm 70/68/69) bağımlılığı çözüldü.**
+
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 
 - v2-03 §8.5 başlığı "~63 scope" diyor, tablosu **58** sayıyor. Tablo esas alındı.
@@ -2212,6 +2240,12 @@ Uygulama detayları (yoruma bırakılmaz):
 **Faz-0 kapısı (2026-07-31 · GL-3 · tm 87):** **51 ✅ · 0 ◐ · 0 ⬜** (Must) → **✅ KAPALI**. Altı
 bloklayan ◐ (01.3, 02.4, 13.8, EK-A.1, EK-A.2, EK-B.1) kapandı ve §F.1'in **10 maddesi tam sürüm**
 koşuldu (kanıt HANDOFF §F.2 · §D55). _Tarihçe: kapanış öncesi damga "45 ✅ · 6 ◐ · 0 ⬜ → AÇIK" idi._
+
+**v1 (Faz 1) kapısı (2026-07-31 · GL-4 · tm 88):** **20 ✅ · 0 ◐ · 0 ⬜** (Must) → **✅ KAPALI**. §4.4
+kapanış kapısı listesi (05.1/05.3/05.5 · 06.1–06.4 · 08.5.4–.6 · 08.8.4 · 02.1.2 · 04.2 · +10.1.4)
+`0 ◐/⬜`; mobil (13.7 · 13.8-push) 🔒 gerekçeli (§11.1/8, web-öncelikli). §F.1'in **10 maddesi tam
+sürüm** + **tam E2E süiti** koşuldu (kanıt HANDOFF §F.2 · §D56). _Tarihçe: kapanış öncesi damga
+"denetlendi §4 — çoğu ⬜/◐ → AÇIK" idi; öne çekme + sonraki dilimler payı doldurmuştu, tur koşulmamıştı._
 
 ### F.0 — Periyodik Denetim (mini kapanış turu)
 

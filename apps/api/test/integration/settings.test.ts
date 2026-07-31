@@ -574,12 +574,15 @@ describe('settings', () => {
         data: { licenseId: fx.b.licenseId },
       });
       expect(body).toMatchObject({
+        banned_customer_ips: fromSchema.bannedCustomerIps,
         file_sharing_enabled: fromSchema.fileSharingEnabled,
         allowed_file_types: fromSchema.allowedFileTypes,
         max_file_size_bytes: fromSchema.maxFileSizeBytes,
         spam_filter_enabled: fromSchema.spamFilterEnabled,
         require_two_factor: fromSchema.requireTwoFactor,
       });
+      // No blocked addresses until a workspace adds one.
+      expect(body.banned_customer_ips).toEqual([]);
       // No row was written to answer a read.
       expect(
         await owner.securitySettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
@@ -651,6 +654,71 @@ describe('settings', () => {
         auth(readToken),
       );
       expect(response.statusCode).toBe(403);
+    });
+
+    it('stores banned customer IPs and reads them back (FR-MOD-08.9.2)', async () => {
+      const saved = await server.patch(
+        '/settings/security',
+        { banned_customer_ips: ['203.0.113.5', '2001:db8::1'] },
+        auth(adminToken),
+      );
+      expect(saved.statusCode).toBe(200);
+
+      const after = await server.get('/settings/security', auth(readToken));
+      expect((after.json() as { banned_customer_ips: string[] }).banned_customer_ips).toEqual([
+        '203.0.113.5',
+        '2001:db8::1',
+      ]);
+    });
+
+    it('refuses an entry that is not a valid IP address', async () => {
+      for (const bad of ['not-an-ip', '999.0.0.1', '203.0.113.5/24', '']) {
+        const response = await server.patch(
+          '/settings/security',
+          { banned_customer_ips: [bad] },
+          auth(adminToken),
+        );
+        expect(response.statusCode, `${bad} should be rejected`).toBe(400);
+        expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
+      }
+    });
+
+    it('normalises and dedupes an address given in two shapes', async () => {
+      // The IPv4-mapped IPv6 form and the bare IPv4 are one address; storing two
+      // entries would let one linger after the other is removed.
+      const response = await server.patch(
+        '/settings/security',
+        { banned_customer_ips: ['203.0.113.5', '::ffff:203.0.113.5', '2001:DB8::2'] },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as { banned_customer_ips: string[] }).banned_customer_ips).toEqual([
+        '203.0.113.5',
+        '2001:db8::2',
+      ]);
+    });
+
+    it("never lets one tenant's banned IPs reach another's row", async () => {
+      await owner.securitySettings.create({
+        data: { licenseId: fx.b.licenseId, bannedCustomerIps: ['198.51.100.7'] },
+      });
+
+      // Their list must not leak into our read...
+      const read = await server.get('/settings/security', auth(readToken));
+      expect((read.json() as { banned_customer_ips: string[] }).banned_customer_ips).toEqual([]);
+
+      // ...and our write must not reach it.
+      const written = await server.patch(
+        '/settings/security',
+        { banned_customer_ips: ['203.0.113.9'] },
+        auth(adminToken),
+      );
+      expect(written.statusCode).toBe(200);
+
+      const theirs = await owner.securitySettings.findUnique({
+        where: { licenseId: fx.b.licenseId },
+      });
+      expect(theirs?.bannedCustomerIps).toEqual(['198.51.100.7']);
     });
 
     it("never reads or writes another tenant's rules", async () => {

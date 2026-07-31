@@ -237,6 +237,13 @@ securitySettings:
             type: object
             minProperties: 1
             properties:
+              banned_customer_ips:
+                type: array
+                description: >-
+                  Visitor IPs to refuse (FR-MOD-08.9.2). Each must be a valid
+                  IPv4 or IPv6 address; entries are normalised and deduped.
+                maxItems: 1000
+                items: { type: string, maxLength: 45 }
               file_sharing_enabled: { type: boolean }
               allowed_file_types:
                 type: array

@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { SNEAK_PEEK_MAX_LENGTH, typingStateKey } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { maskCardNumbers, maskOptional } from '../lib/cc-mask.js';
+import { isIpBanned } from '../lib/banned-ip.js';
 import type { Env } from '../config/env.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
@@ -244,6 +245,16 @@ export default async function customerRoutes(
 
       const body = parse(startSchema, request.body);
       const tenant = request.tenant();
+
+      // An IP ban (FR-MOD-08.9.2) refuses the conversation itself, not just the
+      // token: a token minted before the ban would otherwise still let the
+      // address open or continue a chat. Enforced here — the one visitor-facing
+      // write path — so "a banned visitor cannot start a chat" holds even for a
+      // session that was already live. The identity ban (`Customer.bannedAt`) is
+      // enforced deeper in `chat-service`; this is the address-based half.
+      if (await request.withTenant((tx) => isIpBanned(tx, request.ip))) {
+        throw new ApiError('customer_banned', 'This customer is banned.');
+      }
 
       // Mask a card number the moment the message arrives (FR-MOD-08.9.5), then
       // use the masked text for everything downstream — the persisted event, the

@@ -869,6 +869,7 @@ components:
         composer's attachments and anything a customer sends.
       required:
         [
+          banned_customer_ips,
           file_sharing_enabled,
           allowed_file_types,
           max_file_size_bytes,
@@ -876,6 +877,13 @@ components:
           require_two_factor,
         ]
       properties:
+        banned_customer_ips:
+          type: array
+          description: >-
+            Visitor IPs refused a widget token and blocked from starting a chat
+            (FR-MOD-08.9.2). Stored in canonical form; an IPv4-mapped IPv6
+            address matches its bare IPv4 form.
+          items: { type: string }
         file_sharing_enabled:
           type: boolean
           description: When false, no attachment is accepted from either side.

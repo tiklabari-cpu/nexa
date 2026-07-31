@@ -6,6 +6,7 @@
  * most: until a customer's domain is on this list the widget cannot mint a
  * token on their site, so the product shipped in a state nobody could deploy.
  */
+import { isIP } from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -16,6 +17,7 @@ import {
   WIDGET_THEMES,
 } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
+import { normaliseIp } from '../lib/banned-ip.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 
@@ -75,12 +77,27 @@ const MAX_FILE_SIZE_CEILING = 104_857_600;
  * `settings.test.ts` pins the two copies together.
  */
 const SECURITY_DEFAULTS = {
+  bannedCustomerIps: [] as string[],
   fileSharingEnabled: true,
   allowedFileTypes: ['image/png', 'image/jpeg', 'application/pdf'],
   maxFileSizeBytes: 10_485_760,
   spamFilterEnabled: true,
   requireTwoFactor: false,
 } as const;
+
+/**
+ * A banned visitor IP (FR-MOD-08.9.2). Validated as a real IPv4/IPv6 address so
+ * a typo cannot sit in the list looking like a rule while matching nobody, and
+ * stored in the canonical shape the enforcement path compares against — the same
+ * `normaliseIp` `isIpBanned` applies to the incoming address, so an admin's
+ * `203.0.113.5` and a proxy's `::ffff:203.0.113.5` are one entry.
+ */
+const bannedIp = z
+  .string()
+  .trim()
+  .max(45, 'not a valid IP address')
+  .refine((value) => isIP(value) !== 0, 'must be a valid IPv4 or IPv6 address')
+  .transform(normaliseIp);
 
 /**
  * 30 days. A window longer than this is indistinguishable from "off" but still
@@ -122,6 +139,13 @@ const updateWidgetBody = z
 
 const updateSecurityBody = z
   .object({
+    banned_customer_ips: z
+      .array(bannedIp)
+      .max(1000)
+      // Deduped after normalisation so the same address in two shapes does not
+      // become two entries. Order is not significant — membership is.
+      .transform((ips) => [...new Set(ips)])
+      .optional(),
     file_sharing_enabled: z.boolean().optional(),
     allowed_file_types: z
       .array(z.string().trim().toLowerCase().max(255))
@@ -400,6 +424,9 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
       const tenant = request.tenant();
 
       const data = {
+        ...(body.banned_customer_ips !== undefined
+          ? { bannedCustomerIps: body.banned_customer_ips }
+          : {}),
         ...(body.file_sharing_enabled !== undefined
           ? { fileSharingEnabled: body.file_sharing_enabled }
           : {}),
@@ -424,6 +451,7 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
           where: { licenseId: tenant.licenseId },
           create: {
             ...SECURITY_DEFAULTS,
+            bannedCustomerIps: [...SECURITY_DEFAULTS.bannedCustomerIps],
             allowedFileTypes: [...SECURITY_DEFAULTS.allowedFileTypes],
             ...data,
             licenseId: tenant.licenseId,
@@ -800,6 +828,7 @@ function serialiseTag(row: {
 
 function serialiseSecurity(
   row: {
+    bannedCustomerIps: string[];
     fileSharingEnabled: boolean;
     allowedFileTypes: string[];
     maxFileSizeBytes: number;
@@ -810,6 +839,7 @@ function serialiseSecurity(
 ) {
   const value = row ?? SECURITY_DEFAULTS;
   return {
+    banned_customer_ips: [...value.bannedCustomerIps],
     file_sharing_enabled: value.fileSharingEnabled,
     allowed_file_types: [...value.allowedFileTypes],
     max_file_size_bytes: value.maxFileSizeBytes,

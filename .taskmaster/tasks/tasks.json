@@ -1635,7 +1635,7 @@
         "description": "FR-MOD-08.9.2 · Should (v2).",
         "details": "FR-MOD-08.9.2 · Should (v2).\nNEDEN: Customer.banned alanı + ban yazma yolu ✅ (F4); yönetim UI + IP yasağı eksik.\nKAPSAM: banned müşteri yönetim ekranı + IP/visitor yasağı; yasaklı sohbet başlatamaz.\nKK (birebir): \"Yasaklı sohbet başlatamaz\". BAĞLAM: PLAN §5.1 (§8 ratings/banned).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).\n\n[günlük 2026-07-28 GO-LIVE] v2'den öne çekildi (PLAN §4.5/GL-6 · §D52). Bağımlılık tm 88. KODA KARŞI (2026-07-28): visitor/customer yasağı ÇALIŞIYOR — Customer.bannedAt + segment banned + PATCH ban/unban (customers.ts:183-200) + token mint reddi (auth.ts:573 customer_banned) + chat start reddi (chat-service.ts:332). EKSİK: SecuritySettings.bannedCustomerIps kolonu şemada (schema.prisma:1126) ama HİÇBİR YERDE OKUNMUYOR (grep 0) → IP yasağı uygulanmıyor; Settings→Security yönetim yüzeyi yok. KAPSAM (PLAN §4.5/GL-6):\n(a) IP enforcement: /customer/token mint + chat start yolunda istemci IP'si bannedCustomerIps ile karşılaştırılır → customer_banned zarfı.\n(b) Kontrat: /settings/security GET/PATCH'e banned_customer_ips alanı (tm 1 deseni) + Settings→Security UI listesi.\n(c) CustomersPage'de ban/unban aksiyonunun UI'dan erişilebilirliği doğrulanır; yoksa eklenir.\nKAPANIŞ: PLAN §5 08.9.2 satırı ✅ + HANDOFF + commit + push + tm 68 done.",
         "testStrategy": "integration: yasaklı IP → token 403 + sohbet başlatamaz; yasaklı visitor → aynı (regresyon); unban → tekrar başlatabilir; CROSS-TENANT: A lisansının yasağı B'yi etkilemez (ZORUNLU). UI unit: liste düzenleme + ban/unban aksiyonu. Kontrat: contract-parity yeşil. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "88"
         ],
@@ -1645,24 +1645,24 @@
             "id": 1,
             "title": "08.9.2-a1 — IP yasağı enforcement",
             "description": "Token mint + chat start yolunda bannedCustomerIps kontrolü; customer_banned zarfı; integration + cross-tenant testler.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T18:27:15.740Z",
             "parentId": "undefined"
           },
           {
             "id": 2,
             "title": "08.9.2-a2 — Kontrat + Security UI + müşteri ban aksiyonu",
             "description": "banned_customer_ips kontrata + Settings→Security listesi; CustomersPage ban/unban UI doğrula/ekle; E2E görsel kanıt.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T18:27:15.748Z",
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-28T01:23:47.977Z"
+        "updatedAt": "2026-07-31T18:27:15.748Z"
       },
       {
         "id": "69",
@@ -2122,13 +2122,24 @@
           }
         ],
         "updatedAt": "2026-07-31T17:30:07.939Z"
+      },
+      {
+        "id": "89",
+        "title": "e2e determinizm: Date.now() mesaj metinleri cc-mask (08.9.5) ile çakışıyor",
+        "description": "GL-5 (tm 70) cc-masking sonrası birkaç e2e spec bayat: ziyaretçi/ajan mesaj metnine gömülü çıplak `Date.now()` (13 hane) Luhn-geçerli olduğunda `**** **** **** NNNN` olarak maskeleniyor → `toContainText(rawText)` zaman zaman kırılıyor. tm 68'de demo-flow.spec.ts düzeltildi (question/answer/note → `.slice(-6)`). KALAN aynı desen: customers.spec.ts:101, traffic.spec.ts:23, settings.spec.ts:307/324, widget.spec.ts:120/153. ÇÖZÜM: bu spec'lerdeki mesaj-metni benzersizlik jetonlarını 13-hane cc-mask penceresinin altına indir (ör. `Date.now().toString().slice(-6)`) — URL/domain alanındakiler (ai-agent:80, onboarding:62) maskelenmediği için DOKUNMA. DoD: full e2e süiti deterministik yeşil.",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-31T17:58:11.842Z",
-      "taskCount": 88,
-      "completedCount": 67,
+      "lastModified": "2026-07-31T18:27:15.748Z",
+      "taskCount": 89,
+      "completedCount": 68,
       "tags": [
         "master"
       ]

@@ -3335,6 +3335,8 @@ export interface components {
      *     composer's attachments and anything a customer sends.
      */
     SecuritySettings: {
+      /** @description Visitor IPs refused a widget token and blocked from starting a chat (FR-MOD-08.9.2). Stored in canonical form; an IPv4-mapped IPv6 address matches its bare IPv4 form. */
+      banned_customer_ips: string[];
       /** @description When false, no attachment is accepted from either side. */
       file_sharing_enabled: boolean;
       /** @description Allowed MIME types. An empty list blocks every upload. */
@@ -7945,6 +7947,8 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
+          /** @description Visitor IPs to refuse (FR-MOD-08.9.2). Each must be a valid IPv4 or IPv6 address; entries are normalised and deduped. */
+          banned_customer_ips?: string[];
           file_sharing_enabled?: boolean;
           allowed_file_types?: string[];
           max_file_size_bytes?: number;

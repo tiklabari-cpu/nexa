@@ -12,6 +12,7 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { originHost } from '../lib/origin.js';
 import { withTenant, type TenantContext } from '../lib/tenant.js';
+import { isIpBanned } from '../lib/banned-ip.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import {
   writeAuditEntry,
@@ -556,6 +557,14 @@ export default async function authRoutes(
     }
 
     const tenant = { licenseId: match.license_id, organizationId: match.organization_id };
+
+    // A banned IP (FR-MOD-08.9.2) is refused a token at all, so a visitor on a
+    // blocked address cannot even start a session — clearing cookies or dropping
+    // their `customer_id` does not get them a fresh identity. Checked per-license
+    // against `SecuritySettings`; no row means nothing is banned.
+    if (await withTenant(app.db, tenant, (tx) => isIpBanned(tx, request.ip))) {
+      throw new ApiError('customer_banned', 'This customer is banned.');
+    }
 
     let customerId = body.customer_id;
     if (customerId) {

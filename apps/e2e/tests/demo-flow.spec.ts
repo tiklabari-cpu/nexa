@@ -28,7 +28,12 @@ test('a visitor conversation reaches the agent, is answered, and is archived', a
     // The agent has to be accepting work for routing to assign anything.
     await agent.getByLabel('Availability').selectOption('accepting_chats');
 
-    const question = `My rear brake is rubbing — ${Date.now()}`;
+    // A short numeric token, not a bare `Date.now()`: a 13-digit timestamp is a
+    // card-length run, and card masking (FR-MOD-08.9.5) rewrites the Luhn-valid
+    // ones to `**** **** **** 1234` in the transcript — which made this assertion
+    // flake whenever the clock landed on a valid checksum. Six digits stay below
+    // the 13-digit floor the masker looks at, so the text round-trips verbatim.
+    const question = `My rear brake is rubbing — ${Date.now().toString().slice(-6)}`;
     await openWidget(visitor, organizationId);
     await visitorSends(visitor, question);
 
@@ -53,7 +58,9 @@ test('a visitor conversation reaches the agent, is answered, and is archived', a
     await expect(details.getByText('Visit info')).toBeVisible();
 
     // --- Reply --------------------------------------------------------------
-    const answer = `Bring it in and we will true the rotor — ${Date.now()}`;
+    // Short token, same reason as the question above: keep it clear of the
+    // 13-digit card-mask window so the reply reads back verbatim in the widget.
+    const answer = `Bring it in and we will true the rotor — ${Date.now().toString().slice(-6)}`;
     await agent.getByRole('radio', { name: 'Reply' }).click();
     await agent.getByPlaceholder('Type your reply').fill(answer);
     await agent.getByRole('button', { name: 'Send' }).click();
@@ -64,7 +71,7 @@ test('a visitor conversation reaches the agent, is answered, and is archived', a
     );
 
     // --- Internal note ------------------------------------------------------
-    const note = `Customer is a repeat buyer — ${Date.now()}`;
+    const note = `Customer is a repeat buyer — ${Date.now().toString().slice(-6)}`;
     await agent.getByRole('radio', { name: 'Internal note' }).click();
     await expect(agent.getByText('Only your team will see this.')).toBeVisible();
     await agent.getByPlaceholder('Add a note for your team…').fill(note);

@@ -776,4 +776,108 @@ describe('customer chat api', () => {
       expect(await owner.chat.count()).toBe(0);
     });
   });
+
+  // =========================================================================
+  // Banned IPs (FR-MOD-08.9.2)
+  //
+  // The visitor ban travels with an identity (`Customer.bannedAt`); this is the
+  // other half — a ban on the address, enforced where the client IP is known:
+  // the token mint and the one visitor-facing write path.
+  // =========================================================================
+
+  describe('banned IPs', () => {
+    const BANNED_IP = '198.51.100.9';
+    const ALLOWED_IP = '203.0.113.20';
+
+    /** Mint a widget token, presenting `ip` as the client address. */
+    function tokenFrom(ip: string, tenant = fx.a) {
+      return server.post(
+        '/customer/token',
+        { organization_id: tenant.organizationId },
+        { origin: `https://${tenant.trustedDomain}`, 'x-forwarded-for': ip },
+      );
+    }
+
+    it('refuses a widget token to a banned address', async () => {
+      await owner.securitySettings.create({
+        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+      });
+
+      const response = await tokenFrom(BANNED_IP);
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.type).toBe('customer_banned');
+    });
+
+    it('still issues a token to an address that is not banned', async () => {
+      await owner.securitySettings.create({
+        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+      });
+
+      const response = await tokenFrom(ALLOWED_IP);
+      expect(response.statusCode).toBe(200);
+    });
+
+    it('blocks a banned address from starting a chat, even with a token minted before the ban', async () => {
+      // Token issued while the address was still allowed.
+      const minted = await tokenFrom(ALLOWED_IP);
+      expect(minted.statusCode).toBe(200);
+      const { token } = minted.json() as { token: string };
+
+      // The address is banned only afterwards.
+      await owner.securitySettings.create({
+        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+      });
+
+      const blocked = await server.post(
+        '/customer/chat/events',
+        { text: 'let me in' },
+        { ...auth(token), 'x-forwarded-for': BANNED_IP },
+      );
+      expect(blocked.statusCode).toBe(403);
+      expect(blocked.json().error.type).toBe('customer_banned');
+      // The ban is a refusal, not a half-started conversation.
+      expect(await owner.chat.count()).toBe(0);
+    });
+
+    it('lets the address start a chat again once the ban is lifted', async () => {
+      await owner.securitySettings.create({
+        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+      });
+      const { token } = (await tokenFrom(ALLOWED_IP)).json() as { token: string };
+
+      await owner.securitySettings.update({
+        where: { licenseId: fx.a.licenseId },
+        data: { bannedCustomerIps: [] },
+      });
+
+      const response = await server.post(
+        '/customer/chat/events',
+        { text: 'hello again' },
+        { ...auth(token), 'x-forwarded-for': BANNED_IP },
+      );
+      expect(response.statusCode).toBe(201);
+    });
+
+    it("does not let one tenant's ban block another tenant's visitors", async () => {
+      // Tenant A bans the address...
+      await owner.securitySettings.create({
+        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+      });
+
+      // ...the same address reaching tenant B, which has not, is unaffected.
+      const response = await tokenFrom(BANNED_IP, fx.b);
+      expect(response.statusCode).toBe(200);
+    });
+
+    it('recognises an IPv4-mapped IPv6 address as the banned bare IPv4', async () => {
+      await owner.securitySettings.create({
+        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+      });
+
+      // A proxy reporting the mapped form must still match the ban.
+      const response = await tokenFrom(`::ffff:${BANNED_IP}`);
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.type).toBe('customer_banned');
+    });
+  });
 });

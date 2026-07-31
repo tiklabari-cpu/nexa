@@ -6,6 +6,35 @@
 
 ## Task log (newest-first)
 
+### GL-6 · 08.9.2 — Banned customers (IP/visitor yasak) — done — 2026-07-31 UTC
+
+- Kapsam: **FR-MOD-08.9.2 · [XHIGH].** IP tabanlı müşteri yasağı. v2'den öne-çekilen üç güvenlik
+  kaleminin ikincisi (§D52/§4.5-GL-6); GL-4 bağımlılığı çözülüydü. Mevcuttu: visitor yasağı
+  (`Customer.bannedAt` + token mint reddi + `chat-service` chat start reddi) + ban/unban müşteri UI
+  (`CustomerDetailPanel`). Eksikti: `SecuritySettings.bannedCustomerIps` kolonu şemadaydı ama hiçbir
+  yerde okunmuyordu (grep 0) → IP yasağı uygulanmıyordu; Settings→Security yönetim yüzeyi yoktu.
+- Yapıldı:
+  - Saf lib `apps/api/src/lib/banned-ip.ts` — `normaliseIp` (trim/lowercase + IPv4-mapped IPv6 `::ffff:`
+    sıyırma) + `isIpBanned(tx, ip)` (per-license `SecuritySettings.findFirst`, RLS-kapsamlı; satır yoksa/boşsa
+    yasak yok). Kimlik yasağı servis katmanında; **adres yasağı istek kenarında** (IP orada bilinir).
+  - Enforcement iki nokta: `auth.ts` `/customer/token` mint (yasaklı adrese hiç token yok) + `customer.ts`
+    `/customer/chat/events` (bandan önce mint'lenmiş token'la başlatma/mesaj da bloke) → `customer_banned`.
+  - Kontrat: `banned_customer_ips` `/settings/security` GET (+`required`)/PATCH; PATCH `net.isIP` doğrular +
+    `normaliseIp` canonical + `Set` dedup. openapi.yaml + settings.yaml + regen (`api.ts`/`openapi.json`).
+  - UI: Settings→Security "Blocked IP addresses" (`SettingsPage.BannedCustomerIps`, `FileSharing` ile aynı
+    `['settings','security']` sorgusunu paylaşır). Müşteri ban/unban UI zaten mevcuttu → doğrulandı (part c).
+- Doğrulama (exit 0, kanıtla): typecheck ✅ · lint ✅ · build ✅ · unit ✅ (api `banned-ip.test.ts` 5 · web
+  `BannedCustomerIps.test.tsx` 4) · integration ✅ **798** (api, +10: settings +4 · customer-chat +6 —
+  token 403 / chat token-önce bloku / unban / **cross-tenant** / IPv4-mapped; serial `--concurrency=1`,
+  contract-parity 5/5) · e2e ilgili ✅ (settings 13/13 — yeni bölüm kırmadı; demo-flow 3/3).
+- Varsayımlar: IP karşılaştırması exact-match (normalize sonrası); CIDR/aralık yok (KK "adres" yeterli,
+  ileride genişletilebilir). `trustProxy: true` zaten açık → `request.ip` XFF'i yansıtır.
+- Sonraki pencereye not: **tm 89 açıldı** — GL-5 cc-mask (08.9.5) sonrası birkaç e2e spec bayat: ziyaretçi/
+  ajan mesaj metnine gömülü çıplak `Date.now()` (13 hane) Luhn-geçerli olunca maskeleniyor →
+  `toContainText(rawText)` flake. Bu turda **demo-flow.spec.ts** düzeltildi (`.slice(-6)`); KALAN 5 spec
+  (customers/traffic/settings/widget) tm 89'da (§5 kapsam disiplini — bu turda sprawl edilmedi). **GL-7
+  (tm 69, spam filtre) sırada.**
+
 ### GL-5 · 08.9.5 — CC masking (Luhn, yazma anında) — done — 2026-07-31 UTC
 
 - Kapsam: **FR-MOD-08.9.5 · [MAX] · NFR-C5/S9 · PCI SAQ A.** Kart numarası **yazım anında** maskelenir

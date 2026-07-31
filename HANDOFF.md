@@ -6,6 +6,31 @@
 
 ## Task log (newest-first)
 
+### GRAF-ONARIM (2. doğrulama penceresi) · run-loop "0 seçilebilir" yeniden teşhis — NO-OP — done — 2026-08-01 UTC
+
+- **Neden açıldı:** run-loop yine 0 seçilebilir görev bulup düzeltme penceresi dispatch etti. Aynı
+  terminal durum ikinci kez tetiklendi → **grafta değil, dispatch'te döngü** (harness ayrı iş, §5).
+- **Teşhis (canlı, bu pencerede sıfırdan — HANDOFF'a güvenmeden kanıtla):** `get_tasks` → **89 görev
+  = 70 done + 19 deferred**; **0 pending · 0 in-progress · 0 blocked · 0 review**. Seçilebilir =
+  `pending` VE deps kapalı; hiçbiri `pending` değil (hepsi `deferred`, `priority=low`) → **seçilebilir = 0**.
+  **Sebep (a) kesin.** Diğerleri elendi: `validate_dependencies` ✅ (döngü/eksik-id yok); deferred
+  deps'in tümü çözülüyor — #65/#79→35 (done) · #72→34 (done) · #75→[45 done, 74 deferred = gerçek
+  sıra kenarı, Sales tracker→Goals]. Kırık/döngüsel/fantom kenar yok.
+- **Engel HÂLÂ geçerli → graf mutasyonu YOK:** PLAN §4.5:889 (**kullanıcı kararı 2026-07-28**: "dış
+  entegrasyonlar deferred kalır") + §1064 ("**değişmedi**", 19'u birebir sayar: 63/64·65/79·66·67·
+  71/72·73–78·80–84) + CLAUDE.md sınırı (dış servis = yapılandırma, kod değil; mock'lanır). Kararın
+  değiştiğine ya da gerçek kimlik/anahtar sağlandığına dair **hiçbir sinyal yok**. → 19 deferred
+  açılMADI · yeni görev açılMADI · `tasks.json` **değişmedi** (yalnız bu HANDOFF notu).
+- **Terminal durum DOĞRU:** run-loop "Hazır task kalmadı. Plan tamam." = **beklenen son durum, hata
+  değil**. Açılış koşulu (ikisi de açık onay + CLAUDE.md sınırı ister): (i) kullanıcı 2026-07-28
+  kararını değiştirir, **ya da** (ii) gerçek dış servis kimlikleri sağlanır → o an ilgili kalemi
+  deferred→pending çek (graf hazır, deps temiz). Bu koşullar sağlanana dek döngü **kod işiyle
+  devam ETMEYECEK** — ve bu doğru. Bkz. GRAF-ONARIM (1. geçiş, commit `15f9ce7`) — bu pencere onu
+  **bağımsız** yeniden doğruladı, aynı sonuç.
+- **Doğrulama:** `validate_dependencies` ✅ · sayım 70 done · 19 deferred · 0 pending/in-progress ·
+  `metadata.taskCount=89` sağlam. DoD kod kapıları **N/A** — kod DEĞİŞMEDİ. Harness dosyaları
+  (`run-loop.sh`/`TASK-RUNNER-PROMPT.md`) DOKUNULMADI (§5).
+
 ### GRAF-ONARIM · run-loop "seçilebilir görev yok" teşhisi + #86.1 bayat bayrak — done — 2026-08-01 UTC
 
 - **Teşhis (kanıtlı):** run-loop 0 seçilebilir görev buluyor → "Hazır task kalmadı" deyip duruyordu.

@@ -1670,7 +1670,7 @@
         "description": "FR-MOD-08.9.3 · Should (v2) · [MAX] ↑.",
         "details": "FR-MOD-08.9.3 · Should (v2) · [MAX] ↑.\n↑ GEREKÇE: dış girdi sınırı + otomatik filtre (yanlış-pozitif/negatif riski). Güvenlik kuralı — tam derinlik serbest (§5.1).\nKAPSAM: spam sohbet/ticket otomatik filtre (SecuritySettings.spamFilterEnabled zaten var, email-inbound kullanıyor).\nKK (birebir): \"Spam sohbet/ticket otomatik filtre\". BAĞLAM: PLAN §5.1, §C-A9 (email spam bağı).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).\n\n[günlük 2026-07-28 GO-LIVE] v2'den öne çekildi (PLAN §4.5/GL-7 · §D52). Bağımlılık tm 88. KODA KARŞI (2026-07-28): spamFilterEnabled var ve YALNIZ email-inbound.ts kullanıyor (sağlayıcı spam bayrağı); chat yolunda filtre yok. KAPSAM (PLAN §4.5/GL-7):\n(a) DETERMİNİSTİK kural motoru services/security/spam-filter.ts — link yoğunluğu, tekrar oranı, karakter/entropi eşiği, blocklist; LLM YOK (test edilebilirlik + yanlış-pozitif denetimi).\n(b) Widget chat start / ilk mesaj yoluna bağlanır (spamFilterEnabled kapısı); email yolundaki mevcut kanca AYNI motora bağlanır (tek doğruluk kaynağı).\n(c) Spam kararının davranışı (sessiz drop mu, zarflı red mi) task içinde kararlaştırılır → PLAN §C'ye yazılır.\nKAPANIŞ: PLAN §5 08.9.3 satırı ✅ + karar §C'de + HANDOFF + commit + push + tm 69 done.",
         "testStrategy": "[MAX] NEGATİF ÖNCE: normal müşteri mesajı GEÇER (yanlış-pozitif sınırı — gerçekçi örnek seti: kısa selamlama, link içeren meşru soru, tekrar eden ama meşru mesaj). SONRA: spam örnek seti düşer; filtre kapalıyken geçer; email + chat İKİ yol da aynı motordan; cross-tenant ayar izolasyonu. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "88"
         ],
@@ -1680,24 +1680,24 @@
             "id": 1,
             "title": "08.9.3-a1 — deterministik kural motoru (negatif önce)",
             "description": "spam-filter.ts kural motoru + unit tablo-testleri; yanlış-pozitif sınırı ÖNCE kırmızı görülür.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T19:23:43.157Z",
             "parentId": "undefined"
           },
           {
             "id": 2,
             "title": "08.9.3-a2 — chat + email yollarına bağlama",
             "description": "Widget chat start/ilk mesaj + email-inbound aynı motora; davranış kararı §C'ye; integration iki yol + cross-tenant.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T19:23:43.165Z",
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-28T01:23:47.977Z"
+        "updatedAt": "2026-07-31T19:23:43.165Z"
       },
       {
         "id": "70",
@@ -2138,9 +2138,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-31T18:39:53.712Z",
+      "lastModified": "2026-07-31T19:23:43.165Z",
       "taskCount": 89,
-      "completedCount": 69,
+      "completedCount": 70,
       "tags": [
         "master"
       ]

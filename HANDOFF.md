@@ -6,6 +6,29 @@
 
 ## Task log (newest-first)
 
+### GL-1 · SYNC-a — v1 bayat satır senkron denetimi (06.2.4/06.3.2/10.1.4) — done — 2026-07-31 UTC
+
+- Kapsam: **saf denetim — kod DEĞİŞMEDİ.** §D52'nin açtığı "TM'de bitti, PLAN'da ◐" deseninin son
+  üç örneği koda + teste karşı doğrulandı, odaklı süitler fiilen koşuldu, satırlar kanıt metniyle
+  `◐`→`✅` çevrildi. KK açığı bulunmadı (bulunsaydı satır ◐ kalır + ayrı görev açılırdı).
+- Yapıldı:
+  - **06.2.4** (§4.2) ✅ — drag + klavye (↑↓) reorder (ikisi de tek `moveStep`) + aria-live +
+    zorunlu-param kapısı (boş transfer hedefi → Save engeli); `SkillEditor.tsx` + `step-reorder.ts`; tm 33.2.
+  - **06.3.2** (§4.2) ✅ — geçersiz URL/tür reddi + website crawl/parse + RAG index; `playbook.ts`
+    `type:'website'` → `assertPublicHttpUrl` → `crawl` → `knowledge.index`; `web-crawler.ts`+`lib/ssrf.ts`; tm 33.4.
+    bulk/CSV bilinçli kapsam dışı → §5.1'e `06.3.2-bulk` (Should, v2) eklendi.
+  - **10.1.4** (§4.3) ✅ — sayaç `N/limit (% used)` + %80 proaktif uyarı + aşım paketi fiyatı önden;
+    `BillingPage.tsx` (`/billing/usage`=ADR-09); tm 54.
+  - Senkron: §4.4 bayat "Eksik (2026-07-25)" bloğu 2026-07-31 durumuyla yeniden yazıldı;
+    §2 matrisi **sayılarak** MOD-05 (05.1–05.5 ✅) + MOD-06 (06.1–06.5 ✅) `◐`→`✅`; §D53 kaydı.
+- Doğrulama (odaklı süit, exit 0): web unit **27** (`step-reorder` 10 + `SkillEditor` 5 + `BillingPage` 12) ·
+  api unit **21** (`ssrf` 15 + `web-crawler` 6) · integration `knowledge-crawl` **11** (SSRF negatifler
+  → 400 & kaynak-yok · public crawl → ready+chunks · cross-tenant) · `contract-parity` **5/5**.
+  Kod değişmediği için tam DoD kod kapısı (typecheck/lint/build/tüm-suite) yapısal olarak uygulanmaz — commit `docs(plan)`.
+- Varsayımlar: tm subtask eşlemesi TM'den doğrulandı (33.2=06.2.4-a, 33.4=06.3.2-a); 10.1.4 UI = tm 54.
+- Sonraki pencereye not: v1 `Must` açığı kalmadı (üç satır kapandı). Sıra: **tm 86 → 87 → 88 →
+  70/68/69**. GL-3/GL-4 (tm 87/88) doküman-tazeliği maddesi artık bu senkronla temiz.
+
 ### GO-LIVE planlama turu — §4.5 kırılımı + tm 85–88 + tm 68/69/70 pending — done — 2026-07-28 UTC
 
 - Kapsam: kod yok — yalnız PLAN.md + tasks.json. PRD (FR-MOD-06.2.4/06.3.2/10.1.4 + 08.9.2/3/5

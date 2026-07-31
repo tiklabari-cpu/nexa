@@ -1647,7 +1647,8 @@
             "description": "Token mint + chat start yolunda bannedCustomerIps kontrolü; customer_banned zarfı; integration + cross-tenant testler.",
             "status": "pending",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1657,7 +1658,8 @@
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-28T01:23:47.977Z"
@@ -1680,7 +1682,8 @@
             "description": "spam-filter.ts kural motoru + unit tablo-testleri; yanlış-pozitif sınırı ÖNCE kırmızı görülür.",
             "status": "pending",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1690,7 +1693,8 @@
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-28T01:23:47.977Z"
@@ -1713,7 +1717,8 @@
             "description": "lib/cc-mask.ts: aday yakalama + Luhn + maskeleme; unit tablo-testleri — yanlış-pozitif sınırı ÖNCE kırmızı görülür.",
             "status": "pending",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1723,7 +1728,8 @@
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -1733,7 +1739,8 @@
             "dependencies": [
               2
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-28T01:23:47.977Z"
@@ -1919,7 +1926,7 @@
         "description": "PLAN §4.2/§4.3 üç satırı ◐ gösteriyor ama işler TM'de done (tm 33 alt-görevleri 06.2.4-a drag-reorder + 06.3.2-a website crawl; tm 54 meter UI) ve kod mevcut (step-reorder.ts + SkillEditor.tsx drag/klavye; web-crawler.ts + lib/ssrf.ts + playbook.ts type:website; BillingPage.tsx meter + quota_warning). Panelin 'TM'de bitti, PLAN'da ◐' bulgu deseninin son üç örneği. Satırlar KANITLA (odaklı test koşusuyla) ✅'a çevrilir. PLAN §4.5/GL-1 · §D52.",
         "details": "DENETİM GÖREVİ — kod değişikliği ÇIKMAMALI; KK açığı bulunursa satır ◐ KALIR, açık §D'ye yazılır ve ayrı görev açılır (satır asla kanıtsız çevrilmez).\n1) 06.2.4 — KK (birebir): 'Her adım araç çağrısı; drag reorder (+ klavye alternatifi); zorunlu parametre (ör. transfer hedefi) boşsa hata'. Kanıt yüzeyi: apps/web/src/features/playbook/SkillEditor.tsx (draggable + ↑↓ reorder, satır ~198-230) + step-reorder.ts (moveStep/describeMove/stepIssues) + step-reorder.test.ts + SkillEditor.test.tsx. Odaklı süit koş; zorunlu-parametre-boş → hata davranışını testte GÖR. Geçerse PLAN §4.2 06.2.4 satırı ✅ (kanıt: dosya+test adları + tm 33 referansı).\n2) 06.3.2 — KK (birebir): 'Geçersiz URL/tür reddi; crawl/parse; RAG indeksleme; bulk/CSV import (Nexa)'. Kanıt yüzeyi: services/ai/web-crawler.ts (+test) + lib/ssrf.ts + routes/playbook.ts type enum website/file/article/faq. SSRF negatif testlerin (169.254.169.254 / localhost reddi) fiilen var ve yeşil olduğunu GÖR. NOT: bulk/CSV, §4.4 06.3.2-a kırılımında bilinçli kapsam dışıydı ('Kapsam dışı: bulk/CSV (ayrı Should)') → satır ✅'a çevrilirken PLAN §5.1 tablosuna yeni satır '06.3.2-bulk — bulk/CSV import (Should, v2)' eklenir; KK'nın bu payı gizlenmez.\n3) 10.1.4 — KK (birebir): 'Sayaç N/limit (% used); aşım paketi; %80 proaktif uyarı (Nexa)'. Kanıt yüzeyi: apps/web/src/features/billing/BillingPage.tsx (quota_warning, overage pack fiyat teklifi) + testleri (tm 54). Odaklı süit koş. Geçerse PLAN §4.3 10.1.4 satırı ✅.\n4) PLAN §4.4 girişindeki bayat denetim bloğu ('Eksik (grep/okuma ile doğrulandı): ... drag-reorder (06.2.4 — 0 eşleşme), website crawl ...') güncellenir — 2026-07-28 durumuyla yeniden yazılır.\n5) PLAN §2 matrisi yeniden değerlendirilir: MOD-05 ve MOD-06 satırları v1 payı tamamsa ✅'a çevrilir (sayarak, elle değil).\nPRD: FR-MOD-06.2.4 / FR-MOD-06.3.2 / FR-MOD-10.1.4 · PLAN §4.5/GL-1 · §D52.",
         "testStrategy": "Kanıt zorunlu: satır başına odaklı süit FİİLEN koşulur — web unit (SkillEditor + step-reorder + BillingPage) + api integration (knowledge crawl + SSRF negatifler) + contract-parity; çıktı özetleri HANDOFF'a yazılır. Kod değişikliği çıkarsa DUR → §D'ye yaz, ayrı görev aç. KAPANIŞ: PLAN satırları ✅ (kanıt metniyle) + §4.4 denetim bloğu güncel + §5.1'e 06.3.2-bulk satırı + HANDOFF task log + commit (docs(plan)) + push + tm 85 done.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -1927,42 +1934,46 @@
             "id": 1,
             "title": "06.2.4 doğrulaması + satır çevirisi",
             "description": "SkillEditor/step-reorder odaklı süit koş; zorunlu-param-boş → hata testini gör; PLAN §4.2 satırını kanıtla ✅ yap.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-31T13:05:39.011Z",
+            "parentId": "undefined"
           },
           {
             "id": 2,
             "title": "06.3.2 doğrulaması + satır çevirisi + 06.3.2-bulk satırı",
             "description": "Crawl+SSRF negatif süiti koş; PLAN §4.2 satırını ✅ yap; §5.1'e '06.3.2-bulk (Should, v2)' satırı ekle.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-31T13:05:39.013Z",
+            "parentId": "undefined"
           },
           {
             "id": 3,
             "title": "10.1.4 doğrulaması + satır çevirisi",
             "description": "BillingPage meter/quota_warning süiti koş; PLAN §4.3 satırını ✅ yap.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-31T13:05:39.015Z",
+            "parentId": "undefined"
           },
           {
             "id": 4,
             "title": "§4.4 denetim bloğu + §2 matris senkronu + kapanış",
             "description": "Bayat denetim bloğunu yeniden yaz; §2 MOD-05/06 satırlarını sayarak güncelle; HANDOFF + commit + push.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-31T13:05:39.017Z",
+            "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-28T01:23:47.977Z"
+        "updatedAt": "2026-07-31T13:05:39.017Z"
       },
       {
         "id": "86",
@@ -1980,7 +1991,8 @@
             "description": "Üç kaynak dosyayı teslim edilen muadillerle karşılaştır; entegre-et/sil kararını gerekçesiyle ver.",
             "status": "pending",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1990,7 +2002,8 @@
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-28T01:23:47.977Z"
@@ -2014,7 +2027,8 @@
             "description": "PLAN §3 satırlarını say (beklenen 51✅·0◐·0⬜); üst tabloyla ve bu sayımla çelişki varsa satır satır çöz.",
             "status": "pending",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -2024,7 +2038,8 @@
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -2034,7 +2049,8 @@
             "dependencies": [
               2
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -2044,7 +2060,8 @@
             "dependencies": [
               3
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-28T01:23:47.977Z"
@@ -2067,7 +2084,8 @@
             "description": "PLAN §4 satırlarından Must listesi sayılır; ◐/⬜ kalan varsa DUR → görevleştir, bu tur bekler.",
             "status": "pending",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -2077,7 +2095,8 @@
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 3,
@@ -2087,7 +2106,8 @@
             "dependencies": [
               2
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           },
           {
             "id": 4,
@@ -2097,7 +2117,8 @@
             "dependencies": [
               3
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z"
+            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "parentId": "undefined"
           }
         ],
         "updatedAt": "2026-07-28T01:23:47.977Z"
@@ -2105,9 +2126,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-28T01:23:47.977Z",
+      "lastModified": "2026-07-31T13:05:39.017Z",
       "taskCount": 88,
-      "completedCount": 62,
+      "completedCount": 63,
       "tags": [
         "master"
       ]

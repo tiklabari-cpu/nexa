@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { EVENT_RECIPIENTS, EVENT_TYPES, TRANSFER_REASONS, isShortId } from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { maskCardNumbers } from '../lib/cc-mask.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { hasChatScope } from '../services/chat/access.js';
 import type { Mailer } from '../services/mail/mailer.js';
@@ -107,7 +108,11 @@ export default async function chatRoutes(
     return {
       type: raw.type,
       recipients: raw.recipients,
-      ...(raw.text !== undefined ? { text: raw.text } : {}),
+      // Mask a card number at the source (FR-MOD-08.9.5): the masked text is
+      // what gets persisted on the event, pushed over realtime and mailed in the
+      // transcript — never the raw PAN. Shared by the agent send and the
+      // start-chat initial event, since both shape through here.
+      ...(raw.text !== undefined ? { text: maskCardNumbers(raw.text) } : {}),
       ...(raw.attachment_url !== undefined ? { attachmentUrl: raw.attachment_url } : {}),
       ...(raw.properties !== undefined ? { properties: raw.properties } : {}),
       ...(raw.idempotency_key !== undefined ? { idempotencyKey: raw.idempotency_key } : {}),

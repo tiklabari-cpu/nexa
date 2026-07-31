@@ -1705,7 +1705,7 @@
         "description": "FR-MOD-08.9.5 · Should (v2) · [MAX] ↑ · NFR-C5/S9.",
         "details": "FR-MOD-08.9.5 · Should (v2) · [MAX] ↑ · NFR-C5/S9.\n↑ GEREKÇE: PII sınırı — DB/log'a maskeli yazma (yazma anında, yalnız UI değil). Güvenlik kuralı — tam derinlik serbest.\nKAPSAM: kart no Luhn tespiti + yazma anında maskeleme (event/log); PCI SAQ A.\nKK (birebir): \"PCI SAQ A; DB/log'a maskeli yazılır (yalnız UI değil)\". BAĞLAM: PLAN §5.1.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).\n\n[günlük 2026-07-28 GO-LIVE] v2'den öne çekildi (kullanıcı kararı; PLAN §4.5/GL-5 · §D52). Bağımlılık tm 88 (v1 kapanışı) — faz disiplini. KODA KARŞI (2026-07-28): maskeleme yok; yalnız payment-method-service.ts kendi maskeli alanlarını tutuyor (farklı iş). KAPSAM (atomik kırılım PLAN §4.5/GL-5):\n(a) Saf lib apps/api/src/lib/cc-mask.ts — 13-19 haneli aday diziler (boşluk/tire ayraçlı varyantlar dahil) yakalanır, Luhn doğrulanır, geçenler '**** **** **** 1234' biçimine maskelenir.\n(b) TÜM event yazım yolları kaynağında maskeler: chats.ts (ajan eventi) + customer.ts (widget eventi + pre-chat custom_fields) + email-inbound.ts (konu). Kaynakta maskelendiği için RTM push + transcript e-postası otomatik maskeli.\n(c) Yan kanal doğrulaması: request log, audit_log meta, FileMailer çıktıları (.data/mail), skill/AI yollarına giden metin — ham PAN sızmaz (integration kanıtı). NFR-C5/S9 satırı güncellenir.\nKAPANIŞ: PLAN §5 08.9.5 satırı ✅ (§4.5/GL-5 referansıyla) + §7.2 NFR-C5/S9 + HANDOFF + commit + push + tm 70 done.",
         "testStrategy": "[MAX] NEGATİF ÖNCE yazılır ve kırmızı görülür: (a) Luhn GEÇMEYEN 16 hane (sipariş no) maskelenMEZ — yanlış-pozitif sınırı; (b) telefon/UUID/timestamp dokunulmaz. SONRA pozitifler: geçerli PAN (ayraçlı/ayraçsız) → DB'de ham PAN YOK (doğrudan SQL ile doğrula), maskeli metin var; RTM push + .data/mail + audit_log meta'da ham PAN yok. Cross-tenant + iki composer (ajan/widget) + email yolu. DoD tam.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           "88"
         ],
@@ -1715,35 +1715,35 @@
             "id": 1,
             "title": "08.9.5-a1 — cc-mask çekirdeği (negatif önce)",
             "description": "lib/cc-mask.ts: aday yakalama + Luhn + maskeleme; unit tablo-testleri — yanlış-pozitif sınırı ÖNCE kırmızı görülür.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T17:58:11.828Z",
             "parentId": "undefined"
           },
           {
             "id": 2,
             "title": "08.9.5-a2 — yazım yollarına bağlama",
             "description": "chats.ts + customer.ts (+pre-chat custom_fields) + email-inbound.ts kaynağında maskeler; integration: DB'de ham PAN yok (SQL doğrulama).",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T17:58:11.835Z",
             "parentId": "undefined"
           },
           {
             "id": 3,
             "title": "08.9.5-b — log/yan-kanal doğrulaması",
             "description": "request log + audit_log + .data/mail + skill/AI giriş metni; ham PAN sızmaz integration kanıtı; NFR-C5/S9 güncelle.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T17:58:11.841Z",
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-28T01:23:47.977Z"
+        "updatedAt": "2026-07-31T17:58:11.841Z"
       },
       {
         "id": "71",
@@ -2126,9 +2126,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-31T17:30:07.939Z",
+      "lastModified": "2026-07-31T17:58:11.842Z",
       "taskCount": 88,
-      "completedCount": 66,
+      "completedCount": 67,
       "tags": [
         "master"
       ]

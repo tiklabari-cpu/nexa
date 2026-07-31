@@ -6,6 +6,34 @@
 
 ## Task log (newest-first)
 
+### GL-5 · 08.9.5 — CC masking (Luhn, yazma anında) — done — 2026-07-31 UTC
+
+- Kapsam: **FR-MOD-08.9.5 · [MAX] · NFR-C5/S9 · PCI SAQ A.** Kart numarası **yazım anında** maskelenir
+  (DB/log'a, yalnız UI değil). v2'den öne-çekilen üç güvenlik kaleminin ilki (§D52); GL-4 bağımlılığı çözülüydü.
+- Yapıldı:
+  - Saf lib `apps/api/src/lib/cc-mask.ts` — 13–19 haneli aday diziler (boşluk/tire ayraçlı dahil) **Luhn** ile
+    doğrulanır, geçen PAN `**** **** **** 1234`'e maskelenir (son 4 korunur; yanlış-pozitif biası bilinçli —
+    kaçırmaktansa fazla maskele). `maskCardNumbers` + `maskOptional`.
+  - Tüm event yazım yolları **kaynağında** maskeler: `chats.ts` (`normaliseEvent` → ajan send + start initial),
+    `customer.ts` (widget mesaj + **AI/skill'e giden metin** + pre-chat `custom_fields` + rating comment +
+    typing sneak-peek), `email-inbound.ts` (`ingestInboundEmail` konu → ticket + triage). Kaynakta maskelendiği
+    için **RTM push + transcript e-postası otomatik** maskeli; `audit_log` meta yapıca değer taşımaz; request
+    log Fastify default serializer `req.body`'yi loglamaz.
+- Doğrulama — **tam DoD kapısı, exit 0:**
+  - `typecheck` 0 · `lint` 0 · `build` 0
+  - **unit** `cc-mask.test.ts` **16** (NEGATİF önce: Luhn-geçmez 16-hane sipariş no + telefon + UUID + timestamp
+    + 20-hane hesap no MASKELENMEZ; ayraçlı/ayraçsız/13-15-16-19-hane PAN maskelenir) — tüm workspace unit yeşil
+  - **integration 788** (api, +9 `cc-masking.test.ts`; serial `--concurrency=1`, contract-parity 5/5) —
+    widget/ajan/pre-chat/rating/email **DB'de ham PAN YOK** (doğrudan SQL), transcript `.data/mail` spool + audit
+    sweep temiz, cross-tenant A/B
+  - **e2e 59** (18 spec chromium, `.env` source'lu) — mesajlaşma yolu kırılmadı
+- Varsayımlar: yok — her yazım yolu koda/teste karşı doğrulandı; kanıtsız çevirme yok.
+- Sonraki pencereye not: **GL-6 (tm 68 · Banned IP) → GL-7 (tm 69 · Spam filtre)** sırada; ikisinin de GL-4
+  bağımlılığı çözülü, birbirinden bağımsız. Kapsam dışı bırakılanlar (gerekçeli, §D57): `properties` JSON
+  (ajan-kontrollü yapısal veri) + kişi adı alanı (isim maskesi yanlış olur). Pencereye açılışta zaten `M` olan
+  harness dosyaları (`TASK-RUNNER-PROMPT.md` + `run-loop.sh`) ve kök `.DS_Store` **bu turun işi değil →
+  commit'e alınmadı**, çalışma-tepesinde bırakıldı (GL-4 ile aynı ele alış).
+
 ### GL-4 · V1-KAPAT — v1 §F.00 kapanış turu — done — 2026-07-31 UTC
 
 - Kapsam: **v1 (Faz 1) kapanış turu — kod DEĞİŞMEDİ (saf denetim + doküman senkronu).** §F.1'in 10 maddesi

@@ -21,6 +21,7 @@
  * and write to the licence the address pointed at.
  */
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { maskCardNumbers } from '../../lib/cc-mask.js';
 import type { TicketService } from '../tickets/ticket-service.js';
 
 export interface InboundEmail {
@@ -112,7 +113,9 @@ export async function ingestInboundEmail(
     ).id;
 
   const ticket = await tickets.createFromEmail(tx, tenant, {
-    subject: email.subject,
+    // Mask a card number in the subject at the source (FR-MOD-08.9.5): the
+    // masked subject is what the ticket stores and what the triage rules see.
+    subject: maskCardNumbers(email.subject),
     customerId,
   });
   return { status: 'created', ticket_id: ticket.id };

@@ -14,6 +14,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { SNEAK_PEEK_MAX_LENGTH, typingStateKey } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
+import { maskCardNumbers, maskOptional } from '../lib/cc-mask.js';
 import type { Env } from '../config/env.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
@@ -244,6 +245,12 @@ export default async function customerRoutes(
       const body = parse(startSchema, request.body);
       const tenant = request.tenant();
 
+      // Mask a card number the moment the message arrives (FR-MOD-08.9.5), then
+      // use the masked text for everything downstream — the persisted event, the
+      // realtime push and the AI skill matcher — so a raw PAN never reaches the
+      // database, a log or the AI path.
+      const maskedText = maskOptional(body.text);
+
       // An attachment must be a file this workspace uploaded through `/uploads`
       // (FR-MOD-08.9.4) — the same check the agent path runs, before it can be
       // stored on an event.
@@ -271,8 +278,13 @@ export default async function customerRoutes(
       // a 400 here — before any chat is opened, so a bad form never leaves a
       // half-started conversation behind.
       if (body.custom_fields && Object.keys(body.custom_fields).length > 0) {
+        // Pre-chat answers are visitor free text too — mask each value at the
+        // source (FR-MOD-08.9.5) before it is written to the contact.
+        const maskedFields = Object.fromEntries(
+          Object.entries(body.custom_fields).map(([key, value]) => [key, maskOptional(value)]),
+        );
         await request.withTenant((tx) =>
-          customFields.setValues(tx, tenant, 'contact', principal.customerId, body.custom_fields!),
+          customFields.setValues(tx, tenant, 'contact', principal.customerId, maskedFields),
         );
       }
 
@@ -305,7 +317,7 @@ export default async function customerRoutes(
       if (existing) {
         const { event, replayed } = await chats.sendEvent(tenant, principal, existing.id, {
           type: 'message',
-          ...(body.text !== undefined ? { text: body.text } : {}),
+          ...(maskedText !== undefined ? { text: maskedText } : {}),
           ...(body.attachment_url ? { attachmentUrl: body.attachment_url } : {}),
           recipients: 'all',
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
@@ -314,7 +326,7 @@ export default async function customerRoutes(
         // A replay is the same message arriving twice; running the skill again
         // would answer the customer twice for one question. An attachment with no
         // text gives the skill nothing to match, so it is left for a human.
-        if (!replayed && body.text?.trim()) await ai.handle(request, existing.id, body.text);
+        if (!replayed && maskedText?.trim()) await ai.handle(request, existing.id, maskedText);
 
         // A replay is the same message arriving twice — do not e-mail again.
         if (!replayed) await notifyAssignee(request, existing.id);
@@ -328,7 +340,7 @@ export default async function customerRoutes(
         assignToMe: false,
         initialEvent: {
           type: 'message',
-          ...(body.text !== undefined ? { text: body.text } : {}),
+          ...(maskedText !== undefined ? { text: maskedText } : {}),
           ...(body.attachment_url ? { attachmentUrl: body.attachment_url } : {}),
           recipients: 'all',
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
@@ -336,7 +348,7 @@ export default async function customerRoutes(
         ...(body.url ? { routing: { url: body.url } } : {}),
       });
 
-      if (body.text?.trim()) await ai.handle(request, chat.id, body.text);
+      if (maskedText?.trim()) await ai.handle(request, chat.id, maskedText);
 
       // Routing may have assigned this brand-new chat to an agent — that is the
       // "assignment" notification (FR-MOD-13.8).
@@ -379,7 +391,9 @@ export default async function customerRoutes(
       if (chat) {
         await chats.publishCustomerTyping(request.tenant(), principal, chat.id, {
           isTyping: body.is_typing,
-          ...(body.text !== undefined ? { text: body.text } : {}),
+          // The sneak-peek is pushed to the agent as the visitor types; mask a
+          // card there too (FR-MOD-08.9.5) so a PAN is not exposed mid-type.
+          ...(body.text !== undefined ? { text: maskOptional(body.text) } : {}),
         });
       }
 
@@ -435,7 +449,9 @@ export default async function customerRoutes(
             licenseId: tenant.licenseId,
             threadId: chat.threads[0]?.id ?? null,
             value: body.value,
-            ...(body.comment ? { comment: body.comment } : {}),
+            // A rating comment is visitor free text written to the database —
+            // masked at the source like every other write path (FR-MOD-08.9.5).
+            ...(body.comment ? { comment: maskCardNumbers(body.comment) } : {}),
           },
           select: { id: true, value: true, chatId: true },
         });

@@ -1,10 +1,35 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-28 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı) · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-07-31 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
 
 ## Task log (newest-first)
+
+### GL-3 · F0-KAPAT — Faz-0 §F.00 kapanış turu — done — 2026-07-31 UTC
+
+- Kapsam: **Faz-0 kapanış turu — kod DEĞİŞMEDİ (saf denetim + doküman senkronu).** §F.1'in 10 maddesi
+  **tam sürüm** koda karşı koşuldu; `Must` sayacı **sayılarak** doğrulandı; üst tablo Faz-0 → **✅ KAPALI**.
+- Yapıldı:
+  - **Sayım (subtask 1):** Faz-0 `Must` = §3.0–§3.10 modül **48 ✅** (00:3·01:4·02:11·03:2·04:6·06:0·07:1·08:10·10:5·11:5·13:1) + 3 EK = **51 ✅ · 0 ◐ · 0 ⬜** (beklenen 51 doğrulandı).
+  - **Uyuşmazlık giderildi:** üst-tablo `45 ✅ · 6 ◐` bayattı → `51 ✅ · 0 ◐`. 01.3/02.4/13.8 modül tablolarında zaten ✅'ti (D23/D24/D26) ama sayaç güncellenmemişti; EK-A.1/EK-A.2/EK-B.1 (§7.1) + NFR P4 (§7.2) tm 29/30 teslimine karşı **kanıtla `◐`→`✅`** ("verify+close, don't rebuild" — "TM'de bitti, PLAN'da ◐" deseni, §D52/§D53 · panel).
+  - PLAN senkron: üst tablo · "Faz-0 kapanmadı" bloğu→tarihçe · §3.13 kapı `✅ KAPANDI` · §7.1 (EK-A.1/A.2/B.1) · §7.2 (P4) · M4 sayısı (752→**1697**) · §E sayısı (595→1697) · §F.00 kapı satırı (AÇIK→KAPALI) · §4.5/GL-3 `✅ Kapandı` bülteni · **§D55**.
+- Doğrulama — **tam DoD kapısı, exit 0 (kanıtla; §F.2 "kanıtsız geçti yok" uyarısı):**
+  - `typecheck` 0 · `lint` 0 · `build` 0
+  - **unit 817** (web 445/65f · api 179/15f · rtm 29/3f · types 56 · ai-mock 56 · widget 52) — EK kanıtı: `form.test.tsx` 13 · `dirty-guard` 6 + `stepper` 5 + `optimistic` 3 · `VirtualList` 10 (10k P4 proxy) + `Skeleton` 7
+  - **integration 821** (api 779/38f · rtm 42/1f, serial `--concurrency=1` — paylaşılan-PG yarışı) · **contract-parity 5/5**
+  - **e2e 59** (18 spec chromium, `demo-flow` dahil) — `.env` **source'lanarak** koşuldu (ilk deneme rtm dev env'siz düştü; portlar boşaltıldı)
+- Varsayımlar: yok — her satır koda/teste karşı doğrulandı, kanıtsız çevirme yok.
+- Sonraki pencereye not: **Faz-0 ✅ KAPALI.** Sıra: **tm 88 (GL-4 · v1 kapanış turu) → 70/68/69 (GL-5/6/7 öne-çekme güvenlik)**. GL-4, GL-3 ile aynı disiplini v1 §4 sayaçlarına uygular; faz-sızıntısı maddesinde GL-5/6/7 belgeli sapması (§D52) beklenir, belgesiz sızıntı aranır. Kök `.DS_Store` pre-existing `M` (macOS artefaktı) — commit'e alınmadı.
+
+#### §F.2 — Faz-0 Kapanış Raporu (PRD §11.2 karşılaştırmalı)
+
+- **Tamamlanan kapsam (PRD kimlikleriyle):** Faz-0 `Must` = **51/51 ✅**. FR-MOD: 00.1–00.3 (auth/signup/reset) · 01.1.3/01.1.6/01.2/01.3 (shell/⌘K/trial/sağ-panel) · 02.1.1/02.1.3/02.2.2/02.3.1/02.3.3–.6/02.4/02.6/02.8 (inbox/transcript/composer/details/ticket/archive) · 03.2.1/03.2.3 (contacts) · 04.1/04.3.1/04.3.3/04.3.4/04.4/04.5 (team/invite/teams) · 07.3.2 (reports KPI) · 08.5.1–.3/08.5.9/08.6.1/08.7.1/08.7.2/08.8.2/08.9.1/08.9.4 (channels/routing/tags/canned/PAT/trusted-domain/file) · 10.1.1–.3/10.1.6/10.2 (billing/trial, Stripe MOCK) · 11.1–11.4/11.6 (widget) · 13.8 (notifications+e-posta). FR-EK: EK-A.1/A.2/B.1/C.1 Must + EK-C.2 Should erken. Modül-tablo toplamı (Must+Should) 54 ✅ · 0 ◐.
+- **Yarım kalan işler:** **YOK** (Faz-0 `Must` kapsamında 0 ◐ · 0 ⬜). — Kapanışı bloklamayan Should artıkları aşağıda.
+- **Bilinçli yapılmayanlar (⛔/🔒, gerekçeli):** 01.1.1/.4/.5/01.4/01.5 (hamburger/presence/banner 🔒 v1) · 02.1.2/.4/02.2.1/02.3.2/02.5/02.7/02.9 (AI Agents grubu/kanal görünümü/Reply Suggestions/Copilot/Tickets grid 🔒 v1) · 03.1.1-kalan sekmeler (Supervised/Invited/Browsing → v2) · 04.2/04.3.2/04.6 (AI perf/chatbots 🔒 v1) · `workflows` tablosu (⛔ ADR-14, UI'sız) · mobil push (🔒 v1, 13.7). Should (bloklamaz): 00.4 Onboarding ✅ erken · EK-C.2 ✅ erken · 03.1.1-kalan v1'e ismen.
+- **Sessiz borç (§F.1/6):** **TEMİZ.** apps/*/src + packages/*/src'de 0 TODO/FIXME/XXX/HACK · 0 `@ts-expect-error`/`@ts-ignore` · 0 test `skip`/`only` · 0 `eslint-disable`. (GL-2 `.parked-playbook` temizliğinden sonra ölü-kod kirliliği de yok.)
+- **Sapmalar (§D):** §D55 (bu tur — bayat sayaç + 3 EK/P4 senkronu, "verify+close"). Önceki ilgili: §D52 (GO-LIVE kırılımı) · §D53 (GL-1 v1 bayat satır) · §D54 (GL-2 parked temizlik).
+- **Karar bekleyen açık sorular (PRD §11.2):** Faz-0 kapsamında **yok** — dış entegrasyonlar (gerçek Stripe/SMTP/S3/ClamAV) yapılandırma olup PRD §11.1 + CLAUDE.md sınırı gereği bu depodan yapılmaz (provider desenleri hazır, mock aktif); tm 63–67/71–84 deferred (kullanıcı kararı §D52). v1 kapanışı = GL-4 (tm 88).
 
 ### GL-2 · PARK-a — `.parked-playbook/` temizliği — done — 2026-07-31 UTC
 

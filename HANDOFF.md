@@ -30,6 +30,13 @@
 - Sonraki pencereye not: tm 85 bir **denetim** görevidir — kod değişikliği çıkmamalı; KK açığı
   bulunursa satır ◐ kalır ve ayrı görev açılır. tm 87/88 `[MAX]` — §F.1 maddeleri kanıtsız
   "geçti" sayılmaz.
+- **Ek (2026-07-31, panel C4 uyumu):** panelin `plan-not-imported` bulguları (GL-3/GL-4
+  "Task Master'da karşılığı yok") **yanlış pozitifti** — tm 87/88 mevcut ve pending. Kök neden:
+  §G ID hücresi `GL-3/F0-KAPAT` biçimindeydi; C4 kuralı ID'yi görev metninde birebir kelime olarak
+  arar (`\bGL-3/F0-KAPAT\b`), görev başlığı ise `GL-3 · F0-KAPAT`. §G ID hücreleri sade `GL-N`
+  yapıldı (ek ad başlık hücresine taşındı); panelin kendi lib'iyle (parsePlan+readTaskmaster+C4
+  filtresi) doğrulandı: eksik 0. Bulgular sonraki taramada kendiliğinden kapanır — hazır
+  "Düzeltmeye gönder" promptları ÇALIŞTIRILMAMALI (tm 87/88 mükerrer açılırdı).
 
 ### E2E bakım (düzeltme penceresi) — çalışma ağacındaki commit'siz değişiklikler — done — 2026-07-28 UTC
 

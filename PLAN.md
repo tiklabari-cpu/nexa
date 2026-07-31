@@ -1297,13 +1297,13 @@ denetim** noktası olur. **Faz-0 önce kapanır** (§1.3 — v1 dilimine geçmed
 | 04.6-a | Chatbots/Suspended sekmeleri | 04.6 | XHIGH | — | 1 | V1-Team | 1 |
 | 13.1-a | Home dashboard | 13.1 | XHIGH | 03.1.1 | 1 | V1-Home | 1–2 |
 | 13.6-a | Omnichannel HelpDesk katmanı | 13.6 | MAX↑ | ticketing✅ | 1 | V1-Home | 2+ |
-| GL-1/SYNC-a | v1 bayat satır senkron denetimi (tm 85) | 06.2.4·06.3.2·10.1.4 | XHIGH | — | 1 | GO-LIVE | 1 |
-| GL-2/PARK-a | `.parked-playbook/` temizliği (tm 86) | 05.3/05.4 tarihçe | XHIGH | — | 1 | GO-LIVE | 1 |
-| GL-3/F0-KAPAT | Faz-0 §F.00 kapanış turu (tm 87) | Faz-0 tümü | MAX | GL-1·GL-2 | 0 | GO-LIVE | 1–2 |
-| GL-4/V1-KAPAT | v1 §F.00 kapanış turu (tm 88) | v1 tümü | MAX | GL-3 | 1 | GO-LIVE | 1–2 |
-| GL-5/08.9.5-a/b | CC masking (Luhn, yazma anında) (tm 70) | 08.9.5 | MAX↑ | GL-4 | v2→GL | GO-LIVE | 2 |
-| GL-6/08.9.2-a | Banned customers tamamlama (IP+UI) (tm 68) | 08.9.2 | XHIGH | GL-4 | v2→GL | GO-LIVE | 1–2 |
-| GL-7/08.9.3-a | Spam filtre (ortak motor + chat) (tm 69) | 08.9.3 | MAX↑ | GL-4 | v2→GL | GO-LIVE | 2 |
+| GL-1 | SYNC-a — v1 bayat satır senkron denetimi (tm 85) | 06.2.4·06.3.2·10.1.4 | XHIGH | — | 1 | GO-LIVE | 1 |
+| GL-2 | PARK-a — `.parked-playbook/` temizliği (tm 86) | 05.3/05.4 tarihçe | XHIGH | — | 1 | GO-LIVE | 1 |
+| GL-3 | F0-KAPAT — Faz-0 §F.00 kapanış turu (tm 87) | Faz-0 tümü | MAX | GL-1·GL-2 | 0 | GO-LIVE | 1–2 |
+| GL-4 | V1-KAPAT — v1 §F.00 kapanış turu (tm 88) | v1 tümü | MAX | GL-3 | 1 | GO-LIVE | 1–2 |
+| GL-5 | 08.9.5-a/b — CC masking (Luhn, yazma anında) (tm 70) | 08.9.5 | MAX↑ | GL-4 | v2→GL | GO-LIVE | 2 |
+| GL-6 | 08.9.2-a — Banned customers tamamlama (IP+UI) (tm 68) | 08.9.2 | XHIGH | GL-4 | v2→GL | GO-LIVE | 1–2 |
+| GL-7 | 08.9.3-a — Spam filtre (ortak motor + chat) (tm 69) | 08.9.3 | MAX↑ | GL-4 | v2→GL | GO-LIVE | 2 |
 
 > v2/v3 satırları §5.1 / §6.1'de item-level verildi (orta derinlik — faz başında atomik bölünür).
 

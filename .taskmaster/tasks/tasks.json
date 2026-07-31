@@ -1989,9 +1989,9 @@
             "id": 1,
             "title": "Diff + karar",
             "description": "Üç kaynak dosyayı teslim edilen muadillerle karşılaştır; entegre-et/sil kararını gerekçesiyle ver.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
-            "updatedAt": "2026-07-31T13:10:35.881Z",
+            "updatedAt": "2026-07-31T22:17:00.906Z",
             "parentId": "undefined"
           },
           {
@@ -2006,7 +2006,7 @@
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-31T13:13:14.355Z"
+        "updatedAt": "2026-07-31T22:17:00.906Z"
       },
       {
         "id": "87",
@@ -2138,7 +2138,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-31T19:23:43.165Z",
+      "lastModified": "2026-07-31T22:17:00.906Z",
       "taskCount": 89,
       "completedCount": 70,
       "tags": [

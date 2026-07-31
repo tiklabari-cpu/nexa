@@ -1,10 +1,52 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-07-31 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı) · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-08-01 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 ---
 
 ## Task log (newest-first)
+
+### GRAF-ONARIM · run-loop "seçilebilir görev yok" teşhisi + #86.1 bayat bayrak — done — 2026-08-01 UTC
+
+- **Teşhis (kanıtlı):** run-loop 0 seçilebilir görev buluyor → "Hazır task kalmadı" deyip duruyordu.
+  89 görev: 70 done + **19 deferred** (top-level) · 87 subtask (biri bayat) → **0 pending / 0 in-progress**.
+  Aday sebepler test edildi:
+  - **(a) hepsi deferred — DOĞRU sebep.** 19 açık üst görev (63-67, 71-84) `deferred`, `priority=low`;
+    hiçbiri `pending` değil → hiçbiri seçilemez.
+  - **(b) döngü — ELENDİ:** `validate_dependencies` temiz.
+  - **(c) var-olmayan-id bağımlılığı — ELENDİ:** tüm deps (35/34/45/74/88…) mevcut göreve çözülüyor.
+  - **(d) aktarılmamış bağımlılık — ELENDİ:** #75→["45","74"] gerçek sıralama kenarı (Sales tracker
+    Goals'a bağlı); #45 done, #74 var (deferred). Kırık değil.
+- **Tek gerçek kusur (onarıldı):** **#86.1 `Diff + karar`** `in-progress` kalmış — parent #86 + kardeş
+  #86.2 `done`, iş `82c4273`'te commit'li, `.parked-playbook/` silinmiş (disk yok). Bayat bayrak →
+  **done** yapıldı. Tek graf mutasyonu bu. (pick_next §92-96 rule#1 in-progress'i ilk seçtiği için bu
+  fantom subtask döngü durum-okumasını da kirletiyordu.)
+- **Doğrulama (kapılar):** `validate_dependencies` ✅ (döngü/eksik-referans yok) · post-onarım sayım:
+  top-level 70 done · 19 deferred · **0 pending · 0 in-progress** · subtask 87 done · **seçilebilir görev = 0**.
+  `metadata.taskCount=89` sağlam. (DoD build/test kapıları N/A — **kod DEĞİŞMEDİ**, yalnız görev grafiği.)
+- **Karar — 19 deferred neden pending'e ÇEKİLMEDİ (engel HÂLÂ geçerli):** PLAN §4.5:1064
+  _"GO-LIVE sonrası deferred kalanlar (**kullanıcı kararı 2026-07-28 — değişmedi**)"_ 19'unu birebir
+  sayıyor (63/64 · 65/79 · 66 · 67 · 71/72 · 73-78 · 80-84). Gerekçe: dış entegrasyon
+  (Stripe/SMTP/S3/ClamAV = **yapılandırma, kod değil**; provider desenleri hazır) + kurumsal uyumluluk
+  (SOC2/ISO/HIPAA/SAML = **süreç/denetim, kod değil**). CLAUDE.md sınırı: "Production deploy/DNS/TLS/
+  gerçek secret YOK; dış servisler mock'lanır." §D52 istisnası (tm 68/69/70 öne-çekme) zaten **done**.
+  → Bunları açmak hem dated kullanıcı kararını hem daimi kapsam sınırını ihlal ederdi. **Açılmadı.**
+- **Sonraki pencereye / döngüye not:** **Döngü artık bir görevle DEVAM ETMEYECEK — ve bu DOĞRU.**
+  run-loop bundan sonra "Hazır task kalmadı. Plan tamam." diyecek; artık **doğru terminal durum** —
+  repo kapsamında yapılacak kod işi kalmadı (Faz-0 + v1 + öne-çekilen güvenlik seti tam). 19 deferred
+  kalem **otomatik açılmamalı**; açılması için ya (i) kullanıcı 2026-07-28 kararını değiştirmeli, ya da
+  (ii) gerçek dış servis kimlik/anahtarları sağlanmalı (ikisi de CLAUDE.md sınırı + açık onay ister).
+  O zaman ilgili kalemi deferred→pending çek — graf hazır (deps temiz). Kirli harness dosyaları
+  (`TASK-RUNNER-PROMPT.md`, `run-loop.sh`, `.DS_Store`) bu pencerede de DOKUNULMADI (§5 kapsam) — ayrı iş.
+- **İkinci geçiş — bağımsız yeniden doğrulama + commit (aynı teşhis, sıfırdan):** top-level **89**
+  (70 done · **19 deferred** · **0 pending / 0 in-progress**), subtask **87** hepsi terminal, id'ler
+  **1–89 kesintisiz**, 19 açığın tüm deps'i çözülüyor (#65/79→35 done · #72→34 done · #75→45 done+74
+  deferred = gerçek sıralama kenarı), self-dep/döngü yok, `validate_dependencies` ✅ (task-master 0.43.1
+  "Dependencies validated successfully"). #86 ailesi (parent + .1 + .2) done + `.parked-playbook/` diskte
+  yok + `82c4273` "SİL" kararını taşıyor → **#86.1→done meşru**. Engel HÂLÂ geçerli (PLAN §4.5:1064 ·
+  §889 kullanıcı kararı 2026-07-28 "değişmedi" · §D52 · CLAUDE.md dış-servis sınırı) → 19 deferred
+  **açılMADI**, yeni görev **açılMADI**. Önceki geçişin **commit'lenmemiş** onarımı (tasks.json #86.1 +
+  bu GRAF-ONARIM notu) bu pencerede commit'lendi → kapı kapandı. Harness dosyaları yine DOKUNULMADI (§5).
 
 ### tm 69 · 08.9.3 Spam filtre `[MAX]` — done — 2026-07-31 UTC
 

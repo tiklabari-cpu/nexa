@@ -117,7 +117,7 @@ test.describe('widget embedding', () => {
 
   test('sends a message and keeps it after a reload', async ({ page, organizationId }) => {
     await openWidget(page, organizationId);
-    const text = `Do you ship to Norway? ${Date.now()}`;
+    const text = `Do you ship to Norway? ${Date.now().toString().slice(-6)}`;
     await visitorSends(page, text);
 
     // A returning visitor continues the same conversation — the customer id is
@@ -150,7 +150,7 @@ test.describe('chat page', () => {
       const composer = visitor.getByRole('textbox', { name: 'Message' });
       await expect(composer).toBeVisible();
 
-      const question = `From the hosted chat page — ${Date.now()}`;
+      const question = `From the hosted chat page — ${Date.now().toString().slice(-6)}`;
       await composer.fill(question);
       await visitor.getByRole('button', { name: 'Send' }).click();
       await expect(visitor.getByRole('log', { name: 'Conversation' })).toContainText(question);
@@ -244,7 +244,7 @@ test.describe('attachments', () => {
       await frame.locator('input[type="file"]').setInputFiles(SAMPLE_PNG);
       await expect(frame.locator('.nx-chip')).toContainText('sample.png');
 
-      const caption = `Here is a screenshot — ${Date.now()}`;
+      const caption = `Here is a screenshot — ${Date.now().toString().slice(-6)}`;
       await frame.getByRole('textbox', { name: 'Message' }).fill(caption);
       await frame.getByRole('button', { name: 'Send' }).click();
 

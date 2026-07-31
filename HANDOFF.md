@@ -6,6 +6,39 @@
 
 ## Task log (newest-first)
 
+### tm 89 · E2E determinizm — `Date.now()` cc-mask (08.9.5) çakışması — done — 2026-07-31 UTC
+
+- Kapsam: **§D58 (GL-6/tm 68) takip bulgusu.** GL-5 cc-mask (08.9.5) sonrası birkaç e2e spec
+  probabilistik flake: ziyaretçi/ajan **mesaj metnine** gömülü çıplak `Date.now()` (13 hane =
+  kart uzunluğu) Luhn-geçerli düştüğünde `lib/cc-mask.ts` `CARD_CANDIDATE` (≥13 hane + Luhn) onu
+  `**** **** **** NNNN`'e maskeler → `toContainText(rawText)` ~%10 kırılır. `visitorSends`
+  (fixtures.ts:114) her çağrıda echo-back `toContainText` yaptığı için her `visitorSends(...Date.now())`
+  sitesi etkileniyordu.
+- Yapıldı:
+  - 7 **mesaj-metni** jetonu `Date.now().toString().slice(-6)` ile 6 haneye indirildi (6 < 13 → asla
+    `CARD_CANDIDATE`'e girmez → hiç maskelenmez → verbatim round-trip; tm 68/demo-flow deseninin aynısı):
+    `customers.spec.ts:101` · `traffic.spec.ts:23` · `settings.spec.ts:307`/`324` · `widget.spec.ts:120`/`153`.
+  - **+ `widget.spec.ts:247`** (ekli-dosya `caption`'ı, agent transcript'inde `toContainText`): task'ın
+    numaralı listesinde YOKTU ama birebir aynı kusur (mesaj metni + maskelenir + assert edilir). DoD
+    "tam süit deterministik yeşil" gereği kapatıldı — enumerasyon dışı ek bir örnek, kapsam sprawl'ı değil
+    (aynı kusur sınıfı, aynı task hedefi). Numaralı listenin `grep`'i `caption` değişkenini kaçırmış.
+  - DOKUNULMADI (cc-mask yazım yolunda değil → maskelenmez): URL/domain (`ai-agent:80` · `onboarding:62` ·
+    `settings:21`/`161`/`183`) + ayar/metadata (`ai-agent:54` Tone · `ai-agent:78` knowledge Title ·
+    `campaigns:14` kampanya adı) + `onboarding:18` signup id (mesaj değil; `-random` diziyi ayrıca keser).
+- Doğrulama (exit 0, kanıtla): e2e typecheck ✅ · e2e lint ✅ · **e2e ilgili yeşil** — 4 etkilenen spec
+  **32/32 passed** (customers/traffic/settings/widget; `.env` source'lu, nexa-db:5433/nexa-redis:6380
+  healthy, migrate current, global-setup seed). Düzeltilen her site fiilen koştu: customers:93 ·
+  settings:301 (canned reply → müşteriye) · traffic:12 · widget:118/134/228.
+- Varsayımlar: Determinizm **inşa gereği** kanıtlı (regex tabanı 13 hane; 6-hane jeton asla eşleşmez) —
+  tek e2e koşusu bir olasılık-flake'i kanıtlayamayacağı için kanıt yapısaldır; unit/integration/build
+  bu değişiklikten etkilenmez (yalnız test fixtürü). Kaynak kod DEĞİŞMEDİ.
+- Sonraki pencereye not: GL-6 (tm 68) takip bulgusu kapandı. Yeni mesaj-metni e2e jetonu eklerken
+  `Date.now()` yerine `.slice(-6)` kullan (13-hane cc-mask tabanının altında) — aksi halde flake döner.
+  GL-7 (tm 69 · spam-filter) sırada.
+- Not (çalışma alanı): pencere açılışında zaten kirli olan **tm 89 dışı** harness dosyaları
+  (`TASK-RUNNER-PROMPT.md`, `run-loop.sh` kota-kapısı düzenlemeleri, `.DS_Store`) bu commit'e
+  DAHİL EDİLMEDİ (§5 kapsam disiplini) → tree'de duruyorlar, ayrı bir işin parçası.
+
 ### GL-6 · 08.9.2 — Banned customers (IP/visitor yasak) — done — 2026-07-31 UTC
 
 - Kapsam: **FR-MOD-08.9.2 · [XHIGH].** IP tabanlı müşteri yasağı. v2'den öne-çekilen üç güvenlik

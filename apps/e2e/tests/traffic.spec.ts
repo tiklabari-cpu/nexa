@@ -20,7 +20,7 @@ test.describe('real-time traffic', () => {
     try {
       // A visitor writes in — now they are on the site, mid-conversation.
       await openWidget(visitor, organizationId);
-      await visitorSends(visitor, `Live traffic ${Date.now()}`);
+      await visitorSends(visitor, `Live traffic ${Date.now().toString().slice(-6)}`);
 
       // Reach the board through the Customers sub-nav, not a bookmarked URL.
       await agentPage.goto('/app/customers');

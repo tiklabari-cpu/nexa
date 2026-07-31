@@ -304,7 +304,7 @@ test.describe('composer shortcuts', () => {
     organizationId,
   }) => {
     const shortcut = `promo${Date.now().toString().slice(-6)}`;
-    const replyText = `Free shipping this week — ${Date.now()}`;
+    const replyText = `Free shipping this week — ${Date.now().toString().slice(-6)}`;
 
     // 1. An admin saves it.
     await agentPage.goto('/app/settings');
@@ -321,7 +321,7 @@ test.describe('composer shortcuts', () => {
       await agentPage.goto('/app/inbox');
       await agentPage.getByLabel('Availability').selectOption('accepting_chats');
 
-      const question = `Do you ship free? ${Date.now()}`;
+      const question = `Do you ship free? ${Date.now().toString().slice(-6)}`;
       await openWidget(visitor, organizationId);
       await visitorSends(visitor, question);
 

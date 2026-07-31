@@ -98,7 +98,7 @@ test.describe('customers', () => {
 
     try {
       await openWidget(visitor, organizationId);
-      await visitorSends(visitor, `Where is my order? ${Date.now()}`);
+      await visitorSends(visitor, `Where is my order? ${Date.now().toString().slice(-6)}`);
 
       await agentPage.goto('/app/customers');
       // The widget visitor is anonymous, which is exactly who this has to work

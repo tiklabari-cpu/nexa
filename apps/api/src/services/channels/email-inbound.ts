@@ -22,6 +22,7 @@
  */
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { maskCardNumbers } from '../../lib/cc-mask.js';
+import { evaluateSpam, isSpamFilterEnabled } from '../security/spam-filter.js';
 import type { TicketService } from '../tickets/ticket-service.js';
 
 export interface InboundEmail {
@@ -79,14 +80,23 @@ export async function ingestInboundEmail(
   tickets: TicketService,
   email: InboundEmail,
 ): Promise<InboundResult> {
-  // No row means the defaults, and the schema default for the filter is *on* —
-  // an unconfigured workspace still drops flagged spam rather than accepting it.
-  const settings = await tx.securitySettings.findUnique({
-    where: { licenseId: tenant.licenseId },
-    select: { spamFilterEnabled: true },
-  });
-  const spamFilterOn = settings?.spamFilterEnabled ?? true;
-  if (email.spam && spamFilterOn) {
+  // Mask a card number in the subject once (FR-MOD-08.9.5), up front — the same
+  // value is what the spam classifier sees and what the ticket stores, so, as on
+  // the widget path, no raw PAN is ever handed to the classifier.
+  const maskedSubject = maskCardNumbers(email.subject);
+
+  // The spam gate is the same engine the widget screens through (FR-MOD-08.9.3),
+  // so the decision lives in one place rather than being reimplemented per
+  // channel. The provider's own verdict is honoured, and the subject is run
+  // through the deterministic content classifier as well — a message the
+  // provider passed but whose subject is a content-spam flood is still dropped.
+  // No row means the schema default, which is *on*, so an unconfigured workspace
+  // still drops flagged spam rather than accepting it.
+  const spamFilterOn = await isSpamFilterEnabled(tx, tenant.licenseId);
+  if (
+    evaluateSpam({ filterEnabled: spamFilterOn, text: maskedSubject, providerFlagged: email.spam })
+      .spam
+  ) {
     return { status: 'ignored', reason: 'spam' };
   }
 
@@ -113,9 +123,9 @@ export async function ingestInboundEmail(
     ).id;
 
   const ticket = await tickets.createFromEmail(tx, tenant, {
-    // Mask a card number in the subject at the source (FR-MOD-08.9.5): the
-    // masked subject is what the ticket stores and what the triage rules see.
-    subject: maskCardNumbers(email.subject),
+    // The masked subject (computed above) is what the ticket stores and what the
+    // triage rules see (FR-MOD-08.9.5).
+    subject: maskedSubject,
     customerId,
   });
   return { status: 'created', ticket_id: ticket.id };

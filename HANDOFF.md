@@ -6,6 +6,45 @@
 
 ## Task log (newest-first)
 
+### tm 69 · 08.9.3 Spam filtre `[MAX]` — done — 2026-07-31 UTC
+
+- Yapıldı: **deterministik** spam motoru + chat & email yolları **aynı motora** bağlandı (FR-MOD-08.9.3,
+  §4.5/GL-7). Öne-çekilen saf-güvenlik üçlüsünün (tm 70/68/69) sonuncusu.
+  - **Motor** `apps/api/src/services/security/spam-filter.ts` — **LLM yok** (test edilebilir +
+    yanlış-pozitif denetimi). `classifyText` dört sinyal: blocklist (dar, çok-kelime) · link seli
+    (≥4 URL) · tekrar (token ≥5× & ≥%50 baskın, veya 20+ aynı-karakter run) · gibberish (40+ hane
+    kesintisiz alnum + Shannon entropi ≥3.5). `evaluateSpam({filterEnabled,text?,providerFlagged?})`
+    **tek gate** (filtre-kapalı→geç · sağlayıcı-bayrağı→spam · yoksa içerik) + `isSpamFilterEnabled`
+    (RLS-kapsamlı, satır yoksa varsayılan **açık**).
+  - **Chat** (`customer.ts` `/customer/chat/events`): yalnız chat-**START** taranır (`existing`
+    lookup yukarı taşındı, kontrol pre-chat yazımlarından ÖNCE → red hiçbir yan-etki bırakmaz).
+    Spam → `message_rejected` (403, **yeni hata tipi**, jenerik mesaj → kural sızmaz).
+  - **Email** (`email-inbound.ts`): inline `email.spam && spamFilterOn` yerine `evaluateSpam`
+    (konu içeriği + sağlayıcı bayrağı) — tek doğruluk kaynağı; dış davranış aynı (`ignored/spam`).
+  - **Davranış kararı** (sessiz-drop vs zarflı-red) → **PLAN §C-A11**: chat zarflı-red (senkron widget,
+    kardeş banned-IP ile tutarlı), email sessiz (async webhook).
+- **Güvenlik denetimi (security-reviewer subagent — [MAX] son kapı):** bir **HIGH** commit ÖNCESİ
+  giderildi — `normaliseToken`'ın `$`-anchored regex'i ziyaretçi metniyle **O(n²)** (ZWSP dolgulu
+  token → ~1 s event-loop bloğu, tüm tenant'lar). Fix: linear iki-uçlu walk + repetition döngüsünde
+  64-hane token kapısı + ReDoS-linear regresyon unit'i. LOW (email konu maske sırası) da kapatıldı:
+  konu artık maskeli sınıflandırılır. Cross-tenant/RLS + red-öncesi-yazma-yok + probing-yok onaylı.
+- Doğrulama (DoD kapısı, exit 0, kanıtla): typecheck ✅ · lint ✅ · build ✅ · **unit** ✅ (spam-filter
+  **29** negatif-önce; `types` sayaç 27→28 `NEXA_ADDED_TYPES`+`message_rejected`) · **integration** ✅
+  **805** (api, +7: customer-chat 6 + email 1; serial `--concurrency=1`, contract-parity 5/5) · **e2e**
+  ✅ **59/59** (widget/demo/traffic/customers/settings chat-start'ları meşru → filtre kırmadı). `.env`
+  source'lu, nexa-db:5433/nexa-redis:6380 healthy.
+- Varsayımlar: yeni hata tipi `message_rejected` (403) — kardeş `customer_banned` deseni (§D58);
+  openapi `ErrorType` enum + `contract:generate` regen. Eşik değerleri **yanlış-pozitif-averse**
+  seçildi (task'ın #1 kaygısı); unit testi meşru uzun-URL'de char-run FP'sini yakaladı → per-token'a
+  alınıp URL atlandı (gerçek bir tasarım hatası testle bulundu, uydurma yeşil değil).
+- Sonraki pencereye not: öne-çekilen güvenlik seti (§D52 · tm 70/68/69) **tamamlandı**. Spam davranışı
+  chat=zarflı-red / email=sessiz asimetriktir — gerekçe §C-A11. Kurulu sohbetteki mesaj **taranmaz**
+  (bilinçli scope); ileride mid-chat spam istenirse ayrı task. Motor deterministik + saf → yeni
+  sinyal/eşik eklemek izole (unit tablo-testi).
+- Not (çalışma alanı): pencere açılışında zaten kirli olan **tm 69 dışı** harness dosyaları
+  (`TASK-RUNNER-PROMPT.md`, `run-loop.sh`, `.DS_Store`) bu commit'e DAHİL EDİLMEDİ (§5 kapsam
+  disiplini) → tree'de duruyorlar, ayrı bir işin parçası.
+
 ### tm 89 · E2E determinizm — `Date.now()` cc-mask (08.9.5) çakışması — done — 2026-07-31 UTC
 
 - Kapsam: **§D58 (GL-6/tm 68) takip bulgusu.** GL-5 cc-mask (08.9.5) sonrası birkaç e2e spec

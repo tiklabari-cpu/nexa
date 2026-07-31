@@ -16,6 +16,7 @@ import { SNEAK_PEEK_MAX_LENGTH, typingStateKey } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { maskCardNumbers, maskOptional } from '../lib/cc-mask.js';
 import { isIpBanned } from '../lib/banned-ip.js';
+import { evaluateSpam, isSpamFilterEnabled } from '../services/security/spam-filter.js';
 import type { Env } from '../config/env.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
@@ -269,6 +270,37 @@ export default async function customerRoutes(
         await assertUploadedAttachment(store, tenant.licenseId, body.attachment_url);
       }
 
+      // The one active conversation, if there is one. Fetched here — before any
+      // pre-chat write — because the spam filter below screens only the message
+      // that would OPEN a chat, and a refused chat-start must leave no trace.
+      const existing = await request.withTenant((tx) =>
+        tx.chat.findFirst({
+          where: { customerId: principal.customerId, active: true },
+          select: { id: true },
+        }),
+      );
+
+      // Spam filter (FR-MOD-08.9.3): screen the message that would open a chat.
+      // A spam conversation floods the queue; screening only chat-start — not
+      // every message in an established thread — keeps the false-positive cost
+      // off a legitimate visitor mid-conversation (who may, say, paste several
+      // links). Gated by the per-workspace spamFilterEnabled (schema default on)
+      // and routed through the same deterministic engine the email channel uses.
+      if (!existing && maskedText) {
+        const spamFilterOn = await request.withTenant((tx) =>
+          isSpamFilterEnabled(tx, tenant.licenseId),
+        );
+        if (evaluateSpam({ filterEnabled: spamFilterOn, text: maskedText }).spam) {
+          // An enveloped refusal, like the co-located banned-IP check: a
+          // synchronous widget request has nothing to return once the chat is
+          // refused, and a silent 2xx would leave a false-positive visitor
+          // staring at a message no agent ever answers. The message is generic
+          // on purpose — it names no rule, so the filter cannot be probed — and
+          // nothing (no chat, no customer field write) is persisted.
+          throw new ApiError('message_rejected', 'This message could not be sent.');
+        }
+      }
+
       // Pre-chat details, if the visitor gave them.
       if (body.name || body.email) {
         await request.withTenant((tx) =>
@@ -317,13 +349,6 @@ export default async function customerRoutes(
           request.log.warn({ err: error }, 'could not record page view');
         }
       }
-
-      const existing = await request.withTenant((tx) =>
-        tx.chat.findFirst({
-          where: { customerId: principal.customerId, active: true },
-          select: { id: true },
-        }),
-      );
 
       if (existing) {
         const { event, replayed } = await chats.sendEvent(tenant, principal, existing.id, {

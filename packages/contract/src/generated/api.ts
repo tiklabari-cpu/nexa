@@ -4380,6 +4380,7 @@ export interface components {
       | 'internal'
       | 'license_expired'
       | 'limit_reached'
+      | 'message_rejected'
       | 'misdirected_request'
       | 'not_allowed'
       | 'not_found'

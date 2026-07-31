@@ -880,4 +880,83 @@ describe('customer chat api', () => {
       expect(response.json().error.type).toBe('customer_banned');
     });
   });
+
+  // =========================================================================
+  // Spam filter (FR-MOD-08.9.3): the deterministic engine screens the message
+  // that would OPEN a chat, gated by the per-workspace `spamFilterEnabled`.
+  // Negative first — the legitimate messages that must get through are asserted
+  // before the spam that must be refused, because a filter that eats a real
+  // visitor's first message is the worse failure.
+  // =========================================================================
+
+  describe('spam filter', () => {
+    // A blocklisted phrase — unambiguous, and short enough to read in the test.
+    const SPAM = 'Congratulations! You have won a prize — click here to claim now';
+
+    it('lets a normal first message open a chat', async () => {
+      const { token } = await widgetToken();
+      const response = await server.post('/customer/chat/events', { text: 'hi there' }, auth(token));
+      expect(response.statusCode).toBe(201);
+    });
+
+    it('lets a legitimate message carrying a single link through', async () => {
+      const { token } = await widgetToken();
+      const response = await server.post(
+        '/customer/chat/events',
+        { text: 'How do I reset my password? https://example.com/help' },
+        auth(token),
+      );
+      expect(response.statusCode).toBe(201);
+    });
+
+    it('refuses a spam message that would open a chat, persisting nothing', async () => {
+      const { token } = await widgetToken();
+      const response = await server.post('/customer/chat/events', { text: SPAM }, auth(token));
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.type).toBe('message_rejected');
+      // The refusal is generic — it must not name the rule that fired.
+      expect(response.json().error.message).not.toMatch(/spam|blocklist|link/i);
+      // A refusal is not a half-started conversation, and not even a page view.
+      expect(await owner.chat.count()).toBe(0);
+    });
+
+    it('lets spam through once the workspace turns the filter off', async () => {
+      await owner.securitySettings.create({
+        data: { licenseId: fx.a.licenseId, spamFilterEnabled: false },
+      });
+      const { token } = await widgetToken();
+      const response = await server.post('/customer/chat/events', { text: SPAM }, auth(token));
+      expect(response.statusCode).toBe(201);
+    });
+
+    it('does not screen a message inside an already-open conversation', async () => {
+      // The filter guards chat-start; a spammy-looking follow-up in an
+      // established thread is a human's problem, not the filter's, and screening
+      // it would risk blocking a legitimate visitor mid-conversation.
+      const { token } = await widgetToken();
+      const started = await server.post('/customer/chat/events', { text: 'hello' }, auth(token));
+      expect(started.statusCode).toBe(201);
+
+      const followUp = await server.post('/customer/chat/events', { text: SPAM }, auth(token));
+      expect(followUp.statusCode).toBe(201);
+    });
+
+    it("does not let one tenant's filter setting affect another", async () => {
+      // Tenant A turns the filter off; tenant B keeps the default (on). The same
+      // spam reaches both — A accepts it, B refuses it. The switch is per-license.
+      await owner.securitySettings.create({
+        data: { licenseId: fx.a.licenseId, spamFilterEnabled: false },
+      });
+      const a = await widgetToken(fx.a);
+      const b = await widgetToken(fx.b);
+
+      const toA = await server.post('/customer/chat/events', { text: SPAM }, auth(a.token));
+      expect(toA.statusCode).toBe(201);
+
+      const toB = await server.post('/customer/chat/events', { text: SPAM }, auth(b.token));
+      expect(toB.statusCode).toBe(403);
+      expect(toB.json().error.type).toBe('message_rejected');
+    });
+  });
 });

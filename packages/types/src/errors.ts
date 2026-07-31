@@ -26,6 +26,12 @@ export const ERROR_TYPES = [
   'internal',
   'license_expired',
   'limit_reached',
+  // Nexa addition. A write refused for content reasons at the visitor edge —
+  // the spam filter (FR-MOD-08.9.3). Deliberately generic: it does not name the
+  // rule that fired, so an enveloped refusal cannot be used to probe the filter.
+  // Kept narrow like `customer_banned`, not folded into `not_allowed` (which is
+  // an authorization verdict).
+  'message_rejected',
   'misdirected_request',
   'not_allowed',
   'not_found',
@@ -69,6 +75,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   internal: 500,
   license_expired: 402,
   limit_reached: 429,
+  message_rejected: 403,
   misdirected_request: 421,
   not_allowed: 403,
   // Enumeration protection (NFR-S5): unknown *and* out-of-tenant resources

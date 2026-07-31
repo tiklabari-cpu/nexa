@@ -223,6 +223,22 @@ describe('inbound email → ticket', () => {
     expect(response.json().status).toBe('created');
   });
 
+  it('drops a content-spam subject the provider passed, via the shared engine', async () => {
+    // The provider's verdict is clean, but the subject itself is a blocklisted
+    // spam phrase — the same deterministic classifier the widget uses catches
+    // it. This is what "email is on the same engine" (FR-MOD-08.9.3) buys: a
+    // channel is not limited to whatever an upstream provider happened to flag.
+    const response = await inbound({
+      to: addressFor(fx.a.organizationId),
+      from: 'promo@shady.example',
+      subject: 'Click here to claim your prize',
+      spam: false,
+    });
+
+    expect(response.json()).toEqual({ status: 'ignored', reason: 'spam' });
+    expect(await owner.ticket.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+  });
+
   // --- Unroutable -----------------------------------------------------------
 
   it('rejects an address whose organization does not exist', async () => {

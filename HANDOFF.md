@@ -6,6 +6,31 @@
 
 ## Task log (newest-first)
 
+### GL-2 · PARK-a — `.parked-playbook/` temizliği — done — 2026-07-31 UTC
+
+- Karar: **SİL** (entegre etme değil). Dosya-dosya diff'te 6 parked dosyanın hiçbiri teslim edilen
+  muadillerinde (tm 32) olmayan bir davranış/test taşımıyor; hiçbir yer parked modüllerini import
+  etmiyor (ölü kod). Detaylı gerekçe: **PLAN §D54 (D-PARK)** + §4.5/GL-2 kapanış bülteni.
+- Yapıldı:
+  - `git rm -r .parked-playbook` → 6 dosya (`SkillBrowser`/`RecommendedSkills`/`skill-filters` + 3 test).
+    **Not:** dir `878d640` snapshot'ında aslında commit'lenmişti (eski "untracked" notları bayattı) →
+    rm hem yarım-işi hem izlenen ölü kodu temizledi.
+  - Muadil eşlemesi: `RecommendedSkills.tsx`→teslim (PlaybookPage'e bağlı, "See more"=galeri, testli) ·
+    `skill-filters.ts`→bölünmüş süperküme `skill-tabs.ts`+`skill-filter.ts` (+`skillOwnerOptions`, generic) ·
+    `SkillBrowser.tsx`→davranışı **`PlaybookPage.tsx`'e inline** (tablist+sayaç, 200ms debounce, tip/durum/sahip
+    Select, `VirtualList`, boş durumlar). "En zayıf eşleme" = ayrı dosya yok ama davranış tam.
+  - PLAN §D54 kaydı + §4.5/GL-2 "✅ Kapandı" bülteni.
+- Doğrulama (odaklı kapı, exit 0): web **typecheck** · **lint** · **unit 445**/65 (baz D51 445 ile aynı →
+  parked testleri web süitinde hiç yoktu, silme regresyonsuz) · `git status` untracked **0**. Parked
+  dosyalar kök `.parked-playbook/`'ta, hiçbir paketin tsconfig/eslint/vitest kapsamında değil →
+  typecheck/lint/build/integration/e2e yapısal olarak etkilenmez (tam DoD kod kapısı uygulanmaz;
+  D49/D50/D51 "yapısal no-op → odaklı kapı" emsali). Commit `chore`.
+- Varsayımlar: yok — karar koda karşı diff'le verildi.
+- Sonraki pencereye not: **`.parked-playbook/` artık YOK** — önceki task-log bloklarındaki "Kalan tek
+  untracked öğe `.parked-playbook/`" notları kapandı. Sıra: **tm 87 → 88 → 70/68/69**. GL-3 (tm 87)
+  §F.1/6 sessiz-borç + §F.1/7 ölü-kod maddeleri artık bu temizlikle yanlış-pozitif vermez. (Kök
+  `.DS_Store` pre-existing `M` — macOS artefaktı, tm 86 kapsamı dışı, commit'e alınmadı.)
+
 ### GL-1 · SYNC-a — v1 bayat satır senkron denetimi (06.2.4/06.3.2/10.1.4) — done — 2026-07-31 UTC
 
 - Kapsam: **saf denetim — kod DEĞİŞMEDİ.** §D52'nin açtığı "TM'de bitti, PLAN'da ◐" deseninin son

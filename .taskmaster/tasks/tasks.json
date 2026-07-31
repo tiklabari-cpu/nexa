@@ -1981,7 +1981,7 @@
         "description": ".parked-playbook/ (SkillBrowser.tsx, RecommendedSkills.tsx, skill-filters.ts + 3 test dosyası; 25 Tem) izlenmeyen yarım iş olarak duruyor (HANDOFF 'parked' notu). Teslim edilen muadilleri repo'da mevcut: TemplateGallery.tsx, RecommendedSkills.tsx, skill-tabs.ts, skill-filter.ts (tm 32, PLAN §4.1 hepsi ✅). F.1/6 'sessiz borç' ve F.1/7 'ölü kod' maddelerini kirletir — Faz-0 kapanışından (tm 87) ÖNCE çözülmeli. PLAN §4.5/GL-2 · §D52.",
         "details": "1) Dosya-dosya diff: .parked-playbook/RecommendedSkills.tsx ↔ apps/web/src/features/playbook/RecommendedSkills.tsx; .parked-playbook/skill-filters.ts ↔ skill-filter.ts + skill-tabs.ts; .parked-playbook/SkillBrowser.tsx ↔ TemplateGallery.tsx/PlaybookPage.tsx (muadil eşlemesi burada en zayıf — dikkatli bak).\n2) KARAR: değerli fark varsa (teslim edilende olmayan davranış/test) ilgili dosyaya taşı + test yeşil; yoksa dizini SİL. Karar gerekçesiyle PLAN §D'ye yazılır (D-PARK maddesi).\n3) Sonuç: git status temiz (untracked 0); HANDOFF'taki 'Kalan tek untracked öğe .parked-playbook/' notu kapatılır.\nPLAN §4.5/GL-2 · §D52 · HANDOFF 2026-07-28 notu.",
         "testStrategy": "Silme yolunda: repo temiz (git status untracked 0), web unit regresyonsuz. Entegre yolunda: taşınan davranışın testi + web typecheck/lint/unit yeşil. KAPANIŞ: karar §D'ye (D-PARK) + HANDOFF task log + commit + push + tm 86 done.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -1989,24 +1989,24 @@
             "id": 1,
             "title": "Diff + karar",
             "description": "Üç kaynak dosyayı teslim edilen muadillerle karşılaştır; entegre-et/sil kararını gerekçesiyle ver.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T13:10:35.881Z",
             "parentId": "undefined"
           },
           {
             "id": 2,
             "title": "Uygulama + kapanış",
             "description": "Kararı uygula (taşı+test veya sil); git status temiz; §D + HANDOFF + commit + push.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
-            "updatedAt": "2026-07-28T01:23:47.977Z",
+            "updatedAt": "2026-07-31T13:13:14.349Z",
             "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-28T01:23:47.977Z"
+        "updatedAt": "2026-07-31T13:13:14.355Z"
       },
       {
         "id": "87",
@@ -2126,9 +2126,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-31T13:05:39.017Z",
+      "lastModified": "2026-07-31T13:13:14.355Z",
       "taskCount": 88,
-      "completedCount": 63,
+      "completedCount": 64,
       "tags": [
         "master"
       ]

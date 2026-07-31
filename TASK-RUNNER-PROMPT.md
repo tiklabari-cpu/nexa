@@ -21,10 +21,15 @@ Sırayla oku:
 5. `git log --oneline -20` + `git status` — repo şu an nerede.
 6. Task'ın dokunacağı mevcut dosyalar.
 
-## 1) Resume kontrolü (yeniden deneme olabilir)
+## 1) Resume kontrolü + durum damgası (yeniden deneme olabilir)
 Bu task daha önce yarım kalmış olabilir. ÖNCE mevcut durumu tespit et: ilgili dosyalar/branch
-var mı, testler ne durumda, `git status` ne diyor. **Sıfırdan yapma** — kaldığı yerden devam et
-veya hatayı düzelt.
+var mı, testler ne durumda, `git status` ne diyor, `HANDOFF.md`'de bu task için not var mı.
+**Sıfırdan yapma** — kaldığı yerden devam et veya hatayı düzelt.
+
+Tespit biter bitmez task'ı Task Master'da **in-progress** işaretle (CONVENTIONS §4). Bu adım
+opsiyonel DEĞİL: pencere beklenmedik şekilde ölürse (kota bitti, çökme, elle durdurma) geride
+"bu iş başlamıştı" izi kalmaz; görev `pending` göründüğü için hiçbir denetim onu yarım kalmış
+saymaz ve sessizce kaybolur. Alt-görev üzerinde çalışıyorsan alt-görevi işaretle.
 
 ## 2) İşi baştan sona bitir — TEK sürekli akış (build → doğrulama → düzeltme → kapanış)
 

@@ -24,6 +24,16 @@ MAX_CONSEC_ERRORS=5
 BACKOFF_SECS=90
 ALLOW=""                   # gerekirse: '--allowedTools Bash(git *),Bash(pnpm *)'
 
+# --- Kota kapısı ayarları -----------------------------------------------------
+# Bir pencere açmadan ÖNCE "kalan kota bu işi kaldırır mı?" diye sorulur. Maliyet
+# yüzdeleri geçmiş koşulardan ölçüldü (tam 5 saatlik pencere ≈ $170 → %1 ≈ $1.7):
+# xhigh ortancası ~$13 (%8), max görevler $25-31 (%15-18) — üste yuvarlandı.
+# RESERVE_PCT = kendi elle kullanımın için ayrılan pay.
+PANEL_URL="${DASH_URL:-http://127.0.0.1:4545}"
+RESERVE_PCT="${LOOP_RESERVE_PCT:-5}"
+COST_MAX_PCT="${LOOP_COST_MAX_PCT:-20}"
+COST_HIGH_PCT="${LOOP_COST_HIGH_PCT:-10}"
+
 pick_schema='{"type":"object","properties":{"has_task":{"type":"boolean"},"task_id":{"type":"string"},"effort":{"type":"string","enum":["max","high"]},"remaining":{"type":"integer"}},"required":["has_task"]}'
 result_schema='{"type":"object","properties":{"status":{"type":"string","enum":["done","blocked"]},"task_id":{"type":"string"},"summary":{"type":"string"}},"required":["status"]}'
 
@@ -79,7 +89,12 @@ fi
 
 # --- Sıradaki hazır task + efor (ucuz, sessiz) -------------------------------
 pick_next(){
-  claude -p "Task Master (MCP): bağımlılıkları tamam, durumu pending/ready bir SONRAKI task var mı? Varsa en yüksek öncelikliyi seç. İş YAPMA, kod okuma/yazma yok. Döndür: has_task, task_id, effort (başlık/detay [MAX] içeriyorsa \"max\" değilse \"high\"), remaining (kalan yapılabilir task sayısı)." \
+  claude -p "Task Master (MCP): sıradaki işi seç. ÖNCELİK SIRASI kesindir:
+1) Durumu 'in-progress' olan bir görev VEYA alt-görev varsa ONU seç. Bu yarım kalmış iştir —
+   önceki pencere kota/çökme/elle durdurma yüzünden kapanmış olabilir. Açılacak pencere
+   protokolün resume adımıyla kaldığı yerden devam edecek, atlanırsa o iş sonsuza kadar asılı kalır.
+2) Yoksa bağımlılıkları tamamlanmış, durumu 'pending' olanlardan en yüksek öncelikliyi seç.
+İş YAPMA, kod okuma/yazma yok. Döndür: has_task, task_id, effort (başlık/detay [MAX] içeriyorsa \"max\" değilse \"high\"), remaining (kalan yapılabilir görev sayısı)." \
     --model "$MODEL" --effort low --permission-mode "$PERM" --max-turns 10 $ALLOW \
     --output-format json --json-schema "$pick_schema" 2>>"$LOG_DIR/pick.err" \
     | jq -c '.structured_output' 2>/dev/null
@@ -99,6 +114,42 @@ Yalnız bu task'ı baştan sona tamamla, protokolü uygula, en son JSON sonucu d
     2>>"$LOG_DIR/task-$id.err" | tee -a "$logf" | pretty
 }
 status_from(){ jq -r 'select(.type=="result") | (.structured_output.status // empty)' "$1" 2>/dev/null | tail -1; }
+
+# --- Kota kapısı: bu pencereyi açmaya yetecek kota var mı? --------------------
+# Panelin bekçisi yalnız GÖREVLER ARASINDA durdurabiliyor: bir pencere açıldıktan
+# sonra "BİTTİ" satırı gelene kadar kesilmiyor, ve retry aynı görevin içinde
+# olduğu için araya hiç giremiyor. Yani tek bir pahalı görev (+retry) kalan payı
+# aşıp kotayı pencere ORTASINDA bitirebiliyordu — yarım dosya, commit'siz iş.
+# Bu kapı kararı pencere AÇILMADAN önce verir, o yüzden o riski kapatır.
+#
+# $1 = efor etiketi · $2 = aşama adı (log için)
+# 0 → devam et · 1 → kota yetmiyor (çağıran temiz çıkar; panel sıfırlanmadan
+# sonra döngüyü yeniden başlatır, in-progress task pick_next'te ilk sırada
+# olduğu için aynı işten devam edilir).
+# Panel kapalı/okunamıyorsa 0 döner (fail-open) — döngü panele bağımlı değildir.
+quota_gate(){
+  local stage="$2" need used remaining usage resume_at
+  if [ "$1" = "$EFFORT_MAX" ]; then need=$((COST_MAX_PCT+RESERVE_PCT)); else need=$((COST_HIGH_PCT+RESERVE_PCT)); fi
+
+  usage=$(curl -s --max-time 5 "$PANEL_URL/api/usage" 2>/dev/null)
+  used=$(printf '%s' "$usage" | jq -r '.fiveHour.utilization // empty' 2>/dev/null)
+  case "$used" in ''|*[!0-9]*) return 0 ;; esac   # okunamadı → eski davranış
+
+  remaining=$((100-used))
+  [ "$remaining" -ge "$need" ] && return 0
+
+  # resumeAtIfStopped panelde sıfırlanma + 1 dk olarak hesaplanır ve geçmişe
+  # düşmemesi garanti edilir (usage.mjs resumeAtFrom).
+  resume_at=$(printf '%s' "$usage" | jq -r '.resumeAtIfStopped // empty' 2>/dev/null)
+  if [ -n "$resume_at" ]; then
+    curl -s --max-time 5 -X POST "$PANEL_URL/api/schedules" \
+      -H 'content-type: application/json' \
+      -d "{\"atISO\":\"$resume_at\",\"note\":\"kota kapısı — $stage\"}" >/dev/null 2>&1
+  fi
+  log "⏸ Kota kapısı ($stage): kalan %$remaining < gerekli %$need (efor $1, rezerv %$RESERVE_PCT)."
+  log "  Döngü temiz duruyor. Otomatik devam: ${resume_at:-YOK — panel kapalı, elle başlat}"
+  return 1
+}
 
 # =============================================================================
 consec_errors=0; iteration=0
@@ -126,6 +177,9 @@ while true; do
   eff_label=$(echo "$pick" | jq -r '.effort // "high"')
   [ "$eff_label" = "max" ] && eff="$EFFORT_MAX" || eff="$EFFORT_HIGH"
 
+  # KAPI 1 — görev penceresi açılmadan önce
+  quota_gate "$eff" "görev öncesi" || exit 0
+
   log "──────────────────────────────────────────────────────────────"
   log "▶ Task $task_id  (effort=$eff, kalan≈$remaining)  — tek sürekli akış başlıyor (build→doğrulama→kapanış)"
   start=$SECONDS
@@ -133,6 +187,11 @@ while true; do
   status=$(status_from "$LOG_DIR/task-$task_id.jsonl"); [ -z "$status" ] && status="blocked"
 
   if [ "$status" != "done" ]; then
+    # KAPI 2 — retry penceresi açılmadan önce. Bekçinin yapısal olarak giremediği
+    # tek nokta burası: iki deneme arasında "BİTTİ" satırı yok, dolayısıyla
+    # nazik durdurma bu araya asla düşemiyor.
+    quota_gate "$eff" "retry öncesi" || exit 0
+
     log "⟳ Task $task_id ilk turda geçemedi ($status). 1 kez yeniden deneniyor (temiz pencere)..."
     stream_task "$task_id" "$eff"
     status=$(status_from "$LOG_DIR/task-$task_id.jsonl"); [ -z "$status" ] && status="blocked"

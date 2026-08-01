@@ -3418,10 +3418,10 @@
             "description": "(1) Prisma model IpAllowlistEntry: id (uuid), organizationId (uuid), licenseId (BigInt), entry (String — tekil IP veya CIDR, canonical form), label (String?), createdAt; @@unique([licenseId, entry]), @@index([licenseId]), @@map(\"ip_allowlist_entries\"). (2) Migration: tablo + ALTER TABLE ip_allowlist_entries ENABLE ROW LEVEL SECURITY + CREATE POLICY ip_allowlist_entries_tenant ON ip_allowlist_entri",
             "details": "08.9.6-b — ip_allowlist_entries tablosu + RLS politikası + IpAllowlistEntry şeması  [OPUS-XHIGH]\n\nPRD: FR-MOD-08.9.6 (+ NFR-S4 tenant izolasyonu, NFR-C11)\nETİKET GEREKÇESİ: OPUS-XHIGH: yeni tabloya RLS politikası yazmak tenant izolasyon yüzeyine dokunur (koşul 2 sınırda — güvenlik hassasiyeti var) ve tablo şekli bir tasarım kararı (normalize tablo mu, security_settings üstünde String[] mi; label taşınsın mı) → koşul 4/5 ihlali. Kullanıcı kuralı: güvenlik hassasiyeti olan iş asla SONNET olmaz. Eşleştirme mantığı (-c) ve enforcement (-e) burada olmadığı için MAX değil.\nNEDEN AÇIK: grep: apps/ + packages/ genelinde ipAllowlist|ip_allowlist|allowed_ips|allowedIps → 0 eşleşme. Mevcut SecuritySettings.bannedCustomerIps kavramsal olarak ters işi çözüyor (deny-list, müşteri/widget yüzeyi, FR-MOD-08.9.2 — tm 68 ile teslim); agent/admin panel erişimini IP'ye göre İZİN VEREN bir yapı yok. Depoda allowlist deseni bir kez uygulanmış: schema.prisma:256-272 model TrustedDomain (organizationId/licenseId + entry + unique index).\nKAPSAM: (1) Prisma model IpAllowlistEntry: id (uuid), organizationId (uuid), licenseId (BigInt), entry (String — tekil IP veya CIDR, canonical form), label (String?), createdAt; @@unique([licenseId, entry]), @@index([licenseId]), @@map(\"ip_allowlist_entries\"). (2) Migration: tablo + ALTER TABLE ip_allowlist_entries ENABLE ROW LEVEL SECURITY + CREATE POLICY ip_allowlist_entries_tenant ON ip_allowlist_entries USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license()). (3) tenant-isolation.test.ts içindeki sabit tablo listesine (satır 62 ve 81 civarı, trusted_domains'in yanına) eklenir. (4) OpenAPI components/schemas/IpAllowlistEntry şeması. PATH TANIMI KAPSAM DIŞI — contract-parity.test.ts iki yönlü çalışır ('belgelenmiş ama servis edilmeyen path' de kırar), o yüzden /settings/ip-allowlist yolu route'uyla birlikte 08.9.6-d'de eklenir.\nDOSYALAR: apps/api/prisma/schema.prisma · apps/api/prisma/migrations/<YYYYMMDDHHMMSS>_ip_allowlist_entries/migration.sql · packages/contract/openapi/openapi.yaml · apps/api/test/integration/tenant-isolation.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/prisma/schema.prisma (model TrustedDomain, satır 256-272 — allowlist tablo şekli birebir) · apps/api/prisma/migrations/20260726200000_custom_fields/migration.sql (satır 97-103 — ENABLE ROW LEVEL SECURITY + CREATE POLICY … nexa_current_license() bloğu) · apps/api/test/integration/tenant-isolation.test.ts (satır 62 ve 81 — RLS kapsamındaki tablo listesi)\nKK (birebir): \"IP kısıtı\" | \"KK-türetilmiş: IP kısıt listesi lisans başına normalize bir tabloda tutulur (ip_allowlist_entries), RLS ile tenant'a kapatılır ve bir kayıt tekil IP ya da CIDR aralığı olabilir. TÜRETME GEREKÇESİ: PRD (satır 656) yalnız 'IP kısıtı' diyor — tekil IP mi CIDR mi, nerede saklanacağı yazmıyor (olgular: kk_yetersiz=true). Depolama şekli NFR-S4'ün 'Her sorgu organization_id/license_id filtreli; PostgreSQL RLS' maddesine göre seçildi.\"\nKK DOĞRULAMA: tenant-isolation.test.ts — ip_allowlist_entries tablosunda RLS aktif ve politika nexa_current_license()'a bağlı; A lisansının context'iyle B'nin kaydı ne okunabiliyor ne yazılabiliyor. prisma migrate up temiz; contract-parity.test.ts yeşil (path eklenmedi).\nKAPSAM DIŞI: /settings/ip-allowlist OpenAPI path tanımı ve route'u (08.9.6-d — contract-parity iki yönlü kırılır) · CIDR parse/eşleştirme (08.9.6-c) · Enforcement (08.9.6-e) · security_settings kolonları (08.9.6-a)\nSÖZLEŞME: OpenAPI components/schemas/IpAllowlistEntry (yalnız şema, path YOK) + re-bundle. UYARI: bu alt-görevde path EKLENMEZ; eklenirse contract-parity.test.ts 'documented route that nothing serves' dalından kırılır.\nMIGRATION: EVET — yeni tablo ip_allowlist_entries (id uuid PK, organization_id uuid, license_id bigint FK→licenses, entry text, label text NULL, created_at timestamptz) + UNIQUE(license_id, entry) + INDEX(license_id) + RLS ENABLE + tenant policy.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF/CROSS-TENANT (ÖNCE): A lisansı context'inde B'nin entry'si SELECT'te görünmez · NEGATİF/CROSS-TENANT (ÖNCE): B'nin license_id'siyle INSERT WITH CHECK ile reddedilir · tenant-isolation.test.ts tablo listesi ip_allowlist_entries'i içerir ve RLS açık olduğunu kanıtlar · integration: UNIQUE(license_id, entry) aynı kaydın ikinci kez eklenmesini reddeder · migration up temiz + prisma migrate diff boş",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "80",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-01T18:10:31.470Z"
           },
           {
             "id": 3,
@@ -3521,7 +3521,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T17:49:49.862Z"
+        "updatedAt": "2026-08-01T18:10:31.470Z"
       },
       {
         "id": "81",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-01T17:49:49.862Z",
+      "lastModified": "2026-08-01T18:10:31.470Z",
       "taskCount": 99,
       "completedCount": 70,
       "tags": [

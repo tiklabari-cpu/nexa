@@ -59,40 +59,41 @@ model License {
   demoSeededAt          DateTime? @map("demo_seeded_at") @db.Timestamptz(6)
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  memberships       AgentMembership[]
-  apiTokens         ApiToken[]
-  refreshTokens     OauthRefreshToken[]
-  groups            Group[]
-  chats             Chat[]
-  tags              Tag[]
-  tickets           Ticket[]
-  cannedResponses   CannedResponse[]
-  campaigns         Campaign[]
-  campaignSends     CampaignSend[]
-  goals             Goal[]
-  aiAgents          AiAgent[]
-  skills            Skill[]
-  workflows         Workflow[]
-  routingRules      RoutingRule[]
-  ticketRules       TicketRule[]
-  ticketEmailTemplates TicketEmailTemplate[]
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships            AgentMembership[]
+  apiTokens              ApiToken[]
+  refreshTokens          OauthRefreshToken[]
+  groups                 Group[]
+  chats                  Chat[]
+  tags                   Tag[]
+  tickets                Ticket[]
+  cannedResponses        CannedResponse[]
+  campaigns              Campaign[]
+  campaignSends          CampaignSend[]
+  goals                  Goal[]
+  aiAgents               AiAgent[]
+  skills                 Skill[]
+  workflows              Workflow[]
+  routingRules           RoutingRule[]
+  ticketRules            TicketRule[]
+  ticketEmailTemplates   TicketEmailTemplate[]
   customFieldDefinitions CustomFieldDefinition[]
   customFieldValues      CustomFieldValue[]
-  channels          Channel[]
-  channelIdentities ChannelIdentity[]
-  channelMessages   ChannelMessage[]
-  websites          Website[]
-  webhooks          Webhook[]
-  webhookDeliveries WebhookDelivery[]
-  subscriptions     Subscription[]
-  usageRecords      UsageRecord[]
-  paymentMethod     PaymentMethod?
-  auditEntries      AuditLogEntry[]
-  securitySettings  SecuritySettings?
-  inboxSettings     InboxSettings?
-  widgetSettings    WidgetSettings?
-  appInstallations  AppInstallation[]
+  channels               Channel[]
+  channelIdentities      ChannelIdentity[]
+  channelMessages        ChannelMessage[]
+  websites               Website[]
+  webhooks               Webhook[]
+  webhookDeliveries      WebhookDelivery[]
+  subscriptions          Subscription[]
+  usageRecords           UsageRecord[]
+  paymentMethod          PaymentMethod?
+  auditEntries           AuditLogEntry[]
+  ipAllowlistEntries     IpAllowlistEntry[]
+  securitySettings       SecuritySettings?
+  inboxSettings          InboxSettings?
+  widgetSettings         WidgetSettings?
+  appInstallations       AppInstallation[]
 
   invitations Invitation[]
 
@@ -270,6 +271,32 @@ model TrustedDomain {
   @@unique([organizationId, domain])
   @@index([licenseId])
   @@map("trusted_domains")
+}
+
+/// IP addresses and CIDR ranges permitted to reach the agent/admin panel
+/// (FR-MOD-08.9.6). The allow-side counterpart to `SecuritySettings`
+/// `banned_customer_ips` (a deny-list on the customer/widget surface,
+/// FR-MOD-08.9.2): here a license lists the sources it trusts for its own staff.
+///
+/// An entry is a single IPv4/IPv6 address or a CIDR range in canonical form; a
+/// record is unique per (license, entry). CIDR/IP matching (08.9.6-c) and
+/// enforcement (08.9.6-e) live elsewhere — this model is only the storage, closed
+/// to its tenant by the RLS policy in the migration.
+model IpAllowlistEntry {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  licenseId      BigInt   @map("license_id")
+  /// A single IPv4/IPv6 address or a CIDR range, canonical form.
+  entry          String
+  /// Optional human label, e.g. `Office VPN`.
+  label          String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, entry])
+  @@index([licenseId])
+  @@map("ip_allowlist_entries")
 }
 
 /// Bearer credentials: OAuth access tokens, personal access tokens and bot
@@ -548,20 +575,20 @@ model TicketEmailTemplate {
 /// License-scoped like ticket rules; RLS narrows every row to its workspace. A
 /// label is unique per (license, entity) so a field cannot be defined twice.
 model CustomFieldDefinition {
-  id        String   @id @default(uuid()) @db.Uuid
-  licenseId BigInt   @map("license_id")
+  id            String   @id @default(uuid()) @db.Uuid
+  licenseId     BigInt   @map("license_id")
   /// 'ticket' or 'contact'.
-  entity    String
-  label     String
+  entity        String
+  label         String
   /// 'text' | 'number' | 'boolean' | 'date'.
-  type      String
-  required  Boolean  @default(false)
+  type          String
+  required      Boolean  @default(false)
   /// 'pre_chat' when this contact field is also asked on the widget's pre-chat
   /// form (FR-MOD-08.7.7), or null for a CRM-only field. A CHECK in the migration
   /// keeps a placement to `entity = 'contact'`.
-  formPlacement String? @map("form_placement")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  formPlacement String?  @map("form_placement")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   values  CustomFieldValue[]
@@ -641,13 +668,13 @@ model Ticket {
   lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(6)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  license       License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  customer      Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  sourceChat    Chat?            @relation(fields: [sourceChatId], references: [id], onDelete: SetNull)
-  mergedInto    Ticket?          @relation("TicketMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
-  mergedTickets Ticket[]         @relation("TicketMerge")
-  followers     TicketFollower[]
-  tags          TicketTag[]
+  license           License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer          Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  sourceChat        Chat?              @relation(fields: [sourceChatId], references: [id], onDelete: SetNull)
+  mergedInto        Ticket?            @relation("TicketMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedTickets     Ticket[]           @relation("TicketMerge")
+  followers         TicketFollower[]
+  tags              TicketTag[]
   customFieldValues CustomFieldValue[]
 
   @@index([licenseId, status, lastMessageAt(sort: Desc)])
@@ -792,12 +819,12 @@ model CampaignSend {
   campaignId String   @map("campaign_id") @db.Uuid
   customerId String   @map("customer_id") @db.Uuid
   /// The proactive conversation this send opened, once the visitor engages.
-  chatId    String?  @map("chat_id") @db.VarChar(12)
+  chatId     String?  @map("chat_id") @db.VarChar(12)
   /// The visitor replied — this send counts as a Chat.
-  engaged   Boolean  @default(false)
+  engaged    Boolean  @default(false)
   /// The visitor reached a goal — this send counts as a Conversion.
-  converted Boolean  @default(false)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  converted  Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license  License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
@@ -1122,13 +1149,13 @@ model WebhookDelivery {
 
 /// Per-license security configuration (PRD §8.4 `security_settings`).
 model SecuritySettings {
-  licenseId          BigInt   @id @map("license_id")
-  bannedCustomerIps  String[] @default([]) @map("banned_customer_ips")
-  spamFilterEnabled  Boolean  @default(true) @map("spam_filter_enabled")
-  fileSharingEnabled Boolean  @default(true) @map("file_sharing_enabled")
-  allowedFileTypes   String[] @default(["image/png", "image/jpeg", "application/pdf"]) @map("allowed_file_types")
-  maxFileSizeBytes   Int      @default(10485760) @map("max_file_size_bytes")
-  requireTwoFactor   Boolean  @default(false) @map("require_two_factor")
+  licenseId                 BigInt   @id @map("license_id")
+  bannedCustomerIps         String[] @default([]) @map("banned_customer_ips")
+  spamFilterEnabled         Boolean  @default(true) @map("spam_filter_enabled")
+  fileSharingEnabled        Boolean  @default(true) @map("file_sharing_enabled")
+  allowedFileTypes          String[] @default(["image/png", "image/jpeg", "application/pdf"]) @map("allowed_file_types")
+  maxFileSizeBytes          Int      @default(10485760) @map("max_file_size_bytes")
+  requireTwoFactor          Boolean  @default(false) @map("require_two_factor")
   /// Whether `bannedCustomerIps` is enforced as an allowlist (FR-MOD-08.9.6).
   /// Read-only surface for now — nothing enforces this yet.
   ipAllowlistEnforced       Boolean  @default(false) @map("ip_allowlist_enforced")
@@ -1139,7 +1166,7 @@ model SecuritySettings {
   /// fixed `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) — nothing reads this
   /// column to enforce it yet.
   maxConcurrentSessions     Int?     @map("max_concurrent_sessions")
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 

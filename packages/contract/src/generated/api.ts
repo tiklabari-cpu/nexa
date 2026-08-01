@@ -3190,6 +3190,27 @@ export interface components {
       created_at: string;
     };
     /**
+     * @description A single source permitted to reach the agent/admin panel
+     *     (FR-MOD-08.9.6). The allow-side counterpart to a security setting's
+     *     `banned_customer_ips` (a deny-list on the customer/widget surface): here
+     *     a license lists the sources it trusts for its own staff. Tenant-scoped
+     *     and closed by row level security.
+     *
+     *     This is the schema only — the `/settings/ip-allowlist` path and its route
+     *     arrive together in a later slice (08.9.6-d); documenting a path nothing
+     *     serves would break the contract-parity check.
+     */
+    IpAllowlistEntry: {
+      /** Format: uuid */
+      id: string;
+      /** @description A single IPv4/IPv6 address or a CIDR range, in canonical form. A bare address behaves like a /32 (or /128) range. */
+      entry: string;
+      /** @description Optional human label for the entry, e.g. `Office VPN`. */
+      label: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
      * @description A site a workspace has connected the widget to (FR-MOD-08.5.2). Distinct
      *     from a trusted domain (FR-MOD-08.9.1): a website is the customer-facing
      *     install record — where the snippet was pasted — while a trusted domain is

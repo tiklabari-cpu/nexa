@@ -59,9 +59,9 @@ describe('tenant isolation (RLS)', () => {
         WHERE schemaname = 'public'
           AND tablename IN ('organizations','licenses','accounts','agent_memberships',
                             'oauth_clients','oauth_authorization_codes','oauth_refresh_tokens',
-                            'api_tokens','customers','trusted_domains')
+                            'api_tokens','customers','trusted_domains','ip_allowlist_entries')
       `;
-      expect(rows.length).toBe(10);
+      expect(rows.length).toBe(11);
       for (const row of rows) {
         expect(row.rowsecurity, `${row.tablename} must have RLS enabled`).toBe(true);
       }
@@ -79,6 +79,7 @@ describe('tenant isolation (RLS)', () => {
         'api_tokens',
         'customers',
         'trusted_domains',
+        'ip_allowlist_entries',
         'oauth_clients',
       ]) {
         const [row] = await app.$queryRawUnsafe<Array<{ count: bigint }>>(
@@ -189,6 +190,92 @@ describe('tenant isolation (RLS)', () => {
       const ids = visible.map((a) => a.id);
       expect(ids).toContain(fixtures.a.ownerAccountId);
       expect(ids).not.toContain(fixtures.b.ownerAccountId);
+    });
+  });
+
+  describe('ip_allowlist_entries — the allow-side of IP security', () => {
+    // The counterpart to banned_customer_ips: the sources a license trusts for
+    // its own staff. Proven the same way as every tenant table — by attacking
+    // tenant A's context against tenant B's rows — plus the uniqueness invariant
+    // that stops the same entry being listed twice for one license.
+    const aEntry = '203.0.113.10';
+    const bEntry = '198.51.100.20';
+
+    beforeAll(async () => {
+      // Seeded as the owner, which is not subject to RLS.
+      await owner.ipAllowlistEntry.createMany({
+        data: [
+          {
+            organizationId: fixtures.a.organizationId,
+            licenseId: fixtures.a.licenseId,
+            entry: aEntry,
+            label: 'office a',
+          },
+          {
+            organizationId: fixtures.b.organizationId,
+            licenseId: fixtures.b.licenseId,
+            entry: bEntry,
+          },
+        ],
+      });
+    });
+
+    afterAll(async () => {
+      await owner.ipAllowlistEntry.deleteMany({ where: { entry: { in: [aEntry, bEntry] } } });
+    });
+
+    it('reads only its own license entries', async () => {
+      const rows = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.ipAllowlistEntry.findMany({ select: { entry: true } }),
+      );
+      expect(rows.map((r) => r.entry)).toEqual([aEntry]);
+    });
+
+    it('cannot fetch a tenant B entry by id', async () => {
+      // Correct SQL and the row exists — RLS is what makes it invisible.
+      const planted = await owner.ipAllowlistEntry.findFirstOrThrow({ where: { entry: bEntry } });
+      const found = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.ipAllowlistEntry.findUnique({ where: { id: planted.id } }),
+      );
+      expect(found).toBeNull();
+    });
+
+    it('cannot plant an entry for tenant B (WITH CHECK)', async () => {
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.ipAllowlistEntry.create({
+              data: {
+                organizationId: fixtures.b.organizationId,
+                licenseId: fixtures.b.licenseId,
+                entry: '192.0.2.99',
+              },
+            }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it('rejects a duplicate (license_id, entry) for the same license', async () => {
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.ipAllowlistEntry.create({
+              data: {
+                organizationId: fixtures.a.organizationId,
+                licenseId: fixtures.a.licenseId,
+                entry: aEntry,
+              },
+            }),
+        ),
+      ).rejects.toThrow(/unique constraint/i);
     });
   });
 

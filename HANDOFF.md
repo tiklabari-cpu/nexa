@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+### tm 80.2 — 08.9.6-b ip_allowlist_entries tablosu + RLS politikası + IpAllowlistEntry şeması — done — 2026-08-01 UTC
+
+- **Yapıldı:** Yeni normalize tablo `ip_allowlist_entries` (id uuid PK, organization_id uuid,
+  license_id bigint FK→licenses CASCADE, entry text, label text NULL, created_at timestamptz) +
+  `UNIQUE(license_id, entry)` + `INDEX(license_id)` — migration `20260801100000_ip_allowlist_entries`.
+  Migration RLS'i elle ekliyor: `ENABLE ROW LEVEL SECURITY` + `CREATE POLICY ip_allowlist_entries_tenant`
+  (`USING`/`WITH CHECK` = `license_id = nexa_current_license()`) + `GRANT ... TO nexa_app` — custom_fields
+  deseniyle birebir. `IpAllowlistEntry` Prisma modeli (+ `License.ipAllowlistEntries` back-relation) —
+  `schema.prisma`. OpenAPI `components/schemas/IpAllowlistEntry` (yalnız şema, **path YOK**) + re-bundle
+  (`packages/contract/src/generated/api.ts`, `dist/openapi.json`). Bu, banned_customer_ips'in (deny-list,
+  müşteri yüzeyi) allow-list karşılığı — agent/admin panel için lisansın güvendiği kaynaklar.
+- **Doğrulama (hepsi yeşil):** `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` ·
+  `pnpm --filter @nexa/api test` (57 dosya/**1038** test; `tenant-isolation.test.ts` 15→**19**,
+  `contract-parity.test.ts` 5) · diğer paketler `turbo run test` (rtm/web/widget/contract/types/ai-mock) ·
+  `pnpm -w test:e2e` (**59** passed) · `pnpm db:check-drift` "no drift (1 known-unmodellable)" ·
+  `prisma migrate deploy` temiz. E2E ilk denemede rtm dev sunucusu env eksikliğinden düştü → `.env`
+  **source edilerek** yeniden koşuldu ve geçti (bilinen e2e kısıtı: sourced .env + freed ports).
+- **Varsayımlar:** (1) `license_id FK→licenses` MIGRATION talimatı açık olduğundan FK eklendi ve
+  drift-temiz kalmak için Prisma relation iki tarafa da yazıldı (custom_fields precedent'i; TrustedDomain
+  FK'siz ama görev "FK→licenses" diyor). (2) `label` OpenAPI'de `required`+`nullable:true` — SecuritySettings
+  oturum alanlarıyla tutarlı, stabil okuma kontratı.
+- **Sonraki pencereye not:** Tablo/şema hazır; path bilinçli EKLENMEDİ (contract-parity iki yönlü kırar).
+  `08.9.6-d` `/settings/ip-allowlist` CRUD + path kontratını (bu tablo üstüne), `08.9.6-c` CIDR/IP
+  eşleştirme algoritmasını, `08.9.6-e` enforcement kapısını getirir. IpAllowlistEntry şeması onları bekliyor.
+
 ### tm 80.1 — 08.9.6-a security_settings oturum politikası kolonları + kontrat/okuma yüzeyi — done — 2026-08-01 UTC
 
 - **Yapıldı:** `security_settings`'e 3 katkısal kolon (`ip_allowlist_enforced` BOOLEAN NOT NULL

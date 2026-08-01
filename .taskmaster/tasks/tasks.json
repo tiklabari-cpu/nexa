@@ -3469,12 +3469,12 @@
             "description": "(1) updateSecurityBody'ye üç katkısal alan: ip_allowlist_enforced: z.boolean().optional(), session_idle_timeout_seconds: z.number().int().positive().max(<üst sınır>).nullable().optional(), max_concurrent_sessions: z.number().int().positive().max(<üst sınır>).nullable().optional() — .positive() sıfır/negatifi reddeder (chat-timeout'taki aynı gerekçe: 0 bir 'kapalı' değil, enforcement'in üzerine gid",
             "details": "08.9.6-f — PATCH /settings/security — oturum politikası alanlarının yazma yüzeyi (validasyon + audit)  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.9.6 (+ NFR-S2, NFR-S12)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 dosya + testi. (2) Güvenlik sınırı YOK — yalnız bir ayar değerini doğrulayıp saklar; erişim/oturum kararı -e ve -g'de, değerlerin semantiği -a'nın kontratında sabit; route zaten access_rules:rw ile korunuyor, yeni yetki yüzeyi açılmıyor. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen verilebiliyor: updateChatTimeoutBody (pozitif tam sayı + üst sınır + nullable) ve require_two_factor spread satırı. (5) Kontrat değişikliği katkısal (mevcut PATCH requestBody'ye 3 alan, yeni path yok). (6) Kabul kriteri mekanik: 400/200 ve persist.\nNEDEN AÇIK: apps/api/src/routes/settings.ts:140 updateSecurityBody zod şeması tam olarak 6 alan taşıyor: banned_customer_ips, file_sharing_enabled, allowed_file_types, max_file_size_bytes, spam_filter_enabled, require_two_factor. PATCH gövdesindeki data bloğu (satır 426-445) bu 6 alanın spread'i. Oturum politikası alanı ne şemada ne spread'de var.\nKAPSAM: (1) updateSecurityBody'ye üç katkısal alan: ip_allowlist_enforced: z.boolean().optional(), session_idle_timeout_seconds: z.number().int().positive().max(<üst sınır>).nullable().optional(), max_concurrent_sessions: z.number().int().positive().max(<üst sınır>).nullable().optional() — .positive() sıfır/negatifi reddeder (chat-timeout'taki aynı gerekçe: 0 bir 'kapalı' değil, enforcement'in üzerine gideceği gerçek bir sayı olur). (2) PATCH data bloğuna karşılık gelen üç spread satırı. (3) packages/contract/openapi/paths/settings.yaml securitySettings PATCH requestBody'sine üç alan + re-bundle. Mevcut settings.security_updated audit yazımı yalnız DEĞİŞEN ALAN ADLARINI kaydediyor — değişiklik gerekmez, ama testle doğrulanır. Enforcement KAPSAM DIŞI.\nDOSYALAR: apps/api/src/routes/settings.ts · packages/contract/openapi/paths/settings.yaml · apps/api/test/integration/settings.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/settings.ts (updateChatTimeoutBody — z.number().int().positive().max(CHAT_TIMEOUT_MAX_SECONDS).nullable() ve 0'ın neden reddedildiğinin yorumu) · apps/api/src/routes/settings.ts (satır 419-472 — PATCH /settings/security upsert + data spread bloğu + writeAuditEntry) · packages/contract/openapi/paths/settings.yaml (satır 223-265 — securitySettings patch requestBody şeması)\nKK (birebir): \"oturum politikaları\" | \"KK-türetilmiş: Oturum politikası değerleri Settings üzerinden kaydedilir; sıfır/negatif değer reddedilir; null politikanın kapalı olduğu anlamına gelir; değişiklik audit log'a alan adı olarak düşer. TÜRETME GEREKÇESİ: PRD 'oturum politikaları' dışında birim/sınır vermiyor (olgular: kk_yetersiz=true); sınırlar NFR-S2 ('Access token TTL kısaltılır … maks 25 access+25 refresh/istemci; revocation') ve depodaki chat-timeout deseninden türetildi.\"\nKK DOĞRULAMA: settings.test.ts — PATCH ile üç alan yazılır, GET aynen geri okur; session_idle_timeout_seconds: 0 ve max_concurrent_sessions: 0 400 validation alır; audit_log'da settings.security_updated satırının metadata'sında yalnız değişen alan adları vardır. contract-parity.test.ts yeşil.\nKAPSAM DIŞI: Değerlerin uygulanması — idle timeout / concurrent limit enforcement (08.9.6-g) · IP allowlist CRUD (08.9.6-d) · UI (08.9.6-h)\nSÖZLEŞME: OpenAPI paths/settings.yaml içindeki securitySettings PATCH requestBody'sine 3 katkısal alan. Yeni path YOK. Re-bundle ('pnpm --filter @nexa/contract generate') şart; aksi halde üretilen tipler eskir.\nMIGRATION: yok (kolonlar 08.9.6-a'da eklendi)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF (ÖNCE): 0 / negatif / üst sınır üstü değer → 400 validation · NEGATİF (ÖNCE): tip hatası (string/float) → 400 validation · NEGATİF: access_rules:rw olmayan token → 403 · CROSS-TENANT: A lisansının PATCH'i B'nin security_settings satırını değiştirmez (RLS + licenseId anahtarlı upsert) · POZİTİF integration: PATCH persist + GET geri okuma + null ile kapatma · integration: audit_log'da settings.security_updated metadata'sı yalnız değişen alan adlarını taşır · REGRESYON: mevcut settings.test.ts 6 alanlık senaryoları yeşil kalır",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "80",
-            "updatedAt": "2026-08-01T20:05:43.005Z"
+            "updatedAt": "2026-08-01T20:24:20.519Z"
           },
           {
             "id": 7,
@@ -3521,7 +3521,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T20:05:43.005Z"
+        "updatedAt": "2026-08-01T20:24:20.519Z"
       },
       {
         "id": "81",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-01T20:05:43.005Z",
+      "lastModified": "2026-08-01T20:24:20.520Z",
       "taskCount": 99,
       "completedCount": 70,
       "tags": [

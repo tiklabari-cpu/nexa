@@ -13,6 +13,29 @@
 
 ## Task log (newest-first)
 
+### DÜZELTME — Faz-2 özet sayacı bayat (08.9.6 `◐→✅`, sayaç güncellenmedi) — done — 2026-08-01 UTC
+
+- **Bulgu (panel §1.2):** Üst-tablo (`PLAN.md:22`) + §5.0 girişi (`PLAN.md:1100`) dağılımı `4 ✅ · 23 ⬜ · 3 ⛔`
+  yazıyordu; §5.0 gereksinim envanterinin (satır 1108–1137, **30 satır**) her satırının **öncü durum damgası
+  tek tek sayıldığında** `5 ✅ · 22 ⬜ · 3 ⛔` (toplam 30 sabit).
+- **Kök neden:** `08.9.6` satırı (`PLAN.md:1120`) tm 80.9 penceresinde `◐→✅` çevrildi (08.9.6-i teslim, a→i
+  tamam) ama iki dağılım sayacı güncellenmedi — deponun bilinen "kod/TM'de bitti, PLAN üst-özeti bayat"
+  deseni (§D55/§D56). Panelin `6 ✅ / 21 ⬜` iddiası **naif ham-glif** sayımıydı: `06.3.2-bulk` satırının notu
+  v1 kardeşine atıfla gömülü `` `✅` ``/`` `⬜` `` taşır → öncü damga 1 fazla sayılır. Doğru = öncü-damga sayımı.
+  Tam teşhis PLAN §D68.
+- **Yapıldı (YALNIZ dağılım sayacı):** `PLAN.md:22` + `PLAN.md:1100` → `22 ⬜ · 5 ✅ · 3 ⛔`; PLAN §D68 notu.
+  **DOKUNULMADI:** gereksinim satır damgaları (kanıta dayalı); `23 açık kalem` kapanış-paydası (satır 22-col5 ·
+  2318) + §5.2 `23 kalem` kırılım kapsamı (yapısal/backlog paydası — 08.9.6 teslimi payda içi ilerlemedir);
+  §D62 tarihsel `23/4/3` kaydı (append-only).
+- **Commit kapsamı:** yalnız `PLAN.md` + `HANDOFF.md`. PLAN.md commit'i satır 1120'nin `◐→✅` çevrimini de
+  içerir (tm 80.9 çalışma alanına bırakmıştı) — çünkü `5 ✅` özeti ancak o satır `✅` iken tutarlıdır, ikisi
+  aynı commit'te olmalı.
+- **⚠️ Çalışma alanı uyarısı:** Bu pencere açıldığında tree zaten **tm 80.9 (08.9.6-i) in-progress** koduyla
+  kirliydi: `apps/api/src/plugins/auth.ts` · `apps/api/test/integration/ip-allowlist.test.ts` ·
+  `apps/e2e/tests/settings.spec.ts` · `apps/e2e/kanit/80.9-ip-allowlist.png` · `.taskmaster/tasks/tasks.json`
+  (80.9 `pending→in-progress`). Bunlar tm 80.9'un **kendi DoD kapısına** (typecheck/lint/test/integration/build/
+  e2e) tabidir ve o pencerenin kapanışıdır — **kapsam dışı, commit EDİLMEDİ.** Bu düzeltme doküman-yalnızdır.
+
 ### tm 80.8 — 08.9.6-h Settings ekranı — IP allowlist bölümü + oturum politikası formu — done — 2026-08-01 UTC
 
 - **Yapıldı:** Yeni dosya `apps/web/src/features/settings/IpAllowlist.tsx`, iki alt-bileşen: (1)

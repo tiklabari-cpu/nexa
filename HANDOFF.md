@@ -13,6 +13,33 @@
 
 ## Task log (newest-first)
 
+### tm 80.7 — 08.9.6-g Oturum politikası enforcement (idle timeout + eşzamanlı oturum limiti) — done — 2026-08-01 UTC
+
+- **Yapıldı:** Enforcement, `apps/api/src/services/auth/token-service.ts` içinde (migration YOK, yeni hata tipi YOK).
+  (1) **Idle timeout** — `resolve()` yalnız **oauth** için lisansın `session_idle_timeout_seconds`'unu okur; `now -
+  (lastUsedAt ?? createdAt) > timeout` ise token'ı membership okumasıyla **aynı transaction'da kalıcı revoke** eder
+  ve `idle_expired` reason'ı döndürür (mevcut log yolundan akar; istemci tek tip 401 alır — "expired≠unknown"
+  gerekçesi korunur). PAT/bot muaf. `auth_resolve_token` SQL fonksiyonu `last_used_at`/`created_at` döndürmediği ve
+  migration yasak olduğu için değerler `#idleExpired` içinde tenant-scoped okunur. `touch()` fire-and-forget yarışı
+  fail-closed: okunan değer daima önceki isteğin aktivitesi, karşılaştırma `lastActive`'de monoton (staler okuma
+  yalnız daha erken expire ettirir, asla yanlış kabul etmez) — yorumla gerekçelendirildi. (2) **Eşzamanlı oturum
+  limiti** — `#pruneOldest` cap'i lisansın `max_concurrent_sessions` (null → `MAX_ACTIVE_TOKENS_PER_OWNER` 25)
+  değerinden **kilitli transaction içinde** okur; PAT muaf. Paralel `issue()` invariant'ı
+  `pg_advisory_xact_lock(hashtext('nexa.session-cap'), hashtext('<license>:<owner>'))` ile korunur (`withTenant`
+  READ COMMITTED — lock olmadan iki paralel basım under-prune eder). `auth.ts` **değişmedi**.
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w test` ✅ (api 1101/1101, +12; unit+integration
+  aynı vitest run — `session-policies.test.ts` dahil; diğer paketler cache-hit yeşil) · `pnpm -w build` ✅.
+  **Invariant testinin dişi kanıtlandı:** advisory lock geçici kapatılınca `holds the cap … under parallel mints`
+  8 paralel basımda 6 canlı ile **kırıldı**; lock geri konunca iki ardışık koşuda tam cap (deterministik).
+- **Varsayımlar:** Idle timeout "session" politikası olarak **oauth-only** yorumlandı (testStrategy "PAT idle ve limit
+  politikalarından etkilenmez" + PAT/bot uzun ömürlü kimlik gerekçesi). E2E bilinçli kapsam dışı — bu dilim salt
+  backend enforcement; uçtan uca akış 08.9.6-i'nin (tm 80.9) işi (task KAPSAM DIŞI + §5.2 -i satırı).
+- **Sonraki pencereye not:** Kalan `08.9.6`: `-h` (tm 80.8) Settings UI — IP allowlist bölümü + oturum politikası
+  formu; `-i` (tm 80.9) uçtan uca doğrulama (E2E, audit görünürlüğü, proxy-IP, istek başına maliyet). `-g`'nin
+  eklediği per-request maliyet: oauth resolve() artık bir `securitySettings` taze okuması yapıyor (idle null olsa
+  bile) — `-i`'nin maliyet notunda ölçülmeli. Yeni idiom: advisory lock (repoda ilk kez) — başka concurrent-cap
+  ihtiyacı çıkarsa aynı desen.
+
 ### tm 80.6 — 08.9.6-f PATCH /settings/security — oturum politikası alanlarının yazma yüzeyi (validasyon + audit) — done — 2026-08-01 UTC
 
 - **Yapıldı:** `updateSecurityBody` zod şemasına üç katkısal alan — `ip_allowlist_enforced: z.boolean().optional()`,

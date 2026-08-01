@@ -12,7 +12,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { AgentRole } from '@nexa/types';
 import { generateToken, hashToken } from '../../lib/crypto.js';
-import { withTenant } from '../../lib/tenant.js';
+import { withTenant, type TenantClient } from '../../lib/tenant.js';
 import type { Principal } from './principal.js';
 
 /** v2-03 §8.6: at most 25 live access tokens per (client, user). */
@@ -42,7 +42,12 @@ interface ResolvedTokenRow {
 }
 
 export type TokenRejection =
-  'unknown' | 'revoked' | 'expired' | 'license_expired' | 'membership_missing';
+  | 'unknown'
+  | 'revoked'
+  | 'expired'
+  | 'idle_expired'
+  | 'license_expired'
+  | 'membership_missing';
 
 export type TokenResolution =
   | { ok: true; principal: Principal; licenseStatus: string; region: string }
@@ -90,20 +95,34 @@ export class TokenService {
 
     // The role lives on the membership, not the token: revoking someone's admin
     // rights must take effect on their existing tokens immediately, not when
-    // they next sign in.
-    const membership = await withTenant(
+    // they next sign in. The same transaction also enforces the idle-session
+    // policy for oauth tokens, so reading `last_used_at` and revoking on expiry
+    // commit together.
+    const context = { licenseId: row.license_id, organizationId: row.organization_id };
+    const check = await withTenant(
       this.db,
-      { licenseId: row.license_id, organizationId: row.organization_id },
-      (tx) =>
-        tx.agentMembership.findUnique({
+      context,
+      async (tx): Promise<{ ok: false; reason: TokenRejection } | { ok: true; role: AgentRole }> => {
+        const membership = await tx.agentMembership.findUnique({
           where: { licenseId_agentId: { licenseId: row.license_id, agentId: row.owner_id } },
           select: { role: true, suspended: true, awaitingApproval: true },
-        }),
+        });
+        if (!membership || membership.suspended || membership.awaitingApproval) {
+          return { ok: false, reason: 'membership_missing' };
+        }
+        // Idle timeout is a *session* policy: it governs oauth access tokens — the
+        // credential a browser sign-in mints and refreshes. Personal access and
+        // bot tokens are named, long-lived credentials a human pasted into a
+        // script; expiring one for inactivity would be a mystery outage, the same
+        // reason #pruneOldest leaves them alone.
+        if (row.kind === 'oauth' && (await this.#idleExpired(tx, row.id))) {
+          return { ok: false, reason: 'idle_expired' };
+        }
+        return { ok: true, role: membership.role as AgentRole };
+      },
     );
 
-    if (!membership || membership.suspended || membership.awaitingApproval) {
-      return { ok: false, reason: 'membership_missing' };
-    }
+    if (!check.ok) return { ok: false, reason: check.reason };
 
     return {
       ok: true,
@@ -114,12 +133,52 @@ export class TokenService {
         accountId: row.owner_id,
         licenseId: row.license_id,
         organizationId: row.organization_id,
-        role: membership.role as AgentRole,
+        role: check.role,
         scopes: row.scopes,
         tokenId: row.id,
         tokenKind: row.kind,
       },
     };
+  }
+
+  /**
+   * Whether an oauth session has been idle past its licence's configured window,
+   * revoking it in the caller's transaction when so. A null window (the default)
+   * disables the policy, so behaviour is byte-identical to before it was set.
+   *
+   * `last_used_at` is written by touch() (plugins/auth.ts) fire-and-forget AFTER
+   * resolve() returns, so the value read here is the *previous* request's
+   * activity — exactly the window "idle" measures. Two concurrent requests may
+   * read the same pre-touch value; that is safe because the comparison is
+   * monotonic in `lastActive`: a staler read can only push a session over the
+   * edge, never admit one that should have expired. The race is fail-closed.
+   */
+  async #idleExpired(tx: TenantClient, tokenId: string): Promise<boolean> {
+    const settings = await tx.securitySettings.findFirst({
+      select: { sessionIdleTimeoutSeconds: true },
+    });
+    const timeoutSeconds = settings?.sessionIdleTimeoutSeconds ?? null;
+    // Common case: no policy set, so nothing further to read or enforce.
+    if (timeoutSeconds === null) return false;
+
+    const token = await tx.apiToken.findUnique({
+      where: { id: tokenId },
+      select: { lastUsedAt: true, createdAt: true },
+    });
+    if (!token) return false;
+
+    // A token that has never been used measures inactivity from when it was minted.
+    const lastActive = token.lastUsedAt ?? token.createdAt;
+    if (Date.now() - lastActive.getTime() <= timeoutSeconds * 1000) return false;
+
+    // The session is over. Revoke durably so every later request fails with the
+    // undifferentiated `revoked` reason without recomputing the window; the null
+    // guard keeps it idempotent under the concurrent-request race above.
+    await tx.apiToken.updateMany({
+      where: { id: tokenId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return true;
   }
 
   /** Fire-and-forget: a failed bookkeeping update must not fail the request. */
@@ -229,25 +288,49 @@ export class TokenService {
   }
 
   /**
-   * Enforce the per-owner cap by revoking the oldest surviving tokens.
+   * Enforce the per-owner concurrent-session cap by revoking the oldest
+   * surviving tokens.
    *
    * Only OAuth access tokens are pruned. Personal access tokens are named,
    * long-lived credentials a human pasted into a script — silently revoking one
    * because a browser session refreshed 25 times would be a mystery outage.
+   *
+   * The cap is the licence's `max_concurrent_sessions`; a null column falls back
+   * to the fixed ceiling, so behaviour is unchanged until a workspace sets one.
    */
   async #pruneOldest(
-    tx: { apiToken: PrismaClient['apiToken'] },
+    tx: TenantClient,
     licenseId: bigint,
     ownerId: string,
     kind: 'pat' | 'oauth' | 'bot',
   ): Promise<void> {
     if (kind !== 'oauth') return;
 
+    // Serialize concurrent mints for this owner. `withTenant` runs at READ
+    // COMMITTED, so without this two parallel issue() calls each insert their
+    // token and then count the live set *without seeing the other's uncommitted
+    // row* — both under-prune and the survivors settle one over the cap. A
+    // transaction-scoped advisory lock keyed on (license, owner) makes
+    // count-then-revoke a critical section: the second mint blocks until the
+    // first commits, then counts a view that includes it. The lock releases
+    // automatically at commit/rollback, and each owner takes a distinct key, so
+    // it neither deadlocks nor serializes unrelated mints.
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext('nexa.session-cap'), hashtext(${`${licenseId}:${ownerId}`}))
+    `;
+
+    // Read the cap inside the locked transaction so a concurrent policy change
+    // cannot race the prune it governs.
+    const settings = await tx.securitySettings.findFirst({
+      select: { maxConcurrentSessions: true },
+    });
+    const cap = settings?.maxConcurrentSessions ?? MAX_ACTIVE_TOKENS_PER_OWNER;
+
     const live = await tx.apiToken.findMany({
       where: { licenseId, ownerId, kind: 'oauth', revokedAt: null },
       select: { id: true },
       orderBy: { createdAt: 'desc' },
-      skip: MAX_ACTIVE_TOKENS_PER_OWNER,
+      skip: cap,
     });
     if (live.length === 0) return;
 

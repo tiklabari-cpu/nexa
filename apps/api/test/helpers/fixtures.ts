@@ -181,6 +181,9 @@ export async function grantToken(
     kind?: 'pat' | 'oauth' | 'bot';
     expiresAt?: Date | null;
     revokedAt?: Date | null;
+    /** Position the token in time — session-policy tests need a stale credential. */
+    lastUsedAt?: Date | null;
+    createdAt?: Date;
   },
 ): Promise<string> {
   const token = `test_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
@@ -195,6 +198,8 @@ export async function grantToken(
       name: 'test token',
       expiresAt: input.expiresAt ?? null,
       revokedAt: input.revokedAt ?? null,
+      ...(input.lastUsedAt !== undefined ? { lastUsedAt: input.lastUsedAt } : {}),
+      ...(input.createdAt !== undefined ? { createdAt: input.createdAt } : {}),
     },
   });
   return token;

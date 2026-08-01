@@ -3429,10 +3429,10 @@
             "description": "Yalnız saf modül apps/api/src/lib/ip-allowlist.ts — DB, route, hook YOK: (1) parseAllowlistEntry(value) → tekil IPv4/IPv6 veya adres/prefix CIDR'ı canonical {version, bytes, prefixLength} yapısına çevirir; geçersiz (prefix >32/v4, >128/v6, negatif, adres bozuk) → null. (2) ipMatchesEntry(ip, entry) → bit-maskeli üyelik testi; IPv4-mapped IPv6 (::ffff:a.b.c.d) düzleştirilir (mevcut normaliseIp yeni",
             "details": "08.9.6-c — lib/ip-allowlist.ts — CIDR/IP eşleştirme algoritması + izin-ret semantiği (saf, DB'siz)  [OPUS-MAX]\n\nPRD: FR-MOD-08.9.6 (+ NFR-S1, NFR-S3, NFR-C11)\nETİKET GEREKÇESİ: OPUS-MAX: erişim kontrolü algoritmasının kendisi — koşul 2 (güvenlik sınırı) ve koşul 4 (yeni algoritma; depoda kopyalanacak CIDR eşleştirici YOK) ihlali. Bit-maske ya da IPv4-mapped-IPv6 düzleştirme hatası doğrudan ya bypass ya da tüm ajanların kilitlenmesi demek; 'boş liste ne demek' kararı da aynı bağlamda verilmeli. BÖLÜNMEZ ÇEKİRDEK.\nNEDEN AÇIK: Depodaki tek IP karşılaştırması tam-string eşitliği: apps/api/src/lib/banned-ip.ts — normaliseIp (trim+lowercase+::ffff: düzleştirme) ve bannedCustomerIps.some((entry) => normaliseIp(entry) === target). CIDR/aralık desteği yok. ipAllowlist|allowed_ips grep 0. apps/api/src/lib/ssrf.ts mevcut ama IP'yi sınıflandırıyor (private/loopback/link-local reddi), keyfi prefix'e karşı üyelik testi yapmıyor.\nKAPSAM: Yalnız saf modül apps/api/src/lib/ip-allowlist.ts — DB, route, hook YOK: (1) parseAllowlistEntry(value) → tekil IPv4/IPv6 veya adres/prefix CIDR'ı canonical {version, bytes, prefixLength} yapısına çevirir; geçersiz (prefix >32/v4, >128/v6, negatif, adres bozuk) → null. (2) ipMatchesEntry(ip, entry) → bit-maskeli üyelik testi; IPv4-mapped IPv6 (::ffff:a.b.c.d) düzleştirilir (mevcut normaliseIp yeniden kullanılır); v4 girdi v6 entry'ye (ve tersi) eşleşmez. (3) decideIpAccess({ clientIp, entries }) → 'allow' | 'deny': boş liste = allow (yapılandırılmamış ≠ kimseye izin yok — self-lockout önlemi), dolu liste + eşleşme yok = deny, clientIp null/boş + dolu liste = deny (sinyal yokluğu dolu listede ret sayılır). (4) wouldLockOut(callerIp, nextEntries) → yazma tarafının (-d) çağıracağı self-kilitleme kontrolü.\nDOSYALAR: apps/api/src/lib/ip-allowlist.ts · apps/api/src/lib/ip-allowlist.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/lib/banned-ip.ts (normaliseIp + saf-fonksiyon/DB ayrımı + doküman tonu) · apps/api/src/lib/ssrf.ts (IP aralık akıl yürütmesi ve fail-closed yazım biçimi) · apps/api/src/lib/ssrf.test.ts (negatif-önce test dizilimi)\nKK (birebir): \"IP kısıtı\" | \"KK-türetilmiş: Bir kayıt tekil IP ya da CIDR aralığıdır; boş liste hiçbir kısıt uygulanmadığı anlamına gelir; dolu listede eşleşmeyen adres reddedilir; adresi bilinmeyen istek dolu listede reddedilir. TÜRETME GEREKÇESİ: PRD 'IP kısıtı' dışında hiçbir uygulama detayı vermiyor (olgular: 'tekil IP mi CIDR aralığı mı … ihlal durumunda davranış — hiçbiri belirtilmemiş'). Boş-liste=izinli seçimi olgulardaki 'boş liste herkese izin mi kimseye izin yok mu netleşmeli / self-lockout riski' maddesine karşı verilen karardır (§C varsayım).\"\nKK DOĞRULAMA: ip-allowlist.test.ts — 'IP kısıtı' KK'sı, eşleştiricinin bir adresi listeye göre kabul/ret ettiğini kanıtlayan unit testleriyle karşılanır; 'boş liste = allow' ve 'clientIp yok = deny' davranışları ayrı testlerle sabitlenir (bu iki test regresyon kilididir).\nKAPSAM DIŞI: DB okuma/yazma, route, Fastify hook (08.9.6-d / -e) · Oturum politikaları (08.9.6-f / -g) · SSRF sınıflandırması — lib/ssrf.ts ayrı sorumluluk, birleştirilmez\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit NEGATİF (ÖNCE): geçersiz entry (10.0.0.0/33, 999.1.1.1, 10.0.0.0/, boş string) → parseAllowlistEntry null · unit NEGATİF (ÖNCE): 10.0.1.5 ∉ 10.0.0.0/24 → deny · unit NEGATİF (ÖNCE): v4 adres v6 entry'ye (ve tersi) eşleşmez · unit NEGATİF (ÖNCE): clientIp null/boş + dolu liste → deny · unit POZİTİF: 10.0.0.5 ∈ 10.0.0.0/24; tekil IP entry'si /32 gibi davranır · unit POZİTİF: 203.0.113.5 ≡ ::ffff:203.0.113.5 (IPv4-mapped düzleştirme) · unit POZİTİF: boş liste → allow (regresyon kilidi) · unit sınır: /0 davranışı bilinçli olarak sabitlenir · unit: wouldLockOut — çağıranın adresi kapsam dışıysa true · CROSS-TENANT testi YOK — gerekçe: modül saf, tenant kavramı taşımıyor; tenant sınırı -b'nin RLS'i ve -e'nin sorgusuyla sağlanır",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "80",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-01T18:31:44.005Z"
           },
           {
             "id": 4,
@@ -3521,7 +3521,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T18:10:31.470Z"
+        "updatedAt": "2026-08-01T18:31:44.005Z"
       },
       {
         "id": "81",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-01T18:10:31.470Z",
+      "lastModified": "2026-08-01T18:31:44.006Z",
       "taskCount": 99,
       "completedCount": 70,
       "tags": [

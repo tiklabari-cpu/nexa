@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### tm 80.3 — 08.9.6-c lib/ip-allowlist.ts — CIDR/IP eşleştirme + izin-ret semantiği (saf, DB'siz) — done — 2026-08-01 UTC
+
+- **Yapıldı:** Yeni **saf** modül `apps/api/src/lib/ip-allowlist.ts` (DB/route/hook YOK) —
+  `banned-ip.ts`'in (deny-list, müşteri yüzeyi) allow-list karşılığı; agent yüzeyi için CIDR
+  üyeliği. Dört dışa-açık fonksiyon: (1) `parseAllowlistEntry(value)` → tekil IP veya adres/prefix
+  CIDR'ı canonical `{version, bytes, prefixLength}`'e çevirir; **host bitleri maskeli** (ağ adresi),
+  geçersiz (prefix >32/v4 · >128/v6 · negatif · çift-slash · bozuk adres · boş) → `null`
+  (fail-closed). (2) `ipMatchesEntry(ip, entry)` → bit-maskeli prefix üyeliği; IPv4-mapped
+  `::ffff:a.b.c.d` mevcut `normaliseIp` ile düzleştirilir; v4↔v6 **asla** eşleşmez; parse edilemeyen
+  adres hiçbir şeye uymaz. (3) `decideIpAccess({clientIp, entries})` → `'allow'|'deny'`: boş liste =
+  allow (yapılandırılmamış ≠ kimseye-izin-yok, self-lockout önlemi), dolu+eşleşmez = deny, clientIp
+  yok = deny, dolu-ama-hepsi-bozuk = deny (**ham string[] alır**, önceden parse edilmiş liste "boş"a
+  çökemez). (4) `wouldLockOut(callerIp, nextEntries)` = decideIpAccess deny (-d yazma tarafının
+  öz-kilitleme kontrolü). Test `apps/api/src/lib/ip-allowlist.test.ts` (23 unit, negatif-önce).
+- **Doğrulama (hepsi yeşil, exit 0):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7) · `pnpm --filter @nexa/api test:unit` (19 dosya/**252** test; yeni dosya 23) ·
+  `pnpm --filter @nexa/api test:integration` (39 dosya/**809** test) · `pnpm -w test:e2e`
+  (**59** passed, `.env` source edilerek) · ayrıca elle 16 **saldırgan sınır** kontrolü (kısmi-bayt
+  /12 · /20, v6 /64, mapped-in-CIDR, gömülü-v4 v6, karışık-aile liste, aralık-dışı oktet→null,
+  /0 broadcast) dist'e karşı geçti. Modülün **hiçbir importer'ı yok** (grep 0) → integration/e2e
+  mantıken etkilenemez; yine de tam kapı koşuldu.
+- **Varsayımlar:** (1) `decideIpAccess` ham `string[]` alır (parse'ı içeride yapar) — hepsi-bozuk dolu
+  liste "boş"a çöküp herkesi içeri almasın (fail-closed). (2) `bytes` canonical ağ adresidir (host
+  bitleri sıfırlı) → `10.0.0.5/24` ≡ `10.0.0.0/24`. (3) `/0` bilinçle "tüm aile": aynı-aile her adres
+  eşleşir, diğer aile eşleşmez (regresyon testiyle sabit). (4) IPv4-mapped düzleştirme `normaliseIp`
+  ile — banned-ip ile aynı adres kavramı.
+- **Sonraki pencereye not:** -d (`/settings/ip-allowlist` CRUD + path kontratı + self-lockout guard
+  `wouldLockOut` ile + audit action'ları `settings.ip_allowlist_added/removed`) ve -e (auth onRequest
+  enforcement `decideIpAccess` ile) bu modülü tüketecek. Import: `import { decideIpAccess, wouldLockOut,
+  parseAllowlistEntry } from '../lib/ip-allowlist.js'`. **DİKKAT -e:** `server.ts` `trustProxy: true` →
+  `request.ip` X-Forwarded-For ile taklit edilebilir; enforcement o yüzeyi ayrıca ele almalı (§5.1.2
+  bölünmez çekirdek gerekçesi). Not: e2e `kanit/*.png` yeniden-render churn'u bu commit'e DAHİL
+  EDİLMEDİ (80.1/80.2 deseni — her task e2e ekran görüntülerini commit'lemez); `git restore` ile geri
+  alındı, çalışma alanı temiz.
+
 ### tm 80.2 — 08.9.6-b ip_allowlist_entries tablosu + RLS politikası + IpAllowlistEntry şeması — done — 2026-08-01 UTC
 
 - **Yapıldı:** Yeni normalize tablo `ip_allowlist_entries` (id uuid PK, organization_id uuid,

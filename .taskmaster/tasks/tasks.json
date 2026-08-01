@@ -3482,13 +3482,13 @@
             "description": "(1) IDLE TIMEOUT: lisansın session_idle_timeout_seconds doluysa, now - (lastUsedAt ?? createdAt) > timeout olan token reddedilir; ret sebebi resolve()'un mevcut reason deseniyle loglanır ama istemciye ayrım verilmez (mevcut 'expired ile unknown ayrımı token'ın gerçek olduğunu doğrular' gerekçesi korunur) → 401 authentication; token kalıcı olarak revoke edilir. touch()'ın fire-and-forget olması ned",
             "details": "08.9.6-g — Oturum politikası enforcement — idle timeout (lastUsedAt) + lisans başına eşzamanlı oturum limiti  [OPUS-MAX]\n\nPRD: FR-MOD-08.9.6 (+ NFR-S2 token yönetimi, NFR-S3)\nETİKET GEREKÇESİ: OPUS-MAX: token geçerlilik semantiğini değiştirmek doğrudan authN sınırıdır (koşul 2 ihlali) ve eşzamanlı oturum limiti eşzamanlılık akıl yürütmesi gerektirir (koşul 3 ihlali): touch() fire-and-forget bir UPDATE, resolve() aynı satırı okuyor — idle penceresi bu yarışın içinde hesaplanacak; paralel issue() çağrılarında limitin aşılmaması bir invariant. BÖLÜNMEZ ÇEKİRDEK.\nNEDEN AÇIK: apps/api/src/services/auth/token-service.ts:19 MAX_ACTIVE_TOKENS_PER_OWNER = 25 sabit ve lisans başına yapılandırılamıyor; #pruneOldest (satır ~238-259) yalnız kind === 'oauth' için çalışıyor ve eşiği bu sabitten alıyor. resolve() (satır 62-121) yalnız revoked_at, expires_at, lisans durumu ve membership kontrol ediyor — boşta-kalma (idle) kontrolü YOK. Alt yapı hazır: ApiToken.lastUsedAt kolonu (schema.prisma ~294) ve touch() → auth_touch_token (token-service.ts:125-128) her agent/bot isteğinde güncelliyor.\nKAPSAM: (1) IDLE TIMEOUT: lisansın session_idle_timeout_seconds doluysa, now - (lastUsedAt ?? createdAt) > timeout olan token reddedilir; ret sebebi resolve()'un mevcut reason deseniyle loglanır ama istemciye ayrım verilmez (mevcut 'expired ile unknown ayrımı token'ın gerçek olduğunu doğrular' gerekçesi korunur) → 401 authentication; token kalıcı olarak revoke edilir. touch()'ın fire-and-forget olması nedeniyle 'okunan lastUsedAt ile aynı istekte yazılan değer' yarışı açıkça ele alınıp yorumla gerekçelendirilir. (2) EŞZAMANLI OTURUM LİMİTİ: #pruneOldest'in eşiği lisansın max_concurrent_sessions değerinden okunur (null → mevcut MAX_ACTIVE_TOKENS_PER_OWNER sabiti); aşan en eski oauth token'lar revoke edilir; PAT'ler hariç kalır (mevcut 'adlandırılmış, uzun ömürlü kimlik bilgisini sessizce iptal etmek gizemli kesinti yaratır' gerekçesi korunur). Limit okuması issue()'nun içindeki transaction'da yapılır ki paralel basımda invariant korunsun.\nDOSYALAR: apps/api/src/services/auth/token-service.ts · apps/api/src/plugins/auth.ts · apps/api/test/integration/session-policies.test.ts · apps/api/test/integration/auth.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/auth/token-service.ts (satır 62-121 resolve — reason döndürme + istemciye ayrım vermeme deseni) · apps/api/src/services/auth/token-service.ts (satır 130-170 issue + satır 238-259 #pruneOldest — transaction içi cap uygulaması) · apps/api/src/plugins/license-gate.ts (her istekte taze okuma vs. cache tartışmasının yazılı biçimi)\nKK (birebir): \"oturum politikaları\" | \"KK-türetilmiş: Yapılandırılmış boşta-kalma penceresi aşıldığında oturum geçersizleşir ve token iptal edilir; yapılandırılmış eşzamanlı oturum limiti aşıldığında en eski oturum kapanır; her iki politika da null iken davranış bugünküyle birebir aynı kalır. TÜRETME GEREKÇESİ: PRD 'oturum politikaları' dışında hiçbir detay vermiyor (olgular: 'idle timeout kaç dakika/saat … hiçbiri belirtilmemiş'). Politikaların şekli NFR-S2'nin 'Access token TTL kısaltılır (kaynak 8 saat—uzun; Nexa ≤1 saat + refresh); maks 25 access+25 refresh/istemci; revocation' maddesinden türetildi.\"\nKK DOĞRULAMA: session-policies.test.ts — idle penceresi geçmiş bir token ile yapılan çağrı 401 alır ve api_tokens.revoked_at dolar; pencere içindeki çağrı 200 alır; max_concurrent_sessions=2 iken üçüncü oturum açıldığında en eski oauth token revoke olur, aynı sahibin PAT'i canlı kalır; her iki alan null iken mevcut auth.test.ts senaryoları değişmeden geçer.\nKAPSAM DIŞI: IP allowlist (08.9.6-c / -d / -e) · Refresh token ailesi (OauthRefreshToken.familyId) semantiğinin değiştirilmesi — mevcut rotasyon/aile iptali davranışı korunur · Oturumun IP'ye bağlanması — §C varsayım gereği yapılmaz · Access token TTL'inin kendisi (NFR-S2, ayrı kalem)\nSÖZLEŞME: yok — mevcut 401 authentication zarfı kullanılır; yeni hata tipi eklenmez (errors.ts×2 + scopes.test.ts sayaç + openapi enum + regen tuzağına girilmez).\nMIGRATION: yok (kolonlar 08.9.6-a'da)\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF (ÖNCE): idle penceresi aşılmış token → 401 authentication; yanıt 'expired/idle' ayrımını sızdırmaz · NEGATİF (ÖNCE): max_concurrent_sessions=1 iken ikinci oturum ilkini kapatır; ilk token'ın sonraki isteği 401 · NEGATİF/REGRESYON: PAT idle ve limit politikalarından etkilenmez (yanlışlıkla iptal testi) · REGRESYON: her iki politika null iken hiçbir davranış değişmez; mevcut auth süiti yeşil · EŞZAMANLILIK: paralel iki issue() sonrası canlı token sayısı limiti aşmaz (invariant) · CROSS-TENANT: A lisansının max_concurrent_sessions değeri B lisansındaki aynı hesabın token'larını revoke etmez · CROSS-TENANT: A'nın idle penceresi B'nin token'ını geçersizleştirmez · POZİTİF: pencere içi çağrı 200; revoked_at gerçekten yazılır",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               6
             ],
             "parentId": "80",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-01T20:56:30.761Z"
           },
           {
             "id": 8,
@@ -3521,7 +3521,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T20:24:20.519Z"
+        "updatedAt": "2026-08-01T20:56:30.761Z"
       },
       {
         "id": "81",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-01T20:24:20.520Z",
+      "lastModified": "2026-08-01T20:56:30.761Z",
       "taskCount": 99,
       "completedCount": 70,
       "tags": [

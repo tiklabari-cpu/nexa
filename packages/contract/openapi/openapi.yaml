@@ -867,6 +867,14 @@ components:
         `file_sharing_enabled`, `allowed_file_types` and `max_file_size_bytes`
         are the rules FR-MOD-08.9.4 enforces on every upload — both the agent
         composer's attachments and anything a customer sends.
+
+        `ip_allowlist_enforced`, `session_idle_timeout_seconds` and
+        `max_concurrent_sessions` are the session policy fields
+        (FR-MOD-08.9.6). This surface is read-only for them: it reports
+        columns nothing writes or enforces yet, so every workspace reads the
+        same defaults — `false`, and null for both limits, meaning the
+        existing `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) still governs
+        concurrent sessions.
       required:
         [
           banned_customer_ips,
@@ -875,6 +883,9 @@ components:
           max_file_size_bytes,
           spam_filter_enabled,
           require_two_factor,
+          ip_allowlist_enforced,
+          session_idle_timeout_seconds,
+          max_concurrent_sessions,
         ]
       properties:
         banned_customer_ips:
@@ -899,6 +910,27 @@ components:
           description: Per-file ceiling. 100 MiB is the hard maximum.
         spam_filter_enabled: { type: boolean }
         require_two_factor: { type: boolean }
+        ip_allowlist_enforced:
+          type: boolean
+          description: >-
+            Whether `banned_customer_ips` (an allowlist model, FR-MOD-08.9.6)
+            is enforced. Defaults to false; nothing enforces this yet.
+        session_idle_timeout_seconds:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 1
+          description: >-
+            Seconds of inactivity before a session is force-expired, or null
+            when the policy is off (the default — nothing enforces this yet).
+        max_concurrent_sessions:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 1
+          description: >-
+            Per-owner cap on simultaneous active sessions, or null to fall
+            back to the fixed `MAX_ACTIVE_TOKENS_PER_OWNER` limit (25).
         updated_at: { type: string, format: date-time, nullable: true }
 
     ChatTimeoutSettings:

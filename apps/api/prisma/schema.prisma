@@ -1129,6 +1129,16 @@ model SecuritySettings {
   allowedFileTypes   String[] @default(["image/png", "image/jpeg", "application/pdf"]) @map("allowed_file_types")
   maxFileSizeBytes   Int      @default(10485760) @map("max_file_size_bytes")
   requireTwoFactor   Boolean  @default(false) @map("require_two_factor")
+  /// Whether `bannedCustomerIps` is enforced as an allowlist (FR-MOD-08.9.6).
+  /// Read-only surface for now — nothing enforces this yet.
+  ipAllowlistEnforced       Boolean  @default(false) @map("ip_allowlist_enforced")
+  /// Seconds of inactivity before a session is force-expired. Null disables
+  /// the policy (the default) — nothing enforces this yet.
+  sessionIdleTimeoutSeconds Int?     @map("session_idle_timeout_seconds")
+  /// Per-owner cap on simultaneous active sessions. Null falls back to the
+  /// fixed `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) — nothing reads this
+  /// column to enforce it yet.
+  maxConcurrentSessions     Int?     @map("max_concurrent_sessions")
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)

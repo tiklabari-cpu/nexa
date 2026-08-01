@@ -3333,6 +3333,14 @@ export interface components {
      *     `file_sharing_enabled`, `allowed_file_types` and `max_file_size_bytes`
      *     are the rules FR-MOD-08.9.4 enforces on every upload — both the agent
      *     composer's attachments and anything a customer sends.
+     *
+     *     `ip_allowlist_enforced`, `session_idle_timeout_seconds` and
+     *     `max_concurrent_sessions` are the session policy fields
+     *     (FR-MOD-08.9.6). This surface is read-only for them: it reports
+     *     columns nothing writes or enforces yet, so every workspace reads the
+     *     same defaults — `false`, and null for both limits, meaning the
+     *     existing `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) still governs
+     *     concurrent sessions.
      */
     SecuritySettings: {
       /** @description Visitor IPs refused a widget token and blocked from starting a chat (FR-MOD-08.9.2). Stored in canonical form; an IPv4-mapped IPv6 address matches its bare IPv4 form. */
@@ -3348,6 +3356,18 @@ export interface components {
       max_file_size_bytes: number;
       spam_filter_enabled: boolean;
       require_two_factor: boolean;
+      /** @description Whether `banned_customer_ips` (an allowlist model, FR-MOD-08.9.6) is enforced. Defaults to false; nothing enforces this yet. */
+      ip_allowlist_enforced: boolean;
+      /**
+       * Format: int32
+       * @description Seconds of inactivity before a session is force-expired, or null when the policy is off (the default — nothing enforces this yet).
+       */
+      session_idle_timeout_seconds: number | null;
+      /**
+       * Format: int32
+       * @description Per-owner cap on simultaneous active sessions, or null to fall back to the fixed `MAX_ACTIVE_TOKENS_PER_OWNER` limit (25).
+       */
+      max_concurrent_sessions: number | null;
       /** Format: date-time */
       updated_at?: string | null;
     };

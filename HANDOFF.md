@@ -13,6 +13,32 @@
 
 ## Task log (newest-first)
 
+### tm 80.1 — 08.9.6-a security_settings oturum politikası kolonları + kontrat/okuma yüzeyi — done — 2026-08-01 UTC
+
+- **Yapıldı:** `security_settings`'e 3 katkısal kolon (`ip_allowlist_enforced` BOOLEAN NOT NULL
+  DEFAULT false, `session_idle_timeout_seconds` INTEGER NULL, `max_concurrent_sessions` INTEGER
+  NULL) — `schema.prisma` + migration `20260727100000_session_policy_columns`. OpenAPI
+  `SecuritySettings` şemasına aynı 3 alan (null semantiği açıklamalı) + re-bundle
+  (`packages/contract/src/generated/api.ts`). `SECURITY_DEFAULTS` ve `serialiseSecurity`
+  (`routes/settings.ts`) okuma tarafına eklendi — `GET /settings/security` artık 3 alanı da
+  döner. Davranışsız iskelet: PATCH yazma yüzeyi ve her türlü enforcement bilinçli olarak
+  KAPSAM DIŞI (08.9.6-f/-e/-g'nin işi).
+- **Doğrulama:** `pnpm -w typecheck`/`lint`/`build` yeşil · `pnpm --filter @nexa/api test`
+  (57 dosya/1034 test) ve `pnpm --filter @nexa/rtm test` (4 dosya/71 test) **paralel DB yarışını
+  önlemek için ayrı ayrı** yeşil (bkz. bilinen `pnpm -w test` paralel-DB kısıtı) · `pnpm -w
+  test:integration` (concurrency=1) yeşil — `settings.test.ts` (68, genişletilmiş "schema
+  defaults" testi dahil) + `contract-parity.test.ts` (5) dahil · `pnpm db:check-drift` "no drift"
+  (yalnız bilinen pgvector istisnası).
+- **Varsayımlar:** Yok — alan seti/varsayılanlar task detayındaki NFR-S2 türetmesine birebir
+  uyuyor (`MAX_ACTIVE_TOKENS_PER_OWNER=25` referansı `token-service.ts:19`'dan doğrulandı).
+- **Sonraki pencereye not:** PLAN.md §5.2 `08.9.6` satırı `⬜→◐` (tam ✅ değil — yalnız -a
+  teslim; -b..-i hâlâ açık, bkz. satırdaki kalan liste). `08.9.6-f` (PATCH yazma yüzeyi) ve
+  `08.9.6-e`/`-g` (enforcement) bu task'a `depends on 08.9.6-a` ile bağlı — artık başlayabilirler.
+  `prisma format` tüm dosyayı yeniden hizalıyor (kapsam dışı yan etki) — bir daha çalıştırılırsa
+  yalnız dokunulan modelin diff'i commit'lenmeli, dosya geneli değil.
+
+---
+
 ### PANEL-FIX · #97 `plan-tm-reverse` çelişkisi — yanlış pozitif, ayrım netleştirildi — done — 2026-08-01 UTC
 
 - **Bulgu:** panel `ORTA` — _"#97 açık ama kapsadığı her PLAN satırı ✅"_ (kanıt: `PLAN.md:520`,

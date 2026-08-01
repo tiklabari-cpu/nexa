@@ -580,7 +580,15 @@ describe('settings', () => {
         max_file_size_bytes: fromSchema.maxFileSizeBytes,
         spam_filter_enabled: fromSchema.spamFilterEnabled,
         require_two_factor: fromSchema.requireTwoFactor,
+        ip_allowlist_enforced: fromSchema.ipAllowlistEnforced,
+        session_idle_timeout_seconds: fromSchema.sessionIdleTimeoutSeconds,
+        max_concurrent_sessions: fromSchema.maxConcurrentSessions,
       });
+      // Session policy is off until something writes it (08.9.6-a ships no
+      // write surface): the allowlist flag is false, both limits are null.
+      expect(body.ip_allowlist_enforced).toBe(false);
+      expect(body.session_idle_timeout_seconds).toBeNull();
+      expect(body.max_concurrent_sessions).toBeNull();
       // No blocked addresses until a workspace adds one.
       expect(body.banned_customer_ips).toEqual([]);
       // No row was written to answer a read.

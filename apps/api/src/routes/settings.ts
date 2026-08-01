@@ -83,6 +83,9 @@ const SECURITY_DEFAULTS = {
   maxFileSizeBytes: 10_485_760,
   spamFilterEnabled: true,
   requireTwoFactor: false,
+  ipAllowlistEnforced: false,
+  sessionIdleTimeoutSeconds: null as number | null,
+  maxConcurrentSessions: null as number | null,
 } as const;
 
 /**
@@ -834,6 +837,9 @@ function serialiseSecurity(
     maxFileSizeBytes: number;
     spamFilterEnabled: boolean;
     requireTwoFactor: boolean;
+    ipAllowlistEnforced: boolean;
+    sessionIdleTimeoutSeconds: number | null;
+    maxConcurrentSessions: number | null;
     updatedAt: Date;
   } | null,
 ) {
@@ -845,6 +851,9 @@ function serialiseSecurity(
     max_file_size_bytes: value.maxFileSizeBytes,
     spam_filter_enabled: value.spamFilterEnabled,
     require_two_factor: value.requireTwoFactor,
+    ip_allowlist_enforced: value.ipAllowlistEnforced,
+    session_idle_timeout_seconds: value.sessionIdleTimeoutSeconds,
+    max_concurrent_sessions: value.maxConcurrentSessions,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

@@ -1,6 +1,13 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-08-01 · **Branch:** `docs/plan-expand-audit` (aktif iş dalı) · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** 2026-08-01 · **Branch:** `main` (güncel — Faz-0 + v1 + v2 planı burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
+
+> **Dal durumu (2026-08-01):** `main` uzun süre `e118695` (tm 21) noktasında takılı kalmıştı; Faz-0
+> kapanışı, **tüm v1** ve v2 planlama turu yalnızca `docs/plan-expand-audit` üzerinde birikmişti
+> (127 commit). Bu tur `main` **fast-forward** ile güncellendi (`--ff-only`, force yok, history
+> rewrite yok, hiçbir commit kaybolmadı) ve push edildi. `main` ile `docs/plan-expand-audit` artık
+> **birebir aynı**. Bundan sonra iş `main`'den dallanır — CONVENTIONS §2'nin `feat/<slug>` → `main`
+> akışı yeniden geçerli. Eski `docs/plan-expand-audit` dalı tamamen merge edilmiş durumda; silinebilir.
 
 ---
 

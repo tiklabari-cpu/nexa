@@ -19,8 +19,8 @@
 | ------------------ | ---- | ------------------------------------ | ------------------------------ | :-----: |
 | **Faz 0 — MVP**    | §5.1 | 54 ✅ · 0 ◐ (§3) · gruplu-🔒 v1'e    | **51 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
 | Faz 1 — v1         | §5.2 | v1 payı teslim (Playbook+AI+omnichannel-MOCK+webhooks §1.3); Should çoğu ✅ · mobil 🔒 · 06.3.2-bulk→v2 | **20 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
-| Faz 2 — v2         | §5.3 | ⬜ başlanmadı                         | —                              |    —    |
-| Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı                         | —                              |    —    |
+| **Faz 2 — v2**     | §5.3 | **📋 PLANLANDI, kod başlamadı** (2026-08-01). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: **23 ⬜ açık · 4 ✅ teslim · 3 ⛔ kapsam dışı** (7 faz çelişkisi PRD'den çözüldü). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: **23 açık kalemin hepsi ✅** | ⬜ AÇIK |
+| Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı · orta derinlik (§6.1). 2026-08-01'de **13.7 mobil** buraya taşındı (§D60) · **08.9.6 IP allowlist** buradan v2'ye çıktı (§D61) | —                              |    —    |
 
 **Faz-0 kapandı (2026-07-31 · GL-3 · tm 87).** Kapanışı bloklayan 6 `Must ◐` kapatıldı: 01.3, 02.4,
 13.8 (modül tablolarında D23/D24/D26'da `◐`→`✅`) + EK-A.1 / EK-A.2 / EK-B.1 (bu turda §7.1'de
@@ -33,8 +33,9 @@ bloklamadı (§F.00) ama §3.13'te ismen listeli. _Tarihçe: kapanış öncesi �
 
 **v1 (Faz 1) kapandı (2026-07-31 · GL-4 · tm 88).** v1 `Must` kapısı **sayılarak** `20 ✅ · 0 ◐ · 0 ⬜`
 (§4.1/4.2/4.3'te `Must (v1)` = **20 satır**, hepsi ✅: 05.1/05.3/05.5 · 06.1–06.4 [10] · 08.5.4–.6 ·
-08.8.4 · 02.1.2 · 04.2 · 10.1.4). Mobil (13.7 · 13.8-push) gerekçeli 🔒 (PRD §11.1/8, web-öncelikli) —
-sayaca girmez. `Should` kalemleri de çoğunlukla teslim (Copilot 12.x · Campaigns · Reviews/Reports v1 ·
+08.8.4 · 02.1.2 · 04.2 · 10.1.4). Mobil (13.7 · 13.8-push) 🔒 → **Faz 3'e atandı** (2026-08-01 · §D60;
+eski gerekçe "§11.1/8" yanlış atıftı — o madde masaüstü native app'i kapsar) — `Should` olduğu için
+sayaca zaten girmiyordu, kapanış kararı değişmedi. `Should` kalemleri de çoğunlukla teslim (Copilot 12.x · Campaigns · Reviews/Reports v1 ·
 Apps · Custom fields · HelpDesk merge…); tek bilinçli v2 payı `06.3.2-bulk` (bulk/CSV, §5.1). §F.1'in
 **10 maddesi tam sürüm** koda karşı koşuldu; **tam DoD kapısı + tam E2E süiti** yeşil (817 unit · 821
 integration · 59 e2e — exit 0). Kanıt HANDOFF §F.2 + §D56. GL-5/6/7 (tm 70/68/69, öne çekilen güvenlik)
@@ -264,7 +265,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 
 | PRD  | Gereksinim                                        | Öncelik    | Durum | Nerede               |
 | ---- | ------------------------------------------------- | ---------- | :---: | -------------------- |
-| 13.8 | **Notifications** (ses/masaüstü/tarayıcı/e-posta) | Must (MVP) |  ✅   | Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `notifications.ts`) · **e-posta bildirim kanalı ✅** (tm 31): karar `assignee-email.ts` `shouldEmailAssignee` + route tetik `customer.ts` (atanan ajana FileMailer) · kullanıcı bazında opt-out `notify_email` (migration `20260725110000`, Settings `SettingsPage.tsx`/`auth-store.ts`, `agents.ts`/`auth.ts`) · KK 08.2 karşılandı · test: `assignee-email.test.ts` (5) + `notifications.test.ts` integration (5, opt-out/idempotent/cross-tenant dahil) — mobil push 🔒 v1 (§11.1/8) → FR-MOD-13.7/§3.13/T7 · §D20/§D26 |
+| 13.8 | **Notifications** (ses/masaüstü/tarayıcı/e-posta) | Must (MVP) |  ✅   | Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `notifications.ts`) · **e-posta bildirim kanalı ✅** (tm 31): karar `assignee-email.ts` `shouldEmailAssignee` + route tetik `customer.ts` (atanan ajana FileMailer) · kullanıcı bazında opt-out `notify_email` (migration `20260725110000`, Settings `SettingsPage.tsx`/`auth-store.ts`, `agents.ts`/`auth.ts`) · KK 08.2 karşılandı · test: `assignee-email.test.ts` (5) + `notifications.test.ts` integration (5, opt-out/idempotent/cross-tenant dahil) — **mobil push 🔒 → Faz 3** (2026-08-01 · §D60; eski damga "🔒 v1 (§11.1/8)" idi — §11.1/8 masaüstü native app maddesi, yanlış atıf) → FR-MOD-13.7 · §6.1 · tm 90. MVP `Must` payı (ses/masaüstü/tarayıcı/e-posta) tam teslim, mobil push `Should` kanadıdır → sayacı etkilemez · §D20/§D26/§D60 |
 
 ### 3.11 Faz-0 dilim planı
 
@@ -559,7 +560,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 12.1–12.3  | **Copilot** (buton, ayrı KB, özet + yanıt yardımı)                                                     | Should (v1)    | ✅ **Copilot agent-assist (3 alt-görev, tm 36)** — **12.2-a ayrı KB:** `kind:'copilot'` AiAgent'a bağlı ayrı bilgi tabanı, AI-agent KB'sinden çift yönlü izole (`/knowledge-sources` `ai_agent`'a, `/copilot/knowledge` copilot ajanına süzülür → birbirini göstermez), **müşteri token'ı → 404** (agent+bot default principals, boundary=404), cross-tenant izole; `GET/POST/DELETE /copilot/knowledge` (`copilot.ts`→`copilot-service.ts` `ensureAgent`/`createSource`/`deleteSource`, SSRF-guard'lı website crawl + eşzamanlı indeks). **12.1-a buton+panel:** transcript header'da Copilot butonu → sağ panel Copilot sekmesi (`CopilotPanel.tsx`; `InboxPage` `panelTab` details↔copilot, chat değişince reset) → **Assisted metriğini besler** — her assist bir `skill_run` yazar = 07.3.2 reports "assisted" sorgusunun tam anahtarı (`recordAssist` copilot `workspace`-kind skill; kapalı chat + agent-event + skill_run ⇒ assisted). **12.3-a özet+yanıt+enhance (+02.5):** özet→internal note (`chats.sendEvent` recipients=agents); yanıt taslağı copilot KB'den RAG (son müşteri mesajı sorgu; eşleşme yoksa boş, uydurmaz) → `copilotDraft` store ile composer'a (`Composer` reply moduna geçer); enhance rephrase/friendly/formal/grammar (`@nexa/ai-mock` `enhanceText`/`summariseConversation` deterministik stub). OpenAPI 5 yol (`paths/copilot.yaml`, contract-parity ✅). `/skills`+`/knowledge-sources` `ai_agent`'a filtrelendi (copilot skill/source sızmaz). Test: integration `copilot.test.ts`(15: KB izolasyon negatifleri + summary→note + reply RAG + enhance + assisted-alignment 07.3.2) · unit `assist.test.ts`(14) · web `CopilotPanel.test.tsx`(7)/`copilotDraft.test.ts`(3)/`Composer.copilot.test.tsx`(2) · e2e `copilot.spec.ts`(1) · tm 36 · §D40 |
 | 13.1       | Home dashboard                                                                                         | Should (v1)    | ✅ aktivasyon checklist (5 adım, gerçek state'ten türetilir: website/teammate/customize/canned/AI-agent) + canlı gerçek-zaman kartları (visitors_online = açık chat ∪ 30dk ziyaret UNION, ongoing_chats, agents_online = accepting_chats) + haftalık performans (bu hafta vs geçen: new chats/resolved/CSAT WoW delta) — `GET /home` (`reports_read`) `routes/home.ts` → `services/home/home-service.ts` (RLS + defansif license filtresi; weekly chats/resolved = Reports overview chats/closed ile aynı created-in-window taban, ADR-09 automated split'e dokunmaz) · şema `@nexa/types` `HomeDashboard` · OpenAPI `/home` (contract-parity ✅) · web `HomePage.tsx` + saf `dashboard.ts` kart view-model'leri · rota `/app/home` + nav "Home" (`nav.home` tr/en) · test unit `dashboard.test.ts`(8)+`HomePage.test.tsx`(4) [kartlar] + integration `home.test.ts`(13) [canlı sayaç + tenant isolation + scope] · tm 60 · §D34 |
 | 13.6       | Omnichannel Ticketing / HelpDesk katmanı                                                               | Should (v1)    | ✅ **HelpDesk katmanı — backend ✅ (tm 61.1) + frontend ✅ (tm 61.2)** — chat↔ticket köprüsü (`source_chat` detail; Dilim 11 create-from-chat) + ticket yaşam döngüsü (status geçişleri artık `ticket.status_changed` audit'li) + **merge/unmerge** (non-destructive pointer `merged_into_id`; invariant: self-merge/zincir/primary-with-children/already-merged reddi + cross-tenant→404; unmerge = tam ters; merged ticket listeden gizli, primary'de `merged_ticket_ids`) + **followers** (add/remove idempotent, üyelik doğrulaması) + **priority** (int, PATCH) — hepsi audit'li (`ticket.merged`/`unmerged`/`follower_added`/`follower_removed`/`priority_changed`/`status_changed`). `routes/tickets.ts` (POST/DELETE `/tickets/:id/merge`, POST `/tickets/:id/followers`, DELETE `/tickets/:id/followers/:accountId`, priority via PATCH) → `ticket-service.ts`; migration `20260726160000_ticket_helpdesk` (`priority`, `merged_into_id` self-FK + no-self-merge CHECK, `ticket_followers` RLS=thread_tags deseni + GRANT); OpenAPI 3 yol + Ticket/TicketDetail alanları (contract-parity ✅); `@nexa/types` `TICKET_PRIORITY_*`. KK doğrulaması "integration (merge/unmerge invariant + audit)" birebir: `tickets-helpdesk.test.ts` (15). **Frontend HelpDesk yüzeyi ✅ (tm 61.2)** — `TicketDetailPane`'de priority seçici (4 seviyeli ölçek; `ticket-priority.ts` keyfi int'i en yakın seviyeye snap'ler) + followers (agent picker'dan ekle / satırdan çıkar) + merge (aday ticket listesinden birleştir) + unmerge (folded child'ı primary'nin panelinden veya child'ın merged-banner'ından geri al); merged ticket read-only (subject/status/priority disabled + banner); liste satırında priority pill. `useTickets.ts` HelpDesk hook'ları (merge/unmerge/addFollower/removeFollower/agents; id mutate-time'da) + `TicketDetail`/`TicketFollower` tipleri. `TicketPane.tsx` · `useTickets.ts` · `ticket-priority.ts` · `types.ts`; test `TicketPane.test.tsx` (8: priority PATCH · follower add/remove · merge · child+primary unmerge · list pill) + `ticket-priority.test.ts` (6) + e2e `tickets.spec.ts` (1, priority+follower canlı stack). NOT (`◐` değil): liste satırında **merged-child sayaç rozeti** liste özet payload'una `merged_ticket_ids`/`merged_count` alanı eklemeyi (backend+contract) gerektirir → frontend-scope dışı, ertelendi; merge/unmerge UI'dan tam çalışıyor (child'lar primary panelinde), KK'nın parçası değil. · §D38·§D39 |
-| 13.7       | Mobil uygulamalar                                                                                      | Should (v1)    |       🔒 web-öncelikli (PRD §11.1/8 ile hizalı)       |
+| 13.7       | Mobil uygulamalar                                                                                      | Should (v1)    | 🔒 → **Faz 3 (Enterprise)** — v1 kapanışını bloklamadı, ama gerekçesi bu turda **düzeltildi**: eski metin "PRD §11.1/8 ile hizalı" diyordu; §11.1/8 **masaüstü** native uygulama hakkındadır, mobil hakkında değil (yanlış atıf → gerekçesiz 🔒 = §F.00'a göre gizlenmiş ⬜). Yeni gerekçe: native iOS/Android bu deponun stack'i (TS monorepo: Fastify+React+Vite) dışındadır; ayrı bir uygulama hattı + store süreci ister. Faz 3'e **açıkça** atandı → §6 · §6.1 · tm 90. §D60 |
 
 ---
 
@@ -580,7 +581,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 > açığı kalmadı**; tek bilinçli v2 payı = `06.3.2-bulk` bulk/CSV import (§5.1, Should).
 >
 > **v1 kapanış kapısı (§F.00):** v1 `Must` kalemleri = 05.1/05.3/05.5, 06.1–06.4, 08.5.4–.6,
-> 08.8.4, 02.1.2, 04.2, 13.8-mobil-push(🔒). Bunların `0 ◐/⬜` olması gerekir. `Should`'lar
+> 08.8.4, 02.1.2, 04.2, 13.8-mobil-push(🔒 → Faz 3, §D60). Bunların `0 ◐/⬜` olması gerekir. `Should`'lar
 > bloklamaz. Aşağıdaki kırılım atomiktir; her alt-görev PRD KK'sını **birebir** taşır.
 
 #### 4.4.1 · MOD-05 Playbook (öne çekildi — tamamlanacak)
@@ -870,8 +871,13 @@ Dış servisler MOCK (MASTER-PROMPT §5). Ortak adaptör arayüzü + kanal baş�
   *Should* — **↑ gerekçe:** ticket yaşam döngüsü + merge/unmerge veri bütünlüğü + audit. KK:
   _"Chat↔ticket köprüsü; ticket yaşam döngüsü; birleşik (ayrı ürün değil)"_ · doğrulama: integration
   (merge/unmerge invariant + audit). **Bağımlılık:** ticketing (✅ Dilim 11). **Tahmin:** 2+ pencere (böl).
-- **13.7 Mobil uygulamalar** — 🔒 web-öncelikli (PRD §11.1/8 ile hizalı). v1 kapanışını **bloklamaz**;
-  gerekçe: web parite önce.
+- **13.7 Mobil uygulamalar** — 🔒 → **Faz 3'e atandı** (§6 · §6.1 · tm 90). v1 kapanışını **bloklamadı**.
+  _Gerekçe düzeltmesi (2026-08-01, §D60):_ bu satır önce "web-öncelikli (PRD §11.1/8 ile hizalı)" diyordu.
+  §11.1/8 **"Masaüstü native uygulama"** maddesidir — mobil değil. PRD'de mobil kapsam dışı DEĞİL; aksine
+  FR-MOD-13.7 `Should (v1)` ve KK'sında _"tam modül paritesi (Nexa farklılaşması)"_ yazıyor. Yani kalem
+  **gerekçesiz 🔒** durumundaydı ve §F.00'ın _"gerekçesiz 🔒 bir kapanış engelidir (gizlenmiş ⬜ olabilir)"_
+  kuralına takılıyordu. Doğru gerekçe: native iOS/Android **bu deponun stack'i dışında** (ADR-01/02: TS
+  monorepo, Fastify+React+Vite) — ayrı uygulama hattı, ayrı derleme zinciri, store süreci. Faz 3'e taşındı.
 
 ### 4.5 GO-LIVE turu — kapanış + canlıya hazırlık kırılımı (2026-07-28)
 
@@ -1075,59 +1081,1031 @@ gereği bu depodan yapılmaz.
 **PRD amacı:** _"Skill builder + Copilot BI + gelişmiş operasyon."_
 **Çıkış kriteri (PRD):** temsilci başına çözülen ≥%25 artış · NPS ≥40 · hesap başına ≥3 aktif entegrasyon.
 
-| PRD    | Gereksinim                                        | Öncelik          | Not                                                 |
-| ------ | ------------------------------------------------- | ---------------- | --------------------------------------------------- |
-| 07.5   | Metrics breakdown (ajan/takım/kanal/saat)         | Should (v2)      |                                                     |
-| 07.6   | Chat topics (AI kümeleme)                         | Could (v2)       |                                                     |
-| 08.5.7 | Instagram (DM)                                    | Should (Ent./v2) |                                                     |
-| 08.6.3 | Skills-based routing + supervision/takeover       | Could (v2)       |                                                     |
-| 08.8.3 | MCP server (search_tickets/list_chats/get_report) | Could (v2)       |                                                     |
-| 08.9.2 | Banned customers                                  | Should (v2)      | ✅ **GL-6 (tm 68):** IP yasağı enforcement — `/customer/token` mint + `/customer/chat/events` yolunda istemci IP'si `SecuritySettings.bannedCustomerIps` ile karşılaştırılır → `customer_banned` (`lib/banned-ip.ts`: normalise+isIpBanned, IPv4-mapped IPv6 çözümlenir); kontrat `banned_customer_ips` GET/PATCH (`net.isIP` doğrulama + normalise + dedup) + Settings→Security "Blocked IP addresses" UI; müşteri ban/unban UI zaten mevcut (`CustomerDetailPanel`, doğrulandı). test: int **10** (token 403 · chat bloku token-önce · unban · cross-tenant · IPv4-mapped) + unit **5** + UI unit **4**. §4.5/GL-6 · §D58 |
-| 08.9.3 | Spam filtre                                       | Should (v2)      | ✅ **GL-7 (tm 69):** deterministik motor `services/security/spam-filter.ts` (link seli ≥4 URL · tekrar oranı · 20+ karakter run · 40+ hane entropi ≥3.5 · blocklist; **LLM yok** → test edilebilir + yanlış-pozitif denetimi) — widget chat-start (`/customer/chat/events`, yeni-chat kapısı) + `email-inbound` **aynı motordan** (`evaluateSpam` tek gate, `spamFilterEnabled` varsayılan açık). **Davranış kararı (§C-A11):** chat = **zarflı red** `message_rejected` (403, jenerik mesaj → kural sızmaz, kardeş banned-IP ile tutarlı, hiçbir şey persist edilmez); email = sessiz `ignored/spam` (async webhook). NEGATİF-önce: unit **29** (kısa selam/tek-link soru/tekrar-meşru/uzun-URL geçer + ReDoS-linear regresyon) + int **7** (chat 6: red 403+0 chat · filtre-off · kurulu-sohbet taranmaz · **cross-tenant**; email 1: sağlayıcı-temiz içerik-spam konu düşer). **Güvenlik denetimi (security-reviewer):** `normaliseToken` `$`-anchored regex'i O(n²) (ZWSP dolgulu token → ~1 s event-loop bloğu) bulundu → linear iki-uçlu walk + 64-hane token kapı ile giderildi. §4.5/GL-7 · §D59 |
-| 08.9.5 | CC masking (Luhn, yazma anında)                   | Should (v2)      | ✅ **GL-5 (tm 70):** kart no Luhn→`**** **** **** 1234` yazım anında (DB/log/RTM/transcript) · `lib/cc-mask.ts` · test unit 16 + int 9 · NFR-C5/S9 · §4.5/GL-5 · §D57 |
-| 09.3   | API istek paketleri                               | Could (v2)       |                                                     |
-| 09.4   | Zapier/Make + Build-your-app                      | Could (v2)       |                                                     |
-| 13.2   | Engage / Traffic (gelişmiş filtreler)             | Should (v2)      |                                                     |
-| 13.3   | **Goals** (ziyaretçi→sohbet→dönüşüm hunisi)       | Should (v2)      | `Goal` modeli var                                   |
-| 13.4   | Görsel Workflow builder (nodes/edges)             | Could (v2)       | ⛔ **ADR-14: UI yapılmayacak** (tablo şemada kalır) |
-| 13.5   | Sales tracker                                     | Could (v2)       |                                                     |
-| —      | Public KB (SEO'lu self-servis)                    | v2 (§5.3)        |                                                     |
-| —      | Work scheduler / staffing prediction              | v2 (§5.3)        |                                                     |
-| —      | Multibrand                                        | v2 (§5.3)        |                                                     |
+> **Bu bölüm 2026-08-01'de baştan yazıldı (v2 planlama turu).** Önceki hâli 18 kalemlik bir liste +
+> "orta derinlik" kırılımdı. Bu tur iki şey yaptı: **(1) kapsamı PRD'ye karşı süpürdü** — v2'nin
+> gerçek kalem sayısı **30** çıktı, PLAN'da **12'si eksikti** (§D62); **(2) kalan işi tam atomik
+> böldü** — her alt-görev tek temiz pencerede DoD kapısından geçebilecek boyutta, `dosyalar` +
+> `referans desen` alanlarıyla (§5.2).
+>
+> **Kapsam süpürmesi nasıl yapıldı:** üç bağımsız kaynak paralel tarandı ve sonra uzlaştırıldı —
+> (a) PRD **§5.3** v2 faz tablosunun her "Alan | Kapsam" hücresi; (b) PRD **§5.5** modül→faz
+> matrisinin **v2 sütununda** işaret taşıyan her modül; (c) PRD **§6**'nın `Öncelik` sütununda
+> `(v2)` geçen her `FR-MOD` satırı. Eksiklerin çoğu PRD'de **proza içinde** geçtiği ve kendi
+> `FR-MOD` satırı olmadığı için gözden kaçmıştı (ör. "zamanlanmış export", "100+ entegrasyon",
+> "çoklu-ajan çakışma uyarısı", "command palette AI komutları"). Her "PLAN'da yok" iddiası hedefli
+> `grep` ile teyit edildi ve yanlış-pozitifler ayıklandı.
 
-### 5.1 v2 orta-derinlik kırılımı (derinlik politikası: faz başlarken bölünür)
+### 5.0 v2 kalem envanteri (30 kalem — PRD'ye karşı sayıldı)
 
-> **Neden orta derinlik (uzunluk değil, bayatlama):** v2 başlarken kod tabanı değişmiş olacak;
-> bugün yazılan ince kırılım yanlış güven verir (§1.2). İş kalemi + etiket + tahmini alt-görev
-> sayısı + bağımlılık verilir; atomik KK kırılımı faz başında (§F.0 mini denetimle) yapılır.
-> **İstisna (tam derinlik serbest):** saf güvenlik kuralları — 08.9.5 CC-masking, 08.9.3 spam
-> filtre — kod tabanı değişse de değişmez; istenirse şimdi atomik bölünebilir.
+**23 ⬜ açık · 4 ✅ teslim · 3 ⛔ kapsam dışı** — tablodan **sayılarak** (§1.2: bu sayılar elle yazılmaz).
+7 kalem faz çelişkisi taşıyordu → hepsi bu turda PRD'den çözüldü (§D61/§D62).
+Açık 23 kalemin tamamı §5.2'de atomik bölündü.
 
-| PRD  | İş kalemi                          | Etiket   | ~Alt-görev | Bağımlılık                    |
-| ---- | ---------------------------------- | -------- | :--------: | ----------------------------- |
-| 06.3.2-bulk | bulk/CSV KB import (Should) | `[XHIGH]`|   1–2      | 06.3.2-a ✅ (crawl+index yolu) |
-| 07.5 | Metrics breakdown (kanal/saat)     | `[XHIGH]`|   2–3      | reports ✅ (gün/ajan zaten)   |
-| 07.6 | Chat topics (AI kümeleme)          | `[XHIGH]`|   2        | ai-mock; yeterli-veri empty   |
-| 08.5.7| Instagram (DM, MOCK)              | `[XHIGH]`|   2        | 08.5-adapter-a (v1)           |
-| 08.6.3| Skills-based routing + takeover   | `[MAX]`  |   3–4      | routing ✅; supervision yeni  |
-| 08.8.3| MCP server (search/list/report)   | `[MAX]` ↑|   3        | OAuth scope ✅; tenant izole   |
-| 08.9.2| Banned customers                  | `[XHIGH]`|   1–2      | **→ §4.5/GL-6 (öne çekildi, atomik kırılım orada)** |
-| 08.9.3| Spam filtre                       | `[MAX]` ↑|   2        | **→ §4.5/GL-7 (öne çekildi, atomik kırılım orada)** |
-| 08.9.5| CC masking (Luhn, yazma anında)   | `[MAX]` ↑|   2        | **→ §4.5/GL-5 (öne çekildi, atomik kırılım orada)** |
-| 09.3 | API istek paketleri               | `[XHIGH]`|   1–2      | billing ✅                    |
-| 09.4 | Zapier/Make + Build-your-app      | `[XHIGH]`|   2–3      | 08.8.4 (v1) webhooks          |
-| 13.2 | Engage/Traffic (gelişmiş filtre)  | `[XHIGH]`|   2–3      | `visits` ✅ · 03.1.x          |
-| 13.3 | Goals (huni)                      | `[XHIGH]`|   2–3      | `goals` tablo ✅ · reports     |
-| 13.4 | Görsel Workflow builder           | ⛔        |     0      | **ADR-14 — UI yapılmaz**       |
-| 13.5 | Sales tracker                     | `[XHIGH]`|   2        | 07.8-a · 13.3                 |
-| —    | Public KB (SEO self-servis)       | `[XHIGH]`|   2–3      | knowledge ✅                  |
-| —    | Work scheduler / staffing         | `[XHIGH]`|   2–3      | reports · presence            |
-| —    | Multibrand                        | `[MAX]` ↑|   3–4      | tenant/RLS (izolasyon sınırı) |
+`Yeni` sütunu: `★` = bu turda kapsam süpürmesinde bulunan, PLAN §5'te satırı olmayan kalem.
 
-**v2 `↑` yukarı yuvarlananlar:** 08.8.3 (MCP — tool yüzeyi + tenant izolasyon), 08.9.3/08.9.5
-(güvenlik kuralı), Multibrand (tenant izolasyon genişlemesi). ~toplam **35–45 alt-görev** (kaba).
+| PRD | Gereksinim | Öncelik | Yeni | Durum / Not |
+| --- | --- | --- | :-: | --- |
+| 06.3.2-bulk | **Bulk/CSV knowledge base import** | Should (v2) | | ⬜ v1'in tek bilinçli v2 payı. **Task Master'da görevi YOKTU** — bu turda açıldı (§D62). Bağımlılık: 06.3.2-a **teslim** (crawl+index yolu, SSRF guard hazır). → §5.2 |
+| 07.5 | **Metrics breakdown** — ajan/takım/kanal/saat | Should (v2) | | ⬜ MVP payı gün+ajan split **teslim** (tm 21/54); **saat + kanal + takım** boyutları eksik. Kontrat `ReportsBreakdown` iki boyutta kilitli. → §5.2 |
+| 07.6 | **Chat topics (AI-clustered)** | Could (v2) | | ⬜ Deterministik kümeleme (`@nexa/ai-mock`, gerçek LLM yok). Yetersiz veride empty state. → §5.2 |
+| 07.7 | **Rapor grupları v2 payı** — Leads/Cases/Sales/Team performance + **PDF export** + benchmark + **Save view** | **Should (v1–v2)** | ★ | ⬜ Önceliği **açıkça iki faza yayılıyor**. v1 payı **teslim** teslim (izin bazlı görünürlük + CSV, tm 46/§D35); §4.4.8 zaten _"Kapsam dışı: PDF/benchmark (v2)"_ diyordu ama **v2 satırı hiç açılmamıştı**. → §5.2 |
+| 07.9 | **Zamanlanmış (scheduled) rapor export** | v2 (§5.3 Reports) | ★ | ⬜ Yalnız PRD §5.3'te; FR-MOD-07.7 sadece "Export (CSV/PDF)" diyor, "zamanlanmış" ifadesi FR-MOD tablosunda YOK → ayrı kalem. KK-türetilmiş. → §5.2 |
+| 08.5.7 | **Instagram (DM)** | Should (Ent./v2) | | ⬜ **İkili etiket çözüldü → v2.** Dayanak: PRD §11.1/7 _"Instagram/Telegram tam kanal: v2/Enterprise"_ + Telegram zaten Faz-3'te. Adaptör MOCK (08.5-adapter-a **teslim** tm 35). → §5.2 |
+| 08.6.3 | **Skills-based routing + supervision/takeover** | Could (v2) | | ⬜ ADR-08 routing çekirdeğine uzmanlık katmanı + supervisor devralma (yetki + eşzamanlılık sınırı). → §5.2 |
+| 08.6.3-conflict | **Çoklu-ajan çakışma uyarısı** | v2 (§5.3 Routing) | ★ | ⬜ FR-MOD-08.6.3'ün KK'sında **geçmiyor**; yalnız PRD §5.3'te → ayrı kalem + KK-türetilmiş. Aynı sohbette eşzamanlı iki ajan = yarış durumu. → §5.2 |
+| 08.8.3 | **MCP server** (search_tickets/list_chats/get_report/summarize_chat) | Could (v2) | | ⬜ Tool yüzeyi + OAuth scope bazlı yetki + tenant izolasyon. Scope altyapısı **teslim**. → §5.2 |
+| 08.9.2 | Banned customers | Should (v2) | | ✅ **TESLİM** — GL-6 · tm 68 · `lib/banned-ip.ts` · §D58 |
+| 08.9.3 | Spam filtre | Should (v2) | | ✅ **TESLİM** — GL-7 · tm 69 · `services/security/spam-filter.ts` · §D59 |
+| 08.9.5 | CC masking (Luhn, yazma anında) | Should (v2) | | ✅ **TESLİM** — GL-5 · tm 70 · `lib/cc-mask.ts` · §D57 |
+| 08.9.6 | **IP allowlist / oturum güvenliği** | Could (Ent.) → **v2** | ★ | ⬜ **Faz çelişkisi çözüldü → v2** (§D61). PRD §5.3 "Güvenlik" satırı bunu CC-masking/banned/spam ile **aynı v2 hücresinde** listeliyor; §1.1'e göre **fazı §5 belirler**, `Could (Ent.)` yalnız önceliktir. PLAN §6'dan taşındı (tm 80). → §5.2 |
+| 08.9.7 | **Temel audit log — TÜM PLANLARDA** + kullanıcıya görünür ekran | v2 (§5.3 Güvenlik) · NFR-S12 | ★ | ⬜ FR-MOD satırı YOK; NFR-S12 birebir: _"Temel audit … **tüm planlarda**; genişletilmiş + SIEM Enterprise"_ + risk **R5**. **Yazıcı **teslim** teslim** (tm 23, `services/audit/audit-log.ts`); **okuma yüzeyi YOK** (OpenAPI'de audit path'i grep 0) → v2 payı = plan/tier kapısı + 30 gün penceresi + ekran. → §5.2 |
+| 09.2 | **100+ entegrasyon** (marketplace katalog genişlemesi) | v2 (§5.5 MOD-09) | ★ | ⬜ §5.5 matrisi: v1 `○ (15–20)` → v2 `○ (100+)`. v1'de 20 kart **teslim** (tm 51/52). İş = katalog + kataloğun **ölçeklendiğinin kanıtı** (arama/kategori/sayfalama). Hepsi MOCK. → §5.2 |
+| 09.3 | **API istek paketleri** (Essential/Pro/Pro+) | Could (v2) | | ⬜ Billing **teslim** üzerine (ADR-13 Stripe MOCK — gerçek ödeme yok, kota artışı gerçek). → §5.2 |
+| 09.4 | **Zapier/Make + Build-your-app** (partner/creator) | Could (v2) | | ⬜ Webhooks **teslim** (tm 34, HMAC+SSRF) üzerine. "700+ Zapier" = katalog/desen kanıtı. → §5.2 |
+| 01.1.3 | **⌘K command palette — AI komutları** | v2 (§5.5 MOD-01) | ★ | ⬜ §5.5 matrisi MOD-01 v2: `○ (AI komutları)`. Palet **teslim** MVP'de (tm 18). v2 payı = doğal-dil AI sorgu tipi + sonuç render + scope kapısı. → §5.2 |
+| 12.4 | **Copilot BI komut** (rapor/metrik sorusu → cevap) | v2 (§5.5 MOD-12) | ★ | ⬜ §5.5 matrisi MOD-12 v2: `○ (BI komut)`. Copilot **teslim** v1 (tm 36). ADR-09 tutarlılığı şart (aynı sorgu = aynı sayı). → §5.2 |
+| 13.2 | **Engage / Traffic** (gelişmiş filtre + ziyaretçi 360° panel) | Should (v2) | | ⬜ Faz-0'da ertelenen **03.1.1 kalan sekmeleri** (Supervised/Invited/Browsing) buraya dahil (§3.13 kararı). `visits` **teslim**. → §5.2 |
+| 13.3 | **Goals** — ziyaretçi→sohbet→dönüşüm hunisi | Should (v2) | | ⬜ `goals` tablosu **teslim** şemada ama **0 tüketici** (§8) — bu iş onu bağlar. → §5.2 |
+| 13.4 | Görsel Workflow builder (nodes/edges) + 31+ şablon | Could (v2) | | ⛔ **ADR-14: UI yapılmayacak** (`workflows` tablosu şemada kalır). Şablon **sayısı** hedefi ADR-14 uyumlu ikame ile onurlandırıldı → `05.6-tmpl31` (§C-A14) |
+| 05.6 | **Skill şablon kataloğunu 31+'a genişlet** (ADR-14 uyumlu ikame) | v2 (§5.3 Otomasyon) | ★ | ⬜ 05.1/05.2 Skill şablon galerisi **teslim** v1 (kendi deterministik yerel kataloğu var). Görsel canvas YAPILMAZ. §C-A14. → §5.2 |
+| 13.5 | **Sales tracker** (Ecommerce/Tracked sales) | Could (v2) | | ⬜ 13.3 Goals + 07.8 Reviews/Ratings (tm 45 **teslim**) üzerine. → §5.2 |
+| §5.3-KB | **Public KB** (SEO'lu self-servis) | v2 (§5.3 Knowledge) | | ⬜ KK PRD §6'da yok → KK-türetilmiş. **Public (kimlik doğrulamasız) yüzey = yeni erişim sınırı.** PRD §11.1/9 pazarlama sitesi/blog **kapsam dışıdır** — bu ürün-içi KB, karıştırılmaz. → §5.2 |
+| §5.3-Vardiya | **Work scheduler / staffing prediction** | v2 (§5.3 Vardiya) | | ⬜ KK-türetilmiş. Tahmin = geçmiş hacim + presence'tan **deterministik** hesap, LLM yok. → §5.2 |
+| §5.3-Marka | **Multibrand** | v2 (§5.3 Marka) | | ⬜ KK-türetilmiş. **Tenant/RLS izolasyon sınırının genişlemesi = v2'nin en riskli kalemi.** Cross-brand negatif test şart. → §5.2 |
+| 06.2.3 | NL skill (doğal dil talimat → skill) | Must (v1) | | ✅ **v1'de teslim.** PRD §5.3'teki tekrarı **kapsam dışı** görsel builder'ın bağlamıdır → yeni iş YOK (§D62) |
+| — | §5.5 MOD-04 (Team/roller) v2 `○` | ○ (§5.5) | | ⛔ Somut `FR-MOD (v2)` satırı yok, kapsam tanımsız → **ayrı kalem açılmadı** (§C-A12) |
+| — | §5.5 MOD-06 (AI+RAG) v2 `○` | ○ (§5.5) | | ⛔ MOD-06'nın tek `(v2)` içeriği `06.3.2-bulk` → **ayrı kalem açılmadı** (§C-A13) |
+
+### 5.1 Kırılım politikası + etiket sistemi (model × efor matrisi)
+
+> **Bu bölüm 2026-08-01'de yeniden yazıldı.** Önceki hâli "v2 orta-derinlik kırılımı" idi ve gerekçesi
+> şuydu: _"v2 başlarken kod tabanı değişmiş olacak; bugün yazılan ince kırılım yanlış güven verir."_
+> O gerekçe **artık geçerli değil**, çünkü v2 **şimdi başlıyor** — Faz-0 ve v1 kapandı (§F.00), kod
+> tabanı bu kırılımın yazıldığı andaki hâliyle aynı. Bu yüzden §5.2'deki kırılım **tam atomiktir**:
+> her alt-görev tek temiz pencerede DoD kapısından geçebilecek boyuttadır ve `dosyalar` +
+> `referans desen` alanlarını taşır. Bayatlama politikası artık yalnız **Faz 3**'e (§6.1) uygulanır.
+
+#### 5.1.1 Etiket = model + efor
+
+Otonom döngüde (`run-loop.sh`) her temiz pencere, görev başlığındaki etiketten **hangi modelle** ve
+**hangi eforla** çalışacağını okur. Bu turda etiket tek boyutlu (`[XHIGH]`/`[MAX]`) olmaktan çıkıp
+**iki boyutlu** hâle geldi: _model_ × _efor_. Gerekçe: v2 iş kalemlerinin büyük bölümü mekanik
+(katalog verisi, liste/sekme UI, kontrat satırı, salt-okunur rapor kartı) ve bunları en pahalı
+modelle koşturmak bütçeyi, gerçekten muhakeme isteyen güvenlik/algoritma işlerinden çalıyor.
+
+| Etiket | Model | Efor | Ne zaman |
+| --- | --- | --- | --- |
+| `[SONNET-XHIGH]` | sonnet | xhigh | **Varsayılan hedef.** Mekanik iş: depoda kopyalanacak bir desen var ve o dosya ismen verilebiliyor; ~3-5 dosya; güvenlik sınırı yok; eşzamanlılık yok; kontrat/şema değişikliği katkısal; KK mekanik doğrulanabilir. |
+| `[SONNET-MAX]` | sonnet | max | Aynı güvenlik/eşzamanlılık muafiyeti, ama iş **mekanik olarak girift**: geniş yüzey (10+ dosya), çok sayıda benzer dönüşüm, yoğun tablo/rapor sorgusu, çok adımlı form akışı. Sonnet yapabilir ama daha fazla düşünme bütçesi ister. |
+| `[OPUS-XHIGH]` | opus | xhigh | Çok dosyaya yayılan **tasarım kararı**, yeni UI kompozisyonu, yeni veri/sorgu şekli, çok yüzeyli bağlama (kontrat+backend+UI+RTM), KK'da yorum gerektiren belirsizlik — **veya hafif güvenlik dokunuşu** (yeni yetkili endpoint, scope genişletme). |
+| `[OPUS-MAX]` | opus | max | Güvenlik sınırı (authN/authZ, erişim kontrolü, kripto), tenant/marka izolasyonu, eşzamanlılık/kilit, algoritma tasarımı, çapraz-kesen veri modeli değişikliği. |
+
+**Efor tabanı `xhigh`'dır** — bu matriste `high` veya altı yoktur. Kullanıcı kuralı:
+_"Güvenlik olarak high gereken işlerde xhigh kullansın."_ Yani güvenlik hassasiyeti taşıyan hiçbir
+iş `sonnet`'e verilmez ve hiçbir iş `xhigh`'ın altına düşmez.
+
+**Yanlış `SONNET` etiketi bu planın en pahalı hatasıdır** — bir güvenlik sınırının küçük modele
+düşmesi, kaydedilmemiş bir açık demektir. Bu yüzden §5.2'deki her `SONNET-*` alt-görev, kırılım
+turunda ayrı bir **düşman denetçisi** tarafından 6 koşula karşı yeniden sınandı (KK birebir mi, kod
+iddiası doğru mu, `dosyalar`/`referans desen` gerçekten var mı, güvenlik sızmış mı, bağımlılık grafı
+sağlam mı, Sonnet için yeterince belirli mi) ve kritik bulgular kırılıma geri işlendi.
+
+**Eski etiketler:** Faz-0 ve v1 tarihçe bölümlerinde (§3 · §4 · §A · §B) `[XHIGH]`/`[MAX]` yazımı
+**olduğu gibi bırakıldı** — o işler bitti, etiketleri artık yalnız kayıt değeri taşıyor. Yeni matris
+§5.2 (v2) ve §6.1 (Faz 3) için geçerlidir.
+
+#### 5.1.2 Bölme politikası
+
+Kullanıcı talimatı (2026-08-01): _"bütün taskları olabildiğince task ve subtasklara böleceksin."_
+
+- **Her kalem** görev + alt-görevlere bölünür. Tek parça bırakmak varsayılan **değildir**.
+- **Tek istisna:** bir `[OPUS-MAX]` alt-görevin **güvenlik/algoritma çekirdeği** daha küçüğe
+  bölünmez — bağlam bölününce güvenlik akıl yürütmesi kaybolur. Çekirdek tek alt-görev kalır.
+- Çekirdeğin **etrafındaki** her şey (kontrat satırı, migration, salt-okunur UI, liste ekranı, seed,
+  tip tanımı) ayrı ve **daha ucuz etiketli** alt-göreve çıkarılır. Tipik desen:
+  `[SONNET-XHIGH]` kontrat/tip iskeleti → `[OPUS-MAX]` güvenlik çekirdeği (bölünmez) →
+  `[SONNET-XHIGH]` UI → `[OPUS-XHIGH]` uçtan uca doğrulama.
+  Bu, pahalı pencereyi küçültür: v1'in ölçülen maliyeti opus-xhigh ~$13/pencere, opus-max
+  ~$25-31/pencere idi (§`run-loop.sh` kota kapısı yorumu).
+- Contract-first sıra korunur: kontrat+backend alt-görevi UI'dan **önce** gelir, UI ona bağımlıdır.
+- Bir alt-görev 2 pencereden uzun çıkıyorsa **mutlaka** daha da bölünür; 3 pencere yalnız
+  bölünemez güvenlik çekirdeği için kabul edilir.
+
+### 5.2 v2 atomik kırılım (23 kalem · 196 alt-görev)
+
+> Her kalem: alt-görev tablosu (ID · başlık · **etiket** · bağımlılık · pencere) + kalem seviyesinde
+> **KK birebir** + bölünmeyen çekirdek gerekçesi + varsayımlar + açık sorular.
+> **Tam alan detayı** (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu
+> testler · sözleşme · migration) **`PLAN-V2-KIRILIM.md`** companion dosyasındadır (§D66).
+> Alt-görev ID'leri PLAN §5.2, companion, §G düz tablosu ve Task Master'da **birebir aynıdır**.
+>
+> **Etiket dağılımı (196 alt-görev):** `SONNET-XHIGH` **95** · `SONNET-MAX` **5** · `OPUS-XHIGH` **65** ·
+> `OPUS-MAX` **31** → **%51 Sonnet**. Ölçülen pencere maliyeti (v1 koşularından): opus-xhigh ~$13,
+> opus-max ~$25–31; Sonnet belirgin ucuz. Yarısını küçük modele indirmek, kalan yarıdaki güvenlik
+> ve algoritma işine bütçe bırakır — etiket disiplininin somut karşılığı budur.
+
+#### 5.2.1 · Bulk/CSV knowledge base import (FR-MOD-06.3.2 — v1'in tek bilinçli v2 payı)
+
+**8 atomik alt-görev · ~11 pencere** — `OPUS-MAX` ×3 · `OPUS-XHIGH` ×1 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"crawl/parse"_ · _"Geçersiz URL/tür reddi"_ · _"**bulk/CSV import** (Nexa)"_ · _"RAG indeksleme"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `06.3.2-bulk-a` | RFC4180 CSV ayrıştırıcı + formül-enjeksiyon nötrleme (saf modül, lineer zaman) | `OPUS-MAX` | — | 2 |
+| `06.3.2-bulk-b` | CSV satır şeması: kolon eşleme + satır-başı doğrulama (saf modül) | `SONNET-XHIGH` | — | 1 |
+| `06.3.2-bulk-c` | POST /knowledge-sources/bulk — kontrat + route: tenant sahipliği, satır tavanı, tx sınırı,… | `OPUS-MAX` | 06.3.2-bulk-a, 06.3.2-bulk-b | 2 |
+| `06.3.2-bulk-d` | Frontend saf yardımcılar: örnek CSV şablonu katalogu + dosya okuma/ön-kontrol modülü | `SONNET-XHIGH` | — | 1 |
+| `06.3.2-bulk-e` | Knowledge panelinde "Bulk import" formu: dosya seç → dry-run önizleme | `SONNET-XHIGH` | 06.3.2-bulk-c, 06.3.2-bulk-d | 1 |
+| `06.3.2-bulk-f` | İçe aktarma sonuç tablosu: satır no / başlık / durum / hata + kısmi-başarı özeti + empty state | `SONNET-XHIGH` | 06.3.2-bulk-e | 1 |
+| `06.3.2-bulk-g` | CSV'de website satırları: satır-başı SSRF guard + crawl'ın transaction DIŞINDA, sıralı ve… | `OPUS-MAX` | 06.3.2-bulk-c | 2 |
+| `06.3.2-bulk-h` | Uçtan uca doğrulama: E2E CSV içe aktarma akışı + RAG'de aranabilirlik + regresyon/parite kanıtı | `OPUS-XHIGH` | 06.3.2-bulk-f, 06.3.2-bulk-g | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** Üç bölünmez çekirdek var, hepsi izole edildi ve etraflarındaki ucuz yüzeyler ayrı alt-görevlere çıkarıldı. (1) 06.3.2-bulk-a — CSV ayrıştırıcı: depoda kopyalanacak parser YOK (reports-export.ts ters yön/serileştirme, apps/api'de csv-parse/papaparse grep 0), yani yeni algoritma tasarımı; ayrıca formül-enjeksiyon nötrleme + lineer-zaman (ReDoS) garantisi aynı fonksiyonun içinde yaşıyor — tırnak/gömülü satır-sonu durum makinesini enjeksiyon guard'ından ayırmak, guard'ın hangi hücreye uygulandığı bilgisini kaybettirir. (2) 06.3.2-bulk-c — bulk endpoint: satır-başı tenant/ai_agent sahiplik kontrolü + tx sınırı + kısmi-başarı semantiği tek bir akıl yürütme; "ilk satırdan sonra sahiplik kontrolünü atlama" bu işin somut hata sınıfı ve döngüyü sonuç-zarfından ayırınca görünmez oluyor. (3) 06.3.2-bulk-g — website satırları: tek istek → N dış fetch = SSRF amplifikasyonu; guard'ın satır başına…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (10)
+  - TAŞIMA (§C adayı): Yeni bir multipart bağımlılığı EKLENMEZ. CSV, JSON gövdesinde ham metin alanı (`csv`) olarak gelir; route-özel `bodyLimit` ile `server.ts:99`'daki 1…
+  - BÜYÜKLÜK: Senkron ve sınırlı — istek başına satır tavanı (~200), hücre başına 100.000 karakter (mevcut `createSourceBody.content` zod tavanıyla aynı), toplam gövde…
+  - YANIT ŞEKLİ: Kısmi başarı 200 + `{ imported, failed, dry_run, results[] }` ile raporlanır; 207 kullanılmaz ve ADR-06 hata zarfı yalnız TÜM isteğin reddinde döner.…
+  - TX SINIRI: Her satır kendi kısa transaction'ında yazılır (create + `knowledge.index()` çifti). Tek uzun tx seçilmedi: kısmi başarı zaten sözleşme, ve N embedding boyunca…
+  - ÖNİZLEME: İstemciye ikinci bir CSV parser yazılmaz; önizleme `dry_run: true` ile sunucudan alınır. Böylece önizlemede görülen kural ile yazmada uygulanan kural aynı…
+  - VERİ MODELİ: Batch/job/import-durumu tablosu EKLENMEZ → migration yok. PRD §8.4 DDL'inde böyle bir tablo tanımlı değil ve senkron+sınırlı akış onu gerektirmiyor. Sonuç…
+  - _…+4 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (5)
+  - Satır tavanı 200 doğru büyüklük mü? PRD/NFR bulk için bir sayı vermiyor; üründe daha büyük (birkaç bin satırlık) bir beklenti varsa akış senkron kalamaz ve asenkron iş +…
+  - İçe aktarılan kaynaklar bir 'batch' izi taşımalı mı? Bugün `addedBy` dışında iz yok; toplu geri alma ("bu içe aktarmayı sil") isteniyorsa `knowledge_sources`'a bir…
+  - v2-04 §312 "PDF/DOCX/PPTX/TXT/CSV/TSV/MD, 50 MB'a kadar" satırı hangi yüzeye ait? Bu kırılım onu *dosya-türü knowledge kaynağı ayrıştırma* hedefi kabul etti ve ikili…
+  - Kısmi başarıda, düşen satırların düzeltilebilir bir 'hata CSV'si' olarak indirilebilmesi isteniyor mu? Şu an kapsam dışı (06.3.2-bulk-f kapsam_disi). İsteniyorsa…
+  - Bulk'ta `type:'file'` satırı ne anlama gelmeli? Bu kırılım onu 'CSV hücresindeki düz metin' kabul etti (tek-kaynak akışıyla aynı: `content` indekslenir). Eğer beklenti…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.1**
+
+#### 5.2.2 · Metrics breakdown — ajan/takım/kanal/saat boyutları (FR-MOD-07.5)
+
+**9 atomik alt-görev · ~11 pencere** — `OPUS-MAX` ×2 · `OPUS-XHIGH` ×1 · `SONNET-XHIGH` ×6
+
+**KK (PRD birebir):** _"Boyutlu kırılım"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `07.5-a` | ReportsBreakdown kontratına by_hour/by_team/by_channel (additive, opsiyonel) | `SONNET-XHIGH` | yok | 1 |
+| `07.5-b` | Saat boyutu: breakdownByHour() + /reports/breakdown yanıtına by_hour | `SONNET-XHIGH` | 07.5-a | 1 |
+| `07.5-c` | channel_messages(license_id, chat_id) indeksi + saf kanal etiketi helper'ı | `SONNET-XHIGH` | yok | 1 |
+| `07.5-d` | Kanal boyutu agregasyon çekirdeği — license_id-kilitli soft-FK join + 'website' fallback | `OPUS-MAX` | 07.5-a, 07.5-c | 2 |
+| `07.5-e` | Takım boyutu agregasyon çekirdeği — chat_access M:N fan-out + license kilidi | `OPUS-MAX` | 07.5-a | 2 |
+| `07.5-f` | CSV export: breakdown grubunu dört boyuta genişlet (uzun format) | `SONNET-XHIGH` | 07.5-b, 07.5-d, 07.5-e | 1 |
+| `07.5-g` | Breakdown sekmesi: "By hour" bölümü (salt-okunur tablo + empty state) | `SONNET-XHIGH` | 07.5-b | 1 |
+| `07.5-h` | Breakdown sekmesi: "By team" + "By channel" bölümleri + örtüşme dipnotu | `SONNET-XHIGH` | 07.5-d, 07.5-e | 1 |
+| `07.5-i` | Uçtan uca doğrulama: dört boyut çapraz-tutarlılığı + NFR-P2 bütçe ölçümü | `OPUS-XHIGH` | 07.5-f, 07.5-g, 07.5-h | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** İki OPUS-MAX çekirdeği bölünmez. (1) 07.5-d kanal boyutu: `channel_messages.chat_id` FK'sız soft-reference (schema.prisma yorumu birebir: "`chat_id` is a soft reference (no FK)"); join `license_id` eşleşmesiyle kilitlenmezse başka tenant'ın satırı bir chat'i yanlış kanala sokabilir — join koşulu, RLS davranışı ve "hangi kanal" seçimi tek akıl yürütmedir, parçalanırsa izolasyon argümanı kaybolur. (2) 07.5-e takım boyutu: `chat_access` tablosunun KENDİ license_id kolonu YOK (migration 20260722154008 satır 892-906 birebir: "chat_users and chat_access have no license column of their own (PRD §8.4)" — RLS `chats` üzerinden EXISTS alt-sorgusuyla uygulanıyor) ve `chat-service.ts:1246` `chatAccess.createMany` bir chat'i birden fazla gruba yazabiliyor (M:N) → izolasyon kilidi + çift-sayım invariantı + "hangi takım" tanımı aynı kararın parçaları. Bu çekirdeklerin ETRAFI ucuzlatıldı: kontrat…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (10)
+  - Saat kovası UTC'dir — mevcut `breakdownByDay`'in `AT TIME ZONE 'UTC'` deseniyle (reports.ts:301) tutarlı. Müşteri saat dilimi parametresi bu kalemde kapsam dışı; aksi…
+  - `by_hour` DENSE döner (0-23, veri yoksa sıfır satır); `by_day` mevcut davranışını korur (sparse). Gerekçe: saat ekseni sabit ve 24 elemanlıdır, UI'da boşluk yerine sıfır…
+  - Kanal sınıflandırması: bir chat'in kanalı, o chat'e ait EN ESKİ `direction='inbound'` `channel_messages` satırının `channel_type`'ıdır; hiç satır yoksa `'website'`.…
+  - Takım boyutunda FAN-OUT kabul edilir (birincil grup SEÇİLMEZ): bir chat açık olduğu her takımın satırında sayılır ve yanıt `overlapping: true` ile bunu beyan eder, UI…
+  - Hiçbir gruba açık olmayan sohbetler `team_id: null` / 'Unassigned' satırında toplanır — hiçbir sohbet kaybolmaz.
+  - Rapor görünürlüğü lisans genelinde kalır: `reports_read` scope'u tüm takımların/kanalların metriklerini görür. Gerekçe: mevcut `by_agent` de tüm ajanları döndürüyor…
+  - _…+4 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (5)
+  - Takım boyutunda örtüşme beyanı (fan-out + `overlapping` bayrağı) yeterli mi, yoksa şemaya 'birincil takım' (`threads.group_id` veya `chat_access.is_primary`) eklenip…
+  - Kanal boyutuna e-posta dahil edilecek mi? `email-inbound.ts` gelen e-postayı TICKET'a çeviriyor (chat değil) ve `channel_messages` yazmıyor; mevcut breakdown ise…
+  - v2-03 §316 ortak gövde parametreleri `distribution` (`hour|day|day-hours|month|year`) ve `filters.agents` / `filters.groups` tanımlıyor. Bu kalem sabit dört boyutu TEK…
+  - NFR-P7 ("ağır raporlar için read-replica/ayrı analitik depo") uygulanmış değil. 07.5-i'nin EXPLAIN ölçümü NFR-P2 bütçesini (okuma p99 <150ms) aşarsa ne yapılacak — kalem…
+  - `chat_access` RLS'i `chats` üzerinden EXISTS alt-sorgusuyla çalışıyor (migration 20260722154008:892-906). Takım agregasyonu bu alt-sorgunun maliyetini ödeyecek; ölçüm…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.2**
+
+#### 5.2.3 · 07.6 — Chat topics (AI kümeleme): deterministik ai-mock kümeleme + hacim/trend raporu + yetersiz-veri empty state
+
+**8 atomik alt-görev · ~9 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"yeterli veri yoksa empty"_ · _"AI kümeleme"_ · _"hacim/trend"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `07.6-a` | `GET /reports/topics` kontratı + yetkili route iskeleti + yetersiz-veri (empty) yanıtı | `OPUS-XHIGH` | yok | 1 |
+| `07.6-b` | Deterministik konu kümeleme çekirdeği: `packages/ai-mock/src/topics.ts` (kümeleme + etiket… | `OPUS-MAX` | 07.6-a | 2 |
+| `07.6-c` | Kümelemeyi route'a bağla: tenant-scoped konu sorgusu + hacim/trend (önceki dönem) + performans… | `OPUS-XHIGH` | 07.6-a, 07.6-b | 1 |
+| `07.6-d` | Demo seed'de konu çeşitliliği: kümelenebilir sohbet özetleri | `SONNET-XHIGH` | 07.6-b, 07.6-c | 1 |
+| `07.6-e` | Reports'ta 'Chat topics' sekmesi: hacim/trend listesi + yetersiz-veri empty state | `SONNET-XHIGH` | 07.6-a, 07.6-c | 1 |
+| `07.6-f` | Overview'da 'Top chat topics' promo bandı (See chat topics / Remind me later — kalıcı dismiss) | `SONNET-XHIGH` | 07.6-e | 1 |
+| `07.6-g` | Topics rapor grubu: `/reports/groups` kataloğu + CSV export satırı | `SONNET-XHIGH` | 07.6-c | 1 |
+| `07.6-h` | Uçtan uca doğrulama: Chat topics e2e (dolu + empty) + ai-mock paylaşım regresyonu | `OPUS-XHIGH` | 07.6-c, 07.6-d, 07.6-e, 07.6-f | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** 07.6-b (deterministik kümeleme + etiket türetme çekirdeği) bölünmez. Üç şey aynı akıl yürütmenin parçası ve ayrı pencerelere dağılınca kaybolur: (1) determinizm garantisi — aynı sohbet kümesi girdi sırasından bağımsız aynı kümeleri/etiketleri vermeli, yoksa rapor her yenilemede değişir ve testler kırılgan olur; (2) eşik kalibrasyonu — benzerlik eşiği, minimum küme boyutu ve "yeterli veri" eşiği birbirine bağlı üç sayıdır, biri diğerinden ayrı ayarlanamaz ("yeterli veri yoksa empty" KK'sı doğrudan bu üçlüye dayanıyor); (3) etiket türetmede PII elemesi — etiket, müşteri konuşma metninden türeyen tokenlardan oluşuyor; salt-rakam tokenların (kart/sipariş numarası) elenmesi kümeleme skorlamasıyla aynı fonksiyonda yaşıyor, ayrı pencereye çıkarılırsa "etiketi kim üretti, neyi eledi" bağlamı kopar. Ayrıca packages/ai-mock/src/embedding.ts hem RAG (knowledge-service.ts) hem bu iş tarafından…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (9)
+  - YENİ TABLO YOK — kümeleme istek anında (on-the-fly) hesaplanır. Gerekçe: CLAUDE.md'ye göre şema tek doğruluk kaynağı PRD §8.4 + rapor-2-teknik-mimari.md §5.3 ve ikisinde…
+  - Kümeleme girdisi: thread başına `threads.summary` doluysa o, değilse thread'in ilk müşteri `events.text` mesajı (type='message', author_type='customer'). `summary`…
+  - Performans tavanı: pencere başına en fazla 1000 en yeni kümelenebilir sohbet işlenir; üstü kesilir ve yanıtta `analyzed` alanı gerçek sayıyı söyler. NFR-P7 ölçümü…
+  - 'Yeterli veri yoksa empty' bir HATA DEĞİL, bir DURUM: 200 + `sufficient_data:false` + `topics: []`. Yeni ApiError tipi EKLENMEZ — böylece errors.ts (×2 yer) +…
+  - Chat topics ayrı bir sol-nav girdisi veya `/chat-topics` rotası DEĞİL, Reports sayfasının 5. sekmesidir. Sol navigasyonda 'NEW' kırmızı nokta rozeti YAPILMAZ:…
+  - `share` ve `trend` boşken 0 değil null döner — depodaki yerleşik kural (ReportsOverview.automated_rate, ReportsReviews.score: 'unrated period is unknown, not bad').…
+  - _…+3 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (4)
+  - 'Yeterli veri' eşiği kaç sohbet? PRD sayı vermiyor ('yeterli veri yoksa empty'). Önerilen kalibrasyon: pencerede ≥20 kümelenebilir sohbet VE küme başına ≥3 sohbet;…
+  - Trend hangi biçimde sunulsun: sayısal değişim oranı mı (önceki döneme göre), yoksa ayrık 'up/down/flat' mı? Öneri: kontrat `previous_volume` (integer) + `trend`…
+  - Kümeleme girdisi olarak müşteri mesaj metni kullanılsın mı, yoksa yalnız `threads.summary` mi? Yalnız summary kullanılırsa insan-yürüttüğü sohbetler rapordan düşer…
+  - Topics CSV export grubu (07.6-g) bu kalemin kapsamında mı kalsın, yoksa 07.7 'Rapor grupları + Export'a mı bırakılsın? Şu an 07.6'ya alındı çünkü reports-export.ts:34-44…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.3**
+
+#### 5.2.4 · 07.7-v2 — Rapor grupları v2 payı: Leads/Cases/Sales/Team performance + PDF export + benchmark + Save view
+
+**12 atomik alt-görev · ~13 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×3 · `SONNET-MAX` ×1 · `SONNET-XHIGH` ×7
+
+**KK (PRD birebir):** _"İzin bazlı görünürlük"_ · _"export"_ · _"benchmark karşılaştırma"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `07.7-a` | Cases rapor grubu — kontrat + lisans-kapsamlı ticket sorgusu + CSV exporter | `SONNET-XHIGH` | yok | 1 |
+| `07.7-b` | Leads rapor grubu — organizasyon-kapsamlı `customers` verisinin lisans sınırına oturtulması… | `OPUS-MAX` | 07.7-a | 2 |
+| `07.7-c` | Team performance rapor grubu — ajan bazlı KPI genişletmesi (mevcut by_agent üzerine) | `SONNET-MAX` | 07.7-b | 1 |
+| `07.7-d` | Sales rapor grubu — 13.5 Sales tracker'a bağlı `configured:false` dürüst iskelet | `SONNET-XHIGH` | 07.7-c | 1 |
+| `07.7-e` | Benchmark karşılaştırma katmanı — tüm rapor gruplarına ortak vs-baseline (lisans-içi,… | `OPUS-XHIGH` | 07.7-a, 07.7-b, 07.7-c, 07.7-d | 1 |
+| `07.7-f` | Deterministik, bağımlılıksız PDF serializer (saf modül) — `toCsv`'nin PDF eşi | `OPUS-XHIGH` | yok | 1 |
+| `07.7-g` | PDF export rotası — `/reports/export` `format` parametresi + content-type/attachment bağlama | `SONNET-XHIGH` | 07.7-f, 07.7-d, 07.7-e | 1 |
+| `07.7-h` | Reports Save view — rapora özgü kaydedilmiş görünüm (saf modül, Inbox views deseni) | `SONNET-XHIGH` | yok | 1 |
+| `07.7-i` | Reports UI — Leads + Cases sekmeleri (kartlar + benchmark rozetleri + empty state) | `SONNET-XHIGH` | 07.7-a, 07.7-b, 07.7-e | 1 |
+| `07.7-j` | Reports UI — Sales + Team performance sekmeleri (ajan tablosu + `configured:false` empty state) | `SONNET-XHIGH` | 07.7-c, 07.7-d, 07.7-i | 1 |
+| `07.7-k` | Reports UI — Export butonu (CSV/PDF indirme) + Save view çubuğu | `SONNET-XHIGH` | 07.7-g, 07.7-h, 07.7-i, 07.7-j | 1 |
+| `07.7-l` | Uçtan uca doğrulama — 8 grup için izin matrisi, cross-tenant süpürmesi, ağır sorgu bütçesi… | `OPUS-XHIGH` | 07.7-a, 07.7-b, 07.7-c, 07.7-d, 07.7-e, 07.7-f, 07.7-g, 07.7-h, 07.7-i, 07.7-j, 07.7-k | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** 07.7-b (Leads) tek bölünemez güvenlik çekirdeği. Gerekçe koda karşı: `customers` tablosu `organization_id` ile scope'lu (schema.prisma:228-236 — `licenseId` alanı YOK) ve RLS `app.current_organization` ile kapatılıyor (lib/tenant.ts:60); buna karşılık TÜM mevcut rapor sorguları `license_id` ile scope'lu (`WHERE t.license_id = ${licenseId}`, `ticketCount` `where:{licenseId}`). Bir Organization birden çok License taşır (`Organization.licenses License[]`). Dolayısıyla `customers.is_lead`'i doğrudan saymak, aynı organizasyonun KARDEŞ LİSANSLARININ müşterilerini bu lisansın raporuna sızdırır. Hangi sınırın doğru olduğu (org-scope mu, chats/tickets üzerinden lisans-bağlı join mi) bir erişim-kontrolü kararıdır; sorgu + RLS + negatif test aynı pencerede kalmalı, bölünürse izolasyon akıl yürütmesi kaybolur. Çekirdeğin ETRAFINDAKİ her şey daha ucuz etiketli alt-görevlere çıkarıldı: PDF serializer…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (8)
+  - §V1 — BENCHMARK TANIMI: PRD 'benchmark karşılaştırma' der ama neye karşı olduğunu söylemez. Karar: benchmark = AYNI LİSANSIN kendi geçmişiyle karşılaştırması (baseline:…
+  - §V2 — PDF KAPSAMI: PDF çıktısı TABLO'dur; grafik/donut/bar çizimi yoktur. Dayanak: depoda hiçbir PDF/çizim bağımlılığı yok (package.json grep 0) ve CONVENTIONS'ın dış…
+  - §V3 — LEADS/CASES EXPORT'U AGREGATTIR: Bu iki grup satır-bazlı müşteri verisi (ad/e-posta/telefon) döndürmez; yalnız sayılar/gün kırılımı döner. Dayanak: PRD KK'sı…
+  - §V4 — SAVE VIEW İSTEMCİ TARAFIDIR: Kaydedilmiş rapor görünümü `localStorage`'da tutulur, sunucuda tablo açılmaz. Dayanak: aynı özelliğin yazılı emsali Inbox'ta böyle…
+  - §V5 — SALES GRUBU 13.5'E BAĞLIDIR: Şemada satış/sipariş tablosu yok; Sales grubu `configured:false` dürüst iskelet olarak teslim edilir (reviews raporundaki `ecommerce`…
+  - §V6 — TEAM PERFORMANCE ≠ 07.5: 07.7'nin Team performance'ı bir RAPOR GRUBUDUR (ajan bazlı KPI + kendi export'u). Saat/kanal/takım BOYUTLARI ve ısı haritası FR-MOD-07.5…
+  - _…+2 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (5)
+  - Leads sayımının lisans sınırı: 07.7-b 'bu lisansa dokunmuş lead' (chats/tickets join) yorumunu alıyor. Alternatif yorum 'organizasyon geneli lead' olurdu ve o da…
+  - Cases grubunda merge edilmiş ticket'lar (`merged_into_id IS NOT NULL`) sayılmalı mı? 07.7-a çift sayım olmasın diye `merged_into_id IS NULL` filtresini varsayıyor; 13.6…
+  - NFR-P7 ('ağır raporlar → read-replica / kolon-tabanlı analitik depo') bu depoda karşılanamaz (altyapı, §9 sınırı). 07.7-l ikame olarak aralık üst sınırı veya export…
+  - PDF'e benchmark bloğu nasıl yerleşecek: ayrı bir 'Önceki dönem' tablosu mu, yoksa her satırda delta sütunu mu? 07.7-g bunu tablo-şekli kararı olarak bırakıyor; UI ile…
+  - Team performance sorgusunda mevcut `LIMIT 20` (reports.ts:697) korunacak mı, yoksa tam ajan listesi mi dönecek? Tam liste NFR-P7 yükstartırır; 07.7-c mevcut limiti…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.4**
+
+#### 5.2.5 · Zamanlanmış (scheduled) rapor export — PRD §5.3-Reports
+
+**10 atomik alt-görev · ~12 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×5 · `SONNET-MAX` ×1 · `SONNET-XHIGH` ×3
+
+**KK (PRD birebir):** _"FR-MOD-07.7 KK (PRD satır 591, birebir): "İzin bazlı görünürlük; export; benchmark karşılaştırma" — bu alt-göreve düşen pay: "İzin bazlı görünürlük" + "export"."_ · _"FR-MOD-07.7 KK (PRD satır 591, birebir): "İzin bazlı görünürlük; export; benchmark karşılaştırma" — bu alt-göreve düşen pay: "İzin bazlı görünürlük" (tek kayıt okuma/değiştirme de aynı izin kapısından geçer)."_ · _"FR-MOD-07.7 KK (PRD satır 591, birebir): "İzin bazlı görünürlük; export; benchmark karşılaştırma" — bu alt-göreve düşen pay: "export" (CSV üretiminin tek doğruluk kaynağı olarak korunması)."_ · _"FR-MOD-07.7 KK (PRD satır 591, birebir): "İzin bazlı görünürlük; export; benchmark karşılaştırma" — bu alt-göreve düşen pay: "İzin bazlı görünürlük" (teslim geçmişi de aynı izin kapısından geçer)."_ · _"FR-MOD-07.7 KK (PRD satır 591, birebir): "İzin bazlı görünürlük; export; benchmark karşılaştırma" — bu alt-göreve düşen pay: "İzin bazlı görünürlük" (kullanıcı yalnız görebildiği rapor gruplarını zamanlayabilir)."_ · _"FR-EK-B.1 KK (PRD, birebir): "10.000+ satırda 60fps; skeleton; her boş liste için anlamlı empty state (boş dikdörtgen yok)" — bu alt-göreve düşen pay: "her boş liste için anlamlı empty state (boş dikdörtgen yok)"."_ · _"FR-EK-A.1 KK (PRD, birebir): "Tek form/validasyon kütüphanesi; alan-altı hata mesajı" — oluşturma formu bu primitifi kullanır."_ · _"FR-MOD-07.7 KK (PRD satır 591, birebir): "İzin bazlı görünürlük; export; benchmark karşılaştırma" — bu alt-görev 'İzin bazlı görünürlük' ve 'export' paylarını UÇTAN UCA kanıtlar (benchmark v2 — kapsam dışı)."_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `07.9-sched-a` | Şema + migration: scheduled_reports / scheduled_report_runs (RLS + dönem tekilleştirme kısıtı) | `OPUS-XHIGH` | yok | 1 |
+| `07.9-sched-b` | `reports_manage` scope + kontrat/route: zamanlanmış export listeleme ve oluşturma | `OPUS-XHIGH` | 07.9-sched-a | 2 |
+| `07.9-sched-c` | Kontrat/route: tek kayıt okuma + güncelleme + iptal (GET/PATCH/DELETE) | `OPUS-XHIGH` | 07.9-sched-b | 1 |
+| `07.9-sched-d1` | Rapor teslim e-postası: Mailer `kind` genişletme + saf konu/gövde biçimlendirici | `SONNET-XHIGH` | yok | 1 |
+| `07.9-sched-d2` | Rapor CSV üretimini paylaşılan `services/reports/report-csv.ts` modülüne çıkar | `SONNET-MAX` | yok | 1 |
+| `07.9-sched-e` | Zamanlayıcı çekirdeği: dönem hesabı + tek-teslim claim (idempotens) + tenant-scoped sweep | `OPUS-MAX` | 07.9-sched-a, 07.9-sched-b, 07.9-sched-d1, 07.9-sched-d2 | 2 |
+| `07.9-sched-f` | `scheduled-reports:run` operatör betiği + npm script (dry-run varsayılanı) | `SONNET-XHIGH` | 07.9-sched-e | 1 |
+| `07.9-sched-g` | Teslim geçmişi okuması: kontrat + `GET /reports/scheduled-exports/{id}/runs` | `OPUS-XHIGH` | 07.9-sched-c, 07.9-sched-e | 1 |
+| `07.9-sched-h` | Settings UI: "Scheduled exports" bölümü (liste + oluştur + iptal + son çalışma durumu) | `SONNET-XHIGH` | 07.9-sched-c, 07.9-sched-g | 1 |
+| `07.9-sched-i` | Uçtan uca doğrulama: cross-tenant zinciri + tekrar-tetik idempotens regresyonu + e2e | `OPUS-XHIGH` | 07.9-sched-c, 07.9-sched-e, 07.9-sched-f, 07.9-sched-g, 07.9-sched-h | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** Tek bölünmez çekirdek `07.9-sched-e` (zamanlayıcı çekirdeği). "Bir dönem için en fazla bir teslim" garantisi üç şeyin AYNI ANDA doğru olmasına bağlıdır: (1) dönem anahtarının (period_key) sıklıktan deterministik türetilmesi, (2) `scheduled_report_runs` üzerindeki `@@unique([scheduledReportId, periodKey])` kısıtına dayalı transactional claim — çakışma "başkası aldı" demektir, hata değil, (3) claim ile e-posta gönderiminin sırası (önce claim, sonra gönder; gönderim hatası satırı `failed` bırakır ama dönemi serbest bırakmaz). Bu üçü ayrı pencerelere bölünürse "iki e-posta gitmesin" akıl yürütmesi bağlamıyla birlikte kaybolur — claim'i yazan pencere gönderim sırasını görmez, gönderimi yazan pencere claim'in yarış semantiğini görmez. Çekirdeğin ETRAFINDAKİ her şey ayrı ve daha ucuz etiketlere çıkarıldı: şema/migration (-a), CRUD yüzeyi (-b/-c), CSV üretimi (-d2), e-posta biçimi (-d1), CLI…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (11)
+  - Zamanlama motoru: bu depoda production scheduler YOK (proje sınırı). Zamanlanmış export, `retention:run` ve `chat-timeout:run` ile aynı 'operatör / host-cron tetikler'…
+  - Format yalnız CSV. PDF karara bağlanmamıştı; `apps/api/src/routes/reports-export.ts` başlık yorumu 'PDF and benchmark comparison are explicitly out of scope for v1'…
+  - Teslim kanalı: `FileMailer` mock (`.data/mail`), gerçek SMTP yok (MASTER-PROMPT §5 / PLAN §9). Teslim 'gönderildi' kabulü = posta kutusuna dosya düşmesi.
+  - Yeni yazma scope'u `reports_manage` eklenir ve YALNIZ `ADMIN_SCOPES`'a verilir (principal.ts). Gerekçe: `AGENT_SCOPES` içinde `reports_read` bile yok — ajan raporu…
+  - Sıklık kümesi: `daily | weekly | monthly`. PRD sıklık listelemiyor → türetilmiş. Gün sınırı UTC (ADR-12 tek bölge eu; depodaki tüm rapor sorguları zaten UTC gün ile…
+  - Rapor penceresi: her çalışmada 'önceki TAM dönem' (daily → dün 00:00–24:00 UTC). Kısmi dönem hiç gönderilmez; böylece aynı period_key için içerik deterministiktir ve…
+  - _…+5 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (6)
+  - Alıcı kümesi gerçekten workspace-içi ajan e-postalarıyla sınırlansın mı, yoksa doğrulanmış dış adres (ör. muhasebe/yönetim) de olsun mu? Varsayım #7 dar tarafı seçti;…
+  - `reports_manage` yeni bir scope olarak mı eklensin, yoksa mevcut bir yönetim scope'u (`billing_manage` veya `properties.configuration:rw`) mı yeniden kullanılsın? Yeni…
+  - Kalıcı teslim hatasında retry beklenir mi? Webhook tarafında NFR-M5 gereği 3× retry + her deneme log satırı var (`webhook-dispatcher.ts`). Zamanlanmış export için…
+  - Sıklık için saat/gün seçimi gerekiyor mu (ör. 'her Pazartesi 09:00')? Şu an tüm dönem hesabı UTC gün sınırında; tenant saat dilimi alanı depoda yok. Gerekiyorsa…
+  - PRD §5.3-Reports satırındaki 'zamanlanmış export', aynı satırdaki Chat topics ve Team performance raporlarını da kapsıyor mu? Bu kırılım yalnız mevcut 4 rapor grubunu…
+  - `GET /reports/export` (senkron) için hâlâ hiçbir web tüketicisi yok (`grep -rn 'reports/export\|reports/groups' apps/web/src apps/e2e` = 0). Zamanlanmış export UI'ı…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.5**
+
+#### 5.2.6 · Instagram (DM) kanalı — MOCK adaptör, uçtan uca (PRD FR-MOD-08.5.7, v2)
+
+**8 atomik alt-görev · ~9 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×2 · `SONNET-XHIGH` ×5
+
+**KK (PRD birebir):** _"Coming soon → Get notified → tam entegrasyon"_ · _"rapor-1-fonksiyonel.md:1534-1541 — "[MOD-08.5.7] Instagram (SOON) ... Mevcut Durumlar: Coming soon. Tetiklenen Eylem ve Sayfa Mantığı: [Get notified] lansman bildirimi için kayıt."_ · _"rapor-1-fonksiyonel.md:1467 — "Instagram — Coming soon — [Get notified]."_ · _"rapor-1-fonksiyonel.md:1534-1541 — "[Get notified] lansman bildirimi için kayıt. Validasyon ve Hata Senaryoları: Yok."_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `08.5.7-a` | Instagram kanal tipinin kontrata eklenmesi (ChannelType enum + connect/webhook gövde tanımı) | `SONNET-XHIGH` | yok | 1 |
+| `08.5.7-b` | InstagramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri | `SONNET-XHIGH` | 08.5.7-a | 1 |
+| `08.5.7-c` | instagram'ın adapter kanalı olarak devreye alınması (CHANNEL_TYPES + registry) + inbound→chat… | `OPUS-XHIGH` | 08.5.7-a, 08.5.7-b | 1 |
+| `08.5.7-d` | Kanal adresinin lisanslar arası tekilliği — çakışan adres bağlamanın reddi (bölünmez izolasyon… | `OPUS-MAX` | 08.5.7-c | 2 |
+| `08.5.7-e` | Settings → Channels: Instagram kartının statik 'Coming soon'dan canlı connect/disconnect… | `SONNET-XHIGH` | 08.5.7-c | 1 |
+| `08.5.7-f` | 'Get notified' kaydının kalıcılaştırılması (kalan coming-soon kanalları) | `SONNET-XHIGH` | 08.5.7-e | 1 |
+| `08.5.7-g` | Inbox Views grubunda Instagram kanal görünümü | `SONNET-XHIGH` | 08.5.7-c | 1 |
+| `08.5.7-h` | Uçtan uca doğrulama: Instagram bağla → DM gelsin → inbox'ta chat (e2e) | `OPUS-XHIGH` | 08.5.7-e, 08.5.7-g | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** 08.5.7-d (kanal adresi sahiplenme çakışmasının reddi) bölünmez. Kısıt (DB unique index), yazma yolu (ChannelService.connect upsert + P2002 yarış dalı) ve okuma yolu (resolveLicense çoklu-satır reddi) tek bir izolasyon akıl yürütmesinin üç ucudur; ayrı pencerelere bölünürse "adres bir lisansa aittir" invaryantı yarım kalır ve arada geçen sürümde çapraz-tenant yanlış yönlendirme açık kalır. Migration'ı ayrı alt-göreve çıkarmak da güvenli değil: kısmi/fonksiyonel index'in tam şekli (status='connected' + address IS NOT NULL kısıtı, seed'in config={} website_widget satırı) servis kodundaki ret kararıyla birlikte tasarlanmalı. Çekirdeğin ETRAFINDAKİ her şey (kontrat satırı -a, saf adapter -b, UI -e/-f/-g, e2e -h) zaten ayrı ve daha ucuz etiketlere çıkarıldı; pahalı pencere yalnız bu çekirdekle sınırlı.
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (9)
+  - Instagram mock connect alan seti Messenger'a paralel seçildi: `code` (mock OAuth kodu) + `ig_user_id` (kanal adresi) + opsiyonel `username`; gönderici kimliği IGSID. PRD…
+  - Kanal adresi olarak `page_id` değil `ig_user_id` alan adı seçildi. Gerekçe: Messenger'ın adres uzayıyla isim düzeyinde karışmaması; gerçek çakışma riski 08.5.7-d'de DB…
+  - Inbound gövde şekli depodaki düzleştirilmiş {recipient, sender, message} kalıbını izler; Meta'nın gerçek entry[].messaging[] sarmalayıcısı taklit edilmez (mevcut…
+  - Mock outbound provider message id öneki `aigid.` (Messenger'ın `mid.`, WhatsApp'ın `wamid.`, Twilio'nun `SM` muadili).
+  - 'Get notified' kaydı backend'e yazılmaz; localStorage'da kalıcılaştırılır (Banner'ın kalıcı dismiss deseni). Gerekçe: yeni tablo/route açmamak, PRD kaydın nereye…
+  - Kanal adresi tekilliği yalnız `status='connected'` iken zorlanır; disconnect edilen bir kanalın adresi başka bir lisans tarafından bağlanabilir. Gerekçe: disconnect…
+  - _…+3 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (4)
+  - 08.5.7-d (kanal adresinin lisanslar arası tekilliği) 08.5.7 altında mı kalmalı, yoksa ayrı bir güvenlik tm görevi mi açılmalı? Bulgu Instagram'a özgü değil — mevcut…
+  - Messenger/WhatsApp/SMS adaptörleri v1'de teslim (tm 35) olmasına rağmen Settings → Channels'ta hâlâ statik 'Coming soon' görünüyor (Channels.tsx:92-94). Bu bilinçli bir…
+  - 'Get notified' PRD'de "lansman bildirimi için kayıt" olarak geçiyor ama kaydın nereye yazılacağı yazmıyor. İstemci-tarafı kalıcılık (localStorage) yeterli sayılsın mı,…
+  - Instagram inbound gövde şekli: depodaki düzleştirilmiş {recipient, sender, message} kalıbı mı korunsun, yoksa Meta'nın gerçek IG webhook sarmalayıcısı…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.6**
+
+#### 5.2.7 · Skills-based routing + supervision/takeover — atomik kırılım
+
+**9 atomik alt-görev · ~11 pencere** — `OPUS-MAX` ×2 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"Uzmanlık/skill bazlı"_ · _"supervisor takeover"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `08.6.3-a` | Skill kataloğu veri modeli (skills + agent_skills tabloları, RLS, seed) | `OPUS-XHIGH` | — | 1 |
+| `08.6.3-b` | Skill katalog CRUD + ajan-skill atama API'si (kontrat + rol kapılı backend) | `OPUS-XHIGH` | 08.6.3-a | 1 |
+| `08.6.3-c` | ADR-08 routing çekirdeği: skill-eşleşmeli aday seçimi + kural koşuluna skill_ids (BÖLÜNMEZ) | `OPUS-MAX` | 08.6.3-a, 08.6.3-b | 2 |
+| `08.6.3-d` | Supervisor takeover çekirdeği: rol kapısı + eşzamanlı devir reddi + audit + RTM (BÖLÜNMEZ) | `OPUS-MAX` | — | 2 |
+| `08.6.3-e` | Settings: Skills kataloğu bölümü + routing kuralında skill koşulu gösterimi | `SONNET-XHIGH` | 08.6.3-b, 08.6.3-c | 1 |
+| `08.6.3-f` | Team: ajan başına skill ataması ekranı | `SONNET-XHIGH` | 08.6.3-b | 1 |
+| `08.6.3-g` | Inbox: supervisor takeover butonu (rol kapılı, onaylı) + devir sonrası durum | `SONNET-XHIGH` | 08.6.3-d | 1 |
+| `08.6.3-h` | Çoklu-ajan çakışma uyarısı (aynı sohbette birden fazla present ajan) | `SONNET-XHIGH` | — | 1 |
+| `08.6.3-i` | Uçtan uca doğrulama: skill routing + takeover E2E, cross-tenant negatif matrisi, ADR-08… | `OPUS-XHIGH` | 08.6.3-c, 08.6.3-d, 08.6.3-e, 08.6.3-f, 08.6.3-g | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** İki OPUS-MAX çekirdek bölünmez. (1) 08.6.3-c ADR-08 aday seçimi: `#selectAgent` (routing-service.ts:246-269) tek ham SQL'de yük sayımı + kapasite HAVING'i yapıyor ve seçim `GROUP_PRIORITY_ORDER` katman düşmesi → en az yüklü → `last_assigned_at` tie-break zincirinden oluşuyor; skill filtresi bu zincirin herhangi bir halkasından ayrılırsa "skill'li aday yok → hangi gevşetme" kararı ve transaction-içi yük tutarlılığı (kod yorumu: "computing load in one transaction and writing the assignment in another lets two chats arriving together both pick the agent who had a free slot") kaybolur. (2) 08.6.3-d takeover: rol kapısı + koşullu assignee güncellemesi (iki supervisor yarışı) + audit kaydı tek bağlamda akıl yürütülmeli — yetki kararını yazma yarışından ayırmak "yetkisiz ikinci yazıcı kazanır" sınıfı hataya kapı bırakır. Her iki çekirdeğin ETRAFI (migration/RLS, katalog CRUD, üç UI ekranı,…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (9)
+  - Skill modeli düz (flat) bir katalogdur: seviye/ağırlık/hiyerarşi YOK. PRD FR-MOD-08.6.3 yalnız 'Uzmanlık/skill bazlı' diyor; seviyeli skill'e dair hiçbir kaynak satırı…
+  - Skill routing'de GEVŞETİLMEZ: bir kural skill istiyorsa o skill'i olmayan ajan hiçbir aşamada seçilmez; skill'li uygun aday yoksa ADR-08'in mevcut fallback grup → kuyruk…
+  - 'Supervisor' AYRI bir rol olarak eklenmez; mevcut roleAtLeast(role,'admin') (owner > viceowner > admin > agent, principal.ts:70-78) supervisor yetkisi olarak kullanılır.…
+  - Takeover, mevcut POST /chats/{chatId}/transfer'i DEĞİŞTİRMEZ; ayrı bir path olarak eklenir. transfer = rızalı/kurala bağlı devir (scope kapılı, mevcut davranış korunur),…
+  - Eşzamanlı takeover koşullu güncelleme (updateMany + beklenen assignee → 0 satır ise 409) ile çözülür, satır kilidi (SELECT FOR UPDATE) ile değil — mevcut…
+  - Salt-okunur gözlemci ('watch' / non-participant supervisor izleme) bu kalemin KAPSAMI DIŞI. facts §eksikler bunu ayrı bir boşluk olarak işaretliyor (ChatUser.userType'a…
+  - _…+3 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (6)
+  - Eşzamanlı takeover reddi için 409 gövdesinde hangi `error.type` kullanılacak? Mevcut 409'lar semantik olarak uymuyor (chat_inactive = kapalı sohbet; group_offline /…
+  - Skill kataloğu Settings altında mı (`/settings/skills`, access_rules scope'u) yoksa Team altında mı (`/agents/skills`, agents--all scope'u) yaşamalı? Kırılımda Settings…
+  - Bir routing kuralı birden fazla skill isteyebilir mi, isterse mantık AND mi OR mu? Kırılımda AND varsayıldı (`HAVING COUNT(DISTINCT skill_id) = n` — 'hepsine sahip'),…
+  - Takeover'dan sonra ÖNCEKİ assignee sohbeti hâlâ okuyabilmeli mi (ChatUser satırı kalır, present=false) yoksa erişimi tamamen kesilmeli mi? Kırılımda 'satır kalır,…
+  - `agent_skills` AgentMembership'e mi bağlanmalı (license_id + agent_id composite FK) yoksa doğrudan Account'a mı? Kırılımda license-scoped ayrı tablo varsayıldı…
+  - Skill'i olmayan ama kurala uyan bir grup için 'skill'li kimse yok' durumu operatöre GÖRÜNÜR olmalı mı (ör. Settings'te uyarı rozeti)? Şu anda sohbet sessizce kuyruğa…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.7**
+
+#### 5.2.8 · Çoklu-ajan çakışma uyarısı (aynı sohbette iki ajan) — atomik kırılım
+
+**7 atomik alt-görev · ~8 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×3
+
+**KK (PRD birebir):** _"| Routing (gelişmiş) | Skills-based routing, supervision + takeover, çoklu-ajan çakışma uyarısı |"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `08.6.3-conflict-a` | Çakışma uyarısı RTM push action'ı + composer-registry anahtar/TTL tip sözleşmesi | `SONNET-XHIGH` | yok | 1 |
+| `08.6.3-conflict-b` | ConflictDetectionService — atomik eşzamanlı-yazıcı kaydı + çakışma kararı (güvenlik/algoritma… | `OPUS-MAX` | 08.6.3-conflict-a | 2 |
+| `08.6.3-conflict-c` | send_typing_indicator yolunda çakışma tespiti + uyarının bus envelope ile her iki ajana iletimi | `OPUS-XHIGH` | 08.6.3-conflict-a, 08.6.3-conflict-b | 1 |
+| `08.6.3-conflict-d` | Transfer/atama anında aktif yazıcı çakışmasının API tarafından uyarılması | `OPUS-XHIGH` | 08.6.3-conflict-a, 08.6.3-conflict-b | 1 |
+| `08.6.3-conflict-e` | Çakışma uyarısı istemci state'i + ConflictBanner bileşeni (salt görünüm) | `SONNET-XHIGH` | 08.6.3-conflict-a | 1 |
+| `08.6.3-conflict-f` | Realtime kablolama: agent_conflict_warning aboneliği + applyPush case'i + banner montajı | `SONNET-XHIGH` | 08.6.3-conflict-c, 08.6.3-conflict-e | 1 |
+| `08.6.3-conflict-g` | Uçtan uca doğrulama: iki-ajan çakışma senaryosu + cross-tenant/negatif süiti + kanıt | `OPUS-XHIGH` | 08.6.3-conflict-c, 08.6.3-conflict-d, 08.6.3-conflict-f | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** Tek bölünmez çekirdek `08.6.3-conflict-b` (ConflictDetectionService). Özelliğin kendisi bir yarış durumu tespitidir: iki ajanın aynı thread'de eşzamanlı yazması. Kayıt+okuma tek atomik Redis işleminde yapılmazsa (check-then-act) tespitin kendisi bir race condition içerir ve çakışma sessizce kaçırılır (false negative) — yani özellik "çalışıyor gibi görünüp" hiç uyarmaz. Aynı bağlamda üç şey birlikte akıl yürütülmek zorunda: (1) atomik komut seçimi ve pencere (TTL) genişliği, (2) tenant-scoped yetki kontrolü — kaydı yalnız chat'e erişimi olan ajan yapabilir, aksi halde "hangi ajan hangi chat'te" bilgisi sızar (NFR-S4), (3) düşen socket'in kalıcı çakışma bırakmaması (TTL lapse). Bunlar ayrı pencerelere bölünürse yarış penceresi yanlış kapatılır. Çekirdeğin ETRAFINDAKİ her şey ayrıldı: tip/anahtar sözleşmesi (-a, SONNET), dispatcher+yayın (-c, OPUS-XHIGH), API atama yüzeyi (-d, OPUS-XHIGH),…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (8)
+  - §C — Çakışma UYARIDIR, ENGEL DEĞİLDİR. PRD 'çakışma uyarısı' diyor; ikinci ajanın yazması reddedilmez. Sonuç: yeni bir ApiError tipi (ve dolayısıyla errors.ts ×2 +…
+  - §C — Kalıcı audit tablosu açılmaz. Çakışma anlık bir durumdur; Redis + TTL yeterli. Olgularda 'yok — migration gerek (eğer kalıcı audit isteniyorsa)' diye geçen…
+  - §C — Yeni bir RTM client action'ı EKLENMEZ; mevcut `send_typing_indicator` yeniden kullanılır. Gerekçe: ajan composer'ı bu action'ı zaten gönderiyor (apps/web…
+  - §C — Çakışma iki ayrı yüzeyde tespit edilir: (1) RTM/typing yolu — eşzamanlı YAZAN iki ajan (-b/-c); (2) API/transfer yolu — devir sırasında hâlâ yazan ajan (-d).…
+  - §C — Uyarı `originConnectionId` SETLENMEDEN yayınlanır, çünkü fanout.ts origin socket'i eliyor; çakışan HER İKİ ajan da uyarıyı almalı.
+  - §C — RTM gateway ilk kez envelope YAYINLAYAN taraf olur (bugüne kadar yalnız tüketiyordu). fanout.ts'in 'gateway yetki kararı vermez' kuralı korunuyor: audience…
+  - _…+2 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (4)
+  - Çakışma penceresi (AGENT_COMPOSING_TTL_SECONDS) kaç saniye olmalı? PRD hiçbir eşik vermiyor. Öneri: mevcut AGENT_TYPING_TTL_SECONDS=8 ile hizalı 8-10 sn. Onay…
+  - Uyarı ajan ADIYLA mı yoksa yalnız kimlikle mi gösterilsin? Ad göstermek ajan dizinine ek bir okuma (ve dolayısıyla ek bir yetki kararı) gerektirir; -e şu an payload'daki…
+  - 'Çakışma' tanımına ATAMA-ONLY durum girsin mi — yani iki ajan aynı chat'te ChatUser.present=true ama hiçbiri yazmıyorsa uyarı verilsin mi? Mevcut kırılım HAYIR diyor…
+  - FR-MOD-08.6.3'ün diğer yarısı (skills-based routing + supervisor takeover) ayrı bir kalem olarak mı planlanıyor? Bu kırılım yalnız 'çakışma uyarısı' payını kapsıyor;…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.8**
+
+#### 5.2.9 · MCP server (search_tickets/list_chats/get_report/summarize_chat) — tool yüzeyi + OAuth scope bazlı yetki + tenant izolasyon
+
+**8 atomik alt-görev · ~9 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"search_tickets/list_chats/get_report/summarize_chat tool'ları"_ · _"OAuth scope bazlı"_ · _"tenant izole"_ · _"**MCP server** (mcp URL + Copy + Claude setup + örnek prompt)"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `08.8.3-a` | MCP tool kataloğu — saf veri modülü (4 tool descriptor + input şemaları) | `SONNET-XHIGH` | — | 1 |
+| `08.8.3-b` | MCP kontratı (paths/mcp.yaml) + GET /mcp/manifest keşif ucu | `OPUS-XHIGH` | 08.8.3-a | 1 |
+| `08.8.3-c` | Tool-call yürütücüsü — scope gate + tenant kapsamı + IDOR 404 + audit + search_tickets… | `OPUS-MAX` | 08.8.3-a, 08.8.3-b | 2 |
+| `08.8.3-d` | list_chats tool adaptörü (mevcut chat listeleme yoluna bağlama) | `SONNET-XHIGH` | 08.8.3-c | 1 |
+| `08.8.3-e` | get_report tool adaptörü — `report` enum'u ile mevcut 4 rapor sorgusuna eşleme | `SONNET-XHIGH` | 08.8.3-c | 1 |
+| `08.8.3-f` | summarize_chat tool'u + tool yanıtlarında PII/CC-mask sınırının doğrulanması | `OPUS-XHIGH` | 08.8.3-c | 1 |
+| `08.8.3-g` | Settings → MCP bağlantı ekranı (mcp URL + Copy + Claude setup + örnek prompt) | `SONNET-XHIGH` | 08.8.3-b | 1 |
+| `08.8.3-h` | Uçtan uca MCP istemci akışı + rate-limit kapsaması + audit doğrulaması | `OPUS-XHIGH` | 08.8.3-c, 08.8.3-d, 08.8.3-e, 08.8.3-f | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** Çekirdek = 08.8.3-c (tool çözümleme → scope gate → tenant kapsamı → IDOR 404 → audit). Bu dört karar tek akıl yürütmedir: gate'i dispatch'ten ayıran bir bölme, bir pencereye "hangi scope yeterli", başka bir pencereye "hangi tenant görülebilir" kararını verir; aradaki boşluk (ör. hasAnyScope geçtikten sonra sorgunun request.withTenant DIŞINDA çalışması, ya da yetkisiz id için 403 dönüp kaynağın varlığını doğrulaması) hiçbir pencerenin kabul kriterinde görünmez. Bu yüzden gate + tenant kapsamı + referans tool (search_tickets) tek alt-görevde (2 pencere bütçesi) kalır. Çekirdeğin ETRAFINDAKİ her şey dışarı çıkarıldı: saf katalog verisi (-a), kontrat+manifest (-b), üç tool adaptörü (-d/-e/-f), salt-okunur UI (-g), uçtan uca doğrulama (-h). Böylece OPUS-MAX penceresi 9 pencerenin yalnız 2'si.
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (11)
+  - Tool yüzeyi TEK genel uç olarak kurulur: POST /api/v1/mcp/tools/{tool} (tool adı path param). Olgulardaki per-tool path listesi kendi içinde 'tahmini öneri' olarak…
+  - MCP istemcisinin kimliği MEVCUT yollarla kurulur: PAT (Basic base64(account_id:PAT)) veya mevcut OAuth 2.1 Auth-Code+PKCE akışı (apps/api/src/routes/auth.ts). Dynamic…
+  - MCP'ye özel YENİ SCOPE eklenmez. Mevcut tickets--*:ro / chats--*:ro / reports_read ödünç alınır. Gerekçe: packages/types/src/scopes.ts'e scope eklemek…
+  - YENİ ApiError TİPİ eklenmez; validation / authorization / not_found kullanılır. Gerekçe: yeni tip errors.ts (2 yer) + scopes.test.ts sayacı + openapi enum + regen…
+  - api_tokens.kind'a 'mcp' değeri EKLENMEZ; MCP token'ı 'pat' veya 'oauth' olarak kalır → hiçbir alt-görevde Prisma migration yok.
+  - get_report TEK tool olarak kalır ve zorunlu `report` argümanı enum alır: overview | breakdown | ai-agent | reviews — apps/api/src/routes/reports.ts'teki dört…
+  - _…+5 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (6)
+  - Claude Desktop/ChatGPT gibi bir MCP istemcisi gerçekten JSON-RPC/SSE bekliyorsa, REST tool uçları yeterli mi yoksa ayrı bir POST /mcp JSON-RPC köprüsü ayrı bir kalem…
+  - Dynamic client registration (RFC 7591) v2 kapsamında mı? Bugünkü /auth/authorize insan tarayıcı login formu varsayıyor — MCP istemcisinin PAT ile bağlanması kabul…
+  - get_report enum'una CSV export (/reports/export, ayrı EXPORT_SCOPES) dahil edilecek mi? Şimdilik kapsam dışı bırakıldı.
+  - summarize_chat çağrısı copilot.recordAssist / Assisted metriğini ve ADR-09 AI-resolution sayacını besleyecek mi? Beslerse MCP çağrıları faturayı etkiler.
+  - MCP tool çağrıları için ayrı bir rate-limit kovası mı gerekli, yoksa mevcut PAT kovası yeterli mi? Ayrıca 10.1.5 'API calls' faturalama sayacı MCP çağrılarını da saymalı…
+  - Manifest, çağıranın scope'larına göre FİLTRELENMELİ mi (yalnız çağırabileceği tool'ları göstersin)? Bugünkü plan statik tam katalog döndürüyor; filtreleme bir yetki…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.9**
+
+#### 5.2.10 · IP allowlist / oturum güvenliği (FR-MOD-08.9.6) — atomik kırılım
+
+**9 atomik alt-görev · ~10 pencere** — `OPUS-MAX` ×3 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×3
+
+**KK (PRD birebir):** _"oturum politikaları"_ · _"IP kısıtı"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `08.9.6-a` | security_settings oturum politikası kolonları + kontrat/okuma yüzeyi (davranışsız iskelet) | `SONNET-XHIGH` | — | 1 |
+| `08.9.6-b` | ip_allowlist_entries tablosu + RLS politikası + IpAllowlistEntry şeması | `OPUS-XHIGH` | — | 1 |
+| `08.9.6-c` | lib/ip-allowlist.ts — CIDR/IP eşleştirme algoritması + izin-ret semantiği (saf, DB'siz) | `OPUS-MAX` | — | 1 |
+| `08.9.6-d` | /settings/ip-allowlist CRUD (GET/POST/DELETE) + self-lockout guard + audit + path kontratı | `OPUS-XHIGH` | 08.9.6-b, 08.9.6-c | 1 |
+| `08.9.6-e` | IP allowlist enforcement — auth onRequest kapısı + trustProxy taklit yüzeyi + not_allowed/audit | `OPUS-MAX` | 08.9.6-a, 08.9.6-b, 08.9.6-c | 1 |
+| `08.9.6-f` | PATCH /settings/security — oturum politikası alanlarının yazma yüzeyi (validasyon + audit) | `SONNET-XHIGH` | 08.9.6-a | 1 |
+| `08.9.6-g` | Oturum politikası enforcement — idle timeout (lastUsedAt) + lisans başına eşzamanlı oturum… | `OPUS-MAX` | 08.9.6-a, 08.9.6-f | 2 |
+| `08.9.6-h` | Settings ekranı — IP allowlist bölümü + oturum politikası formu | `SONNET-XHIGH` | 08.9.6-d, 08.9.6-f | 1 |
+| `08.9.6-i` | Uçtan uca doğrulama — E2E akışı, audit görünürlüğü, proxy-IP davranışı ve istek başına maliyet… | `OPUS-XHIGH` | 08.9.6-d, 08.9.6-e, 08.9.6-g, 08.9.6-h | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** Üç alt-görev bölünmez güvenlik/eşzamanlılık çekirdeğidir ve daha küçüğe ayrılmaz: (1) 08.9.6-c — CIDR/IP eşleştirme algoritması + izin/ret semantiği: bir bit-maske hatası ya bypass (yanlış izin) ya da tüm ajanların kilitlenmesi (yanlış ret) demek; parse, eşleştirme ve "boş liste ne demek" kararı aynı bağlamda kalmalı. (2) 08.9.6-e — enforcement noktası: plugins/auth.ts:130-207 her kimlikli isteğin geçtiği tek çıkış kapısı; hangi principal türünün muaf olduğu, server.ts:97 trustProxy:true yüzünden request.ip'nin X-Forwarded-For ile taklit edilebilir olması ve kontrolün sırası tek bir akıl yürütmedir — parçalanırsa kontrol sessizce anlamsızlaşır. (3) 08.9.6-g — oturum politikası enforcement: token geçerlilik semantiğini değiştirmek authN sınırıdır ve eşzamanlı oturum limiti touch() fire-and-forget yazımı ile resolve() okuması arasındaki yarışı + toplu revoke invariant'ını birlikte ele…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (13)
+  - BOŞ ALLOWLIST = HERKESE İZİN. Kayıt yokken hiçbir kısıt uygulanmaz. Gerekçe: olgularda saptanan self-lockout riski ('boş liste izinli mi engelli mi netleşmeden…
+  - CIDR DESTEKLENİR. Bir kayıt tekil IPv4/IPv6 adresi ya da CIDR aralığıdır (tekil adres /32 ya da /128 gibi davranır). PRD yalnız 'IP kısıtı' diyor; ofis/VPN aralıkları…
+  - ENFORCEMENT NOKTASI: HER KİMLİKLİ İSTEK, LOGIN DEĞİL. Kontrol plugins/auth.ts onRequest hook'unda agent/PAT/bot principal'ları için çalışır; public:true uçlar…
+  - MÜŞTERİ/WIDGET YÜZEYİ MUAF. principal.kind === 'customer' istekleri IP allowlist'e tabi değildir; o yüzeyin IP denetimi FR-MOD-08.9.2'nin deny-list'idir…
+  - OTURUM IP'YE BAĞLANMAZ (session-to-IP binding YOK). Login sonrası IP değişimi oturumu sonlandırmaz; yalnız o anki isteğin adresi allowlist'e göre değerlendirilir.…
+  - SELF-LOCKOUT GUARD YAZMA TARAFINDA. Kısıt açıkken (veya ilk kayıt eklenirken) çağıranın kendi adresini kapsamayan bir yapılandırma 400 validation ile reddedilir. PRD'de…
+  - _…+7 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (6)
+  - PLAN ÇELİŞKİSİ: IP allowlist hangi plan(lar)da aktif olacak? PRD §5.3 (satır 413) 'Güvenlik | IP allowlist, CC masking, banned customers, spam, temel audit log (tüm…
+  - OWNER/ADMIN İÇİN ACİL KURTARMA YOLU: allowlist enforcement owner rolünü de kapsasın mı, yoksa owner her zaman muaf mı kalsın? Muafiyet self-lockout'a karşı ikinci bir…
+  - İHLAL DAVRANIŞI: allowlist dışı bir adresten gelen istekte yalnız o istek mi reddedilsin (şu anki varsayım), yoksa ilgili token da revoke mü edilsin? Revoke, VPN kopması…
+  - IDLE TIMEOUT VARSAYILANI: PRD hiçbir süre vermiyor. Varsayılan null (kapalı) mı kalsın, yoksa NFR-S2'nin 'access token TTL ≤1 saat' hedefiyle uyumlu bir varsayılan (ör.…
+  - WIDGET/MÜŞTERİ MUAFİYETİ: PRD'nin 'IP kısıtı' ifadesi yalnız agent/admin panelini mi kastediyor? NFR-C11 (regüle dikey: 'IP allowlist; CC masking; audit') müşteri…
+  - RTM (WebSocket) YÜZEYİ: apps/rtm bağlantıları da allowlist'e tabi olacak mı? Bu kırılım yalnız apps/api HTTP yüzeyini kapsıyor; RTM el sıkışması ayrı bir enforcement…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.10**
+
+#### 5.2.11 · Temel audit log TÜM PLANLARDA (+ kullanıcıya görünür audit ekranı) — NFR-S12
+
+**11 atomik alt-görev · ~14 pencere** — `OPUS-MAX` ×2 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×6
+
+**KK (PRD birebir):** _"Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30 gün) tüm planlarda"_ · _"KK3: Audit log (login, rol değişimi, veri silme, webhook değişimi) tutulur (§7). — kaynak: US-11, satır 325"_ · _"genişletilmiş + SIEM Enterprise"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `08.9.7-a` | Audit log okuma kontratı + audit_log--all:ro scope'u + GET /audit-log (keyset, son 30 gün… | `OPUS-XHIGH` | yok | 2 |
+| `08.9.7-b` | Audit liste filtreleri: eylem, aktör ve tarih aralığı (katkısal sorgu parametreleri) | `SONNET-XHIGH` | 08.9.7-a | 1 |
+| `08.9.7-c` | Webhook değişimi audit'i: webhook.created / webhook.deleted eylemleri | `OPUS-XHIGH` | yok | 1 |
+| `08.9.7-d` | data.deleted eylemi + ayarlar ailesi hedefli silmelerinde audit | `SONNET-XHIGH` | 08.9.7-c | 1 |
+| `08.9.7-e` | İçerik ve entegrasyon silme uçlarında data.deleted audit'i | `SONNET-XHIGH` | 08.9.7-d | 1 |
+| `08.9.7-f` | Rol değişimi ucu (PUT /agents/{agentId}/role) + member.role_changed audit'i | `OPUS-MAX` | 08.9.7-c | 2 |
+| `08.9.7-g` | Retention politikasına audit penceresi (RETENTION_AUDIT_DAYS=30) — politika/env/rapor iskeleti | `SONNET-XHIGH` | yok | 1 |
+| `08.9.7-h` | Append-only log'da süreli budama: audit_prune_expired SECURITY DEFINER + retention sweep… | `OPUS-MAX` | 08.9.7-g | 2 |
+| `08.9.7-i` | Audit Log ekranı: salt-okunur liste + boş/skeleton/hata durumları + Settings girişi | `SONNET-XHIGH` | 08.9.7-a | 1 |
+| `08.9.7-j` | Audit ekranı filtreleri (eylem/tarih) + 'daha fazla yükle' + e2e görünürlük | `SONNET-XHIGH` | 08.9.7-b, 08.9.7-i | 1 |
+| `08.9.7-k` | NFR-S12 uçtan uca doğrulama: dört olay + 30 gün penceresi + 'tüm planlarda' kanıtı | `OPUS-XHIGH` | 08.9.7-b, 08.9.7-c, 08.9.7-e, 08.9.7-f, 08.9.7-h, 08.9.7-j | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** İki alt-görevin çekirdeği bölünmez. (1) 08.9.7-f — rol değişimi ucu: yetki yükseltme (privilege escalation) sınırı tek bir akıl yürütmeyle kurulur — aktörün rolü, hedefin rolü, kendi rolünü değiştirme yasağı, owner'ın korunması ve son-owner invaryantı aynı bağlamda birlikte düşünülmezse kapı yarım kapanır; agents.ts:161-231'deki suspension guard'larının aynısı burada rol için kurulmalı. (2) 08.9.7-h — append-only budama: audit_log'da UPDATE/DELETE nexa_app rolünden REVOKE edilmiş (migration 20260722154008:1005-1006) ve RLS'te yalnız SELECT/INSERT politikası var; 30 günlük pencere ancak dar bir SECURITY DEFINER fonksiyonla (retention_list_tenants() deseni) uygulanabilir. Fonksiyonun imzası, yaş yüklemi, lisans parametresi, GRANT/REVOKE'u ve "tablo DELETE yetkisi asla verilmez" kararı tek karardır; parçalanırsa append-only invaryantına açılan deliğin sınırı kaybolur. Bu iki çekirdeğin…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (11)
+  - Scope adı `audit_log--all:ro` olacak. Kaynak olgulardaki `audit_log--all:r` önerisi kullanılamaz: packages/types/src/scopes.ts'teki expandScope regex'i izin ekini…
+  - Audit okuma yetkisi Owner/Admin ile sınırlı: route'ta scope (`audit_log--all:ro`) + `minimumRole: 'admin'` çift kapısı. PRD KK'sı okuma yüzeyini tanımlamıyor; karar…
+  - 'Son 30 gün' hem SAKLAMA süresi hem liste varsayılan penceresi olarak yorumlandı: 30 günden eski satırlar budanır (08.9.7-h) ve filtresiz liste son 30 günü döner…
+  - 'genişletilmiş + SIEM Enterprise' bu turda YAPILMIYOR. Repoda plan/entitlement mekanizması hiç yok (grep 'entitlement|planGate|requirePlan' → 0); plan bazlı farklı…
+  - 'Tüm planlarda' için KALDIRILACAK bir kapı yok — kapı hiç kurulmamış (schema.prisma AuditLogEntry yorumu bunu açıkça söylüyor). Dolayısıyla iş 'kapıyı kaldırmak' değil,…
+  - 'Rol değişimi' olayını kaydedebilmek için önce olayın kendisi gerekiyor: depoda rol değiştiren hiçbir uç yok, o yüzden 08.9.7-f minimal bir `PUT /agents/{agentId}/role`…
+  - _…+5 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (5)
+  - 08.9.7-f (rol değişimi ucu, OPUS-MAX, 2 pencere) bu kalemin kapsamında mı kalmalı, yoksa MOD-04 (Team) altına ayrı bir kalem olarak mı taşınmalı? Orkestratörün bağlayıcı…
+  - 'Son 30 gün' gerçekten SİLME mi olmalı, yoksa yalnız görüntüleme penceresi mi? Silme, append-only invaryantına kontrollü bir delik açıyor (08.9.7-h: SECURITY DEFINER +…
+  - Enterprise payı ('genişletilmiş saklama + export + SIEM') hangi faza yazılacak? Uygulanabilmesi için önce bir entitlement/plan-gate mekanizması gerekiyor ve repoda hiç…
+  - `data.deleted` tek eylemi mi, yoksa uç başına ayrı eylem adları mı (`website.deleted`, `skill.deleted`, `tag.deleted` …)? Tek eylem sözlüğü küçük tutuyor ama…
+  - Audit ekranı Settings altında mı kalmalı, yoksa güvenlik/uyumluluk yüzeyi büyüdükçe kendi modül rayı girdisine mi taşınmalı (components/navigation.ts MODULES)? Bu turda…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.11**
+
+#### 5.2.12 · 100+ entegrasyon — marketplace katalog genişlemesi + ölçeklenme kanıtı (arama/kategori/sayfalama/virtualization)
+
+**8 atomik alt-görev · ~8 pencere** — `OPUS-XHIGH` ×3 · `SONNET-MAX` ×2 · `SONNET-XHIGH` ×3
+
+**KK (PRD birebir):** _"kategori/ödeme/yerleşim filtreleri + arama"_ · _"virtualized grids (Contacts/Teammates/Skills/Tickets/Knowledge/Apps/Campaigns), infinite scroll, skeleton, anlamlı empty state | ... 10.000+ satırda 60fps"_ · _"kanal-tipli olanlar Channels'ta da yönetilir"_ · _"Her biri OAuth/API key"_ · _"NFR-P4 | Liste render (virtualization) | 10.000+ satırda 60 fps; yalnız görünür satır DOM'da"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `09.2-v2-a` | Marketplace liste kontratı — arama/kategori/sayfalama parametreleri + sayfalama meta alanları | `SONNET-XHIGH` | yok | 1 |
+| `09.2-v2-b` | Saf katalog filtre + sayfalama fonksiyonları (@nexa/types) + determinizm testleri | `SONNET-XHIGH` | yok | 1 |
+| `09.2-v2-c` | GET /settings/apps sorgu bağlama — zod parse + sayfalama + tenant join korunumu | `OPUS-XHIGH` | 09.2-v2-a, 09.2-v2-b | 1 |
+| `09.2-v2-d` | Katalog verisi 20 → 60 kart (mock, mevcut 8 kategori) + üst-sınır iddialarının kaldırılması | `SONNET-MAX` | yok | 1 |
+| `09.2-v2-e` | Katalog verisi 60 → 100+ kart + "100+" hedefinin testle sabitlenmesi | `SONNET-MAX` | 09.2-v2-d | 1 |
+| `09.2-v2-f` | Marketplace arama kutusu + tıklanabilir kategori filtresi + empty/skeleton durumları | `SONNET-XHIGH` | 09.2-v2-c | 1 |
+| `09.2-v2-g` | Virtualized kart grid'i + sayfa zinciri (NFR-P4 "yalnız görünür satır DOM'da") | `OPUS-XHIGH` | 09.2-v2-f, 09.2-v2-e | 1 |
+| `09.2-v2-h` | Uçtan uca doğrulama — 100+ katalogla e2e + NFR-P4 ölçüm notu + izolasyon/kontrat regresyonu | `OPUS-XHIGH` | 09.2-v2-c, 09.2-v2-e, 09.2-v2-g | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** Bu kalemde OPUS-MAX gerektiren, bölünemeyen bir güvenlik/algoritma çekirdeği YOK. Mevcut yetki modeli (route scope kapısı `access_rules:ro/rw`, in-chat okuma `chats--all:ro`/`chats--access:ro`) ve tenant izolasyonu (`request.withTenant` + `app_installations` license-scoped `@@unique(licenseId, appId)`) genişletilmiyor — yalnız korunuyor. Katalog tenant-bağımsız statik veri olduğu için arama/kategori filtresi izolasyon sınırına hiç dokunmuyor. En yüksek iki yüzey: (1) `09.2-v2-c` — tenant-scoped `GET /settings/apps` yanıtının kesiti ve katalog⋈kurulum join sırası değişiyor + input uzunluk sınırı konuyor → hafif güvenlik dokunuşu, kullanıcı kuralı gereği SONNET'e verilmez, OPUS-XHIGH; (2) `09.2-v2-g` — depoda çok-sütunlu grid virtualization deseni olmadığı için yeni UI kompozisyon kararı → OPUS-XHIGH. Kalan altı alt-görev (kontrat satırı, saf fonksiyon, katalog verisi ×2, filtre UI'ı)…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (8)
+  - Kategori enum'u 8 değerde SABİT kalır (crm/support/ecommerce/payments/marketing/productivity/analytics/channels) — 100+ kart bu 8 kategoriye dağıtılır. Gerekçe: enum…
+  - Katalog DB'ye TAŞINMAZ — statik TS dizisi (`@nexa/types/apps.ts` APP_CATALOG) kalır, Prisma migration YOK. Gerekçe: `AppInstallation` (schema.prisma satır 1287) yalnız…
+  - Yeni KANAL-TİPLİ kart EKLENMEZ — mevcut 5 kanal kartı (whatsapp/messenger/instagram/telegram/twilio-sms) aynen korunur, eklenen 80+ kartın hepsi veri app'idir. Gerekçe:…
+  - Filtreleme/sayfalama SERVER-SIDE yapılır (customers.ts deseni), client-side değil. Gerekçe: 100+ kartın tek yanıtta dönmesi yanıt boyutunu ve ilk render maliyetini…
+  - Sayfalama cursor'ı katalog kart id'si üzerinden kurulur (deterministik, tenant-bağımsız); cursor'a HİÇBİR tenant/lisans verisi girmez.
+  - '100+' hedefi test eşiğiyle sabitlenir: `APP_CATALOG.length >= 100`, üst sınır YOK. v1'in `toBeLessThanOrEqual(20)` üst sınırı (apps.test.ts:40 ve integration…
+  - _…+2 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (4)
+  - 100+ kartın isimleri GERÇEK marka adları mı (Notion/Asana/Zapier/Airtable...) yoksa jenerik mock isimler mi olsun? Mevcut 20 kart gerçek marka adı taşıyor…
+  - Kategori enum'u 8'de mi kalsın (varsayım 1)? 100+ kartlık bir dizinde 12-15 kategori kullanıcı deneyimi açısından daha doğal olabilir; genişletilecekse openapi enum +…
+  - `limit` varsayılanı customers.ts emsalinde 25; kart grid'i için 25 düşük kalabilir (ekranda ~12-16 kart). Varsayılan 48/60 mi olsun, max 100 mü kalsın?
+  - 09.4 (Zapier/Make + Build-your-app, '700+ Zapier' katalog/desen kanıtı) ile 09.2-v2 aynı APP_CATALOG'u mu paylaşacak, yoksa ayrı bir partner dizini mi olacak? Aynı…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.12**
+
+#### 5.2.13 · API istek paketleri (Essential/Pro/Pro+) — mock satın alma, gerçek kota artışı
+
+**8 atomik alt-görev · ~9 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"Fiyatlı API paketleri satışı"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `09.3-a` | Statik API paket kataloğu + tipleri (@nexa/types) | `SONNET-XHIGH` | — | 1 |
+| `09.3-b` | api_package_purchases tablosu: Prisma modeli + migration + RLS politikası | `OPUS-XHIGH` | 09.3-a | 1 |
+| `09.3-c` | Okuma yüzeyi: GET /billing/api-packages (katalog) + GET /billing/api-packages/purchases +… | `OPUS-XHIGH` | 09.3-a, 09.3-b | 1 |
+| `09.3-d` | Paket satın alma çekirdeği: POST /billing/api-packages + atomik kota artışı (mock ödeme,… | `OPUS-MAX` | 09.3-a, 09.3-b, 09.3-c | 2 |
+| `09.3-e` | Satın alınan paketin fatura satır kalemi (invoice line_item) | `SONNET-XHIGH` | 09.3-d | 1 |
+| `09.3-f` | Billing ekranında API paketleri bölümü: kartlar + mock satın alma akışı | `SONNET-XHIGH` | 09.3-c, 09.3-d | 1 |
+| `09.3-g` | Satın alma geçmişi listesi (UI) + empty state | `SONNET-XHIGH` | 09.3-c, 09.3-f | 1 |
+| `09.3-h` | Uçtan uca doğrulama: satın alma → kota artışı → geçmiş → fatura (E2E + seed) | `OPUS-XHIGH` | 09.3-e, 09.3-f, 09.3-g | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** 09.3-d (paket satın alma çekirdeği) bölünmez. Üç sınır tek akıl yürütmede birleşiyor: (1) yetkilendirme — BILLING_WRITE_SCOPES + read-only lisansta yazılabilirlik kararı (allowWhenReadOnly, subscription PATCH/payment-method PUT ile aynı gerekçe zinciri), (2) tenant izolasyonu — satın alma license_id'ye bağlanır ve kota AYNI lisansın usage_record'ına yazılır, (3) eşzamanlılık — kota artışı ile eşzamanlı gelen recordApiCall aynı (license_id, metric, period) benzersiz satırında yarışır. metering.ts:117 recordApiCall'ın ON CONFLICT'i `included`'a DOKUNMUYOR (yalnız quantity+1); satın almanın ON CONFLICT'i bu yüzden `included = usage_records.included + quota` olmak ZORUNDA — VALUES'taki hesaplanmış değeri yazarsa dönemin ilk API çağrısı ile satın alma sırasına göre kota sessizce kaybolur veya çift eklenir. Bu üç şeyi ayrı pencerelere bölmek, upsert'ün doğruluğunu kanıtlayan bağlamı…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (9)
+  - Paket = TEK SEFERLİK top-up (abonelik/otomatik yenileme DEĞİL). PRD satır 666 yalnız 'Fiyatlı API paketleri satışı' diyor; yenileme, iptal veya dönemsel tahsilat…
+  - Satın alınan kota, satın alındığı DÖNEMİN usage_records.included değerine eklenir; dönem devri (rollover) YOK. Gerekçe: usage_records (license_id, metric, period)…
+  - Katalog KOD-İÇİ statik kalır (packages/types, APP_CATALOG deseni); DB'de paket katalog tablosu AÇILMAZ. Fiyat/kota değişimi bir kod değişimidir. Gerekçe: ADR-13 mock…
+  - Pro+ paketinin kotası ve fiyatı TÜRETİLDİ (1.000.000 çağrı / $249.99). PRD satır 666'nın Kaynak sütunu 'Essential 100K $29.99, Pro/Pro+ 500K $149.99' diyerek iki paketi…
+  - Ödeme tamamen MOCK: satın alma PaymentMethod kaydına dokunmaz, kart çekilmez, dış servis çağrılmaz ve kayıtlı ödeme yöntemi ZORUNLU TUTULMAZ. Kayıtlı kart şartı konsaydı…
+  - Yeni ApiError tipi EKLENMEZ: bilinmeyen paket → not_found, geçersiz gövde → validation, scope eksikliği → authorization. Gerekçe: bu depoda yeni tip eklemek errors.ts'te…
+  - _…+3 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (7)
+  - Pro+ paketinin kotası ve fiyatı nedir? PRD satır 666 'Pro/Pro+ 500K $149.99' diyerek iki paketi tek rakama bağlıyor; v2-derin-analiz dosyalarında doğrulama yok.…
+  - Satın alınan kota dönem sonunda yanar mı, yoksa bir sonraki döneme devreder mi (rollover)? Varsayım: yanar (dönem-bazlı). Devir istenirse usage_records'a yeni bir…
+  - Satın alma öncesi kayıtlı bir ödeme yöntemi zorunlu mu? Varsayım: hayır (mock). Zorunlu olursa 09.3-d'ye yeni bir reddetme dalı ve muhtemelen yeni ApiError tipi girer…
+  - Paketler tek seferlik mi, otomatik yenilenen abonelik mi? Yenilemeli olursa zamanlayıcı (ChatTimeoutSweeper benzeri bir job), iptal endpoint'i ve dönem geçişinde…
+  - İptal/iade politikası var mı? Kota geri alınabilir mi? Geri alma, usage_records.included'ı AZALTMA anlamına gelir ve kullanılmış kotanın altına düşme riski (negatif…
+  - Bu kalem PRD'de 'Could (v2)' ve KK yetersiz (tek satırlık genel ifade); rapor-1-fonksiyonel.md'de [MOD-09.3] alt bölümü yok (grep 0) ve rakamların kaynağı doğrulanmamış.…
+  - _…+1 madde daha — tam metin companion dosyada_
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.13**
+
+#### 5.2.14 · Zapier/Make + Build-your-app (partner/creator portalı) — atomik kırılım
+
+**7 atomik alt-görev · ~8 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×2 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"700+ Zapier"_ · _"partner/creator portalı"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `09.4-a` | Zapier + Make marketplace kartları ve katalog sınır güncellemesi | `SONNET-XHIGH` | yok | 1 |
+| `09.4-b` | Entegrasyon manifesti (trigger + action kataloğu): kontrat + statik endpoint | `SONNET-XHIGH` | yok | 1 |
+| `09.4-c` | Partner app kaydı çekirdeği: oauth_clients self-servis CRUD (client_id / secret_hash /… | `OPUS-MAX` | yok | 2 |
+| `09.4-d` | Partner app secret rotate + denetim izi (partner_app.* audit olayları) | `OPUS-XHIGH` | 09.4-c | 1 |
+| `09.4-e` | Developer portal kabuğu: partner app listesi + kayıt formu + 'secret bir kez' paneli | `SONNET-XHIGH` | 09.4-c | 1 |
+| `09.4-f` | Portal'da Zapier REST Hooks yüzeyi: webhook aboneliği yönetimi + trigger manifesti + secret… | `SONNET-XHIGH` | 09.4-b, 09.4-d, 09.4-e | 1 |
+| `09.4-g` | Uçtan uca partner akışı doğrulaması: kayıtlı client ile OAuth 2.1 authorize→token +… | `OPUS-XHIGH` | 09.4-c, 09.4-d, 09.4-e, 09.4-f | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** 09.4-c (partner app kaydı çekirdeği) bölünmez. Üç kısıt tek bağlamda tutulmak zorunda: (1) üretilen secret'ın saklanma formatı `hashToken(secret)` olmak ZORUNDA çünkü mevcut `OauthService.#authenticateClient` (apps/api/src/services/auth/oauth-service.ts:328-340) `constantTimeEqual(hashToken(clientSecret), client.secret_hash)` ile doğruluyor — format ayrı pencerede kararlaştırılırsa üretilen client `/auth/token` akışında sessizce çalışmaz; (2) `redirect_uris` kayıt-anı doğrulaması, `OauthService.isRegisteredRedirect` (oauth-service.ts:130-140) TAM EŞLEŞME beklediği için normalize etmemek zorunda — doğrulama ile eşleştirme aynı akıl yürütmenin iki ucu; (3) scope daraltma (kaydeden principal'ın sahip olmadığı scope client'a verilemez) + org-scoped RLS izolasyonu (404, 403 değil) aynı route'ta karar veriliyor. Bu üçü ayrılırsa open-redirect / yetki genişlemesi / sessiz kimlik doğrulama…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (9)
+  - KK YORUMU (kk_yetersiz=true): '700+ Zapier' inşa edilebilir bir kabul kriteri değildir — Zapier'in kendi ekosistemindeki app sayısını ifade eder. Kilitli yorum: Nexa 700…
+  - SCOPE KARARI: partner app yönetimi için YENİ OAuth scope EKLENMEZ; mevcut `access_rules:ro`/`access_rules:rw` yeniden kullanılır (routes/apps.ts:45,55 ile aynı yönetici…
+  - KATALOG SINIRI SAPMASI: FR-MOD-09.2 KK'sı 'Tam entegrasyon listesi (15–20 kart)' diyor ve iki test bu sınırı kilitliyor (packages/types/src/apps.test.ts:39-40,…
+  - MODELLEME: Zapier ve Make, APP_CATALOG'un mevcut ikili bölünmesini (channel app / data app) bozmamak için DATA app olarak modellenir (dataLabel + dataFields dolu).…
+  - PARTNER APP KAYDI KİMLİK DOĞRULAMALIDIR: RFC 7591 tarzı kimliksiz/dinamik client kaydı AÇILMAZ. Kayıt daima oturum açmış ve `access_rules:rw` taşıyan bir yönetici…
+  - REDIRECT_URI POLİTİKASI: yalnız mutlak `https` URI'ler kabul edilir; tek istisna geliştirme için `http://localhost` ve `http://127.0.0.1`. Wildcard, fragment ve gömülü…
+  - _…+3 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (5)
+  - Kaynak izlenebilirliği kırık: PRD satır 667'nin Kaynak sütunu 'v2-05' dosyasına atıf yapıyor ama depoda böyle bir dosya yok (find → 0) ve v2-derin-analiz/01-04…
+  - Partner app yönetimi için `access_rules:rw` yeniden kullanımı onaylanıyor mu, yoksa ayrı bir `oauth_clients--all:ro/:rw` scope çifti mi isteniyor? Ayrı scope,…
+  - APP_CATALOG'un 15–20 üst sınırının 22'ye çıkarılması (FR-MOD-09.2 KK'sından sapma) kabul mü, yoksa Zapier/Make ayrı bir `AUTOMATION_CATALOG` sabitinde mi tutulsun?…
+  - Portal'da PAT (personal access token) üretme ekranı bu kaleme dahil edilsin mi? API tam olarak mevcut (apps/api/src/routes/auth.ts:396-500: list/create/revoke,…
+  - WEBHOOK_ACTIONS bugün 5 aksiyon (chat_started, chat_deactivated, chat_transferred, event_created, ticket_created). Zapier/Make için anlamlı trigger yelpazesi bu 5'le…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.14**
+
+#### 5.2.15 · ⌘K command palette — aksiyon + AI sorgusu sonuç tipleri (v2 payı)
+
+**8 atomik alt-görev · ~8 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"3 sonuç tipi: aksiyon ("Stop Accepting Chats"), navigasyon, AI sorgusu ("Summarize my team's activity…")"_ · _"Search Text or go to…"_ · _"klavye ↑↓/esc"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `01.1.3-ai-a` | Statik aksiyon kataloğu (`actions.ts`) + `PaletteResult` birleşik tipi | `SONNET-XHIGH` | — | 1 |
+| `01.1.3-ai-b` | Aksiyon sonuç tipinin scope kapısı — yetkisi olmayan aksiyon palette GÖRÜNMEZ | `OPUS-XHIGH` | 01.1.3-ai-a | 1 |
+| `01.1.3-ai-c` | Aksiyon tetikleme — `run()` bağlama + optimistic durum + hata geri alma | `OPUS-XHIGH` | 01.1.3-ai-b | 1 |
+| `01.1.3-ai-d` | Kontrat: `POST /palette/ai-query` + bundle + tip üretimi | `SONNET-XHIGH` | — | 1 |
+| `01.1.3-ai-e` | AI sorgu endpoint'i — scope kapısı + tenant izolasyonu + deterministik cevap (reports… | `OPUS-MAX` | 01.1.3-ai-d | 2 |
+| `01.1.3-ai-f` | Palette'te AI sorgu sonuç tipi + cevap kartı + boş/anlaşılmadı durumları | `SONNET-XHIGH` | 01.1.3-ai-e | 1 |
+| `01.1.3-ai-g` | Klavye/a11y: ↑↓/esc üç sonuç tipinde de tutarlı (NFR-A11Y6 regresyonu) | `SONNET-XHIGH` | 01.1.3-ai-c, 01.1.3-ai-f | 1 |
+| `01.1.3-ai-h` | Uçtan uca doğrulama + kapanış: tam DoD, e2e, PLAN/HANDOFF izleri | `OPUS-XHIGH` | 01.1.3-ai-c, 01.1.3-ai-f, 01.1.3-ai-g | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** Bölünemez çekirdek YOK — bu kalemde tek güvenlik sınırı 'aksiyon sonuç tipinin scope kapısı' (01.1.3-ai-b) ve o tek başına tutarlı bir akıl yürütmedir: katalog verisi (-a), tetikleme (-c) ve AI yolu (-d/-e/-f) ondan ayrılabilir. Yine de -b ve -c ARDIŞIK yapılmalıdır: kapı olmadan tetikleme yazılırsa, yetkisiz aksiyon UI'da gizlenmemiş hâlde tetiklenebilir hâle gelir ve testler bunu yakalamaz (endpoint 403 döner ama palet yanlış bir eylem sunmuş olur).
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (4)
+  - AI sorgusu YENİ bir endpoint ister (POST /palette/ai-query); mevcut /copilot/* uçları chat bağlamına bağlıdır (chatId alır), palet ise chat bağlamsızdır. Copilot'un BI…
+  - AI cevabı DETERMİNİSTİKTİR — @nexa/ai-mock üzerinden (ADR: dış LLM yok). Cevap serbest metin üretmez; mevcut reports sorgularından sayısal özet + kaynak metrik adı…
+  - Aksiyon kataloğu STATİKTİR (frontend'de `actions.ts`), NAV_DESTINATIONS deseninin ikizi. Backend'de 'aksiyon kataloğu' endpoint'i AÇILMAZ — her aksiyon zaten kendi…
+  - İlk aksiyon seti PRD'nin somut örneğiyle sınırlı tutuldu: 'Stop/Start Accepting Chats' (PATCH /agents/me/routing-status). Katalog genişletilebilir bırakıldı ama bu turda…
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (2)
+  - Palet AI sorgusu hangi scope'u istemeli — yalnız `reports_read` mi, yoksa ayrı bir `palette_ai` scope'u mu? Şu anki tasarım: mevcut `reports_read` yeniden kullanılır…
+  - Aksiyon kataloğu ileride kullanıcı tanımlı olabilir mi (ör. bir skill'i palete pinlemek)? Şu an statik; kontrat yüzeyi açılmadı.
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.15**
+
+#### 5.2.16 · Copilot BI komut — rapor/metrik sorusu → deterministik cevap (§5.5 MOD-12 v2)
+
+**6 atomik alt-görev · ~7 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×2 · `SONNET-XHIGH` ×3
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `12.4-bi-a` | Kontrat: `POST /copilot/bi` anchor'ı + bundle + tip üretimi | `SONNET-XHIGH` | — | 1 |
+| `12.4-bi-b` | `@nexa/ai-mock`'ta soru → rapor metriği eşleyici (deterministik, LLM yok) | `OPUS-XHIGH` | — | 1 |
+| `12.4-bi-c` | BI endpoint çekirdeği — scope birleşimi + müşteri-token sınırı + tenant izolasyonu + ADR-09… | `OPUS-MAX` | 12.4-bi-a, 12.4-bi-b | 2 |
+| `12.4-bi-d` | CopilotPanel'de BI soru girişi + cevap kartı | `SONNET-XHIGH` | 12.4-bi-c | 1 |
+| `12.4-bi-e` | Anlaşılmadı / yetersiz veri durumları — anlamlı empty state + örnek sorular | `SONNET-XHIGH` | 12.4-bi-d | 1 |
+| `12.4-bi-f` | Uçtan uca doğrulama + ADR-09 çapraz kontrolü + kapanış | `OPUS-XHIGH` | 12.4-bi-d, 12.4-bi-e | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** **12.4-bi-c bölünmez.** BI endpoint'inin çekirdeğinde üç sınır aynı anda karar bekliyor: (a) **scope birleşimi** — BI cevabı rapor verisi taşıdığı için `reports_read` gerekir, ama uç Copilot domain'inde; hangi scope kombinasyonunun isteneceği tek bir yetkilendirme kararıdır; (b) **müşteri token'ına kapalılık** (agent+bot principals, 404 boundary — copilot.ts'in mevcut I4 deseni) ve **cross-tenant izolasyon**; (c) **ADR-09 tutarlılığı** — uç kendi SQL'ini YAZMAMALI, mevcut reports sorgularını çağırmalıdır; aksi hâlde 'Copilot 12 diyor, Reports 11 diyor' sınıfı bir sapma doğar ve bu testlerde kolayca gözden kaçar. Bu üçü ayrı pencerelere bölünürse, scope'u yazan pencere ADR-09'u, ADR-09'u yazan pencere sınır davranışını görmez. Çevresindeki her şey (kontrat, niyet eşleyici, UI, empty state) AYRI ve daha ucuz alt-görevlere çıkarıldı.
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (4)
+  - KK-türetilmiş: PRD'de bu kalem için ayrı FR-MOD satırı YOK — yalnız §5.5 matrisinde MOD-12'nin v2 hücresinde '○ (BI komut)' var ve §5.3 faz başlığı 'Copilot BI' diyor.…
+  - BI komutu CHAT BAĞLAMLIDIR (mevcut /copilot/* uçları gibi chatId alır veya hesap geneli çalışır); hesap/takım geneli bağlamsız sorgu ⌘K paletinin işidir (01.1.3-ai). İki…
+  - Cevap DETERMİNİSTİKTİR: @nexa/ai-mock niyeti çözer, sayıyı mevcut reports sorgusu üretir. Serbest metin üretimi YOK — 'uydurulmuş sayı' sınıfı yapısal olarak imkânsız.
+  - Yeni ApiError tipi AÇILMAZ: anlaşılmayan soru / yetersiz veri 200 + kind alanı ile döner (errors.ts ×2 + scopes.test.ts sayacı + openapi enum + regen tuzağı).
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (2)
+  - BI komutu hangi scope'u istemeli: yalnız `reports_read` mi, Copilot'un mevcut scope'u + `reports_read` birleşimi mi? Tasarım tercihi: birleşim (en dar yetki), ama ürün…
+  - Hangi metrik seti ilk turda desteklensin? Şu an /reports/overview'ın KPI'ları hedeflendi (chats, closed, çözüm split'i, CSAT). Breakdown boyutları (07.5) indikten sonra…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.16**
+
+#### 5.2.17 · Skill şablon kataloğunu 31+'a genişlet (ADR-14 uyumlu ikame)
+
+**5 atomik alt-görev · ~6 pencere** — `SONNET-MAX` ×1 · `SONNET-XHIGH` ×4
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `05.6-tmpl31-a` | Katalog şeması genişletme: rozet alanı (Popular/Essential) + invariant testlerinin… | `SONNET-XHIGH` | — | 1 |
+| `05.6-tmpl31-b` | 23+ yeni şablon kaydı — katalog 8 → 31+ | `SONNET-MAX` | 05.6-tmpl31-a | 2 |
+| `05.6-tmpl31-c` | Katalog i18n: şablon metinleri TR/EN (NFR-I18N2) | `SONNET-XHIGH` | 05.6-tmpl31-b | 1 |
+| `05.6-tmpl31-d` | Galeri ölçek davranışı: arama + kategori filtresi + sanal liste (31+ kart) | `SONNET-XHIGH` | 05.6-tmpl31-b | 1 |
+| `05.6-tmpl31-e` | Kapanış: tam DoD + galeri e2e regresyonu + PLAN/HANDOFF izleri | `SONNET-XHIGH` | 05.6-tmpl31-c, 05.6-tmpl31-d | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** Bölünemez çekirdek YOK — bu kalemde güvenlik sınırı, eşzamanlılık veya algoritma tasarımı bulunmuyor. Kaynak recon'un birebir tespiti: iş, `templates.ts` içindeki salt-okunur statik bir diziye kayıt eklemekten ibaret; authN/authZ, tenant izolasyonu, SSRF, kripto, rate-limit veya PII yüzeyi AÇMIYOR (katalog dış servise bağlanmıyor, kullanıcı girdisi almıyor, yeni DB/API yazma yolu eklemiyor). Bu yüzden kalemin TAMAMI `SONNET-*` etiketlidir — v2'de bu özelliğe sahip tek kalem.
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (4)
+  - KK-türetilmiş: PRD §5.3 'Otomasyon' hücresi '31+ şablon' der ama aynı hücredeki görsel node/edge Workflow builder ADR-14 ile ⛔. Şablon SAYISI hedefi, ADR-14'ten bağımsız…
+  - Katalog DETERMİNİSTİK ve YERELDİR (apps/web/src/features/playbook/templates.ts) — dış servis, backend route veya DB tablosu AÇILMAZ. Bu, ADR-14 ve mevcut mimariyle…
+  - Hedef sayı 31+; bugünkü katalog 8 kayıt (3 prebuilt + 2 ai + 3 trending) → en az 23 yeni kayıt.
+  - Yeni kayıtlar mevcut `SkillTemplate` şeklini korur (id/name/category/summary/instruction/steps/requiresIntegration) ve `templates.test.ts`'in üç mevcut invariantını…
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (3)
+  - Katalog bugün tamamen İngilizce ve `apps/web/src/lib/i18n.ts`'e hiç bağlı değil. NFR-I18N2 'en az TR/EN' istiyor. 23+ yeni kayıt eklemeden ÖNCE i18n'e bağlanmalı mı…
+  - Kaynak recon bir kapsam boşluğu işaret etti: katalogda regüle/bahis dikeyine (KYC, para çekme, çevrim şartı, sorumlu oyun) özel TEK BİR şablon yok (grep 0). PRD satır…
+  - FR-MOD-05.2 kart rozetlerinde 'Popular'/'Essential' geçiyor ama TEMPLATE_CATEGORIES yalnız 3 sabit tür tanımlıyor (prebuilt/ai/trending). Rozetler ayrı bir kategori mi…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.17**
+
+#### 5.2.18 · Engage / Traffic (gelişmiş) — Match all filters + Add filter, ziyaretçi 360° panel, 03.1.1 kalan sekmeler
+
+**11 atomik alt-görev · ~13 pencere** — `OPUS-MAX` ×2 · `OPUS-XHIGH` ×4 · `SONNET-XHIGH` ×5
+
+**KK (PRD birebir):** _"Gelişmiş filtre"_ · _"proaktif aksiyon"_ · _"ziyaretçi geçmişi"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `13.2-a` | TrafficActivity sözlüğünün supervised + invited ile genişletilmesi (kontrat + tip + web etiket… | `SONNET-XHIGH` | yok | 1 |
+| `13.2-b` | `invited` durumu: campaign_sends'ten türetme + funnel öncelik kararı (backend) | `OPUS-XHIGH` | 13.2-a | 1 |
+| `13.2-c` | `chat_supervisions` tablosu + RLS politikası + Prisma modeli (yalnız migration, route yok) | `OPUS-XHIGH` | yok | 1 |
+| `13.2-d` | Supervision register/release API + yetki sınırı + heartbeat (BÖLÜNMEZ GÜVENLİK ÇEKİRDEĞİ) | `OPUS-MAX` | 13.2-c | 2 |
+| `13.2-e` | `supervised` durumunun Traffic funnel'ına bağlanması + öncelik sırası | `OPUS-XHIGH` | 13.2-a, 13.2-d | 1 |
+| `13.2-f` | "Match all filters + Add filter": GET /traffic çoklu-koşul filtre çekirdeği (kontrat + backend) | `OPUS-MAX` | 13.2-a, 13.2-b, 13.2-e | 2 |
+| `13.2-g` | Traffic durum sekmeleri (All/Chatting/Supervised/Queued/Waiting/Invited/Browsing) + sayaç +… | `SONNET-XHIGH` | 13.2-f | 1 |
+| `13.2-h` | "Match all filters + Add filter" filtre paneli UI + query builder | `SONNET-XHIGH` | 13.2-f, 13.2-g | 1 |
+| `13.2-i` | CustomerDetail'e `visits_count` + `groups[]` (kontrat + servis) | `SONNET-XHIGH` | yok | 1 |
+| `13.2-j` | Ziyaretçi 360° panel: N visits özeti + Came from + Groups kartları (UI) | `SONNET-XHIGH` | 13.2-i | 1 |
+| `13.2-k` | Uçtan uca doğrulama: E2E (sekme + filtre + supervise + 360° panel) + NFR-P2 ölçümü + a11y… | `OPUS-XHIGH` | 13.2-a, 13.2-b, 13.2-c, 13.2-d, 13.2-e, 13.2-f, 13.2-g, 13.2-h, 13.2-i, 13.2-j | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** İki bölünmez çekirdek var. (1) **13.2-d** (supervision register/release): "kim hangi sohbeti izleyebilir" kararı (`chats--all:ro` global mi, `chats--access:ro` yalnız kendi grubunun `chat_access` üzerinden eriştiği sohbet mi), IDOR deseni (başka kiracının chatId'si → 404, 403 DEĞİL) ve iki ajanın aynı sohbeti eşzamanlı izlemesi/serbest bırakması (idempotent upsert + yalnız kendi satırını silme) tek bir akıl yürütmenin parçaları; ayrıştırılırsa "endpoint var ama yetki yarım" ara durumu doğar ve tam da orada sızıntı olur. Çekirdeğin ETRAFINDAKİ her şey ayrıştırıldı: tablo+RLS 13.2-c'ye (OPUS-XHIGH), funnel bağlama 13.2-e'ye (OPUS-XHIGH), UI 13.2-g/-h'ye (SONNET-XHIGH). (2) **13.2-f** (filtre predicate derleyicisi): istemciden gelen koşulların çok-kiracılı bir sorguya çevrilmesi — allowlist, tenant kapısı (`group_id` başka kiracıya sızmamalı) ve sorgu şekli (NFR-P2 bütçesi; Visit.pages…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (8)
+  - **Supervised kalıcı tabloyla modellenir, RTM/Redis presence ile DEĞİL.** `chat_supervisions` (chat_id, agent_id, license_id, started_at, last_seen_at) + heartbeat…
+  - **Invited = `campaign_sends` satırı `engaged = false` ve canlı pencere içinde.** Yeni kolon/tablo açılmaz; CampaignSend zaten 'davet gönderildi' anlamını taşıyor…
+  - **Ziyaretçi 'groups' = müşterinin bu lisanstaki sohbetlerine `chat_access` üzerinden erişen ajan grupları.** Yeni `customer_groups` segment tablosu AÇILMAZ. Gerekçe:…
+  - **'Match all filters' = ayrık, AND'lenen query parametreleri** (`activity`, `page_url_contains`, `came_from_contains`, `country_code`, `is_lead`, `group_id`), JSON koşul…
+  - **Funnel öncelik sırası: `queued` > `supervised` > `waiting` > `chatting`;** `invited` yalnız aktif sohbeti OLMAYAN ziyaretçide `browsing`'i ezer. Gerekçe: kuyruktaki…
+  - **`page_url_contains` filtresi SQL LIKE ile DEĞİL, servisin zaten yaptığı over-fetch + JS de-dup adımında uygulanır.** Gerekçe: `visits.pages` JSONB ve üzerinde uygun…
+  - _…+2 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (4)
+  - Supervision heartbeat penceresi kaç dakika olmalı? Traffic'in `LIVE_WINDOW_MINUTES = 30` sabitiyle aynı olursa bir ajanın 25 dk önce kapattığı sekme hâlâ 'Supervised'…
+  - `chats--all:ro` taşıyan HER ajan her sohbeti izleyebilmeli mi, yoksa ek olarak bir rol şartı (owner/viceowner/admin) da aranmalı mı? PRD rol matrisi 'supervise' için…
+  - Ziyaretçi 'groups' için varsayım 3 (chat_access'ten türetme) onaylanıyor mu, yoksa gerçekten ayrı bir `customer_groups` segment tablosu mu isteniyor? İkincisi seçilirse…
+  - Filtre `group_id` parametresi, `chats--access:ro` ile sınırlı bir ajan kendi grupları dışında bir değer verdiğinde 400 mü dönmeli, yoksa sessizce boş sonuç mu? (İkisi de…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.18**
+
+#### 5.2.19 · 13.3 — Goals (ziyaretçi→sohbet→dönüşüm hunisi): goals tablosunu bağla + Reports "Achieved goals"
+
+**9 atomik alt-görev · ~10 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×4 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"hedef tanımı"_ · _"3 aşamalı huni"_ · _"rapor entegrasyonu"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `13.3-a` | Goal veri sözlüğü — @nexa/types tipleri + OpenAPI component şemaları (path YOK) | `SONNET-XHIGH` | — | 1 |
+| `13.3-b` | goal_achievements tablosu + RLS politikası + idempotency kısıtı (Prisma migration) | `OPUS-XHIGH` | — | 1 |
+| `13.3-c` | Goals CRUD — kontrat path + route + servis (license-scoped, .strict() definition) | `OPUS-XHIGH` | 13.3-a | 1 |
+| `13.3-d` | Hedef eşleşme + achievement kaydı çekirdeği — idempotent tetik, ziyaretçi yazma yolu, campaign… | `OPUS-MAX` | 13.3-b, 13.3-c | 2 |
+| `13.3-e` | /reports/overview "Achieved goals" sayacı (pencere + önceki pencere karşılaştırması) | `SONNET-XHIGH` | 13.3-b, 13.3-d | 1 |
+| `13.3-f` | GET /reports/goals — 3 aşamalı huni raporu + rapor grubu + CSV export | `OPUS-XHIGH` | 13.3-b, 13.3-c, 13.3-d | 1 |
+| `13.3-g` | Goals ekranı — liste + Create goal formu (Customers alanının 4. sekmesi) | `SONNET-XHIGH` | 13.3-c | 1 |
+| `13.3-h` | 3 aşamalı huni gösterimi (Goals ekranı) + Reports Overview "Achieved goals" KPI kartı | `SONNET-XHIGH` | 13.3-e, 13.3-f, 13.3-g | 1 |
+| `13.3-i` | Uçtan uca doğrulama — ziyaret→sohbet→hedef E2E + çapraz-tenant regresyon kapanışı | `OPUS-XHIGH` | 13.3-d, 13.3-e, 13.3-f, 13.3-g, 13.3-h | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** 13.3-d (hedef eşleşme + achievement kaydı çekirdeği) bölünmez. Üç akıl yürütme aynı bağlamı paylaşıyor: (1) idempotency — aynı ziyaretçi aynı hedefi iki kez tetiklememeli, kanıtı `@@unique([goalId, customerId])` + `createMany({skipDuplicates:true})`; (2) tenant izolasyonu — yazma yolu **ziyaretçi (customer principal)** tarafından tetikleniyor (customer.ts:341 `recordPageView` bloğu), yani kimliği doğrulanmış ajan değil, widget; (3) çapraz-özellik invariantı — achievement yazılınca aynı müşterinin `campaign_sends.converted` alanı güncelleniyor, bu da yalnız aynı licenseId için geçerli olmalı. Bu üçü ayrı pencerelere bölünürse "hangi koşulda satır yazılır" kararı ile "o satırın hangi lisansa ait olduğu" kararı farklı bağlamlara düşer ve izolasyon akıl yürütmesi kaybolur. Çekirdeğin ETRAFINDAKİ her şey ayrı ve daha ucuz etikete çıkarıldı: migration+RLS 13.3-b (OPUS-XHIGH), CRUD 13.3-c…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (8)
+  - `goal_achievements` YENİ bir tablodur ve PRD §8.4'e EK'tir (çelişki değil). Gerekçe: PRD §8.4 (satır 960) yalnız `goals`(`id`,`license_id`,`name`,`definition`,`active`)…
+  - `Goal.definition` (jsonb) v1 şeması `{ url_contains?: string }` olarak sabitlenir — `Campaign.conditions` ile aynı vokabüler (campaigns.ts:22 `.strict()`). Gerekçe: PRD…
+  - `campaign_sends` tablosuna `goal_id` FK EKLENMEZ. Bunun yerine achievement yazıldığında aynı müşterinin AYNI LİSANSTAKİ `campaign_sends` satırları `converted=true`…
+  - Huni denominatörleri: `visitors` = pencerede ziyareti olan distinct müşteri (TENANT GENELİ), `chats` = pencerede açılan thread'lerin distinct müşterisi, `conversions` =…
+  - Goals ekranı Customers alanının 4. sekmesidir (`/app/customers/goals`). Gerekçe: PRD 'Gözlem: Engage/Goals hunisi' der ama bu depoda Engage adında bir üst alan yok;…
+  - Yeni scope üretilmez: Goals `customers:ro` (okuma) / `customers:rw` (yazma) taşır — campaigns.ts:4-9'daki gerekçenin aynısı (Goals de CRM/canlı panonun kapsadığı…
+  - _…+2 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (5)
+  - "Achieved goals" hem `/reports/overview` KPI kartında (13.3-e) hem ayrı bir Goals rapor grubunda (13.3-f) veriliyor. Tek yer isteniyorsa 13.3-e düşülebilir (−1 pencere)…
+  - `Goal.definition` v2'de sayfa URL'sinin ötesine (olay adı, satış tutarı, form gönderimi) genişleyecek mi? Plan `matchesGoal` fonksiyonunu şimdiden çok-koşullu AND olarak…
+  - `campaign_sends.converted` semantiği değişiyor: bugün serbest bir boolean, bu işten sonra yalnız tanımlı bir Goal tetiklendiğinde true olacak. Mevcut Campaigns E2E/unit…
+  - Huni 'visitors' denominatörü tenant geneli mi olmalı (planın seçimi) yoksa hedef bazında mı (yalnız hedefin sayfasına yakın olan ziyaretçiler)? Hedef bazında istenirse…
+  - `goal_achievements` için retention/PII politikası gerekiyor mu? Satır `customer_id` taşıyor; `visits` tablosu NFR-S9 retention politikasına tabi (schema.prisma yorumu).…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.19**
+
+#### 5.2.20 · Sales tracker (Ecommerce / Tracked sales) — atomik kırılım
+
+**8 atomik alt-görev · ~9 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"İzleme yapılandırması"_ · _"Reports Ecommerce ile ilişki"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `13.5-a` | Sales tracker veri modeli — sales_tracker_settings (lisans-tekil) + tracked_sales (olay… | `SONNET-XHIGH` | 13.3 Goals (dış bağımlılık — orkestratörün bağlayıcı kararı: 13.3 önce; `goals` tablosu şemada var ama 0 tüketici, bu kalem başlamadan 13.3'ün CRUD+UI'si bitmeli) | 1 |
+| `13.5-b` | Sales tracker konfigürasyon endpoint'i — GET/PUT /settings/sales-tracker (kontrat + route +… | `OPUS-XHIGH` | 13.5-a | 1 |
+| `13.5-c` | Tracked-sale ingest + atıf (attribution) çekirdeği — POST /customer/chat/sale (BÖLÜNMEZ) | `OPUS-MAX` | 13.5-a, 13.5-b | 2 |
+| `13.5-d` | GET /reports/reviews ecommerce bloğunu gerçek veriyle doldur — trackedSalesSummary agregasyonu | `OPUS-XHIGH` | 13.5-b, 13.5-c | 1 |
+| `13.5-e` | Settings ekranı — 'Sales tracker' bölümü (enabled / currency / atıf penceresi formu) | `SONNET-XHIGH` | 13.5-b | 1 |
+| `13.5-f` | Reports/Reviews — Ecommerce KPI'ları + dürüst empty state + 'Configure sales platforms' CTA | `SONNET-XHIGH` | 13.5-d, 13.5-e (CTA'nın hedefi olan Settings bölümü var olmalı) | 1 |
+| `13.5-g` | Widget izleme kodu — nexa('trackSale', …) JS API + kurulum snippet'i | `SONNET-XHIGH` | 13.5-c | 1 |
+| `13.5-h` | Uçtan uca doğrulama — seed/demo verisi + e2e (izleme kodu → Reports Ecommerce) + 13.3 Goals… | `OPUS-XHIGH` | 13.5-d, 13.5-e, 13.5-f, 13.5-g, 13.3 Goals (dış bağımlılık — tutarlılık kontrolü için teslim olmalı) | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** 13.5-c (tracked-sale ingest + atıf çekirdeği) bölünmez. Bu tek noktada üç sınır aynı anda kesişiyor: (1) **güven sınırı** — parayı bildiren taraf müşteri token'ı, yani widget'ın çalıştığı sayfa; `amount_cents`/`currency`/`external_order_id` tamamen ziyaretçi kontrolündeki girdidir ve `license_id` ASLA gövdeden alınamaz (tenant'tan alınır); (2) **idempotency/çift-sayım invariantı** — aynı `external_order_id` iki kez POST edildiğinde ciro iki kez sayılmamalı, bu kısıt `(license_id, external_order_id)` unique + upsert davranışının birlikte akıl yürütülmesini ister; (3) **atıf algoritması** — satışın hangi chat'e bağlanacağı (attribution_window_days içindeki son chat, yoksa attributed=false) rapordaki `attributed_revenue_cents`'i doğrudan belirler. Bu üçü ayrı pencerelere bölünürse "kim neyi doğruluyor" bağlamı kaybolur: doğrulamayı ingest'ten ayırmak, ya doğrulanmamış yazma yolu ya da atıf…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (11)
+  - **Veri kaynağı = first-party izleme kodu, harici platform webhook'u DEĞİL.** PRD 'satış/dönüşüm izleme kodu/kuralı' diyor ama kaynağı belirtmiyor. Olgular MOD-09.2…
+  - **Atıf (attribution) kuralı deterministik:** satış, aynı müşterinin `attribution_window_days` içindeki EN SON chat'ine bağlanır. Pencere içinde chat yoksa satış yine…
+  - **Tek para birimi:** lisans başına tek ISO 4217 kodu (`sales_tracker_settings.currency`). Farklı para biriminde gelen satış 400 ile reddedilir; çoklu-para toplama…
+  - **Idempotency anahtarı `(license_id, external_order_id)`.** Aynı sipariş kaç kez bildirilirse bildirilsin bir kez sayılır. Tekrar POST 200 döner (hata değil) — checkout…
+  - **`configured` semantiği:** `sales_tracker_settings` satırı VAR **ve** `enabled=true` → `configured:true`. Satır yok veya kapalı → bugünkü `configured:false` + üç null…
+  - **Yeni scope AÇILMAZ.** Konfigürasyon `access_rules:ro/rw`, rapor `reports_read`, ingest `principals:['customer']` — hepsi mevcut. Böylece…
+  - _…+5 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (5)
+  - **13.3 Goals şeması:** tracked sale, `goals.definition` jsonb'sinde bir dönüşüm tipi (`type:'purchase'`) olarak mı temsil edilecek, yoksa `tracked_sales` tamamen…
+  - **Rapor yüzeyi:** MOD-07.7'nin v2 payı ayrı bir 'Sales' rapor grubu/sekmesi (Leads/Cases/Sales/Team performance — rapor-1:1363-1371) istiyor. Satış verisi Reviews…
+  - **Origin kontrolü:** izleme kodu müşterinin checkout/teşekkür sayfasında çalışacak. Widget token'ı zaten trusted-domain kapısından geçiyor; satış bildirimi için EK bir…
+  - **Çoklu para birimi:** tek-currency varsayımı (varsayım 3) kabul edilirse bu soru kapanır. Kabul edilmezse `ReportsReviews.ecommerce` şeması kırıcı biçimde değişir (para…
+  - **Üst sınır/anomali:** ziyaretçi kontrolündeki `amount_cents` için mantıklı bir üst sınır (ör. 100.000.000 kuruş) konulacak mı, yoksa yalnız tamsayı+negatif-değil…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.20**
+
+#### 5.2.21 · Public KB — SEO'lu self-servis bilgi bankası (PRD §5.3-Knowledge)
+
+**9 atomik alt-görev · ~12 pencere** — `OPUS-MAX` ×2 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"SEO'lu self-servis bilgi bankası (public KB)"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `PUBKB-a` | Public KB veri modeli: kb_articles + kb_categories + kb_settings (RLS'li migration) | `SONNET-XHIGH` | yok | 1 |
+| `PUBKB-b` | Yönetim (agent-auth) KB CRUD kontratı + backend + yayın (draft/published) durumu | `OPUS-XHIGH` | PUBKB-a | 2 |
+| `PUBKB-c` | Anonim public okuma çekirdeği (BÖLÜNMEZ): slug→license çözümleyici + yayın filtresi + 404… | `OPUS-MAX` | PUBKB-a, PUBKB-b | 2 |
+| `PUBKB-d` | Makale gövdesi güvenli render çekirdeği (BÖLÜNMEZ): escape-first sınırlı markdown | `OPUS-MAX` | yok | 1 |
+| `PUBKB-e` | SEO'lu sunucu-render HTML yüzeyi: KB ana sayfası + makale sayfası… | `OPUS-XHIGH` | PUBKB-c, PUBKB-d | 2 |
+| `PUBKB-f` | sitemap.xml + robots.txt (yalnız yayınlanmış makaleler, XML-escape'li) | `SONNET-XHIGH` | PUBKB-c, PUBKB-e | 1 |
+| `PUBKB-g` | Admin: KB makale listesi + durum sekmeleri (All/Published/Drafts) + anlamlı empty state | `SONNET-XHIGH` | PUBKB-b | 1 |
+| `PUBKB-h` | Admin: makale editörü (içerik + SEO alanları) + publish/unpublish + public link | `SONNET-XHIGH` | PUBKB-b, PUBKB-g | 1 |
+| `PUBKB-i` | Uçtan uca doğrulama: anonim okuyucu e2e + izolasyon/SEO kanıt seti | `OPUS-XHIGH` | PUBKB-c, PUBKB-e, PUBKB-f, PUBKB-h | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** İki bölünmez çekirdek var. (1) PUBKB-c — anonim (principal'sız) trafiğe org-scoped İÇERİK servis etme kararı bu depoda bir ilk: slug→license çözümleyici (pre-tenant SECURITY DEFINER deliği), yayın filtresi (published+is_public), 404-yerine-403 politikası (NFR-S5) ve enumeration yüzeyi TEK bir akıl yürütmenin parçaları; resolver'ı filtreden veya 404 politikasından ayırmak, "hangi satır kime görünür" invariantını iki ayrı pencereye bölerek kaybettirir. (2) PUBKB-d — escape-first render: kaçış sırası ile beyaz-liste sırası aynı fonksiyonda karar verilir; "önce escape sonra whitelist" invariantı bölününce stored-XSS açığı tam olarak bu dikişten girer. Her iki çekirdeğin ETRAFINDAKİ her şey (şema/migration, admin CRUD, HTML şablonu, sitemap, admin UI, e2e) ayrı ve daha ucuz etiketli alt-görevlere çıkarıldı.
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (12)
+  - §C-PUBKB-1 (ŞEMA İZOLASYONU): Public KB, `knowledge_sources` tablosunu GENİŞLETMEZ; ayrı `kb_articles`/`kb_categories`/`kb_settings` tabloları kullanır. Gerekçe:…
+  - §C-PUBKB-2 (RENDER MİMARİSİ): Public KB sayfaları apps/web SPA'sına EKLENMEZ; API tarafından sunucuda üretilen HTML olarak servis edilir. Gerekçe: PRD kendi A2…
+  - §C-PUBKB-3 (İÇERİK BİÇİMİ): Makale gövdesi ham HTML olarak saklanmaz ve saklanmayacak; sınırlı markdown alt kümesi + escape-first render kullanılır (`lib/kb-render.ts`).…
+  - §C-PUBKB-4 (ADRES): Workspace'in public adresi `kb_settings.public_slug` (license-singleton, global unique) ile taşınır. Gerekçe: `Organization` (schema.prisma:29-40) ve…
+  - §C-PUBKB-5 (ERİŞİM ÇÖZÜMLEME): slug→license çözümü, mevcut `auth_resolve_organization_license` (migration 20260724110000, SECURITY DEFINER, REVOKE FROM PUBLIC + GRANT TO…
+  - §C-PUBKB-6 (SCOPE): KB yönetimi YENİ SCOPE EKLEMEZ; mevcut `agents-bot--all:ro` / `agents-bot--all:rw` kullanılır (aynı Knowledge alanı, `playbook.ts:20-21` ile aynı…
+  - _…+6 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (6)
+  - Public KB hangi origin'den servis edilecek? API origin mi, `WIDGET_BASE_URL` mi, yoksa ayrı bir `kb.` alt alanı mı? DNS/TLS kapsam dışı olduğu için kırılımda API origin…
+  - Makale gövdesi için zengin metin (WYSIWYG) editörü isteniyor mu? Varsayım: HAYIR — düz metin + sınırlı markdown (§C-PUBKB-3). Zengin editör istenirse PUBKB-d ve PUBKB-h…
+  - Public KB'de site-içi arama (full-text) MVP'ye dahil mi? Şu an kapsam dışı bırakıldı (liste + kategori + makale gezinmesi). Dahilse ayrı bir alt-görev (Postgres…
+  - AI Agent, public KB makalelerini de RAG kaynağı olarak kullanmalı mı (çift yönlü bağ: bir makale hem public hem RAG)? Varsayım: HAYIR — iki tablo, iki amaç, tek yönlü…
+  - Bir workspace'in birden çok public KB'si (marka/dil başına) olacak mı? Varsayım: license başına TEK KB (`kb_settings` license-singleton). Çoklu KB istenirse…
+  - Yayınlanmış bir makalenin slug'ı değiştirilirse eski adres ne yapmalı (301 yönlendirme kaydı mı, 404 mü)? Kırılımda 404 varsayıldı; SEO açısından yönlendirme tablosu…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.21**
+
+#### 5.2.22 · WORKSCHED — Work scheduler / staffing prediction (PRD §5.3-Vardiya)
+
+**10 atomik alt-görev · ~11 pencere** — `OPUS-MAX` ×2 · `OPUS-XHIGH` ×4 · `SONNET-XHIGH` ×4
+
+**KK (PRD birebir):** _"| Ekip/Vardiya | Work scheduler / staffing prediction |"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `WORKSCHED-a` | Work schedule kontratı + @nexa/types haftalık plan tipi ve normalizer | `SONNET-XHIGH` | yok | 1 |
+| `WORKSCHED-b` | work_schedules + agent_presence_events tabloları, Prisma modelleri ve RLS migration'ı | `OPUS-XHIGH` | WORKSCHED-a | 1 |
+| `WORKSCHED-c` | GET/PUT /agents/{agentId}/work-schedule — scope kapısı ve self-vs-admin yetkilendirme | `OPUS-XHIGH` | WORKSCHED-a, WORKSCHED-b | 1 |
+| `WORKSCHED-d` | Presence olay günlüğü yazma yolu + planlı vardiya ↔ manuel routingStatus öncelik kuralı… | `OPUS-MAX` | WORKSCHED-b | 2 |
+| `WORKSCHED-e` | /reports/breakdown yanıtına saat-bazlı hacim kırılımı (by_hour) | `SONNET-XHIGH` | yok | 1 |
+| `WORKSCHED-f` | Deterministik staffing tahmin çekirdeği (saf modül, LLM yok — bölünmez) | `OPUS-MAX` | yok | 1 |
+| `WORKSCHED-g` | GET /reports/staffing-forecast — kontrat + üç girdinin tek yanıta bağlanması | `OPUS-XHIGH` | WORKSCHED-b, WORKSCHED-d, WORKSCHED-e, WORKSCHED-f | 1 |
+| `WORKSCHED-h` | Team → Work schedule düzenleyici (haftalık ızgara + timezone + alan-altı hata) | `SONNET-XHIGH` | WORKSCHED-a, WORKSCHED-c | 1 |
+| `WORKSCHED-i` | Reports → Staffing sekmesi (salt-okunur gün × saat ızgarası + düşük-baz uyarısı) | `SONNET-XHIGH` | WORKSCHED-g | 1 |
+| `WORKSCHED-j` | Uçtan uca doğrulama: staffing e2e akışı + izolasyon iddiaları + ADR-09 sayı tutarlılığı | `OPUS-XHIGH` | WORKSCHED-c, WORKSCHED-d, WORKSCHED-g, WORKSCHED-h, WORKSCHED-i | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** İki bölünmez çekirdek var. (1) WORKSCHED-d — presence olay günlüğünün YAZMA yolu `PUT /agents/me/routing-status` handler'ının içindedir ve o handler aynı `withTenant` bloğunda `routing.drainQueue` çağırıyor (apps/api/src/routes/agents.ts:74); olay yazımı bu transaction'dan koparılırsa kısmi yazma (durum değişti, olay yok / olay var, atama geri alındı) oluşur. Aynı alt-görev planlı vardiya ile manuel routingStatus arasındaki öncelik kuralını da sabitler — kural bağlamdan koparılırsa ajanın kuyruk alıp almadığı yanlış kararlaşır. (2) WORKSCHED-f — deterministik personel tahmini yeni bir algoritma tasarımıdır; depoda kopyalanacak eşdeğeri yoktur (reports-metrics.ts yalnız oran/yuvarlama içerir) ve kapasite modeli parçalara bölünürse "düşük-baz → null, 0 değil" ile "kapsama açığı" kuralları birbirinden kopar. Bu iki çekirdeğin ETRAFINDAKİ her şey daha ucuz alt-görevlere çıkarıldı:…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (11)
+  - KK-türetilmiş kalemdir: PRD §5.3 satır 412 iki sütunlu ("Alan | Kapsam") tablodadır, ayrı "Kabul Kriteri" sütunu yoktur ve PRD §6 FR-MOD tablosunda bu koda karşılık…
+  - Tahmin LLM'siz ve deterministiktir (orkestratörün bağlayıcı kararı): girdi = saat-bazlı geçmiş hacim + presence kapsaması + AgentMembership.concurrentChatsLimit +…
+  - StaffingForecast TABLOSU AÇILMAZ — tahmin API-time hesaplanır, persist edilmez. (Olgulardaki 'persist edilecekse' notu bu turda hayır olarak karara bağlandı; ihtiyaç…
+  - Tarihsel presence, ÖRNEKLEYİCİ CRON ile değil, OLAY GÜNLÜĞÜ (append-on-change) ile tutulur: routingStatus zaten tek noktadan (agents.ts PUT /agents/me/routing-status)…
+  - ÖNCELİK KURALI: manuel routingStatus HER ZAMAN planlı vardiyayı ezer. WorkSchedule routing/atama kararını değiştirmez — yalnız beklenen kapasite ve tahmin girdisidir.…
+  - Vardiya planı AJAN bazlı ve lisans kapsamlıdır (PK license_id + agent_id). Grup/ekip bazlı vardiya bu kalemin kapsamı dışındadır (PRD 'Ekip/Vardiya' diyor ama §6'da…
+  - _…+5 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (6)
+  - Vardiya planı ajan bazlı mı olmalı, yoksa grup/ekip (Group) bazlı mı? PRD §5.3 satırı 'Ekip/Vardiya' diyor ama §6'da tanım yok. Varsayım: ajan bazlı (PK…
+  - Tahmin çıktısı zaman içinde saklanıp 'tahmin vs gerçekleşen' karşılaştırması istenir mi? Varsayım: hayır — API-time hesap, StaffingForecast tablosu yok. İstenirse ayrı…
+  - Planlı vardiya routing'i GERÇEKTEN sürmeli mi (vardiya başında ajanı otomatik accepting_chats yapmak)? Varsayım: HAYIR (manuel kazanır — WORKSCHED-d). Otomatik sürüş…
+  - Düşük-baz (low_confidence) eşiği kaç sohbet/saat olmalı? PRD'de sayı yok. Varsayım: sabit bir eşik, mevcut rapor 'düşük-baz uyarısı' deseniyle hizalı; sayı kullanıcı…
+  - agent_presence_events için retention politikası ne olmalı — mevcut retention yolu bu tabloyu da süpürmeli mi? Süpürürse tahmin penceresi geçmişe doğru kısalır;…
+  - Vardiya planı UI'ı ajanın kendisine mi (self-servis) yoksa yalnız yöneticiye mi açılmalı? Varsayım (WORKSCHED-c): ikisi de — self için agents--my, başkası için…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.22**
+
+#### 5.2.23 · MULTIBRAND — Multibrand (tek lisansta çok marka) · PRD §5.3-Marka
+
+**8 atomik alt-görev · ~10 pencere** — `OPUS-MAX` ×1 · `OPUS-XHIGH` ×4 · `SONNET-XHIGH` ×3
+
+**KK (PRD birebir):** _"Destek (birebir, urun-gereksinim-dokumani-PRD.md:58): «Multi-tenant | Çok kiracılı SaaS; izolasyon anahtarı `organization_id` / `license_id` / `account_id`»"_ · _"Destek (birebir, urun-gereksinim-dokumani-PRD.md:758): «NFR-S4 | Tenant izolasyonu | Her sorgu `organization_id`/`license_id` filtreli; PostgreSQL RLS (`current_setting('app.current_org')`) + `TenantScopedRepository`; PgBouncer transaction-mode + `SET LOCAL`; CI'da çapraz-tenant reddi negatif testleri»"_ · _"Destek (birebir, v2-derin-analiz/v2-02-teknik-mimari-derin.md:476): «her transaction başında `SET LOCAL app.current_org_id` çağrılmalı — aksi halde bağlantı havuzunda önceki tenant'ın context'i sızabilir (kritik operasyonel tuzak).»"_ · _"Destek (birebir, v2-derin-analiz/v2-04-guvenlik-uyumluluk.md:432-434): «Repository katmanında merkezi tenant-scoping — her `findMany`/`findFirst` çağrısı bir taban sınıf/yardımcı fonksiyondan geçmeli, `organization_id` filtresi *asla* çağıran koda bırakılmamalı»"_ · _"Destek (birebir, PRD §5.3-Marka, satır 415 ham kapsam hücresi): «Multibrand; 100+ entegrasyon; command palette AI komutları»"_ · _"Destek (birebir, v2-derin-analiz/v2-04-guvenlik-uyumluluk.md:441): «Otomatik izolasyon testi — CI'da her repository metodu için "org A'nın token'ı ile org B'nin ID'sini sorgula, sonuç boş dönmeli" testi zorunlu kılınmalı.»"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `MULTIBRAND-a` | `brands` tablosu + license-scoped RLS + lisans başına varsayılan marka backfill | `OPUS-XHIGH` | yok | 1 |
+| `MULTIBRAND-b` | Marka izolasyon çekirdeği — `app.current_brand` context + marka çözümleyici + brand-scoped RLS… | `OPUS-MAX` | MULTIBRAND-a | 2 |
+| `MULTIBRAND-c` | brand_id yayılımı — websites + üç singleton ayar tablosunun (widget/security/inbox)… | `OPUS-XHIGH` | MULTIBRAND-b | 2 |
+| `MULTIBRAND-d` | `/brands` CRUD kontratı + route + `brands--all` scope + `brand_not_found` hata tipi | `OPUS-XHIGH` | MULTIBRAND-a, MULTIBRAND-b | 1 |
+| `MULTIBRAND-e` | Settings → Brands ekranı (liste + ekle + yeniden adlandır + sil + boş durum) | `SONNET-XHIGH` | MULTIBRAND-d | 1 |
+| `MULTIBRAND-f` | AppShell marka değiştirici + seçili markanın persist'i + isteklerde `X-Nexa-Brand` başlığı | `SONNET-XHIGH` | MULTIBRAND-b, MULTIBRAND-d, MULTIBRAND-e | 1 |
+| `MULTIBRAND-g` | Marka-scoped ayar ekranlarının seçili markaya bağlanması (Widget / Websites / Channels) | `SONNET-XHIGH` | MULTIBRAND-c, MULTIBRAND-f | 1 |
+| `MULTIBRAND-h` | Uçtan uca cross-brand doğrulama — otomatik izolasyon test matrisi + kapsam-kaçağı alarmı + e2e | `OPUS-XHIGH` | MULTIBRAND-c, MULTIBRAND-g | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası):** MULTIBRAND-b (marka izolasyon çekirdeği) bölünmez. Çekirdek üç şeyi TEK akıl yürütmede tutmak zorunda: (1) `withTenant` transaction'ına üçüncü bir `SET LOCAL app.current_brand` eklenmesi — v2-02:476 bunun yanlış yapılmasının PgBouncer transaction-mode'da connection-pool context sızıntısı ürettiğini açıkça uyarıyor; (2) `nexa_current_brand()` + RLS policy semantiği (NULL = lisansın tüm markaları, NOT NULL = tek marka) — policy ile context aynı anda tasarlanmazsa ya her sorgu boş döner ya da filtre hiç uygulanmaz; (3) istekten gelen marka kimliğinin lisansa aitliğinin doğrulanması (cross-brand IDOR). Bu üçü ayrı pencerelere bölünürse, aradaki pencerede sistem "policy var ama context yok" (tüm veri görünmez) veya "context var ama policy yok" (tüm veri sızar) durumunda kalır ve ikinci durum sessizce yanlış-ama-makul veri döndürür — orkestratörün "en riskli v2 kalemi" dediği tam senaryo.…
+
+**Varsayımlar** — kırılım turunda PRD dışında verilen kararlar: (10)
+  - Katman sırası Organization → License → Brand olarak kuruldu: Brand, License'ın ALTINDA yeni bir izolasyon katmanıdır. PRD §8.4 tablo envanterinde `brands` tablosu hiç…
+  - Geriye dönük uyum: her lisans migration ile bir 'Default' markası alır ve mevcut TÜM veri ona bağlanır; tek-markalı lisansların davranışı hiç değişmez ve UI'da marka…
+  - `app.current_brand` NULL = 'lisansın tüm markaları', NOT NULL = tek marka. Bu sayede lisans-geneli mevcut sorgular (reports, billing, metering) marka bilgisi taşımadan…
+  - v2 kapsamındaki brand-scoped tablo kümesi ŞUNLARLA SINIRLI: channels, websites, widget_settings, security_settings, inbox_settings. `chats`, `tickets`, `campaigns` marka…
+  - `customers` marka-agnostik kalır (bugünkü hâliyle organization_id scoped). Aynı müşteri birden çok markayla konuşabilir; marka ayrımı kanal/ayar düzeyinde taşınır. PII…
+  - Marka seçimi istemciden `X-Nexa-Brand` başlığıyla taşınır (yol parametresi değil) — böylece ADR-04'ün mevcut `/api/v1/...` REST yüzeyi ve 23 path dosyası yeniden…
+  - _…+4 madde daha — tam metin companion dosyada_
+
+**Açık sorular** — ürün/kullanıcı kararı bekleyenler: (6)
+  - `chats` / `tickets` / `campaigns` marka-scoped olacak mı? Bu turda kapsam dışı varsayıldı. Olacaksa +3-4 alt-görev (her biri OPUS-XHIGH, chats için muhtemelen OPUS-MAX…
+  - Faturalama marka bazında mı kırılacak? Bugün `usage_records`/metering lisans bazında (ADR-13 mock). Marka bazlı kullanım/fatura isteniyorsa ayrı bir kalem gerekir — bu…
+  - Ajanlar markaya atanabilecek mi (marka bazlı yetki)? Varsayım: hayır, tüm ajanlar tüm markaları görür. Evet ise MULTIBRAND-b'nin çekirdeği büyür (authZ kararı marka…
+  - `customers` markaya bağlanacak mı? Varsayım: hayır (organization_id scoped kalır). Evet ise PII sahipliği + CRM ekranları + retention politikaları etkilenir; bu ayrı bir…
+  - Her markanın ayrı bir widget domain'i / website'ı olması ZORUNLU mu, yoksa bir domain birden çok markaya hizmet edebilir mi? -c, `@@unique([licenseId, brandId, domain])`…
+  - Marka logosu/teması widget'a yansıyacak mı (marka bazlı görsel kimlik)? Bu kırılım `logoUrl` kolonunu tanımlıyor ama widget'a bağlamıyor; bağlanacaksa `apps/widget`…
+
+> Tam alan detayı (neden açık · kapsam · dosyalar · referans desen · KK doğrulama · zorunlu testler · sözleşme · migration): **`PLAN-V2-KIRILIM.md` → 5.2.23**
 
 ---
+
+### 5.3 v2 dilim gruplaması + kritik yol
+
+> Dilim = 3–8 kalemlik tematik grup; her dilimin bir **§F.00 kapanış kapısı** ve bir **§F.0 mini
+> denetim** noktası var. Dilim **sırası = çalışma sırası**.
+
+#### 5.3.1 Sıralamanın iki kilit kararı
+
+**(a) Güvenlik kalemleri en başta.** `08.9.6` (IP allowlist / oturum güvenliği) ve
+`08.6.3-conflict` (çoklu-ajan çakışma = yarış durumu) ve `08.9.7-audit` (audit tüm planlarda)
+**birinci dilime** kondu. Gerekçe bu depoda kanıtlanmış bir desen: v2'nin diğer üç güvenlik kalemi
+(CC-masking · banned customers · spam filtre) GO-LIVE turunda **öne çekilmek zorunda kaldı**
+(§D52/§D57/§D58/§D59) çünkü canlıya hazırlık onları erken istedi. Sonradan eklenen güvenlik en
+pahalı borçtur: her yeni yüzey onu retrofit etmek zorunda kalır. Aynı hatayı v2 içinde tekrar
+etmemek için erişim kontrolü ve eşzamanlılık sınırları **önce** kapanır.
+
+**(b) Multibrand ikinci dilimde — sonda değil.** Bu, v2'nin en tartışmalı sıralama kararı;
+gerekçesi yazılı olmalı:
+
+- Multibrand **tenant/RLS izolasyon sınırının genişlemesidir**: `license` → `license × brand`.
+  Her sorgu, her RLS politikası, her widget/persona/rapor yüzeyi marka boyutu kazanır.
+- **Sonda yapılırsa:** v2 boyunca inşa edilen her yeni yüzey (Goals hunisi, Public KB, MCP tool'ları,
+  Instagram kanalı, audit ekranı, scheduled export, 100+ katalog…) **marka-farkındalığı olmadan**
+  yazılır ve Multibrand penceresi hepsini geri dönüp retrofit etmek zorunda kalır. Bu, tek bir
+  `[OPUS-MAX]` penceresine v2'nin tamamı kadar yüzey yükler — bölünemez çekirdek olduğu için de
+  ucuza bölünemez.
+- **Başta yapılırsa:** v2'nin geri kalanı marka boyutunu **doğduğu anda** taşır; her yeni sorgu
+  zaten iki anahtarla yazılır. Maliyet tek yerde toplanır.
+- **Karşı argüman (ve neden kazanmıyor):** Multibrand en riskli kalem; erken yapmak v2'nin geri
+  kalanını istikrarsız bir tabanın üstüne kurar. — Ama bu risk **her hâlükârda** alınıyor: v1
+  yüzeyleri de retrofit gerektiriyor (Multibrand'in blast radius'u v1'i de kapsıyor), yani "sonra
+  yaparsak taban stabil kalır" doğru değil; yalnız **retrofit edilecek yüzey sayısı** artıyor.
+- **Sonuç:** Multibrand, güvenlik dilimi kapandıktan hemen sonra, v2'nin yeni yüzeyleri açılmadan
+  **önce** gelir. Cross-brand negatif testi bu dilimin kapanış kapısıdır.
+
+**(c) Bağımlılık zorlamaları.** `13.5 Sales tracker` → `13.3 Goals`'a bağlı (PRD: "MOD-07.8,
+MOD-13.3"). `09.4 Zapier/partner` → webhooks ✅ (tm 34) üzerine. `08.5.7 Instagram` →
+`08.5-adapter-a` ✅ (tm 35) üzerine. `12.4-bi Copilot BI` → `07.5 Metrics breakdown`'a bağlı
+(BI komutu kırılım sorgularını okur; ADR-09 tutarlılığı aynı sorgudan gelmeli).
+`09.2 100+ katalog` ile `09.4 partner portalı` aynı dilimde — ikisi de marketplace yüzeyi.
+
+#### 5.3.2 Dilim tablosu (çalışma sırası)
+
+| # | Dilim | Tema | Kalemler | Alt-gör. | ~Pen | Kapanış kapısı |
+| :-: | --- | --- | --- | :-: | :-: | --- |
+| 1 | **Güvenlik sınırları** | Erişim kontrolü + yarış durumu + denetim izi — **v2 buradan başlar** | `08.9.6` · `08.6.3-conflict` · `08.9.7-audit` | 27 | 32 | Üçü de ✅ · her birinde negatif + cross-tenant testi yeşil |
+| 2 | **Marka izolasyonu** | Multibrand — tenant sınırının genişlemesi; **yeni yüzeyler açılmadan önce** | `Multibrand` | 8 | 10 | Multibrand ✅ · **cross-brand negatif** yeşil |
+| 3 | **Routing** | Skills-based routing + supervision/takeover | `08.6.3` | 9 | 11 | 08.6.3 ✅ · yetkisiz takeover reddi + eşzamanlılık |
+| 4 | **Reports** | Boyutlu kırılım · konu kümeleme · rapor grupları · zamanlanmış export | `07.5` · `07.6` · `07.7-v2` · `07.9-sched` | 39 | 45 | Dördü de ✅ · **ADR-09 tutarlılığı** korunur |
+| 5 | **AI yüzeyi** | MCP server · ⌘K AI komutları · Copilot BI | `08.8.3` · `01.1.3-ai` · `12.4-bi` | 22 | 24 | Üçü de ✅ · scope + tenant izolasyonu + ADR-09 |
+| 6 | **Bilgi tabanı** | Bulk/CSV import · Public KB · 31+ şablon | `06.3.2-bulk` · `Public KB` · `05.6-tmpl31` | 22 | 29 | Üçü de ✅ · **public yüzey** erişim sınırı doğrulandı |
+| 7 | **Marketplace** | 100+ katalog · API paketleri · partner portalı | `09.2` · `09.3` · `09.4` | 23 | 25 | Üçü de ✅ |
+| 8 | **Engage** | Traffic gelişmiş · Goals hunisi · Sales tracker | `13.2` · `13.3` · `13.5` | 28 | 32 | Üçü de ✅ · `goals` tablosu artık tüketiliyor (§8) |
+| 9 | **Kanal + Vardiya** | Instagram DM (MOCK) · work scheduler | `08.5.7` · `Work scheduler` | 18 | 20 | İkisi de ✅ → **Faz-2 §F.00 kapanır** |
+| | | | **9 dilim · 23 kalem** | **196** | **228** | |
 
 ## 6. FAZ 3 — Enterprise (PRD §5.4)
 
@@ -1135,8 +2113,9 @@ gereği bu depodan yapılmaz.
 
 | PRD    | Gereksinim                                       | Not                                                       |
 | ------ | ------------------------------------------------ | --------------------------------------------------------- |
-| 08.5.8 | Telegram                                         |                                                           |
-| 08.9.6 | IP allowlist / oturum güvenliği                  |                                                           |
+| 08.5.8 | Telegram                                         | PRD §11.1/7: "Instagram/Telegram tam kanal: v2/Enterprise" → Instagram v2 (§5), Telegram burada |
+| **13.7** | **Mobil uygulamalar** (iOS/Android + push) — **13.8-mobil-push** dahil | **v1 `Should`'undan bu turda taşındı (2026-08-01 · §D60).** PRD KK: _"Inbox/AI/CRM/Reports mobilde; push; **tam modül paritesi** (Nexa farklılaşması)"_. Taşıma gerekçesi: native iOS/Android **bu deponun stack'i dışında** (ADR-01/02 TS monorepo) — ayrı uygulama hattı + derleme zinciri + store süreci. Eski `🔒` gerekçesi ("PRD §11.1/8") **yanlış atıftı**: o madde _"Masaüstü native uygulama"_ hakkındadır. → §6.1 · tm 90 |
+| 08.9.6 | ~~IP allowlist / oturum güvenliği~~              | **→ Faz 2'ye taşındı (§5, 2026-08-01 · §D61).** PRD §5.3 "Güvenlik" satırı bu kalemi CC-masking/banned-customers/spam ile **aynı v2 hücresinde** listeliyor; o üç kardeş zaten v2 (ve GL-5/6/7 ile öne bile çekildi). FR-MOD-08.9.6'nın `Could (Ent.)` etiketi **önceliği** bildirir; **fazı PRD §5 belirler** (§1.1 omurga kuralı: _"Çalışma sırası PRD §5'in faz sırasıdır"_). Güvenlik erken gelir. |
 | —      | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11                                                   |
 | —      | HIPAA BAA + bölgesel barındırma (US/EU)          | ⚠️ ADR-12 tek bölge (`eu`) — Enterprise'da yeniden açılır |
 | —      | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12                                             |
@@ -1152,8 +2131,9 @@ gereği bu depodan yapılmaz.
 
 | PRD    | İş kalemi                                | Etiket   | ~Alt-görev | Not                                        |
 | ------ | ---------------------------------------- | -------- | :--------: | ------------------------------------------ |
-| 08.5.8 | Telegram (TR pazarı önceliği)            | `[XHIGH]`|   2        | 08.5-adapter-a                             |
-| 08.9.6 | IP allowlist / oturum güvenliği          | `[MAX]` ↑|   2        | güvenlik sınırı                            |
+| 08.5.8 | Telegram (TR pazarı önceliği)            | `[OPUS-XHIGH]`|   2        | 08.5-adapter-a (tm 35 ✅)                  |
+| **13.7** | **Mobil uygulamalar** (iOS/Android + push) | `[OPUS-MAX]` ↑ | **8–12** | **v1'den taşındı (§D60).** ↑ gerekçe: **stack sınırı** — bu monorepo TS/web (ADR-01/02); native app ayrı derleme zinciri + store süreci + ayrı test piramidi ister; ayrıca push altyapısı (APNs/FCM MOCK) + oturum/token modelinin mobil kanada genişlemesi = kimlik sınırı. Faz başında atomik bölünür (§5.1 bayatlama politikası). Bağımlılık: 13.8 web bildirim ✅ (tm 31) · auth/token ✅. tm 90 |
+| ~~08.9.6~~ | ~~IP allowlist / oturum güvenliği~~  | —        |   —        | **→ Faz 2'ye taşındı** (§5 · §5.2 · §D61). PRD §5.3 Güvenlik satırı v2 diyor; §1.1'e göre fazı §5 belirler. |
 | —      | SAML 2.0 SSO + SCIM provisioning         | `[MAX]` ↑|   4–5      | NFR-S11; kimlik sınırı                     |
 | —      | HIPAA BAA + bölgesel barındırma          | `[MAX]` ↑|   3–4      | ADR-12 tek bölge (`eu`) yeniden açılır     |
 | —      | SOC2 Type II · ISO 27001 · audit+SIEM    | `[MAX]` ↑|   süreç    | NFR-C6/C7/S12; audit yazıcı ✅ temeli var  |
@@ -1162,8 +2142,15 @@ gereği bu depodan yapılmaz.
 | —      | Gerçek zamanlı çeviri · sesli sentiment  | ⛔        |     0      | PRD §11.1/4 kapsam dışı                     |
 | —      | Veri ambarı export                       | ⛔        |     0      | P3 (§11.1/5)                                |
 
-**Enterprise:** çoğu `[MAX]` (güvenlik/uyumluluk/kimlik sınırları). Kod ~alt-görev **20–25** +
-sertifikasyon **süreç** işi (takvim-belirleyici).
+**Enterprise:** çoğu `[OPUS-MAX]` (güvenlik/uyumluluk/kimlik sınırları). Kod ~alt-görev **28–37**
+(2026-08-01: mobil 13.7 `+8–12` girdi, 08.9.6 `−2` Faz-2'ye çıktı) + sertifikasyon **süreç** işi
+(takvim-belirleyici).
+
+> **Etiket notu (2026-08-01):** Faz-3 tablosu hâlâ **orta derinliktedir** — atomik kırılım faz başında
+> yapılır (§5.1 bayatlama politikası). Etiketler yeni **model+efor matrisine** çevrildi
+> (`[SONNET-XHIGH]` · `[SONNET-MAX]` · `[OPUS-XHIGH]` · `[OPUS-MAX]` — bkz. §5.2 giriş). Eski
+> `[XHIGH]`/`[MAX]` yazımı Faz-0/v1 tarihçe bölümlerinde (§3/§4/§A/§B) **olduğu gibi bırakıldı**:
+> o işler bitti, etiketleri artık yalnız kayıt değeri taşıyor.
 
 ---
 
@@ -1280,18 +2267,38 @@ denetim** noktası olur. **Faz-0 önce kapanır** (§1.3 — v1 dilimine geçmed
 
 ### Toplamlar
 
-- **Atomik alt-görev:** **~59** (Faz-0 **9** + v1 **~50**). v2/v3 orta derinlik (item-level):
-  v2 **~35–45**, v3 **~20–25** + sertifikasyon süreç işi (§5.1/§6.1).
-- **Etiket dağılımı (Faz-0+v1):** `[MAX]` **8** (06.2.4-a, 06.3.2-a, 08.8.4-b, 08.8.4-c, 12.2-a,
-  03.3.2-a, 08.7.7-a, 13.6-a — hepsi ↑ güvenlik/eşzamanlılık/izolasyon) · `[XHIGH]` **~51**.
-- **Faz dağılımı:** Faz-0 = 9 (hepsi Must ◐ kapatıcı) · v1 = ~50 (Must ~18, Should ~32).
-- **Tahmini pencere:** Faz-0 **~10** · v1 **~55–65** (kaba; `[MAX]` ve 2-pencere kalemler dahil).
+- **Atomik alt-görev:** **~255** — Faz-0 **9** (✅ teslim) + v1 **~50** (✅ teslim) + **v2 196**
+  (2026-08-01'de atomik bölündü). v3 hâlâ orta derinlik: **~28–37** + sertifikasyon süreç işi (§6.1).
+- **Etiket dağılımı — Faz-0+v1 (eski tek boyutlu şema, tarihçe):** `[MAX]` **8** (06.2.4-a, 06.3.2-a,
+  08.8.4-b, 08.8.4-c, 12.2-a, 03.3.2-a, 08.7.7-a, 13.6-a — hepsi ↑ güvenlik/eşzamanlılık/izolasyon)
+  · `[XHIGH]` **~51**.
+- **Etiket dağılımı — v2 (yeni model × efor matrisi, §5.1.1):** `SONNET-XHIGH` **95** ·
+  `SONNET-MAX` **5** · `OPUS-XHIGH` **65** · `OPUS-MAX` **31** → **%51 Sonnet**.
+  31 `OPUS-MAX`'ın hepsi gerekçeli: erişim kontrolü, tenant/marka izolasyonu, eşzamanlılık/yarış,
+  algoritma tasarımı veya ADR-09 bütünlüğü. Her biri §5.2'de "bölünmeyen çekirdek" gerekçesi taşır.
+- **Faz dağılımı:** Faz-0 = 9 (hepsi Must ◐ kapatıcı) · v1 = ~50 (Must ~18, Should ~32) ·
+  **v2 = 196** (9 dilim; v2'de `Must` yok — PRD'de tüm v2 kalemleri `Should`/`Could`).
+- **Tahmini pencere:** Faz-0 **~10** (fiili) · v1 **~55–65** (fiili) · **v2 ~228** (kaba; `OPUS-MAX`
+  ve 2–3 pencerelik bölünmez çekirdekler dahil).
 
 ### Kritik yol (en uzun bağımlılık zinciri)
 
-`T4-a → T4-b` (Faz-0 form katmanı) **→ Faz-0 kapanır →** `07.4-a → 06.5-a → 06.1-a → 04.2-a`
-(AI performans zinciri; 04.2-a hem 06.5-a hem 12.2-a bekler). Paralel uzun hat: `12.2-a → 12.1-a
-→ 12.3-a → 02.3.2-a`. En uzun tekil kalem: **13.6-a** (HelpDesk, 2+ pencere, bölünecek).
+**Faz-0 / v1 (tarihçe):** `T4-a → T4-b` (Faz-0 form katmanı) **→ Faz-0 kapanır →**
+`07.4-a → 06.5-a → 06.1-a → 04.2-a` (AI performans zinciri; 04.2-a hem 06.5-a hem 12.2-a bekler).
+Paralel uzun hat: `12.2-a → 12.1-a → 12.3-a → 02.3.2-a`. En uzun tekil kalem: **13.6-a**.
+
+**v2 (Faz 2):** kritik yol **dilimler arasıdır**, kalem içi değil. Kalem içi zincirler kısadır
+(tipik `kontrat → çekirdek → UI → kapanış`, 4 halka); asıl uzunluk dilim sırasından gelir:
+
+`V2-1 güvenlik` **→** `V2-2 Multibrand` **→** (V2-3…V2-9 büyük ölçüde **paralelleşebilir**)
+**→** `V2-8 Engage` içindeki `13.3 Goals → 13.5 Sales tracker` zinciri **→ Faz-2 kapanır**.
+
+- **Neden ilk iki dilim seri:** Multibrand tenant sınırını genişletir; ondan sonra açılan her yüzey
+  marka boyutunu doğduğu anda taşır. Güvenlik dilimi ondan da önce gelir çünkü `08.9.6` (IP
+  allowlist) ve `08.6.3-conflict` (yarış durumu) oturum/eşzamanlılık sınırlarını kurar (§5.3.1).
+- **En uzun tekil kalem:** `07.7-v2` (12 alt-görev, ~14 pencere — rapor grupları + PDF + benchmark
+  + Save view). Ardından `13.2` (11) ve `08.9.7-audit` (11).
+- **Kalem-içi en uzun zincir:** `06.3.2-bulk` — CSV çekirdeği → ingest → website/SSRF → UI → e2e.
 
 ### Faz kapanışını bloklayanlar (`Must` — §F.00 girdisi)
 
@@ -1299,6 +2306,10 @@ denetim** noktası olur. **Faz-0 önce kapanır** (§1.3 — v1 dilimine geçmed
   EK-C.2 ✅ (tm 62); 03.1.1-kalan bloklamaz, v1'e taşınır.
 - **v1:** 05.1-a · 05.3-a · 06.1-a · 06.2.4-a · 06.3.1-a · 06.3.2-a · 06.4-a · 08.5-adapter-a ·
   08.5.4-a · 08.5.5-a · 08.5.6-a · 08.8.4-a/-b/-c/-d · 02.1.2-a · 10.1.4-a · 04.2-a (~18).
+- **v2:** PRD'de v2 kalemlerinin **hiçbiri `Must` değildir** (hepsi `Should`/`Could`) → §F.00'ın
+  *sayaç* kuralı v2'de uygulanamaz. Yerine **kalem kuralı** geçerlidir: **23 açık kalemin hepsi ✅**
+  olduğunda Faz-2 kapanır. Dilim bazlı ara kapılar §5.3.2'de. `13.4` ⛔ (ADR-14) ve `08.9.2/.3/.5`
+  ✅ (GL-5/6/7) sayıma girmez.
 
 ### Düz tablo (aktarım kaynağı)
 
@@ -1373,7 +2384,235 @@ denetim** noktası olur. **Faz-0 önce kapanır** (§1.3 — v1 dilimine geçmed
 | GL-6 | 08.9.2-a — Banned customers tamamlama (IP+UI) (tm 68) | 08.9.2 | XHIGH | GL-4 | v2→GL | GO-LIVE | 1–2 |
 | GL-7 | 08.9.3-a — Spam filtre (ortak motor + chat) (tm 69) | 08.9.3 | MAX↑ | GL-4 | v2→GL | GO-LIVE | 2 |
 
-> v2/v3 satırları §5.1 / §6.1'de item-level verildi (orta derinlik — faz başında atomik bölünür).
+> **v3 (Faz 3) satırları** §6.1'de item-level verildi (orta derinlik — faz başında atomik bölünür).
+> **v2 satırları artık tam atomiktir** — aşağıda.
+
+---
+
+### v2 (Faz 2) — dilim gruplaması
+
+Çalışma sırası bu tablodur. Sıralamanın gerekçesi §5.3.1'de (güvenlik önce, Multibrand yeni
+yüzeyler açılmadan önce). Her dilim bir §F.00 kapanış kapısı taşır.
+
+#### 5.3.2 Dilim tablosu (çalışma sırası)
+
+| # | Dilim | Tema | Kalemler | Alt-gör. | ~Pen | Kapanış kapısı |
+| :-: | --- | --- | --- | :-: | :-: | --- |
+| 1 | **Güvenlik sınırları** | Erişim kontrolü + yarış durumu + denetim izi — **v2 buradan başlar** | `08.9.6` · `08.6.3-conflict` · `08.9.7-audit` | 27 | 32 | Üçü de ✅ · her birinde negatif + cross-tenant testi yeşil |
+| 2 | **Marka izolasyonu** | Multibrand — tenant sınırının genişlemesi; **yeni yüzeyler açılmadan önce** | `Multibrand` | 8 | 10 | Multibrand ✅ · **cross-brand negatif** yeşil |
+| 3 | **Routing** | Skills-based routing + supervision/takeover | `08.6.3` | 9 | 11 | 08.6.3 ✅ · yetkisiz takeover reddi + eşzamanlılık |
+| 4 | **Reports** | Boyutlu kırılım · konu kümeleme · rapor grupları · zamanlanmış export | `07.5` · `07.6` · `07.7-v2` · `07.9-sched` | 39 | 45 | Dördü de ✅ · **ADR-09 tutarlılığı** korunur |
+| 5 | **AI yüzeyi** | MCP server · ⌘K AI komutları · Copilot BI | `08.8.3` · `01.1.3-ai` · `12.4-bi` | 22 | 24 | Üçü de ✅ · scope + tenant izolasyonu + ADR-09 |
+| 6 | **Bilgi tabanı** | Bulk/CSV import · Public KB · 31+ şablon | `06.3.2-bulk` · `Public KB` · `05.6-tmpl31` | 22 | 29 | Üçü de ✅ · **public yüzey** erişim sınırı doğrulandı |
+| 7 | **Marketplace** | 100+ katalog · API paketleri · partner portalı | `09.2` · `09.3` · `09.4` | 23 | 25 | Üçü de ✅ |
+| 8 | **Engage** | Traffic gelişmiş · Goals hunisi · Sales tracker | `13.2` · `13.3` · `13.5` | 28 | 32 | Üçü de ✅ · `goals` tablosu artık tüketiliyor (§8) |
+| 9 | **Kanal + Vardiya** | Instagram DM (MOCK) · work scheduler | `08.5.7` · `Work scheduler` | 18 | 20 | İkisi de ✅ → **Faz-2 §F.00 kapanır** |
+| | | | **9 dilim · 23 kalem** | **196** | **228** | |
+
+### v2 (Faz 2) — düz tablo (Task Master aktarım kaynağı)
+
+196 atomik alt-görev. Etiket = model × efor (§5.1.1). Tam alan detayı: **`PLAN-V2-KIRILIM.md`**.
+Bu tablo Task Master'a **aktarıldı** (2026-08-01) — üst görev başına alt-görevler, başlıklarda etiket.
+
+| ID | Başlık | PRD | Etiket | Bağımlılık | Dilim | Pen |
+| --- | --- | --- | --- | --- | :-: | :-: |
+| `08.6.3-conflict-a` | Çakışma uyarısı RTM push action'ı + composer-registry anahtar/TTL tip sözleşmesi | 08.6.3-conflict | `SONNET-XHIGH` | yok | V2-1 | 1 |
+| `08.6.3-conflict-b` | ConflictDetectionService — atomik eşzamanlı-yazıcı kaydı + çakışma kararı (güven | 08.6.3-conflict | `OPUS-MAX` | 08.6.3-conflict-a | V2-1 | 2 |
+| `08.6.3-conflict-c` | send_typing_indicator yolunda çakışma tespiti + uyarının bus envelope ile her ik | 08.6.3-conflict | `OPUS-XHIGH` | 08.6.3-conflict-a, 08.6.3-conflict-b | V2-1 | 1 |
+| `08.6.3-conflict-d` | Transfer/atama anında aktif yazıcı çakışmasının API tarafından uyarılması | 08.6.3-conflict | `OPUS-XHIGH` | 08.6.3-conflict-a, 08.6.3-conflict-b | V2-1 | 1 |
+| `08.6.3-conflict-e` | Çakışma uyarısı istemci state'i + ConflictBanner bileşeni (salt görünüm) | 08.6.3-conflict | `SONNET-XHIGH` | 08.6.3-conflict-a | V2-1 | 1 |
+| `08.6.3-conflict-f` | Realtime kablolama: agent_conflict_warning aboneliği + applyPush case'i + banner | 08.6.3-conflict | `SONNET-XHIGH` | 08.6.3-conflict-c, 08.6.3-conflict-e | V2-1 | 1 |
+| `08.6.3-conflict-g` | Uçtan uca doğrulama: iki-ajan çakışma senaryosu + cross-tenant/negatif süiti + k | 08.6.3-conflict | `OPUS-XHIGH` | 08.6.3-conflict-c, 08.6.3-conflict-d, 08.6.3-conflict-f | V2-1 | 1 |
+| `08.9.6-a` | security_settings oturum politikası kolonları + kontrat/okuma yüzeyi (davranışsı | 08.9.6 | `SONNET-XHIGH` | — | V2-1 | 1 |
+| `08.9.6-b` | ip_allowlist_entries tablosu + RLS politikası + IpAllowlistEntry şeması | 08.9.6 | `OPUS-XHIGH` | — | V2-1 | 1 |
+| `08.9.6-c` | lib/ip-allowlist.ts — CIDR/IP eşleştirme algoritması + izin-ret semantiği (saf,  | 08.9.6 | `OPUS-MAX` | — | V2-1 | 1 |
+| `08.9.6-d` | /settings/ip-allowlist CRUD (GET/POST/DELETE) + self-lockout guard + audit + pat | 08.9.6 | `OPUS-XHIGH` | 08.9.6-b, 08.9.6-c | V2-1 | 1 |
+| `08.9.6-e` | IP allowlist enforcement — auth onRequest kapısı + trustProxy taklit yüzeyi + no | 08.9.6 | `OPUS-MAX` | 08.9.6-a, 08.9.6-b, 08.9.6-c | V2-1 | 1 |
+| `08.9.6-f` | PATCH /settings/security — oturum politikası alanlarının yazma yüzeyi (validasyo | 08.9.6 | `SONNET-XHIGH` | 08.9.6-a | V2-1 | 1 |
+| `08.9.6-g` | Oturum politikası enforcement — idle timeout (lastUsedAt) + lisans başına eşzama | 08.9.6 | `OPUS-MAX` | 08.9.6-a, 08.9.6-f | V2-1 | 2 |
+| `08.9.6-h` | Settings ekranı — IP allowlist bölümü + oturum politikası formu | 08.9.6 | `SONNET-XHIGH` | 08.9.6-d, 08.9.6-f | V2-1 | 1 |
+| `08.9.6-i` | Uçtan uca doğrulama — E2E akışı, audit görünürlüğü, proxy-IP davranışı ve istek  | 08.9.6 | `OPUS-XHIGH` | 08.9.6-d, 08.9.6-e, 08.9.6-g, 08.9.6-h | V2-1 | 1 |
+| `08.9.7-a` | Audit log okuma kontratı + audit_log--all:ro scope'u + GET /audit-log (keyset, s | 08.9.7-audit | `OPUS-XHIGH` | yok | V2-1 | 2 |
+| `08.9.7-b` | Audit liste filtreleri: eylem, aktör ve tarih aralığı (katkısal sorgu parametrel | 08.9.7-audit | `SONNET-XHIGH` | 08.9.7-a | V2-1 | 1 |
+| `08.9.7-c` | Webhook değişimi audit'i: webhook.created / webhook.deleted eylemleri | 08.9.7-audit | `OPUS-XHIGH` | yok | V2-1 | 1 |
+| `08.9.7-d` | data.deleted eylemi + ayarlar ailesi hedefli silmelerinde audit | 08.9.7-audit | `SONNET-XHIGH` | 08.9.7-c | V2-1 | 1 |
+| `08.9.7-e` | İçerik ve entegrasyon silme uçlarında data.deleted audit'i | 08.9.7-audit | `SONNET-XHIGH` | 08.9.7-d | V2-1 | 1 |
+| `08.9.7-f` | Rol değişimi ucu (PUT /agents/{agentId}/role) + member.role_changed audit'i | 08.9.7-audit | `OPUS-MAX` | 08.9.7-c | V2-1 | 2 |
+| `08.9.7-g` | Retention politikasına audit penceresi (RETENTION_AUDIT_DAYS=30) — politika/env/ | 08.9.7-audit | `SONNET-XHIGH` | yok | V2-1 | 1 |
+| `08.9.7-h` | Append-only log'da süreli budama: audit_prune_expired SECURITY DEFINER + retenti | 08.9.7-audit | `OPUS-MAX` | 08.9.7-g | V2-1 | 2 |
+| `08.9.7-i` | Audit Log ekranı: salt-okunur liste + boş/skeleton/hata durumları + Settings gir | 08.9.7-audit | `SONNET-XHIGH` | 08.9.7-a | V2-1 | 1 |
+| `08.9.7-j` | Audit ekranı filtreleri (eylem/tarih) + 'daha fazla yükle' + e2e görünürlük | 08.9.7-audit | `SONNET-XHIGH` | 08.9.7-b, 08.9.7-i | V2-1 | 1 |
+| `08.9.7-k` | NFR-S12 uçtan uca doğrulama: dört olay + 30 gün penceresi + 'tüm planlarda' kanı | 08.9.7-audit | `OPUS-XHIGH` | 08.9.7-b, 08.9.7-c, 08.9.7-e, 08.9.7-f, 08.9.7-h, 08.9.7-j | V2-1 | 1 |
+| `MULTIBRAND-a` | `brands` tablosu + license-scoped RLS + lisans başına varsayılan marka backfill | Multibrand | `OPUS-XHIGH` | yok | V2-2 | 1 |
+| `MULTIBRAND-b` | Marka izolasyon çekirdeği — `app.current_brand` context + marka çözümleyici + br | Multibrand | `OPUS-MAX` | MULTIBRAND-a | V2-2 | 2 |
+| `MULTIBRAND-c` | brand_id yayılımı — websites + üç singleton ayar tablosunun (widget/security/inb | Multibrand | `OPUS-XHIGH` | MULTIBRAND-b | V2-2 | 2 |
+| `MULTIBRAND-d` | `/brands` CRUD kontratı + route + `brands--all` scope + `brand_not_found` hata t | Multibrand | `OPUS-XHIGH` | MULTIBRAND-a, MULTIBRAND-b | V2-2 | 1 |
+| `MULTIBRAND-e` | Settings → Brands ekranı (liste + ekle + yeniden adlandır + sil + boş durum) | Multibrand | `SONNET-XHIGH` | MULTIBRAND-d | V2-2 | 1 |
+| `MULTIBRAND-f` | AppShell marka değiştirici + seçili markanın persist'i + isteklerde `X-Nexa-Bran | Multibrand | `SONNET-XHIGH` | MULTIBRAND-b, MULTIBRAND-d, MULTIBRAND-e | V2-2 | 1 |
+| `MULTIBRAND-g` | Marka-scoped ayar ekranlarının seçili markaya bağlanması (Widget / Websites / Ch | Multibrand | `SONNET-XHIGH` | MULTIBRAND-c, MULTIBRAND-f | V2-2 | 1 |
+| `MULTIBRAND-h` | Uçtan uca cross-brand doğrulama — otomatik izolasyon test matrisi + kapsam-kaçağ | Multibrand | `OPUS-XHIGH` | MULTIBRAND-c, MULTIBRAND-g | V2-2 | 1 |
+| `08.6.3-a` | Skill kataloğu veri modeli (skills + agent_skills tabloları, RLS, seed) | 08.6.3 | `OPUS-XHIGH` | — | V2-3 | 1 |
+| `08.6.3-b` | Skill katalog CRUD + ajan-skill atama API'si (kontrat + rol kapılı backend) | 08.6.3 | `OPUS-XHIGH` | 08.6.3-a | V2-3 | 1 |
+| `08.6.3-c` | ADR-08 routing çekirdeği: skill-eşleşmeli aday seçimi + kural koşuluna skill_ids | 08.6.3 | `OPUS-MAX` | 08.6.3-a, 08.6.3-b | V2-3 | 2 |
+| `08.6.3-d` | Supervisor takeover çekirdeği: rol kapısı + eşzamanlı devir reddi + audit + RTM  | 08.6.3 | `OPUS-MAX` | — | V2-3 | 2 |
+| `08.6.3-e` | Settings: Skills kataloğu bölümü + routing kuralında skill koşulu gösterimi | 08.6.3 | `SONNET-XHIGH` | 08.6.3-b, 08.6.3-c | V2-3 | 1 |
+| `08.6.3-f` | Team: ajan başına skill ataması ekranı | 08.6.3 | `SONNET-XHIGH` | 08.6.3-b | V2-3 | 1 |
+| `08.6.3-g` | Inbox: supervisor takeover butonu (rol kapılı, onaylı) + devir sonrası durum | 08.6.3 | `SONNET-XHIGH` | 08.6.3-d | V2-3 | 1 |
+| `08.6.3-h` | Çoklu-ajan çakışma uyarısı (aynı sohbette birden fazla present ajan) | 08.6.3 | `SONNET-XHIGH` | — | V2-3 | 1 |
+| `08.6.3-i` | Uçtan uca doğrulama: skill routing + takeover E2E, cross-tenant negatif matrisi, | 08.6.3 | `OPUS-XHIGH` | 08.6.3-c, 08.6.3-d, 08.6.3-e, 08.6.3-f, 08.6.3-g | V2-3 | 1 |
+| `07.5-a` | ReportsBreakdown kontratına by_hour/by_team/by_channel (additive, opsiyonel) | 07.5 | `SONNET-XHIGH` | yok | V2-4 | 1 |
+| `07.5-b` | Saat boyutu: breakdownByHour() + /reports/breakdown yanıtına by_hour | 07.5 | `SONNET-XHIGH` | 07.5-a | V2-4 | 1 |
+| `07.5-c` | channel_messages(license_id, chat_id) indeksi + saf kanal etiketi helper'ı | 07.5 | `SONNET-XHIGH` | yok | V2-4 | 1 |
+| `07.5-d` | Kanal boyutu agregasyon çekirdeği — license_id-kilitli soft-FK join + 'website'  | 07.5 | `OPUS-MAX` | 07.5-a, 07.5-c | V2-4 | 2 |
+| `07.5-e` | Takım boyutu agregasyon çekirdeği — chat_access M:N fan-out + license kilidi | 07.5 | `OPUS-MAX` | 07.5-a | V2-4 | 2 |
+| `07.5-f` | CSV export: breakdown grubunu dört boyuta genişlet (uzun format) | 07.5 | `SONNET-XHIGH` | 07.5-b, 07.5-d, 07.5-e | V2-4 | 1 |
+| `07.5-g` | Breakdown sekmesi: "By hour" bölümü (salt-okunur tablo + empty state) | 07.5 | `SONNET-XHIGH` | 07.5-b | V2-4 | 1 |
+| `07.5-h` | Breakdown sekmesi: "By team" + "By channel" bölümleri + örtüşme dipnotu | 07.5 | `SONNET-XHIGH` | 07.5-d, 07.5-e | V2-4 | 1 |
+| `07.5-i` | Uçtan uca doğrulama: dört boyut çapraz-tutarlılığı + NFR-P2 bütçe ölçümü | 07.5 | `OPUS-XHIGH` | 07.5-f, 07.5-g, 07.5-h | V2-4 | 1 |
+| `07.6-a` | `GET /reports/topics` kontratı + yetkili route iskeleti + yetersiz-veri (empty)  | 07.6 | `OPUS-XHIGH` | yok | V2-4 | 1 |
+| `07.6-b` | Deterministik konu kümeleme çekirdeği: `packages/ai-mock/src/topics.ts` (kümelem | 07.6 | `OPUS-MAX` | 07.6-a | V2-4 | 2 |
+| `07.6-c` | Kümelemeyi route'a bağla: tenant-scoped konu sorgusu + hacim/trend (önceki dönem | 07.6 | `OPUS-XHIGH` | 07.6-a, 07.6-b | V2-4 | 1 |
+| `07.6-d` | Demo seed'de konu çeşitliliği: kümelenebilir sohbet özetleri | 07.6 | `SONNET-XHIGH` | 07.6-b, 07.6-c | V2-4 | 1 |
+| `07.6-e` | Reports'ta 'Chat topics' sekmesi: hacim/trend listesi + yetersiz-veri empty stat | 07.6 | `SONNET-XHIGH` | 07.6-a, 07.6-c | V2-4 | 1 |
+| `07.6-f` | Overview'da 'Top chat topics' promo bandı (See chat topics / Remind me later — k | 07.6 | `SONNET-XHIGH` | 07.6-e | V2-4 | 1 |
+| `07.6-g` | Topics rapor grubu: `/reports/groups` kataloğu + CSV export satırı | 07.6 | `SONNET-XHIGH` | 07.6-c | V2-4 | 1 |
+| `07.6-h` | Uçtan uca doğrulama: Chat topics e2e (dolu + empty) + ai-mock paylaşım regresyon | 07.6 | `OPUS-XHIGH` | 07.6-c, 07.6-d, 07.6-e, 07.6-f | V2-4 | 1 |
+| `07.7-a` | Cases rapor grubu — kontrat + lisans-kapsamlı ticket sorgusu + CSV exporter | 07.7-v2 | `SONNET-XHIGH` | yok | V2-4 | 1 |
+| `07.7-b` | Leads rapor grubu — organizasyon-kapsamlı `customers` verisinin lisans sınırına  | 07.7-v2 | `OPUS-MAX` | 07.7-a | V2-4 | 2 |
+| `07.7-c` | Team performance rapor grubu — ajan bazlı KPI genişletmesi (mevcut by_agent üzer | 07.7-v2 | `SONNET-MAX` | 07.7-b | V2-4 | 1 |
+| `07.7-d` | Sales rapor grubu — 13.5 Sales tracker'a bağlı `configured:false` dürüst iskelet | 07.7-v2 | `SONNET-XHIGH` | 07.7-c | V2-4 | 1 |
+| `07.7-e` | Benchmark karşılaştırma katmanı — tüm rapor gruplarına ortak vs-baseline (lisans | 07.7-v2 | `OPUS-XHIGH` | 07.7-a, 07.7-b, 07.7-c, 07.7-d | V2-4 | 1 |
+| `07.7-f` | Deterministik, bağımlılıksız PDF serializer (saf modül) — `toCsv`'nin PDF eşi | 07.7-v2 | `OPUS-XHIGH` | yok | V2-4 | 1 |
+| `07.7-g` | PDF export rotası — `/reports/export` `format` parametresi + content-type/attach | 07.7-v2 | `SONNET-XHIGH` | 07.7-f, 07.7-d, 07.7-e | V2-4 | 1 |
+| `07.7-h` | Reports Save view — rapora özgü kaydedilmiş görünüm (saf modül, Inbox views dese | 07.7-v2 | `SONNET-XHIGH` | yok | V2-4 | 1 |
+| `07.7-i` | Reports UI — Leads + Cases sekmeleri (kartlar + benchmark rozetleri + empty stat | 07.7-v2 | `SONNET-XHIGH` | 07.7-a, 07.7-b, 07.7-e | V2-4 | 1 |
+| `07.7-j` | Reports UI — Sales + Team performance sekmeleri (ajan tablosu + `configured:fals | 07.7-v2 | `SONNET-XHIGH` | 07.7-c, 07.7-d, 07.7-i | V2-4 | 1 |
+| `07.7-k` | Reports UI — Export butonu (CSV/PDF indirme) + Save view çubuğu | 07.7-v2 | `SONNET-XHIGH` | 07.7-g, 07.7-h, 07.7-i, 07.7-j | V2-4 | 1 |
+| `07.7-l` | Uçtan uca doğrulama — 8 grup için izin matrisi, cross-tenant süpürmesi, ağır sor | 07.7-v2 | `OPUS-XHIGH` | 07.7-a, 07.7-b, 07.7-c, 07.7-d, 07.7-e, 07.7-f, 07.7-g, 07.7-h, 07.7-i, 07.7-j, 07.7-k | V2-4 | 1 |
+| `07.9-sched-a` | Şema + migration: scheduled_reports / scheduled_report_runs (RLS + dönem tekille | 07.9-sched | `OPUS-XHIGH` | yok | V2-4 | 1 |
+| `07.9-sched-b` | `reports_manage` scope + kontrat/route: zamanlanmış export listeleme ve oluşturm | 07.9-sched | `OPUS-XHIGH` | 07.9-sched-a | V2-4 | 2 |
+| `07.9-sched-c` | Kontrat/route: tek kayıt okuma + güncelleme + iptal (GET/PATCH/DELETE) | 07.9-sched | `OPUS-XHIGH` | 07.9-sched-b | V2-4 | 1 |
+| `07.9-sched-d1` | Rapor teslim e-postası: Mailer `kind` genişletme + saf konu/gövde biçimlendirici | 07.9-sched | `SONNET-XHIGH` | yok | V2-4 | 1 |
+| `07.9-sched-d2` | Rapor CSV üretimini paylaşılan `services/reports/report-csv.ts` modülüne çıkar | 07.9-sched | `SONNET-MAX` | yok | V2-4 | 1 |
+| `07.9-sched-e` | Zamanlayıcı çekirdeği: dönem hesabı + tek-teslim claim (idempotens) + tenant-sco | 07.9-sched | `OPUS-MAX` | 07.9-sched-a, 07.9-sched-b, 07.9-sched-d1, 07.9-sched-d2 | V2-4 | 2 |
+| `07.9-sched-f` | `scheduled-reports:run` operatör betiği + npm script (dry-run varsayılanı) | 07.9-sched | `SONNET-XHIGH` | 07.9-sched-e | V2-4 | 1 |
+| `07.9-sched-g` | Teslim geçmişi okuması: kontrat + `GET /reports/scheduled-exports/{id}/runs` | 07.9-sched | `OPUS-XHIGH` | 07.9-sched-c, 07.9-sched-e | V2-4 | 1 |
+| `07.9-sched-h` | Settings UI: "Scheduled exports" bölümü (liste + oluştur + iptal + son çalışma d | 07.9-sched | `SONNET-XHIGH` | 07.9-sched-c, 07.9-sched-g | V2-4 | 1 |
+| `07.9-sched-i` | Uçtan uca doğrulama: cross-tenant zinciri + tekrar-tetik idempotens regresyonu + | 07.9-sched | `OPUS-XHIGH` | 07.9-sched-c, 07.9-sched-e, 07.9-sched-f, 07.9-sched-g, 07.9-sched-h | V2-4 | 1 |
+| `08.8.3-a` | MCP tool kataloğu — saf veri modülü (4 tool descriptor + input şemaları) | 08.8.3 | `SONNET-XHIGH` | — | V2-5 | 1 |
+| `08.8.3-b` | MCP kontratı (paths/mcp.yaml) + GET /mcp/manifest keşif ucu | 08.8.3 | `OPUS-XHIGH` | 08.8.3-a | V2-5 | 1 |
+| `08.8.3-c` | Tool-call yürütücüsü — scope gate + tenant kapsamı + IDOR 404 + audit + search_t | 08.8.3 | `OPUS-MAX` | 08.8.3-a, 08.8.3-b | V2-5 | 2 |
+| `08.8.3-d` | list_chats tool adaptörü (mevcut chat listeleme yoluna bağlama) | 08.8.3 | `SONNET-XHIGH` | 08.8.3-c | V2-5 | 1 |
+| `08.8.3-e` | get_report tool adaptörü — `report` enum'u ile mevcut 4 rapor sorgusuna eşleme | 08.8.3 | `SONNET-XHIGH` | 08.8.3-c | V2-5 | 1 |
+| `08.8.3-f` | summarize_chat tool'u + tool yanıtlarında PII/CC-mask sınırının doğrulanması | 08.8.3 | `OPUS-XHIGH` | 08.8.3-c | V2-5 | 1 |
+| `08.8.3-g` | Settings → MCP bağlantı ekranı (mcp URL + Copy + Claude setup + örnek prompt) | 08.8.3 | `SONNET-XHIGH` | 08.8.3-b | V2-5 | 1 |
+| `08.8.3-h` | Uçtan uca MCP istemci akışı + rate-limit kapsaması + audit doğrulaması | 08.8.3 | `OPUS-XHIGH` | 08.8.3-c, 08.8.3-d, 08.8.3-e, 08.8.3-f | V2-5 | 1 |
+| `01.1.3-ai-a` | Statik aksiyon kataloğu (`actions.ts`) + `PaletteResult` birleşik tipi | 01.1.3-ai | `SONNET-XHIGH` | — | V2-5 | 1 |
+| `01.1.3-ai-b` | Aksiyon sonuç tipinin scope kapısı — yetkisi olmayan aksiyon palette GÖRÜNMEZ | 01.1.3-ai | `OPUS-XHIGH` | 01.1.3-ai-a | V2-5 | 1 |
+| `01.1.3-ai-c` | Aksiyon tetikleme — `run()` bağlama + optimistic durum + hata geri alma | 01.1.3-ai | `OPUS-XHIGH` | 01.1.3-ai-b | V2-5 | 1 |
+| `01.1.3-ai-d` | Kontrat: `POST /palette/ai-query` + bundle + tip üretimi | 01.1.3-ai | `SONNET-XHIGH` | — | V2-5 | 1 |
+| `01.1.3-ai-e` | AI sorgu endpoint'i — scope kapısı + tenant izolasyonu + deterministik cevap (re | 01.1.3-ai | `OPUS-MAX` | 01.1.3-ai-d | V2-5 | 2 |
+| `01.1.3-ai-f` | Palette'te AI sorgu sonuç tipi + cevap kartı + boş/anlaşılmadı durumları | 01.1.3-ai | `SONNET-XHIGH` | 01.1.3-ai-e | V2-5 | 1 |
+| `01.1.3-ai-g` | Klavye/a11y: ↑↓/esc üç sonuç tipinde de tutarlı (NFR-A11Y6 regresyonu) | 01.1.3-ai | `SONNET-XHIGH` | 01.1.3-ai-c, 01.1.3-ai-f | V2-5 | 1 |
+| `01.1.3-ai-h` | Uçtan uca doğrulama + kapanış: tam DoD, e2e, PLAN/HANDOFF izleri | 01.1.3-ai | `OPUS-XHIGH` | 01.1.3-ai-c, 01.1.3-ai-f, 01.1.3-ai-g | V2-5 | 1 |
+| `12.4-bi-a` | Kontrat: `POST /copilot/bi` anchor'ı + bundle + tip üretimi | 12.4-bi | `SONNET-XHIGH` | — | V2-5 | 1 |
+| `12.4-bi-b` | `@nexa/ai-mock`'ta soru → rapor metriği eşleyici (deterministik, LLM yok) | 12.4-bi | `OPUS-XHIGH` | — | V2-5 | 1 |
+| `12.4-bi-c` | BI endpoint çekirdeği — scope birleşimi + müşteri-token sınırı + tenant izolasyo | 12.4-bi | `OPUS-MAX` | 12.4-bi-a, 12.4-bi-b | V2-5 | 2 |
+| `12.4-bi-d` | CopilotPanel'de BI soru girişi + cevap kartı | 12.4-bi | `SONNET-XHIGH` | 12.4-bi-c | V2-5 | 1 |
+| `12.4-bi-e` | Anlaşılmadı / yetersiz veri durumları — anlamlı empty state + örnek sorular | 12.4-bi | `SONNET-XHIGH` | 12.4-bi-d | V2-5 | 1 |
+| `12.4-bi-f` | Uçtan uca doğrulama + ADR-09 çapraz kontrolü + kapanış | 12.4-bi | `OPUS-XHIGH` | 12.4-bi-d, 12.4-bi-e | V2-5 | 1 |
+| `06.3.2-bulk-a` | RFC4180 CSV ayrıştırıcı + formül-enjeksiyon nötrleme (saf modül, lineer zaman) | 06.3.2-bulk | `OPUS-MAX` | — | V2-6 | 2 |
+| `06.3.2-bulk-b` | CSV satır şeması: kolon eşleme + satır-başı doğrulama (saf modül) | 06.3.2-bulk | `SONNET-XHIGH` | — | V2-6 | 1 |
+| `06.3.2-bulk-c` | POST /knowledge-sources/bulk — kontrat + route: tenant sahipliği, satır tavanı,  | 06.3.2-bulk | `OPUS-MAX` | 06.3.2-bulk-a, 06.3.2-bulk-b | V2-6 | 2 |
+| `06.3.2-bulk-d` | Frontend saf yardımcılar: örnek CSV şablonu katalogu + dosya okuma/ön-kontrol mo | 06.3.2-bulk | `SONNET-XHIGH` | — | V2-6 | 1 |
+| `06.3.2-bulk-e` | Knowledge panelinde "Bulk import" formu: dosya seç → dry-run önizleme | 06.3.2-bulk | `SONNET-XHIGH` | 06.3.2-bulk-c, 06.3.2-bulk-d | V2-6 | 1 |
+| `06.3.2-bulk-f` | İçe aktarma sonuç tablosu: satır no / başlık / durum / hata + kısmi-başarı özeti | 06.3.2-bulk | `SONNET-XHIGH` | 06.3.2-bulk-e | V2-6 | 1 |
+| `06.3.2-bulk-g` | CSV'de website satırları: satır-başı SSRF guard + crawl'ın transaction DIŞINDA,  | 06.3.2-bulk | `OPUS-MAX` | 06.3.2-bulk-c | V2-6 | 2 |
+| `06.3.2-bulk-h` | Uçtan uca doğrulama: E2E CSV içe aktarma akışı + RAG'de aranabilirlik + regresyo | 06.3.2-bulk | `OPUS-XHIGH` | 06.3.2-bulk-f, 06.3.2-bulk-g | V2-6 | 1 |
+| `05.6-tmpl31-a` | Katalog şeması genişletme: rozet alanı (Popular/Essential) + invariant testlerin | 05.6-tmpl31 | `SONNET-XHIGH` | — | V2-6 | 1 |
+| `05.6-tmpl31-b` | 23+ yeni şablon kaydı — katalog 8 → 31+ | 05.6-tmpl31 | `SONNET-MAX` | 05.6-tmpl31-a | V2-6 | 2 |
+| `05.6-tmpl31-c` | Katalog i18n: şablon metinleri TR/EN (NFR-I18N2) | 05.6-tmpl31 | `SONNET-XHIGH` | 05.6-tmpl31-b | V2-6 | 1 |
+| `05.6-tmpl31-d` | Galeri ölçek davranışı: arama + kategori filtresi + sanal liste (31+ kart) | 05.6-tmpl31 | `SONNET-XHIGH` | 05.6-tmpl31-b | V2-6 | 1 |
+| `05.6-tmpl31-e` | Kapanış: tam DoD + galeri e2e regresyonu + PLAN/HANDOFF izleri | 05.6-tmpl31 | `SONNET-XHIGH` | 05.6-tmpl31-c, 05.6-tmpl31-d | V2-6 | 1 |
+| `PUBKB-a` | Public KB veri modeli: kb_articles + kb_categories + kb_settings (RLS'li migrati | Public KB | `SONNET-XHIGH` | yok | V2-6 | 1 |
+| `PUBKB-b` | Yönetim (agent-auth) KB CRUD kontratı + backend + yayın (draft/published) durumu | Public KB | `OPUS-XHIGH` | PUBKB-a | V2-6 | 2 |
+| `PUBKB-c` | Anonim public okuma çekirdeği (BÖLÜNMEZ): slug→license çözümleyici + yayın filtr | Public KB | `OPUS-MAX` | PUBKB-a, PUBKB-b | V2-6 | 2 |
+| `PUBKB-d` | Makale gövdesi güvenli render çekirdeği (BÖLÜNMEZ): escape-first sınırlı markdow | Public KB | `OPUS-MAX` | yok | V2-6 | 1 |
+| `PUBKB-e` | SEO'lu sunucu-render HTML yüzeyi: KB ana sayfası + makale sayfası (title/meta/ca | Public KB | `OPUS-XHIGH` | PUBKB-c, PUBKB-d | V2-6 | 2 |
+| `PUBKB-f` | sitemap.xml + robots.txt (yalnız yayınlanmış makaleler, XML-escape'li) | Public KB | `SONNET-XHIGH` | PUBKB-c, PUBKB-e | V2-6 | 1 |
+| `PUBKB-g` | Admin: KB makale listesi + durum sekmeleri (All/Published/Drafts) + anlamlı empt | Public KB | `SONNET-XHIGH` | PUBKB-b | V2-6 | 1 |
+| `PUBKB-h` | Admin: makale editörü (içerik + SEO alanları) + publish/unpublish + public link | Public KB | `SONNET-XHIGH` | PUBKB-b, PUBKB-g | V2-6 | 1 |
+| `PUBKB-i` | Uçtan uca doğrulama: anonim okuyucu e2e + izolasyon/SEO kanıt seti | Public KB | `OPUS-XHIGH` | PUBKB-c, PUBKB-e, PUBKB-f, PUBKB-h | V2-6 | 1 |
+| `09.2-v2-a` | Marketplace liste kontratı — arama/kategori/sayfalama parametreleri + sayfalama  | 09.2 | `SONNET-XHIGH` | yok | V2-7 | 1 |
+| `09.2-v2-b` | Saf katalog filtre + sayfalama fonksiyonları (@nexa/types) + determinizm testler | 09.2 | `SONNET-XHIGH` | yok | V2-7 | 1 |
+| `09.2-v2-c` | GET /settings/apps sorgu bağlama — zod parse + sayfalama + tenant join korunumu | 09.2 | `OPUS-XHIGH` | 09.2-v2-a, 09.2-v2-b | V2-7 | 1 |
+| `09.2-v2-d` | Katalog verisi 20 → 60 kart (mock, mevcut 8 kategori) + üst-sınır iddialarının k | 09.2 | `SONNET-MAX` | yok | V2-7 | 1 |
+| `09.2-v2-e` | Katalog verisi 60 → 100+ kart + "100+" hedefinin testle sabitlenmesi | 09.2 | `SONNET-MAX` | 09.2-v2-d | V2-7 | 1 |
+| `09.2-v2-f` | Marketplace arama kutusu + tıklanabilir kategori filtresi + empty/skeleton durum | 09.2 | `SONNET-XHIGH` | 09.2-v2-c | V2-7 | 1 |
+| `09.2-v2-g` | Virtualized kart grid'i + sayfa zinciri (NFR-P4 "yalnız görünür satır DOM'da") | 09.2 | `OPUS-XHIGH` | 09.2-v2-f, 09.2-v2-e | V2-7 | 1 |
+| `09.2-v2-h` | Uçtan uca doğrulama — 100+ katalogla e2e + NFR-P4 ölçüm notu + izolasyon/kontrat | 09.2 | `OPUS-XHIGH` | 09.2-v2-c, 09.2-v2-e, 09.2-v2-g | V2-7 | 1 |
+| `09.3-a` | Statik API paket kataloğu + tipleri (@nexa/types) | 09.3 | `SONNET-XHIGH` | — | V2-7 | 1 |
+| `09.3-b` | api_package_purchases tablosu: Prisma modeli + migration + RLS politikası | 09.3 | `OPUS-XHIGH` | 09.3-a | V2-7 | 1 |
+| `09.3-c` | Okuma yüzeyi: GET /billing/api-packages (katalog) + GET /billing/api-packages/pu | 09.3 | `OPUS-XHIGH` | 09.3-a, 09.3-b | V2-7 | 1 |
+| `09.3-d` | Paket satın alma çekirdeği: POST /billing/api-packages + atomik kota artışı (moc | 09.3 | `OPUS-MAX` | 09.3-a, 09.3-b, 09.3-c | V2-7 | 2 |
+| `09.3-e` | Satın alınan paketin fatura satır kalemi (invoice line_item) | 09.3 | `SONNET-XHIGH` | 09.3-d | V2-7 | 1 |
+| `09.3-f` | Billing ekranında API paketleri bölümü: kartlar + mock satın alma akışı | 09.3 | `SONNET-XHIGH` | 09.3-c, 09.3-d | V2-7 | 1 |
+| `09.3-g` | Satın alma geçmişi listesi (UI) + empty state | 09.3 | `SONNET-XHIGH` | 09.3-c, 09.3-f | V2-7 | 1 |
+| `09.3-h` | Uçtan uca doğrulama: satın alma → kota artışı → geçmiş → fatura (E2E + seed) | 09.3 | `OPUS-XHIGH` | 09.3-e, 09.3-f, 09.3-g | V2-7 | 1 |
+| `09.4-a` | Zapier + Make marketplace kartları ve katalog sınır güncellemesi | 09.4 | `SONNET-XHIGH` | yok | V2-7 | 1 |
+| `09.4-b` | Entegrasyon manifesti (trigger + action kataloğu): kontrat + statik endpoint | 09.4 | `SONNET-XHIGH` | yok | V2-7 | 1 |
+| `09.4-c` | Partner app kaydı çekirdeği: oauth_clients self-servis CRUD (client_id / secret_ | 09.4 | `OPUS-MAX` | yok | V2-7 | 2 |
+| `09.4-d` | Partner app secret rotate + denetim izi (partner_app.* audit olayları) | 09.4 | `OPUS-XHIGH` | 09.4-c | V2-7 | 1 |
+| `09.4-e` | Developer portal kabuğu: partner app listesi + kayıt formu + 'secret bir kez' pa | 09.4 | `SONNET-XHIGH` | 09.4-c | V2-7 | 1 |
+| `09.4-f` | Portal'da Zapier REST Hooks yüzeyi: webhook aboneliği yönetimi + trigger manifes | 09.4 | `SONNET-XHIGH` | 09.4-b, 09.4-d, 09.4-e | V2-7 | 1 |
+| `09.4-g` | Uçtan uca partner akışı doğrulaması: kayıtlı client ile OAuth 2.1 authorize→toke | 09.4 | `OPUS-XHIGH` | 09.4-c, 09.4-d, 09.4-e, 09.4-f | V2-7 | 1 |
+| `13.2-a` | TrafficActivity sözlüğünün supervised + invited ile genişletilmesi (kontrat + ti | 13.2 | `SONNET-XHIGH` | yok | V2-8 | 1 |
+| `13.2-b` | `invited` durumu: campaign_sends'ten türetme + funnel öncelik kararı (backend) | 13.2 | `OPUS-XHIGH` | 13.2-a | V2-8 | 1 |
+| `13.2-c` | `chat_supervisions` tablosu + RLS politikası + Prisma modeli (yalnız migration,  | 13.2 | `OPUS-XHIGH` | yok | V2-8 | 1 |
+| `13.2-d` | Supervision register/release API + yetki sınırı + heartbeat (BÖLÜNMEZ GÜVENLİK Ç | 13.2 | `OPUS-MAX` | 13.2-c | V2-8 | 2 |
+| `13.2-e` | `supervised` durumunun Traffic funnel'ına bağlanması + öncelik sırası | 13.2 | `OPUS-XHIGH` | 13.2-a, 13.2-d | V2-8 | 1 |
+| `13.2-f` | "Match all filters + Add filter": GET /traffic çoklu-koşul filtre çekirdeği (kon | 13.2 | `OPUS-MAX` | 13.2-a, 13.2-b, 13.2-e | V2-8 | 2 |
+| `13.2-g` | Traffic durum sekmeleri (All/Chatting/Supervised/Queued/Waiting/Invited/Browsing | 13.2 | `SONNET-XHIGH` | 13.2-f | V2-8 | 1 |
+| `13.2-h` | "Match all filters + Add filter" filtre paneli UI + query builder | 13.2 | `SONNET-XHIGH` | 13.2-f, 13.2-g | V2-8 | 1 |
+| `13.2-i` | CustomerDetail'e `visits_count` + `groups[]` (kontrat + servis) | 13.2 | `SONNET-XHIGH` | yok | V2-8 | 1 |
+| `13.2-j` | Ziyaretçi 360° panel: N visits özeti + Came from + Groups kartları (UI) | 13.2 | `SONNET-XHIGH` | 13.2-i | V2-8 | 1 |
+| `13.2-k` | Uçtan uca doğrulama: E2E (sekme + filtre + supervise + 360° panel) + NFR-P2 ölçü | 13.2 | `OPUS-XHIGH` | 13.2-a, 13.2-b, 13.2-c, 13.2-d, 13.2-e, 13.2-f, 13.2-g, 13.2-h, 13.2-i, 13.2-j | V2-8 | 1 |
+| `13.3-a` | Goal veri sözlüğü — @nexa/types tipleri + OpenAPI component şemaları (path YOK) | 13.3 | `SONNET-XHIGH` | — | V2-8 | 1 |
+| `13.3-b` | goal_achievements tablosu + RLS politikası + idempotency kısıtı (Prisma migratio | 13.3 | `OPUS-XHIGH` | — | V2-8 | 1 |
+| `13.3-c` | Goals CRUD — kontrat path + route + servis (license-scoped, .strict() definition | 13.3 | `OPUS-XHIGH` | 13.3-a | V2-8 | 1 |
+| `13.3-d` | Hedef eşleşme + achievement kaydı çekirdeği — idempotent tetik, ziyaretçi yazma  | 13.3 | `OPUS-MAX` | 13.3-b, 13.3-c | V2-8 | 2 |
+| `13.3-e` | /reports/overview "Achieved goals" sayacı (pencere + önceki pencere karşılaştırm | 13.3 | `SONNET-XHIGH` | 13.3-b, 13.3-d | V2-8 | 1 |
+| `13.3-f` | GET /reports/goals — 3 aşamalı huni raporu + rapor grubu + CSV export | 13.3 | `OPUS-XHIGH` | 13.3-b, 13.3-c, 13.3-d | V2-8 | 1 |
+| `13.3-g` | Goals ekranı — liste + Create goal formu (Customers alanının 4. sekmesi) | 13.3 | `SONNET-XHIGH` | 13.3-c | V2-8 | 1 |
+| `13.3-h` | 3 aşamalı huni gösterimi (Goals ekranı) + Reports Overview "Achieved goals" KPI  | 13.3 | `SONNET-XHIGH` | 13.3-e, 13.3-f, 13.3-g | V2-8 | 1 |
+| `13.3-i` | Uçtan uca doğrulama — ziyaret→sohbet→hedef E2E + çapraz-tenant regresyon kapanış | 13.3 | `OPUS-XHIGH` | 13.3-d, 13.3-e, 13.3-f, 13.3-g, 13.3-h | V2-8 | 1 |
+| `13.5-a` | Sales tracker veri modeli — sales_tracker_settings (lisans-tekil) + tracked_sale | 13.5 | `SONNET-XHIGH` | 13.3 Goals (dış bağımlılık — orkestratörün bağlayıcı kararı: 13.3 önce; `goals` tablosu şemada var ama 0 tüketici, bu kalem başlamadan 13.3'ün CRUD+UI'si bitmeli) | V2-8 | 1 |
+| `13.5-b` | Sales tracker konfigürasyon endpoint'i — GET/PUT /settings/sales-tracker (kontra | 13.5 | `OPUS-XHIGH` | 13.5-a | V2-8 | 1 |
+| `13.5-c` | Tracked-sale ingest + atıf (attribution) çekirdeği — POST /customer/chat/sale (B | 13.5 | `OPUS-MAX` | 13.5-a, 13.5-b | V2-8 | 2 |
+| `13.5-d` | GET /reports/reviews ecommerce bloğunu gerçek veriyle doldur — trackedSalesSumma | 13.5 | `OPUS-XHIGH` | 13.5-b, 13.5-c | V2-8 | 1 |
+| `13.5-e` | Settings ekranı — 'Sales tracker' bölümü (enabled / currency / atıf penceresi fo | 13.5 | `SONNET-XHIGH` | 13.5-b | V2-8 | 1 |
+| `13.5-f` | Reports/Reviews — Ecommerce KPI'ları + dürüst empty state + 'Configure sales pla | 13.5 | `SONNET-XHIGH` | 13.5-d, 13.5-e (CTA'nın hedefi olan Settings bölümü var olmalı) | V2-8 | 1 |
+| `13.5-g` | Widget izleme kodu — nexa('trackSale', …) JS API + kurulum snippet'i | 13.5 | `SONNET-XHIGH` | 13.5-c | V2-8 | 1 |
+| `13.5-h` | Uçtan uca doğrulama — seed/demo verisi + e2e (izleme kodu → Reports Ecommerce) + | 13.5 | `OPUS-XHIGH` | 13.5-d, 13.5-e, 13.5-f, 13.5-g, 13.3 Goals (dış bağımlılık — tutarlılık kontrolü için teslim olmalı) | V2-8 | 1 |
+| `08.5.7-a` | Instagram kanal tipinin kontrata eklenmesi (ChannelType enum + connect/webhook g | 08.5.7 | `SONNET-XHIGH` | yok | V2-9 | 1 |
+| `08.5.7-b` | InstagramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri | 08.5.7 | `SONNET-XHIGH` | 08.5.7-a | V2-9 | 1 |
+| `08.5.7-c` | instagram'ın adapter kanalı olarak devreye alınması (CHANNEL_TYPES + registry) + | 08.5.7 | `OPUS-XHIGH` | 08.5.7-a, 08.5.7-b | V2-9 | 1 |
+| `08.5.7-d` | Kanal adresinin lisanslar arası tekilliği — çakışan adres bağlamanın reddi (bölü | 08.5.7 | `OPUS-MAX` | 08.5.7-c | V2-9 | 2 |
+| `08.5.7-e` | Settings → Channels: Instagram kartının statik 'Coming soon'dan canlı connect/di | 08.5.7 | `SONNET-XHIGH` | 08.5.7-c | V2-9 | 1 |
+| `08.5.7-f` | 'Get notified' kaydının kalıcılaştırılması (kalan coming-soon kanalları) | 08.5.7 | `SONNET-XHIGH` | 08.5.7-e | V2-9 | 1 |
+| `08.5.7-g` | Inbox Views grubunda Instagram kanal görünümü | 08.5.7 | `SONNET-XHIGH` | 08.5.7-c | V2-9 | 1 |
+| `08.5.7-h` | Uçtan uca doğrulama: Instagram bağla → DM gelsin → inbox'ta chat (e2e) | 08.5.7 | `OPUS-XHIGH` | 08.5.7-e, 08.5.7-g | V2-9 | 1 |
+| `WORKSCHED-a` | Work schedule kontratı + @nexa/types haftalık plan tipi ve normalizer | Work scheduler | `SONNET-XHIGH` | yok | V2-9 | 1 |
+| `WORKSCHED-b` | work_schedules + agent_presence_events tabloları, Prisma modelleri ve RLS migrat | Work scheduler | `OPUS-XHIGH` | WORKSCHED-a | V2-9 | 1 |
+| `WORKSCHED-c` | GET/PUT /agents/{agentId}/work-schedule — scope kapısı ve self-vs-admin yetkilen | Work scheduler | `OPUS-XHIGH` | WORKSCHED-a, WORKSCHED-b | V2-9 | 1 |
+| `WORKSCHED-d` | Presence olay günlüğü yazma yolu + planlı vardiya ↔ manuel routingStatus öncelik | Work scheduler | `OPUS-MAX` | WORKSCHED-b | V2-9 | 2 |
+| `WORKSCHED-e` | /reports/breakdown yanıtına saat-bazlı hacim kırılımı (by_hour) | Work scheduler | `SONNET-XHIGH` | yok | V2-9 | 1 |
+| `WORKSCHED-f` | Deterministik staffing tahmin çekirdeği (saf modül, LLM yok — bölünmez) | Work scheduler | `OPUS-MAX` | yok | V2-9 | 1 |
+| `WORKSCHED-g` | GET /reports/staffing-forecast — kontrat + üç girdinin tek yanıta bağlanması | Work scheduler | `OPUS-XHIGH` | WORKSCHED-b, WORKSCHED-d, WORKSCHED-e, WORKSCHED-f | V2-9 | 1 |
+| `WORKSCHED-h` | Team → Work schedule düzenleyici (haftalık ızgara + timezone + alan-altı hata) | Work scheduler | `SONNET-XHIGH` | WORKSCHED-a, WORKSCHED-c | V2-9 | 1 |
+| `WORKSCHED-i` | Reports → Staffing sekmesi (salt-okunur gün × saat ızgarası + düşük-baz uyarısı) | Work scheduler | `SONNET-XHIGH` | WORKSCHED-g | V2-9 | 1 |
+| `WORKSCHED-j` | Uçtan uca doğrulama: staffing e2e akışı + izolasyon iddiaları + ADR-09 sayı tuta | Work scheduler | `OPUS-XHIGH` | WORKSCHED-c, WORKSCHED-d, WORKSCHED-g, WORKSCHED-h, WORKSCHED-i | V2-9 | 1 |
+
 
 ---
 
@@ -1901,6 +3140,28 @@ görüneceği en son yerdir.
   yükler. İki yol da tek motor `evaluateSpam` (`services/security/spam-filter.ts`) — tek doğruluk
   kaynağı. Doğrulama: §D59.
 
+- **A12 (v2 kapsam süpürmesi · §5.5 MOD-04 "○" · 2026-08-01):** PRD §5.5 modül→faz matrisi
+  `MOD-04 Team/roller/teams` satırının **v2 sütununda çıplak bir `○`** var (v1'de `○`, Ent.'te
+  `○ (SCIM)` — sonuncusu etiketli, v2'ninki değil). PRD §6'da `MOD-04` için `(v2)` önceliği taşıyan
+  **hiçbir `FR-MOD` satırı yok**; yani ne kapsam ne kabul kriteri tanımlı. **Varsayım:** matristeki
+  etiketsiz `○`, "bu modül sonraki fazlarda da evrilmeye devam eder" anlamında bir **yön işareti**dir,
+  ayrı bir gereksinim değildir. → v2 için **ayrı iş kalemi açılmadı**. Aksi ortaya çıkarsa (kullanıcı
+  somut kapsam yazarsa) yeni kalem olarak §5'e eklenir. Bkz. §D62.
+
+- **A13 (v2 kapsam süpürmesi · §5.5 MOD-06 "○" · 2026-08-01):** Aynı gerekçe `MOD-06 AI Agent + RAG`
+  v2 hücresi için. `MOD-06`'nın `(v2)` önceliği taşıyan tek içeriği **`06.3.2`'nin bulk/CSV import
+  payı**dır (satırın kendisi `Must (v1)`, `bulk/CSV import` kanadı bilinçli olarak v2'ye bırakıldı —
+  §4.4 GL-1 notu). **Varsayım:** MOD-06'nın v2 payı = `06.3.2-bulk`; ayrı kalem açılmadı. Bkz. §D62.
+
+- **A14 (v2 kapsam süpürmesi · "31+ şablon" ADR-14 altında · 2026-08-01):** PRD §5.3'ün `Otomasyon`
+  hücresi _"NL skill + **görsel node/edge Workflow builder** (Workspace skill) + canlı preview;
+  **31+ şablon**"_ der. Görsel builder **ADR-14 ile ⛔** (UI yapılmaz, `workflows` tablosu şemada
+  kalır) — dolayısıyla "31+ şablon" hedefi de teknik olarak sahipsiz kalıyordu. **Varsayım:** şablon
+  **sayısı** hedefi ADR-14'ten bağımsız olarak onurlandırılabilir, çünkü **Skill şablon galerisi**
+  (05.1/05.2) v1'de ✅ teslim edildi ve **kendi deterministik yerel kataloğu** var. → İş kalemi
+  `05.6-tmpl31` olarak açıldı: skill şablon kataloğunu 31+'a çıkar. **Görsel canvas YAPILMAZ** —
+  ADR-14 aynen geçerli. Bkz. §D62.
+
 ## D. Deviations (sapmalar)
 
 - **D1 (dilim 2):** Redirect URI eşleşmesi **tam eşitlik** (OAuth 2.1). Kaynak platformun
@@ -2250,10 +3511,23 @@ görüneceği en son yerdir.
   sınırlar) + ReDoS-linear regresyon unit'i. LOW (email konu maskeleme sırası) da kapatıldı — konu
   artık **maskeli** sınıflandırılır (widget'la tutarlı, `maskedSubject` bir kez). Cross-tenant izole
   (RLS `withTenant`) + red-öncesi-yazma-yok + probing-oracle-yok denetimde onaylandı.
-- **D59 (E2E determinizm · tm 89 · 2026-07-31 · §D58 takip bulgusu):** §D58'de tm 89'a loglanan bulgu kapatıldı — GL-5 cc-mask (08.9.5) ile çakışan çıplak `Date.now()` mesaj-metni jetonları determinize edildi. **Kök neden:** ziyaretçi/ajan mesaj metnine gömülü çıplak `Date.now()` **13 hane** = kart uzunluğu; Luhn-geçerli düştüğü koşularda `lib/cc-mask.ts` `CARD_CANDIDATE` (`(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)`, ≥13 hane + Luhn) onu `**** **** **** NNNN`'e çevirir → `toContainText(rawText)` ~%10 olasılıkla kırılır (probabilistik flake). **Çözüm (tm 68 / demo-flow deseninin aynısı):** jetonlar `Date.now().toString().slice(-6)` ile **6 haneye** indirildi — 6 < 13 olduğundan `CARD_CANDIDATE`'in tabanına asla ulaşmaz → hiçbir zaman maskelenmez → metin **inşa gereği** verbatim round-trip eder (tek koşu bir olasılık-flake'i kanıtlayamaz; belirlenim regex tabanıyla kanıtlanır — sibling `customers:57`/`settings:203`/`settings:306` aynı idiom). **Düzeltilen 7 mesaj-metni sitesi:** `customers.spec.ts:101` · `traffic.spec.ts:23` · `settings.spec.ts:307`/`324` · `widget.spec.ts:120`/`153` **+ `widget.spec.ts:247`** (ek: ekli-dosya `caption`'ı, agent transcript'inde `toContainText` ile denetleniyor — aynı kusur; task'ın numaralı listesinde yoktu ama DoD "tam süit deterministik" gereği kapatıldı, HANDOFF'ta işaretli). **DOKUNULMADI (maskelenmez → flake değil):** URL/domain (`ai-agent:80` · `onboarding:62` · `settings:21`/`161`/`183`) + ayar/metadata alanları (`ai-agent:54` Tone · `ai-agent:78` knowledge Title · `campaigns:14` kampanya adı) — hiçbiri cc-mask yazım yolunda (`chats.ts`/`customer.ts` mesaj metni) değil; `onboarding:18` signup id'si (workspace adı/email, mesaj değil, `-random` ayrıca kesintiye uğratır). **Doğrulama (exit 0, kanıtla):** e2e typecheck · e2e lint · **e2e ilgili yeşil** — 4 etkilenen spec dosyası **32/32 passed** (customers/traffic/settings/widget; `.env` source'lu, nexa-db:5433/nexa-redis:6380 healthy, migrate current, global-setup seed [[nexa-e2e-clean-db]]) — düzeltilen her site fiilen koştu (customers:93 · settings:301 · traffic:12 · widget:118/134/228). **Kapsam:** yalnız apps/e2e (5 spec dosyası, test-jetonu üretimi) + PLAN(§D59)+HANDOFF; **kaynak kod DEĞİŞMEDİ** (yalnız test fixtürleri) → commit `test(e2e)`. **GL-6 (tm 68) takip bulgusu kapandı; GL-7 (tm 69) sırada.**
+- **D59-b (E2E determinizm · tm 89 · 2026-07-31 · §D58 takip bulgusu):** _(numara düzeltmesi 2026-08-01: bu kayıt da `D59` diye yazılmıştı — §D'de **iki ayrı D59** vardı. Spam filtre kaydı (tm 69) §5 tablosundan `§D59` diye referanslandığı için o numarayı korudu; bu kayıt `D59-b` oldu. Bkz. §D65.)_ §D58'de tm 89'a loglanan bulgu kapatıldı — GL-5 cc-mask (08.9.5) ile çakışan çıplak `Date.now()` mesaj-metni jetonları determinize edildi. **Kök neden:** ziyaretçi/ajan mesaj metnine gömülü çıplak `Date.now()` **13 hane** = kart uzunluğu; Luhn-geçerli düştüğü koşularda `lib/cc-mask.ts` `CARD_CANDIDATE` (`(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)`, ≥13 hane + Luhn) onu `**** **** **** NNNN`'e çevirir → `toContainText(rawText)` ~%10 olasılıkla kırılır (probabilistik flake). **Çözüm (tm 68 / demo-flow deseninin aynısı):** jetonlar `Date.now().toString().slice(-6)` ile **6 haneye** indirildi — 6 < 13 olduğundan `CARD_CANDIDATE`'in tabanına asla ulaşmaz → hiçbir zaman maskelenmez → metin **inşa gereği** verbatim round-trip eder (tek koşu bir olasılık-flake'i kanıtlayamaz; belirlenim regex tabanıyla kanıtlanır — sibling `customers:57`/`settings:203`/`settings:306` aynı idiom). **Düzeltilen 7 mesaj-metni sitesi:** `customers.spec.ts:101` · `traffic.spec.ts:23` · `settings.spec.ts:307`/`324` · `widget.spec.ts:120`/`153` **+ `widget.spec.ts:247`** (ek: ekli-dosya `caption`'ı, agent transcript'inde `toContainText` ile denetleniyor — aynı kusur; task'ın numaralı listesinde yoktu ama DoD "tam süit deterministik" gereği kapatıldı, HANDOFF'ta işaretli). **DOKUNULMADI (maskelenmez → flake değil):** URL/domain (`ai-agent:80` · `onboarding:62` · `settings:21`/`161`/`183`) + ayar/metadata alanları (`ai-agent:54` Tone · `ai-agent:78` knowledge Title · `campaigns:14` kampanya adı) — hiçbiri cc-mask yazım yolunda (`chats.ts`/`customer.ts` mesaj metni) değil; `onboarding:18` signup id'si (workspace adı/email, mesaj değil, `-random` ayrıca kesintiye uğratır). **Doğrulama (exit 0, kanıtla):** e2e typecheck · e2e lint · **e2e ilgili yeşil** — 4 etkilenen spec dosyası **32/32 passed** (customers/traffic/settings/widget; `.env` source'lu, nexa-db:5433/nexa-redis:6380 healthy, migrate current, global-setup seed [[nexa-e2e-clean-db]]) — düzeltilen her site fiilen koştu (customers:93 · settings:301 · traffic:12 · widget:118/134/228). **Kapsam:** yalnız apps/e2e (5 spec dosyası, test-jetonu üretimi) + PLAN(§D59)+HANDOFF; **kaynak kod DEĞİŞMEDİ** (yalnız test fixtürleri) → commit `test(e2e)`. **GL-6 (tm 68) takip bulgusu kapandı; GL-7 (tm 69) sırada.**
+
+- **D60 (Mobil 13.7 + 13.8-push → Faz 3 · gerekçe düzeltmesi · 2026-08-01 · v2 planlama turu):** FR-MOD-13.7 "Mobil uygulamalar" (ve 13.8'in mobil-push kanadı) v1 boyunca `🔒` damgalıydı ve gerekçesi **"web-öncelikli (PRD §11.1/8 ile hizalı)"** yazıyordu. **Bu tur bunun yanlış atıf olduğunu buldu:** PRD §11.1'in 8. maddesi _"**Masaüstü** native uygulama: web-öncelikli; opsiyonel/geç faz"_ der — **mobil hakkında değildir**. PRD'de mobil kapsam dışı da değildir: FR-MOD-13.7 `Should (v1)` önceliğindedir ve KK'sında _"Inbox/AI/CRM/Reports mobilde; push; **tam modül paritesi** (Nexa farklılaşması)"_ yazar; yani PRD onu bir **farklılaşma** kalemi sayar. Sonuç: kalem **gerekçesiz bir 🔒** taşıyordu ve §F.00'ın _"gerekçesiz `🔒` bir kapanış engelidir (gizlenmiş `⬜` olabilir)"_ kuralına takılıyordu — v1, farkında olunmadan, gerekçesiz bir kilitle kapandı. **Kapanış kararı değişmez** (mobil `Should`'tur, `Must` sayacına zaten girmiyordu; `20 ✅` sayımı doğru kaldı) — düzeltilen yalnız **gerekçe** ve **faz ataması**. **Kullanıcı kararı (2026-08-01):** Faz 3'e (Enterprise) ertelensin. **Yeni gerekçe (doğru olan):** native iOS/Android **bu deponun stack'i dışındadır** (ADR-01 TypeScript her yerde / ADR-02 pnpm+Turborepo monorepo: Fastify+React+Vite) — ayrı uygulama hattı, ayrı derleme zinciri, ayrı test piramidi ve store yayın süreci ister; ayrıca push altyapısı (APNs/FCM, MOCK'lanacak) cihaz-token yaşam döngüsü + 08.2 kanal tutarlılığı invariant'ı taşır. **Dokunulan satırlar:** §4.3 13.7 · §4.4.11 13.7 notu · §3.10 13.8 satırı (mobil push damgası) · üst-tablo v1 anlatısı (satır 36) · §4.4 v1 kapanış kapısı listesi · §F.00 v1 kapı satırı · §6 tablosu (**yeni satır**) · §6.1 kırılımı (**yeni satır, `[OPUS-MAX]` ~8–12 alt-görev**). **Task Master:** **tm 90** açıldı (Faz 3, `deferred`, orta derinlik — faz başında bölünecek). **Kod DEĞİŞMEDİ.**
+
+- **D61 (08.9.6 IP allowlist: Faz 3 → Faz 2 · PRD içi faz çelişkisi çözüldü · 2026-08-01):** Kalem PLAN §6/§6.1'de Faz-3'te duruyordu (tm 80). **Çelişki:** PRD'nin iki yeri farklı faz söylüyor — (a) **§5.3 "v2 (Faz 2)"** tablosunun `Güvenlik` satırı: _"IP allowlist, CC masking, banned customers, spam, temel audit log (tüm planlarda)"_ → v2; (b) **§6 FR-MOD-08.9.6** önceliği: `Could (Ent.)` → Enterprise. **Tiebreak (PLAN §1.1 omurga kuralı):** _"Çalışma sırası **PRD §5'in faz sırasıdır**; her faz içinde işler PRD §6'nın modül numaralarına göre gruplanır."_ Yani **§5 fazı belirler, §6 önceliği/gruplamayı belirler.** `Could (Ent.)` bir **öncelik** damgasıdır (düşük öncelik + Enterprise planında satılır), faz ataması değildir. **Destekleyici kanıt:** aynı §5.3 hücresindeki üç kardeş (08.9.5 CC masking · 08.9.2 banned customers · 08.9.3 spam) zaten v2'ydi ve GL-5/6/7 ile **öne bile çekildi** (§D52/§D57/§D58/§D59); IP allowlist'i tek başına iki faz ötede bırakmak asimetrik ve gerekçesizdi. **Karar:** → **Faz 2**, `[OPUS-MAX]` (erişim kontrolü sınırı). Dilim sıralamasında **erken** konumlandırıldı — sonradan eklenen güvenlik en pahalı borçtur. **Dokunulan:** §6 tablosu (üstü çizili + yönlendirme) · §6.1 (üstü çizili) · §5 tablosu (**yeni satır**) · §5.2 (**atomik kırılım**) · §G. **Task Master:** tm 80 v2'ye taşındı (başlık/detay/faz güncellendi).
+
+- **D62 (v2 kapsam süpürmesi — PLAN §5'te 12 kalem eksikti · 2026-08-01):** Bu tur v2'yi atomik bölmeden önce **kapsamı PRD'ye karşı süpürdü**: üç bağımsız kaynak paralel tarandı — (a) PRD **§5.3** v2 faz tablosunun her hücresi, (b) PRD **§5.5** modül→faz matrisinin v2 sütununda işaret taşıyan her modül, (c) PRD **§6**'nın `Oncelik` sütununda `(v2)` geçen her `FR-MOD` satırı — sonra üçü uzlaştırıldı. **Sonuç: v2 = 30 kalem.** İlk uzlaştırma `19 açık · 3 teslim · 1 kapsam dışı · 7 karar gerektiren` saydı; **7 karar kalemi PRD'den çözülünce** dağılım **nihai** hâlini aldı: **23 ⬜ açık · 4 ✅ teslim · 3 ⛔ kapsam dışı** (08.9.6 v3'ten v2'ye girdi §D61; 08.9.7-audit/09.2/01.1.3/12.4/05.6 açık kalem oldu; 06.2.3 ✅ teslim sayıldı; MOD-04/MOD-06 ⛔ oldu). §5.0'daki sayılar **tablodan sayılarak** üretildi (§1.2). **PLAN §5/§5.1 yalnız 18 kalem listeliyordu → 12 kalem eksikti.** Eksikler, çoğu PRD'de **proza içinde** geçtiği ve `FR-MOD` satırı olmadığı için gözden kaçmıştı: `⌘K AI komutları` (§5.5 MOD-01 v2 hücresi) · `zamanlanmış rapor export` (§5.3 Reports) · `çoklu-ajan çakışma uyarısı` (§5.3 Routing) · `07.7 rapor grupları v2 payı` (önceliği **`Should (v1–v2)`** — açıkça iki faza yayılıyor, v2 payı hiç açılmamış) · `100+ entegrasyon` (§5.5 MOD-09 v2) · `Copilot BI komut` (§5.5 MOD-12 v2) · `temel audit log tüm planlarda` (NFR-S12 + risk R5) · `08.9.6` (→ §D61) · `31+ şablon` (§5.3 Otomasyon) + §5.5'in tanımsız `○` derinleşmeleri (MOD-04 · MOD-06 · 06.2.3 NL skill). **Her "PLAN'da yok" iddiası hedefli grep ile teyit edildi** ve yanlış-pozitifler ayıklandı (ör. "çakışma" PLAN'da 4 kez geçiyor ama hiçbiri routing değil: RLS anahtar çakışması, OpenAPI anahtar çakışması, Playbook birleşimi, ticket-seçim effect'i). **Karar verilenler:** MOD-04 v2 `○` → somut `FR-MOD (v2)` satırı yok, kapsam tanımı yok → **ayrı kalem açılmadı** (§C-A12); MOD-06 v2 `○` → tek `(v2)` içeriği `06.3.2-bulk`'tur → **ayrı kalem açılmadı** (§C-A13); 06.2.3 NL skill → v1'de ✅ teslim, §5.3'teki tekrarı ⛔ builder'ın bağlamı → **yeni iş yok**; `31+ şablon` → ADR-14 canvas'ı ⛔ ama **şablon sayısı hedefi** ADR-14'e rağmen onurlandırılabilir (05.1/05.2 Skill şablon galerisi ✅ teslim, kendi kataloğu var) → **`05.6-tmpl31` olarak açıldı** (§C-A14). **Kalan 9 kalem v2 kırılımına dâhil edildi.**
+
+- **D63 (Etiket sistemi: tek boyutlu → model × efor matrisi · 2026-08-01):** `run-loop.sh` her temiz pencerenin modelini/eforunu görev başlığındaki etiketten okur. Eski sistem tek boyutluydu (`[XHIGH]`→opus/xhigh · `[MAX]`→opus/max; model `MODEL="opus"` ile sabit). **Sorun:** v2 iş kalemlerinin büyük bölümü mekaniktir (katalog verisi, liste/sekme UI, kontrat satırı, salt-okunur rapor kartı) ve bunları en pahalı modelle koşturmak, gerçekten muhakeme isteyen güvenlik/algoritma işlerinden bütçe çalar — v1'in ölçülen maliyeti opus-xhigh ~$13/pencere, opus-max ~$25–31/pencere. **Yeni sistem (kullanıcı talimatı):** `[SONNET-XHIGH]` · `[SONNET-MAX]` · `[OPUS-XHIGH]` · `[OPUS-MAX]`. **Efor tabanı `xhigh`** — matriste `high` ve altı YOK; kullanıcı kuralı: _"Güvenlik olarak high gereken işlerde xhigh kullansın."_ Güvenlik hassasiyeti olan hiçbir iş `sonnet`'e verilmez. Tam koşul listesi + bölme politikası **§5.1**'de. **Eski etiketler Faz-0/v1 tarihçesinde (§3 · §4 · §A · §B) olduğu gibi bırakıldı** — o işler bitti, etiketleri artık yalnız kayıt değeri taşıyor; yeni matris §5.2 (v2) ve §6.1 (Faz 3) için geçerlidir. **Bölme politikası da değişti:** eski tur "MAX işler bölünmez" diyordu; yeni talimat _"bütün taskları olabildiğince task ve subtasklara böleceksin"_ — tek istisna bir `[OPUS-MAX]` alt-görevin **güvenlik/algoritma çekirdeği** (bağlam bölününce güvenlik akıl yürütmesi kaybolur). Çekirdeğin etrafındaki ucuz yüzeyler (kontrat, migration, salt-okunur UI, seed) **ayrı ve daha ucuz etiketli** alt-göreve çıkarılır.
+
+- **D64 (2026-07-28 "hepsi deferred" kararının kapsamı düzeltildi · 2026-08-01):** Panel 2026-07-27'den beri **kritik** bir bulgu taşıyordu: _"run-loop duracak: bağımlılığı çözülmüş hiçbir görev kalmadı"_ — 19 açık görev var ama **0 seçilebilir**, çünkü hepsi `deferred` (seçilebilir = `pending` **ve** bağımlılıkları kapalı). İki ayrı GRAF-ONARIM penceresi (commit `15f9ce7`, `a8e2fe1`) bunu bağımsız teşhis etti, grafın sağlam olduğunu doğruladı ve **doğru olarak** graf mutasyonu yapmadı — çünkü elde **2026-07-28 kullanıcı kararı** vardı: _"proje hızla canlıya hazırlanacak; **dış entegrasyonlar deferred kalır**"_. **Bu turun bulgusu:** o karar **dış entegrasyonlar** için verilmişti, ama §4.5'in "GO-LIVE sonrası deferred kalanlar" bölümü onu **tüm v2+v3'e** (tm 63–84) uyguladı. Oysa listenin çoğu dış entegrasyon **değildir**: tm 63/64 (Reports v2) · 66 (skills-based routing) · 73–78 (Engage/Goals/Sales/Public KB/scheduler/Multibrand) tamamen iç iştir. Dış servise dokunanlar (Instagram/Zapier/API paketleri) bile MASTER-PROMPT'un _"Dış servisleri MOCK'la — arayüz + sahte sağlayıcı yaz"_ kuralına tabidir ve v1 bunu zaten **üç kanalda yaptı** (Messenger/Twilio/WhatsApp hepsi MOCK, tm 35). Yani gerçek kimlik/anahtar gerektiren **hiçbir v2 kalemi yok**. **Kullanıcı talimatı (2026-08-01)** — v2'nin eksiksiz ve atomik planlanması + Task Master'a aktarımı — 2026-07-28 kararının bu genişletilmiş yorumunu **geçersiz kılar**. **Sonuç:** v2 görevleri `deferred` → `pending`, alt-görevleriyle birlikte (§G · Task Master). Faz-3 kalemleri (tm 79–84, 90) `deferred` kalır — onlar gerçekten sonraki fazdır. Panelin kritik bulgusu bununla kapanır.
+
+- **D66 (v2 atomik kırılımı ayrı companion dosyaya alındı · 2026-08-01):** Faz-2'nin atomik kırılımı **23 kalem / ~180 alt-görev**tir ve her alt-görev ev formatının tam alan setini taşır (koda karşı `neden açık`, `dosyalar`, `referans desen`, `KK birebir`, `KK doğrulama`, `zorunlu testler`, `sözleşme`, `migration`). Bu, ham hâliyle **birkaç yüz KB** tutuyor. PLAN.md zaten ~305 KB ve `TASK-RUNNER-PROMPT.md` §0/4 her pencereye açıkça _"PLAN.md — **baştan sona OKUMA** (bağlamı boşa harcar)"_ diyor; dosyayı iki katına çıkarmak bu protokolü daha da zorlardı. **Karar:** kırılım **ikiye ayrıldı** — (a) **PLAN.md §5.2**: kalem başına **özet tablo** (her alt-görev: ID · başlık · etiket · bağımlılık · pencere) + kalem seviyesinde `KK birebir` + bölünmeyen çekirdek gerekçesi + varsayımlar/açık sorular; (b) **`PLAN-V2-KIRILIM.md`** (yeni companion): aynı alt-görevlerin **tam alan detayı**. **PLAN.md tek doğruluk kaynağı olmaya devam eder** (CLAUDE.md) — companion onun eki'dir, ayrı bir plan değildir; §5.2'deki her kalem sonunda buraya işaret eder ve numaralandırma (`5.2.N`) ile alt-görev ID'leri **birebir aynıdır**. **Pratikte pencere hiçbirini baştan sona okumaz:** Task Master alt-görevinin `details` alanı zaten o alt-görevin tam metnini taşır (aktarımda companion'dan üretildi), yani runner tek kaynaktan çalışır. Companion, bir kalemin komşularını veya çekirdek gerekçesini görmek istendiğinde okunur. **Risk ve azaltma:** iki dosyanın bayatlaması (bu deponun bilinen kusuru — §D52/§D53/§D55'in "TM'de bitti, PLAN'da ◐" deseni). Azaltma: özet tablo ile tam detay **aynı JSON kaynağından programatik üretildi**, elle kopyalanmadı; bir alt-görev değişirse ikisi birlikte yeniden üretilir.
 
 **Doküman düzeltmeleri (kaynakta sayı hatası):**
 
+- **D65 (§D numara çakışması · 2026-08-01):** §D'de **iki ayrı kayıt `D59` numarasını taşıyordu** — (a) GL-7 Spam filtre (tm 69) ve (b) E2E determinizm (tm 89). İkisi de 2026-07-31'de aynı gün yazılmış, ikincisi birincinin numarasını görmemiş. §5 tablosunun 08.9.3 satırı `§D59` diye **spam filtreye** referans verdiği için o numara korundu; e2e kaydı **`D59-b`** oldu. Referans kırılmadı.
 - v2-03 §8.5 başlığı "~63 scope" diyor, tablosu **58** sayıyor. Tablo esas alındı.
 - v2-03 §1.8 tablosu **24** hata tipi listeliyor (master prompt 23 diyor). Tablo esas alındı.
 - **Faz-0 özet satırı (satır 20) bayatlamıştı** (denetim 2026-07-26): "Genel durum" sütunu `51 ✅ · 3 ◐` gösteriyordu; §3.0–§3.10 gereksinim tabloları elle sayıldığında `54 ✅ · 0 ◐` çıkıyor. Sebep: üç `◐` kalemi (01.3, 02.4, 13.8) D23/D24/D26 çelişki denetimlerinde koda karşı doğrulanıp sırasıyla `◐`→`✅` çevrildi (satır işaretleri güncel), ancak özet satırı güncellenmedi — satır eklenmedi/silinmedi, `✅`+`◐` toplamı 54 sabit kaldı, yalnız 3 satır `◐`'den `✅`'e geçti. Özet gerçek sayıma göre düzeltildi (yalnız "Genel durum" sütunu; gereksinim işaretlerine dokunulmadı).
@@ -2315,9 +3589,13 @@ koşuldu (kanıt HANDOFF §F.2 · §D55). _Tarihçe: kapanış öncesi damga "45
 
 **v1 (Faz 1) kapısı (2026-07-31 · GL-4 · tm 88):** **20 ✅ · 0 ◐ · 0 ⬜** (Must) → **✅ KAPALI**. §4.4
 kapanış kapısı listesi (05.1/05.3/05.5 · 06.1–06.4 · 08.5.4–.6 · 08.8.4 · 02.1.2 · 04.2 · +10.1.4)
-`0 ◐/⬜`; mobil (13.7 · 13.8-push) 🔒 gerekçeli (§11.1/8, web-öncelikli). §F.1'in **10 maddesi tam
-sürüm** + **tam E2E süiti** koşuldu (kanıt HANDOFF §F.2 · §D56). _Tarihçe: kapanış öncesi damga
-"denetlendi §4 — çoğu ⬜/◐ → AÇIK" idi; öne çekme + sonraki dilimler payı doldurmuştu, tur koşulmamıştı._
+`0 ◐/⬜`; mobil (13.7 · 13.8-push) 🔒 — **gerekçesi 2026-08-01'de düzeltildi ve kalem Faz 3'e atandı**
+(§D60): kapanış anındaki gerekçe "§11.1/8, web-öncelikli" idi ama §11.1/8 masaüstü native app maddesidir;
+yani kapanış **gerekçesiz bir 🔒 ile** yapılmış oldu. Sayaca girmediği için `20 ✅` sayımı ve kapanış
+kararı **değişmez** (mobil `Must (v1)` değil, `Should`'tur) — düzeltilen yalnız gerekçe + faz ataması.
+§F.1'in **10 maddesi tam sürüm** + **tam E2E süiti** koşuldu (kanıt HANDOFF §F.2 · §D56). _Tarihçe:
+kapanış öncesi damga "denetlendi §4 — çoğu ⬜/◐ → AÇIK" idi; öne çekme + sonraki dilimler payı
+doldurmuştu, tur koşulmamıştı._
 
 ### F.0 — Periyodik Denetim (mini kapanış turu)
 

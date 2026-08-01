@@ -6,6 +6,104 @@
 
 ## Task log (newest-first)
 
+### V2-PLAN · Faz-2 kapsam süpürmesi + tam atomik kırılım — done — 2026-08-01 UTC
+
+- **Neden açıldı:** Faz-0 ve v1 kapandı (GL-3/GL-4); sıradaki iş Faz-2. Ama Task Master'da
+  **0 seçilebilir görev** vardı (19 açık görevin hepsi `deferred`) → panel 2026-07-27'den beri
+  `critical` bulgu taşıyordu ve run-loop "Hazır task kalmadı" deyip duruyordu. Kullanıcı talimatı:
+  v2'yi **eksiksiz** ve **en ince detayına kadar** böl; her işe doğru model+efor ayarını ver.
+
+- **Yapıldı — 1) Kapsam süpürmesi (asıl bulgu).** v2 kapsamı üç bağımsız kaynaktan paralel tarandı
+  ve uzlaştırıldı: PRD **§5.3** (v2 faz tablosunun her hücresi) · PRD **§5.5** (modül→faz matrisinin
+  v2 sütunu) · PRD **§6** (`Öncelik` sütununda `(v2)` geçen her `FR-MOD`). Sonuç: **v2 = 30 kalem**
+  (ilk uzlaştırma: 19 açık · 3 teslim · 1 kapsam dışı · 7 karar gerektiren; **7 karar PRD'den çözülünce nihai dağılım 23 ⬜ · 4 ✅ · 3 ⛔**). **PLAN §5 yalnız 18 listeliyordu → 12
+  kalem eksikti.** Eksiklerin çoğu PRD'de proza içinde geçtiği ve kendi `FR-MOD` satırı olmadığı
+  için gözden kaçmıştı. Her "PLAN'da yok" iddiası hedefli `grep` ile teyit edildi, yanlış-pozitifler
+  ayıklandı (ör. "çakışma" PLAN'da 4 kez geçiyor, hiçbiri routing değil). → PLAN §5.0 · §D62
+
+- **Yapıldı — 2) Yedi faz çelişkisi PRD'den çözüldü** (kullanıcı: _"Ne yapacağına ürün gereksinim
+  md içinden karar vereceksin"_):
+  - **08.9.6 IP allowlist** — PRD §5.3 "v2" der, FR-MOD "Could (Ent.)" der, PLAN Faz-3'e koymuş.
+    Tiebreak PLAN §1.1: _"Çalışma sırası PRD §5'in faz sırasıdır"_ → **§5 fazı, §6 önceliği belirler**
+    → **v2**. Kardeşleri (CC-mask/banned/spam) zaten v2 ve öne bile çekilmişti. → §D61
+  - **08.5.7 Instagram** ikili etiketi (`Ent./v2`) → PRD §11.1/7 + Telegram'ın Faz-3'te olması → **v2**.
+  - **07.7 Rapor grupları** — önceliği `Should (v1–v2)`, **açıkça iki faza yayılıyor**; v1 payı
+    teslim, v2 payı (PDF/benchmark/Save view/Team performance) hiç açılmamıştı → **yeni kalem**.
+  - **06.2.3 NL skill** → v1'de ✅; §5.3'teki tekrarı ⛔ builder'ın bağlamı → yeni iş yok.
+  - **§5.5 MOD-04 / MOD-06 çıplak `○`** → somut FR yok → ayrı kalem açılmadı (§C-A12/A13).
+  - **Temel audit log** → NFR-S12 + risk R5; yazıcı ✅ (tm 23) ama **okuma yüzeyi yok** (OpenAPI'de
+    audit path grep 0) → v2 payı gerçek: plan/tier kapısı + 30 gün + ekran → **yeni kalem**.
+  - **31+ şablon** → ADR-14 canvas'ı ⛔ ama şablon sayısı hedefi Skill galerisi üzerinden
+    onurlandırılabilir → `05.6-tmpl31` (§C-A14).
+
+- **Yapıldı — 3) Mobil (13.7 + 13.8-push) → Faz 3, gerekçe düzeltildi.** PLAN'daki `🔒` gerekçesi
+  _"PRD §11.1/8 ile hizalı"_ diyordu; **§11.1/8 masaüstü native uygulama maddesidir, mobil değil** —
+  yanlış atıf. PRD'de 13.7 `Should (v1)` ve KK'sı _"tam modül paritesi (Nexa farklılaşması)"_ diyor,
+  yani kapsam dışı değil. Kalem **gerekçesiz 🔒** durumundaydı → §F.00'a göre gizlenmiş `⬜`.
+  v1 kapanış kararı **değişmez** (mobil `Should`, `Must` sayacına girmiyordu). Kullanıcı kararı:
+  Faz 3. Doğru gerekçe: native iOS/Android **stack dışı** (ADR-01/02). → tm 90 · §D60
+
+- **Yapıldı — 4) Etiket sistemi: model × efor matrisi.** `[SONNET-XHIGH]` · `[SONNET-MAX]` ·
+  `[OPUS-XHIGH]` · `[OPUS-MAX]`. Efor tabanı **xhigh** (matriste `high` ve altı yok); güvenlik işi
+  asla `sonnet`'e verilmez. Bölme politikası: **her şey bölünür**, tek istisna bir `OPUS-MAX`
+  alt-görevin güvenlik/algoritma **çekirdeği** (bağlam bölününce güvenlik akıl yürütmesi kaybolur);
+  çekirdeğin etrafındaki ucuz yüzeyler ayrı ve daha ucuz etiketli alt-göreve çıkarılır. → §5.1 · §D63
+
+- **Yapıldı — 5) Atomik kırılım: 23 kalem → 196 alt-görev · ~228 pencere · 9 dilim.**
+  Akış: kapsam süpürmesi → kalem başına **kaynak çıkarımı** (PRD KK birebir + koda karşı recon) →
+  **atomik kırılım**. Her alt-görev `dosyalar` + `referans desen` taşır — Sonnet penceresinin işi
+  başlatabilmesini bu iki alan sağlar. **Etiket dağılımı:** `SONNET-XHIGH` 95 · `SONNET-MAX` 5 ·
+  `OPUS-XHIGH` 65 · `OPUS-MAX` 31 → **%51 Sonnet**.
+  - **Nerede durdu:** planlanan **adversarial denetim** turu (her `SONNET-*`'ın 6 koşula karşı
+    yeniden sınanması) ve çapraz-kesit ajanları **oturum limitine takıldı** ve KOŞULAMADI.
+    Denetim turu olmadan da kırılım kanıtlıdır (kaynak çıkarımı koda karşı yapıldı), ama
+    **bağımsız ikinci göz geçmedi** — bu bir borçtur, aşağıda "sonraki pencereye not"ta.
+  - **Elle yazılan 3 kalem:** `01.1.3-ai`, `12.4-bi`, `05.6-tmpl31` kırılımları limit yüzünden
+    ajanla üretilemedi; kaynak verileri mevcut olduğu için orkestratör tarafından **elle** aynı
+    formatta yazıldı (ev formatının tam alan seti + KK türetme gerekçesi + negatif testler).
+  - **Kalite spot-check (orkestratör, bağımsız):** kırılımın 5 kod iddiası koda karşı doğrulandı —
+    `by_hour/by_team/by_channel` grep 0 ✓ · `EXTRACT(HOUR` 0 ✓ · `ReportsBreakdown` satır 1908 ✓ ·
+    `csv-parse`/`papaparse`/`multipart` bağımlılığı yok ✓ · `apps/api/src/lib/` içeriği birebir ✓.
+
+- **Yapıldı — 6) 2026-07-28 "hepsi deferred" kararının kapsamı düzeltildi.** O karar **dış
+  entegrasyonlar** için verilmişti ama §4.5 onu tüm v2+v3'e uygulamıştı. Oysa tm 63/64/66/73–78
+  tamamen iç iştir; dış servise dokunanlar bile MASTER-PROMPT'un _"Dış servisleri MOCK'la"_ kuralına
+  tabidir ve v1 bunu üç kanalda zaten yaptı (tm 35). **Gerçek kimlik gerektiren hiçbir v2 kalemi
+  yok.** v2 görevleri `deferred` → `pending`. Faz-3 (tm 79–84, 90) `deferred` kalır. → §D64
+
+- **Yapıldı — 7) `run-loop.sh` yeni etiketleri okuyor.** Etiket artık hem **modeli** hem **eforu**
+  seçiyor: `pick_next` şemasına `model` alanı eklendi, prompt dört etiketi (+ eski `[MAX]`/`[XHIGH]`
+  geriye uyumluluğunu) çözecek şekilde yazıldı, `stream_task` üçüncü parametre olarak modeli alıyor,
+  `quota_gate` sonnet pencereleri için kapıyı orantılı gevşetiyor (RESERVE_PCT'ye dokunmadan).
+  Etiket belirsizse **güvenli tarafa** düşer: `opus`+`max`. `bash -n` temiz.
+
+- **Doğrulama:** Kod DEĞİŞMEDİ (uygulama kodu) — bu bir **planlama turu**; tek kod dokunuşu
+  `run-loop.sh` (harness). DoD kod kapıları N/A (uygulama kodu değişmedi).
+  Doküman tutarlılığı: PLAN §5 (başlık+§5.0+§5.1+§5.2+§5.3) · §6/§6.1 (mobil girdi, 08.9.6 çıktı) ·
+  §C (A12/A13/A14) · §D (D60–D66) · §G (v2 dilim + 196 satırlık düz tablo + Toplamlar + Kritik yol)
+  · `PLAN-V2-KIRILIM.md` (yeni companion, 23 kalem / 196 girdi) · HANDOFF · Task Master.
+  **Task Master:** 99 görev (9 yeni: tm 91–99) · **196 yeni alt-görev** · 23 v2 üst görevi
+  `deferred`→`pending` · tm 90 (mobil) `deferred` (Faz 3) · `validate_dependencies` ✅ temiz.
+  Etiket sayımı TM'de doğrulandı: 95/5/65/31 — PLAN §5.2 ile birebir.
+
+- **Varsayımlar:** §C-A12 (MOD-04 v2 `○` gereksinim değil) · §C-A13 (MOD-06 v2 payı = 06.3.2-bulk) ·
+  §C-A14 (31+ şablon ADR-14 uyumlu ikame). Kalem bazlı varsayımlar `PLAN-V2-KIRILIM.md`'de listeli.
+
+- **AÇIK BORÇ (bir sonraki pencere bunu bilsin):** **adversarial denetim turu koşulmadı** (oturum
+  limiti). Kırılım kaynak-çıkarımı koda karşı yapıldığı için sağlamdır ve orkestratör 5 iddiayı
+  bağımsız doğruladı — ama **her `SONNET-*` etiketinin 6 koşula karşı ikinci-göz denetimi** ve
+  **her KK metninin PRD'de yeniden aranması** yapılmadı. Pratik risk: yanlış bir `SONNET` etiketi
+  (güvenlik işinin küçük modele düşmesi). **Azaltma:** her dilime başlamadan önce o dilimin
+  `SONNET-*` alt-görevlerini §5.1.1'in 6 koşuluna karşı gözden geçir; şüpheliyi `OPUS-XHIGH`'a
+  yükselt. Bu, dilim başına ~10 dakikalık bir kontroldür ve dilim kapanış kapısının parçasıdır.
+- **Sonraki pencereye not:** v2 artık **koşulabilir** — run-loop seçilebilir görev bulacak.
+  Çalışma sırası §G'deki v2 dilim gruplamasıdır; güvenlik kalemleri (08.9.6 · 08.6.3-conflict)
+  bilinçli olarak **erken** dilimlere kondu (sonradan eklenen güvenlik en pahalı borçtur).
+  **Multibrand** kararı §5.3'te gerekçeli: tenant izolasyonunun genişlemesi olduğu için
+  konumu diğer v2 yüzeylerine marka boyutu eklemek zorunda kalmamak açısından kritik.
+  Kalem başına **açık sorular** (ürün kararı bekleyenler) `PLAN-V2-KIRILIM.md`'de işaretli —
+  bir dilime başlamadan önce o kalemin açık sorularına bak.
+
 ### GRAF-ONARIM (2. doğrulama penceresi) · run-loop "0 seçilebilir" yeniden teşhis — NO-OP — done — 2026-08-01 UTC
 
 - **Neden açıldı:** run-loop yine 0 seçilebilir görev bulup düzeltme penceresi dispatch etti. Aynı

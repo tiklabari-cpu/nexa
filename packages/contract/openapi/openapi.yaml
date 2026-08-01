@@ -900,11 +900,12 @@ components:
 
         `ip_allowlist_enforced`, `session_idle_timeout_seconds` and
         `max_concurrent_sessions` are the session policy fields
-        (FR-MOD-08.9.6). This surface is read-only for them: it reports
-        columns nothing writes or enforces yet, so every workspace reads the
-        same defaults — `false`, and null for both limits, meaning the
-        existing `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) still governs
-        concurrent sessions.
+        (FR-MOD-08.9.6). `PATCH` validates and stores them, but nothing
+        enforces them yet — idle-timeout and concurrent-session enforcement is
+        FR-MOD-08.9.6-g. A workspace that has never saved them reads the same
+        defaults — `false`, and null for both limits, meaning the existing
+        `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) still governs concurrent
+        sessions.
       required:
         [
           banned_customer_ips,
@@ -943,13 +944,14 @@ components:
         ip_allowlist_enforced:
           type: boolean
           description: >-
-            Whether `banned_customer_ips` (an allowlist model, FR-MOD-08.9.6)
+            Whether `ip_allowlist_entries` (the allowlist model, FR-MOD-08.9.6)
             is enforced. Defaults to false; nothing enforces this yet.
         session_idle_timeout_seconds:
           type: integer
           format: int32
           nullable: true
           minimum: 1
+          maximum: 2592000
           description: >-
             Seconds of inactivity before a session is force-expired, or null
             when the policy is off (the default — nothing enforces this yet).
@@ -958,6 +960,7 @@ components:
           format: int32
           nullable: true
           minimum: 1
+          maximum: 25
           description: >-
             Per-owner cap on simultaneous active sessions, or null to fall
             back to the fixed `MAX_ACTIVE_TOKENS_PER_OWNER` limit (25).

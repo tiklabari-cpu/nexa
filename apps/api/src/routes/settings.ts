@@ -25,6 +25,7 @@ import {
 } from '../lib/ip-allowlist.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
+import { MAX_ACTIVE_TOKENS_PER_OWNER } from '../services/auth/token-service.js';
 
 const SHORTCUT = /^[A-Za-z0-9_-]{1,40}$/;
 
@@ -136,6 +137,14 @@ const updateChatTimeoutBody = z.object({
 });
 
 /**
+ * Same 30-day ceiling as `chat_timeout_seconds`: an idle window longer than
+ * this is indistinguishable from "off" but still a real number the
+ * enforcement sweep (FR-MOD-08.9.6-g) would act on, so it is rejected rather
+ * than stored.
+ */
+const SESSION_IDLE_TIMEOUT_MAX_SECONDS = CHAT_TIMEOUT_MAX_SECONDS;
+
+/**
  * Widget appearance (FR-MOD-11.7). Every field is optional so the customisation
  * screen can save one control at a time, but a body with none is rejected —
  * empty is a mistake, not "reset to defaults". The colour is pinned to the same
@@ -177,6 +186,27 @@ const updateSecurityBody = z
     max_file_size_bytes: z.number().int().min(1).max(MAX_FILE_SIZE_CEILING).optional(),
     spam_filter_enabled: z.boolean().optional(),
     require_two_factor: z.boolean().optional(),
+    ip_allowlist_enforced: z.boolean().optional(),
+    // `.positive()` rejects zero/negative for the same reason chat-timeout
+    // does: 0 is not "off" here, null is — a stored 0 would reach the
+    // enforcement sweep as a real number and expire every session at once.
+    session_idle_timeout_seconds: z
+      .number()
+      .int()
+      .positive()
+      .max(SESSION_IDLE_TIMEOUT_MAX_SECONDS)
+      .nullable()
+      .optional(),
+    // Capped at `MAX_ACTIVE_TOKENS_PER_OWNER`: token issuance already refuses
+    // a 26th live session, so a stored value above that ceiling could never
+    // take effect and would only mislead whoever reads it back.
+    max_concurrent_sessions: z
+      .number()
+      .int()
+      .positive()
+      .max(MAX_ACTIVE_TOKENS_PER_OWNER)
+      .nullable()
+      .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -589,6 +619,15 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
           : {}),
         ...(body.require_two_factor !== undefined
           ? { requireTwoFactor: body.require_two_factor }
+          : {}),
+        ...(body.ip_allowlist_enforced !== undefined
+          ? { ipAllowlistEnforced: body.ip_allowlist_enforced }
+          : {}),
+        ...(body.session_idle_timeout_seconds !== undefined
+          ? { sessionIdleTimeoutSeconds: body.session_idle_timeout_seconds }
+          : {}),
+        ...(body.max_concurrent_sessions !== undefined
+          ? { maxConcurrentSessions: body.max_concurrent_sessions }
           : {}),
       };
 

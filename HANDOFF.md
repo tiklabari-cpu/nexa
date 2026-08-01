@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+### tm 80.6 — 08.9.6-f PATCH /settings/security — oturum politikası alanlarının yazma yüzeyi (validasyon + audit) — done — 2026-08-01 UTC
+
+- **Yapıldı:** `updateSecurityBody` zod şemasına üç katkısal alan — `ip_allowlist_enforced: z.boolean().optional()`,
+  `session_idle_timeout_seconds`/`max_concurrent_sessions`: `z.number().int().positive().max(<üst sınır>).nullable().optional()`
+  (chat-timeout deseninin birebir kopyası — `.positive()` sıfır/negatifi reddeder, `null` = kapalı). Üst sınırlar:
+  idle timeout `CHAT_TIMEOUT_MAX_SECONDS` (30 gün) ile aynı sabit; concurrent sessions `MAX_ACTIVE_TOKENS_PER_OWNER`
+  (25) — ikisi de token-service.ts'ten import edilerek tek kaynaktan alındı, ayrı sabit tanımlanmadı. PATCH data
+  bloğuna üç katkısal spread satırı. `packages/contract/openapi/paths/settings.yaml` + re-bundle. Mevcut
+  `settings.security_updated` audit yazımı (yalnız değişen alan adları) davranışsız kaldı — yeni testle doğrulandı.
+  `apps/api/test/integration/settings.test.ts`'ye 4 test: round-trip + null-ile-kapatma, 8 değerli negatif tablo
+  (0/negatif/float/üst-sınır-üstü × iki alan), audit metadata'da yalnız değişen alan adları, cross-tenant izolasyon.
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w test` ✅ (1089/1089, unit+integration
+  birlikte — `test/integration/*` aynı `vitest run` içinde, `contract-parity.test.ts` dahil) · `pnpm -w build` ✅ ·
+  `apps/e2e` `settings.spec.ts` (12/12, dokunulan `/settings/security` PATCH yolunun regresyon kontrolü) ✅.
+- **Varsayımlar:** Bu pencere açıldığında task zaten `in-progress` ve kod/test/kontrat WIP olarak çalışma alanında
+  hazırdı (önceki pencere yarım bırakmış, işaretlemeyi atlamış olabilir) — sıfırdan yazılmadı, mevcut hal
+  denetlendi, DoD kapısından geçirildi ve kapatıldı.
+- **Sonraki pencereye not:** Kalan (◐) `08.9.6`: `-g` oturum politikası enforcement (idle timeout sweep +
+  eşzamanlı oturum limiti — bu task'ın kapsam dışı bıraktığı asıl iş), `-h` Settings UI, `-i` uçtan uca doğrulama.
+  `-g` `[OPUS-MAX]` — token-service.ts'teki `touch()` fire-and-forget yazımı ile `resolve()` okuması arasındaki
+  yarış + toplu revoke invariant'ı birlikte ele alınmalı (PLAN §5.2.10 bölünmeyen-çekirdek notu).
+
 ### tm 80.5 — 08.9.6-e IP allowlist enforcement — auth onRequest kapısı + trustProxy taklit yüzeyi + not_allowed/audit — done — 2026-08-01 UTC
 
 - **Yapıldı:** Allowlist'i **ısıran** enforcement noktası — `apps/api/src/plugins/auth.ts` `onRequest`

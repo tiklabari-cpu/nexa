@@ -584,8 +584,8 @@ describe('settings', () => {
         session_idle_timeout_seconds: fromSchema.sessionIdleTimeoutSeconds,
         max_concurrent_sessions: fromSchema.maxConcurrentSessions,
       });
-      // Session policy is off until something writes it (08.9.6-a ships no
-      // write surface): the allowlist flag is false, both limits are null.
+      // Session policy is off until something writes it: the allowlist flag
+      // is false, both limits are null.
       expect(body.ip_allowlist_enforced).toBe(false);
       expect(body.session_idle_timeout_seconds).toBeNull();
       expect(body.max_concurrent_sessions).toBeNull();
@@ -751,6 +751,121 @@ describe('settings', () => {
       });
       expect(theirs?.maxFileSizeBytes).toBe(999);
       expect(theirs?.fileSharingEnabled).toBe(false);
+    });
+
+    // --- Session policy write surface (FR-MOD-08.9.6-f) -----------------------
+    //
+    // Validation and storage only — nothing enforces these yet (that is
+    // 08.9.6-g). What matters here is that a saved value round-trips exactly,
+    // a value that could never be enforced (zero, negative, or above the
+    // ceiling) is rejected before it is stored, and `null` is the one way to
+    // turn a limit back off.
+
+    it('stores session policy fields and reads them back, off by null', async () => {
+      const saved = await server.patch(
+        '/settings/security',
+        {
+          ip_allowlist_enforced: true,
+          session_idle_timeout_seconds: 900,
+          max_concurrent_sessions: 3,
+        },
+        auth(adminToken),
+      );
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({
+        ip_allowlist_enforced: true,
+        session_idle_timeout_seconds: 900,
+        max_concurrent_sessions: 3,
+      });
+
+      const after = await server.get('/settings/security', auth(readToken));
+      expect(after.json()).toMatchObject({
+        ip_allowlist_enforced: true,
+        session_idle_timeout_seconds: 900,
+        max_concurrent_sessions: 3,
+      });
+
+      // null turns a limit back off, the same as never having saved it.
+      const cleared = await server.patch(
+        '/settings/security',
+        { session_idle_timeout_seconds: null, max_concurrent_sessions: null },
+        auth(adminToken),
+      );
+      expect(cleared.statusCode).toBe(200);
+      expect(cleared.json()).toMatchObject({
+        session_idle_timeout_seconds: null,
+        max_concurrent_sessions: null,
+        // Untouched field keeps its saved value rather than resetting.
+        ip_allowlist_enforced: true,
+      });
+    });
+
+    it('rejects a zero, negative, non-integer or above-ceiling session-policy limit', async () => {
+      // 2_592_001 and 26 sit one past the 30-day / MAX_ACTIVE_TOKENS_PER_OWNER
+      // ceilings — a value the enforcement sweep (08.9.6-g) could never act on
+      // as written.
+      const bad = [
+        { session_idle_timeout_seconds: 0 },
+        { session_idle_timeout_seconds: -1 },
+        { session_idle_timeout_seconds: 1.5 },
+        { session_idle_timeout_seconds: 2_592_001 },
+        { max_concurrent_sessions: 0 },
+        { max_concurrent_sessions: -1 },
+        { max_concurrent_sessions: 1.5 },
+        { max_concurrent_sessions: 26 },
+      ];
+      for (const body of bad) {
+        const response = await server.patch('/settings/security', body, auth(adminToken));
+        expect(response.statusCode, `${JSON.stringify(body)} should be rejected`).toBe(400);
+        expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
+      }
+    });
+
+    it('records a session-policy change with only the changed field names', async () => {
+      const auditWhere = { licenseId: fx.a.licenseId, action: 'settings.security_updated' };
+      const before = await owner.auditLogEntry.count({ where: auditWhere });
+
+      const response = await server.patch(
+        '/settings/security',
+        { ip_allowlist_enforced: true, max_concurrent_sessions: 5 },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(200);
+      expect(await owner.auditLogEntry.count({ where: auditWhere })).toBe(before + 1);
+
+      const entry = await owner.auditLogEntry.findFirst({
+        where: auditWhere,
+        orderBy: { createdAt: 'desc' },
+      });
+      const fields = (entry?.metadata as { fields: string[] }).fields;
+      expect(fields).toEqual(
+        expect.arrayContaining(['ip_allowlist_enforced', 'max_concurrent_sessions']),
+      );
+      expect(fields).toHaveLength(2);
+    });
+
+    it("never lets one tenant's session policy reach another's row", async () => {
+      await owner.securitySettings.create({
+        data: { licenseId: fx.b.licenseId, ipAllowlistEnforced: true, maxConcurrentSessions: 7 },
+      });
+
+      // Their policy must not leak into our read...
+      const read = await server.get('/settings/security', auth(readToken));
+      expect(read.json()).toMatchObject({ ip_allowlist_enforced: false, max_concurrent_sessions: null });
+
+      // ...and our write must not reach it.
+      const written = await server.patch(
+        '/settings/security',
+        { ip_allowlist_enforced: false, max_concurrent_sessions: 1 },
+        auth(adminToken),
+      );
+      expect(written.statusCode).toBe(200);
+
+      const theirs = await owner.securitySettings.findUnique({
+        where: { licenseId: fx.b.licenseId },
+      });
+      expect(theirs?.ipAllowlistEnforced).toBe(true);
+      expect(theirs?.maxConcurrentSessions).toBe(7);
     });
   });
 

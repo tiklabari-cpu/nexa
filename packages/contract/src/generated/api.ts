@@ -1984,6 +1984,12 @@ export interface paths {
      *     types (`type/subtype`) and stored lowercased: an entry like `.pdf` or
      *     `pdf` would sit in the list looking like a rule while matching no upload
      *     the browser ever labels.
+     *
+     *     `ip_allowlist_enforced`, `session_idle_timeout_seconds` and
+     *     `max_concurrent_sessions` (FR-MOD-08.9.6) are validated and stored here
+     *     but not yet enforced — idle-timeout and concurrent-session enforcement
+     *     is FR-MOD-08.9.6-g. A zero or negative value is rejected for the two
+     *     limits; `null` is how a limit is turned off.
      */
     patch: operations['updateSecuritySettings'];
     trace?: never;
@@ -3410,11 +3416,12 @@ export interface components {
      *
      *     `ip_allowlist_enforced`, `session_idle_timeout_seconds` and
      *     `max_concurrent_sessions` are the session policy fields
-     *     (FR-MOD-08.9.6). This surface is read-only for them: it reports
-     *     columns nothing writes or enforces yet, so every workspace reads the
-     *     same defaults — `false`, and null for both limits, meaning the
-     *     existing `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) still governs
-     *     concurrent sessions.
+     *     (FR-MOD-08.9.6). `PATCH` validates and stores them, but nothing
+     *     enforces them yet — idle-timeout and concurrent-session enforcement is
+     *     FR-MOD-08.9.6-g. A workspace that has never saved them reads the same
+     *     defaults — `false`, and null for both limits, meaning the existing
+     *     `MAX_ACTIVE_TOKENS_PER_OWNER` constant (25) still governs concurrent
+     *     sessions.
      */
     SecuritySettings: {
       /** @description Visitor IPs refused a widget token and blocked from starting a chat (FR-MOD-08.9.2). Stored in canonical form; an IPv4-mapped IPv6 address matches its bare IPv4 form. */
@@ -3430,7 +3437,7 @@ export interface components {
       max_file_size_bytes: number;
       spam_filter_enabled: boolean;
       require_two_factor: boolean;
-      /** @description Whether `banned_customer_ips` (an allowlist model, FR-MOD-08.9.6) is enforced. Defaults to false; nothing enforces this yet. */
+      /** @description Whether `ip_allowlist_entries` (the allowlist model, FR-MOD-08.9.6) is enforced. Defaults to false; nothing enforces this yet. */
       ip_allowlist_enforced: boolean;
       /**
        * Format: int32
@@ -8131,6 +8138,9 @@ export interface operations {
           max_file_size_bytes?: number;
           spam_filter_enabled?: boolean;
           require_two_factor?: boolean;
+          ip_allowlist_enforced?: boolean;
+          session_idle_timeout_seconds?: number | null;
+          max_concurrent_sessions?: number | null;
         };
       };
     };

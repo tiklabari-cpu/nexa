@@ -96,6 +96,10 @@
   (güvenlik işinin küçük modele düşmesi). **Azaltma:** her dilime başlamadan önce o dilimin
   `SONNET-*` alt-görevlerini §5.1.1'in 6 koşuluna karşı gözden geçir; şüpheliyi `OPUS-XHIGH`'a
   yükselt. Bu, dilim başına ~10 dakikalık bir kontroldür ve dilim kapanış kapısının parçasıdır.
+- **Dilim sırası bağımlılıkla zorlandı:** run-loop `next` seçimi önceliğe + görev numarasına
+  bakar, dilim tablosunu okumaz. Bu yüzden `V2-2` (Multibrand) → üç güvenlik görevine,
+  `V2-3…V2-9` → `V2-2`'ye bağlandı. Doğrulama: panel `next` = **#80 08.9.6 (dilim V2-1)**,
+  20 görev sıra bekliyor, `validate_dependencies` temiz.
 - **Sonraki pencereye not:** v2 artık **koşulabilir** — run-loop seçilebilir görev bulacak.
   Çalışma sırası §G'deki v2 dilim gruplamasıdır; güvenlik kalemleri (08.9.6 · 08.6.3-conflict)
   bilinçli olarak **erken** dilimlere kondu (sonradan eklenen güvenlik en pahalı borçtur).

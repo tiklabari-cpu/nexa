@@ -2107,6 +2107,14 @@ MOD-13.3"). `09.4 Zapier/partner` → webhooks ✅ (tm 34) üzerine. `08.5.7 Ins
 | 9 | **Kanal + Vardiya** | Instagram DM (MOCK) · work scheduler | `08.5.7` · `Work scheduler` | 18 | 20 | İkisi de ✅ → **Faz-2 §F.00 kapanır** |
 | | | | **9 dilim · 23 kalem** | **196** | **228** | |
 
+**Sıra Task Master'da zorlanır (bilgi değil, kısıt):** dilim sırası yalnız bu tabloda yazılı
+kalsaydı run-loop onu görmezdi — `next` seçimi önceliğe, eşitlikte görev numarasına bakar.
+Bu yüzden sıra **bağımlılıkla** kodlandı: `V2-2` (Multibrand) üç güvenlik görevini bekler;
+`V2-3…V2-9`'un tamamı `V2-2`'yi bekler. Böylece **önce güvenlik, sonra marka izolasyonu, sonra
+geri kalan her şey (birbirine paralel)** akışı yapısal olarak garanti edilir — §5.3.1'in
+gerekçesi bir tavsiye değil, grafın şekli hâline gelir. Doğrulama: panel `next` = `08.9.6`
+(dilim V2-1) · 20 görev sıra bekliyor · `validate_dependencies` temiz.
+
 ## 6. FAZ 3 — Enterprise (PRD §5.4)
 
 **Çıkış kriteri (PRD):** Enterprise ARR ≥%25 · SOC2 Type II + ISO 27001 · churn <%5/yıl.
@@ -2408,6 +2416,14 @@ yüzeyler açılmadan önce). Her dilim bir §F.00 kapanış kapısı taşır.
 | 8 | **Engage** | Traffic gelişmiş · Goals hunisi · Sales tracker | `13.2` · `13.3` · `13.5` | 28 | 32 | Üçü de ✅ · `goals` tablosu artık tüketiliyor (§8) |
 | 9 | **Kanal + Vardiya** | Instagram DM (MOCK) · work scheduler | `08.5.7` · `Work scheduler` | 18 | 20 | İkisi de ✅ → **Faz-2 §F.00 kapanır** |
 | | | | **9 dilim · 23 kalem** | **196** | **228** | |
+
+**Sıra Task Master'da zorlanır (bilgi değil, kısıt):** dilim sırası yalnız bu tabloda yazılı
+kalsaydı run-loop onu görmezdi — `next` seçimi önceliğe, eşitlikte görev numarasına bakar.
+Bu yüzden sıra **bağımlılıkla** kodlandı: `V2-2` (Multibrand) üç güvenlik görevini bekler;
+`V2-3…V2-9`'un tamamı `V2-2`'yi bekler. Böylece **önce güvenlik, sonra marka izolasyonu, sonra
+geri kalan her şey (birbirine paralel)** akışı yapısal olarak garanti edilir — §5.3.1'in
+gerekçesi bir tavsiye değil, grafın şekli hâline gelir. Doğrulama: panel `next` = `08.9.6`
+(dilim V2-1) · 20 görev sıra bekliyor · `validate_dependencies` temiz.
 
 ### v2 (Faz 2) — düz tablo (Task Master aktarım kaynağı)
 

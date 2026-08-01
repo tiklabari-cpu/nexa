@@ -3496,13 +3496,13 @@
             "description": "Yeni dosya apps/web/src/features/settings/IpAllowlist.tsx: (1) allowlist listesi + ekle/sil formu (GET/POST/DELETE /settings/ip-allowlist, queryKey ['settings','ip-allowlist']); (2) 'Enforce' anahtarı + oturum politikası girdileri (idle timeout, max concurrent sessions) → PATCH /settings/security (mevcut ['settings','security'] cache'i güncellenir); (3) self-lockout uyarı metni ve sunucudan gelen ",
             "details": "08.9.6-h — Settings ekranı — IP allowlist bölümü + oturum politikası formu  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.9.6 (+ FR-EK-A.1 alan-altı hata, FR-EK-B.1 anlamlı empty state)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 3 dosya + testi. (2) Güvenlik sınırı YOK — tüm doğrulama, self-lockout reddi ve enforcement sunucuda (-c/-d/-e/-g); UI yalnız listeler, gönderir ve sunucudan gelen 400'ü gösterir. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen verilebiliyor: BannedCustomerIps bileşeni (SettingsPage.tsx:464-570) — IP giriş/liste editörü, query+mutation, EmptyState, canEdit kapısı. (5) Kontrat değişikliği yok. (6) Kabul kriteri mekanik: render + boş durum + hata gösterimi.\nNEDEN AÇIK: apps/web/src/features/settings/SettingsPage.tsx:106-132 render listesi 15 bölüm içeriyor (ChannelsGrid … PreChatFormSettings) — IP allowlist ya da oturum politikası bölümü YOK. Aynı dosyadaki frontend SecuritySettings arayüzü (satır 64-72) yalnız 6 alan + updated_at taşıyor.\nKAPSAM: Yeni dosya apps/web/src/features/settings/IpAllowlist.tsx: (1) allowlist listesi + ekle/sil formu (GET/POST/DELETE /settings/ip-allowlist, queryKey ['settings','ip-allowlist']); (2) 'Enforce' anahtarı + oturum politikası girdileri (idle timeout, max concurrent sessions) → PATCH /settings/security (mevcut ['settings','security'] cache'i güncellenir); (3) self-lockout uyarı metni ve sunucudan gelen 400'ün alan-altı gösterimi (role=\"alert\"); (4) kayıt yokken EmptyState; (5) canEdit = access_rules:rw scope'u — false iken form render edilmez. SettingsPage.tsx: render listesine <IpAllowlist canEdit={canManageAccess} /> + SecuritySettings arayüzüne 3 yeni alan.\nDOSYALAR: apps/web/src/features/settings/IpAllowlist.tsx · apps/web/src/features/settings/IpAllowlist.test.tsx · apps/web/src/features/settings/SettingsPage.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/settings/SettingsPage.tsx (satır 464-570 BannedCustomerIps — IP ekle/sil editörü, useQuery+useMutation, EmptyState, ApiClientError mesajı, canEdit kapısı) · apps/web/src/features/settings/SettingsPage.tsx (satır 329-460 TrustedDomains — ayrı kaynak CRUD listesi: POST/DELETE + id ile silme) · apps/web/src/features/settings/BannedCustomerIps.test.tsx (test iskeleti) · apps/web/src/features/settings/WidgetCustomization.tsx (ayrı dosya + kendi testi deseni)\nKK (birebir): \"IP kısıtı\" | \"oturum politikaları\" | \"KK-türetilmiş: Yönetici IP kısıt listesini ve oturum politikalarını Settings ekranından görür ve düzenler; liste boşken anlamlı bir boş durum gösterilir; sunucunun reddi (geçersiz CIDR, self-lockout) alan-altı hata olarak görünür; yetkisi olmayan kullanıcıya düzenleme formu gösterilmez. TÜRETME GEREKÇESİ: PRD KK'sında ekran davranışı yok; boş durum ve alan-altı hata payı FR-EK-A.1/EK-B.1'in depoda yerleşik desenlerinden türetildi.\"\nKK DOĞRULAMA: IpAllowlist.test.tsx — kayıtlar listelenir; kayıt yokken EmptyState metni görünür (boş dikdörtgen değil); ekleme mutation'ı doğru gövdeyle çağrılır; sunucu 400'ü role=\"alert\" ile görünür; canEdit=false iken form yok. E2E görünürlük 08.9.6-i'de.\nKAPSAM DIŞI: E2E akışı (08.9.6-i) · Audit log görüntüleme ekranı · Coğrafi IP çözümleme / harita · Sunucu tarafı doğrulama veya enforcement\nSÖZLEŞME: yok (kontrat -d ve -f'de tamamlandı; UI üretilen tipleri tüketir)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: liste render + kayıt yokken anlamlı EmptyState (boş dikdörtgen değil) · unit: ekle → mutation doğru gövdeyle çağrılır; sil → doğru id · unit: oturum politikası alanları PATCH /settings/security gövdesini doğru kurar · unit NEGATİF: sunucu 400'ü alan-altı hata olarak (role=\"alert\") görünür · unit NEGATİF: yükleme hatası → ErrorNotice · unit: canEdit=false iken düzenleme formu render edilmez · CROSS-TENANT testi YOK — gerekçe: tenant sınırı sunucuda (RLS + -d/-e testleri); UI kendi token'ıyla tek tenant görür",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               4,
               6
             ],
             "parentId": "80",
-            "updatedAt": "2026-08-01T21:02:14.281Z"
+            "updatedAt": "2026-08-01T21:06:20.806Z"
           },
           {
             "id": 9,
@@ -3521,7 +3521,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T21:02:14.281Z"
+        "updatedAt": "2026-08-01T21:06:20.806Z"
       },
       {
         "id": "81",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-01T21:02:14.281Z",
+      "lastModified": "2026-08-01T21:06:20.806Z",
       "taskCount": 99,
       "completedCount": 70,
       "tags": [

@@ -27,6 +27,7 @@ import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { WidgetCustomization } from './WidgetCustomization.js';
 import { ChannelsGrid } from './Channels.js';
+import { IpAllowlist } from './IpAllowlist.js';
 import {
   DEFAULT_PREFS,
   loadPrefs,
@@ -69,6 +70,9 @@ interface SecuritySettings {
   max_file_size_bytes: number;
   spam_filter_enabled: boolean;
   require_two_factor: boolean;
+  ip_allowlist_enforced: boolean;
+  session_idle_timeout_seconds: number | null;
+  max_concurrent_sessions: number | null;
   updated_at: string | null;
 }
 
@@ -119,6 +123,7 @@ export function SettingsPage(): ReactElement {
       <WidgetCustomization canEdit={canManageAccess} />
       <TrustedDomains canEdit={canManageAccess} />
       <BannedCustomerIps canEdit={canManageAccess} />
+      <IpAllowlist canEdit={canManageAccess} />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />
       <Tags canEdit={canManageTags} />

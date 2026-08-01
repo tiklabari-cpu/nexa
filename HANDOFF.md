@@ -13,6 +13,39 @@
 
 ## Task log (newest-first)
 
+### tm 80.8 — 08.9.6-h Settings ekranı — IP allowlist bölümü + oturum politikası formu — done — 2026-08-01 UTC
+
+- **Yapıldı:** Yeni dosya `apps/web/src/features/settings/IpAllowlist.tsx`, iki alt-bileşen: (1)
+  `IpAllowlistEntries` — TrustedDomains deseninin birebir kopyası: GET/POST/DELETE
+  `/settings/ip-allowlist` (queryKey `['settings','ip-allowlist']`), ekleme formu (`entry` + opsiyonel
+  `label`), kayıt yokken anlamlı `EmptyState`, ekleme 400'ü (self-lockout reddi dahil) `role="alert"`
+  ile alan-altı gösterilir. (2) `SessionPolicy` — BannedCustomerIps/FileSharing deseni: aynı
+  `['settings','security']` cache'ini okuyan ikinci bir `useQuery` + `PATCH /settings/security` ile
+  `ip_allowlist_enforced` (anında toggle, FileSharing deseni) + `session_idle_timeout_seconds` (dakika
+  girilir, saniyeye çevrilip gönderilir) + `max_concurrent_sessions` formu (Save ile); `canEdit=false`
+  iken form hiç render edilmez — bunun yerine salt-okunur bir özet (`StatusDot` + iki metin satırı)
+  gösterilir (RoutingRules'ın "durum her zaman görünür, kontrol canEdit'e bağlı" deseninden ödünç
+  alındı, çünkü test stratejisi "form render edilmez" diyor, "disabled" değil). `SettingsPage.tsx`:
+  render listesine `<IpAllowlist canEdit={canManageAccess} />` (BannedCustomerIps ile FileSharing
+  arasına) + oradaki private `SecuritySettings` arayüzüne 3 yeni alan eklendi (dokümantasyon amaçlı;
+  IpAllowlist.tsx kendi ayrı `SecuritySettings` arayüzünü taşıyor, WidgetCustomization.tsx'in kendi
+  `WidgetSettings` tipini taşıması gibi). Kontrat değişikliği yok — task'ın kapsamı UI'ydı, backend
+  -d/-f'de zaten tamamlanmıştı.
+- **Doğrulama:** `pnpm --filter @nexa/web typecheck` ✅ · `lint` ✅ · `apps/web` vitest tam paket
+  (67 dosya / 458 test) ✅ · `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w test` ✅ (10/10 paket)
+  · `pnpm -w build` ✅. Yeni `IpAllowlist.test.tsx` (9): liste render + empty state (boş dikdörtgen
+  değil) + ekleme POST gövdesi + silme DELETE id + self-lockout 400'ün alert'i + policy PATCH gövdesi
+  (dakika→saniye dönüşümü dahil) + enforce toggle PATCH'i + policy-hata alert + `canEdit=false`'ta
+  hiçbir form/checkbox/buton yok (salt-okunur özet metni var). E2E bilinçli KAPSAM DIŞI (task'ın kendi
+  tanımı: "E2E akışı (08.9.6-i)") — `apps/e2e/tests/settings.spec.ts`'teki mevcut "File sharing"
+  senaryosu `getByRole('region', {name:...})` ile scope'lu olduğu için yeni section'ların araya
+  girmesinden etkilenmez (satır bazlı kontrol edildi, çalıştırılmadı — full stack gerektiriyor).
+- **Varsayımlar:** Yok — task'ın referans desenleri (BannedCustomerIps satır 464-570, TrustedDomains
+  329-460, WidgetCustomization.tsx) birebir uygulandı.
+- **Sonraki pencereye not:** Kalan `08.9.6`: yalnız `-i` (tm 80.9) — uçtan uca doğrulama (E2E akışı,
+  audit görünürlüğü, proxy-IP davranışı, istek başına maliyet). `-i` bu ekranı da kapsamalı: allowlist
+  ekle/sil + enforce aç/kapa + idle/limit kaydet akışının gerçek tarayıcıda çalıştığını kanıtla.
+
 ### tm 80.7 — 08.9.6-g Oturum politikası enforcement (idle timeout + eşzamanlı oturum limiti) — done — 2026-08-01 UTC
 
 - **Yapıldı:** Enforcement, `apps/api/src/services/auth/token-service.ts` içinde (migration YOK, yeni hata tipi YOK).

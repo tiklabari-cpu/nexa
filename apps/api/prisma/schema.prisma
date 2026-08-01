@@ -1156,8 +1156,11 @@ model SecuritySettings {
   allowedFileTypes          String[] @default(["image/png", "image/jpeg", "application/pdf"]) @map("allowed_file_types")
   maxFileSizeBytes          Int      @default(10485760) @map("max_file_size_bytes")
   requireTwoFactor          Boolean  @default(false) @map("require_two_factor")
-  /// Whether `bannedCustomerIps` is enforced as an allowlist (FR-MOD-08.9.6).
-  /// Read-only surface for now — nothing enforces this yet.
+  /// Whether the `ipAllowlistEntries` list is enforced for agent/PAT/bot requests
+  /// (FR-MOD-08.9.6). When true, the auth edge (plugins/auth.ts) admits only
+  /// source addresses matching an entry; off, or with an empty list, imposes no
+  /// restriction. Customer/widget traffic is exempt (that surface uses
+  /// `bannedCustomerIps`).
   ipAllowlistEnforced       Boolean  @default(false) @map("ip_allowlist_enforced")
   /// Seconds of inactivity before a session is force-expired. Null disables
   /// the policy (the default) — nothing enforces this yet.

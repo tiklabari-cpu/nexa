@@ -35,6 +35,11 @@ export const AUDIT_ACTIONS = [
   'auth.login',
   'auth.login_failed',
   'auth.password_reset',
+  // An authenticated request was refused at the edge because the workspace's IP
+  // allow-list did not admit its source address (FR-MOD-08.9.6). Recorded so a
+  // locked-out admin — or a stolen token being used from outside the office —
+  // is visible in the trail; the address itself is deliberately not stored here.
+  'auth.ip_denied',
   // Team membership
   'member.invited',
   'member.invitation_revoked',

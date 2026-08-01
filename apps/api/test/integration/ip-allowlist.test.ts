@@ -16,7 +16,13 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 describe('ip allow-list', () => {
@@ -198,5 +204,213 @@ describe('ip allow-list', () => {
       auth(adminToken),
     );
     expect(res.statusCode).toBe(404);
+  });
+});
+
+/**
+ * IP allow-list *enforcement* (FR-MOD-08.9.6-e).
+ *
+ * The management surface above stores the list; this is the gate that makes it
+ * bite. Enforcement lives in one place — the auth `onRequest` hook — so it cannot
+ * be forgotten per route, and `GET /auth/me` is the probe: it authenticates,
+ * needs no scope, and answers all three principal kinds, so a 403 here is the
+ * allow-list talking and nothing else.
+ *
+ * `trustProxy` is narrowed to a single hop (server.ts), so `request.ip` is the
+ * address our own proxy attested — the right-most `X-Forwarded-For` entry — and a
+ * client cannot prepend an allowed address to walk through. The negative tests
+ * come first: this is a security boundary.
+ */
+describe('ip allow-list enforcement', () => {
+  let owner: PrismaClient;
+  let server: TestServer;
+  let fx: Fixtures;
+  let agentA: string;
+  let agentB: string;
+
+  const auth = (token: string) => ({ authorization: `Bearer ${token}` });
+  // `trustProxy` honours `X-Forwarded-For`, so this is how a test presents the
+  // address the request appears to come from.
+  const from = (token: string, xff: string) => ({ ...auth(token), 'x-forwarded-for': xff });
+  const errorType = (res: { json: () => unknown }) =>
+    (res.json() as { error: { type: string } }).error.type;
+
+  /** Turn enforcement on for a tenant and seed its list, straight through RLS. */
+  async function enforce(tenant: TenantFixture, entries: string[]): Promise<void> {
+    await owner.securitySettings.upsert({
+      where: { licenseId: tenant.licenseId },
+      create: { licenseId: tenant.licenseId, ipAllowlistEnforced: true },
+      update: { ipAllowlistEnforced: true },
+    });
+    for (const entry of entries) {
+      await owner.ipAllowlistEntry.create({
+        data: { organizationId: tenant.organizationId, licenseId: tenant.licenseId, entry },
+      });
+    }
+  }
+
+  beforeAll(async () => {
+    owner = ownerClient();
+    server = await startTestServer();
+  });
+
+  afterAll(async () => {
+    await server.close();
+    await owner.$disconnect();
+  });
+
+  beforeEach(async () => {
+    fx = await seedFixtures(owner);
+    await clearRateLimits(server.app);
+    agentA = await grantToken(owner, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.ownerAccountId,
+      scopes: [],
+    });
+    agentB = await grantToken(owner, {
+      licenseId: fx.b.licenseId,
+      organizationId: fx.b.organizationId,
+      ownerId: fx.b.ownerAccountId,
+      scopes: [],
+    });
+  });
+
+  // --- Rejections first ------------------------------------------------------
+
+  it('refuses an agent whose address is not on the list — 403 not_allowed', async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    const res = await server.get('/auth/me', from(agentA, '198.51.100.7'));
+    expect(res.statusCode).toBe(403);
+    // ADR-06 envelope: the existing 403 type is reused, no new error was added.
+    expect(errorType(res)).toBe('not_allowed');
+  });
+
+  it('cannot be bypassed with a spoofed X-Forwarded-For', async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    // The proxy appends the real client (198.51.100.7, denied) as the right-most
+    // entry; the attacker prepends an allowed address hoping to be read as the
+    // client. With one trusted hop the right-most entry wins, so the header is
+    // ignored and the denial stands. Under `trustProxy: true` this would let them
+    // in — that is the regression this pins.
+    const res = await server.get('/auth/me', from(agentA, '203.0.113.9, 198.51.100.7'));
+    expect(res.statusCode).toBe(403);
+    expect(errorType(res)).toBe('not_allowed');
+  });
+
+  it('denies a caller that presents no address the non-empty list can match', async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    // No forwarded address: `request.ip` falls back to the loopback peer, which
+    // the list does not cover. A restrictive list treats "no proof you are inside"
+    // as out — fail closed.
+    const res = await server.get('/auth/me', auth(agentA));
+    expect(res.statusCode).toBe(403);
+    expect(errorType(res)).toBe('not_allowed');
+  });
+
+  // --- The audit trail -------------------------------------------------------
+
+  it('records a denial as auth.ip_denied and never stores the raw address', async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    const res = await server.get('/auth/me', from(agentA, '198.51.100.7'));
+    expect(res.statusCode).toBe(403);
+
+    const entry = await owner.auditLogEntry.findFirst({
+      where: { licenseId: fx.a.licenseId, action: 'auth.ip_denied' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(entry).not.toBeNull();
+    expect(entry!.actorType).toBe('agent');
+    // Who acted and with which credential — the `<kind>:<id>` target convention.
+    expect(entry!.target).toMatch(/^token:/);
+    // The address is PII (NFR-C1/C2): neither the ip column nor the metadata holds
+    // it, only the principal kind.
+    expect(entry!.ip).toBeNull();
+    const metadata = entry!.metadata as Record<string, unknown>;
+    expect(metadata.principal_kind).toBe('agent');
+    expect(JSON.stringify(metadata)).not.toContain('198.51.100.7');
+  });
+
+  it('admits a matching address and writes no denial', async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    const res = await server.get('/auth/me', from(agentA, '203.0.113.9'));
+    expect(res.statusCode).toBe(200);
+    expect(
+      await owner.auditLogEntry.count({
+        where: { licenseId: fx.a.licenseId, action: 'auth.ip_denied' },
+      }),
+    ).toBe(0);
+  });
+
+  // --- Exemptions and the "off" path (regression) ----------------------------
+
+  it('checks nothing while enforcement is off, even with entries present', async () => {
+    // The flag governs enforcement, not the presence of rows: a list saved but not
+    // switched on restricts no one.
+    await owner.ipAllowlistEntry.create({
+      data: {
+        organizationId: fx.a.organizationId,
+        licenseId: fx.a.licenseId,
+        entry: '203.0.113.0/24',
+      },
+    });
+
+    const res = await server.get('/auth/me', from(agentA, '198.51.100.7'));
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('imposes no restriction when enforced with an empty list', async () => {
+    // Enabling enforcement with nothing in the list is "no restriction", never
+    // "admit nobody" — the guard against a self-inflicted lockout.
+    await enforce(fx.a, []);
+
+    const res = await server.get('/auth/me', from(agentA, '198.51.100.7'));
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("never lets one workspace's list gate another workspace's agents", async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    // B has no list. B's agent, from an address A's list would reject, is
+    // unaffected — enforcement reads through RLS, one license at a time.
+    const res = await server.get('/auth/me', from(agentB, '198.51.100.7'));
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('exempts customer/widget tokens from the agent allow-list', async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    const minted = await server.post(
+      '/customer/token',
+      { organization_id: fx.a.organizationId },
+      { origin: `https://${fx.a.trustedDomain}` },
+    );
+    expect(minted.statusCode).toBe(200);
+    const customerToken = (minted.json() as { token: string }).token;
+
+    // From an address the agent list rejects. The widget surface has its own
+    // control (the ban-list of 08.9.2); the agent allow-list must not touch it.
+    const res = await server.get('/auth/me', from(customerToken, '198.51.100.7'));
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { kind: string }).kind).toBe('customer');
+  });
+
+  it('leaves a public route reachable from a denied address', async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    // Minting a widget token is public (a recovery/entry path). Enforcement must
+    // skip it, or a workspace could lock its own visitors out. Called from an
+    // address the agent list would reject.
+    const res = await server.post(
+      '/customer/token',
+      { organization_id: fx.a.organizationId },
+      { origin: `https://${fx.a.trustedDomain}`, 'x-forwarded-for': '198.51.100.7' },
+    );
+    expect(res.statusCode).toBe(200);
   });
 });

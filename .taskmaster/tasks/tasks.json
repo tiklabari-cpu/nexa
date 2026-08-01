@@ -3454,14 +3454,14 @@
             "description": "plugins/auth.ts onRequest zincirinde, principal çözüldükten ve principal-kind kontrolünden SONRA, scope kontrolünden ÖNCE: (1) principal.kind !== 'customer' ise lisansın ip_allowlist_enforced bayrağı ve ip_allowlist_entries kayıtları tenant-scoped okunur; (2) decideIpAccess({ clientIp: request.ip, entries }) → deny ise new ApiError('not_allowed', …) (403) fırlatılır — YENİ HATA TİPİ EKLENMEZ, not_",
             "details": "08.9.6-e — IP allowlist enforcement — auth onRequest kapısı + trustProxy taklit yüzeyi + not_allowed/audit  [OPUS-MAX]\n\nPRD: FR-MOD-08.9.6 (+ NFR-S1, NFR-S3, NFR-S5, NFR-S12, NFR-C11)\nETİKET GEREKÇESİ: OPUS-MAX: authN/authZ sınırında ağ seviyeli erişim kontrolü. server.ts:97 trustProxy: true olduğu için request.ip istemcinin gönderdiği X-Forwarded-For'dan türeyebilir — yanlış karar verilirse allowlist tek başlıkla atlanır (bypass); ters yönde tüm workspace kilitlenir. Hangi principal türünün muaf olduğu, kontrolün zincirdeki sırası ve reddin hangi hata tipiyle döneceği tek bir akıl yürütmedir. Koşul 2 ihlali. BÖLÜNMEZ ÇEKİRDEK.\nNEDEN AÇIK: request.ip depoda yalnız dört yerde geçiyor: plugins/rate-limit.ts:124 (anon rate-limit anahtarı), routes/customer.ts:256 ve :345, routes/auth.ts:565 — son üçü müşteri/widget isIpBanned kontrolü. Agent/PAT/bot isteğinde IP kontrolü yapan HİÇBİR kod yok. Tek çıkış kapısı plugins/auth.ts:130-207 onRequest hook'u: principal çözümü → principal-kind (404) → region (421) → scope (403) → role (403) kontrolleri zaten orada sıralı. apps/api/src/server.ts:97 trustProxy: true.\nKAPSAM: plugins/auth.ts onRequest zincirinde, principal çözüldükten ve principal-kind kontrolünden SONRA, scope kontrolünden ÖNCE: (1) principal.kind !== 'customer' ise lisansın ip_allowlist_enforced bayrağı ve ip_allowlist_entries kayıtları tenant-scoped okunur; (2) decideIpAccess({ clientIp: request.ip, entries }) → deny ise new ApiError('not_allowed', …) (403) fırlatılır — YENİ HATA TİPİ EKLENMEZ, not_allowed packages/types/src/errors.ts'te zaten var (ERROR_STATUS 403); (3) müşteri/widget principal'ı MUAF (o yüzeyin denetimi FR-MOD-08.9.2'nin isIpBanned'ı); (4) public: true route'lar (login/authorize/token/revoke) bu dala hiç girmez — kurtarma yolu açık kalır, karar testle sabitlenir; (5) trustProxy yüzeyi: request.ip'nin nereden geldiği doğrulanır ve allowlist'in X-Forwarded-For ile taklit edilemeyeceği güvenceye alınır (güvenilmeyen kaynakta başlık yok sayılır / güvenilen proxy zinciri daraltılır), karar kodda yorumla gerekçelendirilir; (6) ret auth.ip_denied audit action'ı ile kaydedilir — metadata'da ham IP TUTULMAZ (NFR-C1/C2), yalnız principal kind + token id; (7) okuma her istekte taze yapılır, license-gate.ts'teki 'cache etme' gerekçesi bu yüzey için ayrıca değerlendirilip yorumlanır.\nDOSYALAR: apps/api/src/plugins/auth.ts · apps/api/src/server.ts · apps/api/src/services/audit/audit-log.ts · apps/api/test/integration/ip-allowlist.test.ts · apps/api/test/integration/route-config.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/plugins/auth.ts (satır 130-207 — sıralı kontrol zinciri: principal-kind 404, region 421, scope 403, role 403) · apps/api/src/plugins/license-gate.ts (her istekte taze okuma + neden cache'lenmediğinin yazılı gerekçesi) · apps/api/src/lib/banned-ip.ts (tenant-scoped okuma + 'sinyal yokluğu eşleşme değildir' yazımı)\nKK (birebir): \"IP kısıtı\" | \"KK-türetilmiş: Kısıt açıkken, agent/PAT/bot kimliğiyle gelen her istek listeye göre değerlendirilir; eşleşmeyen adres 403 not_allowed alır; müşteri/widget yüzeyi muaftır; oturum açma (public) uçları kısıt dışıdır. TÜRETME GEREKÇESİ: PRD 'IP kısıtı' diyor ama olgularda saptandığı gibi 'enforcement noktasının yalnız login'de mi her istekte mi çalışacağı ayrı bir güvenlik kararı'dır — burada verilip testle sabitlenmiştir. Destek kaynağı v2-04 satır 127: 'PAT/Bearer token çalınması ile API'ye taklit erişim | TLS zorunlu, token rotasyonu, IP allowlist (Enterprise)' — kontrolün hedefi login değil, çalınmış token'la yapılan API erişimidir; dolayısıyla her istekte çalışır.\"\nKK DOĞRULAMA: ip-allowlist.test.ts — enforce açık + eşleşmeyen IP ile agent token'ı korumalı bir uç çağırınca 403 not_allowed (ADR-06 zarfı: {error:{type:'not_allowed',…}}) ve audit_log'da auth.ip_denied satırı; eşleşen IP ile aynı çağrı 200. X-Forwarded-For taklidi testi kontrolü atlatamaz. route-config.test.ts public route'ların etkilenmediğini kanıtlar.\nKAPSAM DIŞI: Oturum politikaları (idle timeout / eşzamanlı oturum) — 08.9.6-g · Allowlist yönetim endpoint'i — 08.9.6-d · Oturumun IP'ye bağlanması (session-to-IP binding) — bilinçli olarak YAPILMAZ (§C varsayım: VPN/mobil roaming yanlış-pozitifi) · Plan/paket kapısı (Enterprise-only gating) — açık soru, bu turda kodlanmaz · RTM (WebSocket) el sıkışması — ayrı yüzey, açık soru\nSÖZLEŞME: yok — mevcut 403 not_allowed hata tipi kullanılır. UYARI (bilinçli kaçınılan tuzak): yeni bir ApiError tipi eklenseydi packages/types/src/errors.ts'te İKİ yer (ERROR_TYPES + ERROR_STATUS) + packages/types/src/scopes.test.ts:95 sayaç iddiası + OpenAPI hata enum'u + regen gerekirdi; bu iş not_allowed'ı yeniden kullanarak bunlara dokunmaz.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF (ÖNCE): enforce açık + eşleşmeyen IP → 403 not_allowed (ADR-06 zarfı) · NEGATİF (ÖNCE): sahte X-Forwarded-For başlığıyla allowlist atlatılamaz (trustProxy taklit yüzeyi) · NEGATİF (ÖNCE): clientIp çözülemediğinde dolu listede erişim reddedilir · NEGATİF: müşteri/widget token'ı muaf — allowlist onu reddetmez · REGRESYON: ip_allowlist_enforced=false iken hiçbir kontrol yapılmaz; mevcut tüm integration süiti yeşil · CROSS-TENANT: A lisansının allowlist'i B lisansının ajanını etkilemez (B'nin isteği 200) · POZİTİF: eşleşen IP → 200; audit_log'a auth.ip_denied yazılır ve metadata'da ham IP YOKTUR (NFR-C1/C2) · route-config.test.ts: public uçlar (login/authorize/token/revoke) etkilenmez",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               2,
               3
             ],
             "parentId": "80",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-01T19:34:59.360Z"
           },
           {
             "id": 6,
@@ -3521,7 +3521,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T19:04:17.199Z"
+        "updatedAt": "2026-08-01T19:34:59.360Z"
       },
       {
         "id": "81",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-01T19:04:17.200Z",
+      "lastModified": "2026-08-01T19:34:59.360Z",
       "taskCount": 99,
       "completedCount": 70,
       "tags": [

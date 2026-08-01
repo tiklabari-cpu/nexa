@@ -13,6 +13,45 @@
 
 ## Task log (newest-first)
 
+### tm 80.5 — 08.9.6-e IP allowlist enforcement — auth onRequest kapısı + trustProxy taklit yüzeyi + not_allowed/audit — done — 2026-08-01 UTC
+
+- **Yapıldı:** Allowlist'i **ısıran** enforcement noktası — `apps/api/src/plugins/auth.ts` `onRequest`
+  zincirinde, principal-kind (404) kontrolünden **sonra**, region/scope/role'dan **önce**:
+  - `principal.kind !== 'customer' && !config.public` iken lisansın `ip_allowlist_enforced` bayrağı +
+    `ip_allowlist_entries` **her istekte taze** (cache YOK — license-gate.ts ile aynı gerekçe: cache'lenirse
+    workspace'in az önce çıkardığı adres TTL boyunca kabul edilmeye devam eder) tenant-scoped (RLS) okunur →
+    `decideIpAccess({clientIp: request.ip, entries})` **deny** ise `new ApiError('not_allowed', …)` (403).
+    **Yeni hata tipi EKLENMEDİ** — `not_allowed` zaten var (errors.ts, ERROR_STATUS 403); errors.ts×2 +
+    scopes.test sayaç + OpenAPI enum + regen tuzağından bilinçli kaçınıldı.
+  - **Muafiyetler:** müşteri/widget principal (o yüzeyin denetimi 08.9.2 `isIpBanned` ban-list'i) ·
+    `public:true` uçlar (login/authorize/token/revoke) — öz-kilitleyen bir liste kaydedilse bile giriş →
+    listeyi temizle → kurtar yolu açık kalır.
+  - **trustProxy taklit yüzeyi (bu task'ın [OPUS-MAX] çekirdeği) kapatıldı:** `server.ts` `trustProxy: true`→`1`.
+    `true` iken proxy-addr **tüm** zinciri güvenir ve **en-sol** (istemcinin yazdığı) XFF girdisini döndürür →
+    saldırgan `X-Forwarded-For: <izinli-ip>` ile allowlist'i tek başlıkla geçebilirdi. Tek hop güvenince
+    **en-sağ** (kendi proxy'mizin doğruladığı) girdi döner; istemci-önekli değer yok sayılır. Aynı türetme
+    `request.ip`'yi kullanan rate-limit + banned-IP yüzeylerini de güçlendirir; tüm mevcut tek-XFF testleri
+    değişmeden yeşil.
+  - **Audit:** ret `writeAuditEntry(tx, auditContext({ip:null}), {action:'auth.ip_denied', target:'token:<id>',
+    metadata:{principal_kind}})` — aynı tx'te (throw'dan önce commit). **Ham IP hiçbir yerde tutulmaz**
+    (NFR-C1/C2): metadata yalnız principal kind, token id `target`'ta (`<kind>:<id>` deseni, sanitizer'a
+    dokunmadan), ip kolonu `null`. `audit-log.ts` kapalı sözlüğe `+1 action`.
+  - `schema.prisma`: `ipAllowlistEnforced` doc yorumu güncellendi ("nothing enforces this yet" ve yanlış
+    `bannedCustomerIps` referansı kaldırıldı) — **migration YOK** (yalnız yorum, DB/generate değişmez).
+- **Doğrulama:** `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ · api `test:integration` **827/827** ✓
+  (regresyon yok — rate-limit, customer-chat banned-IP, auth, contract-parity dahil). Yeni testler:
+  `ip-allowlist.test.ts` +11 (enforcement describe: 403 not_allowed envelope, XFF-spoof atlatamaz, no-XFF deny,
+  matching→200, audit auth.ip_denied + ham IP yok, enforcement-off no-op, empty-list no-op, cross-tenant,
+  customer-muaf, public-muaf) · `route-config.test.ts` +1 (public kurtarma uçları 401 dönmez).
+- **Varsayımlar:** Deployment tek güvenilen reverse-proxy ardında ve **doğrudan** açık değil (Assumption →
+  `trustProxy: 1`). Topoloji değişirse count yerine proxy adresi/subnet'i yazılmalı (yorumda not düşüldü).
+  Enforcement her korumalı non-customer istekte bir singleton `security_settings` PK okuması ekler (bayrak
+  kapalıysa orada durur); spec "her istekte taze" istediği için cache yok — istek-başı maliyet ölçümü 08.9.6-i'nin işi.
+- **Sonraki pencereye not:** Kalan 08.9.6 alt-görevleri: `-f` PATCH /settings/security yazma yüzeyi ·
+  `-g` oturum politikası enforcement (idle timeout + eşzamanlı oturum) · `-h` Settings UI · `-i` uçtan uca
+  doğrulama (E2E + proxy-IP davranışı + istek-başı maliyet). RTM (WebSocket) el sıkışması allowlist'e **dahil
+  değil** (ayrı yüzey, açık soru) — auth onRequest yalnız HTTP'yi kapsar.
+
 ### tm 80.4 — 08.9.6-d /settings/ip-allowlist CRUD + self-lockout guard + audit + path kontratı — done — 2026-08-01 UTC
 
 - **Yapıldı:** Erişim kontrol listesinin **yazma yüzeyi** — üç yeni yetkili route `apps/api/src/routes/settings.ts`

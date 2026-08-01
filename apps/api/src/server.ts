@@ -94,7 +94,19 @@ export async function buildServer({
     // Correlates the log line, the trace and the `request_id` the client sees.
     genReqId: (req) => (req.headers['x-request-id'] as string | undefined) ?? randomUUID(),
     requestIdHeader: 'x-request-id',
-    trustProxy: true,
+    // Trust exactly one proxy hop, not the whole `X-Forwarded-For` chain.
+    //
+    // `request.ip` feeds security decisions — the anonymous rate-limit key, the
+    // customer IP ban, and the agent IP allow-list (FR-MOD-08.9.6). With
+    // `trustProxy: true` proxy-addr trusts every hop and returns the *left-most*
+    // XFF entry, which is whatever the client wrote: a caller could send
+    // `X-Forwarded-For: <an-allowed-ip>` and walk straight through the allow-list.
+    // Trusting a single hop makes proxy-addr return the *right-most* entry — the
+    // address our own reverse proxy attested — so a client-prepended value is
+    // ignored and cannot be spoofed. Assumption: the API is reached through
+    // exactly one trusted reverse proxy and is never exposed directly (if that
+    // ever changes, this must become the proxy's address/subnet, not a count).
+    trustProxy: 1,
     disableRequestLogging: env.isTest,
     bodyLimit: 1_048_576, // 1 MiB — attachments go through signed upload URLs
   });

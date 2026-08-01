@@ -15,7 +15,9 @@ import fp from 'fastify-plugin';
 import { hasAnyScope, type AgentRole } from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { decideIpAccess } from '../lib/ip-allowlist.js';
 import { withTenant, type TenantClient, type TenantContext } from '../lib/tenant.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerTokenService } from '../services/auth/customer-token.js';
 import { roleAtLeast, tenantOf, type Principal } from '../services/auth/principal.js';
 import { TokenService } from '../services/auth/token-service.js';
@@ -151,6 +153,64 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
       // not a permission shortfall. 404 rather than 403 so the widget-facing
       // surface cannot be used to map the agent API.
       throw ApiError.notFound('Resource not found.');
+    }
+
+    // --- IP allow-list (FR-MOD-08.9.6) ------------------------------------
+    // A workspace may restrict its agent/admin surface to a set of source
+    // networks. Enforced here — the one authenticated choke point — for the same
+    // reason scopes are: a check left to individual handlers is one forgotten
+    // call away from a hole. It runs after the principal-kind gate (a customer
+    // token has already been turned away from agent routes) and before scope/role,
+    // because a request from an excluded address is refused before its permissions
+    // are even considered.
+    //
+    //   - Customer/widget principals are exempt. Their address control is the
+    //     deny-list of FR-MOD-08.9.2 (`banned-ip.ts`), enforced at token mint and
+    //     the chat edge; an allow-list written for the office network would lock
+    //     out every visitor, which is not what "restrict the console" means.
+    //   - `public: true` routes (login/authorize/token/revoke) are exempt, so a
+    //     workspace that saves a list excluding its own current address can still
+    //     sign in, clear it and recover — the list restricts the console, never
+    //     bricks it.
+    //   - `request.ip` is the proxy-attested address (see `trustProxy` in
+    //     server.ts, narrowed to one hop): a client-supplied `X-Forwarded-For`
+    //     cannot influence it, so the allow-list cannot be bypassed with a spoofed
+    //     header.
+    if (principal.kind !== 'customer' && !config.public) {
+      // Read fresh on every request, never cached — the call license-gate.ts makes
+      // and for the same reason: a cached list keeps admitting an address the
+      // workspace just removed for the length of the TTL, which is exactly the
+      // window an IP restriction exists to close. When enforcement is off (the
+      // common case) this stops at a single indexed lookup before reading entries.
+      const denied = await request.withTenant(async (tx) => {
+        const settings = await tx.securitySettings.findFirst({
+          select: { ipAllowlistEnforced: true },
+        });
+        if (!settings?.ipAllowlistEnforced) return false;
+
+        const entries = (await tx.ipAllowlistEntry.findMany({ select: { entry: true } })).map(
+          (row) => row.entry,
+        );
+        // An empty list is *no restriction*, not "admit nobody" — `decideIpAccess`
+        // owns that rule, and a non-empty-but-unmatchable list still denies.
+        if (decideIpAccess({ clientIp: request.ip, entries }) === 'allow') return false;
+
+        // Record the refusal, not the address. The principal kind and the token id
+        // (the audit `target`, in the `<kind>:<id>` convention) say who was turned
+        // away and with which credential; the raw IP is PII and stays out of the
+        // log (NFR-C1/C2) — `ip: null` overrides the context's default of storing
+        // it. Written inside this transaction so it commits before the throw below.
+        await writeAuditEntry(tx, request.auditContext({ ip: null }), {
+          action: 'auth.ip_denied',
+          target: `token:${principal.tokenId}`,
+          metadata: { principal_kind: principal.kind },
+        });
+        return true;
+      });
+
+      if (denied) {
+        throw new ApiError('not_allowed', 'Access from your network is not permitted.');
+      }
     }
 
     // --- Region (ADR-12) --------------------------------------------------

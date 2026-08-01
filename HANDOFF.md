@@ -13,6 +13,29 @@
 
 ## Task log (newest-first)
 
+### PANEL-FIX · #97 `plan-tm-reverse` çelişkisi — yanlış pozitif, ayrım netleştirildi — done — 2026-08-01 UTC
+
+- **Bulgu:** panel `ORTA` — _"#97 açık ama kapsadığı her PLAN satırı ✅"_ (kanıt: `PLAN.md:520`,
+  `06.3.2` → `✅`). Risk olarak _"run-loop bitmiş işi yeniden yaptırabilir"_ gösterildi.
+- **Doğrulama (KODA KARŞI, iki yön):**
+  - `PLAN.md:520`'nin `✅`'i **gerçek** — `services/ai/web-crawler.ts` (94) · `lib/ssrf.ts` (171) ·
+    `services/ai/knowledge-service.ts` (109) mevcut; `playbook.ts`'te `assertPublicHttpUrl`+`crawl`
+    yolu bağlı; testler var (`ssrf.test.ts` · `web-crawler.test.ts` · int `knowledge-crawl.test.ts`).
+  - **tm 97 de haklı olarak açık** — bulk/CSV yolu **yok**: `parseCsv`/`csv-parse`/`papaparse` grep
+    **0** · `playbook.yaml`'da `bulk` grep **0** · `/knowledge-sources` yalnız 2 yol · `package.json`
+    csv/multipart bağımlılığı **0**.
+- **Kök neden:** `FR-MOD-06.3.2` iki kapsama bölünmüş — tek-kaynak yolu v1'de (`✅`, tm 33.4),
+  bulk/CSV kanadı v2'de (`⬜`, tm 97). Panelin eşleştiricisi `06.3.2-bulk`'tan `-bulk`'u atıp v1
+  satırıyla eşleştiriyor. Kardeş bulgular (#63/#65/#67/#71–75/#93/#95) 17:48'de kendiliğinden
+  kapandı; bu biri sonek çakışması yüzünden kaldı.
+- **Yapıldı (kod DEĞİŞMEDİ):** ayrım üç yerde açık hâle getirildi — `PLAN.md:520` v1 satırına
+  "KAPSAM SINIRI" notu · §5.0 `06.3.2-bulk` satırına karşılıklı işaret + koda karşı kanıt ·
+  tm 97 başlığı "YALNIZ çoklu-satır" olarak daraltıldı + `details` başına kapsam-sınırı uyarısı.
+- **Karar:** görev **ne done ne cancelled** — iş gerçekten duruyor. Panel bulgusu bir sonraki
+  taramada kapanmazsa panel tarafında eşleştiriciye sonek duyarlılığı gerekir (bizim tarafta
+  yapılacak bir şey kalmadı). Gerekçe: **PLAN §D67**.
+- **Doğrulama:** kod değişmedi → DoD kod kapıları N/A. `git status` temiz.
+
 ### V2-PLAN · Faz-2 kapsam süpürmesi + tam atomik kırılım — done — 2026-08-01 UTC
 
 - **Neden açıldı:** Faz-0 ve v1 kapandı (GL-3/GL-4); sıradaki iş Faz-2. Ama Task Master'da

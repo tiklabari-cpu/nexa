@@ -47,6 +47,8 @@ export const AUDIT_ACTIONS = [
   'settings.widget_updated',
   'settings.trusted_domain_added',
   'settings.trusted_domain_removed',
+  'settings.ip_allowlist_added',
+  'settings.ip_allowlist_removed',
   'billing.subscription_updated',
   'billing.payment_method_updated',
   // Ticketing / HelpDesk (FR-MOD-13.6) — the lifecycle and structural changes an

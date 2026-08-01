@@ -13,6 +13,50 @@
 
 ## Task log (newest-first)
 
+### tm 80.4 — 08.9.6-d /settings/ip-allowlist CRUD + self-lockout guard + audit + path kontratı — done — 2026-08-01 UTC
+
+- **Yapıldı:** Erişim kontrol listesinin **yazma yüzeyi** — üç yeni yetkili route `apps/api/src/routes/settings.ts`
+  (trusted-domains desenini birebir izler):
+  - `GET /settings/ip-allowlist` (`access_rules:ro|rw`) — tenant-scoped, entry **alfabetik**,
+    `{items:[{id,entry,label,created_at}]}`.
+  - `POST /settings/ip-allowlist` (`access_rules:rw`) — gövde `parseAllowlistEntry` ile doğrulanır (geçersiz→**400**),
+    **canonical** `formatAllowlistEntry` ile saklanır (host bitleri maskeli + v6 RFC 5952 sıkıştırma → `10.0.0.5/24`
+    ≡ `10.0.0.0/24` **tek satır**), `@@unique(license,entry)` çakışması→**403** (`not_allowed`, trusted-domains
+    kardeşiyle aynı). **Self-lockout guard:** aynı tx'te (mevcut entry'ler + yeni canonical) listesi
+    `wouldLockOut(request.ip, nextEntries)`'e verilir; çağıranı dışarıda bırakan liste→**400** (create'ten ÖNCE).
+  - `DELETE /settings/ip-allowlist/:entryId` (`access_rules:rw`) — tenant-scoped `deleteMany`, cross-tenant/yok→**404**
+    (NFR-S5 enumeration; 403 değil), audit için önce entry okunur.
+  - Her yazımda **aynı tx'te** `writeAuditEntry` — iki yeni action `settings.ip_allowlist_added`/`_removed`
+    (`audit-log.ts` kapalı sözlük, +2). metadata = `{entry}` (kural, PII değil); **ham çağıran IP metadata'ya YAZILMAZ**
+    (standart `ip` sütununda zaten var).
+  - Yeni **saf** `formatAllowlistEntry(entry)` (`lib/ip-allowlist.ts`) — parse'ın tersi; canonical string üretir
+    (v4 dotted, v6 RFC 5952 compression [en uzun sıfır-koşu → `::`, leftmost], tam-uzunluk prefix düşürülür). 80.3'ün
+    frozen matcher'ına eklendi: "canonical saklama" bu string'i gerektiriyor, parse+format çiftinin bir arada testi
+    doğru yer (round-trip invariant testiyle sabit).
+  - Sözleşme: `settings.yaml`'a `ipAllowlist` (get/post) + `ipAllowlistEntry` (delete) blokları · `openapi.yaml`
+    paths (+2) · `IpAllowlistEntry` şema açıklamasındaki "yalnız şema, path yok" notu güncellendi (path artık var) ·
+    re-bundle (`api.ts`/`openapi.json`, 111→113 path).
+- **Doğrulama (tam DoD kapısı, exit 0):** `pnpm -w typecheck` (11/11) · `lint` (8/8) · `build` (7/7) ·
+  **unit** api 252→**258** (`lib/ip-allowlist.test.ts` 23→**29**, +6 formatAllowlistEntry: v4 mask/bare/v6-compress/
+  all-zero/mapped/round-trip) + workspace tümü · **integration** 39→**40** dosya / 809→**816** test
+  (`ip-allowlist.test.ts` **7**: negatif-önce [malformed→400 · self-lockout→400 · scope→403 · duplicate-farklı-yazım→403]
+  + cross-tenant [GET gizler · DELETE 404 · satır sağ kalır] + canonical saklama + audit added/removed) ·
+  **contract-parity 5/5** (iki yön) · tenant-isolation 19 · **e2e 59/59** (`.env` source'lu, nexa-db:5433/nexa-redis:6380).
+  Integration serial `--concurrency=1` (paylaşılan-PG yarışı).
+- **Varsayımlar/kararlar:** (1) Duplicate → **403 `not_allowed`** (trusted-domains kardeşinin aynısı; genel `conflict`
+  tipi yok, yeni error tipi = kapsam dışı yüzey). Contract'ta **409 UYDURULMADI** (kardeş dokümanı 409 diyor ama kod
+  403 döner = yanıltıcı; 403 Forbidden ref + açıklama honest ve yeterli). (2) **Self-lockout guard yalnız POST'ta** —
+  KK "kaydedilemez"/ilk-kayıt POST'a işaret eder, test stratejisi de POST'u test eder; enforcement (08.9.6-e) henüz
+  canlı değil, DELETE-lockout şu an gerçek risk değil. (3) `formatAllowlistEntry` frozen 80.3 modülüne eklendi
+  (canonical saklama zorunluluğu).
+- **Sonraki pencereye not:** -e (enforcement) bu route'un yazdığı entry'leri `decideIpAccess` ile tüketecek.
+  **DİKKAT -e:** `server.ts` `trustProxy:true` → `request.ip` X-Forwarded-For ile taklit edilebilir; self-lockout
+  guard'ı bu etkilemez (taklit ancak kişiyi kendini kilitler, escalation değil) **ama enforcement kapısı bu yüzeyi
+  ayrıca ele almalı** (§5.1.2). -h (Settings UI) bu route'u bağlayacak. **DELETE self-lockout guard YOK** (yukarıda
+  gerekçe) — -e/-i onaylarken göz önünde tut. Kapsam dışı: enforcement, PATCH oturum politikası (-f), UI (-h).
+  Çalışma alanı: e2e'nin yeniden ürettiği `apps/e2e/kanit/*.png` (26) UI değişmediği için `git restore` ile geri
+  alındı (80.1/80.2/80.3 deseni). Açılışta kirli harness dosyası bu turda yoktu; çalışma alanı temiz.
+
 ### tm 80.3 — 08.9.6-c lib/ip-allowlist.ts — CIDR/IP eşleştirme + izin-ret semantiği (saf, DB'siz) — done — 2026-08-01 UTC
 
 - **Yapıldı:** Yeni **saf** modül `apps/api/src/lib/ip-allowlist.ts` (DB/route/hook YOK) —

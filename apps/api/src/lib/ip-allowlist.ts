@@ -98,6 +98,26 @@ export function parseAllowlistEntry(value: string): AllowlistEntry | null {
 }
 
 /**
+ * Render a parsed entry back to its canonical string — the form the write surface
+ * (08.9.6-d) stores. It is the inverse of {@link parseAllowlistEntry}: parse then
+ * format, and two spellings of one range collapse to a single string, so the
+ * `(license, entry)` unique index actually catches a duplicate and an admin never
+ * ends up with `10.0.0.5/24` and `10.0.0.0/24` sitting side by side meaning the
+ * same thing.
+ *
+ * Host bits are already zeroed by the parse, so the network address is canonical
+ * by construction. A full-length prefix is dropped, so a bare host round-trips as
+ * itself rather than `/32` (or `/128`). IPv6 is compressed per RFC 5952 —
+ * lowercase, no leading zeros, the longest run of zero groups collapsed to `::` —
+ * so one range has exactly one textual form.
+ */
+export function formatAllowlistEntry(entry: AllowlistEntry): string {
+  const maxPrefix = entry.version === 4 ? V4_BITS : V6_BITS;
+  const address = entry.version === 4 ? formatV4(entry.bytes) : formatV6(entry.bytes);
+  return entry.prefixLength === maxPrefix ? address : `${address}/${entry.prefixLength}`;
+}
+
+/**
  * Whether `ip` falls inside `entry`'s range.
  *
  * The incoming address is parsed the same way the entry was — normalised (so a
@@ -265,6 +285,50 @@ function parseHextets(segment: string): number[] | null {
     out.push(parseInt(group, 16));
   }
   return out;
+}
+
+/** 4 network bytes → dotted quad. */
+function formatV4(bytes: Uint8Array): string {
+  return `${bytes[0]}.${bytes[1]}.${bytes[2]}.${bytes[3]}`;
+}
+
+/**
+ * 16 network bytes → canonical IPv6 text (RFC 5952): lowercase hextets with no
+ * leading zeros, and the longest run of two or more zero groups replaced by `::`
+ * (the leftmost such run on a tie). A parsed v6 entry never holds an embedded v4
+ * (the parse flattens `::ffff:a.b.c.d` to v4 first), so this only ever formats a
+ * genuine v6 address.
+ */
+function formatV6(bytes: Uint8Array): string {
+  const groups: number[] = [];
+  for (let i = 0; i < 8; i++) groups.push(((bytes[i * 2]! << 8) | bytes[i * 2 + 1]!) >>> 0);
+
+  // Find the longest run of consecutive zero groups (RFC 5952 only collapses a
+  // run of length ≥ 2; a single zero stays "0"). Leftmost wins a tie.
+  let bestStart = -1;
+  let bestLen = 0;
+  let runStart = -1;
+  let runLen = 0;
+  for (let i = 0; i < 8; i++) {
+    if (groups[i] === 0) {
+      if (runStart === -1) runStart = i;
+      runLen++;
+      if (runLen > bestLen) {
+        bestLen = runLen;
+        bestStart = runStart;
+      }
+    } else {
+      runStart = -1;
+      runLen = 0;
+    }
+  }
+
+  const hex = (g: number): string => g.toString(16);
+  if (bestLen < 2) return groups.map(hex).join(':');
+
+  const head = groups.slice(0, bestStart).map(hex).join(':');
+  const tail = groups.slice(bestStart + bestLen).map(hex).join(':');
+  return `${head}::${tail}`;
 }
 
 /**

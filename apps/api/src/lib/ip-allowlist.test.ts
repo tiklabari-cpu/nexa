@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   decideIpAccess,
+  formatAllowlistEntry,
   ipMatchesEntry,
   parseAllowlistEntry,
   wouldLockOut,
@@ -60,6 +61,46 @@ describe('parseAllowlistEntry', () => {
     const parsed = entry('2001:db8::/32');
     expect(parsed.version).toBe(6);
     expect(parsed.prefixLength).toBe(32);
+  });
+});
+
+describe('formatAllowlistEntry', () => {
+  // The invariant the store relies on: whatever an admin typed, its canonical
+  // form is what lands, so two spellings of one range cannot both be saved.
+
+  it('renders a v4 CIDR as its masked network, dropping the host bits', () => {
+    expect(formatAllowlistEntry(entry('10.0.0.55/24'))).toBe('10.0.0.0/24');
+  });
+
+  it('drops a full-length prefix so a bare host round-trips as itself', () => {
+    expect(formatAllowlistEntry(entry('203.0.113.5'))).toBe('203.0.113.5');
+    expect(formatAllowlistEntry(entry('203.0.113.5/32'))).toBe('203.0.113.5');
+  });
+
+  it('compresses a v6 address per RFC 5952 (lowercase, longest zero-run → ::)', () => {
+    expect(formatAllowlistEntry(entry('2001:0DB8:0000:0000:0000:0000:0000:0001'))).toBe(
+      '2001:db8::1',
+    );
+    expect(formatAllowlistEntry(entry('2001:db8:0:0:0:0:0:0/32'))).toBe('2001:db8::/32');
+  });
+
+  it('collapses an all-zero v6 address to ::', () => {
+    expect(formatAllowlistEntry(entry('0:0:0:0:0:0:0:0'))).toBe('::');
+    expect(formatAllowlistEntry(entry('::/0'))).toBe('::/0');
+  });
+
+  it('folds an IPv4-mapped v6 entry back to its v4 form', () => {
+    expect(formatAllowlistEntry(entry('::ffff:203.0.113.5'))).toBe('203.0.113.5');
+  });
+
+  it('round-trips: parsing the canonical form yields the same range', () => {
+    for (const raw of ['10.0.0.55/24', '203.0.113.5', '2001:db8::1', '2001:db8:abcd::/48', '::/0']) {
+      const once = entry(raw);
+      const twice = entry(formatAllowlistEntry(once));
+      expect(twice).toEqual(once);
+      // Idempotent: formatting the canonical form again changes nothing.
+      expect(formatAllowlistEntry(twice)).toBe(formatAllowlistEntry(once));
+    }
   });
 });
 

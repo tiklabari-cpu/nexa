@@ -1595,6 +1595,59 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/ip-allowlist': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Sources allowed to reach the agent/admin panel
+     * @description The allow-side counterpart to a security setting's `banned_customer_ips`
+     *     (FR-MOD-08.9.6): a license lists the addresses and CIDR ranges it trusts for
+     *     its own staff. Managing the list does not by itself refuse anyone —
+     *     enforcement is a separate control. Ordered by entry.
+     */
+    get: operations['listIpAllowlist'];
+    put?: never;
+    /**
+     * Allow a source to reach the agent/admin panel
+     * @description Accepts a single IPv4/IPv6 address or a CIDR range (`10.0.0.0/24`). The
+     *     value is validated and stored in canonical form — host bits masked, a bare
+     *     address kept as itself, IPv6 compressed — so two spellings of one range
+     *     cannot both sit in the list. A duplicate is refused (403).
+     *
+     *     A configuration that would exclude the address the request is made from is
+     *     rejected (400): the list must always keep the caller admitted, so a first
+     *     typo cannot lock a workspace out of its own console.
+     */
+    post: operations['addIpAllowlistEntry'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/ip-allowlist/{entryId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        entryId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Stop allowing a source */
+    delete: operations['removeIpAllowlistEntry'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/canned-responses': {
     parameters: {
       query?: never;
@@ -3196,9 +3249,9 @@ export interface components {
      *     a license lists the sources it trusts for its own staff. Tenant-scoped
      *     and closed by row level security.
      *
-     *     This is the schema only — the `/settings/ip-allowlist` path and its route
-     *     arrive together in a later slice (08.9.6-d); documenting a path nothing
-     *     serves would break the contract-parity check.
+     *     Managed through `/settings/ip-allowlist` (list, add, remove). `entry` is
+     *     stored in canonical form, so a bare address round-trips as itself and a
+     *     CIDR range keeps only its network bits.
      */
     IpAllowlistEntry: {
       /** Format: uuid */
@@ -7231,6 +7284,88 @@ export interface operations {
       header?: never;
       path: {
         domainId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listIpAllowlist: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The allowlist */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['IpAllowlistEntry'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  addIpAllowlistEntry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description A single IPv4/IPv6 address or a CIDR range. */
+          entry: string;
+          /** @description Optional human label for the entry, e.g. `Office VPN`. */
+          label?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Added */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IpAllowlistEntry'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  removeIpAllowlistEntry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        entryId: string;
       };
       cookie?: never;
     };

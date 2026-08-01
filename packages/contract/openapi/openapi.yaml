@@ -213,6 +213,10 @@ paths:
     $ref: "./paths/settings.yaml#/trustedDomains"
   /settings/trusted-domains/{domainId}:
     $ref: "./paths/settings.yaml#/trustedDomain"
+  /settings/ip-allowlist:
+    $ref: "./paths/settings.yaml#/ipAllowlist"
+  /settings/ip-allowlist/{entryId}:
+    $ref: "./paths/settings.yaml#/ipAllowlistEntry"
   /settings/canned-responses:
     $ref: "./paths/settings.yaml#/cannedResponses"
   /settings/canned-responses/{cannedResponseId}:
@@ -708,9 +712,9 @@ components:
         a license lists the sources it trusts for its own staff. Tenant-scoped
         and closed by row level security.
 
-        This is the schema only — the `/settings/ip-allowlist` path and its route
-        arrive together in a later slice (08.9.6-d); documenting a path nothing
-        serves would break the contract-parity check.
+        Managed through `/settings/ip-allowlist` (list, add, remove). `entry` is
+        stored in canonical form, so a bare address round-trips as itself and a
+        CIDR range keeps only its network bits.
       required: [id, entry, label, created_at]
       properties:
         id: { type: string, format: uuid }

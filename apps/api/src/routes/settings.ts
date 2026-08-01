@@ -18,6 +18,11 @@ import {
 } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
+import {
+  formatAllowlistEntry,
+  parseAllowlistEntry,
+  wouldLockOut,
+} from '../lib/ip-allowlist.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 
@@ -26,6 +31,18 @@ const SHORTCUT = /^[A-Za-z0-9_-]{1,40}$/;
 const addDomainBody = z.object({
   domain: z.string().trim().min(1).max(253),
   include_subdomains: z.boolean().default(false),
+});
+
+/**
+ * One IP allow-list entry (FR-MOD-08.9.6). `entry` is validated against the same
+ * parser the enforcement gate will use — `max(49)` fits the longest textual form
+ * (a full IPv6 address plus `/128`); anything malformed is rejected in the handler
+ * with the parser as the single source of truth, not re-derived here. `label` is an
+ * optional human note; an empty string is a mistake, not a way to clear it.
+ */
+const addIpAllowlistBody = z.object({
+  entry: z.string().trim().min(1).max(49),
+  label: z.string().trim().min(1).max(100).nullable().optional(),
 });
 
 const cannedListQuery = z.object({ scope: z.enum(['chat', 'ticket']).optional() });
@@ -296,6 +313,134 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
         return count;
       });
       if (deleted === 0) throw ApiError.notFound('Domain not found.');
+
+      return reply.status(204).send();
+    },
+  );
+
+  // --- IP allow-list (FR-MOD-08.9.6) -----------------------------------------
+  //
+  // The allow-side counterpart to `banned_customer_ips`: those addresses are
+  // refused on the customer surface; these are the only ones admitted to the
+  // agent/admin panel. This surface only *manages* the list — enforcement (which
+  // request is refused) lands in 08.9.6-e. What matters here is that a saved list
+  // is always well-formed and can never exclude the very address it is saved from.
+
+  app.get(
+    '/settings/ip-allowlist',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
+    async (request, reply) => {
+      const items = await request.withTenant((tx) =>
+        tx.ipAllowlistEntry.findMany({ orderBy: { entry: 'asc' } }),
+      );
+      return reply.send({
+        items: items.map((e) => ({
+          id: e.id,
+          entry: e.entry,
+          label: e.label,
+          created_at: e.createdAt.toISOString(),
+        })),
+      });
+    },
+  );
+
+  app.post(
+    '/settings/ip-allowlist',
+    { config: { scopes: ['access_rules:rw'] } },
+    async (request, reply) => {
+      const body = parse(addIpAllowlistBody, request.body);
+      const tenant = request.tenant();
+
+      // Validated with the parser the enforcement gate will reuse, then stored in
+      // canonical form: `10.0.0.5/24` and `10.0.0.0/24` become one string, so the
+      // unique index catches a duplicate and a typo cannot sit in the list looking
+      // like a rule while admitting no one — or a neighbouring network.
+      const parsed = parseAllowlistEntry(body.entry);
+      if (!parsed) {
+        throw ApiError.validation(
+          'Enter a single IPv4/IPv6 address or a CIDR range such as 10.0.0.0/24.',
+        );
+      }
+      const canonical = formatAllowlistEntry(parsed);
+
+      try {
+        const created = await request.withTenant(async (tx) => {
+          // Self-lockout guard: the resulting list must still admit the address
+          // the caller is connecting from, or the first entry with a typo would
+          // lock a workspace out of its own console the moment enforcement is on —
+          // the availability risk an allow-list carries. Checked against the whole
+          // proposed list (existing entries plus the new one) inside the same
+          // transaction, so it cannot race a concurrent write.
+          const existing = await tx.ipAllowlistEntry.findMany({ select: { entry: true } });
+          const nextEntries = [...existing.map((e) => e.entry), canonical];
+          if (wouldLockOut(request.ip, nextEntries)) {
+            throw ApiError.validation(
+              'That would lock you out: the list must still include the address you are connecting from.',
+            );
+          }
+
+          const row = await tx.ipAllowlistEntry.create({
+            data: {
+              organizationId: tenant.organizationId,
+              licenseId: tenant.licenseId,
+              entry: canonical,
+              label: body.label ?? null,
+            },
+          });
+          // Same transaction as the change, so the trail can never disagree with
+          // the list. The rule is recorded; the caller's own address is not copied
+          // into metadata — it is PII and already lives in the entry's `ip` column.
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'settings.ip_allowlist_added',
+            target: `ip_allowlist:${row.id}`,
+            metadata: { entry: canonical },
+          });
+          return row;
+        });
+
+        return reply.status(201).send({
+          id: created.id,
+          entry: created.entry,
+          label: created.label,
+          created_at: created.createdAt.toISOString(),
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new ApiError('not_allowed', `${canonical} is already on the allowlist.`);
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.delete<{ Params: { entryId: string } }>(
+    '/settings/ip-allowlist/:entryId',
+    { config: { scopes: ['access_rules:rw'] } },
+    async (request, reply) => {
+      const entryId = parse(uuid, request.params.entryId);
+
+      const deleted = await request.withTenant(async (tx) => {
+        // Read the entry first so the audit trail can name which rule went, then
+        // delete tenant-scoped: the id alone would let a caller remove another
+        // tenant's entry if RLS were ever misconfigured. A cross-tenant id matches
+        // nothing here and surfaces as 404, never 403 — a 403 would confirm the id
+        // is real and turn short IDs into an enumeration oracle (NFR-S5).
+        const found = await tx.ipAllowlistEntry.findFirst({
+          where: { id: entryId },
+          select: { entry: true },
+        });
+        const { count } = await tx.ipAllowlistEntry.deleteMany({ where: { id: entryId } });
+        // Only record a removal that actually happened.
+        if (count > 0 && found) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'settings.ip_allowlist_removed',
+            target: `ip_allowlist:${entryId}`,
+            metadata: { entry: found.entry },
+          });
+        }
+        return count;
+      });
+      if (deleted === 0) throw ApiError.notFound('Allowlist entry not found.');
 
       return reply.status(204).send();
     },

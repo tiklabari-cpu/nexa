@@ -85,6 +85,92 @@ trustedDomain:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+ipAllowlist:
+  get:
+    tags: [Settings]
+    operationId: listIpAllowlist
+    summary: Sources allowed to reach the agent/admin panel
+    description: |
+      The allow-side counterpart to a security setting's `banned_customer_ips`
+      (FR-MOD-08.9.6): a license lists the addresses and CIDR ranges it trusts for
+      its own staff. Managing the list does not by itself refuse anyone —
+      enforcement is a separate control. Ordered by entry.
+    responses:
+      "200":
+        description: The allowlist
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/IpAllowlistEntry" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: addIpAllowlistEntry
+    summary: Allow a source to reach the agent/admin panel
+    description: |
+      Accepts a single IPv4/IPv6 address or a CIDR range (`10.0.0.0/24`). The
+      value is validated and stored in canonical form — host bits masked, a bare
+      address kept as itself, IPv6 compressed — so two spellings of one range
+      cannot both sit in the list. A duplicate is refused (403).
+
+      A configuration that would exclude the address the request is made from is
+      rejected (400): the list must always keep the caller admitted, so a first
+      typo cannot lock a workspace out of its own console.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [entry]
+            properties:
+              entry:
+                type: string
+                minLength: 1
+                maxLength: 49
+                description: A single IPv4/IPv6 address or a CIDR range.
+              label:
+                type: string
+                nullable: true
+                maxLength: 100
+                description: Optional human label for the entry, e.g. `Office VPN`.
+    responses:
+      "201":
+        description: Added
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/IpAllowlistEntry" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ipAllowlistEntry:
+  parameters:
+    - name: entryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  delete:
+    tags: [Settings]
+    operationId: removeIpAllowlistEntry
+    summary: Stop allowing a source
+    responses:
+      "204": { description: Removed }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 cannedResponses:
   get:
     tags: [Settings]

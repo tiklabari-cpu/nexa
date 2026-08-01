@@ -3440,13 +3440,13 @@
             "description": "Contract-first: (1) packages/contract/openapi/paths/settings.yaml'a ipAllowlist (get/post) + ipAllowlistEntry (delete) blokları, openapi.yaml paths kaydı, re-bundle. (2) routes/settings.ts: GET (access_rules:ro|rw, entry alfabetik), POST (access_rules:rw, gövde parseAllowlistEntry ile doğrulanır → geçersizse 400 validation; canonical form saklanır; unique çakışması reddedilir), DELETE /:entryId (a",
             "details": "08.9.6-d — /settings/ip-allowlist CRUD (GET/POST/DELETE) + self-lockout guard + audit + path kontratı  [OPUS-XHIGH]\n\nPRD: FR-MOD-08.9.6 (+ NFR-S12 audit, NFR-S4, NFR-S5)\nETİKET GEREKÇESİ: OPUS-XHIGH: erişim kontrol listesinin YAZMA yüzeyi = yeni yetkili endpoint. Kullanıcı kuralı: 'güvenlik hassasiyeti olan ama çekirdek güvenlik sınırı olmayan işler (ör. yeni bir yetkili endpoint eklemek) EN AZ OPUS-XHIGH olur; güvenlik işi asla sonnet'e verilmez.' Eşleştirme/kilitlenme kararı -c'de saf fonksiyon olarak sabitlendiği için MAX değil.\nNEDEN AÇIK: /settings/ip-allowlist route'u yok (ip_allowlist grep 0). Aynı şekilli bir allowlist CRUD'u depoda bir kez var: apps/api/src/routes/settings.ts:206-299 /settings/trusted-domains GET/POST/DELETE — scope access_rules:ro|rw, tenant-scoped deleteMany, aynı transaction'da writeAuditEntry. AUDIT_ACTIONS (audit-log.ts:33-67) kapalı sözlük; IP allowlist için action yok.\nKAPSAM: Contract-first: (1) packages/contract/openapi/paths/settings.yaml'a ipAllowlist (get/post) + ipAllowlistEntry (delete) blokları, openapi.yaml paths kaydı, re-bundle. (2) routes/settings.ts: GET (access_rules:ro|rw, entry alfabetik), POST (access_rules:rw, gövde parseAllowlistEntry ile doğrulanır → geçersizse 400 validation; canonical form saklanır; unique çakışması reddedilir), DELETE /:entryId (access_rules:rw, deleteMany ile tenant-scoped, count 0 → 404). (3) Her yazımda aynı transaction'da writeAuditEntry — AUDIT_ACTIONS'a settings.ip_allowlist_added ve settings.ip_allowlist_removed eklenir (metadata: entry; ham istemci IP'si PII olarak yazılmaz). (4) SELF-LOCKOUT GUARD: wouldLockOut(request.ip, nextEntries) true ise 400 ile reddedilir — çağıranın kendi adresini dışarıda bırakan bir yapılandırma kaydedilemez.\nDOSYALAR: apps/api/src/routes/settings.ts · packages/contract/openapi/paths/settings.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/services/audit/audit-log.ts · apps/api/test/integration/ip-allowlist.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/settings.ts (satır 206-299 — trusted-domains GET/POST/DELETE: scope, normalize-veya-400, transaction içi audit, tenant-scoped deleteMany + 404) · packages/contract/openapi/paths/settings.yaml (trustedDomains blokları) · apps/api/src/services/audit/audit-log.ts (satır 33-67 AUDIT_ACTIONS kapalı sözlüğü + sanitizeAuditMetadata)\nKK (birebir): \"IP kısıtı\" | \"KK-türetilmiş: IP kısıt listesi Settings üzerinden listelenir, kayıt eklenir ve silinir; her ekleme/silme audit log'a düşer; çağıranın kendisini dışarıda bırakan bir kayıt reddedilir. TÜRETME GEREKÇESİ: PRD 'IP kısıtı' dışında yönetim yüzeyi tanımlamıyor; audit payı NFR-S12'den, self-lockout reddi ise olgulardaki 'yanlış yapılandırılmış bir allowlist agent'ları kilitleyebilir (availability/self-lockout riski)' bulgusundan türetildi.\"\nKK DOĞRULAMA: apps/api/test/integration/ip-allowlist.test.ts — POST sonrası GET kaydı döner ve audit_log'da settings.ip_allowlist_added satırı vardır; DELETE sonrası kayıt gider ve settings.ip_allowlist_removed yazılır; kendi IP'sini kapsamayan ilk kayıt 400 alır. contract-parity.test.ts yeşil (üç operasyon hem belgelenmiş hem servis ediliyor).\nKAPSAM DIŞI: Enforcement — bu endpoint listeyi yönetir, hiçbir isteği reddetmez (08.9.6-e) · Oturum politikası alanlarının yazımı (08.9.6-f) · UI (08.9.6-h)\nSÖZLEŞME: EVET — YENİ PATH'LER: GET/POST /settings/ip-allowlist ve DELETE /settings/ip-allowlist/{entryId}. packages/contract/openapi/paths/settings.yaml + openapi.yaml paths bölümüne eklenip 'pnpm --filter @nexa/contract generate' ile re-bundle EDİLMEZSE contract-parity.test.ts KIRILIR — test iki yönlüdür: belgelenmemiş route da, hiçbir şeyin servis etmediği belgelenmiş path de kırar.\nMIGRATION: yok (tablo 08.9.6-b'de). Not: AUDIT_ACTIONS bir TS const'tır, migration gerektirmez; ancak kapalı sözlük olduğu için iki yeni action eklenmeden writeAuditEntry tip hatası verir.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF (ÖNCE): geçersiz CIDR/IP → 400 validation · NEGATİF (ÖNCE): çağıranın adresini kapsamayan kayıt → 400 (self-lockout guard) · NEGATİF (ÖNCE): access_rules:rw olmayan token POST/DELETE'te 403 · NEGATİF: aynı entry ikinci kez → çakışma reddi (unique index) · CROSS-TENANT: B lisansının entry id'si ile DELETE → 404 (403 değil — NFR-S5 enumeration koruması) · CROSS-TENANT: A'nın GET'i B'nin kayıtlarını göstermez · POZİTİF integration: CRUD akışı + canonical saklama + audit_log satırları · contract-parity.test.ts yeşil (path + route iki yönlü eşleşiyor)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2,
               3
             ],
             "parentId": "80",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-01T19:04:17.199Z"
           },
           {
             "id": 5,
@@ -3521,7 +3521,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T18:31:44.005Z"
+        "updatedAt": "2026-08-01T19:04:17.199Z"
       },
       {
         "id": "81",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-01T18:31:44.006Z",
+      "lastModified": "2026-08-01T19:04:17.200Z",
       "taskCount": 99,
       "completedCount": 70,
       "tags": [

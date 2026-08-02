@@ -77,6 +77,11 @@ export const AUDIT_ACTIONS = [
   // Data lifecycle — a retention sweep hard-deleted expired data (NFR-C8). The
   // record is metadata (counts), not the data itself, so it is safe to retain.
   'data.retention_pruned',
+  // A targeted, single-record delete an agent chose to make (as opposed to the
+  // automatic sweep above) — the "veri silme" NFR-S12 names by hand. One shared
+  // action across the settings-family kinds it covers; metadata carries only
+  // `kind`, never the deleted record's name, body or values.
+  'data.deleted',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

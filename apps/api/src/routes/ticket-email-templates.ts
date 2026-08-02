@@ -104,7 +104,7 @@ export default async function ticketEmailTemplateRoutes(app: FastifyInstance): P
     async (request, reply) => {
       const id = parse(templateIdSchema, request.params.templateId);
       const tenant = request.tenant();
-      await request.withTenant((tx) => templates.remove(tx, tenant, id));
+      await request.withTenant((tx) => templates.remove(tx, tenant, request.auditContext(), id));
       return reply.status(204).send();
     },
   );

@@ -121,7 +121,7 @@ export default async function ticketRuleRoutes(app: FastifyInstance): Promise<vo
     async (request, reply) => {
       const id = parse(ruleIdSchema, request.params.ruleId);
       const tenant = request.tenant();
-      await request.withTenant((tx) => rules.remove(tx, tenant, id));
+      await request.withTenant((tx) => rules.remove(tx, tenant, request.auditContext(), id));
       return reply.status(204).send();
     },
   );

@@ -3956,12 +3956,12 @@
             "description": "AUDIT_ACTIONS'a tek bir 'data.deleted' eylemi eklenir. Beş silme ucunda, zaten var olan request.withTenant(tx) bloğunun içinde ve yalnız gerçekten silindiğinde (count > 0) writeAuditEntry çağrılır. target = '<kind>:<id>' (canned_response / tag / custom_field / ticket_rule / ticket_email_template). metadata YALNIZ { kind } taşır — silinen kaydın adı, gövdesi veya değerleri metadata'ya YAZILMAZ.",
             "details": "08.9.7-d — data.deleted eylemi + ayarlar ailesi hedefli silmelerinde audit  [SONNET-XHIGH]\n\nPRD: NFR-S12 (+ NFR-C8 veri yaşam döngüsü)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 4 route dosyası + test; yeni güvenlik sınırı yok (yazım mevcut writeAuditEntry'den geçiyor, tenancy'yi RLS zorluyor); eşzamanlılık yok; kopyalanacak desen ismen var (settings.ts:275-298); kontrat değişikliği yok; kabul kriteri mekanik (silme başına tam 1 entry, no-op'ta 0).\nNEDEN AÇIK: NFR-S12'nin 'veri silme' maddesi bugün yalnız otomatik toplu sweep için karşılanıyor (retention.ts:145-148 data.retention_pruned). Hedefli silme uçlarında audit yok: grep writeAuditEntry settings.ts'te yalnız trusted_domain_added/removed + security/routing/chat_timeout/widget satırlarını gösteriyor; canned-response silme (settings.ts:390), tag silme (settings.ts:769), ticket-rules.ts:118, ticket-email-templates.ts:101 ve custom-fields.ts:103 audit'siz. NOT: depoda DELETE /customers/:customerId diye bir erasure ucu YOK — customers.ts:171 DELETE /customers/:customerId/ban (ban kaldırma) ucudur; kaynak olgulardaki bu iddia koda karşı doğrulanmadı ve düzeltildi.\nKAPSAM: AUDIT_ACTIONS'a tek bir 'data.deleted' eylemi eklenir. Beş silme ucunda, zaten var olan request.withTenant(tx) bloğunun içinde ve yalnız gerçekten silindiğinde (count > 0) writeAuditEntry çağrılır. target = '<kind>:<id>' (canned_response / tag / custom_field / ticket_rule / ticket_email_template). metadata YALNIZ { kind } taşır — silinen kaydın adı, gövdesi veya değerleri metadata'ya YAZILMAZ.\nDOSYALAR: apps/api/src/services/audit/audit-log.ts · apps/api/src/services/audit/audit-log.test.ts · apps/api/src/routes/settings.ts · apps/api/src/routes/ticket-rules.ts · apps/api/src/routes/ticket-email-templates.ts · apps/api/src/routes/custom-fields.ts · apps/api/test/integration/audit-log.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/settings.ts:275-298 (DELETE /settings/trusted-domains/:domainId — deleteMany + count>0 kapısı + writeAuditEntry aynı tx içinde) · apps/api/test/integration/audit-log.test.ts:110-131 ('records a trusted domain being removed (and not a no-op delete)' testi birebir kopyalanabilir)\nKK (birebir): \"Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30 gün) tüm planlarda\" | \"KK3: Audit log (login, rol değişimi, veri silme, webhook değişimi) tutulur (§7). — kaynak: US-11, satır 325\"\nKK DOĞRULAMA: test/integration/audit-log.test.ts: beş silme ucunun her biri tam olarak bir data.deleted entry'si yazar (doğru target/kind); 404 silme entry yazmaz. KK'nın 'veri silme' maddesinin hedefli silme payını kanıtlar.\nKAPSAM DIŞI: İçerik/entegrasyon silme uçları (websites/playbook/copilot/apps) — 08.9.7-e · Toplu retention sweep audit'i (retention.ts'te zaten var) · GDPR tekil erasure ucu (depoda yok, bu turda eklenmiyor)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): var olmayan id ile silme (404) → entry yazılmaz · negatif (önce): silinen kaydın adı/gövdesi/değeri audit metadata'sında geçmiyor (haystack iddiası) · cross-tenant: B'nin kaydını silme denemesi 404 ve A'nın log'una entry düşmüyor · integration (pozitif): uç başına tam 1 entry, doğru target biçimi",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3
             ],
             "parentId": "92",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T09:30:52.023Z"
           },
           {
             "id": 5,
@@ -4059,7 +4059,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T06:35:49.149Z"
+        "updatedAt": "2026-08-02T09:30:52.023Z"
       },
       {
         "id": "93",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T06:35:49.149Z",
+      "lastModified": "2026-08-02T09:30:52.023Z",
       "taskCount": 99,
       "completedCount": 72,
       "tags": [

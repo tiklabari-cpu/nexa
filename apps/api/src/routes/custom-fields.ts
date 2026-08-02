@@ -106,7 +106,9 @@ export default async function customFieldRoutes(app: FastifyInstance): Promise<v
     async (request, reply) => {
       const id = parse(fieldIdSchema, request.params.fieldId);
       const tenant = request.tenant();
-      await request.withTenant((tx) => fields.removeDefinition(tx, tenant, id));
+      await request.withTenant((tx) =>
+        fields.removeDefinition(tx, tenant, request.auditContext(), id),
+      );
       return reply.status(204).send();
     },
   );

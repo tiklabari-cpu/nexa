@@ -84,6 +84,9 @@ describe('audit log writer (NFR-S12)', () => {
         'accounts--my:rw',
         'accounts--all:rw',
         'webhooks--all:rw',
+        'canned_responses--all:rw',
+        'tags--all:rw',
+        'tickets--all:rw',
       ],
     });
   });
@@ -387,6 +390,167 @@ describe('audit log writer (NFR-S12)', () => {
       const entry = await latest('auth.password_reset');
       expect(entry?.actorId).toBe(fx.a.ownerAccountId);
       expect(entry?.actorType).toBe('agent');
+    });
+  });
+
+  // =========================================================================
+  // Targeted settings-family deletes (data.deleted, 08.9.7-d)
+  // =========================================================================
+
+  describe('a targeted settings delete records exactly one data.deleted entry', () => {
+    it('records a canned response being deleted (and not a no-op delete)', async () => {
+      const response = await owner.cannedResponse.create({
+        data: { licenseId: fx.a.licenseId, shortcut: 'audit-d', text: 'gone soon' },
+        select: { id: true },
+      });
+
+      const before = await count('data.deleted');
+      const removed = await server.del(
+        `/settings/canned-responses/${response.id}`,
+        auth(adminToken),
+      );
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`canned_response:${response.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'canned_response' });
+      // The deleted reply's own text never reaches the append-only log.
+      expect(JSON.stringify(entry?.metadata)).not.toContain('gone soon');
+
+      // A repeat delete matches nothing (404) and must not write an entry.
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(
+        `/settings/canned-responses/${response.id}`,
+        auth(adminToken),
+      );
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records a tag being deleted (and not a no-op delete)', async () => {
+      const tag = await owner.tag.create({
+        data: { licenseId: fx.a.licenseId, name: 'audit-d-tag' },
+        select: { id: true },
+      });
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/settings/tags/${tag.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`tag:${tag.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'tag' });
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/settings/tags/${tag.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records a ticket rule being deleted (and not a no-op delete)', async () => {
+      const rule = await owner.ticketRule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          name: 'audit-d-rule',
+          conditions: { source: 'email' },
+          actions: { priority: 10 },
+        },
+        select: { id: true },
+      });
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/settings/ticket-rules/${rule.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`ticket_rule:${rule.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'ticket_rule' });
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/settings/ticket-rules/${rule.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records a ticket e-mail template being deleted (and not a no-op delete)', async () => {
+      const template = await owner.ticketEmailTemplate.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          name: 'audit-d-template',
+          subject: 'Re: {{ ticket.subject }}',
+          body: 'Thanks for reaching out.',
+        },
+        select: { id: true },
+      });
+
+      const before = await count('data.deleted');
+      const removed = await server.del(
+        `/settings/ticket-email-templates/${template.id}`,
+        auth(adminToken),
+      );
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`ticket_email_template:${template.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'ticket_email_template' });
+      // The deleted template's own text never reaches the append-only log.
+      expect(JSON.stringify(entry?.metadata)).not.toContain('Thanks for reaching out');
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(
+        `/settings/ticket-email-templates/${template.id}`,
+        auth(adminToken),
+      );
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records a custom field being deleted (and not a no-op delete)', async () => {
+      const field = await owner.customFieldDefinition.create({
+        data: { licenseId: fx.a.licenseId, entity: 'ticket', label: 'audit-d-field', type: 'text' },
+        select: { id: true },
+      });
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/settings/custom-fields/${field.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`custom_field:${field.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'custom_field' });
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/settings/custom-fields/${field.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it("a cross-tenant targeted delete writes to no one's log", async () => {
+      const mine = await owner.cannedResponse.create({
+        data: { licenseId: fx.a.licenseId, shortcut: 'audit-d-cross', text: 'tenant a only' },
+        select: { id: true },
+      });
+
+      // A tenant-B admin holding the write scope aims at tenant A's record id.
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['canned_responses--all:rw'],
+      });
+
+      const beforeA = await count('data.deleted', fx.a.licenseId);
+      const beforeB = await count('data.deleted', fx.b.licenseId);
+      const res = await server.del(`/settings/canned-responses/${mine.id}`, auth(tokenB));
+      expect(res.statusCode).toBe(404);
+
+      // RLS matched nothing, so neither log gained an entry — and A's record is
+      // untouched, still there for its own owner to remove and record.
+      expect(await count('data.deleted', fx.a.licenseId)).toBe(beforeA);
+      expect(await count('data.deleted', fx.b.licenseId)).toBe(beforeB);
+      const byOwner = await server.del(`/settings/canned-responses/${mine.id}`, auth(adminToken));
+      expect(byOwner.statusCode).toBe(204);
+      expect(await count('data.deleted', fx.a.licenseId)).toBe(beforeA + 1);
     });
   });
 

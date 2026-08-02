@@ -50,4 +50,9 @@ describe('AUDIT_ACTIONS', () => {
     expect(AUDIT_ACTIONS).toContain('webhook.created');
     expect(AUDIT_ACTIONS).toContain('webhook.deleted');
   });
+
+  it('records the targeted-delete action NFR-S12 names by hand', () => {
+    // "veri silme" is one of the four events the requirement enumerates.
+    expect(AUDIT_ACTIONS).toContain('data.deleted');
+  });
 });

@@ -17,6 +17,7 @@ import type { Prisma } from '@prisma/client';
 import type { TicketRule, TicketRuleActions, TicketRuleConditions } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { type AuditContext, writeAuditEntry } from '../audit/audit-log.js';
 import { hasAction, hasCondition } from './ticket-rule-matching.js';
 
 export interface TicketRuleInput {
@@ -127,9 +128,20 @@ export class TicketRuleService {
   }
 
   /** Delete a rule. Scoped by licence so an id alone cannot reach another tenant's. */
-  async remove(tx: TenantClient, tenant: TenantContext, id: string): Promise<void> {
+  async remove(
+    tx: TenantClient,
+    tenant: TenantContext,
+    audit: AuditContext,
+    id: string,
+  ): Promise<void> {
     const { count } = await tx.ticketRule.deleteMany({ where: { id, licenseId: tenant.licenseId } });
     if (count === 0) throw ApiError.notFound('Ticket rule not found.');
+    // Only a delete that actually happened is worth an entry.
+    await writeAuditEntry(tx, audit, {
+      action: 'data.deleted',
+      target: `ticket_rule:${id}`,
+      metadata: { kind: 'ticket_rule' },
+    });
   }
 }
 

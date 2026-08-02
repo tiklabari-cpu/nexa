@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+### tm 92.4 — 08.9.7-d data.deleted eylemi + ayarlar ailesi hedefli silmelerinde audit — done — 2026-08-02 UTC
+
+- **Yapıldı:** SONNET-XHIGH — bu pencere önceki bir pencerenin commit'lenmemiş WIP'ini (§D70
+  notunda "kapsam dışı" bırakıldığı doğrulandı) denetleyip tamamladı. `AUDIT_ACTIONS`'a kapalı
+  sözlük eylemi `data.deleted`. Beş hedefli silme ucu — canned_response, tag (`settings.ts`
+  içinde inline, trusted-domain deseni birebir) + custom_field, ticket_rule,
+  ticket_email_template (servis katmanına yeni `audit: AuditContext` parametresi, route'lar
+  `request.auditContext()` geçiyor) — mevcut `withTenant(tx)` bloğu içinde ve yalnız
+  `count > 0`'da `writeAuditEntry` çağırıyor; `target=<kind>:<id>`, `metadata` YALNIZ `{ kind }`.
+- **Doğrulama:** `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ ·
+  `apps/api` içinde `pnpm test` (unit+integration birleşik vitest run, gerçek Postgres'e karşı)
+  62 dosya / 1138 test yeşil — `services/audit/audit-log.test.ts` (+1: sözlükte `data.deleted`)
+  ve `test/integration/audit-log.test.ts` (+6: beş uç pozitif tam-1-entry, no-op-404 hiç
+  yazmaz, cross-tenant hiçbir log'a düşmez, silinen kaydın metni asla metadata'ya sızmıyor)
+  dahil. `contract-parity.test.ts` de aynı koşuda yeşil (bu task OpenAPI'ye dokunmadı, kontrat
+  değişmedi). E2E: bu akışa dokunan bir Playwright testi yok (grep boş) — task'ın kapsadığı akış
+  saf API+DB seviyesinde, integration testleri tarafından doğrulandı; E2E ilgisiz.
+- **Varsayımlar:** [[nexa-early-delivered-slices-audit]] deseninin tersi — bu kez kod gerçekten
+  eksikti (WIP halinde), yalnız işaretleme/commit eksikti; "audit+kapat" değil "bitir+kapat".
+- **Sonraki pencereye not:** 08.9.7'nin kalan v2 payı: içerik/entegrasyon silme uçlarında
+  data.deleted (`-e`, bu task'a bağımlı) · rol-değişimi olayı (`-f`) · 30-gün budama (`-h`) ·
+  ekran (`-i`/`-j`) · uçtan uca doğrulama (`-k`). PLAN.md §5.0 satır 1121 güncellendi (evidence
+  eklendi); Faz-2 dağılım sayacı (satır 22/1100) bu görevle değişmedi çünkü 08.9.7 zaten `◐` idi
+  ve öyle kalıyor (henüz tüm alt-kalemler bitmedi).
+
 ### Faz-2 özet sayacı senkronu — §D70 — done — 2026-08-02 UTC
 
 - **Yapıldı:** DÜZELTME penceresi (panel §1.2 bulgusu). Faz-2 dağılım sayacı bayattı: özet

@@ -27,6 +27,7 @@ import {
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { type AuditContext, writeAuditEntry } from '../audit/audit-log.js';
 
 export interface DefinitionInput {
   entity: CustomFieldEntity;
@@ -192,11 +193,22 @@ export class CustomFieldService {
   }
 
   /** Delete a field. Its stored values cascade away with it (see the migration). */
-  async removeDefinition(tx: TenantClient, tenant: TenantContext, id: string): Promise<void> {
+  async removeDefinition(
+    tx: TenantClient,
+    tenant: TenantContext,
+    audit: AuditContext,
+    id: string,
+  ): Promise<void> {
     const { count } = await tx.customFieldDefinition.deleteMany({
       where: { id, licenseId: tenant.licenseId },
     });
     if (count === 0) throw ApiError.notFound('Custom field not found.');
+    // Only a delete that actually happened is worth an entry.
+    await writeAuditEntry(tx, audit, {
+      action: 'data.deleted',
+      target: `custom_field:${id}`,
+      metadata: { kind: 'custom_field' },
+    });
   }
 
   /**

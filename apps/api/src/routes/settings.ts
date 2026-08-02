@@ -573,6 +573,15 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
 
       const deleted = await request.withTenant(async (tx) => {
         const { count } = await tx.cannedResponse.deleteMany({ where: { id } });
+        // Only record a delete that actually happened — a 404 (nothing matched)
+        // is not an event worth an entry.
+        if (count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'data.deleted',
+            target: `canned_response:${id}`,
+            metadata: { kind: 'canned_response' },
+          });
+        }
         return count;
       });
       if (deleted === 0) throw ApiError.notFound('Saved reply not found.');
@@ -963,6 +972,15 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
         // Scoped delete, not `delete by id`: the id alone would let a caller
         // remove another tenant's tag if RLS were ever misconfigured.
         const { count } = await tx.tag.deleteMany({ where: { id } });
+        // Only record a delete that actually happened — a 404 (nothing matched)
+        // is not an event worth an entry.
+        if (count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'data.deleted',
+            target: `tag:${id}`,
+            metadata: { kind: 'tag' },
+          });
+        }
         return count;
       });
       if (deleted === 0) throw ApiError.notFound('Tag not found.');

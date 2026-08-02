@@ -15,6 +15,7 @@ import type { TicketEmailTemplate } from '@nexa/types';
 import { findTemplateProblemsIn } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { type AuditContext, writeAuditEntry } from '../audit/audit-log.js';
 
 export interface TicketEmailTemplateInput {
   name: string;
@@ -111,11 +112,22 @@ export class TicketEmailTemplateService {
   }
 
   /** Delete a template. Scoped by licence so an id alone cannot reach another tenant's. */
-  async remove(tx: TenantClient, tenant: TenantContext, id: string): Promise<void> {
+  async remove(
+    tx: TenantClient,
+    tenant: TenantContext,
+    audit: AuditContext,
+    id: string,
+  ): Promise<void> {
     const { count } = await tx.ticketEmailTemplate.deleteMany({
       where: { id, licenseId: tenant.licenseId },
     });
     if (count === 0) throw ApiError.notFound('Ticket e-mail template not found.');
+    // Only a delete that actually happened is worth an entry.
+    await writeAuditEntry(tx, audit, {
+      action: 'data.deleted',
+      target: `ticket_email_template:${id}`,
+      metadata: { kind: 'ticket_email_template' },
+    });
   }
 }
 

@@ -3337,14 +3337,14 @@
             "description": "İstemci plumbing. (1) `AppShell.tsx`: üst çubukta marka `Dropdown`'ı — `GET /brands` listesinden; tek marka varsa gizli (tek-markalı lisansta görsel gürültü yok). (2) Seçim `localStorage`'da persist (i18n dil tercihinin birebir deseni); geçersiz/silinmiş marka id'si varsa varsayılana düşer. (3) `api-client.ts`: seçili marka varsa her isteğe `X-Nexa-Brand` başlığı eklenir (mevcut Authorization enje",
             "details": "MULTIBRAND-f — AppShell marka değiştirici + seçili markanın persist'i + isteklerde `X-Nexa-Brand` başlığı  [SONNET-XHIGH]\n\nPRD: §5.3-Marka (Multibrand)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 5 dosya (AppShell + api-client + auth-store + iki test). (2) Güvenlik sınırı YOK: istemci yalnız bir başlık taşır; markanın lisansa aitliğini SUNUCU doğruluyor (-b) ve uydurma başlık 404 döner — istemci tarafı yanlışlığı sızıntı üretemez. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen mevcut: AppShell hesap menüsü + `components/ui/Dropdown.tsx` + `lib/i18n.ts` localStorage persist. (5) Kontrat değişikliği yok. (6) KK mekanik (seç → persist → istekte başlık).\nNEDEN AÇIK: `apps/web/src/features/` altında workspace/brand switcher ekranı YOK (grep sonuçları tamamı false-positive). `apps/web/src/components/AppShell.tsx` mevcut hesap menüsünü barındırıyor (EK-C.2'de `Dropdown`'a oturtulmuştu) ama marka seçici taşımıyor; `apps/web/src/lib/api-client.ts` isteklere marka başlığı eklemiyor.\nKAPSAM: İstemci plumbing. (1) `AppShell.tsx`: üst çubukta marka `Dropdown`'ı — `GET /brands` listesinden; tek marka varsa gizli (tek-markalı lisansta görsel gürültü yok). (2) Seçim `localStorage`'da persist (i18n dil tercihinin birebir deseni); geçersiz/silinmiş marka id'si varsa varsayılana düşer. (3) `api-client.ts`: seçili marka varsa her isteğe `X-Nexa-Brand` başlığı eklenir (mevcut Authorization enjeksiyon noktasının yanına); seçili marka yoksa başlık HİÇ gönderilmez (lisans-geneli NULL semantiği korunur). (4) Marka değişince react-query cache'i invalidate edilir.\nDOSYALAR: apps/web/src/components/AppShell.tsx · apps/web/src/components/AppShell.test.tsx · apps/web/src/lib/api-client.ts · apps/web/src/lib/api-client.test.ts · apps/web/src/lib/auth-store.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/components/AppShell.tsx (mevcut hesap menüsü = kopyalanacak Dropdown yerleşimi) · apps/web/src/components/ui/Dropdown.tsx (EK-C.2 tek tasarım sistemi bileşeni) · apps/web/src/lib/i18n.ts + apps/web/src/lib/i18n.test.ts (localStorage tercih persist + reload sonrası koruma deseni) · apps/web/src/lib/api-client.ts + apps/web/src/lib/api-client.test.ts (mevcut başlık enjeksiyonu ve test kurgusu)\nKK (birebir): \"KK-türetilmiş: «Kullanıcı üst çubuktan marka değiştirebilir; seçim sayfa yeniden yüklendiğinde korunur; seçim sonrası tüm API istekleri seçili markanın bağlamında gider ve önceki markanın verisi ekranda kalmaz; lisansta tek marka varsa seçici gösterilmez.» — Türetme gerekçesi: PRD §5.3'te KK sütunu yok (kk_yetersiz=true); kriter 'tek lisansta çok marka' kapsamının kullanıcı yüzeyi payı olarak ve mevcut tercih-persist deseninden (T1-a / i18n) türetildi.\"\nKK DOĞRULAMA: `AppShell.test.tsx` — (a) iki markalı yanıt → seçici görünür, seçim değişir [KK: değiştirebilir]; (b) seçimden sonra store yeniden kurulduğunda seçili marka korunur [KK: reload'da korunur]; (c) tek markalı yanıt → seçici render edilmez [KK: tek markada gizli]; (d) marka değişince `queryClient.invalidateQueries` çağrılır [KK: önceki veri kalmaz]. `api-client.test.ts` — seçili marka varken istekte `X-Nexa-Brand` var, yokken başlık hiç gönderilmiyor [KK: bağlamında gider].\nKAPSAM DIŞI: ayar ekranlarının queryKey'lerinin markaya bağlanması (-g) · command palette'e marka komutu eklenmesi (ayrı PRD kalemi — `CommandPalette.tsx` zaten var) · marka bazlı tema/logo görselinin uygulanması\nSÖZLEŞME: yok — `X-Nexa-Brand` başlığı -b/-c'de kontrata yazıldı, burada yalnız tüketiliyor.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: seçici render / tek markada gizlenme · unit: seçimin localStorage'da persist edilmesi ve yeniden kurulumda korunması · unit: marka değişiminde queryClient.invalidateQueries çağrılıyor · unit: api-client — seçili markada `X-Nexa-Brand` başlığı var, seçimsizken başlık hiç yok · negatif: localStorage'da geçersiz/silinmiş marka id'si → varsayılana düşer, istek kırılmaz · NOT: sunucu tarafı marka doğrulaması -b'de, cross-brand negatifleri -b ve -h'de",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2,
               4,
               5
             ],
             "parentId": "78",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T17:36:23.872Z"
           },
           {
             "id": 7,
@@ -3375,7 +3375,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T17:18:10.807Z"
+        "updatedAt": "2026-08-02T17:36:23.872Z"
       },
       {
         "id": "79",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T17:18:10.808Z",
+      "lastModified": "2026-08-02T17:36:23.873Z",
       "taskCount": 99,
       "completedCount": 73,
       "tags": [

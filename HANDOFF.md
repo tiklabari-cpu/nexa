@@ -13,6 +13,51 @@
 
 ## Task log (newest-first)
 
+### 63.4 (07.5-d) — Kanal boyutu agregasyon çekirdeği — license_id-kilitli soft-FK join + 'website' fallback — done — 2026-08-03 UTC
+
+- **Yapıldı:** `breakdownByChannel(tx, licenseId, from, to)` (`apps/api/src/routes/reports.ts`) —
+  `threads t` → `LEFT JOIN LATERAL (SELECT cm.channel_type FROM channel_messages cm WHERE
+  cm.license_id = t.license_id AND cm.chat_id = t.chat_id AND cm.direction = 'inbound' ORDER BY
+  cm.created_at, cm.id LIMIT 1)`. **İZOLASYON ÇEKİRDEĞİ (OPUS-MAX gerekçesi):** soft-FK join HER İKİ
+  kilitle (`cm.license_id = t.license_id` **AND** `cm.chat_id = t.chat_id`) — `channel_messages.chat_id`
+  FK'sız ve chat_id yalnız lisans içinde tekil; chat_id-tek join, RLS bir gün zayıflarsa başka
+  tenant'ın aynı-id satırını çekip chat'i yanlış kanala sokabilirdi. RLS zaten `channel_messages`'ı
+  lisansa daraltıyor (policy `channel_messages_tenant`, `license_id = nexa_current_license()`); açık
+  lisans predikatı bunun ÜSTÜNE defense-in-depth ve izolasyon argümanını sorgunun kendisinde görünür
+  kılar. Chat'in kanalı = en ESKİ inbound satırın `channel_type`'ı; hiç inbound yoksa
+  `channelLabel(null)` → `'website'` (07.5-c helper'ı, CSV+UI ile paylaşılan tek sözlük). Mevcut
+  `SPLIT_COUNTS` aynen yeniden kullanıldı (ADR-09 rapor=fatura hizası) → her satırda
+  `manual+assisted+automated===closed`. Ham `channel_type` grupları JS'te `channelLabel` ile etikete
+  katlanır (NULL + bilinmeyen → 'website' birleşir), her thread tam bir kovaya düşer →
+  `SUM(by_channel.chats)` === pencere toplamı. Sparse (yalnız var olan kanallar), `by_day` gibi.
+  `/reports/breakdown` yanıtına `by_channel` eklendi; `reports_read` scope + route + kontrat
+  DEĞİŞMEDİ (alan 07.5-a'da eklenmişti; yeni route/migration yok).
+- **Doğrulama (hepsi yeşil, exit 0):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7). Testler paket-bazında ([memory: nexa-test-gate-parallel-db], DB süiti seri):
+  `@nexa/api` **1229/1229** (65 dosya; `reports-billing.test.ts` **91/91** — +5 yeni kanal testi,
+  negatifler önce: (1) CROSS-TENANT — B'nin A ile aynı chat_id'li `channel_messages` satırı A'nın
+  chat'ini 'website'te tutar, 'messenger'a sokamaz; (2) `reports_read` yoksa 403; (3) `chat_id` NULL
+  satır hiçbir kovayı bozmaz; (4) messenger/twilio/whatsapp + website fallback + oldest-inbound-wins;
+  (5) partition invariantı `SUM(by_channel.chats)===by_day` + satır-içi split; mevcut "never counts
+  another tenant" `by_channel: []` ile genişletildi. `reports-metrics.test.ts` 9/9 (channelLabel),
+  `contract-parity` 5/5, `tenant-isolation` 22/22 dahil) · `@nexa/web` 514/514 · `@nexa/rtm` 90/90 ·
+  `@nexa/widget` 52/52 · `@nexa/types` 60/60 · `@nexa/ai-mock` 56/56 · `@nexa/contract` test dosyası
+  yok (contract parity `@nexa/api`'de koşuyor).
+- **Varsayımlar:** e2e çalıştırılmadı — görev kapsamı açıkça backend-only (KAPSAM DIŞI: UI 07.5-h,
+  CSV 07.5-f); değişiklik yanıta additive+opsiyonel `by_channel` ekler, hiçbir UI'a dokunmaz, mevcut
+  `reports.spec.ts` yalnız "By day" bölümünü doğruluyor ve `by_channel`'ı henüz kontrol etmiyor (onu
+  07.5-h/-i yapacak). Aynı emsal 07.5-a/-b/-c pencerelerinde de izlendi (tm 63.1/63.2/63.3
+  HANDOFF'ları da e2e listelemiyor); uçtan uca e2e + NFR-P2 EXPLAIN ölçümü açıkça 07.5-i'nin işi. ·
+  Kanal seçimi timezone'dan bağımsız (kanal chat özelliği); `channel_messages` üzerine pencere
+  filtresi YOK — chat'in kanalı ilk inbound hangi zamanda geldiyse odur, thread pencere ile daraltılır.
+- **Sonraki pencereye not:** `07.5-d` teslim. Zincirde kalan: `07.5-e` (takım — OPUS-MAX, yalnız
+  07.5-a'ya bağlı, açılabilir), sonra `07.5-f` (CSV — 07.5-b/-d/-e'ye bağlı; -b ve -d payı hazır, -e
+  bekliyor), `07.5-g` (By hour UI — 07.5-b'ye bağlı, açılabilir), `07.5-h` (By team+channel UI —
+  07.5-d/-e'ye bağlı; -d hazır, -e bekliyor), `07.5-i` (uçtan uca + EXPLAIN/NFR-P2). ⚠ Bu pencerede
+  de `CONVENTIONS.md` · `.taskmaster/BUILD-BLUEPRINT.md` · `run-loop.sh` çalışma alanında değişik
+  BULUNDU (aynı `critical` öncelik konusu, 78.8'den beri duruyor) — bu görevin KAPSAMINDA DEĞİL, bu
+  commit'e ALINMADI (kapsam disiplini); panel/loop altyapısına ait, ayrı commit'e bırakıldı.
+
 ### 63.2 (07.5-b) — Saat boyutu: breakdownByHour() + /reports/breakdown yanıtına by_hour — done — 2026-08-02 UTC
 
 - **Yapıldı:** `breakdownByHour(tx, licenseId, from, to)` helper'ı (`apps/api/src/routes/reports.ts`) —

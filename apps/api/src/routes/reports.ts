@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { hasAnyScope } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
-import { resolutionRate, round } from './reports-metrics.js';
+import { channelLabel, resolutionRate, round } from './reports-metrics.js';
 import {
   EXPORT_SCOPES,
   exportFilename,
@@ -365,6 +365,102 @@ async function breakdownByHour(
       manual: Number(row?.manual ?? 0n),
     };
   });
+}
+
+interface ChannelSplit {
+  channel: string;
+  chats: number;
+  closed: number;
+  automated: number;
+  assisted: number;
+  manual: number;
+}
+
+/**
+ * The resolution split (manual / assisted / automated) per channel
+ * (FR-MOD-07.5). A chat's channel is the `channel_type` of its *oldest inbound*
+ * `channel_messages` row; a chat with no inbound adapter message — the native
+ * web widget writes none — falls back to `'website'` through {@link channelLabel},
+ * the one mapping the CSV export and the UI also consume, so the fallback bucket
+ * cannot drift between surfaces.
+ *
+ * ISOLATION (why this is the isolation-sensitive core, NFR-S4): `chat_id` on
+ * `channel_messages` is a *soft* reference — no FK — and chat ids are only
+ * unique within a license, so the soft-FK join is locked on BOTH
+ * `cm.license_id = t.license_id` AND `cm.chat_id = t.chat_id`. RLS already
+ * narrows `channel_messages` to the current license, but the explicit license
+ * predicate is defence in depth: a join on `chat_id` alone would, the moment RLS
+ * were ever weakened, let another tenant's row that happens to carry the same
+ * chat id reclassify this chat's channel. The lock is written out rather than
+ * trusted to RLS so the isolation argument is visible in the query itself.
+ *
+ * Reuses the same `SPLIT_COUNTS` fragment as {@link breakdownByDay}, so the
+ * channel split can never disagree with Overview or the invoice (ADR-09). The
+ * per-chat channel is derived from `t.chat_id`, so every thread on a chat shares
+ * its channel and the counts stay thread-based like the other dimensions. Sparse
+ * (only channels present in the window appear), unlike the fixed 24-hour axis;
+ * because every thread maps to exactly one label, `SUM(by_channel.chats)` equals
+ * the window's total chats.
+ */
+async function breakdownByChannel(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<ChannelSplit[]> {
+  const rows = await tx.$queryRaw<
+    Array<{
+      channel_type: string | null;
+      chats: bigint;
+      closed: bigint;
+      automated: bigint;
+      assisted: bigint;
+      manual: bigint;
+    }>
+  >`
+    SELECT first_inbound.channel_type AS channel_type,
+      ${SPLIT_COUNTS}
+    FROM threads t
+    LEFT JOIN LATERAL (
+      SELECT cm.channel_type
+      FROM channel_messages cm
+      WHERE cm.license_id = t.license_id
+        AND cm.chat_id = t.chat_id
+        AND cm.direction = 'inbound'
+      ORDER BY cm.created_at, cm.id
+      LIMIT 1
+    ) first_inbound ON TRUE
+    WHERE t.license_id = ${licenseId}
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+    GROUP BY first_inbound.channel_type
+  `;
+
+  // Fold the raw `channel_type` groups into their display labels: NULL (no
+  // inbound message) and any non-adapter value collapse to 'website', so a chat
+  // lands in exactly one bucket and the counts stay a true partition of the
+  // window's chats.
+  const byLabel = new Map<string, ChannelSplit>();
+  for (const row of rows) {
+    const channel = channelLabel(row.channel_type);
+    const acc = byLabel.get(channel) ?? {
+      channel,
+      chats: 0,
+      closed: 0,
+      automated: 0,
+      assisted: 0,
+      manual: 0,
+    };
+    acc.chats += Number(row.chats);
+    acc.closed += Number(row.closed);
+    acc.automated += Number(row.automated);
+    acc.assisted += Number(row.assisted);
+    acc.manual += Number(row.manual);
+    byLabel.set(channel, acc);
+  }
+  // Busiest channel first, ties broken by name — a deterministic order.
+  return Array.from(byLabel.values()).sort(
+    (a, b) => b.chats - a.chats || a.channel.localeCompare(b.channel),
+  );
 }
 
 /**
@@ -733,6 +829,12 @@ export default async function reportRoutes(
       // never has to fill in the hours nothing happened in.
       const byHour = await breakdownByHour(tx, tenant.licenseId, from, to);
 
+      // The same split per channel — the oldest inbound adapter message decides
+      // a chat's channel, 'website' when it has none. The soft-FK join is locked
+      // on license *and* chat id (see breakdownByChannel), so another tenant's
+      // same-id row can never reclassify a chat here.
+      const byChannel = await breakdownByChannel(tx, tenant.licenseId, from, to);
+
       // The same split per assigned agent. An automated chat can still carry an
       // assignee (nobody replied), so it shows against the agent it sat with.
       const byAgent = await tx.$queryRaw<
@@ -758,7 +860,7 @@ export default async function reportRoutes(
         LIMIT 20
       `;
 
-      return { byDay, byHour, byAgent };
+      return { byDay, byHour, byAgent, byChannel };
     });
 
     return reply.send({
@@ -787,6 +889,14 @@ export default async function reportRoutes(
         manual: Number(row.manual),
         assisted: Number(row.assisted),
         automated: Number(row.automated),
+      })),
+      by_channel: data.byChannel.map((row) => ({
+        channel: row.channel,
+        chats: row.chats,
+        closed: row.closed,
+        manual: row.manual,
+        assisted: row.assisted,
+        automated: row.automated,
       })),
     });
   });

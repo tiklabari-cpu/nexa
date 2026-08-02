@@ -154,6 +154,31 @@ describe('reports and billing', () => {
     });
   }
 
+  /**
+   * Record an inbound adapter message on a chat — what pins the chat to a
+   * channel in the breakdown (the oldest inbound row's `channel_type` wins,
+   * 'website' when a chat has none). Written directly (like {@link runSkillOn}),
+   * so the test exercises the aggregation without standing up a provider webhook.
+   * `licenseId` is a parameter so a test can plant *another* tenant's row — same
+   * chat id, different license — and prove the join lock keeps it out.
+   */
+  async function recordInbound(
+    chatId: string | null,
+    channelType: string,
+    options: { licenseId?: bigint; createdAt?: Date } = {},
+  ): Promise<void> {
+    await owner.channelMessage.create({
+      data: {
+        licenseId: options.licenseId ?? fx.a.licenseId,
+        channelType,
+        direction: 'inbound',
+        externalId: `ext-${chatId ?? 'orphan'}-${channelType}-${Date.now()}`,
+        chatId,
+        ...(options.createdAt ? { createdAt: options.createdAt } : {}),
+      },
+    });
+  }
+
   /** Move a chat's thread back in time, to land it in an earlier report window. */
   async function backdateChat(chatId: string, createdAt: Date): Promise<void> {
     await owner.thread.updateMany({ where: { chatId }, data: { createdAt } });
@@ -642,6 +667,113 @@ describe('reports and billing', () => {
       });
     });
 
+    // --- by channel (07.5-d): isolation & negatives first, then the happy path ---
+
+    interface ChannelRow {
+      channel: string;
+      chats: number;
+      closed: number;
+      manual: number;
+      assisted: number;
+      automated: number;
+    }
+
+    it('locks the channel join to the license — a foreign row cannot reclassify a chat', async () => {
+      // A chat in license A with no inbound adapter message: it is a plain web
+      // widget chat and must read as 'website'.
+      const mine = await conversation({ agentReplies: true, customerName: 'Web visitor' });
+
+      // Plant, in license B, a channel message carrying the SAME chat id and a
+      // real adapter channel. A join keyed on chat_id alone would pull this row
+      // in and show A's chat as 'messenger'; the `cm.license_id = t.license_id`
+      // lock (and RLS behind it) must keep the foreign row out.
+      await recordInbound(mine, 'messenger', { licenseId: fx.b.licenseId });
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      const channels = breakdown.by_channel as ChannelRow[];
+      // One bucket only — 'website', holding the one chat. The foreign row leaked
+      // into no bucket at all.
+      expect(channels).toEqual([expect.objectContaining({ channel: 'website', chats: 1 })]);
+      expect(channels.some((row) => row.channel === 'messenger')).toBe(false);
+    });
+
+    it('requires the reports_read scope', async () => {
+      const noReports = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      const response = await server.get('/reports/breakdown', {
+        authorization: `Bearer ${noReports}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('ignores inbound rows with no chat id', async () => {
+      const mine = await conversation({ agentReplies: true });
+      await recordInbound(mine, 'messenger');
+      // An inbound row tied to no chat (chat_id null) must not create a phantom
+      // bucket or steal a chat — the join predicate `cm.chat_id = t.chat_id`
+      // never matches a null.
+      await recordInbound(null, 'whatsapp');
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      expect(breakdown.by_channel as ChannelRow[]).toEqual([
+        expect.objectContaining({ channel: 'messenger', chats: 1 }),
+      ]);
+    });
+
+    it('buckets chats by their oldest inbound channel, website as the fallback', async () => {
+      const onMessenger = await conversation({ agentReplies: true, customerName: 'FB' });
+      await recordInbound(onMessenger, 'messenger');
+      const onWhatsapp = await conversation({ agentReplies: false, customerName: 'WA' });
+      await recordInbound(onWhatsapp, 'whatsapp');
+      const onTwilio = await conversation({ agentReplies: true, customerName: 'SMS' });
+      await recordInbound(onTwilio, 'twilio');
+      // No inbound message at all → website.
+      await conversation({ agentReplies: true, customerName: 'Web' });
+
+      // A later whatsapp row on the messenger chat must NOT change its channel:
+      // the *oldest* inbound decides, and messenger came first.
+      await recordInbound(onMessenger, 'whatsapp', { createdAt: new Date(Date.now() + 60_000) });
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      const byChannel = Object.fromEntries(
+        (breakdown.by_channel as ChannelRow[]).map((row) => [row.channel, row.chats]),
+      );
+      expect(byChannel).toEqual({ messenger: 1, whatsapp: 1, twilio: 1, website: 1 });
+    });
+
+    it('partitions the window: channel chats sum to the day total, split holds per row', async () => {
+      const automated = await conversation({ agentReplies: false }); // automated
+      await recordInbound(automated, 'messenger');
+      await conversation({ agentReplies: true }); // manual, website
+      const assisted = await conversation({ agentReplies: true });
+      await runSkillOn(assisted); // assisted, website
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      const byChannel = breakdown.by_channel as ChannelRow[];
+
+      // Every chat lands in exactly one channel bucket, so the buckets partition
+      // the window — their chats sum to the by_day total (no chat lost or double
+      // counted).
+      const dayChats = (breakdown.by_day as Array<{ chats: number }>).reduce(
+        (sum, row) => sum + row.chats,
+        0,
+      );
+      const channelChats = byChannel.reduce((sum, row) => sum + row.chats, 0);
+      expect(channelChats).toBe(dayChats);
+
+      // ADR-09: the manual/assisted/automated split holds inside every channel
+      // row too — the same fragment feeds every dimension.
+      byChannel.forEach((row) => {
+        expect(row.manual + row.assisted + row.automated).toBe(row.closed);
+      });
+      const messenger = byChannel.find((row) => row.channel === 'messenger');
+      expect(messenger?.automated).toBe(1);
+    });
+
     it('never counts another tenant', async () => {
       await conversation({ agentReplies: false });
       const theirToken = await grantToken(owner, {
@@ -655,6 +787,9 @@ describe('reports and billing', () => {
       ).json();
       expect(theirs.by_day).toEqual([]);
       expect(theirs.by_agent).toEqual([]);
+      // by_channel is sparse like by_day: a tenant with nothing in the window
+      // gets an empty array, not a stray 'website' row.
+      expect(theirs.by_channel).toEqual([]);
       // by_hour stays dense even for a tenant with nothing in the window — 24
       // zero-filled rows, not an empty array.
       expect(theirs.by_hour).toHaveLength(24);

@@ -3879,13 +3879,13 @@
             "description": "(1) useInbox.ts pushes listesine `agent_conflict_warning` eklenir. (2) applyPush'a case eklenir — `incoming_typing_indicator` case'inin birebir deseni: payload tip doğrulaması (chat_id string + agents dizisi) → conflict store `note()`. (3) `chat_deactivated` case'ine çakışma temizliği eklenir (kapanan sohbet 'çakışıyor' kalamaz — typing store'daki mevcut davranışın aynısı). (4) ConflictBanner Inbo",
             "details": "08.6.3-conflict-f — Realtime kablolama: agent_conflict_warning aboneliği + applyPush case'i + banner montajı  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.6.3\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 3 dosya düzenlemesi + e2e iddiası. (2) Güvenlik kararı yok — kimin uyarı alacağı sunucuda (-c/-d audience) belirlendi; istemci yalnız aboneliği açar. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: useInbox.ts pushes listesi (satır 166-173) + `case 'incoming_typing_indicator'`. (5) Kontrat değişikliği yok. (6) Kabul kriteri mekanik: push geldiğinde şerit görünür.\nNEDEN AÇIK: apps/web/src/features/inbox/useInbox.ts'te RtmClient `pushes` listesi (satır ~166-173) yalnız 7 action'a abone: incoming_chat, incoming_event, chat_deactivated, chat_transferred, routing_status_set, incoming_typing_indicator, incoming_sneak_peek — çakışma action'ı yok. `applyPush` switch'inde (satır ~200 sonrası) çakışma case'i yok. InboxPage.tsx satır 527'de TypingIndicator monte ediliyor; yanında çakışma şeridi için yuva yok.\nKAPSAM: (1) useInbox.ts pushes listesine `agent_conflict_warning` eklenir. (2) applyPush'a case eklenir — `incoming_typing_indicator` case'inin birebir deseni: payload tip doğrulaması (chat_id string + agents dizisi) → conflict store `note()`. (3) `chat_deactivated` case'ine çakışma temizliği eklenir (kapanan sohbet 'çakışıyor' kalamaz — typing store'daki mevcut davranışın aynısı). (4) ConflictBanner InboxPage.tsx'te TypingIndicator'ın yanına monte edilir (satır ~527). (5) apps/e2e/tests/inbox-panel.spec.ts'e görünürlük iddiası eklenir.\nDOSYALAR: apps/web/src/features/inbox/useInbox.ts · apps/web/src/features/inbox/InboxPage.tsx · apps/e2e/tests/inbox-panel.spec.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/inbox/useInbox.ts (pushes listesi satır 166-173 + `case 'incoming_typing_indicator'` payload doğrulama → store çağrısı + `case 'chat_deactivated'` temizlik deseni) · apps/web/src/features/inbox/InboxPage.tsx satır 527 (TypingIndicator montaj noktası ve prop geçişi) · apps/e2e/tests/inbox-panel.spec.ts (panel görünürlük iddiası deseni)\nKK (birebir): \"| Routing (gelişmiş) | Skills-based routing, supervision + takeover, çoklu-ajan çakışma uyarısı |\" | \"KK-türetilmiş: 'Sunucudan gelen çakışma uyarısı ajanın sohbet ekranında anında görünür; sohbet kapandığında uyarı temizlenir.' — Türetme gerekçesi -b ile aynı.\"\nKK DOĞRULAMA: useInbox unit testi — sahte `agent_conflict_warning` push'u verildiğinde conflict store dolar ve ConflictBanner görünür ('anında görünür'); `chat_deactivated` push'u sonrası temizlenir ('kapandığında temizlenir'). E2E apps/e2e/tests/inbox-panel.spec.ts — şeridin `data-testid` ile görünürlüğü. Regresyon: mevcut inbox unit + e2e süitleri yeşil kalır.\nKAPSAM DIŞI: Sunucu tarafı tespit/yayın (-b/-c/-d) · banner bileşeni ve store (-e) · widget tarafı · uyarıdan aksiyon alma (ör. 'devral' butonu) — supervision/takeover kalemi\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: push → store → ConflictBanner render zinciri · unit (negatif): eksik/bozuk payload (chat_id yok, agents dizi değil) sessizce yok sayılır, çökmez · unit: chat_deactivated → çakışma temizlenir · e2e: inbox-panel.spec.ts'te şerit görünürlük iddiası · regresyon: mevcut inbox unit + e2e süitleri",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3,
               5
             ],
             "parentId": "91",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T03:01:24.922Z"
           },
           {
             "id": 7,
@@ -3903,7 +3903,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T02:29:08.721Z"
+        "updatedAt": "2026-08-02T03:01:24.922Z"
       },
       {
         "id": "92",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T02:29:08.721Z",
+      "lastModified": "2026-08-02T03:01:24.923Z",
       "taskCount": 99,
       "completedCount": 71,
       "tags": [

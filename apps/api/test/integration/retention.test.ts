@@ -35,7 +35,7 @@ import {
 
 const APP_URL = process.env['DATABASE_APP_URL'];
 
-const POLICY: RetentionPolicy = { threadDays: 365, visitDays: 90, mailDays: 30 };
+const POLICY: RetentionPolicy = { threadDays: 365, visitDays: 90, mailDays: 30, auditDays: 30 };
 const DAY = 86_400_000;
 const daysAgo = (n: number): Date => new Date(Date.now() - n * DAY);
 
@@ -290,6 +290,9 @@ describe('retention sweep (NFR-C8)', () => {
       expect(report.dryRun).toBe(true);
       expect(report.totals.threads).toBeGreaterThanOrEqual(1);
       expect(report.totals.visits).toBeGreaterThanOrEqual(1);
+      // Audit window is resolved but nothing is pruned yet — report skeleton only.
+      expect(report.auditEntries).toBe(0);
+      expect(report.totals.auditEntries).toBe(0);
 
       // …but nothing was actually removed, and no audit entry was written.
       expect(await threadExists(expired.threadId)).toBe(true);

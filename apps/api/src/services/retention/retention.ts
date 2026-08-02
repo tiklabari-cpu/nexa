@@ -53,7 +53,14 @@ export interface RetentionReport {
   finishedAt: string;
   tenants: TenantPruneResult[];
   mailFiles: number;
-  totals: { tenants: number; threads: number; visits: number; mailFiles: number };
+  /**
+   * Audit log entries pruned. Always 0 for now — the audit window
+   * (`policy.auditDays`) is resolved and its cutoff computed, but the sweep
+   * does not delete audit rows yet; this is the report skeleton for the
+   * hard-delete that lands separately.
+   */
+  auditEntries: number;
+  totals: { tenants: number; threads: number; visits: number; mailFiles: number; auditEntries: number };
 }
 
 export interface RetentionRunnerOptions {
@@ -91,6 +98,9 @@ export class RetentionRunner {
     }
 
     const mailFiles = await this.#pruneMail(cutoffs.mail, dryRun);
+    // cutoffs.audit is resolved for parity with the other windows, but no audit
+    // rows are deleted yet — see RetentionReport.auditEntries.
+    const auditEntries = 0;
 
     return {
       dryRun,
@@ -99,11 +109,13 @@ export class RetentionRunner {
       finishedAt: new Date().toISOString(),
       tenants: results,
       mailFiles,
+      auditEntries,
       totals: {
         tenants: results.length,
         threads: results.reduce((sum, r) => sum + r.threads, 0),
         visits: results.reduce((sum, r) => sum + r.visits, 0),
         mailFiles,
+        auditEntries,
       },
     };
   }

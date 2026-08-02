@@ -22,6 +22,11 @@
  *   - **mailDays** — outgoing mail written to `MAIL_DIR` in place of real SMTP
  *     (PLAN A4). Transient dev/support artifacts that may contain an address, so
  *     they are swept too. Default 30.
+ *   - **auditDays** — `audit_log` entries (NFR-S12: "the last 30 days" of basic
+ *     audit — login, role change, data deletion, webhook change — on every
+ *     plan). This step only adds the window and the cutoff arithmetic; the
+ *     sweep itself does not delete audit rows yet (that lands with the actual
+ *     hard-delete in a later step). Default 30.
  *
  * Every window is a positive integer number of days. A window of zero — or a
  * cutoff at or after "now" — would select the entire table, so `cutoffFor`
@@ -37,6 +42,8 @@ export interface RetentionPolicy {
   visitDays: number;
   /** Outgoing mail files older than this many days (by `sent_at`) are pruned. */
   mailDays: number;
+  /** Audit log entries older than this many days (by `created_at`) are pruned. */
+  auditDays: number;
 }
 
 /** Absolute instants the job compares rows against, derived from one `now`. */
@@ -44,6 +51,7 @@ export interface RetentionCutoffs {
   threads: Date;
   visits: Date;
   mail: Date;
+  audit: Date;
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -54,12 +62,16 @@ const MS_PER_DAY = 86_400_000;
  * hand-built policy.
  */
 export function resolveRetentionPolicy(
-  env: Pick<Env, 'RETENTION_THREAD_DAYS' | 'RETENTION_VISIT_DAYS' | 'RETENTION_MAIL_DAYS'>,
+  env: Pick<
+    Env,
+    'RETENTION_THREAD_DAYS' | 'RETENTION_VISIT_DAYS' | 'RETENTION_MAIL_DAYS' | 'RETENTION_AUDIT_DAYS'
+  >,
 ): RetentionPolicy {
   return {
     threadDays: env.RETENTION_THREAD_DAYS,
     visitDays: env.RETENTION_VISIT_DAYS,
     mailDays: env.RETENTION_MAIL_DAYS,
+    auditDays: env.RETENTION_AUDIT_DAYS,
   };
 }
 
@@ -79,11 +91,12 @@ export function cutoffFor(days: number, now: Date): Date {
   return new Date(now.getTime() - days * MS_PER_DAY);
 }
 
-/** All three cutoffs from a single reference instant, so a run is consistent. */
+/** All four cutoffs from a single reference instant, so a run is consistent. */
 export function resolveCutoffs(policy: RetentionPolicy, now: Date): RetentionCutoffs {
   return {
     threads: cutoffFor(policy.threadDays, now),
     visits: cutoffFor(policy.visitDays, now),
     mail: cutoffFor(policy.mailDays, now),
+    audit: cutoffFor(policy.auditDays, now),
   };
 }

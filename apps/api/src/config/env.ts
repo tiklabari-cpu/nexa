@@ -72,6 +72,8 @@ const envSchema = z.object({
   RETENTION_THREAD_DAYS: z.coerce.number().int().positive().default(365),
   RETENTION_VISIT_DAYS: z.coerce.number().int().positive().default(90),
   RETENTION_MAIL_DAYS: z.coerce.number().int().positive().default(30),
+  /** Audit log window (NFR-S12: "last 30 days" of basic audit, every plan). */
+  RETENTION_AUDIT_DAYS: z.coerce.number().int().positive().default(30),
 
   TRIAL_DAYS: z.coerce.number().int().positive().default(14),
   UNIT_PRICE_CENTS: z.coerce.number().int().nonnegative().default(9900),

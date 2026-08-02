@@ -33,17 +33,27 @@ describe('cutoffFor', () => {
 });
 
 describe('resolveCutoffs', () => {
-  it('derives all three windows from a single reference instant', () => {
-    const cutoffs = resolveCutoffs({ threadDays: 365, visitDays: 90, mailDays: 30 }, NOW);
+  it('derives all four windows from a single reference instant', () => {
+    const cutoffs = resolveCutoffs(
+      { threadDays: 365, visitDays: 90, mailDays: 30, auditDays: 30 },
+      NOW,
+    );
     expect(cutoffs.threads.getTime()).toBe(NOW.getTime() - 365 * DAY);
     expect(cutoffs.visits.getTime()).toBe(NOW.getTime() - 90 * DAY);
     expect(cutoffs.mail.getTime()).toBe(NOW.getTime() - 30 * DAY);
+    expect(cutoffs.audit.getTime()).toBe(NOW.getTime() - 30 * DAY);
   });
 
   it('propagates the guard when any window is invalid', () => {
-    expect(() => resolveCutoffs({ threadDays: 365, visitDays: 0, mailDays: 30 }, NOW)).toThrow(
-      RangeError,
-    );
+    expect(() =>
+      resolveCutoffs({ threadDays: 365, visitDays: 0, mailDays: 30, auditDays: 30 }, NOW),
+    ).toThrow(RangeError);
+  });
+
+  it('propagates the guard when the audit window is invalid', () => {
+    expect(() =>
+      resolveCutoffs({ threadDays: 365, visitDays: 90, mailDays: 30, auditDays: 0 }, NOW),
+    ).toThrow(RangeError);
   });
 });
 
@@ -54,7 +64,22 @@ describe('resolveRetentionPolicy', () => {
         RETENTION_THREAD_DAYS: 200,
         RETENTION_VISIT_DAYS: 60,
         RETENTION_MAIL_DAYS: 14,
+        RETENTION_AUDIT_DAYS: 45,
       }),
-    ).toEqual({ threadDays: 200, visitDays: 60, mailDays: 14 });
+    ).toEqual({ threadDays: 200, visitDays: 60, mailDays: 14, auditDays: 45 });
+  });
+
+  // env.ts declares RETENTION_AUDIT_DAYS with `.default(30)` — the NFR-S12
+  // "last 30 days" value. Pinned here so a change to that default is a
+  // deliberate, visible edit rather than a silent drift.
+  it('the NFR-S12 default (30 days) round-trips into the policy unchanged', () => {
+    expect(
+      resolveRetentionPolicy({
+        RETENTION_THREAD_DAYS: 365,
+        RETENTION_VISIT_DAYS: 90,
+        RETENTION_MAIL_DAYS: 30,
+        RETENTION_AUDIT_DAYS: 30,
+      }).auditDays,
+    ).toBe(30);
   });
 });

@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+### tm 92.7 — 08.9.7-g Retention politikasına audit penceresi (RETENTION_AUDIT_DAYS=30) — done — 2026-08-02 UTC
+
+- **Yapıldı:** SONNET-XHIGH — `RetentionPolicy`'ye dördüncü pencere `auditDays`, mevcut
+  threadDays/visitDays/mailDays üçlüsünün deseni birebir kopyalanarak (arayüz alanı + docstring +
+  `resolveRetentionPolicy` passthrough). Env'e `RETENTION_AUDIT_DAYS` (`z.coerce.number().int()
+  .positive().default(30)` — NFR-S12 "son 30 gün") + `.env.example` satırı. `RetentionCutoffs`'a
+  `audit: Date` + `resolveCutoffs`'ta `cutoffFor(policy.auditDays, now)` — aynı tablo-silme guard'ı
+  (pozitif olmayan pencere `RangeError`) otomatik olarak audit penceresine de uygulanıyor.
+  `RetentionReport`'a `auditEntries` sayacı (top-level + `totals.auditEntries`, `mailFiles`
+  desenindeki gibi tenant-bağımsız tek alan) — bu adımda **daima 0**, fiili silme yok (08.9.7-h'nin
+  işi). Runner davranışı değişmedi: cutoff hesaplanıyor ama hiçbir sorguda kullanılmıyor.
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w build` ✅ · `apps/api` unit
+  (`pnpm test:unit`, 19 dosya/261 test, `policy.test.ts` 8→8 yeşil, +3 yeni: dört pencere
+  `resolveCutoffs`, audit guard, NFR-S12 varsayılan-30 pin) ✅ · `apps/api` integration
+  (`pnpm test:integration`, .env source edilip DB/Redis'e karşı, 43 dosya/870 test — `retention
+  .test.ts` 8 dahil, `POLICY` literal `auditDays: 30` ile genişletildi + `auditEntries: 0` skeleton
+  assert eklendi) ✅ · `apps/rtm` integration ayrıca **serial** koşuldu (90 test, hepsi yeşil) — ilk
+  `pnpm -w test` (paralel) rtm+api aynı Postgres'e yarıştığı için 19 rtm testini FK-violation ile
+  düşürdü ([[nexa-test-gate-parallel-db]] memory'sinin teyidi); kök neden bu değişiklikle **ilgisiz**,
+  serial koşuda hepsi geçti. E2E koşulmadı — bu task kontrat/route/frontend dokunmuyor, kapsadığı akış
+  yok (saf politika/env/rapor-tipi iskeleti; DB'ye hiç dokunmuyor).
+- **Varsayımlar:** `auditEntries` sayacını `mailFiles` deseniyle (tenant-bağımsız, top-level +
+  totals'ta tek alan) modelledim, `threads`/`visits` deseniyle (`TenantPruneResult` içinde per-tenant)
+  değil — çünkü bu adımda gerçek silme/sayma mantığı yok, hangi deseni izleyeceği 08.9.7-h'nin
+  tasarım kararı (audit_log tenant-scoped bir tablo, muhtemelen per-tenant sayılacak). İskelet bu
+  belirsizliği açık bırakıyor; -h bunu değiştirebilir.
+- **Sonraki pencereye not:** 08.9.7-h (bağımlı, `OPUS-MAX`) bu pencerenin üstüne fiili
+  `audit_prune_expired` SECURITY DEFINER + sweep entegrasyonunu inşa edecek — `auditEntries`'in
+  top-level mi per-tenant mi olacağına orada karar ver (yukarıdaki varsayıma bak). Kalan v2 payı
+  (§PLAN.md 08.9.7 satırı): -e/-f/-h/-i/-j/plan-tier-kapısı/-k.
+
 ### tm 92.2 — 08.9.7-b Audit liste filtreleri: eylem, aktör, tarih aralığı — done — 2026-08-02 UTC
 
 - **Yapıldı:** SONNET-XHIGH — GET /audit-log'a katkısal sorgu parametreleri: `action` (`AUDIT_ACTIONS`

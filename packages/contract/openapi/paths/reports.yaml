@@ -43,11 +43,15 @@ breakdown:
   get:
     tags: [Reports]
     operationId: getReportsBreakdown
-    summary: Resolution split by day and by agent
+    summary: Resolution split by day, agent, hour, team and channel
     description: |
       The Overview's manual / assisted / automated split (FR-MOD-07.3.2) resolved
-      over two dimensions — each UTC day in the window and each assigned agent —
-      for the Metrics breakdown tab (FR-MOD-07.5). Defaults to the last 30 days.
+      over up to four dimensions — each UTC day in the window, each assigned
+      agent, each hour of day and each team and channel — for the Metrics
+      breakdown tab (FR-MOD-07.5). Defaults to the last 30 days.
+
+      `by_day` and `by_agent` are always present; `by_hour`, `by_team` and
+      `by_channel` are optional and appear once their aggregation is wired up.
 
       `automated` keeps ADR-09's definition in every row, so a breakdown never
       disagrees with the Overview or the invoice.

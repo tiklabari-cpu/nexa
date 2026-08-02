@@ -2788,10 +2788,14 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Resolution split by day and by agent
+     * Resolution split by day, agent, hour, team and channel
      * @description The Overview's manual / assisted / automated split (FR-MOD-07.3.2) resolved
-     *     over two dimensions — each UTC day in the window and each assigned agent —
-     *     for the Metrics breakdown tab (FR-MOD-07.5). Defaults to the last 30 days.
+     *     over up to four dimensions — each UTC day in the window, each assigned
+     *     agent, each hour of day and each team and channel — for the Metrics
+     *     breakdown tab (FR-MOD-07.5). Defaults to the last 30 days.
+     *
+     *     `by_day` and `by_agent` are always present; `by_hour`, `by_team` and
+     *     `by_channel` are optional and appear once their aggregation is wired up.
      *
      *     `automated` keeps ADR-09's definition in every row, so a breakdown never
      *     disagrees with the Overview or the invoice.
@@ -4515,10 +4519,15 @@ export interface components {
     };
     /**
      * @description The Overview's resolution split (manual / assisted / automated,
-     *     FR-MOD-07.3.2) resolved over two dimensions — each UTC day in the window
-     *     and each assigned agent — for the Metrics breakdown tab (FR-MOD-07.5).
+     *     FR-MOD-07.3.2) resolved over up to four dimensions — each UTC day in the
+     *     window, each assigned agent, each hour of day, each team and each
+     *     channel — for the Metrics breakdown tab (FR-MOD-07.5).
      *     `manual + assisted + automated === closed` holds inside every row, the
      *     same invariant the Overview cards rely on.
+     *
+     *     `by_day` and `by_agent` are always present. `by_hour`, `by_team` and
+     *     `by_channel` are optional — a client that only knows the original two
+     *     dimensions keeps working unchanged.
      */
     ReportsBreakdown: {
       range: {
@@ -4540,6 +4549,52 @@ export interface components {
         /** Format: uuid */
         agent_id: string;
         name?: string | null;
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+      }[];
+      /**
+       * @description One row per hour of day (0-23, UTC), ascending. Optional — absent
+       *     until FR-MOD-07.5's hour dimension is wired up.
+       */
+      by_hour?: {
+        hour: number;
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+      }[];
+      /**
+       * @description One row per team. `team_id`/`name` are null for chats not assigned
+       *     to any team. Optional — absent until FR-MOD-07.5's team dimension is
+       *     wired up. A chat may be visible to more than one team, so rows can
+       *     overlap; see `overlapping`.
+       */
+      by_team?: {
+        team_id: number | null;
+        name: string | null;
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+      }[];
+      /**
+       * @description True when `by_team` rows can double-count a chat (a chat reachable
+       *     by more than one team), so the sum of `by_team.chats` may exceed the
+       *     window's total chats. Only meaningful alongside `by_team`.
+       */
+      overlapping?: boolean;
+      /**
+       * @description One row per channel (`website` is the fallback for chats with no
+       *     inbound channel message). Optional — absent until FR-MOD-07.5's
+       *     channel dimension is wired up.
+       */
+      by_channel?: {
+        channel: string;
         chats: number;
         closed: number;
         manual: number;

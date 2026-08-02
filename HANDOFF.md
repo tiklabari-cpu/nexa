@@ -13,6 +13,26 @@
 
 ## Task log (newest-first)
 
+### 63.1 (07.5-a) — ReportsBreakdown kontratına by_hour/by_team/by_channel (additive, opsiyonel) — done — 2026-08-02 UTC
+
+- **Yapıldı:** Contract-first ilk adım, yalnız sözleşme. `packages/contract/openapi/openapi.yaml`
+  `ReportsBreakdown` şemasına üç opsiyonel dizi (`by_hour` {hour 0-23 + split alanları}, `by_team`
+  {team_id/name nullable + split alanları}, `by_channel` {channel + split alanları}) + üst-alan
+  `overlapping:boolean` eklendi; `required: [range, by_day, by_agent]` DEĞİŞMEDİ (geriye dönük
+  uyum). `paths/reports.yaml` `breakdown` operation summary/description dört boyutu anlatacak
+  şekilde güncellendi. `pnpm --filter @nexa/contract generate` ile bundle + `src/generated/api.ts`
+  yeniden üretildi (yeni alanlar `?` opsiyonel olarak göründü).
+- **Doğrulama:** `pnpm --filter @nexa/contract typecheck` yeşil · `pnpm --filter @nexa/api typecheck`
+  yeşil · `pnpm --filter @nexa/web typecheck` yeşil · `contract-parity.test.ts` (5 test) yeşil ·
+  `pnpm --filter @nexa/contract lint` + `@nexa/api lint` + `@nexa/web lint` yeşil ·
+  `pnpm --filter @nexa/contract build` yeşil.
+- **Varsayımlar:** yok — görev tanımı birebir uygulandı (alan adları/tipleri PRD-türetilmiş KK'ya
+  ve mevcut `by_day`/`by_agent` desenine göre).
+- **Sonraki pencereye not:** Backend agregasyonu (07.5-b saat, 07.5-c indeks+helper, 07.5-d kanal
+  OPUS-MAX, 07.5-e takım OPUS-MAX), CSV export (07.5-f) ve UI (07.5-g/-h) hâlâ yapılmadı — bu
+  görev yalnız sözleşme yüzeyini açtı. `PLAN-V2-KIRILIM.md` §5.2.2'de tam alt-görev sırası var;
+  07.5-b/-e sadece 07.5-a'ya bağımlı, 07.5-d ayrıca 07.5-c'ye bağımlı.
+
 ### 78.8 — MULTIBRAND-h uçtan uca cross-brand doğrulama (izolasyon matrisi + kapsam-kaçağı alarmı + e2e) — done — 2026-08-02 UTC
 
 - **Yapıldı:** Yalnız doğrulama katmanı — yeni üretim kodu/migration YOK. (1) `brand-isolation.test.ts`'e

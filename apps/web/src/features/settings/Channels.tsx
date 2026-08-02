@@ -12,7 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
-import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { useApiClient, useAuth, useBrand } from '../../lib/auth-store.js';
 
 /** Origin serving the widget and its hosted Chat page. */
 const WIDGET_URL = (import.meta.env['VITE_WIDGET_URL'] as string | undefined) ?? 'http://localhost:5174';
@@ -184,16 +184,27 @@ function EmailForwardingAddress({ label }: { label: string }): ReactElement {
 
 export function ChannelsGrid(): ReactElement {
   const api = useApiClient();
+  const { brandId } = useBrand();
   const websites = useQuery({
-    queryKey: ['settings', 'websites'],
+    queryKey: ['settings', 'websites', brandId],
     queryFn: () => api.get<{ items: WebsiteStatusRow[] }>('/websites'),
   });
+
+  // For the section title only — whose channels are shown.
+  const brands = useQuery({
+    queryKey: ['settings', 'brands'],
+    queryFn: () => api.get<{ items: Array<{ id: string; name: string }> }>('/brands'),
+    enabled: brandId !== null,
+    staleTime: 60_000,
+  });
+  const brandName = brandId ? brands.data?.items.find((b) => b.id === brandId)?.name : undefined;
 
   const channels = channelsFor(websites.data?.items ?? []);
 
   return (
     <Section
-      title="Channels"
+      id="section-channels"
+      title={brandName ? `Channels · ${brandName}` : 'Channels'}
       description="Everywhere your customers can reach you. Connect the ones you use; we will let you know as the rest arrive."
     >
       {websites.error ? (

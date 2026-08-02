@@ -13,12 +13,12 @@
  * on the site the instant it is added.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { ApiClientError, type ApiClient } from '../../lib/api-client.js';
-import { useApiClient } from '../../lib/auth-store.js';
+import { useApiClient, useBrand } from '../../lib/auth-store.js';
 import { FieldError, compose, domain as domainRule, required, useForm } from '../../lib/form.js';
 
 interface Website {
@@ -40,16 +40,31 @@ const STATUS: Record<Website['status'], { tone: StatusTone; label: string }> = {
 export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement {
   const api = useApiClient();
   const queryClient = useQueryClient();
+  const { brandId } = useBrand();
   const [setup, setSetup] = useState<Website['setup']>('manual');
   const [openSnippet, setOpenSnippet] = useState<string | null>(null);
 
+  // A brand switch means a different site list; a snippet panel left open
+  // would otherwise keep pointing at a site id that belongs to the previous
+  // brand.
+  useEffect(() => setOpenSnippet(null), [brandId]);
+
   const list = useQuery({
-    queryKey: ['settings', 'websites'],
+    queryKey: ['settings', 'websites', brandId],
     queryFn: () => api.get<{ items: Website[] }>('/websites'),
     // The Connected transition is written server-side on the widget's first
     // handshake; polling reflects it without the admin refreshing the page.
     refetchInterval: 5_000,
   });
+
+  // For the section title only — whose sites are listed.
+  const brands = useQuery({
+    queryKey: ['settings', 'brands'],
+    queryFn: () => api.get<{ items: Array<{ id: string; name: string }> }>('/brands'),
+    enabled: brandId !== null,
+    staleTime: 60_000,
+  });
+  const brandName = brandId ? brands.data?.items.find((b) => b.id === brandId)?.name : undefined;
 
   const invalidate = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['settings', 'websites'] });
@@ -94,7 +109,8 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
 
   return (
     <Section
-      title="Website widgets"
+      id="section-website-widgets"
+      title={brandName ? `Website widgets · ${brandName}` : 'Website widgets'}
       description="Install the chat widget on your sites. Adding one here also trusts its domain, so the widget can start conversations there right away."
     >
       {list.error ? (

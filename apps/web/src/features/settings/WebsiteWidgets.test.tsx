@@ -3,11 +3,11 @@
  * field-under error and keeps "Add website" disabled; a valid one enables it.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
-import { useAuth } from '../../lib/auth-store.js';
+import { useAuth, useBrandStore } from '../../lib/auth-store.js';
 
 function okJson(body: unknown): Response {
   return {
@@ -29,6 +29,9 @@ function renderWidgets() {
 
 beforeEach(() => {
   useAuth.setState({ status: 'signed-in', accessToken: 'test-token', agent: null });
+  // Every test starts license-wide unless it opts into a brand — the
+  // regression guard for "no behaviour change when no brand is selected".
+  useBrandStore.setState({ brandId: null });
   // The list polls /websites; an empty list is enough to render the add form.
   vi.stubGlobal('fetch', vi.fn(async () => okJson({ items: [] })));
 });
@@ -58,5 +61,74 @@ describe('WebsiteWidgets validation', () => {
     await userEvent.type(screen.getByLabelText('Website domain'), 'shop.example');
     expect(screen.getByRole('button', { name: 'Add website' })).toBeEnabled();
     expect(screen.queryByText(/valid domain/)).not.toBeInTheDocument();
+  });
+
+  it('titles the section plainly when no brand is selected', async () => {
+    renderWidgets();
+    expect(await screen.findByRole('heading', { name: 'Website widgets' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Brand scoping (MULTIBRAND-g, PRD §5.3-Marka): the site list and the section
+ * heading both follow the selected brand, so switching brands shows that
+ * brand's sites rather than the ones left over from before.
+ */
+describe('WebsiteWidgets brand scoping', () => {
+  const BRAND_A = { id: 'brand-a', name: 'Acme Support', is_default: true };
+  const BRAND_B = { id: 'brand-b', name: 'Beta Line', is_default: false };
+  const site = (domain: string) => ({
+    id: `site-${domain}`,
+    domain,
+    setup: 'manual' as const,
+    status: 'connected' as const,
+    connected_at: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    snippet: '<script></script>',
+  });
+  const SITES_BY_BRAND: Record<string, Array<ReturnType<typeof site>>> = {
+    [BRAND_A.id]: [site('a.example')],
+    [BRAND_B.id]: [site('b.example')],
+  };
+
+  function stubBrandAwareFetch(): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const brand = new Headers(init?.headers).get('X-Nexa-Brand');
+        if (String(url).endsWith('/brands')) return okJson({ items: [BRAND_A, BRAND_B] });
+        if (String(url).includes('/websites')) {
+          return okJson({ items: (brand && SITES_BY_BRAND[brand]) || [] });
+        }
+        return okJson({ items: [] });
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    useAuth.setState({ status: 'signed-in', accessToken: 'test-token', agent: null });
+    useBrandStore.setState({ brandId: BRAND_A.id });
+    stubBrandAwareFetch();
+  });
+
+  it("lists the selected brand's sites and names it in the heading", async () => {
+    renderWidgets();
+    expect(await screen.findByText('a.example')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Website widgets/ })).toHaveTextContent(
+      'Acme Support',
+    );
+  });
+
+  it("switching brands refetches the list and drops the other brand's domain", async () => {
+    renderWidgets();
+    await screen.findByText('a.example');
+
+    act(() => useBrandStore.getState().setBrandId(BRAND_B.id));
+
+    expect(await screen.findByText('b.example')).toBeInTheDocument();
+    expect(screen.queryByText('a.example')).toBeNull();
+    expect(screen.getByRole('heading', { name: /Website widgets/ })).toHaveTextContent(
+      'Beta Line',
+    );
   });
 });

@@ -14,7 +14,7 @@
  * appearance.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import {
   DEFAULT_WIDGET_APPEARANCE,
   WIDGET_COLOR_PATTERN,
@@ -24,7 +24,7 @@ import {
 } from '@nexa/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { ApiClientError } from '../../lib/api-client.js';
-import { useApiClient } from '../../lib/auth-store.js';
+import { useApiClient, useBrand } from '../../lib/auth-store.js';
 
 interface WidgetSettings extends WidgetAppearance {
   updated_at: string | null;
@@ -36,17 +36,32 @@ type Edits = Partial<WidgetAppearance>;
 export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactElement {
   const api = useApiClient();
   const queryClient = useQueryClient();
+  const { brandId } = useBrand();
   const [edits, setEdits] = useState<Edits>({});
 
+  // A brand switch is a different license-scoped row server-side (or the
+  // license default when no brand is selected); an unsaved draft from the
+  // previous brand must not be carried over and applied to this one.
+  useEffect(() => setEdits({}), [brandId]);
+
   const settings = useQuery({
-    queryKey: ['settings', 'widget'],
+    queryKey: ['settings', 'widget', brandId],
     queryFn: () => api.get<WidgetSettings>('/settings/widget'),
   });
+
+  // For the section title only — which brand's appearance is being edited.
+  const brands = useQuery({
+    queryKey: ['settings', 'brands'],
+    queryFn: () => api.get<{ items: Array<{ id: string; name: string }> }>('/brands'),
+    enabled: brandId !== null,
+    staleTime: 60_000,
+  });
+  const brandName = brandId ? brands.data?.items.find((b) => b.id === brandId)?.name : undefined;
 
   const save = useMutation({
     mutationFn: (body: Edits) => api.put<WidgetSettings>('/settings/widget', body),
     onSuccess: (data) => {
-      queryClient.setQueryData(['settings', 'widget'], data);
+      queryClient.setQueryData(['settings', 'widget', brandId], data);
       // The install snippet bakes these values in, so a saved change must show
       // up the next time an admin copies the code.
       void queryClient.invalidateQueries({ queryKey: ['settings', 'websites'] });
@@ -73,7 +88,7 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
   return (
     <Section
       id="widget-customization"
-      title="Widget appearance"
+      title={brandName ? `Widget appearance · ${brandName}` : 'Widget appearance'}
       description="How the chat widget looks on your sites. Changes are baked into the install snippet and applied the next time the widget loads."
     >
       <Card>

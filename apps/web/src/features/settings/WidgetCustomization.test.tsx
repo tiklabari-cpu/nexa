@@ -4,11 +4,11 @@
  * change. These pin the "tema uygular" behaviour on the panel side.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WidgetCustomization } from './WidgetCustomization.js';
-import { useAuth } from '../../lib/auth-store.js';
+import { useAuth, useBrandStore } from '../../lib/auth-store.js';
 
 const DEFAULTS = {
   primary_color: '#2f6bff',
@@ -57,6 +57,9 @@ function renderWidget() {
 
 beforeEach(() => {
   useAuth.setState({ status: 'signed-in', accessToken: 'test-token', agent: null });
+  // Every test starts license-wide unless it opts into a brand — the
+  // regression guard for "no behaviour change when no brand is selected".
+  useBrandStore.setState({ brandId: null });
   stubFetch();
 });
 
@@ -109,5 +112,71 @@ describe('WidgetCustomization', () => {
     const preview = within(screen.getByTestId('widget-preview'));
     // Turning the footer off removes it from the miniature.
     expect(preview.queryByText('Powered by Nexa')).toBeNull();
+  });
+
+  it('titles the section plainly when no brand is selected', async () => {
+    renderWidget();
+    expect(await screen.findByRole('heading', { name: 'Widget appearance' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Brand scoping (MULTIBRAND-g, PRD §5.3-Marka): the cache key and the section
+ * heading both follow the selected brand, so switching brands shows that
+ * brand's appearance rather than the one left over from before.
+ */
+describe('WidgetCustomization brand scoping', () => {
+  const BRAND_A = { id: 'brand-a', name: 'Acme Support', is_default: true };
+  const BRAND_B = { id: 'brand-b', name: 'Beta Line', is_default: false };
+  const WIDGET_BY_BRAND: Record<string, typeof DEFAULTS> = {
+    [BRAND_A.id]: { ...DEFAULTS, primary_color: '#111111' },
+    [BRAND_B.id]: { ...DEFAULTS, primary_color: '#222222' },
+  };
+
+  function stubBrandAwareFetch(): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? 'GET';
+        const brand = new Headers(init?.headers).get('X-Nexa-Brand');
+        if (String(url).endsWith('/brands')) return okJson({ items: [BRAND_A, BRAND_B] });
+        if (String(url).endsWith('/settings/widget')) {
+          const current = (brand && WIDGET_BY_BRAND[brand]) || DEFAULTS;
+          if (method === 'PUT') {
+            const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+            return okJson({ ...current, ...body, updated_at: new Date().toISOString() });
+          }
+          return okJson(current);
+        }
+        return okJson(DEFAULTS);
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    useAuth.setState({ status: 'signed-in', accessToken: 'test-token', agent: null });
+    useBrandStore.setState({ brandId: BRAND_A.id });
+    stubBrandAwareFetch();
+  });
+
+  it("renders the selected brand's appearance and names it in the heading", async () => {
+    renderWidget();
+    expect(await screen.findByLabelText('Brand colour hex')).toHaveValue('#111111');
+    expect(screen.getByRole('heading', { name: /Widget appearance/ })).toHaveTextContent(
+      'Acme Support',
+    );
+  });
+
+  it("switching brands fetches the new brand's appearance and drops the previous one", async () => {
+    renderWidget();
+    await waitFor(() => expect(screen.getByLabelText('Brand colour hex')).toHaveValue('#111111'));
+
+    act(() => useBrandStore.getState().setBrandId(BRAND_B.id));
+
+    await waitFor(() => expect(screen.getByLabelText('Brand colour hex')).toHaveValue('#222222'));
+    expect(screen.queryByDisplayValue('#111111')).toBeNull();
+    expect(screen.getByRole('heading', { name: /Widget appearance/ })).toHaveTextContent(
+      'Beta Line',
+    );
   });
 });

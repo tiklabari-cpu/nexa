@@ -13,6 +13,26 @@
 
 ## Task log (newest-first)
 
+### 78.7 — MULTIBRAND-g marka-scoped ayar ekranları (Widget/Websites/Channels) — done — 2026-08-02 UTC
+
+- **Yapıldı:** Pencere açıldığında iş zaten önceki (kesintiye uğramış) bir pencereden `in-progress`
+  ve tam WIP halde bulundu — sıfırdan yazılmadı, doğrulanıp kapatıldı. Üç ekranın
+  (`WidgetCustomization`, `WebsiteWidgets`, `Channels`) `useQuery` `queryKey`'lerine `brandId`
+  eklendi; başlıklar seçili markayı adlandırır, marka yokken düz kalır (regresyon). `WidgetCustomization`
+  taslağı marka değişince sıfırlanır + `setQueryData` markaya özgü anahtara yazar; `WebsiteWidgets`
+  açık snippet paneli marka değişince kapanır. Detaylı teknik döküm: `PLAN.md` §5.3-Marka satırı.
+- **Doğrulama (hepsi yeşil):** `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` — hepsi
+  workspace-genelinde temiz. Unit: `apps/web` paket-bazında **514/514** (73 dosya). `pnpm -w test`
+  paylaşılan Postgres'te `rtm`/`api` ile yarışıp FK ihlali veriyor ([memory: parallel-db]); paket
+  bazında ayrı çalıştırıldı → `apps/rtm` **90/90**, `apps/api` **1211/1211**, ikisi de bu turdan
+  ÖNCEKİ sayılarla birebir aynı (UI-only değişiklik, backend'e dokunulmadı). E2E çalıştırılmadı —
+  task'ın kendi kapsamı bunu açıkça dışarıda bırakıyor (`KAPSAM DIŞI: e2e (-h)`); cross-brand e2e
+  `MULTIBRAND-h`'nin işi.
+- **Varsayımlar:** Yok — WIP zaten task'ın KAPSAM/DOSYALAR/KK maddeleriyle birebir örtüşüyordu,
+  yalnız doğrulama + kapanış yapıldı.
+- **Sonraki pencereye not:** `MULTIBRAND` zinciri `-a`→`-g` tamamlandı; kalan yalnız `MULTIBRAND-h`
+  (uçtan uca cross-brand doğrulama — izolasyon test matrisi + kapsam-kaçağı alarmı + e2e, tm 78.8).
+
 ### 77.10 — WORKSCHED-j uçtan uca doğrulama (staffing e2e + izolasyon + ADR-09) — blocked — 2026-08-02 UTC
 
 - **Yapıldı:** Kod YAZILMADI. Bu task yalnız-doğrulama (`KAPSAM DIŞI: Yeni özellik eklemek`);

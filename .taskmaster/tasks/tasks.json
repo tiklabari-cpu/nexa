@@ -3352,13 +3352,13 @@
             "description": "UI-only. (1) Üç ekranın react-query `queryKey`'lerine seçili `brandId` eklenir (`['settings','widget', brandId]` vb.) — marka değişince otomatik yeniden fetch. (2) Her ekranın başlığında hangi markanın düzenlendiği görünür (yanlış markayı düzenleme kazasını önler). (3) Kaydetme sonrası `setQueryData` markaya özgü anahtara yazar. (4) Marka seçili değilken (lisans-geneli) mevcut davranış korunur.",
             "details": "MULTIBRAND-g — Marka-scoped ayar ekranlarının seçili markaya bağlanması (Widget / Websites / Channels)  [SONNET-XHIGH]\n\nPRD: §5.3-Marka (Multibrand) + NFR-S5\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 5 dosya (3 ekran + 2 test). (2) Güvenlik sınırı yok — sunucu tarafı marka scope'u -c'de kapandı; burada yalnız react-query cache anahtarları ve başlık etiketleri değişiyor. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen mevcut: `WidgetCustomization.tsx`'in `queryKey: ['settings','widget']` kalıbı. (5) Kontrat değişikliği yok. (6) KK mekanik: marka değişince doğru veri gelir.\nNEDEN AÇIK: `apps/web/src/features/settings/WidgetCustomization.tsx` `queryKey: ['settings','widget']` ile markadan bağımsız tek bir cache girdisi tutuyor ve `api.put('/settings/widget')` ile lisans-singleton'ı yazıyor — marka eklendiğinde (bkz. -c) iki marka aynı cache girdisini paylaşır ve marka değişince ekranda önceki markanın değeri kalır. `WebsiteWidgets.tsx` ve `Channels.tsx` aynı feature dizininde aynı kalıbı kullanıyor.\nKAPSAM: UI-only. (1) Üç ekranın react-query `queryKey`'lerine seçili `brandId` eklenir (`['settings','widget', brandId]` vb.) — marka değişince otomatik yeniden fetch. (2) Her ekranın başlığında hangi markanın düzenlendiği görünür (yanlış markayı düzenleme kazasını önler). (3) Kaydetme sonrası `setQueryData` markaya özgü anahtara yazar. (4) Marka seçili değilken (lisans-geneli) mevcut davranış korunur.\nDOSYALAR: apps/web/src/features/settings/WidgetCustomization.tsx · apps/web/src/features/settings/WidgetCustomization.test.tsx · apps/web/src/features/settings/WebsiteWidgets.tsx · apps/web/src/features/settings/WebsiteWidgets.test.tsx · apps/web/src/features/settings/Channels.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/settings/WidgetCustomization.tsx (useQuery queryKey + useMutation + queryClient.setQueryData kalıbı — dönüştürülecek TAM kalıp) · apps/web/src/features/settings/WebsiteWidgets.test.tsx (aynı ekranın mevcut test kurgusu) · apps/web/src/components/AppShell.tsx (-f'te eklenen seçili marka kaynağı)\nKK (birebir): \"KK-türetilmiş: «Marka değiştirildiğinde widget görünümü, website listesi ve kanal ayarları o markanın verisini gösterir; önceki markanın verisi ekranda kalmaz; ekranda hangi markanın düzenlendiği görünür.» — Türetme gerekçesi: PRD §5.3'te KK sütunu yok (kk_yetersiz=true); kriter -c'nin sunucu tarafı KK'sının ekran payı olarak türetildi.\"\nKK DOĞRULAMA: `WidgetCustomization.test.tsx` — marka A seçiliyken A'nın rengi render edilir; marka B'ye geçildiğinde B'nin rengi fetch edilip render edilir ve A'nın değeri EKRANDA KALMAZ [KK maddesi 1-2]; başlıkta marka adı görünür [KK maddesi 3]. `WebsiteWidgets.test.tsx` — marka değişince liste yeniden fetch edilir ve diğer markanın domain'i listede yok.\nKAPSAM DIŞI: Inbox / Reports / Billing ekranlarının markalanması (varsayım: lisans-geneli kalır) · marka bazlı tema/logo görseli · e2e (-h)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: marka değişimi → ilgili markanın verisi fetch edilip render ediliyor · unit: önceki markanın değeri ekranda kalmıyor (cache anahtarı markaya özgü) · unit: başlıkta düzenlenen markanın adı görünüyor · unit: website listesi marka değişince yenileniyor, diğer markanın domain'i yok · regresyon: marka seçili değilken mevcut testler yeşil kalıyor",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3,
               6
             ],
             "parentId": "78",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T19:41:55.979Z"
           },
           {
             "id": 8,
@@ -3375,7 +3375,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T17:36:23.872Z"
+        "updatedAt": "2026-08-02T19:41:55.979Z"
       },
       {
         "id": "79",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T17:40:46.103Z",
+      "lastModified": "2026-08-02T19:41:55.980Z",
       "taskCount": 99,
       "completedCount": 73,
       "tags": [

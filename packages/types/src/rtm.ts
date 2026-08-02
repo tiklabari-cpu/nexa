@@ -137,6 +137,7 @@ export const RTM_PUSH_ACTIONS = [
   // Agents
   'routing_status_set',
   'agent_disconnected',
+  'agent_conflict_warning',
   // Customers
   'customer_updated',
   'incoming_customers',
@@ -230,4 +231,16 @@ export interface QueuePositionsUpdatedPush {
 export interface AgentDisconnectedPush {
   reason: ErrorType;
   details?: Record<string, unknown>;
+}
+
+/**
+ * Two or more agents composing a reply in the same chat at once
+ * (FR-MOD-08.6.3). Detection and dispatch are out of scope here — this is only
+ * the wire shape the gateway will push once they exist.
+ */
+export interface AgentConflictWarningPush {
+  chat_id: string;
+  thread_id: string;
+  agents: Array<{ agent_id: string; since: string }>;
+  detected_at: string;
 }

@@ -34,6 +34,20 @@ export function typingStateKey(licenseId: string | bigint, chatId: string): stri
 /** Seconds an agent-typing flag survives without a refreshing keystroke. */
 export const AGENT_TYPING_TTL_SECONDS = 8;
 
+/**
+ * Registry of agents currently composing a reply in one chat, keyed for
+ * multi-agent conflict detection (FR-MOD-08.6.3).
+ *
+ * Same shape and reasoning as `typingStateKey`: scoped by licence id so the
+ * same chat id in two tenants can never collide on one key.
+ */
+export function composerStateKey(licenseId: string | bigint, chatId: string): string {
+  return `nexa:composer:${licenseId}:${chatId}`;
+}
+
+/** Seconds an agent stays registered as composing without a refresh. */
+export const AGENT_COMPOSING_TTL_SECONDS = 8;
+
 /** A visitor's sneak-peek text never travels longer than this. */
 export const SNEAK_PEEK_MAX_LENGTH = 500;
 

@@ -13,6 +13,36 @@
 
 ## Task log (newest-first)
 
+### tm 91.1 — 08.6.3-conflict-a Çakışma uyarısı RTM push action'ı + composer-registry anahtar/TTL tip sözleşmesi — done — 2026-08-02 UTC
+
+- **Yapıldı:** Kontrat-önce, davranışsız iskelet (mantık YOK — tespit/dispatcher/API/UI hepsi -b..-g'nin işi).
+  (1) `packages/types/src/rtm.ts`: `RTM_PUSH_ACTIONS`'a `agent_conflict_warning` eklendi +
+  `AgentConflictWarningPush` arayüzü (`chat_id`, `thread_id`, `agents: [{agent_id, since}]`,
+  `detected_at`) `IncomingEventPush` deseninde yazıldı. (2) `packages/types/src/realtime-bus.ts`:
+  `composerStateKey(licenseId, chatId)` + `AGENT_COMPOSING_TTL_SECONDS = 8` eklendi —
+  `typingStateKey`/`AGENT_TYPING_TTL_SECONDS` bloğunun (satır 22-35) birebir deseni, license-scoped
+  anahtar (aynı chat id iki lisansta çakışmaz). (3) `index.ts` zaten `export *` kullanıyor — ayrı
+  export listesi yok, otomatik dahil. (4) `pnpm --filter @nexa/types build` ile dist yenilendi.
+- **Test:** yeni `packages/types/src/realtime-bus.test.ts` (4): composer anahtarı license-izolasyonu
+  (`composerStateKey('1','ABC') !== composerStateKey('2','ABC')`) + kararlılık + TTL pozitifliği +
+  `RTM_PUSH_ACTIONS.includes('agent_conflict_warning')`.
+- **Doğrulama:** `pnpm -w typecheck` ✅ (api/rtm/web/widget üç tüketici yeni tiplerle derlendi) ·
+  `pnpm -w lint` ✅ · `pnpm -w build` ✅ · unit: tüm paketler ayrı ayrı yeşil (types 60, api 1103,
+  rtm 71, web 458, widget 52, ai-mock 56) · `pnpm -w test:integration` (concurrency=1) ✅ — api 845 +
+  rtm 42. **Not:** `pnpm -w test` (paralel) rtm'de 6 sahte-kırmızı verdi — paylaşılan Postgres yarışı
+  ([[nexa-test-gate-parallel-db]]), bu tur kaynaklı değil; rtm serial koşulduğunda 71/71 yeşil.
+  OpenAPI/REST değişmedi → `contract-parity.test.ts` etkilenmedi (kapsam dışı, task'ın kendisi
+  belirtiyor).
+- **PLAN.md:** `08.6.3-conflict` satırı (§5.0, satır 1115) `⬜`→`◐` — yalnız -a teslim, -b..-g (tespit
+  çekirdeği, dispatcher yayını, API atama yüzeyi, istemci banner, realtime kablolama, e2e) kalan.
+  Faz-2 özet sayacı (satır 22/1100) **dokunulmadı** — ◐ satırlar bu sayaçta "açık" (⬜) kovasında
+  sayılıyor (tm 80.1-80.8 önceki, §D68/§D69'da teşhis edilen aynı davranış), sayısal değişiklik yok.
+- **Varsayımlar:** yok — task kapsamı mekanik ve tek yorumlu (SONNET-XHIGH gerekçesi kendi
+  açıklamasında verilmiş).
+- **Sonraki pencereye not:** 08.6.3-conflict-b (ConflictDetectionService, OPUS-MAX, bölünmez çekirdek)
+  bu tip sözleşmesine bağımlı — atomik Redis kaydı + tenant-scoped yetki + TTL akıl yürütmesi tek
+  pencerede birlikte ele alınmalı (PLAN §5.2'deki "Bölünmeyen çekirdek" notu).
+
 ### PANEL — Faz-2 üst-tablo sayaç çelişkisi (§D68 yanlış-pozitifi yeniden bildirildi) — no-change — 2026-08-02 UTC
 
 - **Yapıldı:** Panel §1.2 çelişkisi bildirdi (özet satır 22 `5 ✅ / 22 ⬜` ⟷ sayım `6 ✅ / 21 ⬜`).

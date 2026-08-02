@@ -3324,12 +3324,12 @@
             "description": "UI-only, contract-first sıranın SONUNDA (backend -d'de hazır). `Brands.tsx`: react-query ile `GET /brands` listesi; 'Add brand' formu (ad zorunlu — `lib/form.tsx` primitifi, alan-altı hata + submit-disabled); satır içi yeniden adlandırma (`PATCH`); sil butonu (varsayılan markada gizli/pasif, sunucu reddini de ErrorNotice ile gösterir); marka yokken `EmptyState` (boş dikdörtgen değil, EK-B.1 kuralı",
             "details": "MULTIBRAND-e — Settings → Brands ekranı (liste + ekle + yeniden adlandır + sil + boş durum)  [SONNET-XHIGH]\n\nPRD: §5.3-Marka (Multibrand)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 3 dosya + test. (2) Güvenlik sınırı yok — yetki -d'deki scope'ta, izolasyon -b/-c'de; ekran yalnız `/brands` çağırır. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen mevcut: `WebsiteWidgets.tsx` (aynı lisans-altı çoklu-kayıt CRUD ekranı: liste+ekle+kaldır). (5) Kontrat değişikliği yok (-d'de kapandı). (6) KK mekanik: render + ekle/sil + boş durum.\nNEDEN AÇIK: `apps/web/src/features/` altında 15 feature dizini var (settings, campaigns, team, traffic dahil) ama brand/workspace-switcher ekranı YOK — 'brand'/'switcher' araması yalnız isim çakışmalarından (ör. 'vibrant', JS switch ifadeleri) false-positive dönüyor, gerçek UI 0. `apps/web/src/features/settings/` içeriği: BannedCustomerIps, Channels, SettingsPage, WebsiteWidgets, WidgetCustomization — marka ekranı yok.\nKAPSAM: UI-only, contract-first sıranın SONUNDA (backend -d'de hazır). `Brands.tsx`: react-query ile `GET /brands` listesi; 'Add brand' formu (ad zorunlu — `lib/form.tsx` primitifi, alan-altı hata + submit-disabled); satır içi yeniden adlandırma (`PATCH`); sil butonu (varsayılan markada gizli/pasif, sunucu reddini de ErrorNotice ile gösterir); marka yokken `EmptyState` (boş dikdörtgen değil, EK-B.1 kuralı); `canEdit` prop'u ile salt-okunur rol davranışı (WidgetCustomization deseni). `SettingsPage.tsx`'e bölüm kaydı.\nDOSYALAR: apps/web/src/features/settings/Brands.tsx · apps/web/src/features/settings/Brands.test.tsx · apps/web/src/features/settings/SettingsPage.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/settings/WebsiteWidgets.tsx (lisans altında çoklu kayıt: liste + ekle + kaldır — kopyalanacak ANA desen) · apps/web/src/features/settings/WebsiteWidgets.test.tsx (aynı ekranın test kurgusu) · apps/web/src/features/settings/WidgetCustomization.tsx (useQuery/useMutation + queryClient.setQueryData + canEdit salt-okunur deseni) · apps/web/src/lib/form.tsx (alan-altı hata + submit-disabled primitifi, T4-a) · apps/web/src/components/EmptyState.tsx (anlamlı boş durum)\nKK (birebir): \"KK-türetilmiş: «Markalar ekranı mevcut markaları listeler; yeni marka eklenebilir, adı değiştirilebilir, varsayılan olmayan marka silinebilir; hiç marka yokken anlamlı boş durum gösterilir (boş dikdörtgen değil); salt-okunur rolde form pasiftir.» — Türetme gerekçesi: PRD §5.3'te KK sütunu yok (kk_yetersiz=true); kriter -d'nin API KK'sının ekran payı olarak ve EK-B.1 empty-state kuralıyla türetildi.\"\nKK DOĞRULAMA: `apps/web/src/features/settings/Brands.test.tsx` — (a) iki markalı yanıt → iki satır render [KK: listeler]; (b) boş ad ile submit → alan-altı hata + submit pasif [KK: form davranışı]; (c) ekle → mutation çağrılır ve liste güncellenir [KK: eklenebilir]; (d) varsayılan markada sil butonu yok/pasif [KK: varsayılan silinemez]; (e) boş liste → EmptyState metni görünür [KK: anlamlı boş durum]; (f) `canEdit=false` → tüm kontroller pasif.\nKAPSAM DIŞI: üst çubuk marka değiştirici (-f) · ayar ekranlarının marka bağlamına bağlanması (-g) · marka logosu yükleme · e2e (-h)\nSÖZLEŞME: yok — -d'de eklenen `/brands` path'leri tüketilir, kontrat değişmez.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: liste render · unit: marka ekleme (mutation çağrılır, liste güncellenir) · unit: yeniden adlandırma · unit: varsayılan markada sil butonu yok/pasif · unit: boş liste → anlamlı EmptyState (boş dikdörtgen değil) · unit: canEdit=false → tüm kontroller pasif · negatif: boş ad → alan-altı hata + submit pasif; sunucu 409'u ErrorNotice olarak görünür · NOT: güvenlik yüzeyi sunucuda olduğu için cross-tenant testi bu alt-görevde değil, -d ve -h'de karşılanıyor",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               4
             ],
             "parentId": "78",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T17:18:10.807Z"
           },
           {
             "id": 6,
@@ -3375,7 +3375,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T16:56:12.406Z"
+        "updatedAt": "2026-08-02T17:18:10.807Z"
       },
       {
         "id": "79",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T16:56:12.406Z",
+      "lastModified": "2026-08-02T17:18:10.808Z",
       "taskCount": 99,
       "completedCount": 73,
       "tags": [

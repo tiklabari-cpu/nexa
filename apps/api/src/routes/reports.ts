@@ -463,6 +463,108 @@ async function breakdownByChannel(
   );
 }
 
+interface TeamSplit {
+  team_id: number | null;
+  name: string | null;
+  chats: number;
+  closed: number;
+  automated: number;
+  assisted: number;
+  manual: number;
+}
+
+/**
+ * The resolution split (manual / assisted / automated) per team, for the
+ * Breakdown tab's team dimension (FR-MOD-07.5). A chat's teams are the groups it
+ * has been shared with through `chat_access`; a chat shared with no group falls
+ * into a single `team_id: null` bucket ('Unassigned' on the UI) so that no chat
+ * is dropped from the dimension.
+ *
+ * FAN-OUT (why the split declares `overlapping`): `chat_access` is M:N — a chat is
+ * written one row per group it is opened to (chat-service's `createMany`) — and
+ * the schema holds no notion of a chat's *primary* team. A chat reachable by two
+ * teams is therefore counted once under each rather than silently attributed to
+ * one, so `SUM(by_team.chats)` can exceed the window's total chats. `overlapping`
+ * says so plainly: true when any chat in the window is shared with more than one
+ * team. Collapsing the fan-out onto a single team would be inventing an ownership
+ * the data does not record.
+ *
+ * ISOLATION (why this is the isolation-sensitive core, NFR-S4): `chat_access` has
+ * no `license_id` column of its own (PRD §8.4 — its RLS runs through an EXISTS on
+ * `chats`), and `groups` has a *composite* key `(license_id, id)`, so the same
+ * autoincrement `group_id` can exist in more than one license. The join is locked
+ * on the license twice over, defence in depth rather than trusting RLS alone:
+ * `chat_access` is reached only through `chats c` bound on `c.license_id =
+ * t.license_id`, and `groups g` is joined on `g.license_id = c.license_id AND
+ * g.id = ca.group_id`. Drop the group's license predicate and another tenant's
+ * team carrying the same `group_id` would surface in — and double-count — this
+ * license's rows.
+ *
+ * Reuses the same `SPLIT_COUNTS` fragment as {@link breakdownByDay}, so the team
+ * split can never disagree with Overview or the invoice (ADR-09); the invariant
+ * `manual + assisted + automated === closed` holds inside every row, fan-out and
+ * all. Counts are thread-based like every other dimension.
+ */
+async function breakdownByTeam(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<{ teams: TeamSplit[]; overlapping: boolean }> {
+  const rows = await tx.$queryRaw<
+    Array<{
+      team_id: bigint | null;
+      name: string | null;
+      chats: bigint;
+      closed: bigint;
+      automated: bigint;
+      assisted: bigint;
+      manual: bigint;
+    }>
+  >`
+    SELECT ca.group_id AS team_id, g.name AS name,
+      ${SPLIT_COUNTS}
+    FROM threads t
+    JOIN chats c ON c.id = t.chat_id AND c.license_id = t.license_id
+    LEFT JOIN chat_access ca ON ca.chat_id = c.id
+    LEFT JOIN groups g ON g.license_id = c.license_id AND g.id = ca.group_id
+    WHERE t.license_id = ${licenseId}
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+    GROUP BY ca.group_id, g.name
+    ORDER BY chats DESC, name ASC NULLS LAST
+  `;
+
+  // Does any chat in the window reach more than one team? If so the rows above
+  // double-count it and `SUM(by_team.chats)` overshoots the window total — the
+  // fan-out `overlapping` warns the client about. Same license locks as the
+  // aggregation, so a foreign tenant's access rows can never flip the flag.
+  const [flag] = await tx.$queryRaw<Array<{ overlapping: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM threads t
+      JOIN chats c ON c.id = t.chat_id AND c.license_id = t.license_id
+      JOIN chat_access ca ON ca.chat_id = c.id
+      WHERE t.license_id = ${licenseId}
+        AND t.created_at >= ${from} AND t.created_at <= ${to}
+      GROUP BY t.id
+      HAVING count(*) > 1
+    ) AS overlapping
+  `;
+
+  return {
+    teams: rows.map((row) => ({
+      team_id: row.team_id === null ? null : Number(row.team_id),
+      name: row.name,
+      chats: Number(row.chats),
+      closed: Number(row.closed),
+      automated: Number(row.automated),
+      assisted: Number(row.assisted),
+      manual: Number(row.manual),
+    })),
+    overlapping: flag?.overlapping ?? false,
+  };
+}
+
 /**
  * AI→human hand-offs in a window — the `chat_transferred` system event. Feeds
  * both the AI Agent report and its CSV export. Containment (`@>`) rather than
@@ -835,6 +937,13 @@ export default async function reportRoutes(
       // same-id row can never reclassify a chat here.
       const byChannel = await breakdownByChannel(tx, tenant.licenseId, from, to);
 
+      // The same split per team — the groups a chat is shared with through
+      // chat_access. Fan-out is intentional (a chat open to two teams counts in
+      // both) and `overlapping` declares it. The join is license-locked through
+      // chats and groups (see breakdownByTeam), because chat_access has no
+      // license column of its own and group ids repeat across licenses.
+      const byTeam = await breakdownByTeam(tx, tenant.licenseId, from, to);
+
       // The same split per assigned agent. An automated chat can still carry an
       // assignee (nobody replied), so it shows against the agent it sat with.
       const byAgent = await tx.$queryRaw<
@@ -860,7 +969,7 @@ export default async function reportRoutes(
         LIMIT 20
       `;
 
-      return { byDay, byHour, byAgent, byChannel };
+      return { byDay, byHour, byAgent, byChannel, byTeam };
     });
 
     return reply.send({
@@ -898,6 +1007,18 @@ export default async function reportRoutes(
         assisted: row.assisted,
         automated: row.automated,
       })),
+      by_team: data.byTeam.teams.map((row) => ({
+        team_id: row.team_id,
+        name: row.name,
+        chats: row.chats,
+        closed: row.closed,
+        manual: row.manual,
+        assisted: row.assisted,
+        automated: row.automated,
+      })),
+      // Declares the by_team fan-out: a chat reachable by more than one team is
+      // counted under each, so the rows can sum past the window total.
+      overlapping: data.byTeam.overlapping,
     });
   });
 

@@ -185,6 +185,22 @@ describe('reports and billing', () => {
     await owner.chat.update({ where: { id: chatId }, data: { createdAt } });
   }
 
+  /**
+   * Set exactly which teams (groups) a chat is shared with, replacing whatever
+   * access the routing engine handed it at creation. Written directly, like the
+   * other fixtures here, so a team-dimension test controls the `chat_access`
+   * fan-out precisely rather than depending on the default routing decision — an
+   * empty list makes a chat genuinely unassigned.
+   */
+  async function setChatTeams(chatId: string, groupIds: bigint[]): Promise<void> {
+    await owner.chatAccess.deleteMany({ where: { chatId } });
+    if (groupIds.length > 0) {
+      await owner.chatAccess.createMany({
+        data: groupIds.map((groupId) => ({ chatId, groupId })),
+      });
+    }
+  }
+
   // =========================================================================
 
   describe('AI resolutions', () => {
@@ -774,6 +790,134 @@ describe('reports and billing', () => {
       expect(messenger?.automated).toBe(1);
     });
 
+    // --- by team (07.5-e): isolation & negatives first, then the happy path ---
+
+    interface TeamRow {
+      team_id: number | null;
+      name: string | null;
+      chats: number;
+      closed: number;
+      manual: number;
+      assisted: number;
+      automated: number;
+    }
+
+    it('locks the team join to the license — a foreign team with the same id cannot leak', async () => {
+      // A group in license A and a group in license B that DELIBERATELY share the
+      // same group_id — legal, since `groups` is keyed `(license_id, id)`. RLS is
+      // the primary guard, and the query locks the groups join on
+      // `g.license_id = c.license_id` as defence in depth: were RLS ever weakened,
+      // a join on `g.id = ca.group_id` alone would resolve A's assignment against
+      // B's team too, double-counting the chat and leaking B's name. Either way A
+      // must see exactly its own 'Sales A', never 'Sales B'.
+      const sharedId = 90001n;
+      await owner.group.create({
+        data: { id: sharedId, licenseId: fx.a.licenseId, name: 'Sales A' },
+      });
+      await owner.group.create({
+        data: { id: sharedId, licenseId: fx.b.licenseId, name: 'Sales B' },
+      });
+
+      const mine = await conversation({ agentReplies: true, customerName: 'Shared-id' });
+      await setChatTeams(mine, [sharedId]);
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      const teams = breakdown.by_team as TeamRow[];
+
+      // Exactly one team row, resolved within license A. B's same-id team appears
+      // nowhere, and the chat is counted once — no fan-out across the licence line.
+      expect(teams).toEqual([
+        expect.objectContaining({ team_id: Number(sharedId), name: 'Sales A', chats: 1 }),
+      ]);
+      expect(teams.some((row) => row.name === 'Sales B')).toBe(false);
+      expect(breakdown.overlapping).toBe(false);
+    });
+
+    it('buckets chats by team and drops unassigned chats into their own row', async () => {
+      const team = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Billing' },
+        select: { id: true },
+      });
+      const assigned = await conversation({ agentReplies: true, customerName: 'Has team' }); // manual
+      await setChatTeams(assigned, [team.id]);
+      const noTeam = await conversation({ agentReplies: false, customerName: 'No team' }); // automated
+      await setChatTeams(noTeam, []); // clear the routing default → genuinely unassigned
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      const teams = breakdown.by_team as TeamRow[];
+
+      const billing = teams.find((row) => row.team_id === Number(team.id));
+      expect(billing).toMatchObject({ name: 'Billing', chats: 1, manual: 1 });
+
+      // The chat shared with no group is not lost — it lands in the null bucket
+      // the UI renders as 'Unassigned'.
+      const unassigned = teams.find((row) => row.team_id === null);
+      expect(unassigned).toMatchObject({ name: null, chats: 1, automated: 1 });
+      expect(breakdown.overlapping).toBe(false);
+    });
+
+    it('counts a chat under every team it is shared with and flags the overlap', async () => {
+      const first = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Team One' },
+        select: { id: true },
+      });
+      const second = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Team Two' },
+        select: { id: true },
+      });
+      const shared = await conversation({ agentReplies: true, customerName: 'Two teams' }); // manual
+      await setChatTeams(shared, [first.id, second.id]);
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      const teams = breakdown.by_team as TeamRow[];
+
+      // The one chat is counted once under each of its two teams — M:N fan-out,
+      // not a silent pick of a 'primary' team the schema does not record.
+      expect(teams.find((row) => row.team_id === Number(first.id))?.chats).toBe(1);
+      expect(teams.find((row) => row.team_id === Number(second.id))?.chats).toBe(1);
+      // And the response declares it, so the client knows the rows can sum past
+      // the window total.
+      expect(breakdown.overlapping).toBe(true);
+      const teamChats = teams.reduce((sum, row) => sum + row.chats, 0);
+      const dayChats = (breakdown.by_day as Array<{ chats: number }>).reduce(
+        (sum, row) => sum + row.chats,
+        0,
+      );
+      expect(teamChats).toBeGreaterThan(dayChats);
+    });
+
+    it('partitions the window when no chat overlaps: team chats sum to the day total', async () => {
+      const team = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Solo' },
+        select: { id: true },
+      });
+      const automated = await conversation({ agentReplies: false }); // automated
+      await setChatTeams(automated, [team.id]);
+      const manualChat = await conversation({ agentReplies: true }); // manual
+      await setChatTeams(manualChat, []); // unassigned
+      const assisted = await conversation({ agentReplies: true });
+      await runSkillOn(assisted); // assisted
+      await setChatTeams(assisted, []); // unassigned
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      const teams = breakdown.by_team as TeamRow[];
+
+      // No chat is shared with two teams, so the buckets partition the window:
+      // their chats sum to the by_day total exactly, and the flag stays down.
+      expect(breakdown.overlapping).toBe(false);
+      const dayChats = (breakdown.by_day as Array<{ chats: number }>).reduce(
+        (sum, row) => sum + row.chats,
+        0,
+      );
+      const teamChats = teams.reduce((sum, row) => sum + row.chats, 0);
+      expect(teamChats).toBe(dayChats);
+
+      // ADR-09: the manual/assisted/automated split holds inside every team row.
+      teams.forEach((row) => {
+        expect(row.manual + row.assisted + row.automated).toBe(row.closed);
+      });
+    });
+
     it('never counts another tenant', async () => {
       await conversation({ agentReplies: false });
       const theirToken = await grantToken(owner, {
@@ -794,6 +938,10 @@ describe('reports and billing', () => {
       // zero-filled rows, not an empty array.
       expect(theirs.by_hour).toHaveLength(24);
       expect(theirs.by_hour.every((row: { chats: number }) => row.chats === 0)).toBe(true);
+      // by_team is sparse like by_day: nothing in the window means no rows at all
+      // (not even an empty 'Unassigned' bucket), and no chat means no fan-out.
+      expect(theirs.by_team).toEqual([]);
+      expect(theirs.overlapping).toBe(false);
     });
   });
 

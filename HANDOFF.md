@@ -13,6 +13,55 @@
 
 ## Task log (newest-first)
 
+### 63.5 (07.5-e) — Takım boyutu agregasyon çekirdeği — chat_access M:N fan-out + license kilidi — done — 2026-08-03 UTC
+
+- **Yapıldı:** `breakdownByTeam(tx, licenseId, from, to)` (`apps/api/src/routes/reports.ts`) —
+  `threads t` → `JOIN chats c ON c.id = t.chat_id AND c.license_id = t.license_id` →
+  `LEFT JOIN chat_access ca ON ca.chat_id = c.id` →
+  `LEFT JOIN groups g ON g.license_id = c.license_id AND g.id = ca.group_id`,
+  `GROUP BY ca.group_id, g.name`. **İZOLASYON ÇEKİRDEĞİ (OPUS-MAX gerekçesi):** `chat_access`
+  tablosunun KENDİ `license_id` kolonu YOK (RLS `chats` üzerinden EXISTS ile uygulanıyor) ve
+  `groups` PK'sı bileşik `(license_id, id)` → aynı autoincrement `group_id` birden çok lisansta
+  bulunabilir; bu yüzden join İKİ yerden lisansa kilitlenir — `chat_access`'e yalnız `chats c`
+  (lisans kilitli) üzerinden erişilir ve `groups` join'i `g.license_id = c.license_id` taşır. RLS
+  birincil koruma; açık kilit bunun ÜSTÜNE defense-in-depth (RLS bir gün zayıflarsa aynı-id başka
+  takım A'nın satırına sızıp çift sayardı) ve izolasyon argümanını sorgunun içinde görünür kılar.
+  **FAN-OUT:** `chat_access` M:N (chat-service `createMany`; şemada 'birincil grup' kavramı yok) →
+  bir chat açık olduğu HER takımın satırında sayılır ve yanıt `overlapping: true` ile bunu BEYAN
+  eder (sessiz çift-sayım yasak); `overlapping` ayrı `EXISTS (… GROUP BY t.id HAVING count(*)>1)`
+  sorgusuyla türetilir (aynı lisans kilitleri). Hiçbir gruba açık olmayan chat `team_id: null`
+  'Unassigned' kovasında toplanır (LEFT JOIN → kayıp yok). Mevcut `SPLIT_COUNTS` aynen yeniden
+  kullanıldı (ADR-09 rapor=fatura hizası) → her satırda `manual+assisted+automated===closed`.
+  `/reports/breakdown` yanıtına `by_team` + `overlapping` eklendi; `reports_read` scope + route +
+  kontrat DEĞİŞMEDİ (alanlar 07.5-a'da eklenmişti; yeni route/migration yok).
+- **Doğrulama (hepsi yeşil, exit 0):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7) · `pnpm -w test:unit` (web 514/514 + api/contract). DB süiti seri
+  ([memory: nexa-test-gate-parallel-db]): `@nexa/api` integration **967/967** (46 dosya;
+  `reports-billing.test.ts` **95/95** — +4 yeni takım testi, negatifler önce: (1) CROSS-TENANT —
+  aynı `group_id` iki lisansta; A yalnız 'Sales A'yı görür, 'Sales B' sızmaz; (2) takım +
+  'Unassigned' kovası; (3) M:N fan-out iki takımda sayım + `overlapping===true` + toplam > pencere
+  toplamı; (4) örtüşme yokken partition `SUM(by_team.chats)===by_day` + `overlapping===false` +
+  satır-içi split; mevcut "never counts another tenant" `by_team: []` + `overlapping:false` ile
+  genişletildi; `contract-parity` 5/5 + `tenant-isolation` 22/22 dahil) · `@nexa/rtm` integration
+  51/51 · birleşik `@nexa/api` (unit+integration) **1233/1233** (65 dosya; 63.4'teki 1229 + 4 yeni
+  takım testi).
+- **Varsayımlar:** Takım boyutunda FAN-OUT kabul edildi (birincil grup SEÇİLMEZ) — `chat_access`
+  M:N ve şemada 'birincil grup' yok; `overlapping` bayrağıyla beyan edilir (07.5 açık soru §1:
+  şemaya `threads.group_id`/`chat_access.is_primary` eklenmesi bu turda bilinçli YAPILMADI). ·
+  `reports_read` lisans genelinde kalır (mevcut `by_agent` de tüm ajanları döndürür); takım-bazlı
+  daraltma yeni bir yetki modeli olurdu ve PRD'de yok — testle sabitlendi. · Endpoint testleri RLS
+  yolundan geçtiği için grup-lisans kilidinin TEK BAŞINA "kırmızı görülmesi" mümkün değil (RLS
+  grupları A'ya daraltıp sızıntıyı maskeler) — kanal kardeşi 07.5-d ile aynı özellik; kilit
+  defense-in-depth olarak korundu, testler doğru in-license davranışı doğrular.
+- **Sonraki pencereye not:** Kalan 07.5 alt-görevleri: **07.5-f** (CSV: breakdown grubunu dört
+  boyuta/uzun-formata genişlet — `by_team.name` formula-injection guard'ından geçmeli), **07.5-g**
+  (UI "By hour"), **07.5-h** (UI "By team" + "By channel" + `overlapping===true` iken örtüşme
+  dipnotu), **07.5-i** (uçtan-uca çapraz-tutarlılık + NFR-P2 EXPLAIN bütçesi — takım boyutu
+  `chat_access` EXISTS/RLS maliyetini ölçmeli). 07.5-e **e2e yüzeyi yok** (backend-only; reports
+  e2e 07.5-g/-h/-i'nin işi). PLAN §5.2 satır 1109 hâlâ `◐` (07.5-f/-g/-h/-i eksik). · **Çalışma
+  alanındaki ilgisiz 3 dosya** (`.taskmaster/BUILD-BLUEPRINT.md`, `CONVENTIONS.md`, `run-loop.sh`)
+  `critical` öncelik rezervasyonuyla ilgili, tm 63.5 kapsamı DIŞINDA — commit'e DAHİL EDİLMEDİ.
+
 ### 63.4 (07.5-d) — Kanal boyutu agregasyon çekirdeği — license_id-kilitli soft-FK join + 'website' fallback — done — 2026-08-03 UTC
 
 - **Yapıldı:** `breakdownByChannel(tx, licenseId, from, to)` (`apps/api/src/routes/reports.ts`) —

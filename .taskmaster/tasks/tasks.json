@@ -3838,13 +3838,13 @@
             "description": "(1) apps/rtm/src/conflict-publisher.ts — RealtimePublisher'ın RTM tarafı eşi: `licenseChannel(licenseId)`'a `v:1` BusEnvelope yayınlar; action='agent_conflict_warning', audience={agentIds: çakışan ajanların hepsi}; boş audience yayınlanmaz. (2) dispatcher `#typing` case'i genişletilir: is_typing=true → ConflictDetectionService.register; dönen küme ≥2 ise envelope yayınlanır; is_typing=false → kayı",
             "details": "08.6.3-conflict-c — send_typing_indicator yolunda çakışma tespiti + uyarının bus envelope ile her iki ajana iletimi  [OPUS-XHIGH]\n\nPRD: FR-MOD-08.6.3 (+ NFR-S4, NFR-P1, NFR-R2)\nETİKET GEREKÇESİ: OPUS-XHIGH: koşul 4 ve 5 ihlali + hafif güvenlik dokunuşu. RTM gateway bugüne kadar HİÇ envelope YAYINLAMIYOR (fanout.ts yalnız tüketiyor) — yayıncı yönün açılması çok dosyaya yayılan bir tasarım kararı ve depoda kopyalanacak RTM-tarafı örneği yok. Ayrıca uyarının kime gideceği (audience.agentIds) bir sızıntı yüzeyi: yanlış audience başka ajanın hangi chat'te olduğunu ifşa eder. Çekirdek yarış mantığı -b'de kapalı olduğu için MAX değil; 'güvenlik hassasiyeti olan iş asla SONNET'e verilmez' kuralı gereği SONNET olamaz.\nNEDEN AÇIK: apps/rtm/src/dispatcher.ts `#typing` (satır 185-217) yalnız `typing.canType` + `typing.setAgentTyping` çağırıyor; ikinci bir ajanın aynı chat'te yazdığını tespit edip karşı tarafa push gönderen bir case/servis YOK (grep 'conflict'/'second'/'warning' → 0). apps/rtm/src/fanout.ts (satır 1-12) gateway'in 'hiçbir yetki kararı vermediğini, audience'a güvendiğini' söylüyor — dolayısıyla uyarı audience'ı ENVELOPE'A yazan bir yayın olarak akmalı ki farklı pod'daki ajana da ulaşsın (v2-02 satır 330: presence pod bazlı).\nKAPSAM: (1) apps/rtm/src/conflict-publisher.ts — RealtimePublisher'ın RTM tarafı eşi: `licenseChannel(licenseId)`'a `v:1` BusEnvelope yayınlar; action='agent_conflict_warning', audience={agentIds: çakışan ajanların hepsi}; boş audience yayınlanmaz. (2) dispatcher `#typing` case'i genişletilir: is_typing=true → ConflictDetectionService.register; dönen küme ≥2 ise envelope yayınlanır; is_typing=false → kayıt silinir. `originConnectionId` SET EDİLMEZ — çakışan HER İKİ ajan da uyarıyı almalı (fanout.ts origin'i eler). (3) apps/rtm/src/server.ts DI: ayrı Redis publisher client + ConflictDetectionService. (4) Yayın best-effort: hata `send_typing_indicator` yanıtını BOZMAZ (publisher.ts'teki 'publishing never fails a request' kuralı birebir).\nDOSYALAR: apps/rtm/src/dispatcher.ts · apps/rtm/src/server.ts · apps/rtm/src/conflict-publisher.ts · apps/rtm/src/conflict-publisher.test.ts · apps/rtm/test/integration/rtm.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/realtime/publisher.ts (BusEnvelope kurulumu + hasAudience boş-audience reddi + 'asla rethrow etme' kuralı) · apps/rtm/src/dispatcher.ts #typing (satır 185-217: yetki → yaz → yanıt akışı) · apps/rtm/src/fanout.ts #isAddressed (audience.agentIds yolunun nasıl okunduğu) · apps/rtm/test/helpers/rtm-harness.ts (gerçek socket üzerinden integration deseni)\nKK (birebir): \"| Routing (gelişmiş) | Skills-based routing, supervision + takeover, çoklu-ajan çakışma uyarısı |\" | \"KK-türetilmiş: 'İkinci ajan yazmaya başladığında uyarı çakışan ajanların HEPSİNE iletilir (yalnız sonradan gelene değil); tek ajan yazarken uyarı üretilmez; uyarı yalnız aynı lisansın ve o sohbete erişimi olan ajanlarına ulaşır.' — Türetme gerekçesi -b ile aynı (PRD KK'sı ibareyi somutlamıyor).\"\nKK DOĞRULAMA: apps/rtm/test/integration/rtm.test.ts — iki ajan socket'i aynı chat'te `send_typing_indicator` gönderir → HER İKİSİNE de `agent_conflict_warning` push'u düşer ('hepsine iletilir'); tek ajan yazarken push YOK ('tek ajan → uyarı yok'); erişimi olmayan chat'te yanıt `not_found` ve push YOK; başka lisansın socket'ine push GİTMEZ ('yalnız aynı lisans' — fanout licence eşleşmesi). Regresyon: typing.test.ts + rtm.test.ts yeşil kalır.\nKAPSAM DIŞI: transfer/atama kaynaklı çakışma (-d) · UI (-e/-f) · yeni bir RTM client action'ı eklemek — mevcut `send_typing_indicator` yeniden kullanılır (bkz. varsayımlar) · v2-02 §330 presence:conn:* kayıt defteri · sert engelleme (ikinci ajanın yazmasının reddi) — uyarı, blok değil\nSÖZLEŞME: yok — OpenAPI'ye dokunulmaz, yeni REST route eklenmez, contract-parity.test.ts etkilenmez. RTM push sözleşmesi -a'da eklendi.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): yetkisiz chat → not_found + push yok; is_typing=false → uyarı yok; abone olmayan socket push almaz; Redis publish hatası typing yanıtını bozmaz · cross-tenant: farklı licenseId socket'ine push gitmez (fanout licence eşleşmesi) · integration: RTM harness ile iki socket → çift yönlü `agent_conflict_warning` · integration: tek ajan yazarken 0 push · regresyon: typing.test.ts / protocol.test.ts / connection.test.ts / rtm.test.ts yeşil",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               1,
               2
             ],
             "parentId": "91",
-            "updatedAt": "2026-08-02T01:39:02.616Z"
+            "updatedAt": "2026-08-02T01:57:20.460Z"
           },
           {
             "id": 4,
@@ -3903,7 +3903,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T01:39:02.616Z"
+        "updatedAt": "2026-08-02T01:57:20.460Z"
       },
       {
         "id": "92",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T01:39:02.617Z",
+      "lastModified": "2026-08-02T01:57:20.460Z",
       "taskCount": 99,
       "completedCount": 71,
       "tags": [

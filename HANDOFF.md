@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+### 92.11 — 08.9.7-k NFR-S12 uçtan uca doğrulama (dört olay + 30 gün + tüm planlarda) — done — 2026-08-02 UTC
+
+- **Yapıldı:** NFR-S12'nin bütününü tek süitte koda karşı kanıtlayan doğrulama turu (yeni davranış
+  YOK — altyapı tm 92.1–92.10'da teslim). `apps/api/test/integration/audit-log.test.ts` (+4):
+  (1) login→rol değişimi→webhook oluştur+sil→hedefli veri silme dördü de tek `GET /audit-log`
+  okumasında doğru eylem adlarıyla; (2) deneme (`trialing`) ve ücretli (`plan=enterprise`,
+  `status=active`) lisansta **yazım** paritesi — plan kapısı yok; (3) çapraz-kiracı: B'nin dört
+  olayı A'nın okumasında yok, B kendi okumasında hepsini görür; (4) `audit_prune_expired` budaması
+  sonrası okumada 31-gün YOK / 29-gün VAR. `apps/api/test/integration/audit-log-read.test.ts`
+  (+1): reader plan-agnostik (trial/paid **okuma** paritesi). `apps/e2e/tests/settings.spec.ts`
+  (+1): webhook değişimi Audit log ekranında (action filtresiyle); yeni helper `ownerAccessToken`
+  (`apps/e2e/tests/fixtures.ts`, PKCE ile owner Bearer — webhooks--all:rw + audit_log--all:ro).
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w test:integration` ✅ (serial
+  `--concurrency=1`; 44 dosya / **911** test — audit-log 39, audit-log-read 18) · `pnpm -w test:unit`
+  ✅ · `pnpm -w build` ✅ · e2e `settings.spec.ts` ✅ (**15/15**, yeni "shows a webhook change in
+  the audit trail" dahil). Kapı komutlarının hepsi exit 0.
+- **Varsayımlar:** "İki farklı plan" = deneme vs ücretli abonelik → `status` trialing↔active +
+  `plan` free-form string (owner bağlantısıyla doğrudan yazılır, tek-plan subscription doğrulayıcısı
+  bilinçli atlanır). "genişletilmiş + SIEM Enterprise" **açıkça yapılmadı** — entitlement mekanizması
+  repoda yok, ayrı kalem (kapsam dışı).
+- **Sonraki pencereye not:** Bu tur §5.0 envanterinde `08.9.7` **◐→✅** oldu (slice 11/11 tamam),
+  özet **gerçekten** `1 ◐ / 6 ✅` → **`0 ◐ / 7 ✅`** (⬜ **20 sabit** — 08.9.7 ⬜ değildi). §D71'in
+  reddettiği "6→7/20→19" panel önerisi yanlış-pozitif GLİF sayımıydı; buradaki flip ise -k'nın
+  **gerçek teslimi** — ikisi karıştırılmamalı. Kalan v2: 20 ⬜ açık kalem (§5.2).
+
 ### FIX (panel: Faz-2 özet sayaç çelişkisi) — §D71 · yanlış-pozitif kökten kapatıldı — done — 2026-08-02 UTC
 
 - **Yapıldı:** Panelin bildirdiği Faz-2 özet çelişkisi (✅ 6→7 · ⬜ 20→19) incelendi. §5.0 envanteri

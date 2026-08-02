@@ -952,4 +952,200 @@ describe('audit log writer (NFR-S12)', () => {
       expect(haystack).not.toContain(attemptedEmail);
     });
   });
+
+  // =========================================================================
+  // NFR-S12 end-to-end verification (08.9.7-k)
+  //
+  // The slices above each proved one piece: a writer per action, a reader, a
+  // 30-day prune. This block proves the *whole* NFR-S12 claim as one story,
+  // against the code rather than by assumption:
+  //
+  //   "Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30
+  //    gün) tüm planlarda."
+  //
+  // — the four named event families all reach one read of the trail; the trail
+  // is written and read the same on a trial and on a paid licence (there is no
+  // plan gate to lift — none was ever built); the 30-day window survives a
+  // prune through the reader; and none of it leaks across tenants. The
+  // Enterprise-only "extended + SIEM" clause is deliberately NOT built here
+  // (no entitlement mechanism exists — a separate item).
+  // =========================================================================
+
+  describe('the four NFR-S12 families, all plans, one trail', () => {
+    const WEBHOOK_URL = 'https://hooks.s12.example/receiver';
+
+    /** An owner-role reader token with the audit read scope, per tenant. */
+    const readerToken = (t: { licenseId: bigint; organizationId: string; ownerAccountId: string }) =>
+      grantToken(owner, {
+        licenseId: t.licenseId,
+        organizationId: t.organizationId,
+        ownerId: t.ownerAccountId,
+        scopes: ['audit_log--all:ro'],
+      });
+
+    /** Sign a tenant's owner in through the real /auth/authorize path. */
+    const signIn = (t: {
+      clientId: string;
+      redirectUri: string;
+      ownerEmail: string;
+      licenseId: bigint;
+    }) =>
+      server.post('/auth/authorize', {
+        client_id: t.clientId,
+        redirect_uri: t.redirectUri,
+        code_challenge: deriveCodeChallenge(generateToken(48).slice(0, 64)),
+        email: t.ownerEmail,
+        password: TEST_PASSWORD,
+        license_id: t.licenseId.toString(),
+      });
+
+    const actionsOf = (res: { json: () => unknown }) =>
+      (res.json() as { items: Array<{ action: string }> }).items.map((e) => e.action);
+
+    const FOUR_FAMILIES = [
+      'auth.login', // login
+      'member.role_changed', // rol değişimi
+      'webhook.created', // webhook değişimi …
+      'webhook.deleted', // … (both halves)
+      'data.deleted', // veri silme
+    ] as const;
+
+    /** Produce all four NFR-S12 families in one tenant, via the API. */
+    async function produceFourFamilies(
+      t: {
+        clientId: string;
+        redirectUri: string;
+        ownerEmail: string;
+        licenseId: bigint;
+        agentAccountId: string;
+      },
+      token: string,
+    ): Promise<void> {
+      expect((await signIn(t)).statusCode).toBe(200);
+
+      const role = await server.put(`/agents/${t.agentAccountId}/role`, { role: 'admin' }, auth(token));
+      expect(role.statusCode).toBe(200);
+
+      const created = (
+        await server.post('/webhooks', { url: WEBHOOK_URL, action: 'chat_started' }, auth(token))
+      ).json() as { id: string };
+      expect((await server.del(`/webhooks/${created.id}`, auth(token))).statusCode).toBe(204);
+
+      const tag = await owner.tag.create({
+        data: { licenseId: t.licenseId, name: `s12-${t.licenseId}` },
+        select: { id: true },
+      });
+      expect((await server.del(`/settings/tags/${tag.id}`, auth(token))).statusCode).toBe(204);
+    }
+
+    it('surfaces login, role change, webhook change and data deletion in one read', async () => {
+      // The adminToken from beforeEach holds every write scope these four use.
+      await produceFourFamilies(fx.a, adminToken);
+
+      const res = await server.get('/audit-log', auth(await readerToken(fx.a)));
+      expect(res.statusCode).toBe(200);
+      // Every family NFR-S12 names by hand is present, under the exact action.
+      expect(actionsOf(res)).toEqual(expect.arrayContaining([...FOUR_FAMILIES]));
+    });
+
+    it('writes the trail on a trial and on a paid licence alike — no plan gate', async () => {
+      // Fixtures ship both tenants as a trial. Turn B into a paid, active
+      // subscription on a different plan label — 'enterprise', the very tier the
+      // source platform reserves audit behind. NFR-S12 puts basic audit on
+      // *every* plan, so the writer must consult neither license.plan nor
+      // license.status. Written through the owner connection on purpose: it
+      // bypasses the single-plan subscription validator, and `plan` is a
+      // free-form column.
+      await owner.license.update({
+        where: { id: fx.b.licenseId },
+        data: { plan: 'enterprise', status: 'active', trialEndsAt: null },
+      });
+      expect(
+        await owner.license.findUnique({
+          where: { id: fx.b.licenseId },
+          select: { plan: true, status: true },
+        }),
+      ).toMatchObject({ plan: 'enterprise', status: 'active' });
+
+      const beforeA = await count('auth.login', fx.a.licenseId);
+      const beforeB = await count('auth.login', fx.b.licenseId);
+
+      // Each workspace's owner signs in — the trial and the paid licence.
+      expect((await signIn(fx.a)).statusCode).toBe(200);
+      expect((await signIn(fx.b)).statusCode).toBe(200);
+
+      // Both trails gained exactly one sign-in: the plan changed nothing.
+      expect(await count('auth.login', fx.a.licenseId)).toBe(beforeA + 1);
+      expect(await count('auth.login', fx.b.licenseId)).toBe(beforeB + 1);
+    });
+
+    it("a reader never sees another tenant's four events", async () => {
+      // Produce all four families in tenant B, as B's owner.
+      const bAdmin = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['agents--all:rw', 'webhooks--all:rw', 'tags--all:rw'],
+      });
+      await produceFourFamilies(fx.b, bAdmin);
+
+      // Tenant A produced nothing here, so its reader's trail holds none of B's
+      // families — RLS confines the read, not a clause the reader could forget.
+      const inA = actionsOf(await server.get('/audit-log', auth(await readerToken(fx.a))));
+      for (const family of FOUR_FAMILIES) expect(inA).not.toContain(family);
+
+      // And B's own reader does see them — proof the events were really written,
+      // not merely absent everywhere.
+      const inB = actionsOf(await server.get('/audit-log', auth(await readerToken(fx.b))));
+      expect(inB).toEqual(expect.arrayContaining([...FOUR_FAMILIES]));
+    });
+
+    it('after pruning, the reader shows the last 30 days and not older entries', async () => {
+      const DAY = 86_400_000;
+      const daysAgo = (n: number) => new Date(Date.now() - n * DAY);
+
+      // One entry a day past the 30-day window, one a day inside it.
+      const stale = await owner.auditLogEntry.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          actorType: 'system',
+          action: 'auth.login',
+          target: 'token:stale',
+          metadata: {},
+          createdAt: daysAgo(31),
+        },
+        select: { id: true },
+      });
+      const kept = await owner.auditLogEntry.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          actorType: 'system',
+          action: 'auth.login',
+          target: 'token:kept',
+          metadata: {},
+          createdAt: daysAgo(29),
+        },
+        select: { id: true },
+      });
+
+      // Retention prunes everything older than 30 days, through the one guarded
+      // door the append-only log allows.
+      const pruned = await appRole.$queryRaw<Array<{ n: bigint }>>`
+        SELECT audit_prune_expired(${fx.a.licenseId}, ${daysAgo(30)}) AS n`;
+      expect(Number(pruned[0]?.n)).toBe(1);
+
+      // The reader, defaulting to the last 30 days, shows the 29-day entry and
+      // never the 31-day one — which pruning has now physically removed as well.
+      const res = await server.get('/audit-log', auth(await readerToken(fx.a)));
+      expect(res.statusCode).toBe(200);
+      const targets = (res.json() as { items: Array<{ target: string | null }> }).items.map(
+        (e) => e.target,
+      );
+      expect(targets).toContain('token:kept');
+      expect(targets).not.toContain('token:stale');
+
+      expect(await owner.auditLogEntry.findUnique({ where: { id: stale.id } })).toBeNull();
+      expect(await owner.auditLogEntry.findUnique({ where: { id: kept.id } })).not.toBeNull();
+    });
+  });
 });

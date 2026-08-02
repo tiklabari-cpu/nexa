@@ -5,6 +5,7 @@
  * helper that reaches into Postgres can pass while the API that real clients
  * use is broken — which is the entire failure mode this suite exists to catch.
  */
+import { createHash, randomBytes } from 'node:crypto';
 import { expect, request, test as base, type APIRequestContext, type Page } from '@playwright/test';
 
 export const API_BASE = 'http://localhost:4000/api/v1';
@@ -81,6 +82,60 @@ export async function resolveOrganizationId(request: APIRequestContext): Promise
   const acme = body.memberships.find((m) => m.organization_name.startsWith('Acme'));
   expect(acme, 'seeded Acme tenant not found').toBeDefined();
   return acme!.organization_id;
+}
+
+/**
+ * An owner Bearer token via the same OAuth 2.1 + PKCE flow the web app runs
+ * (`auth-store.ts`). A handful of e2e steps have to drive the API directly —
+ * registering a webhook to prove its audit entry reaches the screen (NFR-S12)
+ * is one — and the browser session keeps its token in memory, out of reach of
+ * the test. Owners hold `webhooks--all:rw` and `audit_log--all:ro` by default
+ * (ADMIN_SCOPES), so this token can both write the event and read the trail.
+ */
+export async function ownerAccessToken(context: APIRequestContext): Promise<string> {
+  const login = await context.post(`${API_BASE}/auth/login`, {
+    data: { email: DEMO.email, password: DEMO.password },
+  });
+  expect(login.ok(), `login failed: ${login.status()} ${await login.text()}`).toBe(true);
+  const { memberships } = (await login.json()) as {
+    memberships: Array<{ client_id?: string; organization_name: string; license_id: string }>;
+  };
+  const acme = memberships.find((m) => m.organization_name.startsWith('Acme'));
+  expect(acme?.client_id, 'seeded Acme tenant not found').toBeTruthy();
+
+  // A fresh PKCE pair; the challenge is base64url(sha256(verifier)), S256.
+  const verifier = randomBytes(32).toString('base64url');
+  const challenge = createHash('sha256').update(verifier).digest('base64url');
+  const redirectUri = 'http://localhost:5173/auth/callback';
+
+  const authorized = await context.post(`${API_BASE}/auth/authorize`, {
+    data: {
+      client_id: acme!.client_id,
+      redirect_uri: redirectUri,
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      email: DEMO.email,
+      password: DEMO.password,
+      license_id: acme!.license_id,
+    },
+  });
+  expect(
+    authorized.ok(),
+    `authorize failed: ${authorized.status()} ${await authorized.text()}`,
+  ).toBe(true);
+  const { code } = (await authorized.json()) as { code: string };
+
+  const granted = await context.post(`${API_BASE}/auth/token`, {
+    data: {
+      grant_type: 'authorization_code',
+      code,
+      code_verifier: verifier,
+      client_id: acme!.client_id,
+      redirect_uri: redirectUri,
+    },
+  });
+  expect(granted.ok(), `token failed: ${granted.status()} ${await granted.text()}`).toBe(true);
+  return ((await granted.json()) as { access_token: string }).access_token;
 }
 
 export async function signIn(page: Page): Promise<void> {

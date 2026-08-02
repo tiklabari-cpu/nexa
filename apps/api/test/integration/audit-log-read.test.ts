@@ -413,4 +413,41 @@ describe('audit log read', () => {
       expect(seen).toEqual(expected);
     });
   });
+
+  // --- Plan-agnostic read (NFR-S12 "tüm planlarda" — 08.9.7-k) ----------------
+
+  describe('the reader serves every plan', () => {
+    it('reads a trial and a paid licence identically — audit is not plan-gated', async () => {
+      // A is a trial (fixtures default); make B a paid, active 'enterprise'
+      // subscription — the tier the source platform reserves audit behind. The
+      // reader keys off RLS + the caller's own licence alone, never
+      // license.plan/status, so the paid workspace is served no differently
+      // from the trial. Written through the owner connection: `plan` is a
+      // free-form column and this skips the single-plan subscription validator.
+      await owner.license.update({
+        where: { id: fx.b.licenseId },
+        data: { plan: 'enterprise', status: 'active', trialEndsAt: null },
+      });
+
+      const aEntry = await seedEntry(fx.a, { action: 'auth.login', target: 'token:a-plan' });
+      const bEntry = await seedEntry(fx.b, { action: 'auth.login', target: 'token:b-plan' });
+
+      const paidOwnerToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['audit_log--all:ro'],
+      });
+
+      // The trial owner reads exactly A's entry; the paid owner exactly B's —
+      // each its own trail, and neither the plan nor the status changed the read.
+      const resTrial = await server.get('/audit-log', auth(ownerReadToken));
+      expect(resTrial.statusCode).toBe(200);
+      expect(itemsOf(resTrial).map((e) => e.id)).toEqual([aEntry]);
+
+      const resPaid = await server.get('/audit-log', auth(paidOwnerToken));
+      expect(resPaid.statusCode).toBe(200);
+      expect(itemsOf(resPaid).map((e) => e.id)).toEqual([bEntry]);
+    });
+  });
 });

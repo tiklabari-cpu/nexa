@@ -6,7 +6,15 @@
  * here is the one that proves the loop is closed: a reply created in Settings
  * has to reach a customer through the composer without anyone reloading.
  */
-import { expect, test, openWidget, visitorSends, widgetFrame } from './fixtures.js';
+import {
+  API_BASE,
+  expect,
+  ownerAccessToken,
+  openWidget,
+  test,
+  visitorSends,
+  widgetFrame,
+} from './fixtures.js';
 
 test.describe('website widgets', () => {
   // FR-MOD-08.5.2: add a site, install the snippet, and watch the row flip to
@@ -371,6 +379,41 @@ test.describe('audit log', () => {
     const table = agentPage.getByRole('table', { name: 'Audit log' });
     await expect(table.getByText('auth.login').first()).toBeVisible();
     await agentPage.screenshot({ path: 'kanit/92.10-audit-log.png', fullPage: true });
+  });
+
+  // NFR-S12 / 08.9.7-k: the trail names four event families — sign-in (above),
+  // role change, data deletion and *webhook change*. This proves the last one
+  // end to end. Register then remove a webhook through the API (the owner
+  // session holds `webhooks--all:rw`), then read it back on the very screen an
+  // admin uses. The action filter runs server-side, so the row is found however
+  // many other entries a busy run has piled onto this shared tenant.
+  test('shows a webhook change in the audit trail', async ({ agentPage, request }) => {
+    const token = await ownerAccessToken(request);
+    const auth = { authorization: `Bearer ${token}` };
+
+    const created = await request.post(`${API_BASE}/webhooks`, {
+      headers: auth,
+      data: { url: 'https://hooks.audit-e2e.example/receiver', action: 'chat_started' },
+    });
+    expect(created.ok(), `webhook create failed: ${created.status()} ${await created.text()}`).toBe(
+      true,
+    );
+    const { id } = (await created.json()) as { id: string };
+    // Remove it straight away — that both keeps the tenant tidy and writes the
+    // second half of "webhook değişimi" (webhook.deleted) to the trail.
+    const removed = await request.delete(`${API_BASE}/webhooks/${id}`, { headers: auth });
+    expect(removed.status()).toBe(204);
+
+    await agentPage.goto('/app/settings');
+    await agentPage.getByRole('link', { name: 'Open audit log' }).click();
+    await expect(agentPage.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible();
+
+    const table = agentPage.getByRole('table', { name: 'Audit log' });
+    // Filter to the created event — a server-side query, so page size cannot
+    // hide the row behind the day's other activity.
+    await agentPage.getByLabel('Filter by action').selectOption('webhook.created');
+    await expect(table.getByText('webhook.created').first()).toBeVisible();
+    await agentPage.screenshot({ path: 'kanit/92.11-audit-webhook.png', fullPage: true });
   });
 });
 

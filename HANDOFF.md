@@ -13,6 +13,24 @@
 
 ## Task log (newest-first)
 
+### FIX (panel: Faz-2 özet sayaç çelişkisi) — §D71 · yanlış-pozitif kökten kapatıldı — done — 2026-08-02 UTC
+
+- **Yapıldı:** Panelin bildirdiği Faz-2 özet çelişkisi (✅ 6→7 · ⬜ 20→19) incelendi. §5.0 envanteri
+  (satır 1108–1137, 30 satır) **öncü** durum damgaları grep ile tek tek sayıldı = **20 ⬜ · 1 ◐ ·
+  6 ✅ · 3 ⛔** → özet (satır 22 + §5.0:1100) ZATEN DOĞRU. Çelişki, satır 1108 (`06.3.2-bulk`)
+  notundaki gömülü `` `✅` ``/`` `⬜` `` gliflerinin naif ham-glif sayımı (§D68/D69/D70'te teşhisli,
+  üçüncü tekrar). §D69'un öngördüğü kök kapatma yapıldı: 1108'deki iki gömülü glif düz metne çevrildi
+  (**teslim (kapalı)** / **açık (yapılmadı)**) — öncü damga (`⬜`) ve anlam değişmedi. §D71 eklendi.
+- **Doğrulama:** grep öncü-damga sayımı `20/1/6/3` (özetle birebir) · §5.0'da kalan gömülü glif **0**
+  (grep). **Yalnız-doküman değişikliği** (PLAN.md + HANDOFF.md) — kod/test/şema DEĞİŞMEDİ →
+  kod DoD kapıları (typecheck/lint/test/integration/build/e2e) N/A (doc-only commit deseni, bkz.
+  `aec3b02`). `git status` commit sonrası temiz.
+- **Varsayımlar:** "Faz-2 gereksinim tablosu" = §5.0 kalem envanteri (özetin dayandığı 30 kalem);
+  §5.2 kırılım · §5.3.2 dilim · §G düz tablo hedef değil (öncü durum damgası taşımıyor — grep 0).
+- **Sonraki pencereye not:** Özet sayacı DÜZELTİLMEDİ çünkü zaten doğruydu — `7/19`'a çekmek onu
+  BOZARDI (öncü-damga gerçeğiyle + §5.0:1100 ile çelişirdi). Bu panel bulgusu artık **kökten kapalı**
+  (naif sayım ↔ öncü-damga yakınsadı). Tekrar gelirse önce §D71'i oku, körlemesine özet değiştirme.
+
 ### tm 92.10 — 08.9.7-j Audit ekranı filtreleri (eylem/tarih) + 'daha fazla yükle' + e2e görünürlük — done — 2026-08-02 UTC
 
 - **Yapıldı:** SONNET-XHIGH. `AuditLogPage.tsx`'e üç parça eklendi. (1) Eylem seçici: `AUDIT_ACTIONS`'ı

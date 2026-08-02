@@ -4006,12 +4006,12 @@
             "description": "Yeni migration: retention_list_tenants() desenini birebir izleyen dar bir fonksiyon — audit_prune_expired(p_license_id BIGINT, p_cutoff TIMESTAMPTZ) RETURNS BIGINT, LANGUAGE plpgsql SECURITY DEFINER, SET search_path = public, pg_temp; YALNIZ 'license_id = p_license_id AND created_at < p_cutoff' satırlarını siler, silinen sayıyı döndürür; p_cutoff NULL veya now() ve sonrası ise exception atar. REVO",
             "details": "08.9.7-h — Append-only log'da süreli budama: audit_prune_expired SECURITY DEFINER + retention sweep bağlantısı  [OPUS-MAX]\n\nPRD: NFR-S12 'son 30 gün' (+ NFR-C8, NFR-S4 bütünlük)\nETİKET GEREKÇESİ: OPUS-MAX: append-only invaryantına kontrollü bir delik açılıyor. audit_log'da UPDATE/DELETE nexa_app'ten REVOKE edilmiş ve RLS'te yalnız SELECT/INSERT politikası var; budama ancak RLS'i atlayan SECURITY DEFINER bir fonksiyonla mümkün — yani fonksiyonun yaş yüklemi ve lisans parametresi TEK cross-tenant savunması. Yanlış yazılırsa tüm kiracıların denetim izi silinir. Koşul 2+3 ihlali; çekirdek bölünmez.\nNEDEN AÇIK: migrations/20260722154008_domain_model/migration.sql:997-1006 → audit_log ENABLE RLS + yalnız audit_log_read (SELECT) ve audit_log_append (INSERT) politikaları; ardından 'REVOKE UPDATE, DELETE ON audit_log FROM nexa_app'. Mevcut RetentionRunner (services/retention/retention.ts) TÜM silmelerini nexa_app + withTenant üzerinden yapıyor → 30 günlük pencere normal yoldan UYGULANAMAZ; audit satırları bugün süresiz birikiyor.\nKAPSAM: Yeni migration: retention_list_tenants() desenini birebir izleyen dar bir fonksiyon — audit_prune_expired(p_license_id BIGINT, p_cutoff TIMESTAMPTZ) RETURNS BIGINT, LANGUAGE plpgsql SECURITY DEFINER, SET search_path = public, pg_temp; YALNIZ 'license_id = p_license_id AND created_at < p_cutoff' satırlarını siler, silinen sayıyı döndürür; p_cutoff NULL veya now() ve sonrası ise exception atar. REVOKE EXECUTE FROM PUBLIC + GRANT EXECUTE TO nexa_app. Tablo üzerindeki DELETE yetkisi nexa_app'e VERİLMEZ (mevcut REVOKE aynen kalır). RetentionRunner'ın per-tenant döngüsüne bağlanır (batch'li, dryRun'da hiçbir şey silmez, sayım döndürür); sonuç mevcut data.retention_pruned entry'sinin metadata'sına audit_entries olarak eklenir.\nDOSYALAR: apps/api/prisma/migrations/<yeni>_audit_retention_window/migration.sql · apps/api/src/services/retention/retention.ts · apps/api/test/integration/retention.test.ts · apps/api/test/integration/audit-log.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/prisma/migrations/20260725090000_retention_tenants/migration.sql (retention_list_tenants: dar SECURITY DEFINER + SET search_path + GRANT EXECUTE TO nexa_app; yorumu 'küçük, adlandırılmış, gözden geçirilebilir bir delik' gerekçesini de veriyor) · apps/api/src/services/retention/retention.ts (#pruneTenant + #deleteInBatches + dryRun ayrımı + data.retention_pruned yazımı) · apps/api/test/integration/audit-log.test.ts:300-360 ('the log cannot be rewritten' — nexa_app'in UPDATE/DELETE reddi testleri, aynen korunmalı)\nKK (birebir): \"Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30 gün) tüm planlarda\"\nKK DOĞRULAMA: test/integration/retention.test.ts: 31 gün önce yazılmış audit satırı sweep sonrası yok, 29 günlük satır duruyor → 'son 30 gün' birebir kanıtlanır. audit-log.test.ts'in mevcut append-only testleri yeşil kalır → budama, tabloyu yazılabilir hale getirmedi.\nKAPSAM DIŞI: Plan bazlı farklı pencere (Enterprise genişletilmiş saklama) — entitlement mekanizması repoda yok · Budamanın kendisini audit'lemek için ayrı yeni eylem (mevcut data.retention_pruned metadata'sı kullanılır) · Arşive taşıma / cold storage / SIEM aktarımı · nexa_app'e tablo düzeyinde DELETE verme — AÇIKÇA yasak\nMIGRATION: EVET — yeni Prisma migration (audit_retention_window): yalnız audit_prune_expired(BIGINT, TIMESTAMPTZ) fonksiyonu + REVOKE EXECUTE FROM PUBLIC + GRANT EXECUTE TO nexa_app. Tablo/kolon/indeks değişikliği YOK, dolayısıyla schema.prisma değişmez ve db:check-drift temiz kalır.\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): nexa_app hâlâ doğrudan DELETE/UPDATE edemiyor (permission denied) — mevcut testler regresyon olarak korunur · negatif (önce): p_cutoff NULL / now() veya sonrası → fonksiyon exception atar (tüm tabloyu silme yolu yok) · cross-tenant (önce, ZORUNLU): A lisansı için çağrılan budama B'nin satırlarına dokunmuyor — SECURITY DEFINER RLS'i atladığı için tek savunma bu yüklem · integration: sınır — cutoff'tan yeni satır kalır, eski satır gider · integration: dryRun hiçbir şey silmez, yalnız sayar · integration: idempotent — ikinci koşu 0 döner · integration: budama sonrası data.retention_pruned metadata'sında audit_entries sayacı doğru · NOT: DB süitleri paylaşılan Postgres'te SERİ koşulmalı (satır sayımı testleri yarışa girer)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               7
             ],
             "parentId": "92",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T10:24:32.416Z"
           },
           {
             "id": 9,
@@ -4059,7 +4059,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T10:02:21.186Z"
+        "updatedAt": "2026-08-02T10:24:32.416Z"
       },
       {
         "id": "93",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T10:02:21.187Z",
+      "lastModified": "2026-08-02T10:24:32.417Z",
       "taskCount": 99,
       "completedCount": 72,
       "tags": [

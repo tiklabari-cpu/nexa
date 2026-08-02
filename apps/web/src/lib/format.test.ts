@@ -7,7 +7,14 @@
  * a difference stable across every ICU build.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { formatCount, formatDate, formatMoney, formatRate, setFormatLocale } from './format.js';
+import {
+  formatCount,
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  formatRate,
+  setFormatLocale,
+} from './format.js';
 
 afterEach(() => {
   // Leave the module-level locale as the tests found it.
@@ -33,6 +40,14 @@ describe('explicit locale argument', () => {
     expect(formatCount(null, 'tr')).toBeNull();
     expect(formatMoney(undefined, 'USD', 'tr')).toBeNull();
     expect(formatDate('not a date', 'tr')).toBeNull();
+  });
+
+  it('formatDateTime includes a time and rejects the same invalid inputs as formatDate', () => {
+    const iso = '2026-01-15T10:00:00.000Z';
+    expect(formatDateTime(iso, 'en')).not.toBeNull();
+    expect(formatDateTime(iso, 'en')).not.toBe(formatDate(iso, 'en'));
+    expect(formatDateTime(null, 'en')).toBeNull();
+    expect(formatDateTime('not a date', 'en')).toBeNull();
   });
 });
 

@@ -13,6 +13,45 @@
 
 ## Task log (newest-first)
 
+### tm 92.9 — 08.9.7-i Audit Log ekranı: salt-okunur liste + boş/skeleton/hata durumları + Settings girişi — done — 2026-08-02 UTC
+
+- **Yapıldı:** SONNET-XHIGH. Yeni `apps/web/src/features/audit/AuditLogPage.tsx` —
+  `useQuery`+`api.get('/audit-log')` → `VirtualTable` (Zaman/Eylem/Aktör/Hedef/IP, CustomersPage
+  deseni), `ListSkeleton` (yükleniyor), `EmptyState` (boş — dört olay kategorisini anan metin, boş
+  dikdörtgen değil), `ErrorNotice` (hata). RBAC istemci kapı `scopes.includes('audit_log--all:ro')`
+  → `useQuery({ enabled })` ile scope yokken **hiç fetch atmıyor** ve sayfa "Audit log not
+  available" uyarısı gösteriyor (UI gizleme asıl kapı DEĞİL — gerçek kapı 08.9.7-a'daki route
+  `scopes`+`minimumRole:admin`). `App.tsx`'e `/app/settings/audit-log` route'u (modül rayında
+  değil — Apps/marketplace deseniyle aynı, yalnız Settings girişinden erişilir).
+  `SettingsPage.tsx`'e Integrations kartı deseninde `AuditLog()` giriş bölümü — scope yokken render
+  EDİLMİYOR. `apps/web/src/lib/format.ts`'e `formatDateTime` eklendi (mevcut `formatDate` deseni
+  birebir, ayrıca saat gösterir — audit zaman damgasında gün tek başına yetersiz).
+  Dosyalar: `apps/web/src/features/audit/AuditLogPage.tsx` ·
+  `apps/web/src/features/settings/SettingsPage.tsx` (`AuditLog` export) · `apps/web/src/App.tsx` ·
+  `apps/web/src/lib/format.ts`.
+- **Doğrulama:** `pnpm --filter @nexa/web typecheck` ✓ · `pnpm --filter @nexa/web lint` ✓ ·
+  `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓. Testler paket paket serial
+  çalıştırıldı (bkz. [[nexa-test-gate-parallel-db]] — `pnpm -w test` apps/rtm+apps/api'nin paylaşılan
+  Postgres'e karşı deadlock/FK yarışına giriyor, bu task'la ilgisiz): `pnpm --filter @nexa/web test`
+  483/483 ✓ (+8 yeni: `AuditLogPage.test.tsx` 5 · `AuditLog.test.tsx` (settings) 2 ·
+  `format.test.ts` +1) · `pnpm --filter @nexa/api test` 1169/1169 ✓ (contract-parity dahil, hiç
+  değişmedi) · `pnpm --filter @nexa/rtm test` 90/90 ✓ · `pnpm --filter @nexa/types test` 60/60 ✓ ·
+  `pnpm --filter @nexa/widget test` 52/52 ✓ · `pnpm --filter @nexa/ai-mock test` 56/56 ✓.
+- **Varsayımlar:** (1) Aktör sütunu `actor_type` + `actor_id` (ham UUID) gösteriyor — isim
+  çözümlemesi (agent adı lookup) API'de yok ve KK bunu istemiyor ("aktör" alanının render edilmesi
+  yeterli). (2) Sıralama/aria-sort **eklenmedi** — TicketGrid referansı yalnız "salt-okunur grid
+  deseni" için anıldı, sıralama 08.9.7-j/KAPSAM DIŞI listesinde değil ama filtre/pagination'ın
+  parçası sayıldı; statik `<th>` (CustomersPage deseni) kullanıldı. (3) `format.ts`/`format.test.ts`
+  DOSYALAR listesinde değildi ama mevcut i18n altyapısını (locale-bound Intl formatter'lar)
+  tekrarlamamak için gerekliydi — bir satırlık, mevcut `formatDate` deseninin birebir eşi. (4) E2E
+  yazılmadı — task'ın kendi KAPSAM DIŞI listesi bunu 08.9.7-j'ye bırakıyor; `apps/e2e`'de audit
+  referansı yoktu (grep 0 sonuç), yeni kapsam kaçağı değil.
+- **Sonraki pencereye not:** `08.9.7` hâlâ `◐`. Kalan: `-j` (filtreler + 'daha fazla yükle' +
+  e2e görünürlük — bu ekranın üstüne inşa eder) · plan/tier kapısı (entitlement mekanizması hâlâ
+  yok) · `-k` uçtan uca doğrulama. `-j` bu ekranın `useQuery` key'ini (`['audit-log']`) ve tablo
+  yapısını genişletecek — action/date filtrelerini query param'a çevirip aynı `AuditLogPage`'e
+  eklemek en düşük sürtünmeli yol.
+
 ### tm 92.8 — 08.9.7-h Append-only log'da 30-gün fiili budama (audit_prune_expired SECURITY DEFINER + retention sweep) — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-MAX. NFR-S12'nin "son 30 gün"ü artık fiilen uygulanıyor. `audit_log`

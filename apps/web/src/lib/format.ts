@@ -90,3 +90,14 @@ export function formatDate(
   if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date);
 }
+
+/** ISO timestamp → a short absolute date and time. For logs, where the day alone is ambiguous. */
+export function formatDateTime(
+  iso: string | null | undefined,
+  locale: string | undefined = activeLocale,
+): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}

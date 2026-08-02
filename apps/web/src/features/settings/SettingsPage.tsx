@@ -124,6 +124,7 @@ export function SettingsPage(): ReactElement {
       <TrustedDomains canEdit={canManageAccess} />
       <BannedCustomerIps canEdit={canManageAccess} />
       <IpAllowlist canEdit={canManageAccess} />
+      <AuditLog />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />
       <Tags canEdit={canManageTags} />
@@ -573,6 +574,42 @@ export function BannedCustomerIps({ canEdit }: { canEdit: boolean }): ReactEleme
           )}
         </Card>
       )}
+    </Section>
+  );
+}
+
+// --- Audit log ----------------------------------------------------------------
+
+/**
+ * The door into the security trail (NFR-S12) — Integrations' pattern: a full
+ * page's worth of list lives behind its own route, not a form field here.
+ * Hidden entirely without `audit_log--all:ro`, so a teammate who cannot read
+ * the trail is not shown a door that only leads to a 403. That hiding is a
+ * courtesy, not the boundary — the route itself carries the real gate (scope +
+ * `minimumRole: admin`, see `apps/api/src/routes/audit-log.ts`).
+ */
+export function AuditLog(): ReactElement | null {
+  const scopes = useAuth((s) => s.agent?.scopes ?? []);
+  if (!scopes.includes('audit_log--all:ro')) return null;
+
+  return (
+    <Section
+      title="Audit log"
+      description="Sign-ins, role changes, deletions and webhook changes — the last 30 days, kept for every plan."
+    >
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm text-content-secondary">
+            Review who did what across this workspace.
+          </p>
+          <Link
+            to="/app/settings/audit-log"
+            className="shrink-0 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+          >
+            Open audit log
+          </Link>
+        </div>
+      </Card>
     </Section>
   );
 }

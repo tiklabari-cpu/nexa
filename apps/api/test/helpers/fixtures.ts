@@ -168,6 +168,23 @@ export async function seedFixtures(db: PrismaClient): Promise<Fixtures> {
 }
 
 /**
+ * Give a license its default brand and return the id.
+ *
+ * Fixtures are deliberately brandless (78.1's isolation suites assert the exact
+ * brand set of a fresh license), so a suite that exercises a brand-scoped table
+ * — websites or the widget/security/inbox settings — seeds the default brand on
+ * demand, the row backfill/seed/signup lay down in production. Only one default
+ * is allowed per license (a partial unique index), so call it once per license.
+ */
+export async function seedDefaultBrand(db: PrismaClient, licenseId: bigint): Promise<string> {
+  const brand = await db.brand.create({
+    data: { licenseId, name: 'Default', slug: 'default', isDefault: true },
+    select: { id: true },
+  });
+  return brand.id;
+}
+
+/**
  * Insert a token directly, bypassing the API, so tests can construct exactly
  * the credential they want to probe with (wrong tenant, missing scope, expired).
  */

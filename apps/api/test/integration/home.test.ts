@@ -17,7 +17,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { HomeDashboard } from '@nexa/types';
-import { grantToken, ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import { grantToken, ownerClient, seedDefaultBrand, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 describe('home dashboard', () => {
@@ -239,8 +239,11 @@ describe('home dashboard', () => {
     });
 
     it('flips each step done when its thing exists', async () => {
-      await owner.website.create({ data: { licenseId: fx.a.licenseId, domain: 'shop.example' } });
-      await owner.widgetSettings.create({ data: { licenseId: fx.a.licenseId } });
+      const brandId = await seedDefaultBrand(owner, fx.a.licenseId);
+      await owner.website.create({
+        data: { licenseId: fx.a.licenseId, brandId, domain: 'shop.example' },
+      });
+      await owner.widgetSettings.create({ data: { licenseId: fx.a.licenseId, brandId } });
       await owner.cannedResponse.create({
         data: { licenseId: fx.a.licenseId, scope: 'chat', shortcut: 'hi', text: 'Hello!' },
       });

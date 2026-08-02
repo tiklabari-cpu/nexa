@@ -23,6 +23,7 @@ import { writeAuditEntry } from '../../src/services/audit/audit-log.js';
 import {
   grantToken,
   ownerClient,
+  seedDefaultBrand,
   seedFixtures,
   TEST_PASSWORD,
   type Fixtures,
@@ -71,6 +72,11 @@ describe('audit log writer (NFR-S12)', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    // /settings/security and /websites resolve the license default brand now.
+    await Promise.all([
+      seedDefaultBrand(owner, fx.a.licenseId),
+      seedDefaultBrand(owner, fx.b.licenseId),
+    ]);
     await clearRateLimits(server.app);
     // The owner holds every scope these actions need, and the owner *role* so
     // the invitation gate (admin-or-above) is satisfied.

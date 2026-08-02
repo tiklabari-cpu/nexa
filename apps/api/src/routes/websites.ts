@@ -52,7 +52,7 @@ export default async function websiteRoutes(
     { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
     async (request, reply) => {
       const tenant = request.tenant();
-      const items = await request.withTenant((tx) => websites.list(tx, tenant.organizationId));
+      const items = await request.withTenant((tx) => websites.list(tx, tenant));
       return reply.send({ items });
     },
   );
@@ -100,7 +100,7 @@ export default async function websiteRoutes(
       const id = parse(uuid, request.params.websiteId);
       const tenant = request.tenant();
 
-      const website = await request.withTenant((tx) => websites.get(tx, tenant.organizationId, id));
+      const website = await request.withTenant((tx) => websites.get(tx, tenant, id));
       // Also the answer for a website in another tenant: RLS returns nothing and
       // 404 keeps ids un-enumerable (NFR-S5).
       if (!website) throw ApiError.notFound('Website not found.');

@@ -2306,7 +2306,16 @@ export interface paths {
   '/websites/{websiteId}': {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path: {
         websiteId: string;
       };
@@ -3374,6 +3383,11 @@ export interface components {
     Website: {
       /** Format: uuid */
       id: string;
+      /**
+       * Format: uuid
+       * @description The brand this site belongs to (Multibrand, PRD §5.3).
+       */
+      brand_id?: string;
       /** @description Hostname only — lowercased, no scheme, port or path. */
       domain: string;
       /**
@@ -3523,6 +3537,11 @@ export interface components {
      *     sessions.
      */
     SecuritySettings: {
+      /**
+       * Format: uuid
+       * @description The brand these settings belong to (Multibrand, PRD §5.3).
+       */
+      brand_id?: string;
       /** @description Visitor IPs refused a widget token and blocked from starting a chat (FR-MOD-08.9.2). Stored in canonical form; an IPv4-mapped IPv6 address matches its bare IPv4 form. */
       banned_customer_ips: string[];
       /** @description When false, no attachment is accepted from either side. */
@@ -3560,6 +3579,11 @@ export interface components {
      */
     ChatTimeoutSettings: {
       /**
+       * Format: uuid
+       * @description The brand these settings belong to (Multibrand, PRD §5.3).
+       */
+      brand_id?: string;
+      /**
        * Format: int32
        * @description Seconds of inactivity before auto-close, or null when disabled.
        */
@@ -3573,6 +3597,11 @@ export interface components {
      *     values are baked into the install snippet and applied by the widget.
      */
     WidgetSettings: {
+      /**
+       * Format: uuid
+       * @description The brand this appearance belongs to (Multibrand, PRD §5.3).
+       */
+      brand_id?: string;
       /** @description Brand colour of the launcher, header and send button, a hex. */
       primary_color: string;
       /**
@@ -8273,7 +8302,16 @@ export interface operations {
   getSecuritySettings: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -8296,7 +8334,16 @@ export interface operations {
   updateSecuritySettings: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -8335,7 +8382,16 @@ export interface operations {
   getChatTimeout: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -8358,7 +8414,16 @@ export interface operations {
   setChatTimeout: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -8392,7 +8457,16 @@ export interface operations {
   getWidgetSettings: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -8415,7 +8489,16 @@ export interface operations {
   setWidgetSettings: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -8657,7 +8740,16 @@ export interface operations {
   listWebsites: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -8682,7 +8774,16 @@ export interface operations {
   addWebsite: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -8726,7 +8827,16 @@ export interface operations {
   getWebsite: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path: {
         websiteId: string;
       };
@@ -8752,7 +8862,16 @@ export interface operations {
   removeWebsite: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path: {
         websiteId: string;
       };

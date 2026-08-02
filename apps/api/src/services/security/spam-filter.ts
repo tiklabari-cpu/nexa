@@ -186,13 +186,14 @@ export function evaluateSpam(input: {
 }
 
 /**
- * Read the per-license spam-filter switch. No row means the schema default,
- * which is *on* — an unconfigured workspace still filters. Call inside the
- * tenant's `withTenant`, so RLS scopes the read to that license.
+ * Read the spam-filter switch. No row means the schema default, which is *on* —
+ * an unconfigured workspace still filters. Call inside the tenant's `withTenant`,
+ * so RLS scopes the read: license-wide it reads the license's (default brand)
+ * row, and `security_settings` is now keyed by `(license, brand)`, so `findFirst`
+ * — not a `licenseId` lookup, which is no longer a unique key — is the read.
  */
-export async function isSpamFilterEnabled(tx: TenantClient, licenseId: bigint): Promise<boolean> {
-  const settings = await tx.securitySettings.findUnique({
-    where: { licenseId },
+export async function isSpamFilterEnabled(tx: TenantClient): Promise<boolean> {
+  const settings = await tx.securitySettings.findFirst({
     select: { spamFilterEnabled: true },
   });
   return settings?.spamFilterEnabled ?? true;

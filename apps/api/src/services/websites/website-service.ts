@@ -17,6 +17,7 @@ import {
   normalizeWidgetAppearance,
   type WidgetAppearance,
 } from '@nexa/types';
+import { resolveBrandId } from '../../lib/brand.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 /**
@@ -33,6 +34,8 @@ export type WebsiteStatus = 'pending' | 'connected' | 'error';
 
 export interface Website {
   id: string;
+  /** The brand this site belongs to (Multibrand, PRD §5.3). */
+  brand_id: string;
   domain: string;
   setup: WebsiteSetup;
   status: WebsiteStatus;
@@ -43,6 +46,7 @@ export interface Website {
 
 interface WebsiteRow {
   id: string;
+  brandId: string;
   domain: string;
   setup: string;
   status: string;
@@ -63,46 +67,57 @@ export class WebsiteService {
    * the same tenant transaction; a workspace that has never customised it gets
    * the shipped defaults and the minimal snippet it always had.
    */
-  async list(tx: TenantClient, organizationId: string): Promise<Website[]> {
-    // RLS narrows to the caller's license; the order gives the table a stable
-    // shape rather than insertion order.
+  async list(tx: TenantClient, tenant: TenantContext): Promise<Website[]> {
+    // RLS narrows the rows to the caller's license and — under a brand context —
+    // to that one brand; the order gives the table a stable shape rather than
+    // insertion order. The snippet appearance is the active brand's (or the
+    // license default's), resolved once and shared, since a snippet is identical
+    // across a workspace's sites (FR-MOD-11.7).
+    const brandId = await resolveBrandId(tx, tenant.brandId);
     const [rows, appearance] = await Promise.all([
       tx.website.findMany({ orderBy: { domain: 'asc' } }),
-      this.appearance(tx),
+      this.appearance(tx, brandId),
     ]);
-    return rows.map((row) => this.serialise(row, organizationId, appearance));
+    return rows.map((row) => this.serialise(row, tenant.organizationId, appearance));
   }
 
-  async get(tx: TenantClient, organizationId: string, id: string): Promise<Website | null> {
+  async get(tx: TenantClient, tenant: TenantContext, id: string): Promise<Website | null> {
     const row = await tx.website.findFirst({ where: { id } });
     if (!row) return null;
-    return this.serialise(row, organizationId, await this.appearance(tx));
+    // The site's *own* brand appearance — RLS already limited what is visible, so
+    // the row's brand is the right one for its snippet.
+    return this.serialise(row, tenant.organizationId, await this.appearance(tx, row.brandId));
   }
 
-  /** Throws Prisma P2002 on a duplicate `[licenseId, domain]`; the route maps it. */
+  /** Throws Prisma P2002 on a duplicate `[licenseId, brandId, domain]`; the route maps it. */
   async create(
     tx: TenantClient,
     tenant: TenantContext,
     input: { domain: string; setup: WebsiteSetup; createdBy: string | null },
   ): Promise<Website> {
+    // A website belongs to exactly one brand (brand_id is NOT NULL): the request's
+    // brand when `X-Nexa-Brand` named one, otherwise the license default — the
+    // sole brand of a single-brand workspace.
+    const brandId = await resolveBrandId(tx, tenant.brandId);
     const row = await tx.website.create({
       data: {
         licenseId: tenant.licenseId,
+        brandId,
         domain: input.domain,
         setup: input.setup,
         createdBy: input.createdBy,
       },
     });
-    return this.serialise(row, tenant.organizationId, await this.appearance(tx));
+    return this.serialise(row, tenant.organizationId, await this.appearance(tx, brandId));
   }
 
   /**
-   * The workspace's widget appearance, or the shipped defaults when it has never
-   * been customised. Normalised so a value that somehow bypassed the endpoint's
+   * A brand's widget appearance, or the shipped defaults when it has never been
+   * customised. Normalised so a value that somehow bypassed the endpoint's
    * validation still cannot carry anything but its declared shape into a snippet.
    */
-  private async appearance(tx: TenantClient): Promise<WidgetAppearance> {
-    const row = await tx.widgetSettings.findFirst();
+  private async appearance(tx: TenantClient, brandId: string): Promise<WidgetAppearance> {
+    const row = await tx.widgetSettings.findFirst({ where: { brandId } });
     return normalizeWidgetAppearance(
       row
         ? {
@@ -129,6 +144,7 @@ export class WebsiteService {
   serialise(row: WebsiteRow, organizationId: string, appearance: WidgetAppearance): Website {
     return {
       id: row.id,
+      brand_id: row.brandId,
       domain: row.domain,
       setup: row.setup as WebsiteSetup,
       status: row.status as WebsiteStatus,

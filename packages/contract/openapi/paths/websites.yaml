@@ -12,6 +12,8 @@ websites:
     tags: [Websites]
     operationId: listWebsites
     summary: Sites the widget is installed on
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
     responses:
       "200":
         description: The workspace's websites
@@ -32,6 +34,8 @@ websites:
     tags: [Websites]
     operationId: addWebsite
     summary: Add a site to install the widget on
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
     description: |
       Accepts a bare hostname (`shop.example`) or a URL to take one from; the
       hostname is stored lowercased, without port or path, the same shape the
@@ -75,6 +79,7 @@ website:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
 
   get:
     tags: [Websites]

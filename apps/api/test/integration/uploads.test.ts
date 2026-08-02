@@ -15,7 +15,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedDefaultBrand,
+  seedFixtures,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 import { EICAR_SIGNATURE } from '../../src/services/storage/virus-scanner.js';
 
@@ -43,6 +49,12 @@ describe('uploads', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    // The /settings/security PATCH resolves the license default brand (the
+    // security rules are brand-scoped now).
+    await Promise.all([
+      seedDefaultBrand(owner, fx.a.licenseId),
+      seedDefaultBrand(owner, fx.b.licenseId),
+    ]);
     await clearRateLimits(server.app);
 
     tokenA = await grantToken(owner, {

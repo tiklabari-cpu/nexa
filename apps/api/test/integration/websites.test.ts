@@ -13,11 +13,18 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedDefaultBrand,
+  seedFixtures,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 interface Website {
   id: string;
+  brand_id: string;
   domain: string;
   setup: string;
   status: string;
@@ -33,8 +40,14 @@ describe('websites', () => {
   let adminToken: string;
   let readToken: string;
   let adminTokenB: string;
+  // Websites are brand-scoped now (a site belongs to one brand). Every license
+  // needs its default brand — the row an add resolves to when no brand is named.
+  let brandA: string;
 
-  const auth = (token: string) => ({ authorization: `Bearer ${token}` });
+  const auth = (token: string, brand?: string) => ({
+    authorization: `Bearer ${token}`,
+    ...(brand ? { 'x-nexa-brand': brand } : {}),
+  });
 
   beforeAll(async () => {
     owner = ownerClient();
@@ -48,6 +61,10 @@ describe('websites', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    [brandA] = await Promise.all([
+      seedDefaultBrand(owner, fx.a.licenseId),
+      seedDefaultBrand(owner, fx.b.licenseId),
+    ]);
     await clearRateLimits(server.app);
 
     adminToken = await grantToken(owner, {
@@ -267,5 +284,68 @@ describe('websites', () => {
 
     const after = await server.get(`/websites/${created.id}`, auth(readToken));
     expect((after.json() as Website).status).toBe('pending');
+  });
+
+  // --- Brand isolation within one license (Multibrand · NFR-S4/S5) ------------
+  //
+  // A website belongs to one brand now. The same domain may live under two brands
+  // of a license, one brand's site is invisible to another's context, and a
+  // cross-brand id is 404 — un-enumerable, like a cross-license one.
+  describe('brand isolation', () => {
+    // brandA is the license default; brandA2 is a second brand of the same license.
+    let brandA2: string;
+
+    beforeEach(async () => {
+      const b = await owner.brand.create({
+        data: { licenseId: fx.a.licenseId, name: 'Acme EU', slug: 'acme-eu' },
+        select: { id: true },
+      });
+      brandA2 = b.id;
+    });
+
+    it('adds a site under the named brand and stamps its brand_id', async () => {
+      const created = await server.post('/websites', { domain: 'eu.example' }, auth(adminToken, brandA2));
+      expect(created.statusCode).toBe(201);
+      expect((created.json() as Website).brand_id).toBe(brandA2);
+    });
+
+    it("hides a brand's site from another brand of the same license", async () => {
+      await server.post('/websites', { domain: 'eu-only.example' }, auth(adminToken, brandA2));
+
+      // The default brand's list does not include it…
+      const underDefault = await server.get('/websites', auth(readToken, brandA));
+      expect(
+        (underDefault.json() as { items: Website[] }).items.map((w) => w.domain),
+      ).not.toContain('eu-only.example');
+
+      // …but the second brand sees it.
+      const underA2 = await server.get('/websites', auth(readToken, brandA2));
+      expect((underA2.json() as { items: Website[] }).items.map((w) => w.domain)).toContain(
+        'eu-only.example',
+      );
+    });
+
+    it('lets the same domain live under two brands of one license', async () => {
+      const first = await server.post('/websites', { domain: 'shared.example' }, auth(adminToken, brandA));
+      expect(first.statusCode).toBe(201);
+      // The new [license, brand, domain] key allows the same domain in a second brand.
+      const second = await server.post('/websites', { domain: 'shared.example' }, auth(adminToken, brandA2));
+      expect(second.statusCode).toBe(201);
+      expect((second.json() as Website).brand_id).toBe(brandA2);
+    });
+
+    it("404s another brand's website id, never 403 (un-enumerable, NFR-S5)", async () => {
+      const mine = (
+        await server.post('/websites', { domain: 'a2-only.example' }, auth(adminToken, brandA2))
+      ).json() as Website;
+
+      // Under the default brand the id is invisible → 404, the same answer a
+      // stranger id gets; a delete there touches nothing.
+      expect((await server.get(`/websites/${mine.id}`, auth(readToken, brandA))).statusCode).toBe(404);
+      expect((await server.del(`/websites/${mine.id}`, auth(adminToken, brandA))).statusCode).toBe(404);
+
+      // Still there under its own brand.
+      expect((await server.get(`/websites/${mine.id}`, auth(readToken, brandA2))).statusCode).toBe(200);
+    });
   });
 });

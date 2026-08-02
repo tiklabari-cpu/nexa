@@ -25,6 +25,7 @@ import { hashToken } from '../../src/lib/crypto.js';
 import {
   grantToken,
   ownerClient,
+  seedDefaultBrand,
   seedFixtures,
   type Fixtures,
   type TenantFixture,
@@ -54,9 +55,15 @@ describe('session policies', () => {
       sessionIdleTimeoutSeconds: policy.idleSeconds ?? null,
       maxConcurrentSessions: policy.maxSessions ?? null,
     };
+    // security_settings is keyed by (license, brand) now — write the default
+    // brand's row, the one the brandless session-policy read resolves to.
+    const brand = await owner.brand.findFirstOrThrow({
+      where: { licenseId: tenant.licenseId, isDefault: true },
+      select: { id: true },
+    });
     await owner.securitySettings.upsert({
-      where: { licenseId: tenant.licenseId },
-      create: { licenseId: tenant.licenseId, ...data },
+      where: { licenseId_brandId: { licenseId: tenant.licenseId, brandId: brand.id } },
+      create: { licenseId: tenant.licenseId, brandId: brand.id, ...data },
       update: data,
     });
   }
@@ -93,6 +100,11 @@ describe('session policies', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    // setPolicy() writes each license's default brand security_settings row.
+    await Promise.all([
+      seedDefaultBrand(owner, fx.a.licenseId),
+      seedDefaultBrand(owner, fx.b.licenseId),
+    ]);
     await clearRateLimits(server.app);
   });
 

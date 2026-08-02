@@ -237,6 +237,7 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
   await prisma.website.create({
     data: {
       licenseId,
+      brandId: defaultBrand.id,
       domain: spec.widgetDomain,
       status: 'connected',
       setup: 'manual',
@@ -291,7 +292,7 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
   });
 
   await prisma.securitySettings.create({
-    data: { licenseId, fileSharingEnabled: true, spamFilterEnabled: true },
+    data: { licenseId, brandId: defaultBrand.id, fileSharingEnabled: true, spamFilterEnabled: true },
   });
 
   // --- Billing --------------------------------------------------------------

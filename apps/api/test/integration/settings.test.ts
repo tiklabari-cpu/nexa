@@ -11,7 +11,13 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedDefaultBrand,
+  seedFixtures,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 describe('settings', () => {
@@ -20,8 +26,22 @@ describe('settings', () => {
   let fx: Fixtures;
   let adminToken: string;
   let readToken: string;
+  // The widget/security/inbox settings are brand-scoped (a row per brand). With
+  // no `X-Nexa-Brand` header these endpoints resolve the license default brand,
+  // so every license needs its default brand — the row the production backfill,
+  // seed and signup all lay down.
+  let brandA: string;
+  let brandB: string;
 
-  const auth = (token: string) => ({ authorization: `Bearer ${token}` });
+  const auth = (token: string, brand?: string) => ({
+    authorization: `Bearer ${token}`,
+    ...(brand ? { 'x-nexa-brand': brand } : {}),
+  });
+  // The compound primary key of every brand-scoped singleton, for reading a row
+  // back straight through the owner client (RLS-exempt).
+  const key = (licenseId: bigint, brandId: string) => ({
+    licenseId_brandId: { licenseId, brandId },
+  });
 
   beforeAll(async () => {
     owner = ownerClient();
@@ -35,6 +55,10 @@ describe('settings', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    [brandA, brandB] = await Promise.all([
+      seedDefaultBrand(owner, fx.a.licenseId),
+      seedDefaultBrand(owner, fx.b.licenseId),
+    ]);
     await clearRateLimits(server.app);
 
     adminToken = await grantToken(owner, {
@@ -560,7 +584,7 @@ describe('settings', () => {
       // Signup does not create this row — only the seed does — so this is what
       // a real workspace reads until it saves for the first time.
       const none = await owner.securitySettings.findUnique({
-        where: { licenseId: fx.a.licenseId },
+        where: key(fx.a.licenseId, brandA),
       });
       expect(none).toBeNull();
 
@@ -571,7 +595,7 @@ describe('settings', () => {
       // Pins the constants in routes/settings.ts to the column defaults: a row
       // created with nothing but its key must match what the endpoint invents.
       const fromSchema = await owner.securitySettings.create({
-        data: { licenseId: fx.b.licenseId },
+        data: { licenseId: fx.b.licenseId, brandId: brandB },
       });
       expect(body).toMatchObject({
         banned_customer_ips: fromSchema.bannedCustomerIps,
@@ -593,7 +617,7 @@ describe('settings', () => {
       expect(body.banned_customer_ips).toEqual([]);
       // No row was written to answer a read.
       expect(
-        await owner.securitySettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+        await owner.securitySettings.findUnique({ where: key(fx.a.licenseId, brandA) }),
       ).toBeNull();
       expect(body.updated_at).toBeNull();
     });
@@ -708,7 +732,7 @@ describe('settings', () => {
 
     it("never lets one tenant's banned IPs reach another's row", async () => {
       await owner.securitySettings.create({
-        data: { licenseId: fx.b.licenseId, bannedCustomerIps: ['198.51.100.7'] },
+        data: { licenseId: fx.b.licenseId, brandId: brandB, bannedCustomerIps: ['198.51.100.7'] },
       });
 
       // Their list must not leak into our read...
@@ -724,14 +748,19 @@ describe('settings', () => {
       expect(written.statusCode).toBe(200);
 
       const theirs = await owner.securitySettings.findUnique({
-        where: { licenseId: fx.b.licenseId },
+        where: key(fx.b.licenseId, brandB),
       });
       expect(theirs?.bannedCustomerIps).toEqual(['198.51.100.7']);
     });
 
     it("never reads or writes another tenant's rules", async () => {
       await owner.securitySettings.create({
-        data: { licenseId: fx.b.licenseId, fileSharingEnabled: false, maxFileSizeBytes: 999 },
+        data: {
+          licenseId: fx.b.licenseId,
+          brandId: brandB,
+          fileSharingEnabled: false,
+          maxFileSizeBytes: 999,
+        },
       });
 
       // Their row must not leak into our read...
@@ -747,7 +776,7 @@ describe('settings', () => {
       expect(written.statusCode).toBe(200);
 
       const theirs = await owner.securitySettings.findUnique({
-        where: { licenseId: fx.b.licenseId },
+        where: key(fx.b.licenseId, brandB),
       });
       expect(theirs?.maxFileSizeBytes).toBe(999);
       expect(theirs?.fileSharingEnabled).toBe(false);
@@ -846,7 +875,12 @@ describe('settings', () => {
 
     it("never lets one tenant's session policy reach another's row", async () => {
       await owner.securitySettings.create({
-        data: { licenseId: fx.b.licenseId, ipAllowlistEnforced: true, maxConcurrentSessions: 7 },
+        data: {
+          licenseId: fx.b.licenseId,
+          brandId: brandB,
+          ipAllowlistEnforced: true,
+          maxConcurrentSessions: 7,
+        },
       });
 
       // Their policy must not leak into our read...
@@ -862,7 +896,7 @@ describe('settings', () => {
       expect(written.statusCode).toBe(200);
 
       const theirs = await owner.securitySettings.findUnique({
-        where: { licenseId: fx.b.licenseId },
+        where: key(fx.b.licenseId, brandB),
       });
       expect(theirs?.ipAllowlistEnforced).toBe(true);
       expect(theirs?.maxConcurrentSessions).toBe(7);
@@ -879,7 +913,7 @@ describe('settings', () => {
 
     it('reads as disabled until it is set, without writing a row', async () => {
       const none = await owner.inboxSettings.findUnique({
-        where: { licenseId: fx.a.licenseId },
+        where: key(fx.a.licenseId, brandA),
       });
       expect(none).toBeNull();
 
@@ -889,7 +923,7 @@ describe('settings', () => {
 
       // No row was written to answer a read.
       expect(
-        await owner.inboxSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+        await owner.inboxSettings.findUnique({ where: key(fx.a.licenseId, brandA) }),
       ).toBeNull();
     });
 
@@ -928,7 +962,7 @@ describe('settings', () => {
       expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
       // Nothing was stored — a rejected window must not leave a row behind.
       expect(
-        await owner.inboxSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+        await owner.inboxSettings.findUnique({ where: key(fx.a.licenseId, brandA) }),
       ).toBeNull();
     });
 
@@ -959,7 +993,7 @@ describe('settings', () => {
 
     it("never reads or writes another tenant's window", async () => {
       await owner.inboxSettings.create({
-        data: { licenseId: fx.b.licenseId, chatTimeoutSeconds: 120 },
+        data: { licenseId: fx.b.licenseId, brandId: brandB, chatTimeoutSeconds: 120 },
       });
 
       // Their row must not leak into our read…
@@ -975,7 +1009,7 @@ describe('settings', () => {
       expect(written.statusCode).toBe(200);
 
       const theirs = await owner.inboxSettings.findUnique({
-        where: { licenseId: fx.b.licenseId },
+        where: key(fx.b.licenseId, brandB),
       });
       expect(theirs?.chatTimeoutSeconds).toBe(120);
     });
@@ -988,7 +1022,7 @@ describe('settings', () => {
 
     it('reads the shipped defaults until it is set, without writing a row', async () => {
       expect(
-        await owner.widgetSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+        await owner.widgetSettings.findUnique({ where: key(fx.a.licenseId, brandA) }),
       ).toBeNull();
 
       const response = await server.get('/settings/widget', auth(readToken));
@@ -1004,7 +1038,7 @@ describe('settings', () => {
 
       // A read must not materialise a row.
       expect(
-        await owner.widgetSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+        await owner.widgetSettings.findUnique({ where: key(fx.a.licenseId, brandA) }),
       ).toBeNull();
     });
 
@@ -1055,7 +1089,7 @@ describe('settings', () => {
         expect(response.statusCode).toBe(400);
         expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
         expect(
-          await owner.widgetSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+          await owner.widgetSettings.findUnique({ where: key(fx.a.licenseId, brandA) }),
         ).toBeNull();
       },
     );
@@ -1101,7 +1135,12 @@ describe('settings', () => {
 
     it("never reads or writes another tenant's appearance", async () => {
       await owner.widgetSettings.create({
-        data: { licenseId: fx.b.licenseId, primaryColor: '#abcdef', updatedAt: new Date() },
+        data: {
+          licenseId: fx.b.licenseId,
+          brandId: brandB,
+          primaryColor: '#abcdef',
+          updatedAt: new Date(),
+        },
       });
 
       // Their row must not leak into our read…
@@ -1113,9 +1152,93 @@ describe('settings', () => {
       expect(written.statusCode).toBe(200);
 
       const theirs = await owner.widgetSettings.findUnique({
-        where: { licenseId: fx.b.licenseId },
+        where: key(fx.b.licenseId, brandB),
       });
       expect(theirs?.primaryColor).toBe('#abcdef');
+    });
+  });
+
+  // --- Brand isolation within one license (Multibrand · NFR-S4/S5) ------------
+  //
+  // The property 78.3 adds: the widget/security/inbox settings are per *brand*,
+  // not per license. A save under one brand of a license must not change another
+  // brand of the same license, and a read with no brand named resolves the
+  // license default — never an arbitrary brand's row.
+  describe('brand isolation', () => {
+    // brandA is the license default; brandA2 is a second brand of the same license.
+    let brandA2: string;
+
+    beforeEach(async () => {
+      const b = await owner.brand.create({
+        data: { licenseId: fx.a.licenseId, name: 'Acme EU', slug: 'acme-eu' },
+        select: { id: true },
+      });
+      brandA2 = b.id;
+    });
+
+    it("keeps one brand's widget appearance out of another brand of the same license", async () => {
+      const saved = await server.put(
+        '/settings/widget',
+        { primary_color: '#e11d48' },
+        auth(adminToken, brandA2),
+      );
+      expect(saved.statusCode).toBe(200);
+      expect((saved.json() as { brand_id: string }).brand_id).toBe(brandA2);
+
+      // The default brand still reads the shipped default — the write did not reach it.
+      const def = await server.get('/settings/widget', auth(readToken));
+      expect((def.json() as { primary_color: string; brand_id: string }).primary_color).toBe(
+        '#2f6bff',
+      );
+      expect((def.json() as { brand_id: string }).brand_id).toBe(brandA);
+
+      // The second brand reads back its own value.
+      const own = await server.get('/settings/widget', auth(readToken, brandA2));
+      expect(own.json()).toMatchObject({ primary_color: '#e11d48', brand_id: brandA2 });
+
+      // One row per brand: the default brand has none, the second brand has one.
+      expect(
+        await owner.widgetSettings.findUnique({ where: key(fx.a.licenseId, brandA) }),
+      ).toBeNull();
+      expect(
+        (await owner.widgetSettings.findUnique({ where: key(fx.a.licenseId, brandA2) }))
+          ?.primaryColor,
+      ).toBe('#e11d48');
+    });
+
+    it("scopes security settings to the brand — one brand's PATCH leaves another's", async () => {
+      await server.patch(
+        '/settings/security',
+        { max_file_size_bytes: 5000 },
+        auth(adminToken, brandA2),
+      );
+
+      const def = await server.get('/settings/security', auth(readToken));
+      expect((def.json() as { max_file_size_bytes: number }).max_file_size_bytes).toBe(10_485_760);
+
+      const own = await server.get('/settings/security', auth(readToken, brandA2));
+      expect(own.json()).toMatchObject({ max_file_size_bytes: 5000, brand_id: brandA2 });
+    });
+
+    it('scopes the chat-timeout window to the brand', async () => {
+      await server.put(
+        '/settings/chat-timeout',
+        { chat_timeout_seconds: 3600 },
+        auth(adminToken, brandA2),
+      );
+
+      const def = await server.get('/settings/chat-timeout', auth(readToken));
+      expect((def.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds).toBeNull();
+
+      const own = await server.get('/settings/chat-timeout', auth(readToken, brandA2));
+      expect((own.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds).toBe(
+        3600,
+      );
+    });
+
+    it('404s a brand id from another license, never 403 (un-enumerable, NFR-S5)', async () => {
+      const res = await server.get('/settings/widget', auth(readToken, brandB));
+      expect(res.statusCode).toBe(404);
     });
   });
 });

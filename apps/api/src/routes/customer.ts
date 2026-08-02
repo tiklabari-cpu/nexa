@@ -287,9 +287,7 @@ export default async function customerRoutes(
       // links). Gated by the per-workspace spamFilterEnabled (schema default on)
       // and routed through the same deterministic engine the email channel uses.
       if (!existing && maskedText) {
-        const spamFilterOn = await request.withTenant((tx) =>
-          isSpamFilterEnabled(tx, tenant.licenseId),
-        );
+        const spamFilterOn = await request.withTenant((tx) => isSpamFilterEnabled(tx));
         if (evaluateSpam({ filterEnabled: spamFilterOn, text: maskedText }).spam) {
           // An enveloped refusal, like the co-located banned-IP check: a
           // synchronous widget request has nothing to return once the chat is

@@ -15,7 +15,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { ownerClient, seedDefaultBrand, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const DOMAIN = 'inbound.nexa.localhost';
@@ -198,8 +198,9 @@ describe('inbound email → ticket', () => {
   });
 
   it('lets a flagged message through when the workspace turned the filter off', async () => {
+    const brandId = await seedDefaultBrand(owner, fx.a.licenseId);
     await owner.securitySettings.create({
-      data: { licenseId: fx.a.licenseId, spamFilterEnabled: false },
+      data: { licenseId: fx.a.licenseId, brandId, spamFilterEnabled: false },
     });
 
     const response = await inbound({

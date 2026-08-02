@@ -20,6 +20,7 @@ import { withTenant } from '../../src/lib/tenant.js';
 import {
   grantToken,
   ownerClient,
+  seedDefaultBrand,
   seedFixtures,
   type Fixtures,
   type TenantFixture,
@@ -242,9 +243,15 @@ describe('ip allow-list enforcement', () => {
 
   /** Turn enforcement on for a tenant and seed its list, straight through RLS. */
   async function enforce(tenant: TenantFixture, entries: string[]): Promise<void> {
+    // security_settings is keyed by (license, brand) now — write the default
+    // brand's row, the one the brandless enforcement read resolves to.
+    const brand = await owner.brand.findFirstOrThrow({
+      where: { licenseId: tenant.licenseId, isDefault: true },
+      select: { id: true },
+    });
     await owner.securitySettings.upsert({
-      where: { licenseId: tenant.licenseId },
-      create: { licenseId: tenant.licenseId, ipAllowlistEnforced: true },
+      where: { licenseId_brandId: { licenseId: tenant.licenseId, brandId: brand.id } },
+      create: { licenseId: tenant.licenseId, brandId: brand.id, ipAllowlistEnforced: true },
       update: { ipAllowlistEnforced: true },
     });
     for (const entry of entries) {
@@ -268,6 +275,11 @@ describe('ip allow-list enforcement', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    // enforce() writes each license's default brand security_settings row.
+    await Promise.all([
+      seedDefaultBrand(owner, fx.a.licenseId),
+      seedDefaultBrand(owner, fx.b.licenseId),
+    ]);
     await clearRateLimits(server.app);
     agentA = await grantToken(owner, {
       licenseId: fx.a.licenseId,

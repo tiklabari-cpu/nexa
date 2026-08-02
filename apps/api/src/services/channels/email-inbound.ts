@@ -92,7 +92,7 @@ export async function ingestInboundEmail(
   // provider passed but whose subject is a content-spam flood is still dropped.
   // No row means the schema default, which is *on*, so an unconfigured workspace
   // still drops flagged spam rather than accepting it.
-  const spamFilterOn = await isSpamFilterEnabled(tx, tenant.licenseId);
+  const spamFilterOn = await isSpamFilterEnabled(tx);
   if (
     evaluateSpam({ filterEnabled: spamFilterOn, text: maskedSubject, providerFlagged: email.spam })
       .spam

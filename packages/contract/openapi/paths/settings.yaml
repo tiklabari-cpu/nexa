@@ -287,6 +287,8 @@ securitySettings:
     tags: [Settings]
     operationId: getSecuritySettings
     summary: File sharing and security rules
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
     description: |
       The file-sharing fields are what FR-MOD-08.9.4 enforces on every upload.
       They existed in the schema from the start but could only be changed by
@@ -310,6 +312,8 @@ securitySettings:
     tags: [Settings]
     operationId: updateSecuritySettings
     summary: Change the file sharing and security rules
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
     description: |
       Creates the row on first write. `allowed_file_types` is validated as MIME
       types (`type/subtype`) and stored lowercased: an entry like `.pdf` or
@@ -371,6 +375,8 @@ chatTimeout:
     tags: [Settings]
     operationId: getChatTimeout
     summary: Idle-chat auto-close window
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
     description: |
       The idle window before a conversation is auto-closed (FR-MOD-08.7.3).
       `chat_timeout_seconds` is null when the feature is off, which is also what
@@ -390,6 +396,8 @@ chatTimeout:
     tags: [Settings]
     operationId: setChatTimeout
     summary: Set or disable the idle-chat auto-close window
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
     description: |
       Creates the row on first write. `chat_timeout_seconds` must be a positive
       integer (up to 30 days) or null to disable — a zero or negative window is
@@ -425,6 +433,8 @@ widgetSettings:
     tags: [Settings]
     operationId: getWidgetSettings
     summary: Widget appearance
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
     description: |
       The widget's appearance (FR-MOD-11.7): brand colour, corner, colour
       scheme, mobile-fullscreen and the removable "Powered by" footer. A
@@ -444,6 +454,8 @@ widgetSettings:
     tags: [Settings]
     operationId: setWidgetSettings
     summary: Change the widget appearance
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
     description: |
       Creates the row on first write, filling unset fields from the defaults, so
       a partial save lands a complete, valid appearance. At least one field is

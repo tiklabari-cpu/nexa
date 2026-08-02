@@ -91,9 +91,9 @@ model License {
   paymentMethod          PaymentMethod?
   auditEntries           AuditLogEntry[]
   ipAllowlistEntries     IpAllowlistEntry[]
-  securitySettings       SecuritySettings?
-  inboxSettings          InboxSettings?
-  widgetSettings         WidgetSettings?
+  securitySettings       SecuritySettings[]
+  inboxSettings          InboxSettings[]
+  widgetSettings         WidgetSettings[]
   appInstallations       AppInstallation[]
 
   invitations Invitation[]
@@ -1089,9 +1089,16 @@ model ChannelMessage {
 }
 
 /// A site the widget is installed on.
+///
+/// Brand-scoped, not just license-scoped (Multibrand, PRD §5.3): a site belongs
+/// to exactly one brand, and the same domain may be added once per brand — the
+/// `(license, brand, domain)` unique key. RLS narrows the list to the active
+/// brand on top of that; a license-wide request (no brand) still sees every
+/// brand's sites, so a single-brand workspace is unchanged.
 model Website {
   id          String    @id @default(uuid()) @db.Uuid
   licenseId   BigInt    @map("license_id")
+  brandId     String    @map("brand_id") @db.Uuid
   domain      String
   createdBy   String?   @map("created_by")
   connectedAt DateTime? @map("connected_at") @db.Timestamptz(6)
@@ -1100,8 +1107,9 @@ model Website {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  brand   Brand   @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
-  @@unique([licenseId, domain])
+  @@unique([licenseId, brandId, domain])
   @@map("websites")
 }
 
@@ -1123,8 +1131,12 @@ model Brand {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  license  License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  channels Channel[]
+  license          License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  channels         Channel[]
+  websites         Website[]
+  securitySettings SecuritySettings[]
+  inboxSettings    InboxSettings[]
+  widgetSettings   WidgetSettings[]
 
   @@unique([licenseId, slug])
   @@map("brands")
@@ -1178,9 +1190,15 @@ model WebhookDelivery {
   @@map("webhook_deliveries")
 }
 
-/// Per-license security configuration (PRD §8.4 `security_settings`).
+/// Per-brand security configuration (PRD §8.4 `security_settings` · §5.3).
+///
+/// Keyed by `(license, brand)`, one row per brand (Multibrand). The settings
+/// screen resolves the row from `X-Nexa-Brand`, or the license default when no
+/// brand is named — so a single-brand workspace keeps its single row. RLS
+/// narrows the row to the active brand on top of the license match.
 model SecuritySettings {
-  licenseId                 BigInt   @id @map("license_id")
+  licenseId                 BigInt   @map("license_id")
+  brandId                   String   @map("brand_id") @db.Uuid
   bannedCustomerIps         String[] @default([]) @map("banned_customer_ips")
   spamFilterEnabled         Boolean  @default(true) @map("spam_filter_enabled")
   fileSharingEnabled        Boolean  @default(true) @map("file_sharing_enabled")
@@ -1203,18 +1221,21 @@ model SecuritySettings {
   updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  brand   Brand   @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
+  @@id([licenseId, brandId])
   @@map("security_settings")
 }
 
-/// Per-license inbox behaviour (FR-MOD-08.7, "Settings/Inbox tools").
+/// Per-brand inbox behaviour (FR-MOD-08.7, "Settings/Inbox tools").
 ///
-/// A singleton keyed by license, like `SecuritySettings`. Signup does not create
-/// the row — the settings endpoint upserts it on first save, and a read with no
-/// row falls back to the schema defaults — so a workspace that has never touched
-/// these behaves as "everything off".
+/// A singleton keyed by `(license, brand)`, like `SecuritySettings`. Signup does
+/// not create the row — the settings endpoint upserts it on first save under the
+/// resolved brand, and a read with no row falls back to the schema defaults — so
+/// a workspace that has never touched these behaves as "everything off".
 model InboxSettings {
-  licenseId          BigInt   @id @map("license_id")
+  licenseId          BigInt   @map("license_id")
+  brandId            String   @map("brand_id") @db.Uuid
   /// Auto-close a chat after this many seconds with no activity (FR-MOD-08.7.3).
   /// Null disables it. Only a positive value is ever written — enforced at the
   /// settings endpoint and re-checked by the sweep, so a zero or negative window
@@ -1223,19 +1244,22 @@ model InboxSettings {
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  brand   Brand   @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
+  @@id([licenseId, brandId])
   @@map("inbox_settings")
 }
 
-/// Per-license widget appearance (FR-MOD-11.7, "Widget customization").
+/// Per-brand widget appearance (FR-MOD-11.7, "Widget customization").
 ///
-/// A singleton keyed by license, like `InboxSettings`. Signup does not create
-/// the row — the settings endpoint upserts it on first save, and a read with no
-/// row falls back to the schema defaults — so a workspace that has never touched
-/// these renders the shipped look. The column defaults mirror
-/// `DEFAULT_WIDGET_APPEARANCE` in `@nexa/types` value-for-value.
+/// A singleton keyed by `(license, brand)`, like `InboxSettings`. Signup does
+/// not create the row — the settings endpoint upserts it on first save under the
+/// resolved brand, and a read with no row falls back to the schema defaults — so
+/// a workspace that has never touched these renders the shipped look. The column
+/// defaults mirror `DEFAULT_WIDGET_APPEARANCE` in `@nexa/types` value-for-value.
 model WidgetSettings {
-  licenseId        BigInt   @id @map("license_id")
+  licenseId        BigInt   @map("license_id")
+  brandId          String   @map("brand_id") @db.Uuid
   /// Brand colour — a `#rrggbb` hex, checked by the settings endpoint and the
   /// `widget_settings_color_check` DB invariant so nothing but a colour is ever
   /// stored (it is embedded in the install snippet and applied to CSS).
@@ -1250,7 +1274,9 @@ model WidgetSettings {
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  brand   Brand   @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
+  @@id([licenseId, brandId])
   @@map("widget_settings")
 }
 

@@ -13,6 +13,49 @@
 
 ## Task log (newest-first)
 
+### 78.3 — MULTIBRAND-c brand_id yayılımı (websites + widget/security/inbox singleton ayarları) — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-XHIGH. `-b`'de `channels` üzerinde kanıtlanan `nexa_current_brand()` deseni
+  dört tabloya uygulandı. (1) **Şema:** `Website.brandId` (+ `@@unique([licenseId,brandId,domain])`);
+  `SecuritySettings`/`InboxSettings`/`WidgetSettings` `licenseId @id` → `@@id([licenseId,brandId])`
+  (satır başına marka); `Brand`'a back-relation'lar + `License` tarafı `?`→`[]` (bileşik PK artık
+  1-1 değil). (2) **Migration** `20260802130000_brand_scoped_settings`: her tabloya `brand_id`
+  (nullable→varsayılan markaya backfill→NOT NULL+FK cascade) · websites unique genişletme · üç
+  singleton'da PK swap (`DROP CONSTRAINT _pkey` → `PRIMARY KEY (license_id, brand_id)`) · dört
+  `_tenant` policy DROP+CREATE marka-koşullu (`-b` şablonu birebir). (3) **Callsite:** yeni
+  `lib/brand.ts` `resolveBrandId(tx, brandId)` (başlık ya da lisans varsayılanı — `ChannelService`'in
+  private `defaultBrandId`'sinin paylaşımlı biçimi); `routes/settings.ts` 3 GET marka filtresi + 3
+  upsert `licenseId_brandId` + serialiser'lara `brand_id`; `website-service.ts` create markayı çözer,
+  appearance marka-scoped, yanıt `brand_id` (`websites.ts` `list`/`get` artık `tenant` alır);
+  `spam-filter.ts` `findUnique({licenseId})` → `findFirst()` (customer/email callsite'ları güncellendi).
+  (4) **Kontrat additive:** dört şemaya `brand_id` + altı ayar/website operasyonuna reusable
+  `X-Nexa-Brand` BrandHeader (yeni path YOK) → re-bundle + types regen. (5) **seed.ts** website +
+  securitySettings artık `brandId: defaultBrand.id`.
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w build` ✅ ·
+  `test:integration` ✅ (serial; **45 dosya / 937 test** — 929→937, +8: settings 4 + websites 4
+  brand-isolation; contract-parity 5/5 + tenant-isolation 22 DEĞİŞMEDEN yeşil) · api unit **263** ·
+  web unit **489** · `db:check-drift` ✅ (no drift) · e2e `settings.spec.ts` **15/15** ✅. Canlı DB
+  teyidi: 4 policy `nexa_current_brand` koşullu · 4 `brand_id` NOT NULL · 3 bileşik PK ·
+  `websites_license_id_brand_id_domain_key`. Kapı komutlarının hepsi exit 0.
+- **Varsayımlar:** (1) **Enforcement okumaları brand-scope EDİLMEDİ** — auth IP-check, banned-ip,
+  uploads, token-service session policy, chat-timeout sweep, chat-page appearance `findFirst()` olarak
+  kaldı; brandless bağlamda RLS lisans-geneli tek (varsayılan marka) satırı okur. Bugün yalnız
+  varsayılan-marka satırı var (ayar ekranları -g'ye kadar başlık göndermiyor), o yüzden davranış
+  tek-marka lisansta birebir korunur; marka-bazlı enforcement -g/-h kapsamı. (2) **Fixtures markasız
+  KALDI** (78.1 `tenant-isolation`/`data-model` marka blokları kendi `isDefault:true` markasını kurup
+  tam listeyi assert ediyor — `seedTenant`'a marka eklemek onları kırardı); yeni `seedDefaultBrand`
+  yardımcısı etkilenen 10 test dosyasının beforeEach'inde ihtiyaç anında marka kurar. (3) Web ayar
+  testleri (`WidgetCustomization`/`BannedCustomerIps`) KIRILMADI (API'yi mock'luyorlar, additive
+  `brand_id` opsiyonel) → dokunulmadı.
+- **Sonraki pencereye not:** §5.3-Marka Multibrand satırı (PLAN §5.0:1134) **◐ kaldı** (slice 3/8);
+  özet sayaç DEĞİŞMEDİ (Multibrand hâlâ tek `◐`). Sıradaki: **-d** `/brands` CRUD route + kontrat +
+  `brands--all` scope + `brand_not_found` hata tipi — **yaml+route AYNI pencerede** (yeni path →
+  contract-parity iki-yönlü tetiklenir; `brands.yaml` hâlâ YOK) + yeni ApiError tipi errors.ts(×2)
+  + scopes.test count + openapi enum + regen zinciri (bkz. hafıza). Sonra -e/-f/-g UI (`X-Nexa-Brand`'i
+  AppShell marka değiştirici gönderir; -g marka-scoped ayar ekranlarını seçili markaya bağlar) → -h
+  cross-brand e2e + otomatik izolasyon matrisi (enforcement'ın marka-scope'a çekilip çekilmeyeceği
+  burada karara bağlanmalı).
+
 ### 78.2 — MULTIBRAND-b marka izolasyon çekirdeği (`app.current_brand` + brand-scoped RLS, `channels` üzerinde kanıtlandı) — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-MAX, bölünmez çekirdek. (1) `lib/tenant.ts`: `TenantContext.brandId?`, `withTenant`

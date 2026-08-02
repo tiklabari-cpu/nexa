@@ -8,7 +8,13 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { licenseChannel, typingStateKey } from '@nexa/types';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedDefaultBrand,
+  seedFixtures,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 describe('customer chat api', () => {
@@ -16,6 +22,9 @@ describe('customer chat api', () => {
   let server: TestServer;
   let fx: Fixtures;
   let agentToken: string;
+  // Both licenses get their default brand: security_settings is brand-scoped now,
+  // and the banned-IP / spam-filter rows the tests write hang off it.
+  let brandA: string;
 
   beforeAll(async () => {
     owner = ownerClient();
@@ -29,6 +38,10 @@ describe('customer chat api', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    [brandA] = await Promise.all([
+      seedDefaultBrand(owner, fx.a.licenseId),
+      seedDefaultBrand(owner, fx.b.licenseId),
+    ]);
     await clearRateLimits(server.app);
 
     const support = await owner.group.create({
@@ -800,7 +813,7 @@ describe('customer chat api', () => {
 
     it('refuses a widget token to a banned address', async () => {
       await owner.securitySettings.create({
-        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+        data: { licenseId: fx.a.licenseId, brandId: brandA, bannedCustomerIps: [BANNED_IP] },
       });
 
       const response = await tokenFrom(BANNED_IP);
@@ -810,7 +823,7 @@ describe('customer chat api', () => {
 
     it('still issues a token to an address that is not banned', async () => {
       await owner.securitySettings.create({
-        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+        data: { licenseId: fx.a.licenseId, brandId: brandA, bannedCustomerIps: [BANNED_IP] },
       });
 
       const response = await tokenFrom(ALLOWED_IP);
@@ -825,7 +838,7 @@ describe('customer chat api', () => {
 
       // The address is banned only afterwards.
       await owner.securitySettings.create({
-        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+        data: { licenseId: fx.a.licenseId, brandId: brandA, bannedCustomerIps: [BANNED_IP] },
       });
 
       const blocked = await server.post(
@@ -841,12 +854,12 @@ describe('customer chat api', () => {
 
     it('lets the address start a chat again once the ban is lifted', async () => {
       await owner.securitySettings.create({
-        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+        data: { licenseId: fx.a.licenseId, brandId: brandA, bannedCustomerIps: [BANNED_IP] },
       });
       const { token } = (await tokenFrom(ALLOWED_IP)).json() as { token: string };
 
       await owner.securitySettings.update({
-        where: { licenseId: fx.a.licenseId },
+        where: { licenseId_brandId: { licenseId: fx.a.licenseId, brandId: brandA } },
         data: { bannedCustomerIps: [] },
       });
 
@@ -861,7 +874,7 @@ describe('customer chat api', () => {
     it("does not let one tenant's ban block another tenant's visitors", async () => {
       // Tenant A bans the address...
       await owner.securitySettings.create({
-        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+        data: { licenseId: fx.a.licenseId, brandId: brandA, bannedCustomerIps: [BANNED_IP] },
       });
 
       // ...the same address reaching tenant B, which has not, is unaffected.
@@ -871,7 +884,7 @@ describe('customer chat api', () => {
 
     it('recognises an IPv4-mapped IPv6 address as the banned bare IPv4', async () => {
       await owner.securitySettings.create({
-        data: { licenseId: fx.a.licenseId, bannedCustomerIps: [BANNED_IP] },
+        data: { licenseId: fx.a.licenseId, brandId: brandA, bannedCustomerIps: [BANNED_IP] },
       });
 
       // A proxy reporting the mapped form must still match the ban.
@@ -923,7 +936,7 @@ describe('customer chat api', () => {
 
     it('lets spam through once the workspace turns the filter off', async () => {
       await owner.securitySettings.create({
-        data: { licenseId: fx.a.licenseId, spamFilterEnabled: false },
+        data: { licenseId: fx.a.licenseId, brandId: brandA, spamFilterEnabled: false },
       });
       const { token } = await widgetToken();
       const response = await server.post('/customer/chat/events', { text: SPAM }, auth(token));
@@ -946,7 +959,7 @@ describe('customer chat api', () => {
       // Tenant A turns the filter off; tenant B keeps the default (on). The same
       // spam reaches both — A accepts it, B refuses it. The switch is per-license.
       await owner.securitySettings.create({
-        data: { licenseId: fx.a.licenseId, spamFilterEnabled: false },
+        data: { licenseId: fx.a.licenseId, brandId: brandA, spamFilterEnabled: false },
       });
       const a = await widgetToken(fx.a);
       const b = await widgetToken(fx.b);

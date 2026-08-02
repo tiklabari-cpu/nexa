@@ -18,6 +18,7 @@ import {
 } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
+import { resolveBrandId } from '../lib/brand.js';
 import {
   formatAllowlistEntry,
   parseAllowlistEntry,
@@ -596,10 +597,14 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     '/settings/security',
     { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
     async (request, reply) => {
-      // `findFirst` with no `where`: RLS narrows it to this license, and the
-      // id-by-licenseId key means there is at most one row to find.
-      const row = await request.withTenant((tx) => tx.securitySettings.findFirst());
-      return reply.send(serialiseSecurity(row));
+      // Brand-scoped: the row belongs to the active brand (`X-Nexa-Brand`) or the
+      // license default when none is named — so a settings screen never reads
+      // another brand's row, and never an arbitrary one when several exist.
+      const { row, brandId } = await request.withTenant(async (tx) => {
+        const brandId = await resolveBrandId(tx, request.brandId);
+        return { row: await tx.securitySettings.findFirst({ where: { brandId } }), brandId };
+      });
+      return reply.send(serialiseSecurity(row, brandId));
     },
   );
 
@@ -642,15 +647,19 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
 
       // Upsert because signup leaves no row: a workspace saving these for the
       // first time would otherwise get a 404 for settings it can plainly see.
-      const updated = await request.withTenant(async (tx) => {
+      // Keyed by `(license, brand)` — the active brand or the license default —
+      // so a save under one brand never overwrites another's row.
+      const { updated, brandId } = await request.withTenant(async (tx) => {
+        const brandId = await resolveBrandId(tx, request.brandId);
         const row = await tx.securitySettings.upsert({
-          where: { licenseId: tenant.licenseId },
+          where: { licenseId_brandId: { licenseId: tenant.licenseId, brandId } },
           create: {
             ...SECURITY_DEFAULTS,
             bannedCustomerIps: [...SECURITY_DEFAULTS.bannedCustomerIps],
             allowedFileTypes: [...SECURITY_DEFAULTS.allowedFileTypes],
             ...data,
             licenseId: tenant.licenseId,
+            brandId,
           },
           update: data,
         });
@@ -660,10 +669,10 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
           action: 'settings.security_updated',
           metadata: { fields: Object.keys(body) },
         });
-        return row;
+        return { updated: row, brandId };
       });
 
-      return reply.send(serialiseSecurity(updated));
+      return reply.send(serialiseSecurity(updated, brandId));
     },
   );
 
@@ -673,11 +682,14 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     '/settings/chat-timeout',
     { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
     async (request, reply) => {
-      // `findFirst` with no `where`: RLS narrows it to this license, and the
-      // id-by-licenseId key means there is at most one row. No row means the
-      // feature was never turned on, which reads as disabled.
-      const row = await request.withTenant((tx) => tx.inboxSettings.findFirst());
-      return reply.send(serialiseInbox(row));
+      // Brand-scoped: the row for the active brand, or the license default when
+      // none is named. No row means the feature was never turned on, which reads
+      // as disabled.
+      const { row, brandId } = await request.withTenant(async (tx) => {
+        const brandId = await resolveBrandId(tx, request.brandId);
+        return { row: await tx.inboxSettings.findFirst({ where: { brandId } }), brandId };
+      });
+      return reply.send(serialiseInbox(row, brandId));
     },
   );
 
@@ -690,11 +702,14 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
 
       // Upsert because signup leaves no row: a workspace enabling this for the
       // first time would otherwise get a 404 for a setting it can plainly see.
-      const updated = await request.withTenant(async (tx) => {
+      // Keyed by `(license, brand)`, so a save under one brand leaves another's.
+      const { updated, brandId } = await request.withTenant(async (tx) => {
+        const brandId = await resolveBrandId(tx, request.brandId);
         const row = await tx.inboxSettings.upsert({
-          where: { licenseId: tenant.licenseId },
+          where: { licenseId_brandId: { licenseId: tenant.licenseId, brandId } },
           create: {
             licenseId: tenant.licenseId,
+            brandId,
             chatTimeoutSeconds: body.chat_timeout_seconds,
           },
           update: { chatTimeoutSeconds: body.chat_timeout_seconds },
@@ -703,10 +718,10 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
           action: 'settings.chat_timeout_updated',
           metadata: { chat_timeout_seconds: body.chat_timeout_seconds },
         });
-        return row;
+        return { updated: row, brandId };
       });
 
-      return reply.send(serialiseInbox(updated));
+      return reply.send(serialiseInbox(updated, brandId));
     },
   );
 
@@ -716,11 +731,14 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     '/settings/widget',
     { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
     async (request, reply) => {
-      // `findFirst` with no `where`: RLS narrows it to this license, and the
-      // id-by-licenseId key means there is at most one row. No row means the
-      // workspace has never customised the widget, which reads as the defaults.
-      const row = await request.withTenant((tx) => tx.widgetSettings.findFirst());
-      return reply.send(serialiseWidget(row));
+      // Brand-scoped: the row for the active brand, or the license default when
+      // none is named. No row means the workspace has never customised this
+      // brand's widget, which reads as the defaults.
+      const { row, brandId } = await request.withTenant(async (tx) => {
+        const brandId = await resolveBrandId(tx, request.brandId);
+        return { row: await tx.widgetSettings.findFirst({ where: { brandId } }), brandId };
+      });
+      return reply.send(serialiseWidget(row, brandId));
     },
   );
 
@@ -744,12 +762,15 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
       // Upsert because signup leaves no row: a workspace customising the widget
       // for the first time would otherwise get a 404 for settings it can see.
       // The create fills unset fields from the defaults, so a partial first save
-      // lands a complete, valid row.
-      const updated = await request.withTenant(async (tx) => {
+      // lands a complete, valid row. Keyed by `(license, brand)`, so a save under
+      // one brand leaves another brand's appearance untouched.
+      const { updated, brandId } = await request.withTenant(async (tx) => {
+        const brandId = await resolveBrandId(tx, request.brandId);
         const row = await tx.widgetSettings.upsert({
-          where: { licenseId: tenant.licenseId },
+          where: { licenseId_brandId: { licenseId: tenant.licenseId, brandId } },
           create: {
             licenseId: tenant.licenseId,
+            brandId,
             primaryColor: DEFAULT_WIDGET_APPEARANCE.primary_color,
             position: DEFAULT_WIDGET_APPEARANCE.position,
             theme: DEFAULT_WIDGET_APPEARANCE.theme,
@@ -765,10 +786,10 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
           action: 'settings.widget_updated',
           metadata: { fields: Object.keys(body) },
         });
-        return row;
+        return { updated: row, brandId };
       });
 
-      return reply.send(serialiseWidget(updated));
+      return reply.send(serialiseWidget(updated, brandId));
     },
   );
 
@@ -1044,9 +1065,11 @@ function serialiseSecurity(
     maxConcurrentSessions: number | null;
     updatedAt: Date;
   } | null,
+  brandId: string,
 ) {
   const value = row ?? SECURITY_DEFAULTS;
   return {
+    brand_id: brandId,
     banned_customer_ips: [...value.bannedCustomerIps],
     file_sharing_enabled: value.fileSharingEnabled,
     allowed_file_types: [...value.allowedFileTypes],
@@ -1060,8 +1083,12 @@ function serialiseSecurity(
   };
 }
 
-function serialiseInbox(row: { chatTimeoutSeconds: number | null; updatedAt: Date } | null) {
+function serialiseInbox(
+  row: { chatTimeoutSeconds: number | null; updatedAt: Date } | null,
+  brandId: string,
+) {
   return {
+    brand_id: brandId,
     chat_timeout_seconds: row?.chatTimeoutSeconds ?? null,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
@@ -1081,8 +1108,10 @@ function serialiseWidget(
     poweredBy: boolean;
     updatedAt: Date;
   } | null,
+  brandId: string,
 ) {
   return {
+    brand_id: brandId,
     primary_color: row?.primaryColor ?? DEFAULT_WIDGET_APPEARANCE.primary_color,
     position: row?.position ?? DEFAULT_WIDGET_APPEARANCE.position,
     theme: row?.theme ?? DEFAULT_WIDGET_APPEARANCE.theme,

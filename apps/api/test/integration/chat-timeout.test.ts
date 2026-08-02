@@ -24,7 +24,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import { ChatTimeoutSweeper, type ChatTimeoutReport } from '../../src/services/chat/chat-timeout.js';
-import { ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import {
+  ownerClient,
+  seedDefaultBrand,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
 const HOUR = 3_600_000;
@@ -66,9 +72,15 @@ describe('chat timeout sweep (FR-MOD-08.7.3)', () => {
   }
 
   async function configureTimeout(t: TenantFixture, seconds: number | null): Promise<void> {
+    // inbox_settings is keyed by (license, brand) now — write the default brand's
+    // row, the one the brandless sweep resolves to via RLS.
+    const brand = await owner.brand.findFirstOrThrow({
+      where: { licenseId: t.licenseId, isDefault: true },
+      select: { id: true },
+    });
     await owner.inboxSettings.upsert({
-      where: { licenseId: t.licenseId },
-      create: { licenseId: t.licenseId, chatTimeoutSeconds: seconds },
+      where: { licenseId_brandId: { licenseId: t.licenseId, brandId: brand.id } },
+      create: { licenseId: t.licenseId, brandId: brand.id, chatTimeoutSeconds: seconds },
       update: { chatTimeoutSeconds: seconds },
     });
   }
@@ -138,6 +150,11 @@ describe('chat timeout sweep (FR-MOD-08.7.3)', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
+    // configureTimeout() writes each license's default brand inbox_settings row.
+    await Promise.all([
+      seedDefaultBrand(owner, fx.a.licenseId),
+      seedDefaultBrand(owner, fx.b.licenseId),
+    ]);
     seq = 0;
   });
 

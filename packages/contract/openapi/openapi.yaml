@@ -748,6 +748,10 @@ components:
       required: [id, domain, setup, status, connected_at, created_at, snippet]
       properties:
         id: { type: string, format: uuid }
+        brand_id:
+          type: string
+          format: uuid
+          description: The brand this site belongs to (Multibrand, PRD §5.3).
         domain:
           type: string
           description: Hostname only — lowercased, no scheme, port or path.
@@ -930,6 +934,10 @@ components:
           max_concurrent_sessions,
         ]
       properties:
+        brand_id:
+          type: string
+          format: uuid
+          description: The brand these settings belong to (Multibrand, PRD §5.3).
         banned_customer_ips:
           type: array
           description: >-
@@ -987,6 +995,10 @@ components:
         A stored value is always a positive integer.
       required: [chat_timeout_seconds, updated_at]
       properties:
+        brand_id:
+          type: string
+          format: uuid
+          description: The brand these settings belong to (Multibrand, PRD §5.3).
         chat_timeout_seconds:
           type: integer
           format: int32
@@ -1003,6 +1015,10 @@ components:
         values are baked into the install snippet and applied by the widget.
       required: [primary_color, position, theme, mobile_fullscreen, powered_by, updated_at]
       properties:
+        brand_id:
+          type: string
+          format: uuid
+          description: The brand this appearance belongs to (Multibrand, PRD §5.3).
         primary_color:
           type: string
           pattern: "^#[0-9a-fA-F]{6}$"

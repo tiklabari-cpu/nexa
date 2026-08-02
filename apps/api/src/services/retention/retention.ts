@@ -17,6 +17,14 @@
  *      without it. `cutoffFor` refuses a non-positive window, so the cutoff can
  *      never land at or after "now".
  *
+ * The audit log is the one table the sweep cannot prune through `nexa_app`: it
+ * is append-only to that role (INSERT/SELECT only, UPDATE/DELETE revoked), so
+ * its window is applied by a single SECURITY DEFINER function,
+ * `audit_prune_expired`. That function bypasses RLS, so there the age predicate
+ * is joined by an explicit per-tenant `license_id` predicate as the sole
+ * cross-tenant guard, and it refuses a null or not-yet-past cutoff; a dry-run
+ * counts under RLS and never calls it.
+ *
  * `dryRun` counts what *would* go without writing anything — no delete, no audit
  * entry — so an operator can see the blast radius before committing to it. It is
  * the default in the CLI; deletion takes an explicit `--apply`.
@@ -44,6 +52,8 @@ export interface TenantPruneResult {
   organizationId: string;
   threads: number;
   visits: number;
+  /** Audit-log entries pruned for this tenant (NFR-S12 30-day window). */
+  auditEntries: number;
 }
 
 export interface RetentionReport {
@@ -54,10 +64,10 @@ export interface RetentionReport {
   tenants: TenantPruneResult[];
   mailFiles: number;
   /**
-   * Audit log entries pruned. Always 0 for now — the audit window
-   * (`policy.auditDays`) is resolved and its cutoff computed, but the sweep
-   * does not delete audit rows yet; this is the report skeleton for the
-   * hard-delete that lands separately.
+   * Audit-log entries pruned across all tenants (NFR-S12: basic audit is kept
+   * for "the last 30 days" on every plan). Deleted through the SECURITY DEFINER
+   * `audit_prune_expired`, the one exception to the log's append-only grant —
+   * see `#pruneAudit`. Zero in a dry-run, which only counts.
    */
   auditEntries: number;
   totals: { tenants: number; threads: number; visits: number; mailFiles: number; auditEntries: number };
@@ -98,9 +108,7 @@ export class RetentionRunner {
     }
 
     const mailFiles = await this.#pruneMail(cutoffs.mail, dryRun);
-    // cutoffs.audit is resolved for parity with the other windows, but no audit
-    // rows are deleted yet — see RetentionReport.auditEntries.
-    const auditEntries = 0;
+    const auditEntries = results.reduce((sum, r) => sum + r.auditEntries, 0);
 
     return {
       dryRun,
@@ -148,16 +156,30 @@ export class RetentionRunner {
       ? await withTenant(this.#db, context, (tx) => this.#countVisits(tx, cutoffs.visits))
       : await this.#deleteInBatches(context, (tx) => this.#deleteVisitBatch(tx, cutoffs.visits));
 
+    // The audit log is append-only to `nexa_app` (no DELETE grant), so its
+    // window cannot be applied through `withTenant` like the tables above. A
+    // real run goes through the one SECURITY DEFINER hole, `audit_prune_expired`,
+    // whose in-function `license_id = …` predicate keeps the RLS-bypassing
+    // delete inside this tenant; a dry-run only counts, under RLS.
+    const auditEntries = dryRun
+      ? await withTenant(this.#db, context, (tx) => this.#countAudit(tx, cutoffs.audit))
+      : await this.#pruneAudit(context.licenseId, cutoffs.audit);
+
     // Recording the deletion (who, when, how much) is itself part of the
     // compliance requirement — and it is metadata, not the deleted data, so it
     // is retained. A run that removed nothing writes no entry, matching the rest
-    // of the audit trail (a no-op delete is not an event).
-    if (!dryRun && threads + visits > 0) {
+    // of the audit trail (a no-op delete is not an event). The audit prune runs
+    // before this entry, so the row that records the sweep is itself fresh and
+    // never inside the window it just applied.
+    if (!dryRun && threads + visits + auditEntries > 0) {
       await withTenant(this.#db, context, (tx) =>
         writeAuditEntry(
           tx,
           { licenseId: context.licenseId, actorId: null, actorType: 'system' },
-          { action: 'data.retention_pruned', metadata: { threads, visits, dry_run: false } },
+          {
+            action: 'data.retention_pruned',
+            metadata: { threads, visits, audit_entries: auditEntries, dry_run: false },
+          },
         ),
       );
     }
@@ -167,6 +189,7 @@ export class RetentionRunner {
       organizationId: tenant.organization_id,
       threads,
       visits,
+      auditEntries,
     };
   }
 
@@ -226,6 +249,31 @@ export class RetentionRunner {
     const rows = await tx.$queryRaw<Array<{ n: bigint }>>`
       SELECT count(*)::bigint AS n FROM visits
        WHERE started_at < ${cutoff}`;
+    return Number(rows[0]?.n ?? 0n);
+  }
+
+  /**
+   * Count this tenant's expired audit rows for a dry-run. RLS scopes the read to
+   * the current tenant, and — unlike the apply path — it never touches the
+   * SECURITY DEFINER function, so a dry-run has no way to delete.
+   */
+  async #countAudit(tx: TenantClient, cutoff: Date): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*)::bigint AS n FROM audit_log
+       WHERE created_at < ${cutoff}`;
+    return Number(rows[0]?.n ?? 0n);
+  }
+
+  /**
+   * Prune this tenant's expired audit rows through the one function permitted to
+   * delete from the append-only log. It runs SECURITY DEFINER and so bypasses
+   * RLS: the `licenseId` handed to it — not a tenant context — is what scopes the
+   * delete, and it refuses a null or `now()`-or-later cutoff. Called on the
+   * RLS-bound `nexa_app` connection, which holds EXECUTE but no table DELETE.
+   */
+  async #pruneAudit(licenseId: bigint, cutoff: Date): Promise<number> {
+    const rows = await this.#db.$queryRaw<Array<{ n: bigint }>>`
+      SELECT audit_prune_expired(${licenseId}, ${cutoff}) AS n`;
     return Number(rows[0]?.n ?? 0n);
   }
 

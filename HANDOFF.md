@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+### tm 92.8 — 08.9.7-h Append-only log'da 30-gün fiili budama (audit_prune_expired SECURITY DEFINER + retention sweep) — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-MAX. NFR-S12'nin "son 30 gün"ü artık fiilen uygulanıyor. `audit_log`
+  append-only (nexa_app'te UPDATE/DELETE REVOKE'lu) olduğundan pencere, `retention_list_tenants()`
+  desenini izleyen dar bir SECURITY DEFINER fonksiyonla açıldı: yeni migration
+  `20260802090000_audit_retention_window` → `audit_prune_expired(p_license_id BIGINT, p_cutoff
+  TIMESTAMPTZ) RETURNS BIGINT` (`plpgsql`, `SET search_path=public,pg_temp`); YALNIZ
+  `license_id=p_license_id AND created_at<p_cutoff` siler + sayı döner; `p_license_id`/`p_cutoff`
+  NULL ya da `p_cutoff>=now()` → **exception** (tüm-tabloyu-silme yolu yok); `REVOKE EXECUTE FROM
+  PUBLIC` + `GRANT EXECUTE TO nexa_app` — tablo DELETE yetkisi **verilmedi** (REVOKE aynen duruyor).
+  SECURITY DEFINER RLS'i atladığından tek cross-tenant savunma fonksiyon-içi lisans yüklemi.
+  `RetentionRunner` per-tenant döngüsüne bağlandı: dryRun RLS altında yalnız **sayar** (`#countAudit`,
+  silme yolu yok), apply `nexa_app` üzerinden fonksiyonu çağırır (`#pruneAudit`); sonuç
+  `data.retention_pruned` metadata'sına `audit_entries` + `report.auditEntries` toplamına yazılır
+  (iskeletin sabit 0'ı gerçek sayımla değişti); `run.ts` özeti audit sayacını basıyor.
+- **Doğrulama:** `db:migrate` (33 migration, yenisi uygulandı) + `db:check-drift` temiz (schema.prisma
+  değişmedi) · `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w test:unit` ✓ · `pnpm -w
+  test:integration` ✓ (**api 906**, +11: `retention.test.ts` 8→16, `audit-log.test.ts` 32→35;
+  contract-parity 5/5, mevcut 'log cannot be rewritten' regresyonsuz) · `pnpm -w build` ✓.
+- **Varsayımlar:** (1) İmza spec'te **2-arg sabit** (batch limit param'ı yok) → tek hedefli `DELETE`
+  kullanıldı; plpgsql `LOOP` tek transaction olduğundan iç-batch'in kilit/tx-boyutu faydası yok,
+  "batch'li" ifadesi runner'ın mevcut per-tenant döngüsünü kastediyor (en dar, en denetlenebilir
+  biçim). (2) `p_license_id IS NULL` de guard'a eklendi (fail-closed; spec yalnız cutoff'u sayıyordu).
+  (3) Yalnız audit budandığında da `data.retention_pruned` yazılır (silme bir olaydır; yeni entry
+  taze olduğundan asla re-count edilmez). **E2E uygulanmadı** — bu slice backend bakım fonksiyonu,
+  UI/E2E akışı yok (tm 92.6 -f ile aynı gerekçe); KK integration ile uçtan uca kanıtlandı.
+- **Sonraki pencereye not:** `08.9.7` hâlâ `◐`. Kalan: `-i/-j` audit ekranı · plan/tier kapısı
+  (entitlement mekanizması repoda hâlâ yok) · `-k` uçtan uca doğrulama (artık `-h` dahil tüm
+  bağımlılıkları `-j` hariç hazır). `audit_prune_expired`, retention'ın append-only log'daki tek
+  deliği — genişletmeden önce dar tutulmalı.
+
 ### tm 92.6 — 08.9.7-f Rol değişimi ucu (PUT /agents/{agentId}/role) + member.role_changed audit'i — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-MAX. NFR-S12'nin birebir saydığı 'rol değişimi' olayı artık üretilebilir: yeni

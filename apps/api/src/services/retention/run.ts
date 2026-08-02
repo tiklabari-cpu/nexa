@@ -39,7 +39,8 @@ async function main(): Promise<void> {
     const { totals } = report;
     process.stderr.write(
       `retention ${dryRun ? 'dry-run (nothing deleted; pass --apply to delete)' : 'applied'}: ` +
-        `${totals.threads} thread(s), ${totals.visits} visit(s), ${totals.mailFiles} mail file(s) ` +
+        `${totals.threads} thread(s), ${totals.visits} visit(s), ${totals.mailFiles} mail file(s), ` +
+        `${totals.auditEntries} audit entr${totals.auditEntries === 1 ? 'y' : 'ies'} ` +
         `across ${totals.tenants} tenant(s)\n`,
     );
   } finally {

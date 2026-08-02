@@ -17,6 +17,9 @@
  *   6. Each real sweep of a tenant records exactly one audit entry, attributed to
  *      the system, with the counts — the deletion's own paper trail.
  *   7. Outgoing mail files past the window are swept; recent ones are kept.
+ *   8. Audit-log entries past the 30-day window are pruned (NFR-S12) through the
+ *      one SECURITY DEFINER hole in the append-only log — which refuses a
+ *      null/not-past cutoff and scopes every delete to a single tenant.
  */
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -131,6 +134,17 @@ describe('retention sweep (NFR-C8)', () => {
     return visit.id;
   }
 
+  // Audit rows are planted as the owner (bypassing RLS) so a scenario can set
+  // `created_at` on either side of the window. `auth.login` is an arbitrary
+  // valid action; the sweep prunes by age, not by what the entry records.
+  async function seedAudit(t: TenantFixture, createdAt: Date): Promise<string> {
+    const row = await owner.auditLogEntry.create({
+      data: { licenseId: t.licenseId, actorType: 'system', action: 'auth.login', metadata: {}, createdAt },
+      select: { id: true },
+    });
+    return row.id;
+  }
+
   async function writeMail(name: string, sentAt: Date): Promise<void> {
     await writeFile(
       join(mailDir, name),
@@ -151,6 +165,8 @@ describe('retention sweep (NFR-C8)', () => {
   const visitCount = (t: TenantFixture) => owner.visit.count({ where: { licenseId: t.licenseId } });
   const threadExists = async (id: string) =>
     (await owner.thread.findUnique({ where: { id } })) !== null;
+  const auditExists = async (id: string) =>
+    (await owner.auditLogEntry.findUnique({ where: { id } })) !== null;
   const pruneEntries = (t: TenantFixture) =>
     owner.auditLogEntry.findMany({
       where: { licenseId: t.licenseId, action: 'data.retention_pruned' },
@@ -290,7 +306,8 @@ describe('retention sweep (NFR-C8)', () => {
       expect(report.dryRun).toBe(true);
       expect(report.totals.threads).toBeGreaterThanOrEqual(1);
       expect(report.totals.visits).toBeGreaterThanOrEqual(1);
-      // Audit window is resolved but nothing is pruned yet — report skeleton only.
+      // Nothing here is past the audit window, so the count is zero; the audit
+      // window has its own dedicated tests below.
       expect(report.auditEntries).toBe(0);
       expect(report.totals.auditEntries).toBe(0);
 
@@ -342,6 +359,132 @@ describe('retention sweep (NFR-C8)', () => {
       expect(applied.mailFiles).toBe(1);
       const remaining = await readdir(mailDir);
       expect(remaining).toEqual(['fresh-notification.json']);
+    });
+  });
+
+  // ==========================================================================
+  // Audit log window (NFR-S12: basic audit kept for "the last 30 days")
+  //
+  // The audit log is append-only to `nexa_app`, so this window is the one the
+  // sweep applies through the SECURITY DEFINER `audit_prune_expired` rather than
+  // a `withTenant` delete.
+  // ==========================================================================
+
+  describe('audit log entries past the window (NFR-S12)', () => {
+    it('deletes an entry older than 30 days and keeps one inside the window', async () => {
+      const old = await seedAudit(fx.a, daysAgo(31));
+      const recent = await seedAudit(fx.a, daysAgo(29));
+
+      const report = await runner().run({ dryRun: false });
+
+      // 31 days > 30-day window → gone; 29 days < window → kept. This is the
+      // literal "last 30 days" of NFR-S12.
+      expect(await auditExists(old)).toBe(false);
+      expect(await auditExists(recent)).toBe(true);
+
+      const a = report.tenants.find((r) => r.licenseId === fx.a.licenseId.toString());
+      expect(a?.auditEntries).toBe(1);
+      expect(report.totals.auditEntries).toBe(1);
+    });
+
+    it('dry-run counts expired audit rows but deletes none and writes no entry', async () => {
+      const old = await seedAudit(fx.a, daysAgo(400));
+
+      const report = await runner().run({ dryRun: true });
+
+      expect(report.auditEntries).toBe(1);
+      expect(report.totals.auditEntries).toBe(1);
+      expect(await auditExists(old)).toBe(true); // nothing deleted
+      expect((await pruneEntries(fx.a)).length).toBe(0); // and no paper trail
+    });
+
+    it('is idempotent — a second run finds no expired audit rows', async () => {
+      await seedAudit(fx.a, daysAgo(400));
+
+      const first = await runner().run({ dryRun: false });
+      const firstA = first.tenants.find((r) => r.licenseId === fx.a.licenseId.toString());
+      expect(firstA?.auditEntries).toBe(1);
+
+      const second = await runner().run({ dryRun: false });
+      const secondA = second.tenants.find((r) => r.licenseId === fx.a.licenseId.toString());
+      expect(secondA?.auditEntries).toBe(0);
+      expect(second.totals.auditEntries).toBe(0);
+    });
+
+    it('records the audit count in the tenant’s data.retention_pruned metadata', async () => {
+      await seedClosedThread(fx.a, daysAgo(400)); // a thread is pruned too
+      await seedAudit(fx.a, daysAgo(400));
+      await seedAudit(fx.a, daysAgo(400));
+
+      await runner().run({ dryRun: false });
+
+      const entries = await pruneEntries(fx.a);
+      expect(entries.length).toBe(1);
+      expect(entries[0]?.metadata).toMatchObject({ threads: 1, audit_entries: 2, dry_run: false });
+    });
+  });
+
+  // ==========================================================================
+  // The prune function is a narrow, guarded hole — not a table wipe
+  //
+  // SECURITY DEFINER bypasses RLS, so the in-function `license_id` predicate is
+  // the only cross-tenant defence and the age guard the only thing between it and
+  // a wipe. Both are tested directly against the function.
+  // ==========================================================================
+
+  describe('audit_prune_expired refuses to wipe the live log', () => {
+    it('cross-tenant: pruning license A leaves an identical row in B intact', async () => {
+      const inA = await seedAudit(fx.a, daysAgo(400));
+      const inB = await seedAudit(fx.b, daysAgo(400));
+      const cutoff = cutoffFor(POLICY.auditDays, new Date());
+
+      // Call the definer function directly for A only. It bypasses RLS, so the
+      // in-function license predicate — nothing else — must keep it out of B.
+      const rows = await appRole.$queryRaw<Array<{ n: bigint }>>`
+        SELECT audit_prune_expired(${fx.a.licenseId}, ${cutoff}) AS n`;
+      expect(Number(rows[0]?.n)).toBe(1);
+
+      expect(await auditExists(inA)).toBe(false);
+      expect(await auditExists(inB)).toBe(true);
+    });
+
+    it('refuses a null cutoff without deleting anything', async () => {
+      const recent = await seedAudit(fx.a, daysAgo(1));
+      await expect(
+        appRole.$queryRaw`SELECT audit_prune_expired(${fx.a.licenseId}, NULL::timestamptz) AS n`,
+      ).rejects.toThrow();
+      expect(await auditExists(recent)).toBe(true);
+    });
+
+    it('refuses a cutoff at or after now, so it cannot select live rows', async () => {
+      const old = await seedAudit(fx.a, daysAgo(400));
+      const recent = await seedAudit(fx.a, daysAgo(1));
+
+      await expect(
+        appRole.$queryRaw`SELECT audit_prune_expired(${fx.a.licenseId}, now()) AS n`,
+      ).rejects.toThrow();
+      const future = new Date(Date.now() + DAY);
+      await expect(
+        appRole.$queryRaw`SELECT audit_prune_expired(${fx.a.licenseId}, ${future}) AS n`,
+      ).rejects.toThrow();
+
+      // The refusal is total: nothing was deleted, not even the genuinely old row.
+      expect(await auditExists(old)).toBe(true);
+      expect(await auditExists(recent)).toBe(true);
+    });
+
+    it('does not open a table-level DELETE for nexa_app', async () => {
+      const old = await seedAudit(fx.a, daysAgo(400));
+      // A row the function *would* prune still cannot be removed by a direct
+      // DELETE: the append-only grant is unchanged; the function is the only door.
+      await expect(
+        withTenant(
+          appRole,
+          ctx(fx.a),
+          (tx) => tx.$executeRaw`DELETE FROM audit_log WHERE id = ${old}::uuid`,
+        ),
+      ).rejects.toThrow(/permission denied/i);
+      expect(await auditExists(old)).toBe(true);
     });
   });
 });

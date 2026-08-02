@@ -804,6 +804,68 @@ describe('audit log writer (NFR-S12)', () => {
   });
 
   // =========================================================================
+  // The 30-day retention window (NFR-S12) does not weaken append-only
+  //
+  // Pruning old entries is the one delete the log allows, and only through the
+  // SECURITY DEFINER `audit_prune_expired`. These tests sit next to "the log
+  // cannot be rewritten" to show that adding that hole left the append-only
+  // guarantee intact: the function respects the window, refuses a wiping cutoff,
+  // and never becomes a table-level DELETE for the application role.
+  // =========================================================================
+
+  describe('pruning does not make the log writable', () => {
+    const DAY = 86_400_000;
+    const daysAgo = (n: number) => new Date(Date.now() - n * DAY);
+
+    async function seedAt(licenseId: bigint, createdAt: Date): Promise<string> {
+      const row = await owner.auditLogEntry.create({
+        data: { licenseId, actorType: 'system', action: 'auth.login', metadata: {}, createdAt },
+        select: { id: true },
+      });
+      return row.id;
+    }
+
+    it('prunes only rows past the cutoff, through the one guarded function', async () => {
+      const old = await seedAt(fx.a.licenseId, daysAgo(40));
+      const recent = await seedAt(fx.a.licenseId, daysAgo(1));
+
+      const rows = await appRole.$queryRaw<Array<{ n: bigint }>>`
+        SELECT audit_prune_expired(${fx.a.licenseId}, ${daysAgo(30)}) AS n`;
+      expect(Number(rows[0]?.n)).toBe(1);
+
+      // Past the window is gone; the last 30 days are untouched.
+      expect(await owner.auditLogEntry.findUnique({ where: { id: old } })).toBeNull();
+      expect(await owner.auditLogEntry.findUnique({ where: { id: recent } })).not.toBeNull();
+    });
+
+    it('cannot be used to erase the live log: a non-past cutoff is refused', async () => {
+      const recent = await seedAt(fx.a.licenseId, daysAgo(1));
+      // now() and null both raise — there is no argument that selects live rows.
+      await expect(
+        appRole.$queryRaw`SELECT audit_prune_expired(${fx.a.licenseId}, now()) AS n`,
+      ).rejects.toThrow();
+      await expect(
+        appRole.$queryRaw`SELECT audit_prune_expired(${fx.a.licenseId}, NULL::timestamptz) AS n`,
+      ).rejects.toThrow();
+      expect(await owner.auditLogEntry.findUnique({ where: { id: recent } })).not.toBeNull();
+    });
+
+    it('leaves the table-level DELETE revoke intact — nexa_app still cannot delete', async () => {
+      const old = await seedAt(fx.a.licenseId, daysAgo(40));
+      // Even a row the function would prune cannot be removed by a direct DELETE:
+      // the append-only grant is unchanged; the function is the only door.
+      await expect(
+        withTenant(
+          appRole,
+          contextA(),
+          (tx) => tx.$executeRaw`DELETE FROM audit_log WHERE id = ${old}::uuid`,
+        ),
+      ).rejects.toThrow(/permission denied/i);
+      expect(await owner.auditLogEntry.findUnique({ where: { id: old } })).not.toBeNull();
+    });
+  });
+
+  // =========================================================================
   // Cross-tenant invisibility (mandatory negative test)
   // =========================================================================
 

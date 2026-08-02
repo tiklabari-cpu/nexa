@@ -12,7 +12,12 @@
 import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { licenseChannel, type BusEnvelope, type PushAudience } from '@nexa/types';
+import {
+  composerStateKey,
+  licenseChannel,
+  type BusEnvelope,
+  type PushAudience,
+} from '@nexa/types';
 import {
   createConversation,
   createCustomer,
@@ -896,6 +901,192 @@ describe('rtm gateway', () => {
       await settle();
       expect(other.pushes('agent_conflict_warning')).toHaveLength(0);
       expect(JSON.stringify(other.frames)).not.toContain(conversation.chatId);
+    });
+
+    // -----------------------------------------------------------------------
+    // 08.6.3-conflict-g — end-to-end verification of the whole path: the
+    // lifecycle including the *drop*, wire-shape parity with the web reader,
+    // resilience of the 02.9 indicator to an 08.6.3 fault, and the cross-tenant
+    // mirror. No new behaviour — these only prove the built path holds together.
+    // -----------------------------------------------------------------------
+
+    it('drops the warning once one agent stops composing', async () => {
+      const conversation = await createConversation(db, { tenant: fx.a });
+      const agent = await loginComposer(fx.a, fx.a.agentAccountId);
+      const ownerAgent = await loginComposer(fx.a, fx.a.ownerAccountId, ['chats--all:rw']);
+
+      // Both compose → both warned. (The arrival itself is asserted above; here
+      // it is only the setup for the release half of the lifecycle.)
+      await agent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await ownerAgent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await Promise.all([
+        agent.waitForPush('agent_conflict_warning'),
+        ownerAgent.waitForPush('agent_conflict_warning'),
+      ]);
+      const seenByAgent = agent.pushes('agent_conflict_warning').length;
+      const seenByOwner = ownerAgent.pushes('agent_conflict_warning').length;
+
+      // The owner stops. Their registry entry is removed, so the chat is no
+      // longer contended.
+      const released = await ownerAgent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: false,
+      });
+      expect(released.success).toBe(true);
+
+      // The remaining agent keeps composing — now alone. A fresh keystroke must
+      // not re-raise the warning: the conflict genuinely cleared server-side, it
+      // did not merely lapse on the client's idle timer.
+      await agent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await settle();
+
+      expect(agent.pushes('agent_conflict_warning')).toHaveLength(seenByAgent);
+      expect(ownerAgent.pushes('agent_conflict_warning')).toHaveLength(seenByOwner);
+    });
+
+    it('emits a payload shaped exactly as the web client reads it', async () => {
+      // Shape parity with apps/web/src/features/inbox/useInbox.ts, the
+      // `agent_conflict_warning` case: it reads `chat_id`, `detected_at` and an
+      // `agents` array of `{ agent_id, since }`, all strings, and discards the
+      // whole warning if any is the wrong type. Nowhere else asserts the emitted
+      // frame and that reader agree, so if they ever drift the banner silently
+      // stops showing. Prove it at the wire, against the real published frame.
+      const conversation = await createConversation(db, { tenant: fx.a });
+      const agent = await loginComposer(fx.a, fx.a.agentAccountId);
+      const ownerAgent = await loginComposer(fx.a, fx.a.ownerAccountId, ['chats--all:rw']);
+
+      await agent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await ownerAgent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      const warning = await agent.waitForPush('agent_conflict_warning');
+
+      // The web store's reader, copied verbatim in intent, so a drift on either
+      // side fails this test rather than quietly disabling the banner.
+      const applyPushReads = (payload: Record<string, unknown>) => {
+        const chatId = payload['chat_id'];
+        const rawAgents = payload['agents'];
+        const detectedAt = payload['detected_at'];
+        if (
+          typeof chatId !== 'string' ||
+          !Array.isArray(rawAgents) ||
+          typeof detectedAt !== 'string'
+        ) {
+          return null;
+        }
+        const agents: Array<{ agentId: string; since: string }> = [];
+        for (const entry of rawAgents) {
+          const record = entry as Record<string, unknown> | null;
+          const agentId = record?.['agent_id'];
+          const since = record?.['since'];
+          if (typeof agentId !== 'string' || typeof since !== 'string') return null;
+          agents.push({ agentId, since });
+        }
+        return { chatId, detectedAt, agents };
+      };
+
+      const read = applyPushReads(warning.payload);
+      // Not null means the web reader keeps the warning rather than dropping it.
+      expect(read).not.toBeNull();
+      expect(read!.chatId).toBe(conversation.chatId);
+      expect(read!.agents.map((a) => a.agentId).sort()).toEqual(
+        [fx.a.agentAccountId, fx.a.ownerAccountId].sort(),
+      );
+      // Every instant the store shows and times off of must parse.
+      expect(Number.isNaN(new Date(read!.detectedAt).getTime())).toBe(false);
+      for (const a of read!.agents) {
+        expect(Number.isNaN(new Date(a.since).getTime())).toBe(false);
+      }
+      // `thread_id` rides the same wire contract even though applyPush ignores
+      // it; assert it too so the emitted shape stays a superset of the type.
+      expect(typeof warning.payload['thread_id']).toBe('string');
+      expect(warning.payload['thread_id']).toBe(conversation.threadId);
+    });
+
+    it('keeps send_typing_indicator succeeding when conflict registration fails', async () => {
+      // The composer registry is a Lua script over a Redis sorted set. Poison its
+      // key with a plain string so the script's first command raises WRONGTYPE —
+      // a stand-in for any Redis fault on the register path. The 02.9 typing
+      // indicator rides above 08.6.3 and must not break with it: the dispatcher
+      // guard swallows the fault, the request still succeeds, and no phantom
+      // warning goes out.
+      const conversation = await createConversation(db, { tenant: fx.a });
+      const agent = await loginComposer(fx.a, fx.a.agentAccountId);
+      const key = composerStateKey(fx.a.licenseId, conversation.chatId);
+      await redis.set(key, 'not-a-sorted-set');
+
+      try {
+        const response = await agent.request('send_typing_indicator', {
+          chat_id: conversation.chatId,
+          is_typing: true,
+        });
+        // The indicator itself succeeded despite the detector blowing up.
+        expect(response.success).toBe(true);
+        expect(response.payload['is_typing']).toBe(true);
+
+        await settle();
+        // A failed registration cannot manufacture a warning either.
+        expect(agent.pushes('agent_conflict_warning')).toHaveLength(0);
+      } finally {
+        await redis.del(key);
+      }
+    });
+
+    it('is inert for a second tenant replaying the same flow on the same chat id', async () => {
+      // The cross-tenant test above proves tenant B never *receives* A's warning.
+      // This is the mirror: B running the whole compose flow itself, on the exact
+      // same chat id, is turned away as if the chat did not exist and registers
+      // nothing — so A's own conflict still fires untouched.
+      const conversation = await createConversation(db, { tenant: fx.a });
+
+      const bAgent = await loginComposer(fx.b, fx.b.agentAccountId);
+      const bOwner = await loginComposer(fx.b, fx.b.ownerAccountId, ['chats--all:rw']);
+
+      // Both of B's agents "compose" on A's chat id — each answered not_found,
+      // exactly as a missing chat, so nothing lands in B's registry.
+      for (const socket of [bAgent, bOwner]) {
+        const response = await socket.request('send_typing_indicator', {
+          chat_id: conversation.chatId,
+          is_typing: true,
+        });
+        expect(response.success).toBe(false);
+        expect((response.payload['error'] as { type: string }).type).toBe('not_found');
+      }
+
+      // A's own two agents then contend for the chat and are warned as usual,
+      // proving B's attempts left A's registry untouched.
+      const aAgent = await loginComposer(fx.a, fx.a.agentAccountId);
+      const aOwner = await loginComposer(fx.a, fx.a.ownerAccountId, ['chats--all:rw']);
+      await aAgent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await aOwner.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await Promise.all([
+        aAgent.waitForPush('agent_conflict_warning'),
+        aOwner.waitForPush('agent_conflict_warning'),
+      ]);
+
+      await settle();
+      // Neither of B's sockets ever heard a conflict warning.
+      expect(bAgent.pushes('agent_conflict_warning')).toHaveLength(0);
+      expect(bOwner.pushes('agent_conflict_warning')).toHaveLength(0);
     });
   });
 });

@@ -13,6 +13,46 @@
 
 ## Task log (newest-first)
 
+### tm 91.7 — 08.6.3-conflict-g Uçtan uca doğrulama: iki-ajan çakışma senaryosu + cross-tenant/negatif süiti + kanıt — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-XHIGH — yalnız **doğrulama**, yeni davranış/özellik yüzeyi YOK (yeni kaynak
+  dosyası değişmedi; sadece test eklendi). -b/-c/-d/-e/-f kendi katmanlarına bakıyordu; -g yolun
+  BÜTÜNÜNÜ tek yerde kanıtlar. `apps/rtm/test/integration/rtm.test.ts` `conflict warning` describe'ına
+  4 yeni `it` eklendi (5→9): (1) **tam yaşam döngüsü + drop** — iki ajan yazar → çift
+  `agent_conflict_warning` → biri `is_typing=false` → kalan ajan tek başına yeniden yazınca YENİ uyarı
+  gelmez (kayıt sunucuda gerçekten `ZREM`'lendi; istemci idle-timer'ına bağlı değil). (2) **şekil
+  paritesi** — RTM'in soket üzerinden yayınladığı GERÇEK payload, web `useInbox.applyPush`'un
+  (`apps/web/src/features/inbox/useInbox.ts` `agent_conflict_warning` case) okuduğu alanlarla birebir
+  doğrulanır: reader mantığı testte kopyalanıp gerçek frame'e uygulanır, `chat_id`/`agents[].agent_id`/
+  `agents[].since`/`detected_at` string + `thread_id` süperset. Bu, -g'nin var oluş nedeniydi:
+  RTM-payload↔web-shape paritesini doğrulayan başka yer yoktu. (3) **02.9 dayanıklılık** — composer
+  registry anahtarı test istemcisiyle WRONGTYPE'a çevrilip (`SET` string) Lua script'i patlatılır →
+  `send_typing_indicator` yine `success:true` döner, hayalet uyarı çıkmaz (dispatcher try/catch).
+  (4) **cross-tenant ayna** — ikinci lisansın iki soketi aynı chatId ile tüm akışı koşar → her ikisi
+  `not_found`, 0 push; bu sırada A'nın kendi iki-ajan çakışması normal ateşler (B'nin denemeleri A'nın
+  registry'sine dokunmadı). API devir uçtan-uca + cross-tenant fence + registry-hata dayanıklılığı
+  zaten -d'nin `apps/api/test/integration/agent-conflict.test.ts` (5 test) dosyasında mevcut; -g bunu
+  yeniden yazmadı (audit-close: erken teslim edilmiş dilim). `tenant-isolation.test.ts` saf DB/RLS
+  süiti (HTTP/Redis yok) — çakışma yüzeyi yok; DOSYALAR'da referans desen olarak listelenmiş,
+  cross-tenant çakışma iddiası mimari olarak agent-conflict.test.ts + rtm.test.ts'e ait, oraya eklendi.
+- **Doğrulama (tam DoD kapısı, exit 0):** `pnpm -w typecheck` yeşil (11/11) · `pnpm -w lint` yeşil (8/8)
+  · **test (unit+integration, `turbo run test --filter='!@nexa/e2e' --concurrency=1` — memory
+  nexa-test-gate-parallel-db uyarınca paketler arası SERİ):** yeşil, API 61 dosya/**1108 test**, RTM
+  dahil tüm paketler; izole RTM `conflict warning` süiti 9/9 (yeni 4 + eski 5). `pnpm -w build` yeşil
+  (7/7). `pnpm -w test:e2e` yeşil — **61 passed**, ilgili `inbox-panel.spec.ts › multi-agent composing
+  conflict › a conflict banner appears...` (KK "inbox'ta şeridin görünmesi") dahil.
+- **Varsayımlar:** (1) `pnpm -w test`'i paralel değil `--concurrency=1` ile koştum — paket `test`
+  script'i unit+integration'ı birlikte çalıştırır, paralel turbo paylaşımlı Postgres'i yarıştırır
+  (tm 91.6 notu + memory); serileştirme aynı kapının doğru sürümü, integration'ı da kapsar.
+  (2) Redis-hata enjeksiyonu için sunucunun iç Redis'ine seam yok → composer anahtarını dışarıdan
+  WRONGTYPE'a çevirmek Lua register yolunu gerçekten patlatan, kaynağa dokunmayan temiz enjeksiyon.
+- **Sonraki pencereye not:** `08.6.3-conflict` özelliği **a→g TAMAMLANDI**; PLAN.md §5.0 satırı `◐`→`✅`,
+  Faz-2 sayacı `22 ⬜/5 ✅` → `21 ⬜/6 ✅` (üst-tablo satır 22 + §5.0 satır 1100, öncü-damga sayımı;
+  D69'daki naif ham-glif tuzağına düşülmedi). PLAN §5.2/§5.3.2 dilim tabloları öncü damga taşımaz
+  (D69), dokunulmadı. Panelin naif sayacı hâlâ satır 1108 gömülü `✅` glifi yüzünden +1 ✅ sapabilir
+  (bilinen §D68/D69 yanlış-pozitifi, benim değişikliğim değil). Bir sonraki bağımsız v2 kalemi §5.2'den
+  seçilebilir (08.6.3 skills-routing veya başka ⬜).
+
 ### tm 91.6 — 08.6.3-conflict-f Realtime kablolama: agent_conflict_warning aboneliği + applyPush case'i + banner montajı — done — 2026-08-02 UTC
 
 - **Yapıldı:** SONNET-XHIGH — çakışma uyarısının son bacağı, -c'nin (RTM publisher) ürettiği

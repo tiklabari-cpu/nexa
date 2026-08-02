@@ -3866,12 +3866,12 @@
             "description": "(1) apps/web/src/features/inbox/conflict.ts — typing.ts'in birebir deseninde zustand store: `byChat: Record<chatId, {agents: {agent_id, since}[], detectedAt}>`, `note(chatId, agents)`, `clear(chatId)` ve TYPING_IDLE_MS muadili bir idle temizleyici (karşı taraf yazmayı bırakınca uyarı kendiliğinden kaybolur). (2) ConflictBanner.tsx — TypingIndicator.tsx deseninde `role='status'` + `aria-live='polit",
             "details": "08.6.3-conflict-e — Çakışma uyarısı istemci state'i + ConflictBanner bileşeni (salt görünüm)  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.6.3 (+ NFR-A11Y)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 kaynak + 2 test dosyası. (2) Güvenlik sınırı yok — yetki sunucuda (-b/-c/-d) verildi; bu katman yalnız gelen payload'ı ekrana çevirir, ağ çağrısı yok. (3) Eşzamanlılık akıl yürütmesi yok — tek yönlü store yazımı. (4) Kopyalanacak desen ismen var: typing.ts (zustand + timer temizleme) ve TypingIndicator.tsx (role=status + null render). (5) Kontrat değişikliği yok. (6) Kabul kriteri mekanik: şerit görünür / null döner.\nNEDEN AÇIK: apps/web/src/features/inbox dizin listesinde çakışma için hiçbir dosya yok (typing.ts / TypingIndicator.tsx / CopilotPanel.tsx / TicketGrid.tsx … var; conflict* YOK). Uyarıyı gösterecek bir yüzey bulunmuyor.\nKAPSAM: (1) apps/web/src/features/inbox/conflict.ts — typing.ts'in birebir deseninde zustand store: `byChat: Record<chatId, {agents: {agent_id, since}[], detectedAt}>`, `note(chatId, agents)`, `clear(chatId)` ve TYPING_IDLE_MS muadili bir idle temizleyici (karşı taraf yazmayı bırakınca uyarı kendiliğinden kaybolur). (2) ConflictBanner.tsx — TypingIndicator.tsx deseninde `role='status'` + `aria-live='polite'` şerit: 'Bu sohbette N ajan aynı anda yazıyor' + ajan kimlikleri; çakışma yoksa `null` döner (layout zıplamaz). Hiçbir ağ çağrısı, hiçbir push aboneliği YOK (o -f'de).\nDOSYALAR: apps/web/src/features/inbox/conflict.ts · apps/web/src/features/inbox/conflict.test.ts · apps/web/src/features/inbox/ConflictBanner.tsx · apps/web/src/features/inbox/ConflictBanner.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/inbox/typing.ts (zustand store + timers Map + TYPING_IDLE_MS ile kendiliğinden temizleme) · apps/web/src/features/inbox/TypingIndicator.tsx (role='status' + aria-live='polite' + çakışma yoksa null render + motion-safe animasyon) · apps/web/src/features/inbox/typing.test.ts · apps/web/src/features/inbox/TypingIndicator.test.tsx\nKK (birebir): \"| Routing (gelişmiş) | Skills-based routing, supervision + takeover, çoklu-ajan çakışma uyarısı |\" | \"KK-türetilmiş: 'Ajan, aynı sohbette başka bir ajanın da yazdığını ekranda görür; çakışma bitince uyarı kendiliğinden kaybolur; uyarı ekran okuyucuya nazikçe (polite) duyurulur.' — Türetme gerekçesi -b ile aynı; a11y payı depo deseninden (TypingIndicator aria-live='polite') alındı.\"\nKK DOĞRULAMA: conflict.test.ts + ConflictBanner.test.tsx — (i) iki ajanlı payload → şerit görünür, her iki ajan görünür ('başka bir ajanın da yazdığını görür'); (ii) boş/tek ajan → `null` render; (iii) `clear` veya idle süresi sonrası kaybolur ('kendiliğinden kaybolur'); (iv) render edilen düğümde `role='status'` ve `aria-live='polite'` var (a11y maddesi).\nKAPSAM DIŞI: push aboneliği / applyPush kablolaması / InboxPage montajı (-f) · uyarıyı kalıcı kapatma (dismiss) — v2 kapsamında değil · supervision/takeover UI · widget/müşteri tarafı görünürlüğü (uyarı yalnız ajan yüzeyi)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: iki ajanlı payload → şerit + ajan listesi render · unit (empty state/negatif): boş veya tek ajan → null render · unit: clear + idle süre aşımı → şerit kaybolur · unit (a11y): role='status' + aria-live='polite' · not: güvenlik yüzeyi yok (salt görünüm, ağ yok) → cross-tenant iddiası -c/-d'de kapatıldı, burada uygulanmaz",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "91",
-            "updatedAt": "2026-08-02T02:20:22.465Z"
+            "updatedAt": "2026-08-02T02:29:08.721Z"
           },
           {
             "id": 6,
@@ -3903,7 +3903,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T02:20:22.465Z"
+        "updatedAt": "2026-08-02T02:29:08.721Z"
       },
       {
         "id": "92",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T02:20:22.465Z",
+      "lastModified": "2026-08-02T02:29:08.721Z",
       "taskCount": 99,
       "completedCount": 71,
       "tags": [

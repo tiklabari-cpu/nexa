@@ -3982,12 +3982,12 @@
             "description": "Contract-first: agents.yaml'a PUT /agents/{agentId}/role + openapi.yaml kaydı + re-bundle. Route: config { scopes: ['agents--all:rw'], minimumRole: 'admin' } çift kapı; guard'lar (suspension ucunun deseninin aynısı, rol için): aktör agent principal olmalı; roleAtLeast(actorRole,'admin'); kendi rolünü değiştiremez; hedef owner ise reddedilir (owner devri kapsam dışı); yeni rol aktörün rolünü AŞAMAZ",
             "details": "08.9.7-f — Rol değişimi ucu (PUT /agents/{agentId}/role) + member.role_changed audit'i  [OPUS-MAX]\n\nPRD: NFR-S12 (+ NFR-S3 RBAC, US-11 KK3)\nETİKET GEREKÇESİ: OPUS-MAX: yetki yükseltme (privilege escalation) sınırı — kim kimi hangi role taşıyabilir, owner nasıl korunur, kendi rolünü değiştirme nasıl engellenir. Koşul 2 ihlali ve yanlış kararın pahalı olduğu tipik durum (bir admin kendini owner yapabilirse tüm RBAC çöker). Çekirdek BÖLÜNMEZ: guard'lar tek akıl yürütmedir.\nNEDEN AÇIK: Depoda rol değiştiren hiçbir uç yok: agents.ts'in tüm route'ları routing-status (51), notification-preferences (104), liste (131), suspension (161) ve groups (233); rol yalnız davet gövdesinde (account-lifecycle.ts:41 role: z.enum(['admin','agent'])) ve suspension audit metadata'sında (agents.ts:223 metadata:{role:targetRole}) geçiyor — suspend askıya alır, rol değiştirmez. Yani NFR-S12'nin birebir saydığı 'rol değişimi' olayı üretilebilir DEĞİL: AUDIT_ACTIONS'ta karşılığı da yok.\nKAPSAM: Contract-first: agents.yaml'a PUT /agents/{agentId}/role + openapi.yaml kaydı + re-bundle. Route: config { scopes: ['agents--all:rw'], minimumRole: 'admin' } çift kapı; guard'lar (suspension ucunun deseninin aynısı, rol için): aktör agent principal olmalı; roleAtLeast(actorRole,'admin'); kendi rolünü değiştiremez; hedef owner ise reddedilir (owner devri kapsam dışı); yeni rol aktörün rolünü AŞAMAZ (roleAtLeast(actorRole, nextRole)); hedefin mevcut rolü aktörün üstündeyse reddedilir; no-op (aynı rol) hiçbir şey yazmaz. AUDIT_ACTIONS'a 'member.role_changed'; entry aynı tx içinde, target 'account:<id>', metadata { from, to }.\nDOSYALAR: apps/api/src/routes/agents.ts · apps/api/src/services/audit/audit-log.ts · apps/api/src/services/audit/audit-log.test.ts · packages/contract/openapi/paths/agents.yaml · packages/contract/openapi/openapi.yaml · apps/api/test/integration/agents-suspension.test.ts · apps/api/test/integration/audit-log.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/agents.ts:161-231 (PUT /agents/:agentId/suspension — scope+rol çift kapısı, owner koruması, kendi kendine uygulama yasağı, roleAtLeast karşılaştırması, no-op'ta entry yazmama, tx içinde writeAuditEntry) · apps/api/src/services/auth/principal.ts (roleAtLeast + ROLE_RANK) · apps/api/test/integration/agents-suspension.test.ts (aynı guard ailesinin negatif test seti)\nKK (birebir): \"Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30 gün) tüm planlarda\" | \"KK3: Audit log (login, rol değişimi, veri silme, webhook değişimi) tutulur (§7). — kaynak: US-11, satır 325\"\nKK DOĞRULAMA: test/integration/audit-log.test.ts: admin bir üyeyi agent→admin taşır, tam olarak bir member.role_changed entry'si (from/to metadata'sıyla) yazılır → KK'nın 'rol değişimi' maddesi birebir kanıtlanır. Guard'lar agents-suspension.test.ts komşusunda negatif testlerle kanıtlanır.\nKAPSAM DIŞI: Owner devri (ownership transfer) — ayrı ve daha ağır bir invaryant (son-owner kuralı), bu alt-görevde reddedilir · Bot/AI hesaplarının rolü · Ekranda rol değiştirme UI'ı (Team ekranı) — bu turda yok, uç API seviyesinde kalır · Davet rolü akışı (account-lifecycle.ts, zaten audit'li)\nSÖZLEŞME: YENİ: PUT /agents/{agentId}/role — paths/agents.yaml + openapi.yaml kaydı + re-bundle. UYARI: OpenAPI'ye eklenmezse contract-parity.test.ts KIRILIR (belgesiz route yönü).\nMIGRATION: yok (agent_memberships.role kolonu ve rol CHECK'i zaten mevcut)\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): ajan rolündeki kullanıcı → 403 · negatif (önce): kendi rolünü değiştirme denemesi → 403 · negatif (önce): owner'ın rolünü değiştirme denemesi → 403 · negatif (önce): admin'in birini owner'a yükseltme denemesi (kendi rolünün üstü) → 403 · negatif (önce): kendinden üst rolde birini değiştirme denemesi → 403 · cross-tenant (önce): başka lisansın ajanı → 404 (id enumerasyonu yok) ve log'a entry yazılmaz · integration: no-op (aynı rol) → 200 ama entry YOK · integration (pozitif): geçerli düşürme/yükseltme → tam 1 entry + üyelik rolü gerçekten değişti · integration: contract-parity yeşil",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3
             ],
             "parentId": "92",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T10:02:21.186Z"
           },
           {
             "id": 7,
@@ -4059,7 +4059,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T09:41:29.244Z"
+        "updatedAt": "2026-08-02T10:02:21.186Z"
       },
       {
         "id": "93",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T09:41:29.244Z",
+      "lastModified": "2026-08-02T10:02:21.187Z",
       "taskCount": 99,
       "completedCount": 72,
       "tags": [

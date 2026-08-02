@@ -55,6 +55,8 @@ tags:
     description: Subscription, usage metering, trial.
   - name: Webhooks
     description: Outbound webhooks — signed, SSRF-guarded event delivery.
+  - name: Audit
+    description: The security trail — who did what, read-only, Owner/Admin only.
 
 paths:
   /health:
@@ -319,6 +321,9 @@ paths:
     $ref: "./paths/reports.yaml#/invoiceDownload"
   /billing/payment-method:
     $ref: "./paths/reports.yaml#/paymentMethod"
+
+  /audit-log:
+    $ref: "./paths/audit-log.yaml#/auditLog"
 
 components:
   securitySchemes:
@@ -1132,6 +1137,39 @@ components:
           description: Counted from conversations, not read from a stored total.
         tickets_count: { type: integer }
         last_activity_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    AuditLogEntry:
+      type: object
+      description: |
+        One append-only entry in the workspace's security trail (NFR-S12). The
+        `metadata` is deliberately PII-minimal — field names, counts and roles,
+        never values or secrets — so the trail can be retained safely.
+      required: [id, action, actor_type, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        action:
+          type: string
+          description: The security-relevant action, e.g. `auth.login`, `member.suspended`.
+        actor_id:
+          type: string
+          nullable: true
+          description: The acting account/bot/customer id, or null when unknown.
+        actor_type:
+          type: string
+          enum: [agent, bot, customer, system]
+        target:
+          type: string
+          nullable: true
+          description: The object acted on, as `<kind>:<id>` (e.g. `token:…`).
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Non-sensitive detail — field names, counts, roles.
+        ip:
+          type: string
+          nullable: true
+          description: Source address when recorded; null when deliberately omitted.
         created_at: { type: string, format: date-time }
 
     TrafficRespondent:

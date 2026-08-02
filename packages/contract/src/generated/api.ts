@@ -2938,6 +2938,35 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/audit-log': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List audit log entries
+     * @description The workspace's security trail, newest first. Owner/Admin only, and each
+     *     workspace sees only its own entries (RLS) — a cross-tenant entry is never
+     *     returned, by id or otherwise.
+     *
+     *     Defaults to the last 30 days, the window the PRD keeps in every plan.
+     *     Explicit filters (action, actor, date range) are a separate surface; this
+     *     endpoint is the base read. Paginated by opaque keyset cursor rather than
+     *     offset: entries arrive constantly and an offset page would shift under the
+     *     reader and silently skip rows. `limit` above the maximum is clamped, not
+     *     rejected.
+     */
+    get: operations['listAuditLog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3601,6 +3630,31 @@ export interface components {
       last_activity_at?: string | null;
       /** Format: date-time */
       created_at?: string;
+    };
+    /**
+     * @description One append-only entry in the workspace's security trail (NFR-S12). The
+     *     `metadata` is deliberately PII-minimal — field names, counts and roles,
+     *     never values or secrets — so the trail can be retained safely.
+     */
+    AuditLogEntry: {
+      /** Format: uuid */
+      id: string;
+      /** @description The security-relevant action, e.g. `auth.login`, `member.suspended`. */
+      action: string;
+      /** @description The acting account/bot/customer id, or null when unknown. */
+      actor_id?: string | null;
+      /** @enum {string} */
+      actor_type: 'agent' | 'bot' | 'customer' | 'system';
+      /** @description The object acted on, as `<kind>:<id>` (e.g. `token:…`). */
+      target?: string | null;
+      /** @description Non-sensitive detail — field names, counts, roles. */
+      metadata?: {
+        [key: string]: unknown;
+      };
+      /** @description Source address when recorded; null when deliberately omitted. */
+      ip?: string | null;
+      /** Format: date-time */
+      created_at: string;
     };
     /**
      * @description Who a visitor is currently talking to (FR-MOD-03.1.3 "Chatting with").
@@ -9459,6 +9513,38 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PaymentMethod'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listAuditLog: {
+    parameters: {
+      query?: {
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+        limit?: components['parameters']['Limit'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of audit log entries, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['AuditLogEntry'][];
+            /** @description Opaque cursor for the next page; absent on the last. */
+            next_page_id?: string;
+          };
         };
       };
       400: components['responses']['BadRequest'];

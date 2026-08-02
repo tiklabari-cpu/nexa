@@ -13,6 +13,34 @@
 
 ## Task log (newest-first)
 
+### tm 92.1 — 08.9.7-a Audit log okuma kontratı + `audit_log--all:ro` scope'u + GET /audit-log (keyset, son 30 gün) — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-XHIGH — audit trail'in ilk **okuma** yüzeyi (yazıcı tm 23'ten beri vardı, okuma yoktu).
+  Contract-first: yeni `GET /audit-log` — `packages/contract/openapi/paths/audit-log.yaml` + `openapi.yaml`
+  (path kaydı + `AuditLogEntry` şeması + `Audit` tag; re-bundle → 114 path). Yeni scope `audit_log--all:ro`
+  (`packages/types/src/scopes.ts`; guard `scopes.test.ts` NEXA_ADDED 6→7 = 65 scope; `principal.ts`
+  ADMIN_SCOPES'a eklendi → owner/admin varsayılan alır). Okuma servisi
+  `apps/api/src/services/audit/audit-log-reader.ts`: keyset (created_at DESC, id DESC, base64url cursor),
+  filtresiz varsayılan **son 30 gün** (`(license_id, created_at DESC)` indeksi, tam tablo taraması yok),
+  limit **kırpılır** (reddedilmez), **RLS'ye güvenir** (ekstra license filtresi yok). Route
+  `apps/api/src/routes/audit-log.ts`: `{ scopes: ['audit_log--all:ro'], minimumRole: 'admin' }` **çift kapı**;
+  `server.ts`'e register.
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w build` ✅ · `@nexa/types` unit (scopes
+  65) ✅ · yeni `apps/api/test/integration/audit-log-read.test.ts` (9: negatif-önce rol/scope kapısı +
+  cross-tenant + 30 gün + keyset + clamp + şekil) + `contract-parity` ✅ · tam `@nexa/api` integration süiti
+  ✅ (izole koşu). **UYARI (öğrenildi):** iki DB-süitini **paralel** koşarsan (ör. `test:integration` arka
+  planda + `test:unit` ön planda) `copilot.test.ts` / rtm `conflict.test.ts` paylaşılan Postgres+Redis'te
+  **yarışır ve yanlış-negatif** verir — süitleri **seri** koş. Bu turda ilk paralel koşu 2 copilot + 3
+  conflict yanlış-negatifi verdi; her ikisi de izole koşuda yeşil (15/15, 6/6).
+- **Varsayımlar:** `ip` kolonu okuma yanıtında owner/admin'e döner (forensic değeri; yalnız owner/admin görür).
+  Tekil kayıt `GET /audit-log/{id}` ve filtreler KAPSAM DIŞI (-b/detay). `total` alanı yok — keyset yeterli,
+  30-gün penceresinde count maliyetinden kaçınıldı. Yeni ApiError tipi eklenmedi (403 = mevcut `authorization`).
+- **Sonraki pencereye not:** 08.9.7 **◐ (kısmi)** — bu tur yalnız okuma çekirdeği. Kalan: filtreler -b (bu -a'ya
+  bağlı) · olaylar -c/-e/-f · budama -h · retention -g · ekran -i/-j · plan/tier kapısı · uçtan uca -k.
+  **Bayat yorum:** `ip-allowlist.test.ts` sat. 359-364 + HANDOFF tm 80.9 "GET /audit-log endpoint'i YOK" diyor —
+  artık yanlış; test davranışı (RLS okuma yolu) hâlâ geçerli, yalnız yorum bayat. Kapsam disiplini gereği o
+  dosyaya dokunulmadı; -i/-b turunda güncellenebilir.
+
 ### tm 91.7 — 08.6.3-conflict-g Uçtan uca doğrulama: iki-ajan çakışma senaryosu + cross-tenant/negatif süiti + kanıt — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-XHIGH — yalnız **doğrulama**, yeni davranış/özellik yüzeyi YOK (yeni kaynak

@@ -95,6 +95,12 @@ export const SCOPES = [
   'webhooks.state:ro',
   'webhooks.state:rw',
   'webhooks.configuration:rw',
+  // Audit log. A Nexa addition: the source platform (v2-03 §8.5) has no audit
+  // resource, but Nexa keeps a security trail (NFR-S12) and needs a scope to
+  // gate reading it. `--all:ro` — tenant-wide, read-only: an audit log is
+  // append-only, so there is no `:rw`, and it is never scoped narrower than the
+  // whole workspace. Paired with `minimumRole: admin` at the route (PLAN §D).
+  'audit_log--all:ro',
   // Reports / Billing — do not follow the `--` pattern
   'reports_read',
   'billing_manage',

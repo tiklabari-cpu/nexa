@@ -110,6 +110,10 @@ export const ADMIN_SCOPES: Scope[] = [
   'channels--all:rw',
   'access_rules:rw',
   'properties.configuration:rw',
+  // Reading the security trail (NFR-S12) is an owner/admin power — the route
+  // pairs this scope with `minimumRole: admin`, and an ordinary agent gets
+  // neither.
+  'audit_log--all:ro',
   'reports_read',
   'billing_manage',
 ];

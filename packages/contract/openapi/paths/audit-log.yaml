@@ -1,0 +1,52 @@
+# Audit log — the security trail (NFR-S12).
+#
+# The `audit_log` table has had a single writer since slice 23 (every
+# security-relevant action funnels through `writeAuditEntry`); this is its first
+# reader. The trail records who did what — logins, role changes, data deletion,
+# webhook and security changes — and the PRD keeps "temel audit … son 30 gün"
+# in every plan. The read surface itself, though, is derived, not stated: the KK
+# says the log is *kept*, not who may read it. It is gated to Owner/Admin
+# (v2-04 §RBAC: Audit log → Owner ✓, Admin ✓) and, like every tenant surface,
+# scoped by RLS so a workspace only ever sees its own entries (NFR-S5).
+#
+# Read-only and append-only: there is no write, edit or delete here — an actor
+# who could rewrite the log could erase the evidence of what they did.
+
+auditLog:
+  get:
+    tags: [Audit]
+    operationId: listAuditLog
+    summary: List audit log entries
+    description: |
+      The workspace's security trail, newest first. Owner/Admin only, and each
+      workspace sees only its own entries (RLS) — a cross-tenant entry is never
+      returned, by id or otherwise.
+
+      Defaults to the last 30 days, the window the PRD keeps in every plan.
+      Explicit filters (action, actor, date range) are a separate surface; this
+      endpoint is the base read. Paginated by opaque keyset cursor rather than
+      offset: entries arrive constantly and an offset page would shift under the
+      reader and silently skip rows. `limit` above the maximum is clamped, not
+      rejected.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: A page of audit log entries, newest first.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/AuditLogEntry" }
+                next_page_id:
+                  type: string
+                  description: Opaque cursor for the next page; absent on the last.
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

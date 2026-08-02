@@ -20,6 +20,9 @@ const NEXA_ADDED_SCOPES = [
   // first-class resource (FR-MOD-08.5.4-.6), so Nexa adds channel scopes.
   'channels--all:ro',
   'channels--all:rw',
+  // The source platform has no audit resource; Nexa keeps a security trail
+  // (NFR-S12) and gates reading it with a scope of its own (PLAN §D).
+  'audit_log--all:ro',
 ];
 
 const SOURCE_SCOPE_COUNT = 58;

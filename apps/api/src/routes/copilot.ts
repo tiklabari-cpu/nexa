@@ -16,6 +16,7 @@ import { ENHANCE_MODES, enhanceText, summariseConversation } from '@nexa/ai-mock
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CopilotService } from '../services/ai/copilot-service.js';
 import { KnowledgeService } from '../services/ai/knowledge-service.js';
 import { crawl } from '../services/ai/web-crawler.js';
@@ -118,7 +119,19 @@ export default async function copilotRoutes(
     { config: { scopes: KB_WRITE } },
     async (request, reply) => {
       const id = parse(uuid, request.params.sourceId);
-      const deleted = await request.withTenant((tx) => copilot.deleteSource(tx, id));
+      const deleted = await request.withTenant(async (tx) => {
+        const count = await copilot.deleteSource(tx, id);
+        // Only record a delete that actually happened — a 404 (nothing matched)
+        // is not an event worth an entry.
+        if (count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'data.deleted',
+            target: `copilot_source:${id}`,
+            metadata: { kind: 'copilot_source' },
+          });
+        }
+        return count;
+      });
       if (deleted === 0) throw ApiError.notFound('Knowledge source not found.');
       return reply.status(204).send();
     },

@@ -13,6 +13,33 @@
 
 ## Task log (newest-first)
 
+### tm 92.5 — 08.9.7-e İçerik ve entegrasyon silme uçlarında data.deleted audit'i — done — 2026-08-02 UTC
+
+- **Yapıldı:** SONNET-XHIGH — 08.9.7-d'de tanımlanan `data.deleted` eylemi beş içerik/entegrasyon
+  silme ucuna uygulandı: `DELETE /websites/:id`, `DELETE /skills/:id`, `DELETE
+  /knowledge-sources/:id` (AI-agent), `DELETE /copilot/knowledge/:id`, `DELETE /settings/apps/:id`.
+  Her biri kendi mevcut `request.withTenant(tx)` bloğu içinde, servisin döndürdüğü `count` (veya
+  route'un kendi `deleteMany` sonucu) `> 0` iken `writeAuditEntry` çağırıyor — `canned_response`
+  deseninin (settings.ts:568-591) birebir kopyası. `target=<kind>:<id>` (website / skill /
+  knowledge_source / copilot_source / app_installation), `metadata` YALNIZ `{ kind }`.
+- **Doğrulama:** `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ · `apps/api`
+  `pnpm test:unit` (19 dosya/262 test) ✓ · `apps/api` `pnpm test:integration` (tek fork/seri koşum,
+  gerçek Postgres'e karşı — [[nexa-test-gate-parallel-db]]) 43 dosya/882 test yeşil —
+  `test/integration/audit-log.test.ts` 25→31 test (+6: beş ucun her biri pozitif tam-1-entry +
+  no-op-404 hiç yazmaz; tek cross-tenant temsilci senaryo — website — hiçbir log'a düşmez). Root
+  `contract-parity.test.ts` de aynı koşuda yeşil (bu task OpenAPI'ye dokunmadı). E2E: grep
+  `apps/e2e/tests/*.spec.ts` bu beş silme ucuna dokunan bir test döndürmedi (playbook.spec.ts ve
+  settings.spec.ts başka akışları kapsıyor) — task'ın kapsadığı akış saf API+DB, E2E ilgisiz
+  ([[nexa-early-delivered-slices-audit]] ile aynı gerekçe: dokunulmamış yüzeye E2E koşulmaz).
+- **Varsayımlar:** `app_installation` hedefinin `<id>`'si `appId` (katalog slug'ı, ör. `hubspot`) —
+  `AppInstallation` satırının kendi UUID'si değil; bu tenant içinde kurulumu tekil olarak
+  tanımlayan kimlik budur (route zaten yalnız bunu alıyor).
+- **Sonraki pencereye not:** 08.9.7'nin kalan v2 payı değişmedi (bu task -e'yi kapattı): rol-değişimi
+  olayı `-f` (OPUS-MAX) · 30-gün budama `-h` (OPUS-MAX, append-only SECURITY DEFINER) · ekran
+  `-i`/`-j` · uçtan uca doğrulama `-k`. PLAN.md §5.0 satır 1121 güncellendi (evidence eklendi,
+  durum `◐` kalıyor — henüz -f/-h/-i/-j/-k açık). Faz-2 dağılım sayacı (satır 22/1100) bu görevle
+  değişmedi çünkü 08.9.7'nin durum damgası değişmedi (zaten `◐` idi, öyle kalıyor).
+
 ### tm 92.4 — 08.9.7-d data.deleted eylemi + ayarlar ailesi hedefli silmelerinde audit — done — 2026-08-02 UTC
 
 - **Yapıldı:** SONNET-XHIGH — bu pencere önceki bir pencerenin commit'lenmemiş WIP'ini (§D70

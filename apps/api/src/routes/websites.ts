@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import type { Env } from '../config/env.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { WebsiteService, WEBSITE_SETUPS } from '../services/websites/website-service.js';
 
 const addBody = z.object({
@@ -114,7 +115,19 @@ export default async function websiteRoutes(
     async (request, reply) => {
       const id = parse(uuid, request.params.websiteId);
 
-      const removed = await request.withTenant((tx) => websites.remove(tx, id));
+      const removed = await request.withTenant(async (tx) => {
+        const count = await websites.remove(tx, id);
+        // Only record a delete that actually happened — a 404 (nothing matched)
+        // is not an event worth an entry.
+        if (count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'data.deleted',
+            target: `website:${id}`,
+            metadata: { kind: 'website' },
+          });
+        }
+        return count;
+      });
       if (removed === 0) throw ApiError.notFound('Website not found.');
 
       return reply.status(204).send();

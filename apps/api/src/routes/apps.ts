@@ -14,6 +14,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { AppService } from '../services/apps/app-service.js';
 
 const callbackBody = z.object({
@@ -78,7 +79,20 @@ export default async function appRoutes(
     { config: { scopes: ['access_rules:rw'] } },
     async (request, reply) => {
       const tenant = request.tenant();
-      const removed = await request.withTenant((tx) => apps.disconnect(tx, tenant, request.params.appId));
+      const appId = request.params.appId;
+      const removed = await request.withTenant(async (tx) => {
+        const count = await apps.disconnect(tx, tenant, appId);
+        // Only record a delete that actually happened — a 404 (nothing matched)
+        // is not an event worth an entry.
+        if (count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'data.deleted',
+            target: `app_installation:${appId}`,
+            metadata: { kind: 'app_installation' },
+          });
+        }
+        return count;
+      });
       // Nothing removed means no such connection in this tenant — 404 keeps that
       // indistinguishable from another tenant's (NFR-S5).
       if (removed === 0) throw ApiError.notFound('App not found.');

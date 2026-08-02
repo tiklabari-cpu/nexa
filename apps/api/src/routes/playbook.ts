@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { compileInstruction, validateSteps } from '@nexa/ai-mock';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { KnowledgeService } from '../services/ai/knowledge-service.js';
 import { crawl } from '../services/ai/web-crawler.js';
 import { SkillEngine } from '../services/ai/skill-engine.js';
@@ -271,6 +272,15 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       const id = parse(uuid, request.params.skillId);
       const deleted = await request.withTenant(async (tx) => {
         const { count } = await tx.skill.deleteMany({ where: { id } });
+        // Only record a delete that actually happened — a 404 (nothing matched)
+        // is not an event worth an entry.
+        if (count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'data.deleted',
+            target: `skill:${id}`,
+            metadata: { kind: 'skill' },
+          });
+        }
         return count;
       });
       if (deleted === 0) throw ApiError.notFound('Skill not found.');
@@ -443,6 +453,15 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         // Chunks cascade with the source; leaving them would keep answering
         // from text the admin believes they deleted.
         const { count } = await tx.knowledgeSource.deleteMany({ where: { id } });
+        // Only record a delete that actually happened — a 404 (nothing matched)
+        // is not an event worth an entry.
+        if (count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'data.deleted',
+            target: `knowledge_source:${id}`,
+            metadata: { kind: 'knowledge_source' },
+          });
+        }
         return count;
       });
       if (deleted === 0) throw ApiError.notFound('Knowledge source not found.');

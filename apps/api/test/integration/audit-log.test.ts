@@ -87,6 +87,7 @@ describe('audit log writer (NFR-S12)', () => {
         'canned_responses--all:rw',
         'tags--all:rw',
         'tickets--all:rw',
+        'agents-bot--all:rw',
       ],
     });
   });
@@ -549,6 +550,156 @@ describe('audit log writer (NFR-S12)', () => {
       expect(await count('data.deleted', fx.a.licenseId)).toBe(beforeA);
       expect(await count('data.deleted', fx.b.licenseId)).toBe(beforeB);
       const byOwner = await server.del(`/settings/canned-responses/${mine.id}`, auth(adminToken));
+      expect(byOwner.statusCode).toBe(204);
+      expect(await count('data.deleted', fx.a.licenseId)).toBe(beforeA + 1);
+    });
+  });
+
+  // =========================================================================
+  // Content and integration deletes (data.deleted, 08.9.7-e)
+  // =========================================================================
+
+  describe('a targeted content/integration delete records exactly one data.deleted entry', () => {
+    it('records a website being deleted (and not a no-op delete)', async () => {
+      const created = (
+        await server.post('/websites', { domain: 'audit-e.example' }, auth(adminToken))
+      ).json() as { id: string };
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/websites/${created.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`website:${created.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'website' });
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/websites/${created.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records an AI-agent skill being deleted (and not a no-op delete)', async () => {
+      const skill = (
+        await server.post('/skills', { name: 'audit-e-skill' }, auth(adminToken))
+      ).json() as { id: string };
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/skills/${skill.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`skill:${skill.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'skill' });
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/skills/${skill.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records an AI-agent knowledge source being deleted (and not a no-op delete)', async () => {
+      const agent = await owner.aiAgent.create({
+        data: { licenseId: fx.a.licenseId, kind: 'ai_agent', name: 'Ada' },
+        select: { id: true },
+      });
+      const source = (
+        await server.post(
+          '/knowledge-sources',
+          { ai_agent_id: agent.id, name: 'audit-e-source', type: 'article', content: 'gone soon' },
+          auth(adminToken),
+        )
+      ).json() as { id: string };
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/knowledge-sources/${source.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`knowledge_source:${source.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'knowledge_source' });
+      // The deleted source's own text never reaches the append-only log.
+      expect(JSON.stringify(entry?.metadata)).not.toContain('gone soon');
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/knowledge-sources/${source.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records a copilot knowledge source being deleted (and not a no-op delete)', async () => {
+      const source = (
+        await server.post(
+          '/copilot/knowledge',
+          { name: 'audit-e-copilot', content: 'gone soon too' },
+          auth(adminToken),
+        )
+      ).json() as { id: string };
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/copilot/knowledge/${source.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`copilot_source:${source.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'copilot_source' });
+      expect(JSON.stringify(entry?.metadata)).not.toContain('gone soon too');
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/copilot/knowledge/${source.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records an app being disconnected (and not a no-op disconnect)', async () => {
+      const APP = 'hubspot';
+      const started = await server.post(`/settings/apps/${APP}/oauth/start`, {}, auth(adminToken));
+      expect(started.statusCode).toBe(200);
+      const { state } = started.json() as { state: string };
+      const connected = await server.post(
+        `/settings/apps/${APP}/oauth/callback`,
+        { state, code: 'mock-auth-code' },
+        auth(adminToken),
+      );
+      expect(connected.statusCode).toBe(200);
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/settings/apps/${APP}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`app_installation:${APP}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'app_installation' });
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/settings/apps/${APP}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it("a cross-tenant content delete writes to no one's log", async () => {
+      const mine = (
+        await server.post('/websites', { domain: 'audit-e-cross.example' }, auth(adminToken))
+      ).json() as { id: string };
+
+      // A tenant-B admin holding the write scope aims at tenant A's record id.
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['access_rules:rw'],
+      });
+
+      const beforeA = await count('data.deleted', fx.a.licenseId);
+      const beforeB = await count('data.deleted', fx.b.licenseId);
+      const res = await server.del(`/websites/${mine.id}`, auth(tokenB));
+      expect(res.statusCode).toBe(404);
+
+      // RLS matched nothing, so neither log gained an entry — and A's record is
+      // untouched, still there for its own owner to remove and record.
+      expect(await count('data.deleted', fx.a.licenseId)).toBe(beforeA);
+      expect(await count('data.deleted', fx.b.licenseId)).toBe(beforeB);
+      const byOwner = await server.del(`/websites/${mine.id}`, auth(adminToken));
       expect(byOwner.statusCode).toBe(204);
       expect(await count('data.deleted', fx.a.licenseId)).toBe(beforeA + 1);
     });

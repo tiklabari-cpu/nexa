@@ -3310,13 +3310,13 @@
             "description": "ADR-05 contract-first, TEK PENCEREDE: kontrat + route birlikte (zorunlu — parity iki yönlü). (1) `packages/contract/openapi/paths/brands.yaml`: `GET/POST /brands`, `GET/PATCH/DELETE /brands/{brandId}` — `websites.yaml`'ın iki-bloklu şeklinin birebir eşi. (2) `openapi.yaml`'a `Brand` şeması + Error enum'a `brand_not_found`. (3) `packages/types/src/scopes.ts`'e `brands--all:ro` / `brands--all:rw` + ",
             "details": "MULTIBRAND-d — `/brands` CRUD kontratı + route + `brands--all` scope + `brand_not_found` hata tipi  [OPUS-XHIGH]\n\nPRD: §5.3-Marka (Multibrand) + NFR-S5\nETİKET GEREKÇESİ: OPUS-XHIGH: yeni YETKİLİ endpoint ailesi + YENİ scope tanımı + rol eşlemesi — kullanıcı kuralı birebir: 'yeni bir yetkili endpoint eklemek, mevcut scope'u genişletmek EN AZ OPUS-XHIGH olur; güvenlik işi asla sonnet'e verilmez'. Koşul 2 ihlali. MAX değil: izolasyon çekirdeği -b'de kapandı, burada kurulmuş context tüketiliyor ve CRUD şekli `websites.ts`'ten kopyalanıyor.\nNEDEN AÇIK: `apps/api/src/routes/` altında 28 route dosyası var (channels.ts, campaigns.ts, settings.ts, websites.ts dahil) ama `brands.ts` veya `organizations.ts` YOK — grep 0. `packages/contract/openapi/paths/` altında 23 path dosyası var, `brands.yaml` YOK — grep 0. `packages/types/src/scopes.ts` içinde marka scope'u yok. En yakın CRUD analog `websites.ts` (123 satır) marka değil yalnız domain kaydı tutuyor.\nKAPSAM: ADR-05 contract-first, TEK PENCEREDE: kontrat + route birlikte (zorunlu — parity iki yönlü). (1) `packages/contract/openapi/paths/brands.yaml`: `GET/POST /brands`, `GET/PATCH/DELETE /brands/{brandId}` — `websites.yaml`'ın iki-bloklu şeklinin birebir eşi. (2) `openapi.yaml`'a `Brand` şeması + Error enum'a `brand_not_found`. (3) `packages/types/src/scopes.ts`'e `brands--all:ro` / `brands--all:rw` + rol varsayılan eşlemesi (owner/admin yazar, agent okur). (4) `packages/types/src/errors.ts`: `ERROR_TYPES` + `ERROR_STATUS` (İKİ AYRI YER) → `brand_not_found: 404`. (5) `packages/types/src/scopes.test.ts` sayaçları (`SCOPES` uzunluğu + `ERROR_TYPES` 24+N). (6) `apps/api/src/routes/brands.ts` — `websites.ts` deseni; varsayılan marka SİLİNEMEZ; markaya bağlı satır varsa silme reddi; duplicate slug → 409. (7) `server.ts`'e route kaydı. (8) re-bundle + regen.\nDOSYALAR: packages/contract/openapi/paths/brands.yaml · packages/contract/openapi/openapi.yaml · packages/types/src/scopes.ts · packages/types/src/scopes.test.ts · packages/types/src/errors.ts · apps/api/src/routes/brands.ts · apps/api/src/server.ts · apps/api/test/integration/brands.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/websites.ts (TAM CRUD şekli: zod parse helper, ApiError.validation, isUniqueViolation→409, cross-tenant 404 gerekçesi) · packages/contract/openapi/paths/websites.yaml (iki-bloklu path dosyası: koleksiyon + tekil, 401/403/404/429 response referansları) · apps/api/test/integration/websites.test.ts (CRUD + cross-tenant integration kurgusu)\nKK (birebir): \"KK-türetilmiş: «Marka oluştur / listele / yeniden adlandır / sil çalışır; başka lisansın markası ne listede görünür ne de id ile erişilebilir (404); varsayılan marka silinemez; aynı lisansta aynı slug'a sahip ikinci marka reddedilir (409).» — Türetme gerekçesi: PRD §5.3'te KK sütunu yok (kk_yetersiz=true); kriter 'tek lisansta çok marka' kapsam hücresinden + `websites` CRUD KK deseninden türetildi.\" | \"Destek (birebir, PRD §5.3-Marka, satır 415 ham kapsam hücresi): «Multibrand; 100+ entegrasyon; command palette AI komutları»\"\nKK DOĞRULAMA: Yeni `apps/api/test/integration/brands.test.ts` — CRUD döngüsü (POST 201 → GET listede → PATCH ad değişir → DELETE 204) [KK maddesi 1]; cross-tenant negatif ÖNCE: B lisansının brandId'siyle GET/PATCH/DELETE → 404 ve listede görünmez [KK maddesi 2]; varsayılan markayı DELETE → 4xx `not_allowed` [KK maddesi 3]; aynı slug ikinci kez POST → 409 [KK maddesi 4]; `brands--all` scope'u olmayan token → 403. `contract-parity.test.ts` YEŞİL (yaml+route aynı pencerede geldiği için). `packages/types/src/scopes.test.ts` yeşil (sayaçlar güncellendi).\nKAPSAM DIŞI: UI (-e/-f/-g) · marka bazlı ajan atama/yetkisi (açık soru 3) · marka logosu yükleme akışı (mevcut `uploads.ts` yüzeyi — ayrı kalem) · marka silinince bağlı verinin taşınması/arşivlenmesi (varsayım: bağlı satır varsa silme reddi)\nSÖZLEŞME: YENİ PATH'LER: `POST /brands`, `GET /brands`, `GET /brands/{brandId}`, `PATCH /brands/{brandId}`, `DELETE /brands/{brandId}` → `packages/contract/openapi/paths/brands.yaml` + `openapi.yaml`'a `Brand` şeması ve `brand_not_found` error enum girdisi. ZORUNLU: OpenAPI'ye eklenip RE-BUNDLE edilmeli, aksi halde `contract-parity.test.ts` KIRILIR — ve test İKİ YÖNLÜ olduğu için yaml'ı route'suz eklemek de kırar; ikisi aynı pencerede. TUZAK (MEMORY 'Error-type additions'): yeni ApiError tipi `packages/types/src/errors.ts`'te İKİ YERE (ERROR_TYPES + ERROR_STATUS) + `scopes.test.ts` sayacına + openapi error enum'una eklenip regen edilmezse test kırılır.\nMIGRATION: yok — tablo -a'da, brand_id kolonları -b/-c'de oluşturuldu; bu alt-görev yalnız API yüzeyi.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (ÖNCE): cross-tenant — başka lisansın brandId'si ile GET/PATCH/DELETE → 404 · negatif (ÖNCE): varsayılan marka silme reddi · negatif: duplicate slug → 409 · negatif: `brands--all` scope'suz token → 403 · integration: CRUD döngüsü (POST/GET/PATCH/DELETE) · contract-parity (iki yönlü) yeşil · unit: ERROR_STATUS eksiksizliği + SCOPES/ERROR_TYPES sayacları (scopes.test.ts)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               2
             ],
             "parentId": "78",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T16:56:12.406Z"
           },
           {
             "id": 5,
@@ -3375,7 +3375,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T13:34:19.122Z"
+        "updatedAt": "2026-08-02T16:56:12.406Z"
       },
       {
         "id": "79",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T13:34:19.123Z",
+      "lastModified": "2026-08-02T16:56:12.406Z",
       "taskCount": 99,
       "completedCount": 73,
       "tags": [

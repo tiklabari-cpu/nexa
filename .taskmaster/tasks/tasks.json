@@ -1620,13 +1620,13 @@
             "description": "`breakdownByChannel(tx, licenseId, from, to)` — `threads t` → (soft) `channel_messages cm` üzerinden chat başına TEK kanal türetilir; join koşulu HER ZAMAN `cm.license_id = t.license_id AND cm.chat_id = t.chat_id` (iki kilit birden). Kanal seçimi: chat'in en ESKİ `direction='inbound'` satırının `channel_type`'ı; hiç satır yoksa `channelLabel(null)` → 'website' (07.5-c helper'ı). Mevcut `SPLIT_COUN",
             "details": "07.5-d — Kanal boyutu agregasyon çekirdeği — license_id-kilitli soft-FK join + 'website' fallback  [OPUS-MAX]\n\nPRD: FR-MOD-07.5 (+ NFR-S4 tenant izolasyonu, NFR-S3 scope zorlaması, NFR-P2)\nETİKET GEREKÇESİ: OPUS-MAX: koşul 2 ihlali — TENANT İZOLASYON SINIRI. `channel_messages.chat_id` FK'sız soft-reference (schema.prisma birebir: \"`chat_id` is a soft reference (no FK)\"); ham SQL join'i `license_id` eşleşmesiyle kilitlenmezse başka bir tenant'ın aynı chat_id'li satırı bu lisansın chat'ini yanlış kanala sokabilir — RLS'e körü körüne güvenilemez, join koşulu açıkça doğrulanmalı. Ayrıca bir chat'in birden fazla channel_message satırı olabilir → \"hangi kanal\" seçimi bir invariant kararı. Çekirdek bölünmez: join koşulu, RLS davranışı ve kanal seçimi tek akıl yürütmedir.\nNEDEN AÇIK: Olgu: reports.ts'de `channel_type` / `channel_messages` HİÇ geçmiyor (grep 0) — kanal boyutu için sıfır tüketici. Thread/Chat üzerinde `channel_type` kolonu yok (schema.prisma). Veri yalnız `channel_messages`'ta ve oraya YALNIZ `apps/api/src/services/channels/channel-service.ts:342` `record()` yazıyor; `CHANNEL_TYPES = ['messenger','twilio','whatsapp']` (channel-adapter.ts:29) → native web sohbetleri hiç satır üretmiyor. Sorgu ham `$queryRaw` olacağı için açık license filtresi zorunlu.\nKAPSAM: `breakdownByChannel(tx, licenseId, from, to)` — `threads t` → (soft) `channel_messages cm` üzerinden chat başına TEK kanal türetilir; join koşulu HER ZAMAN `cm.license_id = t.license_id AND cm.chat_id = t.chat_id` (iki kilit birden). Kanal seçimi: chat'in en ESKİ `direction='inbound'` satırının `channel_type`'ı; hiç satır yoksa `channelLabel(null)` → 'website' (07.5-c helper'ı). Mevcut `SPLIT_COUNTS` (reports.ts:117-123) AYNEN yeniden kullanılır — kanal kırılımı Overview/fatura ile asla ayrışmaz (ADR-09). Handler'a `by_channel`; route scope'u `reports_read` DEĞİŞMEZ. Toplam invariantı: SUM(by_channel.chats) === toplam chats (her chat tam bir kovada).\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/test/integration/reports-billing.test.ts · apps/api/test/integration/tenant-isolation.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts:677-698 — `by_agent`'ın LEFT JOIN accounts + SPLIT_COUNTS + GROUP BY bloğu: dış tabloya join ederken license filtresini koruma deseni · apps/api/src/lib/tenant.ts — `withTenant` / `set_config` (SET LOCAL) ile RLS bağlamı: ham SQL'in hangi bağlamda koştuğu · apps/api/test/integration/tenant-isolation.test.ts — cross-tenant sızıntı iddia deseni\nKK (birebir): \"Boyutlu kırılım\" | \"KK-türetilmiş: \"Kanal boyutu: her sohbet tam olarak bir kanal kovasına düşer (adaptör kanalı yoksa 'website'); satırların chats toplamı pencere toplamına EŞİTTİR (ne eksik ne çift sayım); başka lisansın kanal mesajı hiçbir satırı etkilemez.\" — PRD KK sütunu tek kelimelik; tam-kapsayıcılık ve izolasyon kriterleri NFR-S4 ile ve mevcut şema invariant cümlesiyle türetildi.\"\nKK DOĞRULAMA: reports-billing.test.ts: (1) CROSS-TENANT ÖNCE — B lisansına, A lisansındaki bir chat ile AYNI chat_id'yi taşıyan `channel_messages` satırı yazılır; A'nın `/reports/breakdown` yanıtında o chat hâlâ 'website' kovasında kalır, B'nin kanalı görünmez (join kilidi kanıtlanır). (2) messenger/whatsapp/twilio inbound'u olan chat'ler doğru kovada. (3) SUM(by_channel.chats) === by_day toplam chats. (4) `reports_read` olmayan token → 403.\nKAPSAM DIŞI: Takım boyutu (07.5-e) · Kanal bazlı yanıt süresi / SLA metrikleri · email→ticket akışının kanal kırılımına dahil edilmesi (email-inbound.ts chat değil ticket üretir) · channel_messages'a FK constraint eklemek · UI (07.5-h) ve CSV (07.5-f)\nSÖZLEŞME: yok (alan 07.5-a'da eklendi). Yeni route YOK — mevcut GET /api/v1/reports/breakdown genişletiliyor, path pariteesi etkilenmez; yine de bundle 07.5-a'da güncellenmiş olmalı yoksa contract-parity kırılır.\nMIGRATION: yok (indeks 07.5-c'de)\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF + CROSS-TENANT ÖNCE (bu depoda negatifler pozitiflerden önce yazılır ve kırmızı görülür): yabancı license_id'li aynı-chat_id satırı sızmaz · NEGATİF: `reports_read` scope'u olmayan token → 403 · NEGATİF: `chat_id` NULL taşıyan channel_messages satırları hiçbir kovayı bozmaz · integration pozitif: üç adaptör kanalı (messenger/twilio/whatsapp) + 'website' fallback doğru kovada · integration: toplam invariantı SUM(by_channel.chats) === toplam chats + satır-içi manual+assisted+automated===closed · NOT (MEMORY: nexa-test-gate-parallel-db): DB süiti SERİ koşulur",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               1,
               3
             ],
             "parentId": "63",
-            "updatedAt": "2026-08-02T21:48:49.459Z"
+            "updatedAt": "2026-08-02T22:05:51.504Z"
           },
           {
             "id": 5,
@@ -1699,7 +1699,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T21:48:49.459Z"
+        "updatedAt": "2026-08-02T22:05:51.504Z"
       },
       {
         "id": "64",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T21:48:49.459Z",
+      "lastModified": "2026-08-02T22:05:51.504Z",
       "taskCount": 99,
       "completedCount": 74,
       "tags": [

@@ -3825,12 +3825,12 @@
             "description": "apps/rtm/src/conflict.ts — yeni `ConflictDetectionService`: (1) typing.ts'teki `#scoped` + `canType` ile AYNI tenant-scoped RLS okumasıyla ajanın chat'e erişimi doğrulanır; erişim yoksa kayıt YAPILMAZ ve yanıt 'chat yok'tan ayırt edilemez olur. (2) Ajan TEK BİR ATOMİK Redis işlemiyle (Lua script veya tek MULTI/pipeline'da ZADD + ZREMRANGEBYSCORE(prune) + ZRANGE) `composerStateKey(licenseId, chatId",
             "details": "08.6.3-conflict-b — ConflictDetectionService — atomik eşzamanlı-yazıcı kaydı + çakışma kararı (güvenlik/algoritma çekirdeği)  [OPUS-MAX]\n\nPRD: FR-MOD-08.6.3 (+ NFR-S3, NFR-S4, NFR-R2)\nETİKET GEREKÇESİ: OPUS-MAX: koşul 2 VE koşul 3 ihlali. (a) Eşzamanlılık sınırı: iki ajanın aynı anda kayıt olması check-then-act ile yazılırsa her ikisi de karşısındakini göremez → çakışma sessizce kaçar; tespit mekanizmasının kendisi bir yarış durumu içerir. (b) Tenant izolasyonu + yetki: kayıt/okuma yalnız o chat'e erişimi olan ajan için yapılmalı, aksi halde 'hangi ajan hangi chat'te' bilgisi sızar (NFR-S4/S5 — typing.ts canType gerekçesiyle aynı). Atomik komut + TTL penceresi + yetki tek bağlamda akıl yürütülmek zorunda — çekirdek bölünmez.\nNEDEN AÇIK: apps/rtm/src/typing.ts yalnız TEK bir bayrak tutuyor: `setAgentTyping` → `redis.set(typingStateKey(licenseId, chatId), '1', 'EX', TTL)` / `redis.del` — KİMİN yazdığını tutmuyor, dolayısıyla ikinci bir yazıcıyı ayırt edemez. apps/rtm/src'de 'conflict' grep 0. schema.prisma satır 440'ta ChatUser.present iki ajanın chat'te bulunabildiğini gösteriyor ama bunu 'ikisi de aktif yazıyor' sinyaline çeviren servis/sorgu yok. apps/api/src/services/routing/routing-service.ts eşzamanlılığı yalnız YENİ chat ataması için çözüyor (yorum: 'assignment happens inside the caller's transaction so the load count it reads cannot go stale'), mevcut thread üzerindeki iki ajanı kapsamıyor.\nKAPSAM: apps/rtm/src/conflict.ts — yeni `ConflictDetectionService`: (1) typing.ts'teki `#scoped` + `canType` ile AYNI tenant-scoped RLS okumasıyla ajanın chat'e erişimi doğrulanır; erişim yoksa kayıt YAPILMAZ ve yanıt 'chat yok'tan ayırt edilemez olur. (2) Ajan TEK BİR ATOMİK Redis işlemiyle (Lua script veya tek MULTI/pipeline'da ZADD + ZREMRANGEBYSCORE(prune) + ZRANGE) `composerStateKey(licenseId, chatId)` altına yazılır ve AYNI işlemde pencerede bulunan tüm agent_id'ler geri okunur — check-then-act YOK. (3) Pencerede ≥2 farklı agent_id varsa çakışma kararı üretilir ve çakışan küme (agent_id + since) döner. (4) `AGENT_COMPOSING_TTL_SECONDS` ile kayıt kendiliğinden düşer (anahtarda PEXPIRE) — düşen socket kalıcı çakışma bırakmaz. (5) is_typing=false geldiğinde kayıt atomik silinir (ZREM). Servis PUSH GÖNDERMEZ, yalnız karar döner (-c yayınlar).\nDOSYALAR: apps/rtm/src/conflict.ts · apps/rtm/src/conflict.test.ts\nREFERANS DESEN (kopyalanacak): apps/rtm/src/typing.ts (canType tenant-scoped RLS okuması + #scoped transaction + TTL'li Redis yazımı — yetki deseni birebir kopyalanır) · apps/api/src/services/chat/chat-service.ts #appendEvent (satır ~1183-1200: `UPDATE … RETURNING` = artır ve oku tek işlemde; yorum: 'two concurrent sends cannot both observe the same value … which is what a read-then-write would allow') · apps/api/src/services/routing/routing-service.ts (karar+yazının aynı işlemde tutulması gerekçesi)\nKK (birebir): \"| Routing (gelişmiş) | Skills-based routing, supervision + takeover, çoklu-ajan çakışma uyarısı |\" | \"KK-türetilmiş: 'Aynı sohbette pencere içinde ikinci bir ajan yazmaya başladığında sistem çakışmayı tespit eder; tespit eşzamanlı iki kayıt altında da kaybolmaz; çakışma bilgisi yalnız o sohbete erişimi olan ajanlar için üretilir; yazıcı kaydı süre dolunca kendiliğinden düşer.' — Türetme gerekçesi: PRD §5.3 satır 408 yalnız ibareyi veriyor, §6 KK'sı ve §10 tablosu eşik/kriter tanımlamıyor (kk_yetersiz=true); orkestratörün bağlayıcı kararı 'RTM presence + event sırası; eşzamanlılık sınırı' bu türetmenin dayanağı.\"\nKK DOĞRULAMA: apps/rtm/src/conflict.test.ts — NEGATİFLER ÖNCE: (i) erişimi olmayan ajan kayıt olamaz, boş küme döner (yetki maddesi); (ii) aynı chatId farklı licenseId altında birbirini GÖRMEZ (izolasyon maddesi); (iii) `Promise.all` ile iki eşzamanlı register → HER İKİSİ de 2 elemanlı küme görür ('tespit eşzamanlı iki kayıt altında kaybolmaz'); (iv) tek ajanın tekrarlı kaydı çakışma ÜRETMEZ; (v) TTL dolunca küme boşalır ('kendiliğinden düşer').\nKAPSAM DIŞI: Dispatcher action bağlama ve envelope yayını (-c) · transfer/atama kaynaklı çakışma (-d) · UI (-e/-f) · kalıcı audit tablosu (thread_conflict_warnings) — açılmıyor, bkz. varsayımlar · v2-02 §330'daki `presence:conn:{orgId}:{accountId}` presence kayıt defteri (ayrı kalem)\nSÖZLEŞME: yok (REST yok; RTM tip sözleşmesi -a'da eklendi).\nMIGRATION: yok — çakışma anlık bir durumdur, Redis + TTL yeterli; `thread_conflict_warnings` benzeri tablo AÇILMAZ (varsayım §C). Kalıcı audit istenirse ayrı kalem olur.\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): yetkisiz/erişilemez chat → kayıt yok + boş küme; is_typing=false → kayıt silinir · cross-tenant: aynı chatId + farklı licenseId → kümeler tamamen izole · unit (atomiklik): Promise.all ile iki eşzamanlı register → her ikisi de 2 elemanlı küme görür (kayıp güncelleme yok) · unit: tek ajanın tekrarlı kaydı çakışma üretmez (idempotent) · unit: TTL dolunca küme boşalır (düşen socket kalıcı çakışma bırakmaz) · not: DB'ye dokunan süit paket bazında seri koşulur (memory: 'Test gate & parallel DB')",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "91",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T01:37:15.572Z"
           },
           {
             "id": 3,
@@ -3903,7 +3903,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T01:16:46.734Z"
+        "updatedAt": "2026-08-02T01:37:15.572Z"
       },
       {
         "id": "92",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T01:16:46.734Z",
+      "lastModified": "2026-08-02T01:37:15.572Z",
       "taskCount": 99,
       "completedCount": 71,
       "tags": [

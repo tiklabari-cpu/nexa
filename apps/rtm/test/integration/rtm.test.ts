@@ -776,6 +776,128 @@ describe('rtm gateway', () => {
       }
     });
   });
+
+  // =========================================================================
+  // Multi-agent conflict warning (08.6.3)
+  // =========================================================================
+
+  describe('conflict warning', () => {
+    /** Log in, then also subscribe to the conflict-warning push. */
+    async function loginComposer(tenant: RtmTenant, accountId: string, scopes?: string[]) {
+      const socket = await loginAgent(tenant, accountId, scopes);
+      await socket.request('subscribe', { actions: ['agent_conflict_warning'] });
+      return socket;
+    }
+
+    it('warns every agent composing the same chat at once', async () => {
+      const conversation = await createConversation(db, { tenant: fx.a });
+      const agent = await loginComposer(fx.a, fx.a.agentAccountId);
+      const ownerAgent = await loginComposer(fx.a, fx.a.ownerAccountId, ['chats--all:rw']);
+
+      await agent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await ownerAgent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+
+      const [toAgent, toOwner] = await Promise.all([
+        agent.waitForPush('agent_conflict_warning'),
+        ownerAgent.waitForPush('agent_conflict_warning'),
+      ]);
+
+      // Both composing agents are told — not just the one who arrived second.
+      for (const push of [toAgent, toOwner]) {
+        expect(push.payload['chat_id']).toBe(conversation.chatId);
+        expect(push.payload['thread_id']).toBe(conversation.threadId);
+        const ids = (push.payload['agents'] as Array<{ agent_id: string }>)
+          .map((a) => a.agent_id)
+          .sort();
+        expect(ids).toEqual([fx.a.agentAccountId, fx.a.ownerAccountId].sort());
+      }
+    });
+
+    it('does not warn a single agent composing alone', async () => {
+      const conversation = await createConversation(db, { tenant: fx.a });
+      const agent = await loginComposer(fx.a, fx.a.agentAccountId);
+
+      const response = await agent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      expect(response.success).toBe(true);
+
+      await settle();
+      expect(agent.pushes('agent_conflict_warning')).toHaveLength(0);
+    });
+
+    it('answers not_found for a chat the sender cannot see, and warns no one', async () => {
+      // Routed to Support; the outsider belongs to Sales only.
+      const conversation = await createConversation(db, {
+        tenant: fx.a,
+        groupId: fx.a.supportGroupId,
+      });
+      const outsider = await loginComposer(fx.a, fx.a.outsiderAccountId);
+
+      const response = await outsider.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      expect(response.success).toBe(false);
+      expect((response.payload['error'] as { type: string }).type).toBe('not_found');
+
+      await settle();
+      expect(outsider.pushes('agent_conflict_warning')).toHaveLength(0);
+    });
+
+    it('keeps the warning to the agents in the chat, not others in the licence', async () => {
+      const conversation = await createConversation(db, { tenant: fx.a });
+      const agent = await loginComposer(fx.a, fx.a.agentAccountId);
+      const ownerAgent = await loginComposer(fx.a, fx.a.ownerAccountId, ['chats--all:rw']);
+      // Subscribed and in the licence, but not one of the composing agents.
+      const outsider = await loginComposer(fx.a, fx.a.outsiderAccountId);
+
+      await agent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await ownerAgent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await Promise.all([
+        agent.waitForPush('agent_conflict_warning'),
+        ownerAgent.waitForPush('agent_conflict_warning'),
+      ]);
+
+      await settle();
+      expect(outsider.pushes('agent_conflict_warning')).toHaveLength(0);
+    });
+
+    it('never delivers a warning across a tenant boundary', async () => {
+      const conversation = await createConversation(db, { tenant: fx.a });
+      const agent = await loginComposer(fx.a, fx.a.agentAccountId);
+      const ownerAgent = await loginComposer(fx.a, fx.a.ownerAccountId, ['chats--all:rw']);
+      // Another tenant's agent, subscribed, sharing the exact same chat id.
+      const other = await loginComposer(fx.b, fx.b.agentAccountId);
+
+      await agent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await ownerAgent.request('send_typing_indicator', {
+        chat_id: conversation.chatId,
+        is_typing: true,
+      });
+      await agent.waitForPush('agent_conflict_warning');
+
+      await settle();
+      expect(other.pushes('agent_conflict_warning')).toHaveLength(0);
+      expect(JSON.stringify(other.frames)).not.toContain(conversation.chatId);
+    });
+  });
 });
 
 /** Append an event the way the API would, keeping the thread counter in step. */

@@ -9,6 +9,8 @@
 import type { Logger } from 'pino';
 import { RTM_LIMITS, RTM_PUSH_ACTIONS, type ErrorType, type RtmAction } from '@nexa/types';
 import type { SocketAuthenticator, SocketPrincipal } from './auth.js';
+import type { ConflictDetectionService } from './conflict.js';
+import type { ConflictPublisher } from './conflict-publisher.js';
 import type { Connection, ConnectionRegistry } from './connection.js';
 import { encodeError, encodeResponse, type DecodedRequest } from './protocol.js';
 import { MAX_SYNC_CHATS, type SyncCursor, type SyncService } from './sync.js';
@@ -22,6 +24,13 @@ export interface DispatcherDeps {
   authenticator: SocketAuthenticator;
   sync: SyncService;
   typing: TypingService;
+  /**
+   * Multi-agent conflict detection (08.6.3). Optional so the 02.9 typing path
+   * never depends on it being wired — when absent, `send_typing_indicator`
+   * behaves exactly as before. The gateway always provides both.
+   */
+  conflict?: ConflictDetectionService;
+  conflictPublisher?: ConflictPublisher;
   log: Logger;
   onAuthenticated: (connection: Connection, principal: SocketPrincipal) => Promise<void>;
   /** Per-connection message budget, from RATE_LIMIT_RTM_PER_SEC. */
@@ -210,6 +219,24 @@ export class Dispatcher {
     }
 
     await this.deps.typing.setAgentTyping(connection.licenseId ?? '', chatId, isTyping);
+
+    // Multi-agent conflict detection (08.6.3), layered on top of the typing
+    // flag above. Register this agent as composing and, when a second agent is
+    // composing the same chat at once, warn everyone who is. Kept entirely
+    // inside its own guard: no 08.6.3 failure may break the 02.9 indicator that
+    // already succeeded, and the warning is best-effort by design.
+    const { conflict, conflictPublisher } = this.deps;
+    if (conflict && conflictPublisher) {
+      try {
+        const decision = await conflict.record(principal, chatId, isTyping);
+        if (isTyping && decision.conflict) {
+          await conflictPublisher.publish(principal, chatId, decision.agents);
+        }
+      } catch (error) {
+        this.deps.log.error({ err: error, chat_id: chatId }, 'conflict detection failed');
+      }
+    }
+
     return encodeResponse(message.request_id, 'send_typing_indicator', {
       chat_id: chatId,
       is_typing: isTyping,

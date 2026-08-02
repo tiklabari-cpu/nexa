@@ -13,6 +13,33 @@
 
 ## Task log (newest-first)
 
+### tm 91.3 — 08.6.3-conflict-c send_typing_indicator yolunda çakışma tespiti + uyarının bus envelope ile her iki ajana iletimi — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-XHIGH — RTM gateway ilk kez envelope YAYINLAYAN taraf oldu.
+  (1) `apps/rtm/src/conflict-publisher.ts` yeni `ConflictPublisher` (RealtimePublisher'ın RTM tarafı eşi):
+  `agent_conflict_warning` `BusEnvelope`'unu `licenseChannel`'a yayınlar; audience={agentIds: çakışan
+  ajanların hepsi}, boş audience yayınlanmaz (fail-closed), `originConnectionId` SETLENMEZ (fanout origin'i
+  eler → çakışan HER İKİ ajan da alır). `thread_id` typing frame'inde taşınmadığından RLS-scoped `threads`
+  okumasıyla sunucuda çözülür (chat görünmüyorsa null → yayın yok — cross-tenant kapalı). Publish best-effort:
+  asla rethrow etmez (kayıp uyarı sonraki keystroke'ta yeniden yayınlanır).
+  (2) dispatcher `#typing` genişletildi: `is_typing=true` → `ConflictDetectionService.record`; `decision.conflict`
+  (≥2 ajan) ise `ConflictPublisher.publish`; `is_typing=false` → kayıt silinir, yayın yok. Tüm 08.6.3 bloğu
+  kendi try/catch'inde — hiçbir çakışma-hatası 02.9 typing yanıtını bozmaz.
+  (3) `apps/rtm/src/server.ts` DI: ayrı `nexa-rtm-pub` Redis publish client + `ConflictDetectionService`(commands)
+  + `ConflictPublisher`. Dispatcher deps opsiyonel tutuldu → `typing.test.ts` (kapsam dışı) deps eklemeden yeşil.
+- **Doğrulama:** `pnpm -w typecheck` ✅ (11/11) · `pnpm -w lint` ✅ (8/8) · `pnpm -w build` ✅ (7/7) ·
+  rtm **serial** (`pnpm --filter @nexa/rtm test`) ✅ **86/86** (yeni `conflict-publisher.test.ts` 4 + rtm.test.ts
+  conflict warning +5; önceki 77). Kapı yeşil. Değişiklik yalnız `apps/rtm` (types/contract/api/web/şema
+  DOKUNULMADI, migration YOK) → diğer paket süitleri etkilenmez; DB süiti repo'nun per-package/serial kuralıyla koşuldu.
+- **Varsayımlar:** §C kararları korundu — çakışma UYARIDIR (engel değil), yeni ApiError yok, kalıcı audit tablosu
+  yok, mevcut `send_typing_indicator` yeniden kullanıldı (yeni RTM client action yok), uyarı yalnız ajan yüzeyi.
+  `AGENT_COMPOSING_TTL_SECONDS=8` (-a'da kondu, açık soru: ürün 8-10sn onayı gerekebilir). Uyarı `agent_id` ile
+  gösterilir (ad değil; açık soru -e'ye kadar ertelenmiş).
+- **Sonraki pencereye not:** -d (API transfer/atama çakışması — `composerStateKey` SALT OKUNUR, chat-service
+  transfer COMMIT sonrası audience=yeni assignee+yazanlar), -e (ConflictBanner + store), -f (useInbox aboneliği +
+  applyPush case + banner montajı; `AGENT_PUSHES`'a `agent_conflict_warning` EKLENMEDİ — -f eklemeli), -g (uçtan
+  uca + şekil paritesi). Wire şekli: `AgentConflictWarningPush { chat_id, thread_id, agents:[{agent_id, since:ISO}], detected_at:ISO }` — `since`/`detected_at` ISO 8601 string olarak yayınlanıyor (-e/-f bunu bekler).
+
 ### tm 91.2 — 08.6.3-conflict-b ConflictDetectionService (atomik eşzamanlı-yazıcı kaydı + çakışma kararı) — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-MAX bölünmez çekirdek — `apps/rtm/src/conflict.ts` yeni `ConflictDetectionService`.

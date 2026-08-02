@@ -16,6 +16,8 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { RTM_LIMITS } from '@nexa/types';
 import { SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import type { RtmEnv } from './config/env.js';
+import { ConflictDetectionService } from './conflict.js';
+import { ConflictPublisher } from './conflict-publisher.js';
 import { ConnectionRegistry, type Connection } from './connection.js';
 import { Dispatcher } from './dispatcher.js';
 import { Fanout } from './fanout.js';
@@ -53,7 +55,15 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
     maxRetriesPerRequest: null,
     retryStrategy: (attempt) => Math.min(attempt * 200, 5_000),
   });
-  for (const client of [commands, subscriber]) {
+  // A third connection for the one thing the gateway publishes — conflict
+  // warnings — so a burst of them cannot queue behind the RLS and Lua commands
+  // typing and conflict detection run on `commands`.
+  const publisher = new Redis(env.REDIS_URL, {
+    connectionName: 'nexa-rtm-pub',
+    maxRetriesPerRequest: 3,
+    retryStrategy: (attempt) => Math.min(attempt * 200, 3_000),
+  });
+  for (const client of [commands, subscriber, publisher]) {
     client.on('error', (error) => log.error({ err: error }, 'redis connection error'));
   }
 
@@ -63,6 +73,11 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
   // Typing flags are written on the command connection: a subscriber-mode client
   // may issue no other commands, so it cannot be reused for a `SET`.
   const typing = new TypingService(db, commands);
+  // Conflict detection registers composing agents on the command connection (its
+  // Redis registry is a Lua script), then hands the decision to the publisher,
+  // which emits the warning on the dedicated publish connection.
+  const conflict = new ConflictDetectionService(db, commands);
+  const conflictPublisher = new ConflictPublisher(db, publisher, log);
   const fanout = new Fanout(subscriber, registry, log);
 
   const dispatcher = new Dispatcher({
@@ -70,6 +85,8 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
     authenticator,
     sync,
     typing,
+    conflict,
+    conflictPublisher,
     log,
     messagesPerSecond: env.RATE_LIMIT_RTM_PER_SEC,
     onAuthenticated: async (_connection: Connection, principal: SocketPrincipal) => {
@@ -145,6 +162,7 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
       await Promise.all([
         commands.quit().catch(() => commands.disconnect()),
         subscriber.quit().catch(() => subscriber.disconnect()),
+        publisher.quit().catch(() => publisher.disconnect()),
         db.$disconnect(),
       ]);
     },

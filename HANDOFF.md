@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### 78.5 — MULTIBRAND-e Settings → Brands ekranı (liste + ekle + yeniden adlandır + sil + boş durum) — done — 2026-08-02 UTC
+
+- **Yapıldı:** SONNET-XHIGH, UI-only (-d'de API zaten hazırdı, kontrat değişmedi). `Brands.tsx` —
+  `WebsiteWidgets.tsx` (ekle+liste deseni) ve `Tags` (tek-alanlı ad formu) desenlerinin bileşimi.
+  `useQuery` `GET /brands`; `lib/form.tsx` `useForm`+`required` ile 'Add brand' formu (ad zorunlu,
+  alan-altı hata + submit-disabled, `POST /brands`); `BrandRow` satır-içi yeniden adlandırma
+  (blur'da `PATCH /brands/:id`; aynı ada dönülürse çağrı atlanır; sunucu reddi `ErrorNotice` ile
+  satırda gösterilir ve taslak eski ada geri döner); sil butonu varsayılan markada hiç render
+  edilmez (`canEdit && !is_default`), sunucu reddi (bağlı veri/`not_allowed`) aynı `ErrorNotice`;
+  marka yokken `EmptyState` (EK-B.1); `canEdit=false` → ekle formu render edilmez, ad alanları
+  `disabled`, sil butonu yok. `canEdit` `brands--all:rw` scope'undan türetilir (`SettingsPage.tsx`
+  yeni `canManageBrands`). Test `Brands.test.tsx` (10: listeler · boş ad → alan-altı hata + submit
+  disabled · ekle → POST + liste güncellenir · varsayılanda sil yok/diğerinde var · boş liste →
+  EmptyState · canEdit=false → tüm kontroller pasif · rename → PATCH · aynı ada rename → no-op ·
+  rename 409 → ErrorNotice + taslak revert · delete reddi → ErrorNotice).
+- **Doğrulama:** typecheck·lint·build YEŞİL. Unit: web **499** (489→499, +10 — tek tek paket
+  bazında çalıştırıldı: `pnpm -w test` paylaşılan Postgres'te rtm paketiyle yarışıp deadlock/FK
+  hatası veriyor [memory: parallel-db], paketler ayrı ayrı 100% yeşil — web 499, api 1211, rtm 90).
+  Integration `apps/api` **948/948** (46 dosya) DEĞİŞMEDİ — UI-only, backend'e dokunulmadı. E2E
+  `settings.spec.ts` **15/15** DEĞİŞMEDİ (Brands bölümü eklenmesi mevcut akışları kırmadı).
+  `apps/web/src/features/settings/{Brands.tsx,Brands.test.tsx,SettingsPage.tsx}`.
+- **Varsayımlar:** Add formu yalnız `name` alanı (slug sunucuda türetiliyor, logo yükleme KAPSAM
+  DIŞI — task metni birebir). Silme kontrolü "render edilmez" (disabled değil) — `canEdit=false`
+  ve varsayılan marka için tutarlı, kod tabanındaki diğer ekranlarla (`WebsiteWidgets`/`Tags`) aynı
+  desen. Rename input `canEdit=false`'ta disabled render edilir (gizlenmez) — KK metni "tüm
+  kontroller pasif" dediği için literal `disabled`, `WebsiteWidgets`'ın "hiç render etme" tercihinden
+  kasıtlı sapma.
+- **Sonraki pencereye not:** §5.3-Marka hâlâ `◐` — kalan **-f** (AppShell marka değiştirici +
+  seçili markanın persist'i + `X-Nexa-Brand` header), **-g** (ayar ekranlarının seçili markaya
+  bağlanması), **-h** (cross-brand e2e izolasyon matrisi). Dev DB'de entegrasyon testi koşusu
+  öncesi bir önceki oturumdan kalma "Org A"/"Org B" artığı bulundu (seed.ts'in FK ihlaliyle
+  patlamasına sebep oluyordu) — `db:reset`/`migrate reset` KULLANILMADI (DB drop yasak); yalnız
+  `test:integration`'ın kendi TRUNCATE tabanlı fixture reset'i çalıştırılarak temizlendi, sonra
+  `db:seed` + e2e normal koştu. Bir sonraki pencere bu kalıntıyı tekrar görürse aynı yolu izlesin.
+
 ### 78.4 — MULTIBRAND-d `/brands` CRUD kontrat + route + `brands--all` scope + `brand_not_found` hata tipi — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-XHIGH, yalnız API yüzeyi (migration yok — tablo/kolonlar 78.1–78.3'te). ADR-05

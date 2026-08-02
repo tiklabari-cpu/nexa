@@ -24,6 +24,7 @@ import {
   type CustomFieldType,
 } from '@nexa/types';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
+import { Brands } from './Brands.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { WidgetCustomization } from './WidgetCustomization.js';
 import { ChannelsGrid } from './Channels.js';
@@ -113,12 +114,14 @@ export function SettingsPage(): ReactElement {
   const canManageReplies = scopes.includes('canned_responses--all:rw');
   const canManageTags = scopes.includes('tags--all:rw');
   const canManageTicketRules = scopes.includes('tickets--all:rw');
+  const canManageBrands = scopes.includes('brands--all:rw');
 
   return (
     <Page title="Settings" description="Widget installation, saved replies and routing.">
       <ChannelsGrid />
       <Integrations />
       <NotificationSettings />
+      <Brands canEdit={canManageBrands} />
       <WebsiteWidgets canEdit={canManageAccess} />
       <WidgetCustomization canEdit={canManageAccess} />
       <TrustedDomains canEdit={canManageAccess} />

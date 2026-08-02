@@ -1634,12 +1634,12 @@
             "description": "`breakdownByTeam(tx, licenseId, from, to)` — `threads t` → `chats c` (license kilidi) → `chat_access ca ON ca.chat_id = c.id` → `groups g ON g.license_id = c.license_id AND g.id = ca.group_id`. Fan-out KABUL edilir (birincil-grup kavramı şemada yok): bir chat N takıma açıksa N satırda sayılır ve yanıt `overlapping: true` ile bunu BEYAN eder (sessiz çift sayım yasak). Hiçbir gruba açık olmayan chat",
             "details": "07.5-e — Takım boyutu agregasyon çekirdeği — chat_access M:N fan-out + license kilidi  [OPUS-MAX]\n\nPRD: FR-MOD-07.5 (+ NFR-S4 tenant izolasyonu, NFR-S3 scope, NFR-P2)\nETİKET GEREKÇESİ: OPUS-MAX: koşul 2 ihlali — TENANT İZOLASYONU + YETKİ SINIRI. `chat_access` tablosunun KENDİ license_id kolonu yok (migration 20260722154008:892 birebir: \"chat_users and chat_access have no license column of their own (PRD §8.4)\"; RLS `chats` üzerinden EXISTS alt-sorgusuyla) → ham SQL join'i chats.license_id üzerinden kilitlenmezse izolasyon yalnız RLS'e kalır; ayrıca `groups` PK'sı bileşik (`@@id([licenseId, id])`) olduğu için aynı group_id iki lisansta var olabilir. Koşul 6 ihlali de var: `chatAccess.createMany` (chat-service.ts:1246) bir chat'i N gruba yazabildiği için \"bu chat hangi takıma ait\" AYRIŞIK DEĞİL — çift sayım mı birincil grup mu kararı yorum gerektirir. Çekirdek bölünmez.\nNEDEN AÇIK: Olgu: reports.ts'de `group` / `chat_access` HİÇ geçmiyor (grep 0). Thread'de doğrudan `groupId` kolonu YOK (schema.prisma); takım bilgisinin tek gerçek kaynağı `ChatAccess(chat_id, group_id)` — ve bu M:N: `chat-service.ts:1246` `tx.chatAccess.createMany({ data: input.groupIds.map(...) })` bir chat'i N gruba yazıyor (transfer yolu `chat-service.ts:947-948` deleteMany+create ile tekile indiriyor, ama yeni chat yolu indirmiyor).\nKAPSAM: `breakdownByTeam(tx, licenseId, from, to)` — `threads t` → `chats c` (license kilidi) → `chat_access ca ON ca.chat_id = c.id` → `groups g ON g.license_id = c.license_id AND g.id = ca.group_id`. Fan-out KABUL edilir (birincil-grup kavramı şemada yok): bir chat N takıma açıksa N satırda sayılır ve yanıt `overlapping: true` ile bunu BEYAN eder (sessiz çift sayım yasak). Hiçbir gruba açık olmayan chat'ler `team_id: null` / 'Unassigned' satırında toplanır — hiçbir sohbet kaybolmaz. `SPLIT_COUNTS` (reports.ts:117-123) AYNEN yeniden kullanılır. Görünürlük kararı: `reports_read` lisans genelinde kalır (mevcut `by_agent` de tüm ajanları döndürüyor — reports.ts:677-698); takım bazlı daraltma YAPILMAZ ve bu karar testle sabitlenir.\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/test/integration/reports-billing.test.ts · apps/api/test/integration/tenant-isolation.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts:677-698 — by_agent'ın LEFT JOIN + SPLIT_COUNTS + GROUP BY + ORDER BY chats DESC bloğu · apps/api/src/services/routing/routing-service.ts:142 — `tx.chatAccess.findMany` grup okuma deseni · apps/api/src/services/chat/access.ts — `resolveVisibility` (scope vs üyelik iki kapısı): görünürlük kararının mevcut referansı · apps/api/prisma/migrations/20260722154008_domain_model/migration.sql:892-906 — chat_access RLS politikası (chats üzerinden EXISTS)\nKK (birebir): \"Boyutlu kırılım\" | \"KK-türetilmiş: \"Takım boyutu: bir sohbet açık olduğu HER takımın satırında görünür ve yanıt bu örtüşmeyi (`overlapping`) açıkça beyan eder; takımsız sohbetler kaybolmaz; başka lisansın takımı/sohbeti hiçbir satırda görünmez.\" — PRD KK sütunu tek kelimelik; fan-out beyanı `chat_access`'in M:N olmasından (chat-service.ts:1246) zorunlu olarak türetildi, çünkü sessiz çift sayım Overview toplamıyla çelişir.\"\nKK DOĞRULAMA: reports-billing.test.ts: (1) CROSS-TENANT ÖNCE — iki lisansta AYNI `group_id` değerini kullanan kurgu; B'nin grubu/chat'i A'nın `by_team`'inde görünmez (join license kilidi olmadan sızar → test bunu kanıtlar). (2) İki gruba açık bir chat her iki takım satırında sayılır VE `overlapping === true`. (3) Tek gruba açık senaryoda SUM(by_team.chats) === toplam chats ve `overlapping === false`. (4) Gruba açık olmayan chat 'Unassigned' satırında. (5) scope'suz token → 403.\nKAPSAM DIŞI: Kanal boyutu (07.5-d) · Threads'e `group_id` / 'birincil takım' kolonu eklemek (şema değişikliği — açık soru §1) · Grup CRUD/UI, takım üyeliği yönetimi · Ajan→grup eşlemesi üzerinden türev ikinci bir boyut · Takım bazlı SLA/yanıt süresi · UI (07.5-h) ve CSV (07.5-f)\nSÖZLEŞME: yok (alanlar 07.5-a'da eklendi: `by_team` + `overlapping`). Yeni route YOK.\nMIGRATION: yok — takım boyutu mevcut `chat_access` + `groups` tablolarından okunur; yeni kolon eklenmez (birincil-grup kolonu bilinçli olarak açık soru bırakıldı)\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "CROSS-TENANT ÖNCE: aynı group_id'ye sahip iki lisans kurgusu — başka lisansın takımı/sohbeti sızmaz · NEGATİF: `reports_read` olmayan token → 403 · integration: M:N fan-out beyanı (`overlapping` true/false doğru) · integration: 'Unassigned' kovası — gruba açık olmayan sohbet kaybolmaz · integration: satır-içi invariant (manual+assisted+automated === closed) + tek-grup senaryosunda toplam eşitliği · NOT (MEMORY: nexa-test-gate-parallel-db): DB süiti SERİ koşulur",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "63",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T23:41:34.736Z"
           },
           {
             "id": 6,
@@ -1699,7 +1699,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T22:05:51.504Z"
+        "updatedAt": "2026-08-02T23:41:34.736Z"
       },
       {
         "id": "64",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T22:05:51.504Z",
+      "lastModified": "2026-08-02T23:41:34.737Z",
       "taskCount": 99,
       "completedCount": 74,
       "tags": [

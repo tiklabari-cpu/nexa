@@ -3239,7 +3239,7 @@
             "description": "(1) apps/e2e/staffing.spec.ts: Team ekranında vardiya kaydet → ajan uygunluk durumunu değiştir (presence olayı yazılır) → Reports ▸ Staffing sekmesinde ızgara ve 'yeterli veri yok' durumu görünür. (2) apps/api/test/integration/tenant-isolation.test.ts'e work_schedules + agent_presence_events satırları (iki lisans fixture'ı). (3) ADR-09 tutarlılık iddiası: staffing yanıtındaki saatlik hacim = /repo",
             "details": "WORKSCHED-j — Uçtan uca doğrulama: staffing e2e akışı + izolasyon iddiaları + ADR-09 sayı tutarlılığı  [OPUS-XHIGH]\n\nPRD: §5.3-Vardiya (WORKSCHED) — kalem kapanış kapısı · NFR-S4, NFR-R3, NFR-M2\nETİKET GEREKÇESİ: OPUS-XHIGH: çok yüzeyli bağlama doğrulaması (kontrat + DB/RLS + backend + presence yazma yolu + iki ekran) ve iddiaların hangi katmanda kanıtlandığına dair yorum gerektiriyor; cross-tenant fixture kurgusu güvenlik hassasiyeti taşıyor → kullanıcı kuralı gereği SONNET OLAMAZ. Yeni güvenlik çekirdeği yazılmadığı için MAX değil.\nNEDEN AÇIK: apps/e2e altında 20 spec var (reports.spec.ts, team.spec.ts, settings.spec.ts, traffic.spec.ts …) ve vardiya/staffing akışı için spec yok. PLAN.md §5.1 (satır 1130) bu kalemi atomik kırılıma açmamıştı ve §G İş Kırılımı Dizini'nde (satır 1264+) ayrı satırı yok — Task Master'a hiç aktarılmamış, kapanış kanıtı da yok.\nKAPSAM: (1) apps/e2e/staffing.spec.ts: Team ekranında vardiya kaydet → ajan uygunluk durumunu değiştir (presence olayı yazılır) → Reports ▸ Staffing sekmesinde ızgara ve 'yeterli veri yok' durumu görünür. (2) apps/api/test/integration/tenant-isolation.test.ts'e work_schedules + agent_presence_events satırları (iki lisans fixture'ı). (3) ADR-09 tutarlılık iddiası: staffing yanıtındaki saatlik hacim = /reports/breakdown by_hour. (4) DoD kanıtı HANDOFF.md'ye yazılır. NOT: e2e temiz DB ister — truncate+reseed, .env source, portlar boş (proje notu); DB süitleri paket bazlı SERİ koşulur.\nDOSYALAR: apps/e2e/staffing.spec.ts · apps/api/test/integration/tenant-isolation.test.ts · HANDOFF.md\nREFERANS DESEN (kopyalanacak): apps/e2e/reports.spec.ts · apps/e2e/team.spec.ts · apps/e2e/fixtures.ts\nKK (birebir): \"| Ekip/Vardiya | Work scheduler / staffing prediction |\" | \"KK-türetilmiş: \"Vardiya planı → presence kaydı → personel önerisi zinciri uçtan uca çalışır; bir lisansın vardiya/presence verisi başka lisansta hiçbir yüzeyde görünmez; öneri ekranındaki hacim sayıları hacim raporuyla aynıdır.\" — Türetme gerekçesi: PRD §5.3 satır 412'de KK sütunu yok; zincir maddesi bu kalemin alt-görevlerinin bileşimidir, izolasyon maddesi NFR-S4'ten, sayı tutarlılığı ADR-09'dan türetildi.\"\nKK DOĞRULAMA: staffing.spec.ts uçtan uca zincirin çalıştığını (birinci madde), tenant-isolation.test.ts'e eklenen iki tablo satırı izolasyonu (ikinci madde), staffing↔breakdown karşılaştırması ADR-09 tutarlılığını (üçüncü madde) kanıtlar. DoD kapısı (typecheck+lint+unit+integration+build+e2e) HANDOFF'a kanıtla yazılır.\nKAPSAM DIŞI: Yeni özellik eklemek — bu alt-görev yalnız doğrulama/kanıt · Performans/yük testi (NFR-P7 ölçümü ayrı kalem) · PLAN.md §G / Task Master satır senkronu (ayrı iş)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration CROSS-TENANT (ÖNCE): iki lisans fixture'ı — A'nın vardiya planı ve presence olayları B'nin work-schedule GET'inde, staffing yanıtında ve Staffing ekranında YOK · integration NEGATİF: rapor yetkisi olmayan kullanıcı staffing verisini alamaz (403) · e2e pozitif: vardiya kaydet → durum değiştir → Reports ▸ Staffing ızgarası görünür · e2e: veri yetersizken 'yeterli veri yok' durumu görünür (0 görünmez) · REGRESYON: apps/e2e/reports.spec.ts + team.spec.ts + apps/api/test/integration/routing.test.ts yeşil; contract-parity yeşil · ÇALIŞTIRMA NOTU: e2e için truncate+reseed + .env source + portlar boş; DB süitleri paket bazlı seri",
-            "status": "pending",
+            "status": "blocked",
             "dependencies": [
               3,
               4,
@@ -3248,10 +3248,10 @@
               9
             ],
             "parentId": "77",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T17:40:46.103Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-02T17:40:46.103Z"
       },
       {
         "id": "78",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T17:36:23.873Z",
+      "lastModified": "2026-08-02T17:40:46.103Z",
       "taskCount": 99,
       "completedCount": 73,
       "tags": [

@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+### 77.10 — WORKSCHED-j uçtan uca doğrulama (staffing e2e + izolasyon + ADR-09) — blocked — 2026-08-02 UTC
+
+- **Yapıldı:** Kod YAZILMADI. Bu task yalnız-doğrulama (`KAPSAM DIŞI: Yeni özellik eklemek`);
+  doğrulanacak WORKSCHED özelliği depoda **hiç yok**. Tespit: (a) Task Master'da tüm WORKSCHED
+  dilimi (`77.1`–`77.9`) `pending`; bu task'ın bağımlılıkları `77.3, 77.4, 77.7, 77.8, 77.9`'un
+  hepsi `pending`. (b) Kod taraması: `staffing-forecast` kontratı YOK, `work_schedules` +
+  `agent_presence_events` migration/Prisma modeli YOK, `GET /reports/staffing-forecast` route'u
+  YOK, Team → Work-schedule düzenleyici (`77.8`) YOK, Reports → Staffing sekmesi (`77.9`) YOK,
+  depoda hiçbir yerde `forecast` geçmiyor. `PLAN.md:1133` (§5.3-Vardiya) durumu hâlâ `⬜`
+  (başlanmamış v2 planı) — bu erken-teslim edilmiş bir dilim DEĞİL, gerçekten yok.
+- **Doğrulama:** DoD kapısı çalıştırılamadı — doğrulanacak yüzeyler (e2e için Team vardiya
+  düzenleyici + Reports Staffing ızgarası, integration için `work_schedules`/
+  `agent_presence_events` tabloları, ADR-09 için `/reports/staffing-forecast` yanıtı) mevcut
+  değil. `apps/e2e/staffing.spec.ts` var olmayan ekranlara karşı yazılamaz; bunları inşa etmek
+  9 ayrı task'ı (`77.1`–`77.9`) yapmak demektir → protokol yasağı ("Asla ikinci bir task'a
+  başlama"). Bozuk/yarım kod main'e MERGE EDİLMEDİ; çalışma alanı temiz.
+- **Varsayımlar:** Yok. Bağımlılık durumu Task Master + kod taramasıyla objektif olarak sabit.
+- **Sonraki pencereye not:** Önce WORKSCHED çekirdeği inşa edilmeli — sıra: `77.1` (kontrat) →
+  `77.2` (tablolar/RLS) → `77.5`/`77.6` (by_hour + tahmin çekirdeği, bağımsız) → `77.3`/`77.4`
+  → `77.7` (staffing-forecast API) → `77.8`/`77.9` (ekranlar). Ancak o dilim done olduktan sonra
+  `77.10` doğrulaması anlamlı olur; şu an bağımlı olarak `blocked`.
+
 ### 78.6 — MULTIBRAND-f AppShell marka değiştirici + persist + isteklerde `X-Nexa-Brand` başlığı — done — 2026-08-02 UTC
 
 - **Yapıldı:** SONNET-XHIGH, istemci plumbing (kontrat/migration yok — `-b`/`-c`'de zaten yazılmıştı).

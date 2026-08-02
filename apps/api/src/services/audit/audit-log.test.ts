@@ -55,4 +55,9 @@ describe('AUDIT_ACTIONS', () => {
     // "veri silme" is one of the four events the requirement enumerates.
     expect(AUDIT_ACTIONS).toContain('data.deleted');
   });
+
+  it('records the role-change action NFR-S12 names by hand', () => {
+    // "rol değişimi" is one of the four events the requirement enumerates.
+    expect(AUDIT_ACTIONS).toContain('member.role_changed');
+  });
 });

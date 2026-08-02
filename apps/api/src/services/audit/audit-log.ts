@@ -45,6 +45,11 @@ export const AUDIT_ACTIONS = [
   'member.invitation_revoked',
   'member.suspended',
   'member.unsuspended',
+  // A teammate was moved between roles — the "rol değişimi" NFR-S12 names by
+  // hand. Bounded by a privilege ceiling at the route (no self-change, the
+  // owner is immutable, and no grant above the actor's own rank); the entry
+  // records only the from/to roles, never the whole membership.
+  'member.role_changed',
   // Workspace configuration
   'settings.security_updated',
   'settings.routing_rule_updated',

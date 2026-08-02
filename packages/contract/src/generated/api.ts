@@ -1141,6 +1141,43 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/agents/{agentId}/role': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change a teammate's role
+     * @description Moves a teammate between roles (NFR-S12 — the "rol değişimi" the audit
+     *     requirement names by hand). Admin or owner only: both the scope and the
+     *     role are checked, and the change is bounded by a privilege ceiling so it
+     *     can never grant more power than the caller holds.
+     *
+     *     An admin or owner may only assign a role at or below their own rank, and
+     *     may only change a teammate whose current role is at or below theirs — an
+     *     admin cannot promote anyone to owner, nor touch a vice-owner. The owner's
+     *     own role is immutable here, and no one may change their own role: both
+     *     would be a way to seize or surrender the workspace. Ownership transfer is
+     *     a separate, heavier operation and is refused (`403`) by this endpoint.
+     *
+     *     A change to the role the teammate already holds is a no-op: it returns the
+     *     unchanged agent and writes nothing to the audit log. A real change writes
+     *     exactly one `member.role_changed` entry recording only the `from`/`to`
+     *     roles.
+     */
+    put: operations['setAgentRole'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/agents/me/routing-status': {
     parameters: {
       query?: never;
@@ -6564,6 +6601,46 @@ export interface operations {
     };
     responses: {
       /** @description The agent, with its new suspension state. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Agent'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setAgentRole: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * @description The role to assign. `owner` is accepted by the schema but
+           *     always refused (ownership transfer is out of scope here), and
+           *     any role above the caller's own rank is refused — both as
+           *     `403`, not `400`.
+           * @enum {string}
+           */
+          role: 'owner' | 'viceowner' | 'admin' | 'agent';
+        };
+      };
+    };
+    responses: {
+      /** @description The agent, with its new role. */
       200: {
         headers: {
           [name: string]: unknown;

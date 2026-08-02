@@ -88,6 +88,7 @@ describe('audit log writer (NFR-S12)', () => {
         'tags--all:rw',
         'tickets--all:rw',
         'agents-bot--all:rw',
+        'agents--all:rw',
       ],
     });
   });
@@ -327,6 +328,38 @@ describe('audit log writer (NFR-S12)', () => {
       const revoked = await server.del(`/invitations/${invitationId}`, auth(adminToken));
       expect(revoked.statusCode).toBe(204);
       expect(await count('member.invitation_revoked')).toBe(beforeRevoke + 1);
+    });
+
+    it("records a teammate's role change, once, with only the from/to roles", async () => {
+      // The "rol değişimi" NFR-S12 names by hand. The owner promotes the seeded
+      // agent to admin; exactly one entry lands, attributed to the actor, and its
+      // metadata is the two roles and nothing else — never the whole membership.
+      const before = await count('member.role_changed');
+      const res = await server.put(
+        `/agents/${fx.a.agentAccountId}/role`,
+        { role: 'admin' },
+        auth(adminToken),
+      );
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ id: fx.a.agentAccountId, role: 'admin' });
+
+      expect(await count('member.role_changed')).toBe(before + 1);
+      const entry = await latest('member.role_changed');
+      expect(entry?.actorId).toBe(fx.a.ownerAccountId);
+      expect(entry?.actorType).toBe('agent');
+      expect(entry?.target).toBe(`account:${fx.a.agentAccountId}`);
+      expect(entry?.metadata).toMatchObject({ from: 'agent', to: 'admin' });
+      expect((entry?.metadata as Record<string, unknown>).request_id).toBeTruthy();
+
+      // A repeat request for the role the agent now holds is a no-op: no second,
+      // misleading entry.
+      const again = await server.put(
+        `/agents/${fx.a.agentAccountId}/role`,
+        { role: 'admin' },
+        auth(adminToken),
+      );
+      expect(again.statusCode).toBe(200);
+      expect(await count('member.role_changed')).toBe(before + 1);
     });
 
     it('records a successful workspace sign-in', async () => {

@@ -8,7 +8,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { ROUTING_STATUSES, type AgentRole } from '@nexa/types';
+import { AGENT_ROLES, ROUTING_STATUSES, type AgentRole } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { RoutingService } from '../services/routing/routing-service.js';
@@ -19,6 +19,7 @@ const routingStatusBody = z.object({ routing_status: z.enum(ROUTING_STATUSES) })
 const notificationPrefsBody = z.object({ email: z.boolean() });
 const listAgentsQuery = z.object({ status: z.enum(['active', 'suspended', 'all']).default('active') });
 const suspensionBody = z.object({ suspended: z.boolean() });
+const roleChangeBody = z.object({ role: z.enum(AGENT_ROLES) });
 
 /** One shape for an agent membership, so the list and the suspension reply never drift. */
 type MembershipWithAgent = {
@@ -221,6 +222,95 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
           action: suspended ? 'member.suspended' : 'member.unsuspended',
           target: `account:${agentId}`,
           metadata: { role: targetRole },
+        });
+
+        return next;
+      });
+
+      return reply.send(serialiseAgent(updated));
+    },
+  );
+
+  app.put<{ Params: { agentId: string } }>(
+    '/agents/:agentId/role',
+    // The double gate, in config so it reads at a glance: the scope says the
+    // token may administer agents, `minimumRole: admin` says the *person* is an
+    // admin or owner. An agent-role user holding a broad PAT is refused here.
+    { config: { scopes: ['agents--all:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const params = z.object({ agentId: z.string().uuid() }).safeParse(request.params);
+      if (!params.success) throw ApiError.validation('agentId must be a UUID.');
+      const parsedBody = roleChangeBody.safeParse(request.body);
+      if (!parsedBody.success) {
+        throw ApiError.validation('role must be one of: ' + AGENT_ROLES.join(', '));
+      }
+
+      const { agentId } = params.data;
+      const nextRole = parsedBody.data.role;
+
+      // `minimumRole` already proved this is an agent principal of admin rank or
+      // above; the narrowing is for the type system (accountId/role below) and a
+      // second line of defence.
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'agent') {
+        throw ApiError.authorization('Only a signed-in teammate can change a role.');
+      }
+      const actorRole = principal.role;
+
+      const updated = await request.withTenant(async (tx) => {
+        // RLS scopes this to the caller's licence, so a hit is always in-tenant
+        // and a miss is a 404 that keeps ids un-enumerable across tenants (NFR-S5).
+        const target = await tx.agentMembership.findFirst({
+          where: { agentId },
+          include: { agent: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+        });
+        if (!target) throw ApiError.notFound('Agent not found.');
+
+        const currentRole = target.role as AgentRole;
+
+        // The privilege ceiling, kept as one reasoning unit: drop any single
+        // guard and the escalation boundary leaks (an admin who could make
+        // themselves owner would collapse the whole of RBAC).
+        //
+        //   - No one changes their own role — you can neither hand yourself
+        //     power nor lock yourself out.
+        //   - The owner's role is immutable here; handing over the workspace is a
+        //     separate, heavier operation (the last-owner invariant) and out of
+        //     scope. Ownership is never *granted* here either — promoting anyone
+        //     to owner is that same transfer, refused.
+        //   - The caller may not touch a teammate ranked above them, nor grant a
+        //     role above their own rank. Both are the escalation NFR-S12 guards
+        //     against; each is a 403, not a 400, even when the body parsed.
+        if (target.agentId === principal.accountId) {
+          throw ApiError.authorization('You cannot change your own role.');
+        }
+        if (currentRole === 'owner') {
+          throw ApiError.authorization('The owner cannot be moved to another role here.');
+        }
+        if (nextRole === 'owner') {
+          throw ApiError.authorization('Ownership transfer is not supported here.');
+        }
+        if (!roleAtLeast(actorRole, currentRole)) {
+          throw ApiError.authorization('You cannot change an agent above your own role.');
+        }
+        if (!roleAtLeast(actorRole, nextRole)) {
+          throw ApiError.authorization('You cannot grant a role above your own.');
+        }
+
+        // No-op when the role is unchanged: return the current agent without
+        // writing a second, misleading audit entry.
+        if (currentRole === nextRole) return target;
+
+        const next = await tx.agentMembership.update({
+          where: { licenseId_agentId: { licenseId: target.licenseId, agentId } },
+          data: { role: nextRole },
+          include: { agent: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+        });
+
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'member.role_changed',
+          target: `account:${agentId}`,
+          metadata: { from: currentRole, to: nextRole },
         });
 
         return next;

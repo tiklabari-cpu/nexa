@@ -178,6 +178,62 @@ agentSuspension:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+agentRole:
+  parameters:
+    - name: agentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  put:
+    tags: [Configuration]
+    operationId: setAgentRole
+    summary: Change a teammate's role
+    description: |
+      Moves a teammate between roles (NFR-S12 — the "rol değişimi" the audit
+      requirement names by hand). Admin or owner only: both the scope and the
+      role are checked, and the change is bounded by a privilege ceiling so it
+      can never grant more power than the caller holds.
+
+      An admin or owner may only assign a role at or below their own rank, and
+      may only change a teammate whose current role is at or below theirs — an
+      admin cannot promote anyone to owner, nor touch a vice-owner. The owner's
+      own role is immutable here, and no one may change their own role: both
+      would be a way to seize or surrender the workspace. Ownership transfer is
+      a separate, heavier operation and is refused (`403`) by this endpoint.
+
+      A change to the role the teammate already holds is a no-op: it returns the
+      unchanged agent and writes nothing to the audit log. A real change writes
+      exactly one `member.role_changed` entry recording only the `from`/`to`
+      roles.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [role]
+            properties:
+              role:
+                type: string
+                enum: [owner, viceowner, admin, agent]
+                description: |
+                  The role to assign. `owner` is accepted by the schema but
+                  always refused (ownership transfer is out of scope here), and
+                  any role above the caller's own rank is refused — both as
+                  `403`, not `400`.
+    responses:
+      "200":
+        description: The agent, with its new role.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Agent" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 groups:
   get:
     tags: [Configuration]

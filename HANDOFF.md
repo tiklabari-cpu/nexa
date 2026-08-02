@@ -13,6 +13,29 @@
 
 ## Task log (newest-first)
 
+### tm 92.6 — 08.9.7-f Rol değişimi ucu (PUT /agents/{agentId}/role) + member.role_changed audit'i — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-MAX. NFR-S12'nin birebir saydığı 'rol değişimi' olayı artık üretilebilir: yeni
+  `PUT /agents/{agentId}/role` (contract-first — `paths/agents.yaml`+`openapi.yaml`, re-bundle).
+  Route **çift kapı** `{ scopes: ['agents--all:rw'], minimumRole: 'admin' }`; yetki tavanı tek akıl
+  yürütme olarak (suspension `agents.ts:161-231` deseninin rol için aynısı): kendi rolünü
+  değiştiremez · owner'ın rolü değişmez · **owner'a yükseltme reddedilir** (ikinci owner üretilmez) ·
+  aktörün rolünü aşan hedef **ve** yeni rol reddedilir (`roleAtLeast`) — hepsi **403**; no-op (aynı
+  rol) hiçbir entry yazmaz. `AUDIT_ACTIONS`'a kapalı sözlük `member.role_changed`; entry aynı
+  `withTenant(tx)` içinde, `target=account:<id>`, `metadata` YALNIZ `{ from, to }`.
+- **Doğrulama:** `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w test:unit` ✓ (api 263) ·
+  `pnpm -w test:integration` ✓ (rtm 51 + api 895, **contract-parity 5/5**; yeni `agents-role.test.ts`
+  12, `audit-log.test.ts` 31→32, `agents-suspension` 13 regresyonsuz) · `pnpm -w build` ✓.
+- **Varsayımlar:** Rol gövdesi `z.enum(AGENT_ROLES)` (owner dâhil) kabul edilir ama `owner` runtime'da
+  **403** ile reddedilir — böylece "admin→owner → 403" kabul kriteri sağlanır (400 değil) ve ikinci
+  owner asla üretilmez; owner devri ayrı/daha ağır bir işlem olarak kapsam dışı bırakıldı.
+  Guard negatifleri suspension'ın **komşusu** yeni `agents-role.test.ts`'te toplandı; birebir KK
+  (agent→admin tam-1 entry) `audit-log.test.ts`'e eklendi.
+- **Sonraki pencereye not:** E2E kapısı **uygulanmadı** — bu tur **ekran/UI yok** (KAPSAM DIŞI: Team
+  ekranında rol değiştirme -i/-j'nin işi); kapsanan akış API+audit seviyesinde ve integration ile
+  uçtan uca kanıtlandı. Kalan 08.9.7 payı: `-h` 30-gün fiili budama (append-only'de SECURITY DEFINER
+  fonksiyon) · `-i/-j` ekran · plan/tier kapısı · `-k` uçtan uca doğrulama. `08.9.7` satırı hâlâ `◐`.
+
 ### tm 92.5 — 08.9.7-e İçerik ve entegrasyon silme uçlarında data.deleted audit'i — done — 2026-08-02 UTC
 
 - **Yapıldı:** SONNET-XHIGH — 08.9.7-d'de tanımlanan `data.deleted` eylemi beş içerik/entegrasyon

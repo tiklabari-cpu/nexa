@@ -3852,13 +3852,13 @@
             "description": "chat-service `transfer` yolunda, transaction COMMIT sonrası (publisher.ts'in 'publishing happens after the transaction commits' kuralı): -a'daki `composerStateKey` ile o an chat'te yazan ajan kümesi SALT OKUNUR (-b'nin okuma yüzeyi yeniden kullanılır). Devir sonucu sorumlu ajan DEĞİŞTİYSE ve pencerede ≥1 başka ajan hâlâ yazıyorsa `agent_conflict_warning` yayınlanır; audience = yeni assignee + yaza",
             "details": "08.6.3-conflict-d — Transfer/atama anında aktif yazıcı çakışmasının API tarafından uyarılması  [OPUS-XHIGH]\n\nPRD: FR-MOD-08.6.3 (+ NFR-S4, NFR-M4)\nETİKET GEREKÇESİ: OPUS-XHIGH: koşul 2'ye kısmi temas (tenant-scoped audience kararı + mevcut transfer akışına dokunuş; yanlış audience başka ajanın chat erişimini sızdırır) ve koşul 4 (kopyalanacak birebir desen yok; publishCustomerTyping benzer ama çakışma kümesini Redis'ten okuma yolu yeni). Yarış mantığı -b'de kapalı — burada yalnız hazır küme okunup audience'a çevriliyor — bu yüzden MAX değil; güvenlik hassasiyeti olduğu için SONNET olamaz.\nNEDEN AÇIK: apps/api/src/routes/chats.ts transfer endpoint'i (satır ~282, operationId transferChat) devri yapıyor; schema.prisma satır 382'de `Thread.assigneeId` TEKİL bir alan (String?) — aynı anda yalnız bir sorumlu ajan modellenebiliyor ve iki ajanın eşzamanlı atanmasını/devrini uyaran veya bildiren bir kontrol yok. apps/api/src/services/chat/chat-service.ts `publishCustomerTyping` (satır ~499-551) audience hesabı + best-effort publish desenini taşıyor ama çakışma için kullanılmıyor.\nKAPSAM: chat-service `transfer` yolunda, transaction COMMIT sonrası (publisher.ts'in 'publishing happens after the transaction commits' kuralı): -a'daki `composerStateKey` ile o an chat'te yazan ajan kümesi SALT OKUNUR (-b'nin okuma yüzeyi yeniden kullanılır). Devir sonucu sorumlu ajan DEĞİŞTİYSE ve pencerede ≥1 başka ajan hâlâ yazıyorsa `agent_conflict_warning` yayınlanır; audience = yeni assignee + yazan ajanlar, `#audienceFor(chat)` ile kesiştirilerek (chat'i görmeyen ajan audience'a giremez). Yayın best-effort, transfer'i BOZMAZ. Uyarı bilgilendirir; devir engellenmez.\nDOSYALAR: apps/api/src/services/chat/chat-service.ts · apps/api/test/integration/agent-conflict.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/chat/chat-service.ts publishCustomerTyping (satır ~499-551: audience hesabı + boş audience'ta no-op + best-effort publish) · apps/api/src/services/realtime/publisher.ts (envelope + hasAudience reddi + asla rethrow etmeme) · apps/api/test/integration/chats.test.ts (transfer integration + cross-tenant iddia deseni)\nKK (birebir): \"| Routing (gelişmiş) | Skills-based routing, supervision + takeover, çoklu-ajan çakışma uyarısı |\" | \"KK-türetilmiş: 'Bir sohbet başka bir ajana devredilirken o sohbette hâlâ yazmakta olan ajan varsa, devralan ve yazan ajanlara çakışma uyarısı iletilir; kimse yazmıyorsa uyarı üretilmez; uyarı devri engellemez.' — Türetme gerekçesi: PRD §5.3 satır 408 çakışmayı yalnız isimlendiriyor, atama tarafı için kriter vermiyor; orkestratörün bağlayıcı kararı 'aynı thread'de eşzamanlı yazan/ATANAN iki ajan' bu ikinci yüzeyi kapsama alıyor.\"\nKK DOĞRULAMA: apps/api/test/integration/agent-conflict.test.ts — (i) A ajanı yazarken chat B'ye devredilir → sahte publisher `agent_conflict_warning` envelope'unu yakalar, audience hem A hem B'yi içerir ('devralan ve yazan ajanlara iletilir'); (ii) kimse yazmıyorken devir → uyarı YOK ('kimse yazmıyorsa üretilmez'); (iii) publisher/Redis hata verdiğinde transfer yine başarılı yanıt döner ve thread devredilmiş olur ('uyarı devri engellemez'); (iv) başka lisansın ajanı audience'a GİRMEZ.\nKAPSAM DIŞI: Sert engelleme / 409 + yeni ApiError tipi — YAPILMAZ. (Gerekseydi depo tuzağı: packages/types/src/errors.ts ×2 yer (ERROR_TYPES + ERROR_STATUS) + scopes.test.ts sayacı + openapi enum + bundle regen dörtlüsünün HEPSİ güncellenmeliydi.) · RTM typing yolundaki çakışma (-c) · ticket rules / otomatik atama (08.6.2) · supervision + takeover (FR-MOD-08.6.3'ün diğer yarısı — ayrı kalem) · UI (-e/-f)\nSÖZLEŞME: yok — yeni REST route veya yanıt alanı eklenmiyor (getChat yanıtına `active_agent_ids` EKLENMEZ), contract-parity.test.ts etkilenmez. UYARI: ileride bir route/alan eklenirse packages/contract/openapi'ye eklenip re-bundle edilmezse contract-parity.test.ts KIRILIR.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): yazan yok → uyarı yok; publisher/Redis hatası transfer'i bozmaz; chat audience'ı dışındaki ajan audience'a girmez · cross-tenant: başka lisansın ajanı audience'ta yer almaz / uyarı sızmaz · integration: A yazarken B'ye devir → `agent_conflict_warning` yayınlanır ve audience A+B içerir · regresyon: mevcut chats.test.ts transfer testleri yeşil · not: DB süiti paket bazında seri koşulur (memory: 'Test gate & parallel DB')",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               2
             ],
             "parentId": "91",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T02:18:49.791Z"
           },
           {
             "id": 5,
@@ -3903,7 +3903,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T01:57:20.460Z"
+        "updatedAt": "2026-08-02T02:18:49.791Z"
       },
       {
         "id": "92",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T01:57:20.460Z",
+      "lastModified": "2026-08-02T02:18:49.791Z",
       "taskCount": 99,
       "completedCount": 71,
       "tags": [

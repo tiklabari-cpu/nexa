@@ -3969,12 +3969,12 @@
             "description": "08.9.7-d'de tanımlanan 'data.deleted' eylemi bu beş uca uygulanır; her biri kendi mevcut request.withTenant(tx) bloğunun içinde, yalnız silme gerçekleştiyse yazar. target = '<kind>:<id>' (website / skill / knowledge_source / copilot_source / app_installation). metadata yalnız { kind }.",
             "details": "08.9.7-e — İçerik ve entegrasyon silme uçlarında data.deleted audit'i  [SONNET-XHIGH]\n\nPRD: NFR-S12 (+ NFR-C8)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 5 route dosyası, tek satırlık aynı dönüşüm; eylem sözlüğü 08.9.7-d'de tanımlandığı için burada yalnız uygulama var; güvenlik kararı yok, eşzamanlılık yok; referans desen ismen 08.9.7-d'nin kendisi + settings.ts:275-298; kabul kriteri mekanik.\nNEDEN AÇIK: grep writeAuditEntry: websites.ts, playbook.ts, copilot.ts ve apps.ts dosyalarının hiçbirinde geçmiyor (0 sonuç). Oysa hepsi kalıcı silme yapıyor: DELETE /websites/:websiteId (websites.ts:111), DELETE /playbook/skills/:skillId (playbook.ts:267), DELETE /knowledge-sources/:sourceId (playbook.ts:437), DELETE /copilot/knowledge/:sourceId (copilot.ts:116), DELETE /settings/apps/:appId (apps.ts:76).\nKAPSAM: 08.9.7-d'de tanımlanan 'data.deleted' eylemi bu beş uca uygulanır; her biri kendi mevcut request.withTenant(tx) bloğunun içinde, yalnız silme gerçekleştiyse yazar. target = '<kind>:<id>' (website / skill / knowledge_source / copilot_source / app_installation). metadata yalnız { kind }.\nDOSYALAR: apps/api/src/routes/websites.ts · apps/api/src/routes/playbook.ts · apps/api/src/routes/copilot.ts · apps/api/src/routes/apps.ts · apps/api/test/integration/audit-log.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/settings.ts:275-298 (count>0 kapısı + tx içinde yazım) · apps/api/src/routes/webhooks.ts:77-89 (removed === 0 → 404 deseni, aynı yapı)\nKK (birebir): \"Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30 gün) tüm planlarda\"\nKK DOĞRULAMA: test/integration/audit-log.test.ts: beş ucun her biri tam olarak bir data.deleted entry'si yazar; 404 silmede entry yok. 'veri silme' maddesinin içerik/entegrasyon payını kapatır.\nKAPSAM DIŞI: Ayarlar ailesi uçları (08.9.7-d) · Chat tag kaldırma (chats.ts:320) — konuşma içi etiket düşürme veri silme değil, kapsam dışı · Ekranda gösterim (08.9.7-i/-j)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): 404 silme → entry yazılmaz · negatif (önce): silinen kaynağın adı/URL'i/içeriği metadata'ya düşmüyor · cross-tenant: başka lisansın kaydını silme denemesi 404 + log'a entry yok · integration (pozitif): uç başına tam 1 entry",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               4
             ],
             "parentId": "92",
-            "updatedAt": "2026-08-02T09:32:34.221Z"
+            "updatedAt": "2026-08-02T09:41:29.244Z"
           },
           {
             "id": 6,
@@ -4059,7 +4059,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T09:32:34.221Z"
+        "updatedAt": "2026-08-02T09:41:29.244Z"
       },
       {
         "id": "93",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T09:32:34.222Z",
+      "lastModified": "2026-08-02T09:41:29.244Z",
       "taskCount": 99,
       "completedCount": 72,
       "tags": [

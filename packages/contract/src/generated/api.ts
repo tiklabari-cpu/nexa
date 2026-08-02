@@ -2952,11 +2952,12 @@ export interface paths {
      *     returned, by id or otherwise.
      *
      *     Defaults to the last 30 days, the window the PRD keeps in every plan.
-     *     Explicit filters (action, actor, date range) are a separate surface; this
-     *     endpoint is the base read. Paginated by opaque keyset cursor rather than
-     *     offset: entries arrive constantly and an offset page would shift under the
-     *     reader and silently skip rows. `limit` above the maximum is clamped, not
-     *     rejected.
+     *     `action`, `actor_id`, `date_from` and `date_to` narrow the same list,
+     *     additively — combine them freely. `date_from`/`date_to` replace the
+     *     30-day default when given; omitting one leaves that side open. Paginated
+     *     by opaque keyset cursor rather than offset: entries arrive constantly and
+     *     an offset page would shift under the reader and silently skip rows.
+     *     `limit` above the maximum is clamped, not rejected.
      */
     get: operations['listAuditLog'];
     put?: never;
@@ -9524,6 +9525,18 @@ export interface operations {
   listAuditLog: {
     parameters: {
       query?: {
+        /**
+         * @description One action from the closed audit vocabulary (e.g. `auth.login`,
+         *     `member.suspended`). An unrecognised value is a 400, not an empty
+         *     list. Uses the `(license_id, action, created_at DESC)` index.
+         */
+        action?: string;
+        /** @description The acting account/bot id, exact match. */
+        actor_id?: string;
+        /** @description Replaces the 30-day default lower bound when given. */
+        date_from?: string;
+        /** @description Open-ended (now) when omitted. */
+        date_to?: string;
         /** @description Opaque keyset cursor from the previous page. */
         page_id?: components['parameters']['PageId'];
         limit?: components['parameters']['Limit'];

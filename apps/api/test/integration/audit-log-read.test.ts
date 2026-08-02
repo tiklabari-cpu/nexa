@@ -52,12 +52,13 @@ describe('audit log read', () => {
       createdAt?: Date;
       metadata?: Record<string, unknown>;
       ip?: string | null;
+      actorId?: string | null;
     } = {},
   ): Promise<string> {
     const row = await owner.auditLogEntry.create({
       data: {
         licenseId: tenant.licenseId,
-        actorId: tenant.ownerAccountId,
+        actorId: opts.actorId !== undefined ? opts.actorId : tenant.ownerAccountId,
         actorType: 'agent',
         action: opts.action ?? 'auth.login',
         target: opts.target ?? null,
@@ -270,5 +271,146 @@ describe('audit log read', () => {
     expect(entry.metadata).toEqual({ role: 'agent', fields: ['suspended'] });
     expect(entry.ip).toBe('203.0.113.9');
     expect(typeof entry.created_at).toBe('string');
+  });
+
+  // --- Filters (action, actor, date range) — 08.9.7-b ------------------------
+
+  describe('filters', () => {
+    it('rejects an unrecognised action with 400', async () => {
+      const res = await server.get('/audit-log?action=not.a.real.action', auth(ownerReadToken));
+      expect(res.statusCode).toBe(400);
+      expect(errorType(res)).toBe('validation');
+    });
+
+    it('rejects date_from after date_to with 400', async () => {
+      const res = await server.get(
+        '/audit-log?date_from=2026-02-01T00:00:00.000Z&date_to=2026-01-01T00:00:00.000Z',
+        auth(ownerReadToken),
+      );
+      expect(res.statusCode).toBe(400);
+      expect(errorType(res)).toBe('validation');
+    });
+
+    it('action narrows the list to matching rows only', async () => {
+      const login = await seedEntry(fx.a, { action: 'auth.login', target: 'token:login' });
+      await seedEntry(fx.a, { action: 'pat.created', target: 'token:pat' });
+
+      const res = await server.get('/audit-log?action=auth.login', auth(ownerReadToken));
+      expect(res.statusCode).toBe(200);
+      expect(itemsOf(res).map((e) => e.id)).toEqual([login]);
+    });
+
+    it('actor_id narrows the list to that actor only', async () => {
+      const mine = await seedEntry(fx.a, {
+        action: 'auth.login',
+        target: 'token:mine',
+        actorId: fx.a.ownerAccountId,
+      });
+      await seedEntry(fx.a, {
+        action: 'auth.login',
+        target: 'token:agent',
+        actorId: fx.a.agentAccountId,
+      });
+
+      const res = await server.get(
+        `/audit-log?actor_id=${fx.a.ownerAccountId}`,
+        auth(ownerReadToken),
+      );
+      expect(res.statusCode).toBe(200);
+      expect(itemsOf(res).map((e) => e.id)).toEqual([mine]);
+    });
+
+    it('date_from/date_to override the 30-day default window', async () => {
+      // Well outside the default 30-day window — invisible unless the range says so.
+      const old = await seedEntry(fx.a, {
+        action: 'auth.login',
+        target: 'token:old',
+        createdAt: new Date(Date.now() - 200 * 86_400_000),
+      });
+      const recent = await seedEntry(fx.a, { action: 'auth.login', target: 'token:recent' });
+
+      const from = new Date(Date.now() - 210 * 86_400_000).toISOString();
+      const to = new Date(Date.now() - 190 * 86_400_000).toISOString();
+      const res = await server.get(
+        `/audit-log?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}`,
+        auth(ownerReadToken),
+      );
+      expect(res.statusCode).toBe(200);
+      const ids = itemsOf(res).map((e) => e.id);
+      expect(ids).toEqual([old]);
+      expect(ids).not.toContain(recent);
+    });
+
+    it('combines filters additively (action + actor_id)', async () => {
+      const match = await seedEntry(fx.a, {
+        action: 'auth.login',
+        target: 'token:match',
+        actorId: fx.a.ownerAccountId,
+      });
+      // Same action, different actor.
+      await seedEntry(fx.a, {
+        action: 'auth.login',
+        target: 'token:other-actor',
+        actorId: fx.a.agentAccountId,
+      });
+      // Same actor, different action.
+      await seedEntry(fx.a, {
+        action: 'pat.created',
+        target: 'token:other-action',
+        actorId: fx.a.ownerAccountId,
+      });
+
+      const res = await server.get(
+        `/audit-log?action=auth.login&actor_id=${fx.a.ownerAccountId}`,
+        auth(ownerReadToken),
+      );
+      expect(res.statusCode).toBe(200);
+      expect(itemsOf(res).map((e) => e.id)).toEqual([match]);
+    });
+
+    it("never returns another tenant's entries under a filter", async () => {
+      const mine = await seedEntry(fx.a, { action: 'auth.login', target: 'token:mine' });
+      // Same action, other tenant — must never leak through the filter.
+      await seedEntry(fx.b, { action: 'auth.login', target: 'token:b-only' });
+
+      const res = await server.get('/audit-log?action=auth.login', auth(ownerReadToken));
+      expect(res.statusCode).toBe(200);
+      const ids = itemsOf(res).map((e) => e.id);
+      expect(ids).toEqual([mine]);
+    });
+
+    it('paginates by keyset under a filter — no overlap, no gap', async () => {
+      const base = Date.now() - 60_000;
+      const ids: string[] = [];
+      for (let i = 0; i < 4; i++) {
+        ids.push(
+          await seedEntry(fx.a, {
+            action: 'auth.login',
+            target: `token:f${i}`,
+            createdAt: new Date(base - i * 1000),
+          }),
+        );
+      }
+      // Noise of a different action — must never appear in a filtered page.
+      await seedEntry(fx.a, { action: 'pat.created', target: 'token:noise' });
+      const expected = ids;
+
+      const page1 = await server.get('/audit-log?action=auth.login&limit=2', auth(ownerReadToken));
+      const body1 = page1.json() as { items: Array<{ id: string }>; next_page_id?: string };
+      expect(body1.items.map((e) => e.id)).toEqual(expected.slice(0, 2));
+      expect(body1.next_page_id).toBeTruthy();
+
+      const page2 = await server.get(
+        `/audit-log?action=auth.login&limit=2&page_id=${encodeURIComponent(body1.next_page_id!)}`,
+        auth(ownerReadToken),
+      );
+      const body2 = page2.json() as { items: Array<{ id: string }>; next_page_id?: string };
+      expect(body2.items.map((e) => e.id)).toEqual(expected.slice(2, 4));
+      expect(body2.next_page_id).toBeUndefined();
+
+      const seen = [...body1.items, ...body2.items].map((e) => e.id);
+      expect(new Set(seen).size).toBe(4);
+      expect(seen).toEqual(expected);
+    });
   });
 });

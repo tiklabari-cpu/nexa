@@ -3932,12 +3932,12 @@
             "description": "GET /audit-log'a katkısal parametreler: action (AUDIT_ACTIONS sözlüğünden enum), actor_id (uuid), date_from/date_to (z.coerce.date). action verildiğinde (license_id, action, created_at DESC) indeksi kullanılır. date_from/date_to verilmezse 08.9.7-a'daki 30 günlük varsayılan korunur. Reader'ın #where yardımcısı ayrıştırılır; kontrat parametreleri paths/audit-log.yaml'a eklenir + re-bundle.",
             "details": "08.9.7-b — Audit liste filtreleri: eylem, aktör ve tarih aralığı (katkısal sorgu parametreleri)  [SONNET-XHIGH]\n\nPRD: NFR-S12 (+ NFR-P6)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 3 dosya + test; yeni yetki/scope kararı yok (kapı 08.9.7-a'da kuruldu, bu alt-görev yalnız WHERE daraltıyor); eşzamanlılık yok; kopyalanacak desen ismen var (customer-service.ts #where + reports.ts rangeQuery); kontrat değişikliği katkısal (yalnız query parametresi); kabul kriteri mekanik (filtre listeyi daraltır).\nNEDEN AÇIK: 08.9.7-a yalnız tarih penceresi + sayfalama getiriyor; NFR-S12'nin saydığı dört olay ailesini ayrıştırmak için eylem/aktör bazlı daraltma gerekiyor ve audit_log'un ikinci indeksi (license_id, action, created_at DESC) bugün hiçbir sorgu tarafından kullanılmıyor — okuma tarafı hiç yazılmamıştı (grep: 0 tüketici).\nKAPSAM: GET /audit-log'a katkısal parametreler: action (AUDIT_ACTIONS sözlüğünden enum), actor_id (uuid), date_from/date_to (z.coerce.date). action verildiğinde (license_id, action, created_at DESC) indeksi kullanılır. date_from/date_to verilmezse 08.9.7-a'daki 30 günlük varsayılan korunur. Reader'ın #where yardımcısı ayrıştırılır; kontrat parametreleri paths/audit-log.yaml'a eklenir + re-bundle.\nDOSYALAR: apps/api/src/services/audit/audit-log-reader.ts · apps/api/src/routes/audit-log.ts · packages/contract/openapi/paths/audit-log.yaml · apps/api/test/integration/audit-log-read.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/customers/customer-service.ts (#where + segment/query filtre birleştirme) · apps/api/src/routes/reports.ts (rangeQuery: z.coerce.date() from/to + parse() hata zarfı) · packages/contract/openapi/paths/customers.yaml (query/segment parametre bildirimi)\nKK (birebir): \"Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30 gün) tüm planlarda\" | \"KK-türetilmiş: dört olay ailesi listede birbirinden ayrıştırılabilir olmalı. Türetme gerekçesi: PRD KK olayları sayıyor ama okuma/filtre yüzeyini tanımlamıyor (kk_yetersiz); NFR-S12'nin sayımının ekranda doğrulanabilmesi eylem bazlı daraltma gerektiriyor.\"\nKK DOĞRULAMA: test/integration/audit-log-read.test.ts: action=auth.login yalnız login satırlarını döner; actor_id verilen aktörün satırlarına daralır; date_from/date_to pencereyi daraltır ve 30 günlük varsayılanı geçersiz kılar.\nKAPSAM DIŞI: Serbest metin arama (metadata içi arama) — jsonb tarama, kapsam dışı · Ekran filtre kontrolleri — 08.9.7-j · Yeni indeks ekleme (mevcut iki indeks yeterli)\nSÖZLEŞME: Katkısal: paths/audit-log.yaml GET parametrelerine action/actor_id/date_from/date_to eklenir. Yeni operation YOK, dolayısıyla contract-parity operasyon kümesi değişmez; yine de re-bundle (pnpm --filter @nexa/contract generate) yapılmazsa üretilen tipler kontrattan sapar.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): tanımsız action değeri → 400 (validation, hata zarfı ADR-06) · negatif (önce): date_from > date_to → 400 · cross-tenant: filtreli sorgu da RLS'yi atlamıyor — B'nin kayıtları hiçbir filtre kombinasyonunda görünmüyor · integration: her filtrenin listeyi daralttığı (pozitif) + sayfalamanın filtre altında da çakışmasız kaldığı",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               1
             ],
             "parentId": "92",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T06:16:25.037Z"
           },
           {
             "id": 3,
@@ -4059,7 +4059,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T06:14:16.809Z"
+        "updatedAt": "2026-08-02T06:16:25.037Z"
       },
       {
         "id": "93",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T06:14:16.810Z",
+      "lastModified": "2026-08-02T06:16:25.037Z",
       "taskCount": 99,
       "completedCount": 72,
       "tags": [

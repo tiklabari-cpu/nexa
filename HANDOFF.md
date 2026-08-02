@@ -13,6 +13,38 @@
 
 ## Task log (newest-first)
 
+### tm 92.2 — 08.9.7-b Audit liste filtreleri: eylem, aktör, tarih aralığı — done — 2026-08-02 UTC
+
+- **Yapıldı:** SONNET-XHIGH — GET /audit-log'a katkısal sorgu parametreleri: `action` (`AUDIT_ACTIONS`
+  kapalı sözlüğünden `z.enum`), `actor_id` (`z.string().uuid()`), `date_from`/`date_to`
+  (`z.coerce.date()`). Reader tarafında (`audit-log-reader.ts`) 30 günlük varsayılan pencere +
+  action/actor/date filtreleri tek bir `buildWhere` yardımcısında birleştirildi (customer-service.ts
+  `#where` deseninin birebir kopyası: filtre dizisi, tek elemansa direkt, birden fazlaysa `AND`).
+  `date_from` verilirse varsayılan alt sınırın yerine geçer; `date_to` verilmezse üst sınır açık kalır
+  (şimdiye kadar). `action` verildiğinde Prisma sorgusu `(license_id, action, created_at DESC)`
+  indeksini kullanır (WHERE'de eşitlik koşulu olarak — planı doğrulamak için ek bir adım atılmadı,
+  şema zaten bu indeksi bu erişim deseni için taşıyordu). Route tarafında `date_from > date_to` →
+  400 (reports.ts `resolveRange` deseninin birebir kopyası, ApiError.validation). Kontrat
+  (`paths/audit-log.yaml`) 4 yeni query parametresiyle katkısal genişletildi + re-bundle edildi
+  (`pnpm --filter @nexa/contract generate`) — yeni operation yok, contract-parity operasyon kümesi
+  değişmedi.
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w build` ✅ · `pnpm --filter
+  @nexa/api exec vitest run` (unit, 19 dosya/259 test) ✅ · `pnpm -w test:integration --filter=@nexa/api`
+  (`--concurrency=1`, 43 dosya/870 test dahil `contract-parity.test.ts` ve genişletilmiş
+  `audit-log-read.test.ts` 7→17) ✅. E2E koşulmadı — bu task'ın kapsadığı akışta ekran/UI yok (filtre
+  kontrolleri ayrı task `08.9.7-j`, açıkça KAPSAM DIŞI).
+- **Varsayımlar:** OpenAPI'de `action` parametresi `AuditLogEntry.action` şemasındaki gibi serbest
+  `type: string` bırakıldı (28 elemanlı `AUDIT_ACTIONS`'ı kontratta da enum'lamak, yeni eylem her
+  eklendiğinde iki dosyayı senkron tutmayı zorunlu kılardı — response şemasında zaten aynı gerekçeyle
+  enum'lanmamıştı); backend zod tarafında `z.enum(AUDIT_ACTIONS)` ile sıkı doğrulama korunuyor, yalnız
+  kontrat seviyesinde gevşek. `date_to` verilmeden `date_from` verilirse üst sınır bugüne kadar açık
+  kalır (spec bunu örtük bırakıyordu, reports.ts `resolveRange`'in aksine burada "to" için ayrı bir
+  varsayılan yok — mevcut günden okuma zaten en yeni kayıtları kapsıyor).
+- **Sonraki pencereye not:** `08.9.7-j` (ekran filtreleri) artık açık — bu task'ın API yüzeyine bağımlıydı.
+  `08.9.7-k` (uçtan uca NFR-S12 doğrulaması) hâlâ -e/-f/-h/-j'yi bekliyor. Reader'daki `buildWhere`
+  deseni ileride başka bir filtre eklenirse (ör. `target`) aynı yere eklenmeli — dağınık where-inşası
+  yok.
+
 ### tm 92.3 — 08.9.7-c Webhook değişimi audit'i: `webhook.created` / `webhook.deleted` — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-XHIGH — NFR-S12'nin birebir saydığı "webhook değişimi" olayı hiç kaydedilmiyordu

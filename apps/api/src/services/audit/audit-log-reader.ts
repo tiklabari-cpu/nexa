@@ -17,10 +17,14 @@
  *     key `(created_at, id)` so a page resumes exactly where the last ended.
  *   - **A default 30-day window.** The PRD keeps "temel audit … son 30 gün" in
  *     every plan, and the `(license_id, created_at DESC)` index serves that
- *     bound directly — no full-table scan. Explicit date/action filters are a
- *     separate surface (08.9.7-b); this is the base read.
+ *     bound directly — no full-table scan. An explicit `action` filter uses the
+ *     table's second index (`license_id, action, created_at DESC`) instead;
+ *     `actorId` and an explicit date range narrow further, additively, with no
+ *     index of their own.
  */
+import type { Prisma } from '@prisma/client';
 import type { TenantClient } from '../../lib/tenant.js';
+import type { AuditAction } from './audit-log.js';
 
 /** The default window the PRD keeps in every plan. */
 const DEFAULT_WINDOW_DAYS = 30;
@@ -32,6 +36,13 @@ export interface AuditLogListOptions {
   limit?: number;
   /** Opaque keyset cursor from a previous page. */
   pageId?: string;
+  /** Narrows to one action from the closed AUDIT_ACTIONS vocabulary. */
+  action?: AuditAction;
+  actorId?: string;
+  /** Replaces the 30-day default lower bound when given. */
+  dateFrom?: Date;
+  /** Open-ended (now) when omitted. */
+  dateTo?: Date;
 }
 
 export interface AuditLogItem {
@@ -64,11 +75,8 @@ export async function listAuditLog(
   const limit = clampLimit(options.limit);
   const cursor = decodeCursor(options.pageId);
 
-  // The old end of the default window. `created_at` is never null (schema
-  // default now()), so unlike the customer keyset there is no nulls-last branch.
-  const since = new Date(Date.now() - DEFAULT_WINDOW_DAYS * 86_400_000);
-  const window = { createdAt: { gte: since } };
-  const where = cursor ? { AND: [window, cursorPredicate(cursor)] } : window;
+  const filtered = buildWhere(options);
+  const where = cursor ? { AND: [filtered, cursorPredicate(cursor)] } : filtered;
 
   // One extra row tells us whether another page exists without a second count.
   const rows = await tx.auditLogEntry.findMany({
@@ -87,6 +95,24 @@ export async function listAuditLog(
       ? { nextPageId: encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id }) }
       : {}),
   };
+}
+
+/**
+ * The date window (30-day default, narrowed by explicit `dateFrom`/`dateTo`),
+ * plus any `action`/`actorId` filter — additive, so a caller can combine them
+ * freely. `created_at` is never null (schema default `now()`), so unlike the
+ * customer keyset there is no nulls-last branch to worry about.
+ */
+function buildWhere(options: AuditLogListOptions): Prisma.AuditLogEntryWhereInput {
+  const since = options.dateFrom ?? new Date(Date.now() - DEFAULT_WINDOW_DAYS * 86_400_000);
+  const createdAt: Prisma.DateTimeFilter = { gte: since };
+  if (options.dateTo) createdAt.lte = options.dateTo;
+
+  const filters: Prisma.AuditLogEntryWhereInput[] = [{ createdAt }];
+  if (options.action) filters.push({ action: options.action });
+  if (options.actorId) filters.push({ actorId: options.actorId });
+
+  return filters.length === 1 ? filters[0]! : { AND: filters };
 }
 
 /** Keyset predicate for (created_at DESC, id DESC). */

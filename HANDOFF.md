@@ -13,6 +13,22 @@
 
 ## Task log (newest-first)
 
+### PANEL — Faz-2 üst-tablo sayaç çelişkisi (§D68 yanlış-pozitifi yeniden bildirildi) — no-change — 2026-08-02 UTC
+
+- **Yapıldı:** Panel §1.2 çelişkisi bildirdi (özet satır 22 `5 ✅ / 22 ⬜` ⟷ sayım `6 ✅ / 21 ⬜`).
+  Tek Faz-2 gereksinim tablosu §5.0 (satır 1108–1137, 30 satır) **öncü** durum damgası awk ile tek tek
+  sayıldı → **22 ⬜ · 5 ✅ · 3 ⛔**, üst-tabloyla **birebir uyuşuyor → özet DOĞRU, bayat değil**. Panelin
+  `6 ✅ / 21 ⬜`'i naif ham-glif sayımı: `06.3.2-bulk` satırı (1108) v1 kardeşine atıfla gömülü `` `✅` ``
+  taşır → öncü `⬜` satırı `✅` sanılıp `−1 ⬜ / +1 ✅` kaydırır (§D68'de zaten teşhisli, re-doğrulandı).
+- **Doğrulama:** öncü-damga sayımı (awk, satır 6-col) = özet; §5.0 dışında öncü damga taşıyan Faz-2
+  tablosu yok (grep 0); D68'den beri hiçbir damga değişmedi (satır 1120 hâlâ ✅, commit'li).
+- **Değişen:** yalnız `PLAN.md §D69` (disposition) + bu HANDOFF notu. Özet sayacına ve gereksinim
+  damgalarına DOKUNULMADI — düzeltilecek bir şey yoktu. Kod/şema değişmedi → DoD kapısı (typecheck/…)
+  koşulmadı (yalnız doküman). Commit: `docs(plan)`.
+- **Sonraki pencereye not:** Bu kalıcı yanlış-pozitiftir — satır 1108'in gömülü `✅` glifi durdukça naif
+  glif-sayaç her taramada `6/21` bildirir; doğru yöntem **öncü-damga** sayımıdır (§D68/§D69). Yeniden
+  bildirilirse doğrudan kapatılabilir, PLAN değişmez.
+
 ### tm 80.9 — 08.9.6-i Uçtan uca doğrulama (E2E + audit görünürlüğü + proxy-IP + istek başına maliyet) — done — 2026-08-02 UTC
 
 - **Yapıldı:** IP allowlist / oturum güvenliği dilimini (08.9.6 a→h) uçtan uca **doğruladı** — yeni

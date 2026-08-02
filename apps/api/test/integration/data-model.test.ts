@@ -471,6 +471,67 @@ describe('data model invariants', () => {
   });
 
   // =========================================================================
+  // Brands (Multibrand — PRD §5.3 / NFR-S4)
+  // =========================================================================
+
+  describe('brands', () => {
+    it('holds exactly one default brand per license — a second default is rejected', async () => {
+      // The migration backfill and the seed give every license exactly one
+      // default brand; the partial unique index is what guarantees a second can
+      // never be added, however the race is run.
+      await owner.brand.create({
+        data: { licenseId: fx.a.licenseId, name: 'Default', slug: 'default', isDefault: true },
+      });
+      const defaults = await owner.brand.count({
+        where: { licenseId: fx.a.licenseId, isDefault: true },
+      });
+      expect(defaults).toBe(1);
+
+      await expect(
+        owner.brand.create({
+          data: { licenseId: fx.a.licenseId, name: 'Second', slug: 'second', isDefault: true },
+        }),
+      ).rejects.toThrow(/unique constraint/i);
+    });
+
+    it('allows more than one non-default brand for a license', async () => {
+      // Only the default is capped at one; a license may carry many brands.
+      await owner.brand.createMany({
+        data: [
+          { licenseId: fx.a.licenseId, name: 'Default', slug: 'default', isDefault: true },
+          { licenseId: fx.a.licenseId, name: 'Acme EU', slug: 'acme-eu' },
+          { licenseId: fx.a.licenseId, name: 'Acme US', slug: 'acme-us' },
+        ],
+      });
+      const count = await owner.brand.count({ where: { licenseId: fx.a.licenseId } });
+      expect(count).toBe(3);
+    });
+
+    it('scopes slug uniqueness to a license, not globally', async () => {
+      await owner.brand.create({
+        data: { licenseId: fx.a.licenseId, name: 'Default', slug: 'default', isDefault: true },
+      });
+      // Same slug under a different license is fine — the constraint is per-license.
+      await owner.brand.create({
+        data: { licenseId: fx.b.licenseId, name: 'Default', slug: 'default', isDefault: true },
+      });
+      // A duplicate slug within the same license is not.
+      await expect(
+        owner.brand.create({ data: { licenseId: fx.a.licenseId, name: 'Dup', slug: 'default' } }),
+      ).rejects.toThrow(/unique constraint/i);
+    });
+
+    it('is removed when its license is deleted (onDelete cascade)', async () => {
+      await owner.brand.create({
+        data: { licenseId: fx.b.licenseId, name: 'Default', slug: 'default', isDefault: true },
+      });
+      await owner.license.delete({ where: { id: fx.b.licenseId } });
+      const remaining = await owner.brand.count({ where: { licenseId: fx.b.licenseId } });
+      expect(remaining).toBe(0);
+    });
+  });
+
+  // =========================================================================
   // Referential integrity
   // =========================================================================
 

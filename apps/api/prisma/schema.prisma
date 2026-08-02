@@ -83,6 +83,7 @@ model License {
   channelIdentities      ChannelIdentity[]
   channelMessages        ChannelMessage[]
   websites               Website[]
+  brands                 Brand[]
   webhooks               Webhook[]
   webhookDeliveries      WebhookDelivery[]
   subscriptions          Subscription[]
@@ -1097,6 +1098,30 @@ model Website {
 
   @@unique([licenseId, domain])
   @@map("websites")
+}
+
+/// A brand under a license — the Multibrand surface (PRD §5.3 · NFR-S4).
+///
+/// Shaped like `Website`: license-scoped, a uuid id, `onDelete: Cascade`. Every
+/// license owns at least one brand — the migration backfill and the seed lay
+/// down a single `Default` (`is_default`) row, so a workspace that never touches
+/// Multibrand keeps behaving exactly as one brand. At most one default per
+/// license is enforced by a partial unique index (`ON brands(license_id) WHERE
+/// is_default`), which Prisma cannot express and the migration adds by hand.
+model Brand {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  name      String
+  slug      String
+  logoUrl   String?  @map("logo_url")
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, slug])
+  @@map("brands")
 }
 
 /// Outbound webhook registration.

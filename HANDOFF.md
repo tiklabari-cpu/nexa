@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+### 78.1 — MULTIBRAND-a `brands` tablosu + license-scoped RLS + varsayılan marka backfill — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-XHIGH. Multibrand'in **kontrat-öncesi şema katmanı** (davranışsız — hiçbir
+  route/OpenAPI path YOK). (1) `model Brand` — uuid id · `licenseId` FK `onDelete: Cascade` ·
+  `@@unique([licenseId, slug])` · `logoUrl?` · `isDefault` · timestamps — `Website` modelinin birebir
+  şekli; `License.brands` back-relation. (2) migration `20260802100000_brands`: tablo (Prisma diff DDL
+  stili) + FK + `ENABLE ROW LEVEL SECURITY` + `brands_tenant` policy (`nexa_current_license()`
+  USING+WITH CHECK, `websites`/`widget_settings` deseni) + `GRANT ... TO nexa_app`. (3) lisans başına
+  **tek varsayılan**: partial unique index `ON brands(license_id) WHERE is_default`. (4) backfill:
+  mevcut HER lisansa bir `Default` (is_default) markası (`NOT EXISTS` guard → idempotent) → tek-markalı
+  davranış birebir korunur. (5) `seed.ts` aynı satırı üretir. Partial index Prisma'da ifade edilemez →
+  `scripts/check-drift.ts` KNOWN_UNMODELLABLE'a kaydedildi (pgvector deseni). Testler: `data-model.test.ts`
+  (+4) + `tenant-isolation.test.ts` (RLS-etkin liste 11→12 + 3 negatif).
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w build` ✅ ·
+  `pnpm -w test:integration` ✅ (serial; **44 dosya / 918 test** — 911→918, +7: data-model 4 + tenant-isolation 3;
+  contract-parity 5 DEĞİŞMEDEN yeşil) · `pnpm -w test:unit` ✅ (web 489 + diğer) · `db:check-drift` ✅
+  (no drift — Prisma partial index'i introspection'da yok sayıyor; KNOWN_UNMODELLABLE savunma amaçlı).
+  Canlı DB doğrulaması: 4 lisans → **tam 4** is_default marka; tablo/RLS/policy/partial-index psql ile teyit.
+  Kapı komutlarının hepsi exit 0.
+- **Varsayımlar:** Test fixtures'ına (`seedFixtures`) marka EKLENMEDİ — yeni lisanslar (fixture/signup)
+  markasız doğar; "her lisansta bir marka" yalnız backfill (mevcut veri) + seed (demo) için geçerli, bu
+  subtask'ın kapsamı bu (signup'ta marka üretimi -b/-d'nin işi). E2E: bu subtask kullanıcı-akışı taşımıyor →
+  yeni e2e YOK; `seed.ts` marka üretimi typecheck + integration'daki birebir `brand.create` şekliyle doğrulandı
+  (no-DB-drop sınırı: `db:reset` çalıştırılmadı).
+- **Sonraki pencereye not:** §5.0 envanterinde `§5.3-Marka | Multibrand` **⬜→◐** (slice 1/8 teslim);
+  özet sayaç **20⬜/0◐/7✅/3⛔ → 19⬜/1◐/7✅/3⛔** (line 22 + §5.0:1100, ikisi de; grep-öncü-damga sayımı
+  birebir doğrulandı). Kalan slice'lar: **MULTIBRAND-b** marka izolasyon çekirdeği (`app.current_brand` +
+  brand-scoped RLS — **bölünmez OPUS-MAX çekirdek**, §5.2.23'teki 3-parça uyarıyı oku) → -c brand_id yayılımı
+  → -d /brands CRUD+scope+`brand_not_found` (yaml+route AYNI pencerede, contract-parity iki-yönlü) → -e/-f/-g UI
+  → -h cross-brand e2e. `brands.yaml` bilerek -d'ye bırakıldı.
+
 ### 92.11 — 08.9.7-k NFR-S12 uçtan uca doğrulama (dört olay + 30 gün + tüm planlarda) — done — 2026-08-02 UTC
 
 - **Yapıldı:** NFR-S12'nin bütününü tek süitte koda karşı kanıtlayan doğrulama turu (yeni davranış

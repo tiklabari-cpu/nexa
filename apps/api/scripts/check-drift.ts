@@ -32,6 +32,11 @@ const KNOWN_UNMODELLABLE = [
     pattern: /CREATE INDEX "idx_chunks_embedding" ON "public"\."knowledge_chunks"/,
     reason: 'pgvector ivfflat index — Prisma cannot express index access methods',
   },
+  {
+    // Created as `ON brands(license_id) WHERE is_default` in 20260802100000_brands.
+    pattern: /CREATE UNIQUE INDEX "brands_one_default_per_license" ON "public"\."brands"/,
+    reason: 'partial unique index (one default brand per license) — Prisma cannot express a WHERE predicate',
+  },
 ];
 
 async function main(): Promise<void> {

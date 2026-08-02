@@ -19,7 +19,7 @@
 | ------------------ | ---- | ------------------------------------ | ------------------------------ | :-----: |
 | **Faz 0 — MVP**    | §5.1 | 54 ✅ · 0 ◐ (§3) · gruplu-🔒 v1'e    | **51 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
 | Faz 1 — v1         | §5.2 | v1 payı teslim (Playbook+AI+omnichannel-MOCK+webhooks §1.3); Should çoğu ✅ · mobil 🔒 · 06.3.2-bulk→v2 | **20 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
-| **Faz 2 — v2**     | §5.3 | **📋 PLANLANDI, kod başlamadı** (2026-08-01). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: **20 ⬜ açık · 0 ◐ kısmi · 7 ✅ teslim · 3 ⛔ kapsam dışı** (7 faz çelişkisi PRD'den çözüldü). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: **23 açık kalemin hepsi ✅** | ⬜ AÇIK |
+| **Faz 2 — v2**     | §5.3 | **📋 PLANLANDI, kod başlamadı** (2026-08-01). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: **19 ⬜ açık · 1 ◐ kısmi · 7 ✅ teslim · 3 ⛔ kapsam dışı** (7 faz çelişkisi PRD'den çözüldü). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: **23 açık kalemin hepsi ✅** | ⬜ AÇIK |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı · orta derinlik (§6.1). 2026-08-01'de **13.7 mobil** buraya taşındı (§D60) · **08.9.6 IP allowlist** buradan v2'ye çıktı (§D61) | —                              |    —    |
 
 **Faz-0 kapandı (2026-07-31 · GL-3 · tm 87).** Kapanışı bloklayan 6 `Must ◐` kapatıldı: 01.3, 02.4,
@@ -1097,7 +1097,7 @@ gereği bu depodan yapılmaz.
 
 ### 5.0 v2 kalem envanteri (30 kalem — PRD'ye karşı sayıldı)
 
-**20 ⬜ açık · 0 ◐ kısmi · 7 ✅ teslim · 3 ⛔ kapsam dışı** — tablodan **sayılarak** (§1.2: bu sayılar elle yazılmaz).
+**19 ⬜ açık · 1 ◐ kısmi · 7 ✅ teslim · 3 ⛔ kapsam dışı** — tablodan **sayılarak** (§1.2: bu sayılar elle yazılmaz).
 7 kalem faz çelişkisi taşıyordu → hepsi bu turda PRD'den çözüldü (§D61/§D62).
 Açık 23 kalemin tamamı §5.2'de atomik bölündü.
 
@@ -1131,7 +1131,7 @@ Açık 23 kalemin tamamı §5.2'de atomik bölündü.
 | 13.5 | **Sales tracker** (Ecommerce/Tracked sales) | Could (v2) | | ⬜ 13.3 Goals + 07.8 Reviews/Ratings (tm 45 **teslim**) üzerine. → §5.2 |
 | §5.3-KB | **Public KB** (SEO'lu self-servis) | v2 (§5.3 Knowledge) | | ⬜ KK PRD §6'da yok → KK-türetilmiş. **Public (kimlik doğrulamasız) yüzey = yeni erişim sınırı.** PRD §11.1/9 pazarlama sitesi/blog **kapsam dışıdır** — bu ürün-içi KB, karıştırılmaz. → §5.2 |
 | §5.3-Vardiya | **Work scheduler / staffing prediction** | v2 (§5.3 Vardiya) | | ⬜ KK-türetilmiş. Tahmin = geçmiş hacim + presence'tan **deterministik** hesap, LLM yok. → §5.2 |
-| §5.3-Marka | **Multibrand** | v2 (§5.3 Marka) | | ⬜ KK-türetilmiş. **Tenant/RLS izolasyon sınırının genişlemesi = v2'nin en riskli kalemi.** Cross-brand negatif test şart. → §5.2 |
+| §5.3-Marka | **Multibrand** | v2 (§5.3 Marka) | | ◐ KK-türetilmiş. **Tenant/RLS izolasyon sınırının genişlemesi = v2'nin en riskli kalemi.** Cross-brand negatif test şart. **MULTIBRAND-a teslim (kontrat-öncesi şema katmanı — davranışsız, hiçbir route/path yok):** yeni `brands` tablosu (uuid id · `license_id` FK cascade · `@@unique([licenseId, slug])` · `logoUrl?` · `isDefault`) — `Website` modelinin birebir şekli; `websites`/`widget_settings` deseninde RLS (`ENABLE ROW LEVEL SECURITY` + `brands_tenant` policy `nexa_current_license()` USING+WITH CHECK); lisans başına **tek varsayılan** partial unique index `ON brands(license_id) WHERE is_default` (Prisma bir WHERE yüklemini ifade edemez → `check-drift.ts` KNOWN_UNMODELLABLE'a kaydedildi, pgvector deseni); backfill mevcut HER lisansa bir `Default` (is_default) markası verir → tek-markalı davranış birebir korunur (canlı DB'de 4/4 lisans, `NOT EXISTS` guard'ıyla idempotent); `seed.ts` aynı satırı üretir. contract-parity değişmedi (path yok). `apps/api/prisma/schema.prisma` (model Brand + License.brands) · migration `20260802100000_brands` · `apps/api/prisma/seed.ts` · `apps/api/scripts/check-drift.ts` · test `apps/api/test/integration/data-model.test.ts` (+4: tek-varsayılan + 2. varsayılan reddi/partial index · çok sayıda non-default · slug lisans-scoped · license cascade) + `tenant-isolation.test.ts` (RLS-etkin liste 11→12 + 3 negatif: cross-tenant SELECT/by-id + WITH CHECK reddi) · tm 78.1. **Kalan:** MULTIBRAND-b marka izolasyon çekirdeği (`app.current_brand` + brand-scoped RLS) · -c brand_id yayılımı · -d /brands CRUD+scope+hata tipi · -e/-f/-g UI · -h cross-brand e2e. → §5.2 |
 | 06.2.3 | NL skill (doğal dil talimat → skill) | Must (v1) | | ✅ **v1'de teslim.** PRD §5.3'teki tekrarı **kapsam dışı** görsel builder'ın bağlamıdır → yeni iş YOK (§D62) |
 | — | §5.5 MOD-04 (Team/roller) v2 `○` | ○ (§5.5) | | ⛔ Somut `FR-MOD (v2)` satırı yok, kapsam tanımsız → **ayrı kalem açılmadı** (§C-A12) |
 | — | §5.5 MOD-06 (AI+RAG) v2 `○` | ○ (§5.5) | | ⛔ MOD-06'nın tek `(v2)` içeriği `06.3.2-bulk` → **ayrı kalem açılmadı** (§C-A13) |

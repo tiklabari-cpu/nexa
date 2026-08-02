@@ -231,6 +231,11 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       createdBy: owner.id,
     },
   });
+  // The license's default brand — the same row the migration backfill lays down
+  // for existing licenses. Keeps single-brand behaviour intact (PRD §5.3).
+  await prisma.brand.create({
+    data: { licenseId, name: 'Default', slug: 'default', isDefault: true },
+  });
   await prisma.trustedDomain.create({
     data: {
       organizationId: organization.id,

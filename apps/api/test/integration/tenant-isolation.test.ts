@@ -59,9 +59,10 @@ describe('tenant isolation (RLS)', () => {
         WHERE schemaname = 'public'
           AND tablename IN ('organizations','licenses','accounts','agent_memberships',
                             'oauth_clients','oauth_authorization_codes','oauth_refresh_tokens',
-                            'api_tokens','customers','trusted_domains','ip_allowlist_entries')
+                            'api_tokens','customers','trusted_domains','ip_allowlist_entries',
+                            'brands')
       `;
-      expect(rows.length).toBe(11);
+      expect(rows.length).toBe(12);
       for (const row of rows) {
         expect(row.rowsecurity, `${row.tablename} must have RLS enabled`).toBe(true);
       }
@@ -276,6 +277,66 @@ describe('tenant isolation (RLS)', () => {
             }),
         ),
       ).rejects.toThrow(/unique constraint/i);
+    });
+  });
+
+  describe('brands — Multibrand tenant isolation (NFR-S4)', () => {
+    // Brands carry only a license_id, so the policy is the plain license match,
+    // like websites/widget_settings. Proven the same way as every tenant table:
+    // attack tenant A's context against tenant B's rows.
+    let aBrandId: string;
+    let bBrandId: string;
+
+    beforeAll(async () => {
+      // Seeded as the owner, which is not subject to RLS.
+      const [a, b] = await Promise.all([
+        owner.brand.create({
+          data: { licenseId: fixtures.a.licenseId, name: 'Brand A', slug: 'brand-a', isDefault: true },
+          select: { id: true },
+        }),
+        owner.brand.create({
+          data: { licenseId: fixtures.b.licenseId, name: 'Brand B', slug: 'brand-b', isDefault: true },
+          select: { id: true },
+        }),
+      ]);
+      aBrandId = a.id;
+      bBrandId = b.id;
+    });
+
+    afterAll(async () => {
+      await owner.brand.deleteMany({ where: { id: { in: [aBrandId, bBrandId] } } });
+    });
+
+    it('reads only its own license brands', async () => {
+      const rows = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.brand.findMany({ select: { slug: true } }),
+      );
+      expect(rows.map((r) => r.slug)).toEqual(['brand-a']);
+    });
+
+    it('cannot fetch a tenant B brand by id', async () => {
+      // Correct SQL and the row exists — RLS is what makes it invisible.
+      const found = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.brand.findUnique({ where: { id: bBrandId } }),
+      );
+      expect(found).toBeNull();
+    });
+
+    it('cannot plant a brand for tenant B (WITH CHECK)', async () => {
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.brand.create({
+              data: { licenseId: fixtures.b.licenseId, name: 'Sneaky', slug: 'sneaky' },
+            }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
     });
   });
 

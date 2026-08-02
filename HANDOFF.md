@@ -13,6 +13,33 @@
 
 ## Task log (newest-first)
 
+### tm 92.3 — 08.9.7-c Webhook değişimi audit'i: `webhook.created` / `webhook.deleted` — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-XHIGH — NFR-S12'nin birebir saydığı "webhook değişimi" olayı hiç kaydedilmiyordu
+  (`grep writeAuditEntry` webhooks.ts'te 0 sonuç). `AUDIT_ACTIONS` kapalı sözlüğüne `webhook.created` +
+  `webhook.deleted` eklendi (`services/audit/audit-log.ts`). `routes/webhooks.ts`: POST /webhooks ve
+  DELETE /webhooks/:id, register/unregister'ı zaten saran **aynı** `withTenant` tx'inin İÇİNDE
+  `writeAuditEntry` çağırıyor — trail ile registry ya birlikte yazılır ya hiç. `target=webhook:<id>`;
+  `metadata` YALNIZ `{ action, type, url_host }`. **Secret savunması çağrı yerinde:** register yanıtı
+  plaintext `whsec_…` döndürür ve `sanitizeAuditMetadata` regex'i `url`/`value` anahtarlarını
+  yakalamaz, o yüzden log'a tam URL değil yalnız `new URL(...).host` yazılır (yeni `urlHost()` helper,
+  storage'dan gelen değer için `try`'lı). Silme audit'i için satır **silmeden önce** RLS-scoped
+  `findUnique` ile okunur (unregister yalnız count döndürüyor); yazım yalnız `count>0 && doomed`'da →
+  404 no-op ve cross-tenant miss hiçbir entry yazmaz. Sözleşme değişmedi (yan etki olarak audit satırı).
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w build` ✅ · `pnpm -w test:unit`
+  (api audit-log.test.ts +1 = 7; rtm dahil) ✅ · yeni/ek testler `apps/api/src/services/audit/audit-log.test.ts`
+  (+1: sözlük iki eylemi içeriyor, tekrar yok) + `apps/api/test/integration/audit-log.test.ts` (+3: create
+  host-only & secret-free haystack · delete + 404 no-op · cross-tenant hiç yazmaz → dosya 16→19) ·
+  `apps/api/test/integration/webhooks.test.ts` regresyonsuz (12) · tam `pnpm -w test:integration`
+  (`--concurrency=1`) ✅.
+- **Varsayımlar:** `url_host` = URL'nin `.host`'u (hostname[:port]); path/query/secret hariç. Delete
+  metadata'sı için silinen webhook'un action/type/host'u aynı tx içinde okunuyor (task metadata şeklini
+  register+unregister için ortak tanımlıyor).
+- **Sonraki pencereye not:** `08.9.7-d` (data.deleted + ayarlar ailesi silme audit'i) `08.9.7-c`'ye
+  bağlıydı, artık açık. `08.9.7-f` (rol değişimi ucu, OPUS-MAX) de `-c`'ye bağlı. NFR-S12 uçtan uca
+  doğrulama `-k` hâlâ -e/-f/-h/-j'yi bekliyor. Yeni audit eylemi eklerken desen: sözlük + çağrı yerinde
+  secret savunması + `removed>0` kapısı + cross-tenant negatif test.
+
 ### tm 92.1 — 08.9.7-a Audit log okuma kontratı + `audit_log--all:ro` scope'u + GET /audit-log (keyset, son 30 gün) — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-XHIGH — audit trail'in ilk **okuma** yüzeyi (yazıcı tm 23'ten beri vardı, okuma yoktu).

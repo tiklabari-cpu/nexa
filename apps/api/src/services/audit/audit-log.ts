@@ -56,6 +56,12 @@ export const AUDIT_ACTIONS = [
   'settings.ip_allowlist_removed',
   'billing.subscription_updated',
   'billing.payment_method_updated',
+  // Outbound webhooks (FR-MOD-08.8.4 / NFR-S7) — the platform's highest-risk
+  // egress surface, and the "webhook değişimi" NFR-S12 names by hand. The entry
+  // records the host and the subscription, never the full URL or the signing
+  // secret the register response carries once.
+  'webhook.created',
+  'webhook.deleted',
   // Ticketing / HelpDesk (FR-MOD-13.6) — the lifecycle and structural changes an
   // async ticket goes through. Merge/unmerge affect data integrity across two
   // tickets, so they are recorded as much for the audit trail as for support.

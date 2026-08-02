@@ -43,4 +43,11 @@ describe('AUDIT_ACTIONS', () => {
   it('is a closed vocabulary with no duplicates', () => {
     expect(new Set(AUDIT_ACTIONS).size).toBe(AUDIT_ACTIONS.length);
   });
+
+  it('records both webhook change actions NFR-S12 names by hand', () => {
+    // "webhook değişimi" is one of the four events the requirement enumerates,
+    // registration and removal being the changes a webhook actually undergoes.
+    expect(AUDIT_ACTIONS).toContain('webhook.created');
+    expect(AUDIT_ACTIONS).toContain('webhook.deleted');
+  });
 });

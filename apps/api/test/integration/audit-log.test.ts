@@ -78,7 +78,13 @@ describe('audit log writer (NFR-S12)', () => {
       licenseId: fx.a.licenseId,
       organizationId: fx.a.organizationId,
       ownerId: fx.a.ownerAccountId,
-      scopes: ['access_rules:rw', 'billing_manage', 'accounts--my:rw', 'accounts--all:rw'],
+      scopes: [
+        'access_rules:rw',
+        'billing_manage',
+        'accounts--my:rw',
+        'accounts--all:rw',
+        'webhooks--all:rw',
+      ],
     });
   });
 
@@ -128,6 +134,92 @@ describe('audit log writer (NFR-S12)', () => {
       const miss = await server.del(`/settings/trusted-domains/${id}`, auth(adminToken));
       expect(miss.statusCode).toBe(404);
       expect(await count('settings.trusted_domain_removed')).toBe(beforeMiss);
+    });
+
+    it('records a webhook being created, with the host but never the secret', async () => {
+      const before = await count('webhook.created');
+      const res = await server.post(
+        '/webhooks',
+        { url: 'https://hooks.audit.example/receiver', action: 'chat_started' },
+        auth(adminToken),
+      );
+      expect(res.statusCode).toBe(201);
+      const body = res.json() as { id: string; secret: string };
+
+      expect(await count('webhook.created')).toBe(before + 1);
+      const entry = await latest('webhook.created');
+      expect(entry?.actorId).toBe(fx.a.ownerAccountId);
+      expect(entry?.actorType).toBe('agent');
+      expect(entry?.target).toBe(`webhook:${body.id}`);
+      expect(entry?.metadata).toMatchObject({
+        action: 'chat_started',
+        type: 'license',
+        url_host: 'hooks.audit.example',
+      });
+      // The host, and only the host: not the path, and never the signing secret
+      // the register response returned exactly once.
+      const blob = JSON.stringify({ target: entry?.target, metadata: entry?.metadata });
+      expect(blob).not.toContain('/receiver');
+      expect(blob).not.toContain(body.secret);
+    });
+
+    it('records a webhook being removed (and not a no-op delete)', async () => {
+      const created = (
+        await server.post(
+          '/webhooks',
+          { url: 'https://gone.audit.example/hook', action: 'ticket_created' },
+          auth(adminToken),
+        )
+      ).json() as { id: string };
+
+      const before = await count('webhook.deleted');
+      const removed = await server.del(`/webhooks/${created.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('webhook.deleted')).toBe(before + 1);
+      const entry = await latest('webhook.deleted');
+      expect(entry?.target).toBe(`webhook:${created.id}`);
+      expect(entry?.metadata).toMatchObject({
+        action: 'ticket_created',
+        type: 'license',
+        url_host: 'gone.audit.example',
+      });
+
+      // A repeat delete matches nothing (404) and must not write an entry.
+      const beforeMiss = await count('webhook.deleted');
+      const miss = await server.del(`/webhooks/${created.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('webhook.deleted')).toBe(beforeMiss);
+    });
+
+    it("a cross-tenant webhook delete writes to no one's log", async () => {
+      const mine = (
+        await server.post(
+          '/webhooks',
+          { url: 'https://a-only.audit.example/hook', action: 'chat_started' },
+          auth(adminToken),
+        )
+      ).json() as { id: string };
+
+      // A tenant-B admin holding the write scope aims at tenant A's webhook id.
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['webhooks--all:rw'],
+      });
+
+      const beforeA = await count('webhook.deleted', fx.a.licenseId);
+      const beforeB = await count('webhook.deleted', fx.b.licenseId);
+      const res = await server.del(`/webhooks/${mine.id}`, auth(tokenB));
+      expect(res.statusCode).toBe(404);
+
+      // RLS matched nothing, so neither log gained an entry — and A's webhook is
+      // untouched, still there for its own owner to remove and record.
+      expect(await count('webhook.deleted', fx.a.licenseId)).toBe(beforeA);
+      expect(await count('webhook.deleted', fx.b.licenseId)).toBe(beforeB);
+      const byOwner = await server.del(`/webhooks/${mine.id}`, auth(adminToken));
+      expect(byOwner.statusCode).toBe(204);
+      expect(await count('webhook.deleted', fx.a.licenseId)).toBe(beforeA + 1);
     });
 
     it('records a security-settings change with the field names touched', async () => {

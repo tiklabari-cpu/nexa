@@ -1585,10 +1585,10 @@
             "description": "Contract-first ilk adım. `ReportsBreakdown` şemasına ÜÇ opsiyonel alan: `by_hour` (items: {hour:int 0-23, + SplitRow alanları}), `by_team` (items: {team_id:int|null, name:string|null, + SplitRow}) ve `overlapping:boolean` üst-alanı, `by_channel` (items: {channel:string, + SplitRow}). Alanlar `required` listesine EKLENMEZ (geriye dönük uyum: mevcut istemciler kırılmaz). paths/reports.yaml breakdown",
             "details": "07.5-a — ReportsBreakdown kontratına by_hour/by_team/by_channel (additive, opsiyonel)  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.5 (+ NFR-M2 bounded context: reports)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. Tek dosya çifti + üretilen bundle (3 dosya); güvenlik sınırı yok (kontrat yüzeyi, çalışma zamanı yok); eşzamanlılık yok; yeni algoritma yok — kopyalanacak desen aynı şemadaki by_day/by_agent blokları isimle verilebiliyor; değişiklik katkısal ve mekanik; KK mekanik doğrulanabilir (contract-parity + typecheck).\nNEDEN AÇIK: packages/contract/openapi/openapi.yaml:1908 `ReportsBreakdown` şemasının açıklaması birebir \"resolved over two dimensions — each UTC day in the window and each assigned agent\" diyor ve `required: [range, by_day, by_agent]`; team/channel/hour alanı yok. packages/contract/openapi/paths/reports.yaml:46 operation summary'si de \"Resolution split by day and by agent\".\nKAPSAM: Contract-first ilk adım. `ReportsBreakdown` şemasına ÜÇ opsiyonel alan: `by_hour` (items: {hour:int 0-23, + SplitRow alanları}), `by_team` (items: {team_id:int|null, name:string|null, + SplitRow}) ve `overlapping:boolean` üst-alanı, `by_channel` (items: {channel:string, + SplitRow}). Alanlar `required` listesine EKLENMEZ (geriye dönük uyum: mevcut istemciler kırılmaz). paths/reports.yaml breakdown operation summary + description dört boyutu anlatacak şekilde güncellenir. `pnpm --filter @nexa/contract generate` ile bundle + generated tipler yeniden üretilir.\nDOSYALAR: packages/contract/openapi/openapi.yaml · packages/contract/openapi/paths/reports.yaml · packages/contract/src/generated/api.ts\nREFERANS DESEN (kopyalanacak): packages/contract/openapi/openapi.yaml — aynı şemanın `by_day` (satır ~1923) ve `by_agent` (satır ~1937) blokları: alan adları, integer tipleri, nullable name deseni birebir kopyalanır · packages/contract/openapi/openapi.yaml — `ReportsOverview` içindeki `by_agent` + `top_tags` dizileri: çok-dizili yanıt şeması deseni · packages/contract/openapi/paths/reports.yaml — `breakdown` operation'ının mevcut parameters/responses bloğu (satır 42-70)\nKK (birebir): \"Boyutlu kırılım\" | \"KK-türetilmiş: \"Yanıt şeması dört boyutu (gün/saat/takım/kanal) taşır; yeni alanlar opsiyoneldir, mevcut by_day+by_agent sözleşmesi değişmez.\" — PRD 07.5 KK sütunu tek kelimelik (\"Boyutlu kırılım\"), alan listesi yok; boyut adları PRD satırının kendisinden (\"ajan/takım/kanal/saat\") ve rapor-1-fonksiyonel.md:1333-1340 (\"Metrikleri boyutlara göre (ajan, takım, kanal, saat — **çıkarım**) ayrıştırır\") türetildi.\"\nKK DOĞRULAMA: `apps/api/test/integration/contract-parity.test.ts` yeşil (bundle yeniden üretilmiş); `pnpm --filter @nexa/contract typecheck` + generated `api.ts` içinde `by_hour`/`by_team`/`by_channel` opsiyonel alan olarak görünür — \"Boyutlu kırılım\" KK'sının şema payını kanıtlar.\nKAPSAM DIŞI: Backend sorguları (07.5-b/-d/-e) · CSV export (07.5-f) · UI (07.5-g/-h) · Yeni endpoint/path açmak — mevcut GET /api/v1/reports/breakdown korunur · v2-03 §316'daki `distribution` (hour|day|day-hours|month|year) parametre modeline geçiş\nSÖZLEŞME: packages/contract/openapi/openapi.yaml `#/components/schemas/ReportsBreakdown` → opsiyonel `by_hour`, `by_team`, `by_channel` dizileri + `overlapping` boolean; paths/reports.yaml `breakdown` summary/description güncellemesi. YENİ PATH YOK. UYARI: OpenAPI'ye eklenip re-bundle edilmezse (`pnpm --filter @nexa/contract generate`) contract-parity.test.ts kırılır (MEMORY: nexa-contract-parity-gate).\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "contract-parity (mevcut süit; yeni alan eklendikten sonra bundle güncel değilse kırılır — regresyon kapısı) · typecheck: packages/contract + apps/api + apps/web (opsiyonel alanlar mevcut tüketicileri kırmamalı) · NEGATİF/CROSS-TENANT YOK ve gerekmiyor — gerekçe: bu alt-görev yalnız YAML şema + üretilen tip; çalışma zamanı sorgusu/veri erişimi içermiyor. İzolasyon yüzeyi 07.5-d ve 07.5-e'de test edilir.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "63",
-            "updatedAt": "2026-08-02T20:15:40.209Z"
+            "updatedAt": "2026-08-02T20:19:34.022Z"
           },
           {
             "id": 2,
@@ -1699,7 +1699,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T20:15:40.209Z"
+        "updatedAt": "2026-08-02T20:19:34.022Z"
       },
       {
         "id": "64",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T20:15:40.210Z",
+      "lastModified": "2026-08-02T20:19:34.022Z",
       "taskCount": 99,
       "completedCount": 74,
       "tags": [

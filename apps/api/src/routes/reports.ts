@@ -310,6 +310,63 @@ async function breakdownByDay(
   }));
 }
 
+interface HourSplit {
+  hour: number;
+  chats: number;
+  closed: number;
+  automated: number;
+  assisted: number;
+  manual: number;
+}
+
+/**
+ * The resolution split (manual / assisted / automated) per UTC hour of day,
+ * for the Breakdown tab's hour dimension (FR-MOD-07.5). Reuses the same
+ * `SPLIT_COUNTS` fragment as {@link breakdownByDay} — the only difference is
+ * the `GROUP BY` expression — so the two dimensions can never disagree on
+ * what counts as automated/assisted/manual. Dense: hours 0-23 are always
+ * present, zero-filled where nothing happened, because the axis (a day's 24
+ * hours) is fixed regardless of the data — unlike `by_day`, whose axis grows
+ * with the range.
+ */
+async function breakdownByHour(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<HourSplit[]> {
+  const rows = await tx.$queryRaw<
+    Array<{
+      hour: number;
+      chats: bigint;
+      closed: bigint;
+      automated: bigint;
+      assisted: bigint;
+      manual: bigint;
+    }>
+  >`
+    SELECT EXTRACT(HOUR FROM t.created_at AT TIME ZONE 'UTC')::int AS hour,
+      ${SPLIT_COUNTS}
+    FROM threads t
+    WHERE t.license_id = ${licenseId}
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+    GROUP BY 1
+    ORDER BY 1
+  `;
+  const byHour = new Map(rows.map((row) => [row.hour, row]));
+  return Array.from({ length: 24 }, (_, hour) => {
+    const row = byHour.get(hour);
+    return {
+      hour,
+      chats: Number(row?.chats ?? 0n),
+      closed: Number(row?.closed ?? 0n),
+      automated: Number(row?.automated ?? 0n),
+      assisted: Number(row?.assisted ?? 0n),
+      manual: Number(row?.manual ?? 0n),
+    };
+  });
+}
+
 /**
  * AI→human hand-offs in a window — the `chat_transferred` system event. Feeds
  * both the AI Agent report and its CSV export. Containment (`@>`) rather than
@@ -672,6 +729,10 @@ export default async function reportRoutes(
       // so the tab and its download can never quote a different split for a day.
       const byDay = await breakdownByDay(tx, tenant.licenseId, from, to);
 
+      // The same split per UTC hour of day — a dense 0-23 axis, so the client
+      // never has to fill in the hours nothing happened in.
+      const byHour = await breakdownByHour(tx, tenant.licenseId, from, to);
+
       // The same split per assigned agent. An automated chat can still carry an
       // assignee (nobody replied), so it shows against the agent it sat with.
       const byAgent = await tx.$queryRaw<
@@ -697,13 +758,21 @@ export default async function reportRoutes(
         LIMIT 20
       `;
 
-      return { byDay, byAgent };
+      return { byDay, byHour, byAgent };
     });
 
     return reply.send({
       range: { from: from.toISOString(), to: to.toISOString() },
       by_day: data.byDay.map((row) => ({
         date: row.date,
+        chats: row.chats,
+        closed: row.closed,
+        manual: row.manual,
+        assisted: row.assisted,
+        automated: row.automated,
+      })),
+      by_hour: data.byHour.map((row) => ({
+        hour: row.hour,
         chats: row.chats,
         closed: row.closed,
         manual: row.manual,

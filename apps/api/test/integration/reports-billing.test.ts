@@ -604,6 +604,44 @@ describe('reports and billing', () => {
       expect(owner.automated).toBe(1);
     });
 
+    it('buckets by UTC hour of day, dense across all 24 hours', async () => {
+      const chatId = await conversation({ agentReplies: false }); // automated
+      // Land it in a known hour, clear of "now" (backdated three days), so the
+      // bucket it lands in is unambiguous — every other hour must read zero.
+      const knownHour = 3;
+      const openedAt = new Date();
+      openedAt.setUTCDate(openedAt.getUTCDate() - 3);
+      openedAt.setUTCHours(knownHour, 15, 0, 0);
+      await backdateChat(chatId, openedAt);
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      interface HourRow {
+        hour: number;
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+      }
+      const byHour = breakdown.by_hour as HourRow[];
+
+      // The hour axis is fixed (a day has 24 hours) regardless of the data —
+      // unlike by_day, all 0-23 are present, in ascending order.
+      expect(byHour).toHaveLength(24);
+      byHour.forEach((row, index) => expect(row.hour).toBe(index));
+
+      byHour.forEach((row) => {
+        if (row.hour === knownHour) {
+          expect(row.chats).toBe(1);
+          expect(row.automated).toBe(1);
+        } else {
+          expect(row.chats).toBe(0);
+        }
+        // The split invariant holds in every row, populated or zero-filled.
+        expect(row.manual + row.assisted + row.automated).toBe(row.closed);
+      });
+    });
+
     it('never counts another tenant', async () => {
       await conversation({ agentReplies: false });
       const theirToken = await grantToken(owner, {
@@ -617,6 +655,10 @@ describe('reports and billing', () => {
       ).json();
       expect(theirs.by_day).toEqual([]);
       expect(theirs.by_agent).toEqual([]);
+      // by_hour stays dense even for a tenant with nothing in the window — 24
+      // zero-filled rows, not an empty array.
+      expect(theirs.by_hour).toHaveLength(24);
+      expect(theirs.by_hour.every((row: { chats: number }) => row.chats === 0)).toBe(true);
     });
   });
 

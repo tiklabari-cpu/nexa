@@ -1596,12 +1596,12 @@
             "description": "`breakdownByHour(tx, licenseId, from, to)` helper'ı — mevcut `SPLIT_COUNTS` fragment'i (reports.ts:117-123) AYNEN yeniden kullanılır (tek SQL tanımı ilkesi, reports.ts:112-123 yorumu), yalnız `GROUP BY EXTRACT(HOUR FROM t.created_at AT TIME ZONE 'UTC')`. Sonuç 0-23 DENSE dizi (veri olmayan saat sıfırlarla doldurulur — saat ekseni sabittir). `/reports/breakdown` handler'ına `by_hour` eklenir; `by_d",
             "details": "07.5-b — Saat boyutu: breakdownByHour() + /reports/breakdown yanıtına by_hour  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.5 (+ NFR-P2 okuma p99 <150ms)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 2 dosya (route + integration test); güvenlik sınırı yok — aynı `threads` tablosu, aynı `t.license_id = ${licenseId}` filtresi, aynı withTenant/RLS yolu, YENİ JOIN YOK; eşzamanlılık yok; yeni algoritma yok — kopyalanacak desen `breakdownByDay()` (reports.ts:279-311) ismen verildi, tek fark GROUP BY ifadesi; kontrat değişikliği 07.5-a'da bitti; KK mekanik (24 kova + satır-içi invariant).\nNEDEN AÇIK: Olgu: reports.ts'de hiçbir yerde `EXTRACT(HOUR ...)` veya saatlik distribution yok; tek zaman kırılımı `to_char((t.created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD')` ile GÜNLÜK (reports.ts:301, breakdownByDay). Handler (reports.ts:664-723) yalnız `by_day` + `by_agent` döndürüyor.\nKAPSAM: `breakdownByHour(tx, licenseId, from, to)` helper'ı — mevcut `SPLIT_COUNTS` fragment'i (reports.ts:117-123) AYNEN yeniden kullanılır (tek SQL tanımı ilkesi, reports.ts:112-123 yorumu), yalnız `GROUP BY EXTRACT(HOUR FROM t.created_at AT TIME ZONE 'UTC')`. Sonuç 0-23 DENSE dizi (veri olmayan saat sıfırlarla doldurulur — saat ekseni sabittir). `/reports/breakdown` handler'ına `by_hour` eklenir; `by_day`/`by_agent` davranışı DEĞİŞMEZ.\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/test/integration/reports-billing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts — `breakdownByDay()` (satır 279-311): $queryRaw + SPLIT_COUNTS + bigint→Number map'leme deseni birebir · apps/api/src/routes/reports.ts — `/reports/breakdown` handler'ı (satır 664-723): rangeQuery→resolveRange→withTenant→reply.send serileştirme sırası · apps/api/test/integration/reports-billing.test.ts — `describe('breakdown (07.5)')` bloğu (satır 563-620): kurulum + invariant + cross-tenant iddia deseni\nKK (birebir): \"Boyutlu kırılım\" | \"KK-türetilmiş: \"Saat boyutu: her sohbet açılış saatinin UTC kovasına düşer; 0-23 arası 24 kova döner; her satırda manual + assisted + automated === closed.\" — PRD KK sütunu tek kelimelik olduğu için PRD satırındaki \"ajan/takım/kanal/**saat**\" boyut listesinden ve mevcut şema açıklamasındaki invariant cümlesinden (\"`manual + assisted + automated === closed` holds inside every row\") türetildi.\"\nKK DOĞRULAMA: reports-billing.test.ts 'breakdown (07.5)' bloğuna: (1) `by_hour.length === 24` ve `hour` değerleri 0..23 artan; (2) bilinen bir UTC saatinde açılan chat yalnız o kovada; (3) her satırda manual+assisted+automated === closed — \"Boyutlu kırılım\"ın saat payını kanıtlar.\nKAPSAM DIŞI: Müşteri saat dilimi / `timezone` query parametresi (varsayım: UTC) · v2-03 §316'daki `day-hours` (gün×saat matrisi) dağılımı · Takım ve kanal boyutları (07.5-e / 07.5-d) · CSV export (07.5-f) ve UI (07.5-g)\nSÖZLEŞME: yok (alan 07.5-a'da eklendi; bu pencere yalnız alanı doldurur — kontrat ile yanıt arasında sapma kalmaz)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration: 24 dense kova + hour değerleri 0..23 + doğru kovaya düşme · integration: satır-içi invariant (manual+assisted+automated === closed) · CROSS-TENANT negatif (önce yazılır): mevcut cross-tenant iddiası (reports-billing.test.ts:616) `by_hour`'u kapsayacak şekilde genişletilir — başka lisansın chat'i hiçbir saat kovasına girmez · NOT (MEMORY: nexa-test-gate-parallel-db): DB süiti paket içinde SERİ koşulur",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               1
             ],
             "parentId": "63",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T21:38:26.950Z"
           },
           {
             "id": 3,
@@ -1699,7 +1699,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T21:34:11.748Z"
+        "updatedAt": "2026-08-02T21:38:26.950Z"
       },
       {
         "id": "64",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T21:34:11.748Z",
+      "lastModified": "2026-08-02T21:38:26.950Z",
       "taskCount": 99,
       "completedCount": 74,
       "tags": [

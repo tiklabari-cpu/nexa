@@ -13,6 +13,34 @@
 
 ## Task log (newest-first)
 
+### 63.2 (07.5-b) — Saat boyutu: breakdownByHour() + /reports/breakdown yanıtına by_hour — done — 2026-08-02 UTC
+
+- **Yapıldı:** `breakdownByHour(tx, licenseId, from, to)` helper'ı (`apps/api/src/routes/reports.ts`) —
+  mevcut `SPLIT_COUNTS` fragment'i `breakdownByDay()`'daki gibi aynen yeniden kullanılır, tek fark
+  `GROUP BY EXTRACT(HOUR FROM t.created_at AT TIME ZONE 'UTC')::int`. Postgres yalnız veri olan
+  saatleri döner; JS tarafında 0-23 DENSE diziye tamamlanır (boş saatler sıfırla doldurulur — saat
+  ekseni `by_day`'in aksine sabittir, bir günün 24 saati veriden bağımsız). `/reports/breakdown`
+  handler'ına `by_hour` eklendi; `by_day`/`by_agent` davranışı ve sırası değişmedi.
+- **Doğrulama (hepsi yeşil):** `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build`. Integration
+  `reports-billing.test.ts` "breakdown (07.5)" bloğuna yeni test: (1) dense 24 kova + `hour` 0..23
+  artan sırayla; (2) bilinen bir UTC saatine (`backdateChat` ile 3 gün önceye taşınmış) açılan chat
+  yalnız o kovada, diğer 23'ü sıfır; (3) her satırda (dolu/boş) `manual+assisted+automated===closed`
+  invariant'ı — ayrıca mevcut cross-tenant testi genişletildi: başka lisansın `by_hour`'u da 24 satır
+  döner, hepsi sıfır (dense, boş dizi DEĞİL). Paket-bazında ([memory: nexa-test-gate-parallel-db]):
+  `@nexa/api` **1224/1224** (`reports-billing.test.ts` 86/86 dahil, unit+integration tek paket
+  içinde, race yok) · `@nexa/web` **514/514** · `@nexa/rtm` **90/90** · `@nexa/widget` **52/52** ·
+  `@nexa/types` **60/60** · `@nexa/ai-mock` **56/56**.
+- **Varsayımlar:** e2e çalıştırılmadı — görev kapsamı açıkça backend-only (KAPSAM DIŞI: UI 07.5-g),
+  sözleşme alanı additive+opsiyonel (07.5-a'da zaten eklenmişti), mevcut `reports.spec.ts` yalnız
+  "By day" bölümünü kontrol ediyor ve bu pencerede dokunulmadı; aynı emsal 07.5-a/-c pencerelerinde
+  de izlendi (tm 63.1/63.3 HANDOFF'ları da e2e listelemiyor).
+- **Sonraki pencereye not:** `07.5-b` teslim. Zincirde kalan: `07.5-d` (kanal — `07.5-a`+`07.5-c`'ye
+  bağımlıydı, ikisi de teslim, artık açılabilir), `07.5-e` (takım), ardından `07.5-f` (CSV —
+  `07.5-b/-d/-e`'ye bağlı, `07.5-b` payı artık hazır), `07.5-g` (Breakdown "By hour" UI — yalnız
+  `07.5-b`'ye bağlıydı, artık açılabilir), `07.5-h`, `07.5-i`. ⚠ Bu pencerede de `CONVENTIONS.md` ·
+  `.taskmaster/BUILD-BLUEPRINT.md` · `run-loop.sh` çalışma alanında değişik BULUNDU (aynı `critical`
+  öncelik konusu, 78.8'den beri duruyor) — bu görevin KAPSAMINDA DEĞİL, bu commit'e ALINMADI.
+
 ### 63.3 (07.5-c) — channel_messages(license_id, chat_id) indeksi + saf kanal etiketi helper'ı — done — 2026-08-02 UTC
 
 - **Yapıldı:** (1) `ChannelMessage`'a `@@index([licenseId, chatId])` (`apps/api/prisma/schema.prisma`)

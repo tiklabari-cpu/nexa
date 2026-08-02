@@ -4032,13 +4032,13 @@
             "description": "Eylem seçici (AUDIT_ACTIONS'tan üretilen liste veya olay ailesi grupları) + tarih aralığı kontrolü (varsayılan son 30 gün, ekranda görünür şekilde belirtilir) + next_page_id ile 'daha fazla yükle'. Seçimler URL parametresine yazılır (paylaşılabilir/deep-link). e2e: owner olarak giriş → Settings → Audit log → login kaydı görünür.",
             "details": "08.9.7-j — Audit ekranı filtreleri (eylem/tarih) + 'daha fazla yükle' + e2e görünürlük  [SONNET-XHIGH]\n\nPRD: NFR-S12 (+ FR-EK-B.1 liste davranışları)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 2-3 dosya + e2e; backend filtreleri 08.9.7-b'de hazır, burada yalnız kontrol + sorgu parametresi bağlama var; güvenlik kararı yok; kopyalanacak desen ismen var (CustomersPage segment sekmeleri + debounce arama, ReportsPage aralık kontrolü); kabul kriteri mekanik (filtre listeyi daraltır, daha fazla yükle ikinci sayfayı ekler).\nNEDEN AÇIK: 08.9.7-i yalnız ilk sayfayı, filtresiz render ediyor; 08.9.7-b'de eklenen action/actor_id/date_from/date_to parametreleri ve 08.9.7-a'nın next_page_id'si UI'da hiçbir yerde kullanılmıyor — dolayısıyla NFR-S12'nin dört olay ailesi ekranda ayrıştırılamıyor.\nKAPSAM: Eylem seçici (AUDIT_ACTIONS'tan üretilen liste veya olay ailesi grupları) + tarih aralığı kontrolü (varsayılan son 30 gün, ekranda görünür şekilde belirtilir) + next_page_id ile 'daha fazla yükle'. Seçimler URL parametresine yazılır (paylaşılabilir/deep-link). e2e: owner olarak giriş → Settings → Audit log → login kaydı görünür.\nDOSYALAR: apps/web/src/features/audit/AuditLogPage.tsx · apps/web/src/features/audit/AuditLogPage.test.tsx · apps/e2e/tests/settings.spec.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/customers/CustomersPage.tsx (segment sekmeleri + debounce arama + searchParams ile URL senkronu, satır ~40-125) · apps/web/src/features/reports/ReportsPage.tsx (paylaşılan aralık kontrolü + sekme deseni) · apps/web/src/features/inbox/TicketGrid.tsx (URL param sıralama deep-link deseni — 02.7-a) · apps/e2e/tests/settings.spec.ts (mevcut settings e2e akışı)\nKK (birebir): \"Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30 gün) tüm planlarda\"\nKK DOĞRULAMA: AuditLogPage.test.tsx: eylem seçimi isteği action parametresiyle yapıyor ve liste daralıyor; ekran varsayılan pencereyi 'son 30 gün' olarak gösteriyor; 'daha fazla yükle' ikinci sayfayı ekliyor. e2e settings.spec.ts: owner Audit log ekranında kendi login kaydını görüyor.\nKAPSAM DIŞI: Serbest metin arama · CSV export (Enterprise payı) · Sanallaştırılmış liste (VirtualList) — sayfa boyutu küçük, gerekmiyor\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit (negatif önce): next_page_id yokken 'daha fazla yükle' render edilmiyor · unit: eylem filtresi seçimi doğru sorgu parametresini gönderiyor ve listeyi daraltıyor · unit: tarih aralığı değişimi varsayılan 30 günü geçersiz kılıyor · unit: filtre seçimi URL parametresine yazılıyor ve reload'da korunuyor · e2e: Settings → Audit log → login kaydı görünür",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2,
               9
             ],
             "parentId": "92",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T11:00:45.602Z"
           },
           {
             "id": 11,
@@ -4059,7 +4059,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T10:41:41.149Z"
+        "updatedAt": "2026-08-02T11:00:45.602Z"
       },
       {
         "id": "93",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T10:41:41.149Z",
+      "lastModified": "2026-08-02T11:00:45.602Z",
       "taskCount": 99,
       "completedCount": 72,
       "tags": [

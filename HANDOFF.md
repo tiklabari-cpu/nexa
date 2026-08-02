@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+### Faz-2 özet sayacı senkronu — §D70 — done — 2026-08-02 UTC
+
+- **Yapıldı:** DÜZELTME penceresi (panel §1.2 bulgusu). Faz-2 dağılım sayacı bayattı: özet
+  (satır 22 üst-tablo + satır 1100 §5.0) `21 ⬜ · 6 ✅ · 3 ⛔` diyordu; §5.0 gereksinim tablosu
+  (satır 1108–1137, 30 satır) öncü-damga sayıldığında `20 ⬜ · 1 ◐ · 6 ✅ · 3 ⛔` (toplam 30 sabit).
+  **Kök neden:** `08.9.7` satırı (1121) tm 92.1–92.7 audit-log turlarında `⬜→◐` çevrildi (kısmi
+  teslim: -a/-b/-c/-g) ama sayaç güncellenmedi — özet en son tm 91.7'de (`7f2781f`) yazılmıştı, o
+  commit'te satır 1121 `⬜`'di; satır en son tm 92.7'de (`f299096`, özetten SONRA) `◐` oldu. Panelin
+  `7 ✅ / 19 ⬜` iddiası ise yine satır 1108'in gömülü `` `✅` `` glifinin naif ham-glif kayması
+  (§D68/§D69 kalıcı yanlış-pozitifi) — ama bu turda altında **gerçek** `◐` bayatlığı vardı.
+  **Yapılan (YALNIZ dağılım sayacı):** satır 22 + 1100 → `20 ⬜ · 1 ◐ · 6 ✅ · 3 ⛔`; §D70 notu.
+  Gereksinim satır damgalarına + `23 açık kalem` kapanış-paydasına DOKUNULMADI.
+- **Doğrulama:** yalnız doküman değişti (PLAN.md + HANDOFF.md) → kod DoD kapısı (typecheck/lint/
+  test/integration/build/e2e) uygulanmaz [[nexa-early-delivered-slices-audit]] deseni "verify+close".
+  Sayaç doğrulaması reprodüktibl: `awk` öncü-damga sayımı §5.0 (satır 1108–1137) → `6 ✅ · 1 ◐ ·
+  20 ⬜ · 3 ⛔ · TOTAL 30`, özet ile birebir uyuşuyor. Kök neden git ile kanıtlandı
+  (`git show 7f2781f:PLAN.md` satır 1121 = `⬜`; HEAD = `◐`; blame özet=91.7, satır=92.7).
+- **Varsayımlar:** özet satırının `📋 PLANLANDI, kod başlamadı` anlatısı kapsam dışı bırakıldı —
+  görev yalnız sayısal sayacı düzeltmeyi kapsıyor, anlatı revizyonunu değil. Çalışma alanındaki diğer
+  pencerelerin commit'lenmemiş kod değişiklikleri (audit-log.ts vb.) bu commit'e DAHİL EDİLMEDİ —
+  kapsam dışı; yalnız PLAN.md + HANDOFF.md stage'lendi.
+
 ### tm 92.7 — 08.9.7-g Retention politikasına audit penceresi (RETENTION_AUDIT_DAYS=30) — done — 2026-08-02 UTC
 
 - **Yapıldı:** SONNET-XHIGH — `RetentionPolicy`'ye dördüncü pencere `auditDays`, mevcut

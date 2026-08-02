@@ -13,6 +13,32 @@
 
 ## Task log (newest-first)
 
+### 78.8 — MULTIBRAND-h uçtan uca cross-brand doğrulama (izolasyon matrisi + kapsam-kaçağı alarmı + e2e) — done — 2026-08-02 UTC
+
+- **Yapıldı:** Yalnız doğrulama katmanı — yeni üretim kodu/migration YOK. (1) `brand-isolation.test.ts`'e
+  TEK kaynak `BRAND_SCOPED_TABLES` (channels·websites·widget_settings·security_settings·inbox_settings) +
+  `it.each` cross-brand görünmezlik matrisi (marka A2 satırı: A1'de 0, kendi markasında 1, markasız lisans-
+  geneli 1, B lisansında 0). (2) KAPSAM-KAÇAĞI ALARMI (contract-parity iki-yönlü diff): `information_schema`'daki
+  `brand_id` kolonlu tabloların kümesi ↔ matris listesi — undeclared/phantom → KIRMIZI; alarm **kendini kanıtlar**
+  (rollback'li tx'te gerçek `_brand_scope_probe (brand_id uuid)` tablosu enjekte → canlı sorgu yakalar). Seed:
+  **Northwind iki-markalı** yapıldı (Default `#2f6bff`/northwind-supply.localhost + Northwind Europe
+  `#e11d48`/northwind-eu.localhost); **Acme tek-markalı KALDI** → 19 Acme e2e regresyonsuz. e2e `brands.spec.ts`:
+  Northwind'e giriş → marka değiştir → widget rengi + website listesi + başlık markayı adlandırır, geri dön.
+- **Doğrulama (hepsi yeşil):** `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build`. Unit paket-bazında
+  ([memory: parallel-db]): api **263** · rtm **90** · web **514**. Integration `apps/api` **956/956** (46 dosya;
+  `brand-isolation` 11→**19**: +5 matris +3 alarm; `tenant-isolation` 22 dahil) serial. e2e `brands.spec` **1/1**.
+  E2E öncesi truncate+reseed ([memory: E2E clean DB]) — Prisma AI-guard `migrate reset`'i engellediği için
+  data-only truncate (schema/DB drop DEĞİL) + `db:seed`.
+- **Varsayımlar:** Yok. İki-markalı fixture için Acme yerine **Northwind** seçildi (Acme-tabanlı 19 spec'e sıfır
+  regresyon riski; Northwind zaten "giriş yapılmaz" olarak duruyordu ama owner+oauth-client'ı mevcut). Matris
+  bir açık bulmadı (5 tablonun hepsi brand-narrowed RLS taşıyor) → ilgili alt-göreve geri dönüş gerekmedi.
+- **Sonraki pencereye not:** `MULTIBRAND` zinciri `-a`→`-h` **TAMAM**; §5.3-Marka gereksinimi `✅`. Bir daha
+  brand-scoped tablo eklenirse `brand-isolation.test.ts`'teki alarm kırılır → o tabloyu `BRAND_SCOPED_TABLES`'a
+  ekle (matris testi otomatik üretir). e2e `brands.spec` iki-markalı Northwind seed'ine bağlı; taze DB gerektirir.
+  ⚠ Bu pencerede `CONVENTIONS.md` · `.taskmaster/BUILD-BLUEPRINT.md` · `run-loop.sh` çalışma alanında
+  değişik BULUNDU (yeni `critical` öncelik seviyesi / `pick_next` düzeni) — 78.8 KAPSAMINDA DEĞİL, bu commit'e
+  ALINMADI; sahibi panel/loop altyapısı, ayrı bir commit'e bırakıldı (kapsam disiplini).
+
 ### 78.7 — MULTIBRAND-g marka-scoped ayar ekranları (Widget/Websites/Channels) — done — 2026-08-02 UTC
 
 - **Yapıldı:** Pencere açıldığında iş zaten önceki (kesintiye uğramış) bir pencereden `in-progress`

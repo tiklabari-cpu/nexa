@@ -37,6 +37,19 @@ interface TenantSpec {
   teams: string[];
   /** Whether to build a full sample conversation. */
   richDemo: boolean;
+  /**
+   * A second brand, turning this into a Multibrand license (PRD §5.3). The
+   * fixture the cross-brand e2e (78.8) switches between — a distinct widget
+   * colour and website per brand, so a brand switch is visibly a different
+   * appearance and site list, and neither brand's data shows under the other.
+   */
+  secondBrand?: {
+    name: string;
+    slug: string;
+    /** `#rrggbb`, the `widget_settings_color_check` invariant. */
+    primaryColor: string;
+    websiteDomain: string;
+  };
 }
 
 const TENANTS: TenantSpec[] = [
@@ -61,6 +74,15 @@ const TENANTS: TenantSpec[] = [
     widgetDomain: 'northwind-supply.localhost',
     teams: ['Support'],
     richDemo: false,
+    // Northwind carries the two-brand fixture: it is never logged into by the
+    // Acme-based specs, so making it Multibrand keeps the single-brand demo
+    // (Acme) unchanged while giving the cross-brand e2e a license to switch in.
+    secondBrand: {
+      name: 'Northwind Europe',
+      slug: 'northwind-eu',
+      primaryColor: '#e11d48',
+      websiteDomain: 'northwind-eu.localhost',
+    },
   },
 ];
 
@@ -245,6 +267,38 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       createdBy: owner.id,
     },
   });
+
+  // A second brand (PRD §5.3), if the spec calls for one — the Multibrand
+  // fixture the cross-brand e2e (78.8) exercises. Each brand gets its own widget
+  // colour and website so a switch is visibly distinct and isolation is provable
+  // through the UI.
+  if (spec.secondBrand) {
+    // An explicit colour on the default brand too, so the contrast is concrete
+    // rather than resting on the shipped fallback.
+    await prisma.widgetSettings.create({
+      data: { licenseId, brandId: defaultBrand.id, primaryColor: '#2f6bff' },
+    });
+
+    const secondBrand = await prisma.brand.create({
+      data: { licenseId, name: spec.secondBrand.name, slug: spec.secondBrand.slug },
+      select: { id: true },
+    });
+    await prisma.widgetSettings.create({
+      data: { licenseId, brandId: secondBrand.id, primaryColor: spec.secondBrand.primaryColor },
+    });
+    await prisma.website.create({
+      data: {
+        licenseId,
+        brandId: secondBrand.id,
+        domain: spec.secondBrand.websiteDomain,
+        status: 'connected',
+        setup: 'manual',
+        connectedAt: new Date(),
+        createdBy: owner.id,
+      },
+    });
+  }
+
   await prisma.trustedDomain.create({
     data: {
       organizationId: organization.id,

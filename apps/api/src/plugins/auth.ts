@@ -16,7 +16,7 @@ import { hasAnyScope, type AgentRole } from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { decideIpAccess } from '../lib/ip-allowlist.js';
-import { withTenant, type TenantClient, type TenantContext } from '../lib/tenant.js';
+import { UUID_RE, withTenant, type TenantClient, type TenantContext } from '../lib/tenant.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerTokenService } from '../services/auth/customer-token.js';
 import { roleAtLeast, tenantOf, type Principal } from '../services/auth/principal.js';
@@ -33,6 +33,12 @@ declare module 'fastify' {
     principal?: Principal;
     /** Throws rather than returning undefined — handlers should not null-check. */
     requirePrincipal: () => Principal;
+    /**
+     * The brand named by `X-Nexa-Brand`, validated to belong to the caller's
+     * license (Multibrand, PRD §5.3). Undefined means license-wide. Resolved once
+     * per request and folded into `tenant()`.
+     */
+    brandId?: string;
     tenant: () => TenantContext;
     /** Run a query with this request's tenant context established. */
     withTenant: <T>(fn: (tx: TenantClient) => Promise<T>) => Promise<T>;
@@ -101,16 +107,41 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
   app.decorate('customerTokens', customerTokens);
 
   app.decorateRequest('principal', undefined);
+  app.decorateRequest('brandId', undefined);
   app.decorateRequest('requirePrincipal', function (this: FastifyRequest) {
     if (!this.principal) throw ApiError.authentication();
     return this.principal;
   });
   app.decorateRequest('tenant', function (this: FastifyRequest) {
-    return tenantOf(this.requirePrincipal());
+    const context = tenantOf(this.requirePrincipal());
+    // A resolved brand narrows every query this request makes to that one brand;
+    // its absence leaves the license-wide view untouched.
+    return this.brandId ? { ...context, brandId: this.brandId } : context;
   });
   app.decorateRequest('withTenant', function (this: FastifyRequest, fn) {
     return withTenant(app.db, this.tenant(), fn);
   });
+
+  /**
+   * Resolve the `X-Nexa-Brand` header to a brand of the caller's license, or
+   * undefined when absent (license-wide). The lookup runs under the caller's
+   * license context, so RLS makes another license's brand invisible — it comes
+   * back as "not found", which is why a foreign or malformed brand id is a 404
+   * (un-enumerable, NFR-S5) and never a 403. Only the header case costs a query.
+   */
+  async function resolveBrand(
+    principal: Principal,
+    header: string | string[] | undefined,
+  ): Promise<string | undefined> {
+    const raw = Array.isArray(header) ? header[0] : header;
+    if (!raw) return undefined;
+    if (!UUID_RE.test(raw)) throw ApiError.notFound('Brand not found.');
+    const brand = await withTenant(app.db, tenantOf(principal), (tx) =>
+      tx.brand.findFirst({ where: { id: raw }, select: { id: true } }),
+    );
+    if (!brand) throw ApiError.notFound('Brand not found.');
+    return brand.id;
+  }
 
   /**
    * `public: true` short-circuits authentication, so a route that also declares
@@ -153,6 +184,16 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
       // not a permission shortfall. 404 rather than 403 so the widget-facing
       // surface cannot be used to map the agent API.
       throw ApiError.notFound('Resource not found.');
+    }
+
+    // --- Brand context (Multibrand, PRD §5.3) -----------------------------
+    // `X-Nexa-Brand` scopes the request to one brand of the caller's license, so
+    // a brand-scoped table (channels) sees only that brand's rows. Resolved
+    // before the IP check below, because that check runs inside `withTenant` and
+    // would otherwise carry a half-built context. Brand is an agent/bot concept
+    // like scopes — a customer token names none.
+    if (principal.kind !== 'customer') {
+      request.brandId = await resolveBrand(principal, request.headers['x-nexa-brand']);
     }
 
     // --- IP allow-list (FR-MOD-08.9.6) ------------------------------------

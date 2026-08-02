@@ -793,6 +793,10 @@ components:
       required: [type, status, connected, created_at]
       properties:
         type: { $ref: "#/components/schemas/ChannelType" }
+        brand_id:
+          type: string
+          format: uuid
+          description: The brand this channel belongs to (Multibrand, PRD §5.3).
         status:
           type: string
           description: "`connected` while on, `off` once disconnected."
@@ -997,8 +1001,7 @@ components:
         Per-license widget appearance (FR-MOD-11.7, `widget_settings`). A
         workspace that has never customised it reads the shipped defaults; the
         values are baked into the install snippet and applied by the widget.
-      required:
-        [primary_color, position, theme, mobile_fullscreen, powered_by, updated_at]
+      required: [primary_color, position, theme, mobile_fullscreen, powered_by, updated_at]
       properties:
         primary_color:
           type: string
@@ -1261,7 +1264,18 @@ components:
       type: object
       description: A proactive, targeted message (FR-MOD-03.3).
       required:
-        [id, name, status, conditions, content, starts_at, ends_at, recurring, created_at, performance]
+        [
+          id,
+          name,
+          status,
+          conditions,
+          content,
+          starts_at,
+          ends_at,
+          recurring,
+          created_at,
+          performance,
+        ]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1441,7 +1455,8 @@ components:
         when `installed` is true, and is null otherwise. `channel` is set for a
         channel-typed app managed in Settings → Channels (09.2), which is set up
         there rather than connected here — for those, `installed` is always false.
-      required: [id, name, category, provider, icon, description, scopes, channel, installed, installation]
+      required:
+        [id, name, category, provider, icon, description, scopes, channel, installed, installation]
       properties:
         id: { type: string }
         name: { type: string }
@@ -1463,7 +1478,8 @@ components:
             for a data app connected in the marketplace (09.2).
           oneOf:
             - type: string
-              enum: [website_widget, email, messenger, twilio, whatsapp, instagram, telegram, chat_page]
+              enum:
+                [website_widget, email, messenger, twilio, whatsapp, instagram, telegram, chat_page]
             - type: "null"
         installed: { type: boolean }
         installation:
@@ -1828,7 +1844,17 @@ components:
     Invoice:
       type: object
       required:
-        [number, period, period_label, issued_at, status, currency, line_items, subtotal_cents, total_cents]
+        [
+          number,
+          period,
+          period_label,
+          issued_at,
+          status,
+          currency,
+          line_items,
+          subtotal_cents,
+          total_cents,
+        ]
       properties:
         number: { type: string, description: "Invoice number, `NEXA-<yyyymm>`." }
         period: { type: string, description: "Billing period as `yyyymm`." }
@@ -2374,6 +2400,17 @@ components:
       required: true
       description: The adapter channel.
       schema: { $ref: "#/components/schemas/ChannelType" }
+    BrandHeader:
+      name: X-Nexa-Brand
+      in: header
+      required: false
+      description: |
+        Scope the request to one brand of the caller's license (Multibrand,
+        PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+        single-brand default, so a workspace that never uses Multibrand is
+        unaffected. A brand id that is not one of the caller's own is answered
+        404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+      schema: { type: string, format: uuid }
     Limit:
       name: limit
       in: query

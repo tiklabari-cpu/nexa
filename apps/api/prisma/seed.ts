@@ -218,8 +218,21 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
 
   // --- Channels, website, widget --------------------------------------------
 
+  // The license's default brand — the same row the migration backfill lays down
+  // for existing licenses. Keeps single-brand behaviour intact (PRD §5.3).
+  // Created first: a channel now belongs to a brand (brand_id is NOT NULL).
+  const defaultBrand = await prisma.brand.create({
+    data: { licenseId, name: 'Default', slug: 'default', isDefault: true },
+    select: { id: true },
+  });
   await prisma.channel.create({
-    data: { licenseId, type: 'website_widget', status: 'connected', config: {} },
+    data: {
+      licenseId,
+      brandId: defaultBrand.id,
+      type: 'website_widget',
+      status: 'connected',
+      config: {},
+    },
   });
   await prisma.website.create({
     data: {
@@ -230,11 +243,6 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       connectedAt: new Date(),
       createdBy: owner.id,
     },
-  });
-  // The license's default brand — the same row the migration backfill lays down
-  // for existing licenses. Keeps single-brand behaviour intact (PRD §5.3).
-  await prisma.brand.create({
-    data: { licenseId, name: 'Default', slug: 'default', isDefault: true },
   });
   await prisma.trustedDomain.create({
     data: {

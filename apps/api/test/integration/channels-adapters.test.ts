@@ -117,6 +117,15 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
   beforeEach(async () => {
     fx = await seedFixtures(owner);
     await clearRateLimits(server.app);
+    // A channel belongs to a brand now (brand_id is NOT NULL); connecting with no
+    // `X-Nexa-Brand` falls back to the license default, so each tenant needs one —
+    // the single row signup/seed lay down for every real license.
+    await owner.brand.createMany({
+      data: [
+        { licenseId: fx.a.licenseId, name: 'Default', slug: 'default', isDefault: true },
+        { licenseId: fx.b.licenseId, name: 'Default', slug: 'default', isDefault: true },
+      ],
+    });
     await seedTeam(fx.a.licenseId, fx.a.agentAccountId);
     await seedTeam(fx.b.licenseId, fx.b.agentAccountId);
 

@@ -2407,7 +2407,16 @@ export interface paths {
   '/channels/{type}/connect': {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path: {
         /** @description The adapter channel. */
         type: components['parameters']['ChannelTypePath'];
@@ -2438,7 +2447,16 @@ export interface paths {
   '/channels/{type}/disconnect': {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path: {
         /** @description The adapter channel. */
         type: components['parameters']['ChannelTypePath'];
@@ -2463,7 +2481,16 @@ export interface paths {
   '/channels/{type}/messages': {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path: {
         /** @description The adapter channel. */
         type: components['parameters']['ChannelTypePath'];
@@ -3388,6 +3415,11 @@ export interface components {
     /** @description A channel the workspace has connected through an adapter. */
     ConnectedChannel: {
       type: components['schemas']['ChannelType'];
+      /**
+       * Format: uuid
+       * @description The brand this channel belongs to (Multibrand, PRD §5.3).
+       */
+      brand_id?: string;
       /**
        * @description `connected` while on, `off` once disconnected.
        * @enum {string}
@@ -4671,6 +4703,14 @@ export interface components {
     ChatId: string;
     /** @description The adapter channel. */
     ChannelTypePath: components['schemas']['ChannelType'];
+    /**
+     * @description Scope the request to one brand of the caller's license (Multibrand,
+     *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+     *     single-brand default, so a workspace that never uses Multibrand is
+     *     unaffected. A brand id that is not one of the caller's own is answered
+     *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+     */
+    BrandHeader: string;
     Limit: number;
   };
   requestBodies: never;
@@ -8827,7 +8867,16 @@ export interface operations {
   listChannels: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path?: never;
       cookie?: never;
     };
@@ -8852,7 +8901,16 @@ export interface operations {
   connectChannel: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path: {
         /** @description The adapter channel. */
         type: components['parameters']['ChannelTypePath'];
@@ -8886,7 +8944,16 @@ export interface operations {
   disconnectChannel: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path: {
         /** @description The adapter channel. */
         type: components['parameters']['ChannelTypePath'];
@@ -8911,7 +8978,16 @@ export interface operations {
   sendChannelMessage: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
       path: {
         /** @description The adapter channel. */
         type: components['parameters']['ChannelTypePath'];

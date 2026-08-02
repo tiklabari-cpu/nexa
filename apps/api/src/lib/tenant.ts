@@ -2,8 +2,9 @@
  * Tenant-scoped database access (NFR-S4).
  *
  * Every query that touches tenant data runs inside `withTenant`, which opens a
- * transaction and sets `app.current_license` / `app.current_organization` via
- * `SET LOCAL`. The RLS policies read those settings.
+ * transaction and sets `app.current_license`, `app.current_organization` and —
+ * for the Multibrand surface (PRD §5.3) — `app.current_brand` via `SET LOCAL`.
+ * The RLS policies read those settings.
  *
  * Why a transaction rather than a connection-level SET: the pool hands
  * connections to whoever asks next. A session variable set outside a
@@ -14,12 +15,18 @@
  *
  * The values are cast to bigint/uuid inside the SQL, so a malformed tenant id
  * raises rather than silently matching nothing.
+ *
+ * `brandId` is optional: absent (an empty `app.current_brand`) means "every
+ * brand of the license" — the single-brand default — so a workspace that never
+ * touches Multibrand behaves exactly as before. When set, brand-scoped tables
+ * (channels) narrow to that one brand on top of the license match.
  */
 import type { Prisma, PrismaClient } from '@prisma/client';
 
 export interface TenantContext {
   licenseId: bigint;
   organizationId: string;
+  brandId?: string;
 }
 
 export type TenantClient = Omit<
@@ -27,7 +34,7 @@ export type TenantClient = Omit<
   '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
 >;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function assertValidContext(context: TenantContext): void {
   if (typeof context.licenseId !== 'bigint' || context.licenseId <= 0n) {
@@ -35,6 +42,12 @@ function assertValidContext(context: TenantContext): void {
   }
   if (!UUID_RE.test(context.organizationId)) {
     throw new TypeError(`invalid tenant organization id: ${context.organizationId}`);
+  }
+  // A brand is optional (absent = license-wide), but if one is named it must be a
+  // valid uuid — a malformed brand raises here rather than silently matching
+  // nothing, the same contract the license/organization ids hold to.
+  if (context.brandId !== undefined && !UUID_RE.test(context.brandId)) {
+    throw new TypeError(`invalid tenant brand id: ${context.brandId}`);
   }
 }
 
@@ -58,6 +71,9 @@ export async function withTenant<T>(
       // transaction, discarded on commit or rollback.
       await tx.$executeRaw`SELECT set_config('app.current_license', ${context.licenseId.toString()}, true)`;
       await tx.$executeRaw`SELECT set_config('app.current_organization', ${context.organizationId}, true)`;
+      // '' means no brand selected → the license-wide view. Transaction-scoped
+      // like the other two, so it never leaks to the pooled connection.
+      await tx.$executeRaw`SELECT set_config('app.current_brand', ${context.brandId ?? ''}, true)`;
       return fn(tx);
     },
     { timeout: options.timeoutMs ?? 10_000 },
@@ -86,6 +102,11 @@ export abstract class TenantScopedRepository {
 
   get organizationId(): string {
     return this.context.organizationId;
+  }
+
+  /** The active brand, or undefined when the repository runs license-wide. */
+  get brandId(): string | undefined {
+    return this.context.brandId;
   }
 }
 

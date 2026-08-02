@@ -1033,14 +1033,19 @@ model RoutingRule {
 model Channel {
   id        String   @id @default(uuid()) @db.Uuid
   licenseId BigInt   @map("license_id")
+  brandId   String   @map("brand_id") @db.Uuid
   type      String
   status    String   @default("off")
   config    Json     @default("{}")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  brand   Brand   @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
-  @@unique([licenseId, type])
+  // Brand-scoped, not just license-scoped: one license may run the same channel
+  // type once per brand (Multibrand, PRD §5.3). RLS narrows visibility to the
+  // active brand on top of this key.
+  @@unique([licenseId, brandId, type])
   @@map("channels")
 }
 
@@ -1118,7 +1123,8 @@ model Brand {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  license  License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  channels Channel[]
 
   @@unique([licenseId, slug])
   @@map("brands")

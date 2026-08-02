@@ -35,6 +35,8 @@ const OFF = 'off';
 
 export interface ConnectedChannel {
   type: string;
+  /** The brand this channel belongs to (Multibrand, PRD §5.3). */
+  brand_id: string;
   status: string;
   /** The workspace's channel address (page id / phone number), or null if off. */
   address: string | null;
@@ -44,6 +46,7 @@ export interface ConnectedChannel {
 
 interface ChannelRow {
   type: string;
+  brandId: string;
   status: string;
   config: Prisma.JsonValue;
   createdAt: Date;
@@ -80,24 +83,44 @@ export class ChannelService {
     // `address` is stored inside config so the SECURITY DEFINER resolver can find
     // it (`config->>'address'`) without a tenant context.
     const stored = { ...config, address } as Prisma.InputJsonValue;
+    // A channel belongs to exactly one brand (brand_id is NOT NULL). Connect
+    // under the request's brand when `X-Nexa-Brand` named one, otherwise the
+    // license default — which is the sole brand for a single-brand workspace.
+    const brandId = tenant.brandId ?? (await this.defaultBrandId(tx));
 
     const row = await tx.channel.upsert({
-      where: { licenseId_type: { licenseId: tenant.licenseId, type } },
+      where: { licenseId_brandId_type: { licenseId: tenant.licenseId, brandId, type } },
       // `connected` is the "on" value the channels_status_check allows (the
       // others are `off` and `soon`).
-      create: { licenseId: tenant.licenseId, type, status: CONNECTED, config: stored },
+      create: { licenseId: tenant.licenseId, brandId, type, status: CONNECTED, config: stored },
       update: { status: CONNECTED, config: stored },
-      select: { type: true, status: true, config: true, createdAt: true },
+      select: { type: true, brandId: true, status: true, config: true, createdAt: true },
     });
     return this.serialise(row);
   }
 
+  /**
+   * The license's default brand, resolved under the caller's tenant context.
+   * Every license has exactly one (migration backfill / seed / signup), so a
+   * channel connected without an explicit brand has a home. Throws rather than
+   * inventing one if the invariant is ever broken.
+   */
+  private async defaultBrandId(tx: TenantClient): Promise<string> {
+    const brand = await tx.brand.findFirst({
+      where: { isDefault: true },
+      select: { id: true },
+    });
+    if (!brand) throw ApiError.validation('This workspace has no default brand.');
+    return brand.id;
+  }
+
   /** Every channel the workspace has ever connected, connected-first is not
-   *  meaningful here so oldest-first for a stable order. */
+   *  meaningful here so oldest-first for a stable order. Brand-scoped by RLS:
+   *  under a brand context only that brand's channels are visible. */
   async list(tx: TenantClient): Promise<ConnectedChannel[]> {
     const rows = await tx.channel.findMany({
       orderBy: { createdAt: 'asc' },
-      select: { type: true, status: true, config: true, createdAt: true },
+      select: { type: true, brandId: true, status: true, config: true, createdAt: true },
     });
     return rows.map((row) => this.serialise(row));
   }
@@ -270,8 +293,10 @@ export class ChannelService {
     type: ChannelType,
     input: { chatId?: string; externalId?: string; text: string },
   ): Promise<OutboundOutcome> {
-    const channel = await tx.channel.findUnique({
-      where: { licenseId_type: { licenseId: tenant.licenseId, type } },
+    // findFirst by type, not the compound key: RLS already narrows to this
+    // license and — under a brand context — to that one brand's channel.
+    const channel = await tx.channel.findFirst({
+      where: { type },
       select: { status: true, config: true },
     });
     if (!channel || channel.status !== CONNECTED) {
@@ -357,6 +382,7 @@ export class ChannelService {
     const address = typeof config.address === 'string' ? config.address : null;
     return {
       type: row.type,
+      brand_id: row.brandId,
       status: row.status,
       // The address is only meaningful while connected; a disconnected channel
       // reports none.

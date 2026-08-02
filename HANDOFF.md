@@ -13,6 +13,45 @@
 
 ## Task log (newest-first)
 
+### 78.2 — MULTIBRAND-b marka izolasyon çekirdeği (`app.current_brand` + brand-scoped RLS, `channels` üzerinde kanıtlandı) — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-MAX, bölünmez çekirdek. (1) `lib/tenant.ts`: `TenantContext.brandId?`, `withTenant`
+  içinde ÜÇÜNCÜ transaction-scoped `set_config('app.current_brand', brandId ?? '', true)` (pool'a
+  sızmaz), `assertValidContext` brand-UUID doğrulaması (malformed → TypeError), `TenantScopedRepository.brandId`
+  getter. (2) migration `20260802120000_brand_context`: `nexa_current_brand()` (`nexa_current_license()`
+  ikizi) + GRANT · `channels.brand_id` nullable→varsayılan markaya backfill→NOT NULL + FK cascade ·
+  `@@unique([licenseId,type])`→`@@unique([licenseId,brandId,type])` · `channels_tenant` policy DROP+CREATE
+  (`nexa_current_brand() IS NULL OR brand_id = nexa_current_brand()`, NULL=lisansın tüm markaları) ·
+  `auth_signup` CREATE OR REPLACE + varsayılan marka INSERT. (3) `plugins/auth.ts`: `X-Nexa-Brand`
+  çözümleyici onRequest'te (isteyenin lisansına ait değil/malformed/yok → **404, 403 değil**, un-enumerable
+  NFR-S5), `tenant()` brandId'yi katar, `request.brandId` dekorasyonu — brand agent/bot kavramı (customer'da
+  yok). (4) `ChannelService`: `connect` markayı çözer (başlık ya da lisans varsayılanı — `defaultBrandId`),
+  `sendOutbound` compound-key yerine `findFirst(type)`, yanıt `brand_id` taşır. (5) Kontrat **additive**:
+  `ConnectedChannel.brand_id` + reusable `X-Nexa-Brand` BrandHeader (yeni path YOK) → re-bundle + types regen.
+  (6) `seed.ts` marka önce (channel brand_id NOT NULL). Test `brand-isolation.test.ts` (+11) yeni;
+  `channels-adapters.test.ts` beforeEach'e varsayılan marka eklendi.
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `pnpm -w build` ✅ · `pnpm -w test:integration` ✅
+  (serial `--concurrency=1`; **45 dosya / 929 test** — 918→929, +11 brand-isolation; channels-adapters +
+  tenant-isolation + data-model + auth + account-lifecycle + contract-parity 5/5 DEĞİŞMEDEN yeşil) ·
+  `pnpm -w test:unit` ✅ (263) · `db:check-drift` ✅ (no drift). Canlı DB teyidi: policy brand koşulu ·
+  `nexa_current_brand()` · `channels.brand_id` NOT NULL · `channels_license_id_brand_id_type_key` ·
+  `auth_signup` brand INSERT. Kapı komutlarının hepsi exit 0.
+- **Varsayımlar:** Fixtures (`seedTenant`) **markasız bırakıldı** — 78.1'in `data-model`/`tenant-isolation`
+  brand blokları fixtures'ı markasız varsayıyor; onları bozmamak için varsayılan marka yalnız
+  `channels-adapters.test.ts` beforeEach'ine (kanal artık marka ister) + `auth_signup`'a (üretim: gerçek
+  signup lisansı) eklendi — "her lisansta tek varsayılan" invariant'ı üretimde (backfill+seed+signup) tam,
+  fixtures'ta markayı ihtiyaç anında test kurar. "Seen red" canlı gösterilmedi (no-DB-drop + policy diff'i
+  drift'e görünmez, restore riski); test yapısal olarak boş-değil: brandA2 kanalı seed edilip brandA1
+  bağlamında 0 satır beklenir — brand koşulu olmadan 1 döner (test docstring'inde belgeli). Marka-bazlı ajan
+  yetkisi (açık soru 3) kapsam dışı: tüm ajanlar tüm markaları görür.
+- **Sonraki pencereye not:** §5.3-Marka Multibrand satırı (PLAN §5.0:1134) **◐ kaldı** (slice 2/8 teslim);
+  özet sayaç (satır 22 + 1100) DEĞİŞMEDİ — Multibrand hâlâ tek `◐`, `✅`'e taşınmadı. Sıradaki: **-c** brand_id
+  yayılımı (websites + widget/security/inbox singleton ayarları — aynı `nexa_current_brand()` policy deseni) →
+  **-d** `/brands` CRUD + `brands--all` scope + `brand_not_found` hata tipi (yaml+route AYNI pencerede,
+  contract-parity iki-yönlü; `brands.yaml` hâlâ yok) → -e/-f/-g UI (`X-Nexa-Brand`'i AppShell marka
+  değiştirici gönderir) → -h cross-brand e2e. Çekirdek genel: resolver tüm agent/bot route'larında çalışır,
+  yalnız `channels` bugün brand-scoped; -c diğer tabloları aynı desenle bağlar.
+
 ### 78.1 — MULTIBRAND-a `brands` tablosu + license-scoped RLS + varsayılan marka backfill — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-XHIGH. Multibrand'in **kontrat-öncesi şema katmanı** (davranışsız — hiçbir

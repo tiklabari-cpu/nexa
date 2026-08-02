@@ -95,6 +95,8 @@ channels:
     tags: [Configuration]
     operationId: listChannels
     summary: Channels the workspace has connected
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
     description: |
       Every adapter channel (Messenger/SMS/WhatsApp) the workspace has connected,
       each with whether it is currently on and the channel address it answers at.
@@ -117,6 +119,7 @@ channels:
 channelConnect:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ChannelTypePath"
+    - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
   post:
     tags: [Configuration]
     operationId: connectChannel
@@ -154,6 +157,7 @@ channelConnect:
 channelDisconnect:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ChannelTypePath"
+    - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
   post:
     tags: [Configuration]
     operationId: disconnectChannel
@@ -172,6 +176,7 @@ channelDisconnect:
 channelMessages:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ChannelTypePath"
+    - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
   post:
     tags: [Configuration]
     operationId: sendChannelMessage

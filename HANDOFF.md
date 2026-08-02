@@ -13,6 +13,48 @@
 
 ## Task log (newest-first)
 
+### tm 92.10 — 08.9.7-j Audit ekranı filtreleri (eylem/tarih) + 'daha fazla yükle' + e2e görünürlük — done — 2026-08-02 UTC
+
+- **Yapıldı:** SONNET-XHIGH. `AuditLogPage.tsx`'e üç parça eklendi. (1) Eylem seçici: `AUDIT_ACTIONS`'ı
+  (apps/api, paylaşılan paket yok — elle senkron tutulan not eklendi) ailelerine göre gruplayan
+  `<optgroup>`'lu `<select>` (Authentication/Team/Settings/Billing/Webhooks/Tickets/Credentials/Data
+  — NFR-S12'nin dört olay ailesini de kapsıyor, 24 eylemin tamamı). (2) Tarih aralığı: `From date`/`To
+  date` (ReportsPage `RangeControls` deseni, `type=date` girişleri gün başı/sonu UTC'ye çevrilip
+  `date_from`/`date_to` olarak gönderiliyor) — boşken hiçbir tarih parametresi gönderilmiyor, sunucunun
+  varsayılan son-30-gün penceresi (08.9.7-a) korunuyor; statik açıklama metni bunu ekranda söylüyor.
+  (3) 'Load more': `useInfiniteQuery` + 08.9.7-a'nın `next_page_id` cursor'ı `page_id` sorgu
+  parametresi olarak — `hasNextPage` yokken buton hiç render edilmiyor. Üç filtre de yerel state değil
+  `useSearchParams` üzerinden URL'e yazılıyor (Tickets grid sort deep-link deseni, 02.7-a) — filtre
+  değişince sorgu anahtarı değişip sayfalama kendiliğinden sıfırlanıyor, reload/paylaşılan link aynı
+  görünümü açıyor. e2e: `settings.spec.ts`'e yeni `audit log` describe — owner girişi (agentPage
+  fixture zaten `/auth/login` üzerinden gerçek girişi tetikliyor, kendi `auth.login` entry'sini
+  yazıyor) → Settings → "Open audit log" linki → tabloda kendi `auth.login` kaydı görünür.
+  Dosyalar: `apps/web/src/features/audit/AuditLogPage.tsx` ·
+  `apps/web/src/features/audit/AuditLogPage.test.tsx` · `apps/e2e/tests/settings.spec.ts`.
+- **Doğrulama:** `pnpm --filter @nexa/web typecheck` ✓ · `pnpm --filter @nexa/web lint` ✓ ·
+  `pnpm --filter @nexa/e2e typecheck` ✓ · `pnpm --filter @nexa/e2e lint` ✓ · `pnpm -w typecheck` ✓ ·
+  `pnpm -w lint` ✓. Testler paket paket serial çalıştırıldı ([[nexa-test-gate-parallel-db]] —
+  `pnpm -w test` apps/rtm+apps/api'nin paylaşılan Postgres'e karşı deadlock/FK yarışına giriyor, bu
+  task'la ilgisiz, backend kodu hiç değişmedi): `pnpm --filter @nexa/web test` 489/489 ✓ (+6 yeni:
+  negatif-önce next_page_id yokken 'Load more' yok · 'Load more' ikinci sayfayı ekliyor + `page_id`
+  gönderiyor · eylem filtresi `action` parametresiyle listeyi daraltıyor · özel tarih aralığı
+  varsayılan 30 günü geçersiz kılıyor · filtre URL'e yazılıp reload'da korunuyor · varsayılan pencere
+  metni her zaman görünür) · `pnpm --filter @nexa/api test` 1169/1169 ✓ (dokunulmadı) ·
+  `pnpm --filter @nexa/rtm test` 90/90 ✓ (dokunulmadı). e2e ([[nexa-e2e-clean-db]] gereği `set -a; .
+  ./.env; set +a` ile `db:migrate`+`db:seed` koşulup portlar boş doğrulandıktan sonra):
+  `pnpm --filter @nexa/e2e test tests/settings.spec.ts -g "audit trail"` → **1/1 geçti** (webServer
+  api/rtm/web/widget otomatik ayağa kalktı) — `kanit/92.10-audit-log.png` kanıt.
+- **Varsayımlar:** (1) Eylem listesi `AUDIT_ACTIONS`'ı elle kopyalıyor (paylaşılan @nexa/types paketi
+  yok) — apps/api'de yeni bir eylem eklenip burada unutulursa dropdown'da görünmez ama link/URL ile
+  hâlâ filtrelenebilir (yorum bunu not ediyor); ileride gerçek drift riski varsa kaynak tek noktaya
+  taşınabilir. (2) actor_id filtresi ve serbest metin arama KAPSAM DIŞI bırakıldı (task tanımı
+  birebir). (3) `date_from`/`date_to` bağımsız girilebilir (biri boşken diğeri sunucunun açık-uçlu
+  varsayımına düşer) — Reports'un zorunlu-ikili custom-range validasyonu buraya taşınmadı, backend
+  zaten `date_from > date_to` için 400 döndürüyor.
+- **Sonraki pencereye not:** 08.9.7 gereksinim satırı PLAN.md'de hâlâ `◐` — kalan tek alt-görev
+  `08.9.7-k` (NFR-S12 uçtan uca doğrulama: dört olay + 30 gün penceresi + 'tüm planlarda' kanıtı);
+  bağımlılıkları (-b, -c, -e, -f, -h, -j) artık hepsi teslim edildi, -k açılabilir durumda.
+
 ### tm 92.9 — 08.9.7-i Audit Log ekranı: salt-okunur liste + boş/skeleton/hata durumları + Settings girişi — done — 2026-08-02 UTC
 
 - **Yapıldı:** SONNET-XHIGH. Yeni `apps/web/src/features/audit/AuditLogPage.tsx` —

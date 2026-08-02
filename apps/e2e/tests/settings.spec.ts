@@ -358,6 +358,22 @@ test.describe('settings', () => {
   });
 });
 
+test.describe('audit log', () => {
+  // NFR-S12 / 08.9.7-j: the trail's own most basic entry — signing in — is
+  // what proves it is actually being written, end to end. The `agentPage`
+  // fixture's sign-in happens moments before this test runs, so it is well
+  // inside the default 30-day window and sorts first (newest first).
+  test('shows the owner’s own sign-in in the audit trail', async ({ agentPage }) => {
+    await agentPage.goto('/app/settings');
+    await agentPage.getByRole('link', { name: 'Open audit log' }).click();
+
+    await expect(agentPage.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible();
+    const table = agentPage.getByRole('table', { name: 'Audit log' });
+    await expect(table.getByText('auth.login').first()).toBeVisible();
+    await agentPage.screenshot({ path: 'kanit/92.10-audit-log.png', fullPage: true });
+  });
+});
+
 test.describe('composer shortcuts', () => {
   test('a reply saved in Settings reaches a customer through #', async ({
     browser,

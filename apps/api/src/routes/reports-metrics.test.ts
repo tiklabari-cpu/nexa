@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolutionRate, round } from './reports-metrics.js';
+import { channelLabel, resolutionRate, round } from './reports-metrics.js';
 
 describe('resolutionRate', () => {
   it('is null, not zero, when nothing closed', () => {
@@ -39,5 +39,21 @@ describe('round', () => {
   it('keeps three decimals', () => {
     expect(round(0.12345)).toBe(0.123);
     expect(round(1)).toBe(1);
+  });
+});
+
+describe('channelLabel', () => {
+  it('keeps a known adapter type as its own label', () => {
+    expect(channelLabel('messenger')).toBe('messenger');
+    expect(channelLabel('twilio')).toBe('twilio');
+    expect(channelLabel('whatsapp')).toBe('whatsapp');
+  });
+
+  it("falls back to 'website' for null — the native web widget has no adapter type", () => {
+    expect(channelLabel(null)).toBe('website');
+  });
+
+  it("falls back to 'website' for an unrecognized type", () => {
+    expect(channelLabel('carrier-pigeon')).toBe('website');
   });
 });

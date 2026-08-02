@@ -13,6 +13,38 @@
 
 ## Task log (newest-first)
 
+### 63.3 (07.5-c) — channel_messages(license_id, chat_id) indeksi + saf kanal etiketi helper'ı — done — 2026-08-02 UTC
+
+- **Yapıldı:** (1) `ChannelMessage`'a `@@index([licenseId, chatId])` (`apps/api/prisma/schema.prisma`)
+  + karşılık gelen migration `20260802140000_channel_messages_chat_id_index` (yalnız `CREATE INDEX`,
+  veri dönüşümü yok, `DROP INDEX` ile geri alınabilir); paylaşılan dev Postgres'e `prisma migrate deploy`
+  ile uygulandı (bkz. Varsayımlar — `migrate dev` kullanılmadı). (2) `reports-metrics.ts`'e saf
+  `channelLabel(type: string | null): string` — bilinen tipler (`CHANNEL_TYPES`, `channel-adapter.ts`
+  tek kaynağından tüketilir, kendi listesi uydurulmadı) kendi adına, `null`/bilinmeyen → `'website'`
+  (adaptör kanalı olmayan native web sohbeti).
+- **Doğrulama (hepsi yeşil):** `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` ·
+  `pnpm --filter @nexa/api db:check-drift` ("no drift"). Unit `reports-metrics.test.ts` +3 test
+  (bilinen tip × 3, `null`→website, bilinmeyen→website) — paket-bazında `@nexa/api` **266/266**,
+  `@nexa/web` **514/514**, `@nexa/rtm` **90/90**, `@nexa/widget` **52/52** ([memory: parallel-db] —
+  `pnpm -w test` paylaşılan Postgres'te FK ihlaliyle yarıştı, paket bazında ayrı çalıştırıldı, hepsi
+  temiz). Integration `apps/api` **957/957** (46 dosya; yeni `data-model.test.ts` "channel messages"
+  dahil — `EXPLAIN` içinde `SET LOCAL enable_seqscan = off` ile küçük tablo boyutunun planlayıcıyı
+  Seq Scan'e zorlamasını engelleyip yeni indeksin gerçekten kullanılabilir olduğu kanıtlandı: plan
+  `channel_messages_license_id_chat_id_idx` içeriyor, `Seq Scan` içermiyor).
+- **Varsayımlar:** `prisma migrate dev` paylaşılan dev DB'de `20260726120000_omnichannel_adapters`
+  için checksum uyuşmazlığı bulup (dosya applied halinden farklı — önceki bir turun kenar etkisi,
+  bu görevden önce vardı) interaktif olmayan ortamda `migrate reset` istedi; DB'yi düşürmemek için
+  reset ÇALIŞTIRILMADI. Bunun yerine migration dosyası elle yazıldı (mevcut migration'ların
+  house-style'ı, ör. `20260802130000_brand_scoped_settings`, zaten kısmen elle yazılmıştı) ve
+  `prisma migrate deploy` (yalnız bekleyenleri ileri uygular, reset gerektirmez) ile uygulandı —
+  `db:check-drift` "no drift" ile şema tutarlılığı ayrıca doğrulandı.
+- **Sonraki pencereye not:** `07.5-d` (kanal boyutu agregasyon çekirdeği, `OPUS-MAX`) artık bu
+  indekse bağımlı olarak açılabilir — `07.5-a` ve `07.5-c` ikisi de teslim. Kalan zincir:
+  `07.5-b/-d/-e/-f/-g/-h/-i`. ⚠ Bu pencerede de `CONVENTIONS.md` · `.taskmaster/BUILD-BLUEPRINT.md` ·
+  `run-loop.sh` çalışma alanında değişik BULUNDU (aynı `critical` öncelik konusu, 78.8'den beri
+  duruyor) — bu görevin KAPSAMINDA DEĞİL, bu commit'e ALINMADI (kapsam disiplini); sahibi
+  panel/loop altyapısı, ayrı bir commit'e bırakıldı.
+
 ### 63.1 (07.5-a) — ReportsBreakdown kontratına by_hour/by_team/by_channel (additive, opsiyonel) — done — 2026-08-02 UTC
 
 - **Yapıldı:** Contract-first ilk adım, yalnız sözleşme. `packages/contract/openapi/openapi.yaml`

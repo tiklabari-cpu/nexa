@@ -355,6 +355,42 @@ describe('data model invariants', () => {
   });
 
   // =========================================================================
+  // channel_messages(license_id, chat_id) index (07.5-c · NFR-P2)
+  // =========================================================================
+
+  describe('channel messages', () => {
+    it('has an index the channel dimension join can use, not a sequential scan', async () => {
+      // The reports breakdown's channel dimension (07.5-d) filters this table by
+      // (license_id, chat_id). A handful of seeded rows is too small for the
+      // planner to ever prefer an index scan on cost alone, so seqscan is
+      // disabled for the plan to prove the index — not the row count — is what
+      // makes this query cheap.
+      const { chatId } = await openChat();
+      await owner.channelMessage.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          channelType: 'whatsapp',
+          direction: 'inbound',
+          externalId: 'wamid.explain-test',
+          chatId,
+          text: 'hello',
+        },
+      });
+
+      const [plan] = await owner.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('SET LOCAL enable_seqscan = off');
+        return tx.$queryRaw<Array<{ 'QUERY PLAN': string }>>`
+          EXPLAIN (FORMAT TEXT)
+          SELECT * FROM channel_messages
+          WHERE license_id = ${fx.a.licenseId} AND chat_id = ${chatId}
+        `;
+      });
+      expect(JSON.stringify(plan)).not.toMatch(/Seq Scan/);
+      expect(JSON.stringify(plan)).toMatch(/channel_messages_license_id_chat_id_idx/);
+    });
+  });
+
+  // =========================================================================
   // Tenant isolation on the new tables
   // =========================================================================
 

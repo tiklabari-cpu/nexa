@@ -1085,6 +1085,7 @@ model ChannelMessage {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@index([licenseId, channelType, createdAt])
+  @@index([licenseId, chatId])
   @@map("channel_messages")
 }
 

@@ -1609,10 +1609,10 @@
             "description": "(1) Prisma: `ChannelMessage`'a `@@index([licenseId, chatId])` + karşılık gelen migration (yalnız CREATE INDEX; veri dönüşümü yok, geri alınabilir). (2) `reports-metrics.ts`'e saf `channelLabel(type: string | null): string` — bilinen tipler ('messenger'|'twilio'|'whatsapp', kaynak CHANNEL_TYPES) kendi etiketine, `null`/bilinmeyen → `'website'` (adaptör kanalı olmayan native web sohbeti). Saf ve bağ",
             "details": "07.5-c — channel_messages(license_id, chat_id) indeksi + saf kanal etiketi helper'ı  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.5 (+ NFR-P2 okuma p99 <150ms)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 4-5 dosya (schema + migration + saf helper + testleri); güvenlik KARARI yok — join'i ve izolasyon kilidini 07.5-d yapar, bu alt-görev yalnız indeks + saf string eşlemesi; eşzamanlılık yok; yeni algoritma yok — kopyalanacak desenler (mevcut @@index tanımı, reports-metrics.ts saf fonksiyon stili, data-model.test.ts:274 EXPLAIN plan iddiası) ismen verildi; kontrat değişmez; KK mekanik.\nNEDEN AÇIK: apps/api/prisma/schema.prisma `ChannelMessage` yalnız `@@index([licenseId, channelType, createdAt])` taşıyor — `chat_id` üzerinde HİÇBİR indeks yok, oysa kanal boyutu chat_id ile join edecek. Ayrıca `CHANNEL_TYPES = ['messenger', 'twilio', 'whatsapp']` (apps/api/src/services/channels/channel-adapter.ts:29) ve `channel_messages`'a YALNIZ `channel-service.ts:342` `record()` yazıyor → native web widget sohbetleri hiç satır üretmiyor; kanal boyutu fallback etiketi olmadan eksik kalır.\nKAPSAM: (1) Prisma: `ChannelMessage`'a `@@index([licenseId, chatId])` + karşılık gelen migration (yalnız CREATE INDEX; veri dönüşümü yok, geri alınabilir). (2) `reports-metrics.ts`'e saf `channelLabel(type: string | null): string` — bilinen tipler ('messenger'|'twilio'|'whatsapp', kaynak CHANNEL_TYPES) kendi etiketine, `null`/bilinmeyen → `'website'` (adaptör kanalı olmayan native web sohbeti). Saf ve bağımlılıksız — reports.ts, CSV ve UI aynı sözlüğü paylaşır.\nDOSYALAR: apps/api/prisma/schema.prisma · apps/api/prisma/migrations/ · apps/api/src/routes/reports-metrics.ts · apps/api/src/routes/reports-metrics.test.ts · apps/api/test/integration/data-model.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/prisma/schema.prisma — `ChannelMessage`'ın mevcut `@@index([licenseId, channelType, createdAt])` satırı: bileşik indeks yazım deseni · apps/api/src/routes/reports-metrics.ts — `round()` / `resolutionRate()`: bağımlılıksız saf fonksiyon + doc-comment stili · apps/api/test/integration/data-model.test.ts:274 — 'prunes partitions when a query is bounded by time': `EXPLAIN (FORMAT TEXT)` ile sorgu planı iddia etme deseni birebir kopyalanır · apps/api/src/services/channels/channel-adapter.ts:29 — CHANNEL_TYPES tek doğruluk kaynağı (helper bu listeyi tüketir, kendi listesini uydurmaz)\nKK (birebir): \"Boyutlu kırılım\" | \"KK-türetilmiş: \"Kanal boyutunun veri yolu ölçeklenebilir (chat_id join'i indeks kullanır) ve adaptör kanalı olmayan sohbetler tanımlı bir kovaya ('website') düşer.\" — PRD KK'sı tek kelimelik; bu alt-görev KK'nın kendisini değil ÖNKOŞULUNU karşılar, kriter NFR-P2 (okuma bütçesi) ve boyutun tam-kapsayıcılığı üzerinden türetildi.\"\nKK DOĞRULAMA: (1) data-model.test.ts'e EXPLAIN iddiası: `SELECT ... FROM channel_messages WHERE license_id = $1 AND chat_id = $2` planı Seq Scan içermez / yeni indeksi kullanır (NFR-P2 payı). (2) reports-metrics.test.ts unit: `channelLabel('messenger')==='messenger'`, `channelLabel(null)==='website'`, `channelLabel('bilinmeyen')==='website'`.\nKAPSAM DIŞI: Kanal agregasyon sorgusu ve izolasyon kilidi (07.5-d — bölünmez çekirdek) · channel_messages.chat_id'ye FK constraint eklemek (soft-reference bilinçli tasarım: schema.prisma yorumu \"the record outlives the conversation\") · email→ticket akışı (email-inbound.ts ticket üretir, chat değil) · UI / CSV\nMIGRATION: EVET — `channel_messages` tablosuna `CREATE INDEX` (license_id, chat_id). Yeni kolon/tablo yok, veri dönüşümü yok, geri alınabilir (DROP INDEX).\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: channelLabel — her bilinen tip + null + bilinmeyen fallback · integration: EXPLAIN plan iddiası (indeks kullanılıyor) + migration temiz uygulanıyor · NEGATİF/CROSS-TENANT YOK ve gerekmiyor — gerekçe: indeks + saf fonksiyon; hiçbir tenant verisi okunmuyor. İzolasyon testi join'i yapan 07.5-d'nin zorunluluğudur.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "63",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T21:34:11.748Z"
           },
           {
             "id": 4,
@@ -1699,7 +1699,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T20:19:34.022Z"
+        "updatedAt": "2026-08-02T21:34:11.748Z"
       },
       {
         "id": "64",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T20:19:34.022Z",
+      "lastModified": "2026-08-02T21:34:11.748Z",
       "taskCount": 99,
       "completedCount": 74,
       "tags": [

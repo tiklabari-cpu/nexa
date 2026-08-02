@@ -295,6 +295,67 @@ test.describe('settings', () => {
     await save('image/png, image/jpeg, application/pdf', '10');
     await section().screenshot({ path: 'kanit/1-dosya-paylasimi.png' });
   });
+
+  /**
+   * IP allowlist (FR-MOD-08.9.6). The CRUD an admin drives from Settings, proven
+   * end to end: add an entry, see it listed, remove it, and the section falls
+   * back to its empty state.
+   *
+   * Enforcement is left OFF on purpose (08.9.6-i): switching it on from a browser
+   * the server cannot re-admit would lock this very session out of its own
+   * console — the availability risk the whole feature carries. The entry added is
+   * a loopback range so the server's self-lockout guard admits the save: the E2E
+   * session reaches the API from 127.0.0.1 (the API binds 0.0.0.0, so the
+   * dev-proxied call lands on IPv4 loopback), and the guard refuses any list that
+   * would exclude the caller's own address.
+   */
+  test('adds and removes an IP allowlist entry', async ({ agentPage }) => {
+    await agentPage.goto('/app/settings');
+
+    const section = (): ReturnType<typeof agentPage.getByRole> =>
+      agentPage.getByRole('region', { name: 'IP allowlist' });
+    await expect(section().getByRole('heading', { name: 'IP allowlist', level: 2 })).toBeVisible();
+
+    const range = '127.0.0.0/8';
+
+    await section().getByLabel('Address or CIDR range').fill(range);
+    await section().getByLabel('Label (optional)').fill('E2E loopback');
+
+    // Wait for the POST, not the redraw: a reload racing the request would read
+    // the previous (empty) list back — the flake the file-sharing test above hit.
+    const added = agentPage.waitForResponse(
+      (response) =>
+        response.url().endsWith('/settings/ip-allowlist') &&
+        response.request().method() === 'POST',
+    );
+    await section().getByRole('button', { name: 'Add entry' }).click();
+    expect((await added).status()).toBe(201);
+
+    await expect(section().locator('li').filter({ hasText: range })).toBeVisible();
+
+    // Survives a reload — persisted server-side, not just added to the list on
+    // screen.
+    await agentPage.reload();
+    await expect(section().locator('li').filter({ hasText: range })).toBeVisible();
+    await section().screenshot({ path: 'kanit/80.9-ip-allowlist.png' });
+
+    // Remove it, and the section returns to its empty state. This tenant carries
+    // no seeded entries and the test leaves nothing behind, so the empty state is
+    // the true steady state — the change actually refused a row, it did not just
+    // repaint.
+    const removed = agentPage.waitForResponse(
+      (response) =>
+        response.url().includes('/settings/ip-allowlist/') &&
+        response.request().method() === 'DELETE',
+    );
+    await section()
+      .locator('li')
+      .filter({ hasText: range })
+      .getByRole('button', { name: 'Remove' })
+      .click();
+    expect((await removed).status()).toBe(204);
+    await expect(section().getByText('No allowlist entries')).toBeVisible();
+  });
 });
 
 test.describe('composer shortcuts', () => {

@@ -182,6 +182,17 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
       // workspace just removed for the length of the TTL, which is exactly the
       // window an IP restriction exists to close. When enforcement is off (the
       // common case) this stops at a single indexed lookup before reading entries.
+      //
+      // license-gate.ts made this choice for a *per-mutation* read; this one runs
+      // on *every* authenticated request, so the cost was measured before the same
+      // decision was inherited (tm 80.9). The enforcement-off path (the common
+      // case) is one indexed settings read in its own short tenant transaction:
+      // ~1.1-1.2ms mean, p95 ~2ms on local Postgres. Enforcement-on adds the
+      // entries read + match for only ~0.2ms more (~1.3-1.5ms mean, p95 ≤ ~2.5ms) —
+      // the BEGIN/set_config/COMMIT dominates, the reads themselves are noise. Both
+      // sit comfortably inside the NFR-U/NFR-P budget, so there is nothing to trade
+      // the staleness window away for. Numbers + rejected-cache rationale: HANDOFF
+      // tm 80.9.
       const denied = await request.withTenant(async (tx) => {
         const settings = await tx.securitySettings.findFirst({
           select: { ipAllowlistEnforced: true },

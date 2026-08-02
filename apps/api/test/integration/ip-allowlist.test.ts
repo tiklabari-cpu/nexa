@@ -14,8 +14,9 @@
  * Enforcement — refusing a request — is a separate slice; this surface only
  * manages the list, so nothing here should refuse a caller for their address.
  */
-import type { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { withTenant } from '../../src/lib/tenant.js';
 import {
   grantToken,
   ownerClient,
@@ -24,6 +25,9 @@ import {
   type TenantFixture,
 } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
+
+/** The application role — RLS-enforced, the way a console reads its own trail. */
+const APP_URL = process.env['DATABASE_APP_URL'];
 
 describe('ip allow-list', () => {
   let owner: PrismaClient;
@@ -223,6 +227,7 @@ describe('ip allow-list', () => {
  */
 describe('ip allow-list enforcement', () => {
   let owner: PrismaClient;
+  let appRole: PrismaClient;
   let server: TestServer;
   let fx: Fixtures;
   let agentA: string;
@@ -250,13 +255,15 @@ describe('ip allow-list enforcement', () => {
   }
 
   beforeAll(async () => {
+    if (!APP_URL) throw new Error('DATABASE_APP_URL must be set');
     owner = ownerClient();
+    appRole = new PrismaClient({ datasourceUrl: APP_URL });
     server = await startTestServer();
   });
 
   afterAll(async () => {
     await server.close();
-    await owner.$disconnect();
+    await Promise.all([owner.$disconnect(), appRole.$disconnect()]);
   });
 
   beforeEach(async () => {
@@ -300,6 +307,20 @@ describe('ip allow-list enforcement', () => {
     expect(errorType(res)).toBe('not_allowed');
   });
 
+  it('reads the right-most forwarded hop as the client — a trailing allowed address is admitted', async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    // The mirror of the spoof test, and together they pin `request.ip` to exactly
+    // the right-most `X-Forwarded-For` entry under `trustProxy: 1`. There the
+    // right-most hop was the denied real client and a prepended allowed address
+    // could not sneak in front; here the right-most hop — the one our single
+    // trusted proxy attests — is the allowed address, and it is honoured. So the
+    // gate reads neither the left-most (spoofable) nor a fixed index, but the one
+    // hop we trust: end-to-end proof the proxy-IP decision from 08.9.6-e holds.
+    const res = await server.get('/auth/me', from(agentA, '198.51.100.7, 203.0.113.9'));
+    expect(res.statusCode).toBe(200);
+  });
+
   it('denies a caller that presents no address the non-empty list can match', async () => {
     await enforce(fx.a, ['203.0.113.0/24']);
 
@@ -333,6 +354,42 @@ describe('ip allow-list enforcement', () => {
     const metadata = entry!.metadata as Record<string, unknown>;
     expect(metadata.principal_kind).toBe('agent');
     expect(JSON.stringify(metadata)).not.toContain('198.51.100.7');
+  });
+
+  it('surfaces the denial through the audit read path (RLS) — scoped to the tenant, no raw address', async () => {
+    // The test above reads the row as the owner, which bypasses RLS. This proves
+    // the denial is visible the way a console actually reads its trail — through
+    // the application role under row-level security, one tenant at a time. There
+    // is no GET /audit-log endpoint; the trail is queried through the app role +
+    // RLS exactly as here, so this is that read surface, end to end.
+    const contextOf = (t: TenantFixture) => ({
+      licenseId: t.licenseId,
+      organizationId: t.organizationId,
+    });
+
+    await enforce(fx.a, ['203.0.113.0/24']);
+    const res = await server.get('/auth/me', from(agentA, '198.51.100.7'));
+    expect(res.statusCode).toBe(403);
+
+    // Visible to the tenant it belongs to.
+    const visibleToA = await withTenant(appRole, contextOf(fx.a), (tx) =>
+      tx.auditLogEntry.findMany({ where: { action: 'auth.ip_denied' } }),
+    );
+    expect(visibleToA.length).toBeGreaterThan(0);
+
+    // And nothing a reader receives carries the address (NFR-C1/C2): not the `ip`
+    // column, not the metadata — only the principal kind and the token target.
+    const asRead = JSON.stringify(
+      visibleToA.map((e) => ({ ip: e.ip, target: e.target, metadata: e.metadata })),
+    );
+    expect(asRead).not.toContain('198.51.100.7');
+    expect(visibleToA.every((e) => e.ip === null)).toBe(true);
+
+    // Invisible to the other tenant — one workspace never reads another's denials.
+    const visibleToB = await withTenant(appRole, contextOf(fx.b), (tx) =>
+      tx.auditLogEntry.findMany({ where: { action: 'auth.ip_denied' } }),
+    );
+    expect(visibleToB).toHaveLength(0);
   });
 
   it('admits a matching address and writes no denial', async () => {

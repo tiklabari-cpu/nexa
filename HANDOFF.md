@@ -13,6 +13,44 @@
 
 ## Task log (newest-first)
 
+### tm 80.9 — 08.9.6-i Uçtan uca doğrulama (E2E + audit görünürlüğü + proxy-IP + istek başına maliyet) — done — 2026-08-02 UTC
+
+- **Yapıldı:** IP allowlist / oturum güvenliği dilimini (08.9.6 a→h) uçtan uca **doğruladı** — yeni
+  güvenlik mantığı YAZILMADI (task KAPSAM DIŞI), yalnız -e'nin kararları teste sabitlendi:
+  (1) **E2E** `settings.spec.ts` (+1): allowlist ekle → listede görünür → reload'da kalıcı → sil → boş
+      durum. Enforce **KAPALI** (tarayıcı oturumu kendini kilitlemesin); eklenen giriş loopback
+      `127.0.0.0/8` — self-lockout guard'ı geçer çünkü tarayıcı→API çağrısı IPv4 loopback'e düşer.
+      Kanıt: `apps/e2e/kanit/80.9-ip-allowlist.png`.
+  (2) **Integration** `ip-allowlist.test.ts` (17→19, +2): (a) **audit okuma yolu** — enforce açık +
+      eşleşmeyen IP → 403 + `auth.ip_denied` girdisi **app-role/RLS altında** ait olduğu tenant'a
+      görünür, karşı tenant'a görünmez; ne `ip` kolonu ne metadata ham adres taşır (NFR-C1/C2).
+      `GET /audit-log` endpoint'i YOK — trail app-role+RLS ile okunur, test o okuma yüzeyinin ta
+      kendisi. (b) **en-sağ XFF hop kabul** testi — spoof testinin aynası; ikisi birlikte `request.ip`'yi
+      `trustProxy:1` altında tam olarak en-sağ (tek güvenilen) hop'a sabitler.
+  (3) **auth.ts** — enforcement okumasının istek-başı maliyet yorumu (license-gate per-mutation
+      gerekçesi HER kimlikli isteğe otomatik devredilemez → ölçüldü).
+- **Doğrulama (DoD kapısı, hepsi exit 0):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7) · `pnpm -w test:unit` (web 458 + api/contract) · `pnpm -w test:integration`
+  **41 dosya / 845 test** (tenant-isolation 19 + route-config + contract-parity dâhil, regresyon yeşil) ·
+  E2E `settings.spec.ts` **13/13** (yeni IP allowlist testi dâhil).
+- **Maliyet ölçümü (KK kanıtı — bağımsız yeniden ölçüldü, local PG, app-role/RLS, warmup + 500× ×2):**
+  enforce-**OFF** (yalnız settings okuması) mean **1.15ms** / p95 **1.60ms** · enforce-**ON**
+  (settings + entries) mean **1.30ms** / p95 **1.65ms**. Fark ~0.15ms — `BEGIN/set_config/COMMIT`
+  baskın, okumaların kendisi gürültü. Her ikisi de NFR-U/NFR-P bütçesi içinde. **Cache REDDEDİLDİ:**
+  staleness penceresi = kaldırılan bir IP'yi TTL boyunca kabul eder = kısıtın kapatmak için var olduğu
+  tam pencere; maliyet zaten bütçe içi olduğundan takas edecek bir şey yok. Gerekçe kodda yorumla
+  (`apps/api/src/plugins/auth.ts`) sabit. Bu ölçüm auth.ts yorumundaki (önceki pencerenin kaydettiği)
+  rakamları doğruladı.
+- **Varsayımlar:** `trustProxy: 1` (server.ts, -e) tek güvenilen hop demektir → `request.ip` en-sağ XFF
+  girdisi; testler bunu iki yönlü sabitliyor. E2E enforce KAPALI — açık enforce'un uçtan uca 403'ü
+  integration'da kanıtlı (tarayıcıdan enforce açmak oturumu kilitleme riski, KK bunu KAPALI istiyor).
+- **Sonraki pencereye not:** **08.9.6 (a→i) TAM.** PLAN §5.0 satır 1120 zaten `✅` + -i kanıtı taşıyor
+  (doküman düzeltme penceresi `d77edbd` çevirmişti; bu kapanış PLAN'a DOKUNMADI, yalnız kod+HANDOFF
+  commit'ledi). E2E süiti çalıştırıldığında `kanit/*.png` (7 alâkasız ekran görüntüsü) yeniden üretildi →
+  **kapsam dışı, `git restore` ile geri alındı**; yalnız yeni `80.9-ip-allowlist.png` eklendi. **Açık
+  sorular (bu task'ın DIŞINDA):** plan/paket kapısı kararı · RTM WebSocket enforcement — ikisi de
+  ayrı kalem, burada karara bağlanmadı.
+
 ### DÜZELTME — Faz-2 özet sayacı bayat (08.9.6 `◐→✅`, sayaç güncellenmedi) — done — 2026-08-01 UTC
 
 - **Bulgu (panel §1.2):** Üst-tablo (`PLAN.md:22`) + §5.0 girişi (`PLAN.md:1100`) dağılımı `4 ✅ · 23 ⬜ · 3 ⛔`

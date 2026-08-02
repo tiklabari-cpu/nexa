@@ -3945,10 +3945,10 @@
             "description": "AUDIT_ACTIONS'a 'webhook.created' ve 'webhook.deleted' eklenir (kapalı sözlük). routes/webhooks.ts'te register ve unregister'ı zaten saran request.withTenant(tx) bloğunun İÇİNDE writeAuditEntry çağrılır. target = 'webhook:<id>'. metadata YALNIZ { action, type, url_host } taşır — url'nin tamamı ve secret ASLA yazılmaz (register yanıtı plaintext secret döndürüyor; sanitizeAuditMetadata'nın regex'i '",
             "details": "08.9.7-c — Webhook değişimi audit'i: webhook.created / webhook.deleted eylemleri  [OPUS-XHIGH]\n\nPRD: NFR-S12 (+ NFR-S7 webhook güvenliği, risk R1/R2)\nETİKET GEREKÇESİ: OPUS-XHIGH: güvenlik hassasiyeti var — append-only ve asla temizlenemeyen bir tabloya webhook imzalama secret'ının sızmaması ve yazının register/unregister ile AYNI tenant transaction'ında kalması gerekiyor (audit-log.ts kendi dokümantasyonu bunu vurguluyor). Çekirdek güvenlik sınırı (HMAC/SSRF) burada YENİDEN tasarlanmıyor, o yüzden MAX değil. Koşul 2 gereği SONNET olamaz.\nNEDEN AÇIK: grep writeAuditEntry apps/api/src → webhooks.ts hiç geçmiyor (0 sonuç); AUDIT_ACTIONS sözlüğünde (audit-log.ts:33-67, 25 eylem) webhook.* diye bir eylem yok. Oysa route'lar mevcut: POST /webhooks (routes/webhooks.ts:57) ve DELETE /webhooks/:webhookId (routes/webhooks.ts:77). NFR-S12'nin birebir saydığı 'webhook değişimi' hiçbir yerde kaydedilmiyor.\nKAPSAM: AUDIT_ACTIONS'a 'webhook.created' ve 'webhook.deleted' eklenir (kapalı sözlük). routes/webhooks.ts'te register ve unregister'ı zaten saran request.withTenant(tx) bloğunun İÇİNDE writeAuditEntry çağrılır. target = 'webhook:<id>'. metadata YALNIZ { action, type, url_host } taşır — url'nin tamamı ve secret ASLA yazılmaz (register yanıtı plaintext secret döndürüyor; sanitizeAuditMetadata'nın regex'i 'url'/'value' gibi anahtarları yakalamaz, bu yüzden savunma çağrı yerinde kurulur). Silme yalnız gerçekten silindiğinde (removed > 0) kaydedilir.\nDOSYALAR: apps/api/src/services/audit/audit-log.ts · apps/api/src/services/audit/audit-log.test.ts · apps/api/src/routes/webhooks.ts · apps/api/test/integration/audit-log.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/settings.ts:275-298 (trusted_domain_removed — count>0 kapısı + target biçimi + tx içinde yazım) · apps/api/test/integration/audit-log.test.ts (satır ~430-453: 'haystack' deseni — secret/PII'nin log'a düşmediğini kanıtlayan iddia)\nKK (birebir): \"Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30 gün) tüm planlarda\" | \"KK3: Audit log (login, rol değişimi, veri silme, webhook değişimi) tutulur (§7). — kaynak: US-11, satır 325\"\nKK DOĞRULAMA: test/integration/audit-log.test.ts: POST /webhooks tam olarak bir webhook.created entry'si yazar (aktör/hedef doğru); DELETE /webhooks/:id tam olarak bir webhook.deleted yazar; 404 silme hiçbir entry yazmaz. Bu, KK'nın 'webhook değişimi' maddesini birebir kanıtlar.\nKAPSAM DIŞI: Webhook güncelleme/secret rotasyonu ucu — depoda YOK, bu turda eklenmiyor · Teslimat/retry loglama (08.8.4-d ile teslim edilmiş ayrı yüzey) · Ekranda gösterim (08.9.7-i/-j)\nSÖZLEŞME: yok (mevcut /webhooks uçlarının davranışı değişmiyor, yalnız yan etki olarak audit satırı yazılıyor)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): webhook secret'ının plaintext'i hiçbir audit satırının target/metadata'sında geçmiyor (mevcut haystack deseni) · negatif (önce): var olmayan/başka kiracıya ait webhook silme (404) → entry yazılmaz · cross-tenant: B lisansının webhook'unu silme denemesi A'nın log'una entry düşürmüyor; A'nın entry'si B'ye görünmüyor · unit: AUDIT_ACTIONS sözlüğü iki yeni eylemi içeriyor ve tekrar yok · integration (pozitif): create/delete başına tam olarak 1 entry (çift yazım yok)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "92",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T06:14:16.809Z"
           },
           {
             "id": 4,
@@ -4059,7 +4059,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T03:45:00.646Z"
+        "updatedAt": "2026-08-02T06:14:16.809Z"
       },
       {
         "id": "93",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T03:45:00.646Z",
+      "lastModified": "2026-08-02T06:14:16.810Z",
       "taskCount": 99,
       "completedCount": 72,
       "tags": [

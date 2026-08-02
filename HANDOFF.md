@@ -13,6 +13,46 @@
 
 ## Task log (newest-first)
 
+### tm 91.6 — 08.6.3-conflict-f Realtime kablolama: agent_conflict_warning aboneliği + applyPush case'i + banner montajı — done — 2026-08-02 UTC
+
+- **Yapıldı:** SONNET-XHIGH — çakışma uyarısının son bacağı, -c'nin (RTM publisher) ürettiği
+  push'u -e'nin (client state) store'una bağlar. (1) `apps/web/src/features/inbox/useInbox.ts` —
+  `RtmClient` `pushes` listesine `agent_conflict_warning` eklendi; `applyPush`'a yeni case,
+  `incoming_typing_indicator`'ın birebir deseninde: `chat_id` string + `agents` dizisi (her üye
+  `{agent_id, since}` string) + `detected_at` string doğrulanır, herhangi biri bozuksa push
+  tamamen yok sayılır (çökmez) → `useConflictStore.getState().note(chatId, agents, detectedAt)`.
+  `chat_deactivated` case'ine `useConflictStore.getState().clear(chatId)` eklendi — kapanan sohbet
+  "çakışıyor" kalamaz, `typing` store temizliğinin aynısı. `applyPush` artık export'lu (testin
+  push handler'a başka giriş yolu yok). (2) `InboxPage.tsx` — `ConflictBanner`, `TypingIndicator`
+  ile aynı bloğa, composer'dan hemen önce monte edildi.
+- **Doğrulama:** `pnpm -w typecheck` yeşil · `pnpm -w lint` yeşil · `pnpm -w build` yeşil.
+  Unit: yeni `useInbox.test.tsx` (7: kayıt+şekil, chat_id/agents/agent-üyesi eksikse sessiz
+  yok-sayma, boş payload çökmez, push→store→banner tam zincir, `chat_deactivated` temizler) —
+  web paketi izole 70 dosya/475 test yeşil. `pnpm -w test:integration` (rtm 47 + api 850, serial
+  `--concurrency=1`) yeşil. `pnpm -w test` (workspace paralel) yine bilinen paylaşımlı-Postgres
+  yarışıyla kırmızı çıktı (memory: nexa-test-gate-parallel-db) — rtm (86/86) ve api (1108/1108)
+  izole çalıştırıldığında temiz. E2E: `apps/e2e/tests/inbox-panel.spec.ts`'e gerçek iki-ajan
+  senaryosu eklendi — owner (`agentPage`) + seeded `agent1@acme.localhost`, tazece açılan bir
+  visitor konuşmasında eşzamanlı yazma → RTM→ConflictDetectionService→ConflictPublisher→client
+  zinciri uçtan uca tetiklenip banner `data-testid="conflict-banner"` ile görünür oluyor; iki kez
+  (izole + tam 61 testlik suite içinde) yeşil geçti. İlk deneme "All" view'daki **ilk** sohbeti
+  açıyordu — `chat-service.ts` `case 'all': return {}` (active filtresi yok) yüzünden bu, önceki
+  bir testin arşivlediği (composer'ı disabled) bir sohbet olabiliyordu; tazece açılan bir widget
+  konuşmasına ve mesaj metniyle eşleşen satıra (`filter({hasText})`) geçilerek düzeltildi.
+- **Varsayımlar:** E2E ikinci ajan hesabı için seeded `agent1@acme.localhost` (Sam Rivera, admin,
+  `nexa-demo-password`) kullanıldı — admin de owner gibi `chats--all:rw` (unrestricted) aldığından
+  ikisi de "All" view'da aynı sohbeti görüyor.
+- **Bilinen, bu görevin dışı:** Tam e2e suite'i arka arkaya iki kez (reset olmadan) çalıştırınca
+  `customers.spec.ts`'te 2 test kırmızı çıktı (ban/unban + conversation-count state'i) — seed
+  idempotent, mutasyonu geri almıyor (memory: nexa-e2e-clean-db). inbox-panel.spec.ts'le ilgisi
+  yok; tek-seferlik suite koşusunda customers.spec.ts de yeşildi. Bir sonraki pencere tam suite
+  koşacaksa önce `db:reset` (CLAUDE.md sınırları: gerçek prod DB değil, yerel dev — yine de bu
+  görevin kapsamı dışında bırakıldı, hiçbir dosya değişikliği bu bulguyla ilgili değil).
+- **Sonraki pencereye not:** `08.6.3-conflict-g` (uçtan uca doğrulama: cross-tenant/negatif
+  matris + kanıt) kaldı — bu görev yalnız pozitif iki-ajan yolunu kapsadı, negatif/cross-tenant
+  senaryolar zaten alt katmanlarda (-b/-c/-d testlerinde) kapsanmış durumda; -g'nin işi bunları
+  tek bir uçtan-uca kanıt turunda toplamak.
+
 ### tm 91.5 — 08.6.3-conflict-e İstemci çakışma state'i + ConflictBanner bileşeni (salt görünüm) — done — 2026-08-02 UTC
 
 - **Yapıldı:** SONNET-XHIGH — çakışma uyarısının istemci yüzeyi, `typing.ts`/`TypingIndicator.tsx`

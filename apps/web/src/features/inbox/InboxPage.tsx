@@ -16,6 +16,7 @@ import { DetailsPanel } from './DetailsPanel.js';
 import { CopilotPanel } from './CopilotPanel.js';
 import { Transcript } from './Transcript.js';
 import { TypingIndicator } from './TypingIndicator.js';
+import { ConflictBanner } from './ConflictBanner.js';
 import {
   useChat,
   useChatList,
@@ -528,6 +529,7 @@ export function InboxPage(): ReactElement {
                   chatId={selectedId}
                   customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
                 />
+                <ConflictBanner chatId={selectedId} />
 
                 <Composer chatId={selectedId} disabled={!chat.data.active} />
               </>

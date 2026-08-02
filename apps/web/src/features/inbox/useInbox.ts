@@ -13,6 +13,7 @@ import { RtmClient, type PushHandler, type RtmStatus } from '../../lib/realtime.
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { useTypingStore } from './typing.js';
+import { useConflictStore, type ConflictAgent } from './conflict.js';
 import type { ChatDetail, ChatEvent, ChatSummary, InboxView } from './types.js';
 
 const RTM_URL = import.meta.env['VITE_RTM_URL'] ?? 'ws://localhost:4001/v1/agent/rtm/ws';
@@ -171,6 +172,7 @@ export function useRealtime(onPush?: PushHandler): RtmStatus {
         'routing_status_set',
         'incoming_typing_indicator',
         'incoming_sneak_peek',
+        'agent_conflict_warning',
       ],
       onStatusChange: setStatus,
       onPush: (action, payload) => {
@@ -193,7 +195,8 @@ export function useRealtime(onPush?: PushHandler): RtmStatus {
   return status;
 }
 
-function applyPush(
+/** Exported for `useInbox.test.ts` — a push handler has no other way in. */
+export function applyPush(
   queryClient: QueryClient,
   action: string,
   payload: Record<string, unknown>,
@@ -250,10 +253,35 @@ function applyPush(
       return;
     }
 
+    case 'agent_conflict_warning': {
+      // Two or more agents composing a reply at once (FR-MOD-08.6.3). Same
+      // pattern as `incoming_typing_indicator`: validate the payload, then
+      // hand it to the store — no query cache involved.
+      const chatId = payload['chat_id'];
+      const rawAgents = payload['agents'];
+      const detectedAt = payload['detected_at'];
+      if (typeof chatId !== 'string' || !Array.isArray(rawAgents) || typeof detectedAt !== 'string') {
+        return;
+      }
+      const agents: ConflictAgent[] = [];
+      for (const entry of rawAgents) {
+        const record = entry as Record<string, unknown> | null;
+        const agentId = record?.['agent_id'];
+        const since = record?.['since'];
+        // One malformed member makes the whole warning untrustworthy — drop it
+        // rather than show a conflict with a blank agent in it.
+        if (typeof agentId !== 'string' || typeof since !== 'string') return;
+        agents.push({ agentId, since });
+      }
+      useConflictStore.getState().note(chatId, agents, detectedAt);
+      return;
+    }
+
     case 'chat_deactivated':
-      // A closed conversation cannot still be "typing".
+      // A closed conversation cannot still be "typing" — or conflicted.
       if (typeof payload['chat_id'] === 'string') {
         useTypingStore.getState().clear(payload['chat_id']);
+        useConflictStore.getState().clear(payload['chat_id']);
       }
       void queryClient.invalidateQueries({ queryKey: ['chats'] });
       return;

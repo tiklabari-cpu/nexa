@@ -4019,12 +4019,12 @@
             "description": "Yeni apps/web/src/features/audit/AuditLogPage.tsx: useQuery + api.get('/audit-log') → tablo (Zaman / Eylem / Aktör / Hedef / IP), Skeleton (yükleniyor), EmptyState (anlamlı boş metin, boş dikdörtgen yok), ErrorNotice (hata). App.tsx'e '/app/settings/audit-log' route'u. SettingsPage.tsx'e Integrations kartı deseninde bir giriş bölümü. RBAC: scopes.includes('audit_log--all:ro') değilse giriş kartı g",
             "details": "08.9.7-i — Audit Log ekranı: salt-okunur liste + boş/skeleton/hata durumları + Settings girişi  [SONNET-XHIGH]\n\nPRD: NFR-S12 (kullanıcıya görünür audit ekranı) + FR-EK-B.1 (skeleton + anlamlı empty state)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 4-5 dosya (yeni sayfa + route + giriş kartı + test); veri yolu ve yetki kapısı 08.9.7-a'da kuruldu, burada yalnız render var; eşzamanlılık/algoritma yok; kopyalanacak desen ismen var (CustomersPage.tsx liste + Page/EmptyState/Skeleton bileşenleri + SettingsPage Integrations 'kapı' kartı); kontrat değişikliği yok; kabul kriteri mekanik (satırlar render, boş durumda anlamlı metin).\nNEDEN AÇIK: apps/web/src altında 'audit' geçen hiçbir dosya veya satır yok (grep 0 sonuç). SettingsPage.tsx (1953 satır) yalnız ChannelsGrid/Integrations/Notification/WebsiteWidgets/WidgetCustomization/TrustedDomains/BannedCustomerIps/FileSharing/CannedResponses/Tags/RoutingRules/TicketRules/TicketEmailTemplates/CustomFields/PreChatForm bölümlerini render ediyor (satır 106-131) — audit görüntüleme yok.\nKAPSAM: Yeni apps/web/src/features/audit/AuditLogPage.tsx: useQuery + api.get('/audit-log') → tablo (Zaman / Eylem / Aktör / Hedef / IP), Skeleton (yükleniyor), EmptyState (anlamlı boş metin, boş dikdörtgen yok), ErrorNotice (hata). App.tsx'e '/app/settings/audit-log' route'u. SettingsPage.tsx'e Integrations kartı deseninde bir giriş bölümü. RBAC: scopes.includes('audit_log--all:ro') değilse giriş kartı gösterilmez ve sayfa yetki uyarısı render eder (UI gizleme YETERLİ DEĞİLDİR — asıl kapı 08.9.7-a'daki route scope+minimumRole gatingidir).\nDOSYALAR: apps/web/src/features/audit/AuditLogPage.tsx · apps/web/src/features/audit/AuditLogPage.test.tsx · apps/web/src/App.tsx · apps/web/src/features/settings/SettingsPage.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/customers/CustomersPage.tsx (useApiClient + useQuery + api.get('/customers?...') + liste render + seçim/boş durum yönetimi) · apps/web/src/features/settings/SettingsPage.tsx:144-176 (Integrations — başka bir ekrana açılan 'kapı' bölümü deseni) ve :329-460 (TrustedDomains — scope'a bağlı canEdit gating + liste render) · apps/web/src/components/Page.tsx + EmptyState.tsx + Skeleton.tsx (Page/Section/CardSkeleton/ErrorNotice/EmptyState) · apps/web/src/features/inbox/TicketGrid.tsx (aria-sort'lu tablo başlıkları — salt-okunur grid deseni)\nKK (birebir): \"Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30 gün) tüm planlarda\" | \"KK-türetilmiş: audit izi kullanıcıya görünür bir ekrandan okunabilir olmalı. Türetme gerekçesi: PRD KK'sı yalnız 'tutulur' diyor; kalemin başlığı ve orkestratörün bağlayıcı kapsam kararı ('kullanıcıya görünür ekran') ekran yüzeyini gerektiriyor, PRD'de ekran KK'sı yok (kk_yetersiz).\"\nKK DOĞRULAMA: AuditLogPage.test.tsx: kayıt varken satırlar (eylem/aktör/zaman) render ediliyor; kayıt yokken anlamlı empty state (boş dikdörtgen değil); yükleme sırasında skeleton; hata durumunda ErrorNotice. Ayrıca yetkisiz scope ile giriş kartı render EDİLMİYOR.\nKAPSAM DIŞI: Filtre kontrolleri + 'daha fazla yükle' + e2e — 08.9.7-j · CSV export butonu (Enterprise payı) · Kayıt detay çekmecesi/modal'ı · SettingsPage içine gömülü bölüm (dosya 1953 satır — ayrı sayfa tercih edildi)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit (negatif önce): audit_log--all:ro scope'u olmayan kullanıcıda Settings girişi görünmüyor ve sayfa veri çekmiyor · unit: liste render (satır alanları doğru) · unit: boş liste → anlamlı empty state · unit: hata → ErrorNotice; yükleme → skeleton",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "92",
-            "updatedAt": "2026-08-02T10:30:28.070Z"
+            "updatedAt": "2026-08-02T10:41:41.149Z"
           },
           {
             "id": 10,
@@ -4059,7 +4059,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T10:30:28.070Z"
+        "updatedAt": "2026-08-02T10:41:41.149Z"
       },
       {
         "id": "93",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T10:30:28.070Z",
+      "lastModified": "2026-08-02T10:41:41.149Z",
       "taskCount": 99,
       "completedCount": 72,
       "tags": [

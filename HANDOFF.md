@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+### tm 91.2 — 08.6.3-conflict-b ConflictDetectionService (atomik eşzamanlı-yazıcı kaydı + çakışma kararı) — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-MAX bölünmez çekirdek — `apps/rtm/src/conflict.ts` yeni `ConflictDetectionService`.
+  `record(principal, chatId, isComposing)`: (1) `typing.ts` `canType` deseninin birebir kopyası olan
+  tenant-scoped RLS okumasıyla yetki doğrular — erişimi olmayan ajan kayıt olamaz, boş karar döner
+  ('chat yok'tan ayırt edilemez, NFR-S4). (2) TEK atomik Redis Lua ile (`ZREMRANGEBYSCORE` prune +
+  `ZADD` + `PEXPIRE` + `ZRANGE` geri-okuma) `composerStateKey(licenseId, chatId)` altına yazar ve
+  penceredeki tüm ajanları AYNI işlemde okur — check-then-act YOK, yani eşzamanlı iki kayıtta çakışma
+  kaybolmaz. `rate-limit.ts`'in `script LOAD`/`evalsha`/NOSCRIPT-fallback deseni kopyalandı.
+  (3) ≥2 farklı agent_id → `conflict:true`, küme `{agentId, since}`. (4) TTL (`AGENT_COMPOSING_TTL_SECONDS`,
+  ctor'da enjekte edilebilir → test'te 300ms) dolunca kayıt kendiliğinden düşer. (5) `is_typing=false`
+  → atomik `ZREM`. Servis PUSH GÖNDERMEZ (yalnız karar döner; dispatcher yayını -c'nin işi).
+- **Doğrulama:** `pnpm -w typecheck` ✅ (11/11) · `pnpm -w lint` ✅ (8/8) · `pnpm -w build` ✅ (7/7) ·
+  rtm unit **serial** (`pnpm --filter @nexa/rtm test`) ✅ 77/77 (yeni `conflict.test.ts` 6 dahil; önceki 71) ·
+  `turbo test:integration --concurrency=1` ✅ (api + rtm; değişiklik src-only, integration'a dokunmadı).
+  Testler **gerçek PG (RLS-enforcing app-role) + gerçek Redis** kullanır — mock değil, çünkü kanıtlanan
+  şeyler RLS izolasyonu, Redis atomikliği ve TTL. Negatif-önce: (i) yetkisiz→boş küme + yazım yok,
+  (ii) cross-tenant: license B, license A'nın chat'ini RLS altında göremez → boş, (iii) `Promise.all`
+  iki eşzamanlı register → çakışma en az bir gözlemde yüzeye çıkar + kayıp güncelleme yok, (iv) tek-ajan
+  idempotent, (v) TTL self-drop + `is_typing=false` ZREM.
+- **Varsayımlar:** `since` alanı = ajanın **en son** composing sinyali zamanı (ms), ilk başlangıç değil —
+  tek skorlu sorted-set'te güvenilir liveness prune'u (düşen socket'i pencere içinde eleme) ancak son-sinyal
+  skoruyla mümkün; başlangıç-zamanı skoru aktif composer'ı 8sn sonra yanlışlıkla prune ederdi. KK
+  `since`'i kesin tanımlamıyor (kk_yetersiz=true, PLAN §5.2). Servis-içi tip camelCase `{agentId, since}`;
+  wire snake_case `AgentConflictWarningPush {agent_id, since}` dönüşümü -c'nin işi.
+- **Sonraki pencereye not:** 08.6.3-conflict-c (`send_typing_indicator` yolunda tespit + bus envelope
+  yayını) bu servise bağımlı. Dispatcher `record()` çağırıp `conflict` true ise `agent_conflict_warning`
+  envelope'unu her iki ajana yayınlar; `record()`'ın boş-küme (erişim yok) dönüşünü typing'in
+  `not_found` deseni gibi ele almalı. `test:e2e` bu turda koşulmadı — task src-only birim çekirdek,
+  E2E iki-ajan senaryosu ayrı kalem (-g).
+
 ### tm 91.1 — 08.6.3-conflict-a Çakışma uyarısı RTM push action'ı + composer-registry anahtar/TTL tip sözleşmesi — done — 2026-08-02 UTC
 
 - **Yapıldı:** Kontrat-önce, davranışsız iskelet (mantık YOK — tespit/dispatcher/API/UI hepsi -b..-g'nin işi).

@@ -15,9 +15,12 @@
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import {
+  AGENT_COMPOSING_TTL_SECONDS,
   buildEventId,
+  composerStateKey,
   generateShortId,
   SNEAK_PEEK_MAX_LENGTH,
+  type AgentConflictWarningPush,
   type EventRecipients,
   type EventType,
   type TransferReason,
@@ -68,6 +71,18 @@ export interface NewEventInput {
 interface RedisLike {
   set(key: string, value: string, mode: 'EX', ttl: number, nx: 'NX'): Promise<string | null>;
   get(key: string): Promise<string | null>;
+  /**
+   * Reads the members and scores of a sorted set within a score range — the
+   * shape `08.6.3-conflict-b` maintains for the composer registry. Optional so a
+   * service built with a minimal Redis double still constructs; when absent, the
+   * transfer-time conflict read is skipped, best-effort like the bus itself.
+   */
+  zrangebyscore?(
+    key: string,
+    min: number | string,
+    max: number | string,
+    withScores: 'WITHSCORES',
+  ): Promise<string[]>;
 }
 
 /** Everything the shared close path produces that the realtime fan-out needs. */
@@ -1010,6 +1025,10 @@ export class ChatService {
           customerId: chat.customerId,
         },
         threadId: thread.id,
+        // Who was responsible before the hand-off and who is now — the conflict
+        // warning below only fires when this actually changed to a new agent.
+        oldAssigneeId: thread.assigneeId ?? null,
+        newAssigneeId: target.agentId ?? null,
       };
     });
 
@@ -1023,7 +1042,104 @@ export class ChatService {
         agent_ids: target.agentId !== undefined ? [target.agentId] : [],
       },
     });
+
+    // FR-MOD-08.6.3 — a hand-off that lands a chat on a new agent while someone
+    // else is still composing in it is a conflict; warn both sides. After the
+    // commit and strictly best-effort, like every other push: a warning that
+    // fails to go out must never undo a transfer that already happened.
+    await this.#warnTransferConflict(tenant, chatId, result);
+
     return result.detail;
+  }
+
+  /**
+   * Warn the incoming agent and everyone still composing when a transfer moves a
+   * chat onto a new assignee mid-reply (FR-MOD-08.6.3, API surface).
+   *
+   * The composer registry `08.6.3-conflict-b` keeps in Redis is read here, never
+   * written: this path only observes who is composing. Two safeguards keep it
+   * from leaking or breaking anything:
+   *
+   *  - **Audience is fenced to the chat's own.** The recipients are the new
+   *    assignee plus the composing agents, intersected with the agents the chat
+   *    already entitles (its before-and-after audience). An agent the transfer
+   *    just cut off — or one that was never entitled — cannot be told who is
+   *    working which conversation (NFR-S4).
+   *
+   *  - **Every failure is swallowed.** The read sits on top of a committed
+   *    transfer and an advisory, ephemeral warning; a Redis blink or a missing
+   *    publisher is a no-op, never a failed transfer.
+   */
+  async #warnTransferConflict(
+    tenant: TenantContext,
+    chatId: string,
+    result: {
+      threadId: string;
+      audience: { agentIds: string[] };
+      oldAssigneeId: string | null;
+      newAssigneeId: string | null;
+    },
+  ): Promise<void> {
+    const newAssignee = result.newAssigneeId;
+    // Only an agent hand-off that changed the responsible agent can strand a
+    // second composer. A team transfer (no assignee) and a no-op re-assign to
+    // the agent already on it cannot, so neither reads the registry.
+    if (!newAssignee || newAssignee === result.oldAssigneeId) return;
+
+    try {
+      const composing = await this.#composingAgents(tenant, chatId);
+      // The conflict is someone *other* than the just-assigned agent composing;
+      // that agent typing in their own new chat is not a conflict.
+      if (!composing.some((agent) => agent.agentId !== newAssignee)) return;
+
+      // Target only the conflicting agents, and only those the chat's audience
+      // already entitles — never widen delivery past who could see the chat.
+      const entitled = new Set(result.audience.agentIds);
+      const agentIds = [newAssignee, ...composing.map((agent) => agent.agentId)].filter(
+        (id, index, all) => entitled.has(id) && all.indexOf(id) === index,
+      );
+      // The assignee alone is nobody to warn: if no composing agent survives the
+      // entitlement fence, there is no live conflict left to surface.
+      if (agentIds.length < 2) return;
+
+      const now = Date.now();
+      const payload: AgentConflictWarningPush = {
+        chat_id: chatId,
+        thread_id: result.threadId,
+        agents: composing.map((agent) => ({
+          agent_id: agent.agentId,
+          since: new Date(agent.since).toISOString(),
+        })),
+        detected_at: new Date(now).toISOString(),
+      };
+      await this.publisher?.publish(tenant, 'agent_conflict_warning', { agentIds }, payload);
+    } catch {
+      // Best-effort: a committed transfer must not fail because the courtesy
+      // warning on top of it did. The next keystroke re-detects on the RTM path.
+    }
+  }
+
+  /**
+   * The agents composing a reply in `chatId` right now, read from the licence-
+   * scoped composer registry without mutating it. Members are the sorted set
+   * `08.6.3-conflict-b` writes; the score is each agent's last-seen ms, so the
+   * live window is exactly the members scored within `AGENT_COMPOSING_TTL`.
+   */
+  async #composingAgents(
+    tenant: TenantContext,
+    chatId: string,
+  ): Promise<Array<{ agentId: string; since: number }>> {
+    if (!this.redis.zrangebyscore) return [];
+    // Keyed by our own tenant's licence, so the same chat id in another tenant
+    // can never be read here — the cross-tenant fence is the key itself.
+    const key = composerStateKey(tenant.licenseId, chatId);
+    const floor = Date.now() - AGENT_COMPOSING_TTL_SECONDS * 1_000;
+    const raw = await this.redis.zrangebyscore(key, floor, '+inf', 'WITHSCORES');
+    const agents: Array<{ agentId: string; since: number }> = [];
+    for (let i = 0; i + 1 < raw.length; i += 2) {
+      agents.push({ agentId: String(raw[i]), since: Number(raw[i + 1]) });
+    }
+    return agents;
   }
 
   async tagThread(

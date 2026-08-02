@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### tm 91.4 — 08.6.3-conflict-d Transfer/atama anında aktif yazıcı çakışmasının API tarafından uyarılması — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-XHIGH — çakışma tespitinin İKİNCİ yüzeyi (API/transfer). `chat-service.transfer`
+  transaction COMMIT'inden ve mevcut `chat_transferred` yayınından sonra yeni `#warnTransferConflict`
+  çağrılır: (1) `#composerАgents` → `composerStateKey(licenseId, chatId)` sorted set'i `zrangebyscore`
+  ile **SALT OKUR** (`AGENT_COMPOSING_TTL` penceresi = `now-TTL..+inf`; -b'nin yazdığı registry, mutasyon
+  YOK). (2) Kapı: yalnız agent-devri (`newAssignee != null`) ve `newAssignee !== oldAssignee` — team devri
+  (assignee null) ve aynı-ajana no-op devir okumaya bile gitmez. (3) `newAssignee`'den FARKLI ≥1 ajan
+  yazıyorsa çakışma; audience = `[newAssignee, ...composing]` ∩ `result.audience.agentIds` (transfer'in
+  before+after birleşik audience'ı) — chat'i görmeyen/başka-lisans ajan audience'a giremez (NFR-S4), fence
+  altında kalan tek-eleman (<2) yayınlanmaz. (4) Payload `AgentConflictWarningPush` (-a şekli): `agents`
+  = tüm composing küme, `since`/`detected_at` **ISO string** (-c publisher ile birebir parite).
+  (5) `RealtimePublisher.publish(tenant,'agent_conflict_warning',{agentIds},payload)`. Tüm gövde try/catch
+  — okuma/yayın best-effort, commit'lenmiş devir asla 500'e dönmez. `RedisLike`'a opsiyonel `zrangebyscore`
+  eklendi (yoksa okuma no-op).
+- **Doğrulama:** `pnpm -w typecheck` ✅ (11/11) · `pnpm -w lint` ✅ (8/8) · `pnpm -w build` ✅ (7/7) ·
+  `pnpm --filter @nexa/api test` (unit+integration, **serial** — vitest `fileParallelism:false`) ✅ **1108/1108**
+  (61 dosya; yeni `agent-conflict.test.ts` 5 dahil, `chats.test.ts` transfer regresyonu yeşil). Testler
+  gerçek PG (RLS) + gerçek Redis kullanır. Negatif-önce: yazan-yok→uyarı-yok; team-devri→uyarı-yok;
+  registry-okuma-hatası (zrangebyscore reject) devri bozmaz + thread yine yeni assignee'ye geçer; fence:
+  outsider + cross-tenant (aynı chatId, B lisansı) audience'a girmez; pozitif: iki ajana çift audience + ISO
+  payload. Değişiklik yalnız `apps/api` (types/contract/rtm/web/şema DOKUNULMADI, migration YOK) → diğer
+  paket süitleri etkilenmez; e2e -d kapsamı dışı (UI yüzeyi -e/-f/-g).
+- **Varsayımlar:** §C korundu — çakışma UYARIDIR (engel değil): yeni ApiError/409 YOK (errors.ts×2 +
+  scopes sayacı + openapi enum + bundle regen dörtlüsü tetiklenmedi). `getChat` yanıtına `active_agent_ids`
+  EKLENMEDİ → contract-parity riski yok. Kalıcı audit tablosu yok (Redis+TTL yeterli). audience `#audienceFor`
+  kesişimi mevcut transfer audience'ı (before∪after agentIds) üzerinden yapıldı — grup-üyeliğiyle-entitled
+  ama chat-user-olmayan composing ajan (nadir, TTL 8sn penceresi) bilinçli olarak dışarıda kalır (konservatif,
+  sızıntı-averse). `zrangebyscore` ioredis WITHSCORES overload'una yapısal olarak uyar (opsiyonel metod).
+- **Sonraki pencereye not:** -e (ConflictBanner + store, salt görünüm; `role=status`/`aria-live=polite`),
+  -f (`useInbox` pushes'a `agent_conflict_warning` + `applyPush` case + `chat_deactivated` temizliği + banner
+  montajı; **AGENT_PUSHES'a hâlâ EKLENMEDİ** — -f eklemeli), -g (uçtan uca: RTM iki-socket + API transfer
+  senaryosu + RTM/web payload şekil paritesi + tam DoD kapısı + e2e). Wire şekli değişmedi:
+  `AgentConflictWarningPush { chat_id, thread_id, agents:[{agent_id, since:ISO}], detected_at:ISO }`. Hem RTM
+  (-c) hem API (-d) yolları artık aynı envelope'u yayınlıyor; -g her iki yolu tek yerde kanıtlar.
+
 ### tm 91.3 — 08.6.3-conflict-c send_typing_indicator yolunda çakışma tespiti + uyarının bus envelope ile her iki ajana iletimi — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-XHIGH — RTM gateway ilk kez envelope YAYINLAYAN taraf oldu.

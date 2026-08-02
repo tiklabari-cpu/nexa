@@ -3995,10 +3995,10 @@
             "description": "RetentionPolicy'ye auditDays; env'e RETENTION_AUDIT_DAYS (z.coerce.number().int().positive().default(30) — NFR-S12 'son 30 gün'); .env.example satırı; resolveCutoffs'a audit cutoff'u (mevcut cutoffFor invaryantı: pozitif olmayan pencere reddedilir, cutoff asla 'now' veya sonrası olamaz); RetentionReport tipine auditEntries sayacı (bu adımda daima 0, silme yok). Runner davranışı DEĞİŞMEZ.",
             "details": "08.9.7-g — Retention politikasına audit penceresi (RETENTION_AUDIT_DAYS=30) — politika/env/rapor iskeleti  [SONNET-XHIGH]\n\nPRD: NFR-S12 'son 30 gün' (+ NFR-C8 saklama politikası)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 4-5 dosya, saf politika/aritmetik; DB'ye hiç dokunmuyor (silme 08.9.7-h'de), dolayısıyla güvenlik sınırı yok; eşzamanlılık yok; kopyalanacak desen ismen var (policy.ts'teki threadDays/visitDays/mailDays üçlüsü + policy.test.ts); kontrat değişikliği yok; kabul kriteri mekanik (varsayılan 30, pozitif olmayan pencere reddedilir).\nNEDEN AÇIK: services/retention/policy.ts'teki RetentionPolicy arayüzü yalnız threadDays/visitDays/mailDays taşıyor ve config/env.ts:72-74 yalnız RETENTION_THREAD_DAYS/RETENTION_VISIT_DAYS/RETENTION_MAIL_DAYS tanımlıyor; audit_log hiçbir pencereye bağlı değil → satırlar süresiz birikiyor. Dosyanın kendi başlığı da audit'i kapsam dışı sayıyor (üç pencere sayılıyor).\nKAPSAM: RetentionPolicy'ye auditDays; env'e RETENTION_AUDIT_DAYS (z.coerce.number().int().positive().default(30) — NFR-S12 'son 30 gün'); .env.example satırı; resolveCutoffs'a audit cutoff'u (mevcut cutoffFor invaryantı: pozitif olmayan pencere reddedilir, cutoff asla 'now' veya sonrası olamaz); RetentionReport tipine auditEntries sayacı (bu adımda daima 0, silme yok). Runner davranışı DEĞİŞMEZ.\nDOSYALAR: apps/api/src/services/retention/policy.ts · apps/api/src/services/retention/policy.test.ts · apps/api/src/services/retention/retention.ts · apps/api/src/config/env.ts · .env.example\nREFERANS DESEN (kopyalanacak): apps/api/src/services/retention/policy.ts (threadDays/visitDays/mailDays: arayüz + resolveRetentionPolicy + cutoffFor deseni birebir kopyalanır) · apps/api/src/services/retention/policy.test.ts (pencere başına mevcut birim testleri) · apps/api/src/config/env.ts:72-74 (env şeması satırları)\nKK (birebir): \"Temel audit (login, rol değişimi, veri silme, webhook değişimi, son 30 gün) tüm planlarda\"\nKK DOĞRULAMA: policy.test.ts: varsayılan auditDays = 30 ('son 30 gün'); resolveCutoffs audit cutoff'unu 30 gün öncesine koyuyor; sıfır/negatif pencere reddediliyor. KK'nın 'son 30 gün' payının politika tarafını kanıtlar.\nKAPSAM DIŞI: Fiili silme + SECURITY DEFINER fonksiyonu — 08.9.7-h · Plan bazlı farklı pencere (temel 30 gün vs Enterprise genişletilmiş): repoda entitlement/plan-gate mekanizması hiç yok (grep 'entitlement|planGate|requirePlan' → 0), ayrı tasarım kararı gerektirir · Kiracı başına özelleştirilebilir pencere (security_settings kolonu)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): RETENTION_AUDIT_DAYS=0 / negatif → env doğrulaması veya cutoffFor reddi · unit: varsayılan 30 gün; cutoff 'now'dan önce · unit: mevcut üç pencerenin davranışı değişmedi (regresyon)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "92",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-02T06:35:49.149Z"
           },
           {
             "id": 8,
@@ -4059,7 +4059,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T06:24:34.375Z"
+        "updatedAt": "2026-08-02T06:35:49.149Z"
       },
       {
         "id": "93",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T06:24:34.375Z",
+      "lastModified": "2026-08-02T06:35:49.149Z",
       "taskCount": 99,
       "completedCount": 72,
       "tags": [

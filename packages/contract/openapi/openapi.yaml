@@ -270,6 +270,11 @@ paths:
   /onboarding/seed-demo:
     $ref: "./paths/onboarding.yaml#/seedDemo"
 
+  /brands:
+    $ref: "./paths/brands.yaml#/brands"
+  /brands/{brandId}:
+    $ref: "./paths/brands.yaml#/brand"
+
   /websites:
     $ref: "./paths/websites.yaml#/websites"
   /websites/{websiteId}:
@@ -734,6 +739,35 @@ components:
           type: string
           nullable: true
           description: Optional human label for the entry, e.g. `Office VPN`.
+        created_at: { type: string, format: date-time }
+
+    Brand:
+      type: object
+      description: |
+        One brand of a license (Multibrand, PRD §5.3). A license may run several
+        brands under a single subscription; each has its own channels, websites
+        and widget/security/inbox settings, selected via the `X-Nexa-Brand`
+        header on those resources. Every license has exactly one default brand —
+        the `Default` it is created with — which cannot be deleted.
+      required: [id, name, slug, logo_url, is_default, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name:
+          type: string
+          description: Display name, as shown in the brand switcher.
+        slug:
+          type: string
+          description: URL-safe identifier, unique within the license.
+        logo_url:
+          type: string
+          nullable: true
+          description: Brand logo reference, or null when none is set.
+        is_default:
+          type: boolean
+          description: |
+            The license's default brand — the one a request with no
+            `X-Nexa-Brand` header resolves to. Exactly one per license; it
+            cannot be deleted.
         created_at: { type: string, format: date-time }
 
     Website:
@@ -2320,6 +2354,8 @@ components:
       enum:
         - authentication
         - authorization
+        - brand_exists
+        - brand_not_found
         - chat_anonymized
         - chat_inactive
         - customer_banned

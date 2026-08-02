@@ -15,6 +15,13 @@ export const ERROR_TYPES = [
   'account_exists',
   'authentication',
   'authorization',
+  // Nexa additions — Multibrand (PRD §5.3 · NFR-S4/S5). The source catalogue
+  // (v2-03 §1.8) has no brand concept. `brand_not_found` gives the brands surface
+  // its own 404 (a foreign or unknown brand id is un-enumerable, like every other
+  // resource); `brand_exists` is the 409 a duplicate slug within a license raises,
+  // kept narrow like `website_exists`/`ticket_exists` rather than a generic conflict.
+  'brand_exists',
+  'brand_not_found',
   'chat_anonymized',
   'chat_inactive',
   'customer_banned',
@@ -64,6 +71,8 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   account_exists: 409,
   authentication: 401,
   authorization: 403,
+  brand_exists: 409,
+  brand_not_found: 404,
   chat_anonymized: 410,
   chat_inactive: 409,
   customer_banned: 403,

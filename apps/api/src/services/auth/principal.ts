@@ -87,6 +87,9 @@ export const DEFAULT_AGENT_SCOPES: Scope[] = [
   'customers:ro',
   'groups--my:ro',
   'tags--groups:ro',
+  // Reading the brand catalogue (Multibrand, PRD §5.3): an agent picks the brand
+  // they are working under, so they read brands but do not create or rename them.
+  'brands--all:ro',
 ];
 
 /** An owner or admin gets the tenant-wide set. */
@@ -109,6 +112,9 @@ export const ADMIN_SCOPES: Scope[] = [
   // configuration — owners and admins do it, ordinary agents work the inbox.
   'channels--all:rw',
   'access_rules:rw',
+  // Managing the brand catalogue (Multibrand, PRD §5.3) — creating, renaming and
+  // removing brands is workspace configuration, an owner/admin power.
+  'brands--all:rw',
   'properties.configuration:rw',
   // Reading the security trail (NFR-S12) is an owner/admin power — the route
   // pairs this scope with `minimumRole: admin`, and an ordinary agent gets

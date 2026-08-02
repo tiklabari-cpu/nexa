@@ -1,0 +1,170 @@
+# Brands — the Multibrand surface (PRD §5.3 · NFR-S4/S5).
+#
+# One license may run several brands (a distinct name, slug and logo) under a
+# single subscription. Unlike the resources a brand *contains* (channels,
+# websites, widget/security/inbox settings — all brand-scoped via `X-Nexa-Brand`),
+# the brand catalogue itself is license-level: it is the list you choose a brand
+# *from*, so these operations are not brand-scoped and take no `X-Nexa-Brand`
+# header. A brand id that is not one of the caller's own is answered 404, never
+# 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+
+brands:
+  get:
+    tags: [Brands]
+    operationId: listBrands
+    summary: The license's brands
+    description: |
+      Every brand of the caller's license, the default brand first. A
+      single-brand workspace sees exactly one row — the `Default` brand every
+      license is created with.
+    responses:
+      "200":
+        description: The license's brands
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Brand" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Brands]
+    operationId: createBrand
+    summary: Create a brand
+    description: |
+      A new brand is never the default — the license keeps its one default brand
+      (the `Default` it was created with) until that is changed elsewhere. The
+      slug is derived from the name when omitted (lowercased, spaces to hyphens)
+      and must be unique within the license; a clash is a `brand_exists` conflict.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              slug:
+                type: string
+                minLength: 1
+                maxLength: 120
+                pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                description: URL-safe identifier; derived from the name when omitted.
+              logo_url: { type: string, maxLength: 2048, nullable: true }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Brand" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409":
+        description: A brand with this slug already exists (`brand_exists`)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+brand:
+  parameters:
+    - name: brandId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Brands]
+    operationId: getBrand
+    summary: One brand
+    responses:
+      "200":
+        description: The brand
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Brand" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404":
+        description: No such brand in this license (`brand_not_found`)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Brands]
+    operationId: updateBrand
+    summary: Rename a brand or change its slug/logo
+    description: |
+      Any subset of name, slug and logo is accepted. Changing the slug to one
+      another brand of the license already holds is a `brand_exists` conflict.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              slug:
+                type: string
+                minLength: 1
+                maxLength: 120
+                pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              logo_url: { type: string, maxLength: 2048, nullable: true }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Brand" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404":
+        description: No such brand in this license (`brand_not_found`)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "409":
+        description: Another brand already uses this slug (`brand_exists`)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Brands]
+    operationId: deleteBrand
+    summary: Remove a brand
+    description: |
+      Refused when the brand is the license default, or when data still belongs
+      to it (a channel, website or per-brand setting) — both answered
+      `not_allowed` (403), so a brand's data is never silently cascaded away.
+      Move or remove the dependent data first.
+    responses:
+      "204": { description: Removed }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403":
+        description: |
+          Insufficient scope, or the brand is the default / still has data
+          (`not_allowed`).
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "404":
+        description: No such brand in this license (`brand_not_found`)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

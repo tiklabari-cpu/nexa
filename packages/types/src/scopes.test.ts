@@ -23,6 +23,10 @@ const NEXA_ADDED_SCOPES = [
   // The source platform has no audit resource; Nexa keeps a security trail
   // (NFR-S12) and gates reading it with a scope of its own (PLAN §D).
   'audit_log--all:ro',
+  // The source platform is single-tenant-per-license with no brand concept;
+  // Multibrand (PRD §5.3) makes brands a first-class resource with its own scope.
+  'brands--all:ro',
+  'brands--all:rw',
 ];
 
 const SOURCE_SCOPE_COUNT = 58;
@@ -92,7 +96,16 @@ describe('hasAnyScope', () => {
 describe('error taxonomy', () => {
   // Same rule as the scopes above: the source's 24, plus additions that are
   // named here so an unplanned one still fails.
-  const NEXA_ADDED_TYPES = ['ticket_exists', 'account_exists', 'website_exists', 'message_rejected'];
+  const NEXA_ADDED_TYPES = [
+    'ticket_exists',
+    'account_exists',
+    'website_exists',
+    'message_rejected',
+    // Multibrand (PRD §5.3): a 404 for an un-enumerable brand and a 409 for a
+    // duplicate slug within a license.
+    'brand_not_found',
+    'brand_exists',
+  ];
 
   it('carries the 24 documented types, plus Nexa additions', () => {
     expect(ERROR_TYPES).toHaveLength(24 + NEXA_ADDED_TYPES.length);

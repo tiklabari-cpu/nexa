@@ -13,6 +13,34 @@
 
 ## Task log (newest-first)
 
+### 78.4 — MULTIBRAND-d `/brands` CRUD kontrat + route + `brands--all` scope + `brand_not_found` hata tipi — done — 2026-08-02 UTC
+
+- **Yapıldı:** OPUS-XHIGH, yalnız API yüzeyi (migration yok — tablo/kolonlar 78.1–78.3'te). ADR-05
+  iki-yönlü contract-parity gereği kontrat + route TEK pencerede. (1) **Kontrat:**
+  `packages/contract/openapi/paths/brands.yaml` iki-bloklu (`websites.yaml` şekli) — koleksiyon
+  `GET/POST /brands` + tekil `GET/PATCH/DELETE /brands/{brandId}`; `openapi.yaml`'a `Brand` şeması +
+  iki path kaydı + Error enum'a İKİ tip (`brand_not_found` 404 · `brand_exists` 409, `website_exists`
+  deseninde dar) → re-bundle + `packages/types` regen. (2) **Types:** `scopes.ts` `brands--all:ro`/
+  `brands--all:rw` (tenant-wide `--all`); `errors.ts` İKİ YER (ERROR_TYPES + ERROR_STATUS — memory
+  'Error-type additions' tuzağı); `scopes.test.ts` sayaçları (SCOPES +2 · ERROR_TYPES 24+6). (3)
+  **Rol:** `principal.ts` owner/admin `:rw`, ajan `:ro`. (4) **Route** `routes/brands.ts` (`websites.ts`
+  deseni): tüm handler lisans-geneli (katalog marka-scoped değil → gelen `X-Nexa-Brand` düşürülür);
+  slug türetme; P2002→`brand_exists` 409; cross-license id → 404 (un-enumerable NFR-S5); varsayılan
+  marka silinemez (`not_allowed` 403); bağlı verisi (channel/website) olan marka silme reddi
+  (`not_allowed` 403, cascade yok); silmede `data.deleted` audit. `server.ts` kayıt.
+- **Doğrulama:** typecheck·lint·build·unit (types 60 · web 489 · api-unit) YEŞİL; integration serial
+  (`--concurrency=1`) **948 test / 46 dosya** yeşil — yeni `brands.test.ts` (11: cross-license
+  get/patch/delete → 404 & listede yok · varsayılan silme reddi · website'lı marka silme reddi ·
+  duplicate + türev slug 409 · read-scope/scope-siz 403 · CRUD döngüsü · lisanslar arası slug reuse ·
+  bad slug + boş patch 400) + `contract-parity.test.ts` 5/5 iki-yönlü yeşil.
+- **Varsayımlar:** 409 için jenerik conflict yerine `brand_exists` seçildi (task metni yalnız
+  `brand_not_found` diyordu; `website_exists`/`ticket_exists` deseniyle tutarlı, dar tip). Marka silme
+  = bağlı satır varsa reddet (task KAPSAM DIŞI: taşıma/arşivleme).
+- **Sonraki pencereye not:** MULTIBRAND-d ile API tamam; §5.3-Marka satırı hâlâ `◐` — **kalan** -e/-f/-g
+  UI (Brands ekranı + marka değiştirici + ayar ekranlarını seçili markaya bağlama) ve -h uçtan uca
+  cross-brand e2e izolasyon matrisi. Açık soru 3 (ajan marka-bazlı yetkisi) hâlâ açık; bugün tüm
+  ajanlar tüm markaları okur.
+
 ### 78.3 — MULTIBRAND-c brand_id yayılımı (websites + widget/security/inbox singleton ayarları) — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-XHIGH. `-b`'de `channels` üzerinde kanıtlanan `nexa_current_brand()` deseni

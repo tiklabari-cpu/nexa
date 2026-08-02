@@ -69,6 +69,13 @@ export const SCOPES = [
   // so they get their own scopes rather than borrowing an unrelated one.
   'channels--all:ro',
   'channels--all:rw',
+  // Brand — Multibrand (PRD §5.3). A Nexa addition: the source platform is
+  // single-tenant-per-license and has no brand resource. Tenant-wide only
+  // (`--all`): a brand is a workspace-configuration object an owner/admin manages,
+  // so there is no `--my`/`--groups` variant. Owners and admins write it; ordinary
+  // agents read it (they pick a brand, they do not create one).
+  'brands--all:ro',
+  'brands--all:rw',
   // Customer
   'customers.ban:rw',
   'customers:own',

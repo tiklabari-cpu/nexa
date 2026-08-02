@@ -10,10 +10,10 @@
  * here yet" rather than implying the product lacked them. Nothing is inert now,
  * so that branch is gone rather than kept as untested code.
  */
-import { useQuery } from '@tanstack/react-query';
-import { type ReactElement } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, type ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { useApiClient, useAuth } from '../lib/auth-store.js';
+import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { CommandPalette } from './CommandPalette.js';
 import { FOOTER, MODULES, type NavDestination } from './navigation.js';
@@ -103,6 +103,8 @@ function IconRail(): ReactElement {
         N
       </span>
 
+      <BrandSwitcher />
+
       {MODULES.map((item) => (
         <RailButton key={item.to} item={item} />
       ))}
@@ -144,6 +146,94 @@ function RailButton({ item }: { item: NavDestination }): ReactElement {
         </>
       )}
     </NavLink>
+  );
+}
+
+interface BrandSummary {
+  id: string;
+  name: string;
+  is_default: boolean;
+}
+
+/**
+ * Brand switcher (PRD §5.3-Marka) — hidden entirely on a single-brand license,
+ * so the common case carries no extra chrome. The selection is persisted the
+ * same way as the language preference (`lib/i18n.ts`), and every request
+ * after a change picks it up through `api-client.ts`'s `X-Nexa-Brand` header.
+ *
+ * The reconciliation effect below is what makes "invalid/deleted brand id"
+ * safe: a remembered selection that the license no longer has (or a license
+ * that now has just one brand) is treated the same as no selection, falling
+ * back to the license's default brand rather than sending a header the server
+ * would 404 on.
+ */
+function BrandSwitcher(): ReactElement | null {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  const { brandId, setBrandId } = useBrand();
+  const t = useTranslate();
+
+  const { data } = useQuery({
+    queryKey: ['settings', 'brands'],
+    queryFn: () => api.get<{ items: BrandSummary[] }>('/brands'),
+    staleTime: 60_000,
+  });
+  const brands = data?.items ?? [];
+
+  useEffect(() => {
+    if (brands.length === 0) return;
+    if (brands.length < 2) {
+      // A single brand needs no header at all — NULL context already resolves
+      // to it — so a stale id from a since-shrunk license is cleared too.
+      if (brandId !== null) setBrandId(null);
+      return;
+    }
+    if (!brands.some((brand) => brand.id === brandId)) {
+      setBrandId((brands.find((brand) => brand.is_default) ?? brands[0])!.id);
+    }
+  }, [brands, brandId, setBrandId]);
+
+  if (brands.length < 2) return null;
+
+  const current = brands.find((brand) => brand.id === brandId) ?? brands[0]!;
+
+  function selectBrand(id: string, close: (returnFocus?: boolean) => void): void {
+    if (id !== current.id) {
+      setBrandId(id);
+      // Every screen's data is scoped by brand; nothing about the previous
+      // brand's cache is still valid once the header changes.
+      void queryClient.invalidateQueries();
+    }
+    close(true);
+  }
+
+  return (
+    <Dropdown
+      label={t('shell.brand')}
+      triggerTitle={current.name}
+      trigger={current.name.slice(0, 2).toUpperCase()}
+      triggerClassName="mb-2 flex h-9 w-9 items-center justify-center rounded-md bg-white/10 text-2xs font-semibold text-white"
+      panelClassName="left-11 top-0 w-48 p-1"
+    >
+      {({ close }) => (
+        <ul role="listbox" aria-label={t('shell.brand')}>
+          {brands.map((brand) => (
+            <li key={brand.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={brand.id === current.id}
+                onClick={() => selectBrand(brand.id, close)}
+                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2"
+              >
+                {brand.name}
+                {brand.id === current.id && <span aria-hidden="true">✓</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Dropdown>
   );
 }
 

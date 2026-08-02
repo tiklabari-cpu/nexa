@@ -59,6 +59,7 @@ interface AuthState {
 
 const REFRESH_KEY = 'nexa.refresh_token';
 const CLIENT_ID_KEY = 'nexa.client_id';
+const BRAND_KEY = 'nexa.brand_id';
 const REDIRECT_URI = `${window.location.origin}/auth/callback`;
 
 /** PKCE verifier: 43–128 unreserved characters (RFC 7636 §4.1). */
@@ -95,6 +96,38 @@ function writeStored(key: string, value: string | null): void {
   } catch {
     // Storage blocked — the session simply will not survive a reload.
   }
+}
+
+/** Read the persisted brand selection without React — mirrors `detectLocale`. */
+export function readBrandId(): string | null {
+  return readStored(BRAND_KEY);
+}
+
+interface BrandState {
+  brandId: string | null;
+  setBrandId: (id: string | null) => void;
+}
+
+/**
+ * The selected brand for a multi-brand license (PRD §5.3-Marka), persisted the
+ * same way as the locale preference (`lib/i18n.ts`): a plain localStorage
+ * round-trip. `null` means license-wide — the switcher clears back to this
+ * when a license has one brand, or when the remembered id no longer matches
+ * any brand the license has (deleted since the last visit).
+ */
+export const useBrandStore = create<BrandState>((set) => ({
+  brandId: readBrandId(),
+  setBrandId: (id) => {
+    writeStored(BRAND_KEY, id);
+    set({ brandId: id });
+  },
+}));
+
+/** `{ brandId, setBrandId }` for the brand switcher. */
+export function useBrand(): { brandId: string | null; setBrandId: (id: string | null) => void } {
+  const brandId = useBrandStore((s) => s.brandId);
+  const setBrandId = useBrandStore((s) => s.setBrandId);
+  return { brandId, setBrandId };
 }
 
 export const useAuth = create<AuthState>((set, get) => {
@@ -265,8 +298,9 @@ function slugOf(organizationName: string): string {
   return organizationName.toLowerCase().split(/\s+/)[0] ?? 'app';
 }
 
-/** An API client bound to the current session, for use inside components. */
+/** An API client bound to the current session and selected brand, for use inside components. */
 export function useApiClient(): ApiClient {
   const accessToken = useAuth((s) => s.accessToken);
-  return new ApiClient({ getAccessToken: () => accessToken });
+  const brandId = useBrandStore((s) => s.brandId);
+  return new ApiClient({ getAccessToken: () => accessToken, getBrandId: () => brandId });
 }

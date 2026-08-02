@@ -46,17 +46,21 @@ export class ApiClientError extends Error {
 export interface ApiClientOptions {
   baseUrl?: string;
   getAccessToken?: () => string | null;
+  /** The selected brand (PRD §5.3-Marka), or null for the license-wide default. */
+  getBrandId?: () => string | null;
   fetchImpl?: typeof fetch;
 }
 
 export class ApiClient {
   readonly #baseUrl: string;
   readonly #getAccessToken: () => string | null;
+  readonly #getBrandId: () => string | null;
   readonly #fetch: typeof fetch;
 
   constructor(options: ApiClientOptions = {}) {
     this.#baseUrl = (options.baseUrl ?? '/api/v1').replace(/\/$/, '');
     this.#getAccessToken = options.getAccessToken ?? (() => null);
+    this.#getBrandId = options.getBrandId ?? (() => null);
     this.#fetch = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
@@ -91,6 +95,8 @@ export class ApiClient {
     const headers = new Headers(init.headers);
     const token = this.#getAccessToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
+    const brandId = this.#getBrandId();
+    if (brandId) headers.set('X-Nexa-Brand', brandId);
 
     const response = await this.#fetch(`${this.#baseUrl}${path}`, {
       ...init,
@@ -121,6 +127,8 @@ export class ApiClient {
 
     const token = this.#getAccessToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
+    const brandId = this.#getBrandId();
+    if (brandId) headers.set('X-Nexa-Brand', brandId);
 
     let response: Response;
     try {

@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### 78.6 — MULTIBRAND-f AppShell marka değiştirici + persist + isteklerde `X-Nexa-Brand` başlığı — done — 2026-08-02 UTC
+
+- **Yapıldı:** SONNET-XHIGH, istemci plumbing (kontrat/migration yok — `-b`/`-c`'de zaten yazılmıştı).
+  `api-client.ts`: `ApiClientOptions.getBrandId` — `request`/`getBlob` ikisi de seçili markada
+  `X-Nexa-Brand` ekler, seçim yokken başlık HİÇ gönderilmez (lisans-geneli NULL semantiği ile
+  karışmasın diye boş header değil, header'ın kendisi yok). `auth-store.ts`: `useBrandStore` /
+  `useBrand` / `readBrandId` — `lib/i18n.ts`'in localStorage persist deseninin birebir ikizi
+  (`nexa.brand_id`, aynı `readStored`/`writeStored`); `useApiClient()` artık brandId'yi de
+  enjekte ediyor. `AppShell.tsx`: `BrandSwitcher` — rayın üstünde (logonun altı), paylaşılan
+  `Dropdown` bileşeniyle (hesap menüsüyle birebir yerleşim deseni); `GET /brands`'i `Brands.tsx`
+  ile AYNI queryKey'de (`['settings','brands']`) okur; ≥2 markada görünür, tek/sıfır markada
+  render edilmez; seçim değişince `queryClient.invalidateQueries()` (filtresiz) + persist; aynı
+  markayı yeniden seçmek invalidate ETMEZ. Reconciliation effect: persisted brandId listede yoksa
+  (silinmiş) veya liste tek elemanlıysa varsayılana düşer (`is_default` → yoksa ilk eleman) —
+  cross-brand 404 döngüsü ve tek-markalı lisansta gereksiz header'ı önler.
+- **Doğrulama:** typecheck·lint·build YEŞİL (workspace). Unit paket bazında (memory: `pnpm -w
+  test` paylaşılan Postgres'te rtm'yle yarışıp FK hatası veriyor): web **508** (499→508, +9 —
+  `api-client.test.ts` +3, `AppShell.test.tsx` +6), api **1211/1211** DEĞİŞMEDİ (integration +
+  contract-parity 5/5 dahil), rtm **90/90** DEĞİŞMEDİ. E2E `settings.spec` DEĞİŞMEDİ (dosyada
+  `brand` referansı yok — cross-brand e2e ayrı task -h). Kabul kriteri (KK-türetilmiş, tam metin
+  Task Master 78.6 + `PLAN-V2-KIRILIM.md` §5.2.23): değiştirebilir/reload'da korunur/önceki
+  markanın verisi kalmaz/tek markada gizli — dördü de `AppShell.test.tsx`'te ayrı test.
+- **Varsayımlar:** BrandSwitcher rayın İÇİNDE (görev metni "üst çubukta" diyor ama AppShell'de
+  ayrı bir yatay top-bar yok — dikey rail'in en üstü, logo altı, hesap menüsüyle simetrik).
+  Reconciliation invalidateQueries ÇAĞIRMAZ (yalnız kullanıcı-tetiklemeli değişiklik invalidate
+  eder) — ilk yüklemede henüz hiçbir marka-scoped veri fetch edilmemiş, invalidate edilecek bir
+  şey yok. Tek marka → brandId `null`'a sıfırlanır (spesifik id değil) — NULL semantiği tek
+  markada zaten o markayla eşdeğer, ve `-g` sonrası çok-markalı bir lisans tek markaya düşerse
+  stale id otomatik temizlenir.
+- **Sonraki pencereye not:** `-g` (Widget/Websites/Channels ekranlarının queryKey'lerine brandId
+  eklenmesi) `useBrand()`'i `auth-store.ts`'ten import edip mevcut `['settings','widget']` vb.
+  anahtarlara `brandId` ekleyecek — burada kurulan store hazır, ekstra plumbing gerekmiyor. `-h`
+  (cross-brand e2e) bu ekranın gerçek tarayıcıda render olduğunu ilk kez doğrulayacak; buradaki
+  testler jsdom, gerçek CSS/layout kontrolü yok.
+
 ### 78.5 — MULTIBRAND-e Settings → Brands ekranı (liste + ekle + yeniden adlandır + sil + boş durum) — done — 2026-08-02 UTC
 
 - **Yapıldı:** SONNET-XHIGH, UI-only (-d'de API zaten hazırdı, kontrat değişmedi). `Brands.tsx` —

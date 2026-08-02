@@ -51,6 +51,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     'shell.account.agentFallback': 'Agent',
     'shell.account.signOut': 'Sign out',
     'shell.account.language': 'Language',
+    'shell.brand': 'Brand',
 
     // Navigation (rail + command palette)
     'nav.home': 'Home',
@@ -87,6 +88,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     'shell.account.agentFallback': 'Temsilci',
     'shell.account.signOut': 'Çıkış Yap',
     'shell.account.language': 'Dil',
+    'shell.brand': 'Marka',
 
     // Navigation
     'nav.home': 'Ana Sayfa',

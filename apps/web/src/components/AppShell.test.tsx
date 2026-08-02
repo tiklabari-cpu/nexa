@@ -17,20 +17,24 @@
  * actually obeys. A real rendered check belongs in the browser E2E suite.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppShell } from './AppShell.js';
-import { useAuth } from '../lib/auth-store.js';
+import { readBrandId, useAuth, useBrandStore } from '../lib/auth-store.js';
 
-function renderShell(initialPath = '/app/inbox') {
+const BRAND_KEY = 'nexa.brand_id';
+
+function renderShell(
+  initialPath = '/app/inbox',
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   // The shell's trial banner reads `/billing/subscription` through TanStack
   // Query, so a client is required to render at all. There is no server here,
   // and with retries off the query simply stays without data — the banner
   // renders nothing, which is the same as an active workspace and keeps these
   // navigation/menu tests focused on the shell rather than on billing.
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
@@ -43,6 +47,37 @@ function renderShell(initialPath = '/app/inbox') {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+function jsonResponse(body: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    json: async () => body,
+  } as unknown as Response;
+}
+
+const BRAND_A = { id: 'brand-a', name: 'Acme Support', is_default: true };
+const BRAND_B = { id: 'brand-b', name: 'Beta Line', is_default: false };
+
+/**
+ * Stubs `fetch` for `/brands`; every other path (e.g. the trial banner's
+ * billing read) errors, same as the unstubbed real fetch these tests would
+ * otherwise get — `!data` either way, so the banner still renders nothing.
+ */
+function stubBrands(items: Array<{ id: string; name: string; is_default: boolean }>) {
+  const fetchMock = vi.fn(async (input: string) => {
+    if (input.includes('/brands')) return jsonResponse({ items });
+    return {
+      ok: false,
+      status: 404,
+      headers: { get: () => null },
+      json: async () => ({ error: { type: 'not_found', message: 'Not found.', request_id: '-' } }),
+    } as unknown as Response;
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
 }
 
 beforeEach(() => {
@@ -192,5 +227,91 @@ describe('account menu', () => {
     });
     renderShell();
     expect(screen.getAllByText('SR').length).toBeGreaterThan(0);
+  });
+});
+
+describe('brand switcher', () => {
+  beforeEach(() => {
+    localStorage.removeItem(BRAND_KEY);
+    useBrandStore.setState({ brandId: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('stays hidden on a single-brand license', async () => {
+    const fetchMock = stubBrands([BRAND_A]);
+    renderShell();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Brand' })).toBeNull();
+  });
+
+  it('lets the agent switch brands, and persists the choice', async () => {
+    const user = userEvent.setup();
+    stubBrands([BRAND_A, BRAND_B]);
+    renderShell();
+
+    await user.click(await screen.findByRole('button', { name: 'Brand' }));
+    expect(screen.getByRole('option', { name: /Acme Support/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(screen.getByRole('option', { name: /Beta Line/ }));
+
+    expect(localStorage.getItem(BRAND_KEY)).toBe('brand-b');
+  });
+
+  it('keeps a remembered selection after the store is rebuilt from storage', async () => {
+    localStorage.setItem(BRAND_KEY, 'brand-b');
+    useBrandStore.setState({ brandId: readBrandId() });
+    stubBrands([BRAND_A, BRAND_B]);
+    const user = userEvent.setup();
+
+    renderShell();
+    await user.click(await screen.findByRole('button', { name: 'Brand' }));
+
+    expect(screen.getByRole('option', { name: /Beta Line/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('falls back to the default brand when the remembered id no longer exists', async () => {
+    localStorage.setItem(BRAND_KEY, 'brand-deleted');
+    useBrandStore.setState({ brandId: readBrandId() });
+    stubBrands([BRAND_A, BRAND_B]);
+
+    renderShell();
+
+    await waitFor(() => expect(localStorage.getItem(BRAND_KEY)).toBe('brand-a'));
+  });
+
+  it('invalidates the query cache so no stale data from the previous brand lingers', async () => {
+    const user = userEvent.setup();
+    stubBrands([BRAND_A, BRAND_B]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    renderShell('/app/inbox', queryClient);
+    await user.click(await screen.findByRole('button', { name: 'Brand' }));
+    await user.click(screen.getByRole('option', { name: /Beta Line/ }));
+
+    expect(invalidateSpy).toHaveBeenCalled();
+  });
+
+  it('does not invalidate the cache when re-selecting the current brand', async () => {
+    const user = userEvent.setup();
+    stubBrands([BRAND_A, BRAND_B]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    renderShell('/app/inbox', queryClient);
+    await user.click(await screen.findByRole('button', { name: 'Brand' }));
+    await user.click(screen.getByRole('option', { name: /Acme Support/ }));
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 });

@@ -30,6 +30,41 @@ describe('ApiClient', () => {
     expect(new Headers(init!.headers).has('Authorization')).toBe(false);
   });
 
+  it('sends the selected brand as X-Nexa-Brand (PRD §5.3-Marka)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({ ok: true }));
+    const client = new ApiClient({ fetchImpl, getBrandId: () => 'brand-b' });
+
+    await client.get('/websites');
+
+    const [, init] = fetchImpl.mock.calls[0]!;
+    expect(new Headers(init!.headers).get('X-Nexa-Brand')).toBe('brand-b');
+  });
+
+  it('omits X-Nexa-Brand entirely when no brand is selected', async () => {
+    // License-wide NULL semantics (RLS `nexa_current_brand() IS NULL`) must
+    // stay distinguishable from "the caller sent a brand" — an empty header
+    // is not the same as no header.
+    const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({ ok: true }));
+    const client = new ApiClient({ fetchImpl });
+
+    await client.get('/websites');
+
+    const [, init] = fetchImpl.mock.calls[0]!;
+    expect(new Headers(init!.headers).has('X-Nexa-Brand')).toBe(false);
+  });
+
+  it('carries the brand header on blob fetches too', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response(new Blob(['data']), { status: 200 }),
+    );
+    const client = new ApiClient({ fetchImpl, getBrandId: () => 'brand-b' });
+
+    await client.getBlob('/uploads/key-1');
+
+    const [, init] = fetchImpl.mock.calls[0]!;
+    expect(new Headers(init!.headers).get('X-Nexa-Brand')).toBe('brand-b');
+  });
+
   it('normalises the base url so paths never double up slashes', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({}));
     const client = new ApiClient({ baseUrl: 'http://localhost:4000/api/v1/', fetchImpl });

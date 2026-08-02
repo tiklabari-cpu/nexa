@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+### tm 91.5 — 08.6.3-conflict-e İstemci çakışma state'i + ConflictBanner bileşeni (salt görünüm) — done — 2026-08-02 UTC
+
+- **Yapıldı:** SONNET-XHIGH — çakışma uyarısının istemci yüzeyi, `typing.ts`/`TypingIndicator.tsx`
+  deseninin birebir kopyası. (1) `apps/web/src/features/inbox/conflict.ts` — zustand store,
+  `byChat: Record<chatId, {agents: {agentId, since}[], detectedAt}>`; `note(chatId, agents,
+  detectedAt)` <2 ajanlı payload'ı çakışma saymayıp temizler, `clear(chatId)`; idle-lapse süresi
+  sabit kodlanmadı — `CONFLICT_IDLE_MS = AGENT_COMPOSING_TTL_SECONDS * 1000` (`@nexa/types`'tan),
+  sunucunun composer-registry TTL'iyle aynı pencereyi kullanır. (2) `ConflictBanner.tsx` —
+  `role='status'` + `aria-live='polite'`; çakışma yoksa `null` (layout zıplamaz); "Bu sohbette N
+  ajan aynı anda yazıyor" + `agent_id` listesi. Ağ çağrısı, push aboneliği yok (-f'nin işi).
+- **Doğrulama:** `pnpm -w typecheck` yeşil · `pnpm -w lint` yeşil · `pnpm -w build` yeşil ·
+  yeni testler: `conflict.test.ts` (5) + `ConflictBanner.test.tsx` (5), hepsi yeşil. Workspace
+  `pnpm -w test` tek seferde rtm'de deadlock'la kırmızı çıktı (bilinen paylaşımlı-Postgres yarışı,
+  memory: nexa-test-gate-parallel-db) — rtm (86/86) ve api (1108/1108) paketleri izole çalıştırıldığında
+  temiz geçti; web paketi 468/468 (yeni 10 dahil). Bu görev için `test:integration`/`test:e2e`
+  uygulanmaz — kendi test stratejisi notu: "güvenlik yüzeyi yok (salt görünüm, ağ yok)".
+- **Varsayımlar:** Banner, çakışan ajanları `agent_id` ile gösteriyor (görünen ad çözümlemesi bu
+  dizinde henüz yok ve kapsam dışı); -f/-g gerçek isimlendirme ihtiyacı doğrulayacak.
+- **Sonraki pencereye not:** `08.6.3-conflict-f` (realtime kablolama: `agent_conflict_warning`
+  aboneliği + `applyPush` case'i + banner'ın InboxPage/ChatDetail montajı, `TypingIndicator`'ın
+  monte edildiği yerin yanına) ve ardından `08.6.3-conflict-g` (uçtan uca doğrulama) bağımlı.
+
 ### tm 91.4 — 08.6.3-conflict-d Transfer/atama anında aktif yazıcı çakışmasının API tarafından uyarılması — done — 2026-08-02 UTC
 
 - **Yapıldı:** OPUS-XHIGH — çakışma tespitinin İKİNCİ yüzeyi (API/transfer). `chat-service.transfer`

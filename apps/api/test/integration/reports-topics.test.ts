@@ -1,14 +1,15 @@
 /**
- * Chat topics report (FR-MOD-07.6) — the contract-first skeleton (07.6-a).
- *
- * This window settles the endpoint's shape and its "not enough conversations
- * yet" gate; the clustering itself lands in 07.6-c. So every assertion here is
- * about the gate and its isolation, not about topic contents (which stay empty):
+ * Chat topics report (FR-MOD-07.6). 07.6-a settled the endpoint's shape and its
+ * "not enough conversations yet" gate; 07.6-c wires the clustering itself in, so
+ * this suite asserts both the gate and the topics it now produces:
  *
  *   - below `min_conversations` clusterable chats → `sufficient_data: false`,
  *     `topics: []`, a 200 state and not an error ("yeterli veri yoksa empty");
+ *   - above it, distinct vocabularies cluster into distinct topics, each with a
+ *     volume, a share of `analyzed`, and a trend against the previous window;
  *   - `analyzed` counts exactly the clusterable conversations, and only this
- *     tenant's (NFR-S4).
+ *     tenant's (NFR-S4); another tenant's topics never appear here;
+ *   - the same request twice returns the same topics (deterministic).
  *
  * A thread is clusterable once it has text to cluster — an AI summary, or
  * failing that a customer message — the same rule the route's count uses.
@@ -141,6 +142,22 @@ describe('chat topics report (07.6)', () => {
     });
   }
 
+  /** Seed `count` closed threads all carrying `summary` — one deliberate topic. */
+  async function seedTopic(
+    t: TenantFixture,
+    summary: string,
+    count: number,
+    at = new Date(),
+  ): Promise<void> {
+    for (let i = 0; i < count; i++) await seedSummaryThread(t, summary, at);
+  }
+
+  // Two clearly separate vocabularies — no shared content token — so they land in
+  // distinct clusters; a third, for a second tenant, overlapping neither.
+  const DELIVERY = 'Package delivery is late, the tracking shows my shipment still in transit';
+  const REFUND = 'I want a refund for my return, the money back on the invoice charge';
+  const LOGIN = 'I cannot login, my password reset email never arrived to access the account';
+
   // --- negatives first ------------------------------------------------------
 
   it('requires the reports_read scope', async () => {
@@ -182,15 +199,83 @@ describe('chat topics report (07.6)', () => {
     expect(body.topics).toEqual([]);
   });
 
-  it('flips to sufficient at the threshold (topics still empty in the skeleton)', async () => {
+  it('flips to sufficient at the threshold and clusters into topics', async () => {
     const floor = (await server.get('/reports/topics', auth)).json().min_conversations as number;
-    await seedSummaryThreads(fx.a, floor);
+    await seedTopic(fx.a, DELIVERY, floor);
 
     const body = (await server.get('/reports/topics', auth)).json();
     expect(body.analyzed).toBe(floor);
     expect(body.sufficient_data).toBe(true);
-    // 07.6-a settles the gate; clustering (and non-empty topics) lands in 07.6-c.
-    expect(body.topics).toEqual([]);
+    // Clustering is wired (07.6-c): a sufficient window yields at least one topic
+    // with a real, vocabulary-derived label — never a fabricated one.
+    expect(body.topics.length).toBeGreaterThanOrEqual(1);
+    expect(body.topics[0].label.length).toBeGreaterThan(0);
+    expect(body.topics[0].volume).toBeGreaterThan(0);
+  });
+
+  // --- clustering: volume, share, ordering (07.6-c) -------------------------
+
+  it('groups distinct vocabularies into distinct topics, each with a volume', async () => {
+    await seedTopic(fx.a, DELIVERY, 12);
+    await seedTopic(fx.a, REFUND, 8);
+
+    const body = (await server.get('/reports/topics', auth)).json();
+    expect(body.sufficient_data).toBe(true);
+    expect(body.analyzed).toBe(20);
+    // Two separate concerns → at least two topics, every one with a real volume.
+    expect(body.topics.length).toBeGreaterThanOrEqual(2);
+    for (const topic of body.topics) expect(topic.volume).toBeGreaterThan(0);
+    // Most voluminous first (delivery's 12 over refund's 8); share = volume/analyzed.
+    expect(body.topics[0].volume).toBe(12);
+    expect(body.topics[0].share).toBeCloseTo(12 / 20, 5);
+    const volumes = body.topics.map((topic: { volume: number }) => topic.volume);
+    expect([...volumes]).toEqual([...volumes].sort((x: number, y: number) => y - x));
+  });
+
+  it('never puts a bare number in a topic label (no order/card leak)', async () => {
+    // Every conversation carries a 16-digit run; it must not surface as a label.
+    await seedTopic(fx.a, 'Refund for order 4111111111111111 shipped last week', 20);
+
+    const body = (await server.get('/reports/topics', auth)).json();
+    expect(body.sufficient_data).toBe(true);
+    for (const topic of body.topics) {
+      expect(topic.label).not.toMatch(/\d/);
+      for (const keyword of topic.keywords) expect(keyword).not.toMatch(/^\d+$/);
+    }
+  });
+
+  // --- trend vs the previous window -----------------------------------------
+
+  it('reads previous_volume from the prior window; a new topic has a null trend', async () => {
+    // The default window is the last 30 days; place the "before" data ~45 days back.
+    const previous = new Date(Date.now() - 45 * 86_400_000);
+    await seedTopic(fx.a, DELIVERY, 5, previous); // delivery existed before…
+    await seedTopic(fx.a, DELIVERY, 12); // …and now, so it carries a trend
+    await seedTopic(fx.a, REFUND, 8); // refund is new this window → trend null
+
+    const body = (await server.get('/reports/topics', auth)).json();
+    const delivery = body.topics.find((topic: { volume: number }) => topic.volume === 12);
+    const refund = body.topics.find((topic: { volume: number }) => topic.volume === 8);
+    expect(delivery.previous_volume).toBe(5);
+    expect(delivery.trend).toBeCloseTo((12 - 5) / 5, 5);
+    // Absent before → previous_volume 0 and trend unknown (null), not a +100% rise.
+    expect(refund.previous_volume).toBe(0);
+    expect(refund.trend).toBeNull();
+  });
+
+  // --- determinism ----------------------------------------------------------
+
+  it('returns identical topics for the same request twice', async () => {
+    await seedTopic(fx.a, DELIVERY, 12);
+    await seedTopic(fx.a, REFUND, 8);
+
+    // A fixed range so only the clustering, not the clock, decides the response.
+    const to = new Date();
+    const from = new Date(to.getTime() - 30 * 86_400_000);
+    const url = `/reports/topics?from=${from.toISOString()}&to=${to.toISOString()}`;
+    const first = (await server.get(url, auth)).json();
+    const second = (await server.get(url, auth)).json();
+    expect(second).toEqual(first);
   });
 
   // --- what counts as clusterable -------------------------------------------
@@ -244,5 +329,29 @@ describe('chat topics report (07.6)', () => {
     expect(theirs.analyzed).toBe(0);
     expect(theirs.sufficient_data).toBe(false);
     expect(theirs.topics).toEqual([]);
+  });
+
+  it("keeps one tenant's topics out of another's report", async () => {
+    // A talks about delivery and refunds; B, on its own, about logins.
+    await seedTopic(fx.a, DELIVERY, 12);
+    await seedTopic(fx.a, REFUND, 8);
+    await seedTopic(fx.b, LOGIN, 20);
+
+    const theirToken = await grantToken(owner, {
+      licenseId: fx.b.licenseId,
+      organizationId: fx.b.organizationId,
+      ownerId: fx.b.ownerAccountId,
+      scopes: ['reports_read'],
+    });
+    const theirs = (
+      await server.get('/reports/topics', { authorization: `Bearer ${theirToken}` })
+    ).json();
+
+    // B sees only its own 20 conversations, and none of A's topic vocabulary.
+    expect(theirs.analyzed).toBe(20);
+    expect(theirs.sufficient_data).toBe(true);
+    expect(theirs.topics.length).toBeGreaterThanOrEqual(1);
+    const labels = theirs.topics.map((topic: { label: string }) => topic.label).join(' ');
+    expect(labels).not.toMatch(/deliver|refund|package|invoice/);
   });
 });

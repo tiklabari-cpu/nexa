@@ -13,6 +13,48 @@
 
 ## Task log (newest-first)
 
+### 64.3 (07.6-c) — Kümelemeyi route'a bağla: tenant-scoped konu sorgusu + hacim/trend + performans tavanı — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-XHIGH] 07.6-b'nin `clusterTopics()` çekirdeği `/reports/topics` route'una
+  bağlandı (`apps/api/src/routes/reports.ts` — kontrat/şema DEĞİŞMEDİ, 07.6-a'da pinlenen
+  `ReportsTopics.topics[]` alanları dolduruldu):
+  - **`clusterableDocs()`** — `request.withTenant` içinde `license_id` filtreli tenant-scoped ham
+    SQL: her thread için kümeleme metni = `threads.summary` dolu ise o, değilse ilk müşteri mesajı
+    (`events.type='message' AND author_type='customer'`, `created_at ASC` LIMIT 1). En yeni
+    **`TOPIC_WINDOW_LIMIT`(1000)** ile performans tavanı (NFR-P7); `analyzed` gerçek işlenen sayıyı
+    söyler (sessiz kırpma yok).
+  - **`buildTopicsReport()`** — PAYLAŞILAN yardımcı (07.6-g CSV export aynı sayıyı yeniden hesaplamak
+    yerine tüketecek; `breakdownByDay` felsefesi). `clusterTopics()` → `sufficient` false ise 07.6-a
+    empty yanıtı korunur.
+  - **TREND:** eşit-uzunluk önceki pencere docs çekilir ve MEVCUT dönemin küme MERKEZLERİNE atanır
+    (**yeniden kümelenmez** — yoksa iki dönemin etiketleri eşleşmez, karşılaştırma anlamsızlaşır).
+    Merkezler üyelerden yeniden kurulur (`centroidOf` = normalize-ortalama, `toFixed(6)`;
+    `similarity` dot-product olduğundan merkez birim vektör olmalı — `clusterTopics`'in kullandığı
+    merkezle birebir), aynı `TOPIC_SIMILARITY_THRESHOLD`(0.3) eşiği. `previous_volume` = atanan
+    sohbet sayısı, `trend` = (volume−prev)/prev — **prev=0 iken null** (yeni konu: trend bilinmez,
+    +%100 değil; ReportsOverview/ReportsReviews "unknown ≠ 0" kuralı). `share` = volume/analyzed,
+    analyzed=0 iken null.
+  - Yerel `TOPIC_MIN_CONVERSATIONS(20)` + `clusterableCount()` **KALDIRILDI** — tek sayı artık
+    `@nexa/ai-mock` `TOPIC_MIN_CONVERSATIONS`'tan yönetir; `analyzed`+`sufficient_data`
+    `clusterTopics` sonucundan gelir (07.6-a/07.6-b uzlaşması tamamlandı). İç `docIds` yanıta sızmaz.
+- **Doğrulama (DoD tam yeşil):** `pnpm -w typecheck` 11/11 (exit 0) · `pnpm -w lint` 8/8 (exit 0) ·
+  `pnpm -w build` 7/7 (exit 0) · `pnpm -w test:unit` (api 266/266) (exit 0) · `pnpm -w test:integration`
+  (`--concurrency=1`, seri) **986/986** — `reports-topics` 14/14 + `contract-parity` 5/5 (çift yönlü) +
+  `tenant-isolation` 22/22 dahil, regresyon yok (exit 0). Yeni testler: ayrı kelime dağarcıkları ≥2
+  kümeye ayrılır (her biri volume>0), hacim↓ sıra + `share`, 16-hane rakam etikete/keyword'e girmez
+  (PII), `previous_volume`/`trend` prev pencereden + yeni konu trend null, aynı istek iki kez → birebir
+  aynı (determinizm), CROSS-TENANT A'nın konuları B'de yok + `analyzed` yalnız B (NFR-S4).
+- **Varsayımlar:** Yeni tablo YOK — kümeleme on-the-fly (PRD §8.4 + rapor-2 §5.3 şema kaynağı,
+  `chat_topics` tanımlı değil). Kümeleme thread düzeyinde (07.6-a `clusterableCount` deseniyle
+  aynı; `docId` = thread id). Performans tavanı 1000 (varsayım 3). NFR-P7: 14-test süiti (her test
+  20+ thread seed'iyle) 3.4 sn — endpoint tavan altında rahat; formel HANDOFF perf kanıtı 07.6-h'de.
+- **Sonraki pencereye not:** `buildTopicsReport()` PAYLAŞILAN — **07.6-g** CSV `buildGroupCsv`
+  switch'inde `case 'topics'` bunu ÇAĞIRMALI (yeniden hesaplama yok, CSV↔JSON çelişmez).
+  **07.6-d** seed hâlâ tek özet (`seed.ts:593 'Delivery query, resolved.'`) yazıyor → demo lisansında
+  şu an tek küme; konu çeşitliliği eklenince e2e'de dolu durum gösterilebilir. **07.6-e** UI sekmesi +
+  **07.6-h** e2e (dolu+empty) bu route'u tüketir. Chat topics e2e BU pencerede yazılmadı: mevcut
+  `reports.spec.ts` /reports/topics'e dokunmuyor, backend değişikliği mevcut e2e akışını etkilemez.
+
 ### 64.2 (07.6-b) — Deterministik konu kümeleme çekirdeği: `packages/ai-mock/src/topics.ts` — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-MAX] Bölünmeyen kümeleme çekirdeği — YENİ SAF modül

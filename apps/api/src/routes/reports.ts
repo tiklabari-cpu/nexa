@@ -9,6 +9,14 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { hasAnyScope } from '@nexa/types';
+import {
+  clusterTopics,
+  embed,
+  similarity,
+  TOPIC_MIN_CONVERSATIONS,
+  TOPIC_SIMILARITY_THRESHOLD,
+  type TopicDoc,
+} from '@nexa/ai-mock';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { channelLabel, resolutionRate, round } from './reports-metrics.js';
@@ -587,37 +595,49 @@ async function transferCount(
 }
 
 /**
- * The floor of clusterable conversations the Chat topics report needs before it
- * clusters (FR-MOD-07.6, "yeterli veri yoksa empty"). Below it the report is an
- * honest empty state, not a single fabricated topic.
- *
- * Provisional at 20 — the calibration the slice proposed — and kept local to
- * this route for the skeleton. The clustering core lands its own
- * `MIN_CONVERSATIONS` in `packages/ai-mock/src/topics.ts` (07.6-b); 07.6-c
- * reconciles the two so one number governs both the count gate here and the
- * cluster-size floor there.
+ * The most conversations the Chat topics report clusters in one window — a
+ * ceiling on the work per request (NFR-P7). The newest `TOPIC_WINDOW_LIMIT`
+ * clusterable conversations are read and clustered, and `analyzed` reports how
+ * many that actually was — the truth, capped, never a silent trim passed off as
+ * the whole window. The floor the report gates on (`TOPIC_MIN_CONVERSATIONS`)
+ * comes from the clusterer itself, so one number governs both the count gate here
+ * and the cluster-size floor there.
  */
-const TOPIC_MIN_CONVERSATIONS = 20;
+const TOPIC_WINDOW_LIMIT = 1000;
 
 /**
- * How many conversations in the window are *clusterable* — the count the Chat
- * topics report gates on before it will say anything (FR-MOD-07.6). A thread is
- * clusterable once it has text to cluster: its AI summary when one was written
- * (only AI-closed threads carry one), otherwise a customer message. 07.6-a only
- * counts them; 07.6-c reads the text and clusters it.
+ * The window's clusterable conversations, reduced to `{ id, text }` for the
+ * clusterer. A thread is clusterable once it has text to cluster: its AI summary
+ * when one was written (only AI-closed threads carry one), otherwise its first
+ * customer message. Newest first and capped at {@link TOPIC_WINDOW_LIMIT}, so a
+ * busy window bounds the work rather than the request.
  *
- * license_id-scoped and run inside withTenant, so another tenant's
- * conversations can never lift the count (NFR-S4) — the same isolation the other
- * report aggregates rely on.
+ * license_id-scoped and run inside withTenant, so another tenant's conversations
+ * can never enter the clustering (NFR-S4) — the same isolation the other report
+ * aggregates rely on. The text is customer-authored but never leaves this
+ * transaction: only derived topic labels do, and those have bare numbers stripped
+ * (07.6-b), so an order or card number cannot ride out in a label.
  */
-async function clusterableCount(
+async function clusterableDocs(
   tx: TenantClient,
   licenseId: bigint,
   from: Date,
   to: Date,
-): Promise<number> {
-  const [row] = await tx.$queryRaw<Array<{ clusterable: bigint }>>`
-    SELECT count(*) AS clusterable
+): Promise<TopicDoc[]> {
+  const rows = await tx.$queryRaw<Array<{ id: string; text: string | null }>>`
+    SELECT t.id AS id,
+      COALESCE(
+        NULLIF(t.summary, ''),
+        (
+          SELECT e.text FROM events e
+          WHERE e.thread_id = t.id
+            AND e.type = 'message'
+            AND e.author_type = 'customer'
+            AND e.text IS NOT NULL AND e.text <> ''
+          ORDER BY e.created_at ASC, e.id ASC
+          LIMIT 1
+        )
+      ) AS text
     FROM threads t
     WHERE t.license_id = ${licenseId}
       AND t.created_at >= ${from} AND t.created_at <= ${to}
@@ -631,8 +651,134 @@ async function clusterableCount(
             AND e.text IS NOT NULL AND e.text <> ''
         )
       )
+    ORDER BY t.created_at DESC, t.id DESC
+    LIMIT ${TOPIC_WINDOW_LIMIT}
   `;
-  return Number(row?.clusterable ?? 0n);
+  return rows.flatMap((row) => (row.text ? [{ id: row.id, text: row.text }] : []));
+}
+
+/** One topic as the report serves it — the clusterer's output plus the route's derived fields. */
+interface TopicReportRow {
+  id: string;
+  label: string;
+  keywords: string[];
+  volume: number;
+  share: number | null;
+  previous_volume: number;
+  trend: number | null;
+}
+
+interface TopicsReport {
+  min_conversations: number;
+  analyzed: number;
+  sufficient_data: boolean;
+  topics: TopicReportRow[];
+}
+
+/**
+ * The Chat topics report for one window (FR-MOD-07.6). Shared so the CSV export
+ * (07.6-g) serves the exact figures the JSON does — the same reason the other
+ * report aggregates each live in one helper.
+ *
+ * Cluster the current window; if it clears the floor, derive each topic's share
+ * of the window and its trend against the equal-length window before. Trend is
+ * *not* a second clustering: the previous window's conversations are assigned to
+ * the current topics' centroids, so the two periods speak of the same topics.
+ * Re-clustering the past would name it differently, and the comparison would be
+ * between two things that only look alike.
+ *
+ * `share` and `trend` are null, not zero, when undefined — no conversations
+ * analyzed, or a topic absent from the previous window (new, so its trend is
+ * unknown, not a 100% rise) — the same "unknown is not zero" rule the Overview
+ * and Reviews reports carry.
+ */
+async function buildTopicsReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+  prevFrom: Date,
+  prevTo: Date,
+): Promise<TopicsReport> {
+  const docs = await clusterableDocs(tx, licenseId, from, to);
+  const result = clusterTopics(docs);
+
+  const base = {
+    min_conversations: TOPIC_MIN_CONVERSATIONS,
+    analyzed: result.analyzed,
+    sufficient_data: result.sufficient,
+  };
+  if (!result.sufficient) return { ...base, topics: [] };
+
+  // Rebuild each topic's centroid from its members — the clusterer returns the
+  // members, not the vector. Same formula it used (the normalised mean), so this
+  // is the centroid it clustered on; `similarity` is a dot product, so the
+  // centroid has to be a unit vector for the comparison to be a real cosine.
+  const vectorById = new Map(docs.map((doc) => [doc.id, embed(doc.text)]));
+  const centroids = result.topics.map((topic) =>
+    centroidOf(
+      topic.docIds.map((id) => vectorById.get(id)).filter((v): v is number[] => v != null),
+    ),
+  );
+
+  // Assign the previous window's conversations to the current topics' centroids,
+  // clearing the same cosine floor a current conversation had to clear to join a
+  // topic — a past chat too far from every current topic simply is not one of
+  // them, so it lifts no topic's previous volume.
+  const prevDocs = await clusterableDocs(tx, licenseId, prevFrom, prevTo);
+  const previousVolumes = new Array<number>(result.topics.length).fill(0);
+  for (const doc of prevDocs) {
+    const vector = embed(doc.text);
+    let best = -Infinity;
+    let bestIndex = -1;
+    for (let i = 0; i < centroids.length; i++) {
+      const centroid = centroids[i];
+      if (!centroid || centroid.length === 0) continue;
+      const sim = similarity(vector, centroid);
+      // Strict `>` so a tie keeps the earlier (higher-volume) topic.
+      if (sim > best) {
+        best = sim;
+        bestIndex = i;
+      }
+    }
+    if (bestIndex >= 0 && best >= TOPIC_SIMILARITY_THRESHOLD) {
+      previousVolumes[bestIndex] = (previousVolumes[bestIndex] ?? 0) + 1;
+    }
+  }
+
+  const topics = result.topics.map((topic, i) => {
+    const previousVolume = previousVolumes[i] ?? 0;
+    return {
+      id: topic.id,
+      label: topic.label,
+      keywords: topic.keywords,
+      volume: topic.volume,
+      share: result.analyzed > 0 ? round(topic.volume / result.analyzed) : null,
+      previous_volume: previousVolume,
+      trend: previousVolume > 0 ? round((topic.volume - previousVolume) / previousVolume) : null,
+    };
+  });
+
+  return { ...base, topics };
+}
+
+/**
+ * The normalised mean of a set of unit vectors — a cluster's centroid. Rounded to
+ * six places like {@link embed}, so the centroid stays comparable to the doc
+ * vectors without float drift.
+ */
+function centroidOf(vectors: number[][]): number[] {
+  const first = vectors[0];
+  if (!first) return [];
+  const sum = new Array<number>(first.length).fill(0);
+  for (const vector of vectors) {
+    for (let i = 0; i < sum.length; i++) sum[i] = (sum[i] ?? 0) + (vector[i] ?? 0);
+  }
+  let magnitude = 0;
+  for (const value of sum) magnitude += value * value;
+  magnitude = Math.sqrt(magnitude);
+  if (magnitude === 0) return sum;
+  return sum.map((value) => Number((value / magnitude).toFixed(6)));
 }
 
 /**
@@ -1172,41 +1318,34 @@ export default async function reportRoutes(
   });
 
   // Chat topics (FR-MOD-07.6): conversations clustered into topics with volume
-  // and trend. This is the contract-first skeleton (07.6-a) — it settles the
-  // shape and the "not enough conversations yet" gate; the clustering itself
-  // lands in 07.6-c. Same reports_read + withTenant surface as the other tabs.
+  // and trend. Clustering is deterministic and on-the-fly (@nexa/ai-mock, no real
+  // LLM); below the floor the report is an honest "not enough conversations yet"
+  // — a 200 state, not an error, so no new ApiError type. Same reports_read +
+  // withTenant surface as the other tabs.
   app.get('/reports/topics', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
     const parsed = rangeQuery.safeParse(request.query);
     if (!parsed.success) throw ApiError.validation('Invalid date range.');
     const { from, to } = resolveRange(parsed.data);
     const tenant = request.tenant();
 
-    // The equal-length window immediately before this one — where 07.6-c will
-    // read each topic's previous volume to compute its trend, the same
-    // construction the Overview and Reviews reports use (FR-MOD-07.3.1). Declared
-    // from the skeleton on so `previous_period` is never a fabricated shape.
+    // The equal-length window immediately before this one, where each topic's
+    // previous volume (and so its trend) is read — the same construction the
+    // Overview and Reviews reports use (FR-MOD-07.3.1).
     const spanMs = to.getTime() - from.getTime();
     const prevTo = new Date(from.getTime() - 1);
     const prevFrom = new Date(from.getTime() - spanMs);
 
-    const analyzed = await request.withTenant((tx) =>
-      clusterableCount(tx, tenant.licenseId, from, to),
+    const report = await request.withTenant((tx) =>
+      buildTopicsReport(tx, tenant.licenseId, from, to, prevFrom, prevTo),
     );
-
-    // Clustering needs a floor of conversations to say anything honest; below it
-    // the report is an empty "not enough conversations yet" — a 200 state, not an
-    // error (so no new ApiError type). The clustering lands in 07.6-c, so the
-    // sufficient branch also returns no topics yet — but the flag already tells
-    // the two apart, and a client renders the empty state off it.
-    const sufficient = analyzed >= TOPIC_MIN_CONVERSATIONS;
 
     return reply.send({
       range: { from: from.toISOString(), to: to.toISOString() },
       previous_period: { range: { from: prevFrom.toISOString(), to: prevTo.toISOString() } },
-      min_conversations: TOPIC_MIN_CONVERSATIONS,
-      analyzed,
-      sufficient_data: sufficient,
-      topics: [],
+      min_conversations: report.min_conversations,
+      analyzed: report.analyzed,
+      sufficient_data: report.sufficient_data,
+      topics: report.topics,
     });
   });
 

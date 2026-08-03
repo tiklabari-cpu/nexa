@@ -3051,13 +3051,13 @@
             "description": "`apps/api/src/routes/public-kb-sitemap.ts`, `config: { public: true }`: (1) `GET /public/kb/{workspaceSlug}/sitemap.xml` — PUBKB-c'nin published-makale servis fonksiyonundan liste alır, `<urlset>`/`<url>`/`<loc>`/`<lastmod>` üretir; her `<loc>` XML-escape edilir (`& < > \" '`), `lastmod` = `published_at`/`updated_at` ISO tarihi; KB kapalı/bilinmeyen slug → 404. (2) `GET /public/kb/{workspaceSlug}/r",
             "details": "PUBKB-f — sitemap.xml + robots.txt (yalnız yayınlanmış makaleler, XML-escape'li)  [SONNET-XHIGH]\n\nPRD: §5.3-Knowledge (public KB); NFR-S5\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 2 dosya + testi. Güvenlik sınırı YOK — erişim kararı ve published filtresi PUBKB-c'de çözülmüş, burada aynı servis fonksiyonu çağrılıp XML'e yazılıyor (yetki kararı verilmiyor). Eşzamanlılık yok. Kopyalanacak desen ismen var: `reports-export.ts` (injection-safe dışa aktarım) ve `public-kb.ts` (yayın filtresi + resolver çağrısı). Kontrat eklemesi katkısal ve mekanik. KK mekanik doğrulanabilir (URL listesi = published makale kümesi).\nNEDEN AÇIK: Repo genelinde sitemap.xml / robots.txt üretimi grep 0 (olgular listesi) ve `apps/api/src/routes/` altında böyle bir dosya yok (27 dosyalık ls). Depodaki tek anonim tam-sayfa (`apps/widget/chat.html`) zaten `noindex, nofollow` — yani hiçbir indeksleme yönergesi üretim yolu mevcut değil.\nKAPSAM: `apps/api/src/routes/public-kb-sitemap.ts`, `config: { public: true }`: (1) `GET /public/kb/{workspaceSlug}/sitemap.xml` — PUBKB-c'nin published-makale servis fonksiyonundan liste alır, `<urlset>`/`<url>`/`<loc>`/`<lastmod>` üretir; her `<loc>` XML-escape edilir (`& < > \" '`), `lastmod` = `published_at`/`updated_at` ISO tarihi; KB kapalı/bilinmeyen slug → 404. (2) `GET /public/kb/{workspaceSlug}/robots.txt` — `User-agent: *` + `Allow: /public/kb/{slug}/` + `Sitemap: <mutlak sitemap url>`; KB kapalıysa `Disallow: /`. (3) Sayfa sayısı tavanı (50k URL / tek dosya) aşılırsa ilk N ile sınırlanır (sitemap index v3).\nDOSYALAR: apps/api/src/routes/public-kb-sitemap.ts · packages/contract/openapi/paths/public-kb.yaml · apps/api/src/server.ts · apps/api/test/integration/public-kb-sitemap.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports-export.ts · apps/api/src/routes/public-kb.ts · apps/api/src/services/ai/web-crawler.ts\nKK (birebir): \"KK-türetilmiş: \"SEO'lu self-servis bilgi bankası (public KB)\" — bu alt-görevin payı: 'SEO'lu' bir bilgi bankası, arama motoruna hangi sayfalarının indekslenebilir olduğunu makine-okur biçimde bildirmelidir (sitemap + robots). Türetme gerekçesi: PRD sitemap/robots'tan hiç söz etmiyor; 'SEO'lu' sıfatının asgari teknik karşılığı olarak türetildi.\"\nKK DOĞRULAMA: `public-kb-sitemap.test.ts` integration: (1) sitemap yalnız `status='published'` makalelerin URL'lerini içerir, taslakların slug'ı hiç geçmez → KK 'yalnız public içerik' payı; (2) `robots.txt` Sitemap satırını ve Allow kuralını taşır → KK 'SEO'lu' payı; (3) `&` içeren slug/başlık XML'de `&amp;` olarak kaçırılır.\nKAPSAM DIŞI: Sitemap index / 50k üstü bölme (v3) · Arama motoruna ping/submit (dış servis — MASTER-PROMPT §5 mock, kapsam dışı) · Kök `/robots.txt` (uygulama kökü ürün SPA'sına ait; burada yalnız KB yolu altındaki robots) · Structured data doğrulama araçlarıyla dış test\nSÖZLEŞME: EVET — `public-kb.yaml`'a `GET /public/kb/{workspaceSlug}/sitemap.xml` (`application/xml`) ve `GET /public/kb/{workspaceSlug}/robots.txt` (`text/plain`). **OpenAPI'ye eklenip re-bundle edilmezse contract-parity.test.ts kırılır.** `sitemap.xml`/`robots.txt` PUBKB-b'deki rezerve-slug listesine eklenmiş olmalı.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF (önce): taslak makale slug'ı sitemap'te YOK · NEGATİF (CROSS-TENANT): license B'nin makale URL'leri, license A'nın sitemap'inde YOK · NEGATİF: `kb_settings.enabled=false` → sitemap 404, robots.txt `Disallow: /` · NEGATİF: XML enjeksiyonu — slug/başlıktaki `& < > \"` kaçırılır, üretilen XML iyi biçimli (parse edilerek doğrulanır) · integration (POZİTİF): yayınlanmış N makale → N adet `<url>`; `lastmod` ISO-8601 · integration: `contract-parity` yeşil",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3,
               5
             ],
             "parentId": "76",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T16:34:55.372Z"
           },
           {
             "id": 7,
@@ -3103,7 +3103,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T15:46:48.707Z"
+        "updatedAt": "2026-08-03T16:34:55.372Z"
       },
       {
         "id": "77",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T15:46:48.708Z",
+      "lastModified": "2026-08-03T16:34:55.374Z",
       "taskCount": 100,
       "completedCount": 79,
       "tags": [

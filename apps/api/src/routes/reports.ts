@@ -588,12 +588,14 @@ async function transferCount(
 
 /**
  * One report group rendered as a CSV table — a header row and its data rows —
- * for {@link toCsv}. The two time-series groups (breakdown, reviews) serialise as
- * one row per UTC day; the two window summaries (overview, ai-agent) serialise as
- * `metric,value` pairs, the honest tabular shape for a dashboard of headline
- * figures. Every figure is the *same* one its JSON report exposes — the export
- * reuses the report's aggregation helpers rather than recomputing — so a CSV can
- * never disagree with the screen it was exported from.
+ * for {@link toCsv}. `reviews` serialises one row per UTC day; `breakdown`
+ * serialises the Breakdown tab's four dimensions (day, hour, team, channel) in
+ * one long-format table — `dimension,key,...` — rather than four files, so the
+ * download stays one CSV per group; the two window summaries (overview,
+ * ai-agent) serialise as `metric,value` pairs, the honest tabular shape for a
+ * dashboard of headline figures. Every figure is the *same* one its JSON report
+ * exposes — the export reuses the report's aggregation helpers rather than
+ * recomputing — so a CSV can never disagree with the screen it was exported from.
  */
 async function buildGroupCsv(
   tx: TenantClient,
@@ -631,17 +633,34 @@ async function buildGroupCsv(
       };
     }
     case 'breakdown': {
+      // Four dimensions, one file, long format: `dimension` names which axis a
+      // row belongs to and `key` is that axis's bucket (a date, an hour, a team
+      // name, a channel label) — so the four screen tables the tab shows become
+      // one CSV without inventing a second file per dimension. Same helpers the
+      // `/reports/breakdown` route calls, so the download can never disagree
+      // with what the tab shows for any of the four. Sequential, not
+      // `Promise.all` — `tx` is one connection inside a Prisma interactive
+      // transaction (see withTenant), which does not support concurrent
+      // queries on the same client; the JSON route awaits these same four
+      // helpers one at a time for the same reason.
       const byDay = await breakdownByDay(tx, licenseId, from, to);
+      const byHour = await breakdownByHour(tx, licenseId, from, to);
+      const byTeam = await breakdownByTeam(tx, licenseId, from, to);
+      const byChannel = await breakdownByChannel(tx, licenseId, from, to);
+      const row = (
+        key: string,
+        split: { chats: number; closed: number; manual: number; assisted: number; automated: number },
+      ): CsvCell[] => [key, split.chats, split.closed, split.manual, split.assisted, split.automated];
       return {
-        headers: ['date', 'chats', 'closed', 'manual', 'assisted', 'automated'],
-        rows: byDay.map((row) => [
-          row.date,
-          row.chats,
-          row.closed,
-          row.manual,
-          row.assisted,
-          row.automated,
-        ]),
+        headers: ['dimension', 'key', 'chats', 'closed', 'manual', 'assisted', 'automated'],
+        rows: [
+          ...byDay.map((r) => ['day', ...row(r.date, r)]),
+          ...byHour.map((r) => ['hour', ...row(String(r.hour), r)]),
+          // `name` is null for the fan-out-free 'Unassigned' bucket (no chat_access
+          // row) — the same label the UI shows for it (see breakdownByTeam).
+          ...byTeam.teams.map((r) => ['team', ...row(r.name ?? 'Unassigned', r)]),
+          ...byChannel.map((r) => ['channel', ...row(r.channel, r)]),
+        ],
       };
     }
     case 'ai-agent': {

@@ -171,10 +171,13 @@ export:
       group's scope, so a token holding none is refused; a group whose own scope
       the token lacks is refused too. Defaults to the last 30 days.
 
-      The two time-series groups (`breakdown`, `reviews`) serialise one row per
-      UTC day; the two window summaries (`overview`, `ai-agent`) serialise as
-      `metric,value` pairs. Every figure is the same one the group's JSON report
-      exposes, so a download never disagrees with the screen it came from.
+      `reviews` serialises one row per UTC day; `breakdown` serialises all four
+      Breakdown-tab dimensions (day, hour, team, channel) in one long-format
+      table — `dimension,key,chats,closed,manual,assisted,automated` — rather
+      than four files; the two window summaries (`overview`, `ai-agent`)
+      serialise as `metric,value` pairs. Every figure is the same one the
+      group's JSON report exposes, so a download never disagrees with the
+      screen it came from.
 
       User-influenced fields (tags, agent names) are neutralised against
       spreadsheet formula injection, and the body is `no-store`: a report is a

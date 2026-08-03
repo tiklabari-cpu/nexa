@@ -13,6 +13,53 @@
 
 ## Task log (newest-first)
 
+### 63.6 (07.5-f) — CSV export: breakdown grubunu dört boyuta genişlet (uzun format) — done — 2026-08-03 UTC
+
+- **Yapıldı:** `/reports/export?group=breakdown` CSV'si uzun formata geçti:
+  `dimension,key,chats,closed,manual,assisted,automated`, `dimension` ∈ {day, hour, team,
+  channel}. `buildGroupCsv`'nin 'breakdown' case'i artık `breakdownByDay`/`breakdownByHour`/
+  `breakdownByTeam`/`breakdownByChannel`'i (07.5-b/-d/-e'nin kendi helper'ları — YENİ SORGU
+  YAZILMADI) sırayla çağırıp dört tabloyu tek dosyada birleştiriyor. `REPORT_GROUPS` katalogu,
+  route, scope gating ve dosya adı deseni DEĞİŞMEDİ; mevcut `csvField` formula-injection
+  guard'ı (leading `=+-@`\t\r` → `'` prefiksi + RFC 4180 quoting) jenerik olduğu için team
+  adı gibi kullanıcı kaynaklı `key` alanlarına da otomatik uygulanıyor — ayrı bir guard yazılmadı.
+  `packages/contract/openapi/paths/reports.yaml`'daki export açıklaması yeni formatı anlatacak
+  şekilde güncellendi (kontrat ŞEMASI değişmedi — CSV gövde şeması taşımıyor, `SÖZLEŞME: yok`);
+  `pnpm --filter @nexa/contract generate` ile bundle + generated typed client (`api.ts`)
+  yeniden üretildi (yalnız doc-comment farkı, 7 satır).
+  **Kararlı düzeltme (dizayn sırasında bulundu):** ilk taslak dört helper'ı `Promise.all` ile
+  paralel çağırıyordu; `withTenant` (apps/api/src/lib/tenant.ts) Prisma'nın interactive
+  `$transaction`'ını kullanıyor — TEK bağlantı — ve komşu `/reports/breakdown` route'u aynı dört
+  helper'ı bilinçli olarak SIRAYLA (`await` await await) çağırıyor, `Promise.all` değil. Aynı
+  tx client'a eşzamanlı sorgu göndermek güvenli değil; kod komşu route'un deseniyle hizalanarak
+  sıralı `await`'e çevrildi.
+- **Doğrulama (hepsi yeşil, exit 0):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7) · `pnpm -w test:unit` (web 514/514 + api 266/266 + ai-mock 56/56).
+  DB süiti ([memory: nexa-test-gate-parallel-db] — `fileParallelism: false` zaten config'te,
+  root script `--concurrency=1`): `@nexa/api` integration **968/968** (46 dosya;
+  `reports-billing.test.ts` **96/96** — eski "date,chats,..." formatlı tek-satır CSV testi
+  ekran–CSV birebir çapraz-doğrulama testine dönüştürüldü: aynı istekte `/reports/breakdown` +
+  `/reports/export?group=breakdown` çağrılır, CSV satır sayısı === `by_day+by_hour+by_team+
+  by_channel` toplamı ve her satırın sayıları JSON'la birebir `toEqual` karşılaştırılır; tenant-
+  isolation testi güncellendi (B'nin day/team/channel'ı boş ama `by_hour` DENSE kaldığı için CSV
+  1 header + 24 sıfır-satır — JSON'daki `by_hour: 24 kova` davranışıyla tutarlı); yeni test:
+  formula-injection guard'ı team-name `key`'inde de çalışıyor (`-Acme,Inc` → `'-Acme,Inc` guard +
+  virgül nedeniyle RFC 4180 quote) — 63.5'teki 967 + 1 (yeni guard testi) = 968). `@nexa/rtm`
+  integration testleri değişmeden yeşil (cache).
+- **Varsayımlar:** `hour` key'i `String(row.hour)` (sıfır-doldurmasız "0".."23") — JSON'daki
+  `hour: number` alanının doğal string hali; UI henüz `by_hour`/`by_team`/`by_channel`'i
+  RENDER ETMEDİĞİ için (07.5-g/-h bekliyor) ekranla çakışacak bir format kararı yok. `team`
+  key'i null→`'Unassigned'` — mevcut UI-niyeti yorumuyla (`breakdownByTeam` docstring'i) aynı
+  etiket. `overlapping` bayrağı CSV'ye TAŞINMADI (satır bazlı tablo, tek boolean için sütun
+  eklemek KK'nin istediği "dimension,key,..." şeklini bozardı; JSON zaten taşıyor).
+- **Sonraki pencereye not:** Kalan 07.5 alt-görevleri: **07.5-g** (UI "By hour"), **07.5-h**
+  (UI "By team" + "By channel" + `overlapping===true` iken örtüşme dipnotu), **07.5-i**
+  (uçtan-uca çapraz-tutarlılık e2e + NFR-P2 EXPLAIN bütçesi — dört boyutun hepsini kapsamalı).
+  07.5-f'nin **e2e yüzeyi yok** (backend-only, [memory: nexa-early-delivered-slices-audit]
+  desenine benzer — export UI'da henüz bir "Export" düğmesi/fetch çağrısı yok, `apps/web/src`
+  grep'i boş döndü) — 07.5-e'deki aynı gerekçeyle `pnpm -w test:e2e` bu turda ÇALIŞTIRILMADI.
+
+
 ### 63.5 (07.5-e) — Takım boyutu agregasyon çekirdeği — chat_access M:N fan-out + license kilidi — done — 2026-08-03 UTC
 
 - **Yapıldı:** `breakdownByTeam(tx, licenseId, from, to)` (`apps/api/src/routes/reports.ts`) —

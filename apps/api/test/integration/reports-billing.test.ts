@@ -1169,10 +1169,36 @@ describe('reports and billing', () => {
       /** Split a CSV body into its non-empty lines (rows are CRLF-terminated). */
       const lines = (body: string): string[] => body.split('\r\n').filter((line) => line !== '');
 
-      it('exports the breakdown as a dated CSV download', async () => {
+      /** Parse a `dimension,key,chats,closed,manual,assisted,automated` data row. */
+      interface BreakdownCsvRow {
+        dimension: string;
+        key: string;
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+      }
+      const parseBreakdownRow = (line: string): BreakdownCsvRow => {
+        const [dimension, key, chats, closed, manual, assisted, automated] = line.split(',');
+        return {
+          dimension: dimension!,
+          key: key!,
+          chats: Number(chats),
+          closed: Number(closed),
+          manual: Number(manual),
+          assisted: Number(assisted),
+          automated: Number(automated),
+        };
+      };
+
+      it('exports the breakdown as one long-format CSV — four dimensions, never disagreeing with the screen', async () => {
         await conversation({ agentReplies: false }); // one automated chat, closed today
 
-        const response = await server.get('/reports/export?group=breakdown', auth);
+        const [breakdown, response] = await Promise.all([
+          server.get('/reports/breakdown', auth),
+          server.get('/reports/export?group=breakdown', auth),
+        ]);
         expect(response.statusCode).toBe(200);
         expect(response.headers['content-type']).toContain('text/csv');
         expect(response.headers['content-disposition']).toMatch(
@@ -1181,10 +1207,110 @@ describe('reports and billing', () => {
         expect(response.headers['cache-control']).toBe('no-store');
 
         const rows = lines(response.body);
-        expect(rows[0]).toBe('date,chats,closed,manual,assisted,automated');
-        // The single automated chat: 1 chat, 1 closed, 0/0/1 across the split.
-        expect(rows).toHaveLength(2);
-        expect(rows[1]).toMatch(/^\d{4}-\d{2}-\d{2},1,1,0,0,1$/);
+        expect(rows[0]).toBe('dimension,key,chats,closed,manual,assisted,automated');
+
+        interface SplitFields {
+          chats: number;
+          closed: number;
+          manual: number;
+          assisted: number;
+          automated: number;
+        }
+        interface CsvDayRow extends SplitFields {
+          date: string;
+        }
+        interface CsvHourRow extends SplitFields {
+          hour: number;
+        }
+        interface CsvTeamRow extends SplitFields {
+          name: string | null;
+        }
+        interface CsvChannelRow extends SplitFields {
+          channel: string;
+        }
+        const splitOf = (row: SplitFields) => ({
+          chats: row.chats,
+          closed: row.closed,
+          manual: row.manual,
+          assisted: row.assisted,
+          automated: row.automated,
+        });
+
+        const data = breakdown.json();
+        const dataRows = rows.slice(1).map(parseBreakdownRow);
+
+        // Same row count as the four screen dimensions combined — the download
+        // can never drop or invent a bucket the tab does not show.
+        expect(dataRows).toHaveLength(
+          data.by_day.length + data.by_hour.length + data.by_team.length + data.by_channel.length,
+        );
+
+        const byDimension = (name: string) => dataRows.filter((row) => row.dimension === name);
+
+        expect(byDimension('day')).toEqual(
+          (data.by_day as CsvDayRow[]).map((row) => ({
+            dimension: 'day',
+            key: row.date,
+            ...splitOf(row),
+          })),
+        );
+        expect(byDimension('hour')).toEqual(
+          (data.by_hour as CsvHourRow[]).map((row) => ({
+            dimension: 'hour',
+            key: String(row.hour),
+            ...splitOf(row),
+          })),
+        );
+        expect(byDimension('team')).toEqual(
+          (data.by_team as CsvTeamRow[]).map((row) => ({
+            dimension: 'team',
+            key: row.name ?? 'Unassigned',
+            ...splitOf(row),
+          })),
+        );
+        expect(byDimension('channel')).toEqual(
+          (data.by_channel as CsvChannelRow[]).map((row) => ({
+            dimension: 'channel',
+            key: row.channel,
+            ...splitOf(row),
+          })),
+        );
+
+        // The single automated chat lands as the 'Support' team (the default
+        // group — see beforeEach) and the 'website' channel (no inbound
+        // adapter message recorded).
+        expect(byDimension('team')).toEqual([
+          { dimension: 'team', key: 'Support', chats: 1, closed: 1, manual: 0, assisted: 0, automated: 1 },
+        ]);
+        expect(byDimension('channel')).toEqual([
+          {
+            dimension: 'channel',
+            key: 'website',
+            chats: 1,
+            closed: 1,
+            manual: 0,
+            assisted: 0,
+            automated: 1,
+          },
+        ]);
+      });
+
+      it('neutralises formula injection in a team name key, same as any other field', async () => {
+        // Starts with a formula-lead char (`-`) *and* carries a comma, so both
+        // guards in `csvField` fire on the same key: the leading `'` defuses
+        // the formula, then the comma forces RFC 4180 quoting.
+        const dangerous = await owner.group.create({
+          data: { licenseId: fx.a.licenseId, name: '-Acme,Inc' },
+          select: { id: true },
+        });
+        const chatId = await conversation({ agentReplies: false });
+        await setChatTeams(chatId, [dangerous.id]);
+
+        const response = await server.get('/reports/export?group=breakdown', auth);
+        const rows = lines(response.body);
+        const teamRow = rows.find((line) => line.startsWith('team,'));
+
+        expect(teamRow).toBe('team,"\'-Acme,Inc",1,1,0,0,1');
       });
 
       it('exports the overview as metric/value pairs, matching the JSON report', async () => {
@@ -1233,8 +1359,15 @@ describe('reports and billing', () => {
           authorization: `Bearer ${theirToken}`,
         });
         expect(response.statusCode).toBe(200);
-        // B shares none of A's chats: the header, and not a single data row.
-        expect(response.body).toBe('date,chats,closed,manual,assisted,automated\r\n');
+        // B shares none of A's chats: day/team/channel contribute no rows, but
+        // the hour axis stays dense (see breakdownByHour) — 24 zero-filled rows,
+        // same as the JSON breakdown's `by_hour`.
+        const rows = lines(response.body);
+        expect(rows[0]).toBe('dimension,key,chats,closed,manual,assisted,automated');
+        expect(rows).toHaveLength(1 + 24);
+        rows.slice(1).forEach((line, hour) => {
+          expect(line).toBe(`hour,${hour},0,0,0,0,0`);
+        });
       });
 
       it('rejects an unknown group with 400', async () => {

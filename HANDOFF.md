@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### 64.5 (07.6-e) — Reports'ta 'Chat topics' sekmesi: hacim/trend listesi + yetersiz-veri empty state — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] Bu görev bu pencere açıldığında zaten `in-progress` ve kod (uncommitted)
+  büyük ölçüde tamamlanmış halde bulundu — önceki pencere kota/kesinti yüzünden kapanışa
+  ulaşamadan bitmiş olmalı. Bu pencere resume etti: mevcut diff'i baştan sona doğruladı (kodu
+  değil, yalnız gözden geçirdi), eksik kalan DoD kapısını (typecheck/lint/unit/build + manuel
+  tarayıcı doğrulaması) tamamladı ve kapanışı yürüttü. Değişiklik: `TABS`'a `{id:'topics',
+  label:'Chat topics'}` + panel seçim dalı; yerel `ReportsTopics`/`TopicRow` arayüzleri 07.6-a'nın
+  pinlenmiş şemasıyla birebir; `TopicsTab` = `useReport<ReportsTopics>('topics', api, props)` →
+  hata→`ErrorNotice` · yükleniyor→`CardSkeleton` · `!sufficient_data`→anlamlı `EmptyState`
+  (`min_conversations`+`analyzed` metinde, boş dikdörtgen değil) · dolu→`TopicsTable` (etiket,
+  `volume`, `share` `formatRate`+null→'—', `TopicTrend` ok+büyüklük/`No change`/null→'—' — renk
+  tek başına anlam taşımıyor) — `apps/web/src/features/reports/ReportsPage.tsx`.
+- **Doğrulama (DoD tam yeşil):** `pnpm --filter @nexa/web typecheck` (exit 0) ·
+  `pnpm --filter @nexa/web lint` (exit 0) · `pnpm --filter @nexa/web test` — 73 dosya/527 test yeşil
+  (`ReportsPage.test.tsx` 23/23, yeni "Chat topics report (07.6)" bloğu 4/4: hacim/pay/trend
+  satırları · `sufficient_data:false`→empty+tablo yok · önceki pencerede yoksa trend '—' (0%
+  değil) · seçili aralıkla `/reports/topics` sorgulanıyor) · `pnpm --filter @nexa/web build`
+  (exit 0). Ek olarak: `pnpm db:seed` + `apps/api`/`apps/web` dev sunucuları ayağa kaldırılıp
+  Playwright ile tarayıcıda gerçek girişle (owner@acme.localhost) `/app/reports` → "Chat topics"
+  sekmesine tıklandı — gerçek backend'den (tm 64.1–64.4) hacim/pay/trend (`↑ 250%`, `27%` vb.) ve
+  önceki pencerede olmayan konularda `—` canlı doğrulandı, konsol hatası yok. Bu görevin kendi test
+  stratejisi e2e/integration gerektirmiyor (salt-okunur UI, tenant kapısı 07.6-c'de kanıtlı) —
+  manuel tarayıcı turu ek güvence olarak yapıldı, DoD şartı değil. Dev sunucuları iş bitince
+  durduruldu.
+- **Varsayımlar:** Yok — kapsam net (KAPSAM DIŞI: promo bandı/CSV/drill-down/yeni grafik kütüphanesi
+  07.6-f/g/h'ye bırakıldı).
+- **Sonraki pencereye not:** Aynı `git status`'ta CONVENTIONS.md/`.taskmaster/BUILD-BLUEPRINT.md`/
+  `run-loop.sh` üzerinde ("critical" öncelik seviyesi rezervasyonu) ve `apps/e2e/kanit/*.png`
+  (20/21/21/22/36) üzerinde bu göreve AİT OLMAYAN, önceden uncommitted değişiklikler bulundu —
+  önceki bir pencerenin artığı, tm 64.5 kapsamı dışı olduğu için bu commit'e DAHİL EDİLMEDİ (bkz.
+  CONVENTIONS §5 kapsam disiplini, 234e67e emsali). Bir sonraki pencere bunları kendi task'ı
+  kapsamında değerlendirip commit'lemeli ya da bilinçli olarak atmalı. **07.6 serisinde kalan:**
+  07.6-f (promo bandı), 07.6-g (CSV grubu), 07.6-h (e2e, 07.6-e'ye bağımlı — artık açılabilir).
+
 ### 64.4 (07.6-d) — Demo seed'de konu çeşitliliği: kümelenebilir sohbet özetleri — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] `apps/api/prisma/seed.ts:593`'ün her kapalı thread'e yazdığı sabit

@@ -120,11 +120,31 @@ interface ReportsReviews {
   };
 }
 
+interface TopicRow {
+  id: string;
+  label: string;
+  keywords: string[];
+  volume: number;
+  share: number | null;
+  previous_volume: number;
+  trend: number | null;
+}
+
+interface ReportsTopics {
+  range: { from: string; to: string };
+  previous_period: { range: { from: string; to: string } };
+  min_conversations: number;
+  analyzed: number;
+  sufficient_data: boolean;
+  topics: TopicRow[];
+}
+
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'ai-agent', label: 'AI Agent' },
   { id: 'reviews', label: 'Reviews' },
   { id: 'breakdown', label: 'Breakdown' },
+  { id: 'topics', label: 'Chat topics' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
@@ -226,8 +246,10 @@ export function ReportsPage(): ReactElement {
           <AiAgentTab rangeKey={rangeKey} range={range} />
         ) : tab === 'reviews' ? (
           <ReviewsTab rangeKey={rangeKey} range={range} />
-        ) : (
+        ) : tab === 'breakdown' ? (
           <BreakdownTab rangeKey={rangeKey} range={range} />
+        ) : (
+          <TopicsTab rangeKey={rangeKey} range={range} />
         )}
       </div>
     </Page>
@@ -961,6 +983,98 @@ function SplitTable({
         ))}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * Chat topics (FR-MOD-07.6): conversations in the window clustered into topics
+ * by `@nexa/ai-mock`, no real LLM. Below `min_conversations` clusterable chats
+ * the report is an honest "not enough conversations yet" state — never a single
+ * fabricated topic, and never an empty rectangle (EK-B.1).
+ */
+function TopicsTab(props: TabProps): ReactElement {
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<ReportsTopics>('topics', api, props);
+
+  if (error) {
+    return (
+      <ErrorNotice message="Could not load chat topics. Check that the API is reachable and try again." />
+    );
+  }
+  if (isPending) {
+    return <CardSkeleton rows={4} />;
+  }
+
+  return (
+    <Section
+      title="Chat topics"
+      description="Conversations in this window, grouped into topics by AI clustering."
+    >
+      <Card>
+        {!data.sufficient_data || data.topics.length === 0 ? (
+          <EmptyState
+            title="Not enough conversations yet"
+            description={`Chat topics needs at least ${data.min_conversations} conversations in this window — ${data.analyzed} so far.`}
+          />
+        ) : (
+          <TopicsTable topics={data.topics} />
+        )}
+      </Card>
+    </Section>
+  );
+}
+
+/** The topics table: label, volume, share of analyzed conversations and trend. */
+function TopicsTable({ topics }: { topics: TopicRow[] }): ReactElement {
+  const numeric = 'w-28 px-4 py-2 text-right text-xs font-medium text-content-secondary';
+  return (
+    <table className="w-full text-sm">
+      <caption className="sr-only">Chat topics, most voluminous first</caption>
+      <thead>
+        <tr className="border-b border-border text-left">
+          <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
+            Topic
+          </th>
+          <th scope="col" className={numeric}>
+            Volume
+          </th>
+          <th scope="col" className={numeric}>
+            Share
+          </th>
+          <th scope="col" className={numeric}>
+            Trend
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {topics.map((topic) => (
+          <tr key={topic.id} className="border-b border-border last:border-0">
+            <td className="truncate px-4 py-2">{topic.label}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(topic.volume)}</td>
+            <td className="tabular px-4 py-2 text-right">{formatRate(topic.share) ?? '—'}</td>
+            <td className="tabular px-4 py-2 text-right">
+              <TopicTrend trend={topic.trend} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/**
+ * A topic's volume change vs the previous equal-length window: an arrow plus
+ * the magnitude, never colour alone (colour carries no meaning by itself — it
+ * always rides with the arrow). Null — not a fabricated 0% — when the topic did
+ * not appear in the previous window, so its trend is genuinely unknown.
+ */
+function TopicTrend({ trend }: { trend: number | null }): ReactElement {
+  if (trend === null) return <span className="text-content-tertiary">—</span>;
+  if (trend === 0) return <span className="text-content-tertiary">No change</span>;
+  return (
+    <span>
+      {trend > 0 ? '↑' : '↓'} {formatRate(Math.abs(trend))}
+    </span>
   );
 }
 

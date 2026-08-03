@@ -482,3 +482,131 @@ describe('ReportsPage — Breakdown report, By team / By channel (07.5-h)', () =
     expect(within(byChannel).queryByRole('table')).not.toBeInTheDocument();
   });
 });
+
+// ===========================================================================
+
+interface TopicRow {
+  id: string;
+  label: string;
+  keywords: string[];
+  volume: number;
+  share: number | null;
+  previous_volume: number;
+  trend: number | null;
+}
+
+const TOPICS_BASE = {
+  range: OVERVIEW.range,
+  previous_period: { range: OVERVIEW.previous_period.range },
+  min_conversations: 20,
+  analyzed: 0,
+  sufficient_data: false,
+  topics: [] as TopicRow[],
+};
+
+function mockTopics(overrides: Partial<typeof TOPICS_BASE>): void {
+  const payload = { ...TOPICS_BASE, ...overrides };
+  api.get.mockImplementation((path: string) => {
+    if (path.startsWith('/reports/topics')) return Promise.resolve(payload);
+    if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    return Promise.reject(new Error(`unexpected ${path}`));
+  });
+}
+
+async function openTopicsTab(): Promise<void> {
+  await userEvent.click(screen.getByRole('tab', { name: 'Chat topics' }));
+  await screen.findByRole('region', { name: 'Chat topics' });
+}
+
+describe('ReportsPage — Chat topics report (07.6)', () => {
+  it('renders topic rows with their volume, share and trend', async () => {
+    mockTopics({
+      sufficient_data: true,
+      analyzed: 40,
+      topics: [
+        {
+          id: 't1',
+          label: 'Shipping',
+          keywords: ['shipping'],
+          volume: 12,
+          share: 0.3,
+          previous_volume: 8,
+          trend: 0.5,
+        },
+        {
+          id: 't2',
+          label: 'Refunds',
+          keywords: ['refund'],
+          volume: 6,
+          share: 0.15,
+          previous_volume: 0,
+          trend: null,
+        },
+      ],
+    });
+    renderReports(<ReportsPage />);
+    await openTopicsTab();
+
+    expect(screen.getByText('Shipping')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText('30%')).toBeInTheDocument();
+    // Volume/trend (hacim/trend): an arrow plus the magnitude, not a bare percentage.
+    expect(screen.getByText(/↑ 50%/)).toBeInTheDocument();
+
+    expect(screen.getByText('Refunds')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
+    expect(screen.getByText('15%')).toBeInTheDocument();
+  });
+
+  it('shows a meaningful empty state, not a table, when there is not enough data', async () => {
+    mockTopics({ sufficient_data: false, min_conversations: 20, analyzed: 4, topics: [] });
+    renderReports(<ReportsPage />);
+    await openTopicsTab();
+
+    // "Yeterli veri yoksa empty": an honest state naming the floor, not a blank table.
+    expect(screen.getByText('Not enough conversations yet')).toBeInTheDocument();
+    expect(screen.getByText(/needs at least 20 conversations/)).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('renders a topic missing from the previous window as "—", not 0%', async () => {
+    mockTopics({
+      sufficient_data: true,
+      analyzed: 10,
+      topics: [
+        {
+          id: 't1',
+          label: 'New topic',
+          keywords: [],
+          volume: 4,
+          share: 0.4,
+          previous_volume: 0,
+          trend: null,
+        },
+      ],
+    });
+    renderReports(<ReportsPage />);
+    await openTopicsTab();
+
+    const row = screen.getByText('New topic').closest('tr');
+    expect(row).not.toBeNull();
+    const cells = within(row as HTMLElement).getAllByRole('cell');
+    // Last column is Trend: "—" for a topic absent from the previous window, not a
+    // fabricated 0%. (Share, the column before it, is a real 40% and stays intact.)
+    expect(cells[cells.length - 1]).toHaveTextContent('—');
+  });
+
+  it('queries the topics endpoint with the selected range', async () => {
+    mockTopics({
+      sufficient_data: true,
+      analyzed: 1,
+      topics: [
+        { id: 't1', label: 'X', keywords: [], volume: 1, share: 1, previous_volume: 1, trend: 0 },
+      ],
+    });
+    renderReports(<ReportsPage />);
+    await openTopicsTab();
+
+    expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/topics\?from=.*&to=/));
+  });
+});

@@ -45,6 +45,12 @@ export const ERROR_TYPES = [
   'pending_requests_limit_reached',
   'request_timeout',
   'service_unavailable',
+  // Nexa addition — supervisor takeover (FR-MOD-08.6.3). Two supervisors racing
+  // to seize the same chat: the conditional re-assign lets exactly one win, and
+  // the loser gets this 409. Not `not_allowed` (that is an authorization verdict
+  // — the loser *was* allowed, they simply lost the race) and not `chat_inactive`
+  // (the chat is open); kept narrow like `ticket_exists`, not a generic conflict.
+  'takeover_conflict',
   // Nexa addition. The source catalogue (v2-03 §1.8) is chat-only — ticketing
   // lives in a separate product there — so it has no "this already exists"
   // conflict. Kept narrow rather than adding a generic `conflict`, which is how
@@ -93,6 +99,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   pending_requests_limit_reached: 429,
   request_timeout: 408,
   service_unavailable: 503,
+  takeover_conflict: 409,
   ticket_exists: 409,
   too_many_requests: 429,
   unsupported_version: 400,

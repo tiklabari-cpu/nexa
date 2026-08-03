@@ -752,6 +752,178 @@ describe('agent chat api', () => {
   });
 
   // =========================================================================
+  // Takeover (FR-MOD-08.6.3) — a supervisor forcibly seizes a chat
+  // =========================================================================
+
+  describe('takeover', () => {
+    /** A chat currently held by the regular agent, so a seizure has a real
+     *  previous holder to displace. */
+    async function chatHeldByAgent() {
+      const chat = await startChat(acmeAdminToken);
+      const transferred = await server.post(
+        `/chats/${chat.id}/transfer`,
+        { agent_id: fx.a.agentAccountId },
+        auth(acmeAdminToken),
+      );
+      expect(transferred.statusCode).toBe(200);
+      return chat;
+    }
+
+    // --- Negatives first ----------------------------------------------------
+
+    it('refuses an agent-role teammate, even with the all-chats scope', async () => {
+      const chat = await chatHeldByAgent();
+      // Agent role but a broad token: proves the *role* gate fires, not the scope.
+      const agentAllToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.agentAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      const res = await server.post(`/chats/${chat.id}/takeover`, {}, auth(agentAllToken));
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error.type).toBe('authorization');
+    });
+
+    it('refuses a bot principal, even with the all-chats scope', async () => {
+      const chat = await chatHeldByAgent();
+      const bot = await owner.aiAgent.create({
+        data: { licenseId: fx.a.licenseId, name: 'Bot', kind: 'ai_agent', active: true },
+        select: { id: true },
+      });
+      const botToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: bot.id,
+        scopes: ['chats--all:rw'],
+        kind: 'bot',
+      });
+      const res = await server.post(`/chats/${chat.id}/takeover`, {}, auth(botToken));
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('cannot take over a chat in another tenant (404, un-enumerable)', async () => {
+      const chat = await chatHeldByAgent();
+      const res = await server.post(`/chats/${chat.id}/takeover`, {}, auth(northwindToken));
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error.type).toBe('not_found');
+    });
+
+    it('refuses to take over a closed chat (409 chat_inactive)', async () => {
+      const chat = await chatHeldByAgent();
+      await server.post(`/chats/${chat.id}/deactivate`, {}, auth(acmeAdminToken));
+      const res = await server.post(`/chats/${chat.id}/takeover`, {}, auth(acmeAdminToken));
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error.type).toBe('chat_inactive');
+    });
+
+    // --- Positive -----------------------------------------------------------
+
+    it('reassigns to the supervisor, demotes the previous holder, records a system event', async () => {
+      const chat = await chatHeldByAgent();
+      const res = await server.post(
+        `/chats/${chat.id}/takeover`,
+        { reason: 'Escalation' },
+        auth(acmeAdminToken),
+      );
+      expect(res.statusCode).toBe(200);
+      // The owner (the admin token's account) now holds it...
+      expect(res.json().thread.assignee_id).toBe(fx.a.ownerAccountId);
+      // ...and the agent it was taken from stays on the chat, no longer present.
+      const previous = res
+        .json()
+        .users.find((u: { user_id: string }) => u.user_id === fx.a.agentAccountId);
+      expect(previous).toBeDefined();
+      expect(previous.present).toBe(false);
+
+      const transcript = await server.get(`/chats/${chat.id}/events`, auth(acmeAdminToken));
+      const system = transcript
+        .json()
+        .items.find(
+          (e: { properties: { system_event?: string } }) =>
+            e.properties.system_event === 'chat_taken_over',
+        );
+      expect(system).toBeDefined();
+      expect(system.author_type).toBe('system');
+      expect(system.properties.previous_assignee_id).toBe(fx.a.agentAccountId);
+    });
+
+    // --- Concurrency: exactly one supervisor may win ------------------------
+
+    it('rejects a supervisor who loses the assignee race (409 takeover_conflict)', async () => {
+      const chat = await chatHeldByAgent();
+      const threadId = (await server.get(`/chats/${chat.id}`, auth(acmeAdminToken))).json().thread
+        .id;
+
+      // Model the *winning* supervisor as a lock we hold: move the assignee off
+      // the agent and keep the row locked until the in-flight takeover is parked
+      // behind us. When we commit, the takeover's conditional
+      // `WHERE assignee_id = <agent>` matches nothing — precisely the path a
+      // second, concurrent supervisor takes. Deterministic: no lucky interleave.
+      let release!: () => void;
+      const locked = new Promise<void>((resolve) => (release = resolve));
+      const winner = owner.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`UPDATE threads SET assignee_id = ${fx.a.ownerAccountId}::uuid WHERE id = ${threadId}`;
+          await locked;
+        },
+        { timeout: 15_000 },
+      );
+
+      const takeover = server.post(`/chats/${chat.id}/takeover`, {}, auth(acmeAdminToken));
+      // Give the takeover time to read the (still-agent) assignee and block on
+      // our lock, then let the winner commit and the takeover re-evaluate.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      release();
+
+      const [res] = await Promise.all([takeover, winner]);
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error.type).toBe('takeover_conflict');
+
+      // The seizure that lost wrote nothing: the winner's assignee stands alone.
+      const detail = await server.get(`/chats/${chat.id}`, auth(acmeAdminToken));
+      expect(detail.json().thread.assignee_id).toBe(fx.a.ownerAccountId);
+    });
+
+    it('lets exactly one of two live supervisors win a simultaneous takeover', async () => {
+      const chat = await chatHeldByAgent();
+      // A second supervisor (admin role) racing the owner for the same chat.
+      const second = await owner.account.create({
+        data: { email: `admin2-${Date.now()}@example.test`, name: 'Second Admin' },
+        select: { id: true },
+      });
+      await owner.agentMembership.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          agentId: second.id,
+          role: 'admin',
+          routingStatus: 'accepting_chats',
+        },
+      });
+      const secondToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: second.id,
+        scopes: ['chats--all:rw'],
+      });
+
+      const [a, b] = await Promise.all([
+        server.post(`/chats/${chat.id}/takeover`, {}, auth(acmeAdminToken)),
+        server.post(`/chats/${chat.id}/takeover`, {}, auth(secondToken)),
+      ]);
+
+      expect([a.statusCode, b.statusCode].sort()).toEqual([200, 409]);
+      const loser = a.statusCode === 409 ? a : b;
+      expect(loser.json().error.type).toBe('takeover_conflict');
+
+      // Whoever won, the chat has a single assignee and it is one of the two.
+      const assignee = (await server.get(`/chats/${chat.id}`, auth(acmeAdminToken))).json().thread
+        .assignee_id;
+      expect([fx.a.ownerAccountId, second.id]).toContain(assignee);
+    });
+  });
+
+  // =========================================================================
   // Tags
   // =========================================================================
 

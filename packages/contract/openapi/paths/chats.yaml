@@ -275,6 +275,41 @@ transfer:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
 
+takeover:
+  post:
+    tags: [Chats]
+    operationId: takeoverChat
+    summary: Forcibly take a chat over as a supervisor
+    description: >-
+      Reassigns the chat to the calling supervisor, whoever held it. Unlike
+      `transfer` (a consented, rule-driven hand-off), takeover is restricted to
+      admin/owner-role teammates and is recorded in the audit log. A second
+      supervisor racing for the same chat loses and receives `409
+      takeover_conflict`.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              reason: { type: string, maxLength: 500, description: Optional supervisory justification, recorded in the audit trail. }
+    responses:
+      "200":
+        description: Taken over
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Chat" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: The chat is closed, or another supervisor took it over first
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
 tags:
   post:
     tags: [Chats]

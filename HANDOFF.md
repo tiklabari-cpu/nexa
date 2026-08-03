@@ -13,6 +13,47 @@
 
 ## Task log (newest-first)
 
+### 66.4 (08.6.3-d) — Supervisor takeover çekirdeği: rol kapısı + eşzamanlı devir reddi + audit + RTM — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-MAX, bölünmez çekirdek] Yeni `POST /chats/{chatId}/takeover` — bir supervisor
+  başka bir ajanın sohbetini ZORLA devralır. `transfer`'den AYRI yüzey: transfer = rızalı/scope'lu
+  devir (değişmedi), takeover = admin+ rol-kapılı, audit'li zorla devir.
+  (1) **Kontrat:** `chats.yaml`'a `takeover` bloğu + `openapi.yaml` path kaydı + `ErrorType` enum'a
+  `takeover_conflict`; yeniden bundle (**122 path**) + `src/generated/api.ts`.
+  (2) **Route** (`routes/chats.ts`): scope `chats--all:rw` (supervisor, katılımcı olmadığı sohbete
+  eriştiği için unrestricted görünürlük şart) + ÇİFT KAPI `principal.kind==='agent'` &
+  `roleAtLeast(role,'admin')` — bot token / agent-rol kullanıcı = 403 (suspension deseninin aynısı).
+  (3) **Servis** (`ChatService.takeover`, tek `withTenant` transaction): aktif thread'in mevcut
+  assignee'si okunur → **KOŞULLU** `updateMany where {id, assigneeId: beklenen}` (0 satır →
+  `takeover_conflict` 409). READ COMMITTED'de ikinci supervisor satır kilidinde bloke olur, WHERE'ini
+  commit'lenmiş yeni satıra karşı yeniden değerlendirir → eşleşmez → 409; SELECT FOR UPDATE gerekmez.
+  Önceki assignee `ChatUser.present=false` (satır KALIR — arşiv/denetim izi), supervisor upsert
+  present=true; `system_event:'chat_taken_over'` (recipients=`agents`, internal); audit + RTM push
+  AYNI transaction/akışta.
+  (4) **Yeni error tipi** `takeover_conflict` (409): `not_allowed`(403) DEĞİL (kaybeden yetkiliydi,
+  yarışı kaybetti), `chat_inactive` DEĞİL (chat açık) → dar tip (`ticket_exists` idiyomu). Dokunulan
+  4 yer: `errors.ts` (ERROR_TYPES + ERROR_STATUS) + `scopes.test.ts` sayaç (24+7) + openapi enum.
+  (5) **Audit** (`AUDIT_ACTIONS` → `chat.taken_over`): aktör + `chat:<id>` + `previous_assignee_id`
+  (+ opsiyonel reason), PII-minimal, mesaj içeriği YOK. **RTM** (`RTM_PUSH_ACTIONS` → `chat_taken_over`
+  + `ChatTakenOverPush`): audience = devir öncesi ∪ sonrası (kaybeden + kazanan birlikte haberdar).
+- **Doğrulama:** `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w test:unit` ✓ (web 532 + types
+  hata-sayacı 24+7) · `pnpm --filter @nexa/api test:integration` ✓ (48 dosya / **1040** test;
+  `chats.test.ts` +7 takeover, `audit-log.test.ts` +1, `contract-parity` iki yönlü yeşil,
+  `route-config`/`tenant-isolation` yeşil) · `pnpm -w build` ✓. Takeover testleri (negatifler önce):
+  agent-rol/bot 403 · cross-tenant 404 · kapalı chat 409 chat_inactive · reassign+demote+system_event ·
+  eşzamanlı-kaybeden 409 `takeover_conflict` (held-lock ile deterministik) · iki-canlı-supervisor
+  tek-kazanan (Promise.all).
+- **Varsayımlar:** (a) Açık soru kararı — eşzamanlı devir 409'u için YENİ tip `takeover_conflict`
+  eklendi (mevcut 409'lar semantik uymuyor). (b) Eşzamanlılık koşullu updateMany ile çözüldü, satır
+  kilidiyle değil (kırılımın kararı). (c) 'Supervisor' ayrı rol DEĞİL → `roleAtLeast(role,'admin')`
+  (v2-04-guvenlik:141). (d) system_event recipients=`agents` (internal supervision; müşteri
+  transkriptini kirletmez). (e) takeover, mevcut `/transfer`'i DEĞİŞTİRMEZ — ayrı path.
+- **Sonraki pencereye not:** Bağımlı UI/E2E henüz YOK ve bu task'ın kapsamı DIŞI: **08.6.3-g** (Inbox
+  takeover butonu — `POST /takeover`'ı, 403→'yönetici olmalısınız', 409→'başkası devraldı' mesajına
+  çevirir; RTM `chat_taken_over`'ı tüketir) ve **08.6.3-i** (uçtan uca skill+takeover E2E + cross-tenant
+  matris). `chat_taken_over` RTM action'ı ve `takeover_conflict` tipi web tarafında henüz TÜKETİLMİYOR —
+  additive olduğu için mevcut istemciyi kırmaz. Kalan 08.6.3 dilimi: -e/-f/-g/-i (PLAN §5.2, satır ◐).
+
 ### 66.3 (08.6.3-c) — ADR-08 routing çekirdeği: uzmanlık-eşleşmeli aday seçimi + kural koşuluna `expertise_ids` — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-MAX, bölünmez çekirdek] Bir routing kuralı artık `conditions.expertise_ids` ile

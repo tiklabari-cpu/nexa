@@ -6,6 +6,7 @@ import { ApiError } from '../lib/api-error.js';
 import { maskCardNumbers } from '../lib/cc-mask.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { hasChatScope } from '../services/chat/access.js';
+import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { LocalStore } from '../services/storage/local-store.js';
@@ -53,6 +54,10 @@ const transferSchema = z.object({
   group_id: z.coerce.bigint().optional(),
   agent_id: z.string().uuid().optional(),
   reason: z.enum(TRANSFER_REASONS).default('manual'),
+});
+
+const takeoverSchema = z.object({
+  reason: z.string().trim().max(500).optional(),
 });
 
 const tagSchema = z.object({ tag: z.string().trim().min(1).max(64) });
@@ -290,6 +295,36 @@ export default async function chatRoutes(
         ...(body.group_id !== undefined ? { groupId: body.group_id } : {}),
         ...(body.agent_id !== undefined ? { agentId: body.agent_id } : {}),
       });
+      return reply.send(chat);
+    },
+  );
+
+  app.post<{ Params: { chatId: string } }>(
+    '/chats/:chatId/takeover',
+    { config: { scopes: ['chats--all:rw'] } },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const body = parse(takeoverSchema, request.body ?? {});
+
+      // Both gates, as with agent suspension: the scope says the token may reach
+      // every chat, the role says the person may seize one. Takeover is an
+      // authority action on someone else's conversation — not the consented
+      // hand-off `transfer` is — so a bot token or an agent-role user is refused.
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'agent') {
+        throw ApiError.authorization('Only a signed-in teammate can take over a chat.');
+      }
+      if (!roleAtLeast(principal.role, 'admin')) {
+        throw ApiError.authorization('Only an admin or owner can take over a chat.');
+      }
+
+      const chat = await chats.takeover(
+        request.tenant(),
+        principal,
+        chatId,
+        body.reason ?? null,
+        request.auditContext(),
+      );
       return reply.send(chat);
     },
   );

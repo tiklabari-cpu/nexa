@@ -21,11 +21,13 @@ import {
   generateShortId,
   SNEAK_PEEK_MAX_LENGTH,
   type AgentConflictWarningPush,
+  type ChatTakenOverPush,
   type EventRecipients,
   type EventType,
   type TransferReason,
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
+import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
@@ -1140,6 +1142,133 @@ export class ChatService {
       agents.push({ agentId: String(raw[i]), since: Number(raw[i + 1]) });
     }
     return agents;
+  }
+
+  /**
+   * A supervisor forcibly seizes a chat from whoever holds it (FR-MOD-08.6.3).
+   *
+   * This is deliberately *not* `transfer`: transfer is a consented, scope-gated
+   * hand-off any chat-writer may perform; takeover is an authority action an
+   * admin/owner takes over someone else's conversation, so the route gates it on
+   * role and this method records it. Three properties are load-bearing, and are
+   * why the read, the write and the audit entry all live in one transaction:
+   *
+   *  - **The race has exactly one winner.** Two supervisors seizing the same chat
+   *    both read the current assignee, then re-assign *conditionally*
+   *    (`updateMany where assigneeId = <the one they saw>`). Under READ COMMITTED
+   *    the second update blocks on the first's row lock, re-checks its WHERE
+   *    against the now-committed row, matches nothing and reports zero rows —
+   *    which becomes `takeover_conflict` (409). No `SELECT … FOR UPDATE`, no lock
+   *    ordering to get wrong.
+   *  - **Authority and the write are one unit.** The role gate is at the route;
+   *    the conditional re-assign and the audit entry commit together, so a
+   *    seizure that happened is always recorded and one that lost records nothing.
+   *  - **The previous holder is demoted, not evicted.** Their `chat_users` row
+   *    stays (present=false) so the transcript and trail of who was there survive
+   *    — the same shape a transfer that moves the assignee on leaves behind.
+   */
+  async takeover(
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+    reason: string | null,
+    audit: AuditContext,
+  ): Promise<ChatDetail> {
+    const supervisorId = actorOf(principal);
+
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      const visibility = await resolveVisibility(tx, principal, 'write');
+      const chat = await this.#loadVisibleChat(tx, visibility, chatId);
+
+      const thread = chat.threads.find((t) => t.active);
+      if (!chat.active || !thread) throw ApiError.chatInactive('Cannot take over a closed chat.');
+
+      const previousAssigneeId = thread.assigneeId;
+
+      // Conditional re-assign: only if the assignee is still the one we just read.
+      // A concurrent takeover that already moved it leaves zero rows here — the
+      // loser of the race, answered with 409 rather than silently overwriting.
+      const seized = await tx.thread.updateMany({
+        where: { id: thread.id, assigneeId: previousAssigneeId },
+        data: { assigneeId: supervisorId },
+      });
+      if (seized.count === 0) {
+        throw new ApiError('takeover_conflict', 'Another supervisor took this chat over first.');
+      }
+
+      // The supervisor is now present; the agent they took it from stays on the
+      // chat as a non-present participant so the record of who was there survives.
+      await tx.chatUser.upsert({
+        where: { chatId_userId: { chatId: chat.id, userId: supervisorId } },
+        create: { chatId: chat.id, userId: supervisorId, userType: 'agent', present: true },
+        update: { present: true },
+      });
+      if (previousAssigneeId && previousAssigneeId !== supervisorId) {
+        await tx.chatUser.updateMany({
+          where: { chatId: chat.id, userId: previousAssigneeId, userType: 'agent' },
+          data: { present: false },
+        });
+      }
+
+      await this.#appendEvent(tx, {
+        licenseId: tenant.licenseId,
+        chatId: chat.id,
+        threadId: thread.id,
+        authorId: supervisorId,
+        authorType: 'system',
+        input: {
+          type: 'system_message',
+          text: 'Chat taken over',
+          // Internal supervision, not a customer-facing routing change: kept to
+          // agents so the visitor's transcript is not littered with it.
+          recipients: 'agents',
+          properties: {
+            system_event: 'chat_taken_over',
+            ...(previousAssigneeId ? { previous_assignee_id: previousAssigneeId } : {}),
+            ...(reason ? { reason } : {}),
+          },
+        },
+      });
+
+      // Same transaction as the seize: a takeover that committed is always in the
+      // trail, and a lost race writes nothing. PII-minimal — ids and an optional
+      // supervisory note, never message content (NFR-S12).
+      await writeAuditEntry(tx, audit, {
+        action: 'chat.taken_over',
+        target: `chat:${chat.id}`,
+        metadata: {
+          previous_assignee_id: previousAssigneeId,
+          ...(reason ? { reason } : {}),
+        },
+      });
+
+      const reloaded = await tx.chat.findUniqueOrThrow({
+        where: { id: chat.id },
+        include: chatInclude,
+      });
+      return {
+        detail: serialiseChat(reloaded),
+        // Union of before and after: the agent who lost the chat must be told it
+        // left as much as the supervisor must be told it arrived.
+        audience: {
+          groupIds: [...this.#audienceFor(chat).groupIds, ...this.#audienceFor(reloaded).groupIds],
+          agentIds: [...this.#audienceFor(chat).agentIds, ...this.#audienceFor(reloaded).agentIds],
+          customerId: chat.customerId,
+        },
+        threadId: thread.id,
+        previousAssigneeId,
+      };
+    });
+
+    await this.publisher?.publish(tenant, 'chat_taken_over', result.audience, {
+      chat_id: chatId,
+      thread_id: result.threadId,
+      requester_id: supervisorId,
+      previous_assignee_id: result.previousAssigneeId,
+      new_assignee_id: supervisorId,
+    } satisfies ChatTakenOverPush);
+
+    return result.detail;
   }
 
   async tagThread(

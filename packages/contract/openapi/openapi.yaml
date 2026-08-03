@@ -123,6 +123,8 @@ paths:
     $ref: "./paths/chats.yaml#/resume"
   /chats/{chatId}/transfer:
     $ref: "./paths/chats.yaml#/transfer"
+  /chats/{chatId}/takeover:
+    $ref: "./paths/chats.yaml#/takeover"
   /chats/{chatId}/tags:
     $ref: "./paths/chats.yaml#/tags"
   /chats/{chatId}/tags/{tagName}:
@@ -2562,6 +2564,7 @@ components:
         - pending_requests_limit_reached
         - request_timeout
         - service_unavailable
+        - takeover_conflict
         - too_many_requests
         - unsupported_version
         - users_limit_reached

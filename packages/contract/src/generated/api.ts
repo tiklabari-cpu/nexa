@@ -521,6 +521,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/takeover': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Forcibly take a chat over as a supervisor
+     * @description Reassigns the chat to the calling supervisor, whoever held it. Unlike `transfer` (a consented, rule-driven hand-off), takeover is restricted to admin/owner-role teammates and is recorded in the audit log. A second supervisor racing for the same chat loses and receives `409 takeover_conflict`.
+     */
+    post: operations['takeoverChat'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/tags': {
     parameters: {
       query?: never;
@@ -5007,6 +5027,7 @@ export interface components {
       | 'pending_requests_limit_reached'
       | 'request_timeout'
       | 'service_unavailable'
+      | 'takeover_conflict'
       | 'too_many_requests'
       | 'unsupported_version'
       | 'users_limit_reached'
@@ -6066,6 +6087,47 @@ export interface operations {
       400: components['responses']['BadRequest'];
       404: components['responses']['NotFound'];
       /** @description The target team is offline or the chat is closed */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  takeoverChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** @description Optional supervisory justification */
+          reason?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Taken over */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Chat'];
+        };
+      };
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description The chat is closed, or another supervisor took it over first */
       409: {
         headers: {
           [name: string]: unknown;

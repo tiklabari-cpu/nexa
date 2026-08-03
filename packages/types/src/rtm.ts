@@ -119,6 +119,7 @@ export const RTM_PUSH_ACTIONS = [
   'incoming_chat',
   'chat_deactivated',
   'chat_transferred',
+  'chat_taken_over',
   'chat_access_updated',
   'user_added_to_chat',
   'user_removed_from_chat',
@@ -186,6 +187,21 @@ export interface ChatTransferredPush {
   reason: TransferReason;
   transferred_to: { group_ids: number[]; agent_ids: string[] };
   queue?: { position: number; wait_time: number; queued_at: string };
+}
+
+/**
+ * A supervisor forcibly seized a chat from whoever held it (FR-MOD-08.6.3).
+ * Sent to the union of the losing and winning audiences: the previous assignee
+ * needs to be told the chat left their hands as much as the new owner needs to
+ * be told it arrived. `previous_assignee_id` is null when the chat was
+ * unassigned (e.g. queued) at the moment of takeover.
+ */
+export interface ChatTakenOverPush {
+  chat_id: string;
+  thread_id: string;
+  requester_id: string | null;
+  previous_assignee_id: string | null;
+  new_assignee_id: string;
 }
 
 export interface TypingIndicatorPush {

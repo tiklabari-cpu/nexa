@@ -76,6 +76,11 @@ export const AUDIT_ACTIONS = [
   'ticket.unmerged',
   'ticket.follower_added',
   'ticket.follower_removed',
+  // Supervision (FR-MOD-08.6.3 / NFR-S12). A supervisor forcibly took a chat
+  // from whoever held it — an authority action on someone *else's* conversation,
+  // so it is recorded. The entry names the actor, the chat and the previous
+  // assignee; never the transcript or any message content.
+  'chat.taken_over',
   // Credentials
   'pat.created',
   'pat.revoked',

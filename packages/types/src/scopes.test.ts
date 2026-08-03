@@ -105,6 +105,9 @@ describe('error taxonomy', () => {
     // duplicate slug within a license.
     'brand_not_found',
     'brand_exists',
+    // Supervisor takeover (FR-MOD-08.6.3): the 409 a second, concurrent
+    // supervisor gets when they lose the race to seize a chat.
+    'takeover_conflict',
   ];
 
   it('carries the 24 documented types, plus Nexa additions', () => {

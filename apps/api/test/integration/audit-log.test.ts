@@ -17,6 +17,7 @@
 import { PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { generateShortId } from '@nexa/types';
 import { deriveCodeChallenge, generateToken } from '../../src/lib/crypto.js';
 import { withTenant } from '../../src/lib/tenant.js';
 import { writeAuditEntry } from '../../src/services/audit/audit-log.js';
@@ -95,6 +96,7 @@ describe('audit log writer (NFR-S12)', () => {
         'tickets--all:rw',
         'agents-bot--all:rw',
         'agents--all:rw',
+        'chats--all:rw',
       ],
     });
   });
@@ -121,6 +123,44 @@ describe('audit log writer (NFR-S12)', () => {
       expect(entry?.target).toBe(`trusted_domain:${id}`);
       expect(entry?.metadata).toMatchObject({ domain: 'audit.example' });
       // Every entry carries the request id so a log line and its record tie up.
+      expect((entry?.metadata as Record<string, unknown>).request_id).toBeTruthy();
+    });
+
+    it('records a chat being taken over, with the previous holder but no message content', async () => {
+      // A chat the regular agent holds, seized by the owner (a supervisor).
+      const chatId = generateShortId();
+      await owner.chat.create({
+        data: { id: chatId, licenseId: fx.a.licenseId, customerId: fx.a.customerId, active: true },
+      });
+      await owner.thread.create({
+        data: {
+          id: generateShortId(),
+          chatId,
+          licenseId: fx.a.licenseId,
+          active: true,
+          assigneeId: fx.a.agentAccountId,
+        },
+      });
+
+      const before = await count('chat.taken_over');
+      const res = await server.post(
+        `/chats/${chatId}/takeover`,
+        { reason: 'Escalation' },
+        auth(adminToken),
+      );
+      expect(res.statusCode).toBe(200);
+
+      expect(await count('chat.taken_over')).toBe(before + 1);
+      const entry = await latest('chat.taken_over');
+      expect(entry?.actorId).toBe(fx.a.ownerAccountId);
+      expect(entry?.actorType).toBe('agent');
+      expect(entry?.target).toBe(`chat:${chatId}`);
+      // The previous holder and the supervisory note, and nothing from the
+      // transcript — a takeover records who and why, never what was said.
+      expect(entry?.metadata).toMatchObject({
+        previous_assignee_id: fx.a.agentAccountId,
+        reason: 'Escalation',
+      });
       expect((entry?.metadata as Record<string, unknown>).request_id).toBeTruthy();
     });
 

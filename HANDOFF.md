@@ -57,7 +57,13 @@
   yoktu — muhtemelen ayrı `08.6.3-conflict-a..g` (tm 91.1-91.7, PLAN.md §1116, "TAMAMLANDI") ile
   aynı PRD satırının farklı bir kırılımı; bu pencere onu araştırmadı/dokunmadı (kapsam dışı), ama
   bir sonraki -h'ye bakacak pencerenin önce bunu doğrulaması gerekir — muhtemelen tm 66.8 zaten
-  audit-close'dur, yeniden inşa gerektirmez.
+  audit-close'dur, yeniden inşa gerektirmez. **Çalışma alanı notu:** bu pencere başlamadan ÖNCE
+  de işlenmemiş değişiklikler vardı — `CONVENTIONS.md`/`.taskmaster/BUILD-BLUEPRINT.md`/`run-loop.sh`
+  (priority `critical`'in rezerve edildiğine dair K7.1 notu — tm 66.5 ile ilgisiz, muhtemelen ayrı
+  bir görevin commit'lenmemiş dokümantasyonu) ve `apps/e2e/kanit/36-copilot-panel.png` (tm 36
+  copilot panel ekran görüntüsü yenilemesi). Kapsam disiplini gereği bu pencere onlara DOKUNMADI —
+  ne commit'ledi ne attı; hâlâ işlenmemiş duruyorlar, bir sonraki pencere sahiplenip commit'lemeli
+  ya da neden bekletildiğini araştırmalı.
 
 ### 66.4 (08.6.3-d) — Supervisor takeover çekirdeği: rol kapısı + eşzamanlı devir reddi + audit + RTM — done — 2026-08-03 UTC
 

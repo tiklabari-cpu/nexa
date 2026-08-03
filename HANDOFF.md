@@ -13,6 +13,46 @@
 
 ## Task log (newest-first)
 
+### 64.2 (07.6-b) — Deterministik konu kümeleme çekirdeği: `packages/ai-mock/src/topics.ts` — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-MAX] Bölünmeyen kümeleme çekirdeği — YENİ SAF modül
+  `packages/ai-mock/src/topics.ts` (DB/Fastify/env yok; `embedding.ts` komşusu ve salt-
+  tüketicisi — `embed`/`similarity`/`tokenize` kullanılır, `embedding.ts`'e **TEK SATIR
+  dokunulmadı**, RAG/knowledge regresyon riski sıfırlandı).
+  (1) **`clusterTopics(docs, options?)`** — greedy-leader kümeleme: dokümanlar id'ye göre
+  SIRALANIR (girdi sırasından bağımsız determinizm), her doküman `embed()` ile vektörleşir,
+  normalize-ortalama küme merkezine cosine ≥ `TOPIC_SIMILARITY_THRESHOLD`(0.3) ise o kümeye
+  katılır, değilse yeni küme açar (eşit benzerlikte ilk/erken küme kazanır).
+  (2) **Etiket türetme:** hafif tf-idf (küme-içi terim frekansı × korpus idf) ile en ayırt
+  edici 3 token; **salt-rakam tokenlar elenir** (sipariş/kart numarası etikete sızmaz — PII);
+  yalnız-numara kalan küme isimsiz olduğu için topic'lere GİRMEZ; tie-break skor↓ sonra token
+  alfabetik.
+  (3) **Eşikler + `sufficient`:** `TOPIC_MIN_CLUSTER_SIZE`(2) altı küme topic değil (yine de
+  `analyzed`'e sayılır); `TOPIC_MIN_CONVERSATIONS`(20) altı kümelenebilir doküman →
+  `{sufficient:false, topics:[]}` ("yeterli veri yoksa empty" KK'sının çekirdek payı; route'un
+  geçici `TOPIC_MIN_CONVERSATIONS=20` değeriyle uzlaşıldı).
+  (4) **Çıktı** `{sufficient, analyzed, topics[]{id,label,keywords[],volume,docIds[]}}` —
+  kontrat `ReportsTopics.topics[]`'ın saf-fonksiyonun üretebildiği alanları; `share`/
+  `previous_volume`/`trend` (önceki-dönem + tenant gerektirir) route'a (07.6-c) bırakıldı.
+  Topic'ler hacim↓ sonra label↑ sıralanır; id = keyword slug (yanıt içinde benzersiz).
+  (5) `packages/ai-mock/src/index.ts`'ten export edildi.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · build 7/7 · `pnpm -w test`
+  66 dosya / 1247 test · **@nexa/ai-mock 72/72** (yeni `topics.test.ts` 16 + regresyon
+  embedding/intent/compiler/assist 56) · **@nexa/api full 1247/1247** · paylaşılan-embedding
+  regresyonu ayrıca doğrulandı: knowledge-crawl 11 · ai-skills · copilot 15 · reports-topics 9
+  = **53/53** (`embedding.ts` değişmedi). KK: "AI kümeleme" (determinizm ters+interleave→toEqual;
+  benzer bir arada/ilgisiz ayrı) + "yeterli veri yoksa empty" (eşik altı→`sufficient:false`+[]).
+- **Varsayımlar:** Kümeler kalıcılaştırılmaz (Topic/Cluster tablosu yok — PRD §8.4'te de yok);
+  her istek yeniden hesaplanır. Benzerlik eşiği 0.3, kullanılan lexical embedding'e göre kalibre
+  edildi (within-topic ~0.38–0.62, cross-topic ≤~0.20 → 0.3 boş bantta).
+- **Sonraki pencereye not:** 07.6-c `clusterTopics`'i route'a bağlar — tenant-scoped doküman
+  sorgusu (summary/müşteri mesajı) → `clusterTopics` → her topic'in `share`(volume/analyzed),
+  `previous_volume` ve `trend`'i önceki-dönem penceresinden türetir (`docIds` bu seam için
+  döndürülüyor). Route'un yerel `TOPIC_MIN_CONVERSATIONS(=20)` sabiti artık `@nexa/ai-mock`'tan
+  import edilerek uzlaştırılabilir. Kök `.taskmaster/BUILD-BLUEPRINT.md` · `CONVENTIONS.md` ·
+  `run-loop.sh` önceki pencerelerden kalan, bu task'a ait olmayan kirli dosyalar — commit'e
+  alınmadı (kapsam disiplini, CONVENTIONS §5).
+
 ### 64.1 (07.6-a) — `GET /reports/topics` kontratı + yetkili route iskeleti + yetersiz-veri (empty) yanıtı — done — 2026-08-03 UTC
 
 - **Yapıldı:** Chat topics dilimi V2-4'ün contract-first ilk adımı (ADR-05).

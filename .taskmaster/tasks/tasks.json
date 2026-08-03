@@ -1771,13 +1771,13 @@
             "description": "UI, contract+backend'den SONRA. (1) TABS dizisine `{ id: 'topics', label: 'Chat topics' }` eklenir ve panel seçimine `topics` dalı bağlanır. (2) `ReportsTopics` TS arayüzü dosyanın üstündeki diğer rapor arayüzlerinin yanına yazılır (07.6-a şemasıyla birebir). (3) `TopicsTab` bileşeni: `useReport<ReportsTopics>('topics', api, props)`; hata → ErrorNotice; yükleniyor → CardSkeleton (rapor-1'in 'Loadi",
             "details": "07.6-e — Reports'ta 'Chat topics' sekmesi: hacim/trend listesi + yetersiz-veri empty state  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.6\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 2 dosya (ReportsPage.tsx + testi); güvenlik sınırı yok (salt-okunur rapor sekmesi, mevcut useReport/api client üzerinden; yetki kapısı backend'de); eşzamanlılık yok; yeni algoritma yok — kopyalanacak desen ismen var: BreakdownTab (satır 771-833) + useReport<T> (satır 238-244) + SplitTable + EmptyState; kontrat değişikliği yok (07.6-a'da eklendi, tipler generate edilmiş); kabul kriteri mekanik (render testi + empty state).\nNEDEN AÇIK: apps/web/src/features/reports/ReportsPage.tsx TABS dizisinde (satır 119-124) yalnız overview/ai-agent/reviews/breakdown var — 'Chat topics' sekmesi hiç yok; sekme paneli seçimi de dört dala sabit (satır 218-227). rapor-1-fonksiyonel.md:1348-1355 bu ekranın üç durumunu tarif ediyor: Default / Loading (AI kümeliyor) / Empty.\nKAPSAM: UI, contract+backend'den SONRA. (1) TABS dizisine `{ id: 'topics', label: 'Chat topics' }` eklenir ve panel seçimine `topics` dalı bağlanır. (2) `ReportsTopics` TS arayüzü dosyanın üstündeki diğer rapor arayüzlerinin yanına yazılır (07.6-a şemasıyla birebir). (3) `TopicsTab` bileşeni: `useReport<ReportsTopics>('topics', api, props)`; hata → ErrorNotice; yükleniyor → CardSkeleton (rapor-1'in 'Loading (AI kümeliyor)' durumu); `sufficient_data:false` → EmptyState ('Not enough conversations yet' + kaç sohbet gerektiği `min_conversations`'tan okunur) — boş dikdörtgen değil, anlamlı empty (EK-B.1 kuralı); dolu → konu tablosu: etiket, hacim (`volume`), pay (`share`, null → '—'), trend (`trend`/`previous_volume`, null → '—'; renk tek başına anlam taşımaz, ok/işaretle birlikte). Sıralama backend'den geldiği gibi korunur (determinizm).\nDOSYALAR: apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/reports/ReportsPage.tsx (satır 771-833 `BreakdownTab` — error/pending/empty/dolu dalları; satır 836+ `SplitTable`; satır 182-227 tablist + tabpanel; satır 238-244 `useReport<T>`) · apps/web/src/components/EmptyState.tsx (anlamlı empty state bileşeni) · apps/web/src/features/reports/ReportsPage.test.tsx (satır 108 ve 213 — `getByRole('tab', { name: ... })` ile sekme gezinme deseni)\nKK (birebir): \"hacim/trend\" | \"yeterli veri yoksa empty\"\nKK DOĞRULAMA: apps/web/src/features/reports/ReportsPage.test.tsx: (a) 'Chat topics' sekmesine tıklayınca konu satırları, `volume` ve trend değeri görünür → 'hacim/trend'; (b) `sufficient_data:false` payload'ında konu tablosu yerine anlamlı empty state metni görünür → 'yeterli veri yoksa empty'; (c) `trend: null` satırında '—' render edilir, 0% değil. Mevcut sekme testleri regresyonsuz yeşil kalır.\nKAPSAM DIŞI: Overview promo bandı ve 'See chat topics' CTA'sı (07.6-f) · Sol navigasyonda NEW rozeti (varsayım 5 — yapılmıyor) · Konuya tıklayınca sohbet listesi (drill-down) — KK'da yok · CSV indirme düğmesi (07.6-g) · Yeni grafik kütüphanesi eklemek — mevcut tablo/bar desenleri kullanılır\nSÖZLEŞME: yok — tipler 07.6-a'nın generate edilmiş şemasından gelir.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: sekme render + hacim/trend hücreleri + null → '—' (0% değil) · unit negatif: sufficient_data:false → anlamlı empty state (boş dikdörtgen değil) · unit negatif: hata → ErrorNotice; pending → CardSkeleton · regresyon: mevcut ReportsPage.test.tsx sekme gezinme iddiaları (Overview/AI Agent/Reviews) yeşil kalır · cross-tenant testi bu alt-görevde gerekmez — salt-okunur UI, tenant kapısı 07.6-c'de kanıtlandı",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               3
             ],
             "parentId": "64",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T03:04:35.229Z"
           },
           {
             "id": 6,
@@ -1822,7 +1822,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T02:47:13.824Z"
+        "updatedAt": "2026-08-03T03:04:35.229Z"
       },
       {
         "id": "65",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T02:47:13.824Z",
+      "lastModified": "2026-08-03T03:04:35.229Z",
       "taskCount": 99,
       "completedCount": 75,
       "tags": [

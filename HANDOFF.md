@@ -13,6 +13,51 @@
 
 ## Task log (newest-first)
 
+### tm 76.9 — PUBKB-i uçtan uca doğrulama: anonim okuyucu e2e + izolasyon/SEO kanıt seti — done — 2026-08-03 UTC
+
+- **Yapıldı:** Sıfırdan yazıldı (yarım kalan iş yoktu — PUBKB-a..h zaten teslimdi; bu görev yalnız
+  DOĞRULAR, yeni özellik/route/migration YOK). `apps/e2e/tests/public-kb.spec.ts` — repodaki ilk
+  kimliksiz (storageState'siz `browser.newContext()`) sayfa-okuma e2e'si. **Test 1 (hikâye, Acme
+  owner UI):** Playbook → Public KB sekmesi → editörle makale oluşturur (kategori 'Guides', gövdeye
+  `<img src=x onerror=…>` XSS payload) → taslakken public adres 404 + metin sızmaz + sitemap 0
+  `<loc>` → UI'dan Publish (editör gerçek public link'i gösterir) → oturumsuz okuyucu KB ana
+  sayfası→kategori→makale gezinir (self-servis), `<h1>`+gövde görünür, `<title>`=seo_title + meta
+  description + canonical doğrulanır (SEO'lu), sitemap yalnız o makaleyi listeler (1 `<loc>`,
+  Northwind slug'ı yok), XSS inert (`img[onerror]`=0 + `window.__nexaKbXss` undefined, NFR-S6), JS
+  kapalı context'te gövde yine görünür, NFR-P2 bütçesi ölçülür → **≈9 ms · 2432 bytes** (tek istek,
+  `testInfo.attach`), UI'dan Unpublish → public adres tekrar 404 + sitemap'ten düşer. **Test 2
+  (cross-tenant, ayrı blok):** Northwind workspaceSlug + Acme makale slug'ı → 404, tersi → 404, her
+  ikisi kendi workspace'inde 200 (izolasyon = NFR-S5). `apps/e2e/tests/fixtures.ts`'e
+  `ownerAccessTokenFor(context, owner)` + `ACME_OWNER`/`NORTHWIND_OWNER` eklendi; mevcut
+  `ownerAccessToken(context)` bunun Acme-delegesi olarak korundu (skills-routing/settings çağrıları
+  değişmedi). Kurulum DB'ye değil API'ye gider (fixtures kuralı): iki tenant'ın KB'si gerçek
+  token'la enable edilir, önce prior-run kalıntısı sıfırlanır (idempotent seed mutasyonu resetlemez,
+  bkz. [[nexa-e2e-clean-db]]).
+- **Doğrulama:** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) · `pnpm -w build` (7/7) exit 0.
+  E2E: `public-kb` **2/2 yeşil**; fixtures.ts'i paylaşan `skills-routing`+`settings` regresyonu
+  **18/18 yeşil** (geriye uyumluluk kanıtı). `pnpm -w test` (e2e hariç): **1504/1505** — tek kırmızı
+  `apps/api/test/integration/chats.test.ts:915` (takeover eşzamanlılık: iki yarışan istek
+  `[200,409]` beklentisi), turbo paralel koşumunda ortak Postgres'i zorlayınca flake eden bilinen
+  **paralel-DB yarışı** ([[nexa-test-gate-parallel-db]]); seri/izole koşumda **65/65 yeşil**
+  (doğrulandı). Bu değişiklik e2e-only (2 dosya), tek api dosyasına dokunmaz → bu flake bu görevden
+  bağımsız.
+- **Varsayımlar:** Public KB tabanı `http://localhost:4000/api/v1` (`API_BASE_URL`+`API_PREFIX`
+  varsayılanları, editörün `VITE_KB_PUBLIC_BASE` fallback'iyle ve `.env`'le eşleşir) — `playwright.config.ts`
+  değişmedi (API sunucusu zaten webServer listesinde). İkinci tenant = seed'in Northwind Supply'ı
+  (`owner@northwind.localhost`, aynı `nexa-demo-password`). KB'yi enable eden (`PUT /kb-settings`) UI
+  yüzeyi yok → kurulum owner token'ıyla API'den yapılır (meşru, fixtures deseni).
+- **Sonraki pencereye not:** **Bulunan (ama bu görevin kapsamı dışı) not:** `Modal` paneli
+  (`apps/web/src/components/ui/Modal.tsx`) overflow/scroll içermez; KB editörü uzun bir form olduğu
+  için 720p yükseklikte Create/Publish butonu görünüş alanının altına düşüp erişilemez oluyor. Test
+  bunu meşru şekilde pencere yüksekliğini büyüterek (1280×1600) aşıyor — anonim-okuyucu iddialarını
+  etkilemez. Küçük ekranda kaydırılamayan modal, istenirse **PUBKB-h/Modal** tarafında ayrı bir
+  düzeltme görevine değer (a11y/kullanılabilirlik); burada düzeltilmedi (kapsam disiplini). PUBKB
+  dilimi (76.1–76.9) artık tamamen teslim → parent **tm 76 done**. Kanıt görseli:
+  `apps/e2e/kanit/76.9-public-kb-article.png`. **Çalışma alanı notu:** pencere açıldığında zaten
+  kirli olan dosyalar (`CONVENTIONS.md`, `run-loop.sh`, `.taskmaster/BUILD-BLUEPRINT.md`,
+  önceki koşumlardan kalan `apps/e2e/kanit/*.png` ve untracked `.playwright-mcp/`) bu görevin işi
+  DEĞİL → dokunulmadı/commit'lenmedi (kapsam disiplini); yalnız 76.9'a ait dosyalar commit'lendi.
+
 ### tm 76.8 — PUBKB-h admin: makale editörü (içerik+SEO alanları) + publish/unpublish + public link — done — 2026-08-03 UTC
 
 - **Yapıldı:** Sıfırdan uygulandı (önceki pencereden yarım kalan iş yoktu; backend PATCH/POST

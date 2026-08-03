@@ -84,24 +84,50 @@ export async function resolveOrganizationId(request: APIRequestContext): Promise
   return acme!.organization_id;
 }
 
+/** The credentials + tenant of a seeded owner, for `ownerAccessTokenFor`. */
+export interface TenantOwner {
+  email: string;
+  password: string;
+  /** The seeded organization's name starts with this — memberships are matched on it. */
+  orgPrefix: string;
+}
+
+/** The primary demo tenant (owner@acme.localhost). */
+export const ACME_OWNER: TenantOwner = {
+  email: DEMO.email,
+  password: DEMO.password,
+  orgPrefix: 'Acme',
+};
+
+/** The second seeded tenant — the "other tenant" side of cross-tenant proofs. */
+export const NORTHWIND_OWNER: TenantOwner = {
+  email: 'owner@northwind.localhost',
+  password: DEMO.password,
+  orgPrefix: 'Northwind',
+};
+
 /**
- * An owner Bearer token via the same OAuth 2.1 + PKCE flow the web app runs
- * (`auth-store.ts`). A handful of e2e steps have to drive the API directly —
- * registering a webhook to prove its audit entry reaches the screen (NFR-S12)
- * is one — and the browser session keeps its token in memory, out of reach of
- * the test. Owners hold `webhooks--all:rw` and `audit_log--all:ro` by default
- * (ADMIN_SCOPES), so this token can both write the event and read the trail.
+ * An owner Bearer token for a given seeded tenant, via the same OAuth 2.1 + PKCE
+ * flow the web app runs (`auth-store.ts`). A handful of e2e steps have to drive
+ * the API directly — registering a webhook to prove its audit entry reaches the
+ * screen (NFR-S12), or standing up a second tenant's public KB (PUBKB-i) — and
+ * the browser session keeps its token in memory, out of reach of the test.
+ * Owners hold the admin scope set (ADMIN_SCOPES) by default, so this token can
+ * both write and read the surfaces those steps exercise.
  */
-export async function ownerAccessToken(context: APIRequestContext): Promise<string> {
+export async function ownerAccessTokenFor(
+  context: APIRequestContext,
+  owner: TenantOwner,
+): Promise<string> {
   const login = await context.post(`${API_BASE}/auth/login`, {
-    data: { email: DEMO.email, password: DEMO.password },
+    data: { email: owner.email, password: owner.password },
   });
   expect(login.ok(), `login failed: ${login.status()} ${await login.text()}`).toBe(true);
   const { memberships } = (await login.json()) as {
     memberships: Array<{ client_id?: string; organization_name: string; license_id: string }>;
   };
-  const acme = memberships.find((m) => m.organization_name.startsWith('Acme'));
-  expect(acme?.client_id, 'seeded Acme tenant not found').toBeTruthy();
+  const tenant = memberships.find((m) => m.organization_name.startsWith(owner.orgPrefix));
+  expect(tenant?.client_id, `seeded ${owner.orgPrefix} tenant not found`).toBeTruthy();
 
   // A fresh PKCE pair; the challenge is base64url(sha256(verifier)), S256.
   const verifier = randomBytes(32).toString('base64url');
@@ -110,13 +136,13 @@ export async function ownerAccessToken(context: APIRequestContext): Promise<stri
 
   const authorized = await context.post(`${API_BASE}/auth/authorize`, {
     data: {
-      client_id: acme!.client_id,
+      client_id: tenant!.client_id,
       redirect_uri: redirectUri,
       code_challenge: challenge,
       code_challenge_method: 'S256',
-      email: DEMO.email,
-      password: DEMO.password,
-      license_id: acme!.license_id,
+      email: owner.email,
+      password: owner.password,
+      license_id: tenant!.license_id,
     },
   });
   expect(
@@ -130,12 +156,17 @@ export async function ownerAccessToken(context: APIRequestContext): Promise<stri
       grant_type: 'authorization_code',
       code,
       code_verifier: verifier,
-      client_id: acme!.client_id,
+      client_id: tenant!.client_id,
       redirect_uri: redirectUri,
     },
   });
   expect(granted.ok(), `token failed: ${granted.status()} ${await granted.text()}`).toBe(true);
   return ((await granted.json()) as { access_token: string }).access_token;
+}
+
+/** An owner Bearer token for the primary Acme tenant (the common case). */
+export async function ownerAccessToken(context: APIRequestContext): Promise<string> {
+  return ownerAccessTokenFor(context, ACME_OWNER);
 }
 
 export async function signIn(page: Page): Promise<void> {

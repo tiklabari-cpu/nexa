@@ -1973,12 +1973,12 @@
             "description": "Contract-first: (1) openapi/paths/settings.yaml'a `skills` (GET liste + POST oluştur) ve `skill` (DELETE) blokları — routingRules/routingRule bloklarının (satır 379-440) birebir kalıbıyla; agents.yaml'a `agentSkills` (PUT /agents/{agentId}/skills, gövde `{skill_ids: integer[]}` — tam değiştirme, idempotent); openapi.yaml components/schemas'a `Skill`; ajanın skill listesi `GET /agents` yanıtına (se",
             "details": "08.6.3-b — Skill katalog CRUD + ajan-skill atama API'si (kontrat + rol kapılı backend)  [OPUS-XHIGH]\n\nPRD: FR-MOD-08.6.3 (+ NFR-S3 authZ, NFR-S5 IDOR)\nETİKET GEREKÇESİ: OPUS-XHIGH: kullanıcı talimatı — 'yeni bir yetkili endpoint eklemek, mevcut scope'u genişletmek EN AZ OPUS-XHIGH olur'. Rol kapısı (roleAtLeast admin), scope seçimi ve IDOR/cross-tenant doğrulaması var → koşul 2 ihlali, SONNET olamaz. Eşzamanlılık/kilit yok, yeni algoritma yok, mevcut suspension deseni birebir kopyalanıyor → MAX değil.\nNEDEN AÇIK: `packages/contract/openapi/paths/` altındaki 23 dosyanın hiçbirinde skill path'i yok (dizin listesi: account-lifecycle, agents, apps, auth, campaigns, channels, chats, copilot, custom-fields, customer-chat, customers, home, onboarding, playbook, reports, settings, ticket-email-templates, ticket-rules, tickets, traffic, uploads, webhooks, websites). agents.yaml yalnız `suspension` alt-path'ini taşıyor; routes/agents.ts'te `/agents/:agentId/skills` grep 0.\nKAPSAM: Contract-first: (1) openapi/paths/settings.yaml'a `skills` (GET liste + POST oluştur) ve `skill` (DELETE) blokları — routingRules/routingRule bloklarının (satır 379-440) birebir kalıbıyla; agents.yaml'a `agentSkills` (PUT /agents/{agentId}/skills, gövde `{skill_ids: integer[]}` — tam değiştirme, idempotent); openapi.yaml components/schemas'a `Skill`; ajanın skill listesi `GET /agents` yanıtına (serialiseAgent) eklenir. Bundle yeniden üretilir. (2) Backend: routes/settings.ts'e katalog handler'ları (scope `access_rules:ro` / `access_rules:rw` — routing-rules ile aynı yüzey), routes/agents.ts'e atama handler'ı (scope `agents--all:rw`); her ikisinde principal.kind==='agent' + roleAtLeast(actorRole,'admin') çift kapısı ve `withTenant`; skill_ids tenant içinde doğrulanır (yabancı id → 404, enumerable olmaz).\nDOSYALAR: packages/contract/openapi/paths/settings.yaml · packages/contract/openapi/paths/agents.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/routes/settings.ts · apps/api/src/routes/agents.ts · packages/types/src/domain.ts · apps/api/test/integration/settings.test.ts · apps/api/test/integration/agents-suspension.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/agents.ts (satır 161-183: PUT /agents/:agentId/suspension — principal.kind + roleAtLeast(actorRole,'admin') çift kapı, RLS'e dayalı 404) · apps/api/src/routes/settings.ts (satır 582-640: routing-rules GET/PATCH — scope config + withTenant + ApiError.notFound) · packages/contract/openapi/paths/settings.yaml (satır 379-440: routingRules/routingRule kontrat kalıbı)\nKK (birebir): \"Uzmanlık/skill bazlı\"\nKK DOĞRULAMA: integration — katalog CRUD (POST oluştur → GET listede → DELETE sonrası yok) ve PUT /agents/{id}/skills ajanın skill kümesini TAM değiştirir (idempotent: aynı gövde iki kez → aynı sonuç). NEGATİF (önce): `agent` rolüyle POST/PUT → 403; PAT/bot principal → 403; başka lisansın skill_id'si ile PUT → 404; scope'suz token → 403. contract-parity.test.ts iki yönlü yeşil.\nKAPSAM DIŞI: routing motorunda skill kullanımı (08.6.3-c) · takeover endpoint'i (08.6.3-d) · tüm UI (08.6.3-e / -f) · skill bazlı raporlama · toplu (bulk) skill import\nSÖZLEŞME: EVET — settings.yaml: `skills` (GET/POST) + `skill` (DELETE); agents.yaml: `agentSkills` (PUT /agents/{agentId}/skills); openapi.yaml: `Skill` şeması + Agent şemasına katkısal `skills`. OpenAPI'ye eklenip RE-BUNDLE edilmezse contract-parity.test.ts kırılır (hafıza notu: nexa-contract-parity-gate). Parity İKİ YÖNLÜ olduğu için kontrat satırı ve route AYNI pencerede gitmek zorunda.\nMIGRATION: yok — şema 08.6.3-a'da\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (agent rolü reddi + bot/PAT principal reddi + scope reddi + yabancı skill_id reddi — pozitiflerden ÖNCE yazılır) · cross-tenant (B lisansı A'nın skill'ini listeleyemez, silemez, atayamaz) · integration (katalog CRUD + idempotent PUT + GET /agents yanıtında skill listesi) · contract-parity (iki yönlü — kontrat ve route eşleşiyor)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "66",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T04:55:44.066Z"
           },
           {
             "id": 3,
@@ -2074,7 +2074,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T04:23:42.991Z"
+        "updatedAt": "2026-08-03T04:55:44.066Z"
       },
       {
         "id": "67",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T04:23:42.991Z",
+      "lastModified": "2026-08-03T04:55:44.066Z",
       "taskCount": 99,
       "completedCount": 76,
       "tags": [

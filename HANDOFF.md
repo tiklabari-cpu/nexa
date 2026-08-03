@@ -13,6 +13,58 @@
 
 ## Task log (newest-first)
 
+### 63.9 (07.5-i) — Uçtan uca doğrulama: dört boyut çapraz-tutarlılığı + NFR-P2 bütçe ölçümü — done — 2026-08-03 UTC
+
+- **Yapıldı:** `apps/api/test/integration/reports-billing.test.ts`'e yeni "breakdown
+  cross-consistency (07.5-i)" bloğu (+4 test, üretim kodu DEĞİŞMEDİ — bu bir doğrulama
+  penceresi): (1) **çapraz-boyut toplam + split eşitliği** — gün/saat/kanal üç ekseninin
+  `chats` toplamı Overview `totals.chats` KPI'ına eşit; `closed/manual/assisted/automated`
+  split'i üç eksende + KPI kartlarında + faturada (`/billing/usage` `ai_resolutions.used`)
+  birebir aynı (ADR-09 rapor=fatura hizası tek testte kanıtlanır). (2) **satır invariantı** —
+  `manual+assisted+automated===closed` DÖRT boyutun (day/hour/channel/team) HER satırında
+  tutar. (3) **takım tek istisna** — yalnız `by_team` pencere toplamını aşabilir ve YALNIZ
+  `overlapping===true` iken; fan-out fazlası tam olarak fazladan takım üyeliği kadar (bir chat
+  iki takıma açıldığında `SUM(by_team.chats) === chats+1`), gün/saat/kanal her zaman tam bölüşür
+  (`overlapping===false` tabanı da doğrulanır). (4) **NFR-P2 EXPLAIN bütçe ölçümü** — üç yeni
+  sorgunun (`by_hour`/`by_channel`/`by_team`, `SPLIT_COUNTS` reports.ts'ten birebir kopyalanarak
+  gerçek plan şekli ölçülür) `EXPLAIN (ANALYZE, FORMAT JSON)` planı + `Execution Time`'ı alınır ve
+  <150ms bütçesine karşı iddia edilir (plan regresyonu — kaybolan indeks/kötü join sırası — bu
+  tabanı deler).
+- **NFR-P2 ölçüm kanıtı (seed veri seti, EXPLAIN ANALYZE Execution Time):** `by_hour` ≈ **0.091 ms**
+  · `by_channel` ≈ **0.285 ms** · `by_team` ≈ **0.134 ms** — üçü de NFR-P2 okuma p99 <150ms
+  bütçesinin ÇOK altında. Uyarı: test DB'si küçüktür → bu, plan ŞEKLİNİN sağlığını (indeks
+  kullanımı 07.5-c'de ayrıca EXPLAIN'le kanıtlı, Seq Scan yok) kanıtlar, üretim-ölçekli p99'u
+  değil. **NFR-P7** ("ağır raporlar için read-replica/ayrı analitik depo") üretim ölçeği büyürse
+  gerekebilir — bu turda bilinçli olarak UYGULANMADI, AÇIK SORU olarak kayıtlı (PLAN §5.2.2
+  açık sorular + üst-satır).
+- **Doğrulama (tam DoD kapısı, hepsi exit 0 / yeşil):** `pnpm -w typecheck` 11/11 · `pnpm -w lint`
+  8/8 · `pnpm -w build` 7/7 · `pnpm -w test:unit` (web 523/523 + tüm paketler) · **@nexa/api
+  integration 972/972** (46 dosya; `contract-parity` 5/5, `data-model`, `tenant-isolation` dahil)
+  · **@nexa/rtm integration 51/51** (paylaşılan Postgres yarışını önlemek için api'den AYRI/serial
+  koşuldu — [memory: nexa-test-gate-parallel-db]) · e2e `reports.spec.ts` 3/3 ("navigates the
+  Overview / AI Agent / Breakdown tabs" testi dört bölümü — By day/By hour/By team/By channel —
+  doğrular; [memory: nexa-e2e-clean-db] — DB/Redis konteynerleri koşuyordu, `.env` source edildi,
+  playwright webServer api/web/widget'ı ayağa kaldırdı).
+- **Varsayımlar:** e2e'nin dört-bölüm görünürlüğü zaten 63.7/63.8'de eklendi ve yeşil; CSV
+  dört-`dimension` ekran-birebir tutarlılığı zaten 63.6 export testinde kanıtlı — 07.5-i bunları
+  YENİDEN yazmadı (redundant olurdu), koşup yeşil doğruladı. 07.5-i'nin özgün katkısı boyutlar-arası
+  toplam/split çapraz-tutarlılığı + faturayla hizası + NFR-P2 ölçümüdür. · Cross-tenant izolasyon
+  07.5-d/-e'nin negatif testlerinde kapalı; bu blok fonksiyonel bütünlüğe odaklanır.
+- **Not — kapsam dışı bırakılan pre-existing dirty dosyalar:** `.taskmaster/BUILD-BLUEPRINT.md`,
+  `CONVENTIONS.md`, `run-loop.sh` bu görevden ÖNCE de dirty'ydi (63.6/63.7/63.8 HANDOFF'larında
+  not edilmişti — `critical` öncelik rezervasyonuyla ilgili ayrı/bekleyen iş) ve bu görevin
+  kapsamı dışında olduğu için commit'e DAHİL EDİLMEDİ (CONVENTIONS §5). Tam `test:e2e`
+  koşulmadı — yalnız hedef `reports.spec.ts`; 63.7/63.8'de not edilen `settings.spec.ts:421`
+  strict-mode kırıklığı bu göreve ilgisiz, hâlâ ayrı bir düzeltme görevi. e2e'nin ürettiği
+  `apps/e2e/kanit/*.png` yan etkisi `git checkout -- apps/e2e/kanit/` ile geri alındı (63.5–63.8
+  deseni).
+- **Sonraki pencereye not:** **07.5 (Metrics breakdown) TAMAMEN kapandı** — dilim V2-4'ün dokuz
+  alt-görevi (a–i) bitti; Breakdown sekmesi beş boyutu (day/agent/hour/team/channel) ekranda +
+  CSV'de + e2e'de gösteriyor, ADR-09 rapor=fatura hizası ve NFR-P2 bütçesi kanıtlı. Parent tm 63
+  done. Açık ürün soruları (PLAN §5.2.2): takıma 'birincil grup' kolonu (şema değişikliği),
+  kanal boyutuna e-posta/ticket dahil etme, `distribution` parametre modeli, NFR-P7 read-replica —
+  hepsi bilinçli ertelendi, ayrı kalem gerektirir.
+
 ### 63.8 (07.5-h) — Breakdown sekmesi: "By team" + "By channel" bölümleri + örtüşme dipnotu — done — 2026-08-03 UTC
 
 - **Yapıldı:** `apps/web/src/features/reports/ReportsPage.tsx` — yerel `ReportsBreakdown` arayüzüne

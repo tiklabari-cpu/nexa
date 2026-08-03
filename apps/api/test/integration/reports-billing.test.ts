@@ -946,6 +946,187 @@ describe('reports and billing', () => {
   });
 
   // =========================================================================
+  // 07.5-i — the four dimensions cross-checked against one another, the
+  // Overview KPI and the ADR-09 invoice counter, plus the NFR-P2 read budget.
+  // The per-dimension suites above prove each axis in isolation; this proves
+  // they cannot drift *apart* — the property a five-section screen actually
+  // depends on.
+  // =========================================================================
+
+  describe('breakdown cross-consistency (07.5-i)', () => {
+    /** Sum one split field across every row of a dimension. */
+    const sum = (rows: Array<{ [field: string]: number }>, field: string): number =>
+      rows.reduce((total, row) => total + (row[field] ?? 0), 0);
+
+    it('makes day, hour and channel partition the window to the same Overview total and split', async () => {
+      // A mix that exercises all three resolution classes across two channels, so
+      // no dimension can pass by collapsing everything into one bucket.
+      const onMessenger = await conversation({ agentReplies: false, customerName: 'Bot/FB' }); // automated
+      await recordInbound(onMessenger, 'messenger');
+      await conversation({ agentReplies: true, customerName: 'Human' }); // manual, website
+      const assisted = await conversation({ agentReplies: true, customerName: 'Helped' });
+      await runSkillOn(assisted); // assisted, website
+      const onWhatsapp = await conversation({ agentReplies: false, customerName: 'Bot/WA' }); // automated
+      await recordInbound(onWhatsapp, 'whatsapp');
+
+      const totals = (await server.get('/reports/overview', auth)).json().totals;
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      const usage = (await server.get('/billing/usage', auth)).json();
+
+      // Every chat lands in exactly one bucket of each of these three axes, so
+      // their chat totals all equal the Overview `chats` KPI — no axis loses or
+      // invents a chat.
+      expect(sum(breakdown.by_day, 'chats')).toBe(totals.chats);
+      expect(sum(breakdown.by_hour, 'chats')).toBe(totals.chats);
+      expect(sum(breakdown.by_channel, 'chats')).toBe(totals.chats);
+
+      // The resolution split agrees across all three axes and with the KPI cards —
+      // the same SPLIT_COUNTS fragment feeds every dimension, so they cannot
+      // classify the same chat two different ways (ADR-09).
+      for (const field of ['closed', 'manual', 'assisted', 'automated'] as const) {
+        expect(sum(breakdown.by_day, field)).toBe(totals[field]);
+        expect(sum(breakdown.by_hour, field)).toBe(totals[field]);
+        expect(sum(breakdown.by_channel, field)).toBe(totals[field]);
+      }
+
+      // And 'automated' is exactly the invoice's AI-resolution counter — the one
+      // number Reports and billing must never disagree on (ADR-09) — reached
+      // through the breakdown as well as the Overview.
+      expect(usage.ai_resolutions.used).toBe(totals.automated);
+      expect(sum(breakdown.by_channel, 'automated')).toBe(usage.ai_resolutions.used);
+    });
+
+    it('keeps manual + assisted + automated === closed in every row of every dimension', async () => {
+      const onMessenger = await conversation({ agentReplies: false });
+      await recordInbound(onMessenger, 'messenger');
+      await conversation({ agentReplies: true });
+      const assisted = await conversation({ agentReplies: true });
+      await runSkillOn(assisted);
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      const everyRow = [
+        ...breakdown.by_day,
+        ...breakdown.by_hour,
+        ...breakdown.by_channel,
+        ...breakdown.by_team,
+      ] as Array<{ manual: number; assisted: number; automated: number; closed: number }>;
+      // Populated or zero-filled, the split is a true partition of closed in every
+      // bucket — the invariant the KPI cards and the invoice both lean on.
+      for (const row of everyRow) {
+        expect(row.manual + row.assisted + row.automated).toBe(row.closed);
+      }
+    });
+
+    it('lets only the team dimension exceed the window total, and only when it declares the overlap', async () => {
+      // Baseline: no chat shared with two teams — every dimension, team included,
+      // sums to the same Overview total and the flag stays down.
+      const soloChannel = await conversation({ agentReplies: false });
+      await recordInbound(soloChannel, 'twilio');
+      await conversation({ agentReplies: true });
+
+      const before = (await server.get('/reports/breakdown', auth)).json();
+      const chatsBefore = (await server.get('/reports/overview', auth)).json().totals.chats;
+      expect(before.overlapping).toBe(false);
+      expect(sum(before.by_team, 'chats')).toBe(chatsBefore);
+
+      // Open one chat to a second team. It is counted under both, so the team rows
+      // sum to one past the window total — and `overlapping` says so. That flag is
+      // the only sanctioned way any dimension may read higher than the KPI.
+      const teamOne = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Alpha' },
+        select: { id: true },
+      });
+      const teamTwo = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Beta' },
+        select: { id: true },
+      });
+      const shared = await conversation({ agentReplies: true, customerName: 'Two teams' });
+      await setChatTeams(shared, [teamOne.id, teamTwo.id]);
+
+      const after = (await server.get('/reports/breakdown', auth)).json();
+      const chatsAfter = (await server.get('/reports/overview', auth)).json().totals.chats;
+      // The non-fan-out axes still partition the window exactly.
+      expect(sum(after.by_day, 'chats')).toBe(chatsAfter);
+      expect(sum(after.by_hour, 'chats')).toBe(chatsAfter);
+      expect(sum(after.by_channel, 'chats')).toBe(chatsAfter);
+      // Team overshoots by exactly the one extra membership, and declares it.
+      expect(after.overlapping).toBe(true);
+      expect(sum(after.by_team, 'chats')).toBe(chatsAfter + 1);
+    });
+
+    it('keeps the three new dimension queries within the NFR-P2 read budget (EXPLAIN ANALYZE)', async () => {
+      // Real rows across channels and teams so the planner has joins to cost, not
+      // an empty table.
+      for (const channel of ['messenger', 'whatsapp', 'twilio']) {
+        const chat = await conversation({ agentReplies: false, customerName: channel });
+        await recordInbound(chat, channel);
+      }
+      const assisted = await conversation({ agentReplies: true });
+      await runSkillOn(assisted);
+      await conversation({ agentReplies: true }); // manual, website
+
+      // SPLIT_COUNTS reproduced from reports.ts so the plan measures the real query
+      // shape — the correlated EXISTS filters dominate the cost, so a probe over a
+      // bare count(*) would understate it. Kept in sync deliberately: this is a
+      // performance probe, and the cross-consistency tests above are what guard the
+      // functional behaviour.
+      const SPLIT = `
+        count(*) AS chats,
+        count(*) FILTER (WHERE NOT t.active) AS closed,
+        count(*) FILTER (WHERE NOT t.active AND NOT EXISTS (
+          SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'agent')) AS automated,
+        count(*) FILTER (WHERE NOT t.active AND EXISTS (
+          SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'agent')
+          AND EXISTS (SELECT 1 FROM skill_runs sr WHERE sr.chat_id = t.chat_id AND sr.license_id = t.license_id)) AS assisted,
+        count(*) FILTER (WHERE NOT t.active AND EXISTS (
+          SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'agent')
+          AND NOT EXISTS (SELECT 1 FROM skill_runs sr WHERE sr.chat_id = t.chat_id AND sr.license_id = t.license_id)) AS manual`;
+      const WINDOW = `t.license_id = $1
+        AND t.created_at >= now() - interval '30 days' AND t.created_at <= now()`;
+      const queries: Record<string, string> = {
+        by_hour: `SELECT EXTRACT(HOUR FROM t.created_at AT TIME ZONE 'UTC')::int AS hour, ${SPLIT}
+          FROM threads t WHERE ${WINDOW} GROUP BY 1 ORDER BY 1`,
+        by_channel: `SELECT first_inbound.channel_type, ${SPLIT}
+          FROM threads t
+          LEFT JOIN LATERAL (
+            SELECT cm.channel_type FROM channel_messages cm
+            WHERE cm.license_id = t.license_id AND cm.chat_id = t.chat_id AND cm.direction = 'inbound'
+            ORDER BY cm.created_at, cm.id LIMIT 1) first_inbound ON TRUE
+          WHERE ${WINDOW} GROUP BY first_inbound.channel_type`,
+        by_team: `SELECT ca.group_id AS team_id, g.name, ${SPLIT}
+          FROM threads t
+          JOIN chats c ON c.id = t.chat_id AND c.license_id = t.license_id
+          LEFT JOIN chat_access ca ON ca.chat_id = c.id
+          LEFT JOIN groups g ON g.license_id = c.license_id AND g.id = ca.group_id
+          WHERE ${WINDOW} GROUP BY ca.group_id, g.name`,
+      };
+
+      // NFR-P2: reads p99 < 150ms. On the seeded dataset execution is sub-millisecond;
+      // the assertion is a floor a plan regression (a dropped index, a bad join order)
+      // would blow through. The concrete numbers are the budget evidence 07.5-i owes —
+      // recorded in HANDOFF.
+      const NFR_P2_READ_BUDGET_MS = 150;
+      const timings: Record<string, number> = {};
+      for (const [name, sql] of Object.entries(queries)) {
+        const [row] = await owner.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          `EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`,
+          fx.a.licenseId,
+        );
+        const raw = row?.['QUERY PLAN'];
+        const plan = (typeof raw === 'string' ? JSON.parse(raw) : raw) as
+          | Array<{ 'Execution Time': number }>
+          | undefined;
+        const executionMs = plan?.[0]?.['Execution Time'];
+        expect(executionMs).toBeDefined();
+        timings[name] = executionMs ?? Number.NaN;
+        expect(timings[name]).toBeLessThan(NFR_P2_READ_BUDGET_MS);
+      }
+      // All three measured — a silently-skipped query would leave the budget unproven.
+      expect(Object.keys(timings)).toEqual(['by_hour', 'by_channel', 'by_team']);
+    });
+  });
+
+  // =========================================================================
 
   describe('AI Agent report (07.4)', () => {
     it('agrees with the overview and the invoice on resolutions', async () => {

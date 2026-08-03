@@ -127,6 +127,11 @@ const getReportInputJsonSchema = {
   additionalProperties: false,
 } as const;
 
+/** Parsed, validated arguments to `get_report` — the tool-call surface (08.8.3-c)
+ * validates the request body against `getReportInputSchema` and hands the
+ * executor this shape. */
+export type GetReportArgs = z.infer<typeof getReportInputSchema>;
+
 // --- summarize_chat ------------------------------------------------------------
 // `chat_id` mirrors the `:chatId` path param of `POST /copilot/chats/:chatId/summary`
 // — the single generic MCP tool-call endpoint has no path params, so the id

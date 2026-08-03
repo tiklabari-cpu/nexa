@@ -58,17 +58,20 @@ describe('resolveTool — callable tool resolution', () => {
     expect(typeof resolved?.execute).toBe('function');
   });
 
+  it('resolves get_report', () => {
+    const resolved = resolveTool('get_report');
+    expect(resolved?.descriptor.name).toBe('get_report');
+    expect(typeof resolved?.execute).toBe('function');
+  });
+
   it('returns undefined for a name no tool has', () => {
     expect(resolveTool('definitely_not_a_tool')).toBeUndefined();
   });
 
   it('returns undefined for a catalogued tool not yet served', () => {
-    // get_report/summarize_chat are named in the manifest but wired by later
-    // slices (08.8.3-e/-f). Until then they are not callable, and the route
-    // answers 404 for them — the same as for an unknown name, so the surface
-    // stays un-enumerable.
-    for (const name of ['get_report', 'summarize_chat']) {
-      expect(resolveTool(name), `${name} must not be callable yet`).toBeUndefined();
-    }
+    // summarize_chat is named in the manifest but wired by a later slice
+    // (08.8.3-f). Until then it is not callable, and the route answers 404 for
+    // it — the same as for an unknown name, so the surface stays un-enumerable.
+    expect(resolveTool('summarize_chat'), 'summarize_chat must not be callable yet').toBeUndefined();
   });
 });

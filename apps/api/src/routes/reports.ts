@@ -91,8 +91,12 @@ const rangeQuery = z.object({
 /** An export request: which report group, over which window (defaults to 30d). */
 const exportQuery = rangeQuery.extend({ group: z.string().min(1).max(64) });
 
-/** Default window: the last 30 days, the span every dashboard opens on. */
-function resolveRange(query: z.infer<typeof rangeQuery>): { from: Date; to: Date } {
+/**
+ * Default window: the last 30 days, the span every dashboard opens on. Exported
+ * so the `get_report` MCP tool (08.8.3-e) resolves a range the exact same way —
+ * same 30-day default, same `from > to` rejection — as every REST report route.
+ */
+export function resolveRange(query: z.infer<typeof rangeQuery>): { from: Date; to: Date } {
   const to = query.to ?? new Date();
   const from = query.from ?? new Date(to.getTime() - 30 * 86_400_000);
   if (from > to) throw ApiError.validation('`from` must be before `to`.');
@@ -991,6 +995,353 @@ async function buildSubscriptionView(
   };
 }
 
+// ===========================================================================
+// Report builders
+//
+// One pure(-ish) function per report — the exact query sequence and response
+// shape each `GET /reports/*` route below sends, extracted so the `get_report`
+// MCP tool (08.8.3-e) can run the same report inside its own tenant
+// transaction without duplicating a single query: both callers hand these a
+// transaction and a license, and get back the identical body.
+// ===========================================================================
+
+/**
+ * The Overview report for one window (FR-MOD-07.3). Shared by `GET
+ * /reports/overview` and `get_report` so the two can never quote different
+ * figures for the same license and range.
+ */
+export async function buildOverviewReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Record<string, unknown>> {
+  // The comparison window: the same span immediately before `from`, so a
+  // "vs previous" delta compares like with like (FR-MOD-07.3.1). A millisecond
+  // short of `from` keeps the two windows from sharing an instant.
+  const spanMs = to.getTime() - from.getTime();
+  const prevTo = new Date(from.getTime() - 1);
+  const prevFrom = new Date(from.getTime() - spanMs);
+  const windowHours = spanMs / 3_600_000;
+
+  // Sequential, not Promise.all: `tx` is one connection inside a Prisma
+  // interactive transaction (see withTenant), which does not support
+  // concurrent queries on the same client.
+  const totals = await windowTotals(tx, licenseId, from, to);
+  const satisfaction = await satisfactionCounts(tx, licenseId, from, to);
+
+  const byAgent = await tx.$queryRaw<
+    Array<{ agent_id: string; name: string | null; chats: bigint }>
+  >`
+    SELECT t.assignee_id::text AS agent_id, a.name, count(*) AS chats
+    FROM threads t
+    LEFT JOIN accounts a ON a.id = t.assignee_id
+    WHERE t.license_id = ${licenseId}
+      AND t.assignee_id IS NOT NULL
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+    GROUP BY t.assignee_id, a.name
+    ORDER BY chats DESC
+    LIMIT 20
+  `;
+
+  const topTags = await tx.$queryRaw<Array<{ name: string; count: bigint }>>`
+    SELECT tg.name, count(*) AS count
+    FROM thread_tags tt
+    JOIN tags tg ON tg.id = tt.tag_id
+    JOIN threads t ON t.id = tt.thread_id
+    WHERE t.license_id = ${licenseId}
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+    GROUP BY tg.name
+    ORDER BY count DESC
+    LIMIT 10
+  `;
+
+  const queued = await tx.thread.count({
+    where: { licenseId, active: true, queuePosition: { not: null } },
+  });
+
+  // "Total cases" is chats *plus* tickets (PRD §3.3). Counted here rather than
+  // folded into the thread query above because the two have no join to share —
+  // a ticket need not have come from a conversation at all.
+  const tickets = await ticketCount(tx, licenseId, from, to);
+
+  // The previous window: the same headline figures the delta badges compare
+  // against. No by-agent or by-tag depth — nothing on a KPI card needs it.
+  const prevTotals = await windowTotals(tx, licenseId, prevFrom, prevTo);
+  const prevSatisfaction = await satisfactionCounts(tx, licenseId, prevFrom, prevTo);
+  const prevTickets = await ticketCount(tx, licenseId, prevFrom, prevTo);
+
+  const good = satisfaction.good;
+  const bad = satisfaction.bad;
+  const rated = good + bad;
+  const totalChats = Number(totals.total_chats);
+  const automated = Number(totals.automated);
+  const assisted = Number(totals.assisted);
+  const manual = Number(totals.manual);
+  const closed = Number(totals.closed_chats);
+  const prevChats = Number(prevTotals.total_chats);
+
+  return {
+    range: { from: from.toISOString(), to: to.toISOString() },
+    // The equal-length window before this one, so every KPI card can show a
+    // vs-previous delta (FR-MOD-07.3.1). The comparable figures ride along and
+    // the client subtracts — the baseline stays visible next to the change.
+    previous_period: {
+      range: { from: prevFrom.toISOString(), to: prevTo.toISOString() },
+      chats: prevChats,
+      tickets: prevTickets,
+      total_cases: prevChats + prevTickets,
+      closed: Number(prevTotals.closed_chats),
+      manual: Number(prevTotals.manual),
+      assisted: Number(prevTotals.assisted),
+      automated: Number(prevTotals.automated),
+      avg_first_response_seconds: roundOrNull(prevTotals.avg_first_response_seconds),
+      avg_duration_seconds: roundOrNull(prevTotals.avg_duration_seconds),
+      satisfaction_score: satisfactionScore(prevSatisfaction),
+    },
+    totals: {
+      chats: totalChats,
+      tickets,
+      // The figure the PRD's KPI card shows. Sent as its own field rather than
+      // left for the client to add up, so every surface that quotes "total
+      // cases" quotes the same number.
+      total_cases: totalChats + tickets,
+      closed,
+      // PRD 07.3.2's three-way split of closed cases. Sent as three counts
+      // (not left for the client to derive) so every surface agrees, and by
+      // construction manual + assisted + automated === closed.
+      manual,
+      assisted,
+      // `automated` keeps ADR-09 unchanged — it is the invoice's number too.
+      automated,
+      // Shares of *closed* conversations, not all of them: an open chat has
+      // not resolved either way, and counting it would make the figures drop
+      // whenever the inbox is busy. Null (not 0%) when nothing closed.
+      manual_rate: resolutionRate(manual, closed),
+      assisted_rate: resolutionRate(assisted, closed),
+      automated_rate: resolutionRate(automated, closed),
+      queued_now: queued,
+    },
+    // The Chats section cards (PRD §7.3.3): how fast the AI is clearing chats
+    // and how long conversations run. `automated_per_hour` averages over the
+    // window; a zero-length window would divide by zero, so it reports 0.
+    chats: {
+      automated_per_hour: windowHours > 0 ? round(automated / windowHours) : 0,
+      automated_avg_duration_seconds: roundOrNull(totals.avg_automated_duration_seconds),
+      total_duration_seconds: Math.round(Number(totals.total_duration_seconds ?? 0)),
+    },
+    response_times: {
+      avg_first_response_seconds: roundOrNull(totals.avg_first_response_seconds),
+      avg_duration_seconds: roundOrNull(totals.avg_duration_seconds),
+    },
+    satisfaction: {
+      good,
+      bad,
+      // Null rather than 0% when nobody rated: an unrated period is unknown,
+      // not bad, and showing 0% would read as a catastrophe.
+      score: satisfactionScore(satisfaction),
+      responses: rated,
+    },
+    by_agent: byAgent.map((row) => ({
+      agent_id: row.agent_id,
+      name: row.name,
+      chats: Number(row.chats),
+    })),
+    top_tags: topTags.map((row) => ({ name: row.name, count: Number(row.count) })),
+  };
+}
+
+/**
+ * The Breakdown report for one window (FR-MOD-07.5). Shared by `GET
+ * /reports/breakdown` and `get_report` so the two can never quote different
+ * figures for the same license and range.
+ */
+export async function buildBreakdownReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Record<string, unknown>> {
+  // The resolution split per UTC day — the same helper the CSV export uses, so
+  // the tab and its download can never quote a different split for a day.
+  const byDay = await breakdownByDay(tx, licenseId, from, to);
+
+  // The same split per UTC hour of day — a dense 0-23 axis, so the client
+  // never has to fill in the hours nothing happened in.
+  const byHour = await breakdownByHour(tx, licenseId, from, to);
+
+  // The same split per channel — the oldest inbound adapter message decides a
+  // chat's channel, 'website' when it has none. The soft-FK join is locked on
+  // license *and* chat id (see breakdownByChannel), so another tenant's
+  // same-id row can never reclassify a chat here.
+  const byChannel = await breakdownByChannel(tx, licenseId, from, to);
+
+  // The same split per team — the groups a chat is shared with through
+  // chat_access. Fan-out is intentional (a chat open to two teams counts in
+  // both) and `overlapping` declares it. The join is license-locked through
+  // chats and groups (see breakdownByTeam), because chat_access has no
+  // license column of its own and group ids repeat across licenses.
+  const byTeam = await breakdownByTeam(tx, licenseId, from, to);
+
+  // The same split per assigned agent. An automated chat can still carry an
+  // assignee (nobody replied), so it shows against the agent it sat with.
+  const byAgent = await tx.$queryRaw<
+    Array<{
+      agent_id: string;
+      name: string | null;
+      chats: bigint;
+      closed: bigint;
+      automated: bigint;
+      assisted: bigint;
+      manual: bigint;
+    }>
+  >`
+    SELECT t.assignee_id::text AS agent_id, a.name,
+      ${SPLIT_COUNTS}
+    FROM threads t
+    LEFT JOIN accounts a ON a.id = t.assignee_id
+    WHERE t.license_id = ${licenseId}
+      AND t.assignee_id IS NOT NULL
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+    GROUP BY t.assignee_id, a.name
+    ORDER BY chats DESC
+    LIMIT 20
+  `;
+
+  return {
+    range: { from: from.toISOString(), to: to.toISOString() },
+    by_day: byDay.map((row) => ({
+      date: row.date,
+      chats: row.chats,
+      closed: row.closed,
+      manual: row.manual,
+      assisted: row.assisted,
+      automated: row.automated,
+    })),
+    by_hour: byHour.map((row) => ({
+      hour: row.hour,
+      chats: row.chats,
+      closed: row.closed,
+      manual: row.manual,
+      assisted: row.assisted,
+      automated: row.automated,
+    })),
+    by_agent: byAgent.map((row) => ({
+      agent_id: row.agent_id,
+      name: row.name,
+      chats: Number(row.chats),
+      closed: Number(row.closed),
+      manual: Number(row.manual),
+      assisted: Number(row.assisted),
+      automated: Number(row.automated),
+    })),
+    by_channel: byChannel.map((row) => ({
+      channel: row.channel,
+      chats: row.chats,
+      closed: row.closed,
+      manual: row.manual,
+      assisted: row.assisted,
+      automated: row.automated,
+    })),
+    by_team: byTeam.teams.map((row) => ({
+      team_id: row.team_id,
+      name: row.name,
+      chats: row.chats,
+      closed: row.closed,
+      manual: row.manual,
+      assisted: row.assisted,
+      automated: row.automated,
+    })),
+    // Declares the by_team fan-out: a chat reachable by more than one team is
+    // counted under each, so the rows can sum past the window total.
+    overlapping: byTeam.overlapping,
+  };
+}
+
+/**
+ * The AI Agent report for one window (FR-MOD-07.4). Shared by `GET
+ * /reports/ai-agent` and `get_report` so the two can never quote different
+ * figures for the same license and range.
+ */
+export async function buildAiAgentReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Record<string, unknown>> {
+  const totals = await windowTotals(tx, licenseId, from, to);
+
+  // Hand-offs to a human — the transfer system event (chat_transferred). The
+  // same helper the CSV export uses, so the two agree on the count.
+  const transfers = await transferCount(tx, licenseId, from, to);
+
+  const skillRuns = await tx.skillRun.count({
+    where: { licenseId, ranAt: { gte: from, lte: to } },
+  });
+
+  const automated = Number(totals.automated);
+  const closed = Number(totals.closed_chats);
+  // Of the chats the AI *finished* — resolved outright or handed off — the
+  // share it handed off. Null when it finished none either way.
+  const finished = automated + transfers;
+
+  return {
+    range: { from: from.toISOString(), to: to.toISOString() },
+    // ADR-09's figure, the same one the invoice's AI-resolution counter uses.
+    resolutions: automated,
+    resolution_rate: resolutionRate(automated, closed),
+    transfers,
+    transfer_rate: finished === 0 ? null : round(transfers / finished),
+    skill_runs: skillRuns,
+    avg_automated_duration_seconds: roundOrNull(totals.avg_automated_duration_seconds),
+  };
+}
+
+/**
+ * The Reviews report for one window (FR-MOD-07.8). Shared by `GET
+ * /reports/reviews` and `get_report` so the two can never quote different
+ * figures for the same license and range.
+ */
+export async function buildReviewsReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Record<string, unknown>> {
+  // The equal-length window immediately before this one, so the tab can show a
+  // vs-previous CSAT delta (the PRD's "67% vs 57%") — the same construction the
+  // Overview uses for its period comparison (FR-MOD-07.3.1).
+  const spanMs = to.getTime() - from.getTime();
+  const prevTo = new Date(from.getTime() - 1);
+  const prevFrom = new Date(from.getTime() - spanMs);
+
+  // Sequential, not Promise.all: withTenant is one interactive transaction and
+  // Prisma forbids concurrent queries on its client.
+  const counts = await satisfactionCounts(tx, licenseId, from, to);
+  const prevCounts = await satisfactionCounts(tx, licenseId, prevFrom, prevTo);
+  const byDay = await satisfactionByDay(tx, licenseId, from, to);
+
+  return {
+    range: { from: from.toISOString(), to: to.toISOString() },
+    csat: csatSummary(counts),
+    previous_period: {
+      range: { from: prevFrom.toISOString(), to: prevTo.toISOString() },
+      ...csatSummary(prevCounts),
+    },
+    by_day: byDay.map((row) => ({ date: row.date, ...csatSummary(row) })),
+    // Tracked-sales skeleton (FR-MOD-13.5, v2). No sales source is wired yet, so
+    // the shape is present but nothing is claimed: `configured` false and every
+    // figure null, so the surface renders an honest "not set up" state rather
+    // than a fabricated zero.
+    ecommerce: {
+      configured: false,
+      tracked_sales: null,
+      attributed_revenue_cents: null,
+      currency: null,
+    },
+  };
+}
+
 export default async function reportRoutes(
   app: FastifyInstance,
   options: { env: Env },
@@ -1003,152 +1354,8 @@ export default async function reportRoutes(
     const { from, to } = resolveRange(parsed.data);
     const tenant = request.tenant();
 
-    // The comparison window: the same span immediately before `from`, so a
-    // "vs previous" delta compares like with like (FR-MOD-07.3.1). A millisecond
-    // short of `from` keeps the two windows from sharing an instant.
-    const spanMs = to.getTime() - from.getTime();
-    const prevTo = new Date(from.getTime() - 1);
-    const prevFrom = new Date(from.getTime() - spanMs);
-    const windowHours = spanMs / 3_600_000;
-
-    const report = await request.withTenant(async (tx) => {
-      // Sequential, not Promise.all: withTenant runs in one interactive
-      // transaction, and Prisma forbids concurrent queries on its client.
-      const totals = await windowTotals(tx, tenant.licenseId, from, to);
-      const satisfaction = await satisfactionCounts(tx, tenant.licenseId, from, to);
-
-      const byAgent = await tx.$queryRaw<
-        Array<{ agent_id: string; name: string | null; chats: bigint }>
-      >`
-        SELECT t.assignee_id::text AS agent_id, a.name, count(*) AS chats
-        FROM threads t
-        LEFT JOIN accounts a ON a.id = t.assignee_id
-        WHERE t.license_id = ${tenant.licenseId}
-          AND t.assignee_id IS NOT NULL
-          AND t.created_at >= ${from} AND t.created_at <= ${to}
-        GROUP BY t.assignee_id, a.name
-        ORDER BY chats DESC
-        LIMIT 20
-      `;
-
-      const topTags = await tx.$queryRaw<Array<{ name: string; count: bigint }>>`
-        SELECT tg.name, count(*) AS count
-        FROM thread_tags tt
-        JOIN tags tg ON tg.id = tt.tag_id
-        JOIN threads t ON t.id = tt.thread_id
-        WHERE t.license_id = ${tenant.licenseId}
-          AND t.created_at >= ${from} AND t.created_at <= ${to}
-        GROUP BY tg.name
-        ORDER BY count DESC
-        LIMIT 10
-      `;
-
-      const queued = await tx.thread.count({
-        where: { licenseId: tenant.licenseId, active: true, queuePosition: { not: null } },
-      });
-
-      // "Total cases" is chats *plus* tickets (PRD §3.3). Counted here rather
-      // than folded into the thread query above because the two have no join to
-      // share — a ticket need not have come from a conversation at all.
-      const tickets = await ticketCount(tx, tenant.licenseId, from, to);
-
-      // The previous window: the same headline figures the delta badges compare
-      // against. No by-agent or by-tag depth — nothing on a KPI card needs it.
-      const prevTotals = await windowTotals(tx, tenant.licenseId, prevFrom, prevTo);
-      const prevSatisfaction = await satisfactionCounts(tx, tenant.licenseId, prevFrom, prevTo);
-      const prevTickets = await ticketCount(tx, tenant.licenseId, prevFrom, prevTo);
-
-      return {
-        totals,
-        satisfaction,
-        byAgent,
-        topTags,
-        queued,
-        tickets,
-        prevTotals,
-        prevSatisfaction,
-        prevTickets,
-      };
-    });
-
-    const good = report.satisfaction.good;
-    const bad = report.satisfaction.bad;
-    const rated = good + bad;
-    const totalChats = Number(report.totals.total_chats);
-    const automated = Number(report.totals.automated);
-    const assisted = Number(report.totals.assisted);
-    const manual = Number(report.totals.manual);
-    const closed = Number(report.totals.closed_chats);
-    const prevChats = Number(report.prevTotals.total_chats);
-
-    return reply.send({
-      range: { from: from.toISOString(), to: to.toISOString() },
-      // The equal-length window before this one, so every KPI card can show a
-      // vs-previous delta (FR-MOD-07.3.1). The comparable figures ride along and
-      // the client subtracts — the baseline stays visible next to the change.
-      previous_period: {
-        range: { from: prevFrom.toISOString(), to: prevTo.toISOString() },
-        chats: prevChats,
-        tickets: report.prevTickets,
-        total_cases: prevChats + report.prevTickets,
-        closed: Number(report.prevTotals.closed_chats),
-        manual: Number(report.prevTotals.manual),
-        assisted: Number(report.prevTotals.assisted),
-        automated: Number(report.prevTotals.automated),
-        avg_first_response_seconds: roundOrNull(report.prevTotals.avg_first_response_seconds),
-        avg_duration_seconds: roundOrNull(report.prevTotals.avg_duration_seconds),
-        satisfaction_score: satisfactionScore(report.prevSatisfaction),
-      },
-      totals: {
-        chats: totalChats,
-        tickets: report.tickets,
-        // The figure the PRD's KPI card shows. Sent as its own field rather
-        // than left for the client to add up, so every surface that quotes
-        // "total cases" quotes the same number.
-        total_cases: totalChats + report.tickets,
-        closed,
-        // PRD 07.3.2's three-way split of closed cases. Sent as three counts
-        // (not left for the client to derive) so every surface agrees, and by
-        // construction manual + assisted + automated === closed.
-        manual,
-        assisted,
-        // `automated` keeps ADR-09 unchanged — it is the invoice's number too.
-        automated,
-        // Shares of *closed* conversations, not all of them: an open chat has
-        // not resolved either way, and counting it would make the figures drop
-        // whenever the inbox is busy. Null (not 0%) when nothing closed.
-        manual_rate: resolutionRate(manual, closed),
-        assisted_rate: resolutionRate(assisted, closed),
-        automated_rate: resolutionRate(automated, closed),
-        queued_now: report.queued,
-      },
-      // The Chats section cards (PRD §7.3.3): how fast the AI is clearing chats
-      // and how long conversations run. `automated_per_hour` averages over the
-      // window; a zero-length window would divide by zero, so it reports 0.
-      chats: {
-        automated_per_hour: windowHours > 0 ? round(automated / windowHours) : 0,
-        automated_avg_duration_seconds: roundOrNull(report.totals.avg_automated_duration_seconds),
-        total_duration_seconds: Math.round(Number(report.totals.total_duration_seconds ?? 0)),
-      },
-      response_times: {
-        avg_first_response_seconds: roundOrNull(report.totals.avg_first_response_seconds),
-        avg_duration_seconds: roundOrNull(report.totals.avg_duration_seconds),
-      },
-      satisfaction: {
-        good,
-        bad,
-        // Null rather than 0% when nobody rated: an unrated period is unknown,
-        // not bad, and showing 0% would read as a catastrophe.
-        score: satisfactionScore(report.satisfaction),
-        responses: rated,
-      },
-      by_agent: report.byAgent.map((row) => ({
-        agent_id: row.agent_id,
-        name: row.name,
-        chats: Number(row.chats),
-      })),
-      top_tags: report.topTags.map((row) => ({ name: row.name, count: Number(row.count) })),
-    });
+    const body = await request.withTenant((tx) => buildOverviewReport(tx, tenant.licenseId, from, to));
+    return reply.send(body);
   });
 
   app.get('/reports/breakdown', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
@@ -1157,104 +1364,8 @@ export default async function reportRoutes(
     const { from, to } = resolveRange(parsed.data);
     const tenant = request.tenant();
 
-    const data = await request.withTenant(async (tx) => {
-      // The resolution split per UTC day — the same helper the CSV export uses,
-      // so the tab and its download can never quote a different split for a day.
-      const byDay = await breakdownByDay(tx, tenant.licenseId, from, to);
-
-      // The same split per UTC hour of day — a dense 0-23 axis, so the client
-      // never has to fill in the hours nothing happened in.
-      const byHour = await breakdownByHour(tx, tenant.licenseId, from, to);
-
-      // The same split per channel — the oldest inbound adapter message decides
-      // a chat's channel, 'website' when it has none. The soft-FK join is locked
-      // on license *and* chat id (see breakdownByChannel), so another tenant's
-      // same-id row can never reclassify a chat here.
-      const byChannel = await breakdownByChannel(tx, tenant.licenseId, from, to);
-
-      // The same split per team — the groups a chat is shared with through
-      // chat_access. Fan-out is intentional (a chat open to two teams counts in
-      // both) and `overlapping` declares it. The join is license-locked through
-      // chats and groups (see breakdownByTeam), because chat_access has no
-      // license column of its own and group ids repeat across licenses.
-      const byTeam = await breakdownByTeam(tx, tenant.licenseId, from, to);
-
-      // The same split per assigned agent. An automated chat can still carry an
-      // assignee (nobody replied), so it shows against the agent it sat with.
-      const byAgent = await tx.$queryRaw<
-        Array<{
-          agent_id: string;
-          name: string | null;
-          chats: bigint;
-          closed: bigint;
-          automated: bigint;
-          assisted: bigint;
-          manual: bigint;
-        }>
-      >`
-        SELECT t.assignee_id::text AS agent_id, a.name,
-          ${SPLIT_COUNTS}
-        FROM threads t
-        LEFT JOIN accounts a ON a.id = t.assignee_id
-        WHERE t.license_id = ${tenant.licenseId}
-          AND t.assignee_id IS NOT NULL
-          AND t.created_at >= ${from} AND t.created_at <= ${to}
-        GROUP BY t.assignee_id, a.name
-        ORDER BY chats DESC
-        LIMIT 20
-      `;
-
-      return { byDay, byHour, byAgent, byChannel, byTeam };
-    });
-
-    return reply.send({
-      range: { from: from.toISOString(), to: to.toISOString() },
-      by_day: data.byDay.map((row) => ({
-        date: row.date,
-        chats: row.chats,
-        closed: row.closed,
-        manual: row.manual,
-        assisted: row.assisted,
-        automated: row.automated,
-      })),
-      by_hour: data.byHour.map((row) => ({
-        hour: row.hour,
-        chats: row.chats,
-        closed: row.closed,
-        manual: row.manual,
-        assisted: row.assisted,
-        automated: row.automated,
-      })),
-      by_agent: data.byAgent.map((row) => ({
-        agent_id: row.agent_id,
-        name: row.name,
-        chats: Number(row.chats),
-        closed: Number(row.closed),
-        manual: Number(row.manual),
-        assisted: Number(row.assisted),
-        automated: Number(row.automated),
-      })),
-      by_channel: data.byChannel.map((row) => ({
-        channel: row.channel,
-        chats: row.chats,
-        closed: row.closed,
-        manual: row.manual,
-        assisted: row.assisted,
-        automated: row.automated,
-      })),
-      by_team: data.byTeam.teams.map((row) => ({
-        team_id: row.team_id,
-        name: row.name,
-        chats: row.chats,
-        closed: row.closed,
-        manual: row.manual,
-        assisted: row.assisted,
-        automated: row.automated,
-      })),
-      // Declares the by_team fan-out: a chat reachable by more than one team is
-      // counted under each, so the rows can sum past the window total.
-      overlapping: data.byTeam.overlapping,
-    });
+    const body = await request.withTenant((tx) => buildBreakdownReport(tx, tenant.licenseId, from, to));
+    return reply.send(body);
   });
 
   app.get('/reports/ai-agent', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
@@ -1263,36 +1374,8 @@ export default async function reportRoutes(
     const { from, to } = resolveRange(parsed.data);
     const tenant = request.tenant();
 
-    const data = await request.withTenant(async (tx) => {
-      const totals = await windowTotals(tx, tenant.licenseId, from, to);
-
-      // Hand-offs to a human — the transfer system event (chat_transferred). The
-      // same helper the CSV export uses, so the two agree on the count.
-      const transfers = await transferCount(tx, tenant.licenseId, from, to);
-
-      const skillRuns = await tx.skillRun.count({
-        where: { licenseId: tenant.licenseId, ranAt: { gte: from, lte: to } },
-      });
-
-      return { totals, transfers, skillRuns };
-    });
-
-    const automated = Number(data.totals.automated);
-    const closed = Number(data.totals.closed_chats);
-    // Of the chats the AI *finished* — resolved outright or handed off — the
-    // share it handed off. Null when it finished none either way.
-    const finished = automated + data.transfers;
-
-    return reply.send({
-      range: { from: from.toISOString(), to: to.toISOString() },
-      // ADR-09's figure, the same one the invoice's AI-resolution counter uses.
-      resolutions: automated,
-      resolution_rate: resolutionRate(automated, closed),
-      transfers: data.transfers,
-      transfer_rate: finished === 0 ? null : round(data.transfers / finished),
-      skill_runs: data.skillRuns,
-      avg_automated_duration_seconds: roundOrNull(data.totals.avg_automated_duration_seconds),
-    });
+    const body = await request.withTenant((tx) => buildAiAgentReport(tx, tenant.licenseId, from, to));
+    return reply.send(body);
   });
 
   app.get('/reports/reviews', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
@@ -1301,41 +1384,8 @@ export default async function reportRoutes(
     const { from, to } = resolveRange(parsed.data);
     const tenant = request.tenant();
 
-    // The equal-length window immediately before this one, so the tab can show a
-    // vs-previous CSAT delta (the PRD's "67% vs 57%") — the same construction the
-    // Overview uses for its period comparison (FR-MOD-07.3.1).
-    const spanMs = to.getTime() - from.getTime();
-    const prevTo = new Date(from.getTime() - 1);
-    const prevFrom = new Date(from.getTime() - spanMs);
-
-    const data = await request.withTenant(async (tx) => {
-      // Sequential, not Promise.all: withTenant is one interactive transaction
-      // and Prisma forbids concurrent queries on its client.
-      const counts = await satisfactionCounts(tx, tenant.licenseId, from, to);
-      const prevCounts = await satisfactionCounts(tx, tenant.licenseId, prevFrom, prevTo);
-      const byDay = await satisfactionByDay(tx, tenant.licenseId, from, to);
-      return { counts, prevCounts, byDay };
-    });
-
-    return reply.send({
-      range: { from: from.toISOString(), to: to.toISOString() },
-      csat: csatSummary(data.counts),
-      previous_period: {
-        range: { from: prevFrom.toISOString(), to: prevTo.toISOString() },
-        ...csatSummary(data.prevCounts),
-      },
-      by_day: data.byDay.map((row) => ({ date: row.date, ...csatSummary(row) })),
-      // Tracked-sales skeleton (FR-MOD-13.5, v2). No sales source is wired yet, so
-      // the shape is present but nothing is claimed: `configured` false and every
-      // figure null, so the surface renders an honest "not set up" state rather
-      // than a fabricated zero.
-      ecommerce: {
-        configured: false,
-        tracked_sales: null,
-        attributed_revenue_cents: null,
-        currency: null,
-      },
-    });
+    const body = await request.withTenant((tx) => buildReviewsReport(tx, tenant.licenseId, from, to));
+    return reply.send(body);
   });
 
   // Chat topics (FR-MOD-07.6): conversations clustered into topics with volume

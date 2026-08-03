@@ -11,9 +11,9 @@
  * path (the `search_tickets` reference tool), the cross-tenant property proven
  * from both licenses, and the audit trail.
  *
- * `search_tickets` (08.8.3-c) and `list_chats` (08.8.3-d) are wired in this
- * file; `get_report` and `summarize_chat` arrive in 08.8.3-e/-f, and the
- * end-to-end flow across all four is 08.8.3-h.
+ * `search_tickets` (08.8.3-c), `list_chats` (08.8.3-d) and `get_report`
+ * (08.8.3-e) are wired in this file; `summarize_chat` arrives in 08.8.3-f, and
+ * the end-to-end flow across all four is 08.8.3-h.
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -172,9 +172,9 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
   });
 
   it('answers 404 for a catalogued tool not yet served', async () => {
-    // get_report is in the manifest but wired by 08.8.3-e; until then it is not
-    // callable and 404s, the same as an unknown name.
-    const res = await callTool('get_report', readTokenA, {});
+    // summarize_chat is in the manifest but wired by 08.8.3-f; until then it is
+    // not callable and 404s, the same as an unknown name.
+    const res = await callTool('summarize_chat', readTokenA, {});
     expect(res.statusCode).toBe(404);
   });
 
@@ -392,5 +392,123 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
     const metadata = entries[0]!.metadata as { tool?: string; scope_used?: string };
     expect(metadata.tool).toBe('list_chats');
     expect(metadata.scope_used).toBe('chats--all:ro');
+  });
+
+  // --- get_report (FR-MOD-08.8.3-e) -------------------------------------------
+
+  describe('get_report', () => {
+    interface ReportResult {
+      tool: string;
+      result: Record<string, unknown>;
+    }
+
+    let reportsTokenA: string;
+    let reportsTokenB: string;
+
+    beforeEach(async () => {
+      // One extra ticket in A only, so overview's `totals.tickets` differs
+      // between the two licenses for the same call — proof the count is truly
+      // isolated per tenant, not just that B's row is absent from A's payload.
+      await owner.ticket.create({
+        data: {
+          id: 'iso-a-2',
+          licenseId: fx.a.licenseId,
+          subject: 'Report isolation extra A ticket',
+          lastMessageAt: new Date(),
+        },
+      });
+
+      reportsTokenA = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      reportsTokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+    });
+
+    it('refuses get_report for a token missing the reports scope with 403', async () => {
+      const res = await callTool('get_report', noScopeTokenA, { report: 'overview' });
+      expect(res.statusCode).toBe(403);
+      expect((res.json() as { error: { type: string } }).error.type).toBe('authorization');
+    });
+
+    it('rejects an unknown report enum value with 400', async () => {
+      const res = await callTool('get_report', reportsTokenA, { report: 'topics' });
+      expect(res.statusCode).toBe(400);
+      expect((res.json() as { error: { type: string } }).error.type).toBe('validation');
+    });
+
+    it('rejects a missing report argument with 400', async () => {
+      const res = await callTool('get_report', reportsTokenA, {});
+      expect(res.statusCode).toBe(400);
+      expect((res.json() as { error: { type: string } }).error.type).toBe('validation');
+    });
+
+    it('rejects a reversed date range with 400', async () => {
+      const res = await callTool('get_report', reportsTokenA, {
+        report: 'overview',
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-07-01T00:00:00.000Z',
+      });
+      expect(res.statusCode).toBe(400);
+      expect((res.json() as { error: { type: string } }).error.type).toBe('validation');
+    });
+
+    it.each(['overview', 'breakdown', 'ai-agent', 'reviews'] as const)(
+      'runs get_report(%s) and returns a populated report',
+      async (report) => {
+        const res = await callTool('get_report', reportsTokenA, { report });
+        expect(res.statusCode).toBe(200);
+
+        const body = res.json() as ReportResult;
+        expect(body.tool).toBe('get_report');
+        expect(body.result).toHaveProperty('range');
+      },
+    );
+
+    it('returns different overview ticket totals for two licenses (no cross-tenant mixing)', async () => {
+      const [resA, resB] = await Promise.all([
+        callTool('get_report', reportsTokenA, { report: 'overview' }),
+        callTool('get_report', reportsTokenB, { report: 'overview' }),
+      ]);
+      expect(resA.statusCode).toBe(200);
+      expect(resB.statusCode).toBe(200);
+
+      const totalsA = (resA.json() as ReportResult).result.totals as { tickets: number };
+      const totalsB = (resB.json() as ReportResult).result.totals as { tickets: number };
+      expect(totalsA.tickets).toBe(2);
+      expect(totalsB.tickets).toBe(1);
+    });
+
+    it('returns only the caller license figures, nothing tenant-specific in the envelope', async () => {
+      const res = await callTool('get_report', reportsTokenA, { report: 'overview' });
+      expect(res.statusCode).toBe(200);
+
+      const raw = res.payload;
+      expect(raw).not.toContain('license_id');
+      expect(raw).not.toContain('organization_id');
+      expect(raw).not.toContain(fx.b.organizationId);
+      expect(raw).not.toContain(String(fx.b.licenseId));
+    });
+
+    it('records mcp.tool_called for a successful get_report call', async () => {
+      const res = await callTool('get_report', reportsTokenA, { report: 'overview' });
+      expect(res.statusCode).toBe(200);
+
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'mcp.tool_called', target: 'mcp_tool:get_report' },
+      });
+      expect(entries).toHaveLength(1);
+
+      const metadata = entries[0]!.metadata as { tool?: string; scope_used?: string };
+      expect(metadata.tool).toBe('get_report');
+      expect(metadata.scope_used).toBe('reports_read');
+    });
   });
 });

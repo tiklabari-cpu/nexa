@@ -7,11 +7,10 @@
  *
  * Resolution is the union of two facts. The catalogue (`tool-catalog.ts`) knows
  * a tool's argument schema and required scopes; this table knows how to execute
- * it. A name in the catalogue but with no executor here — one a later slice
- * (`get_report`/`summarize_chat`, 08.8.3-e/-f) will wire — is *not yet
- * callable*, so it resolves to undefined and the route answers 404, exactly as
- * it does for a name in neither. Neither case reveals which tools might exist
- * (NFR-S5).
+ * it. A name in the catalogue but with no executor here — `summarize_chat`,
+ * which a later slice (08.8.3-f) will wire — is *not yet callable*, so it
+ * resolves to undefined and the route answers 404, exactly as it does for a
+ * name in neither. Neither case reveals which tools might exist (NFR-S5).
  *
  * What is deliberately NOT here: the tenant boundary. An executor is handed a
  * transaction that already has the caller's tenant context set, so isolation is
@@ -22,6 +21,7 @@ import { effectiveScopes } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import { toolByName, type McpToolDescriptor, type McpToolName } from './tool-catalog.js';
+import { runGetReport } from './tools/get-report.js';
 import { runListChats } from './tools/list-chats.js';
 import { runSearchTickets } from './tools/search-tickets.js';
 
@@ -41,12 +41,13 @@ export interface McpToolContext {
 export type McpToolExecutor = (ctx: McpToolContext, args: unknown) => Promise<unknown>;
 
 /**
- * The dispatch table: tool name → executor. `search_tickets` and `list_chats`
- * are wired; `get_report` and `summarize_chat` are added here by 08.8.3-e/-f.
+ * The dispatch table: tool name → executor. `search_tickets`, `list_chats` and
+ * `get_report` are wired; `summarize_chat` is added here by 08.8.3-f.
  */
 const EXECUTORS: Partial<Record<McpToolName, McpToolExecutor>> = {
   search_tickets: runSearchTickets,
   list_chats: runListChats,
+  get_report: runGetReport,
 };
 
 export interface ResolvedTool {

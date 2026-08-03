@@ -2145,12 +2145,12 @@
             "description": "`get_report` tek tool, zorunlu `report` argümanı enum: overview | breakdown | ai-agent | reviews (varsayım 6) + isteğe bağlı from/to aralığı. Her enum değeri reports.ts'teki İLGİLİ SORGUYU yeniden kullanır — sorgu kodu KOPYALANMAZ; gerekirse route handler gövdesindeki rapor derleme bloğu dışa aktarılabilir saf fonksiyona çıkarılır ve route onu çağırmaya devam eder (davranış değişmez; mevcut report",
             "details": "08.8.3-e — get_report tool adaptörü — `report` enum'u ile mevcut 4 rapor sorgusuna eşleme  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.8.3 (+ ADR-09: rapor sayıları = fatura sayacı)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. Güvenlik sınırı yok (gate/tenant çekirdekte, tek scope 'reports_read' katalogdan gelir); eşzamanlılık yok; PRD'deki tek belirsizlik (hangi rapor ucu) BU PLANDA karara bağlandı (varsayım 6) — pencereye yorum bırakılmıyor; kopyalanacak desen ismen mevcut (search-tickets.ts adaptörü + reports.ts sorgu blokları); kabul kriteri mekanik. 4 hazır sorgu → geniş yüzey değil, MAX gerekmiyor.\nNEDEN AÇIK: apps/api/src/routes/reports.ts'te dört `reports_read` korumalı uç var (510 /reports/overview, 664 /reports/breakdown, 725 /reports/ai-agent, 763 /reports/reviews) ama tek bir 'get_report' tool'una eşlenmiş değil; grep mcp = 0. Olgular kaydı: 'get_report tool'unun hangi endpoint'e eşleneceği net değil'.\nKAPSAM: `get_report` tek tool, zorunlu `report` argümanı enum: overview | breakdown | ai-agent | reviews (varsayım 6) + isteğe bağlı from/to aralığı. Her enum değeri reports.ts'teki İLGİLİ SORGUYU yeniden kullanır — sorgu kodu KOPYALANMAZ; gerekirse route handler gövdesindeki rapor derleme bloğu dışa aktarılabilir saf fonksiyona çıkarılır ve route onu çağırmaya devam eder (davranış değişmez; mevcut reports testleri regresyon kapısıdır). Scope 'reports_read' katalogdan gelir; gate çekirdekten tüketilir.\nDOSYALAR: apps/api/src/services/mcp/tools/get-report.ts · apps/api/src/services/mcp/tool-dispatch.ts · apps/api/src/routes/reports.ts · apps/api/test/integration/mcp-tools.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/mcp/tools/search-tickets.ts · apps/api/src/routes/reports.ts · apps/api/test/integration/reports-billing.test.ts\nKK (birebir): \"search_tickets/list_chats/get_report/summarize_chat tool'ları\"\nKK DOĞRULAMA: mcp-tools.test.ts: dört enum değeri de dolu rapor döner (KK 'get_report ... tool'ları'); 'reports_read' taşımayan token → 403 (KK 'OAuth scope bazlı' payı); iki lisanslı fixture'da sayılar karışmaz (KK 'tenant izole' payı). Regresyon: mevcut reports-billing.test.ts + reports-metrics.test.ts değişmeden yeşil (sorgu çıkarımı davranışı bozmadı).\nKAPSAM DIŞI: /reports/export (CSV) — ayrı EXPORT_SCOPES taşıyor, MCP yüzeyine alınmıyor (açık soru 3) · yeni rapor sorgusu/metrik tasarımı · PDF/benchmark karşılaştırma\nSÖZLEŞME: yok — tek genel uç 08.8.3-c'de dokümante edildi. UYARI: bu alt-görev yeni REST route AÇMAZ; açarsa OpenAPI'ye eklenip re-bundle zorunlu olur (contract-parity.test.ts kırılır).\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): geçersiz `report` değeri → 400 validation · negatif (önce): reports_read taşımayan token → 403 · negatif (önce): ters/bozuk tarih aralığı → 400 · cross-tenant: A ve B lisansı farklı sayılar döner; A'nın çağrısı B'nin verisini içermez · integration: dört enum × dolu yanıt + rapor sayısı = fatura sayacı (ADR-09) tutarlılığı · regresyon: reports-billing.test.ts + reports-metrics.test.ts değişmeden yeşil",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               3
             ],
             "parentId": "67",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T09:09:11.294Z"
           },
           {
             "id": 6,
@@ -2195,7 +2195,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T09:05:51.736Z"
+        "updatedAt": "2026-08-03T09:09:11.294Z"
       },
       {
         "id": "68",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T09:05:51.736Z",
+      "lastModified": "2026-08-03T09:09:11.294Z",
       "taskCount": 99,
       "completedCount": 77,
       "tags": [

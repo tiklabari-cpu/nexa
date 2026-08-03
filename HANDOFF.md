@@ -13,6 +13,48 @@
 
 ## Task log (newest-first)
 
+### 67.5 (08.8.3-e) — get_report tool adaptörü (`report` enum → mevcut 4 rapor sorgusu) — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] Dispatch tablosuna `get_report` dalı.
+  1. `apps/api/src/routes/reports.ts`: dört route'un (`GET /reports/overview|breakdown|ai-agent|reviews`)
+     sorgu-dizisi + yanıt-şekillendirme gövdesi, davranış birebir korunarak, dört dışa aktarılmış saf
+     fonksiyona çıkarıldı — `buildOverviewReport`/`buildBreakdownReport`/`buildAiAgentReport`/
+     `buildReviewsReport(tx, licenseId, from, to)`. Route handler'ları artık yalnız `resolveRange` +
+     `request.tenant()` + `request.withTenant((tx) => buildXReport(...))` + `reply.send(body)` — sorgu
+     kodu KOPYALANMADI, tek yerde yaşıyor. `resolveRange` de dışa aktarıldı (aynı 30-gün varsayılan +
+     `from>to` → `ApiError.validation` 400 kuralı MCP tarafında da geçerli olsun diye).
+  2. Yeni `apps/api/src/services/mcp/tools/get-report.ts`: `report` enum'una göre dört builder'a
+     dispatch eden `runGetReport`. `ctx.tenant.licenseId` doğrudan geçirilir — tenant sınırı çekirdekten
+     (`ctx.tx`'in RLS'i), executor'un kendi sınırı yok (search_tickets/list_chats deseniyle aynı).
+  3. `tool-catalog.ts`: `GetReportArgs` tip export'u (search_tickets/list_chats desenindeki gibi).
+  4. `tool-dispatch.ts`: `get_report: runGetReport` eklendi; başlık yorumu güncellendi (yalnız
+     `summarize_chat` "henüz bağlanmamış" listesinde kaldı).
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ ·
+  `pnpm -w test:unit` ✓ (303 api; `tool-dispatch.test.ts` 11 — yeni `get_report` resolve testi eklendi,
+  "henüz bağlanmamış" listesinden çıkarıldı) · `pnpm -w test:integration` ✓ (50 dosya / 1083 test,
+  serial). `mcp-tools.test.ts` 22→33: yeni `get_report` bloğu (+11) — 403 (reports scope eksik) · 400
+  (bilinmeyen `report` enum değeri, eksik `report` argümanı, ters tarih aralığı) · dört enum değerinin
+  hepsi 200 + dolu `result` · cross-tenant (A'ya ekstra 1 ticket seedlendi → overview `totals.tickets`
+  A=2/B=1, sayılar karışmıyor) · zarfta license_id/organization_id/B'nin id'leri yok · audit
+  (`mcp.tool_called`, `target: mcp_tool:get_report`, `scope_used: reports_read`). "Henüz bağlanmamış
+  tool → 404" testi artık `summarize_chat`'i kullanıyor (get_report artık bağlı). Regresyon:
+  `reports-billing.test.ts` (100) + `reports-topics.test.ts` (21) değişmeden yeşil — extraction hiçbir
+  yanıt şeklini değiştirmedi. **e2e KAPSAM DIŞI** (backend çekirdek, UI yok — 08.8.3-g'nin işi;
+  67.2/67.3/67.4 emsaliyle aynı).
+- **Varsayımlar:** Yok — görev tanımının kendi varsayım 6'sı (`report` enum: overview/breakdown/
+  ai-agent/reviews) zaten karara bağlanmıştı, pencereye bırakılan bir belirsizlik yoktu.
+- **Sonraki pencereye not:** `reports.ts`'teki dört builder artık modül-seviye export — ileride bu dört
+  route'a dokunacak biri (yeni alan, farklı agregasyon) hem route hem `get_report`'un aynı fonksiyonu
+  paylaştığını bilsin; ikisi birbirinden ayrılmamalı (aksi halde REST ve MCP farklı sayı döner). `-f`
+  aynı desenle devam eder (search_tickets/list_chats/get_report referans); `-f`'in hedefi
+  `summarize_chat` — `POST /copilot/chats/:chatId/summary`'nin okuma kısmını (not dosyalamadan)
+  adapte etmek, PII/CC-mask sınırının tool yanıtında da tutulduğunu doğrulamak.
+- **Çalışma alanı notu:** bu pencere başlarken de aynı işlenmemiş değişiklikler duruyordu (tm 66.5'te
+  ilk kez not edilmişti — `CONVENTIONS.md`/`.taskmaster/BUILD-BLUEPRINT.md`/`run-loop.sh`'ın `critical`
+  öncelik rezervasyonu K7.1 notu + `apps/e2e/kanit/36-copilot-panel.png`), artı iki öge tm 67.4'ten beri
+  birikiyor (`apps/e2e/kanit/28-panel-expanded.png`, `.playwright-mcp/`). Kapsam disiplini gereği bu
+  pencere de DOKUNMADI.
+
 ### 67.4 (08.8.3-d) — list_chats tool adaptörü (mevcut chat listeleme yoluna bağlama) — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] Dispatch tablosuna `list_chats` dalı.

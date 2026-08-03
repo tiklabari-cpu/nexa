@@ -300,3 +300,76 @@ describe('ReportsPage — Reviews report (07.8)', () => {
     expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/reviews\?from=.*&to=/));
   });
 });
+
+// ===========================================================================
+
+interface HourRow {
+  hour: number;
+  chats: number;
+  closed: number;
+  manual: number;
+  assisted: number;
+  automated: number;
+}
+
+const BREAKDOWN_BASE = {
+  range: OVERVIEW.range,
+  by_day: [] as Array<{ date: string } & Omit<HourRow, 'hour'>>,
+  by_agent: [] as Array<{ agent_id: string; name: string | null } & Omit<HourRow, 'hour'>>,
+  by_hour: undefined as HourRow[] | undefined,
+};
+
+function mockBreakdown(overrides: Partial<typeof BREAKDOWN_BASE>): void {
+  const payload = { ...BREAKDOWN_BASE, ...overrides };
+  api.get.mockImplementation((path: string) => {
+    if (path.startsWith('/reports/breakdown')) return Promise.resolve(payload);
+    if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    return Promise.reject(new Error(`unexpected ${path}`));
+  });
+}
+
+async function openBreakdownTab(): Promise<void> {
+  await userEvent.click(screen.getByRole('tab', { name: 'Breakdown' }));
+  await screen.findByRole('region', { name: 'By day' });
+}
+
+describe('ReportsPage — Breakdown report, By hour (07.5-g)', () => {
+  it('renders a row for each of the 24 hours with 00:00 / 23:00 labels', async () => {
+    const by_hour: HourRow[] = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      chats: hour + 1,
+      closed: hour,
+      manual: 0,
+      assisted: 0,
+      automated: hour,
+    }));
+    mockBreakdown({ by_hour });
+    renderReports(<ReportsPage />);
+    await openBreakdownTab();
+
+    const byHour = screen.getByRole('region', { name: 'By hour' });
+    expect(within(byHour).getByText('00:00')).toBeInTheDocument();
+    expect(within(byHour).getByText('23:00')).toBeInTheDocument();
+    expect(within(byHour).getAllByRole('row')).toHaveLength(25); // header + 24 hours
+  });
+
+  it('shows an empty state, not an empty table, when by_hour is missing', async () => {
+    mockBreakdown({ by_hour: undefined });
+    renderReports(<ReportsPage />);
+    await openBreakdownTab();
+
+    const byHour = screen.getByRole('region', { name: 'By hour' });
+    expect(within(byHour).getByText('No hourly data yet')).toBeInTheDocument();
+    expect(within(byHour).queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('shows an empty state, not an empty table, when by_hour is an empty array', async () => {
+    mockBreakdown({ by_hour: [] });
+    renderReports(<ReportsPage />);
+    await openBreakdownTab();
+
+    const byHour = screen.getByRole('region', { name: 'By hour' });
+    expect(within(byHour).getByText('No hourly data yet')).toBeInTheDocument();
+    expect(within(byHour).queryByRole('table')).not.toBeInTheDocument();
+  });
+});

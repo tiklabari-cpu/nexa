@@ -1662,12 +1662,12 @@
             "description": "Yerel `ReportsBreakdown` arayüzüne opsiyonel `by_hour?: Array<SplitRow & { hour: number }>`; `BreakdownTab`'e üçüncü `Section` — başlık \"By hour\", description UTC saat kovasını söyler; satır etiketi `00:00`–`23:00`; mevcut `SplitTable` bileşeni AYNEN kullanılır (yeni tablo bileşeni yazılmaz). Alan yoksa/boşsa mevcut `EmptyState` deseni. \"By day\"/\"By agent\" blokları DEĞİŞMEZ.",
             "details": "07.5-g — Breakdown sekmesi: \"By hour\" bölümü (salt-okunur tablo + empty state)  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.5\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 3 dosya (sayfa + unit test + e2e); güvenlik sınırı yok — salt-okunur render, veri zaten yetkilendirilmiş endpoint'ten geliyor; eşzamanlılık yok; yeni UI kompozisyonu yok — `Section`+`Card`+`SplitTable`+`EmptyState` deseni AYNI DOSYADA iki kez var (satır ~790-830) ve ismen verildi; kontrat değişmez; KK mekanik (render + empty state).\nNEDEN AÇIK: apps/web/src/features/reports/ReportsPage.tsx `BreakdownTab` (satır ~770-830) YALNIZ iki `Section` render ediyor: \"By day\" ve \"By agent\". Yerel `interface ReportsBreakdown` (satır ~83-87) da yalnız `by_day` + `by_agent` taşıyor — saat/takım/kanal için ne tip ne bileşen var.\nKAPSAM: Yerel `ReportsBreakdown` arayüzüne opsiyonel `by_hour?: Array<SplitRow & { hour: number }>`; `BreakdownTab`'e üçüncü `Section` — başlık \"By hour\", description UTC saat kovasını söyler; satır etiketi `00:00`–`23:00`; mevcut `SplitTable` bileşeni AYNEN kullanılır (yeni tablo bileşeni yazılmaz). Alan yoksa/boşsa mevcut `EmptyState` deseni. \"By day\"/\"By agent\" blokları DEĞİŞMEZ.\nDOSYALAR: apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx · apps/e2e/tests/reports.spec.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/reports/ReportsPage.tsx — `BreakdownTab`'in \"By day\" ve \"By agent\" Section+Card+EmptyState+SplitTable blokları (satır ~790-830) birebir kopyalanır · apps/web/src/features/reports/ReportsPage.tsx — `SplitTable` bileşeni (satır ~835+): caption/firstColumn/rows props sözleşmesi · apps/e2e/tests/reports.spec.ts:44-46 — `getByRole('region', { name: 'By day' })` görünürlük iddiası deseni\nKK (birebir): \"Boyutlu kırılım\" | \"KK-türetilmiş: \"Breakdown sekmesinde saat boyutu ayrı bir bölüm olarak görünür; veri yoksa boş dikdörtgen değil anlamlı empty state çıkar.\" — PRD KK'sı tek kelimelik; empty-state şartı depoda yerleşik FR-EK-B.1 kuralından (\"her boş liste için anlamlı empty state (boş dikdörtgen yok)\") ve mevcut BreakdownTab davranışından türetildi.\"\nKK DOĞRULAMA: ReportsPage.test.tsx unit: (1) `by_hour` dolu yanıt → 24 satır + `00:00`/`23:00` etiketleri görünür; (2) `by_hour: []` veya alan yok → EmptyState metni görünür, boş tablo değil. E2E reports.spec.ts: Breakdown sekmesinde `region name: 'By hour'` görünür (mevcut 'By day' iddiasının yanına).\nKAPSAM DIŞI: By team / By channel bölümleri (07.5-h) · Grafik/chart görselleştirme (mevcut tasarım tablo tabanlı) · Boyut seçici/filtre UI'ı · Saat dilimi seçici\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: by_hour dolu → 24 satır + saat etiketleri · unit: by_hour boş veya alan yok → EmptyState (çökme yok, geriye dönük uyum) · e2e: Breakdown sekmesinde 'By hour' region görünür · NEGATİF/CROSS-TENANT YOK ve gerekmiyor — gerekçe: salt-okunur render; izolasyon 07.5-b'nin backend testlerinde kanıtlanıyor",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               2
             ],
             "parentId": "63",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T00:06:02.989Z"
           },
           {
             "id": 8,
@@ -1699,7 +1699,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T00:03:21.626Z"
+        "updatedAt": "2026-08-03T00:06:02.989Z"
       },
       {
         "id": "64",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T00:03:21.627Z",
+      "lastModified": "2026-08-03T00:06:02.989Z",
       "taskCount": 99,
       "completedCount": 74,
       "tags": [

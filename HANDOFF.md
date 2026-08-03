@@ -13,6 +13,44 @@
 
 ## Task log (newest-first)
 
+### 63.7 (07.5-g) — Breakdown sekmesi: "By hour" bölümü — done — 2026-08-03 UTC
+
+- **Yapıldı:** `apps/web/src/features/reports/ReportsPage.tsx` — yerel `ReportsBreakdown` arayüzüne
+  opsiyonel `by_hour?: Array<SplitRow & { hour: number }>` (kontrat alanı zaten 07.5-a'da hazırdı,
+  kontrat değişmedi); `BreakdownTab`'e "By day"/"By agent" ile birebir aynı
+  `Section`+`Card`+`SplitTable`+`EmptyState` deseni kopyalanarak üçüncü `Section` ("By hour")
+  eklendi; satır etiketi `String(hour).padStart(2,'0')+':00'` (`00:00`–`23:00`); `by_hour`
+  yok/boş → mevcut `EmptyState`. "By day"/"By agent" blokları dokunulmadı. Mevcut `SplitTable`
+  bileşeni aynen yeniden kullanıldı, yeni tablo bileşeni yazılmadı.
+- **Doğrulama (hepsi yeşil, exit 0):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7) · `pnpm -w test:unit` (web 517/517, +3 yeni test: `ReportsPage.test.tsx`
+  "Breakdown report, By hour (07.5-g)" — 24 satır + `00:00`/`23:00` etiketleri · `by_hour` yok →
+  EmptyState + tablo yok · `by_hour: []` → EmptyState + tablo yok). `apps/e2e/tests/reports.spec.ts`
+  "navigates the Overview / AI Agent / Breakdown tabs" testine `region name: 'By hour'` görünürlük
+  iddiası eklendi (mevcut 'By day' iddiasının yanına) — `reports.spec.ts` 3/3 yeşil, üç ayrı koşuda
+  tekrarlanarak doğrulandı ([memory: nexa-e2e-clean-db] — DB/Redis konteynerleri koşuyordu, `.env`
+  source edildi, portlar boştu).
+- **Varsayımlar:** Sıralama `data.by_hour` dizisinin geldiği sırayla render edilir — backend'in
+  `breakdownByHour()` helper'ı (tm 63.2) zaten 0-23 DENSE sıralı dizi döndürüyor, ayrı bir sort
+  eklenmedi. "By hour" bölümü mevcut iki bölümün ARDINA eklendi (KAPSAM metni sıra belirtmiyordu).
+- **Not — ilgisiz e2e kırıklığı:** Tam `test:e2e` koşusunda `customers.spec.ts` (birden çok test)
+  ve `settings.spec.ts:421` ("composer shortcuts › a reply saved...") başarısız — bu görevin
+  değiştirdiği hiçbir dosyayla (ReportsPage/reports.spec.ts) ilgisi yok. `git stash` ile bu turun
+  değişiklikleri devre dışı bırakılıp `settings.spec.ts:421` yalnız çalıştırıldığında AYNI hata
+  (`getByLabel('Reply')` iki eleman: "Channels" section + reply input, strict-mode violation)
+  tekrarladı → önceden var olan, bu tur DIŞINDA bir kırıklık, kapsam dışı bırakıldı (CONVENTIONS
+  §5). `customers.spec.ts` başarısızlıkları tekrarlanan `db:seed` koşularıyla (global-setup her
+  `pnpm --filter @nexa/e2e test` çağrısında reseed ediyor, idempotent seed mutasyona uğramış
+  tenant'ı sıfırlamıyor — [memory: nexa-e2e-clean-db]) biriken durum kirliliğinden kaynaklanıyor
+  görünüyor; `pnpm db:reset` Prisma'nın AI-agent güvenlik kilidine takıldı (kullanıcı onayı
+  gerektiriyor, bu turda TALEP EDİLMEDİ/çalıştırılmadı — DB'ye yıkıcı hiçbir komut uygulanmadı).
+- **Sonraki pencereye not:** Kalan 07.5 alt-görevleri: **07.5-h** (UI "By team" + "By channel" +
+  `overlapping===true` dipnotu, bağımlılık 07.5-d/-e teslim), **07.5-i** (uçtan-uca çapraz-
+  tutarlılık e2e + NFR-P2 EXPLAIN bütçesi, dört boyutun hepsi). Bir sonraki pencere tam
+  `pnpm -w test:e2e` çalıştırırsa `customers.spec.ts`/`settings.spec.ts:421`'in hâlâ kırık
+  olduğunu görebilir — bu görevden KAYNAKLANMIYOR, ayrı bir düzeltme görevi (temiz `db:reset`
+  ile, kullanıcı onayıyla) gerektirir.
+
 ### 63.6 (07.5-f) — CSV export: breakdown grubunu dört boyuta genişlet (uzun format) — done — 2026-08-03 UTC
 
 - **Yapıldı:** `/reports/export?group=breakdown` CSV'si uzun formata geçti:

@@ -84,6 +84,7 @@ interface ReportsBreakdown {
   range: { from: string; to: string };
   by_day: Array<SplitRow & { date: string }>;
   by_agent: Array<SplitRow & { agent_id: string; name: string | null }>;
+  by_hour?: Array<SplitRow & { hour: number }>;
 }
 
 interface ReportsAiAgent {
@@ -822,6 +823,30 @@ function BreakdownTab(props: TabProps): ReactElement {
               rows={data.by_agent.map((row) => ({
                 key: row.agent_id,
                 label: row.name ?? 'Unknown agent',
+                ...row,
+              }))}
+            />
+          )}
+        </Card>
+      </Section>
+
+      <Section
+        title="By hour"
+        description="The same split resolved over each UTC hour, summed across the window."
+      >
+        <Card>
+          {(data.by_hour ?? []).length === 0 ? (
+            <EmptyState
+              title="No hourly data yet"
+              description="Once conversations happen in this window, their hourly split shows up here."
+            />
+          ) : (
+            <SplitTable
+              caption="Resolution split per hour"
+              firstColumn="Hour"
+              rows={(data.by_hour ?? []).map((row) => ({
+                key: String(row.hour),
+                label: `${String(row.hour).padStart(2, '0')}:00`,
                 ...row,
               }))}
             />

@@ -2011,13 +2011,13 @@
             "description": "Settings'e yeni `Skills` bölümü: katalog listesi (`GET /settings/skills`), skill ekle (`POST`), sil (`DELETE`), boş liste → anlamlı empty state (boş dikdörtgen değil — FR-EK-B.1 deseni), `canEdit` false ise salt-okunur. Ekle formu ortak form primitifiyle (alan-altı hata + geçersizken submit pasif). Ayrıca `describeConditions` çıktısına skill koşulu eklenir: `conditions.skill_ids` → skill adları. O",
             "details": "08.6.3-e — Settings: Skills kataloğu bölümü + routing kuralında skill koşulu gösterimi  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.6.3\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — tek dosya + testi, güvenlik sınırı yok (rol kapısı sunucuda 08.6.3-b'de; UI yalnız mevcut `canEdit` bayrağıyla gizler), eşzamanlılık yok, kopyalanacak desen ismen ve satır numarasıyla var (aynı dosyadaki RoutingRules bileşeni satır 1007-1075), kontrat değişikliği yok, KK mekanik doğrulanabilir (render + boş liste + ekle/sil).\nNEDEN AÇIK: SettingsPage.tsx'teki `RoutingRules` bileşeni (satır 1007-1075) yalnız `GET /settings/routing-rules` listesini ve enable/disable toggle'ını render ediyor; skill/uzmanlık alanı yok. `describeConditions` yalnız url/ülke koşullarını metne çeviriyor. Settings sayfasında 'Skills' başlıklı bir bölüm yok.\nKAPSAM: Settings'e yeni `Skills` bölümü: katalog listesi (`GET /settings/skills`), skill ekle (`POST`), sil (`DELETE`), boş liste → anlamlı empty state (boş dikdörtgen değil — FR-EK-B.1 deseni), `canEdit` false ise salt-okunur. Ekle formu ortak form primitifiyle (alan-altı hata + geçersizken submit pasif). Ayrıca `describeConditions` çıktısına skill koşulu eklenir: `conditions.skill_ids` → skill adları. Optimistic silme + hata geri alma mevcut `optimisticCacheUpdate` helper'ıyla.\nDOSYALAR: apps/web/src/features/settings/SettingsPage.tsx · apps/web/src/features/settings/SettingsForms.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/settings/SettingsPage.tsx (RoutingRules bileşeni satır 1007-1075 — useQuery + useMutation + optimisticCacheUpdate + Section/Card/EmptyState/StatusDot kalıbı ve `describeConditions`) · apps/web/src/features/settings/BannedCustomerIps.test.tsx (liste + ekle/sil ekranının test kalıbı) · apps/web/src/components/EmptyState.tsx\nKK (birebir): \"Uzmanlık/skill bazlı\"\nKK DOĞRULAMA: unit (vitest + RTL) — katalog listesi render eder; boş yanıt → anlamlı empty state; ekle formunda boş ad → alan-altı hata + submit pasif; sil → listeden düşer, sunucu hatasında geri gelir; `canEdit=false` → ekle/sil kontrolleri render edilmez; skill_ids taşıyan routing kuralı satırında skill adı görünür.\nKAPSAM DIŞI: ajan başına skill ataması (08.6.3-f) · takeover butonu (08.6.3-g) · yeni routing kuralı OLUŞTURMA formu — bugün de yok, bu kalemin kapsamı değil · skill bazlı raporlama\nSÖZLEŞME: yok — yalnız 08.6.3-b/-c'de eklenen mevcut endpoint'ler tüketilir\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit (katalog render + anlamlı empty state) · unit negatif (boş ad → alan-altı hata + submit pasif; canEdit=false → kontroller render edilmez — önce yazılır) · unit (optimistic silme + sunucu hatasında geri alma) · unit (skill_ids taşıyan kural satırında skill adı görünür). Cross-tenant UI'da uygulanamaz — 08.6.3-b ve -i'de karşılanır",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2,
               3
             ],
             "parentId": "66",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T06:08:16.328Z"
           },
           {
             "id": 6,
@@ -2074,7 +2074,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T05:51:39.518Z"
+        "updatedAt": "2026-08-03T06:08:16.328Z"
       },
       {
         "id": "67",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T05:51:39.518Z",
+      "lastModified": "2026-08-03T06:08:16.328Z",
       "taskCount": 99,
       "completedCount": 76,
       "tags": [

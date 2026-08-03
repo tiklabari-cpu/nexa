@@ -2158,12 +2158,12 @@
             "description": "`summarize_chat` dalı: copilot-service.ts:182 conversationTurns() ile turn'leri oku → packages/ai-mock/src/assist.ts summariseConversation() ile özetle → yanıtı apps/api/src/lib/cc-mask.ts'ten geçirerek dön. İNTERNAL NOTE YAZILMAZ (salt-okunur tool, varsayım 7) — copilot akışının mevcut yazma davranışı değişmez. Erişilemeyen/başka lisansın chatId'si → 404 (403 değil). Yanıtta ham kart numarası bul",
             "details": "08.8.3-f — summarize_chat tool'u + tool yanıtlarında PII/CC-mask sınırının doğrulanması  [OPUS-XHIGH]\n\nPRD: FR-MOD-08.8.3 (+ NFR-S5, NFR-S9)\nETİKET GEREKÇESİ: OPUS-XHIGH: PII maskeleme sınırına dokunuyor (koşul 2 hassasiyeti) — bir LLM istemcisine transcript özeti dökülüyor, ham PII sızarsa geri alınamaz. Ancak maskeleme ALGORİTMASI yeni değil: apps/api/src/lib/cc-mask.ts mevcut ve testli (08.9.5, tm 70), summariseConversation() deterministik ve testli; tenant gate çekirdekte kanıtlandı → OPUS-MAX değil. Güvenlik hassasiyeti nedeniyle Sonnet'e ASLA verilmez.\nNEDEN AÇIK: apps/api/src/routes/copilot.ts:130-152 summariseConversation()'ı YALNIZ internal-note yazan akışta kullanıyor (özet chats.sendEvent ile recipients:'agents' notu olarak yazılıyor); MCP yanıtı için ayrı bir JSON sözleşmesi yok. Olgular kaydı: 'CC-mask/spam-filter sonrası mı ham mı transcript döneceği tanımsız (PII riski)'. grep mcp = 0.\nKAPSAM: `summarize_chat` dalı: copilot-service.ts:182 conversationTurns() ile turn'leri oku → packages/ai-mock/src/assist.ts summariseConversation() ile özetle → yanıtı apps/api/src/lib/cc-mask.ts'ten geçirerek dön. İNTERNAL NOTE YAZILMAZ (salt-okunur tool, varsayım 7) — copilot akışının mevcut yazma davranışı değişmez. Erişilemeyen/başka lisansın chatId'si → 404 (403 değil). Yanıtta ham kart numarası bulunmadığı testle kanıtlanır.\nDOSYALAR: apps/api/src/services/mcp/tools/summarize-chat.ts · apps/api/src/services/mcp/tool-dispatch.ts · apps/api/test/integration/mcp-tools.test.ts · apps/api/test/integration/cc-masking.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/copilot.ts · apps/api/src/services/ai/copilot-service.ts · packages/ai-mock/src/assist.ts · apps/api/src/lib/cc-mask.ts · apps/api/test/integration/cc-masking.test.ts\nKK (birebir): \"search_tickets/list_chats/get_report/summarize_chat tool'ları\" | \"tenant izole\"\nKK DOĞRULAMA: mcp-tools.test.ts: summarize_chat kendi lisansındaki chat için özet döner (KK 'summarize_chat ... tool'ları'); başka lisansın chatId'si → 404 (KK 'tenant izole'); chats scope'suz token → 403 (KK 'OAuth scope bazlı' payı). cc-masking.test.ts'e ek: transcript'te geçerli Luhn kart numarası varken tool yanıtında maskeli görünür.\nKAPSAM DIŞI: mevcut POST /copilot/chats/:chatId/summary davranışını değiştirmek · Assisted/AI-resolution sayaçlarını beslemek (açık soru 4) · spam-filter'ın okuma yolunda tekrar çalıştırılması (yazma anında uygulanıyor) · gerçek LLM çağrısı (dış servisler mock)\nSÖZLEŞME: yok — tek genel uç 08.8.3-c'de dokümante edildi; yanıt McpToolCallResult içinde kalır.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): başka lisansın chatId'si → 404 (403 değil) · negatif (önce): chats scope'suz token → 403 · negatif (önce): arşivlenmiş/erişilemeyen chat → 404 · negatif (önce): geçerli Luhn kart numaralı transcript → yanıtta maskeli (ham PAN assert edilerek kırmızı görülür) · cross-tenant: iki lisanslı fixture üzerinde özet çağrısı karşı lisansı görmüyor · integration: pozitif özet + özetin internal note OLARAK YAZILMADIĞI (chat event sayısı değişmiyor) iddiası · regresyon: copilot.test.ts (mevcut summary akışı) değişmeden yeşil",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3
             ],
             "parentId": "67",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T09:45:33.243Z"
           },
           {
             "id": 7,
@@ -2195,7 +2195,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T09:27:16.553Z"
+        "updatedAt": "2026-08-03T09:45:33.243Z"
       },
       {
         "id": "68",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T09:27:16.553Z",
+      "lastModified": "2026-08-03T09:45:33.243Z",
       "taskCount": 99,
       "completedCount": 77,
       "tags": [

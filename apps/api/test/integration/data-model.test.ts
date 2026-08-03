@@ -507,6 +507,105 @@ describe('data model invariants', () => {
   });
 
   // =========================================================================
+  // Agent expertise (skill-based routing — FR-MOD-08.6.3)
+  // =========================================================================
+
+  describe('agent expertise', () => {
+    it('has RLS enabled and a tenant policy on both tables', async () => {
+      // The KK for 08.6.3-a: the catalogue exists, is protected, and carries a
+      // policy — the same shape "covers every tenant table" asserts in bulk,
+      // named here so a regression points straight at this slice.
+      const security = await owner.$queryRaw<Array<{ relname: string; enabled: boolean }>>`
+        SELECT relname, relrowsecurity AS enabled FROM pg_class
+        WHERE relname IN ('expertise', 'agent_expertise')
+        ORDER BY relname
+      `;
+      expect(security).toEqual([
+        { relname: 'agent_expertise', enabled: true },
+        { relname: 'expertise', enabled: true },
+      ]);
+
+      const policies = await owner.$queryRaw<Array<{ tablename: string; policyname: string }>>`
+        SELECT tablename, policyname FROM pg_policies
+        WHERE tablename IN ('expertise', 'agent_expertise')
+        ORDER BY tablename
+      `;
+      expect(policies).toEqual([
+        { tablename: 'agent_expertise', policyname: 'agent_expertise_tenant' },
+        { tablename: 'expertise', policyname: 'expertise_tenant' },
+      ]);
+    });
+
+    it('keeps an expertise slug unique per license — a re-seed cannot duplicate it', async () => {
+      // What makes the demo seed idempotent at the catalogue level: the same
+      // (license, slug) can exist once, so running the seed twice can never add
+      // a fourth area. The same slug under a *different* license is fine.
+      await owner.expertise.create({
+        data: { licenseId: fx.a.licenseId, name: 'Billing', slug: 'billing' },
+      });
+      await expect(
+        owner.expertise.create({
+          data: { licenseId: fx.a.licenseId, name: 'Billing again', slug: 'billing' },
+        }),
+      ).rejects.toThrow(/unique|duplicate/i);
+
+      // Same slug, other tenant: allowed, because the key is (license, slug).
+      await expect(
+        owner.expertise.create({
+          data: { licenseId: fx.b.licenseId, name: 'Billing', slug: 'billing' },
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it("hides another tenant's expertise and assignments", async () => {
+      const mine = await owner.expertise.create({
+        data: { licenseId: fx.a.licenseId, name: 'Onboarding', slug: 'onboarding' },
+        select: { id: true },
+      });
+      const theirs = await owner.expertise.create({
+        data: { licenseId: fx.b.licenseId, name: 'Onboarding', slug: 'onboarding' },
+        select: { id: true },
+      });
+      await owner.agentExpertise.create({
+        data: { licenseId: fx.a.licenseId, agentId: fx.a.ownerAccountId, expertiseId: mine.id },
+      });
+      await owner.agentExpertise.create({
+        data: { licenseId: fx.b.licenseId, agentId: fx.b.ownerAccountId, expertiseId: theirs.id },
+      });
+
+      const visible = await withTenant(
+        app,
+        { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+        async (tx) => ({
+          expertise: await tx.expertise.findMany({ select: { id: true } }),
+          links: await tx.agentExpertise.findMany({ select: { expertiseId: true } }),
+        }),
+      );
+      expect(visible.expertise.map((e) => e.id)).toEqual([mine.id]);
+      expect(visible.links.map((l) => l.expertiseId)).toEqual([mine.id]);
+    });
+
+    it('drops an expertise together with its assignments (composite FK cascade)', async () => {
+      const area = await owner.expertise.create({
+        data: { licenseId: fx.a.licenseId, name: 'Technical', slug: 'technical' },
+        select: { id: true },
+      });
+      await owner.agentExpertise.create({
+        data: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId, expertiseId: area.id },
+      });
+
+      await owner.expertise.delete({
+        where: { licenseId_id: { licenseId: fx.a.licenseId, id: area.id } },
+      });
+
+      const orphans = await owner.agentExpertise.count({
+        where: { licenseId: fx.a.licenseId, expertiseId: area.id },
+      });
+      expect(orphans).toBe(0);
+    });
+  });
+
+  // =========================================================================
   // Brands (Multibrand — PRD §5.3 / NFR-S4)
   // =========================================================================
 

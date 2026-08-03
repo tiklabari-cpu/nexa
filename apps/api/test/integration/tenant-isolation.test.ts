@@ -280,6 +280,116 @@ describe('tenant isolation (RLS)', () => {
     });
   });
 
+  describe('agent expertise (FR-MOD-08.6.3) — skill-based routing isolation', () => {
+    // expertise and agent_expertise both carry a license_id, so the policy is the
+    // plain license match. The join is the row routing (08.6.3-c) will trust to
+    // decide who is qualified for a chat, so a cross-tenant leak here would offer
+    // one workspace's conversations to another workspace's agents.
+    let aExpertiseId: bigint;
+    let bExpertiseId: bigint;
+
+    beforeAll(async () => {
+      // Seeded as the owner, which is not subject to RLS.
+      const aArea = await owner.expertise.create({
+        data: { licenseId: fixtures.a.licenseId, name: 'Refunds', slug: 'refunds' },
+        select: { id: true },
+      });
+      const bArea = await owner.expertise.create({
+        data: { licenseId: fixtures.b.licenseId, name: 'Refunds', slug: 'refunds' },
+        select: { id: true },
+      });
+      aExpertiseId = aArea.id;
+      bExpertiseId = bArea.id;
+      await owner.agentExpertise.create({
+        data: {
+          licenseId: fixtures.a.licenseId,
+          agentId: fixtures.a.agentAccountId,
+          expertiseId: aExpertiseId,
+        },
+      });
+      await owner.agentExpertise.create({
+        data: {
+          licenseId: fixtures.b.licenseId,
+          agentId: fixtures.b.agentAccountId,
+          expertiseId: bExpertiseId,
+        },
+      });
+    });
+
+    afterAll(async () => {
+      await owner.expertise.deleteMany({ where: { slug: 'refunds' } });
+    });
+
+    it('reads only its own license expertise and assignments', async () => {
+      const result = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        async (tx) => ({
+          expertise: await tx.expertise.findMany({ select: { id: true } }),
+          links: await tx.agentExpertise.findMany({ select: { expertiseId: true } }),
+        }),
+      );
+      expect(result.expertise.map((e) => e.id)).toEqual([aExpertiseId]);
+      expect(result.links.map((l) => l.expertiseId)).toEqual([aExpertiseId]);
+    });
+
+    it('cannot fetch a tenant B expertise by id', async () => {
+      // Correct SQL and the row exists — RLS is what makes it invisible (IDOR).
+      const found = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) =>
+          tx.expertise.findUnique({
+            where: { licenseId_id: { licenseId: fixtures.b.licenseId, id: bExpertiseId } },
+          }),
+      );
+      expect(found).toBeNull();
+    });
+
+    it('cannot plant an expertise for tenant B (WITH CHECK)', async () => {
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.expertise.create({
+              data: { licenseId: fixtures.b.licenseId, name: 'Planted', slug: 'planted' },
+            }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it('cannot assign a tenant B agent to a tenant B expertise (WITH CHECK)', async () => {
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.agentExpertise.create({
+              data: {
+                licenseId: fixtures.b.licenseId,
+                agentId: fixtures.b.agentAccountId,
+                expertiseId: bExpertiseId,
+              },
+            }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it('cannot delete a tenant B assignment', async () => {
+      const result = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.agentExpertise.deleteMany({ where: { expertiseId: bExpertiseId } }),
+      );
+      expect(result.count).toBe(0);
+      const survivors = await owner.agentExpertise.count({
+        where: { licenseId: fixtures.b.licenseId, expertiseId: bExpertiseId },
+      });
+      expect(survivors).toBe(1);
+    });
+  });
+
   describe('brands — Multibrand tenant isolation (NFR-S4)', () => {
     // Brands carry only a license_id, so the policy is the plain license match,
     // like websites/widget_settings. Proven the same way as every tenant table:

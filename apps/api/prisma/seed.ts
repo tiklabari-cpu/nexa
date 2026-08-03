@@ -347,6 +347,35 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
     });
   }
 
+  // --- Agent expertise (skill-based routing — FR-MOD-08.6.3) ----------------
+
+  // A small catalogue of expertise areas, plus a few agent↔expertise links so
+  // the join is not empty in the demo. Deterministic (fixed slugs, sequential
+  // creates); the whole tenant seed is idempotent through the org existence
+  // check above, so re-running never adds a fourth area.
+  const expertiseAreas: Array<{ id: bigint }> = [];
+  for (const area of [
+    { name: 'Billing', slug: 'billing' },
+    { name: 'Technical support', slug: 'technical-support' },
+    { name: 'Onboarding', slug: 'onboarding' },
+  ]) {
+    const created = await prisma.expertise.create({
+      data: { licenseId, name: area.name, slug: area.slug },
+      select: { id: true },
+    });
+    expertiseAreas.push(created);
+  }
+
+  await prisma.agentExpertise.create({
+    data: { licenseId, agentId: owner.id, expertiseId: expertiseAreas[0]!.id },
+  });
+  for (const [index, agent] of agents.entries()) {
+    const area = expertiseAreas[(index + 1) % expertiseAreas.length]!;
+    await prisma.agentExpertise.create({
+      data: { licenseId, agentId: agent.id, expertiseId: area.id },
+    });
+  }
+
   // --- Channels, website, widget --------------------------------------------
 
   // The license's default brand — the same row the migration backfill lays down

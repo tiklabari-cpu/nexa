@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### 66.1 (08.6.3-a) — Skill/uzmanlık kataloğu veri modeli (expertise + agent_expertise, RLS, seed) — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-XHIGH] Skill-bazlı routing'in veri katmanı. İki tenant-scoped tablo:
+  `expertise` (license-scoped composite PK `(license_id, id)` — Group deseni, BIGSERIAL id;
+  `name`/`slug`/`archived`/`created_at`; `unique(license_id, slug)`) ve `agent_expertise`
+  (composite PK `(license_id, agent_id, expertise_id)`, `@@index(agent_id)`, composite FK
+  `(license_id, expertise_id) → expertise(license_id, id)` cascade + `agent_id → accounts` cascade).
+  Migration `20260803100000_agent_expertise`: yapısal DDL (`prisma migrate diff` birebir) + elle
+  `ENABLE ROW LEVEL SECURITY` + `<t>_tenant` policy (`license_id = nexa_current_license()`,
+  USING+WITH CHECK) + `nexa_app` GRANT. Seed'e tenant başına 3 uzmanlık (Billing / Technical support /
+  Onboarding) + owner/ajan atamaları. **Route / kontrat / UI YOK** (kapsam: -b..-g).
+  Dosyalar: `apps/api/prisma/schema.prisma` · `.../migrations/20260803100000_agent_expertise/migration.sql`
+  · `prisma/seed.ts` · `test/integration/data-model.test.ts` · `test/integration/tenant-isolation.test.ts`.
+- **Doğrulama (DoD TAM yeşil, exit 0):** `pnpm -w typecheck` 11/11 · `pnpm -w lint` 8/8 ·
+  `pnpm -w build` 7/7 · `pnpm -w test:unit` (web 532 dahil) · `pnpm -w test:integration`
+  (api **1002/1002**, 47 dosya; +9 yeni: data-model +4, tenant-isolation +5 · rtm 51) ·
+  `db:check-drift` temiz (1 known-unmodellable pgvector) · `prisma migrate deploy` temiz ·
+  seed iki kez koşuldu → sayı artmadı (6 expertise / 5 agent_expertise sabit). E2E: bu task
+  route/UI eklemediği için ilgili akış yok; kapı = RLS + cross-tenant integration süiti (yeşil).
+- **Varsayımlar (KK stale premise düzeltmesi):**
+  1. Task detayı `Skill` + `skills`/`agent_skills` diyordu, ama `skills` tablosu **zaten** ADR-14
+     AI-otomasyon Skill'ine ait (farklı kavram: `ai_agent_id`/`kind`/`steps`). Çakışmayı önlemek
+     için uzmanlık modeli **`expertise` / `agent_expertise`** adıyla kuruldu. KK davranışsaldı
+     ("ajan↔uzmanlık ilişkisi, license-scoped, RLS") → karşılandı.
+  2. Migration adı task'ta `20260801100000_...` idi ama o timestamp uygulanmış Ağustos-2
+     migration'larının ÖNÜNE düşerdi → monoton olması için `20260803100000_agent_expertise`.
+- **Sonraki pencereye not:** 08.6.3-b (CRUD + atama API) bu modeli kullanır — Prisma modelleri
+  `Expertise`/`AgentExpertise`, tablolar `expertise`/`agent_expertise`. Kontrat satırı -b'de
+  route'uyla birlikte eklenir (contract-parity iki yönlü). Ürün UI'ında "Skills" denebilir ama
+  DB tablosu `expertise`. 08.6.3 gereksinim satırı PLAN.md'de `◐` (yalnız veri katmanı).
+  Çalışma alanında **bu task'a ait olmayan** önceden var olan değişiklikler bırakıldı (bkz. aşağıdaki not).
+- **Not (pre-existing, dokunulmadı):** Pencere açıldığında çalışma alanı zaten kirliydi —
+  `M .taskmaster/BUILD-BLUEPRINT.md`, `M CONVENTIONS.md`, `M apps/e2e/kanit/36-copilot-panel.png`,
+  `M run-loop.sh`, `?? .playwright-mcp/`. Bunlar bu task'ın işi değil; kapsam disiplini (CONVENTIONS §5)
+  gereği commit'e alınmadı.
+
 ### 64.8 (07.6-h) — Uçtan uca doğrulama: Chat topics e2e (dolu + empty) + ai-mock paylaşım regresyonu — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-XHIGH] `apps/e2e/tests/reports.spec.ts`'e yeni `describe('reports — chat

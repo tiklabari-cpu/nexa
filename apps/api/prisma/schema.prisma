@@ -64,6 +64,7 @@ model License {
   apiTokens              ApiToken[]
   refreshTokens          OauthRefreshToken[]
   groups                 Group[]
+  expertise              Expertise[]
   chats                  Chat[]
   tags                   Tag[]
   tickets                Ticket[]
@@ -117,6 +118,7 @@ model Account {
   authorizationCodes OauthAuthorizationCode[]
   refreshTokens      OauthRefreshToken[]
   groupMemberships   GroupAgent[]
+  expertise          AgentExpertise[]
   passwordResets     PasswordResetToken[]
   invitationsSent    Invitation[]
   ticketFollows      TicketFollower[]
@@ -364,6 +366,49 @@ model GroupAgent {
   @@id([licenseId, groupId, agentId])
   @@index([agentId])
   @@map("group_agents")
+}
+
+// ===========================================================================
+// Agent expertise (skill-based routing — FR-MOD-08.6.3)
+// ===========================================================================
+
+/// An area of expertise an agent can carry, the catalogue "expertise/skill
+/// based" routing draws on (08.6.3-c). Named `expertise` at the data layer
+/// because `skills` is already the AI-automation Skill (ADR-14, a wholly
+/// different concept). License-scoped with a Group-style composite key, so an
+/// id is a small per-license integer the routing UI can show, and a slug is
+/// unique within a license.
+model Expertise {
+  id        BigInt   @default(autoincrement())
+  licenseId BigInt   @map("license_id")
+  name      String
+  slug      String
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  agents  AgentExpertise[]
+
+  @@id([licenseId, id])
+  @@unique([licenseId, slug])
+  @@map("expertise")
+}
+
+/// The tie between an agent and an area of expertise — the row routing reads to
+/// decide who is qualified for a chat. Composite key mirrors group_agents; the
+/// license flows in through the expertise relation, and the agent index serves
+/// the "what is this agent good at" lookup.
+model AgentExpertise {
+  licenseId   BigInt @map("license_id")
+  agentId     String @map("agent_id") @db.Uuid
+  expertiseId BigInt @map("expertise_id")
+
+  expertise Expertise @relation(fields: [licenseId, expertiseId], references: [licenseId, id], onDelete: Cascade)
+  agent     Account   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@id([licenseId, agentId, expertiseId])
+  @@index([agentId])
+  @@map("agent_expertise")
 }
 
 // ===========================================================================

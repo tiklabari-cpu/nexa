@@ -13,6 +13,27 @@
 
 ## Task log (newest-first)
 
+### PLAN-SYNC — docs(plan): Faz-2 dağılım sayacı bayattı → `15 ⬜ · 0 ◐ · 12 ✅ · 3 ⛔` (§D73) — done — 2026-08-03 UTC
+
+- **Yapıldı:** Panel §1.2 bulgusu — üst-tablo (PLAN.md:22) + §5.0 girişi (PLAN.md:1100) Faz-2
+  dağılımı gerçek damga sayımıyla uyuşmuyordu. §5.0 gereksinim envanteri (satır 1108–1167, **30
+  satır**) her satırın **öncü** durum damgası awk ile sayıldı → **15 ⬜ · 0 ◐ · 12 ✅ · 3 ⛔**
+  (toplam 30). İki özet ise `18/1/8` (satır 22) ve `17/1/9` (satır 1100) yazıyordu — ikisi
+  birbiriyle de tutmuyordu. Her iki özet gerçek sayıma çekildi; §D73 sebebi kaydetti.
+  **Gereksinim satır damgalarına DOKUNULMADI** (kanıta dayalı).
+- **Sebep (kanıtlı):** §D72'nin doğru yazımından (commit `cf1ea463`, 2026-08-02, özet=tablo=`18/1/8`)
+  bu yana 2026-08-03 teslim dalgası **4 kalemi** çevirdi: `07.5` (◐→✅, tm 63.x) · `07.6` (⬜→✅,
+  tm 64.x) · `08.6.3` (⬜→✅, tm 66.x) · `08.8.3` (⬜→✅, tm 67.x); sayaç güncellenmedi. Satır
+  sayısı sabit (30) + ⛔ sabit (3) → yeni satır/kapsam değişikliği DEĞİL. Kanıt: cf1ea463'te dördü
+  ◐/⬜, HEAD'de ✅. Deponun bilinen "kod/TM'de bitti, üst-özet bayat" deseni (§D68/§D70/§D72).
+- **Doğrulama:** docs-only (yalnız PLAN.md; **kod değişmedi** → DoD kod kapıları uygulanmaz —
+  §D55/§D56 precedent'i). Sayım doğrulaması: awk öncü-damga = `15/0/12/3`, iki özetle **birebir**.
+  `git diff --stat` = yalnız PLAN.md (3 ins/2 del).
+- **Sonraki pencereye not:** Faz-2 özet sayacı, satırlar teslimle çevrildikçe bayatlamaya devam
+  edecek (§D68–D73 tekrar eden desen) — her tarama **öncü-damga awk** ile yeniden say, ham-glif
+  sayma. `📋 PLANLANDI, kod başlamadı` anlatısı (satır 22) hâlâ eski; bu tur sayaç düzeltmesiydi,
+  anlatı revizyonu kapsamı dışında bırakıldı.
+
 ### 100 — fix(settings): duplicate DOM id — Channels `aria-labelledby` self-reference — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-XHIGH] a11y/DOM-id bug'ı. `apps/web/src/components/Page.tsx` `Section`

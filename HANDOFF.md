@@ -13,6 +13,49 @@
 
 ## Task log (newest-first)
 
+### 67.1 (08.8.3-a) — MCP tool kataloğu — saf veri modülü (4 tool descriptor + input şemaları) — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] Yeni saf veri modülü `apps/api/src/services/mcp/tool-catalog.ts` —
+  `MCP_TOOL_CATALOG` (`as const`, `McpToolDescriptor[]`) 4 tool içeriyor: `search_tickets`,
+  `list_chats`, `get_report`, `summarize_chat`. Her descriptor `name`/`title`/`description` +
+  runtime doğrulama için zod `inputSchema` + keşif manifesti için elle yazılmış
+  `inputJsonSchema` (repoda zod-to-json-schema paketi yok; 4 basit şema için ekstra bağımlılık
+  gerekmedi) + `requiredScopes`. `requiredScopes` görev metninde birebir dikte edilen değerlerle
+  BİREBİR: search_tickets/list_chats/summarize_chat → `['*--all:ro','*--access:ro']` (route
+  READ_SCOPES'undan `:rw` varyantı çıkarılmış — MCP yüzeyi salt-okunur), get_report →
+  `['reports_read']` (4 rapor ucunun paylaştığı scope). `toolByName()` bilinmeyen ad → `undefined`.
+  Modül yüklenirken her `requiredScopes` girdisi `isScope()` ile doğrulanıyor (yazım hatası derleme
+  zamanında değil ama import anında patlıyor — testte de ayrıca kanıtlı). Input şemaları:
+  search_tickets `query` zorunlu (arama terimi olmadan "search" anlamsız) + view/limit/page_id
+  (tickets.ts listQuery deseni); list_chats tamamen opsiyonel filtreler (chats.ts listQuery
+  deseni, mevcut route zaten filtre'siz çağrılabiliyor); get_report `report` enum zorunlu
+  (overview|breakdown|ai-agent|reviews, PLAN-V2-KIRILIM §5.2.9 -e varsayım 6) + opsiyonel from/to
+  (reports.ts rangeQuery deseni, dört rapor ucu da aynı şemayı paylaşıyor); summarize_chat
+  `chat_id` zorunlu (tek genel MCP ucunda path param yok, id argümana taşınıyor). Route/kontrat/
+  scope-enforcement YOK — kapsam dışı, sırasıyla 08.8.3-b/-c'nin işi.
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ ·
+  `pnpm --filter @nexa/api test:unit` ✓ (292, önceki 266'dan +26 — `tool-catalog.test.ts`: katalog
+  tam 4 isim + KK'daki dört isimle birebir eşit · her requiredScopes `isScope()` ile geçerli ·
+  requiredScopes değerleri route'larla birebir · `toolByName` 4 KK adını çözer + bilinmeyen ad
+  `undefined` + büyük/küçük harf duyarlı · her inputSchema boş/bozuk argümanı reddediyor (negatif
+  önce) + geçerli argümanı kabul ediyor · `inputJsonSchema.required` zod'un zorunlu alanlarıyla
+  birebir) · `pnpm --filter @nexa/api test:integration` ✓ (48 dosya / 1044 test, değişiklik yok —
+  bu pencere DB/route/kontrata dokunmadı, `contract-parity.test.ts` + `tenant-isolation.test.ts`
+  dahil regresyonsuz) · `pnpm -w build` ✓. **E2E:** N/A — bu görev saf backend veri modülü, hiçbir
+  route/UI yüzeyi açmıyor (kapsam dışı, task metninde de "cross-tenant testi YOK — modül saf veri"
+  diye belirtilmiş).
+- **Varsayımlar:** Yok — requiredScopes değerleri, get_report enum'u ve tüm dosya/desen kararları
+  görev metninde ve `PLAN-V2-KIRILIM.md` §5.2.9'da zaten birebir dikte edilmişti; bu pencere yeni
+  bir yetki/tasarım kararı vermedi.
+- **Sonraki pencereye not:** 08.8.3 diliminde 8 alt-görevden yalnız **-a** bitti; PLAN.md §5.2
+  satırı `⬜`→`◐` (TAMAMLANDI değil). Sıradaki **-b** (MCP kontratı `paths/mcp.yaml` + `GET
+  /mcp/manifest`, `OPUS-XHIGH`) bu pencerenin `MCP_TOOL_CATALOG`'unu tüketecek. **Çalışma alanı
+  notu:** pencere başlamadan önce de işlenmemiş, bu göreve ilişkisiz değişiklikler vardı —
+  `.taskmaster/BUILD-BLUEPRINT.md` / `CONVENTIONS.md` / `apps/e2e/kanit/{28-panel-expanded,
+  36-copilot-panel}.png` / `run-loop.sh` / `.playwright-mcp/` (untracked) — önceki pencerelerin
+  handoff'larında da not edilmiş (66.5-66.9), bu pencere de onlara dokunmadı, bu commit'e dahil
+  edilmedi.
+
 ### 66.9 (08.6.3-i) — Uçtan uca doğrulama: skill routing + takeover E2E, cross-tenant matrisi, ADR-08 regresyonu — done — 2026-08-03 UTC
 
 - **Yapıldı:** Yalnız doğrulama (yeni davranış yok). (1) Yeni E2E `apps/e2e/tests/skills-routing.spec.ts`

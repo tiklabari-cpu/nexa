@@ -1647,14 +1647,14 @@
             "description": "'breakdown' grubunun CSV'si UZUN FORMAT'a geçer: `dimension,key,chats,closed,manual,assisted,automated`; `dimension` ∈ {day, hour, team, channel}, `key` = tarih / saat / takım adı / kanal etiketi. Dört boyut TEK dosyada, sırayla. `REPORT_GROUPS` katalogu (reports-export.ts:38-43) DEĞİŞMEZ — yeni grup eklenmez, `/reports/groups`, scope gating ve dosya adı deseni aynen kalır. Mevcut formula-injectio",
             "details": "07.5-f — CSV export: breakdown grubunu dört boyuta genişlet (uzun format)  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.5 (+ FR-MOD-07.7 export)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 4 dosya; güvenlik sınırı yok — aynı `reports_read` scope'u, aynı `withTenant`, YENİ SORGU YAZILMAZ (mevcut helper'lar çağrılır; reports-export.ts ilkesi: \"reuses the report's aggregation helpers rather than recomputing\"); eşzamanlılık yok; yeni algoritma yok — kopyalanacak desen `buildGroupCsv` 'breakdown' case'i (reports.ts:378-391) ismen verildi; kontrat değişmez; KK mekanik (satır sayısı + değer eşitliği).\nNEDEN AÇIK: reports.ts `buildGroupCsv` 'breakdown' case'i (satır 378-391) YALNIZ `breakdownByDay()` çıktısını seri hale getiriyor: `headers: ['date','chats','closed','manual','assisted','automated']`. Yeni boyutlar eklenince ekran ile indirme ayrışır — oysa reports-export.ts dosya başlığı bunu açıkça yasaklıyor: CSV \"can never disagree with the screen it was exported from\".\nKAPSAM: 'breakdown' grubunun CSV'si UZUN FORMAT'a geçer: `dimension,key,chats,closed,manual,assisted,automated`; `dimension` ∈ {day, hour, team, channel}, `key` = tarih / saat / takım adı / kanal etiketi. Dört boyut TEK dosyada, sırayla. `REPORT_GROUPS` katalogu (reports-export.ts:38-43) DEĞİŞMEZ — yeni grup eklenmez, `/reports/groups`, scope gating ve dosya adı deseni aynen kalır. Mevcut formula-injection guard'ı ve quoting serialiser'ı DEĞİŞMEZ.\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/src/routes/reports-export.ts · apps/api/src/routes/reports-export.test.ts · apps/api/test/integration/reports-billing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts:378-391 — `buildGroupCsv` 'breakdown' case: helper'ı çağır, headers+rows döndür · apps/api/src/routes/reports.ts — aynı fonksiyonun 'reviews' case'i (~410-420): çok alanlı satır map'leme · apps/api/src/routes/reports-export.test.ts — CSV quoting / formula-injection guard unit test deseni · apps/api/test/integration/reports-billing.test.ts:847-860 — export indirme + Content-Disposition dosya adı iddiası\nKK (birebir): \"Boyutlu kırılım\" | \"KK-türetilmiş: \"İndirilen CSV, ekranın gösterdiği dört boyutun AYNISINI ve aynı sayıları taşır — ekran ile indirme asla ayrışmaz.\" — PRD 07.5 KK'sı tek kelimelik; export tutarlılık kriteri 07.7'nin export maddesinden ve reports-export.ts'in kendi ilkesinden türetildi.\"\nKK DOĞRULAMA: integration: aynı pencerede `/reports/breakdown` ve `/reports/export?group=breakdown` çağrılır; CSV satır sayısı === by_day+by_hour+by_team+by_channel satır toplamı ve her satırın sayıları JSON yanıtıyla birebir eşit. Mevcut dosya adı testi (reports-billing.test.ts:850) ve scope gating testi (satır 907) DEĞİŞMEDEN yeşil kalır.\nKAPSAM DIŞI: PDF / benchmark karşılaştırma (v2 — PLAN §4.4.8'de zaten kapsam dışı) · Yeni rapor grubu (REPORT_GROUPS katalogu değişmez) · overview/ai-agent/reviews gruplarının formatı · UI\nSÖZLEŞME: yok — /reports/export yanıtı CSV (text/csv), OpenAPI'de gövde şeması taşımıyor; yeni path/parametre eklenmiyor.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration: ekran–CSV değer eşitliği + satır sayısı (dört dimension) · unit: yeni `dimension`/`key` kolonlarında formula-injection guard hâlâ uygulanıyor (`=`,`+`,`-`,`@` ile başlayan takım adı kaçırılır) · REGRESYON: mevcut export testleri (Content-Disposition dosya adı, scope gating 403) kırılmaz · CROSS-TENANT: mevcut export cross-tenant testi yeni boyut satırlarını da kapsayacak şekilde genişletilir (export `withTenant` içinden geçer)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2,
               4,
               5
             ],
             "parentId": "63",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T00:03:21.626Z"
           },
           {
             "id": 7,
@@ -1699,7 +1699,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-02T23:41:34.736Z"
+        "updatedAt": "2026-08-03T00:03:21.626Z"
       },
       {
         "id": "64",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-02T23:41:34.737Z",
+      "lastModified": "2026-08-03T00:03:21.627Z",
       "taskCount": 99,
       "completedCount": 74,
       "tags": [

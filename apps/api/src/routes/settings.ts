@@ -12,6 +12,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
   DEFAULT_WIDGET_APPEARANCE,
+  EXPERTISE_NAME_MAX_LENGTH,
   WIDGET_COLOR_PATTERN,
   WIDGET_POSITIONS,
   WIDGET_THEMES,
@@ -248,6 +249,33 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 /** Prisma's unique-violation code, raised by the tenant-scoped indexes here. */
 function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+const createExpertiseBody = z.object({
+  name: z.string().trim().min(1).max(EXPERTISE_NAME_MAX_LENGTH),
+});
+
+/** A small per-license integer id (`expertise.id`), taken straight from the path. */
+const expertiseIdParam = z.coerce.bigint();
+
+/**
+ * The slug the `(license_id, slug)` unique index is enforced on. Lower-cased and
+ * whitespace-collapsed rather than stripped to ASCII, so a non-Latin name keeps
+ * a meaningful slug — the point is a stable, case/spacing-insensitive identity
+ * per licence, matching the seed's `technical-support` form. Never empty: `name`
+ * is validated non-empty first.
+ */
+function expertiseSlug(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function serialiseExpertise(area: { id: bigint; name: string; slug: string }) {
+  return { id: Number(area.id), name: area.name, slug: area.slug };
 }
 
 export default async function settingsRoutes(app: FastifyInstance): Promise<void> {
@@ -897,6 +925,67 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
         is_fallback: updated.isFallback,
         enabled: updated.enabled,
       });
+    },
+  );
+
+  // --- Expertise catalogue (skill-based routing — FR-MOD-08.6.3) -------------
+
+  // Reading is open to any `access_rules` holder — an assignment screen needs
+  // the vocabulary. Writing is admin/owner only: `minimumRole: admin` is the
+  // person gate (a bot or agent-role token is refused there), the scope is the
+  // token gate. The pair mirrors `/agents/:id/role`.
+  app.get(
+    '/settings/expertise',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
+    async (request, reply) => {
+      const items = await request.withTenant((tx) =>
+        tx.expertise.findMany({ where: { archived: false }, orderBy: { name: 'asc' } }),
+      );
+      return reply.send({ items: items.map(serialiseExpertise) });
+    },
+  );
+
+  app.post(
+    '/settings/expertise',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(createExpertiseBody, request.body);
+      const tenant = request.tenant();
+      const slug = expertiseSlug(body.name);
+
+      try {
+        const created = await request.withTenant((tx) =>
+          tx.expertise.create({
+            data: { licenseId: tenant.licenseId, name: body.name, slug },
+          }),
+        );
+        return reply.status(201).send(serialiseExpertise(created));
+      } catch (error) {
+        // The slug is derived from the name, so a collision means an area with
+        // the same name up to case and spacing already exists.
+        if (isUniqueViolation(error)) {
+          throw new ApiError('not_allowed', 'An expertise area with a similar name already exists.');
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.delete<{ Params: { expertiseId: string } }>(
+    '/settings/expertise/:expertiseId',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const id = parse(expertiseIdParam, request.params.expertiseId);
+
+      // RLS scopes the delete to the caller's licence, so another tenant's id
+      // simply matches nothing — a 404 that keeps ids un-enumerable (NFR-S5).
+      // The assignment rows cascade with the area (composite FK).
+      const { count } = await request.withTenant((tx) =>
+        tx.expertise.deleteMany({ where: { id } }),
+      );
+      if (count === 0) throw ApiError.notFound('Expertise area not found.');
+
+      return reply.status(204).send();
     },
   );
 

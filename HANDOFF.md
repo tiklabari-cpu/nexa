@@ -13,6 +13,45 @@
 
 ## Task log (newest-first)
 
+### 66.2 (08.6.3-b) — Skill/uzmanlık katalog CRUD + ajan-uzmanlık atama API'si (kontrat + rol-kapılı backend) — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-XHIGH] 66.1'in veri katmanı üstüne kontrat-önce + rol-kapılı API. **İsim kararı
+  (66.1 ile aynı, kilitli):** API yüzeyi `expertise`/`Expertise`, `skill`/`Skill` DEĞİL —
+  `/skills` + `Skill` şeması zaten ADR-14 AI-otomasyon Skill'ine ait (playbook). Kontrat:
+  `settings.yaml` `expertise` (GET liste + POST) + `expertiseItem` (DELETE), `agents.yaml`
+  `agentExpertise` (PUT `/agents/{agentId}/expertise`, gövde `{expertise_ids:int[]}` — TAM değiştirme,
+  idempotent, boş liste = temizle), `openapi.yaml` `Expertise` şeması + `Agent`'a katkısal (opsiyonel)
+  `expertise[]`; yeniden bundle (118→**121 path**) + `openapi-typescript` tip üretimi. Backend:
+  `routes/settings.ts` katalog (`GET /settings/expertise` scope `access_rules:ro/rw`; `POST`/`DELETE`
+  scope `access_rules:rw` + `minimumRole:'admin'`), `routes/agents.ts` atama (`PUT` scope
+  `agents--all:rw` + `minimumRole:'admin'`) — `minimumRole` çift kapıyı (principal.kind==='agent' +
+  roleAtLeast admin) tek yerde sağlar; `withTenant` + yabancı/cross-tenant id → 404 (enumerable
+  değil, NFR-S5). Slug ad'dan türetilir (`unique(license,slug)`; seed'in `technical-support` biçimi),
+  dup → `not_allowed` **403** (canned/tag ev-deseni; kontrat 409 belgeler ama runtime 403 — repo
+  boyunca böyle). `serialiseAgent` paylaşımlı `agentSelect` ile `expertise[]` döner (GET /agents +
+  suspension/role + atama yanıtı hep aynı şekil).
+- **Doğrulama (DoD TAM yeşil, exit 0):** `pnpm -w typecheck` 11/11 · `pnpm -w lint` 8/8 ·
+  `pnpm -w build` 7/7 · `pnpm --filter @nexa/api test:unit` 266 · `pnpm --filter @nexa/api
+  test:integration` **1024** (48 dosya; contract-parity iki yönlü + operationId benzersiz + 4xx zorunlu
+  dahil; +21 yeni: settings.test.ts katalog +8, agents-expertise.test.ts 13) · `pnpm --filter @nexa/rtm
+  test:integration` 51. KK: katalog CRUD (create→list→delete gone) + idempotent/wholesale PUT + GET
+  /agents expertise + negatif matris (agent-rol/bot/scope reddi + yabancı skill_id 404) + cross-tenant
+  — hepsi karşılandı. Migration yok (şema -a'da).
+- **Varsayımlar:** (1) KK'daki `skill`/`Skill`/`skill_ids` adlandırması, 66.1'in düzelttiği bayat
+  premise (tablo `expertise`); API `expertise`/`expertise_ids` olarak kuruldu — çakışma yok, KK
+  davranışsal ("uzmanlık/skill bazlı") karşılandı. (2) Audit girdisi eklenmedi: uzmanlık ataması
+  NFR-S12 adlı audit olayı değil ve `AUDIT_ACTIONS` birliğine ekleme kapsam-dışı sayım-testi riski;
+  KK audit istemiyor. (3) Katalog DELETE sert silme (cascade agent_expertise) — KK "DELETE sonrası
+  yok"; `archived` alanı ileri soft-delete için, -b kullanmıyor (GET `archived=false` filtreler).
+- **Sonraki pencereye not:** -c (ADR-08 skill-eşleşmeli routing çekirdeği, OPUS-MAX) bu API'nin
+  `expertise`/`agent_expertise` verisini okur; routing kural koşuluna `expertise_ids` -c'de eklenir.
+  UI (-e Settings katalog / -f Team atama ekranı) tipli client'tan `listExpertise`/`createExpertise`/
+  `deleteExpertise`/`setAgentExpertise` operasyonlarını çağırır. `dist/openapi.json` gitignore
+  (build artefaktı); tip dosyası `packages/contract/src/generated/api.ts` commit'lendi.
+- **Not (pre-existing, dokunulmadı):** Pencere açıldığında çalışma alanı zaten kirliydi —
+  `M .taskmaster/BUILD-BLUEPRINT.md`, `M CONVENTIONS.md`, `M apps/e2e/kanit/36-copilot-panel.png`,
+  `M run-loop.sh`, `?? .playwright-mcp/`. Bu task'ın işi değil; CONVENTIONS §5 gereği commit'e alınmadı.
+
 ### 66.1 (08.6.3-a) — Skill/uzmanlık kataloğu veri modeli (expertise + agent_expertise, RLS, seed) — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-XHIGH] Skill-bazlı routing'in veri katmanı. İki tenant-scoped tablo:

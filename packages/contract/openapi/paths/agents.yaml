@@ -234,6 +234,52 @@ agentRole:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+agentExpertise:
+  parameters:
+    - name: agentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  put:
+    tags: [Configuration]
+    operationId: setAgentExpertise
+    summary: Set an agent's expertise areas
+    description: |
+      Replaces the agent's expertise set wholesale (FR-MOD-08.6.3 — skill-based
+      routing). The body is the *complete* list, so sending the same body twice
+      leaves the same result (idempotent) and an empty list clears every area.
+
+      Every id must name an expertise area on the caller's licence; an unknown or
+      cross-tenant id is a `404` that keeps ids un-enumerable across tenants
+      (NFR-S5). Admin or owner only — both the scope and the role are checked.
+
+      The response is the agent with its updated `expertise`, the same shape
+      `GET /agents` returns.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [expertise_ids]
+            properties:
+              expertise_ids:
+                type: array
+                description: The complete set of expertise-area ids to assign.
+                items: { type: integer, format: int64 }
+    responses:
+      "200":
+        description: The agent, with its updated expertise.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Agent" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 groups:
   get:
     tags: [Configuration]

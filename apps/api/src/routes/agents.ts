@@ -7,6 +7,7 @@
  * arrival to trigger assignment.
  */
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AGENT_ROLES, ROUTING_STATUSES, type AgentRole } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
@@ -20,15 +21,41 @@ const notificationPrefsBody = z.object({ email: z.boolean() });
 const listAgentsQuery = z.object({ status: z.enum(['active', 'suspended', 'all']).default('active') });
 const suspensionBody = z.object({ suspended: z.boolean() });
 const roleChangeBody = z.object({ role: z.enum(AGENT_ROLES) });
+// The complete expertise set to assign (FR-MOD-08.6.3). Coerced because JSON
+// carries these as numbers; capped so a single call cannot fan out unbounded.
+const setExpertiseBody = z.object({
+  expertise_ids: z.array(z.coerce.bigint()).max(200),
+});
 
-/** One shape for an agent membership, so the list and the suspension reply never drift. */
+/**
+ * The agent columns — and the expertise areas — every response here draws on, in
+ * one place so the list, the suspension/role replies and the expertise reply
+ * never drift. Expertise is RLS-scoped to the caller's licence, so the nested
+ * read only ever returns the current tenant's areas.
+ */
+const agentSelect = {
+  id: true,
+  name: true,
+  email: true,
+  avatarUrl: true,
+  expertise: {
+    select: { expertise: { select: { id: true, name: true, slug: true } } },
+  },
+} satisfies Prisma.AccountSelect;
+
 type MembershipWithAgent = {
   role: string;
   routingStatus: string;
   concurrentChatsLimit: number;
   twoFactorEnabled: boolean;
   suspended: boolean;
-  agent: { id: string; name: string; email: string; avatarUrl: string | null };
+  agent: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl: string | null;
+    expertise: { expertise: { id: bigint; name: string; slug: string } }[];
+  };
 };
 
 function serialiseAgent(m: MembershipWithAgent) {
@@ -42,6 +69,9 @@ function serialiseAgent(m: MembershipWithAgent) {
     concurrent_chats_limit: m.concurrentChatsLimit,
     two_factor_enabled: m.twoFactorEnabled,
     suspended: m.suspended,
+    expertise: m.agent.expertise
+      .map((e) => ({ id: Number(e.expertise.id), name: e.expertise.name, slug: e.expertise.slug }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
 
@@ -150,7 +180,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       const agents = await request.withTenant((tx) =>
         tx.agentMembership.findMany({
           where,
-          include: { agent: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+          include: { agent: { select: agentSelect } },
           orderBy: { createdAt: 'asc' },
         }),
       );
@@ -188,7 +218,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         // and a miss is a 404 that keeps ids un-enumerable across tenants.
         const target = await tx.agentMembership.findFirst({
           where: { agentId },
-          include: { agent: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+          include: { agent: { select: agentSelect } },
         });
         if (!target) throw ApiError.notFound('Agent not found.');
 
@@ -215,7 +245,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         const next = await tx.agentMembership.update({
           where: { licenseId_agentId: { licenseId: target.licenseId, agentId } },
           data: { suspended },
-          include: { agent: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+          include: { agent: { select: agentSelect } },
         });
 
         await writeAuditEntry(tx, request.auditContext(), {
@@ -262,7 +292,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         // and a miss is a 404 that keeps ids un-enumerable across tenants (NFR-S5).
         const target = await tx.agentMembership.findFirst({
           where: { agentId },
-          include: { agent: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+          include: { agent: { select: agentSelect } },
         });
         if (!target) throw ApiError.notFound('Agent not found.');
 
@@ -304,7 +334,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         const next = await tx.agentMembership.update({
           where: { licenseId_agentId: { licenseId: target.licenseId, agentId } },
           data: { role: nextRole },
-          include: { agent: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+          include: { agent: { select: agentSelect } },
         });
 
         await writeAuditEntry(tx, request.auditContext(), {
@@ -314,6 +344,73 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         });
 
         return next;
+      });
+
+      return reply.send(serialiseAgent(updated));
+    },
+  );
+
+  app.put<{ Params: { agentId: string } }>(
+    '/agents/:agentId/expertise',
+    // The double gate, as with role changes: the scope says the token may
+    // administer agents, `minimumRole: admin` says the person is an admin or
+    // owner. A bot token or an agent-role user is refused here.
+    { config: { scopes: ['agents--all:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const params = z.object({ agentId: z.string().uuid() }).safeParse(request.params);
+      if (!params.success) throw ApiError.validation('agentId must be a UUID.');
+      const parsedBody = setExpertiseBody.safeParse(request.body);
+      if (!parsedBody.success) {
+        throw ApiError.validation('expertise_ids must be an array of expertise-area ids.');
+      }
+
+      const { agentId } = params.data;
+      const tenant = request.tenant();
+
+      // The body is the *complete* set; de-duplicate so a repeated id is neither
+      // counted twice against the catalogue check nor inserted twice.
+      const expertiseIds = [
+        ...new Set(parsedBody.data.expertise_ids.map((id) => id.toString())),
+      ].map((id) => BigInt(id));
+
+      const updated = await request.withTenant(async (tx) => {
+        // RLS scopes this to the caller's licence, so an agent in another
+        // workspace is simply not found — a 404 that keeps ids un-enumerable
+        // across tenants (NFR-S5).
+        const target = await tx.agentMembership.findFirst({ where: { agentId } });
+        if (!target) throw ApiError.notFound('Agent not found.');
+
+        // Every id must name an area on this licence. RLS means a cross-tenant or
+        // unknown id returns nothing, so a short count is a 404 — no id is ever
+        // confirmed to exist outside the caller's tenant.
+        if (expertiseIds.length > 0) {
+          const found = await tx.expertise.findMany({
+            where: { id: { in: expertiseIds } },
+            select: { id: true },
+          });
+          if (found.length !== expertiseIds.length) {
+            throw ApiError.notFound('One or more expertise areas were not found.');
+          }
+        }
+
+        // Full replacement: clear the current set, then lay down the new one. Two
+        // identical calls leave the same rows (idempotent), and an empty list is
+        // a valid way to clear every area.
+        await tx.agentExpertise.deleteMany({ where: { agentId } });
+        if (expertiseIds.length > 0) {
+          await tx.agentExpertise.createMany({
+            data: expertiseIds.map((expertiseId) => ({
+              licenseId: tenant.licenseId,
+              agentId,
+              expertiseId,
+            })),
+          });
+        }
+
+        return tx.agentMembership.findFirstOrThrow({
+          where: { agentId },
+          include: { agent: { select: agentSelect } },
+        });
       });
 
       return reply.send(serialiseAgent(updated));

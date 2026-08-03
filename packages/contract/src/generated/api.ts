@@ -1178,6 +1178,37 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/agents/{agentId}/expertise': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set an agent's expertise areas
+     * @description Replaces the agent's expertise set wholesale (FR-MOD-08.6.3 — skill-based
+     *     routing). The body is the *complete* list, so sending the same body twice
+     *     leaves the same result (idempotent) and an empty list clears every area.
+     *
+     *     Every id must name an expertise area on the caller's licence; an unknown or
+     *     cross-tenant id is a `404` that keeps ids un-enumerable across tenants
+     *     (NFR-S5). Admin or owner only — both the scope and the role are checked.
+     *
+     *     The response is the agent with its updated `expertise`, the same shape
+     *     `GET /agents` returns.
+     */
+    put: operations['setAgentExpertise'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/agents/me/routing-status': {
     parameters: {
       query?: never;
@@ -1772,6 +1803,57 @@ export interface paths {
      *     unassigned with no indication anything was wrong.
      */
     patch: operations['updateRoutingRule'];
+    trace?: never;
+  };
+  '/settings/expertise': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Expertise areas for skill-based routing
+     * @description The catalogue of expertise areas a licence defines (FR-MOD-08.6.3),
+     *     ordered by name. Also read by the assignment UI to offer areas per agent.
+     */
+    get: operations['listExpertise'];
+    put?: never;
+    /**
+     * Add an expertise area
+     * @description Admin or owner only (both the scope and the role are checked). The slug is
+     *     derived from the name and is unique within the licence, so two areas whose
+     *     names differ only by case or spacing are refused as a duplicate (`409`).
+     */
+    post: operations['createExpertise'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/expertise/{expertiseId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        expertiseId: number;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Remove an expertise area
+     * @description Admin or owner only. Deleting an area also removes it from every agent it
+     *     was assigned to (the assignment rows cascade), so routing stops drawing on
+     *     it immediately.
+     */
+    delete: operations['deleteExpertise'];
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/settings/tags': {
@@ -4328,6 +4410,24 @@ export interface components {
        *     does not occupy a billed seat (FR-MOD-04.6).
        */
       suspended?: boolean;
+      /**
+       * @description The expertise areas assigned to this agent (FR-MOD-08.6.3 —
+       *     skill-based routing), ordered by name. Empty when none are set. Set
+       *     wholesale through `PUT /agents/{agentId}/expertise`.
+       */
+      expertise?: components['schemas']['Expertise'][];
+    };
+    /**
+     * @description An area of expertise a licence defines for skill-based routing
+     *     (FR-MOD-08.6.3). Called "expertise" at the data layer because "skills" is
+     *     the AI-automation concept; the product surface may still label it a skill.
+     */
+    Expertise: {
+      /** Format: int64 */
+      id: number;
+      name: string;
+      /** @description Derived from the name, unique within the licence. */
+      slug: string;
     };
     Group: {
       /** Format: int64 */
@@ -6985,6 +7085,40 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  setAgentExpertise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The complete set of expertise-area ids to assign. */
+          expertise_ids: number[];
+        };
+      };
+    };
+    responses: {
+      /** @description The agent, with its updated expertise. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Agent'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   setMyRoutingStatus: {
     parameters: {
       query?: never;
@@ -8059,6 +8193,94 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listExpertise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Expertise areas */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Expertise'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createExpertise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Expertise'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description An expertise area with a similar name already exists */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteExpertise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        expertiseId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

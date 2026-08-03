@@ -560,6 +560,90 @@ routingRule:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+# Expertise catalogue — the areas skill-based routing draws on (FR-MOD-08.6.3).
+# Named "expertise" at the data layer because "skills" is already the
+# AI-automation Skill (ADR-14, a different concept); the product surface may
+# still call these skills. Reads are open to any `access_rules` holder; writes
+# are admin/owner only — both the scope and the role are checked.
+expertise:
+  get:
+    tags: [Settings]
+    operationId: listExpertise
+    summary: Expertise areas for skill-based routing
+    description: |
+      The catalogue of expertise areas a licence defines (FR-MOD-08.6.3),
+      ordered by name. Also read by the assignment UI to offer areas per agent.
+    responses:
+      "200":
+        description: Expertise areas
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Expertise" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: createExpertise
+    summary: Add an expertise area
+    description: |
+      Admin or owner only (both the scope and the role are checked). The slug is
+      derived from the name and is unique within the licence, so two areas whose
+      names differ only by case or spacing are refused as a duplicate (`409`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 100 }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Expertise" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409":
+        description: An expertise area with a similar name already exists
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+expertiseItem:
+  parameters:
+    - name: expertiseId
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+
+  delete:
+    tags: [Settings]
+    operationId: deleteExpertise
+    summary: Remove an expertise area
+    description: |
+      Admin or owner only. Deleting an area also removes it from every agent it
+      was assigned to (the assignment rows cascade), so routing stops drawing on
+      it immediately.
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 tags:
   get:
     tags: [Settings]

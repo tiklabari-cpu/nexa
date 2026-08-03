@@ -407,6 +407,126 @@ describe('settings', () => {
     });
   });
 
+  // --- Expertise catalogue (skill-based routing — FR-MOD-08.6.3) -------------
+
+  describe('expertise catalogue', () => {
+    it('creates an area, lists it, then deletes it', async () => {
+      const created = await server.post('/settings/expertise', { name: 'Billing' }, auth(adminToken));
+      expect(created.statusCode).toBe(201);
+      const body = created.json() as { id: number; name: string; slug: string };
+      expect(body).toMatchObject({ name: 'Billing', slug: 'billing' });
+      expect(typeof body.id).toBe('number');
+
+      // A reader holding only :ro sees it in the catalogue…
+      const listed = await server.get('/settings/expertise', auth(readToken));
+      expect(listed.statusCode).toBe(200);
+      const items = (listed.json() as { items: Array<{ id: number; slug: string }> }).items;
+      expect(items.map((e) => e.slug)).toContain('billing');
+
+      // …and after delete it is gone.
+      const deleted = await server.del(`/settings/expertise/${body.id}`, auth(adminToken));
+      expect(deleted.statusCode).toBe(204);
+
+      const after = await server.get('/settings/expertise', auth(readToken));
+      expect((after.json() as { items: Array<{ id: number }> }).items.map((e) => e.id)).not.toContain(
+        body.id,
+      );
+    });
+
+    it('derives a slug and refuses a name that collides after normalisation', async () => {
+      const first = await server.post(
+        '/settings/expertise',
+        { name: 'Technical support' },
+        auth(adminToken),
+      );
+      expect(first.statusCode).toBe(201);
+      expect((first.json() as { slug: string }).slug).toBe('technical-support');
+
+      // Same identity up to case and spacing — the derived slug collides. As
+      // elsewhere in this file (tags, canned replies), a duplicate is refused
+      // with `not_allowed`, which maps to 403.
+      const dupe = await server.post(
+        '/settings/expertise',
+        { name: '  technical   support ' },
+        auth(adminToken),
+      );
+      expect(dupe.statusCode).toBe(403);
+    });
+
+    it.each(['', 'a'.repeat(101)])('rejects the invalid name %j', async (name) => {
+      const response = await server.post('/settings/expertise', { name }, auth(adminToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('404s an unknown id on delete', async () => {
+      const response = await server.del('/settings/expertise/999999', auth(adminToken));
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('needs write scope to create or delete', async () => {
+      const create = await server.post('/settings/expertise', { name: 'nope' }, auth(readToken));
+      expect(create.statusCode).toBe(403);
+
+      const area = await owner.expertise.create({
+        data: { licenseId: fx.a.licenseId, name: 'Onboarding', slug: 'onboarding' },
+        select: { id: true },
+      });
+      const del = await server.del(`/settings/expertise/${Number(area.id)}`, auth(readToken));
+      expect(del.statusCode).toBe(403);
+    });
+
+    it('refuses an agent-role token even with the write scope', async () => {
+      const agentToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.agentAccountId,
+        scopes: ['access_rules:rw'],
+      });
+      const response = await server.post('/settings/expertise', { name: 'nope' }, {
+        authorization: `Bearer ${agentToken}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('refuses a bot principal even with the write scope', async () => {
+      const bot = await owner.aiAgent.create({
+        data: { licenseId: fx.a.licenseId, name: 'Bot', kind: 'ai_agent', active: true },
+        select: { id: true },
+      });
+      const botToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: bot.id,
+        scopes: ['access_rules:rw'],
+        kind: 'bot',
+      });
+      const response = await server.post('/settings/expertise', { name: 'nope' }, {
+        authorization: `Bearer ${botToken}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("never lists or deletes another tenant's area (404, un-enumerable)", async () => {
+      const theirs = await owner.expertise.create({
+        data: { licenseId: fx.b.licenseId, name: 'Their secret', slug: 'their-secret' },
+        select: { id: true },
+      });
+
+      const listed = await server.get('/settings/expertise', auth(readToken));
+      const slugs = (listed.json() as { items: Array<{ slug: string }> }).items.map((e) => e.slug);
+      expect(slugs).not.toContain('their-secret');
+
+      // The id alone must not reach across tenants — RLS makes it a 404.
+      const attempt = await server.del(`/settings/expertise/${Number(theirs.id)}`, auth(adminToken));
+      expect(attempt.statusCode).toBe(404);
+
+      const still = await owner.expertise.findUnique({
+        where: { licenseId_id: { licenseId: fx.b.licenseId, id: theirs.id } },
+      });
+      expect(still).not.toBeNull();
+    });
+  });
+
   // --- Routing rules ---------------------------------------------------------
 
   describe('routing rules', () => {

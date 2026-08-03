@@ -116,6 +116,14 @@ export type RoutingRuleKind = (typeof ROUTING_RULE_KINDS)[number];
 export const CANNED_RESPONSE_SCOPES = ['chat', 'ticket'] as const;
 export type CannedResponseScope = (typeof CANNED_RESPONSE_SCOPES)[number];
 
+/**
+ * Longest name an expertise area may carry (FR-MOD-08.6.3 — skill-based
+ * routing). Shared so the API validator and the OpenAPI contract agree on the
+ * bound. Called "expertise" at the data layer because "skills" is the
+ * AI-automation Skill (ADR-14, a different concept).
+ */
+export const EXPERTISE_NAME_MAX_LENGTH = 100;
+
 // --- Billing ----------------------------------------------------------------
 
 export const BILLING_CYCLES = ['monthly', 'annual'] as const;

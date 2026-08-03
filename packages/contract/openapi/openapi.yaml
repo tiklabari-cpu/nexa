@@ -176,6 +176,8 @@ paths:
     $ref: "./paths/agents.yaml#/agentSuspension"
   /agents/{agentId}/role:
     $ref: "./paths/agents.yaml#/agentRole"
+  /agents/{agentId}/expertise:
+    $ref: "./paths/agents.yaml#/agentExpertise"
   /agents/me/routing-status:
     $ref: "./paths/agents.yaml#/routingStatus"
   /agents/me/notification-preferences:
@@ -229,6 +231,10 @@ paths:
     $ref: "./paths/settings.yaml#/routingRules"
   /settings/routing-rules/{ruleId}:
     $ref: "./paths/settings.yaml#/routingRule"
+  /settings/expertise:
+    $ref: "./paths/settings.yaml#/expertise"
+  /settings/expertise/{expertiseId}:
+    $ref: "./paths/settings.yaml#/expertiseItem"
   /settings/tags:
     $ref: "./paths/settings.yaml#/tags"
   /settings/tags/{tagId}:
@@ -1774,6 +1780,27 @@ components:
             A suspended agent is reachable through this list (with
             `status=suspended` or `status=all`) but cannot be assigned work and
             does not occupy a billed seat (FR-MOD-04.6).
+        expertise:
+          type: array
+          description: |
+            The expertise areas assigned to this agent (FR-MOD-08.6.3 —
+            skill-based routing), ordered by name. Empty when none are set. Set
+            wholesale through `PUT /agents/{agentId}/expertise`.
+          items: { $ref: "#/components/schemas/Expertise" }
+
+    Expertise:
+      type: object
+      description: |
+        An area of expertise a licence defines for skill-based routing
+        (FR-MOD-08.6.3). Called "expertise" at the data layer because "skills" is
+        the AI-automation concept; the product surface may still label it a skill.
+      required: [id, name, slug]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        slug:
+          type: string
+          description: Derived from the name, unique within the licence.
 
     Group:
       type: object

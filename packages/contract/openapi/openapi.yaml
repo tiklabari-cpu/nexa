@@ -55,6 +55,8 @@ tags:
     description: Subscription, usage metering, trial.
   - name: Webhooks
     description: Outbound webhooks — signed, SSRF-guarded event delivery.
+  - name: Mcp
+    description: MCP server — tool catalogue an AI client discovers and calls.
   - name: Audit
     description: The security trail — who did what, read-only, Owner/Admin only.
 
@@ -292,6 +294,9 @@ paths:
     $ref: "./paths/webhooks.yaml#/webhooks"
   /webhooks/{webhookId}:
     $ref: "./paths/webhooks.yaml#/webhook"
+
+  /mcp/manifest:
+    $ref: "./paths/mcp.yaml#/manifest"
 
   /channels:
     $ref: "./paths/channels.yaml#/channels"
@@ -924,6 +929,61 @@ components:
                 The HMAC signing key. Store it now; it is never shown again.
                 Deliveries are signed
                 `HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")`.
+
+    McpToolDescriptor:
+      type: object
+      description: |
+        One MCP tool as advertised by the manifest (FR-MOD-08.8.3) — enough for a
+        client to render it and build a valid call. `input_schema` is JSON Schema
+        for the tool's argument object; `required_scopes` lists the scopes any one
+        of which authorises a call — the same check the tool-call surface enforces
+        at call time (08.8.3-c) — so a client can predict which tools its token may
+        use before trying them.
+      required: [name, title, description, input_schema, required_scopes]
+      properties:
+        name:
+          type: string
+          description: Stable tool identifier, used as the `{tool}` path segment on a call.
+        title:
+          type: string
+          description: Human-readable label.
+        description:
+          type: string
+          description: What the tool does, for the client to show or reason over.
+        input_schema:
+          type: object
+          additionalProperties: true
+          description: JSON Schema describing the tool's argument object.
+        required_scopes:
+          type: array
+          items: { type: string }
+          description: A caller holding at least one of these may invoke the tool.
+
+    McpManifest:
+      type: object
+      description: |
+        What an MCP client discovers at `GET /mcp/manifest` (FR-MOD-08.8.3): the
+        base URL to call, the protocol revision this server targets, and the static
+        catalogue of tools. Identical for every caller — it carries no license or
+        organization identifier (NFR-S4/NFR-S5).
+      required: [protocol_version, server, tools]
+      properties:
+        protocol_version:
+          type: string
+          description: The MCP protocol revision this server targets.
+        server:
+          type: object
+          required: [name, url, version]
+          properties:
+            name: { type: string }
+            url:
+              type: string
+              format: uri
+              description: Base URL an MCP client points at; tool calls are POSTed beneath it.
+            version: { type: string }
+        tools:
+          type: array
+          items: { $ref: "#/components/schemas/McpToolDescriptor" }
 
     UploadGrant:
       type: object

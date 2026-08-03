@@ -13,6 +13,45 @@
 
 ## Task log (newest-first)
 
+### 67.2 (08.8.3-b) — MCP kontratı (paths/mcp.yaml) + GET /mcp/manifest keşif ucu — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-XHIGH] Contract-first keşif ucu.
+  1. Kontrat: `packages/contract/openapi/paths/mcp.yaml` — yalnız `manifest` operasyonu
+     (GET /mcp/manifest, `operationId: getMcpManifest`, `Mcp` tag). openapi.yaml'a path ref +
+     `Mcp` tag + `McpToolDescriptor`/`McpManifest` şemaları eklendi; `pnpm --filter @nexa/contract
+     generate` ile re-bundle (122→123 path) + tip üretimi (`getMcpManifest`, `McpManifest`,
+     `McpToolDescriptor` `src/generated/api.ts`'te).
+  2. Route: `apps/api/src/routes/mcp.ts` — `GET /mcp/manifest`. **Kimlikli** (agent/bot default
+     principal), **scope YOK** (`public:true` de YOK). 08.8.3-a katalogunu (`MCP_TOOL_CATALOG`)
+     `name/title/description/input_schema/required_scopes` olarak + `server` (name/url/version) +
+     `protocol_version` döner. Manifest statik → registration'da bir kez kuruluyor, per-request iş
+     yok. server URL server.ts'te `${env.API_BASE_URL}${API_PREFIX}/mcp` olarak hesaplanıp
+     registration option olarak geçiliyor (API_PREFIX tek doğruluk kaynağı korunur, import cycle
+     yok); version `VERSION` (health route deseniyle aynı). Tenant verisi dönmez.
+  3. server.ts: `mcpRoutes` webhook'lardan sonra register edildi.
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ ·
+  `pnpm -w test:unit` ✓ (292 api) · `pnpm -w test:integration` ✓ (49 dosya / 1050 test,
+  `--concurrency=1`). Yeni `apps/api/test/integration/mcp.test.ts` (6): token'sız → 401 ·
+  bilinmeyen/bozuk token → 401 · müşteri (nxc1.) token'ı → **404** (principal-kind gate, 403 değil,
+  NFR-S5) · manifest 4 tool adını (`search_tickets/list_chats/get_report/summarize_chat`) +
+  her descriptor'da input_schema (`type:object`) + boş olmayan required_scopes döner · server URL
+  (`…/api/v1/mcp`) + protocol_version + version · iki lisans **birebir aynı** katalogu görür,
+  yanıtta `license_id`/`organization_id` ve org/lisans id'leri YOK. `contract-parity.test.ts` iki
+  yönlü yeşil (dokümante=servis edilen). e2e KAPSAM DIŞI — bu kalem backend keşif ucu, UI 08.8.3-g'de.
+- **Varsayımlar:** (1) Tek genel tool-call ucu `POST /mcp/tools/{tool}` bu pencerede **dokümante
+  EDİLMEDİ** (yoksa contract-parity 'documented but not served' ile kırılırdı) — 08.8.3-c'nin işi.
+  (2) `protocol_version = '2025-06-18'` sabit; REST yüzeyi mi yoksa JSON-RPC/SSE köprüsü mü gerektiği
+  açık ürün sorusu (varsayım 10) — bu alan uyumluluk sertifikası değil hedef sürüm bildiriyor.
+  (3) Manifest çağıranın scope'una göre FİLTRELENMİYOR — statik tam katalog (açık soru 6; filtreleme
+  bir yetki kararı olduğu için yapılırsa -c kapsamına alınmalı).
+- **Sonraki pencereye not:** 08.8.3-c [OPUS-MAX] bölünmez çekirdek — `POST /mcp/tools/{tool}` kontratı
+  + tool-dispatch (scope gate `hasAnyScope` + `request.withTenant` + IDOR 404 + audit
+  `mcp.tool_called` + search_tickets referans tool'u). Manifest'i bu route (`routes/mcp.ts`) dosyasına
+  ekleyecek; `MCP_PROTOCOL_VERSION` export edildi. Bağımlı: -g (UI) manifest'ten tool listesini
+  çekecek; -h uçtan uca akış. **Depoda dokunulmamış, önceden kirli dosyalar** (`.taskmaster/BUILD-BLUEPRINT.md`,
+  `CONVENTIONS.md`, `apps/e2e/kanit/*.png`, `run-loop.sh`, `.playwright-mcp/`) bu tur da **elle
+  bırakıldı** — bu task'ın kapsamı değil (bkz. commit 7791f3b).
+
 ### 67.1 (08.8.3-a) — MCP tool kataloğu — saf veri modülü (4 tool descriptor + input şemaları) — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] Yeni saf veri modülü `apps/api/src/services/mcp/tool-catalog.ts` —

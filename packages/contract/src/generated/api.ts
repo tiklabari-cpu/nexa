@@ -2554,6 +2554,36 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/mcp/manifest': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * MCP tool catalogue and server info
+     * @description What an MCP client discovers before it calls anything: the base URL it
+     *     should point at, the protocol revision this server targets, and the static
+     *     catalogue of tools (`search_tickets`, `list_chats`, `get_report`,
+     *     `summarize_chat`) with their argument schemas and the scopes each needs.
+     *
+     *     Authenticated with any agent or bot token; **no scope is required**, because
+     *     the catalogue is the same list for everyone and whether a caller may run a
+     *     given tool is decided at call time against that tool's `required_scopes`
+     *     (08.8.3-c). A customer (widget) token is answered `404`, not `403` — the
+     *     agent surface stays un-enumerable from the widget (NFR-S5). The response
+     *     contains no tenant identifier.
+     */
+    get: operations['getMcpManifest'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/channels': {
     parameters: {
       query?: never;
@@ -3729,6 +3759,48 @@ export interface components {
        *     `HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")`.
        */
       secret: string;
+    };
+    /**
+     * @description One MCP tool as advertised by the manifest (FR-MOD-08.8.3) — enough for a
+     *     client to render it and build a valid call. `input_schema` is JSON Schema
+     *     for the tool's argument object; `required_scopes` lists the scopes any one
+     *     of which authorises a call — the same check the tool-call surface enforces
+     *     at call time (08.8.3-c) — so a client can predict which tools its token may
+     *     use before trying them.
+     */
+    McpToolDescriptor: {
+      /** @description Stable tool identifier, used as the `{tool}` path segment on a call. */
+      name: string;
+      /** @description Human-readable label. */
+      title: string;
+      /** @description What the tool does, for the client to show or reason over. */
+      description: string;
+      /** @description JSON Schema describing the tool's argument object. */
+      input_schema: {
+        [key: string]: unknown;
+      };
+      /** @description A caller holding at least one of these may invoke the tool. */
+      required_scopes: string[];
+    };
+    /**
+     * @description What an MCP client discovers at `GET /mcp/manifest` (FR-MOD-08.8.3): the
+     *     base URL to call, the protocol revision this server targets, and the static
+     *     catalogue of tools. Identical for every caller — it carries no license or
+     *     organization identifier (NFR-S4/NFR-S5).
+     */
+    McpManifest: {
+      /** @description The MCP protocol revision this server targets. */
+      protocol_version: string;
+      server: {
+        name: string;
+        /**
+         * Format: uri
+         * @description Base URL an MCP client points at; tool calls are POSTed beneath it.
+         */
+        url: string;
+        version: string;
+      };
+      tools: components['schemas']['McpToolDescriptor'][];
     };
     /**
      * @description Permission to store one file, issued by `POST /uploads` once the
@@ -9737,6 +9809,29 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getMcpManifest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The tool catalogue plus server URL and protocol version */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['McpManifest'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };

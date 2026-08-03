@@ -1,0 +1,37 @@
+# MCP server — FR-MOD-08.8.3 (v2). A discovery surface an MCP client (Claude,
+# ChatGPT, …) reads to learn which tools this workspace exposes and where to
+# call them.
+#
+# Only the discovery endpoint lives here. It is authenticated (any agent/bot
+# token) but scope-free: the catalogue is a single static list, identical for
+# every caller, and carries no tenant data — no license or organization id
+# appears in the response. Per-tool authorization and the tool-call surface
+# (`POST /mcp/tools/{tool}`) are a later slice (08.8.3-c); documenting them here
+# would promise an endpoint nothing serves, which contract-parity rejects.
+
+manifest:
+  get:
+    tags: [Mcp]
+    operationId: getMcpManifest
+    summary: MCP tool catalogue and server info
+    description: |
+      What an MCP client discovers before it calls anything: the base URL it
+      should point at, the protocol revision this server targets, and the static
+      catalogue of tools (`search_tickets`, `list_chats`, `get_report`,
+      `summarize_chat`) with their argument schemas and the scopes each needs.
+
+      Authenticated with any agent or bot token; **no scope is required**, because
+      the catalogue is the same list for everyone and whether a caller may run a
+      given tool is decided at call time against that tool's `required_scopes`
+      (08.8.3-c). A customer (widget) token is answered `404`, not `403` — the
+      agent surface stays un-enumerable from the widget (NFR-S5). The response
+      contains no tenant identifier.
+    responses:
+      "200":
+        description: The tool catalogue plus server URL and protocol version
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/McpManifest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

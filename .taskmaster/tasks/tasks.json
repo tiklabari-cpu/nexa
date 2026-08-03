@@ -3078,13 +3078,13 @@
             "description": "`KbArticleEditor.tsx`: (1) alanlar — Title (zorunlu), Slug (başlıktan otomatik türer, elle düzenlenebilir, T4-a form primitifiyle alan-altı hata), Category (seçici + 'yeni kategori'), Body (düz metin/sınırlı markdown textarea + hangi biçimlendirmenin desteklendiğini söyleyen yardım metni), Excerpt, SEO title, SEO description (karakter sayacı: 60/155 önerisi). (2) Publish / Unpublish butonu — `PATC",
             "details": "PUBKB-h — Admin: makale editörü (içerik + SEO alanları) + publish/unpublish + public link  [SONNET-XHIGH]\n\nPRD: §5.3-Knowledge (public KB); FR-EK-A.1 (form validasyon primitifi), NFR-A11Y1\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 2-3 dosya + testleri. Güvenlik sınırı YOK — form, PUBKB-b'nin agent-auth PATCH'ini çağırır; 'kim yayınlayabilir' kararı backend'de (`minimumRole`) verilmiş durumda, UI yalnız onu yansıtır. Eşzamanlılık yok. Kopyalanacak desen ismen var: `SkillEditor.tsx` (çok alanlı editör + kaydet), `ProfileForm.tsx` (zorunlu alan + submit-disabled), `WidgetCustomization.tsx` (ayar formu + canlı önizleme). Kontrat değişikliği yok. KK mekanik doğrulanabilir.\nNEDEN AÇIK: `apps/web/src/features/playbook/` altında makale editörü yok — mevcut editör `SkillEditor.tsx` yalnız skill adımlarını düzenliyor; `PlaybookPage.tsx` knowledge tarafında yalnız kaynak listesi/silme var (`knowledge-tabs.ts`). `apps/web/src/features/` altında slug/seo alanı içeren hiçbir form yok.\nKAPSAM: `KbArticleEditor.tsx`: (1) alanlar — Title (zorunlu), Slug (başlıktan otomatik türer, elle düzenlenebilir, T4-a form primitifiyle alan-altı hata), Category (seçici + 'yeni kategori'), Body (düz metin/sınırlı markdown textarea + hangi biçimlendirmenin desteklendiğini söyleyen yardım metni), Excerpt, SEO title, SEO description (karakter sayacı: 60/155 önerisi). (2) Publish / Unpublish butonu — `PATCH /kb-articles/{id}` `status` alanını değiştirir; yayınlanınca 'Public link' satırı görünür (kopyala butonu, `kb_settings.public_slug` + makale slug'ından üretilir); `kb_settings.enabled=false` iken uyarı bandı ('KB kapalı — link çalışmaz'). (3) Geçersiz/çakışan slug backend'den dönünce alan-altı hata. (4) Kirli formu kapatma onayı (T5-a dirty-guard deseni).\nDOSYALAR: apps/web/src/features/playbook/KbArticleEditor.tsx · apps/web/src/features/playbook/KbArticleEditor.test.tsx · apps/web/src/features/playbook/kb-slug.ts · apps/web/src/features/playbook/kb-slug.test.ts · apps/web/src/features/playbook/KbArticleList.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/playbook/SkillEditor.tsx · apps/web/src/features/playbook/ProfileForm.tsx · apps/web/src/features/settings/WidgetCustomization.tsx · apps/web/src/features/settings/WebsiteWidgets.tsx\nKK (birebir): \"KK-türetilmiş: \"SEO'lu self-servis bilgi bankası (public KB)\" — bu alt-görevin payı: 'SEO'lu' → yazar, arama motoruna gidecek başlık/açıklamayı ve makalenin kalıcı adresini (slug) düzenleyebilmelidir; 'public' → yayına almak açık, geri alınabilir tek bir eylem olmalıdır. Türetme gerekçesi: PRD §6'da KK satırı yok. Form davranışı FR-EK-A.1'in birebir KK'sından ödünç: \"Tek form/validasyon kütüphanesi; alan-altı hata mesajı\".\"\nKK DOĞRULAMA: `KbArticleEditor.test.tsx` unit: (1) Title boşken submit pasif + alan-altı hata (FR-EK-A.1 KK'sı); (2) başlık yazınca slug otomatik türer, elle değiştirilince artık türetilmez (KK 'kalıcı adres' payı); (3) SEO title/description alanları kaydedilip geri okunur (KK 'SEO'lu' payı); (4) Publish → durum rozeti 'Published' + Public link görünür; Unpublish geri alır (KK 'public' payı); (5) `kb_settings.enabled=false` iken uyarı bandı render edilir.\nKAPSAM DIŞI: Zengin metin (WYSIWYG) editörü (§C açık soru 2 — varsayım: hayır) · Markdown canlı önizleme (render PUBKB-d'de sunucuda; UI önizlemesi v3) · Görsel yükleme/medya kütüphanesi · Yayın onay/review iş akışı (§C varsayım 9: yok) · Kategori CRUD tam ekranı (burada yalnız seçici + hızlı ekleme)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: zorunlu alan boş → alan-altı hata + submit pasif · unit: slug türetme saf fonksiyonu (büyük harf, boşluk, arka arkaya tire, baş/son tire, rezerve kelimeler: `articles`/`categories`/`sitemap.xml`/`robots.txt` reddi) · negatif: backend'den dönen slug çakışması → ilgili alanın altında hata gösterilir (genel toast değil) · unit: publish/unpublish durum geçişi + Public link görünürlüğü + kopyalama · unit: kirli formu kapatma → onay istenir (T5-a dirty-guard) · unit: a11y — her alanın label'ı, hata mesajı `aria-describedby` ile bağlı",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2,
               7
             ],
             "parentId": "76",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T17:22:14.394Z"
           },
           {
             "id": 9,
@@ -3103,7 +3103,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T16:54:38.657Z"
+        "updatedAt": "2026-08-03T17:22:14.394Z"
       },
       {
         "id": "77",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T16:54:38.657Z",
+      "lastModified": "2026-08-03T17:22:14.395Z",
       "taskCount": 100,
       "completedCount": 79,
       "tags": [

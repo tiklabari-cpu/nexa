@@ -148,91 +148,7 @@ export class ChatService {
     principal: Principal,
     options: ChatListOptions,
   ): Promise<{ items: ChatSummary[]; nextPageId?: string }> {
-    return withTenant(this.db, tenant, async (tx) => {
-      const visibility = await resolveVisibility(tx, principal, 'read');
-      const cursor = decodeCursor(options.pageId);
-
-      // Visibility is an OR, and so is the keyset cursor. Merging them into one
-      // OR would widen the result rather than narrow it, so each goes into its
-      // own AND clause.
-      const conditions: Record<string, unknown>[] = [];
-
-      const visibilityFilter = chatVisibilityFilter(visibility);
-      if (Object.keys(visibilityFilter).length > 0) conditions.push(visibilityFilter);
-
-      if (cursor) {
-        const [before, after] =
-          options.sort === 'newest' ? (['lt', 'lt'] as const) : (['gt', 'gt'] as const);
-        conditions.push({
-          OR: [
-            { createdAt: { [before]: cursor.createdAt } },
-            { createdAt: cursor.createdAt, id: { [after]: cursor.id } },
-          ],
-        });
-      }
-
-      const direction = options.sort === 'newest' ? 'desc' : 'asc';
-      const rows = await tx.chat.findMany({
-        where: {
-          ...(options.customerId ? { customerId: options.customerId } : {}),
-          ...(options.groupId !== undefined
-            ? { access: { some: { groupId: options.groupId } } }
-            : {}),
-          ...viewFilter(options.view, visibility.actorId),
-          ...(conditions.length > 0 ? { AND: conditions } : {}),
-        },
-        // Tie-break on id: `created_at` alone is not unique, and a cursor built
-        // on a non-unique column silently skips or repeats rows.
-        orderBy: [{ createdAt: direction }, { id: direction }],
-        take: options.limit + 1,
-        include: {
-          customer: { select: { name: true, email: true } },
-          access: { select: { groupId: true } },
-          users: true,
-          threads: {
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            include: { tags: { include: { tag: { select: { name: true } } } } },
-          },
-        },
-      });
-
-      const hasMore = rows.length > options.limit;
-      const page = hasMore ? rows.slice(0, options.limit) : rows;
-      const lastEvents = await this.#lastEventPerChat(
-        tx,
-        page.map((c) => c.id),
-      );
-
-      const items = page.map((chat) => {
-        const thread = chat.threads[0];
-        const seenUpTo = chat.users.find(
-          (u) => u.userId === visibility.actorId && u.userType === 'agent',
-        )?.seenUpTo;
-
-        return {
-          id: chat.id,
-          customer_id: chat.customerId,
-          customer_name: chat.customer.name,
-          active: chat.active,
-          created_at: chat.createdAt.toISOString(),
-          thread_id: thread?.id ?? null,
-          assignee_id: thread?.assigneeId ?? null,
-          queue_position: thread?.queuePosition ?? null,
-          unread_count: countUnread(lastEvents.get(chat.id), seenUpTo),
-          last_event: lastEvents.get(chat.id) ?? null,
-          tags: thread?.tags.map((t) => t.tag.name) ?? [],
-        } satisfies ChatSummary;
-      });
-
-      const last = page.at(-1);
-      return {
-        items,
-        ...(hasMore && last
-          ? { nextPageId: encodeCursor({ createdAt: last.createdAt, id: last.id }) }
-          : {}),
-      };
-    });
+    return withTenant(this.db, tenant, (tx) => listChatsInTenant(tx, principal, options));
   }
 
   async get(tenant: TenantContext, principal: Principal, chatId: string): Promise<ChatDetail> {
@@ -1526,32 +1442,131 @@ export class ChatService {
   async #allocateThreadId(tx: TenantClient): Promise<string> {
     return allocateId(tx, 'threads');
   }
-
-  async #lastEventPerChat(
-    tx: TenantClient,
-    chatIds: string[],
-  ): Promise<Map<string, SerialisedEvent>> {
-    if (chatIds.length === 0) return new Map();
-
-    // DISTINCT ON is the cheap way to get "latest per group" in Postgres; the
-    // alternative (a correlated subquery per chat) turns one inbox page into N+1
-    // queries.
-    const rows = await tx.$queryRaw<RawEvent[]>`
-      SELECT DISTINCT ON (chat_id)
-             id, chat_id, thread_id, type, text, author_id, author_type,
-             recipients, attachment_url, properties, created_at
-      FROM events
-      WHERE chat_id = ANY(${chatIds}::text[])
-      ORDER BY chat_id, created_at DESC, id DESC
-    `;
-
-    return new Map(rows.map((row) => [row.chat_id, serialiseRawEvent(row)]));
-  }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * `ChatService.list`'s query, taking an already-open tenant transaction
+ * directly rather than opening its own (via `withTenant`). `list()` itself is
+ * a thin wrapper around this for its normal (request-scoped) callers; the MCP
+ * `list_chats` tool (`services/mcp/tools/list-chats.ts`) calls this directly
+ * with the transaction its caller (`routes/mcp.ts`) already has open, the same
+ * way `TicketService.list` takes a `tx` — Prisma transactions do not nest, so
+ * a second, independent `withTenant` inside an already-open one is not an
+ * option.
+ */
+export async function listChatsInTenant(
+  tx: TenantClient,
+  principal: Principal,
+  options: ChatListOptions,
+): Promise<{ items: ChatSummary[]; nextPageId?: string }> {
+  const visibility = await resolveVisibility(tx, principal, 'read');
+  const cursor = decodeCursor(options.pageId);
+
+  // Visibility is an OR, and so is the keyset cursor. Merging them into one
+  // OR would widen the result rather than narrow it, so each goes into its
+  // own AND clause.
+  const conditions: Record<string, unknown>[] = [];
+
+  const visibilityFilter = chatVisibilityFilter(visibility);
+  if (Object.keys(visibilityFilter).length > 0) conditions.push(visibilityFilter);
+
+  if (cursor) {
+    const [before, after] =
+      options.sort === 'newest' ? (['lt', 'lt'] as const) : (['gt', 'gt'] as const);
+    conditions.push({
+      OR: [
+        { createdAt: { [before]: cursor.createdAt } },
+        { createdAt: cursor.createdAt, id: { [after]: cursor.id } },
+      ],
+    });
+  }
+
+  const direction = options.sort === 'newest' ? 'desc' : 'asc';
+  const rows = await tx.chat.findMany({
+    where: {
+      ...(options.customerId ? { customerId: options.customerId } : {}),
+      ...(options.groupId !== undefined ? { access: { some: { groupId: options.groupId } } } : {}),
+      ...viewFilter(options.view, visibility.actorId),
+      ...(conditions.length > 0 ? { AND: conditions } : {}),
+    },
+    // Tie-break on id: `created_at` alone is not unique, and a cursor built
+    // on a non-unique column silently skips or repeats rows.
+    orderBy: [{ createdAt: direction }, { id: direction }],
+    take: options.limit + 1,
+    include: {
+      customer: { select: { name: true, email: true } },
+      access: { select: { groupId: true } },
+      users: true,
+      threads: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: { tags: { include: { tag: { select: { name: true } } } } },
+      },
+    },
+  });
+
+  const hasMore = rows.length > options.limit;
+  const page = hasMore ? rows.slice(0, options.limit) : rows;
+  const lastEvents = await lastEventPerChat(
+    tx,
+    page.map((c) => c.id),
+  );
+
+  const items = page.map((chat) => {
+    const thread = chat.threads[0];
+    const seenUpTo = chat.users.find(
+      (u) => u.userId === visibility.actorId && u.userType === 'agent',
+    )?.seenUpTo;
+
+    return {
+      id: chat.id,
+      customer_id: chat.customerId,
+      customer_name: chat.customer.name,
+      active: chat.active,
+      created_at: chat.createdAt.toISOString(),
+      thread_id: thread?.id ?? null,
+      assignee_id: thread?.assigneeId ?? null,
+      queue_position: thread?.queuePosition ?? null,
+      unread_count: countUnread(lastEvents.get(chat.id), seenUpTo),
+      last_event: lastEvents.get(chat.id) ?? null,
+      tags: thread?.tags.map((t) => t.tag.name) ?? [],
+    } satisfies ChatSummary;
+  });
+
+  const last = page.at(-1);
+  return {
+    items,
+    ...(hasMore && last
+      ? { nextPageId: encodeCursor({ createdAt: last.createdAt, id: last.id }) }
+      : {}),
+  };
+}
+
+/** The most recent event per chat, keyed by chat id — `listChatsInTenant`'s only per-row read. */
+async function lastEventPerChat(
+  tx: TenantClient,
+  chatIds: string[],
+): Promise<Map<string, SerialisedEvent>> {
+  if (chatIds.length === 0) return new Map();
+
+  // DISTINCT ON is the cheap way to get "latest per group" in Postgres; the
+  // alternative (a correlated subquery per chat) turns one inbox page into N+1
+  // queries.
+  const rows = await tx.$queryRaw<RawEvent[]>`
+    SELECT DISTINCT ON (chat_id)
+           id, chat_id, thread_id, type, text, author_id, author_type,
+           recipients, attachment_url, properties, created_at
+    FROM events
+    WHERE chat_id = ANY(${chatIds}::text[])
+    ORDER BY chat_id, created_at DESC, id DESC
+  `;
+
+  return new Map(rows.map((row) => [row.chat_id, serialiseRawEvent(row)]));
+}
 
 const chatInclude = {
   customer: { select: { name: true, email: true } },

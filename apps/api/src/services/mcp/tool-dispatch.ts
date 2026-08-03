@@ -8,10 +8,10 @@
  * Resolution is the union of two facts. The catalogue (`tool-catalog.ts`) knows
  * a tool's argument schema and required scopes; this table knows how to execute
  * it. A name in the catalogue but with no executor here — one a later slice
- * (`list_chats`/`get_report`/`summarize_chat`, 08.8.3-d/-e/-f) will wire — is
- * *not yet callable*, so it resolves to undefined and the route answers 404,
- * exactly as it does for a name in neither. Neither case reveals which tools
- * might exist (NFR-S5).
+ * (`get_report`/`summarize_chat`, 08.8.3-e/-f) will wire — is *not yet
+ * callable*, so it resolves to undefined and the route answers 404, exactly as
+ * it does for a name in neither. Neither case reveals which tools might exist
+ * (NFR-S5).
  *
  * What is deliberately NOT here: the tenant boundary. An executor is handed a
  * transaction that already has the caller's tenant context set, so isolation is
@@ -22,6 +22,7 @@ import { effectiveScopes } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import { toolByName, type McpToolDescriptor, type McpToolName } from './tool-catalog.js';
+import { runListChats } from './tools/list-chats.js';
 import { runSearchTickets } from './tools/search-tickets.js';
 
 /** Everything an executor needs to run one tool call, already tenant-scoped. */
@@ -40,11 +41,12 @@ export interface McpToolContext {
 export type McpToolExecutor = (ctx: McpToolContext, args: unknown) => Promise<unknown>;
 
 /**
- * The dispatch table: tool name → executor. Only `search_tickets` is wired in
- * this slice; the other three catalogued tools are added here by 08.8.3-d/-e/-f.
+ * The dispatch table: tool name → executor. `search_tickets` and `list_chats`
+ * are wired; `get_report` and `summarize_chat` are added here by 08.8.3-e/-f.
  */
 const EXECUTORS: Partial<Record<McpToolName, McpToolExecutor>> = {
   search_tickets: runSearchTickets,
+  list_chats: runListChats,
 };
 
 export interface ResolvedTool {

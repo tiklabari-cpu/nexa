@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### 67.4 (08.8.3-d) — list_chats tool adaptörü (mevcut chat listeleme yoluna bağlama) — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] Dispatch tablosuna `list_chats` dalı.
+  1. `apps/api/src/services/mcp/tools/list-chats.ts` — `search-tickets.ts`'in aynı deseni: input
+     (`view`/`limit`/`page_id`, katalogdaki `listChatsInputSchema`'dan gelen) → sorgu → sonuç zarfı
+     `{items, next_page_id?}` (REST `GET /chats` ile birebir aynı alan adları).
+  2. **Uyumsuzluk keşfedildi ve çözüldü:** `search_tickets`'ın aksine `ChatService.list(tenant,
+     principal, options)` kendi `withTenant(this.db, …)`'ını açıyordu (tx almıyordu) — ama
+     `routes/mcp.ts`'in çekirdeği executor'a zaten açık bir tx (`ctx.tx`, `request.withTenant`'tan)
+     veriyor, ve Prisma transaction'lar iç içe açılamaz. Çözüm: `list()`'in sorgu gövdesini (+
+     tek kullanıldığı yer olan özel `#lastEventPerChat`'i) `chat-service.ts` içinde modül seviyeli
+     `listChatsInTenant(tx, principal, options)` olarak dışa çıkardım; `list()` artık ona ince bir
+     sarmalayıcı (`withTenant(this.db, tenant, (tx) => listChatsInTenant(tx, principal, options))`).
+     Dış imza/davranış DEĞİŞMEDİ — mevcut 4 çağıran (chats.ts/channels.ts/customer.ts/copilot.ts) ve
+     chat-timeout script'i etkilenmedi; 65 testlik `chats.test.ts` regresyonu değişmeden yeşil.
+  3. `tool-dispatch.ts`: `list_chats: runListChats` eklendi; başlık yorumu güncellendi.
+  4. `tool-catalog.ts`: `ListChatsArgs` tip export'u (search_tickets'taki `SearchTicketsArgs`
+     deseniyle aynı).
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ ·
+  `pnpm -w test:unit` ✓ (302 api; `tool-dispatch.test.ts` artık 10: `list_chats` resolve testi
+  eklendi, "henüz bağlanmamış" listesinden çıkarıldı) · `pnpm -w test:integration` ✓ (50 dosya /
+  1072 test). `mcp-tools.test.ts`'e +11 test: 403 (chats scope eksik) · 400 (geçersiz view/limit) ·
+  pozitif liste · sayfalama (`next_page_id`, iki chat/iki müşteri — aktif chat licence+customer
+  başına partial-unique olduğundan ikinci chat için ikinci müşteri seedlendi) · cross-tenant
+  izolasyon (yanıt zarfında license_id/organization_id/B'nin id'leri yok + iki lisans testi) · audit
+  (`mcp.tool_called`, `target: mcp_tool:list_chats`, `scope_used: chats--all:ro`). "Henüz bağlanmamış
+  tool → 404" testi artık `get_report`'u kullanıyor (list_chats artık bağlı). **e2e KAPSAM DIŞI**
+  (backend çekirdek, UI yok — 08.8.3-g'nin işi; 67.2/67.3 emsaliyle aynı).
+- **Varsayımlar:** MCP `sort` argümanı yok — REST'in `sort=newest` varsayılanı sabit kullanıldı
+  (katalog zaten `sort`'u dışa açmıyor, görev tanımıyla tutarlı: "her alan zaten opsiyonel").
+- **Sonraki pencereye not:** `chat-service.ts`'teki `listChatsInTenant`/`lastEventPerChat` artık
+  modül-seviye export/helper — ileride `ChatService.list`'e dokunacak biri bu ayrımı bilsin. -e/-f
+  aynı desenle devam eder (search_tickets/list_chats referans); -e'nin hedefi `reports.ts`'teki 4
+  sorgu — get_report'un da benzer bir tx/tenant uyumsuzluğu olup olmadığını ÖNCE kontrol et (reports
+  route'ları da `ChatService.list` gibi kendi tenant sarmalayıcısını açıyor olabilir).
+
 ### 67.3 (08.8.3-c) — MCP tool-call yürütücüsü (scope gate + tenant + IDOR 404 + audit + search_tickets) — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-MAX] Bölünmez güvenlik çekirdeği — `POST /mcp/tools/{tool}` tek genel uç.

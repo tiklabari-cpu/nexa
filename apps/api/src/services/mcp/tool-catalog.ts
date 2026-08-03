@@ -100,6 +100,11 @@ const listChatsInputJsonSchema = {
   additionalProperties: false,
 } as const;
 
+/** Parsed, validated arguments to `list_chats` — the tool-call surface (08.8.3-c)
+ * validates the request body against `listChatsInputSchema` and hands the
+ * executor this shape. */
+export type ListChatsArgs = z.infer<typeof listChatsInputSchema>;
+
 // --- get_report ---------------------------------------------------------------
 // `report` selects which of the four `reports_read` endpoints
 // (`apps/api/src/routes/reports.ts`: overview/breakdown/ai-agent/reviews) to

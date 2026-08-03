@@ -24,6 +24,7 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
 const {
   CannedResponses,
   Tags,
+  Skills,
   TicketRules,
   TicketEmailTemplates,
   CustomFieldsSettings,
@@ -70,6 +71,25 @@ describe('Tags validation', () => {
 
     await userEvent.type(screen.getByPlaceholderText('vip'), 'billing');
     expect(submit).toBeEnabled();
+  });
+});
+
+describe('Skills validation', () => {
+  it('keeps Add skill disabled until a name is entered', async () => {
+    renderComponent(<Skills canEdit />);
+    const submit = await screen.findByRole('button', { name: 'Add skill' });
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(screen.getByPlaceholderText('Billing'), 'Technical support');
+    expect(submit).toBeEnabled();
+  });
+
+  it('shows a field-under error when the name is left empty', async () => {
+    renderComponent(<Skills canEdit />);
+    const name = await screen.findByPlaceholderText('Billing');
+    await userEvent.click(name);
+    await userEvent.tab(); // blur the empty field
+    expect(screen.getByText('Name the skill.')).toBeInTheDocument();
   });
 });
 

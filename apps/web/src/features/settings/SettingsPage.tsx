@@ -19,6 +19,7 @@ import { TEMPLATE_VARIABLES, findTemplateProblems, type TemplateField } from '@n
 import {
   CUSTOM_FIELD_ENTITIES,
   CUSTOM_FIELD_TYPES,
+  EXPERTISE_NAME_MAX_LENGTH,
   type CustomFieldDefinition,
   type CustomFieldEntity,
   type CustomFieldType,
@@ -89,6 +90,17 @@ interface RoutingRule {
   enabled: boolean;
 }
 
+/**
+ * An area of expertise (FR-MOD-08.6.3). Called "expertise" at the API layer
+ * because "skill" already names the Playbook automation concept (ADR-14); this
+ * product surface still labels it Skills.
+ */
+interface Expertise {
+  id: number;
+  name: string;
+  slug: string;
+}
+
 interface TicketRule {
   id: string;
   name: string;
@@ -131,6 +143,7 @@ export function SettingsPage(): ReactElement {
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />
       <Tags canEdit={canManageTags} />
+      <Skills canEdit={canManageAccess} />
       <RoutingRules canEdit={canManageAccess} />
       <TicketRules canEdit={canManageTicketRules} />
       <TicketEmailTemplates canEdit={canManageTicketRules} />
@@ -1047,9 +1060,143 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
   );
 }
 
+// --- Skills (expertise catalogue) ---------------------------------------------
+
+/**
+ * The catalogue skill-based routing draws on (FR-MOD-08.6.3): create a skill
+ * here, then require it in a routing rule's conditions or assign it to an
+ * agent in Team. Deleting one also drops it from any routing rule or agent
+ * that referenced it — the server cascades that, this screen just reflects it
+ * on the next load.
+ */
+export function Skills({ canEdit }: { canEdit: boolean }): ReactElement {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+
+  const list = useQuery({
+    queryKey: ['settings', 'expertise'],
+    queryFn: () => api.get<{ items: Expertise[] }>('/settings/expertise'),
+  });
+
+  const create = useMutation({
+    mutationFn: (body: { name: string }) => api.post<Expertise>('/settings/expertise', body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['settings', 'expertise'] });
+    },
+  });
+
+  // Delete moves the row out at once, rolling back if the server refuses —
+  // the same optimistic behaviour the routing rules use (FR-EK-A.2).
+  const remove = useMutation({
+    mutationFn: (id: number) => api.delete(`/settings/expertise/${id}`),
+    ...optimisticCacheUpdate<{ items: Expertise[] }, number>({
+      queryClient,
+      queryKey: ['settings', 'expertise'],
+      update: (current, id) => ({
+        items: (current?.items ?? []).filter((skill) => skill.id !== id),
+      }),
+    }),
+  });
+
+  // The one validation primitive: a name is required, Submit disabled until it
+  // is present, the field cleared on success (FR-EK-A.1).
+  const form = useForm({
+    initial: { name: '' },
+    validators: { name: required('Name the skill.') },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await create.mutateAsync({ name: values.name.trim() });
+        reset();
+      } catch (error) {
+        setSubmitError(error instanceof ApiClientError ? error.message : 'Could not add that skill.');
+      }
+    },
+  });
+  const nameError = form.errorFor('name');
+
+  return (
+    <Section
+      title="Skills"
+      description="Areas of expertise. Require one in a routing rule, or assign one to an agent in Team."
+    >
+      {list.error ? (
+        <ErrorNotice message="Could not load skills." />
+      ) : (
+        <Card>
+          {canEdit && (
+            <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3 border-b border-border p-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <label htmlFor="new-skill-name" className="flex min-w-56 flex-1 flex-col gap-1">
+                  <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                    Skill
+                  </span>
+                  <input
+                    id="new-skill-name"
+                    value={form.values.name}
+                    onChange={(event) => form.setValue('name', event.target.value)}
+                    onBlur={() => form.blur('name')}
+                    aria-invalid={nameError ? true : undefined}
+                    aria-describedby={nameError ? 'new-skill-name-error' : undefined}
+                    placeholder="Billing"
+                    maxLength={EXPERTISE_NAME_MAX_LENGTH}
+                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                  />
+                  <FieldError id="new-skill-name-error" message={nameError} />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={!form.canSubmit}
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {form.isSubmitting ? 'Adding…' : 'Add skill'}
+                </button>
+              </div>
+
+              {form.submitError && (
+                <p role="alert" className="text-2xs text-danger">
+                  {form.submitError}
+                </p>
+              )}
+            </form>
+          )}
+
+          {list.isPending ? (
+            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+          ) : list.data.items.length === 0 ? (
+            <EmptyState
+              title="No skills yet"
+              description="Add a skill to require it in a routing rule or assign it to an agent in Team."
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {list.data.items.map((skill) => (
+                <li key={skill.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="flex-1 text-sm">{skill.name}</span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      disabled={remove.isPending}
+                      onClick={() => remove.mutate(skill.id)}
+                      aria-label={`Delete skill ${skill.name}`}
+                      className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+    </Section>
+  );
+}
+
 // --- Routing rules -----------------------------------------------------------
 
-function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
+export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -1057,6 +1204,15 @@ function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
     queryKey: ['settings', 'routing-rules'],
     queryFn: () => api.get<{ items: RoutingRule[] }>('/settings/routing-rules'),
   });
+
+  // Routing rules reference skills by id (`conditions.expertise_ids`); this
+  // resolves them to names for display. Same cache key the Skills section
+  // above uses, so mounting both costs one fetch, not two.
+  const skills = useQuery({
+    queryKey: ['settings', 'expertise'],
+    queryFn: () => api.get<{ items: Expertise[] }>('/settings/expertise'),
+  });
+  const skillNameById = new Map((skills.data?.items ?? []).map((skill) => [skill.id, skill.name]));
 
   // Flip the switch under the pointer at once: a toggle that waits for the round
   // trip feels broken. The shared optimistic helper writes the new state now and
@@ -1106,7 +1262,8 @@ function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
                       )}
                     </p>
                     <p className="truncate text-2xs text-content-tertiary">
-                      {describeConditions(rule.conditions)} → {rule.target_group_name ?? 'no team'}
+                      {describeConditions(rule.conditions, skillNameById)} →{' '}
+                      {rule.target_group_name ?? 'no team'}
                     </p>
                   </div>
 
@@ -1139,11 +1296,27 @@ function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
   );
 }
 
-/** Renders the condition JSON as something an admin can read at a glance. */
-function describeConditions(conditions: Record<string, unknown>): string {
+/**
+ * Renders the condition JSON as something an admin can read at a glance.
+ * `expertise_ids` (FR-MOD-08.6.3) is resolved to skill names via `skillNameById`
+ * rather than shown as raw ids; an id with no matching skill (deleted since the
+ * rule was written) falls back to `#<id>` instead of disappearing silently.
+ */
+function describeConditions(
+  conditions: Record<string, unknown>,
+  skillNameById: Map<number, string> = new Map(),
+): string {
   const entries = Object.entries(conditions ?? {});
   if (entries.length === 0) return 'Anything';
-  return entries.map(([key, value]) => `${key.replace(/_/g, ' ')} ${String(value)}`).join(' and ');
+  return entries
+    .map(([key, value]) => {
+      if (key === 'expertise_ids' && Array.isArray(value)) {
+        const names = value.map((id: unknown) => skillNameById.get(Number(id)) ?? `#${String(id)}`);
+        return `skill ${names.join(', ')}`;
+      }
+      return `${key.replace(/_/g, ' ')} ${String(value)}`;
+    })
+    .join(' and ');
 }
 
 // --- Ticket rules ------------------------------------------------------------

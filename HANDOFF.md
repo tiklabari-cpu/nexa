@@ -13,6 +13,52 @@
 
 ## Task log (newest-first)
 
+### 66.5 (08.6.3-e) — Settings: Skills kataloğu bölümü + routing kuralında skill koşulu gösterimi — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] Settings'e yeni **Skills** bölümü + routing kuralı satırında skill
+  koşulunun okunabilir gösterimi.
+  (1) **Skills bölümü** (`apps/web/src/features/settings/SettingsPage.tsx`, `Tags` ile `RoutingRules`
+  arasına, `RoutingRules`'dan önce): katalog listesi `GET /settings/expertise`, ekleme `POST` (ortak
+  `useForm` primitifi — boş ad → alan-altı hata + submit pasif, başarıda alan temizlenir), silme
+  `DELETE` **optimistic** (`optimisticCacheUpdate`: tıklamada listeden düşer, sunucu reddinde geri
+  gelir), boş liste → "No skills yet" empty state, `canEdit=false` → ekle/sil kontrolleri hiç render
+  edilmez. (2) **Routing kuralı gösterimi:** `RoutingRules` artık kendi `/settings/expertise`
+  sorgusuyla (Skills bölümüyle **aynı** query key — iki bileşen birlikte monte olunca tek fetch) bir
+  id→ad haritası kurar; `describeConditions`'a ikinci parametre olarak geçilir — `expertise_ids`
+  artık `#1,#2` yerine `skill Billing, Technical support` gibi ada çözülür (haritada olmayan/silinmiş
+  id `#<id>`'ye düşer, sessizce kaybolmaz); mevcut `url_contains`/`country_codes` gösterimi ve
+  fallback "Anything" metni **değişmedi** (regresyon testiyle kanıtlı).
+  (3) **İsimlendirme:** Backend/veri katmanı 66.1-66.3'ten beri `expertise`/`Expertise` (`skill` adı
+  ADR-14'ün Playbook otomasyon "Skill"ine ait, çakışma önlendi — bkz. `openapi.yaml` `Expertise`
+  şeması yorumu: "the product surface may still call these skills"). Bu pencere o ayrımı ürün
+  yüzeyine taşıdı: UI etiketi bilinçli olarak **"Skills"**, altta yatan uç nokta/tip **"expertise"**
+  kalır — grep'te "Skill" adı web tarafında bu pencereden önce hiç geçmiyordu, çakışma riski yok.
+  Sözleşme/migration değişikliği YOK — yalnız 66.2/66.3'te eklenen mevcut uçlar tüketiliyor.
+- **Doğrulama:** `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w test:unit` ✓ (tüm paketler;
+  web 542, önceki 532'den +10) · `pnpm -w build` ✓. Yeni testler: `Skills.test.tsx` (5: katalog
+  render · boş→empty state · POST trim edilmiş adla · optimistic sil + sunucu-reddinde-geri-alma
+  [kontrollü promise ile mid-flight kanıtlı] · salt-okunur→kontrol yok) · `RoutingRules.test.tsx`
+  (3: `expertise_ids` → skill adı · `url_contains` regresyon değişmedi · fallback kuralı "Anything")
+  · `SettingsForms.test.tsx` (+2: Skills ad-zorunlu alan-altı hata + submit gating — dosyanın
+  mevcut "boş liste stub'lı" kalıbına uydu). `RoutingRules` bu pencerede ilk kez `export` edildi
+  (önceden hiç test edilmiyordu — mevcut bir açık, bu göreve dahil edilmedi, yalnız test edilebilir
+  hale getirildi). **Canlı doğrulama** (Playwright, `owner@acme.localhost`, seed'in 3 skill'i — Billing/
+  Technical support/Onboarding — Settings'te göründü): bir skill eklendi → anında listede belirdi,
+  silindi → anında kayboldu; dev sunucuları doğrulama sonrası durduruldu, DB seed'e geri döndü
+  (`pnpm db:seed` — idempotent upsert, mutasyon bırakmadı).
+- **Varsayımlar:** (a) UI etiketi "Skills" (task başlığı + PRD KK "Uzmanlık/skill bazlı" ile
+  uyumlu), API/tip adı `expertise` (66.1-66.3 kilitli, ADR-14 çakışması). (b) `RoutingRules` bu
+  pencerede export edildi (KK'daki "skill adı satırda görünür" iddiasını doğrudan render ederek
+  test edebilmek için) — davranış değişmedi, yalnız görünürlük.
+- **Sonraki pencereye not:** Kalan 08.6.3 dilimi: **-f** (Team: ajan başına skill ataması ekranı,
+  bağ: -b) · **-g** (Inbox: takeover butonu, bağ: -d) · **-i** (uçtan uca: skill routing + takeover
+  E2E + cross-tenant matris, bağ: -c/-d/-e/-f/-g — bu pencere -e'yi kapattığı için -i'nin bağımlılık
+  listesinden biri daha yeşil). **-h** (çoklu-ajan çakışma uyarısı) bu satırın KALAN listesinde hiç
+  yoktu — muhtemelen ayrı `08.6.3-conflict-a..g` (tm 91.1-91.7, PLAN.md §1116, "TAMAMLANDI") ile
+  aynı PRD satırının farklı bir kırılımı; bu pencere onu araştırmadı/dokunmadı (kapsam dışı), ama
+  bir sonraki -h'ye bakacak pencerenin önce bunu doğrulaması gerekir — muhtemelen tm 66.8 zaten
+  audit-close'dur, yeniden inşa gerektirmez.
+
 ### 66.4 (08.6.3-d) — Supervisor takeover çekirdeği: rol kapısı + eşzamanlı devir reddi + audit + RTM — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-MAX, bölünmez çekirdek] Yeni `POST /chats/{chatId}/takeover` — bir supervisor

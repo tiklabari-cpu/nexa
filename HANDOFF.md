@@ -13,6 +13,54 @@
 
 ## Task log (newest-first)
 
+### 63.8 (07.5-h) — Breakdown sekmesi: "By team" + "By channel" bölümleri + örtüşme dipnotu — done — 2026-08-03 UTC
+
+- **Yapıldı:** `apps/web/src/features/reports/ReportsPage.tsx` — yerel `ReportsBreakdown` arayüzüne
+  opsiyonel `by_team?: Array<SplitRow & { team_id: number | null; name: string | null }>`,
+  `overlapping?: boolean`, `by_channel?: Array<SplitRow & { channel: string }>` (kontrat alanları
+  07.5-a'da hazırdı, kontrat DEĞİŞMEDİ); `BreakdownTab`'e "By day"/"By agent"/"By hour" ile birebir
+  aynı `Section`+`Card`+`SplitTable`+`EmptyState` deseni kopyalanarak iki `Section` daha eklendi:
+  "By team" (satır etiketi takım adı, `team_id: null` → 'Unassigned') ve "By channel" (satır
+  etiketi ham kanal string'i, 'website' dahil). `overlapping === true` iken "By team" `Section`
+  description'ına açıklayıcı dipnot ("a conversation open to more than one team is counted in
+  every one of them, so row totals can exceed the window's total chats" — 07.5-e'nin M:N fan-out
+  beyanını ekrana taşır, sessiz çift-sayım yasak); `false`/`undefined` iken dipnot yok. Mevcut
+  `SplitTable` bileşeni AYNEN kullanıldı, yeni tablo bileşeni yazılmadı; "By day"/"By agent"/
+  "By hour" blokları dokunulmadı.
+- **Doğrulama (hepsi yeşil, exit 0):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7) · web unit `523/523` (+6 yeni test: `ReportsPage.test.tsx` "Breakdown
+  report, By team / By channel (07.5-h)" — takım adları + 'Unassigned' satırı · `overlapping: true`
+  → dipnot görünür · `overlapping: false` → dipnot yok · `by_team` yok/boş → EmptyState, tablo yok
+  · `by_channel` 'website' dahil satırlar görünür · `by_channel` yok/boş → EmptyState, tablo yok).
+  `pnpm -w test` paylaşılan Postgres'e karşı paralel koşunca rtm'de deadlock/FK hatasıyla kırıldı
+  ([memory: nexa-test-gate-parallel-db] — bilinen yarış durumu, bu görevin değişikliğiyle ilgisiz);
+  `pnpm --filter @nexa/rtm test` ve `pnpm --filter @nexa/api test` AYRI AYRI (serial) koşulduğunda
+  rtm **90/90**, api **1234/1234** tam yeşil. `apps/e2e/tests/reports.spec.ts`'e "navigates the
+  Overview / AI Agent / Breakdown tabs" testinde `region name: 'By team'` + `'By channel'`
+  görünürlük iddiaları eklendi — `reports.spec.ts` 3/3 yeşil, iki ayrı koşuda tekrarlanarak
+  doğrulandı ([memory: nexa-e2e-clean-db] — DB/Redis konteynerleri koşuyordu, `.env` source edildi,
+  portlar boştu).
+- **Varsayımlar:** "By team"/"By channel" bölümleri "By hour"un ARDINA eklendi (KAPSAM metni sıra
+  belirtmiyordu, mevcut desen böyle). Kanal etiketi ham `channel` string'i olarak gösterildi
+  (büyük harfe çevirme/kozmetik dönüşüm yapılmadı — KAPSAM "kopyalanacak desen" minimal
+  dönüşüm istiyor, `by_hour`/`by_day` etiketleri de ham/basit biçimlendirme kullanıyor).
+- **Not — ilgisiz e2e kırıklığı:** Tam `test:e2e` koşusunda yalnız `settings.spec.ts:421`
+  ("composer shortcuts › a reply saved in Settings reaches a customer through #") kırık —
+  `getByLabel('Reply')` iki eleman eşleşiyor (strict-mode violation), bu görevin değiştirdiği
+  hiçbir dosyayla (ReportsPage/reports.spec.ts) ilgisi yok; tm 63.7 HANDOFF'unda da AYNI kırıklık
+  önceden var olan, kapsam dışı olarak not edilmişti (CONVENTIONS §5) — hâlâ düzeltilmemiş.
+  `customers.spec.ts` bu turda görülmedi (yalnız `reports.spec.ts` hedeflendi, ama tam suite da
+  koşuldu ve `customers.spec.ts` bu sefer geçti — muhtemelen 63.7'deki reseed kirliliği o zamandan
+  beri temizlenmiş). Kanit ekran görüntüleri (`apps/e2e/kanit/*.png`) e2e koşusunun yan etkisiyle
+  değişti; önceki pencerelerin (63.5/63.6/63.7) aynı deseni izleyerek bu commit'e DAHİL ETMEDİ —
+  `git checkout -- apps/e2e/kanit/` ile geri alındı, ayrı bir "chore(e2e): kanıt yenile" turunun işi.
+- **Sonraki pencereye not:** Kalan tek 07.5 alt-görevi: **07.5-i** (uçtan-uca dört-boyut
+  çapraz-tutarlılık e2e + NFR-P2 EXPLAIN bütçe ölçümü, bağımlılık 07.5-f/-g/-h — hepsi artık
+  teslim). Breakdown sekmesi artık beş bölümün (day/agent/hour/team/channel) hepsini gösteriyor.
+  Bilinmeyen/tekrarlayan `CONVENTIONS.md`/`run-loop.sh`/`.taskmaster/BUILD-BLUEPRINT.md` dirty
+  durumu (63.6 HANDOFF'unda da not edilmişti) bu turda da DEĞİŞMEDEN bırakıldı — bu görevin
+  kapsamı dışında, `critical` öncelik seviyesi rezervasyonuyla ilgili ayrı/bekleyen bir iş.
+
 ### 63.7 (07.5-g) — Breakdown sekmesi: "By hour" bölümü — done — 2026-08-03 UTC
 
 - **Yapıldı:** `apps/web/src/features/reports/ReportsPage.tsx` — yerel `ReportsBreakdown` arayüzüne

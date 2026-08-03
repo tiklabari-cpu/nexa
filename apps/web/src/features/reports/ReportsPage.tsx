@@ -85,6 +85,9 @@ interface ReportsBreakdown {
   by_day: Array<SplitRow & { date: string }>;
   by_agent: Array<SplitRow & { agent_id: string; name: string | null }>;
   by_hour?: Array<SplitRow & { hour: number }>;
+  by_team?: Array<SplitRow & { team_id: number | null; name: string | null }>;
+  overlapping?: boolean;
+  by_channel?: Array<SplitRow & { channel: string }>;
 }
 
 interface ReportsAiAgent {
@@ -847,6 +850,58 @@ function BreakdownTab(props: TabProps): ReactElement {
               rows={(data.by_hour ?? []).map((row) => ({
                 key: String(row.hour),
                 label: `${String(row.hour).padStart(2, '0')}:00`,
+                ...row,
+              }))}
+            />
+          )}
+        </Card>
+      </Section>
+
+      <Section
+        title="By team"
+        description={
+          data.overlapping
+            ? "The same split resolved over each team a conversation is visible to. A conversation open to more than one team is counted in every one of them, so row totals can exceed the window's total chats."
+            : 'The same split resolved over each team a conversation is visible to.'
+        }
+      >
+        <Card>
+          {(data.by_team ?? []).length === 0 ? (
+            <EmptyState
+              title="No team data yet"
+              description="Once conversations are visible to a team, their split shows up here."
+            />
+          ) : (
+            <SplitTable
+              caption="Resolution split per team"
+              firstColumn="Team"
+              rows={(data.by_team ?? []).map((row) => ({
+                key: String(row.team_id ?? 'unassigned'),
+                label: row.name ?? 'Unassigned',
+                ...row,
+              }))}
+            />
+          )}
+        </Card>
+      </Section>
+
+      <Section
+        title="By channel"
+        description="The same split resolved over each channel the conversation started on."
+      >
+        <Card>
+          {(data.by_channel ?? []).length === 0 ? (
+            <EmptyState
+              title="No channel data yet"
+              description="Once conversations happen in this window, their channel split shows up here."
+            />
+          ) : (
+            <SplitTable
+              caption="Resolution split per channel"
+              firstColumn="Channel"
+              rows={(data.by_channel ?? []).map((row) => ({
+                key: row.channel,
+                label: row.channel,
                 ...row,
               }))}
             />

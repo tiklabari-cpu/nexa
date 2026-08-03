@@ -312,11 +312,33 @@ interface HourRow {
   automated: number;
 }
 
+interface TeamRow {
+  team_id: number | null;
+  name: string | null;
+  chats: number;
+  closed: number;
+  manual: number;
+  assisted: number;
+  automated: number;
+}
+
+interface ChannelRow {
+  channel: string;
+  chats: number;
+  closed: number;
+  manual: number;
+  assisted: number;
+  automated: number;
+}
+
 const BREAKDOWN_BASE = {
   range: OVERVIEW.range,
   by_day: [] as Array<{ date: string } & Omit<HourRow, 'hour'>>,
   by_agent: [] as Array<{ agent_id: string; name: string | null } & Omit<HourRow, 'hour'>>,
   by_hour: undefined as HourRow[] | undefined,
+  by_team: undefined as TeamRow[] | undefined,
+  overlapping: undefined as boolean | undefined,
+  by_channel: undefined as ChannelRow[] | undefined,
 };
 
 function mockBreakdown(overrides: Partial<typeof BREAKDOWN_BASE>): void {
@@ -371,5 +393,92 @@ describe('ReportsPage — Breakdown report, By hour (07.5-g)', () => {
     const byHour = screen.getByRole('region', { name: 'By hour' });
     expect(within(byHour).getByText('No hourly data yet')).toBeInTheDocument();
     expect(within(byHour).queryByRole('table')).not.toBeInTheDocument();
+  });
+});
+
+describe('ReportsPage — Breakdown report, By team / By channel (07.5-h)', () => {
+  const TEAM_ROW: TeamRow = {
+    team_id: 1,
+    name: 'Sales',
+    chats: 5,
+    closed: 4,
+    manual: 2,
+    assisted: 1,
+    automated: 1,
+  };
+  const UNASSIGNED_ROW: TeamRow = {
+    team_id: null,
+    name: null,
+    chats: 2,
+    closed: 1,
+    manual: 1,
+    assisted: 0,
+    automated: 0,
+  };
+  const CHANNEL_ROW: ChannelRow = {
+    channel: 'website',
+    chats: 7,
+    closed: 6,
+    manual: 3,
+    assisted: 2,
+    automated: 1,
+  };
+
+  it('renders team names and an Unassigned row for chats visible to no team', async () => {
+    mockBreakdown({ by_team: [TEAM_ROW, UNASSIGNED_ROW] });
+    renderReports(<ReportsPage />);
+    await openBreakdownTab();
+
+    const byTeam = screen.getByRole('region', { name: 'By team' });
+    expect(within(byTeam).getByText('Sales')).toBeInTheDocument();
+    expect(within(byTeam).getByText('Unassigned')).toBeInTheDocument();
+  });
+
+  it('shows the overlap footnote when overlapping is true, hides it when false', async () => {
+    mockBreakdown({ by_team: [TEAM_ROW], overlapping: true });
+    renderReports(<ReportsPage />);
+    await openBreakdownTab();
+
+    const byTeam = screen.getByRole('region', { name: 'By team' });
+    expect(within(byTeam).getByText(/counted in every one of them/i)).toBeInTheDocument();
+  });
+
+  it('hides the overlap footnote when overlapping is false', async () => {
+    mockBreakdown({ by_team: [TEAM_ROW], overlapping: false });
+    renderReports(<ReportsPage />);
+    await openBreakdownTab();
+
+    const byTeam = screen.getByRole('region', { name: 'By team' });
+    expect(within(byTeam).queryByText(/counted in every one of them/i)).not.toBeInTheDocument();
+  });
+
+  it('shows an empty state, not an empty table, when by_team is missing or empty', async () => {
+    mockBreakdown({ by_team: undefined });
+    renderReports(<ReportsPage />);
+    await openBreakdownTab();
+
+    const byTeam = screen.getByRole('region', { name: 'By team' });
+    expect(within(byTeam).getByText('No team data yet')).toBeInTheDocument();
+    expect(within(byTeam).queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('renders channel rows including the website fallback', async () => {
+    mockBreakdown({ by_channel: [CHANNEL_ROW, { ...CHANNEL_ROW, channel: 'messenger' }] });
+    renderReports(<ReportsPage />);
+    await openBreakdownTab();
+
+    const byChannel = screen.getByRole('region', { name: 'By channel' });
+    expect(within(byChannel).getByText('website')).toBeInTheDocument();
+    expect(within(byChannel).getByText('messenger')).toBeInTheDocument();
+  });
+
+  it('shows an empty state, not an empty table, when by_channel is missing or empty', async () => {
+    mockBreakdown({ by_channel: [] });
+    renderReports(<ReportsPage />);
+    await openBreakdownTab();
+
+    const byChannel = screen.getByRole('region', { name: 'By channel' });
+    expect(within(byChannel).getByText('No channel data yet')).toBeInTheDocument();
+    expect(within(byChannel).queryByRole('table')).not.toBeInTheDocument();
   });
 });

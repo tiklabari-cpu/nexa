@@ -41,10 +41,13 @@ test.describe('reports overview', () => {
     await expect(agentPage.getByText('AI resolutions', { exact: true })).toBeVisible();
     await agentPage.screenshot({ path: 'kanit/21-reports-ai-agent.png', fullPage: true });
 
-    // Breakdown (FR-MOD-07.5): the split resolved by day, by agent and (07.5-g) by hour.
+    // Breakdown (FR-MOD-07.5): the split resolved by day, by agent, by hour
+    // (07.5-g) and — this task — by team and by channel.
     await agentPage.getByRole('tab', { name: 'Breakdown' }).click();
     await expect(agentPage.getByRole('region', { name: 'By day' })).toBeVisible();
     await expect(agentPage.getByRole('region', { name: 'By hour' })).toBeVisible();
+    await expect(agentPage.getByRole('region', { name: 'By team' })).toBeVisible();
+    await expect(agentPage.getByRole('region', { name: 'By channel' })).toBeVisible();
     await agentPage.screenshot({ path: 'kanit/21-reports-breakdown.png', fullPage: true });
   });
 

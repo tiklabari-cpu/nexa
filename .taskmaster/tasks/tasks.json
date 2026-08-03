@@ -3065,12 +3065,12 @@
             "description": "(1) Saf modül `apps/web/src/features/playbook/kb-tabs.ts` — makale listesini `status` + kategori + debounce arama ile daraltan saf fonksiyonlar (`knowledge-tabs.ts` imzasının kardeşi). (2) `KbArticleList.tsx` — `role=tablist` sekmeler (All / Published / Drafts), satırda başlık + kategori + durum rozeti + `updated_at`; her sekme için ANLAMLI empty state (boş dikdörtgen yok); yükleme skeleton'ı. (3)",
             "details": "PUBKB-g — Admin: KB makale listesi + durum sekmeleri (All/Published/Drafts) + anlamlı empty state  [SONNET-XHIGH]\n\nPRD: §5.3-Knowledge (public KB); FR-EK-B.1 (empty state deseni), NFR-A11Y1\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 3-4 dosya (saf filtre modülü + bileşen + test + sekme kaydı). Güvenlik sınırı YOK — yalnız PUBKB-b'nin agent-auth endpoint'ini tüketen okuma ekranı, yetki kararı vermiyor. Eşzamanlılık yok. Kopyalanacak desen birebir var ve ismen verilebiliyor: `knowledge-tabs.ts` + `skill-tabs.ts` (saf sekme filtresi) ve `PlaybookPage.tsx` (sekme kabuğu). Kontrat değişikliği yok. KK mekanik doğrulanabilir (her sekme doğru alt küme).\nNEDEN AÇIK: `apps/web/src/features/playbook/` altında Knowledge tarafı yalnız AI Agent RAG kaynaklarını gösteriyor (`knowledge-tabs.ts` sekmeleri All/Websites/Files/Articles/FAQ = `KnowledgeSource.type`) ve `PlaybookPage.tsx` yayınlanabilir makale kavramını hiç bilmiyor; `apps/web/src/features/` altındaki 15 özellik dizininin hiçbirinde kb/public-kb yok.\nKAPSAM: (1) Saf modül `apps/web/src/features/playbook/kb-tabs.ts` — makale listesini `status` + kategori + debounce arama ile daraltan saf fonksiyonlar (`knowledge-tabs.ts` imzasının kardeşi). (2) `KbArticleList.tsx` — `role=tablist` sekmeler (All / Published / Drafts), satırda başlık + kategori + durum rozeti + `updated_at`; her sekme için ANLAMLI empty state (boş dikdörtgen yok); yükleme skeleton'ı. (3) `PlaybookPage.tsx`'e 'Public KB' sekmesi kaydı. Veri: PUBKB-b'nin `GET /kb-articles` endpoint'i, üretilmiş `@nexa/types` tipleriyle.\nDOSYALAR: apps/web/src/features/playbook/kb-tabs.ts · apps/web/src/features/playbook/kb-tabs.test.ts · apps/web/src/features/playbook/KbArticleList.tsx · apps/web/src/features/playbook/KbArticleList.test.tsx · apps/web/src/features/playbook/PlaybookPage.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/playbook/knowledge-tabs.ts · apps/web/src/features/playbook/skill-tabs.ts · apps/web/src/features/playbook/skill-filter.ts · apps/web/src/features/playbook/PlaybookPage.tsx · apps/web/src/features/playbook/TemplateGallery.tsx\nKK (birebir): \"KK-türetilmiş: \"SEO'lu self-servis bilgi bankası (public KB)\" — bu alt-görevin payı: bir bilgi bankası ancak içeriği yönetilebiliyorsa var olur; ekip hangi makalenin yayında hangisinin taslak olduğunu tek bakışta görebilmelidir. Türetme gerekçesi: PRD §6'da bu kalem için KK satırı yok; yönetim yüzeyi §5.3'ün 'bilgi bankası' ifadesinden türetildi. Empty-state şartı FR-EK-B.1'in birebir KK'sından ödünç alındı: \"her boş liste için anlamlı empty state (boş dikdörtgen yok)\".\"\nKK DOĞRULAMA: `kb-tabs.test.ts` unit: her sekme doğru alt kümeyi döner (Published yalnız `status='published'`, Drafts yalnız `draft`, All hepsi) → KK 'yönetilebilir bilgi bankası' payı. `KbArticleList.test.tsx`: boş listede anlamlı empty state metni render edilir (boş dikdörtgen değil) → FR-EK-B.1 KK'sı; `role=tablist`/`aria-selected` doğru (NFR-A11Y1).\nKAPSAM DIŞI: Makale oluşturma/düzenleme formu (PUBKB-h) · publish/unpublish eylemi (PUBKB-h) · Public sayfanın kendisi (PUBKB-e) · Kategori yönetimi ekranı (PUBKB-h içinde basit seçici olarak, ayrı CRUD ekranı v3) · Sürükle-bırak sıralama\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: sekme filtresi her durum için doğru alt küme (saf fonksiyon) · unit: arama debounce + kategori filtresi birlikte daraltır · unit: her sekmede boş liste → anlamlı empty state (üç sekme ayrı ayrı) · unit: a11y — `role=tablist`, `aria-selected`, klavye ile sekme gezinme · unit: yükleme durumunda skeleton, hata durumunda hata mesajı",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2
             ],
             "parentId": "76",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T16:54:38.657Z"
           },
           {
             "id": 8,
@@ -3103,7 +3103,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T16:34:55.372Z"
+        "updatedAt": "2026-08-03T16:54:38.657Z"
       },
       {
         "id": "77",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T16:34:55.374Z",
+      "lastModified": "2026-08-03T16:54:38.657Z",
       "taskCount": 100,
       "completedCount": 79,
       "tags": [

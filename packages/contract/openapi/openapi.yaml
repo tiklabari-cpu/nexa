@@ -335,6 +335,8 @@ paths:
     $ref: "./paths/reports.yaml#/topics"
   /reports/cases:
     $ref: "./paths/reports.yaml#/cases"
+  /reports/leads:
+    $ref: "./paths/reports.yaml#/leads"
   /reports/groups:
     $ref: "./paths/reports.yaml#/groups"
   /reports/export:
@@ -2721,6 +2723,48 @@ components:
             properties:
               priority: { type: integer }
               count: { type: integer }
+
+    ReportsLeads:
+      type: object
+      description: |
+        The Leads report (FR-MOD-07.7, v2 payload): customers flagged as leads
+        (`is_lead`) counted by UTC day of their first contact with this license.
+        Aggregate counts only — no lead name, email or phone is in this report.
+
+        ISOLATION (NFR-S4): `customers` is organization-scoped and carries no
+        `license_id`, and one organization may hold several licenses, so a lead
+        is bound to this license only when it has touched the license through a
+        chat or a ticket. The organization-wide `is_lead` count is deliberately
+        not used — it would leak a sibling license's leads into this report.
+      required: [range, by_day, totals]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        by_day:
+          type: array
+          description: |
+            One row per UTC day on which at least one lead first touched this
+            license, ascending by date. `count` is the number of leads whose
+            first contact with the license fell on that day.
+          items:
+            type: object
+            required: [date, count]
+            properties:
+              date: { type: string, description: "UTC day as `YYYY-MM-DD`." }
+              count: { type: integer }
+        totals:
+          type: object
+          description: |
+            Window totals. `leads` is the distinct leads whose first contact
+            with this license fell inside the window — equal to the sum of the
+            `by_day` counts.
+          required: [leads]
+          properties:
+            leads: { type: integer }
 
     ReportGroups:
       type: object

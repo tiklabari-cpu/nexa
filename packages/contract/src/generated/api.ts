@@ -3098,6 +3098,44 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/leads': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Leads — new leads acquired by day
+     * @description The Leads report (FR-MOD-07.7, v2 payload): customers flagged as leads
+     *     (`is_lead`) counted per UTC day of their first contact with THIS license.
+     *     Defaults to the last 30 days.
+     *
+     *     Aggregate counts only (§V3) — no lead name, email or phone crosses into
+     *     this report.
+     *
+     *     ISOLATION (NFR-S4): `customers` is organization-scoped and carries no
+     *     `license_id`, and one organization may hold several licenses. A lead is
+     *     bound to this license only when it has actually touched the license —
+     *     through a chat or a ticket — so a sibling license's leads never leak into
+     *     this report. The organization-wide `is_lead` count is deliberately *not*
+     *     used; which boundary is correct is an access-control decision, and the
+     *     wrong side of it would expose another license's leads.
+     *
+     *     `by_day` counts each lead once, on the UTC day of its first touch on this
+     *     license, so a lead already acquired before the window is not counted
+     *     again inside it; `totals.leads` is the distinct leads first seen in the
+     *     window and equals the sum of the `by_day` counts.
+     */
+    get: operations['getReportsLeads'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/groups': {
     parameters: {
       query?: never;
@@ -3143,9 +3181,10 @@ export interface paths {
      *     than four files; `topics` serialises one row per cluster —
      *     `label,volume,share,previous_volume,trend` — below the Chat topics
      *     sufficiency floor only the header row, never a fabricated zero-row;
-     *     `cases` serialises one row per UTC day — `date,open,closed,total`; the
-     *     two window summaries (`overview`, `ai-agent`) serialise as `metric,value`
-     *     pairs. Every figure is the same one the group's JSON report exposes, so a
+     *     `cases` serialises one row per UTC day — `date,open,closed,total`;
+     *     `leads` serialises one row per UTC day — `date,count`; the two window
+     *     summaries (`overview`, `ai-agent`) serialise as `metric,value` pairs.
+     *     Every figure is the same one the group's JSON report exposes, so a
      *     download never disagrees with the screen it came from.
      *
      *     User-influenced fields (tags, agent names) are neutralised against
@@ -5545,6 +5584,43 @@ export interface components {
         priority: number;
         count: number;
       }[];
+    };
+    /**
+     * @description The Leads report (FR-MOD-07.7, v2 payload): customers flagged as leads
+     *     (`is_lead`) counted by UTC day of their first contact with this license.
+     *     Aggregate counts only — no lead name, email or phone is in this report.
+     *
+     *     ISOLATION (NFR-S4): `customers` is organization-scoped and carries no
+     *     `license_id`, and one organization may hold several licenses, so a lead
+     *     is bound to this license only when it has touched the license through a
+     *     chat or a ticket. The organization-wide `is_lead` count is deliberately
+     *     not used — it would leak a sibling license's leads into this report.
+     */
+    ReportsLeads: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /**
+       * @description One row per UTC day on which at least one lead first touched this
+       *     license, ascending by date. `count` is the number of leads whose
+       *     first contact with the license fell on that day.
+       */
+      by_day: {
+        /** @description UTC day as `YYYY-MM-DD`. */
+        date: string;
+        count: number;
+      }[];
+      /**
+       * @description Window totals. `leads` is the distinct leads whose first contact
+       *     with this license fell inside the window — equal to the sum of the
+       *     `by_day` counts.
+       */
+      totals: {
+        leads: number;
+      };
     };
     /**
      * @description The report groups a caller may see (FR-MOD-07.7 permission-based
@@ -11041,6 +11117,33 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getReportsLeads: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Lead counts for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsLeads'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   getReportGroups: {
     parameters: {
       query?: never;
@@ -11066,7 +11169,7 @@ export interface operations {
   exportReport: {
     parameters: {
       query: {
-        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`. */
+        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`. */
         group: string;
         from?: string;
         to?: string;

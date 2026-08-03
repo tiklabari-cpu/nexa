@@ -219,6 +219,49 @@ cases:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+leads:
+  get:
+    tags: [Reports]
+    operationId: getReportsLeads
+    summary: Leads — new leads acquired by day
+    description: |
+      The Leads report (FR-MOD-07.7, v2 payload): customers flagged as leads
+      (`is_lead`) counted per UTC day of their first contact with THIS license.
+      Defaults to the last 30 days.
+
+      Aggregate counts only (§V3) — no lead name, email or phone crosses into
+      this report.
+
+      ISOLATION (NFR-S4): `customers` is organization-scoped and carries no
+      `license_id`, and one organization may hold several licenses. A lead is
+      bound to this license only when it has actually touched the license —
+      through a chat or a ticket — so a sibling license's leads never leak into
+      this report. The organization-wide `is_lead` count is deliberately *not*
+      used; which boundary is correct is an access-control decision, and the
+      wrong side of it would expose another license's leads.
+
+      `by_day` counts each lead once, on the UTC day of its first touch on this
+      license, so a lead already acquired before the window is not counted
+      again inside it; `totals.leads` is the distinct leads first seen in the
+      window and equals the sum of the `by_day` counts.
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: Lead counts for the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsLeads" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 groups:
   get:
     tags: [Reports]
@@ -257,9 +300,10 @@ export:
       than four files; `topics` serialises one row per cluster —
       `label,volume,share,previous_volume,trend` — below the Chat topics
       sufficiency floor only the header row, never a fabricated zero-row;
-      `cases` serialises one row per UTC day — `date,open,closed,total`; the
-      two window summaries (`overview`, `ai-agent`) serialise as `metric,value`
-      pairs. Every figure is the same one the group's JSON report exposes, so a
+      `cases` serialises one row per UTC day — `date,open,closed,total`;
+      `leads` serialises one row per UTC day — `date,count`; the two window
+      summaries (`overview`, `ai-agent`) serialise as `metric,value` pairs.
+      Every figure is the same one the group's JSON report exposes, so a
       download never disagrees with the screen it came from.
 
       User-influenced fields (tags, agent names) are neutralised against
@@ -271,7 +315,7 @@ export:
       - name: group
         in: query
         required: true
-        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`."
+        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`."
         schema: { type: string }
       - name: from
         in: query

@@ -14,7 +14,9 @@
 import { randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { generateShortId } from '@nexa/types';
 import { withTenant } from '../../src/lib/tenant.js';
+import { buildGroupCsv, buildLeadsReport } from '../../src/routes/reports.js';
 import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -575,6 +577,127 @@ describe('tenant isolation (RLS)', () => {
           async () => 1,
         ),
       ).rejects.toThrow(/invalid tenant organization id/);
+    });
+  });
+
+  // =========================================================================
+
+  /**
+   * Leads report — the license boundary *within one organization* (FR-MOD-07.7,
+   * 07.7-b). The other suites pit organization A against organization B; this is
+   * the harder case the leads report was built for. `customers` is
+   * organization-scoped and holds no `license_id`, and one organization may own
+   * several licenses, so every lead is visible under *every* license of its org.
+   * A leads count taken straight off `customers.is_lead` would therefore report
+   * a sibling license's leads as this one's. The report closes that leak by
+   * binding a lead to a license only through a chat or ticket it has touched.
+   */
+  describe('leads report — license boundary within one organization (FR-MOD-07.7)', () => {
+    let orgId: string;
+    let l1: bigint;
+    let l2: bigint;
+    // A fixed touch day, so the by-day bucket is deterministic (no midnight-UTC
+    // race) and both licenses report the same date.
+    const touchDay = new Date('2026-05-15T12:00:00.000Z');
+    const day = '2026-05-15';
+    const from = new Date('2026-05-01T00:00:00.000Z');
+    const to = new Date('2026-06-01T00:00:00.000Z');
+
+    beforeAll(async () => {
+      // A dedicated organization with two licenses — the sibling-license
+      // scenario. Owner-written (RLS bypassed) so the fixture can span both.
+      const org = await owner.organization.create({
+        data: { name: 'Org SIBLING', region: 'eu' },
+        select: { id: true },
+      });
+      orgId = org.id;
+      const mkLicense = () =>
+        owner.license.create({
+          data: { organizationId: orgId, plan: 'growth', status: 'trialing' },
+          select: { id: true },
+        });
+      l1 = (await mkLicense()).id;
+      l2 = (await mkLicense()).id;
+
+      const mkLead = () =>
+        owner.customer.create({
+          data: { organizationId: orgId, name: 'Lead', isLead: true },
+          select: { id: true },
+        });
+
+      // Two leads bound to L1 — one through a chat, one through a ticket (both
+      // license-scoped touch tables, so both must respect the boundary).
+      const leadChat = await mkLead();
+      await owner.chat.create({
+        data: { id: generateShortId(), licenseId: l1, customerId: leadChat.id, createdAt: touchDay },
+      });
+      const leadTicket = await mkLead();
+      await owner.ticket.create({
+        data: {
+          id: generateShortId(),
+          licenseId: l1,
+          customerId: leadTicket.id,
+          subject: 'Lead ticket',
+          status: 'open',
+          createdAt: touchDay,
+        },
+      });
+
+      // One lead bound to L2 — so L2 reports its own, and a "L2 sees 0" pass
+      // could not hide behind an empty tenant. What matters is *which* leads
+      // each license claims.
+      const leadOnL2 = await mkLead();
+      await owner.chat.create({
+        data: { id: generateShortId(), licenseId: l2, customerId: leadOnL2.id, createdAt: touchDay },
+      });
+    });
+
+    /** Count is_lead customers the way a *naive* report would — straight off the org-scoped table. */
+    async function naiveOrgWideLeadCount(licenseId: bigint): Promise<number> {
+      const [row] = await withTenant(app, { licenseId, organizationId: orgId }, (tx) =>
+        tx.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM customers WHERE is_lead = TRUE`,
+      );
+      return Number(row?.n ?? 0n);
+    }
+
+    it('sees all three org leads under either license — the trap the report must not fall into', async () => {
+      // customers is organization-scoped: both licenses of the org see every
+      // lead. A count taken here reports 3 for each — which is exactly why the
+      // report cannot count customers directly.
+      expect(await naiveOrgWideLeadCount(l1)).toBe(3);
+      expect(await naiveOrgWideLeadCount(l2)).toBe(3);
+    });
+
+    it('attributes each lead only to the license it actually touched', async () => {
+      const l1Report = (await withTenant(app, { licenseId: l1, organizationId: orgId }, (tx) =>
+        buildLeadsReport(tx, l1, from, to),
+      )) as { by_day: Array<{ date: string; count: number }>; totals: { leads: number } };
+      const l2Report = (await withTenant(app, { licenseId: l2, organizationId: orgId }, (tx) =>
+        buildLeadsReport(tx, l2, from, to),
+      )) as { by_day: Array<{ date: string; count: number }>; totals: { leads: number } };
+
+      // L1 claims its two (chat + ticket); L2's lead never leaks in.
+      expect(l1Report.totals.leads).toBe(2);
+      expect(l1Report.by_day).toEqual([{ date: day, count: 2 }]);
+
+      // L2 claims only its own — the two L1 leads are absent, not counted as 3.
+      expect(l2Report.totals.leads).toBe(1);
+      expect(l2Report.by_day).toEqual([{ date: day, count: 1 }]);
+    });
+
+    it('never lists a sibling license’s lead in the CSV either', async () => {
+      const l2Csv = await withTenant(app, { licenseId: l2, organizationId: orgId }, (tx) =>
+        buildGroupCsv(tx, l2, 'leads', from, to),
+      );
+      // The CSV is the same license-bound series: one row, count 1 — L1's leads
+      // would push it to 3 if the boundary leaked.
+      expect(l2Csv.headers).toEqual(['date', 'count']);
+      expect(l2Csv.rows).toEqual([[day, 1]]);
+
+      const l1Csv = await withTenant(app, { licenseId: l1, organizationId: orgId }, (tx) =>
+        buildGroupCsv(tx, l1, 'leads', from, to),
+      );
+      expect(l1Csv.rows).toEqual([[day, 2]]);
     });
   });
 });

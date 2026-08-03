@@ -292,6 +292,101 @@ async function casesByPriority(
   return rows.map((row) => ({ priority: row.priority, count: Number(row.count) }));
 }
 
+interface LeadDayCount {
+  date: string;
+  count: number;
+}
+
+/**
+ * The lead → license binding, as a CTE body shared by {@link leadsByDay} and
+ * {@link leadTotals} so the two can never disagree on which leads belong to
+ * this license.
+ *
+ * ISOLATION (why this is the isolation-sensitive core, NFR-S4): a lead is a
+ * `customers` row with `is_lead` set, and `customers` is *organization*-scoped
+ * — it has no `license_id` column, and RLS narrows it by
+ * `app.current_organization` (lib/tenant.ts). One organization may hold several
+ * licenses (`Organization.licenses`), so every lead in the org is visible under
+ * *every* one of its licenses. Counting `customers.is_lead` directly would
+ * therefore report a sibling license's leads as this license's — an
+ * access-control leak, and the wrong side of a boundary that is expensive to
+ * get wrong.
+ *
+ * The boundary this report commits to instead: a lead belongs to this license
+ * only when it has actually *touched* the license, through a chat or a ticket
+ * (both license-scoped). The touch tables are joined on
+ * `license_id = ${licenseId}` explicitly — defence in depth on top of RLS,
+ * exactly as {@link breakdownByChannel} and {@link breakdownByTeam} lock their
+ * soft joins: were RLS ever weakened, an unqualified join would let another
+ * license's chat/ticket for the same organization customer pull a sibling lead
+ * in. `first_touch` is the earliest such touch, so a lead is attributed to the
+ * day it first reached this license (see {@link leadsByDay}); the
+ * organization-wide creation date — a fact this license does not own — never
+ * decides the bucket.
+ */
+function leadFirstTouch(licenseId: bigint) {
+  return Prisma.sql`
+    lead_first_touch AS (
+      SELECT c.id AS customer_id, min(touch.touched_at) AS first_touch
+      FROM customers c
+      JOIN (
+        SELECT customer_id, created_at AS touched_at
+          FROM chats  WHERE license_id = ${licenseId}
+        UNION ALL
+        SELECT customer_id, created_at AS touched_at
+          FROM tickets WHERE license_id = ${licenseId} AND customer_id IS NOT NULL
+      ) touch ON touch.customer_id = c.id
+      WHERE c.is_lead = TRUE
+      GROUP BY c.id
+    )`;
+}
+
+/**
+ * New leads per UTC day (FR-MOD-07.7 Leads, v2 payload): a lead counted once, on
+ * the day of its first touch on this license (see {@link leadFirstTouch}), for
+ * days inside the window. `AT TIME ZONE 'UTC'` pins the bucket boundary
+ * regardless of server timezone, like every other by-day report. A lead first
+ * seen before the window does not reappear inside it, so this is a true
+ * "new leads acquired" series whose counts sum to {@link leadTotals}.
+ */
+async function leadsByDay(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<LeadDayCount[]> {
+  const rows = await tx.$queryRaw<Array<{ date: string; count: bigint }>>`
+    WITH ${leadFirstTouch(licenseId)}
+    SELECT to_char((first_touch AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date,
+      count(*) AS count
+    FROM lead_first_touch
+    WHERE first_touch >= ${from} AND first_touch <= ${to}
+    GROUP BY 1
+    ORDER BY 1
+  `;
+  return rows.map((row) => ({ date: row.date, count: Number(row.count) }));
+}
+
+/**
+ * The window's distinct new leads (FR-MOD-07.7 Leads) — the same first-touch
+ * definition as {@link leadsByDay}, so `leads` equals the sum of that series by
+ * construction. An empty window returns 0, never null.
+ */
+async function leadTotals(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<{ leads: number }> {
+  const [row] = await tx.$queryRaw<Array<{ leads: bigint }>>`
+    WITH ${leadFirstTouch(licenseId)}
+    SELECT count(*) AS leads
+    FROM lead_first_touch
+    WHERE first_touch >= ${from} AND first_touch <= ${to}
+  `;
+  return { leads: Number(row?.leads ?? 0n) };
+}
+
 /** Good/bad rating tallies for a window. */
 async function satisfactionCounts(
   tx: TenantClient,
@@ -894,7 +989,7 @@ function centroidOf(vectors: number[][]): number[] {
  * aggregation helpers rather than recomputing — so a CSV can never disagree
  * with the screen it was exported from.
  */
-async function buildGroupCsv(
+export async function buildGroupCsv(
   tx: TenantClient,
   licenseId: bigint,
   groupId: string,
@@ -1016,6 +1111,17 @@ async function buildGroupCsv(
       return {
         headers: ['date', 'open', 'closed', 'total'],
         rows: byDay.map((row) => [row.date, row.open, row.closed, row.total]),
+      };
+    }
+    case 'leads': {
+      // Same helper the /reports/leads route calls, so the download can never
+      // disagree with the tab's day series — and it inherits that helper's
+      // license binding (see leadFirstTouch), so the CSV never lists a sibling
+      // license's lead.
+      const byDay = await leadsByDay(tx, licenseId, from, to);
+      return {
+        headers: ['date', 'count'],
+        rows: byDay.map((row) => [row.date, row.count]),
       };
     }
     default:
@@ -1472,6 +1578,31 @@ export async function buildCasesReport(
   };
 }
 
+/**
+ * The Leads report for one window (FR-MOD-07.7, v2 payload). Shared by `GET
+ * /reports/leads` and the `leads` CSV export so the two can never quote
+ * different figures for the same license and range. Aggregate counts only
+ * (§V3) — no lead identity crosses into this report; see {@link leadFirstTouch}
+ * for why the count is bound to this license rather than the whole organization.
+ */
+export async function buildLeadsReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Record<string, unknown>> {
+  // Sequential, not Promise.all: withTenant is one interactive transaction and
+  // Prisma forbids concurrent queries on its client.
+  const byDay = await leadsByDay(tx, licenseId, from, to);
+  const totals = await leadTotals(tx, licenseId, from, to);
+
+  return {
+    range: { from: from.toISOString(), to: to.toISOString() },
+    by_day: byDay,
+    totals,
+  };
+}
+
 export default async function reportRoutes(
   app: FastifyInstance,
   options: { env: Env },
@@ -1560,6 +1691,21 @@ export default async function reportRoutes(
     const tenant = request.tenant();
 
     const body = await request.withTenant((tx) => buildCasesReport(tx, tenant.licenseId, from, to));
+    return reply.send(body);
+  });
+
+  // Leads (FR-MOD-07.7, v2 payload): customers flagged as leads counted by the
+  // UTC day they first touched this license. The count is license-bound through
+  // a chat/ticket join, never the organization-wide is_lead total (see
+  // buildLeadsReport / leadFirstTouch) — the isolation core of this report.
+  // Same reports_read + withTenant surface as the other tabs.
+  app.get('/reports/leads', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
+    const parsed = rangeQuery.safeParse(request.query);
+    if (!parsed.success) throw ApiError.validation('Invalid date range.');
+    const { from, to } = resolveRange(parsed.data);
+    const tenant = request.tenant();
+
+    const body = await request.withTenant((tx) => buildLeadsReport(tx, tenant.licenseId, from, to));
     return reply.send(body);
   });
 

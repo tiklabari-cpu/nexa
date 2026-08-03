@@ -13,6 +13,44 @@
 
 ## Task log (newest-first)
 
+### tm 93.2 — 07.7-b Leads rapor grubu — org-kapsamlı `customers`'ın lisans sınırına oturtulması (izolasyon çekirdeği) — done — 2026-08-03 UTC
+
+- **Yapıldı:** Sıfırdan uygulandı (`leads` grep 0 idi — gerçek iş, "erken teslim" değil). v2 diliminin
+  (`07.7-v2`, 12 alt-görev) ikinci alt-görevi; Cases (93.1) deseni birebir izlendi, üstüne izolasyon
+  çekirdeği. **İZOLASYON KARARI (OPUS-MAX, PLAN §5.2.4 açık soru → karara bağlandı):** `customers`
+  `organization_id`-scope'lu (`is_lead` schema.prisma:243, `license_id` YOK; RLS
+  `app.current_organization`), bir Organization çok License taşır → `customers.is_lead` naif sayımı
+  kardeş lisansların lead'lerini bu lisansın raporuna sızdırırdı. Karar: lead bu LİSANSA **dokunmuş**
+  ise sayılır — `chats`/`tickets` (ikisi de license-scope'lu) `customer_id` join'i, join'de `WHERE
+  license_id = ${licenseId}` AÇIKÇA (RLS üstüne defence-in-depth, `breakdownByChannel`/`breakdownByTeam`
+  idiyomu). `customers`'a `license_id` EKLENMEDİ (kapsam dışı — çapraz-kesen şema). **Backend
+  (`reports.ts`):** `leadFirstTouch(licenseId)` paylaşılan CTE fragmanı (min(chat/ticket touch)=ilk-değme)
+  + `leadsByDay`/`leadTotals` (sum(by_day)===totals by construction) + `buildLeadsReport` (export) +
+  `GET /reports/leads` route (`withTenant` RLS hem org hem license set eder — tenant.ts:72-73) +
+  `buildGroupCsv` 'leads' case'i (`date,count`); `buildGroupCsv` **export edildi** (izolasyon testi CSV'yi
+  doğrudan doğrular). `reports-export.ts` `REPORT_GROUPS`'a `{id:'leads',label:'Leads',scopes:['reports_read']}`
+  (katalog sonuna, mevcut tab sırası bozulmadı — `EXPORT_SCOPES`/`visibleReportGroups` katalogdan türetilir).
+  **Kontrat:** `paths/reports.yaml` `leads` op + `export` grup listesi/param; `openapi.yaml` `/reports/leads`
+  ref + `ReportsLeads` şeması; `pnpm --filter @nexa/contract generate` (138 path, api.ts regen).
+  **Tasarım kararı:** `by_day` = ilk-değme gününe göre "yeni lead" serisi (org-geneli oluşturma tarihi
+  DEĞİL — bu lisansın malı değil); lead pencereden önce değmişse pencere içinde tekrar sayılmaz. `chats`
+  `unique(license_id,customer_id)` (1-aktif-chat invariantı) → çok-değme first-touch testi chat+ticket ile.
+- **Doğrulama:** typecheck 11/11 · lint 8/8 · build 7/7 · unit `reports-export.test.ts` 11/11 (+1
+  `reportGroup('leads')`). Integration (izole/serial koşum — api vitest `fileParallelism:false`,
+  [[nexa-test-gate-parallel-db]]): `reports-billing.test.ts` "Leads report (07.7-b)" 8 (gün/first-touch ·
+  ticket-touch · non-lead hariç · org-lead-dokunmamış hariç · boş→0 · cross-tenant · ters aralık 400 ·
+  scope 403) + CSV export 1 + groups-list güncel · `tenant-isolation.test.ts` izolasyon çekirdeği +3
+  (32/32: AYNI org iki lisans, naif org-geneli 3/3 iken lisans-bağlı 2/1, L1 lead'i L2 yanıtı+CSV'sinde
+  YOK) · `contract-parity.test.ts` 5/5 (iki yönlü). KK: "İzin bazlı görünürlük" (scope-siz token
+  `/reports/groups`'ta 'leads' görmez) + "export" (`?group=leads` → 200 `text/csv` `nexa-leads-…`).
+- **Varsayımlar:** (1) `by_day` ilk-değme=yeni-lead semantiği (PLAN satır 1383 'chats/tickets join'
+  yorumu). (2) AGGREGAT sayı, PII yok (§V3). (3) `get_report` MCP tool'una leads EKLENMEDİ — 93.1 cases'i
+  de eklememişti (dört v1 raporu sabit enum); kapsam tutarlılığı.
+- **Sonraki pencereye not:** 07.7-c (Team performance, `SONNET-MAX`, dep 07.7-b) sırada. PLAN §5.2.4'te
+  07.7-v2 satırı `◐` kalır (07.7-a+b teslim, 10 açık). Zaten kirli dosyalara (`CONVENTIONS.md`,
+  `run-loop.sh`, `.taskmaster/BUILD-BLUEPRINT.md`, önceki koşumlardan `apps/e2e/kanit/*.png`, untracked
+  `.playwright-mcp/`) DOKUNULMADI/commit'lenmedi (kapsam disiplini — bkz. 93.1/76.9 notu).
+
 ### tm 93.1 — 07.7-a Cases rapor grubu — kontrat + lisans-kapsamlı ticket sorgusu + CSV exporter — done — 2026-08-03 UTC
 
 - **Yapıldı:** Sıfırdan uygulandı (koda karşı doğrulandı: `cases` grep 0 idi — gerçekten yapılmamış

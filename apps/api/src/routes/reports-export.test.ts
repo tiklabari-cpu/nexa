@@ -13,6 +13,7 @@ describe('report group catalogue', () => {
     expect(reportGroup('overview')?.label).toBe('Overview');
     expect(reportGroup('topics')?.label).toBe('Chat topics');
     expect(reportGroup('cases')?.label).toBe('Cases');
+    expect(reportGroup('leads')?.label).toBe('Leads');
     expect(reportGroup('nonexistent')).toBeUndefined();
   });
 

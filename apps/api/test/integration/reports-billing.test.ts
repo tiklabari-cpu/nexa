@@ -1448,6 +1448,134 @@ describe('reports and billing', () => {
 
   // =========================================================================
 
+  describe('Leads report (07.7-b)', () => {
+    /**
+     * Create a lead (an `is_lead` customer) that has touched this license, with
+     * control over the touch type and its date. `touch: 'none'` makes an
+     * organization lead that never reached this license — the case the report
+     * must *not* count, and the whole reason the count is a chat/ticket join
+     * rather than a bare `customers.is_lead` tally.
+     */
+    async function createLead(
+      options: { touch?: 'chat' | 'ticket' | 'none'; isLead?: boolean; createdAt?: Date } = {},
+    ): Promise<string> {
+      const customer = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Lead', isLead: options.isLead ?? true },
+        select: { id: true },
+      });
+      const at = options.createdAt;
+      const touch = options.touch ?? 'chat';
+      if (touch === 'chat') {
+        await owner.chat.create({
+          data: {
+            id: generateShortId(),
+            licenseId: fx.a.licenseId,
+            customerId: customer.id,
+            ...(at ? { createdAt: at } : {}),
+          },
+        });
+      } else if (touch === 'ticket') {
+        await owner.ticket.create({
+          data: {
+            id: generateShortId(),
+            licenseId: fx.a.licenseId,
+            customerId: customer.id,
+            subject: 'Lead ticket',
+            status: 'open',
+            ...(at ? { createdAt: at } : {}),
+          },
+        });
+      }
+      return customer.id;
+    }
+
+    it('counts new leads by the UTC day of their first touch on this license', async () => {
+      const dayA = new Date(Date.now() - 5 * 86_400_000);
+      const dayB = new Date(Date.now() - 2 * 86_400_000);
+      // A lead whose first touch is a ticket on dayA and who also has a later
+      // chat on dayB — counted once, on dayA (first touch), never moved to dayB
+      // nor doubled. (A customer may hold only one chat per license, so the
+      // second touch has to come through a different table.)
+      const early = await createLead({ touch: 'ticket', createdAt: dayA });
+      await owner.chat.create({
+        data: { id: generateShortId(), licenseId: fx.a.licenseId, customerId: early, createdAt: dayB },
+      });
+      // A second lead first seen on dayB.
+      await createLead({ createdAt: dayB });
+
+      const leads = (await server.get('/reports/leads', auth)).json();
+      expect(leads.by_day).toEqual([
+        { date: dayA.toISOString().slice(0, 10), count: 1 },
+        { date: dayB.toISOString().slice(0, 10), count: 1 },
+      ]);
+      expect(leads.totals).toEqual({ leads: 2 });
+    });
+
+    it('counts a lead reached through a ticket, not only a chat', async () => {
+      await createLead({ touch: 'ticket' });
+      const leads = (await server.get('/reports/leads', auth)).json();
+      expect(leads.totals).toEqual({ leads: 1 });
+    });
+
+    it('does not count a non-lead customer with a chat', async () => {
+      await createLead({ isLead: false }); // touched the license, but is_lead is false
+      await createLead(); // a real lead, for contrast
+      const leads = (await server.get('/reports/leads', auth)).json();
+      expect(leads.totals).toEqual({ leads: 1 });
+    });
+
+    it('does not count an organization lead that never touched this license', async () => {
+      // An `is_lead` customer in the org with no chat or ticket on this license
+      // — exactly what a bare `customers.is_lead` count would wrongly include.
+      await createLead({ touch: 'none' });
+      const leads = (await server.get('/reports/leads', auth)).json();
+      expect(leads.by_day).toEqual([]);
+      expect(leads.totals).toEqual({ leads: 0 });
+    });
+
+    it('reports an empty window as zero, not an error', async () => {
+      const leads = (await server.get('/reports/leads', auth)).json();
+      expect(leads.by_day).toEqual([]);
+      expect(leads.totals).toEqual({ leads: 0 });
+    });
+
+    it('never counts another tenant', async () => {
+      await createLead(); // a lead in A
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/reports/leads', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      expect(theirs.by_day).toEqual([]);
+      expect(theirs.totals).toEqual({ leads: 0 });
+    });
+
+    it('rejects a backwards date range', async () => {
+      const response = await server.get('/reports/leads?from=2026-08-01&to=2026-07-01', auth);
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('requires the reports_read scope', async () => {
+      const scopeless = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      const response = await server.get('/reports/leads', {
+        authorization: `Bearer ${scopeless}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
+  // =========================================================================
+
   describe('report groups + CSV export (07.7)', () => {
     /** Grant a token with a chosen scope set — for the permission-gating cases. */
     function scopedToken(scopes: string[]): Promise<string> {
@@ -1469,6 +1597,7 @@ describe('reports and billing', () => {
           'reviews',
           'topics',
           'cases',
+          'leads',
         ]);
         expect(groups[0]).toEqual({ id: 'overview', label: 'Overview' });
       });
@@ -1695,6 +1824,36 @@ describe('reports and billing', () => {
           ),
         );
         expect(rows[1]).toMatch(/^\d{4}-\d{2}-\d{2},0,1,1$/);
+      });
+
+      it('exports leads bucketed by day, matching the JSON report', async () => {
+        const lead = await owner.customer.create({
+          data: { organizationId: fx.a.organizationId, name: 'Lead', isLead: true },
+          select: { id: true },
+        });
+        await owner.chat.create({
+          data: { id: generateShortId(), licenseId: fx.a.licenseId, customerId: lead.id },
+        });
+
+        const [leads, response] = await Promise.all([
+          server.get('/reports/leads', auth),
+          server.get('/reports/export?group=leads', auth),
+        ]);
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['content-type']).toContain('text/csv');
+        expect(response.headers['content-disposition']).toMatch(
+          /^attachment; filename="nexa-leads-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+        );
+
+        const rows = lines(response.body);
+        expect(rows[0]).toBe('date,count');
+        const data = leads.json();
+        expect(rows.slice(1)).toEqual(
+          (data.by_day as Array<{ date: string; count: number }>).map(
+            (row) => `${row.date},${row.count}`,
+          ),
+        );
+        expect(rows[1]).toMatch(/^\d{4}-\d{2}-\d{2},1$/);
       });
 
       it('exports only the caller’s tenant', async () => {

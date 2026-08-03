@@ -180,6 +180,45 @@ topics:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+cases:
+  get:
+    tags: [Reports]
+    operationId: getReportsCases
+    summary: Cases — ticket volume by day, status and priority
+    description: |
+      The Cases report (FR-MOD-07.7, v2 payload — the asynchronous half of the
+      inbox, FR-MOD-02.6): tickets counted by day of creation, current status
+      and queue priority (FR-MOD-13.6). Defaults to the last 30 days.
+
+      Aggregate counts only (§V3) — no ticket subject or customer identity
+      crosses into this report.
+
+      `by_day` splits each UTC day's created tickets into `open` and `closed`
+      by their *current* status (`solved`/`closed` count as closed; there is
+      no per-day status history to bucket against instead — the same
+      non-historical convention the Breakdown report's `closed` count
+      follows). `by_status` and `by_priority` group the whole window by the
+      ticket's current status and stored queue priority. A merged ticket
+      (`merged_into_id` set) is excluded from every bucket, so a merge never
+      double-counts toward both the primary ticket and the one merged into it.
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: Case counts for the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsCases" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 groups:
   get:
     tags: [Reports]
@@ -217,7 +256,8 @@ export:
       table — `dimension,key,chats,closed,manual,assisted,automated` — rather
       than four files; `topics` serialises one row per cluster —
       `label,volume,share,previous_volume,trend` — below the Chat topics
-      sufficiency floor only the header row, never a fabricated zero-row; the
+      sufficiency floor only the header row, never a fabricated zero-row;
+      `cases` serialises one row per UTC day — `date,open,closed,total`; the
       two window summaries (`overview`, `ai-agent`) serialise as `metric,value`
       pairs. Every figure is the same one the group's JSON report exposes, so a
       download never disagrees with the screen it came from.
@@ -231,7 +271,7 @@ export:
       - name: group
         in: query
         required: true
-        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`."
+        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`."
         schema: { type: string }
       - name: from
         in: query

@@ -197,6 +197,101 @@ function ticketCount(tx: TenantClient, licenseId: bigint, from: Date, to: Date):
   return tx.ticket.count({ where: { licenseId, createdAt: { gte: from, lte: to } } });
 }
 
+interface CaseDaySplit {
+  date: string;
+  open: number;
+  closed: number;
+  total: number;
+}
+
+/**
+ * Tickets created per UTC day (FR-MOD-07.7 Cases, v2 payload), split into
+ * `open` vs `closed` by *current* status — `solved`/`closed` count as closed
+ * (the same terminal pair the 'solved' {@link TicketView} filters to in
+ * ticket-service.ts), `open`/`pending`/`spam` as open. There is no per-day
+ * status history to bucket against instead, the same non-historical
+ * convention {@link breakdownByDay}'s `closed` count follows. `AT TIME ZONE
+ * 'UTC'` pins the bucket boundary regardless of server timezone, same as the
+ * other by-day reports. A merged ticket (`merged_into_id` set) is excluded so
+ * a merge never double-counts toward both the primary and the ticket merged
+ * into it (open question in PLAN §5.2.4, resolved this way for 07.7-a).
+ */
+async function casesByDay(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<CaseDaySplit[]> {
+  const rows = await tx.$queryRaw<
+    Array<{ date: string; open: bigint; closed: bigint; total: bigint }>
+  >`
+    SELECT to_char((created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date,
+      count(*) FILTER (WHERE status NOT IN ('solved', 'closed')) AS open,
+      count(*) FILTER (WHERE status IN ('solved', 'closed'))     AS closed,
+      count(*)                                                   AS total
+    FROM tickets
+    WHERE license_id = ${licenseId}
+      AND created_at >= ${from} AND created_at <= ${to}
+      AND merged_into_id IS NULL
+    GROUP BY 1
+    ORDER BY 1
+  `;
+  return rows.map((row) => ({
+    date: row.date,
+    open: Number(row.open),
+    closed: Number(row.closed),
+    total: Number(row.total),
+  }));
+}
+
+/**
+ * Tickets created in a window (FR-MOD-07.7 Cases), grouped by current status.
+ * Same `merged_into_id IS NULL` exclusion as {@link casesByDay}.
+ */
+async function casesByStatus(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Array<{ status: string; count: number }>> {
+  const rows = await tx.$queryRaw<Array<{ status: string; count: bigint }>>`
+    SELECT status, count(*) AS count
+    FROM tickets
+    WHERE license_id = ${licenseId}
+      AND created_at >= ${from} AND created_at <= ${to}
+      AND merged_into_id IS NULL
+    GROUP BY status
+    ORDER BY status
+  `;
+  return rows.map((row) => ({ status: row.status, count: Number(row.count) }));
+}
+
+/**
+ * Tickets created in a window (FR-MOD-07.7 Cases), grouped by their stored
+ * queue priority (FR-MOD-13.6) — the raw signed integer the column holds, not
+ * the four named levels the Inbox pane snaps to for display
+ * (`ticket-priority.ts`, web-only): the report exposes what is actually
+ * stored, highest first. Same `merged_into_id IS NULL` exclusion as
+ * {@link casesByDay}.
+ */
+async function casesByPriority(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Array<{ priority: number; count: number }>> {
+  const rows = await tx.$queryRaw<Array<{ priority: number; count: bigint }>>`
+    SELECT priority, count(*) AS count
+    FROM tickets
+    WHERE license_id = ${licenseId}
+      AND created_at >= ${from} AND created_at <= ${to}
+      AND merged_into_id IS NULL
+    GROUP BY priority
+    ORDER BY priority DESC
+  `;
+  return rows.map((row) => ({ priority: row.priority, count: Number(row.count) }));
+}
+
 /** Good/bad rating tallies for a window. */
 async function satisfactionCounts(
   tx: TenantClient,
@@ -914,6 +1009,15 @@ async function buildGroupCsv(
         ]),
       };
     }
+    case 'cases': {
+      // Same helper the /reports/cases route calls, so the download can never
+      // disagree with what the tab shows for the day split.
+      const byDay = await casesByDay(tx, licenseId, from, to);
+      return {
+        headers: ['date', 'open', 'closed', 'total'],
+        rows: byDay.map((row) => [row.date, row.open, row.closed, row.total]),
+      };
+    }
     default:
       // Unreachable: the route validates the id through reportGroup() first. A
       // throw keeps the switch exhaustive rather than silently emitting an empty
@@ -1342,6 +1446,32 @@ export async function buildReviewsReport(
   };
 }
 
+/**
+ * The Cases report for one window (FR-MOD-07.7, v2 payload). Shared by `GET
+ * /reports/cases` and the `cases` CSV export so the two can never quote
+ * different figures for the same license and range. Aggregate counts only
+ * (§V3) — no ticket subject or customer identity crosses into this report.
+ */
+export async function buildCasesReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Record<string, unknown>> {
+  // Sequential, not Promise.all: withTenant is one interactive transaction and
+  // Prisma forbids concurrent queries on its client.
+  const byDay = await casesByDay(tx, licenseId, from, to);
+  const byStatus = await casesByStatus(tx, licenseId, from, to);
+  const byPriority = await casesByPriority(tx, licenseId, from, to);
+
+  return {
+    range: { from: from.toISOString(), to: to.toISOString() },
+    by_day: byDay,
+    by_status: byStatus,
+    by_priority: byPriority,
+  };
+}
+
 export default async function reportRoutes(
   app: FastifyInstance,
   options: { env: Env },
@@ -1418,6 +1548,19 @@ export default async function reportRoutes(
       sufficient_data: report.sufficient_data,
       topics: report.topics,
     });
+  });
+
+  // Cases (FR-MOD-07.7, v2 payload): the asynchronous half of the inbox
+  // (tickets, FR-MOD-02.6) counted by day, current status and queue priority.
+  // Same reports_read + withTenant surface as the other tabs.
+  app.get('/reports/cases', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
+    const parsed = rangeQuery.safeParse(request.query);
+    if (!parsed.success) throw ApiError.validation('Invalid date range.');
+    const { from, to } = resolveRange(parsed.data);
+    const tenant = request.tenant();
+
+    const body = await request.withTenant((tx) => buildCasesReport(tx, tenant.licenseId, from, to));
+    return reply.send(body);
   });
 
   // The report groups this caller may see (FR-MOD-07.7 permission-based

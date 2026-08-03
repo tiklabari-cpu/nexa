@@ -8,6 +8,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { generateShortId } from '@nexa/types';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -1311,6 +1312,142 @@ describe('reports and billing', () => {
 
   // =========================================================================
 
+  describe('Cases report (07.7-a)', () => {
+    /** Create a ticket directly, with full control over the fields the report buckets on. */
+    async function createTicket(
+      options: {
+        status?: string;
+        priority?: number;
+        createdAt?: Date;
+        mergedIntoId?: string;
+      } = {},
+    ): Promise<string> {
+      const id = generateShortId();
+      await owner.ticket.create({
+        data: {
+          id,
+          licenseId: fx.a.licenseId,
+          subject: 'Test ticket',
+          status: options.status ?? 'open',
+          priority: options.priority ?? 0,
+          ...(options.createdAt ? { createdAt: options.createdAt } : {}),
+          ...(options.mergedIntoId ? { mergedIntoId: options.mergedIntoId } : {}),
+        },
+        select: { id: true },
+      });
+      return id;
+    }
+
+    it('buckets tickets by UTC day into open vs closed by current status', async () => {
+      const dayA = new Date(Date.now() - 5 * 86_400_000);
+      const dayB = new Date(Date.now() - 2 * 86_400_000);
+      await createTicket({ status: 'open', createdAt: dayA });
+      await createTicket({ status: 'solved', createdAt: dayA });
+      await createTicket({ status: 'closed', createdAt: dayB });
+
+      const cases = (await server.get('/reports/cases', auth)).json();
+      expect(cases.by_day).toHaveLength(2);
+      expect(cases.by_day[0]).toEqual({
+        date: dayA.toISOString().slice(0, 10),
+        open: 1,
+        closed: 1,
+        total: 2,
+      });
+      expect(cases.by_day[1]).toEqual({
+        date: dayB.toISOString().slice(0, 10),
+        open: 0,
+        closed: 1,
+        total: 1,
+      });
+    });
+
+    it('groups tickets by current status', async () => {
+      await createTicket({ status: 'open' });
+      await createTicket({ status: 'open' });
+      await createTicket({ status: 'pending' });
+      await createTicket({ status: 'solved' });
+
+      const cases = (await server.get('/reports/cases', auth)).json();
+      const byStatus = Object.fromEntries(
+        (cases.by_status as Array<{ status: string; count: number }>).map((row) => [
+          row.status,
+          row.count,
+        ]),
+      );
+      expect(byStatus).toEqual({ open: 2, pending: 1, solved: 1 });
+    });
+
+    it('groups tickets by stored queue priority', async () => {
+      await createTicket({ priority: 100 });
+      await createTicket({ priority: 100 });
+      await createTicket({ priority: 0 });
+
+      const cases = (await server.get('/reports/cases', auth)).json();
+      expect(cases.by_priority).toEqual(
+        expect.arrayContaining([
+          { priority: 100, count: 2 },
+          { priority: 0, count: 1 },
+        ]),
+      );
+    });
+
+    it('excludes a merged ticket from every bucket, so a merge never double-counts', async () => {
+      const primary = await createTicket({ status: 'open' });
+      await createTicket({ status: 'open', mergedIntoId: primary });
+
+      const cases = (await server.get('/reports/cases', auth)).json();
+      const total = (cases.by_status as Array<{ count: number }>).reduce(
+        (sum, row) => sum + row.count,
+        0,
+      );
+      expect(total).toBe(1);
+    });
+
+    it('reports an empty window as empty arrays, not an error', async () => {
+      const cases = (await server.get('/reports/cases', auth)).json();
+      expect(cases.by_day).toEqual([]);
+      expect(cases.by_status).toEqual([]);
+      expect(cases.by_priority).toEqual([]);
+    });
+
+    it('never counts another tenant', async () => {
+      await createTicket({ status: 'open' });
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/reports/cases', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      expect(theirs.by_day).toEqual([]);
+      expect(theirs.by_status).toEqual([]);
+      expect(theirs.by_priority).toEqual([]);
+    });
+
+    it('rejects a backwards date range', async () => {
+      const response = await server.get('/reports/cases?from=2026-08-01&to=2026-07-01', auth);
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('requires the reports_read scope', async () => {
+      const scopeless = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      const response = await server.get('/reports/cases', {
+        authorization: `Bearer ${scopeless}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
+  // =========================================================================
+
   describe('report groups + CSV export (07.7)', () => {
     /** Grant a token with a chosen scope set — for the permission-gating cases. */
     function scopedToken(scopes: string[]): Promise<string> {
@@ -1331,6 +1468,7 @@ describe('reports and billing', () => {
           'ai-agent',
           'reviews',
           'topics',
+          'cases',
         ]);
         expect(groups[0]).toEqual({ id: 'overview', label: 'Overview' });
       });
@@ -1526,6 +1664,37 @@ describe('reports and billing', () => {
         const rows = lines(response.body);
         expect(rows[0]).toBe('date,good,bad,responses,score');
         expect(rows[1]).toMatch(/^\d{4}-\d{2}-\d{2},1,0,1,1$/);
+      });
+
+      it('exports cases bucketed by day, matching the JSON report', async () => {
+        await owner.ticket.create({
+          data: {
+            id: generateShortId(),
+            licenseId: fx.a.licenseId,
+            subject: 'Test ticket',
+            status: 'solved',
+          },
+        });
+
+        const [cases, response] = await Promise.all([
+          server.get('/reports/cases', auth),
+          server.get('/reports/export?group=cases', auth),
+        ]);
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['content-type']).toContain('text/csv');
+        expect(response.headers['content-disposition']).toMatch(
+          /^attachment; filename="nexa-cases-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+        );
+
+        const rows = lines(response.body);
+        expect(rows[0]).toBe('date,open,closed,total');
+        const data = cases.json();
+        expect(rows.slice(1)).toEqual(
+          (data.by_day as Array<{ date: string; open: number; closed: number; total: number }>).map(
+            (row) => `${row.date},${row.open},${row.closed},${row.total}`,
+          ),
+        );
+        expect(rows[1]).toMatch(/^\d{4}-\d{2}-\d{2},0,1,1$/);
       });
 
       it('exports only the caller’s tenant', async () => {

@@ -333,6 +333,8 @@ paths:
     $ref: "./paths/reports.yaml#/reviews"
   /reports/topics:
     $ref: "./paths/reports.yaml#/topics"
+  /reports/cases:
+    $ref: "./paths/reports.yaml#/cases"
   /reports/groups:
     $ref: "./paths/reports.yaml#/groups"
   /reports/export:
@@ -2665,6 +2667,60 @@ components:
                   Change ratio vs `previous_volume`. Null — not a 100% rise — when
                   `previous_volume` is 0: a topic that is new has an unknown
                   trend, not an infinite one.
+
+    ReportsCases:
+      type: object
+      description: |
+        The Cases report (FR-MOD-07.7, v2 payload): tickets (FR-MOD-02.6)
+        counted by day of creation, current status and stored queue priority
+        (FR-MOD-13.6). Aggregate counts only — no ticket subject or customer
+        identity is in this report. A merged ticket (`merged_into_id` set) is
+        excluded from every bucket.
+      required: [range, by_day, by_status, by_priority]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        by_day:
+          type: array
+          description: |
+            One row per UTC day with at least one ticket created, ascending by
+            date. `open`/`closed` split by the ticket's *current* status
+            (`solved`/`closed` count as closed); `total` is `open + closed`.
+          items:
+            type: object
+            required: [date, open, closed, total]
+            properties:
+              date: { type: string, description: "UTC day as `YYYY-MM-DD`." }
+              open: { type: integer }
+              closed: { type: integer }
+              total: { type: integer }
+        by_status:
+          type: array
+          description: Tickets in the window grouped by current status.
+          items:
+            type: object
+            required: [status, count]
+            properties:
+              status:
+                type: string
+                description: "One of `open`, `pending`, `solved`, `closed`, `spam`."
+              count: { type: integer }
+        by_priority:
+          type: array
+          description: |
+            Tickets in the window grouped by their stored queue priority
+            (FR-MOD-13.6) — the raw signed integer, highest first; not the four
+            named levels the Inbox pane snaps to for display.
+          items:
+            type: object
+            required: [priority, count]
+            properties:
+              priority: { type: integer }
+              count: { type: integer }
 
     ReportGroups:
       type: object

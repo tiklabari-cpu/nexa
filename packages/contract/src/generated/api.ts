@@ -3064,6 +3064,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/cases': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Cases — ticket volume by day, status and priority
+     * @description The Cases report (FR-MOD-07.7, v2 payload — the asynchronous half of the
+     *     inbox, FR-MOD-02.6): tickets counted by day of creation, current status
+     *     and queue priority (FR-MOD-13.6). Defaults to the last 30 days.
+     *
+     *     Aggregate counts only (§V3) — no ticket subject or customer identity
+     *     crosses into this report.
+     *
+     *     `by_day` splits each UTC day's created tickets into `open` and `closed`
+     *     by their *current* status (`solved`/`closed` count as closed; there is
+     *     no per-day status history to bucket against instead — the same
+     *     non-historical convention the Breakdown report's `closed` count
+     *     follows). `by_status` and `by_priority` group the whole window by the
+     *     ticket's current status and stored queue priority. A merged ticket
+     *     (`merged_into_id` set) is excluded from every bucket, so a merge never
+     *     double-counts toward both the primary ticket and the one merged into it.
+     */
+    get: operations['getReportsCases'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/groups': {
     parameters: {
       query?: never;
@@ -3108,7 +3142,8 @@ export interface paths {
      *     table — `dimension,key,chats,closed,manual,assisted,automated` — rather
      *     than four files; `topics` serialises one row per cluster —
      *     `label,volume,share,previous_volume,trend` — below the Chat topics
-     *     sufficiency floor only the header row, never a fabricated zero-row; the
+     *     sufficiency floor only the header row, never a fabricated zero-row;
+     *     `cases` serialises one row per UTC day — `date,open,closed,total`; the
      *     two window summaries (`overview`, `ai-agent`) serialise as `metric,value`
      *     pairs. Every figure is the same one the group's JSON report exposes, so a
      *     download never disagrees with the screen it came from.
@@ -3540,6 +3575,57 @@ export interface paths {
      *     404 as any other miss. Read `text/html`, not JSON.
      */
     get: operations['getPublicKbHome'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/public/kb/{workspaceSlug}/sitemap.xml': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Sitemap of a workspace's published KB articles (public)
+     * @description One `<url>` per published article, pointing at its PUBKB-e HTML page, with
+     *     `<lastmod>` from the article's last update. No authentication; an unknown
+     *     or KB-disabled workspace is a 404, the same as any other miss.
+     */
+    get: operations['getPublicKbSitemap'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/public/kb/{workspaceSlug}/robots.txt': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * robots.txt for a workspace's public KB (public)
+     * @description `Allow: /public/kb/{workspaceSlug}/` plus the sitemap's absolute URL when
+     *     the KB is reachable; an unknown or KB-disabled workspace answers
+     *     `Disallow: /` instead of a 404 — a robots.txt fetch is never itself a miss.
+     *     No authentication.
+     */
+    get: operations['getPublicKbRobots'];
     put?: never;
     post?: never;
     delete?: never;
@@ -5416,6 +5502,48 @@ export interface components {
          *     trend, not an infinite one.
          */
         trend: number | null;
+      }[];
+    };
+    /**
+     * @description The Cases report (FR-MOD-07.7, v2 payload): tickets (FR-MOD-02.6)
+     *     counted by day of creation, current status and stored queue priority
+     *     (FR-MOD-13.6). Aggregate counts only — no ticket subject or customer
+     *     identity is in this report. A merged ticket (`merged_into_id` set) is
+     *     excluded from every bucket.
+     */
+    ReportsCases: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /**
+       * @description One row per UTC day with at least one ticket created, ascending by
+       *     date. `open`/`closed` split by the ticket's *current* status
+       *     (`solved`/`closed` count as closed); `total` is `open + closed`.
+       */
+      by_day: {
+        /** @description UTC day as `YYYY-MM-DD`. */
+        date: string;
+        open: number;
+        closed: number;
+        total: number;
+      }[];
+      /** @description Tickets in the window grouped by current status. */
+      by_status: {
+        /** @description One of `open`, `pending`, `solved`, `closed`, `spam`. */
+        status: string;
+        count: number;
+      }[];
+      /**
+       * @description Tickets in the window grouped by their stored queue priority
+       *     (FR-MOD-13.6) — the raw signed integer, highest first; not the four
+       *     named levels the Inbox pane snaps to for display.
+       */
+      by_priority: {
+        priority: number;
+        count: number;
       }[];
     };
     /**
@@ -10886,6 +11014,33 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getReportsCases: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Case counts for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsCases'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   getReportGroups: {
     parameters: {
       query?: never;
@@ -10911,7 +11066,7 @@ export interface operations {
   exportReport: {
     parameters: {
       query: {
-        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`. */
+        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`. */
         group: string;
         from?: string;
         to?: string;
@@ -11625,6 +11780,55 @@ export interface operations {
         };
         content: {
           'text/html': string;
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getPublicKbSitemap: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The sitemap */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/xml': string;
+        };
+      };
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getPublicKbRobots: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The robots directives */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/plain': string;
         };
       };
       429: components['responses']['TooManyRequests'];

@@ -13,6 +13,46 @@
 
 ## Task log (newest-first)
 
+### tm 93.1 — 07.7-a Cases rapor grubu — kontrat + lisans-kapsamlı ticket sorgusu + CSV exporter — done — 2026-08-03 UTC
+
+- **Yapıldı:** Sıfırdan uygulandı (koda karşı doğrulandı: `cases` grep 0 idi — gerçekten yapılmamış
+  iş, "erken teslim" değil). Bu, v2 diliminin ilk alt-görevi (`07.7-v2` = Leads/Cases/Sales/Team
+  performance + PDF + benchmark + Save view, 12 alt-görev) — yalnız Cases kapsıyor, kalan 11 açık.
+  **Kontrat:** `packages/contract/openapi/paths/reports.yaml`'a `cases` operation (`GET
+  /reports/cases`) + `openapi.yaml`'a path ref + `ReportsCases` şeması (`range`+`by_day`+`by_status`+
+  `by_priority`) + `export` operation'ın grup listesine/CSV şekil açıklamasına `cases` eklendi;
+  `pnpm --filter @nexa/contract generate` ile re-bundle + `src/generated/api.ts` yeniden üretildi.
+  **Backend:** `reports.ts`'e `casesByDay`/`casesByStatus`/`casesByPriority` saf sorgu fonksiyonları
+  (mevcut `(tx, licenseId, from, to)` imzası, `satisfactionByDay`/`breakdownByDay` deseni kopyalandı)
+  + `buildCasesReport` + `GET /reports/cases` handler'ı (`request.withTenant`) + `buildGroupCsv`'ye
+  `'cases'` case'i (`date,open,closed,total`); `reports-export.ts` `REPORT_GROUPS`'a `{id:'cases',
+  label:'Cases', scopes:['reports_read']}` (katalog sırasının sonuna — mevcut tab sırası bozulmadı).
+  **Tasarım kararları (PLAN §5.2.4 açık sorularının çözümü, bu turda karara bağlandı):** (1) merge
+  edilmiş ticket'lar (`merged_into_id IS NOT NULL`) her üç sorgudan da hariç — PLAN'ın kendi
+  varsayımı; çift sayım engellenir. (2) `by_day` open/closed ikili böl: `solved`/`closed` = kapalı
+  (ticket-service.ts'teki `'solved'` görünüm filtresiyle aynı terminal çift), `open`/`pending`/`spam`
+  = açık — tickets'ta günlük durum geçmişi (event log) yok, bu yüzden *mevcut* durum kullanıldı (aynı
+  ilke `breakdownByDay`'in `closed` sayacında). (3) `by_priority` ham imzalı tamsayı ile gruplanır
+  (frontend'in `ticket-priority.ts`'teki 4 isimli seviyesi UI-only kalır, backend etiketlemez).
+- **Doğrulama:** `pnpm --filter @nexa/contract typecheck/lint/build` yeşil · `pnpm --filter @nexa/api
+  typecheck/lint/build` yeşil · `pnpm --filter @nexa/web typecheck/build` yeşil (tip değişikliği web'i
+  etkilemiyor — `ReportsPage.tsx` sekmeleri statik liste, `/reports/groups`'tan sürülmüyor; Cases
+  sekmesi 07.7-i'nin işi). Unit: `reports-export.test.ts` **11/11** (+1: `reportGroup('cases')`).
+  Integration (`reports-billing.test.ts`, tek dosya izole koşum — bkz. [[nexa-test-gate-parallel-db]]):
+  **109/109** — yeni "Cases report (07.7-a)" bloğu (8 test: gün/durum/öncelik bucket'ı, merge
+  hariç-tutma, boş pencere, cross-tenant, ters aralık 400, scope-siz 403) + CSV export testi (1) +
+  groups-list güncellemesi. `contract-parity.test.ts` **5/5** (iki yönlü: yeni path hem belgelenmiş
+  hem sunuluyor). KK doğrulandı: "İzin bazlı görünürlük" (`visibleReportGroups([])` boş) + "export"
+  (`GET /reports/export?group=cases` → 200 + `text/csv` + `nexa-cases-<from>-<to>.csv`).
+- **Varsayımlar:** Yukarıdaki 3 tasarım kararı MASTER-PROMPT "Assumption" kuralı gereği burada +
+  PLAN §5.2.4 satırında yazılı; ürün onayı gerekirse 07.7-l (uçtan uca doğrulama) veya 07.7-i (UI)
+  penceresinde gözden geçirilebilir.
+- **Sonraki pencereye not:** PLAN §5.2.4'teki 07.7-v2 satırı `⬜`→`◐` (yalnız 07.7-a teslim, 07.7-b
+  ile devam — Leads grubu, `customers` org-scope'unu lisans sınırına oturtan **bölünmeyen çekirdek**,
+  bkz. PLAN'daki gerekçe). Bu pencere açtığında zaten kirli olan dosyalara (`CONVENTIONS.md`,
+  `run-loop.sh`, `.taskmaster/BUILD-BLUEPRINT.md`, önceki koşumlardan kalan `apps/e2e/kanit/*.png`,
+  untracked `.playwright-mcp/`) dokunulmadı/commit'lenmedi (kapsam disiplini — bkz. tm 76.9 notu).
+
 ### tm 76.9 — PUBKB-i uçtan uca doğrulama: anonim okuyucu e2e + izolasyon/SEO kanıt seti — done — 2026-08-03 UTC
 
 - **Yapıldı:** Sıfırdan yazıldı (yarım kalan iş yoktu — PUBKB-a..h zaten teslimdi; bu görev yalnız

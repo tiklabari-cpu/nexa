@@ -3037,13 +3037,13 @@
             "description": "`apps/api/src/routes/public-kb-html.ts` — `config: { public: true }`, `reply.type('text/html; charset=utf-8')` ile SUNUCUDA üretilen HTML (yeni bağımlılık yok, şablon literal): `GET /public/kb/{workspaceSlug}` (kategori + makale listesi) ve `GET /public/kb/{workspaceSlug}/{articleSlug}` (makale). Veri yolu PUBKB-c'nin servis fonksiyonlarını yeniden kullanır (aynı resolver, aynı published filtresi,",
             "details": "PUBKB-e — SEO'lu sunucu-render HTML yüzeyi: KB ana sayfası + makale sayfası (title/meta/canonical/OG/JSON-LD)  [OPUS-XHIGH]\n\nPRD: §5.3-Knowledge (public KB); NFR-P2, NFR-A11Y1, NFR-S6\nETİKET GEREKÇESİ: OPUS-XHIGH: yeni bir public HTTP yüzeyi (HTML content-type) ve depoda hiç örneği olmayan bir render katmanı tasarımı — çok yüzeyli bağlama (kontrat + route + şablon + PUBKB-d çıktısı) ve mimari karar içeriyor, SONNET koşul 4 (kopyalanacak mevcut desen) sağlanmıyor. Güvenlik hassasiyeti var (anonim yüzey) ama izolasyon PUBKB-c'de, kaçış PUBKB-d'de çözüldüğü için MAX gerekmiyor.\nNEDEN AÇIK: `apps/web` tek bir Vite SPA (App.tsx react-router, client-render) ve PRD kendi A2 varsayımında (satır 1045) 'Ürün SPA (SEO gerekmez, oturum-arkası); pazarlama sayfaları ve Chat page için SSR/SSG uygun' diyor. Depodaki TEK anonim tam-sayfa yüzey `apps/widget/chat.html` ve o sayfa açıkça `<meta name=\"robots\" content=\"noindex, nofollow\" />` taşıyor. `apps/api`'de `@fastify/static`/`sendFile`/`text/html` grep 0. Yani şu an indekslenebilir bir sayfa üretecek hiçbir yol yok.\nKAPSAM: `apps/api/src/routes/public-kb-html.ts` — `config: { public: true }`, `reply.type('text/html; charset=utf-8')` ile SUNUCUDA üretilen HTML (yeni bağımlılık yok, şablon literal): `GET /public/kb/{workspaceSlug}` (kategori + makale listesi) ve `GET /public/kb/{workspaceSlug}/{articleSlug}` (makale). Veri yolu PUBKB-c'nin servis fonksiyonlarını yeniden kullanır (aynı resolver, aynı published filtresi, aynı 404 politikası — kopyalanmaz, çağrılır). Her sayfa: `<title>` (seo_title ?? title), `<meta name=\"description\">` (seo_description ?? excerpt, PUBKB-d `renderPlainExcerpt`), `<link rel=\"canonical\">`, OpenGraph (og:title/og:description/og:type=article/og:url), `Article` JSON-LD (JSON içinde `<` kaçışı), `<meta name=\"robots\" content=\"index, follow\">` (chat.html'in tersi — bilinçli), `lang` attribute. Gövde PUBKB-d'nin `renderArticleBody` çıktısıdır. JS'siz ilk boyama: sayfa hiçbir script yüklemeden tam okunur. Semantik iskelet: tek `<h1>`, `<main>`, `<nav>` breadcrumb (a11y). Cache-Control: public, kısa max-age + ETag.\nDOSYALAR: apps/api/src/routes/public-kb-html.ts · apps/api/src/lib/kb-page.ts · packages/contract/openapi/paths/public-kb.yaml · apps/api/src/server.ts · apps/api/test/integration/public-kb-html.test.ts\nREFERANS DESEN (kopyalanacak): apps/widget/chat.html · apps/api/src/routes/public-kb.ts · apps/api/src/lib/kb-render.ts · apps/api/src/services/ai/web-crawler.ts\nKK (birebir): \"\"SEO'lu self-servis bilgi bankası (public KB)\"\" | \"KK-türetilmiş: bu alt-görevin payı — 'SEO'lu' = sayfa arama motoru tarafından indekslenebilir olmalı: sunucudan gelen ilk HTML'de başlık, açıklama ve makale metni JavaScript çalışmadan bulunmalı, sayfa kanonik bir adres bildirmeli. Türetme gerekçesi: PRD 'SEO'lu' diyor ama hangi meta/işaretlemenin gerektiğini yazmıyor; PRD satır 1045 SPA'nın SEO üretemeyeceğini kendisi söylüyor, dolayısıyla sunucu-render kararı §C varsayım 2'ye yazıldı.\"\nKK DOĞRULAMA: `public-kb-html.test.ts` integration: (1) yanıt gövdesi (hiçbir script çalıştırmadan, ham string olarak) makale başlığını ve gövde metnini içerir → KK 'SEO'lu' payı; (2) `<title>`, `<meta name=\"description\">`, `<link rel=\"canonical\">`, `og:title`, `Article` JSON-LD var; (3) taslak makale → 404 HTML (metin sızmıyor) → KK 'yalnız public' payı; (4) `<script>` içeren gövdeyle üretilen sayfada `<script` yalnız JSON-LD bloğunda geçer, makale gövdesinde geçmez.\nKAPSAM DIŞI: sitemap.xml / robots.txt (PUBKB-f) · Çok dilli sayfa + hreflang (§C varsayım 8: tek dil) · Görsel/medya gömme, tema/marka özelleştirme (v3) · apps/web SPA'sına public route eklemek (§C varsayım 2: SPA'ya dokunulmaz) · Site içi arama (§C açık soru 3)\nSÖZLEŞME: EVET — `public-kb.yaml` içine iki HTML operasyonu: `GET /public/kb/{workspaceSlug}` ve `GET /public/kb/{workspaceSlug}/{articleSlug}`, `content: text/html` yanıtıyla. **contract-parity.test.ts Fastify router'ının TAMAMINI sayar — HTML route'ları da OpenAPI'ye eklenip re-bundle edilmezse test kırılır.** DİKKAT: `/public/kb/{workspaceSlug}/{articleSlug}` (HTML) ile `/public/kb/{workspaceSlug}/articles/{articleSlug}` (JSON) yol çakışması olmamasına dikkat — `articles`, `categories`, `sitemap.xml` ayrılmış segmentlerdir, makale slug'ı bu üçünü alamaz (PUBKB-b'deki slug doğrulamasına rezerve-kelime kuralı eklenir).\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF (önce): taslak/başka-tenant/kapalı-KB → 404 HTML, gövdede içerikten hiçbir parça yok (CROSS-TENANT dahil) · NEGATİF: XSS regresyonu — gövdesinde `<img src=x onerror=alert(1)>` olan makale sayfasında hiçbir aktif etiket üretilmez (PUBKB-d ile uçtan uca bağ) · NEGATİF: `seo_title`/`seo_description` içindeki `<`/`\"` karakterleri meta attribute'unu kırmaz · integration: JS'siz ilk boyama — HTML'de hiç `<script src>` yok (JSON-LD hariç), makale metni ham gövdede · integration: canonical/OG/JSON-LD alanları makale alanlarıyla eşleşiyor · a11y unit: tek `<h1>`, `lang` attribute, `<main>`/`<nav>` landmark'ları, başlık seviyeleri atlamıyor (NFR-A11Y1)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3,
               4
             ],
             "parentId": "76",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T15:46:48.707Z"
           },
           {
             "id": 6,
@@ -3103,7 +3103,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T15:16:10.944Z"
+        "updatedAt": "2026-08-03T15:46:48.707Z"
       },
       {
         "id": "77",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T15:16:10.944Z",
+      "lastModified": "2026-08-03T15:46:48.708Z",
       "taskCount": 100,
       "completedCount": 79,
       "tags": [

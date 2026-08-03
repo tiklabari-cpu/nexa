@@ -21,7 +21,8 @@
 | K4 | Efor etiketi | run-loop `[MAX]`→`max`, değilse `xhigh`. Etiket **başlık/detayda** `[MAX]` olarak yazılır (pick_next oradan okur). |
 | K5 | **Kapsam derinliği** | ~~Faz-0+v1 tam, v2/v3 placeholder~~ → **GÜNCELLENDİ (kullanıcı):** **TÜM fazlar tam detay.** Faz-0+v1+v2+v3'ün hepsi full-otonom detay taşır (KK birebir/türetilmiş). v2/v3 detayında "faz başında §F.0 ile gözden geçir + gerekiyorsa subtask'a böl" notu (PLAN §5.1 bayatlama uyarısı korunur, ama görevler şimdi tam yazıldı). |
 | K6 | Materyalizasyon | Tur 2'de `tasks.json`'a tm 27+ **doğrudan yazılır** (deterministik, tam kontrol) + `metadata.taskCount` güncellenir; sonra Task Master `validate_dependencies` ile doğrulanır. (Alternatif: MCP `add_task`/`add_subtask` — AI-üretimli, daha az kontrol.) |
-| K7 | Priority | Faz-0 = `high`; v1 Must = `high`; v1 Should = `medium`; v2/v3 = `low`. run-loop eşitlikte yüksek önceliği seçer. |
+| K7 | Priority | **Planlama yalnız üç seviye kullanır:** Faz-0 = `high`; v1 Must = `high`; v1 Should = `medium`; v2/v3 = `low`. run-loop eşitlikte yüksek önceliği seçer. |
+| K7.1 | `critical` (rezerve) | Dördüncü bir seviye vardır ve **planlamaya kapalıdır**: `critical`. Yalnız panelin *"düzeltmeye gönder"* akışında, sağlık taramasının bulgusundan doğan düzeltme görevlerine atanır. PRD aktarımı, `parse-prd`, PLAN §G toplu aktarımı veya elle görev açma sırasında **ASLA** kullanılmaz. Sıralamada `high`'ın da önüne geçer (panel `prioRank`, run-loop `pick_next`); planlamada dağıtılırsa gerçek düzeltmelerin önünü keser. |
 
 ---
 

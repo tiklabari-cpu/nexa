@@ -83,6 +83,8 @@ if [ ! -d ".taskmaster" ]; then
    İlk commit: doküman + döngü dosyaları → 'chore: bootstrap docs + autonomous loop' → push.
 3) Task Master kurulu değilse kur+ekle; 'task-master parse-prd urun-gereksinim-dokumani-PRD.md'
    ile PRD'yi görev ağacına çevir (MASTER-PROMPT 'MVP Kritik Yol' sırası + bağımlılıklar).
+   ÖNCELİK: yalnız 'high' (Faz-0 · v1 Must) / 'medium' (v1 Should) / 'low' (v2-v3) kullan.
+   'critical' KULLANMA — o seviye panelin 'düzeltmeye gönder' akışına rezervedir (CONVENTIONS §4.1).
 4) MASTER-PROMPT 'Efor Kapıları'ndaki [MAX] işlere task başlığına [MAX] ekle; gerisi [XHIGH].
 5) PLAN.md + HANDOFF.md iskeleti oluştur.
 6) DUR — hiçbir Faz task'ını YAPMA." \
@@ -102,7 +104,11 @@ pick_next(){
 1) Durumu 'in-progress' olan bir görev VEYA alt-görev varsa ONU seç. Bu yarım kalmış iştir —
    önceki pencere kota/çökme/elle durdurma yüzünden kapanmış olabilir. Açılacak pencere
    protokolün resume adımıyla kaldığı yerden devam edecek, atlanırsa o iş sonsuza kadar asılı kalır.
-2) Yoksa bağımlılıkları tamamlanmış, durumu 'pending' olanlardan en yüksek öncelikliyi seç.
+2) Yoksa priority='critical' olan bir 'pending' görev varsa ONU seç. Bunlar panelin sağlık
+   taramasından doğan DÜZELTME görevleridir ve normal backlog'un (high/medium/low) ÖNÜNE geçer.
+   Birden çoksa en eski (en küçük id) olanı seç.
+3) Yoksa bağımlılıkları tamamlanmış, durumu 'pending' olanlardan en yüksek öncelikliyi seç
+   (sıra: high > medium > low).
    Bir üst görevin alt-görevleri varsa ALT-GÖREVİ seç (üst görev kod yazmaz, alt-görevleri koşulur);
    alt-görevler arasında kendi 'dependencies' sırasını gözet.
 İş YAPMA, kod okuma/yazma yok.

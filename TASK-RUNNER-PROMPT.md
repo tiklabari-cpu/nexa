@@ -46,6 +46,18 @@ kapanışa (§3) ulaşmadan pencereyi bitirme.
 - **Düzeltme.** Kapı kırmızıysa düzelt ve yeniden doğrula; bu pencerede makul sayıda dene.
   Yeşile dönmüyorsa tahmine dayalı "herhalde oldu" DEME.
 
+**Kapı komutlarını ARKA PLANA ATMA — pencereyi öldürür.** Test/build komutlarını daima ÖN PLANDA,
+yeterli `timeout` ile çalıştır (tam suite ~10-15 dk → `timeout: 900000`). `run_in_background`
+kullanırsan komut oturuma bağlıdır: sıranı bitirdiğin anda `-p` oturumu kapanır, arka plandaki
+koşu da onunla birlikte ölür — sonuç bildirimi ASLA gelmez. "Bildirim bekleyeyim" diye sıranı
+bitirmek = pencerenin sonu: kapanış (§3) hiç çalışmaz, JSON sonuç dönmez, döngü bunu `blocked`
+sayar ve DURUR. (Görülen vaka: tm 93.3 — kod bitmişti, iki pencere de tam bu şekilde öldü.)
+
+**DB testleri paralel koşmaz.** `pnpm -w test` turbo'yu paralel çalıştırır; `@nexa/api` ve
+`@nexa/rtm` aynı Postgres'e girdiği için deadlock/FK hatası verir — bunlar kod hatası DEĞİL.
+Doğru komut tek satır, ön planda:
+`npx turbo run test --filter='!@nexa/e2e' --concurrency=1`
+
 **Tur/bütçe disiplini:** build kısmında iterasyona kilitlenip kalma. Kapanış (§3) — done da
 olsa blocked de olsa — **opsiyonel değil, bu pencerenin zorunlu son adımıdır**. Elindeki tur
 bütçesinin tamamını build'e harcayıp kapanışa hiç gelmeden pencereyi bitirmek en kötü sonuçtur

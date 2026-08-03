@@ -50,6 +50,16 @@ mekanizmanın kalbi budur.
 - Geçemezse: `blocked` (veya `review`), asla `done` değil.
 - Alt-görevler (subtasks) kendi başına aynı kapıdan geçer; hepsi done olunca üst task done.
 
+### 4.1 Öncelik seviyeleri — `critical` rezervedir
+Planlama sırasında açılan HER görev yalnız şu üçünden birini alır (BUILD-BLUEPRINT K7):
+`high` (Faz-0 · v1 Must) · `medium` (v1 Should) · `low` (v2/v3).
+
+Dördüncü seviye `critical` **planlamaya kapalıdır**. Yalnız panelin "düzeltmeye gönder"
+akışıyla açılan pencere, sağlık taramasının bulgusundan doğan düzeltme görevine atar.
+PRD aktarımı, `parse-prd`, PLAN §G aktarımı ve elle görev açma sırasında ASLA kullanılmaz —
+`critical` normal backlog'un tamamının önüne geçtiği için (run-loop `pick_next`) planlamada
+dağıtılırsa gerçek düzeltmelerin önünü keser ve öncelik sırası anlamını yitirir.
+
 ## 5) Kapsam disiplini
 - Bir pencere yalnız kendi hedef task'ını yapar. "Bu arada şunu da düzelteyim" YOK — o ayrı
   task'tır, Task Master'a not/yeni task olarak eklenir.

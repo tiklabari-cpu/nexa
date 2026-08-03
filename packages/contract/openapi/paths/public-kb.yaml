@@ -148,6 +148,64 @@ home:
             schema: { type: string }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+# ── sitemap.xml + robots.txt (PUBKB-f) ────────────────────────────────────────
+# Machine-readable indexing hints for the same anonymous surface: a sitemap of
+# every published article's HTML page, and the robots directives that name it.
+# The list can never diverge from PUBKB-e's pages — both read through the same
+# resolver and published-only predicate.
+
+sitemap:
+  parameters:
+    - name: workspaceSlug
+      in: path
+      required: true
+      description: The workspace's public KB address (`kb_settings.public_slug`).
+      schema: { type: string, minLength: 1, maxLength: 200 }
+
+  get:
+    tags: [Knowledge Base]
+    operationId: getPublicKbSitemap
+    summary: Sitemap of a workspace's published KB articles (public)
+    description: |
+      One `<url>` per published article, pointing at its PUBKB-e HTML page, with
+      `<lastmod>` from the article's last update. No authentication; an unknown
+      or KB-disabled workspace is a 404, the same as any other miss.
+    security: []
+    responses:
+      "200":
+        description: The sitemap
+        content:
+          application/xml:
+            schema: { type: string }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+robots:
+  parameters:
+    - name: workspaceSlug
+      in: path
+      required: true
+      description: The workspace's public KB address (`kb_settings.public_slug`).
+      schema: { type: string, minLength: 1, maxLength: 200 }
+
+  get:
+    tags: [Knowledge Base]
+    operationId: getPublicKbRobots
+    summary: robots.txt for a workspace's public KB (public)
+    description: |
+      `Allow: /public/kb/{workspaceSlug}/` plus the sitemap's absolute URL when
+      the KB is reachable; an unknown or KB-disabled workspace answers
+      `Disallow: /` instead of a 404 — a robots.txt fetch is never itself a miss.
+      No authentication.
+    security: []
+    responses:
+      "200":
+        description: The robots directives
+        content:
+          text/plain:
+            schema: { type: string }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 articleHtml:
   parameters:
     - name: workspaceSlug

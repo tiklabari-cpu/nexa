@@ -109,6 +109,25 @@ function resolveSlug(supplied: string | undefined, fallback: string): string {
   return slug;
 }
 
+/**
+ * Words that name a static route beside `{articleSlug}` on the public reader
+ * surfaces (`articles`/`categories` — PUBKB-c, `sitemap.xml`/`robots.txt` —
+ * PUBKB-f). Fastify resolves those statics ahead of the parameter, so an
+ * article saved under one of these would be created but never reachable at its
+ * own public address; refusing it here is cheaper than a silently dead page.
+ */
+const RESERVED_ARTICLE_SLUGS = new Set(['articles', 'categories', 'sitemap.xml', 'robots.txt']);
+
+/** {@link resolveSlug}, plus the reserved-word check above. Categories have no
+ *  URL of their own on the public surface, so only articles need it. */
+function resolveArticleSlug(supplied: string | undefined, fallback: string): string {
+  const slug = resolveSlug(supplied, fallback);
+  if (RESERVED_ARTICLE_SLUGS.has(slug)) {
+    throw ApiError.validation(`slug: "${slug}" is reserved and cannot be used for an article.`);
+  }
+  return slug;
+}
+
 interface ArticleRow {
   id: string;
   categoryId: string | null;
@@ -185,7 +204,7 @@ export default async function kbRoutes(app: FastifyInstance): Promise<void> {
     const body = parse(createArticleBody, request.body);
     const tenant = request.tenant();
     const principal = request.requirePrincipal();
-    const slug = resolveSlug(body.slug, body.title);
+    const slug = resolveArticleSlug(body.slug, body.title);
 
     const created = await request.withTenant(async (tx) => {
       // A category is validated inside the tenant context: another workspace's id
@@ -254,7 +273,7 @@ export default async function kbRoutes(app: FastifyInstance): Promise<void> {
         if (body.excerpt !== undefined) data.excerpt = body.excerpt;
         if (body.seo_title !== undefined) data.seoTitle = body.seo_title;
         if (body.seo_description !== undefined) data.seoDescription = body.seo_description;
-        if (body.slug !== undefined) data.slug = resolveSlug(body.slug, existing.title);
+        if (body.slug !== undefined) data.slug = resolveArticleSlug(body.slug, existing.title);
 
         if (body.category_id !== undefined) {
           if (body.category_id !== null) {

@@ -41,6 +41,7 @@ import playbookRoutes from './routes/playbook.js';
 import kbRoutes from './routes/kb.js';
 import publicKbRoutes from './routes/public-kb.js';
 import publicKbHtmlRoutes from './routes/public-kb-html.js';
+import publicKbSitemapRoutes from './routes/public-kb-sitemap.js';
 import copilotRoutes from './routes/copilot.js';
 import appRoutes from './routes/apps.js';
 import auditLogRoutes from './routes/audit-log.js';
@@ -184,6 +185,9 @@ export async function buildServer({
       await api.register(kbRoutes);
       await api.register(publicKbRoutes);
       await api.register(publicKbHtmlRoutes, {
+        canonicalBase: `${env.API_BASE_URL}${API_PREFIX}`,
+      });
+      await api.register(publicKbSitemapRoutes, {
         canonicalBase: `${env.API_BASE_URL}${API_PREFIX}`,
       });
       await api.register(copilotRoutes, { env });

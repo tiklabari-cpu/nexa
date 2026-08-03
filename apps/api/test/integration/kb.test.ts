@@ -177,6 +177,18 @@ describe('public KB management (PUBKB-b)', () => {
     expect((await createArticle(adminToken, { title: 'Ürünler', body: 'x' })).statusCode).toBe(400);
   });
 
+  it('refuses a reserved slug that would shadow a public static route (PUBKB-f)', async () => {
+    for (const reserved of ['articles', 'categories', 'sitemap.xml', 'robots.txt']) {
+      const res = await createArticle(adminToken, { ...validArticle, slug: reserved });
+      expect(res.statusCode).toBe(400);
+    }
+    // A rename onto a reserved word is refused the same way.
+    const created = await createArticle(adminToken, { ...validArticle, slug: 'renamable' });
+    const { id } = created.json() as Article;
+    const renamed = await server.patch(`/kb-articles/${id}`, { slug: 'robots.txt' }, auth(adminToken));
+    expect(renamed.statusCode).toBe(400);
+  });
+
   // --- Categories: CRUD + article filing -------------------------------------
 
   it('creates a category, files an article under it, and clears the link on delete', async () => {

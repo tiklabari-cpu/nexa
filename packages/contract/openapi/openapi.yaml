@@ -375,6 +375,14 @@ paths:
   # parameter at runtime regardless.
   /public/kb/{workspaceSlug}:
     $ref: "./paths/public-kb.yaml#/home"
+
+  # sitemap.xml + robots.txt (PUBKB-f) — two more static siblings at the same
+  # depth as `{articleSlug}`, reserved the same way `articles`/`categories` are.
+  /public/kb/{workspaceSlug}/sitemap.xml:
+    $ref: "./paths/public-kb.yaml#/sitemap"
+  /public/kb/{workspaceSlug}/robots.txt:
+    $ref: "./paths/public-kb.yaml#/robots"
+
   /public/kb/{workspaceSlug}/{articleSlug}:
     $ref: "./paths/public-kb.yaml#/articleHtml"
 

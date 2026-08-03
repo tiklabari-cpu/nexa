@@ -13,6 +13,44 @@
 
 ## Task log (newest-first)
 
+### tm 76.6 — PUBKB-f sitemap.xml + robots.txt — done — 2026-08-03 UTC
+
+- **Yapıldı:** Bu pencere açıldığında iş zaten büyük ölçüde yazılmıştı (önceki pencere kota/çökme ile
+  yarım kalmış, task Task Master'da `in-progress` ve dosyalar untracked duruyordu) — protokolün resume
+  adımı uygulandı, sıfırdan yazılmadı. Doğrulanan teslim: `apps/api/src/routes/public-kb-sitemap.ts`
+  — iki anonim rota, `GET /public/kb/{workspaceSlug}/sitemap.xml` ve `.../robots.txt`; veri yolu
+  PUBKB-c/e'nin `kb-public-read.ts` yardımcılarını (`resolvePublicKbWorkspace`/`publishedArticleWhere`)
+  ÇAĞIRIR, kopyalamaz. Sitemap yalnız yayınlanmış makaleleri listeler, her `<loc>` `escapeXml` ile
+  kaçırılır, `<lastmod>` ISO-8601, 50k URL tavanı var; bilinmeyen/kapalı/canceled workspace → 404.
+  robots.txt aynı miss'i `Disallow: /` + 200 olarak yanıtlar (asla hata), erişilebilirken
+  `Allow: /public/kb/{slug}/` + mutlak `Sitemap:` URL'i verir. `kb.ts`'in `RESERVED_ARTICLE_SLUGS`'ına
+  `sitemap.xml`/`robots.txt` eklendi (rota gölgelenmesini engeller) + `kb.test.ts`'e reddiye testi.
+  Kontrat: `public-kb.yaml`'a iki `security:[]` operasyon, `openapi.yaml`'a path kaydı — bundle+
+  contract-parity doğrulandı.
+- **Doğrulama:** `typecheck` yeşil (8/8 paket) · `lint` yeşil (8/8) · `build` yeşil (7/7) ·
+  `pnpm -w test:integration` (concurrency=1, root'tan) **tamamen yeşil** — api 56 dosya/1170 test
+  (public-kb-sitemap.test.ts 9/9 + contract-parity 5/5 dahil), rtm dahil 5/5 paket başarılı.
+  `pnpm test` paket-bazında ayrıca koşuldu (apps/api tek başına, unit+integration birlikte
+  1505 test) — 1 test **flaky** çıktı: `chats.test.ts > takeover > lets exactly one of two live
+  supervisors win a simultaneous takeover` (200/200 bekleniyor 200/409). Bu test bu görevin
+  dokunduğu HİÇBİR dosyayla ilgili değil (chat takeover concurrency, sitemap/robots ile alakasız);
+  `git diff --stat` ile chats.ts/takeover kodunun bu oturumda değişmediği doğrulandı; izole
+  tekrar çalıştırmada deterministik başarısız çıktı ama hemen ardından tam `test:integration`
+  koşusunda aynı test yeşil geçti → gerçek, önceden var olan bir race-condition (muhtemelen
+  eşzamanlı takeover'da eksik satır kilidi/advisory lock — bkz. `nexa-withtenant-read-committed-
+  advisory-lock` hafıza notu, aynı sınıf sorun). Kapsam disiplini gereği bu görevde DÜZELTİLMEDİ.
+- **Varsayımlar:** Yok — kapsam PLAN §5.2/tasks.json'daki tanımla birebir örtüşüyor.
+- **Sonraki pencereye not:** (1) `chats.test.ts`'teki takeover race'i ayrı bir düzeltme görevi
+  olarak aç (Task Master'a not düş) — muhtemelen `services/chat` içinde eşzamanlı iki
+  "takeover" isteğinin ikisinin de kazanmasına izin veren bir kilit eksikliği. (2) Çalışma
+  alanında bu görevle ilgisiz, önceden dursan (bu pencere açılmadan önce) commit'lenmemiş
+  değişiklikler var: `.taskmaster/BUILD-BLUEPRINT.md` + `CONVENTIONS.md` (`critical` öncelik
+  rezervasyonu, K7.1) + `run-loop.sh` (pick_next'e critical dalı) — panel entegrasyonuna ait
+  görünüyor, bu görevin commit'ine BİLEREK dahil edilmedi (kapsam disiplini). Ayrıca
+  `apps/e2e/kanit/*.png` (regenerate edilmiş kanıt görselleri) ve `.playwright-mcp/` (izlenmeyen
+  debug logları) da bu görevle ilgisiz — dokunulmadı. Sıradaki iş: PUBKB-g (admin KB makale
+  listesi).
+
 ### tm 76.5 — PUBKB-e SEO'lu sunucu-render HTML yüzeyi (KB ana sayfası + makale sayfası) — done — 2026-08-03 UTC
 
 - **Yapıldı:** Depodaki ilk `text/html` yanıt yüzeyi — iki anonim, indekslenebilir sayfa:

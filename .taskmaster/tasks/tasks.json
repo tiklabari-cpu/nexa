@@ -2105,12 +2105,12 @@
             "description": "Contract-first: (1) packages/contract/openapi/paths/mcp.yaml — YALNIZ `manifest` operasyonu; (2) openapi.yaml'a path ref + `McpToolDescriptor` / `McpManifest` şemaları; (3) re-bundle + tip üretimi; (4) apps/api/src/routes/mcp.ts — YALNIZ `GET /mcp/manifest`: kimlikli (varsayılan agent/bot principal), scope gerektirmez, 08.8.3-a katalogunu + server URL'ini + protokol sürümünü döner. `public: true` ",
             "details": "08.8.3-b — MCP kontratı (paths/mcp.yaml) + GET /mcp/manifest keşif ucu  [OPUS-XHIGH]\n\nPRD: FR-MOD-08.8.3 (+ NFR-S1, NFR-S3)\nETİKET GEREKÇESİ: OPUS-XHIGH: kullanıcı kuralı — 'yeni bir yetkili endpoint eklemek EN AZ OPUS-XHIGH'. Yeni kimlikli endpoint + yeni kontrat yüzeyi + 'public mi kimlikli mi' kararı (auth.ts:120-128 public+scopes kombinasyonunu boot'ta yasaklıyor, yani karar geri alınması pahalı). Çekirdek güvenlik sınırı DEĞİL (tenant verisi dönmüyor, statik katalog) → MAX değil. Sonnet'e verilmez.\nNEDEN AÇIK: packages/contract/openapi/paths/ altında 20 yaml var, 'mcp' içeren yok. contract-parity.test.ts dosya başlığı iki yönlü çalıştığını söylüyor: 'an undocumented route fails, and so does a documented route that nothing serves' — bu yüzden kontrat, kendisini servis eden route ile AYNI pencerede gelmek zorundadır.\nKAPSAM: Contract-first: (1) packages/contract/openapi/paths/mcp.yaml — YALNIZ `manifest` operasyonu; (2) openapi.yaml'a path ref + `McpToolDescriptor` / `McpManifest` şemaları; (3) re-bundle + tip üretimi; (4) apps/api/src/routes/mcp.ts — YALNIZ `GET /mcp/manifest`: kimlikli (varsayılan agent/bot principal), scope gerektirmez, 08.8.3-a katalogunu + server URL'ini + protokol sürümünü döner. `public: true` KULLANILMAZ. Tenant verisi dönmez (statik katalog).\nDOSYALAR: packages/contract/openapi/paths/mcp.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/routes/mcp.ts · apps/api/src/server.ts · apps/api/test/integration/mcp.test.ts\nREFERANS DESEN (kopyalanacak): packages/contract/openapi/paths/webhooks.yaml · apps/api/src/routes/webhooks.ts · apps/api/test/integration/webhooks.test.ts\nKK (birebir): \"search_tickets/list_chats/get_report/summarize_chat tool'ları\" | \"KK-türetilmiş: MCP istemcisinin bağlanabilmesi için tool listesini keşfedebileceği bir uç gerekir. Türetme gerekçesi: PRD KK yalnız tool isimlerini + 'OAuth scope bazlı' + 'tenant izole' diyor; rapor-1-fonksiyonel.md:1758-1769 ekranda 'MCP server URL + [Copy]' gösterildiğini söylüyor, dolayısıyla o URL'in arkasında bir keşif yüzeyi olmalı.\"\nKK DOĞRULAMA: apps/api/test/integration/mcp.test.ts: manifest yanıtı KK'daki dört tool adını da içerir (KK 'search_tickets/list_chats/get_report/summarize_chat tool'ları'); token'sız çağrı 401; müşteri (widget) token'ı 404 (auth.ts principals gate); iki farklı lisansın token'ı aynı statik katalogu görür ve yanıtta license_id/organization_id sızmaz. contract-parity.test.ts yeşil (iki yönlü).\nKAPSAM DIŞI: POST /mcp/tools/{tool} (08.8.3-c — bu pencerede dokümante EDİLMEZ, yoksa parity 'documented but not served' ile kırılır) · tool yürütme / scope gate (08.8.3-c) · manifest'in çağıranın scope'una göre filtrelenmesi (açık soru 6) · UI (08.8.3-g)\nSÖZLEŞME: YENİ: packages/contract/openapi/paths/mcp.yaml#/manifest (GET /mcp/manifest) + openapi.yaml paths girdisi + components.schemas.McpToolDescriptor / McpManifest. OpenAPI'ye eklenip re-bundle EDİLMEZSE contract-parity.test.ts kırılır; ters yönde de kırılır (dokümante edilip servis edilmeyen path). Yeni ApiError tipi eklenmez (varsayım 4).\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): Authorization başlığı yok → 401 · negatif (önce): müşteri (nxc1.) token'ı → 404 (403 değil) · negatif (önce): geçersiz/iptal edilmiş token → 401 · integration: manifest 4 tool adını + server URL + sürüm döner · cross-tenant: iki farklı lisans aynı statik katalogu görür; yanıtta license_id/organization_id yok · regresyon: contract-parity.test.ts iki yönlü yeşil",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "67",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T08:15:11.573Z"
           },
           {
             "id": 3,
@@ -2195,7 +2195,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T07:57:50.393Z"
+        "updatedAt": "2026-08-03T08:15:11.573Z"
       },
       {
         "id": "68",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T07:57:50.393Z",
+      "lastModified": "2026-08-03T08:15:11.573Z",
       "taskCount": 99,
       "completedCount": 77,
       "tags": [

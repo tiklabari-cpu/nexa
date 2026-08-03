@@ -4090,12 +4090,12 @@
             "description": "(1) İzolasyon kararı: leads sayımı bu LİSANSA bağlanır — `customers` doğrudan sayılmaz; `chats`/`tickets` üzerinden `license_id` join'i ile bu lisansa dokunmuş lead'ler sayılır; organizasyon-geneli sayım açıkça reddedilir ve gerekçesi kodda yorumla kayda geçer. (2) `reports.ts`'e `leadsByDay(tx, licenseId, from, to)` + `leadTotals(...)` — mevcut imza; `request.withTenant` içinde (RLS hem org hem l",
             "details": "07.7-b — Leads rapor grubu — organizasyon-kapsamlı `customers` verisinin lisans sınırına oturtulması (izolasyon çekirdeği)  [OPUS-MAX]\n\nPRD: FR-MOD-07.7 (+ NFR-S3 yetkilendirme, NFR-P7 ağır rapor)\nETİKET GEREKÇESİ: OPUS-MAX: koşul 2 ihlali — tenant izolasyon sınırı. `customers` tablosu `organization_id` scope'lu (schema.prisma:228-236, licenseId YOK) ve RLS `app.current_organization` ile kapatılıyor (lib/tenant.ts:60); tüm rapor sorguları ise `license_id` scope'lu. Bir Organization birden çok License taşır (`Organization.licenses License[]`), dolayısıyla `is_lead` naif sayımı kardeş lisansların müşterilerini bu lisansın raporuna sızdırır. Hangi sınırın doğru olduğu bir erişim-kontrolü kararıdır ve yanlışı pahalıdır. Çekirdek bölünmez; etrafındaki UI (07.7-i) ve export butonu (07.7-k) ayrı ve daha ucuz etiketlere çıkarıldı.\nNEDEN AÇIK: `customers.is_lead` alanı schema.prisma:236'da mevcut (`Boolean @default(false) @map(\"is_lead\")`) ama `reports.ts` içinde `customer`/`isLead` grep 0 — Reports yüzeyi bu alanı hiç tüketmiyor. `reports-export.ts:39-44` kataloğunda 'leads' yok. `openapi.yaml:296-306` içinde `/reports/leads` yok. Ayrıca `Customer` modelinde `licenseId` alanı YOKTUR (schema.prisma:228-252 — yalnız `organizationId`), oysa `reports.ts`'in her sorgusu `license_id` ile filtreliyor — iki farklı scope ekseni.\nKAPSAM: (1) İzolasyon kararı: leads sayımı bu LİSANSA bağlanır — `customers` doğrudan sayılmaz; `chats`/`tickets` üzerinden `license_id` join'i ile bu lisansa dokunmuş lead'ler sayılır; organizasyon-geneli sayım açıkça reddedilir ve gerekçesi kodda yorumla kayda geçer. (2) `reports.ts`'e `leadsByDay(tx, licenseId, from, to)` + `leadTotals(...)` — mevcut imza; `request.withTenant` içinde (RLS hem org hem license set eder). (3) `GET /reports/leads` handler'ı. (4) Kontrat: `paths/reports.yaml` `leads` operation + `openapi.yaml` ref + re-bundle. (5) REPORT_GROUPS'a `{ id:'leads', label:'Leads', scopes:['reports_read'] }` + `buildGroupCsv` 'leads' case'i. (6) NEGATİF TESTLER ÖNCE: aynı organizasyonun ikinci lisansı için lead sızmıyor; başka organizasyon 0.\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/src/routes/reports-export.ts · apps/api/src/lib/tenant.ts · packages/contract/openapi/paths/reports.yaml · packages/contract/openapi/openapi.yaml · apps/api/test/integration/reports-billing.test.ts · apps/api/test/integration/tenant-isolation.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts (satır 279 `breakdownByDay` — `WHERE t.license_id = ${licenseId}` desenli lisans-kapsamlı raw sorgu) · apps/api/src/routes/customers.ts (satır 109/149 `tx.customer.findFirst` — RLS'e güvenen org-kapsamlı erişim; bu alt-görevin REDDEDECEĞİ desen, karşılaştırma için) · apps/api/test/integration/tenant-isolation.test.ts (cross-tenant negatif test kalıbı)\nKK (birebir): \"İzin bazlı görünürlük\" | \"export\"\nKK DOĞRULAMA: `tenant-isolation.test.ts` — AYNI organizasyonun iki lisansı kurulur; L1'de lead olan müşteri L2'nin `/reports/leads` yanıtında ve `?group=leads` CSV'sinde SAYILMAZ (izolasyon kararının kanıtı). `reports-billing.test.ts` — `reports_read` taşımayan token `/reports/groups` yanıtında 'leads' görmez ('İzin bazlı görünürlük'); `GET /reports/export?group=leads` 200 + text/csv ('export').\nKAPSAM DIŞI: Satır-bazlı lead export'u (müşteri adı/e-posta/telefon) — AGREGAT sayı döner, PII CSV'ye girmez (varsayım §V3); PII'li export ayrı kalem olarak kendi maskeleme/scope kararıyla açılmalı · CRM tarafındaki lead yönetimi (MOD-03) — bu alt-görev yalnız okuma/raporlama · `customers` tablosuna `license_id` kolonu eklemek — çapraz-kesen şema değişikliği, bu pencerede YAPILMAZ · Web UI sekmesi (07.7-i), PDF (07.7-f/-g), benchmark (07.7-e)\nSÖZLEŞME: YENİ PATH: `GET /reports/leads` → `paths/reports.yaml` `leads` operation + `openapi.yaml` `/reports/leads` ref; `export` açıklamasındaki grup listesine 'leads' eklenir. ZORUNLU re-bundle (`pnpm --filter @nexa/contract generate`) — aksi halde `contract-parity.test.ts` KIRILIR (iki yönlü).\nMIGRATION: yok — `customers.is_lead` (schema.prisma:236) mevcut. `customers`'a `license_id` EKLENMEZ (kapsam dışı); izolasyon join ile çözülür.\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (ÖNCE) — aynı organizasyonun kardeş lisansının lead'i bu lisansın raporunda 0; farklı organizasyon 0 · cross-tenant — `/reports/leads` ve `?group=leads` CSV'si için ayrı ayrı (negatif testler pozitiflerden önce yazılır) · negatif — `reports_read` yok → `/reports/leads` 403; `/reports/groups` yanıtında 'leads' yok (403 değil boş katalog — mevcut NFR-S3 tasarım kararı korunur) · integration — lead'i olmayan pencere 0 döner (null/hata değil); sayı `is_lead=true` + bu lisansa bağlı olanla birebir · unit — `reports-export.test.ts` katalogda 'leads' + `visibleReportGroups` filtresi",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "93",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T18:52:42.874Z"
           },
           {
             "id": 3,
@@ -4246,7 +4246,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T18:20:34.428Z"
+        "updatedAt": "2026-08-03T18:52:42.874Z"
       },
       {
         "id": "94",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T18:20:34.428Z",
+      "lastModified": "2026-08-03T18:52:42.874Z",
       "taskCount": 100,
       "completedCount": 80,
       "tags": [

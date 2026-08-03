@@ -24,6 +24,7 @@ import { ProfileForm } from './ProfileForm.js';
 import { AiPerformance } from './AiPerformance.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { RecommendedSkills } from './RecommendedSkills.js';
+import { KbArticleList } from './KbArticleList.js';
 import { templateToDraft, type SkillTemplate } from './templates.js';
 import { countSkillsByTab, filterSkillsByTab, type SkillTab } from './skill-tabs.js';
 import {
@@ -45,13 +46,18 @@ import {
   type KnowledgeType,
 } from './knowledge-tabs.js';
 
-/** The four faces of the AI agent (FR-MOD-06.1), in the order the tabs read. */
-type PlaybookView = 'performance' | 'profile' | 'skills' | 'knowledge';
+/**
+ * The faces of the AI agent (FR-MOD-06.1), in the order the tabs read. `kb` is
+ * the Public KB surface (PUBKB-g) — the self-service article list, distinct
+ * from the AI's own `knowledge` (what it answers a customer from).
+ */
+type PlaybookView = 'performance' | 'profile' | 'skills' | 'knowledge' | 'kb';
 const VIEW_TABS: { id: PlaybookView; label: string }[] = [
   { id: 'performance', label: 'Performance' },
   { id: 'profile', label: 'Profile' },
   { id: 'skills', label: 'Skills' },
   { id: 'knowledge', label: 'Knowledge' },
+  { id: 'kb', label: 'Public KB' },
 ];
 
 /**
@@ -571,6 +577,8 @@ export function PlaybookPage(): ReactElement {
             {view === 'knowledge' && (
               <KnowledgePanel canEdit={canEdit} aiAgentId={aiAgent?.id ?? null} />
             )}
+
+            {view === 'kb' && <KbArticleList />}
           </div>
 
           <TemplateGallery

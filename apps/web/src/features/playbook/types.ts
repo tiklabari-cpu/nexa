@@ -64,6 +64,34 @@ export interface KnowledgeSource {
   updated_at: string;
 }
 
+/** A public KB category (PUBKB-a), used to file and label an article. */
+export interface KbCategory {
+  id: string;
+  slug: string;
+  name: string;
+  position: number;
+  created_at: string;
+}
+
+/**
+ * A public KB article as the management CRUD returns it (PUBKB-b) — draft
+ * until an explicit publish, at which point `published_at` is stamped.
+ */
+export interface KbArticle {
+  id: string;
+  category_id: string | null;
+  slug: string;
+  title: string;
+  body: string;
+  excerpt: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  status: 'draft' | 'published';
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Human-readable one-liner for a step, used in the editor list. */
 export function describeStep(step: SkillStep): string {
   switch (step.type) {

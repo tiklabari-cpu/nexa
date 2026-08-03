@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### tm 76.7 — PUBKB-g admin: KB makale listesi + durum sekmeleri — done — 2026-08-03 UTC
+
+- **Yapıldı:** Sıfırdan uygulandı (önceki pencereden yarım kalan iş yoktu). `apps/web/src/features/playbook/kb-tabs.ts`
+  — saf modül, `knowledge-tabs.ts`'in kardeşi: durum sekmesi partition'ı (`all`/`published`/`draft`)
+  + kategori/arama daraltma tek yüzeyde (`skill-filter.ts`'in tek-kontrollü kardeşi). `KbArticleList.tsx`
+  — PUBKB-b'nin `GET /kb-articles`+`GET /kb-categories`'ini tüketen read-only liste: `role=tablist` sekmeler,
+  satırda başlık+kategori+`StatusDot` durum rozeti+`updated_at`, her sekme için ayrı anlamlı empty state
+  (FR-EK-B.1), tüm-liste-boş empty state, yükleme `ListSkeleton`, hata `ErrorNotice`. `PlaybookPage.tsx`'e
+  beşinci "Public KB" görünüm sekmesi kaydedildi. `KbArticle`/`KbCategory` tipleri `playbook/types.ts`'e
+  eklendi (elle aynalanan JSON şekli — dizinin yerleşik kalıbı, `@nexa/types`'ta bu tipler yok).
+- **Doğrulama:** `pnpm -w typecheck` yeşil (11/11 task) · `pnpm -w lint` yeşil (8/8 paket) ·
+  `pnpm --filter @nexa/web build` yeşil · `pnpm --filter @nexa/web test` **tamamen yeşil** — 80/80 dosya,
+  583/583 test (yeni `kb-tabs.test.ts` 11/11 + `KbArticleList.test.tsx` 7/7 dahil). `pnpm -w test`
+  (turbo paralel) `@nexa/rtm`/`@nexa/api` DB-yarışı hatası verdi — bu görevin dokunmadığı hiçbir dosyayla
+  ilgili değil (`git diff --stat` yalnız `apps/web/src/features/playbook/*` gösteriyor); `@nexa/rtm test`
+  paket tek başına izole çalıştırıldığında 90/90 yeşil, doğrulayarak bunun bilinen paralel-Postgres
+  yarış koşulu olduğunu teyit etti (bkz. `nexa-test-gate-parallel-db` hafıza notu / tm 76.6 handoff'undaki
+  benzer emsal). `@nexa/api test` izole arka planda çalıştırıldı; bu görev API/DB dosyasına dokunmadığı
+  için engelleyici sayılmadı.
+- **Varsayımlar:** Yeni "Public KB" sekmesi seçim/editör bağlantısı taşımıyor (kapsam dışı — PUBKB-h);
+  liste salt-okunur. Kategori adı yalnız `GET /kb-categories`'ten çözülüyor; makale `category_id`
+  bilinmeyen bir kategoriye işaret ederse "Unknown category" gösterilir (uç durum, backend invariant'ı
+  gereği pratikte oluşmaz).
+- **Sonraki pencereye not:** PUBKB-h (makale editörü + publish/unpublish + public link) bu pencerenin
+  `KbArticleList.tsx`'ini büyük olasılıkla genişletecek (seçim/onSelect callback'i eklemek gerekebilir —
+  bilinçli olarak bu pencerede eklenmedi, kapsamda yoktu). PUBKB-i uçtan uca doğrulama hâlâ yapılmadı.
+- **Kapanış notu (resume pencere):** Bu görev önceki pencerede kod+PLAN+HANDOFF tamam yazılmış ama
+  commit/push/Task Master `done` adımına gelmeden kesilmişti. Bu pencere DoD kapısını yeniden bağımsız
+  doğruladı (typecheck/lint/build/test — yukarıdaki sayılar aynı çıktı) ve yalnız kapanışı tamamladı.
+  Çalışma alanında bu göreve **ait olmayan**, önceden dursuz kalmış değişiklikler de vardı:
+  `CONVENTIONS.md`/`.taskmaster/BUILD-BLUEPRINT.md`/`run-loop.sh` (K7.1 `critical` öncelik rezervasyonu —
+  başka bir bitmemiş pencerenin işi), `apps/e2e/kanit/*.png` (e2e kanıt görselleri, muhtemelen bir test
+  koşumundan) ve `.playwright-mcp/` (araç hata ayıklama günlükleri, kod değil). Kapsam disiplini
+  (CONVENTIONS §5) gereği bunlara dokunulmadı/commit'lenmedi — bilerek çalışma alanında bırakıldı;
+  ilgili görev/pencere onları kapatmalı.
+
 ### tm 76.6 — PUBKB-f sitemap.xml + robots.txt — done — 2026-08-03 UTC
 
 - **Yapıldı:** Bu pencere açıldığında iş zaten büyük ölçüde yazılmıştı (önceki pencere kota/çökme ile

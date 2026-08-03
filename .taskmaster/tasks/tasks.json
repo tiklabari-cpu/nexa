@@ -2132,12 +2132,12 @@
             "description": "08.8.3-c'nin dispatch tablosuna `list_chats` dalı: katalogdaki inputSchema'dan gelen argümanlar (durum/limit/page_id) → ChatService.list (apps/api/src/services/chat/chat-service.ts:129); sonuç zarfı search_tickets adaptörüyle birebir aynı şekilde kurulur. Gate/tenant sarmalayıcısı ÇEKİRDEKTEN aynen tüketilir — bu pencerede hasAnyScope/withTenant çağrısı YAZILMAZ.",
             "details": "08.8.3-d — list_chats tool adaptörü (mevcut chat listeleme yoluna bağlama)  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.8.3\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. Güvenlik sınırı YOK çünkü scope gate + tenant kapsamı + IDOR kararı 08.8.3-c'de merkezî kuruldu ve testle kanıtlandı; bu alt-görev yeni authz kodu YAZMAZ, dispatch tablosuna bir dal + mevcut ChatService.list çağrısı ekler. Kopyalanacak desen ismen mevcut (08.8.3-c'de teslim edilen search-tickets.ts + routes/chats.ts). Kontrat değişikliği yok; kabul kriteri mekanik.\nNEDEN AÇIK: apps/api/src/routes/chats.ts:126 scope-gated (['chats--all:ro','chats--access:ro']) chat listesi sunuyor ama MCP tool sözleşmesine sarılmamış; grep mcp = 0, list_chats isminde hiçbir yüzey yok.\nKAPSAM: 08.8.3-c'nin dispatch tablosuna `list_chats` dalı: katalogdaki inputSchema'dan gelen argümanlar (durum/limit/page_id) → ChatService.list (apps/api/src/services/chat/chat-service.ts:129); sonuç zarfı search_tickets adaptörüyle birebir aynı şekilde kurulur. Gate/tenant sarmalayıcısı ÇEKİRDEKTEN aynen tüketilir — bu pencerede hasAnyScope/withTenant çağrısı YAZILMAZ.\nDOSYALAR: apps/api/src/services/mcp/tools/list-chats.ts · apps/api/src/services/mcp/tool-dispatch.ts · apps/api/test/integration/mcp-tools.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/mcp/tools/search-tickets.ts · apps/api/src/routes/chats.ts · apps/api/src/services/chat/chat-service.ts\nKK (birebir): \"search_tickets/list_chats/get_report/summarize_chat tool'ları\"\nKK DOĞRULAMA: mcp-tools.test.ts: list_chats çağrısı çağıranın lisansındaki chat'leri döner (KK 'list_chats ... tool'ları'); chats--*:ro taşımayan token → 403 (çekirdek gate'i üzerinden, KK 'OAuth scope bazlı' payı); başka lisansın chat'i sonuçta yok (KK 'tenant izole' payı).\nKAPSAM DIŞI: chat mesaj gövdesi/transcript dönmek (08.8.3-f summarize_chat) · yazma aksiyonları (kapat/ata/etiketle) — MCP yüzeyi salt-okunur · yeni kontrat path'i (tek genel uç kullanılır)\nSÖZLEŞME: yok — POST /mcp/tools/{tool} genel ucu 08.8.3-c'de dokümante edildi; yeni path açılmaz, re-bundle gerekmez.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): chats scope'u olmayan token → 403 · negatif (önce): geçersiz durum/limit argümanı → 400 validation · cross-tenant: A'nın çağrısında B'nin chat'i yok; B'nin chat id'siyle filtre → boş sonuç/404 · integration: pozitif liste + sayfalama alanı (next_page_id) doğru · regresyon: mevcut chats integration süiti yeşil",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3
             ],
             "parentId": "67",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T09:05:51.736Z"
           },
           {
             "id": 5,
@@ -2195,7 +2195,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T08:41:20.073Z"
+        "updatedAt": "2026-08-03T09:05:51.736Z"
       },
       {
         "id": "68",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T08:41:20.073Z",
+      "lastModified": "2026-08-03T09:05:51.736Z",
       "taskCount": 99,
       "completedCount": 77,
       "tags": [

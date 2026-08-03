@@ -2025,12 +2025,12 @@
             "description": "Team ekranında bir ajan satırından açılan skill atama yüzeyi: mevcut skill kataloğunu (`GET /settings/skills`) çoklu seçimle gösterir, kaydet → `PUT /agents/{agentId}/skills` (tam değiştirme). Ajanın mevcut skill'leri `GET /agents` yanıtından okunur (08.6.3-b'de serialiseAgent'a eklendi). Katalog boşsa 'önce Settings → Skills'ten skill ekleyin' yönlendirmeli empty state. Rol yetersizse (mevcut `ro",
             "details": "08.6.3-f — Team: ajan başına skill ataması ekranı  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.6.3\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 3 dosya, güvenlik kararı yok (PUT'un rol kapısı sunucuda 08.6.3-b'de), eşzamanlılık yok, kopyalanacak desen ismen var (TeamPage.tsx `useSuspension` satır 70-78 mutation kalıbı + CopilotKnowledge.tsx feature-içi ayrı bileşen/test deseni), kontrat değişikliği yok, KK mekanik doğrulanabilir.\nNEDEN AÇIK: TeamPage.tsx teammates/roller/gruplar/chatbots sorgularını yapıyor (satır 106-124: `/agents`, `/agents?status=suspended`, `/ai-agents`, `/groups`) ama ajan başına skill/uzmanlık ataması yok (facts §mevcut_kod: 'Teammates/roller ekranı var; ajan başına skill/uzmanlık ataması yok').\nKAPSAM: Team ekranında bir ajan satırından açılan skill atama yüzeyi: mevcut skill kataloğunu (`GET /settings/skills`) çoklu seçimle gösterir, kaydet → `PUT /agents/{agentId}/skills` (tam değiştirme). Ajanın mevcut skill'leri `GET /agents` yanıtından okunur (08.6.3-b'de serialiseAgent'a eklendi). Katalog boşsa 'önce Settings → Skills'ten skill ekleyin' yönlendirmeli empty state. Rol yetersizse (mevcut `roleAtLeast` yardımcısı, TeamPage.tsx:62) kontrol salt-okunur.\nDOSYALAR: apps/web/src/features/team/AgentSkills.tsx · apps/web/src/features/team/AgentSkills.test.tsx · apps/web/src/features/team/TeamPage.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/team/TeamPage.tsx (useSuspension satır 70-78 — api.put + queryClient invalidate kalıbı; roleAtLeast satır 62) · apps/web/src/features/team/CopilotKnowledge.tsx + CopilotKnowledge.test.tsx (feature içinde ayrı bileşen + testinin kalıbı) · apps/web/src/components/ui/Modal.tsx (atama diyaloğu)\nKK (birebir): \"Uzmanlık/skill bazlı\"\nKK DOĞRULAMA: unit (RTL) — ajanın mevcut skill'leri işaretli açılır; seçim değişip kaydedilince `PUT /agents/{id}/skills` doğru `skill_ids` gövdesiyle çağrılır; katalog boşsa yönlendirmeli empty state; rol yetersizse kontroller devre dışı. E2E `team.spec.ts`'e skill atama görünürlük iddiası.\nKAPSAM DIŞI: skill kataloğu CRUD'u (08.6.3-e) · routing davranışı (08.6.3-c) · takeover (08.6.3-d/-g) · toplu (bulk) skill atama\nSÖZLEŞME: yok — 08.6.3-b'de eklenen endpoint tüketilir (ajanın mevcut skill listesinin `GET /agents` yanıtında dönmesi 08.6.3-b'nin kapsamındadır)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit (mevcut seçimin işaretli açılması + kaydet gövdesinin doğru skill_ids taşıması) · unit negatif (katalog boş → yönlendirmeli empty state; rol yetersiz → kontroller devre dışı — önce yazılır) · E2E (team.spec.ts — skill atama yüzeyi görünür). Cross-tenant/negatif yetki sunucu tarafında 08.6.3-b'de kanıtlanır",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2
             ],
             "parentId": "66",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T06:28:06.670Z"
           },
           {
             "id": 7,
@@ -2074,7 +2074,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T06:08:16.328Z"
+        "updatedAt": "2026-08-03T06:28:06.670Z"
       },
       {
         "id": "67",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T06:08:16.328Z",
+      "lastModified": "2026-08-03T06:28:06.671Z",
       "taskCount": 99,
       "completedCount": 76,
       "tags": [

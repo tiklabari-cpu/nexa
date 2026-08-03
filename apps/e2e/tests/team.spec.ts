@@ -7,7 +7,7 @@
  * without nagging. Both halves matter: a guard that always asks is as annoying
  * as one that never does.
  */
-import { expect, test } from './fixtures.js';
+import { DEMO, expect, test } from './fixtures.js';
 
 test.describe('invite teammates — dirty guard (FR-EK-A.2)', () => {
   test('a dirty modal asks before discarding, and keeps the work if you decline', async ({
@@ -58,5 +58,31 @@ test.describe('invite teammates — dirty guard (FR-EK-A.2)', () => {
 
     await expect(dialog).toBeHidden();
     expect(nagged).toBe(false);
+  });
+});
+
+test.describe('Team — per-agent skill assignment (FR-MOD-08.6.3)', () => {
+  test('the skill catalogue opens from the agent row with the current skills checked', async ({
+    agentPage,
+  }) => {
+    await agentPage.getByRole('link', { name: 'Team' }).click();
+    await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
+
+    // Seeded owner (Dana Okonkwo) holds the "Billing" area — the seed's fixed
+    // catalogue also has "Technical support" and "Onboarding" (seed.ts).
+    await agentPage
+      .getByRole('button', { name: `Manage skills for ${DEMO.agentName}` })
+      .click();
+    const dialog = agentPage.getByRole('dialog', { name: `Skills — ${DEMO.agentName}` });
+    await expect(dialog).toBeVisible();
+
+    await expect(dialog.getByRole('checkbox', { name: 'Billing' })).toBeChecked();
+    await expect(dialog.getByRole('checkbox', { name: 'Technical support' })).not.toBeChecked();
+    await expect(dialog.getByRole('checkbox', { name: 'Onboarding' })).not.toBeChecked();
+
+    // Cancel rather than Save: this is a visibility check, not a mutation —
+    // the seeded tenant is shared across the whole suite.
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
   });
 });

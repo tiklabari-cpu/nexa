@@ -13,6 +13,52 @@
 
 ## Task log (newest-first)
 
+### 66.6 (08.6.3-f) — Team: ajan başına skill ataması ekranı — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] Team ekranında bir ajan satırından açılan skill atama yüzeyi.
+  Yeni `apps/web/src/features/team/AgentSkills.tsx`: satırdaki tetikleyici buton ajanın mevcut
+  skill adlarını gösterir (`aria-label="Manage skills for <ad>"`, boşsa "No skills"); tıklanınca
+  `Modal` açılır ve katalog (`GET /settings/expertise` — Settings'in Skills bölümüyle **aynı**
+  `['settings', 'expertise']` query key) çoklu checkbox listesi olarak render edilir, ajanın
+  mevcut `expertise[]`'i (id seti) işaretli açılır. Kaydet → `PUT /agents/{agentId}/expertise`
+  **tam** `{expertise_ids: number[]}` gövdesiyle (08.6.3-b'nin idempotent tam-değiştirme
+  kontratı — yeni sözleşme/migration YOK), başarıda `['team', 'agents']` invalidasyonuyla satır
+  güncellenir. Katalog boşsa "Add a skill in Settings → Skills..." yönlendirmeli `EmptyState`;
+  `canEdit=false` (mevcut `canManage` — `roleAtLeast(role, 'admin')`, `TeamPage.tsx:62`) →
+  checkbox'lar `disabled` + Save butonu hiç render edilmez (yalnız Close) — kontrol GÖRÜNÜR ama
+  salt-okunur, Suspend'in aksine sütun tamamen gizlenmez (KK'nın birebir istediği davranış).
+  `TeamPage.tsx`: `Agent` arayüzüne katkısal `expertise: Expertise[]` eklendi (08.6.3-b'den beri
+  `GET /agents` yanıtında dönüyordu, ekran hiç okumuyordu); Teammates tablosuna her role görünür
+  yeni **Skills** sütunu (`colSpan` 6→7 / 5→6 güncellendi).
+- **Doğrulama:** `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · web unit testleri ✓ (546, önceki
+  542'den +4 — `AgentSkills.test.tsx`: mevcut skill işaretli açılır · değişen seçim
+  `expertise_ids` ile doğru `PUT` gövdesi · boş katalog → yönlendirmeli empty state · rol
+  yetersiz → tüm kontroller disabled) · `pnpm --filter @nexa/api test:unit` ✓ (266) ·
+  `pnpm --filter @nexa/rtm test` ✓ (90) · `pnpm --filter @nexa/api test:integration` ✓ (48
+  dosya / **1040** test, değişiklik yok — bu pencere backend/kontrata dokunmadı) · `pnpm -w
+  build` ✓. `pnpm -w test` (turbo, paralel) `@nexa/rtm` entegrasyon testlerinde paylaşılan
+  Postgres'e karşı deadlock/FK-ihlali ile kırmızı çıktı — [[nexa-test-gate-parallel-db]]'de
+  belgelenen bilinen paralel-DB yarışı (rtm+api aynı anda aynı DB'yi truncate/seed ediyor); her
+  paket tek başına (`pnpm --filter <pkg> test`) çalıştırılınca tam yeşil, bu pencerenin
+  değişikliğiyle ilgisi yok. **E2E:** `apps/e2e/tests/team.spec.ts`'e yeni test — seeded owner
+  (Dana Okonkwo, seed'de `expertise[0]`="Billing") satırından Skills modalı açılır, Billing
+  işaretli/diğer ikisi (Technical support, Onboarding) işaretsiz görünür, **Cancel** ile kapanır
+  (mutasyonsuz görünürlük kanıtı — paylaşılan seed tenant'ı bozmadan) — `pnpm exec playwright
+  test tests/team.spec.ts` ✓ (3/3, yeni test dahil).
+- **Varsayımlar:** (a) Task açıklaması `PUT /agents/{id}/skills` + `skill_ids` diyordu; gerçek
+  kontrat (08.6.3-b, doğrulandı) `PUT /agents/{agentId}/expertise` + `{expertise_ids}` —
+  66.4/66.5'te kilitlenen ürün-yüzeyi-"Skills"/veri-katmanı-"expertise" ayrımıyla tutarlı, gerçek
+  uç nokta kullanıldı. (b) Skills sütunu her role görünür (yalnız `canManage` iken düzenlenebilir)
+  — task'ın "rol yetersizse kontrol salt-okunur" cümlesi sütunun gizlenmesini değil salt-okunur
+  kalmasını istiyor, Suspend sütunundan (tamamen gizli) kasıtlı olarak farklı.
+- **Sonraki pencereye not:** Kalan 08.6.3 dilimi: **-g** (Inbox: takeover butonu, bağ: -d, zaten
+  done) · **-i** (uçtan uca: skill routing + takeover E2E + cross-tenant matrisi, bağ: -c/-d/-e/
+  -f/-g — bu pencere -f'yi kapattığı için -i'nin bağımlılık listesinden biri daha yeşil, yalnız
+  -g kaldı). **Çalışma alanı notu:** pencere başlamadan önce de işlenmemiş değişiklikler vardı —
+  `CONVENTIONS.md` / `.taskmaster/BUILD-BLUEPRINT.md` / `run-loop.sh` / `apps/e2e/kanit/
+  36-copilot-panel.png` (66.5'in handoff'unda da not edildi, bu göreve ilişkisiz) — bu pencere de
+  onlara dokunmadı, hâlâ işlenmemiş duruyorlar.
+
 ### 66.5 (08.6.3-e) — Settings: Skills kataloğu bölümü + routing kuralında skill koşulu gösterimi — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] Settings'e yeni **Skills** bölümü + routing kuralı satırında skill

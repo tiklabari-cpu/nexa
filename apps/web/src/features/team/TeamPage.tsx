@@ -26,6 +26,7 @@ import { formatCount } from '../../lib/format.js';
 import { InviteTeammates, PendingInvitations } from './InviteTeammates.js';
 import { TeamAiPerformance } from './TeamAiPerformance.js';
 import { CopilotKnowledge } from './CopilotKnowledge.js';
+import { AgentSkills, type Expertise } from './AgentSkills.js';
 
 type Role = 'owner' | 'viceowner' | 'admin' | 'agent';
 
@@ -39,6 +40,7 @@ interface Agent {
   concurrent_chats_limit: number;
   two_factor_enabled: boolean;
   suspended: boolean;
+  expertise: Expertise[];
 }
 
 interface Chatbot {
@@ -194,7 +196,7 @@ export function TeamPage(): ReactElement {
                   items={items}
                   rowHeight={56}
                   caption="Agents on this licence"
-                  colSpan={canManage ? 6 : 5}
+                  colSpan={canManage ? 7 : 6}
                   head={
                     <thead>
                       <tr className="border-b border-border text-left">
@@ -203,6 +205,7 @@ export function TeamPage(): ReactElement {
                         <Th>Availability</Th>
                         <Th align="right">Chat limit</Th>
                         <Th>2FA</Th>
+                        <Th>Skills</Th>
                         {canManage && <Th align="right">Manage</Th>}
                       </tr>
                     </thead>
@@ -241,6 +244,9 @@ export function TeamPage(): ReactElement {
                           tone={agent.two_factor_enabled ? 'success' : 'warning'}
                           label={agent.two_factor_enabled ? 'On' : 'Off'}
                         />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <AgentSkills agent={agent} canEdit={canManage} />
                       </td>
                       {canManage && (
                         <td className="px-4 py-2.5 text-right">

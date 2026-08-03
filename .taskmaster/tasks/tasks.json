@@ -1675,13 +1675,13 @@
             "description": "Yerel arayüze opsiyonel `by_team?`, `by_channel?`, `overlapping?`; iki `Section` daha: \"By team\" (etiket = takım adı, gruba açık olmayanlar 'Unassigned') ve \"By channel\" (etiket = kanal; 'website' dahil). `overlapping === true` iken \"By team\" Section description'ına açıklayıcı dipnot: bir sohbet birden fazla takıma açık olabilir, satır toplamı toplam sohbeti aşabilir (07.5-e'nin beyanı ekrana taşı",
             "details": "07.5-h — Breakdown sekmesi: \"By team\" + \"By channel\" bölümleri + örtüşme dipnotu  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.5\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 3 dosya; güvenlik sınırı yok — salt-okunur render; örtüşme/çift sayım KARARI 07.5-e'de verildi ve `overlapping` bayrağı olarak yanıtta geliyor, bu pencere yalnız onu GÖSTERİR (karar vermez); eşzamanlılık/algoritma yok; kopyalanacak desen aynı dosyadaki By day/By agent blokları + 07.5-g'nin By hour bloğu; kontrat değişmez; KK mekanik.\nNEDEN AÇIK: ReportsPage.tsx `BreakdownTab` yalnız by_day + by_agent render ediyor (satır ~770-830); yerel `ReportsBreakdown` arayüzünde (satır ~83-87) `by_team`/`by_channel`/`overlapping` yok — takım ve kanal için ne sekme ne tablo var.\nKAPSAM: Yerel arayüze opsiyonel `by_team?`, `by_channel?`, `overlapping?`; iki `Section` daha: \"By team\" (etiket = takım adı, gruba açık olmayanlar 'Unassigned') ve \"By channel\" (etiket = kanal; 'website' dahil). `overlapping === true` iken \"By team\" Section description'ına açıklayıcı dipnot: bir sohbet birden fazla takıma açık olabilir, satır toplamı toplam sohbeti aşabilir (07.5-e'nin beyanı ekrana taşınır — sessiz çift sayım yasak). İkisinde de boş veri → `EmptyState`. Mevcut `SplitTable` AYNEN kullanılır.\nDOSYALAR: apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx · apps/e2e/tests/reports.spec.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/reports/ReportsPage.tsx — \"By day\" / \"By agent\" Section+Card+EmptyState+SplitTable blokları (satır ~790-830) · apps/web/src/features/reports/ReportsPage.tsx — `SplitTable` (satır ~835+) ve `Section` description prop kullanımı (dipnot metni buraya girer) · apps/e2e/tests/reports.spec.ts:44-46 — region görünürlük iddiası\nKK (birebir): \"Boyutlu kırılım\" | \"KK-türetilmiş: \"Breakdown sekmesinde takım ve kanal boyutları ayrı bölümler olarak görünür; takım satırlarındaki örtüşme (bir sohbetin birden fazla takımda sayılması) kullanıcıya açıkça bildirilir; boş boyutlar anlamlı empty state gösterir.\" — PRD KK'sı tek kelimelik; örtüşme bildirimi 07.5-e'nin M:N gerçeğinden (chat-service.ts:1246) zorunlu olarak türetildi, aksi halde ekran Overview toplamıyla çelişiyormuş gibi okunur.\"\nKK DOĞRULAMA: ReportsPage.test.tsx unit: (1) `by_team` dolu → takım adları + 'Unassigned' satırı görünür; (2) `overlapping: true` → dipnot metni görünür, `false` → görünmez; (3) `by_channel` dolu → 'website' dahil kanal satırları; (4) her ikisi boş → EmptyState. E2E: `region name: 'By team'` ve `'By channel'` görünür.\nKAPSAM DIŞI: By hour bölümü (07.5-g) · Grafik/chart görselleştirme · Takım/kanal filtre veya drill-down · Takım yönetimi ekranları\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: by_team render (takım adları + 'Unassigned') · unit: overlapping true → dipnot görünür; false → görünmez · unit: by_channel render ('website' dahil) · unit: her iki boyut boş/alan yok → EmptyState, çökme yok · e2e: 'By team' ve 'By channel' region'ları görünür · NEGATİF/CROSS-TENANT YOK ve gerekmiyor — gerekçe: salt-okunur render; izolasyon 07.5-d/-e'nin cross-tenant testlerinde kanıtlanıyor",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               4,
               5
             ],
             "parentId": "63",
-            "updatedAt": "2026-08-03T00:18:09.791Z"
+            "updatedAt": "2026-08-03T00:30:47.498Z"
           },
           {
             "id": 9,
@@ -1699,7 +1699,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T00:18:09.791Z"
+        "updatedAt": "2026-08-03T00:30:47.498Z"
       },
       {
         "id": "64",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T00:18:09.791Z",
+      "lastModified": "2026-08-03T00:30:47.498Z",
       "taskCount": 99,
       "completedCount": 74,
       "tags": [

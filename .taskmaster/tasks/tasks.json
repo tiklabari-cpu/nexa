@@ -4103,12 +4103,12 @@
             "description": "(1) `reports.ts`'e `teamPerformanceByAgent(tx, licenseId, from, to)` — mevcut `SPLIT_COUNTS` fragment'i (satır 117-123) yeniden kullanılır; üzerine ajan başına ortalama ilk-yanıt/süre + `ratings` join'li good/bad/CSAT + transfer sayısı eklenir; limit kararı breakdown deseniyle hizalanır. (2) `GET /reports/team-performance` handler'ı. (3) Kontrat: `paths/reports.yaml` `teamPerformance` operation + ",
             "details": "07.7-c — Team performance rapor grubu — ajan bazlı KPI genişletmesi (mevcut by_agent üzerine)  [SONNET-MAX]\n\nPRD: FR-MOD-07.7 (+ NFR-P7 ağır rapor)\nETİKET GEREKÇESİ: SONNET-MAX: koşul 2 ve 3 sağlanıyor (yeni güvenlik sınırı YOK — `breakdown` raporu zaten `reports_read` sahibine `by_agent` kırılımı veriyor, reports.ts:677-698; yeni scope/izolasyon kararı yok, `WHERE t.license_id` filtresi aynen miras alınıyor; eşzamanlılık yok, salt-okunur agregasyon). ANCAK iş mekanik olarak GİRİFT: dört agregasyon ekseni (chat split, ilk-yanıt/süre ortalamaları, ratings→threads→assignee join'li CSAT, transfer sayımı) tek sorgu şekline oturtuluyor — yoğun rapor sorgusu, daha fazla düşünme bütçesi ister. Kopyalanacak desen ismen var (`SPLIT_COUNTS` + breakdown byAgent raw sorgusu) → OPUS'a çıkarılmadı.\nNEDEN AÇIK: `reports.ts:677-698` breakdown içinde ajan bazlı sorgu ZATEN VAR (`SELECT t.assignee_id::text AS agent_id, a.name, ${SPLIT_COUNTS} ... LIMIT 20`) — ajan kırılımı sıfırdan değil; eksik olan ADANMIŞ 'team-performance' RAPOR GRUBU: `reports-export.ts:39-44` kataloğunda yok, `openapi.yaml:296-306` içinde `/reports/team-performance` yok, `buildGroupCsv` switch'inde case'i yok. Ajan bazlı CSAT için gereken bağ mevcut: `Rating` modeli `threadId` taşıyor (schema.prisma:719), `threads.assignee_id` üzerinden join edilebilir.\nKAPSAM: (1) `reports.ts`'e `teamPerformanceByAgent(tx, licenseId, from, to)` — mevcut `SPLIT_COUNTS` fragment'i (satır 117-123) yeniden kullanılır; üzerine ajan başına ortalama ilk-yanıt/süre + `ratings` join'li good/bad/CSAT + transfer sayısı eklenir; limit kararı breakdown deseniyle hizalanır. (2) `GET /reports/team-performance` handler'ı. (3) Kontrat: `paths/reports.yaml` `teamPerformance` operation + `openapi.yaml` ref + re-bundle. (4) REPORT_GROUPS'a `{ id:'team-performance', label:'Team performance', scopes:['reports_read'] }` + `buildGroupCsv` case'i (satır başına bir ajan; ajan adı kullanıcı-etkili alan → mevcut `FORMULA_LEAD` kalkanı `csvField` üzerinden otomatik uygulanır, reports-export.ts:76-95).\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/src/routes/reports-export.ts · apps/api/src/routes/reports-export.test.ts · packages/contract/openapi/paths/reports.yaml · packages/contract/openapi/openapi.yaml · apps/api/test/integration/reports-billing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts (satır 677-698 breakdown `byAgent` raw sorgusu — ajan join'i + SPLIT_COUNTS kullanımı birebir kopyalanacak) · apps/api/src/routes/reports.ts (satır 117-123 `SPLIT_COUNTS` Prisma.sql fragment'i) · apps/api/src/routes/reports.ts (satır 189-210 `satisfactionCounts` — ratings agregasyonu deseni) · apps/api/src/routes/reports.ts (satır 391-410 `buildGroupCsv` 'ai-agent' case'i — CSV şekli)\nKK (birebir): \"İzin bazlı görünürlük\" | \"export\"\nKK DOĞRULAMA: `reports-billing.test.ts` — `GET /reports/team-performance` her ajan için chats/closed/automated/assisted/manual + avg_first_response_seconds + CSAT döner; oy verilmemiş ajanda CSAT `null` (0 değil — mevcut `satisfactionScore` kuralı, reports.ts:211-214). `?group=team-performance` CSV'de `=` ile başlayan ajan adı `'` ön ekiyle nötrleniyor ('export' + formül-enjeksiyon kalkanı korunmuş). `reports-export.test.ts` — katalogda var + yetkisiz scope'ta görünmez ('İzin bazlı görünürlük').\nKAPSAM DIŞI: Isı haritası / saat × ajan çapraz kırılımı — FR-MOD-07.5 'Metrics breakdown (ajan/takım/kanal/saat)' kaleminin işi (PLAN §5.0 satır 1107), burada YAPILMAZ · Takım (group) ve kanal boyutları — yine 07.5 · Ajan performansına dayalı otomatik yönlendirme/uyarı · Web UI sekmesi (07.7-j)\nSÖZLEŞME: YENİ PATH: `GET /reports/team-performance` → `paths/reports.yaml` + `openapi.yaml` ref + `export` açıklamasına grup eklenir. ZORUNLU re-bundle — aksi halde `contract-parity.test.ts` KIRILIR.\nMIGRATION: yok — `threads.assignee_id`, `accounts`, `ratings.thread_id` (schema.prisma:719) mevcut.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce) — `reports_read` yok → 403; `/reports/groups` yanıtında 'team-performance' yok · cross-tenant — başka lisansın ajanı ne JSON ne CSV yanıtında görünmez · integration — atanmamış (assignee_id NULL) sohbetler ajan satırına yazılmaz; oy yoksa CSAT null · unit — katalog + `visibleReportGroups` + formül-enjeksiyon (`=SUM(A1)` adlı ajan → `'=SUM(A1)`) · integration — `contract-parity.test.ts`",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               2
             ],
             "parentId": "93",
-            "updatedAt": "2026-08-03T19:03:14.488Z"
+            "updatedAt": "2026-08-03T20:15:54.052Z"
           },
           {
             "id": 4,
@@ -4246,7 +4246,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T19:03:14.488Z"
+        "updatedAt": "2026-08-03T20:15:54.052Z"
       },
       {
         "id": "94",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T19:03:14.488Z",
+      "lastModified": "2026-08-03T20:15:54.054Z",
       "taskCount": 100,
       "completedCount": 80,
       "tags": [

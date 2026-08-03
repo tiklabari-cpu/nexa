@@ -58,6 +58,11 @@
   07.5-f'nin **e2e yüzeyi yok** (backend-only, [memory: nexa-early-delivered-slices-audit]
   desenine benzer — export UI'da henüz bir "Export" düğmesi/fetch çağrısı yok, `apps/web/src`
   grep'i boş döndü) — 07.5-e'deki aynı gerekçeyle `pnpm -w test:e2e` bu turda ÇALIŞTIRILMADI.
+  **Kirli bırakılan (bu task'ın DIŞI):** pencere açılışında `.taskmaster/BUILD-BLUEPRINT.md`,
+  `CONVENTIONS.md` (§4.1 `critical` öncelik rezervasyonu) ve `run-loop.sh` (`pick_next`
+  `critical` sırası) ZATEN işlenmemiş halde bulundu — tm 63.6'nın kapsamı dışında (kaynağı bu
+  pencerede bilinmiyor), bu yüzden commit'e DAHİL EDİLMEDİ; bir sonraki pencere ya sahiplenip
+  commit'lesin ya da nereden geldiğini araştırsın.
 
 
 ### 63.5 (07.5-e) — Takım boyutu agregasyon çekirdeği — chat_access M:N fan-out + license kilidi — done — 2026-08-03 UTC

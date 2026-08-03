@@ -369,6 +369,15 @@ paths:
   /public/kb/{workspaceSlug}/categories:
     $ref: "./paths/public-kb.yaml#/categories"
 
+  # Server-rendered SEO HTML surface (PUBKB-e). Placed after the JSON reader's
+  # static children (`articles`, `categories`) so the reserved-word intent reads
+  # in order; Fastify prefers those static segments over the `{articleSlug}`
+  # parameter at runtime regardless.
+  /public/kb/{workspaceSlug}:
+    $ref: "./paths/public-kb.yaml#/home"
+  /public/kb/{workspaceSlug}/{articleSlug}:
+    $ref: "./paths/public-kb.yaml#/articleHtml"
+
 components:
   securitySchemes:
     bearerAuth:

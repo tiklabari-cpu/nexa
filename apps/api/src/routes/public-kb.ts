@@ -30,10 +30,11 @@
  * elevation over what an anonymous reader sees.
  */
 import type { FastifyInstance } from 'fastify';
-import { Prisma } from '@prisma/client';
+import { type Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import { withTenant, type TenantContext } from '../lib/tenant.js';
+import { publishedArticleWhere, resolvePublicKbWorkspace } from '../lib/kb-public-read.js';
 
 const slugParam = z.string().trim().min(1).max(200);
 
@@ -135,18 +136,16 @@ function cursorPredicate(cursor: Cursor): Prisma.KbArticleWhereInput {
 
 export default async function publicKbRoutes(app: FastifyInstance): Promise<void> {
   /**
-   * Turn a public slug into a tenant context, or 404. Runs the SECURITY DEFINER
-   * resolver outside any tenant transaction (there is none yet), exactly as the
-   * email-inbound path does — a disabled KB or cancelled licence comes back as
-   * no row and is answered the same 404 as an unknown slug.
+   * Turn a public slug into a tenant context, or 404. The resolver itself lives
+   * in `kb-public-read.ts` and is shared with the SEO HTML surface (PUBKB-e) so
+   * the one cross-tenant read the public KB performs has a single definition; a
+   * miss comes back as `null` and is answered the same indistinguishable 404 as
+   * an unknown slug.
    */
   async function resolveWorkspace(slug: string): Promise<TenantContext> {
-    const rows = await app.db.$queryRaw<Array<{ license_id: bigint; organization_id: string }>>(
-      Prisma.sql`SELECT * FROM kb_resolve_public_slug(${slug})`,
-    );
-    const match = rows[0];
-    if (!match) notFound();
-    return { licenseId: match.license_id, organizationId: match.organization_id };
+    const tenant = await resolvePublicKbWorkspace(app.db, slug);
+    if (!tenant) notFound();
+    return tenant;
   }
 
   // Anonymous surface: `public: true` (no token needed) and its own, higher
@@ -166,10 +165,7 @@ export default async function publicKbRoutes(app: FastifyInstance): Promise<void
       const rows = await withTenant(app.db, tenant, (tx) =>
         tx.kbArticle.findMany({
           where: {
-            AND: [
-              { status: 'published', publishedAt: { not: null } },
-              cursor ? cursorPredicate(cursor) : {},
-            ],
+            AND: [publishedArticleWhere(), cursor ? cursorPredicate(cursor) : {}],
           },
           orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
           // One extra row tells us whether a next page exists without a count.
@@ -197,7 +193,7 @@ export default async function publicKbRoutes(app: FastifyInstance): Promise<void
 
       const article = await withTenant(app.db, tenant, (tx) =>
         tx.kbArticle.findFirst({
-          where: { slug: articleSlug, status: 'published', publishedAt: { not: null } },
+          where: { slug: articleSlug, ...publishedArticleWhere() },
         }),
       );
       // A draft, or an article that lives in another workspace, is invisible

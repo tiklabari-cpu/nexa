@@ -49,8 +49,13 @@ const DEFAULT_EXCERPT_LENGTH = 160;
  * function introduces are not escaped a second time. After this runs, the string
  * cannot open a tag (`<`), close one (`>`), break out of an attribute (`"`/`'`)
  * or start an entity (`&`) — it is inert text.
+ *
+ * Exported so the SEO HTML surface (PUBKB-e, `kb-page.ts`) escapes every
+ * interpolated title/description/URL through this one audited primitive rather
+ * than growing a second, possibly-weaker copy — the same "call, don't copy"
+ * discipline the render path itself follows.
  */
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

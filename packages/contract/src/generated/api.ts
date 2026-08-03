@@ -3523,6 +3523,62 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/public/kb/{workspaceSlug}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * The workspace KB home page, server-rendered (public HTML)
+     * @description An indexable HTML listing of the workspace's published articles, grouped by
+     *     category. No authentication; an unknown or KB-disabled workspace is the same
+     *     404 as any other miss. Read `text/html`, not JSON.
+     */
+    get: operations['getPublicKbHome'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/public/kb/{workspaceSlug}/{articleSlug}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+        /**
+         * @description The article's slug within the workspace. `articles` and `categories` are
+         *     reserved (they resolve to the JSON reader) and never name an article page.
+         */
+        articleSlug: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * One published KB article, server-rendered (public HTML)
+     * @description The published article as an indexable HTML page: a single `<h1>`, the safely
+     *     rendered body (PUBKB-d), `<title>`/`<meta name="description">`/canonical/
+     *     OpenGraph and an `Article` JSON-LD block. A draft, an unpublished slug or an
+     *     article in another workspace all return the same HTML 404.
+     */
+    get: operations['getPublicKbArticleHtml'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -11538,6 +11594,77 @@ export interface operations {
         };
       };
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getPublicKbHome: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rendered KB home page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/html': string;
+        };
+      };
+      /** @description Indistinguishable miss (see the 404 policy) — an HTML page, not JSON */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/html': string;
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getPublicKbArticleHtml: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+        /**
+         * @description The article's slug within the workspace. `articles` and `categories` are
+         *     reserved (they resolve to the JSON reader) and never name an article page.
+         */
+        articleSlug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rendered article page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/html': string;
+        };
+      };
+      /** @description Indistinguishable miss (see the 404 policy) — an HTML page, not JSON */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/html': string;
+        };
+      };
       429: components['responses']['TooManyRequests'];
     };
   };

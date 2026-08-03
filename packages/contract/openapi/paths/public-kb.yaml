@@ -109,3 +109,79 @@ categories:
                   items: { $ref: "../openapi.yaml#/components/schemas/PublicKbCategory" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# ── Server-rendered SEO HTML surface (PUBKB-e) ────────────────────────────────
+# The same data, served as indexable `text/html` instead of JSON: the workspace
+# KB home and a single article page, each carrying title/meta/canonical/OG and an
+# `Article` JSON-LD block. `security: []` marks them anonymous; every miss is the
+# same 404 as the JSON reader. These live in the contract because
+# contract-parity.test.ts enumerates the whole Fastify router — an HTML route
+# absent here fails that test just as a JSON one would.
+
+home:
+  parameters:
+    - name: workspaceSlug
+      in: path
+      required: true
+      description: The workspace's public KB address (`kb_settings.public_slug`).
+      schema: { type: string, minLength: 1, maxLength: 200 }
+
+  get:
+    tags: [Knowledge Base]
+    operationId: getPublicKbHome
+    summary: The workspace KB home page, server-rendered (public HTML)
+    description: |
+      An indexable HTML listing of the workspace's published articles, grouped by
+      category. No authentication; an unknown or KB-disabled workspace is the same
+      404 as any other miss. Read `text/html`, not JSON.
+    security: []
+    responses:
+      "200":
+        description: The rendered KB home page
+        content:
+          text/html:
+            schema: { type: string }
+      "404":
+        description: Indistinguishable miss (see the 404 policy) — an HTML page, not JSON
+        content:
+          text/html:
+            schema: { type: string }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+articleHtml:
+  parameters:
+    - name: workspaceSlug
+      in: path
+      required: true
+      description: The workspace's public KB address (`kb_settings.public_slug`).
+      schema: { type: string, minLength: 1, maxLength: 200 }
+    - name: articleSlug
+      in: path
+      required: true
+      description: |
+        The article's slug within the workspace. `articles` and `categories` are
+        reserved (they resolve to the JSON reader) and never name an article page.
+      schema: { type: string, minLength: 1, maxLength: 200 }
+
+  get:
+    tags: [Knowledge Base]
+    operationId: getPublicKbArticleHtml
+    summary: One published KB article, server-rendered (public HTML)
+    description: |
+      The published article as an indexable HTML page: a single `<h1>`, the safely
+      rendered body (PUBKB-d), `<title>`/`<meta name="description">`/canonical/
+      OpenGraph and an `Article` JSON-LD block. A draft, an unpublished slug or an
+      article in another workspace all return the same HTML 404.
+    security: []
+    responses:
+      "200":
+        description: The rendered article page
+        content:
+          text/html:
+            schema: { type: string }
+      "404":
+        description: Indistinguishable miss (see the 404 policy) — an HTML page, not JSON
+        content:
+          text/html:
+            schema: { type: string }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

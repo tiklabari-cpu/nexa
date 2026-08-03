@@ -13,6 +13,53 @@
 
 ## Task log (newest-first)
 
+### tm 76.5 — PUBKB-e SEO'lu sunucu-render HTML yüzeyi (KB ana sayfası + makale sayfası) — done — 2026-08-03 UTC
+
+- **Yapıldı:** Depodaki ilk `text/html` yanıt yüzeyi — iki anonim, indekslenebilir sayfa:
+  `GET /public/kb/{workspaceSlug}` (KB ana sayfası, kategoriye göre gruplu yayınlanmış makale listesi)
+  ve `GET /public/kb/{workspaceSlug}/{articleSlug}` (makale). Rota `apps/api/src/routes/public-kb-html.ts`
+  (`config.public:true` + `publicKbRateLimit`, principal yok — tenant yol parametresinden).
+  - **Reuse, kopya değil:** slug→license resolver + yayın filtresi PUBKB-c'den paylaşılıyor. İkisi tek
+    tanıma `apps/api/src/lib/kb-public-read.ts`'e çıkarıldı (`resolvePublicKbWorkspace`,
+    `publishedArticleWhere`); `public-kb.ts` (JSON okuyucu) de artık bunları çağırıyor — iki yüzey
+    "hangi satır kime görünür" konusunda ayrışamaz.
+  - **HTML üretimi:** saf, I/O'suz `apps/api/src/lib/kb-page.ts`. Her sayfa: `<title>`
+    (seo_title ?? title), `<meta name=description>` (seo_description ?? excerpt → PUBKB-d
+    `renderPlainExcerpt`), `<link rel=canonical>`, OpenGraph (og:title/description/type/url),
+    `Article` JSON-LD, `<meta name=robots content="index, follow">` (chat.html noindex'inin bilinçli
+    tersi), `lang` attr, tek `<h1>`, `<main>` + `<nav>` breadcrumb landmark'ları. JS'siz ilk boyama:
+    hiç `<script src>` yok, tek script inert `application/ld+json`.
+  - **Güvenlik miras alındı:** gövde PUBKB-d `renderArticleBody` çıktısıdır (sayfadaki escape'siz tek
+    HTML fragmanı). Başlık/kategori/açıklama/URL dahil DİĞER her değer `escapeHtml`'den geçer — bu
+    primitive `kb-render.ts`'den export edildi (ikinci, olası daha zayıf kaçış kopyası yok). JSON-LD
+    `JSON.stringify` sonrası `<`/`>`/`&`→`\uXXXX`; bir alan literal `</script>` içerse bile bloğu
+    kapatamaz.
+  - **404 politikası:** her miss (bilinmeyen slug · KB kapalı · license canceled · taslak · başka
+    tenant makalesi · bozuk slug) TEK ayırt edilemez `text/html` 404 (`noindex`, içerik yok, NFR-S5).
+  - **Cache:** `Cache-Control: public, max-age=60` + güçlü ETag; eşleşen `If-None-Match` → 304.
+  - **Rota ayrımı:** `/public/kb/{slug}/{articleSlug}` ile JSON okuyucunun statik `articles`/`categories`
+    çocukları aynı derinlikte; Fastify statik segmenti parametreye tercih eder → JSON API gölgelenmez,
+    makale sayfaları da gölgelenmez (`articles`/`categories` zaten rezerve slug).
+  - **Kontrat:** `packages/contract/openapi/paths/public-kb.yaml` +2 op `security:[]`
+    (`getPublicKbHome`, `getPublicKbArticleHtml`; yanıt `text/html`) + `openapi.yaml`'e iki yol; bundle +
+    tip regen yapıldı. `contract-parity.test.ts` HTML rotalarını da sayar → çift-yönlü yeşil.
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck`, `pnpm -w lint`, `pnpm -w build`,
+  `pnpm -w test:unit` (api 335), API integration tamamı (55 dosya / 1160 test — `public-kb-html.test.ts`
+  14 yeni test dahil; refactor sonrası `public-kb.test.ts`/`kb.test.ts`/`public-kb-schema.test.ts`/
+  `contract-parity.test.ts`/`kb-render.test.ts` regresyon yok). Yeni test kapsamı: taslak/disabled/
+  canceled/cross-tenant-çift-yön 404 + metin sızmaz · XSS uçtan-uca aktif tag yok · seo meta kaçışı ·
+  JS'siz başlık+gövde ilk boyama · canonical/OG/JSON-LD eşleşme · `</script>` JSON-LD kaçışı · a11y
+  tek-h1/lang/main+nav/başlık-atlamaz · ana sayfa liste · rota gölgelememe · ETag/304.
+- **Varsayımlar:** `lang="tr"` — per-workspace dil kolonu yok, §C-PUBKB varsayım 8 (tek dil) + platform
+  Türkçe locale; çok-dil/hreflang PUBKB-e kapsamı dışı. Canonical/OG mutlak URL'i `${API_BASE_URL}${API_PREFIX}`
+  tabanından (`server.ts` register option'ı olarak geçiliyor; API_PREFIX döngüsel import'undan kaçınıldı).
+  Ana sayfa makale listesi `MAX_INDEX_ARTICLES=500` ile sınırlı (sınırsız sayfa DoS'una karşı).
+- **Sonraki pencereye not:** PUBKB-f (sitemap.xml + robots.txt) bu yüzeye dayanır — aynı resolver +
+  `publishedArticleWhere` + `kb-public-read.ts`'i çağırmalı, kopyalamamalı; XML-escape gövdesi kb-page
+  değil kendi yardımcısını kullansın. Admin UI (PUBKB-g/h) ve e2e (PUBKB-i) hâlâ açık. Bu pencerede
+  başlangıçtaki bayat dirty dosyalar (kanit/*.png, run-loop.sh, BUILD-BLUEPRINT.md, CONVENTIONS.md)
+  bu task'a ait değil — dokunulmadı.
+
 ### tm 76.4 — PUBKB-d Makale gövdesi güvenli render çekirdeği (escape-first sınırlı markdown) — done — 2026-08-03 UTC
 
 - **Yapıldı:** Saf, I/O'suz `apps/api/src/lib/kb-render.ts` — ajanın yazdığı makale gövdesini

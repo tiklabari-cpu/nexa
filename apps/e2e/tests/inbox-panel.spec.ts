@@ -100,6 +100,54 @@ test.describe('multi-agent composing conflict', () => {
   });
 });
 
+/**
+ * Supervisor takeover control (FR-MOD-08.6.3).
+ *
+ * The unit suite (`DetailsPanel.test.tsx`) pins the role gate and the mutation
+ * call against a mocked role and a mocked API client. What only a real browser
+ * proves is that the owner role a genuine `/auth/login` session carries makes
+ * the control actually render. The confirmation is cancelled, not confirmed —
+ * a real takeover would reassign a conversation the rest of the suite still
+ * relies on.
+ */
+test.describe('supervisor takeover', () => {
+  test('the owner session sees the Take over control and can open its confirmation', async ({
+    agentPage,
+    browser,
+    organizationId,
+  }) => {
+    await agentPage.goto('/app/inbox');
+
+    // A conversation created fresh for this test, not picked off the seeded
+    // "All" view — that view's first row can just as easily be a chat an
+    // earlier test in this suite archived, which would hide the control
+    // entirely (it only shows on an active chat) rather than prove anything.
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    try {
+      const question = `Can a supervisor jump in here? ${Date.now().toString().slice(-6)}`;
+      await openWidget(visitor, organizationId);
+      await visitorSends(visitor, question);
+      await openConversation(agentPage, question);
+
+      const details = agentPage.getByRole('complementary', { name: 'Conversation details' });
+      await expect(details).toBeVisible();
+
+      await details.getByRole('button', { name: 'Take over' }).click();
+
+      const dialog = agentPage.getByRole('dialog', { name: 'Take over this chat?' });
+      await expect(dialog).toBeVisible();
+
+      // Cancel, not confirm — proves visibility and wiring without reassigning
+      // a conversation the rest of the suite may still rely on.
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).toBeHidden();
+    } finally {
+      await visitorContext.close();
+    }
+  });
+});
+
 /** Open the conversation whose last message matches `text` — never "the first one". */
 async function openConversation(page: Page, text: string): Promise<void> {
   const list = page.getByRole('region', { name: 'Conversations' });

@@ -136,6 +136,14 @@ export function useChatAction(chatId: string | null) {
       mutationFn: (tag: string) => api.delete(`/chats/${chatId}/tags/${encodeURIComponent(tag)}`),
       onSuccess: invalidate,
     }),
+    // Supervisor seizure (FR-MOD-08.6.3) — role-gated at the route; this mutation
+    // just calls it. A losing race surfaces as `takeover_conflict` (409) on
+    // `.error`, left for the caller to render rather than swallowed here.
+    takeover: useMutation({
+      mutationFn: (reason?: string) =>
+        api.post(`/chats/${chatId}/takeover`, reason ? { reason } : undefined),
+      onSuccess: invalidate,
+    }),
   };
 }
 
@@ -231,8 +239,7 @@ export function applyPush(
       // the agent's own reflection; only a visitor's is worth showing here.
       const chatId = payload['chat_id'];
       const indicator = payload['typing_indicator'] as
-        | { is_typing?: unknown; author_type?: unknown }
-        | undefined;
+        { is_typing?: unknown; author_type?: unknown } | undefined;
       if (typeof chatId !== 'string' || !indicator) return;
       if (indicator.author_type !== 'customer') return;
       useTypingStore.getState().noteCustomer(chatId, indicator.is_typing === true, null);
@@ -242,9 +249,7 @@ export function applyPush(
     case 'incoming_sneak_peek': {
       // A preview of the visitor's in-progress message (FR-MOD-11.8).
       const chatId = payload['chat_id'];
-      const peek = payload['sneak_peek'] as
-        | { text?: unknown; author_type?: unknown }
-        | undefined;
+      const peek = payload['sneak_peek'] as { text?: unknown; author_type?: unknown } | undefined;
       if (typeof chatId !== 'string' || !peek) return;
       if (peek.author_type !== 'customer') return;
       useTypingStore
@@ -260,7 +265,11 @@ export function applyPush(
       const chatId = payload['chat_id'];
       const rawAgents = payload['agents'];
       const detectedAt = payload['detected_at'];
-      if (typeof chatId !== 'string' || !Array.isArray(rawAgents) || typeof detectedAt !== 'string') {
+      if (
+        typeof chatId !== 'string' ||
+        !Array.isArray(rawAgents) ||
+        typeof detectedAt !== 'string'
+      ) {
         return;
       }
       const agents: ConflictAgent[] = [];

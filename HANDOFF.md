@@ -13,6 +13,46 @@
 
 ## Task log (newest-first)
 
+### 66.7 (08.6.3-g) — Inbox: supervisor takeover butonu (rol kapılı, onaylı) + devir sonrası durum — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] Bu pencere işi sıfırdan yazmadı — kod, testler ve PLAN.md
+  gereksinim satırı önceki (yarım kesilmiş, commit'lenmemiş) bir pencerede zaten tamamlanmış
+  halde çalışma alanında duruyordu; bu pencere DoD kapısının tamamını çalıştırıp doğruladı ve
+  kapanışı (HANDOFF + commit + push + Task Master) tamamladı. Uygulama: `DetailsPanel.tsx`'in
+  Assignee satırına, yalnız `admin`/`viceowner`/`owner` rolünde (`useAuth`, rotanın kendi
+  `roleAtLeast(role,'admin')` kapısıyla aynı) ve sohbet aktifken (`chat.active` — kapalıda 409
+  `chat_inactive` almamak için) görünen "Take over" butonu; tıklanınca `TakeoverModal` mevcut
+  atananın adını (`GET /agents`, Skills/Team ile aynı `['team','agents']` cache key; atanmamışsa
+  "unassigned" kopyası, roster sorgusu bu durumda hiç tetiklenmez) gösteren onay diyaloğu açar →
+  onayda `POST /chats/{chatId}/takeover` (08.6.3-d'nin ucu tüketildi, yeni sözleşme YOK).
+  Başarıda `useChatAction`'ın mevcut `invalidate()`'i (chats+chat+events) çalışır ve modal
+  kapanır; 403 (`authorization`) ve 409 (`takeover_conflict`) sunucunun kendi insan-okunur
+  mesajını ayrı bir `Banner` (danger) içinde, birbirinden farklı metinle gösterir. `useInbox.ts`
+  `useChatAction`'a `takeover` mutation'ı eklendi (archive/reopen ile birebir desen).
+- **Doğrulama:** `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm --filter @nexa/web test` ✓
+  (555, önceki 546'dan +9 — `DetailsPanel.test.tsx`: negatif önce [agent rolünde buton yok] ·
+  admin/viceowner/owner'da render edilir · atanan ajanın adıyla onay metni + doğru endpoint
+  çağrısı + başarıda kapanma · atanmamış sohbette düz metin + roster sorgusu atlanır · 403→yetki
+  mesajı · 409→403'ten farklı çakışma mesajı · arşivlenmiş sohbette buton yok) ·
+  `pnpm --filter @nexa/api test:unit` ✓ (266, değişiklik yok) ·
+  `pnpm --filter @nexa/api test:integration` ✓ (48 dosya / 1040 test, değişiklik yok — bu
+  pencere backend/kontrata dokunmadı, 08.6.3-d'de zaten teslim) · `pnpm --filter @nexa/rtm test`
+  ✓ (90) · `pnpm -w build` ✓. **E2E** (`.env` elle source edilerek — `pnpm --filter` Makefile'ın
+  env export'undan geçmiyor): `pnpm --filter @nexa/e2e exec playwright test
+  tests/inbox-panel.spec.ts` ✓ (3/3 — yeni "supervisor takeover" describe dahil: gerçek owner
+  oturumunda kontrol görünür, onay modali açılır, **Cancel** ile kapanır — mutasyonsuz kanıt,
+  paylaşılan seed tenant'ı bozmadan). PLAN.md §5.2 08.6.3-g satırı zaten ✅ + kanıtla
+  güncellenmiş bulundu (önceki pencerenin işi) — bu pencere doğruladı, değiştirmedi.
+- **Varsayımlar:** Yok — önceki pencerenin varsayımları (rol seti, roster cache key paylaşımı,
+  403/409 mesaj ayrımı) PLAN.md'deki 08.6.3-g satırında zaten belgeli, bu pencere onları
+  aynen doğruladı.
+- **Sonraki pencereye not:** 08.6.3 diliminde tek kalan: **-i** (uçtan uca: skill routing +
+  takeover E2E + cross-tenant negatif matrisi — bağımlılıkları -c/-d/-e/-f/-g artık hepsi yeşil).
+  **Çalışma alanı notu:** pencere başlamadan önce de işlenmemiş, bu göreve ilişkisiz değişiklikler
+  vardı — `CONVENTIONS.md` / `.taskmaster/BUILD-BLUEPRINT.md` / `run-loop.sh` /
+  `apps/e2e/kanit/36-copilot-panel.png` (66.5/66.6'nın handoff'unda da not edildi) — bu pencere de
+  onlara dokunmadı, hâlâ işlenmemiş duruyorlar; bu commit'e dahil edilmedi.
+
 ### 66.6 (08.6.3-f) — Team: ajan başına skill ataması ekranı — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] Team ekranında bir ajan satırından açılan skill atama yüzeyi.

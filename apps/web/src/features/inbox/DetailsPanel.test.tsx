@@ -1,18 +1,35 @@
 /**
- * The Details panel's visitor context (FR-MOD-02.4).
+ * The Details panel: the visitor context (FR-MOD-02.4) and the supervisor
+ * takeover action (FR-MOD-08.6.3).
  *
- * The two sections it adds — Visited pages and Visit info — must render the
- * visit when there is one and an explicit empty state when there is not: a
- * blank rectangle reads as a loading bug, not as "this visitor is anonymous".
- * The tag library query is stubbed to nothing; it is another test's concern.
+ * The two visitor sections it adds — Visited pages and Visit info — must
+ * render the visit when there is one and an explicit empty state when there
+ * is not: a blank rectangle reads as a loading bug, not as "this visitor is
+ * anonymous". `api.get` is stubbed to `{ items: [] }` by default so the tag
+ * library and connected-apps queries stay quiet; it is another test's
+ * concern.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { vi } from 'vitest';
+import { ApiClientError } from '../../lib/api-client.js';
 import { DetailsPanel } from './DetailsPanel.js';
 import type { ChatDetail, ChatVisitor } from './types.js';
 
-function baseChat(visitor?: ChatVisitor | null): ChatDetail {
+const { api, authState } = vi.hoisted(() => ({
+  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  authState: { agent: null as { role: string } | null },
+}));
+
+vi.mock('../../lib/auth-store.js', () => ({
+  useApiClient: () => api,
+  useAuth: (selector: (state: typeof authState) => unknown) => selector(authState),
+}));
+
+type ThreadOverrides = Partial<NonNullable<ChatDetail['thread']>>;
+
+function baseChat(overrides?: ThreadOverrides): ChatDetail {
   return {
     id: 'TJ1H8CFKRV',
     license_id: '1000003',
@@ -31,9 +48,13 @@ function baseChat(visitor?: ChatVisitor | null): ChatDetail {
       created_at: '2026-07-20T10:00:00.000Z',
       closed_at: null,
       tags: [],
+      ...overrides,
     },
-    ...(visitor !== undefined ? { visitor } : {}),
   };
+}
+
+function chatWithVisitor(visitor?: ChatVisitor | null): ChatDetail {
+  return { ...baseChat(), ...(visitor !== undefined ? { visitor } : {}) };
 }
 
 function renderPanel(chat: ChatDetail) {
@@ -53,26 +74,18 @@ function rowValue(label: string): HTMLElement {
 }
 
 beforeEach(() => {
-  // The panel fetches the tag library on mount; keep it quiet.
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      headers: { get: () => null },
-      json: async () => ({ items: [] }),
-    })),
-  );
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
+  api.get.mockReset();
+  api.post.mockReset();
+  api.put.mockReset();
+  api.delete.mockReset();
+  api.get.mockResolvedValue({ items: [] });
+  authState.agent = null;
 });
 
 describe('DetailsPanel visitor context', () => {
   it('lists the visited pages and the visit summary', () => {
     renderPanel(
-      baseChat({
+      chatWithVisitor({
         visited_pages: [
           { url: 'https://shop.example/bikes', at: '2026-07-20T10:00:00.000Z' },
           { url: 'https://shop.example/bikes/brakes' },
@@ -99,7 +112,7 @@ describe('DetailsPanel visitor context', () => {
   });
 
   it('shows an empty state for a visitor with no recorded visit', () => {
-    renderPanel(baseChat(null));
+    renderPanel(chatWithVisitor(null));
 
     expect(screen.getByText('No pages recorded for this visitor.')).toBeInTheDocument();
     expect(screen.getByText('No visit information yet.')).toBeInTheDocument();
@@ -110,7 +123,7 @@ describe('DetailsPanel visitor context', () => {
 
   it('falls back to "Direct" and a dash when fields are missing', () => {
     renderPanel(
-      baseChat({
+      chatWithVisitor({
         visited_pages: [],
         visit_info: { device: null, referrer: null, duration_seconds: null, ip: null },
       }),
@@ -121,5 +134,114 @@ describe('DetailsPanel visitor context', () => {
     expect(within(rowValue('Duration')).getByText('—')).toBeInTheDocument();
     // …but with no pages, the pages section still shows its empty state.
     expect(screen.getByText('No pages recorded for this visitor.')).toBeInTheDocument();
+  });
+});
+
+describe('DetailsPanel — supervisor takeover', () => {
+  it('renders no Take over control for an agent-role caller', () => {
+    authState.agent = { role: 'agent' };
+    renderPanel(baseChat());
+
+    expect(screen.queryByRole('button', { name: 'Take over' })).not.toBeInTheDocument();
+  });
+
+  it.each(['admin', 'viceowner', 'owner'])('renders the control for a %s caller', (role) => {
+    authState.agent = { role };
+    renderPanel(baseChat());
+
+    expect(screen.getByRole('button', { name: 'Take over' })).toBeInTheDocument();
+  });
+
+  it('opens a confirmation naming the current assignee, then calls the takeover endpoint', async () => {
+    authState.agent = { role: 'admin' };
+    api.get.mockImplementation((path: string) =>
+      path === '/agents'
+        ? Promise.resolve({ items: [{ id: 'agent-9', name: 'Priya' }] })
+        : Promise.resolve({ items: [] }),
+    );
+    api.post.mockResolvedValue({
+      ...baseChat(),
+      thread: { ...baseChat().thread, assignee_id: 'agent-1' },
+    });
+
+    renderPanel(baseChat({ assignee_id: 'agent-9' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Take over' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Take over this chat?' });
+    expect(await within(dialog).findByText(/taking it from Priya/)).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Take over' }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/chats/TJ1H8CFKRV/takeover', undefined),
+    );
+    // Success closes the dialog.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('offers a plain confirmation for an unassigned chat', async () => {
+    authState.agent = { role: 'admin' };
+    renderPanel(baseChat({ assignee_id: null }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Take over' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Take over this chat?' });
+    expect(within(dialog).getByText(/unassigned/)).toBeInTheDocument();
+    // No agent roster lookup needed for an unassigned chat.
+    expect(api.get).not.toHaveBeenCalledWith('/agents');
+  });
+
+  it('shows the role-authorization message on a 403', async () => {
+    authState.agent = { role: 'admin' };
+    api.post.mockRejectedValue(
+      new ApiClientError({
+        type: 'authorization',
+        status: 403,
+        message: 'Only an admin or owner can take over a chat.',
+        requestId: 'req-1',
+      }),
+    );
+
+    renderPanel(baseChat());
+    fireEvent.click(screen.getByRole('button', { name: 'Take over' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Take over this chat?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Take over' }));
+
+    expect(
+      await within(dialog).findByText('Only an admin or owner can take over a chat.'),
+    ).toBeInTheDocument();
+    // The dialog stays open — the caller may not retry a 403, but should see why it failed.
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('shows a distinct race-lost message on a 409, not the 403 wording', async () => {
+    authState.agent = { role: 'admin' };
+    api.post.mockRejectedValue(
+      new ApiClientError({
+        type: 'takeover_conflict',
+        status: 409,
+        message: 'Another supervisor took this chat over first.',
+        requestId: 'req-2',
+      }),
+    );
+
+    renderPanel(baseChat());
+    fireEvent.click(screen.getByRole('button', { name: 'Take over' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Take over this chat?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Take over' }));
+
+    expect(
+      await within(dialog).findByText('Another supervisor took this chat over first.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Only an admin or owner can take over a chat.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the control on an archived chat, even for an owner', () => {
+    authState.agent = { role: 'owner' };
+    renderPanel({ ...baseChat(), active: false });
+
+    expect(screen.queryByRole('button', { name: 'Take over' })).not.toBeInTheDocument();
   });
 });

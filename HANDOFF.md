@@ -48,6 +48,13 @@
   aynı desenle devam eder (search_tickets/list_chats referans); -e'nin hedefi `reports.ts`'teki 4
   sorgu — get_report'un da benzer bir tx/tenant uyumsuzluğu olup olmadığını ÖNCE kontrol et (reports
   route'ları da `ChatService.list` gibi kendi tenant sarmalayıcısını açıyor olabilir).
+- **Çalışma alanı notu:** bu pencere başlarken de aynı işlenmemiş değişiklikler duruyordu (tm 66.5'te
+  ilk kez not edilmişti — `CONVENTIONS.md`/`.taskmaster/BUILD-BLUEPRINT.md`/`run-loop.sh`'ın
+  `critical` öncelik rezervasyonu K7.1 notu + `apps/e2e/kanit/36-copilot-panel.png`), artı iki yeni
+  öge (`apps/e2e/kanit/28-panel-expanded.png`, `.playwright-mcp/` — playwright MCP debug oturum
+  çıktısı, muhtemelen atılabilir). Kapsam disiplini gereği bu pencere de DOKUNMADI. Birikiyorlar —
+  bir sonraki pencere ya sahiplenip commit'lesin ya da `.playwright-mcp/`'yi silip .gitignore'a
+  eklesin.
 
 ### 67.3 (08.8.3-c) — MCP tool-call yürütücüsü (scope gate + tenant + IDOR 404 + audit + search_tickets) — done — 2026-08-03 UTC
 

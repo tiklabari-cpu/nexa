@@ -1986,13 +1986,13 @@
             "description": "Contract-first: (1) settings.yaml RoutingRule `conditions` şemasına katkısal `skill_ids: integer[]` + `routingRule` PATCH gövdesine `conditions`, re-bundle. (2) routes/settings.ts `updateRuleBody`'ye skill_ids doğrulaması (tenant içi skill id'leri; yabancı id → 404). (3) routing-service.ts: `RoutingConditions`'a `skill_ids?: number[]`; `#selectAgent`'a gerekli skill listesi parametresi; ham SQL'e ",
             "details": "08.6.3-c — ADR-08 routing çekirdeği: skill-eşleşmeli aday seçimi + kural koşuluna skill_ids (BÖLÜNMEZ)  [OPUS-MAX]\n\nPRD: FR-MOD-08.6.3 (+ NFR-P1, NFR-P2, NFR-S4)\nETİKET GEREKÇESİ: OPUS-MAX: kilitli ADR-08 algoritmasının değiştirilmesi (yeni algoritma tasarımı — koşul 4 ihlali) + transaction-içi 'yük sayımı okuma → atama yazma' invariantı (eşzamanlılık — koşul 3 ihlali) + tenant-scoped ham SQL'e yeni JOIN (izolasyon — koşul 2 ihlali). Yanlış karar pahalı: skill filtresi fallback zincirine yanlış yerleştirilirse sohbetler sessizce kuyrukta birikir. Çekirdek bölünmez.\nNEDEN AÇIK: routing-service.ts `RoutingConditions` arayüzü yalnız `url_contains` / `url_equals` / `country_codes` taşıyor. `#selectAgent` ham SQL'i (satır 246-269) yalnız `group_agents` ⋈ `agent_memberships` ⋈ `threads` JOIN'i yapıyor; WHERE'de `ga.license_id` + `ga.group_id` + `m.routing_status='accepting_chats'` + NOT suspended/awaiting_approval var, skill tablosuna hiç dokunmuyor. Seçim sırası kodda sabit: `GROUP_PRIORITY_ORDER` en iyi katman → `active_chats` artan → `last_assigned_at` artan → `agent_id` localeCompare. Facts: 'priority yalnız takım-içi öncelik sırasıdır, ajan yetkinliği değil'.\nKAPSAM: Contract-first: (1) settings.yaml RoutingRule `conditions` şemasına katkısal `skill_ids: integer[]` + `routingRule` PATCH gövdesine `conditions`, re-bundle. (2) routes/settings.ts `updateRuleBody`'ye skill_ids doğrulaması (tenant içi skill id'leri; yabancı id → 404). (3) routing-service.ts: `RoutingConditions`'a `skill_ids?: number[]`; `#selectAgent`'a gerekli skill listesi parametresi; ham SQL'e `agent_skills` JOIN + `license_id = ${licenseId}` filtresi + gerekli skill'lerin HEPSİNE sahip olma koşulu (HAVING COUNT(DISTINCT skill_id) = n); mevcut kapasite HAVING'i ve tie-break sırası KORUNUR. (4) Aday yoksa gevşetme sırası DETERMİNİSTİK ve tek yerde: skill'li aday yok → aynı grupta skill'siz aday DENENMEZ → mevcut `#fallbackGroup` zinciri → kuyruk; karar kodda yorumla gerekçelendirilir.\nDOSYALAR: apps/api/src/services/routing/routing-service.ts · apps/api/src/routes/settings.ts · packages/contract/openapi/paths/settings.yaml · packages/contract/openapi/openapi.yaml · apps/api/test/integration/routing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/routing/routing-service.ts (#selectAgent satır 246-269 — genişletilecek SQL iskeleti; #fallbackGroup satır 237-244 — fallback deseni) · apps/api/test/integration/routing.test.ts (mevcut ADR-08 senaryo kalıbı)\nKK (birebir): \"Uzmanlık/skill bazlı\" | \"KK-türetilmiş: Bir routing kuralı skill istiyorsa, o skill(ler)e sahip OLMAYAN ajan hiçbir koşulda seçilmez; skill'li uygun aday yoksa ADR-08'in mevcut fallback grup → kuyruk zinciri işler (skill gevşetilmez). (Türetme gerekçesi: PRD KK yetersiz — facts.kk_yetersiz=true; 'gevşetme mi kuyruk mu' PRD'de yazmıyor ve ADR-08 zinciri PLAN.md:57'de 'havuz → priority katmanı → en az yüklü → last_assigned_at ASC → fallback → kuyruk' olarak kilitli; skill havuzun daraltıcısı olarak konumlandırıldı.)\"\nKK DOĞRULAMA: routing.test.ts — NEGATİF (önce): skill isteyen kuralda, skill'i olmayan tek uygun ajan varken atama YAPILMAZ, sohbet fallback/kuyruğa düşer. POZİTİF: skill'li iki aday arasında ADR-08 sırası birebir korunur (primary tier → en az yüklü → last_assigned_at ASC). REGRESYON: skill_ids taşımayan mevcut kurallar için routing.test.ts'in tüm eski senaryoları değişmeden yeşil. CROSS-TENANT: B lisansındaki agent_skills satırı A'nın adaylığını etkilemez.\nKAPSAM DIŞI: supervisor takeover (08.6.3-d) · skill ağırlığı/seviyesi ile skorlama · AI ajanı skill'i · tüm UI (08.6.3-e / -f) · yeni routing kuralı OLUŞTURMA formu — mevcut UI'da zaten yok (SettingsPage.tsx yalnız liste+toggle), bu kalemin işi değil\nSÖZLEŞME: EVET — settings.yaml: RoutingRule `conditions` şemasına katkısal `skill_ids`, `routingRule` PATCH gövdesine `conditions`. Yeni path YOK, mevcut şemalar katkısal genişliyor; yine de re-bundle şart (contract-parity.test.ts).\nMIGRATION: yok — routing_rules.conditions jsonb esnek (facts §sema_tablolari: 'jsonb esnek olduğundan skill koşulu şema değişikliği gerektirmeden eklenebilir')\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (skill'siz ajan asla seçilmez; yabancı skill_id ile kural güncellemesi reddedilir — pozitiflerden ÖNCE) · regresyon (mevcut ADR-08 routing.test.ts senaryoları bit-bit korunur) · cross-tenant (başka lisansın agent_skills satırı adaylığa etki etmez) · eşzamanlılık (arka arkaya iki route → concurrent_chats_limit aşılmaz) · integration. UYARI: DB-bağımlı süit `pnpm -w test` ile paralel koşarsa paylaşılan Postgres'te yarışır — paket bazında SERİ koşulur (hafıza notu: nexa-test-gate-parallel-db)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               2
             ],
             "parentId": "66",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T05:22:07.031Z"
           },
           {
             "id": 4,
@@ -2074,7 +2074,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T04:55:44.066Z"
+        "updatedAt": "2026-08-03T05:22:07.031Z"
       },
       {
         "id": "67",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T04:55:44.066Z",
+      "lastModified": "2026-08-03T05:22:07.031Z",
       "taskCount": 99,
       "completedCount": 76,
       "tags": [

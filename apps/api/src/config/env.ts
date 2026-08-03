@@ -61,6 +61,12 @@ const envSchema = z.object({
   RATE_LIMIT_CUSTOMER_PER_MIN: z.coerce.number().int().positive().default(60),
   /** Unauthenticated callers, per IP: sign-in, token exchange, widget tokens. */
   RATE_LIMIT_ANON_PER_MIN: z.coerce.number().int().positive().default(30),
+  /**
+   * Anonymous public-KB reads, per IP (PUBKB-c). Higher than the general anon
+   * limit because this is the SEO surface a search crawler indexes — the shared
+   * 30/min would throttle a legitimate crawl. Its own `rl:pubkb:<ip>` bucket.
+   */
+  RATE_LIMIT_PUBKB_PER_MIN: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_RTM_PER_SEC: z.coerce.number().int().positive().default(10),
 
   /**

@@ -97,6 +97,20 @@ interface Bucket {
 function bucketFor(request: FastifyRequest, env: Env): Bucket {
   const principal = request.principal;
 
+  // Public KB reads (PUBKB-c) are the anonymous SEO surface: a crawler indexing
+  // one workspace's articles would drain the shared 30/min anon bucket in
+  // seconds. They get their own, higher per-IP bucket instead — keyed by IP like
+  // the anon bucket (the reader has no principal), separate so the two never
+  // contend. Checked before the principal buckets so the limit is the route's,
+  // not whatever token a caller happened to also send to a public route.
+  if (request.routeOptions.config.publicKbRateLimit) {
+    return {
+      key: `rl:pubkb:${request.ip}`,
+      limit: env.RATE_LIMIT_PUBKB_PER_MIN,
+      windowMs: 60_000,
+    };
+  }
+
   if (principal?.kind === 'agent' || principal?.kind === 'bot') {
     const owner = principal.kind === 'agent' ? principal.accountId : principal.botId;
     return {
@@ -174,6 +188,13 @@ declare module 'fastify' {
   interface FastifyContextConfig {
     /** For health checks and other endpoints a monitor hits continuously. */
     skipRateLimit?: boolean;
+    /**
+     * Anonymous public-KB reads (PUBKB-c): use the higher `rl:pubkb:<ip>` bucket
+     * instead of the shared 30/min anon one, so a crawler indexing the SEO pages
+     * is not throttled. Never pairs with `skipRateLimit` — a public content
+     * surface stays limited, just more generously.
+     */
+    publicKbRateLimit?: boolean;
   }
 }
 

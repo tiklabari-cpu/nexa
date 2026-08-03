@@ -3444,6 +3444,85 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/public/kb/{workspaceSlug}/articles': {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit'];
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+      };
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * List a workspace's published KB articles (public)
+     * @description Published articles only, newest publication first, keyset-paginated. No
+     *     authentication. An unknown or KB-disabled workspace is a 404, the same as
+     *     any other miss.
+     */
+    get: operations['listPublicKbArticles'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/public/kb/{workspaceSlug}/articles/{articleSlug}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+        /** @description The article's slug within the workspace. */
+        articleSlug: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Get one published KB article (public)
+     * @description The full published article, body included (stored raw here — its safe
+     *     rendering is PUBKB-d). A draft, an unpublished slug or an article in another
+     *     workspace all return the same 404.
+     */
+    get: operations['getPublicKbArticle'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/public/kb/{workspaceSlug}/categories': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * List a workspace's KB categories (public)
+     * @description The reader-facing taxonomy, in display order. No authentication.
+     */
+    get: operations['listPublicKbCategories'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4463,6 +4542,47 @@ export interface components {
       site_title: string | null;
       /** Format: date-time */
       updated_at: string | null;
+    };
+    /**
+     * @description A published KB article as an anonymous reader sees it in a list
+     *     (PUBKB-c). Reader-facing fields only — no `license_id`, no `created_by`,
+     *     no `status` (everything here is published) and no `body` (that is on the
+     *     detail response). `published_at`/`updated_at` are the timestamps a
+     *     sitemap and a reader both use.
+     */
+    PublicKbArticleSummary: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      category_id: string | null;
+      slug: string;
+      title: string;
+      excerpt: string | null;
+      seo_title: string | null;
+      seo_description: string | null;
+      /** Format: date-time */
+      published_at: string | null;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description A published KB article in full (PUBKB-c) — the summary plus its raw
+     *     `body`, which PUBKB-d renders safely. Never carries agent/account
+     *     identity or internal columns.
+     */
+    PublicKbArticle: components['schemas']['PublicKbArticleSummary'] & {
+      body: string;
+    };
+    /**
+     * @description A KB category as an anonymous reader sees it (PUBKB-c) — the reader-facing
+     *     taxonomy, without the `license_id`/`created_at` an admin sees.
+     */
+    PublicKbCategory: {
+      /** Format: uuid */
+      id: string;
+      slug: string;
+      name: string;
+      position: number;
     };
     /**
      * @description A custom field a workspace has defined on tickets or contacts
@@ -11331,6 +11451,93 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listPublicKbArticles: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit'];
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+      };
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's published articles */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['PublicKbArticleSummary'][];
+            /** @description Opaque keyset cursor for the next page; absent on the last page. */
+            next_page_id?: string;
+          };
+        };
+      };
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getPublicKbArticle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+        /** @description The article's slug within the workspace. */
+        articleSlug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The published article */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PublicKbArticle'];
+        };
+      };
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listPublicKbCategories: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The workspace's public KB address (`kb_settings.public_slug`). */
+        workspaceSlug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's categories */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['PublicKbCategory'][];
+          };
+        };
+      };
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

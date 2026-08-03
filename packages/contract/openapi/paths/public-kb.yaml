@@ -1,0 +1,111 @@
+# Public knowledge base — anonymous reader surface (PUBKB-c · PRD §5.3, v2).
+#
+# The SEO'lu self-servis half of the requirement: an anonymous reader browses a
+# workspace's *published* articles with no token. The tenant comes from the
+# `{workspaceSlug}` path segment (a `kb_settings.public_slug`), resolved through
+# a SECURITY DEFINER function before any session exists; every read then runs
+# under that workspace's RLS context. Drafts are never served here.
+#
+# `security: []` marks each operation anonymous. Every miss — unknown workspace,
+# a workspace with its KB switched off, a cancelled licence, a draft article, an
+# article belonging to another workspace — answers one indistinguishable **404**
+# (NFR-S5): no 403, no per-case message, so nothing about what exists can be
+# enumerated. The only other failure a reader sees is 429 (its own higher-limit
+# bucket, so a crawler is not throttled).
+
+articles:
+  parameters:
+    - name: workspaceSlug
+      in: path
+      required: true
+      description: The workspace's public KB address (`kb_settings.public_slug`).
+      schema: { type: string, minLength: 1, maxLength: 200 }
+    - $ref: "../openapi.yaml#/components/parameters/Limit"
+    - $ref: "../openapi.yaml#/components/parameters/PageId"
+
+  get:
+    tags: [Knowledge Base]
+    operationId: listPublicKbArticles
+    summary: List a workspace's published KB articles (public)
+    description: |
+      Published articles only, newest publication first, keyset-paginated. No
+      authentication. An unknown or KB-disabled workspace is a 404, the same as
+      any other miss.
+    security: []
+    responses:
+      "200":
+        description: The workspace's published articles
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/PublicKbArticleSummary" }
+                next_page_id:
+                  type: string
+                  description: Opaque keyset cursor for the next page; absent on the last page.
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+article:
+  parameters:
+    - name: workspaceSlug
+      in: path
+      required: true
+      description: The workspace's public KB address (`kb_settings.public_slug`).
+      schema: { type: string, minLength: 1, maxLength: 200 }
+    - name: articleSlug
+      in: path
+      required: true
+      description: The article's slug within the workspace.
+      schema: { type: string, minLength: 1, maxLength: 200 }
+
+  get:
+    tags: [Knowledge Base]
+    operationId: getPublicKbArticle
+    summary: Get one published KB article (public)
+    description: |
+      The full published article, body included (stored raw here — its safe
+      rendering is PUBKB-d). A draft, an unpublished slug or an article in another
+      workspace all return the same 404.
+    security: []
+    responses:
+      "200":
+        description: The published article
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PublicKbArticle" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+categories:
+  parameters:
+    - name: workspaceSlug
+      in: path
+      required: true
+      description: The workspace's public KB address (`kb_settings.public_slug`).
+      schema: { type: string, minLength: 1, maxLength: 200 }
+
+  get:
+    tags: [Knowledge Base]
+    operationId: listPublicKbCategories
+    summary: List a workspace's KB categories (public)
+    description: The reader-facing taxonomy, in display order. No authentication.
+    security: []
+    responses:
+      "200":
+        description: The workspace's categories
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/PublicKbCategory" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

@@ -39,6 +39,7 @@ import mcpRoutes from './routes/mcp.js';
 import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
 import kbRoutes from './routes/kb.js';
+import publicKbRoutes from './routes/public-kb.js';
 import copilotRoutes from './routes/copilot.js';
 import appRoutes from './routes/apps.js';
 import auditLogRoutes from './routes/audit-log.js';
@@ -180,6 +181,7 @@ export async function buildServer({
       await api.register(uploadRoutes, { env });
       await api.register(playbookRoutes);
       await api.register(kbRoutes);
+      await api.register(publicKbRoutes);
       await api.register(copilotRoutes, { env });
       await api.register(appRoutes, { env });
       await api.register(auditLogRoutes);

@@ -13,6 +13,43 @@
 
 ## Task log (newest-first)
 
+### tm 76.3 — PUBKB-c Anonim public okuma çekirdeği (slug→license çözümleyici + yayın filtresi + 404 + anon rate-limit) — done — 2026-08-03 UTC
+
+- **Yapıldı:** Bu depoda `principal` olmadan org-scoped İÇERİK servis eden İLK yüzey. (1) Migration
+  `20260803120000_kb_public_resolver`: `kb_resolve_public_slug(TEXT)` SECURITY DEFINER —
+  `auth_resolve_organization_license` kardeşi (§C-PUBKB-5); tek soru sorar, YALNIZ
+  `kb_settings.enabled=true` + license `canceled` DEĞİL eşleşir; `(license_id, organization_id)`
+  döner; `REVOKE EXECUTE FROM PUBLIC` + `GRANT TO nexa_app`. (2) `apps/api/src/routes/public-kb.ts`
+  — `config:{public:true, publicKbRateLimit:true}`, principal YOK, tenant **yol parametresinden**:
+  `GET /public/kb/{workspaceSlug}/articles` (keyset sayfalama, gövdesiz özet), `.../articles/{articleSlug}`
+  (gövde detayda), `.../categories`. Her istek: slug çözümle (SECURITY DEFINER, `withTenant` DIŞINDA,
+  email-inbound deseni) → `withTenant` → ZORUNLU `status='published' AND published_at IS NOT NULL`
+  filtresi (RLS + filtre birlikte izolasyon). (3) **404 politikası (NFR-S5):** bilinmeyen slug · KB
+  kapalı · license canceled · taslak · başka tenant makalesi — BEŞİ DE tek ayırt edilemez 404 (403 yok,
+  aynı tip/mesaj/gövde; `not_found` envelope yalnız `request_id`'de farklı). (4) Gövdede `license_id`/
+  `created_by`/iç kimlik YOK; geçerli ajan token'ı yetki yükseltmez (handler principal'ı göz ardı eder).
+  (5) `rate-limit.ts`: `publicKbRateLimit` route-config → ayrı `rl:pubkb:<ip>` kovası (env
+  `RATE_LIMIT_PUBKB_PER_MIN` def **300**, anon 30/200'den ayrı); `skipRateLimit` KULLANILMADI (yalnız
+  health'te). (6) Kontrat `packages/contract/openapi/paths/public-kb.yaml` (3 op `security:[]` +
+  `PublicKbArticle`/`PublicKbArticleSummary`/`PublicKbCategory` şemaları) → openapi.yaml bağlandı,
+  bundle (132 path) + `@nexa/types` regen.
+- **Doğrulama (hepsi yeşil, exit 0):** `pnpm typecheck` (11/11 — web/widget/rtm/contract/api) ·
+  `pnpm lint` (8/8) · `pnpm build` (7/7) · full api süiti `pnpm --filter @nexa/api test` **1457/1457**
+  (76 dosya; `public-kb.test.ts` **12** + `contract-parity.test.ts` **5** çift-yönlü + `kb-slug` 8 dahil) ·
+  migration `migrate deploy` uygulandı. `public-kb.test.ts` 12 senaryo: unknown/disabled/canceled/draft/
+  cross-tenant-çift-yön 404 + enumeration tek-gövde + no-elevation + no-leak(license_id/created_by) +
+  kategori sıra + keyset sayfalama + rate-limit ayrı-kova/429.
+- **Varsayımlar:** Public liste yanıtı `total` DÖNMÜYOR (keyset + crawler yüzeyi; her istekte full count
+  israf) — `items` + opsiyonel `next_page_id`. Slug eşleşmesi TAM (girdi normalize edilmez); public URL'ler
+  zaten normalize slug'dan üretilir. Gövde JSON'da ham metin (güvenli render PUBKB-d).
+- **Sonraki pencereye not:** Kalan Public KB dilimleri **d→i**: PUBKB-d (escape-first render — BÖLÜNMEZ,
+  OPUS-MAX), PUBKB-e (SEO'lu HTML yüzeyi), PUBKB-f (sitemap/robots), PUBKB-g/-h (admin UI), PUBKB-i (e2e).
+  PLAN.md §5.3-KB satırı hâlâ `◐` (feature 9 alt-görevden yalnız a/b/c bitti). Rate-limit için yeni env var
+  `RATE_LIMIT_PUBKB_PER_MIN` — prod `.env` doldurulmalı (def 300 makul).
+- **Not (bu pencere):** İş bitmeden bir "structured-output-enforce" kesintisi geldi ve o an tam süit hâlâ
+  koşuyordu; ara sonuç geçici `blocked` bildirdim. Süit sonradan 1457/1457 yeşil bitti; kapanış (bu commit +
+  push + tm done) bu turda tamamlandı — gerçek blok YOKTU.
+
 ### tm 76.2 — PUBKB-b Yönetim (agent-auth) KB CRUD kontratı + backend + yayın durumu — done — 2026-08-03 UTC
 
 - **Yapıldı:** Bu pencere sıfırdan yazmadı — önceki (yarım kalmış, commit'lenmemiş) pencerenin

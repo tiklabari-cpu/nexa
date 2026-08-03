@@ -362,6 +362,13 @@ paths:
   /kb-settings:
     $ref: "./paths/kb.yaml#/kbSettings"
 
+  /public/kb/{workspaceSlug}/articles:
+    $ref: "./paths/public-kb.yaml#/articles"
+  /public/kb/{workspaceSlug}/articles/{articleSlug}:
+    $ref: "./paths/public-kb.yaml#/article"
+  /public/kb/{workspaceSlug}/categories:
+    $ref: "./paths/public-kb.yaml#/categories"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1612,6 +1619,51 @@ components:
         public_slug: { type: string, nullable: true }
         site_title: { type: string, nullable: true }
         updated_at: { type: string, format: date-time, nullable: true }
+
+    PublicKbArticleSummary:
+      type: object
+      description: |
+        A published KB article as an anonymous reader sees it in a list
+        (PUBKB-c). Reader-facing fields only — no `license_id`, no `created_by`,
+        no `status` (everything here is published) and no `body` (that is on the
+        detail response). `published_at`/`updated_at` are the timestamps a
+        sitemap and a reader both use.
+      required:
+        [id, category_id, slug, title, excerpt, seo_title, seo_description, published_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        category_id: { type: string, format: uuid, nullable: true }
+        slug: { type: string }
+        title: { type: string }
+        excerpt: { type: string, nullable: true }
+        seo_title: { type: string, nullable: true }
+        seo_description: { type: string, nullable: true }
+        published_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time }
+
+    PublicKbArticle:
+      description: |
+        A published KB article in full (PUBKB-c) — the summary plus its raw
+        `body`, which PUBKB-d renders safely. Never carries agent/account
+        identity or internal columns.
+      allOf:
+        - $ref: "#/components/schemas/PublicKbArticleSummary"
+        - type: object
+          required: [body]
+          properties:
+            body: { type: string }
+
+    PublicKbCategory:
+      type: object
+      description: |
+        A KB category as an anonymous reader sees it (PUBKB-c) — the reader-facing
+        taxonomy, without the `license_id`/`created_at` an admin sees.
+      required: [id, slug, name, position]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        position: { type: integer }
 
     CustomFieldDefinition:
       type: object

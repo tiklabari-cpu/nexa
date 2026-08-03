@@ -26,6 +26,7 @@ import {
 } from '@nexa/types';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { Brands } from './Brands.js';
+import { McpConnection } from './McpConnection.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { WidgetCustomization } from './WidgetCustomization.js';
 import { ChannelsGrid } from './Channels.js';
@@ -132,6 +133,7 @@ export function SettingsPage(): ReactElement {
     <Page title="Settings" description="Widget installation, saved replies and routing.">
       <ChannelsGrid />
       <Integrations />
+      <McpConnection />
       <NotificationSettings />
       <Brands canEdit={canManageBrands} />
       <WebsiteWidgets canEdit={canManageAccess} />

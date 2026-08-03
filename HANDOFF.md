@@ -13,6 +13,48 @@
 
 ## Task log (newest-first)
 
+### 67.7 (08.8.3-g) — Settings → MCP bağlantı ekranı — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] Bu pencere, yarım kalmış bir önceki pencereyi devraldı (task
+  `in-progress` + kod/test dosyaları git status'te dirty bulundu, PLAN.md notu cümle ortasında
+  kesikti). Kod/test tarafı ZATEN tam yazılmıştı; bu pencere doğrulayıp kapanışı tamamladı.
+  1. `apps/web/src/features/settings/McpConnection.tsx` — yeni `Section`: manifest'i
+     (`GET /mcp/manifest`, 08.8.3-b) `useQuery` ile okuyan salt-okunur ekran. MCP server URL
+     salt-okunur input + [Copy] (panoya yazar, 1.5sn "Copied" geri bildirimi); katlanır "Claude
+     setup" bölümü (`aria-expanded`, varsayılan kapalı); rapor-1'deki örnek prompt bloğu; manifest
+     tool listesi salt-okunur + boşsa `EmptyState`; hata durumunda `ErrorNotice`. Token/secret
+     ÜRETMEZ/GÖSTERMEZ.
+  2. `SettingsPage.tsx`: `<McpConnection />`, `Integrations`'ın hemen altına eklendi (2 satır).
+  3. `apps/e2e/tests/settings.spec.ts`: yeni test — Settings sayfasında MCP bölümü görünür, URL
+     `/mcp` ile bitiyor, [Copy] var, "Claude setup" `aria-expanded` ile açılıp kapanıyor, örnek
+     prompt metni render ediliyor.
+  4. PLAN.md §5.2'deki `08.8.3` satırının kesik "08.8.3-g teslim" notu tamamlandı (kanıt: dosyalar +
+     test sayıları + tm 67.7). Satır durumu `◐` kaldı — `08.8.3-h` (uçtan uca + rate-limit) hâlâ açık.
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ ·
+  `McpConnection.test.tsx` (7, tümü yeşil: URL+Copy, Claude-setup toggle, örnek prompt, tool listesi,
+  boş tool listesi empty-state, manifest hatası, DOM'da token/secret YOK). `pnpm -w test` paylaşılan
+  Postgres'te rtm+api süitlerini paralel koşturunca ırk koşulu (race) yüzünden kırmızı çıktı (bilinen
+  davranış — proje hafızası); her paket TEK BAŞINA izole koşturulunca tam yeşil: `@nexa/rtm test`
+  90/90, `@nexa/api test` 1394/1394. e2e: temiz seed sonrası `settings.spec.ts` tam koşumu 71/72 yeşil
+  — tek kırmızı (`composer shortcuts › a reply saved in Settings reaches a customer through #`)
+  **bu görevle ilgisiz, önceden var olan** bir hata (aşağıya bkz); MCP testi (`shows the MCP server
+  connection details`) tek başına da, tam koşumda da yeşil.
+- **Bulgu (kapsam dışı, ayrı task açıldı — tm 100):** `composer shortcuts` testi McpConnection kodu
+  GERİ ALINDIĞINDA bile aynı şekilde kırmızı çıkıyor — regresyon DEĞİL. Kök neden: `Page.tsx`
+  `Section` bileşeni title'dan türettiği `headingId`'yi hem `<h2 id>` hem `<section aria-labelledby>`
+  için kullanıyor; `Channels.tsx` `ChannelsGrid` çağrısı `id="section-channels"` VE `title="Channels"`
+  veriyor — ikisi de aynı slug'a ("section-channels") düşüyor → DOM'da iki eleman aynı id → tarayıcı
+  `aria-labelledby`'yi kendine-referans olarak çözüyor → section'ın erişilebilir adı kendi tüm alt
+  ağacının metnine (SMS kartının "Reply to text messages over Twilio." açıklaması dahil) düşüyor →
+  Playwright'ın `getByLabel('Reply')` alt-dize eşlemesi hem gerçek input'u hem bu section'ı buluyor
+  (strict-mode violation). tm 100 olarak Task Master'a düzeltme görevi eklendi (medium, kök neden +
+  önerilen fix + repro adımlarıyla) — CONVENTIONS §5 kapsam disiplini gereği bu pencerede
+  DÜZELTİLMEDİ.
+- **Varsayımlar:** Yok (mevcut varsayım 8 — tek-sayfa Settings mimarisi — korundu).
+- **Sonraki pencereye not:** `08.8.3-h` (uçtan uca MCP akışı + rate-limit + audit doğrulaması)
+  şimdi bağımlılıkları (67.3–67.7) hepsi done olduğu için açılabilir durumda. tm 100 (Section
+  id-çakışması) bağımsız, istenirse önce o alınabilir — küçük ve izole bir düzeltme.
+
 ### 67.6 (08.8.3-f) — summarize_chat tool + tool yanıtında PII/CC-mask sınırı — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-XHIGH] Dört MCP tool'unun sonuncusu bağlandı; dispatch tablosu tamamlandı.

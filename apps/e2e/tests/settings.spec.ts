@@ -364,6 +364,33 @@ test.describe('settings', () => {
     expect((await removed).status()).toBe(204);
     await expect(section().getByText('No allowlist entries')).toBeVisible();
   });
+
+  // FR-MOD-08.8.3-g: the MCP connection screen — the KK is literally "mcp URL +
+  // Copy + Claude setup + örnek prompt", so this proves all four render together
+  // on the real Settings page, fed by the live manifest (08.8.3-b).
+  test('shows the MCP server connection details', async ({ agentPage }) => {
+    await agentPage.goto('/app/settings');
+
+    const section = agentPage.getByRole('region', { name: 'MCP server' });
+    await expect(section).toBeVisible();
+
+    // mcp URL + Copy
+    await expect(section.getByLabel('MCP server URL')).toHaveValue(/\/mcp$/);
+    await expect(section.getByRole('button', { name: 'Copy' })).toBeVisible();
+
+    // Claude setup — collapsed by default, opens on click
+    const setupToggle = section.getByRole('button', { name: 'Claude setup' });
+    await expect(setupToggle).toHaveAttribute('aria-expanded', 'false');
+    await setupToggle.click();
+    await expect(setupToggle).toHaveAttribute('aria-expanded', 'true');
+
+    // örnek prompt
+    await expect(
+      section.getByText('Find all tickets where customers ask about bulk orders'),
+    ).toBeVisible();
+
+    await section.screenshot({ path: 'kanit/67.7-mcp-connection.png' });
+  });
 });
 
 test.describe('audit log', () => {

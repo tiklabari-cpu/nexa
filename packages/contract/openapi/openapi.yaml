@@ -297,6 +297,8 @@ paths:
 
   /mcp/manifest:
     $ref: "./paths/mcp.yaml#/manifest"
+  /mcp/tools/{tool}:
+    $ref: "./paths/mcp.yaml#/toolCall"
 
   /channels:
     $ref: "./paths/channels.yaml#/channels"
@@ -984,6 +986,36 @@ components:
         tools:
           type: array
           items: { $ref: "#/components/schemas/McpToolDescriptor" }
+
+    McpToolCallRequest:
+      type: object
+      description: |
+        The body of a `POST /mcp/tools/{tool}` call (FR-MOD-08.8.3). `arguments`
+        is the tool's argument object, validated against the tool's `input_schema`
+        from the manifest. A tool whose arguments are all optional may be called
+        with no body at all; `arguments` then defaults to an empty object.
+      properties:
+        arguments:
+          type: object
+          additionalProperties: true
+          description: The tool's arguments, matching its `input_schema`.
+
+    McpToolCallResult:
+      type: object
+      description: |
+        The result of an MCP tool call. `result` is the tool's output — its shape
+        depends on the tool (a ticket page for `search_tickets`, a report for
+        `get_report`, …). Carries no license or organization identifier
+        (NFR-S4/NFR-S5).
+      required: [tool, result]
+      properties:
+        tool:
+          type: string
+          description: The tool that ran, echoed back for correlation.
+        result:
+          type: object
+          additionalProperties: true
+          description: The tool's output.
 
     UploadGrant:
       type: object

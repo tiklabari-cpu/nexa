@@ -66,6 +66,11 @@ const searchTicketsInputJsonSchema = {
   additionalProperties: false,
 } as const;
 
+/** Parsed, validated arguments to `search_tickets` — the tool-call surface
+ * (08.8.3-c) validates the request body against `searchTicketsInputSchema` and
+ * hands the executor this shape. */
+export type SearchTicketsArgs = z.infer<typeof searchTicketsInputSchema>;
+
 // --- list_chats --------------------------------------------------------------
 // Mirrors `listQuery` in `apps/api/src/routes/chats.ts`. Every field is
 // already optional there (a filter-less call lists everything the caller can

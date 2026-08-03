@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### 67.3 (08.8.3-c) — MCP tool-call yürütücüsü (scope gate + tenant + IDOR 404 + audit + search_tickets) — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-MAX] Bölünmez güvenlik çekirdeği — `POST /mcp/tools/{tool}` tek genel uç.
+  1. Kontrat: `paths/mcp.yaml#/toolCall` (POST /mcp/tools/{tool}, `operationId: callMcpTool`) +
+     `McpToolCallRequest`/`McpToolCallResult` şemaları + openapi.yaml path/schemas; `pnpm --filter
+     @nexa/contract generate` re-bundle (123→124 path) + tip üretimi.
+  2. Çekirdek `apps/api/src/routes/mcp.ts`: tool çözümleme (bilinmeyen VEYA henüz-bağlanmamış ad →
+     **404**, 403/400 değil) → tool'un `requiredScopes`'una karşı scope gate (`authorizingScope`,
+     `:rw⇒:ro`/`--all⇒--access` implication'lı; eksik → **403**) → argüman doğrulama (`inputSchema`
+     → **400**) → yürütmenin TAMAMI `request.withTenant` içinde → `mcp.tool_called` audit (metadata
+     `{tool, scope_used}`; argüman metni/PII YAZILMAZ) aynı tx'te → yanıt `{tool, result}` (tenant id
+     yok). `allowWhenReadOnly:true` (salt-okunur tool, ADR-10 — read-only lisansta 402 değil).
+  3. `services/mcp/tool-dispatch.ts` (registry + `resolveTool` + saf `authorizingScope` gate). Referans
+     tool `services/mcp/tools/search-tickets.ts` → `TicketService.list`. `mcp.tool_called` `AUDIT_ACTIONS`'a
+     eklendi. Katalog'a additive `SearchTicketsArgs` tip export.
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ ·
+  `pnpm -w test:unit` ✓ (301 api; yeni `tool-dispatch.test.ts` 9) · `pnpm -w test:integration` ✓
+  (50 dosya / 1064 test, serial). Yeni `apps/api/test/integration/mcp-tools.test.ts` (14): 401
+  (token'sız/revoked) · 404 (bilinmeyen tool / henüz-bağlanmamış list_chats / müşteri nxc1. token'ı) ·
+  403 (scope eksik) · 400 (eksik/bozuk argüman) · cross-tenant iki lisans (A↔B izole; yanıtta
+  license_id/organization_id yok) · pozitif search_tickets sayfa · audit `mcp.tool_called` (metadata
+  query metni İÇERMEZ) · read-only lisans hâlâ 200. tenant-isolation (29) + contract-parity (iki yönlü)
+  + route-config yeşil. **e2e KAPSAM DIŞI** (backend çekirdek; UI 08.8.3-g).
+- **Varsayımlar:** Tek genel uç `POST /mcp/tools/{tool}` (varsayım 1); argüman zarfı `{arguments:{…}}`
+  (MCP `tools/call` semantiği, ad path'te). Yeni scope/ApiError/migration YOK (varsayım 3/4/5).
+  IDOR→404 (NFR-S5).
+- **Sapma (küçük):** Cross-tenant HTTP testi plandaki `tenant-isolation.test.ts` yerine
+  `mcp-tools.test.ts`'te. Gerekçe: `tenant-isolation.test.ts` saf RLS testi (withTenant, HTTP/server
+  boot yok); MCP HTTP saldırısı server-boot eden `mcp-tools.test.ts`'e (kardeş `mcp.test.ts` deseni)
+  doğru oturuyor. İzolasyon özelliği iki yönlü tam kanıtlandı; DoD cross-tenant kapısı karşılandı.
+- **Sonraki pencereye not:** -d/-e/-f `tool-dispatch.ts`'teki `EXECUTORS` tablosuna kendi dalını +
+  `tools/<x>.ts` executor'unu ekler; gate/tenant/audit ÇEKİRDEKTEN tüketilir, tekrar YAZILMAZ. Yeni tool
+  contract path GEREKTİRMEZ (tek genel uç). Manifest 4 tool ilan ediyor ama -c'de yalnız `search_tickets`
+  bağlı → `list_chats`/`get_report`/`summarize_chat` şimdilik **404** (henüz-bağlanmamış), -d/-e/-f açınca
+  200 döner. -g UI, -h uçtan uca + rate-limit + audit doğrulaması.
+
 ### 67.2 (08.8.3-b) — MCP kontratı (paths/mcp.yaml) + GET /mcp/manifest keşif ucu — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-XHIGH] Contract-first keşif ucu.

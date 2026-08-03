@@ -35,3 +35,52 @@ manifest:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# The single generic tool-call surface (08.8.3-c). Every tool the manifest lists
+# is invoked here — the tool name is the path segment, its arguments the body —
+# rather than one path per tool, so adding a tool later needs no contract change.
+#
+# Authorization is *per tool*: the caller must hold one of that tool's
+# `required_scopes` (the same list the manifest advertises), checked at call time
+# against the token's own scopes. A tool this server does not serve — an unknown
+# name, or one not yet wired — answers 404, never 403, so the tool surface cannot
+# be enumerated by probing (NFR-S5). Execution is tenant-isolated: a tool only
+# ever reaches the caller's own workspace, and no license or organization id
+# appears in the result.
+toolCall:
+  parameters:
+    - name: tool
+      in: path
+      required: true
+      schema: { type: string, maxLength: 64 }
+      description: The tool to invoke, e.g. `search_tickets` — a `name` from the manifest.
+  post:
+    tags: [Mcp]
+    operationId: callMcpTool
+    summary: Call an MCP tool
+    description: |
+      Invoke the tool named in the path with the arguments in the body. The
+      arguments are validated against that tool's `input_schema` (400 on a
+      mismatch). The caller must hold one of the tool's `required_scopes` (403
+      otherwise); an unknown or unserved tool is 404, not 403, so the surface
+      stays un-enumerable (NFR-S5). The tool runs only against the caller's own
+      workspace, and the result carries no tenant identifier.
+
+      Read-only: these tools read tickets, chats and reports; they never write,
+      so they keep working while a licence is in read-only mode (ADR-10).
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/McpToolCallRequest" }
+    responses:
+      "200":
+        description: The tool ran; `result` holds its output
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/McpToolCallResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

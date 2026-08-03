@@ -2584,6 +2584,37 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/mcp/tools/{tool}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The tool to invoke, e.g. `search_tickets` — a `name` from the manifest. */
+        tool: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Call an MCP tool
+     * @description Invoke the tool named in the path with the arguments in the body. The
+     *     arguments are validated against that tool's `input_schema` (400 on a
+     *     mismatch). The caller must hold one of the tool's `required_scopes` (403
+     *     otherwise); an unknown or unserved tool is 404, not 403, so the surface
+     *     stays un-enumerable (NFR-S5). The tool runs only against the caller's own
+     *     workspace, and the result carries no tenant identifier.
+     *
+     *     Read-only: these tools read tickets, chats and reports; they never write,
+     *     so they keep working while a licence is in read-only mode (ADR-10).
+     */
+    post: operations['callMcpTool'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/channels': {
     parameters: {
       query?: never;
@@ -3801,6 +3832,32 @@ export interface components {
         version: string;
       };
       tools: components['schemas']['McpToolDescriptor'][];
+    };
+    /**
+     * @description The body of a `POST /mcp/tools/{tool}` call (FR-MOD-08.8.3). `arguments`
+     *     is the tool's argument object, validated against the tool's `input_schema`
+     *     from the manifest. A tool whose arguments are all optional may be called
+     *     with no body at all; `arguments` then defaults to an empty object.
+     */
+    McpToolCallRequest: {
+      /** @description The tool's arguments, matching its `input_schema`. */
+      arguments?: {
+        [key: string]: unknown;
+      };
+    };
+    /**
+     * @description The result of an MCP tool call. `result` is the tool's output — its shape
+     *     depends on the tool (a ticket page for `search_tickets`, a report for
+     *     `get_report`, …). Carries no license or organization identifier
+     *     (NFR-S4/NFR-S5).
+     */
+    McpToolCallResult: {
+      /** @description The tool that ran, echoed back for correlation. */
+      tool: string;
+      /** @description The tool's output. */
+      result: {
+        [key: string]: unknown;
+      };
     };
     /**
      * @description Permission to store one file, issued by `POST /uploads` once the
@@ -9832,6 +9889,38 @@ export interface operations {
         };
       };
       401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  callMcpTool: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The tool to invoke, e.g. `search_tickets` — a `name` from the manifest. */
+        tool: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['McpToolCallRequest'];
+      };
+    };
+    responses: {
+      /** @description The tool ran; `result` holds its output */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['McpToolCallResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };

@@ -84,6 +84,13 @@ export const AUDIT_ACTIONS = [
   // Credentials
   'pat.created',
   'pat.revoked',
+  // MCP tool calls (FR-MOD-08.8.3). An MCP client (Claude, ChatGPT, …) invoked a
+  // tool against the workspace. Recorded because these calls read tenant data
+  // through an automated agent that can chain many requests, so the trail of
+  // *which* tool ran under *whose* token matters. Metadata carries only the tool
+  // name and the scope that authorised it — never the arguments (a search query
+  // is user content) or the result.
+  'mcp.tool_called',
   // Data lifecycle — a retention sweep hard-deleted expired data (NFR-C8). The
   // record is metadata (counts), not the data itself, so it is safe to retain.
   'data.retention_pruned',

@@ -66,3 +66,95 @@ test.describe('reports overview', () => {
     await agentPage.screenshot({ path: 'kanit/22-reports-reviews.png', fullPage: true });
   });
 });
+
+/**
+ * Chat topics (FR-MOD-07.6) — the last surface of the 07.6 slice the suite did
+ * not yet touch. The seeded demo ships four thematically distinct closed-topic
+ * groups (`CHAT_TOPIC_GROUPS`, six conversations each), which together clear
+ * `TOPIC_MIN_CONVERSATIONS`, so the tab renders the full clustered table here —
+ * whereas a window with no seeded conversations must fall to the honest "not
+ * enough data" empty state (the "yeterli veri yoksa empty" acceptance criterion).
+ * The Overview promo band and its persistent "Remind me later" dismiss (07.6-f)
+ * are exercised through a real reload, so the localStorage persistence is proven
+ * against the browser and not just a React remount.
+ */
+test.describe('reports — chat topics (FR-MOD-07.6)', () => {
+  test('clusters conversations into topic rows with volume and trend', async ({ agentPage }) => {
+    await agentPage.goto('/app/reports');
+    await agentPage.getByRole('tab', { name: 'Chat topics' }).click();
+    await expect(agentPage.getByRole('tab', { name: 'Chat topics' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    // The report is its own region; its description names the AI clustering that
+    // produced the rows ("AI kümeleme").
+    const topics = agentPage.getByRole('region', { name: 'Chat topics' });
+    await expect(topics).toBeVisible();
+    await expect(topics.getByText('grouped into topics by AI clustering')).toBeVisible();
+
+    // The seeded demo clears the floor, so the full table renders rather than the
+    // empty state: Volume + Trend columns and at least one clustered topic row
+    // that carries a volume value ("hacim/trend").
+    await expect(topics.getByRole('columnheader', { name: 'Volume' })).toBeVisible();
+    await expect(topics.getByRole('columnheader', { name: 'Trend' })).toBeVisible();
+    const dataRows = topics.locator('tbody tr');
+    expect(await dataRows.count()).toBeGreaterThanOrEqual(1);
+    await expect(dataRows.first()).toContainText(/\d/);
+    // A topic new to this window shows the honest em-dash, never a fabricated 0%.
+    await expect(topics.getByText('—').first()).toBeVisible();
+
+    await agentPage.screenshot({ path: 'kanit/23-reports-topics.png', fullPage: true });
+  });
+
+  test('falls to the not-enough-data empty state for a window with no conversations', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await agentPage.getByRole('tab', { name: 'Chat topics' }).click();
+
+    // A historical week with no seeded conversations sits below the floor.
+    await agentPage.getByRole('button', { name: 'Custom' }).click();
+    await agentPage.getByLabel('Start date').fill('2020-01-01');
+    await agentPage.getByLabel('End date').fill('2020-01-07');
+
+    // A meaningful empty state — not an empty rectangle (EK-B.1) — is the end-to-end
+    // proof of the "yeterli veri yoksa empty" acceptance criterion.
+    await expect(agentPage.getByText('Not enough conversations yet')).toBeVisible();
+    // And it is genuinely the empty state, not a table left showing zero rows.
+    await expect(agentPage.getByRole('columnheader', { name: 'Volume' })).toHaveCount(0);
+
+    await agentPage.screenshot({ path: 'kanit/23-reports-topics-empty.png', fullPage: true });
+  });
+
+  test('Overview promo opens the tab, and "Remind me later" persists across a reload (07.6-f)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    const promo = agentPage.getByText('Top chat topics in one place');
+    await expect(promo).toBeVisible();
+
+    // "See chat topics" switches to the tab in place; the banner is Overview-only,
+    // so it is gone once the topics tab is showing.
+    await agentPage.getByRole('button', { name: 'See chat topics' }).click();
+    await expect(agentPage.getByRole('tab', { name: 'Chat topics' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(promo).toHaveCount(0);
+
+    // Back on Overview it returns — it has not been dismissed yet…
+    await agentPage.getByRole('tab', { name: 'Overview' }).click();
+    await expect(promo).toBeVisible();
+
+    // …until "Remind me later" — a real localStorage dismiss — hides it, and a full
+    // reload (which re-auths from the stored refresh token) keeps it hidden.
+    await agentPage.getByRole('button', { name: 'Remind me later' }).click();
+    await expect(promo).toHaveCount(0);
+    await agentPage.reload();
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+    await expect(agentPage.getByText('Top chat topics in one place')).toHaveCount(0);
+  });
+});

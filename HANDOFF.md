@@ -13,6 +13,38 @@
 
 ## Task log (newest-first)
 
+### 64.8 (07.6-h) — Uçtan uca doğrulama: Chat topics e2e (dolu + empty) + ai-mock paylaşım regresyonu — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-XHIGH] `apps/e2e/tests/reports.spec.ts`'e yeni `describe('reports — chat
+  topics (FR-MOD-07.6)')` (+3 test, gerçek tarayıcı + API, `agentPage` fixture): (1) **dolu kutup**
+  — Chat topics sekmesi `aria-selected=true`, "grouped into topics by AI clustering" ("AI kümeleme"),
+  `Volume`+`Trend` sütun başlıkları + ≥1 konu satırı hacim değeriyle ("hacim/trend"), yeni konu için
+  uydurma 0% yerine '—'; kanıt `kanit/23-reports-topics.png`. (2) **empty kutbu** — Custom aralık
+  2020-01-01…-07 (verisiz) → "Not enough conversations yet" anlamlı empty state (boş tablo değil,
+  `Volume` başlığı yok) = "yeterli veri yoksa empty" KK uçtan uca; `kanit/23-reports-topics-empty.png`.
+  (3) **promo bandı (07.6-f)** — "See chat topics" CTA sekmeyi açar; "Remind me later" gerçek `reload`
+  (localStorage refresh-token ile yeniden auth) sonrası bandı geri getirmez. **Ürün kodu / `embedding.ts`
+  değişmedi** — yalnız test + iki yeni kanıt görüntüsü.
+- **Doğrulama (DoD TAM yeşil, exit 0):** `pnpm -w typecheck` 11/11 · `pnpm -w lint` 8/8 ·
+  `pnpm -w build` 7/7 · `pnpm -w test:unit` (types 60 · ai-mock 72 · widget 52 · api 266 · rtm 39 ·
+  web 532) · `pnpm -w test:integration` (rtm 51 + **api 993/993, 47 dosya**, `reports-topics` 21/21 +
+  `knowledge-crawl` 11/11 dahil) · e2e `reports.spec.ts` **6/6** (yeni topics 3 dahil).
+- **REGRESYON KANITI (aynı tur):** paylaşılan `packages/ai-mock/src/embedding.ts`'e DOKUNULMADI
+  (git ile doğrulandı); iki tüketici de yeşil — RAG/knowledge tarafı (`knowledge-crawl` 11 · `ai-skills`
+  18 · `copilot` 15) ve topics tarafı (`reports-topics` 21 + `@nexa/ai-mock` 72). "Aynı metin → aynı
+  vektör" garantisi kırılmadı.
+- **NFR-P7:** `/reports/topics` (demo Acme, 30g pencere) yanıt süresi ~22–80 ms (soğuk 80, sıcak ~22),
+  `analyzed=26`, 4 konu; iş tavanı `TOPIC_WINDOW_LIMIT=1000` — tavanın çok altında.
+- **Varsayımlar / ortam:** E2E öncesi temiz DB gerekti (`nexa-e2e-clean-db`). Mevcut DB, 07.6-d seed
+  değişikliğinden ÖNCE seed'lenmiş demo tenant içeriyordu (idempotent seed konu gruplarını atlıyordu,
+  0 topic-customer). `prisma migrate reset` AI-agent guard'ıyla bloke (kullanıcı onayı gerekir); onun
+  yerine integration süitinin `resetDatabase` kuralıyla veri-seviyesi TRUNCATE + `pnpm db:seed` yapıldı
+  (şema drop YOK). Playwright webServer dev sunucularını kendi başlatıp yönetti.
+- **Sonraki pencereye not:** 64.8 ile **07.6 dilimi tamamen kapandı** (64.1–64.8 done → parent 64 done);
+  PLAN §07.6 satırı `◐`→`✅`. Ortamda iki `run-loop.sh` penceresi + paylaşılan Postgres var; dev
+  sunucuları yalnız bir e2e koşusu boyunca ayakta — DB süitleri paket başına seri koşulmalı
+  (`nexa-test-gate-parallel-db`).
+
 ### 64.7 (07.6-g) — Topics rapor grubu: `/reports/groups` kataloğu + CSV export satırı — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] `apps/api/src/routes/reports-export.ts` `REPORT_GROUPS`'a

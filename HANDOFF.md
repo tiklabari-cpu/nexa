@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### 66.3 (08.6.3-c) — ADR-08 routing çekirdeği: uzmanlık-eşleşmeli aday seçimi + kural koşuluna `expertise_ids` — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-MAX, bölünmez çekirdek] Bir routing kuralı artık `conditions.expertise_ids` ile
+  uzmanlık isteyebilir; o uzmanlık(lar)a sahip OLMAYAN ajan hiçbir aşamada seçilmez.
+  (1) **Kontrat:** `RoutingRule.conditions`'a katkısal `expertise_ids: int64[]` + `routingRule`
+  PATCH gövdesine `conditions` — yeni path YOK, mevcut şemalar katkısal genişledi (121 path, yeniden
+  bundle + `src/generated/api.ts` üretimi). (2) **Routing motoru** (`routing-service.ts`): `#selectGroup`
+  artık takımla birlikte eşleşen kuralın uzmanlık talebini döndürür (`{groupId, requiredExpertiseIds}`)
+  ve `route()` bunu HEM birincil HEM fallback `#selectAgent` çağrısına taşır → talep tek yerde belirlenip
+  zincir boyunca korunur (gevşetme yok; uygun aday yoksa mevcut fallback→kuyruk zinciri değişmeden işler).
+  `#selectAgent`'a uzmanlık daraltıcısı **JOIN olarak DEĞİL, `agent_expertise` üzerinde IN-alt-sorgu**
+  olarak eklendi (`GROUP BY agent_id HAVING COUNT(DISTINCT expertise_id)=n` = hepsine sahip/AND); JOIN
+  olsaydı satır fan-out'u mevcut `COUNT(t.id)` kapasite sayımını (ve tie-break'i) bozardı. Kilitli
+  ADR-08 sırası (priority→en az yüklü→`last_assigned_at`) ve transaction-içi yük tutarlılığı aynen korundu.
+  (3) **Kural yazımı** (`routes/settings.ts`): `updateRuleBody`'ye `conditions` (+`expertise_ids`)
+  doğrulaması — id'ler tenant içinde var mı diye bakılır (RLS-scoped; yabancı/cross-tenant → 404,
+  enumerable değil), jsonb'de bigint olmadığı için sayı olarak saklanır, `conditions` tamamen değiştirilir.
+- **Doğrulama:** `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm --filter @nexa/api test:integration`
+  ✓ (48 dosya / **1032** test; `routing.test.ts` 26→**34**, `tenant-isolation` 27, `contract-parity` 5)
+  · `pnpm -w test:unit` ✓ (web 532 + diğerleri) · `pnpm -w build` ✓. Yeni `routing.test.ts` uzmanlık
+  bloğu (8, negatifler önce): skill'siz-ajan-asla-atanmaz→kuyruk · yabancı expertise_id→404 ·
+  geçerli id API'den saklanır · TÜM-uzmanlık-AND · qualified havuz içinde ADR-08 sırası · talep
+  fallback takıma taşınır (genelci değil uzman seçilir) · cross-tenant `agent_expertise` adaylığa
+  etki etmez · uzmanlık kuralı altında `concurrent_chats_limit` aşılmaz (fan-out yok kanıtı).
+- **Varsayımlar:** (a) İsim `expertise_ids` — 66.1/66.2'nin `expertise`/`Expertise` kararıyla tutarlı
+  (`skill_ids` DEĞİL; `Skill` zaten ADR-14 AI-Skill). (b) `conditions` PATCH'i tam-değiştirme (merge
+  değil); kısmi düzenleme koruduğu alanları yeniden gönderir — kural-koşulu düzenleyen bir UI henüz yok.
+  (c) AND semantiği (`HAVING COUNT(DISTINCT)=n`, PRD'de OR/AND yazmıyor). (d) Uzmanlık gevşetilmez:
+  skill'li aday yoksa herhangi bir ajana verilmez, kuyruğa gider.
+- **Sonraki pencereye not:** **Kuyruk-boşaltma boşluğu (bilinçli, kapsam sınırı):** kuyruğa düşen bir
+  sohbet, hangi uzmanlığı istediğini SAKLAMAZ (bunun için `threads` tablosuna bir kolon + migration
+  gerekir — `-c` migration'a dokunmuyor). Bu yüzden uzmanlık yalnız BAŞLANGIÇ atamasını (`route()`)
+  daraltır; `drainQueue` mevcut takım-bazlı davranışta kalır (kod içi yorumla işaretli). Uzmanlık-farkında
+  kuyruk-boşaltma istenirse önce o kolon eklenmeli — ayrı bir kalem. `-e` (Settings `describeConditions`)
+  ve `-i` (uçtan uca) bu çekirdeğe bağlı; `-d` (takeover) bağımsız, paralel gidebilir.
+
 ### 66.2 (08.6.3-b) — Skill/uzmanlık katalog CRUD + ajan-uzmanlık atama API'si (kontrat + rol-kapılı backend) — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-XHIGH] 66.1'in veri katmanı üstüne kontrat-önce + rol-kapılı API. **İsim kararı

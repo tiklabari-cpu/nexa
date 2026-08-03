@@ -1170,8 +1170,16 @@ components:
           type: object
           description: |
             All must match for the rule to win. Empty on the fallback rule,
-            which is why it catches everything.
+            which is why it catches everything. `expertise_ids` is not a match
+            condition — a rule carrying only it still matches every conversation;
+            it narrows the eligible agent pool to those holding *every* listed
+            area of expertise (FR-MOD-08.6.3), and is never relaxed.
           additionalProperties: true
+          properties:
+            expertise_ids:
+              type: array
+              description: Agent must hold every listed expertise area to be eligible.
+              items: { type: integer, format: int64 }
         target_group_id: { type: integer, format: int64, nullable: true }
         target_group_name: { type: string, nullable: true }
         priority: { type: integer }

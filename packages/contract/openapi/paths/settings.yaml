@@ -543,6 +543,19 @@ routingRule:
               enabled: { type: boolean }
               target_group_id: { type: integer, format: int64, nullable: true }
               priority: { type: integer, minimum: 0, maximum: 1000 }
+              conditions:
+                type: object
+                description: |
+                  Replaces the rule's conditions wholesale. `expertise_ids` lists
+                  the areas of expertise an agent must *all* hold to receive
+                  chats this rule routes (FR-MOD-08.6.3); an id naming no
+                  expertise on this workspace is rejected (404). Not a match
+                  condition — see `RoutingRule.conditions`.
+                additionalProperties: true
+                properties:
+                  expertise_ids:
+                    type: array
+                    items: { type: integer, format: int64 }
     responses:
       "200":
         description: Updated

@@ -5,7 +5,7 @@
  * agent taking every chat, an agent silently pushed past their limit, a
  * customer stuck in a queue while somebody sits idle.
  */
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
 import { withTenant } from '../../src/lib/tenant.js';
@@ -119,6 +119,49 @@ describe('routing', () => {
     withTenant(owner, { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId }, (tx) =>
       routing.route(tx, fx.a.licenseId, context),
     );
+
+  /** A catalogue expertise area on tenant A. */
+  async function addExpertise(name: string): Promise<bigint> {
+    const area = await owner.expertise.create({
+      data: {
+        licenseId: fx.a.licenseId,
+        name,
+        slug: `${name}-${generateShortId()}`.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      },
+      select: { id: true },
+    });
+    return area.id;
+  }
+
+  /** Give an agent an expertise area (tenant A unless a licence is named). */
+  async function grantExpertise(
+    agentId: string,
+    expertiseId: bigint,
+    licenseId = fx.a.licenseId,
+  ): Promise<void> {
+    await owner.agentExpertise.create({ data: { licenseId, agentId, expertiseId } });
+  }
+
+  /** A `chat` rule that routes to a team, optionally demanding expertise. */
+  async function addRule(options: {
+    targetGroupId: bigint;
+    isFallback?: boolean;
+    conditions?: Prisma.InputJsonValue;
+    priority?: number;
+  }): Promise<string> {
+    const rule = await owner.routingRule.create({
+      data: {
+        licenseId: fx.a.licenseId,
+        kind: 'chat',
+        isFallback: options.isFallback ?? false,
+        targetGroupId: options.targetGroupId,
+        ...(options.conditions ? { conditions: options.conditions } : {}),
+        ...(options.priority !== undefined ? { priority: options.priority } : {}),
+      },
+      select: { id: true },
+    });
+    return rule.id;
+  }
 
   // =========================================================================
   // Team selection
@@ -544,6 +587,181 @@ describe('routing', () => {
       // The Sales chat is first and cannot be served, so the drain stops there
       // rather than skipping to the Support one.
       expect(assigned.map((a) => a.chatId)).not.toContain(second.json().id);
+    });
+  });
+
+  // =========================================================================
+  // Expertise-based routing (FR-MOD-08.6.3)
+  // =========================================================================
+
+  describe('expertise-based routing', () => {
+    // Negative first: an agent missing the demanded expertise is never chosen —
+    // the chat queues rather than going to the wrong desk.
+    it('never assigns an agent who lacks a required expertise', async () => {
+      const billing = await addExpertise('Billing');
+      await addAgent({ groupId: supportId, name: 'generalist' }); // no expertise
+      await addRule({
+        targetGroupId: supportId,
+        isFallback: true,
+        conditions: { expertise_ids: [Number(billing)] },
+      });
+
+      const decision = await route();
+      expect(decision.assigneeId).toBeNull();
+      expect(decision.reason).toBe('queued');
+    });
+
+    it('rejects a rule update naming an expertise that does not exist', async () => {
+      const settingsToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['access_rules:rw'],
+      });
+      const ruleId = await addRule({ targetGroupId: supportId, isFallback: true });
+
+      const response = await server.patch(
+        `/settings/routing-rules/${ruleId}`,
+        { conditions: { expertise_ids: [999_999] } },
+        { authorization: `Bearer ${settingsToken}` },
+      );
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('stores a valid expertise requirement through the API', async () => {
+      const billing = await addExpertise('Billing');
+      const settingsToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['access_rules:rw'],
+      });
+      const ruleId = await addRule({ targetGroupId: supportId, isFallback: true });
+
+      const patched = await server.patch(
+        `/settings/routing-rules/${ruleId}`,
+        { conditions: { expertise_ids: [Number(billing)] } },
+        { authorization: `Bearer ${settingsToken}` },
+      );
+      expect(patched.statusCode).toBe(200);
+
+      const list = await server.get('/settings/routing-rules', {
+        authorization: `Bearer ${settingsToken}`,
+      });
+      const stored = list.json().items.find((r: { id: string }) => r.id === ruleId);
+      expect(stored.conditions.expertise_ids).toEqual([Number(billing)]);
+    });
+
+    it('requires every listed expertise area (AND, not OR)', async () => {
+      const billing = await addExpertise('Billing');
+      const refunds = await addExpertise('Refunds');
+
+      const partial = await addAgent({ groupId: supportId, name: 'partial' });
+      await grantExpertise(partial, billing); // has one of two — not eligible
+
+      const full = await addAgent({ groupId: supportId, name: 'full' });
+      await grantExpertise(full, billing);
+      await grantExpertise(full, refunds);
+
+      await addRule({
+        targetGroupId: supportId,
+        isFallback: true,
+        conditions: { expertise_ids: [Number(billing), Number(refunds)] },
+      });
+
+      expect((await route()).assigneeId).toBe(full);
+    });
+
+    it('keeps the ADR-08 order among the qualified agents', async () => {
+      // The expertise filter narrows the pool; within it, priority → least
+      // loaded → longest wait must still decide, unchanged.
+      const skill = await addExpertise('Sales');
+      const primary = await addAgent({ groupId: supportId, priority: 'primary', name: 'primary' });
+      const normal = await addAgent({ groupId: supportId, priority: 'normal', name: 'normal' });
+      await grantExpertise(primary, skill);
+      await grantExpertise(normal, skill);
+
+      await addRule({
+        targetGroupId: supportId,
+        isFallback: true,
+        conditions: { expertise_ids: [Number(skill)] },
+      });
+
+      expect((await route()).assigneeId).toBe(primary);
+    });
+
+    it('carries the expertise requirement into the fallback team', async () => {
+      const skill = await addExpertise('Billing');
+
+      // The matched team (Sales) has an expert, but they are full.
+      const salesExpertFull = await addAgent({ groupId: salesId, limit: 1, name: 'sales-expert' });
+      await grantExpertise(salesExpertFull, skill);
+      await loadAgent(salesExpertFull, 1);
+
+      // The fallback team (Support) has both an expert and a generalist. The
+      // generalist would be picked if the requirement were dropped on fallback.
+      const supportExpert = await addAgent({ groupId: supportId, name: 'support-expert' });
+      await grantExpertise(supportExpert, skill);
+      await addAgent({ groupId: supportId, name: 'support-generalist' });
+
+      await addRule({ targetGroupId: supportId, isFallback: true });
+      await addRule({
+        targetGroupId: salesId,
+        conditions: { url_contains: ['/pricing'], expertise_ids: [Number(skill)] },
+        priority: 5,
+      });
+
+      const decision = await route({ url: '/pricing' });
+      expect(decision.groupIds).toEqual([supportId]);
+      expect(decision.assigneeId).toBe(supportExpert);
+    });
+
+    it('does not count an expertise assignment from another tenant', async () => {
+      const billing = await addExpertise('Billing');
+      const ours = await addAgent({ groupId: supportId, name: 'ours' });
+
+      // The same agent, assigned an expertise under tenant B's licence — a row
+      // an A-scoped routing query must never treat as qualifying.
+      const bBilling = await owner.expertise.create({
+        data: { licenseId: fx.b.licenseId, name: 'Billing', slug: 'billing-b' },
+        select: { id: true },
+      });
+      await grantExpertise(ours, bBilling.id, fx.b.licenseId);
+
+      await addRule({
+        targetGroupId: supportId,
+        isFallback: true,
+        conditions: { expertise_ids: [Number(billing)] },
+      });
+
+      // The cross-tenant row does not qualify the agent.
+      expect((await route()).assigneeId).toBeNull();
+
+      // Only the A-scoped assignment makes them eligible — proving the query
+      // read the requirement on this licence and nowhere else.
+      await grantExpertise(ours, billing);
+      expect((await route()).assigneeId).toBe(ours);
+    });
+
+    it("respects the agent's concurrent limit under an expertise rule", async () => {
+      // The expertise filter must not corrupt the capacity count: an agent
+      // holding the skill is still queued once at their limit, not over-assigned.
+      const skill = await addExpertise('Billing');
+      const expert = await addAgent({ groupId: supportId, limit: 1, name: 'solo-expert' });
+      await grantExpertise(expert, skill);
+      await addRule({
+        targetGroupId: supportId,
+        isFallback: true,
+        conditions: { expertise_ids: [Number(skill)] },
+      });
+
+      const first = await route();
+      expect(first.assigneeId).toBe(expert);
+
+      await loadAgent(expert, 1); // now at the limit
+      const second = await route();
+      expect(second.assigneeId).toBeNull();
+      expect(second.reason).toBe('queued');
     });
   });
 

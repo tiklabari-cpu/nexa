@@ -19,6 +19,7 @@
  * Assignment happens inside the caller's transaction so the load count it reads
  * cannot go stale between the decision and the write.
  */
+import { Prisma } from '@prisma/client';
 import { GROUP_PRIORITY_ORDER, type GroupPriority } from '@nexa/types';
 import type { TenantClient } from '../../lib/tenant.js';
 
@@ -57,6 +58,32 @@ interface RoutingConditions {
   url_contains?: string[];
   url_equals?: string[];
   country_codes?: string[];
+  /**
+   * Areas of expertise an agent must hold to receive this rule's chats
+   * (FR-MOD-08.6.3). Stored as plain numbers because jsonb has no bigint; the
+   * ids are small per-license integers. Not a *match* condition — it never
+   * decides which team wins, only which agents inside that team qualify.
+   */
+  expertise_ids?: number[];
+}
+
+/**
+ * A chosen team, together with any expertise the matched rule demands of its
+ * agents. The requirement is a property of the *rule*, so it is decided once
+ * and carried through every candidate query in `route()` — the primary team and
+ * the fallback team alike. That is what makes "an agent without the expertise is
+ * never chosen" hold at every stage rather than only the first.
+ */
+interface GroupSelection {
+  groupId: bigint;
+  requiredExpertiseIds: bigint[];
+}
+
+/** The expertise a matched rule demands, as bigints for the candidate query. */
+function requiredExpertise(conditions: RoutingConditions): bigint[] {
+  const ids = conditions.expertise_ids;
+  if (!ids?.length) return [];
+  return ids.map((id) => BigInt(id));
 }
 
 export class RoutingService {
@@ -72,14 +99,15 @@ export class RoutingService {
     licenseId: bigint,
     context: RoutingContext = {},
   ): Promise<RoutingDecision> {
-    const groupId = await this.#selectGroup(tx, licenseId, context);
-    if (groupId === null) {
+    const selection = await this.#selectGroup(tx, licenseId, context);
+    if (selection === null) {
       // No team at all — the conversation is still created so nothing is lost,
       // but only a `chats--all` holder will see it.
       return { groupIds: [], assigneeId: null, queuePosition: null, reason: 'no_group' };
     }
+    const { groupId, requiredExpertiseIds } = selection;
 
-    const assignee = await this.#selectAgent(tx, licenseId, groupId);
+    const assignee = await this.#selectAgent(tx, licenseId, groupId, requiredExpertiseIds);
     if (assignee) {
       await tx.agentMembership.update({
         where: { licenseId_agentId: { licenseId, agentId: assignee } },
@@ -92,7 +120,15 @@ export class RoutingService {
     // over-limit agent silently accumulating chats is how customers get ignored.
     const fallbackGroupId = await this.#fallbackGroup(tx, licenseId);
     if (fallbackGroupId !== null && fallbackGroupId !== groupId) {
-      const fallbackAssignee = await this.#selectAgent(tx, licenseId, fallbackGroupId);
+      // The expertise requirement follows the chat into the fallback team: a
+      // billing question overflowing to another desk still needs a billing
+      // agent, not just any free one.
+      const fallbackAssignee = await this.#selectAgent(
+        tx,
+        licenseId,
+        fallbackGroupId,
+        requiredExpertiseIds,
+      );
       if (fallbackAssignee) {
         await tx.agentMembership.update({
           where: { licenseId_agentId: { licenseId, agentId: fallbackAssignee } },
@@ -144,6 +180,12 @@ export class RoutingService {
         select: { groupId: true },
       });
 
+      // Draining assigns by team only. A queued chat does not carry the
+      // expertise its matching rule demanded — persisting that needs a column on
+      // `threads`, which is out of this slice (08.6.3-c touches no migration).
+      // Expertise therefore narrows the *initial* routing decision (`route()`);
+      // once a chat is queued, the existing team-based drain takes over. A
+      // follow-up wanting expertise-aware draining must add that column first.
       let assignee: string | null = null;
       for (const { groupId } of access) {
         assignee = await this.#selectAgent(tx, licenseId, groupId);
@@ -196,13 +238,15 @@ export class RoutingService {
     tx: TenantClient,
     licenseId: bigint,
     context: RoutingContext,
-  ): Promise<bigint | null> {
+  ): Promise<GroupSelection | null> {
     if (context.requestedGroupId !== undefined) {
       const exists = await tx.group.findUnique({
         where: { licenseId_id: { licenseId, id: context.requestedGroupId } },
         select: { id: true },
       });
-      if (exists) return exists.id;
+      // An explicit team request bypasses the rules, so it carries no expertise
+      // requirement — it is a deliberate "send it here", not a routed match.
+      if (exists) return { groupId: exists.id, requiredExpertiseIds: [] };
       // An unknown team id is ignored rather than fatal — the widget may be
       // configured with a team that was since deleted, and refusing the chat
       // would punish the customer for a stale snippet.
@@ -218,11 +262,21 @@ export class RoutingService {
     for (const rule of rules) {
       if (rule.is_fallback) continue; // considered last, below
       if (rule.target_group_id === null) continue;
-      if (matches(rule.conditions, context)) return rule.target_group_id;
+      if (matches(rule.conditions, context)) {
+        return {
+          groupId: rule.target_group_id,
+          requiredExpertiseIds: requiredExpertise(rule.conditions),
+        };
+      }
     }
 
     const fallback = rules.find((r) => r.is_fallback && r.target_group_id !== null);
-    if (fallback?.target_group_id != null) return fallback.target_group_id;
+    if (fallback?.target_group_id != null) {
+      return {
+        groupId: fallback.target_group_id,
+        requiredExpertiseIds: requiredExpertise(fallback.conditions),
+      };
+    }
 
     // No rules configured at all — use the only team, if there is one, so a
     // workspace works before anyone visits the routing settings.
@@ -231,7 +285,7 @@ export class RoutingService {
       orderBy: { id: 'asc' },
       select: { id: true },
     });
-    return only?.id ?? null;
+    return only ? { groupId: only.id, requiredExpertiseIds: [] } : null;
   }
 
   async #fallbackGroup(tx: TenantClient, licenseId: bigint): Promise<bigint | null> {
@@ -246,8 +300,39 @@ export class RoutingService {
    * The agent who should take this chat, or null when nobody can.
    *
    * One query so the load count and the choice cannot disagree.
+   *
+   * When the matched rule demands expertise (`requiredExpertiseIds`), the pool
+   * is narrowed to agents who hold *every* listed area. This is a hard filter,
+   * never a preference: a rule wanting "Billing" must never fall through to a
+   * general agent — that is the "expert chat handed to the wrong desk" failure
+   * this feature exists to prevent. If nobody qualifies, `route()`'s existing
+   * fallback-team → queue chain runs unchanged (the same filter is applied
+   * there too), so the requirement is narrowed but never quietly dropped.
+   *
+   * The expertise test is an `IN (subquery)`, not a join, on purpose: joining
+   * `agent_expertise` would multiply the candidate rows and corrupt
+   * `COUNT(t.id)` — an agent holding two required areas would read as twice the
+   * load. The subquery keeps the capacity count exactly as it was.
    */
-  async #selectAgent(tx: TenantClient, licenseId: bigint, groupId: bigint): Promise<string | null> {
+  async #selectAgent(
+    tx: TenantClient,
+    licenseId: bigint,
+    groupId: bigint,
+    requiredExpertiseIds: bigint[] = [],
+  ): Promise<string | null> {
+    const expertiseClause =
+      requiredExpertiseIds.length > 0
+        ? Prisma.sql`
+          AND ga.agent_id IN (
+            SELECT ae.agent_id
+            FROM agent_expertise ae
+            WHERE ae.license_id = ${licenseId}
+              AND ae.expertise_id IN (${Prisma.join(requiredExpertiseIds)})
+            GROUP BY ae.agent_id
+            HAVING COUNT(DISTINCT ae.expertise_id) = ${requiredExpertiseIds.length}
+          )`
+        : Prisma.empty;
+
     const candidates = await tx.$queryRaw<CandidateRow[]>`
       SELECT ga.agent_id::text AS agent_id,
              ga.priority,
@@ -263,6 +348,7 @@ export class RoutingService {
         AND m.routing_status = 'accepting_chats'
         AND NOT m.suspended
         AND NOT m.awaiting_approval
+        ${expertiseClause}
       GROUP BY ga.agent_id, ga.priority, m.last_assigned_at, m.concurrent_chats_limit
       -- Capacity is checked in HAVING, after the count exists.
       HAVING COUNT(t.id) < m.concurrent_chats_limit

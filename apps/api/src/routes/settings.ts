@@ -20,11 +20,7 @@ import {
 import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { resolveBrandId } from '../lib/brand.js';
-import {
-  formatAllowlistEntry,
-  parseAllowlistEntry,
-  wouldLockOut,
-} from '../lib/ip-allowlist.js';
+import { formatAllowlistEntry, parseAllowlistEntry, wouldLockOut } from '../lib/ip-allowlist.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { MAX_ACTIVE_TOKENS_PER_OWNER } from '../services/auth/token-service.js';
@@ -67,11 +63,25 @@ const updateCannedBody = z
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
+/**
+ * A rule's match/eligibility conditions. `expertise_ids` (FR-MOD-08.6.3) narrows
+ * the agent pool to those holding every listed area; the url/country fields are
+ * the existing team-match criteria. Sent whole — the object *replaces* the
+ * rule's stored conditions — so a partial edit must resend the parts it keeps.
+ */
+const ruleConditionsBody = z.object({
+  url_contains: z.array(z.string()).optional(),
+  url_equals: z.array(z.string()).optional(),
+  country_codes: z.array(z.string()).optional(),
+  expertise_ids: z.array(z.coerce.bigint()).max(200).optional(),
+});
+
 const updateRuleBody = z
   .object({
     enabled: z.boolean().optional(),
     target_group_id: z.coerce.bigint().nullable().optional(),
     priority: z.number().int().min(0).max(1000).optional(),
+    conditions: ruleConditionsBody.optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -266,12 +276,7 @@ const expertiseIdParam = z.coerce.bigint();
  * is validated non-empty first.
  */
 function expertiseSlug(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
+  return name.trim().toLowerCase().replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
 function serialiseExpertise(area: { id: bigint; name: string; slug: string }) {
@@ -884,12 +889,49 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
           if (!group) throw ApiError.validation('That team does not exist.');
         }
 
+        // A rule may narrow routing to agents holding certain expertise
+        // (FR-MOD-08.6.3). Every id must name an area on this workspace: RLS
+        // scopes the lookup to the caller's licence, so a cross-tenant or unknown
+        // id simply is not found — a 404 that keeps ids un-enumerable across
+        // tenants (NFR-S5). The `conditions` object replaces the rule's stored
+        // one wholesale; expertise ids are stored as plain numbers because jsonb
+        // has no bigint, and dropped entirely when empty so a rule without a
+        // requirement stores no marker for one.
+        let conditionsData: Prisma.InputJsonValue | undefined;
+        if (body.conditions !== undefined) {
+          const expertiseIds = body.conditions.expertise_ids
+            ? [...new Set(body.conditions.expertise_ids.map((id) => id.toString()))].map((s) =>
+                BigInt(s),
+              )
+            : [];
+          if (expertiseIds.length > 0) {
+            const found = await tx.expertise.findMany({
+              where: { id: { in: expertiseIds } },
+              select: { id: true },
+            });
+            if (found.length !== expertiseIds.length) {
+              throw ApiError.notFound('One or more expertise areas were not found.');
+            }
+          }
+          conditionsData = {
+            ...(body.conditions.url_contains ? { url_contains: body.conditions.url_contains } : {}),
+            ...(body.conditions.url_equals ? { url_equals: body.conditions.url_equals } : {}),
+            ...(body.conditions.country_codes
+              ? { country_codes: body.conditions.country_codes }
+              : {}),
+            ...(expertiseIds.length > 0
+              ? { expertise_ids: expertiseIds.map((id) => Number(id)) }
+              : {}),
+          };
+        }
+
         const row = await tx.routingRule.update({
           where: { id: ruleId },
           data: {
             ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
             ...(body.priority !== undefined ? { priority: body.priority } : {}),
             ...(body.target_group_id !== undefined ? { targetGroupId: body.target_group_id } : {}),
+            ...(conditionsData !== undefined ? { conditions: conditionsData } : {}),
           },
         });
         // Routing decides who sees which conversations, so a change to it is a
@@ -964,7 +1006,10 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
         // The slug is derived from the name, so a collision means an area with
         // the same name up to case and spacing already exists.
         if (isUniqueViolation(error)) {
-          throw new ApiError('not_allowed', 'An expertise area with a similar name already exists.');
+          throw new ApiError(
+            'not_allowed',
+            'An expertise area with a similar name already exists.',
+          );
         }
         throw error;
       }
@@ -1009,36 +1054,32 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     },
   );
 
-  app.post(
-    '/settings/tags',
-    { config: { scopes: ['tags--all:rw'] } },
-    async (request, reply) => {
-      const body = parse(createTagBody, request.body);
-      const tenant = request.tenant();
-      const principal = request.requirePrincipal();
+  app.post('/settings/tags', { config: { scopes: ['tags--all:rw'] } }, async (request, reply) => {
+    const body = parse(createTagBody, request.body);
+    const tenant = request.tenant();
+    const principal = request.requirePrincipal();
 
-      try {
-        const created = await request.withTenant(async (tx) => {
-          await assertGroupsExist(tx, body.group_ids);
-          return tx.tag.create({
-            data: {
-              licenseId: tenant.licenseId,
-              name: body.name,
-              groupIds: body.group_ids,
-              authorId: principal.kind === 'agent' ? principal.accountId : null,
-            },
-            include: { _count: { select: { threads: true } } },
-          });
+    try {
+      const created = await request.withTenant(async (tx) => {
+        await assertGroupsExist(tx, body.group_ids);
+        return tx.tag.create({
+          data: {
+            licenseId: tenant.licenseId,
+            name: body.name,
+            groupIds: body.group_ids,
+            authorId: principal.kind === 'agent' ? principal.accountId : null,
+          },
+          include: { _count: { select: { threads: true } } },
         });
-        return reply.status(201).send(serialiseTag(created));
-      } catch (error) {
-        if (isUniqueViolation(error)) {
-          throw new ApiError('not_allowed', `The tag “${body.name}” already exists.`);
-        }
-        throw error;
+      });
+      return reply.status(201).send(serialiseTag(created));
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ApiError('not_allowed', `The tag “${body.name}” already exists.`);
       }
-    },
-  );
+      throw error;
+    }
+  });
 
   app.patch<{ Params: { tagId: string } }>(
     '/settings/tags/:tagId',
@@ -1108,10 +1149,7 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
  * apply to no one. RLS narrows the lookup to this tenant, so referencing another
  * workspace's group fails here exactly as an unknown id does.
  */
-async function assertGroupsExist(
-  tx: Prisma.TransactionClient,
-  groupIds: bigint[],
-): Promise<void> {
+async function assertGroupsExist(tx: Prisma.TransactionClient, groupIds: bigint[]): Promise<void> {
   if (groupIds.length === 0) return;
   const unique = [...new Set(groupIds.map((id) => id.toString()))];
   const found = await tx.group.findMany({

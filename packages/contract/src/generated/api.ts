@@ -3910,9 +3910,15 @@ export interface components {
       kind: 'chat' | 'ticket';
       /**
        * @description All must match for the rule to win. Empty on the fallback rule,
-       *     which is why it catches everything.
+       *     which is why it catches everything. `expertise_ids` is not a match
+       *     condition — a rule carrying only it still matches every conversation;
+       *     it narrows the eligible agent pool to those holding *every* listed
+       *     area of expertise (FR-MOD-08.6.3), and is never relaxed.
        */
       conditions: {
+        /** @description Agent must hold every listed expertise area to be eligible. */
+        expertise_ids?: number[];
+      } & {
         [key: string]: unknown;
       };
       /** Format: int64 */
@@ -8167,6 +8173,18 @@ export interface operations {
           /** Format: int64 */
           target_group_id?: number | null;
           priority?: number;
+          /**
+           * @description Replaces the rule's conditions wholesale. `expertise_ids` lists
+           *     the areas of expertise an agent must *all* hold to receive
+           *     chats this rule routes (FR-MOD-08.6.3); an id naming no
+           *     expertise on this workspace is rejected (404). Not a match
+           *     condition — see `RoutingRule.conditions`.
+           */
+          conditions?: {
+            expertise_ids?: number[];
+          } & {
+            [key: string]: unknown;
+          };
         };
       };
     };

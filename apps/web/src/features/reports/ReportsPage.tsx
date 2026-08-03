@@ -24,6 +24,7 @@ import {
   Section,
 } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { Banner } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import type { ApiClient } from '../../lib/api-client.js';
 import { formatCount, formatDuration, formatMoney, formatRate } from '../../lib/format.js';
@@ -151,6 +152,36 @@ type TabId = (typeof TABS)[number]['id'];
 const PRESETS = [7, 30, 90, 365] as const;
 type RangeMode = (typeof PRESETS)[number] | 'custom';
 
+/** Stable id (FR-EK-C.2) so "Remind me later" persists across reloads. */
+const TOPICS_PROMO_BANNER_ID = 'reports-topics-promo';
+
+/**
+ * Overview-only promo for the Chat topics tab (FR-MOD-07.6, rapor-1-fonksiyonel.md:297).
+ * "See chat topics" switches the tab in place; "Remind me later" is Banner's
+ * own persistent dismiss (`dismissLabel`) rather than a second control.
+ */
+function TopicsPromoBanner({ onSeeTopics }: { onSeeTopics: () => void }): ReactElement {
+  return (
+    <Banner
+      tone="brand"
+      id={TOPICS_PROMO_BANNER_ID}
+      dismissible
+      dismissLabel="Remind me later"
+      cta={
+        <button
+          type="button"
+          onClick={onSeeTopics}
+          className="rounded-md bg-brand-500 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-brand-600"
+        >
+          See chat topics
+        </button>
+      }
+    >
+      Top chat topics in one place
+    </Banner>
+  );
+}
+
 /**
  * The selected window as ISO strings, or null when a custom range is incomplete
  * or backwards. Preset modes resolve against "now" at call time, so the query
@@ -241,7 +272,10 @@ export function ReportsPage(): ReactElement {
             />
           </Card>
         ) : tab === 'overview' ? (
-          <OverviewTab rangeKey={rangeKey} range={range} />
+          <>
+            <TopicsPromoBanner onSeeTopics={() => setTab('topics')} />
+            <OverviewTab rangeKey={rangeKey} range={range} />
+          </>
         ) : tab === 'ai-agent' ? (
           <AiAgentTab rangeKey={rangeKey} range={range} />
         ) : tab === 'reviews' ? (

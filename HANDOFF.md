@@ -13,6 +13,33 @@
 
 ## Task log (newest-first)
 
+### 64.6 (07.6-f) — Overview'da 'Top chat topics' promo bandı (See chat topics / Remind me later — kalıcı dismiss) — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] Reports Overview sekmesinin üstüne `TopicsPromoBanner` eklendi
+  (`apps/web/src/features/reports/ReportsPage.tsx`) — referans desen `components/ui/Banner.tsx`
+  (`dismissible`+stabil `id` → localStorage kalıcı dismiss, EK-C.2, tm 62) birebir yeniden
+  kullanıldı, yeni bileşen yazılmadı. Yalnız `tab==='overview'` render dalında (`OverviewTab`'ın
+  yanında, kendi loading/error state'lerinden bağımsız) gösterildiği için diğer sekmelerde
+  (Chat topics dahil) otomatik görünmez — ayrı bir koşul gerekmedi. Birincil CTA "See chat
+  topics" `setTab('topics')` çağırır (aynı sayfa, yeni rota yok). İkincil "Remind me later"
+  AYRI bir buton değil: Banner'ın kendi dismiss kontrolü, `dismissLabel="Remind me later"` ile
+  erişilebilir adı override edilmiş halde (görünür glif `×` kalıyor, aria-label değişiyor —
+  Banner'da zaten var olan `dismissLabel` prop'unun ilk gerçek kullanımı). Sol navigasyona NEW
+  rozeti eklenmedi (kapsam dışı, varsayım 5).
+- **Doğrulama (DoD tam yeşil):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm --filter @nexa/web test` — 73 dosya/532 test yeşil (yeni "Overview 'Chat topics' promo
+  banner (07.6-f)" bloğu 5/5: band+CTA→Chat topics sekmesi seçili · Chat topics sekmesinde band
+  yok · diğer sekmede (AI Agent) band yok · Remind me later→kapanır+unmount/remount sonrası geri
+  gelmez (Banner.test.tsx remount deseniyle birebir) · `localStorage.setItem` fırlatırken yine
+  kapanır, hata fırlatmaz) · `pnpm -w build` (7/7) · `pnpm -w test:integration` (nexa-db+redis
+  ayaktayken) 47 dosya/989 test yeşil — bu görev backend'e dokunmadı, yalnız regresyon kontrolü
+  olarak çalıştırıldı. Bu task'ın kendi kabul kriteri e2e gerektirmiyor (07.6-h ayrı task,
+  07.6-f'ye bağımlı).
+- **Varsayımlar:** Yok — kapsam net, tek dosya UI değişikliği.
+- **Sonraki pencereye not:** 07.6 grubunda kalan: 07.6-g (CSV export grubuna topics eklenmesi) ve
+  07.6-h (uçtan uca e2e — dolu+empty + ai-mock paylaşım regresyonu, 07.6-c/d/e/f'ye bağımlı, artık
+  07.6-f de bitti). PLAN.md §07.6 satırı hâlâ `◐` (07.6-g/h bitmeden `✅` olmaz).
+
 ### 64.5 (07.6-e) — Reports'ta 'Chat topics' sekmesi: hacim/trend listesi + yetersiz-veri empty state — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] Bu görev bu pencere açıldığında zaten `in-progress` ve kod (uncommitted)

@@ -111,6 +111,7 @@ async function openAiAgentTab(): Promise<void> {
 
 beforeEach(() => {
   api.get.mockReset();
+  localStorage.clear();
 });
 
 describe('ReportsPage — AI Agent report (07.4)', () => {
@@ -608,5 +609,78 @@ describe('ReportsPage — Chat topics report (07.6)', () => {
     await openTopicsTab();
 
     expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/topics\?from=.*&to=/));
+  });
+});
+
+// ===========================================================================
+
+describe('ReportsPage — Overview "Chat topics" promo banner (07.6-f)', () => {
+  it('shows the banner on Overview, and "See chat topics" opens the Chat topics tab', async () => {
+    mockReports({ resolutions: 0 });
+    renderReports(<ReportsPage />);
+
+    expect(screen.getByText('Top chat topics in one place')).toBeInTheDocument();
+
+    // CTA opens the tab in place — same page, no new route.
+    await userEvent.click(screen.getByRole('button', { name: 'See chat topics' }));
+    expect(screen.getByRole('tab', { name: 'Chat topics' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('renders only on Overview, not on the Chat topics tab', async () => {
+    mockTopics({ sufficient_data: false, analyzed: 0, topics: [] });
+    renderReports(<ReportsPage />);
+    expect(screen.getByText('Top chat topics in one place')).toBeInTheDocument();
+
+    await openTopicsTab();
+    expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();
+  });
+
+  it('renders only on Overview, not on other report tabs', async () => {
+    mockReports({ resolutions: 0 });
+    renderReports(<ReportsPage />);
+
+    await openAiAgentTab();
+    expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();
+  });
+
+  it('"Remind me later" dismisses the banner and it does not return after a remount', async () => {
+    mockReports({ resolutions: 0 });
+    const queryClient = new QueryClient();
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <ReportsPage />
+      </QueryClientProvider>,
+    );
+
+    // "Remind me later" is Banner's persistent dismiss (id + dismissLabel), not a
+    // second control — same mechanism as the 07.6 reference pattern (tm 62).
+    await userEvent.click(screen.getByRole('button', { name: 'Remind me later' }));
+    expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();
+
+    // A fresh mount — as a reload would be — stays dismissed.
+    view.unmount();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ReportsPage />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();
+  });
+
+  it('dismisses even when localStorage is unavailable, without throwing', async () => {
+    mockReports({ resolutions: 0 });
+    renderReports(<ReportsPage />);
+
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remind me later' }));
+    expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();
+
+    setItem.mockRestore();
   });
 });

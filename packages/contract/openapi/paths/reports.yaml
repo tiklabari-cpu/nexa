@@ -139,6 +139,47 @@ reviews:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+topics:
+  get:
+    tags: [Reports]
+    operationId: getReportsTopics
+    summary: Chat topics — conversation clusters with volume and trend
+    description: |
+      The Chat topics report (FR-MOD-07.6): conversations in the window grouped
+      into topics by deterministic, on-the-fly clustering (`@nexa/ai-mock`, no
+      real LLM), each with its volume, share and vs-previous trend, for the
+      Reports "Chat topics" tab. Nothing is persisted — the clustering is
+      recomputed per request. Defaults to the last 30 days.
+
+      Clustering needs a floor of conversations before it says anything honest,
+      so a window with fewer than `min_conversations` clusterable chats returns
+      `sufficient_data: false` and an empty `topics` — a plain "not enough
+      conversations yet" state, never a single fabricated topic. This is a
+      state, not an error: the response is a 200, never a 4xx. `analyzed` is how
+      many clusterable conversations the window actually held.
+
+      `share` and `trend` are `null`, not `0`, when undefined — a topic with no
+      previous-window volume has an unknown trend, not a 100% rise. This mirrors
+      the Overview's `automated_rate` and the Reviews `score`: an unknown is not
+      a zero.
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: Chat topics for the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsTopics" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 groups:
   get:
     tags: [Reports]

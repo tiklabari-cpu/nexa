@@ -13,6 +13,49 @@
 
 ## Task log (newest-first)
 
+### 64.1 (07.6-a) — `GET /reports/topics` kontratı + yetkili route iskeleti + yetersiz-veri (empty) yanıtı — done — 2026-08-03 UTC
+
+- **Yapıldı:** Chat topics dilimi V2-4'ün contract-first ilk adımı (ADR-05).
+  (1) **Kontrat:** `packages/contract/openapi/paths/reports.yaml`'a `topics:` bloğu
+  (operationId `getReportsTopics`, `breakdown` deseni birebir); `openapi.yaml`'a
+  `/reports/topics` path kaydı + `ReportsTopics` şeması **PİNLENDİ** — `range` ·
+  `previous_period{range}` · `min_conversations` · `analyzed` · `sufficient_data` ·
+  `topics[]{id,label,keywords[],volume,share(number|null),previous_volume,trend(number|null)}`.
+  `share`/`trend` boşken **null** (0 değil) — ReportsOverview.automated_rate + ReportsReviews.score
+  kuralı, şema açıklamasında gerekçeli. Bundle + generated tipler (`src/generated/api.ts`)
+  yeniden üretildi (`pnpm --filter @nexa/contract generate`).
+  (2) **Backend iskeleti:** `apps/api/src/routes/reports.ts`'e
+  `app.get('/reports/topics', {config:{scopes:['reports_read']}})` — `rangeQuery`+`resolveRange`+
+  `request.withTenant` içinde yeni `clusterableCount()` yardımcısı (license_id filtreli SAYIM:
+  `summary` dolu VEYA `type='message' author_type='customer'` metinli thread'ler),
+  `analyzed < TOPIC_MIN_CONVERSATIONS(=20)` → `sufficient_data:false` + `topics:[]`.
+  Kümeleme YOK (07.6-c) — `sufficient` dalı da şimdilik boş `topics:[]`. Yeni ApiError tipi YOK
+  (yetersiz veri bir durum, hata değil — 200).
+  (3) **Test:** `apps/api/test/integration/reports-topics.test.ts` (+9 test, negatifler önce).
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7) · `pnpm -w test:integration` **981/981** (contract-parity çift yönlü 5/5
+  + yeni reports-topics 9/9 dahil) · `pnpm -w test` (api unit+integration **1247/1247**, tüm
+  paketler yeşil, cross-package DB yarışını önlemek için `--concurrency=1`). E2E bu alt-görevde
+  YOK: 07.6-a'nın UI/e2e yüzeyi yok (sekme 07.6-e, e2e 07.6-h — task KAPSAM DIŞI); endpoint
+  contract-parity + integration ile kapatıldı. `@nexa/e2e:typecheck` yeşil (e2e derlenmeye devam).
+- **Varsayımlar:** `TOPIC_MIN_CONVERSATIONS=20` bu pencerede reports.ts'e YEREL sabit olarak kondu
+  (slice'ın önerdiği kalibrasyon). 07.6-b `packages/ai-mock/src/topics.ts`'te `MIN_CONVERSATIONS`'ı
+  tanımlayınca **07.6-c** bu iki sayıyı uzlaştırmalı (tek sayı hem buradaki sayım kapısını hem
+  oradaki küme-boyutu tabanını yönetsin) — yerel sabit o zaman import'la değişir. · Kümelenebilirlik
+  ölçütü = thread'in `summary`'si VEYA en az bir müşteri mesajı olması (parent varsayım: summary
+  yalnız AI-kapanışlarda dolu, tek başına insan-yürüttüğü sohbetleri düşürürdü). · Yeni tablo YOK
+  (şema tek doğruluk kaynağı; on-the-fly).
+- **Sonraki pencereye not:** **07.6-b [OPUS-MAX]** kümeleme çekirdeği (`clusterTopics` + etiket
+  türetme + `MIN_CONVERSATIONS`) — bölünmeyen çekirdek, `embedding.ts`'e DOKUNMA (RAG paylaşımı).
+  Sonra **07.6-c** kümelemeyi bu route'a bağlar: `topics:[]` doldurulur, `previous_period` üzerinden
+  trend hesaplanır, 1000-sohbet performans tavanı eklenir, `TOPIC_MIN_CONVERSATIONS` yerel sabiti
+  ai-mock `MIN_CONVERSATIONS` ile uzlaşır. Şema alanı EKLENİRSE OpenAPI'ye ekle + re-bundle (yoksa
+  contract-parity kırılır). · **PLAN §5.0 sayacı resync edildi:** 18⬜/1◐/8✅ → **17⬜/1◐/9✅/3⛔**
+  (07.6 ⬜→◐ + önceki turdan kalma bir stale ✅ sayımı düzeltildi; §1.2 sayaç tablodan sayılır).
+- **Not (temiz olmayan çalışma alanı):** Pencere açılışında repoda bu göreve İLGİSİZ, önceden var
+  olan 3 kirli dosya vardı (`.taskmaster/BUILD-BLUEPRINT.md`, `CONVENTIONS.md`, `run-loop.sh`) —
+  bu commit'e DAHİL EDİLMEDİ (CONVENTIONS §5 kapsam disiplini). Bunlar başka bir pencerenin işi.
+
 ### 63.9 (07.5-i) — Uçtan uca doğrulama: dört boyut çapraz-tutarlılığı + NFR-P2 bütçe ölçümü — done — 2026-08-03 UTC
 
 - **Yapıldı:** `apps/api/test/integration/reports-billing.test.ts`'e yeni "breakdown

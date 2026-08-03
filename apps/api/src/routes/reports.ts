@@ -587,6 +587,55 @@ async function transferCount(
 }
 
 /**
+ * The floor of clusterable conversations the Chat topics report needs before it
+ * clusters (FR-MOD-07.6, "yeterli veri yoksa empty"). Below it the report is an
+ * honest empty state, not a single fabricated topic.
+ *
+ * Provisional at 20 — the calibration the slice proposed — and kept local to
+ * this route for the skeleton. The clustering core lands its own
+ * `MIN_CONVERSATIONS` in `packages/ai-mock/src/topics.ts` (07.6-b); 07.6-c
+ * reconciles the two so one number governs both the count gate here and the
+ * cluster-size floor there.
+ */
+const TOPIC_MIN_CONVERSATIONS = 20;
+
+/**
+ * How many conversations in the window are *clusterable* — the count the Chat
+ * topics report gates on before it will say anything (FR-MOD-07.6). A thread is
+ * clusterable once it has text to cluster: its AI summary when one was written
+ * (only AI-closed threads carry one), otherwise a customer message. 07.6-a only
+ * counts them; 07.6-c reads the text and clusters it.
+ *
+ * license_id-scoped and run inside withTenant, so another tenant's
+ * conversations can never lift the count (NFR-S4) — the same isolation the other
+ * report aggregates rely on.
+ */
+async function clusterableCount(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<number> {
+  const [row] = await tx.$queryRaw<Array<{ clusterable: bigint }>>`
+    SELECT count(*) AS clusterable
+    FROM threads t
+    WHERE t.license_id = ${licenseId}
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+      AND (
+        (t.summary IS NOT NULL AND t.summary <> '')
+        OR EXISTS (
+          SELECT 1 FROM events e
+          WHERE e.thread_id = t.id
+            AND e.type = 'message'
+            AND e.author_type = 'customer'
+            AND e.text IS NOT NULL AND e.text <> ''
+        )
+      )
+  `;
+  return Number(row?.clusterable ?? 0n);
+}
+
+/**
  * One report group rendered as a CSV table — a header row and its data rows —
  * for {@link toCsv}. `reviews` serialises one row per UTC day; `breakdown`
  * serialises the Breakdown tab's four dimensions (day, hour, team, channel) in
@@ -1119,6 +1168,45 @@ export default async function reportRoutes(
         attributed_revenue_cents: null,
         currency: null,
       },
+    });
+  });
+
+  // Chat topics (FR-MOD-07.6): conversations clustered into topics with volume
+  // and trend. This is the contract-first skeleton (07.6-a) — it settles the
+  // shape and the "not enough conversations yet" gate; the clustering itself
+  // lands in 07.6-c. Same reports_read + withTenant surface as the other tabs.
+  app.get('/reports/topics', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
+    const parsed = rangeQuery.safeParse(request.query);
+    if (!parsed.success) throw ApiError.validation('Invalid date range.');
+    const { from, to } = resolveRange(parsed.data);
+    const tenant = request.tenant();
+
+    // The equal-length window immediately before this one — where 07.6-c will
+    // read each topic's previous volume to compute its trend, the same
+    // construction the Overview and Reviews reports use (FR-MOD-07.3.1). Declared
+    // from the skeleton on so `previous_period` is never a fabricated shape.
+    const spanMs = to.getTime() - from.getTime();
+    const prevTo = new Date(from.getTime() - 1);
+    const prevFrom = new Date(from.getTime() - spanMs);
+
+    const analyzed = await request.withTenant((tx) =>
+      clusterableCount(tx, tenant.licenseId, from, to),
+    );
+
+    // Clustering needs a floor of conversations to say anything honest; below it
+    // the report is an empty "not enough conversations yet" — a 200 state, not an
+    // error (so no new ApiError type). The clustering lands in 07.6-c, so the
+    // sufficient branch also returns no topics yet — but the flag already tells
+    // the two apart, and a client renders the empty state off it.
+    const sufficient = analyzed >= TOPIC_MIN_CONVERSATIONS;
+
+    return reply.send({
+      range: { from: from.toISOString(), to: to.toISOString() },
+      previous_period: { range: { from: prevFrom.toISOString(), to: prevTo.toISOString() } },
+      min_conversations: TOPIC_MIN_CONVERSATIONS,
+      analyzed,
+      sufficient_data: sufficient,
+      topics: [],
     });
   });
 

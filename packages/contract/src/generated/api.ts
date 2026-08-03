@@ -2865,6 +2865,42 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/topics': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Chat topics — conversation clusters with volume and trend
+     * @description The Chat topics report (FR-MOD-07.6): conversations in the window grouped
+     *     into topics by deterministic, on-the-fly clustering (`@nexa/ai-mock`, no
+     *     real LLM), each with its volume, share and vs-previous trend, for the
+     *     Reports "Chat topics" tab. Nothing is persisted — the clustering is
+     *     recomputed per request. Defaults to the last 30 days.
+     *
+     *     Clustering needs a floor of conversations before it says anything honest,
+     *     so a window with fewer than `min_conversations` clusterable chats returns
+     *     `sufficient_data: false` and an empty `topics` — a plain "not enough
+     *     conversations yet" state, never a single fabricated topic. This is a
+     *     state, not an error: the response is a 200, never a 4xx. `analyzed` is how
+     *     many clusterable conversations the window actually held.
+     *
+     *     `share` and `trend` are `null`, not `0`, when undefined — a topic with no
+     *     previous-window volume has an unknown trend, not a 100% rise. This mirrors
+     *     the Overview's `automated_rate` and the Reviews `score`: an unknown is not
+     *     a zero.
+     */
+    get: operations['getReportsTopics'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/groups': {
     parameters: {
       query?: never;
@@ -4681,6 +4717,83 @@ export interface components {
         /** @description ISO 4217 code for the revenue figure. Null until configured. */
         currency: string | null;
       };
+    };
+    /**
+     * @description The Chat topics report (FR-MOD-07.6): conversations in the window grouped
+     *     into topics by deterministic, on-the-fly clustering (`@nexa/ai-mock`, no
+     *     real LLM), each with volume, share and a vs-previous trend. Nothing is
+     *     persisted — the clustering is recomputed per request.
+     *
+     *     Below `min_conversations` clusterable chats the report is
+     *     `sufficient_data: false` with an empty `topics` — an honest "not enough
+     *     conversations yet" state, never a single fabricated topic, and always a
+     *     200 rather than an error.
+     */
+    ReportsTopics: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /**
+       * @description The equal-length window immediately before `range`. Each topic's
+       *     `trend` compares its volume against this window — the same
+       *     previous-window shape the Overview and Reviews reports carry.
+       */
+      previous_period: {
+        range: {
+          /** Format: date-time */
+          from: string;
+          /** Format: date-time */
+          to: string;
+        };
+      };
+      /**
+       * @description The floor of clusterable conversations the window needs before topics
+       *     are computed. Below it, `sufficient_data` is false and `topics` is
+       *     empty — surfaced so a client can tell the user how many more
+       *     conversations are needed.
+       */
+      min_conversations: number;
+      /**
+       * @description How many clusterable conversations the window held. A conversation is
+       *     clusterable once it has text to cluster — an AI summary, or failing
+       *     that a customer message. 0 for an empty window.
+       */
+      analyzed: number;
+      /**
+       * @description False when `analyzed` is below `min_conversations`; `topics` is then
+       *     empty. "Not enough conversations yet" is a state, not an error.
+       */
+      sufficient_data: boolean;
+      /**
+       * @description The clustered topics, most voluminous first. Empty while
+       *     `sufficient_data` is false.
+       */
+      topics: {
+        /** @description Stable within one response, for keying a list row. */
+        id: string;
+        /** @description Human-readable topic name derived from the cluster's terms. */
+        label: string;
+        /** @description The terms the label was derived from. */
+        keywords: string[];
+        /** @description Conversations in this topic within the window. */
+        volume: number;
+        /**
+         * @description Share of `analyzed` conversations in this topic. Null when
+         *     nothing was analyzed — unknown, not zero.
+         */
+        share: number | null;
+        /** @description This topic's volume in `previous_period` (0 when it did not appear). */
+        previous_volume: number;
+        /**
+         * @description Change ratio vs `previous_volume`. Null — not a 100% rise — when
+         *     `previous_volume` is 0: a topic that is new has an unknown
+         *     trend, not an infinite one.
+         */
+        trend: number | null;
+      }[];
     };
     /**
      * @description The report groups a caller may see (FR-MOD-07.7 permission-based
@@ -9884,6 +9997,33 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ReportsReviews'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsTopics: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Chat topics for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsTopics'];
         };
       };
       400: components['responses']['BadRequest'];

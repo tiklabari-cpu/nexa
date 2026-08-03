@@ -1743,13 +1743,13 @@
             "description": "apps/api/src/routes/reports.ts içinde `/reports/topics` handler'ını doldur — contract-first sıradaki backend adımı. (1) request.withTenant içinde tenant-scoped sorgu: seçili pencerede license_id filtreli thread'ler; her thread için kümeleme metni = `threads.summary` doluysa o, değilse thread'in ilk müşteri mesajı (events.type='message' AND author_type='customer', createdAt asc LIMIT 1). (2) Perfor",
             "details": "07.6-c — Kümelemeyi route'a bağla: tenant-scoped konu sorgusu + hacim/trend (önceki dönem) + performans tavanı  [OPUS-XHIGH]\n\nPRD: FR-MOD-07.6 (+ NFR-S3, NFR-S4, NFR-P7)\nETİKET GEREKÇESİ: OPUS-XHIGH: güvenlik hassasiyeti var ama çekirdek güvenlik sınırı değil — mevcut reports_read scope'u ve request.withTenant/RLS deseni birebir tekrarlanıyor, yeni yetki modeli/kripto yok (kullanıcı kuralı: yetkili endpoint yüzeyi ≥ OPUS-XHIGH, asla sonnet). Ek olarak koşul 2 ve 6 ihlali: kümeleme girdisi ham müşteri konuşma metni/özeti (PII yüzeyi) ve license_id filtresiz bir aggregate çapraz-tenant konu sızıntısı yaratır (NFR-S4); ayrıca 'hacim/trend' için önceki dönem sorgusunun veri şekli tasarlanacak. MAX değil: izolasyon mekanizması hazır (withTenant), eşzamanlılık/kilit yok, algoritma 07.6-b'de kapandı.\nNEDEN AÇIK: 07.6-a'nın bıraktığı route `sufficient_data:true` dalında bile boş `topics: []` dönüyor. threads.summary alanı (apps/api/prisma/schema.prisma:383-384) AI özet metni taşıyor — apps/api/src/services/ai/ai-responder.ts:65-69 yazıyor — ama tek tüketicisi chat-service.ts:1620'deki tekil getChat serileştirmesi; hiçbir toplu/analitik tüketicisi yok, yani kümeleme için hazır bir girdi boşta duruyor. reports.ts'te önceki-dönem karşılaştırma deseni zaten var (ReportsOverview/ReportsReviews previous_period) ama topics için hiçbir sorgu yok.\nKAPSAM: apps/api/src/routes/reports.ts içinde `/reports/topics` handler'ını doldur — contract-first sıradaki backend adımı. (1) request.withTenant içinde tenant-scoped sorgu: seçili pencerede license_id filtreli thread'ler; her thread için kümeleme metni = `threads.summary` doluysa o, değilse thread'in ilk müşteri mesajı (events.type='message' AND author_type='customer', createdAt asc LIMIT 1). (2) Performans tavanı: en yeni 1000 thread (varsayım 3); `analyzed` yanıtta gerçek sayıyı söyler. (3) `clusterTopics()` çağrısı → `sufficient` false ise 07.6-a'nın empty yanıtı korunur. (4) TREND: eşit uzunlukta önceki pencere için aynı metin kümesi çekilir ve MEVCUT dönemin küme merkezlerine atanır (yeniden kümelenmez — yoksa iki dönemin etiketleri eşleşmez ve trend anlamsızlaşır); `previous_volume` + `trend` (oran; previous_volume=0 iken null) üretilir. (5) `share` = volume/analyzed, analyzed=0 iken null. Kümeleme veri toplama işi reports.ts içinde PAYLAŞILAN bir yardımcıya konur ki 07.6-g'nin CSV'si aynı sayıyı yeniden hesaplamak yerine tüketebilsin (breakdownByDay deseni).\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/test/integration/reports-topics.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts (satır 664-730 `/reports/breakdown` — withTenant + $queryRaw + license_id filtresi; satır 279+ `breakdownByDay` paylaşılan yardımcı deseni; ReportsReviews'ün eşit-uzunluk önceki-pencere hesabı) · apps/api/src/services/ai/knowledge-service.ts (satır 76-94 — license_id filtreli tenant-scoped ham SQL + bağlı parametre deseni)\nKK (birebir): \"AI kümeleme\" | \"hacim/trend\" | \"yeterli veri yoksa empty\"\nKK DOĞRULAMA: apps/api/test/integration/reports-topics.test.ts: (a) farklı konulardan sohbetler seed edilir → yanıtta ≥2 küme ve her birinde `volume` > 0 → 'AI kümeleme' + 'hacim'; (b) önceki pencerede daha az/çok aynı-konu sohbet → `previous_volume` ve `trend` beklenen yönde, önceki dönem 0 iken `trend` null → 'trend'; (c) eşiğin altındaki tenant → `sufficient_data:false`, `topics: []` → 'yeterli veri yoksa empty'; (d) aynı istek iki kez → birebir aynı yanıt (determinizm).\nKAPSAM DIŞI: UI sekmesi (07.6-e) ve promo bandı (07.6-f) · CSV export grubu (07.6-g) · Kümelerin kalıcılaştırılması / yeni tablo (varsayım 1) · packages/ai-mock içindeki algoritma değişikliği (07.6-b'de kapandı) · Konu bazlı drill-down (konuya tıklayınca sohbet listesi) — KK'da yok\nSÖZLEŞME: yok — path ve şema 07.6-a'da eklendi; bu alt-görev yalnız o alanları doldurur. Şema alanı EKLEMEK gerekirse OpenAPI'ye eklenip re-bundle edilmeli, yoksa contract-parity.test.ts kırılır.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration: kümeler + volume + share + previous_volume/trend doğru; aynı istek iki kez → aynı yanıt · negatif (önce yazılır): reports_read yok → 403; ters/geçersiz aralık → 400 · negatif: metni olmayan thread kümeye girmez; önceki dönem boşken trend null (0/NaN değil) · cross-tenant (zorunlu): A'da 'kargo', B'de 'iade' konulu sohbetler varken B'nin yanıtında A'nın konusu/hacmi görünmez ve analyzed yalnız B'yi sayar (NFR-S4) · perf: 1000 sohbet tavanında yanıt süresi ölçümü (NFR-P7 notu) · DB süiti paket başına SERİ koşulur (nexa-test-gate-parallel-db)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               2
             ],
             "parentId": "64",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T02:07:06.748Z"
           },
           {
             "id": 4,
@@ -1822,7 +1822,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T01:45:02.960Z"
+        "updatedAt": "2026-08-03T02:07:06.748Z"
       },
       {
         "id": "65",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T01:45:02.960Z",
+      "lastModified": "2026-08-03T02:07:06.748Z",
       "taskCount": 99,
       "completedCount": 75,
       "tags": [

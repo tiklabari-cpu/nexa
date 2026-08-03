@@ -2118,13 +2118,13 @@
             "description": "Contract-first sırayla: (1) KONTRAT — paths/mcp.yaml'a `POST /mcp/tools/{tool}` (tek genel uç, varsayım 1) + McpToolCallRequest/McpToolCallResult şemaları + re-bundle. (2) ÇEKİRDEK — routes/mcp.ts handler: katalogdan (08.8.3-a) tool çöz → bilinmeyen ad 404 (tool yüzeyini haritalatmamak için); principal.scopes'a karşı tool.requiredScopes ile hasAnyScope → eksikse 403 authorization; gövdeyi tool.inp",
             "details": "08.8.3-c — Tool-call yürütücüsü — scope gate + tenant kapsamı + IDOR 404 + audit + search_tickets referans tool'u (BÖLÜNMEZ ÇEKİRDEK)  [OPUS-MAX]\n\nPRD: FR-MOD-08.8.3 (+ NFR-S1, NFR-S3, NFR-S4, NFR-S5, NFR-S8, NFR-S9)\nETİKET GEREKÇESİ: OPUS-MAX: koşul 2 ihlali ve tek başına birden fazla güvenlik sınırı — (a) authZ: tool-bazlı scope zorunluluğu (PRD:1386 'her tool çağrısı kullanıcının scope'larıyla ve organization_id ile sınırlı'), (b) tenant izolasyon (withTenant/RLS sınırı), (c) IDOR/enumeration kararı (NFR-S5: 404, 403 değil), (d) audit yüzeyi. Yanlış karar pahalı: bir LLM istemcisine yetkisiz veri dökülür. Çekirdek daha küçüğe BÖLÜNMEZ (bkz. bolunmeyen_gerekce).\nNEDEN AÇIK: grep mcp = 0; hiçbir tool-call yüzeyi yok. Mevcut merkezî gate (apps/api/src/plugins/auth.ts:120-181) route config'indeki `scopes`'u hasAnyScope ile denetliyor — ama tek genel uçta gerekli scope TOOL'a göre değişir, yani route-config seviyesinde ifade edilemez; handler içinde ikinci bir gate gerekir ve bu gate depoda mevcut DEĞİL. apps/api/src/routes/tickets.ts:85-104 GET /tickets serbest metin `query` + withTenant ile scope-gated liste sunuyor (search_tickets'ın bugünkü en yakın karşılığı) ama MCP sözleşmesine sarılmamış.\nKAPSAM: Contract-first sırayla: (1) KONTRAT — paths/mcp.yaml'a `POST /mcp/tools/{tool}` (tek genel uç, varsayım 1) + McpToolCallRequest/McpToolCallResult şemaları + re-bundle. (2) ÇEKİRDEK — routes/mcp.ts handler: katalogdan (08.8.3-a) tool çöz → bilinmeyen ad 404 (tool yüzeyini haritalatmamak için); principal.scopes'a karşı tool.requiredScopes ile hasAnyScope → eksikse 403 authorization; gövdeyi tool.inputSchema ile doğrula → 400 validation; yürütmenin TAMAMI request.withTenant içinde; yanıtta license_id/organization_id ASLA yer almaz. (3) IDOR — argüman olarak gelen id başka lisansa aitse 404 (403 değil, NFR-S5). (4) AUDIT — 'mcp.tool_called' AUDIT_ACTIONS union'ına eklenir (audit-log.ts:62 'pat.created' komşuluğu), metadata = {tool, scope_used}; argüman metni/PII audit'e YAZILMAZ. (5) REFERANS TOOL — search_tickets → TicketService.list (mevcut serbest metin `query` yolu). Negatif ve cross-tenant testler pozitiflerden ÖNCE yazılır ve kırmızı görülür.\nDOSYALAR: packages/contract/openapi/paths/mcp.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/routes/mcp.ts · apps/api/src/services/mcp/tool-dispatch.ts · apps/api/src/services/mcp/tools/search-tickets.ts · apps/api/src/services/audit/audit-log.ts · apps/api/test/integration/mcp-tools.test.ts · apps/api/test/integration/tenant-isolation.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/plugins/auth.ts · apps/api/src/routes/tickets.ts · apps/api/src/routes/auth.ts · apps/api/test/integration/tenant-isolation.test.ts\nKK (birebir): \"OAuth scope bazlı\" | \"tenant izole\" | \"search_tickets/list_chats/get_report/summarize_chat tool'ları\"\nKK DOĞRULAMA: KK 'OAuth scope bazlı' → mcp-tools.test.ts: tickets--*:ro taşımayan PAT ile search_tickets → 403; scope'lu PAT ile 200. KK 'tenant izole' → tenant-isolation.test.ts: A lisansının token'ı B lisansının ticket'ını ne listeler ne id ile getirir (404); yanıt gövdesinde license_id/organization_id yok. KK 'search_tickets ... tool'ları' → katalogdaki search_tickets adıyla çağrı 200 ve TicketService sonucunu döner. contract-parity yeşil.\nKAPSAM DIŞI: list_chats (08.8.3-d), get_report (08.8.3-e), summarize_chat (08.8.3-f) · PII/CC-mask okuma yolu doğrulaması (08.8.3-f) · MCP'ye özel yeni scope (varsayım 3) ve yeni ApiError tipi (varsayım 4) · dynamic client registration / headless izin akışı (varsayım 2) · ayrı rate-limit kovası (08.8.3-h) · UI (08.8.3-g)\nSÖZLEŞME: YENİ: paths/mcp.yaml#/toolCall → POST /mcp/tools/{tool} + McpToolCallRequest/McpToolCallResult şemaları; openapi.yaml paths girdisi + re-bundle ZORUNLU (contract-parity.test.ts iki yönlü kırılır). Yeni hata tipi eklenmez — mevcut validation/authorization/not_found kullanılır; aksi halde errors.ts (×2 yer) + scopes.test.ts sayacı + openapi enum + regen zinciri gerekirdi (varsayım 4).\nMIGRATION: yok — audit action genişletmesi kod seviyesinde union'a değer eklemektir, audit_log_entries şeması değişmez. api_tokens.kind'a 'mcp' EKLENMEZ (varsayım 5).\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce, kırmızı görülecek): gerekli scope'u taşımayan token → 403 authorization · negatif (önce): bilinmeyen tool adı → 404 (403/400 değil) · negatif (önce): bozuk/eksik argüman → 400 validation (ADR-06 zarfı) · negatif (önce): başka lisansın ticket id'si → 404, 403 DEĞİL (NFR-S5) · negatif (önce): müşteri (nxc1.) token'ı → 404 · cross-tenant: iki lisanslı fixture — A'nın çağrısı B'nin hiçbir satırını döndürmüyor; yanıtta tenant tanımlayıcısı sızmıyor · integration: pozitif search_tickets çağrısı TicketService sonucunu döner · integration: her başarılı çağrı 'mcp.tool_called' audit kaydı üretir ve metadata'da argüman metni yok · unit: scope gate saf fonksiyonu tablo testi (kesişim/boş küme/üst küme) · regresyon: contract-parity.test.ts yeşil; DB süiti paket başına SERİ koşulur (paylaşılan Postgres yarışı)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               2
             ],
             "parentId": "67",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T08:41:20.073Z"
           },
           {
             "id": 4,
@@ -2195,7 +2195,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T08:15:11.573Z"
+        "updatedAt": "2026-08-03T08:41:20.073Z"
       },
       {
         "id": "68",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T08:15:11.573Z",
+      "lastModified": "2026-08-03T08:41:20.073Z",
       "taskCount": 99,
       "completedCount": 77,
       "tags": [

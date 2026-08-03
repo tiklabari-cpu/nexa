@@ -262,4 +262,45 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
     const dumped = JSON.stringify(rows);
     expect(dumped).not.toContain(PAN);
   });
+
+  // --- The read paths (MCP summarize_chat, FR-MOD-08.8.3-f) ------------------
+
+  it('masks a card in the summarize_chat tool response (read-path defence)', async () => {
+    // Seed a chat whose transcript holds a RAW PAN straight in the database,
+    // bypassing the write-time mask — the case the read-path mask exists for. A
+    // tool that dumps transcript text to an LLM client must re-mask, so a PAN
+    // that reached the DB by any path never leaves through the tool response.
+    const customer = await owner.customer.create({
+      data: { organizationId: fx.a.organizationId, name: 'CC read-path visitor' },
+      select: { id: true },
+    });
+    const chatId = 'cc-sum-chat';
+    const threadId = 'cc-sum-thr';
+    await owner.chat.create({
+      data: { id: chatId, licenseId: fx.a.licenseId, customerId: customer.id, active: true },
+    });
+    await owner.thread.create({ data: { id: threadId, chatId, licenseId: fx.a.licenseId, active: true } });
+    await owner.event.create({
+      data: {
+        id: `${threadId}_10`,
+        threadId,
+        chatId,
+        licenseId: fx.a.licenseId,
+        type: 'message',
+        text: `my card is ${PAN}`,
+        authorType: 'customer',
+        recipients: 'all',
+      },
+    });
+
+    // agentToken carries chats--all:ro, the scope summarize_chat requires.
+    const res = await server.post('/mcp/tools/summarize_chat', { arguments: { chat_id: chatId } }, auth(agentToken));
+    expect(res.statusCode).toBe(200);
+
+    const summary = (res.json() as { result: { summary: string } }).result.summary;
+    expect(summary).toContain(MASKED);
+    expect(summary).not.toContain(PAN);
+    // Nowhere in the whole response envelope, not just the parsed field.
+    expect(res.payload).not.toContain(PAN);
+  });
 });

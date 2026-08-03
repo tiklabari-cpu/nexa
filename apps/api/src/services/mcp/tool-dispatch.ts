@@ -7,10 +7,10 @@
  *
  * Resolution is the union of two facts. The catalogue (`tool-catalog.ts`) knows
  * a tool's argument schema and required scopes; this table knows how to execute
- * it. A name in the catalogue but with no executor here — `summarize_chat`,
- * which a later slice (08.8.3-f) will wire — is *not yet callable*, so it
- * resolves to undefined and the route answers 404, exactly as it does for a
- * name in neither. Neither case reveals which tools might exist (NFR-S5).
+ * it. All four catalogued tools are now wired; a name in the catalogue with no
+ * executor here would still be *not callable* — it resolves to undefined and the
+ * route answers 404, exactly as it does for a name in neither, so a future
+ * half-added tool cannot be enumerated by probing (NFR-S5).
  *
  * What is deliberately NOT here: the tenant boundary. An executor is handed a
  * transaction that already has the caller's tenant context set, so isolation is
@@ -24,6 +24,7 @@ import { toolByName, type McpToolDescriptor, type McpToolName } from './tool-cat
 import { runGetReport } from './tools/get-report.js';
 import { runListChats } from './tools/list-chats.js';
 import { runSearchTickets } from './tools/search-tickets.js';
+import { runSummarizeChat } from './tools/summarize-chat.js';
 
 /** Everything an executor needs to run one tool call, already tenant-scoped. */
 export interface McpToolContext {
@@ -41,13 +42,14 @@ export interface McpToolContext {
 export type McpToolExecutor = (ctx: McpToolContext, args: unknown) => Promise<unknown>;
 
 /**
- * The dispatch table: tool name → executor. `search_tickets`, `list_chats` and
- * `get_report` are wired; `summarize_chat` is added here by 08.8.3-f.
+ * The dispatch table: tool name → executor. All four catalogued tools are wired
+ * — `summarize_chat` was added here by 08.8.3-f, completing the set.
  */
 const EXECUTORS: Partial<Record<McpToolName, McpToolExecutor>> = {
   search_tickets: runSearchTickets,
   list_chats: runListChats,
   get_report: runGetReport,
+  summarize_chat: runSummarizeChat,
 };
 
 export interface ResolvedTool {

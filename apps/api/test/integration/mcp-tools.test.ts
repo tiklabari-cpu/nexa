@@ -11,9 +11,9 @@
  * path (the `search_tickets` reference tool), the cross-tenant property proven
  * from both licenses, and the audit trail.
  *
- * `search_tickets` (08.8.3-c), `list_chats` (08.8.3-d) and `get_report`
- * (08.8.3-e) are wired in this file; `summarize_chat` arrives in 08.8.3-f, and
- * the end-to-end flow across all four is 08.8.3-h.
+ * `search_tickets` (08.8.3-c), `list_chats` (08.8.3-d), `get_report`
+ * (08.8.3-e) and `summarize_chat` (08.8.3-f) are all wired in this file; the
+ * end-to-end flow across all four is 08.8.3-h.
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -169,13 +169,6 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
     const res = await callTool('no_such_tool', readTokenA, { query: PROBE });
     expect(res.statusCode).toBe(404);
     expect((res.json() as { error: { type: string } }).error.type).toBe('not_found');
-  });
-
-  it('answers 404 for a catalogued tool not yet served', async () => {
-    // summarize_chat is in the manifest but wired by 08.8.3-f; until then it is
-    // not callable and 404s, the same as an unknown name.
-    const res = await callTool('summarize_chat', readTokenA, {});
-    expect(res.statusCode).toBe(404);
   });
 
   it('refuses a token missing the tool scope with 403', async () => {
@@ -509,6 +502,122 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
       const metadata = entries[0]!.metadata as { tool?: string; scope_used?: string };
       expect(metadata.tool).toBe('get_report');
       expect(metadata.scope_used).toBe('reports_read');
+    });
+  });
+
+  // --- summarize_chat (FR-MOD-08.8.3-f) ---------------------------------------
+
+  describe('summarize_chat', () => {
+    interface SummaryResult {
+      tool: string;
+      result: { summary: string };
+    }
+
+    // A chat id that is well-formed (<= 12 chars) but names no chat in any
+    // licence — so a 404 here is "not found", not a validation rejection.
+    const MISSING_CHAT = 'no-such-chat';
+
+    let threadSeq = 0;
+
+    /** Attach a message to a chat, seeded as the owner (bypassing the routes) so
+     * the transcript has something for the summary to quote. */
+    async function seedMessage(
+      chatId: string,
+      licenseId: bigint,
+      text: string,
+      authorType: 'customer' | 'agent' = 'customer',
+    ): Promise<void> {
+      threadSeq += 1;
+      const threadId = `thr-${threadSeq}`;
+      await owner.thread.create({ data: { id: threadId, chatId, licenseId, active: true } });
+      await owner.event.create({
+        data: {
+          id: `${threadId}_10`,
+          threadId,
+          chatId,
+          licenseId,
+          type: 'message',
+          text,
+          authorType,
+          recipients: 'all',
+        },
+      });
+    }
+
+    it('refuses summarize_chat for a token missing the chats scope with 403', async () => {
+      const res = await callTool('summarize_chat', noScopeTokenA, { chat_id: CHAT_A_1 });
+      expect(res.statusCode).toBe(403);
+      expect((res.json() as { error: { type: string } }).error.type).toBe('authorization');
+    });
+
+    it('rejects a missing chat_id argument with 400', async () => {
+      const res = await callTool('summarize_chat', readTokenA, {});
+      expect(res.statusCode).toBe(400);
+      expect((res.json() as { error: { type: string } }).error.type).toBe('validation');
+    });
+
+    it('answers 404 (not 403) for a chat id that does not exist', async () => {
+      const res = await callTool('summarize_chat', readTokenA, { chat_id: MISSING_CHAT });
+      expect(res.statusCode).toBe(404);
+      expect((res.json() as { error: { type: string } }).error.type).toBe('not_found');
+    });
+
+    it("answers 404 for another licence's chat id (tenant isolation)", async () => {
+      // CHAT_B_1 is a real chat — in licence B. Under A's token it must be
+      // indistinguishable from one that does not exist, never a 403 that would
+      // confirm the id is real.
+      const res = await callTool('summarize_chat', readTokenA, { chat_id: CHAT_B_1 });
+      expect(res.statusCode).toBe(404);
+      expect((res.json() as { error: { type: string } }).error.type).toBe('not_found');
+    });
+
+    it('summarises a chat in the caller licence', async () => {
+      await seedMessage(CHAT_A_1, fx.a.licenseId, 'My order has not arrived yet.');
+
+      const res = await callTool('summarize_chat', readTokenA, { chat_id: CHAT_A_1 });
+      expect(res.statusCode).toBe(200);
+
+      const body = res.json() as SummaryResult;
+      expect(body.tool).toBe('summarize_chat');
+      expect(body.result.summary).toContain('order has not arrived');
+    });
+
+    it('does not write an internal note (read-only — the chat is unchanged)', async () => {
+      await seedMessage(CHAT_A_1, fx.a.licenseId, 'Where is my refund?');
+      const before = await owner.event.count({ where: { chatId: CHAT_A_1 } });
+
+      const res = await callTool('summarize_chat', readTokenA, { chat_id: CHAT_A_1 });
+      expect(res.statusCode).toBe(200);
+
+      // No event added, and specifically no agents-only note (the write the
+      // copilot summary route makes and this tool deliberately does not).
+      expect(await owner.event.count({ where: { chatId: CHAT_A_1 } })).toBe(before);
+      expect(await owner.event.count({ where: { chatId: CHAT_A_1, recipients: 'agents' } })).toBe(0);
+      // And no assist run either — summarize_chat feeds no Reports metric.
+      expect(await owner.skillRun.count({ where: { chatId: CHAT_A_1 } })).toBe(0);
+    });
+
+    it("cannot reach another licence's transcript even by summarising A's id under B", async () => {
+      await seedMessage(CHAT_A_1, fx.a.licenseId, 'Tenant A private message.');
+
+      // B holds the same broad chats--all:ro scope, so only isolation stops it.
+      const res = await callTool('summarize_chat', readTokenB, { chat_id: CHAT_A_1 });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('records mcp.tool_called for a successful summarize_chat call', async () => {
+      await seedMessage(CHAT_A_1, fx.a.licenseId, 'Anything at all.');
+      const res = await callTool('summarize_chat', readTokenA, { chat_id: CHAT_A_1 });
+      expect(res.statusCode).toBe(200);
+
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'mcp.tool_called', target: 'mcp_tool:summarize_chat' },
+      });
+      expect(entries).toHaveLength(1);
+
+      const metadata = entries[0]!.metadata as { tool?: string; scope_used?: string };
+      expect(metadata.tool).toBe('summarize_chat');
+      expect(metadata.scope_used).toBe('chats--all:ro');
     });
   });
 });

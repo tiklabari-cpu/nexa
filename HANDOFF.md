@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### 67.6 (08.8.3-f) — summarize_chat tool + tool yanıtında PII/CC-mask sınırı — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-XHIGH] Dört MCP tool'unun sonuncusu bağlandı; dispatch tablosu tamamlandı.
+  1. Yeni `apps/api/src/services/mcp/tools/summarize-chat.ts` (`runSummarizeChat`): **önce görünürlük
+     gate'i** — `resolveVisibility` + `chatVisibilityFilter` doğrudan `ctx.tx` üzerinde (chat routes'un
+     kuralı; `ChatService.get` iç içe açılamayan ikinci `withTenant` açacağından o kullanılmadı). Erişilemez
+     / ekip-dışı / başka lisansın chat'i (RLS görünmez kılar) → **404, asla 403** (kısa id enumerasyon
+     oracle'ı olmaz). Sonra `copilot.conversationTurns(ctx.tx, chat_id)` → `summariseConversation()`
+     (deterministik, @nexa/ai-mock). **İnternal note YAZILMAZ** (salt-okunur; copilot summary route'unun
+     yazma yolu değişmedi, hiçbir `events`/`skill_run` eklenmez — varsayım 7). Özet **`maskCardNumbers()`**
+     (cc-mask.ts) ile maskelenip dönülür — yazma-anı maskesine ek okuma-yolu savunması.
+  2. `tool-dispatch.ts`: `summarize_chat: runSummarizeChat` eklendi; başlık + tablo yorumları "dördü de
+     bağlı" olacak şekilde güncellendi.
+  3. `tool-catalog.ts`: `SummarizeChatArgs` tip export'u (diğer üç tool desenindeki gibi). Descriptor +
+     `chat_id` şeması zaten 08.8.3-a'da vardı.
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ ·
+  `pnpm --filter @nexa/api test:unit` ✓ (303 api; `tool-dispatch.test.ts` 11 — summarize_chat artık
+  pozitif resolve testi) · `pnpm --filter @nexa/api test:integration --no-file-parallelism` ✓
+  (50 dosya / **1091 test**, serial). `mcp-tools.test.ts` yeni `summarize_chat` bloğu (+8): 403 (chats
+  scope eksik) · 400 (eksik `chat_id`) · 404 (yok olan chat) · 404 (başka lisansın chat'i — tenant izole,
+  KK) · pozitif özet (kendi lisansı) · internal-note YAZILMADI (chat event sayısı + agents-note + skill_run
+  değişmiyor) · cross-tenant (A'nın chat id'si B token'ıyla → 404) · audit (`mcp.tool_called`,
+  `target: mcp_tool:summarize_chat`, `scope_used: chats--all:ro`). `cc-masking.test.ts` (+1): DB'ye ham PAN'lı
+  transcript doğrudan seedlenir (yazma maskesi bypass) → tool yanıtında `**** **** **** 1111` görünür, ham
+  PAN yanıt zarfının hiçbir yerinde yok. Regresyon: `copilot.test.ts` (15) değişmeden yeşil.
+- **Varsayımlar:** Yanıt sözleşmesi yok (08.8.3-c'de dokümante); executor `{ summary }` döner, route
+  `McpToolCallResult` (`{ tool, result }`) içinde sarar. Görünürlük gate'i, list_chats'in `listChatsInTenant`
+  filtresiyle aynı `chatVisibilityFilter`'ı kullanır — tek-chat varlık kontrolü için `findFirst`.
+- **Sonraki pencereye not:** MCP dilimi kalan iki iş: **08.8.3-g** (tm 67.7 — Settings → MCP bağlantı UI
+  ekranı) ve **08.8.3-h** (tm 67.8 — uçtan uca istemci akışı + rate-limit + audit). Dört tool adaptörünün
+  (search_tickets/list_chats/get_report/summarize_chat) tamamı artık bağlı; -h bunların hepsini birlikte
+  koşturur. PLAN §5.2 satırı (08.8.3) hâlâ `◐` — yalnız -g/-h kaldığından. Repo kökündeki alakasız kirli
+  dosyalar (BUILD-BLUEPRINT.md, CONVENTIONS.md, e2e PNG'leri, run-loop.sh, .playwright-mcp/) bu turda da
+  ELLENMEDİ — önceki pencerelerden gelen, bu task'la ilgisiz değişiklikler.
+
 ### 67.5 (08.8.3-e) — get_report tool adaptörü (`report` enum → mevcut 4 rapor sorgusu) — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] Dispatch tablosuna `get_report` dalı.

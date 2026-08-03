@@ -150,6 +150,11 @@ const summarizeChatInputJsonSchema = {
   additionalProperties: false,
 } as const;
 
+/** Parsed, validated arguments to `summarize_chat` — the tool-call surface
+ * (08.8.3-c) validates the request body against `summarizeChatInputSchema` and
+ * hands the executor this shape. */
+export type SummarizeChatArgs = z.infer<typeof summarizeChatInputSchema>;
+
 /**
  * The MCP tool catalog. Exactly the four tools the PRD names (KK
  * "search_tickets/list_chats/get_report/summarize_chat tool'ları") — adding a

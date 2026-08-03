@@ -786,11 +786,14 @@ function centroidOf(vectors: number[][]): number[] {
  * for {@link toCsv}. `reviews` serialises one row per UTC day; `breakdown`
  * serialises the Breakdown tab's four dimensions (day, hour, team, channel) in
  * one long-format table — `dimension,key,...` — rather than four files, so the
- * download stays one CSV per group; the two window summaries (overview,
- * ai-agent) serialise as `metric,value` pairs, the honest tabular shape for a
- * dashboard of headline figures. Every figure is the *same* one its JSON report
- * exposes — the export reuses the report's aggregation helpers rather than
- * recomputing — so a CSV can never disagree with the screen it was exported from.
+ * download stays one CSV per group; `topics` serialises one row per cluster
+ * (label, volume, share, previous window's volume, trend) — below the
+ * sufficiency floor only the header row, never a fabricated zero-row; the two
+ * window summaries (overview, ai-agent) serialise as `metric,value` pairs, the
+ * honest tabular shape for a dashboard of headline figures. Every figure is the
+ * *same* one its JSON report exposes — the export reuses the report's
+ * aggregation helpers rather than recomputing — so a CSV can never disagree
+ * with the screen it was exported from.
  */
 async function buildGroupCsv(
   tx: TenantClient,
@@ -887,6 +890,24 @@ async function buildGroupCsv(
           const csat = csatSummary(row);
           return [row.date, csat.good, csat.bad, csat.responses, csat.score];
         }),
+      };
+    }
+    case 'topics': {
+      // Same equal-length previous window construction as the /reports/topics
+      // route (FR-MOD-07.6) — the CSV can never disagree with the JSON.
+      const spanMs = to.getTime() - from.getTime();
+      const prevTo = new Date(from.getTime() - 1);
+      const prevFrom = new Date(from.getTime() - spanMs);
+      const report = await buildTopicsReport(tx, licenseId, from, to, prevFrom, prevTo);
+      return {
+        headers: ['label', 'volume', 'share', 'previous_volume', 'trend'],
+        rows: report.topics.map((topic) => [
+          topic.label,
+          topic.volume,
+          topic.share,
+          topic.previous_volume,
+          topic.trend,
+        ]),
       };
     }
     default:

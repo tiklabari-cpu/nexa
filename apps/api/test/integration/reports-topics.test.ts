@@ -359,6 +359,106 @@ describe('chat topics report (07.6)', () => {
     const labels = theirs.topics.map((topic: { label: string }) => topic.label).join(' ');
     expect(labels).not.toMatch(/deliver|refund|package|invoice/);
   });
+
+  // --- CSV export (07.6-g) ---------------------------------------------------
+  //
+  // `buildGroupCsv`'s 'topics' case reuses `buildTopicsReport` — the same
+  // helper this suite's other tests hit through `/reports/topics` — so the
+  // download can never disagree with the JSON. A label is always a run of
+  // tokenised words (see `packages/ai-mock/src/topics.ts`'s `tokenize`, which
+  // strips everything but letters/digits before a label is ever derived), so a
+  // topic label can never itself open with a formula-lead character (`=+-@`);
+  // the CSV-injection guard is `csvField`'s and is proven generically once in
+  // `reports-export.test.ts`'s `toCsv` suite, exercised here just like every
+  // other exported cell.
+  describe('CSV export (07.6-g)', () => {
+    /** Split a CSV body into its non-empty lines (rows are CRLF-terminated). */
+    const lines = (body: string): string[] => body.split('\r\n').filter((line) => line !== '');
+
+    it('lists topics among the exportable groups for a reports_read token, and hides it without one', async () => {
+      const groups = (await server.get('/reports/groups', auth)).json().groups;
+      expect(groups.map((g: { id: string }) => g.id)).toContain('topics');
+
+      const weak = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:ro'],
+      });
+      const empty = (await server.get('/reports/groups', { authorization: `Bearer ${weak}` })).json()
+        .groups;
+      expect(empty).toEqual([]);
+    });
+
+    it('exports one CSV row per topic, matching the JSON report figure for figure', async () => {
+      await seedTopic(fx.a, DELIVERY, 12);
+      await seedTopic(fx.a, REFUND, 8);
+
+      const [report, response] = await Promise.all([
+        server.get('/reports/topics', auth),
+        server.get('/reports/export?group=topics', auth),
+      ]);
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toContain('text/csv');
+      expect(response.headers['content-disposition']).toMatch(
+        /^attachment; filename="nexa-topics-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+      );
+      expect(response.headers['cache-control']).toBe('no-store');
+
+      const rows = lines(response.body);
+      expect(rows[0]).toBe('label,volume,share,previous_volume,trend');
+
+      const data = report.json() as {
+        topics: Array<{
+          label: string;
+          volume: number;
+          share: number | null;
+          previous_volume: number;
+          trend: number | null;
+        }>;
+      };
+      expect(data.topics.length).toBeGreaterThanOrEqual(2);
+      expect(rows).toHaveLength(1 + data.topics.length);
+
+      data.topics.forEach((topic, i) => {
+        const [label, volume, share, previousVolume, trend] = rows[i + 1]!.split(',');
+        expect(label).toBe(topic.label);
+        expect(Number(volume)).toBe(topic.volume);
+        expect(share).toBe(topic.share === null ? '' : String(topic.share));
+        expect(Number(previousVolume)).toBe(topic.previous_volume);
+        expect(trend).toBe(topic.trend === null ? '' : String(topic.trend));
+      });
+    });
+
+    it('exports only the header row below the sufficiency floor — no fabricated zero-row', async () => {
+      const floor = (await server.get('/reports/topics', auth)).json().min_conversations as number;
+      await seedSummaryThreads(fx.a, floor - 1);
+
+      const response = await server.get('/reports/export?group=topics', auth);
+      expect(response.statusCode).toBe(200);
+      expect(lines(response.body)).toEqual(['label,volume,share,previous_volume,trend']);
+    });
+
+    it("exports only the caller's tenant", async () => {
+      await seedTopic(fx.a, DELIVERY, 12);
+      await seedTopic(fx.a, REFUND, 8);
+      await seedTopic(fx.b, LOGIN, 20);
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const response = await server.get('/reports/export?group=topics', {
+        authorization: `Bearer ${theirToken}`,
+      });
+      expect(response.statusCode).toBe(200);
+      const rows = lines(response.body);
+      expect(rows.length).toBeGreaterThan(1);
+      expect(rows.slice(1).join(' ')).not.toMatch(/deliver|refund|package|invoice/);
+    });
+  });
 });
 
 /**

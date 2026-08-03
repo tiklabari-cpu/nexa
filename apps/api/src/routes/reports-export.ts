@@ -41,6 +41,7 @@ export const REPORT_GROUPS: readonly ReportGroup[] = [
   { id: 'breakdown', label: 'Breakdown', scopes: ['reports_read'] },
   { id: 'ai-agent', label: 'AI Agent', scopes: ['reports_read'] },
   { id: 'reviews', label: 'Reviews', scopes: ['reports_read'] },
+  { id: 'topics', label: 'Chat topics', scopes: ['reports_read'] },
 ] as const;
 
 export type ReportGroupId = (typeof REPORT_GROUPS)[number]['id'];

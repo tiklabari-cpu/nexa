@@ -1330,6 +1330,7 @@ describe('reports and billing', () => {
           'breakdown',
           'ai-agent',
           'reviews',
+          'topics',
         ]);
         expect(groups[0]).toEqual({ id: 'overview', label: 'Overview' });
       });

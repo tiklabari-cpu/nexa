@@ -1798,12 +1798,12 @@
             "description": "(1) reports-export.ts `REPORT_GROUPS` dizisine `{ id: 'topics', label: 'Chat topics', scopes: ['reports_read'] }` satırı (Reports sayfasındaki sekme sırasına uygun konumda). (2) reports.ts `buildGroupCsv` switch'ine `case 'topics'` — 07.6-c'nin PAYLAŞILAN kümeleme yardımcısını yeniden kullanır (yeniden hesaplama YOK; `case 'breakdown'`/breakdownByDay felsefesi: CSV ekranla asla çelişmez); başlıkla",
             "details": "07.6-g — Topics rapor grubu: `/reports/groups` kataloğu + CSV export satırı  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.6 (+ FR-MOD-07.7 izin bazlı görünürlük/export)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 2 kaynak dosya + testleri; GÜVENLİK SINIRI YOK çünkü yetki MANTIĞINA dokunulmuyor: reports-export.ts:39-44 kataloğuna mevcut `reports_read` scope'uyla TEK SATIR ekleniyor, `EXPORT_SCOPES` (satır 54) ve `visibleReportGroups` (satır 67) katalogdan TÜRETİLDİĞİ için kapı otomatik tutarlı kalıyor; yeni scope/yeni endpoint yok. Eşzamanlılık yok; yeni algoritma yok — `buildGroupCsv`'deki `case 'breakdown'` birebir kopyalanacak desen; kabul kriteri mekanik. (Etiket sonnet ama izin ve enjeksiyon negatifleri yine de zorunlu tutuldu.)\nNEDEN AÇIK: apps/api/src/routes/reports-export.ts:39-44 `REPORT_GROUPS` kataloğu tam olarak dört satır taşıyor (overview/breakdown/ai-agent/reviews) — topics yok. Aynı dosyanın modül başlığı (satır 34-38) kataloğun sekmeler/gruplar listesi/export için tek doğruluk kaynağı olduğunu söylüyor; 07.6-e beşinci sekmeyi eklediği anda katalog eksik kalır. apps/api/src/routes/reports.ts `buildGroupCsv` switch'i de (satır 350-410+) yalnız bu dört grubu tanıyor.\nKAPSAM: (1) reports-export.ts `REPORT_GROUPS` dizisine `{ id: 'topics', label: 'Chat topics', scopes: ['reports_read'] }` satırı (Reports sayfasındaki sekme sırasına uygun konumda). (2) reports.ts `buildGroupCsv` switch'ine `case 'topics'` — 07.6-c'nin PAYLAŞILAN kümeleme yardımcısını yeniden kullanır (yeniden hesaplama YOK; `case 'breakdown'`/breakdownByDay felsefesi: CSV ekranla asla çelişmez); başlıklar `label,volume,share,previous_volume,trend`; yetersiz veri durumunda yalnız başlık satırı döner (uydurma 0 satırı yok). (3) paths/reports.yaml `export` bloğundaki `group` parametre açıklamasına `topics` eklenir + re-bundle. CSV formül-enjeksiyon koruması mevcut `csvField`'dan gelir — konu etiketi kullanıcı-etkili metindir, bu koruma testle kanıtlanır.\nDOSYALAR: apps/api/src/routes/reports-export.ts · apps/api/src/routes/reports.ts · apps/api/src/routes/reports-export.test.ts · apps/api/test/integration/reports-topics.test.ts · packages/contract/openapi/paths/reports.yaml\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports-export.ts (satır 39-44 `REPORT_GROUPS` katalog satırları; satır 54 `EXPORT_SCOPES` türetimi; satır 90-97 `csvField` enjeksiyon koruması) · apps/api/src/routes/reports.ts (satır 378-391 `buildGroupCsv` içindeki `case 'breakdown'` — paylaşılan yardımcıyı tüketen CSV üretimi) · apps/api/src/routes/reports-export.test.ts (grup görünürlüğü + CSV alan testleri)\nKK (birebir): \"KK-türetilmiş: PRD 07.6 KK'sı export demiyor; birebir kaynak FR-MOD-07.7 KK'sı \"İzin bazlı görünürlük; export; benchmark karşılaştırma\". Türetme gerekçesi: reports-export.ts kataloğu sekme/grup/export'un tek doğruluk kaynağı; beşinci sekme kataloğa yazılmazsa üç yüzey tutarsız kalır.\"\nKK DOĞRULAMA: reports-export.test.ts: `reports_read` taşıyan token için `visibleReportGroups` çıktısında 'topics' var, taşımayanda YOK → 'izin bazlı görünürlük'. reports-topics.test.ts: `GET /reports/export?group=topics` 200 + text/csv ve satırlar `/reports/topics` JSON'undaki `volume`/`trend` ile BİREBİR aynı → 'export' + 'CSV ekranla çelişmez'. Yetersiz veri durumunda yalnız başlık satırı.\nKAPSAM DIŞI: PDF export ve benchmark karşılaştırma (PRD 07.7'de v2; PLAN §4.4.8 kapsam dışı) · Yeni scope tanımı veya izin mantığı değişikliği — katalog satırı dışında hiçbir authZ dosyasına dokunulmaz · Web'de indirme düğmesi UI'ı (mevcut export deseni neyse o) · Kümeleme mantığı (07.6-b / 07.6-c)\nSÖZLEŞME: packages/contract/openapi/paths/reports.yaml → `export` bloğunun `group` parametre açıklamasına `topics` eklenir (yeni path YOK, yalnız açıklama genişlemesi). Yeni path eklenmediği için contract-parity kırılmaz, ama bundle yine de yenilenir — aksi halde dokümantasyon sapar.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration: CSV içeriği JSON raporla birebir aynı; dosya adı `nexa-topics-<from>-<to>.csv` · negatif (önce yazılır): reports_read'siz token → export 403 ve /reports/groups listesinde topics görünmez · negatif (önce yazılır): `=`/`+` ile başlayan konu etiketi CSV'de `'` ile nötralize edilir (formül enjeksiyonu) · negatif: yetersiz veri → yalnız başlık satırı, uydurma 0 satırı yok · cross-tenant: A lisansının CSV'sinde B lisansının konusu yok · unit: REPORT_GROUPS/EXPORT_SCOPES türetimi bozulmadı (mevcut reports-export.test.ts yeşil)",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               3
             ],
             "parentId": "64",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T03:21:51.656Z"
           },
           {
             "id": 8,
@@ -1822,7 +1822,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T03:16:16.545Z"
+        "updatedAt": "2026-08-03T03:21:51.656Z"
       },
       {
         "id": "65",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T03:16:16.546Z",
+      "lastModified": "2026-08-03T03:21:51.656Z",
       "taskCount": 99,
       "completedCount": 75,
       "tags": [

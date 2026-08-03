@@ -215,10 +215,12 @@ export:
       `reviews` serialises one row per UTC day; `breakdown` serialises all four
       Breakdown-tab dimensions (day, hour, team, channel) in one long-format
       table — `dimension,key,chats,closed,manual,assisted,automated` — rather
-      than four files; the two window summaries (`overview`, `ai-agent`)
-      serialise as `metric,value` pairs. Every figure is the same one the
-      group's JSON report exposes, so a download never disagrees with the
-      screen it came from.
+      than four files; `topics` serialises one row per cluster —
+      `label,volume,share,previous_volume,trend` — below the Chat topics
+      sufficiency floor only the header row, never a fabricated zero-row; the
+      two window summaries (`overview`, `ai-agent`) serialise as `metric,value`
+      pairs. Every figure is the same one the group's JSON report exposes, so a
+      download never disagrees with the screen it came from.
 
       User-influenced fields (tags, agent names) are neutralised against
       spreadsheet formula injection, and the body is `no-store`: a report is a
@@ -229,7 +231,7 @@ export:
       - name: group
         in: query
         required: true
-        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`."
+        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`."
         schema: { type: string }
       - name: from
         in: query

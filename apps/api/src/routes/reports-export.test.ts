@@ -11,6 +11,7 @@ import {
 describe('report group catalogue', () => {
   it('resolves a known id and rejects an unknown one', () => {
     expect(reportGroup('overview')?.label).toBe('Overview');
+    expect(reportGroup('topics')?.label).toBe('Chat topics');
     expect(reportGroup('nonexistent')).toBeUndefined();
   });
 

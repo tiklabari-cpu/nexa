@@ -13,6 +13,56 @@
 
 ## Task log (newest-first)
 
+### 64.7 (07.6-g) — Topics rapor grubu: `/reports/groups` kataloğu + CSV export satırı — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] `apps/api/src/routes/reports-export.ts` `REPORT_GROUPS`'a
+  `{id:'topics',label:'Chat topics',scopes:['reports_read']}` satırı (mevcut dört grubun
+  ardına — Reports sayfası `TABS`'ında son sekme); `EXPORT_SCOPES`/`visibleReportGroups`
+  katalogdan türetildiği için otomatik tutarlı kaldı, yeni scope/route yok.
+  `apps/api/src/routes/reports.ts` `buildGroupCsv` switch'ine `case 'topics'` — 07.6-c'nin
+  paylaşılan `buildTopicsReport()` yardımcısını (route'un previous-window
+  `spanMs`/`prevFrom`/`prevTo` inşasıyla birebir kopyalanarak) yeniden kullanır, yeniden
+  hesaplama yok; başlıklar `label,volume,share,previous_volume,trend`; `sufficient_data:false`
+  iken yalnız başlık satırı (uydurma 0 satırı yok). `packages/contract/openapi/paths/reports.yaml`
+  `export` bloğunun açıklaması + `group` parametre açıklamasına `topics` eklendi (yeni
+  path/şema yok) + bundle/generated tipler (`packages/contract/src/generated/api.ts`)
+  yeniden üretildi.
+- **Doğrulama (DoD tam yeşil):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `pnpm -w build` (7/7) · `@nexa/api` unit 266/266 (`reports-export.test.ts` 11/11, yeni
+  `reportGroup('topics')` iddiası dahil) · `@nexa/api` integration tam koşu 993/993 (47
+  dosya, `contract-parity.test.ts` 5/5 dahil, gerçek Postgres+Redis'e karşı tek seferde) ·
+  `@nexa/web` 532/532 · `@nexa/rtm` 90/90 · `@nexa/ai-mock` 72/72 · `@nexa/types` 60/60 ·
+  `@nexa/widget` 52/52. `reports-topics.test.ts`'e yeni `describe('CSV export (07.6-g)')`
+  (+4: izin bazlı görünürlük · CSV satırları `/reports/topics` JSON'undaki
+  `volume`/`share`/`previous_volume`/`trend` ile birebir · yetersiz veride yalnız başlık
+  satırı · CROSS-TENANT A'nın CSV'sinde B'nin konu kelimeleri yok). Mevcut
+  `reports-billing.test.ts`'in grup-listesi regresyon iddiası (`report groups + CSV export
+  (07.7)`) `topics` içerecek şekilde güncellendi, aksi halde REPORT_GROUPS eklemesiyle kırılırdı.
+- **Varsayımlar:** (1) Formül-enjeksiyon negatifi (testStrategy'de istenen "`=`/`+` ile başlayan
+  konu etiketi") topics'e özgü ayrıca yazılmadı — konu etiketleri `tokenize()`'ın ürettiği saf
+  alfanümerik kelimelerden geliyor (`packages/ai-mock/src/topics.ts`, `PURE_NUMBER` elemesi +
+  `\p{L}\p{N}` dışını boşlukla değiştiren regex), yani bir formula-lead karakterle (`=+-@`,
+  tab, CR) ASLA başlayamaz; koruma zaten `csvField`'dan geliyor ve `reports-export.test.ts`'in
+  `toCsv` süitinde jenerik kanıtlanmış (breakdown'ın takım-adı testi dışında overview/ai-agent/
+  reviews grupları da kendi enjeksiyon testini tekrarlamıyor, aynı gerekçeyle). (2) `topics`
+  REPORT_GROUPS'ta son satıra eklendi — Reports sayfası `TABS` sırasında da son sekme
+  (`overview, ai-agent, reviews, breakdown, topics`); REPORT_GROUPS'un kendi sırası zaten
+  TABS sırasıyla birebir örtüşmüyordu (`breakdown` ikinci, TABS'ta dördüncü), bu değişmedi.
+- **Sonraki pencereye not:** 07.6-h (uçtan uca e2e: Chat topics dolu+empty + ai-mock paylaşım
+  regresyonu) hâlâ açık — 07.6 grubunun tek kalan alt-görevi, bağımlılıkları (07.6-c/-d/-e/-f)
+  artık hepsi teslim. `pnpm --filter @nexa/e2e test` bu pencerede env-sourcing sorunu yüzünden
+  koşulamadı (Playwright'ın `webServer` alt-süreci DATABASE_URL/REDIS_URL/JWT_SIGNING_KEY/
+  CUSTOMER_TOKEN_SECRET'ı görmüyor — kökten `.env` source edilmeden `pnpm --filter` ile
+  çağrıldığında ortaya çıkıyor, bu görevin değişikliğiyle ilgisi yok); bu görev zaten
+  UI/e2e'ye dokunmuyordu (KAPSAM DIŞI "indirme düğmesi UI'ı"), sonraki pencere (07.6-h) e2e'yi
+  doğru ortam kurulumuyla (kökten `.env` source + `pnpm -w test:e2e`) koşmalı.
+- **İlgisiz kirli dosyalar (bu görevle ilgisiz, commit'e dahil edilmedi):**
+  `.taskmaster/BUILD-BLUEPRINT.md`, `CONVENTIONS.md`, `run-loop.sh` (priority `critical`
+  rezervasyonu dokümantasyonu — başka bir tur/pencereden kalma, birden fazla penceredir
+  işlenmemiş uncommitted durumda duruyor) ve `apps/e2e/kanit/*.png` (5 dosya, muhtemelen bir
+  önceki e2e/screenshot koşusundan kalma diff) + izlenmeyen `.playwright-mcp/`. Bu pencere
+  yalnız kendi task'ının dosyalarını commit'ledi (Kapsam disiplini, CONVENTIONS §5).
+
 ### 64.6 (07.6-f) — Overview'da 'Top chat topics' promo bandı (See chat topics / Remind me later — kalıcı dismiss) — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] Reports Overview sekmesinin üstüne `TopicsPromoBanner` eklendi

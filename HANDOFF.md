@@ -13,6 +13,38 @@
 
 ## Task log (newest-first)
 
+### 100 — fix(settings): duplicate DOM id — Channels `aria-labelledby` self-reference — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-XHIGH] a11y/DOM-id bug'ı. `apps/web/src/components/Page.tsx` `Section`
+  bileşeni başlıktan `headingId = section-${slug}` türetip bunu HEM iç `<h2 id>` HEM dış
+  `<section aria-labelledby>` olarak veriyordu. `Channels` (`id="section-channels"`, title
+  "Channels") ve `WebsiteWidgets` (`id="section-website-widgets"`, title "Website widgets")
+  çağıranın verdiği anchor `id` başlık sluğuyla **birebir aynı** → section ile h2 aynı id'yi
+  taşıyor (geçersiz HTML) → `aria-labelledby` section'ı kendine bağlıyor → erişilebilir isim
+  tüm alt-ağacın metni oluyor (SMS kartının "Reply to text messages over Twilio." dahil) →
+  `getByLabel('Reply')` hem section'ı hem `#new-reply` input'unu eşleştirip strict-mode
+  violation veriyordu. **Fix:** heading kendi isim uzayında —
+  `headingId = ${id ?? \`section-${slug}\`}-heading` (her zaman `-heading` sonekli), anchor `id`
+  ile asla çakışmaz. `<section id={id}>` değişmedi → `#section-channels` / `#section-website-widgets`
+  anchor linkleri (Apps "Manage in Channels" çapraz-linki dahil) aynen çalışır.
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 11/11 · `pnpm -w lint` 8/8 · `pnpm -w build`
+  7/7 · unit seri (`turbo run test --concurrency=1` [[nexa-test-gate-parallel-db]]) tüm paketler
+  yeşil: web **565** (yeni `Page.test.tsx` +3: section≠heading id, section aria-labelledby yalnız
+  başlığı işaret eder, id'siz Section title'dan türetir) + api **1402** · **e2e tam suite 72/72**
+  (hedef `settings.spec.ts:448` "a reply saved in Settings reaches a customer through #" yeşil;
+  başka `Section` kullanan ekranlarda — reports/team/billing/settings — yeni çakışma yok).
+  E2E önkoşulu: `set -a; . ./.env; set +a` (RTM/web/widget dev sunucuları env'i böyle miras alır).
+- **Varsayımlar:** yok. Task 100 için ayrı bir PRD/FR-MOD kodu YOK (kalite/a11y bug'ı) → PLAN.md'de
+  güncellenecek gereksinim satırı yok; PLAN'daki `section-channels` geçişleri anchor-link
+  referansları (D50/Apps), bu fix'ten etkilenmez.
+- **Sonraki pencereye not:** Çalışma ağacında bu görevin DIŞINDA kalan değişiklikler var,
+  bilerek commit'lenmedi (CONVENTIONS §5): (a) full e2e koşusunun yeniden ürettiği çok sayıda
+  `apps/e2e/kanit/*.png` (önceki pencereler de commit'lemez) ve (b) pencereden önce zaten kirli
+  olan `.taskmaster/BUILD-BLUEPRINT.md`, `CONVENTIONS.md`, `run-loop.sh`, `.playwright-mcp/`.
+  `Section`'da başlığı aynı olan iki eş-zamanlı bölüm (ör. Reports "By agent") artık
+  `section-<slug>-heading` ile hâlâ aynı h2 id'sini üretebilir — bu ayrı, kapsam-dışı bir konu
+  (self-reference bug'ı bu değildi) ve mevcut e2e'de sorun çıkarmıyor.
+
 ### 67.8 (08.8.3-h) — Uçtan uca MCP istemci akışı + rate-limit + audit doğrulaması — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-XHIGH] `08.8.3` diliminin son alt-görevi — **doğrulama dilimi, kaynak kodu

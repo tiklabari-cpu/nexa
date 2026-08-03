@@ -46,7 +46,14 @@ export function Section({
   /** Optional anchor target, for in-page links such as "Customize widget". */
   id?: string;
 }): ReactElement {
-  const headingId = `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  // The heading gets its own id namespace (always `-heading`-suffixed) so it can
+  // never alias the caller's anchor `id`. Channels and Website widgets both pass
+  // `id="section-<slug>"` — identical to the old heading id — which made
+  // `aria-labelledby` resolve the section to itself: its accessible name then
+  // became the whole subtree (every channel card's text, "Reply to text messages
+  // over Twilio." included), so `getByLabel('Reply')` matched the section too. (tm 100)
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const headingId = `${id ?? `section-${slug}`}-heading`;
   return (
     <section id={id} aria-labelledby={headingId} className="flex flex-col gap-3">
       <div>

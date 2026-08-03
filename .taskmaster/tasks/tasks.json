@@ -1785,12 +1785,12 @@
             "description": "Reports Overview sekmesinin üstüne tek `Banner` (tone: brand): başlık 'Top chat topics in one place'; birincil CTA 'See chat topics' → sekmeyi `topics`'e çevirir (aynı sayfa, yeni rota yok); ikincil eylem 'Remind me later' → Banner'ın `dismissible` + stabil `id` mekanizmasıyla localStorage'a yazılır ve reload sonrası bir daha görünmez. Sol navigasyona NEW rozeti EKLENMEZ (varsayım 5). Band yalnız ",
             "details": "07.6-f — Overview'da 'Top chat topics' promo bandı (See chat topics / Remind me later — kalıcı dismiss)  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.6 (+ FR-EK-C.2 banner deseni)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 2 dosya (ReportsPage.tsx + testi); güvenlik sınırı yok (salt görsel tanıtım bandı, veri okumaz, yetki yüzeyi yok); eşzamanlılık yok; yeni algoritma yok — kopyalanacak desen ismen var: components/ui/Banner.tsx `dismissible` + stabil `id` ile localStorage kalıcı kapatma (EK-C.2, tm 62) ve Banner.test.tsx; kontrat/şema değişikliği yok; kabul kriteri mekanik (band görünür → CTA sekmeyi açar → dismiss kalıcı).\nNEDEN AÇIK: rapor-1-fonksiyonel.md:297 Reports'ta \"Top chat topics in one place [See chat topics][Remind me later]\" bandını tarif ediyor; apps/web/src/features/reports/ReportsPage.tsx'te böyle bir banner/CTA yok (Overview sekmesi yalnız KPI kartları + Resolution/Volume bölümleri render ediyor). v2-01-fonksiyonel-ux-derin.md §132/138 aynı tanıtımın hem sol navda hem promo bandında tekrarlanmasını 'gereksiz tekrar' olarak işaretliyor.\nKAPSAM: Reports Overview sekmesinin üstüne tek `Banner` (tone: brand): başlık 'Top chat topics in one place'; birincil CTA 'See chat topics' → sekmeyi `topics`'e çevirir (aynı sayfa, yeni rota yok); ikincil eylem 'Remind me later' → Banner'ın `dismissible` + stabil `id` mekanizmasıyla localStorage'a yazılır ve reload sonrası bir daha görünmez. Sol navigasyona NEW rozeti EKLENMEZ (varsayım 5). Band yalnız Overview sekmesinde görünür; Chat topics sekmesindeyken görünmez.\nDOSYALAR: apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/components/ui/Banner.tsx (tone + cta + `dismissible` + stabil `id` ile localStorage kalıcı dismiss; storage yoksa yine kapanır, hata fırlatmaz) · apps/web/src/components/ui/Banner.test.tsx (dismiss kalıcılığı test deseni) · apps/web/src/features/reports/ReportsPage.tsx (satır 156-166 `tab`/`setTab` state'i — CTA'nın çağıracağı geçiş)\nKK (birebir): \"KK-türetilmiş: PRD 07.6 KK'sında promo bandı yok; birebir kaynak rapor-1-fonksiyonel.md:297 — \"Reports'ta 'Top chat topics in one place [See chat topics][Remind me later]' — CTA ilgili turu/görünümü açar\". Türetme gerekçesi: PRD KK'sı yalnız kümeleme/hacim/empty diyor; keşfedilebilirlik yüzeyi destek kaynağında tarif edilmiş.\"\nKK DOĞRULAMA: ReportsPage.test.tsx: (a) Overview'da band görünür ve 'See chat topics' tıklanınca 'Chat topics' sekmesi seçili olur (aria-selected=true) → 'CTA ilgili görünümü açar'; (b) 'Remind me later' tıklanınca band kaybolur ve bileşen yeniden monte edildiğinde geri gelmez (localStorage kalıcılığı); (c) Chat topics sekmesindeyken band render edilmez.\nKAPSAM DIŞI: Sol navigasyonda 'NEW' kırmızı nokta rozeti (varsayım 5 — bilinçli yapılmıyor) · Yeni `/chat-topics` rotası (sekme olarak kaldı) · apps/web/src/components/navigation.ts değişikliği · Genel bir 'yeni özellik duyuru' altyapısı\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: band render + 'See chat topics' CTA → topics sekmesi aria-selected=true · unit: 'Remind me later' → band kapanır ve remount sonrası geri gelmez · unit: band yalnız Overview sekmesinde render edilir · negatif: localStorage erişilemezken dismiss bandı yine kapatır ve hata fırlatmaz · cross-tenant testi gerekmez — veri okumayan görsel band",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               5
             ],
             "parentId": "64",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T03:16:16.545Z"
           },
           {
             "id": 7,
@@ -1822,7 +1822,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T03:04:35.229Z"
+        "updatedAt": "2026-08-03T03:16:16.545Z"
       },
       {
         "id": "65",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T03:04:35.229Z",
+      "lastModified": "2026-08-03T03:16:16.546Z",
       "taskCount": 99,
       "completedCount": 75,
       "tags": [

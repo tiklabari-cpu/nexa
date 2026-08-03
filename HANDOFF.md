@@ -13,6 +13,35 @@
 
 ## Task log (newest-first)
 
+### tm 76.4 — PUBKB-d Makale gövdesi güvenli render çekirdeği (escape-first sınırlı markdown) — done — 2026-08-03 UTC
+
+- **Yapıldı:** Saf, I/O'suz `apps/api/src/lib/kb-render.ts` — ajanın yazdığı makale gövdesini
+  kimlik-doğrulamasız tarayıcılara güvenli HTML olarak veren tek yüzey (stored-XSS sınırı, NFR-S6).
+  (1) `renderArticleBody(md)`: ZORUNLU sıra — önce TÜM girdi HTML-escape (`& < > " '`, `&` ilk),
+  SONRA yalnız escape'li metinde beyaz-liste tanınır: `##`/`###`→`<h2>`/`<h3>`, blank-satır paragraf
+  (soft-wrap boşlukla), `-`→`<ul><li>`, `**kalın**`, `` `kod` ``, `[metin](url)`. Link yalnız
+  `http(s)` şema — `javascript:`/`data:`/`vbscript:`/protokol-göreli `//`/göreli URL reddedilir ve
+  link düz (escape'li) metne düşer; üretilen `<a>` `rel="nofollow noopener ugc"`. Ham HTML asla
+  geçmez (girdideki `<script>`/`<img onerror>` adım 1'de metne dönüşür). (2) `renderPlainExcerpt(md)`:
+  meta description için etiketsiz düz metin — tüm `<…>` span + kalan `<`/`>` temizlenir, çıktıda hiç
+  `<` yok. (3) Bağımlılık YOK (§C-PUBKB-3); `web-crawler.ts htmlToText` (ters yön, entity DECODE eder)
+  yeniden kullanılmadı. (4) ReDoS savunması: doğrusal tarama, 100K girdi tavanı, ve link metni/URL
+  sınıfları `[`/`]` hariç tutar (`[^[\]\n]` / `[^)\s[\]]`) — böylece `[[[…` veya `[x](`×N gibi
+  adversaryal girdide O(n²) geri izleme olmaz (geliştirme sırasında 2.5s→18ms).
+- **Doğrulama (exit 0):** `pnpm -w typecheck` · `pnpm -w lint` · `pnpm --filter @nexa/api test:unit`
+  (335/335, yeni `kb-render.test.ts` **24**: negatifler önce — 5 tehlikeli tag üretilmez · 5 kötü şema
+  düşer · çift/iç içe kodlama decode edilmez · attribute kaçışı kırılmaz · süre tavanı <1s; sonra
+  pozitif h2/h3/paragraf/liste/kalın/kod/link + determinizm + KK 4 doğrulama) · `pnpm -w build`.
+- **Varsayımlar:** İçerik biçimi = düz metin + sınırlı markdown, zengin editör yok (§C-PUBKB-3).
+  Meta description varsayılan tavan 160 kar. URL'de `(`/`)` markdown gibi ilk `)`'de kesilir (basit
+  alt küme); `[`/`]` içeren URL/link-metni nadir kenar durumları düz metne düşer (ReDoS bedeli).
+- **Sonraki pencereye not:** Bu çekirdek henüz hiçbir route'tan import EDİLMİYOR — PUBKB-e (tm 76.5,
+  SEO'lu HTML yüzeyi) `renderArticleBody` gövde için + `renderPlainExcerpt` meta/OG için bağlayacak;
+  attribute bağlamına koyarken yine tek kez escape unutulmasın (excerpt zaten `<` içermez ama `"`/`&`
+  için attribute-escape PUBKB-e'nin sorumluluğu). Depoda ~35 öncesi dosya (kanit PNG'leri,
+  `run-loop.sh`, `CONVENTIONS.md`, `BUILD-BLUEPRINT.md`, `.playwright-mcp/`) bu task'tan ÖNCE de
+  kirliydi — dokunulmadı, commit'e alınmadı (kapsam disiplini, önceki pencerelerle aynı).
+
 ### tm 76.3 — PUBKB-c Anonim public okuma çekirdeği (slug→license çözümleyici + yayın filtresi + 404 + anon rate-limit) — done — 2026-08-03 UTC
 
 - **Yapıldı:** Bu depoda `principal` olmadan org-scoped İÇERİK servis eden İLK yüzey. (1) Migration

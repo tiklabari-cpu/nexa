@@ -1757,13 +1757,13 @@
             "description": "seed.ts'teki sohbet üreticisine konu çeşitliliği ekle: kapatılan thread'lerin özeti sabit metin yerine o sohbetin mesaj içeriğine uygun DETERMİNİSTİK bir özet olsun (ör. kargo/teslimat, iade/geri ödeme, fatura/ödeme, ürün/stok gibi ayrık konu grupları — konu başına ≥3 sohbet, toplam kümelenebilir sohbet 07.6-b'nin `MIN_CONVERSATIONS` eşiğinin üstünde). Seed'in idempotent + deterministik olma özell",
             "details": "07.6-d — Demo seed'de konu çeşitliliği: kümelenebilir sohbet özetleri  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.6\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — tek kaynak dosya (prisma/seed.ts) + tek test dosyası; güvenlik sınırı yok (seed yalnız demo verisi yazar, NODE_ENV=production'da zaten reddediyor — seed.ts:622); eşzamanlılık yok; yeni algoritma yok — 07.6-b'nin fonksiyonu ve eşikleri hazır; kontrat/şema değişikliği yok; kabul kriteri mekanik (seed sonrası ≥2 küme). Dosyalar ve referans desen ismen verilebiliyor.\nNEDEN AÇIK: apps/api/prisma/seed.ts:593 — kapatılan HER thread'e birebir aynı özet yazılıyor: `summary: 'Delivery query, resolved.'`. Yani demo tenant'ta kümeleme girdisi tek metinden ibaret; 07.6-c'nin raporu ya tek küme ya da `sufficient_data:false` verir, dolu durum (hacim/trend) hiçbir yerde gösterilemez ve e2e'de doğrulanamaz.\nKAPSAM: seed.ts'teki sohbet üreticisine konu çeşitliliği ekle: kapatılan thread'lerin özeti sabit metin yerine o sohbetin mesaj içeriğine uygun DETERMİNİSTİK bir özet olsun (ör. kargo/teslimat, iade/geri ödeme, fatura/ödeme, ürün/stok gibi ayrık konu grupları — konu başına ≥3 sohbet, toplam kümelenebilir sohbet 07.6-b'nin `MIN_CONVERSATIONS` eşiğinin üstünde). Seed'in idempotent + deterministik olma özelliği korunur (aynı seed → aynı konular → aynı kümeler). Ek olarak önceki döneme (seçili pencereden bir dönem öncesine) düşen birkaç sohbet üretilir ki trend alanı demo/e2e'de null olmayan bir değer alsın. Mevcut seed sözleşmesi (hesaplar, lisanslar, mevcut sayılar) bozulmaz.\nDOSYALAR: apps/api/prisma/seed.ts · apps/api/test/integration/reports-topics.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/prisma/seed.ts (satır 555-619 sohbet+thread+event üretici fonksiyonu; `messages` dizisi ve `startedAt` geriye-kaydırma deseni; satır 593 değiştirilecek satır) · packages/ai-mock/src/topics.test.ts (07.6-b'de yazılan kümelenebilirlik iddiaları — seed metinleri bu eşikleri geçmeli)\nKK (birebir): \"KK-türetilmiş: PRD 07.6 KK'sı yalnız 'yeterli veri yoksa empty' diyor; dolu durumun (AI kümeleme + hacim/trend) demo ve e2e'de gösterilebilmesi için yeterli veri ÜRETİLMESİ gerekiyor. Türetme gerekçesi: seed.ts:593 tüm kapalı thread'lere aynı özeti yazıyor, bu haliyle KK'nın yalnız empty kutbu kanıtlanabilir.\"\nKK DOĞRULAMA: apps/api/test/integration/reports-topics.test.ts: seed edilmiş demo lisansında `GET /reports/topics` → `sufficient_data:true` ve `topics.length >= 2`, her kümenin `volume >= MIN_CLUSTER_SIZE`; en az bir kümede `previous_volume > 0` (trend null değil). Seed iki kez koşturulduğunda aynı kümeler (idempotent + deterministik).\nKAPSAM DIŞI: Yeni tablo/migration · Prod veri veya gerçek müşteri metni (§9 sınırları) · Seed'in hesap/lisans/plan yapısının değiştirilmesi · Kümeleme eşiklerinin ayarlanması (07.6-b'de sabitlendi — seed eşiğe uyar, eşik seed'e değil)\nMIGRATION: yok — yalnız seed verisi; şema değişmiyor.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration: seed sonrası ≥2 küme + en az bir kümede trend null değil · integration: seed idempotency korunuyor (iki kez koş → aynı kümeler) · negatif: yeni/boş bir lisansta hâlâ sufficient_data:false (seed sızıntısı yok) · cross-tenant: seed'in ikinci demo lisansının konuları birinciye karışmıyor · DB süiti paket başına SERİ koşulur (nexa-test-gate-parallel-db)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2,
               3
             ],
             "parentId": "64",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T02:47:13.824Z"
           },
           {
             "id": 5,
@@ -1822,7 +1822,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T02:07:06.748Z"
+        "updatedAt": "2026-08-03T02:47:13.824Z"
       },
       {
         "id": "65",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T02:07:06.748Z",
+      "lastModified": "2026-08-03T02:47:13.824Z",
       "taskCount": 99,
       "completedCount": 75,
       "tags": [

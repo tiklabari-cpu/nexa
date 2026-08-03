@@ -13,6 +13,32 @@
 
 ## Task log (newest-first)
 
+### tm 76.1 — PUBKB-a Public KB veri modeli (kb_articles + kb_categories + kb_settings, RLS'li migration) — done — 2026-08-03 UTC
+
+- **Yapıldı:** Üç yeni license-scoped tablo: `kb_categories` (id/license_id/slug/name/position),
+  `kb_articles` (id/license_id/category_id?/slug/title/body/excerpt?/seo_title?/seo_description?/
+  status[draft|published]/published_at?/created_by?/timestamps), `kb_settings` (license-singleton,
+  enabled, `public_slug` GLOBAL unique, site_title?). Üçünde `ENABLE ROW LEVEL SECURITY` + `_tenant`
+  policy (`nexa_current_license()`); `@@unique([licenseId,slug])` kb_articles+kb_categories'te;
+  `kb_articles_status_check` CHECK; `(license_id,status,published_at DESC)` index. `knowledge_sources`
+  tablosuna DOKUNULMADI (§C-PUBKB-1 — RAG kaynağı ile public KB ayrı kalır). Bu pencere migration'ı
+  yeniden yazmadı — önceki (yarım kalmış, commit'lenmemiş) pencerenin bıraktığı
+  `schema.prisma`/migration/test'i buldu, DoD kapısına karşı doğruladı ve kapattı.
+- **Doğrulama (hepsi yeşil):** `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` · api
+  `db:check-drift` (no drift) · api `test:integration` (52 dosya, **1114/1114**, contract-parity
+  5/5 dahil — path eklenmedi, kapsam dışı bırakıldığı gibi) · yeni `public-kb-schema.test.ts` (15/15:
+  self-servis kategori bağı + kategori silince link temizlenir + SEO/publication kolonları round-trip
+  + status CHECK reddi + slug unique aynı/başka lisans + kb_settings singleton reddi + public_slug
+  global-unique reddi + RLS cross-tenant SELECT/UPDATE/DELETE) · rtm 90/90 + api unit 303/303 (ayrı
+  paket paket çalıştırıldı — `pnpm -w test` paylaşılan Postgres'te rtm/api yarışıp deadlock/FK hatası
+  veriyor, memory: parallel-db, gerçek regresyon değil).
+- **Varsayımlar:** Yok — görev tanımındaki referans desen (ticket_email_templates/inbox_settings
+  migration'ları) birebir izlendi.
+- **Sonraki pencereye not:** PUBKB-b (yönetim CRUD kontratı + backend, draft/published) bu tabloların
+  üstüne oturur. OpenAPI path'i BİLEREK eklenmedi (görev kapsamı) — PUBKB-b path'i eklerken
+  contract-parity'nin **her iki yönü** de tekrar doğrulanmalı. PLAN.md §5.3-KB satırı (§5.0, satır
+  ~1162) ⬜→◐; Faz-2 iki özet sayacı (satır 22 + 1100) buna göre güncellendi (15/0→14/1).
+
 ### PLAN-SYNC — docs(plan): Faz-2 dağılım sayacı bayattı → `15 ⬜ · 0 ◐ · 12 ✅ · 3 ⛔` (§D73) — done — 2026-08-03 UTC
 
 - **Yapıldı:** Panel §1.2 bulgusu — üst-tablo (PLAN.md:22) + §5.0 girişi (PLAN.md:1100) Faz-2

@@ -96,6 +96,9 @@ model License {
   inboxSettings          InboxSettings[]
   widgetSettings         WidgetSettings[]
   appInstallations       AppInstallation[]
+  kbCategories           KbCategory[]
+  kbArticles             KbArticle[]
+  kbSettings             KbSettings?
 
   invitations Invitation[]
 
@@ -1441,4 +1444,74 @@ model AppInstallation {
 
   @@unique([licenseId, appId])
   @@map("app_installations")
+}
+
+// ===========================================================================
+// Public knowledge base (self-service KB — PRD §5.3, v2)
+// ===========================================================================
+
+/// A grouping public KB readers browse (KK "self-servis gezinme"). Deliberately
+/// a separate model from `KnowledgeSource` — that table feeds the AI Agent's
+/// RAG retrieval, this one is reader-facing taxonomy; the two never share rows
+/// (§C-PUBKB-1). A slug is unique within a license, like `Brand`/`Expertise`.
+model KbCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  slug      String
+  name      String
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license  License     @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  articles KbArticle[]
+
+  @@unique([licenseId, slug])
+  @@map("kb_categories")
+}
+
+/// A public KB article. `seoTitle`/`seoDescription` carry the KK "SEO'lu" half
+/// of the requirement; `status` the "public" half (a draft is never served by
+/// the anonymous read path, built in PUBKB-c). `categoryId` is optional so an
+/// article can exist before it is filed under a category; deleting a category
+/// clears the link rather than deleting the article.
+model KbArticle {
+  id             String    @id @default(uuid()) @db.Uuid
+  licenseId      BigInt    @map("license_id")
+  categoryId     String?   @map("category_id") @db.Uuid
+  slug           String
+  title          String
+  body           String
+  excerpt        String?
+  seoTitle       String?   @map("seo_title")
+  seoDescription String?   @map("seo_description")
+  /// 'draft' | 'published'.
+  status         String    @default("draft")
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz(6)
+  createdBy      String?   @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license  License     @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  category KbCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([licenseId, slug])
+  @@index([licenseId, status, publishedAt(sort: Desc)])
+  @@map("kb_articles")
+}
+
+/// Per-license switch and public address for the KB (license-singleton, keyed
+/// and shaped like `payment_methods`). `publicSlug` is GLOBAL unique — unlike
+/// every other slug in this schema — because it is the path segment on a
+/// single shared public host (§C-PUBKB-4), not a value scoped inside one
+/// license's own namespace.
+model KbSettings {
+  licenseId  BigInt   @id @map("license_id")
+  enabled    Boolean  @default(false)
+  publicSlug String   @unique @map("public_slug")
+  siteTitle  String?  @map("site_title")
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("kb_settings")
 }

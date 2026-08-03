@@ -11,7 +11,7 @@ import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import type { KbArticle, KbCategory } from './types.js';
 
-const { api } = vi.hoisted(() => ({ api: { get: vi.fn() } }));
+const { api } = vi.hoisted(() => ({ api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() } }));
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof AuthStore>();
@@ -45,6 +45,9 @@ function mockKb(articles: KbArticle[], categories: KbCategory[] = CATEGORIES): v
   api.get.mockImplementation((path: string) => {
     if (path === '/kb-articles') return Promise.resolve({ items: articles, total: articles.length });
     if (path === '/kb-categories') return Promise.resolve({ items: categories });
+    if (path === '/kb-settings') {
+      return Promise.resolve({ enabled: true, public_slug: 'acme', site_title: null, updated_at: null });
+    }
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -56,6 +59,8 @@ function renderList(ui: ReactElement): void {
 
 beforeEach(() => {
   api.get.mockReset();
+  api.post.mockReset();
+  api.patch.mockReset();
 });
 
 describe('KbArticleList', () => {
@@ -176,5 +181,36 @@ describe('KbArticleList', () => {
     renderList(<KbArticleList />);
 
     expect(await screen.findByText(/Could not load the knowledge base articles/)).toBeInTheDocument();
+  });
+
+  it('hides "New article" and does not open an editor without edit permission', async () => {
+    mockKb([article({ id: 'p1', status: 'published', title: 'Delivery times' })]);
+    renderList(<KbArticleList />);
+
+    await screen.findByText('Delivery times');
+    expect(screen.queryByRole('button', { name: 'New article' })).not.toBeInTheDocument();
+    // The row is plain text, not a button, when the viewer cannot edit.
+    expect(screen.getByText('Delivery times').closest('button')).toBeNull();
+  });
+
+  it('"New article" opens the editor in create mode', async () => {
+    const user = userEvent.setup();
+    mockKb([]);
+    renderList(<KbArticleList canEdit />);
+
+    await user.click(await screen.findByRole('button', { name: 'New article' }));
+
+    expect(await screen.findByRole('dialog', { name: 'New article' })).toBeInTheDocument();
+  });
+
+  it('clicking an article row opens the editor for that article', async () => {
+    const user = userEvent.setup();
+    mockKb([article({ id: 'p1', status: 'draft', title: 'Delivery times' })]);
+    renderList(<KbArticleList canEdit />);
+
+    await user.click(await screen.findByText('Delivery times'));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Edit article' });
+    expect(within(dialog).getByLabelText('Title')).toHaveValue('Delivery times');
   });
 });

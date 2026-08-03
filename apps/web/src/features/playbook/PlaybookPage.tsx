@@ -578,7 +578,7 @@ export function PlaybookPage(): ReactElement {
               <KnowledgePanel canEdit={canEdit} aiAgentId={aiAgent?.id ?? null} />
             )}
 
-            {view === 'kb' && <KbArticleList />}
+            {view === 'kb' && <KbArticleList canEdit={canEdit} />}
           </div>
 
           <TemplateGallery

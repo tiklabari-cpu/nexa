@@ -3,13 +3,14 @@
  * search and category filters, and a meaningful empty state for every tab
  * (FR-EK-B.1, NFR-A11Y1).
  *
- * Read-only: this is the list surface PUBKB-b's `GET /kb-articles` feeds. It
- * neither writes nor knows how to (creating, editing, publish/unpublish is
- * PUBKB-h) — a bilgi bankası is "yönetilebilir" the moment the team can see at
- * a glance which article is live and which is still a draft, which is exactly
- * what the tabs answer.
+ * Owns the surface `GET /kb-articles` feeds, and — for someone with write
+ * access — the doorway into creating and editing one: "New article" and each
+ * row open `KbArticleEditor` (PUBKB-h), which does the actual writing,
+ * publishing and unpublishing. A bilgi bankası is "yönetilebilir" the moment
+ * the team can both see at a glance which article is live and act on it,
+ * which is exactly what the tabs plus this doorway answer together.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -18,6 +19,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
 import type { KbArticle, KbCategory } from './types.js';
+import { KbArticleEditor } from './KbArticleEditor.js';
 import {
   applyKbControls,
   countArticlesByTab,
@@ -45,13 +47,20 @@ const EMPTY_BY_TAB: Record<KbTab, string> = {
   draft: 'No drafts — every article here is published.',
 };
 
-export function KbArticleList(): ReactElement {
+export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): ReactElement {
   const api = useApiClient();
+  const queryClient = useQueryClient();
 
   const [tab, setTab] = useState<KbTab>('all');
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
+  const [editing, setEditing] = useState<KbArticle | 'new' | null>(null);
+
+  const invalidate = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['playbook', 'kb-articles'] });
+    void queryClient.invalidateQueries({ queryKey: ['playbook', 'kb-categories'] });
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setQuery(search.trim()), 200);
@@ -93,6 +102,18 @@ export function KbArticleList(): ReactElement {
 
   return (
     <Section title="Public KB" description="The self-service articles a visitor can read once published.">
+      {canEdit && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setEditing('new')}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+          >
+            New article
+          </button>
+        </div>
+      )}
+
       {articles.isPending || categories.isPending ? (
         <Card>
           <ListSkeleton />
@@ -192,27 +213,54 @@ export function KbArticleList(): ReactElement {
                 />
               ) : (
                 <ul role="list" aria-label="KB articles" className="divide-y divide-border">
-                  {visibleItems.map((article) => (
-                    <li key={article.id} className="flex items-center gap-3 px-4 py-2.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{article.title}</p>
-                        <p className="truncate text-2xs text-content-tertiary">
-                          {article.category_id ? (categoryNameById.get(article.category_id) ?? 'Unknown category') : 'Uncategorized'}
-                          {' · '}
-                          {formatDate(article.updated_at)}
-                        </p>
-                      </div>
-                      <StatusDot
-                        tone={article.status === 'published' ? 'success' : 'neutral'}
-                        label={article.status === 'published' ? 'Published' : 'Draft'}
-                      />
-                    </li>
-                  ))}
+                  {visibleItems.map((article) => {
+                    const meta = (
+                      <p className="truncate text-2xs text-content-tertiary">
+                        {article.category_id ? (categoryNameById.get(article.category_id) ?? 'Unknown category') : 'Uncategorized'}
+                        {' · '}
+                        {formatDate(article.updated_at)}
+                      </p>
+                    );
+                    return (
+                      <li key={article.id} className="flex items-center gap-3 px-4 py-2.5">
+                        {canEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => setEditing(article)}
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <p className="truncate text-sm font-medium">{article.title}</p>
+                            {meta}
+                          </button>
+                        ) : (
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">{article.title}</p>
+                            {meta}
+                          </div>
+                        )}
+                        <StatusDot
+                          tone={article.status === 'published' ? 'success' : 'neutral'}
+                          label={article.status === 'published' ? 'Published' : 'Draft'}
+                        />
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
           </Card>
         </>
+      )}
+
+      {editing !== null && canEdit && (
+        <KbArticleEditor
+          key={editing === 'new' ? 'new' : editing.id}
+          article={editing === 'new' ? null : editing}
+          categories={categoryList}
+          canEdit={canEdit}
+          onClose={() => setEditing(null)}
+          onSaved={invalidate}
+        />
       )}
     </Section>
   );

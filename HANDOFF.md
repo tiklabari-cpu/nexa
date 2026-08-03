@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### tm 76.8 — PUBKB-h admin: makale editörü (içerik+SEO alanları) + publish/unpublish + public link — done — 2026-08-03 UTC
+
+- **Yapıldı:** Sıfırdan uygulandı (önceki pencereden yarım kalan iş yoktu; backend PATCH/POST
+  `/kb-articles` PUBKB-b'de zaten mevcuttu — kontrat/migration değişikliği YOK, saf frontend görevi).
+  `apps/web/src/features/playbook/kb-slug.ts` — saf `deriveKbSlug`/`kbSlugError`, backend'in
+  `normalizeKbSlug`+reserved-slug listesini frontend'de aynalar (önizleme; gerçek çakışma hâlâ
+  backend'in kararı). `KbArticleEditor.tsx` — Title/Slug/Category(+yeni kategori)/Body(markdown
+  yardım metniyle)/Excerpt/SEO title+description(60/155 sayaç) T4-a `useForm` primitifiyle; slug
+  başlıktan otomatik türer, elle değiştirilince veya mevcut makalede baştan kilitlenir; Publish/
+  Unpublish içerikten bağımsız `PATCH status` → rozet + Public link (`GET /kb-settings`) + KB kapalı
+  uyarı bandı; backend slug/kategori çakışması alan-altına düşer (`fieldFromMessage`); T5-a
+  `useCloseGuard` dirty-guard. `KbArticleList.tsx`'e "New article" + satır tıklaması eklendi
+  (`canEdit` prop — `PlaybookPage.tsx`'in mevcut `agents-bot--all:rw` kontrolü). Bir a11y hatası
+  geliştirme sırasında bulundu ve düzeltildi: `<FieldError>`/yardım metni bir `<label>`'ın ÇOCUĞU
+  olunca (ProfileForm/SkillEditor'daki gibi) hata görününce label'ın erişilebilir adını kirletiyordu
+  (`getByLabelText` kırılıyordu) — bu dosyada TÜM alanlar "sibling label" desenine çevrildi (label
+  yalnız etiket metnini sarar, input/hata/yardım metni kardeş eleman).
+- **Doğrulama:** `pnpm -w typecheck` yeşil (11/11 task) · `pnpm -w lint` yeşil (8/8 paket) ·
+  `pnpm --filter @nexa/web build` yeşil · `pnpm --filter @nexa/web test` **tamamen yeşil** — 82/82
+  dosya, 606/606 test (yeni `KbArticleEditor.test.tsx` 11/11 + `kb-slug.test.ts` 9/9 +
+  `KbArticleList.test.tsx` +3 dahil). `pnpm -w test` (turbo paralel) yine `@nexa/rtm` DB-yarışı
+  hatası verdi (deadlock/timeout) — bu görevin dokunmadığı hiçbir dosyayla ilgili değil (`git diff
+  --stat` yalnız `apps/web/src/features/playbook/*` + `PLAN.md` gösteriyor); tm 76.7 handoff'unda
+  aynı emsal zaten kayıtlı (bkz. `nexa-test-gate-parallel-db` hafıza notu). Frontend-only görev
+  olduğu için `@nexa/api`/`@nexa/rtm` DB-testleri bu görevin kabul kriteri kapsamında değil.
+- **Varsayımlar:** Public link tabanı `VITE_KB_PUBLIC_BASE` env değişkeni (yoksa
+  `http://localhost:4000/api/v1` — `API_BASE_URL`+`API_PREFIX` varsayılanlarıyla eşleşir), diğer
+  `VITE_*` değişkenleri gibi `.env.example`'a eklenmedi (kodbazının mevcut deseni — `Channels.tsx`
+  `VITE_WIDGET_URL` de öyle). Yeni kategori oluşturma tek adımlı (isim yaz → kaydet ile birlikte
+  `POST /kb-categories` sonra makale kaydı); ayrı bir kategori yönetim ekranı kapsam dışı (görev
+  metninde de öyle — "burada yalnız seçici + hızlı ekleme").
+- **Sonraki pencereye not:** PUBKB-i (uçtan uca doğrulama — anonim okuyucu e2e + izolasyon/SEO kanıt
+  seti) hâlâ pending; bu görev dahil PUBKB-a..h teslim edildiğine göre artık açılabilir olmalı
+  (bağımlılıkları PUBKB-c/e/f/h hepsi done). PLAN.md §5.3-KB satırı hâlâ `◐` — PUBKB-i kapanınca `✅`.
+
 ### tm 76.7 — PUBKB-g admin: KB makale listesi + durum sekmeleri — done — 2026-08-03 UTC
 
 - **Yapıldı:** Sıfırdan uygulandı (önceki pencereden yarım kalan iş yoktu). `apps/web/src/features/playbook/kb-tabs.ts`

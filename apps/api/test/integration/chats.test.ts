@@ -921,6 +921,36 @@ describe('agent chat api', () => {
         .assignee_id;
       expect([fx.a.ownerAccountId, second.id]).toContain(assignee);
     });
+
+    // --- Surface separation: transfer vs takeover ---------------------------
+
+    it('separates the two surfaces — an agent-role token may transfer but never take over', async () => {
+      // The two paths are deliberately distinct: transfer is a consented,
+      // scope-gated hand-off (no role gate); takeover is the admin-only seizure.
+      // One credential pins the split — the same agent-role token, holding the
+      // very scope takeover asks for, succeeds at transfer and is refused the
+      // takeover on the *role* gate, not the scope.
+      const chat = await chatHeldByAgent();
+      const agentAllToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.agentAccountId,
+        scopes: ['chats--all:rw'],
+      });
+
+      // Transfer: the agent hands the chat to their own team — permitted.
+      const transfer = await server.post(
+        `/chats/${chat.id}/transfer`,
+        { group_id: Number(supportGroupId) },
+        auth(agentAllToken),
+      );
+      expect(transfer.statusCode).toBe(200);
+
+      // Takeover: the same token, refused on the admin role gate.
+      const takeover = await server.post(`/chats/${chat.id}/takeover`, {}, auth(agentAllToken));
+      expect(takeover.statusCode).toBe(403);
+      expect(takeover.json().error.type).toBe('authorization');
+    });
   });
 
   // =========================================================================

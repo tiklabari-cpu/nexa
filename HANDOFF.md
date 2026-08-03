@@ -13,6 +13,27 @@
 
 ## Task log (newest-first)
 
+### 66.9 (08.6.3-i) — Uçtan uca doğrulama: skill routing + takeover E2E, cross-tenant matrisi, ADR-08 regresyonu — done — 2026-08-03 UTC
+
+- **Yapıldı:** Yalnız doğrulama (yeni davranış yok). (1) Yeni E2E `apps/e2e/tests/skills-routing.spec.ts`
+  (2 test): Settings'te skill oluştur (UI) → Team'de plain-agent'a (agent2/Priya Nair) ata (UI) →
+  fallback kuralına `expertise_ids` talebi (API — kuralın tek düzenlenebilir yüzeyi, create-rule
+  ekranı yok) → widget sohbeti yalnız skill'i taşıyan ajana düşer → owner (admin) tarayıcıda
+  "Take over" onaylar → assignee owner'a **değişir**; + negatif: agent rolünde "Take over" yok.
+  (2) Cross-tenant matris `tenant-isolation.test.ts` (+2: skill-routing IN-alt-sorgu RLS boşalır ·
+  takeover koşullu `updateMany` 0 satır) — skill CRUD+atama zaten aynı describe'da. (3) ADR-08
+  regresyon `routing.test.ts` (+1: skill'siz kural uzmanlığı tamamen yok sayar). (4) transfer↔takeover
+  ayrımı `chats.test.ts` (+1: aynı agent-rol token transfer=200 · takeover=403 authorization).
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ ·
+  `turbo run test --concurrency=1` (tüm paketler seri) ✓ (API 1310 test, integ +4 dahil) ·
+  E2E `skills-routing.spec.ts` **2/2** ✓ (temiz DB, `.env` source, dev-server webServer ile).
+- **Varsayımlar:** Routing kuralı oluşturma API'si yok (yalnız PATCH) → E2E fallback kuralını geçici
+  düzenler, `finally`'de geri yükler. E2E seri (`workers:1`) olduğu için tek izolasyon yükümlülüğü
+  cleanup; skill silme composite-FK cascade ile ajan atamasını da düşürür.
+- **Sonraki pencereye not:** 08.6.3 (Skills-based routing + supervision/takeover) tüm alt-görevleriyle
+  (a→i) TAMAMLANDI; PLAN.md §5.1 satırı `◐`→`✅`. E2E takeover assertion'ı chatId ile okunmalı
+  (last_event `chat_taken_over`'a döndüğü için text-eşleşmesi kırılır — bu tuzağa düşme).
+
 ### 66.8 (08.6.3-h) — Çoklu-ajan çakışma uyarısı (aynı sohbette birden fazla present ajan) — done (audit-close) — 2026-08-03 UTC
 
 - **Yapıldı:** Kod değişikliği YOK — bu task'ın istediği davranış (kendimden başka bir ajan aynı

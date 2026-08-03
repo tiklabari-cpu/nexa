@@ -11,6 +11,7 @@
  *   2. With a tenant context set, no query can reach outside that tenant —
  *      including queries that explicitly ask to.
  */
+import { randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withTenant } from '../../src/lib/tenant.js';
@@ -287,6 +288,8 @@ describe('tenant isolation (RLS)', () => {
     // one workspace's conversations to another workspace's agents.
     let aExpertiseId: bigint;
     let bExpertiseId: bigint;
+    let bChatId: string;
+    let bThreadId: string;
 
     beforeAll(async () => {
       // Seeded as the owner, which is not subject to RLS.
@@ -314,9 +317,27 @@ describe('tenant isolation (RLS)', () => {
           expertiseId: bExpertiseId,
         },
       });
+
+      // A tenant B chat + assigned thread, so the takeover surface (a
+      // conditional assignee update) can be attacked cross-tenant below. Seeded
+      // as the owner, which is not subject to RLS.
+      bChatId = randomBytes(6).toString('hex');
+      bThreadId = randomBytes(6).toString('hex');
+      await owner.chat.create({
+        data: { id: bChatId, licenseId: fixtures.b.licenseId, customerId: fixtures.b.customerId },
+      });
+      await owner.thread.create({
+        data: {
+          id: bThreadId,
+          chatId: bChatId,
+          licenseId: fixtures.b.licenseId,
+          assigneeId: fixtures.b.agentAccountId,
+        },
+      });
     });
 
     afterAll(async () => {
+      await owner.chat.deleteMany({ where: { id: bChatId } });
       await owner.expertise.deleteMany({ where: { slug: 'refunds' } });
     });
 
@@ -387,6 +408,43 @@ describe('tenant isolation (RLS)', () => {
         where: { licenseId: fixtures.b.licenseId, expertiseId: bExpertiseId },
       });
       expect(survivors).toBe(1);
+    });
+
+    it('cannot qualify one of its agents through a cross-tenant expertise (skill routing)', async () => {
+      // The membership test routing's #selectAgent trusts to decide who is
+      // qualified is a lookup into agent_expertise. Run under tenant A against
+      // tenant B's expertise id: RLS empties it, so B's assignment can never
+      // make one of A's chats land on an agent the rule does not really fit.
+      const qualified = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.$queryRaw<Array<{ agent_id: string }>>`
+          SELECT ae.agent_id::text AS agent_id
+          FROM agent_expertise ae
+          WHERE ae.expertise_id = ${bExpertiseId}
+        `,
+      );
+      expect(qualified).toEqual([]);
+    });
+
+    it('cannot take over a tenant B chat by flipping its assignee', async () => {
+      // Supervisor takeover (08.6.3-d) is a conditional assignee update:
+      // updateMany where the current assignee still matches. Run under tenant A
+      // against tenant B's thread it must touch nothing — the same fail-closed
+      // boundary the HTTP layer answers with a 404 (chats.test.ts).
+      const result = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) =>
+          tx.thread.updateMany({
+            where: { id: bThreadId, assigneeId: fixtures.b.agentAccountId },
+            data: { assigneeId: fixtures.a.agentAccountId },
+          }),
+      );
+      expect(result.count).toBe(0);
+
+      const untouched = await owner.thread.findUnique({ where: { id: bThreadId } });
+      expect(untouched?.assigneeId).toBe(fixtures.b.agentAccountId);
     });
   });
 

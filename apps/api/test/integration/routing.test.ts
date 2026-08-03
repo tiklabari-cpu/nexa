@@ -690,6 +690,21 @@ describe('routing', () => {
       expect((await route()).assigneeId).toBe(primary);
     });
 
+    it('ignores agent expertise entirely when the rule demands none (ADR-08 regression)', async () => {
+      // The no-skill path must behave exactly as ADR-08 always did: expertise is
+      // invisible to it. A higher-priority generalist beats a lower-priority
+      // specialist, so holding a skill neither helps nor hurts when nothing asks
+      // for one — the filter never leaks into a rule that carries no expertise.
+      const skill = await addExpertise('Sales');
+      const primary = await addAgent({ groupId: supportId, priority: 'primary', name: 'generalist' });
+      const normal = await addAgent({ groupId: supportId, priority: 'normal', name: 'specialist' });
+      await grantExpertise(normal, skill); // the specialist holds a skill; nobody asks
+
+      await addRule({ targetGroupId: supportId, isFallback: true }); // no expertise_ids
+
+      expect((await route()).assigneeId).toBe(primary);
+    });
+
     it('carries the expertise requirement into the fallback team', async () => {
       const skill = await addExpertise('Billing');
 

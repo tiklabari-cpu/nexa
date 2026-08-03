@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### 67.8 (08.8.3-h) — Uçtan uca MCP istemci akışı + rate-limit + audit doğrulaması — done — 2026-08-03 UTC
+
+- **Yapıldı:** [OPUS-XHIGH] `08.8.3` diliminin son alt-görevi — **doğrulama dilimi, kaynak kodu
+  değişikliği YOK**. Yeni `apps/api/test/integration/mcp-e2e.test.ts` (8 test):
+  1. **Uçtan uca akış:** tek PAT ile `GET /mcp/manifest` (dört tool listelenir) → dört tool sırayla
+     çağrılır (`search_tickets` → `list_chats` → `get_report(overview)` → `summarize_chat`) → her biri
+     kendi sonuç zarfını döner.
+  2. **Rate-limit kapsaması (açık soru 5 kararı):** MCP uçları global rate-limit preHandler'ına ZATEN
+     giriyor (plugin `server.ts:144`'te route'lardan önce app seviyesinde kayıtlı; MCP route'ları
+     `skipRateLimit` set etmiyor). GET manifest + POST tool call'ın ikisi de `X-RateLimit-*` başlığı
+     taşıyor ve AYNI PAT (agent) kovasını tüketiyor → **MCP'ye ayrı kova gerekmez** (`bucketFor` token'a
+     göre anahtarlar, ardışık LLM çağrı paterni normal otomatik PAT istemcisi gibi kısıtlanır). Düşük
+     bütçeli sunucuda (`RATE_LIMIT_AGENT_PER_MIN=2`) kova dolunca `POST /mcp/tools/search_tickets` →
+     **429 + ADR-06 zarfı (`too_many_requests`) + `Retry-After`**.
+  3. **Audit:** dört başarılı çağrı tam olarak dört `mcp.tool_called` kaydı üretir (manifest GET
+     audit'lenmez); metadata YALNIZ `{tool, scope_used, request_id}` — argüman metni/PII (arama sorgusu,
+     chat_id) sızmaz. `request_id` yazıcının kimlik-filtresinden muaf, üniform korelasyon UUID'i
+     (`audit-log.ts:144` — kullanıcı içeriği değil).
+  4. Negatifler (önce): scope'u daraltılmış PAT ile yasak tool → 403 akış ortasında (gate per-tool) ·
+     revoked PAT → 401. Cross-tenant: tam akış iki lisansta koşulur, karşı lisansın ticket/chat/org
+     kimliği hiçbir yanıtta yok + her lisans yalnız kendi dört audit kaydını görür.
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` ✓ · `pnpm -w lint` ✓ · `pnpm -w build` ✓ ·
+  `@nexa/api test` **1402** ✓ (yeni mcp-e2e +8; vitest `fileParallelism:false` ile api süiti içinde
+  seri — paket-içi Postgres yarışı yok). Cross-paket `pnpm -w test` (rtm+api paralel) proje-bilinen
+  yarış nedeniyle kullanılmadı; api paketi tek başına tam yeşil. Contract-parity: MCP path'lerine 429
+  response'u EKLENMEDİ (paylaşılan `TooManyRequests` bileşeninden gelir) → `mcp.yaml` re-bundle
+  gerekmedi, parity süiti değişmeden yeşil.
+- **Varsayımlar:** Açık soru 5 KARARI burada verildi (ayrı MCP rate-limit kovası yok, mevcut PAT kovası
+  yeterli). 10.1.5 API-calls faturalama sayacının MCP çağrılarını da sayması bilinçli olarak KAPSAM
+  DIŞI (parent 67 açık soru 5, ayrı ürün kararı). JSON-RPC/SSE köprüsü (açık soru 1) ve dynamic client
+  registration (açık soru 2) hâlâ ayrı kalem olarak açık.
+- **Sonraki pencereye not:** `08.8.3` dilimi (V2-5, a→h) tümüyle bitti — parent tm 67 kapatılabilir
+  (sekiz alt-görev done). Pre-existing dirty dosyalar (`.taskmaster/BUILD-BLUEPRINT.md`,
+  `CONVENTIONS.md`, e2e kanıt png'leri, `run-loop.sh`, `.playwright-mcp/`) bu görevle ilgisiz, önceki
+  pencerelerden beri dokunulmadan bırakıldı.
+
 ### 67.7 (08.8.3-g) — Settings → MCP bağlantı ekranı — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] Bu pencere, yarım kalmış bir önceki pencereyi devraldı (task

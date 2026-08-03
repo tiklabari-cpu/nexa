@@ -1730,12 +1730,12 @@
             "description": "Yeni SAF modül packages/ai-mock/src/topics.ts (DB yok, Fastify yok, env yok — embedding.ts komşusu). İçerik: (1) `clusterTopics(docs: Array<{id, text}>, options?)` — greedy leader kümeleme: dokümanlar id'ye göre SIRALANIR (girdi sırasından bağımsız determinizm), her doküman embed() ile vektörleştirilir, mevcut kümelerin merkezine cosine similarity eşiğinin üstündeyse ona katılır, değilse yeni küme",
             "details": "07.6-b — Deterministik konu kümeleme çekirdeği: `packages/ai-mock/src/topics.ts` (kümeleme + etiket türetme + yeterlilik eşiği)  [OPUS-MAX]\n\nPRD: FR-MOD-07.6 (+ NFR-M2, NFR-P7)\nETİKET GEREKÇESİ: OPUS-MAX: YENİ ALGORİTMA TASARIMI — koşul 4 ihlali (depoda kopyalanacak mevcut bir kümeleme deseni YOK; embed()/similarity() var ama kümeleme, merkez hesabı, etiket türetme ve eşik kalibrasyonu tasarlanacak). Ayrıca yanlış kararın pahalı olduğu yer: (a) determinizm bozulursa rapor her yenilemede değişir ve testler kırılganlaşır, (b) etiket müşteri konuşma metninden türediği için salt-rakam token elemesi yapılmazsa sipariş/kart numarası rapor etiketine sızabilir (PII), (c) packages/ai-mock/src/embedding.ts hem RAG (knowledge-service.ts) hem bu iş tarafından paylaşılıyor — yanlış bir dokunuş iki süiti birden kırar. Bölünmeyen çekirdek.\nNEDEN AÇIK: packages/ai-mock/src/embedding.ts içindeki deterministik embed()/tokenize()/similarity() fonksiyonları YALNIZCA apps/api/src/services/ai/knowledge-service.ts (RAG/KnowledgeChunk) tarafından tüketiliyor; kümeleme amaçlı hiçbir kullanım yok. packages/ai-mock/src/index.ts yalnız embedding/steps/compiler/intent/assist export ediyor — topics modülü yok. apps/api/prisma/schema.prisma'da Topic/Cluster/ChatTopic adında hiçbir model yok (grep 0) ve PRD §8.4'te de böyle bir tablo tanımlı değil, yani kümeleme mantığının yaşayacağı tek yer saf bir fonksiyon.\nKAPSAM: Yeni SAF modül packages/ai-mock/src/topics.ts (DB yok, Fastify yok, env yok — embedding.ts komşusu). İçerik: (1) `clusterTopics(docs: Array<{id, text}>, options?)` — greedy leader kümeleme: dokümanlar id'ye göre SIRALANIR (girdi sırasından bağımsız determinizm), her doküman embed() ile vektörleştirilir, mevcut kümelerin merkezine cosine similarity eşiğinin üstündeyse ona katılır, değilse yeni küme açar; merkez normalize ortalama. (2) Etiket türetme: küme içi token frekansı yüksek + korpus geneli düşük (hafif tf-idf) ilk 3 token; SALT-RAKAM tokenlar ATILIR (sipariş/kart numarası sızıntısı); eşitlikte deterministik tie-break (hacim azalan, sonra etiket alfabetik). (3) Sabitler: `TOPIC_SIMILARITY_THRESHOLD`, `MIN_CLUSTER_SIZE`, `MIN_CONVERSATIONS` — ve `sufficient` bayrağı: kümelenebilir doküman sayısı `MIN_CONVERSATIONS` altındaysa `{ sufficient:false, topics: [] }`. (4) topics.ts index.ts'ten export edilir. embedding.ts'e TEK SATIR dokunulmaz.\nDOSYALAR: packages/ai-mock/src/topics.ts · packages/ai-mock/src/topics.test.ts · packages/ai-mock/src/index.ts\nREFERANS DESEN (kopyalanacak): packages/ai-mock/src/embedding.ts (tokenize/embed/similarity/normalise — salt-tüketici olarak kullanılacak, DEĞİŞTİRİLMEZ) · packages/ai-mock/src/intent.ts (eşikli deterministik lexical eşleştirme + eşik gerekçesinin yorumda yazılması deseni; INTENT_THRESHOLD) · apps/api/src/services/ai/knowledge-service.ts (RETRIEVAL_THRESHOLD — 'eşiğin altı gürültüdür' karar gerekçesi deseni)\nKK (birebir): \"AI kümeleme\" | \"yeterli veri yoksa empty\"\nKK DOĞRULAMA: packages/ai-mock/src/topics.test.ts: (a) aynı doküman kümesi FARKLI SIRAYLA verildiğinde birebir aynı küme/etiket/sıra → determinizm ('AI kümeleme' tekrarlanabilir); (b) aynı konudan 3 metin tek kümede, ilgisiz metin ayrı kümede → gerçekten kümeliyor; (c) `MIN_CONVERSATIONS` altındaki girdi → `sufficient:false` + `topics: []` → 'yeterli veri yoksa empty' KK'sının çekirdek payı; (d) içinde 16 haneli rakam dizisi geçen metinlerden üretilen etikette rakam yok. Regresyon: packages/ai-mock mevcut süiti (embedding.test.ts, intent.test.ts) ve knowledge/RAG testleri yeşil kalır.\nKAPSAM DIŞI: packages/ai-mock/src/embedding.ts'te HERHANGİ bir değişiklik (RAG regresyon riski) · DB sorgusu / Prisma / tenant erişimi (07.6-c) · Kontrat şeması (07.6-a'da pinlendi — bu fonksiyonun çıktısı ona uyarlanır) · Gerçek LLM/embedding sağlayıcısı (ADR: dış servisler mock) · Kümelerin kalıcılaştırılması / yeni tablo (varsayım 1)\nSÖZLEŞME: yok — saf fonksiyon, HTTP yüzeyi yok. (Çıktı şekli 07.6-a'da pinlenen ReportsTopics.topics[] alanlarını karşılamalı.)\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: determinizm — girdi sırası değişse de aynı küme/etiket/sıra · unit: kümeleme doğruluğu — benzer metinler aynı kümede, ilgisiz metin ayrı kümede · unit: etiket tie-break kararlılığı (hacim azalan, sonra alfabetik) · negatif (önce yazılır): boş girdi / tek doküman / eşik altı → sufficient:false + topics: [] · negatif (önce yazılır): salt-rakam token etikete GİRMEZ (16 haneli dizi → etikette rakam yok) — PII sızıntı negatifi · negatif: boş/whitespace-only metin fonksiyonu çökertmez · regresyon: packages/ai-mock mevcut süiti + knowledge/RAG integration testleri yeşil (embedding.ts değişmedi) · cross-tenant testi YOK ve gerekmez — saf fonksiyon, tenant kavramı taşımıyor (izolasyon 07.6-a/07.6-c'de kanıtlanır)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "64",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T01:45:02.960Z"
           },
           {
             "id": 3,
@@ -1822,7 +1822,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T01:23:24.399Z"
+        "updatedAt": "2026-08-03T01:45:02.960Z"
       },
       {
         "id": "65",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T01:23:24.399Z",
+      "lastModified": "2026-08-03T01:45:02.960Z",
       "taskCount": 99,
       "completedCount": 75,
       "tags": [

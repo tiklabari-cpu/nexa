@@ -2038,12 +2038,12 @@
             "description": "Sohbet detayında 'Take over' aksiyonu: yalnız admin/viceowner/owner rolünde görünür; tıklayınca onay modali (kimden alınacağı yazar) → `POST /chats/{chatId}/takeover`; başarıda sohbet listesi + detay invalidate, assignee güncellenir; 403 → 'Bu işlem için yönetici olmalısınız', 409 → 'Bu sohbeti başka bir yönetici az önce devraldı' mesajı. Devir sonrası önceki assignee'nin ekranı RTM push'uyla günc",
             "details": "08.6.3-g — Inbox: supervisor takeover butonu (rol kapılı, onaylı) + devir sonrası durum  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.6.3\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 3 dosya, güvenlik KARARI yok (yetki 08.6.3-d'de sunucuda; UI yalnız `useAuth`'tan gelen rolle butonu gizler ve 403/409 yanıtını mesaja çevirir), eşzamanlılık akıl yürütmesi yok (yarışın çözümü sunucuda), kopyalanacak desen ismen var (TeamPage useSuspension mutation + ui/Modal onay + Banner), kontrat değişikliği yok.\nNEDEN AÇIK: `grep -n 'transfer' apps/web/src/features/inbox/*.tsx` → tek eşleşme InboxPage.tsx:207'deki bir YORUM satırı; inbox'ta devir/takeover için hiçbir buton veya çağrı yok. Devralma bugün yalnız Customers/Traffic ekranındaki 'Assign chat to me' üzerinden ve rol kapısı olmadan yapılabiliyor (TrafficPage.tsx:75-78).\nKAPSAM: Sohbet detayında 'Take over' aksiyonu: yalnız admin/viceowner/owner rolünde görünür; tıklayınca onay modali (kimden alınacağı yazar) → `POST /chats/{chatId}/takeover`; başarıda sohbet listesi + detay invalidate, assignee güncellenir; 403 → 'Bu işlem için yönetici olmalısınız', 409 → 'Bu sohbeti başka bir yönetici az önce devraldı' mesajı. Devir sonrası önceki assignee'nin ekranı RTM push'uyla güncellenir (push tüketimi mevcut RTM istemcisine yeni action'ı tanıtmakla sınırlı).\nDOSYALAR: apps/web/src/features/inbox/DetailsPanel.tsx · apps/web/src/features/inbox/DetailsPanel.test.tsx · apps/web/src/features/inbox/useInbox.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/team/TeamPage.tsx (useSuspension satır 70-78 — yetkili aksiyon mutation kalıbı) · apps/web/src/components/ui/Modal.tsx + Modal.test.tsx (onay diyaloğu) · apps/web/src/features/traffic/rowActions.ts (aksiyonun rol/scope ile gating edilmesinin saf-fonksiyon kalıbı) · apps/web/src/components/ui/Banner.tsx (hata/uyarı tonları)\nKK (birebir): \"supervisor takeover\"\nKK DOĞRULAMA: unit (RTL) — `agent` rolünde buton HİÇ render edilmez (negatif, önce); admin rolünde render edilir; tıkla → onay modali → onayla → `POST /chats/{id}/takeover` çağrılır; 403 yanıtı yetki mesajı, 409 yanıtı 'başkası devraldı' mesajı gösterir. E2E `inbox-panel.spec.ts`'e admin oturumunda takeover görünürlüğü.\nKAPSAM DIŞI: yetki/eşzamanlılık kararı (08.6.3-d, sunucu) · çoklu-ajan çakışma uyarısı (08.6.3-h) · salt-okunur gözlemci modu · mevcut transfer akışının UI'ı — bu kalemde eklenmiyor\nSÖZLEŞME: yok — 08.6.3-d'de eklenen endpoint tüketilir\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit negatif (agent rolünde buton render edilmez — pozitiflerden ÖNCE) · unit (onay modali → doğru endpoint çağrısı + başarıda invalidate) · unit (403 ve 409 yanıtları ayrı ve anlamlı mesaja çevrilir) · E2E (inbox-panel.spec.ts — admin oturumunda takeover görünür)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               4
             ],
             "parentId": "66",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T06:56:43.548Z"
           },
           {
             "id": 8,
@@ -2074,7 +2074,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T06:28:06.670Z"
+        "updatedAt": "2026-08-03T06:56:43.548Z"
       },
       {
         "id": "67",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T06:28:06.671Z",
+      "lastModified": "2026-08-03T06:56:43.548Z",
       "taskCount": 99,
       "completedCount": 76,
       "tags": [

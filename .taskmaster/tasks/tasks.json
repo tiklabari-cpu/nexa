@@ -2051,10 +2051,10 @@
             "description": "Saf `conflict.ts` modülü: ChatDetail.users içinden `user_type==='agent' && present` olanları sayar, kendim dışında en az bir ajan varsa çakışma durumu üretir (kaç kişi, kim). Inbox sohbet görünümünde uyarı banner'ı ('Bu sohbet şu anda başka bir ajanda da açık — aynı anda yanıt vermeyin'), yazarken görünür kalır. RTM `user_added_to_chat` / `user_removed_from_chat` push'ları geldiğinde durum canlı g",
             "details": "08.6.3-h — Çoklu-ajan çakışma uyarısı (aynı sohbette birden fazla present ajan)  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.6.3 (PRD §5.3 satır 408 'çoklu-ajan çakışma uyarısı')\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — saf türetme modülü + bir banner; veri ZATEN mevcut (ChatDetail.users[].present, types.ts:49-54) ve RTM push action'ları ZATEN kayıtlı (`user_added_to_chat` / `user_removed_from_chat`, rtm.ts:117-145), yani kontrat/şema değişikliği yok; güvenlik kararı yok (yalnız görsel uyarı, hiçbir şeyi engellemez); eşzamanlılık kararı yok (yarışın reddi 08.6.3-d'de sunucuda); kopyalanacak desen ismen var (typing.ts + TypingIndicator.tsx).\nNEDEN AÇIK: facts §eksikler: 'Çoklu-ajan çakışma uyarısı (PRD §5.3 satır 408) için hiçbir mekanizma yok — iki ajanın aynı sohbete concurrent yazmasını/almasını tespit eden bir kontrol/uyarı bulunamadı.' Veri yolu hazır: ChatDetail yanıtı `users[]`'i `present` alanıyla döndürüyor (apps/web/src/features/inbox/types.ts:49-54; chat-service.ts chatInclude `users: true` satır 1314) ve RTM'de `user_added_to_chat` push'u zaten var (rtm.ts:117-145) — tüketen bir uyarı yok.\nKAPSAM: Saf `conflict.ts` modülü: ChatDetail.users içinden `user_type==='agent' && present` olanları sayar, kendim dışında en az bir ajan varsa çakışma durumu üretir (kaç kişi, kim). Inbox sohbet görünümünde uyarı banner'ı ('Bu sohbet şu anda başka bir ajanda da açık — aynı anda yanıt vermeyin'), yazarken görünür kalır. RTM `user_added_to_chat` / `user_removed_from_chat` push'ları geldiğinde durum canlı güncellenir (mevcut istemci bu action'ları zaten taşıyor).\nDOSYALAR: apps/web/src/features/inbox/conflict.ts · apps/web/src/features/inbox/conflict.test.ts · apps/web/src/features/inbox/InboxPage.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/inbox/typing.ts + typing.test.ts (saf türetme modülü + testi kalıbı) · apps/web/src/features/inbox/TypingIndicator.tsx (türetilmiş durumun göstergeye bağlanması) · apps/web/src/components/ui/Banner.tsx (tone'lu uyarı bileşeni)\nKK (birebir): \"KK-türetilmiş: Aynı sohbette kendimden başka en az bir 'present' ajan varsa sohbet görünümünde bir çakışma uyarısı görünür ve o ajan ayrılınca kaybolur. (Türetme gerekçesi: FR-MOD-08.6.3 satırının KK'sı yalnız 'Uzmanlık/skill bazlı; supervisor takeover' diyor — facts.kk_yetersiz=true; 'çoklu-ajan çakışma uyarısı' aynı v2 faz satırından geliyor: PRD §5.3 satır 408 'Skills-based routing, supervision + takeover, çoklu-ajan çakışma uyarısı'.)\"\nKK DOĞRULAMA: unit — conflict.ts: tek present ajan (ben) → uyarı yok; ben + başka present ajan → uyarı, sayı/isim doğru; başkası present=false → uyarı yok; müşteri kullanıcıları sayılmaz. RTL: uyarı banner'ı render edilir, `user_removed_from_chat` sonrası kaybolur.\nKAPSAM DIŞI: eşzamanlı takeover'ın SUNUCU tarafında reddi (08.6.3-d — 409) · yazma kilidi / gerçek zamanlı 'kim yazıyor' kilidi · takeover butonu (08.6.3-g) · yeni RTM push action'ı eklemek — mevcut user_added_to_chat / user_removed_from_chat yeterli\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit negatif (uyarı GÖSTERİLMEMESİ gereken haller: tek ajan, present=false, müşteri kullanıcısı — önce yazılır) · unit pozitif (ikinci present ajan → uyarı + doğru sayı/isim) · RTL (banner render + user_removed_from_chat sonrası kaybolma). Sunucu güvenlik yüzeyi yok: veri zaten tenant-scoped ChatDetail'den geliyor, cross-tenant bu katmanda uygulanamaz",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "66",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T07:09:27.390Z"
           },
           {
             "id": 9,
@@ -2074,7 +2074,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T06:56:43.548Z"
+        "updatedAt": "2026-08-03T07:09:27.390Z"
       },
       {
         "id": "67",
@@ -4920,7 +4920,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T06:56:43.548Z",
+      "lastModified": "2026-08-03T07:09:27.390Z",
       "taskCount": 99,
       "completedCount": 76,
       "tags": [

@@ -13,6 +13,46 @@
 
 ## Task log (newest-first)
 
+### 66.8 (08.6.3-h) — Çoklu-ajan çakışma uyarısı (aynı sohbette birden fazla present ajan) — done (audit-close) — 2026-08-03 UTC
+
+- **Yapıldı:** Kod değişikliği YOK — bu task'ın istediği davranış (kendimden başka bir ajan aynı
+  sohbetteyken uyarı banner'ı, o ajan ayrılınca kaybolma) zaten UÇTAN UCA teslim edilmiş halde
+  bulundu. tm 66.5'in handoff notu (2026-08-03) bu ihtimali önceden işaret etmişti: "-h bu satırın
+  KALAN listesinde hiç yoktu — muhtemelen ayrı `08.6.3-conflict-a..g` (tm 91.1-91.7) ile aynı PRD
+  satırının farklı bir kırılımı." Doğrulandı: PLAN.md §5.2 `08.6.3-conflict` satırı ✅ TAMAMLANDI
+  (a→g) olarak işaretli; `apps/web/src/features/inbox/conflict.ts` (zustand store) +
+  `ConflictBanner.tsx` zaten mevcut, `InboxPage.tsx`'e monte edilmiş (satır 532), RTM
+  `agent_conflict_warning` push'uyla besleniyor. **Fark:** bu task'ın orijinal kapsamı
+  `ChatDetail.users[].present`'e dayalı basit bir "sohbeti açık tutan ajan" türetmesi
+  öngörüyordu; teslim edilen mekanizma onun yerine "aktif yazan ajan" (composing, atomik Redis
+  composer-registry, OPUS-MAX çekirdek) sinyalini kullanıyor. PRD §5.3 satır 408 tetikleme
+  koşulunu belirtmiyor (iki kırılım da bağımsız KK-türetmesi) — composing-tabanlı sinyal "aynı
+  anda yanıt vermeyin" uyarısının amacına presence-tabanlıdan daha sadık (salt görüntüleme
+  false-positive üretmez) ve zaten race-safe teslim edilmiş; ikinci, çakışan bir banner mekanizması
+  eklemek kullanıcıya iki farklı "çakışma" anlamı gösterir ve gereksiz kod ikiliği yaratırdı —
+  bu yüzden yeniden inşa edilmedi, mevcut teslim doğrulanıp kapatıldı. PLAN.md §5.2 `08.6.3` satırına
+  bu gerekçeyle `08.6.3-h` audit-close notu eklendi.
+- **Doğrulama:** DoD kapısının tamamı mevcut koda karşı yeniden çalıştırıldı — `pnpm -w typecheck`
+  ✓ · `pnpm -w lint` ✓ · `pnpm --filter @nexa/web test` ✓ (555, `conflict.test.ts` 5 dahil) ·
+  `pnpm --filter @nexa/api test:unit` ✓ (266) · `pnpm --filter @nexa/rtm test` ✓ (90,
+  `conflict.test.ts` + `conflict-publisher.test.ts` + entegrasyon çakışma testleri dahil) ·
+  `pnpm --filter @nexa/api test:integration` ✓ (48 dosya / 1040 test) · `pnpm -w build` ✓.
+  **E2E:** DB truncate+reseed ile temizlendi (paylaşılan-tenant idempotent-seed birikimini önlemek
+  için — [[nexa-e2e-clean-db]]), `.env` elle source edilerek `pnpm --filter @nexa/e2e exec
+  playwright test tests/inbox-panel.spec.ts` ✓ (3/3 — "multi-agent composing conflict › a conflict
+  banner appears while two agents reply to the same conversation at once" dahil, gerçek iki-ajan
+  tarayıcı senaryosu, owner + seeded `agent1@acme.localhost`).
+- **Varsayımlar:** Presence-tabanlı ikinci bir mekanizma inşa etmemek bilinçli bir karar (yukarıda
+  gerekçeli) — task'ın harfiyen istediği `ChatDetail.users[].present` türetmesi değil, PRD'nin
+  amacını (çoklu-ajan çakışma uyarısı) karşılayan zaten-var mekanizma kabul edildi.
+- **Sonraki pencereye not:** 08.6.3 diliminde tek kalan: **-i** (uçtan uca: skill routing +
+  takeover E2E + cross-tenant negatif matrisi). **Çalışma alanı notu:** e2e koşusu
+  `apps/e2e/kanit/28-panel-expanded.png`'i (ve muhtemelen zaten dirty olan
+  `36-copilot-panel.png`'i) nondeterministik pikselle yeniden yazdı; önceki pencereler bunları
+  commit'lememiş, bu pencere de commit'lemedi (`git checkout` ile de geri almadı — 66.4-66.7'nin
+  izlediği aynı "dokunma, bırak" pratiği). `CONVENTIONS.md` / `.taskmaster/BUILD-BLUEPRINT.md` /
+  `run-loop.sh` hâlâ bu task'a ilişkisiz, işlenmemiş duruyorlar — bu pencere de onlara dokunmadı.
+
 ### 66.7 (08.6.3-g) — Inbox: supervisor takeover butonu (rol kapılı, onaylı) + devir sonrası durum — done — 2026-08-03 UTC
 
 - **Yapıldı:** [SONNET-XHIGH] Bu pencere işi sıfırdan yazmadı — kod, testler ve PLAN.md

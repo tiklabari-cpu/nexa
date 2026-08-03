@@ -3309,6 +3309,141 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/kb-articles': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List knowledge base articles
+     * @description All articles — drafts and published alike — newest edit first.
+     */
+    get: operations['listKbArticles'];
+    put?: never;
+    /**
+     * Create a knowledge base article
+     * @description Always created as a draft, whatever the caller sends — an article becomes
+     *     public only through a later `status: published` PATCH (KK "yalnız yetkili
+     *     bir eylemle yayınlanır"). `slug` is normalised (lower-cased, spaces to
+     *     hyphens); omit it to derive one from the title. A value that carries a
+     *     non-ASCII letter, or normalises to nothing, is a 400 rather than a lossy
+     *     guess. A slug already used in the workspace is a 400.
+     */
+    post: operations['createKbArticle'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/kb-articles/{articleId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        articleId: string;
+      };
+      cookie?: never;
+    };
+    /** Get one knowledge base article */
+    get: operations['getKbArticle'];
+    put?: never;
+    post?: never;
+    /** Delete a knowledge base article */
+    delete: operations['deleteKbArticle'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit an article, or publish / unpublish it
+     * @description Only the fields present in the body change. `status` is the publish
+     *     control: moving `draft` → `published` stamps `published_at` and records an
+     *     audit entry; moving back to `draft` clears it and records the reverse. A
+     *     slug or category is re-validated exactly as on create.
+     */
+    patch: operations['updateKbArticle'];
+    trace?: never;
+  };
+  '/kb-categories': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List knowledge base categories
+     * @description The reader-facing taxonomy, in display order.
+     */
+    get: operations['listKbCategories'];
+    put?: never;
+    /**
+     * Create a knowledge base category
+     * @description `slug` is normalised like an article's, and derived from the name when
+     *     omitted. A duplicate slug in the workspace is a 400.
+     */
+    post: operations['createKbCategory'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/kb-categories/{categoryId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        categoryId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a knowledge base category
+     * @description Articles filed under it are kept; their link is cleared (SET NULL).
+     */
+    delete: operations['deleteKbCategory'];
+    options?: never;
+    head?: never;
+    /** Edit a knowledge base category */
+    patch: operations['updateKbCategory'];
+    trace?: never;
+  };
+  '/kb-settings': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read the knowledge base settings
+     * @description The per-workspace singleton. Before it is ever configured, returns the
+     *     default off state with a null public address rather than a 404 — the admin
+     *     screen always has something to render.
+     */
+    get: operations['getKbSettings'];
+    /**
+     * Configure the knowledge base (administrator only)
+     * @description Sets the public address and the on/off switch. Enabling the KB, or setting
+     *     its public address, is what first exposes the workspace's published
+     *     articles to an anonymous audience, so this write is administrator-gated
+     *     (`minimumRole: admin`) beyond the write scope. A `public_slug` is required
+     *     the first time and must be free across all workspaces. A change to
+     *     `enabled` is recorded in the audit log.
+     */
+    put: operations['updateKbSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4273,6 +4408,61 @@ export interface components {
       created_at: string;
       /** Format: date-time */
       updated_at: string;
+    };
+    /**
+     * @description A public KB category (PRD §5.3) — the reader-facing taxonomy an article
+     *     can be filed under. `slug` is unique within the workspace; `position`
+     *     orders the categories for display.
+     */
+    KbCategory: {
+      /** Format: uuid */
+      id: string;
+      slug: string;
+      name: string;
+      position: number;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
+     * @description A public KB article (PRD §5.3). `seo_title`/`seo_description` carry the
+     *     "SEO'lu" half of the requirement; `status` the "public" half — an article
+     *     is a draft until an explicit publish, and only `published` articles are
+     *     ever served by the anonymous read path (PUBKB-c). `body` is stored raw
+     *     here; its safe rendering is a later slice (PUBKB-d).
+     */
+    KbArticle: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      category_id: string | null;
+      slug: string;
+      title: string;
+      body: string;
+      excerpt: string | null;
+      seo_title: string | null;
+      seo_description: string | null;
+      /** @enum {string} */
+      status: 'draft' | 'published';
+      /** Format: date-time */
+      published_at: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    /**
+     * @description The per-workspace KB switch and public address (PRD §5.3). `enabled`
+     *     gates whether the public KB is served at all; `public_slug` is the path
+     *     segment on the shared public host, globally unique across workspaces.
+     *     Both are null/false until an administrator configures them — this is the
+     *     control that first exposes published articles to an anonymous audience.
+     */
+    KbSettings: {
+      enabled: boolean;
+      public_slug: string | null;
+      site_title: string | null;
+      /** Format: date-time */
+      updated_at: string | null;
     };
     /**
      * @description A custom field a workspace has defined on tickets or contacts
@@ -10799,6 +10989,343 @@ export interface operations {
             /** @description Opaque cursor for the next page; absent on the last. */
             next_page_id?: string;
           };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listKbArticles: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's KB articles */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['KbArticle'][];
+            total: number;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createKbArticle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          title: string;
+          body: string;
+          /** @description Normalised on save; derived from the title when omitted. */
+          slug?: string;
+          /**
+           * Format: uuid
+           * @description An existing category in this workspace, or null to leave the article unfiled.
+           */
+          category_id?: string | null;
+          excerpt?: string | null;
+          seo_title?: string | null;
+          seo_description?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Created (as a draft) */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KbArticle'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getKbArticle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        articleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The article */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KbArticle'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteKbArticle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        articleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateKbArticle: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        articleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          title?: string;
+          body?: string;
+          slug?: string;
+          /** Format: uuid */
+          category_id?: string | null;
+          excerpt?: string | null;
+          seo_title?: string | null;
+          seo_description?: string | null;
+          /**
+           * @description The publish state. draft→published stamps published_at; published→draft clears it.
+           * @enum {string}
+           */
+          status?: 'draft' | 'published';
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KbArticle'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listKbCategories: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's KB categories */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['KbCategory'][];
+            total: number;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createKbCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          slug?: string;
+          /** @description Sort order among categories; defaults to 0. */
+          position?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KbCategory'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteKbCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        categoryId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateKbCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        categoryId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          slug?: string;
+          position?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KbCategory'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getKbSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The KB settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KbSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateKbSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Whether the public KB is served. Enabling needs a public_slug set. */
+          enabled?: boolean;
+          /** @description The workspace's KB path segment on the shared public host. Globally unique. */
+          public_slug?: string;
+          site_title?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KbSettings'];
         };
       };
       400: components['responses']['BadRequest'];

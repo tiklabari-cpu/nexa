@@ -43,6 +43,8 @@ tags:
     description: Marketplace of third-party integrations, connected through a (mock) OAuth flow.
   - name: Playbook
     description: AI agents, skills and the knowledge they answer from.
+  - name: Knowledge Base
+    description: The reader-facing "SEO'lu self-servis" public KB — articles, categories, publish state.
   - name: Copilot
     description: Agent-assist — a separate knowledge base and in-chat help (summary, reply draft, rewrite).
   - name: Settings
@@ -348,6 +350,17 @@ paths:
 
   /audit-log:
     $ref: "./paths/audit-log.yaml#/auditLog"
+
+  /kb-articles:
+    $ref: "./paths/kb.yaml#/kbArticles"
+  /kb-articles/{articleId}:
+    $ref: "./paths/kb.yaml#/kbArticle"
+  /kb-categories:
+    $ref: "./paths/kb.yaml#/kbCategories"
+  /kb-categories/{categoryId}:
+    $ref: "./paths/kb.yaml#/kbCategory"
+  /kb-settings:
+    $ref: "./paths/kb.yaml#/kbSettings"
 
 components:
   securitySchemes:
@@ -1531,6 +1544,74 @@ components:
           description: Whether agents may pick the template. Off keeps it authored but hidden.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    KbCategory:
+      type: object
+      description: |
+        A public KB category (PRD §5.3) — the reader-facing taxonomy an article
+        can be filed under. `slug` is unique within the workspace; `position`
+        orders the categories for display.
+      required: [id, slug, name, position, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        position: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    KbArticle:
+      type: object
+      description: |
+        A public KB article (PRD §5.3). `seo_title`/`seo_description` carry the
+        "SEO'lu" half of the requirement; `status` the "public" half — an article
+        is a draft until an explicit publish, and only `published` articles are
+        ever served by the anonymous read path (PUBKB-c). `body` is stored raw
+        here; its safe rendering is a later slice (PUBKB-d).
+      required:
+        [
+          id,
+          category_id,
+          slug,
+          title,
+          body,
+          excerpt,
+          seo_title,
+          seo_description,
+          status,
+          published_at,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        category_id: { type: string, format: uuid, nullable: true }
+        slug: { type: string }
+        title: { type: string }
+        body: { type: string }
+        excerpt: { type: string, nullable: true }
+        seo_title: { type: string, nullable: true }
+        seo_description: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [draft, published]
+        published_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    KbSettings:
+      type: object
+      description: |
+        The per-workspace KB switch and public address (PRD §5.3). `enabled`
+        gates whether the public KB is served at all; `public_slug` is the path
+        segment on the shared public host, globally unique across workspaces.
+        Both are null/false until an administrator configures them — this is the
+        control that first exposes published articles to an anonymous audience.
+      required: [enabled, public_slug, site_title, updated_at]
+      properties:
+        enabled: { type: boolean }
+        public_slug: { type: string, nullable: true }
+        site_title: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
 
     CustomFieldDefinition:
       type: object

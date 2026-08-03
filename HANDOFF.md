@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### tm 76.2 — PUBKB-b Yönetim (agent-auth) KB CRUD kontratı + backend + yayın durumu — done — 2026-08-03 UTC
+
+- **Yapıldı:** Bu pencere sıfırdan yazmadı — önceki (yarım kalmış, commit'lenmemiş) pencerenin
+  bıraktığı tam dilimi buldu, DoD kapısına karşı doğruladı ve kapattı. İçerik: (1) kontrat
+  `packages/contract/openapi/paths/kb.yaml` (11 op: `POST/GET /kb-articles`,
+  `GET/PATCH/DELETE /kb-articles/{id}`, `POST/GET /kb-categories`,
+  `PATCH/DELETE /kb-categories/{id}`, `GET/PUT /kb-settings`) + `KbArticle`/`KbCategory`/`KbSettings`
+  şemaları + `Knowledge Base` tag → `openapi.yaml`'a bağlandı, bundle (129 path) + `@nexa/types`
+  regen (fresh regen ek diff üretmedi = senkron). (2) route `apps/api/src/routes/kb.ts` — `playbook.ts`
+  CRUD deseni: `request.withTenant` tenant-scoped sorgu, `ApiError.notFound` ile cross-tenant 404
+  (NFR-S5), scope `agents-bot--all:ro/:rw` **yeniden kullanım** (YENİ scope YOK), yalnız
+  `validation`/`not_found`/`authorization` (YENİ ApiError tipi YOK). (3) `apps/api/src/lib/kb-slug.ts`
+  — ASCII-only slug normalizasyonu (küçük harf, boşluk→tire, tire birleştir/kırp), non-ASCII →
+  transliterasyon YOK, `null` döner → route reddeder. (4) makale varsayılan `status='draft'`
+  +`published_at=null`; yalnız açık PATCH `status=published` `published_at` damgalar, unpublish
+  null'lar; yalnız GERÇEK geçiş audit yazar (no-op re-publish audit YAZMAZ). (5) `PUT /kb-settings`
+  `minimumRole:'admin'` (KK "yalnız yönetici açar") + `public_slug` global-unique; ilk yazımda
+  `public_slug` zorunlu. (6) publish/unpublish + settings.enabled değişimi audit
+  (`kb.article_published`/`kb.article_unpublished`/`kb.settings_updated` — `audit-log.ts`
+  AUDIT_ACTIONS'a eklendi, NFR-C2). server.ts route kaydı.
+- **Doğrulama (hepsi yeşil, exit 0):** `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` ·
+  `pnpm -w test:unit` (api **311**, `kb-slug.test.ts` **8** dahil) · `pnpm -w test:integration`
+  serial (api **1134/1134** — `kb.test.ts` **20** + `contract-parity.test.ts` **5** çift-yönlü dahil;
+  rtm **51/51**) · `db:check-drift` no drift. e2e: bu görev backend-only yönetim API'si (admin UI =
+  PUBKB-g/-h, anonim okuma = PUBKB-c — hepsi kapsam dışı); test stratejisi yalnız integration+unit
+  listeler → kapsanan e2e akışı YOK, KB e2e spec'i yok.
+- **Varsayımlar:** Yok — kontrat/route/scope kararları görev tanımı + §C-PUBKB varsayımlarıyla birebir.
+- **Sonraki pencereye not:** PUBKB-c (anonim public okuma çekirdeği, BÖLÜNMEZ OPUS-MAX) bu yönetim
+  yüzeyinin üstüne oturur: slug→license çözümleyici + yayın filtresi (`status=published` +
+  `kb_settings.enabled`) + 404-yerine-403 (NFR-S5). Gövde ham saklanıyor, servis edilmiyor — güvenli
+  render PUBKB-d. Parent tm 76 hâlâ in-progress (c→i kaldı). **Kapsam-dışı dokunulmadı:** çalışma
+  alanında bu görevle ilgisiz kirli dosyalar duruyor (`CONVENTIONS.md`, `run-loop.sh`,
+  `.taskmaster/BUILD-BLUEPRINT.md`, `apps/e2e/kanit/*.png`, `.playwright-mcp/`) — önceki turlardan,
+  bilerek commit'lenmedi (tm 67.4 emsali). `tasks.json` KB-dilimi durumları (76.1 done · 76 in-progress ·
+  76.2 done) ayrı `chore(taskmaster)` commit'inde persist edildi.
+
 ### tm 76.1 — PUBKB-a Public KB veri modeli (kb_articles + kb_categories + kb_settings, RLS'li migration) — done — 2026-08-03 UTC
 
 - **Yapıldı:** Üç yeni license-scoped tablo: `kb_categories` (id/license_id/slug/name/position),

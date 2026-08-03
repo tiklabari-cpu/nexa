@@ -1,0 +1,311 @@
+# Public knowledge base — management surface (PUBKB-b · PRD §5.3, v2).
+#
+# The agent-authenticated CRUD an admin uses to write, file and publish the
+# reader-facing "SEO'lu self-servis" articles. Two halves of the KK live here:
+# an article is created a **draft** and only an explicit `status: published`
+# PATCH makes it public (writing `published_at`); and the workspace's KB is off
+# until an **administrator** turns it on through `/kb-settings` — the switch that
+# first exposes any of this to an anonymous audience, so that write alone is
+# role-gated (`minimumRole: admin`), never the scope alone.
+#
+# Scope reuse, not a new one (§C-PUBKB-6): the Knowledge area's existing
+# `agents-bot--all:ro` / `agents-bot--all:rw`, the same pair `playbook.ts`
+# guards its knowledge sources with. The anonymous read path is PUBKB-c; nothing
+# here is public.
+
+kbArticles:
+  get:
+    tags: [Knowledge Base]
+    operationId: listKbArticles
+    summary: List knowledge base articles
+    description: All articles — drafts and published alike — newest edit first.
+    responses:
+      "200":
+        description: The workspace's KB articles
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/KbArticle" }
+                total: { type: integer }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Knowledge Base]
+    operationId: createKbArticle
+    summary: Create a knowledge base article
+    description: |
+      Always created as a draft, whatever the caller sends — an article becomes
+      public only through a later `status: published` PATCH (KK "yalnız yetkili
+      bir eylemle yayınlanır"). `slug` is normalised (lower-cased, spaces to
+      hyphens); omit it to derive one from the title. A value that carries a
+      non-ASCII letter, or normalises to nothing, is a 400 rather than a lossy
+      guess. A slug already used in the workspace is a 400.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [title, body]
+            properties:
+              title: { type: string, minLength: 1, maxLength: 200 }
+              body: { type: string, minLength: 1, maxLength: 100000 }
+              slug:
+                type: string
+                maxLength: 200
+                description: Normalised on save; derived from the title when omitted.
+              category_id:
+                type: string
+                format: uuid
+                nullable: true
+                description: An existing category in this workspace, or null to leave the article unfiled.
+              excerpt: { type: string, maxLength: 500, nullable: true }
+              seo_title: { type: string, maxLength: 200, nullable: true }
+              seo_description: { type: string, maxLength: 500, nullable: true }
+    responses:
+      "201":
+        description: Created (as a draft)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KbArticle" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+kbArticle:
+  parameters:
+    - name: articleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Knowledge Base]
+    operationId: getKbArticle
+    summary: Get one knowledge base article
+    responses:
+      "200":
+        description: The article
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KbArticle" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Knowledge Base]
+    operationId: updateKbArticle
+    summary: Edit an article, or publish / unpublish it
+    description: |
+      Only the fields present in the body change. `status` is the publish
+      control: moving `draft` → `published` stamps `published_at` and records an
+      audit entry; moving back to `draft` clears it and records the reverse. A
+      slug or category is re-validated exactly as on create.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              title: { type: string, minLength: 1, maxLength: 200 }
+              body: { type: string, minLength: 1, maxLength: 100000 }
+              slug: { type: string, maxLength: 200 }
+              category_id: { type: string, format: uuid, nullable: true }
+              excerpt: { type: string, maxLength: 500, nullable: true }
+              seo_title: { type: string, maxLength: 200, nullable: true }
+              seo_description: { type: string, maxLength: 500, nullable: true }
+              status:
+                type: string
+                enum: [draft, published]
+                description: The publish state. draft→published stamps published_at; published→draft clears it.
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KbArticle" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Knowledge Base]
+    operationId: deleteKbArticle
+    summary: Delete a knowledge base article
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+kbCategories:
+  get:
+    tags: [Knowledge Base]
+    operationId: listKbCategories
+    summary: List knowledge base categories
+    description: The reader-facing taxonomy, in display order.
+    responses:
+      "200":
+        description: The workspace's KB categories
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/KbCategory" }
+                total: { type: integer }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Knowledge Base]
+    operationId: createKbCategory
+    summary: Create a knowledge base category
+    description: |
+      `slug` is normalised like an article's, and derived from the name when
+      omitted. A duplicate slug in the workspace is a 400.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              slug: { type: string, maxLength: 200 }
+              position:
+                type: integer
+                description: Sort order among categories; defaults to 0.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KbCategory" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+kbCategory:
+  parameters:
+    - name: categoryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Knowledge Base]
+    operationId: updateKbCategory
+    summary: Edit a knowledge base category
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              slug: { type: string, maxLength: 200 }
+              position: { type: integer }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KbCategory" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Knowledge Base]
+    operationId: deleteKbCategory
+    summary: Delete a knowledge base category
+    description: Articles filed under it are kept; their link is cleared (SET NULL).
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+kbSettings:
+  get:
+    tags: [Knowledge Base]
+    operationId: getKbSettings
+    summary: Read the knowledge base settings
+    description: |
+      The per-workspace singleton. Before it is ever configured, returns the
+      default off state with a null public address rather than a 404 — the admin
+      screen always has something to render.
+    responses:
+      "200":
+        description: The KB settings
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KbSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Knowledge Base]
+    operationId: updateKbSettings
+    summary: Configure the knowledge base (administrator only)
+    description: |
+      Sets the public address and the on/off switch. Enabling the KB, or setting
+      its public address, is what first exposes the workspace's published
+      articles to an anonymous audience, so this write is administrator-gated
+      (`minimumRole: admin`) beyond the write scope. A `public_slug` is required
+      the first time and must be free across all workspaces. A change to
+      `enabled` is recorded in the audit log.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              enabled:
+                type: boolean
+                description: Whether the public KB is served. Enabling needs a public_slug set.
+              public_slug:
+                type: string
+                maxLength: 200
+                description: The workspace's KB path segment on the shared public host. Globally unique.
+              site_title: { type: string, maxLength: 200, nullable: true }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KbSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

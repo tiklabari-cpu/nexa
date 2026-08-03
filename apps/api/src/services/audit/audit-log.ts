@@ -99,6 +99,14 @@ export const AUDIT_ACTIONS = [
   // action across the settings-family kinds it covers; metadata carries only
   // `kind`, never the deleted record's name, body or values.
   'data.deleted',
+  // Public knowledge base (PRD §5.3, PUBKB-b). Publishing an article, or turning
+  // the workspace's KB on/off, changes what an anonymous audience can see — the
+  // moment content crosses from private to public — so each is recorded. The
+  // entry names the article or the new switch state, never the body or the
+  // public address.
+  'kb.article_published',
+  'kb.article_unpublished',
+  'kb.settings_updated',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

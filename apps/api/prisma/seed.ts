@@ -87,6 +87,115 @@ const TENANTS: TenantSpec[] = [
 ];
 
 /**
+ * Four thematically distinct closed-conversation groups for the Chat topics
+ * report (FR-MOD-07.6). A single recycled sentence ("Delivery query,
+ * resolved.", on every closed thread below) gives the clusterer one vocabulary
+ * to work with — the report is stuck showing either one topic or, below
+ * `TOPIC_MIN_CONVERSATIONS`, the "not enough data yet" empty state, and
+ * neither proves clustering or a full report out in a demo or e2e.
+ *
+ * The wording was checked against `clusterTopics` directly, not assumed. Chat
+ * and thread ids are `generateShortId()` — random, not sequential — and
+ * `clusterTopics` sorts by id before clustering, so which doc a greedy leader
+ * sees first (and therefore whether a weakly-worded group survives as one
+ * cluster) changes on every fresh seed. Checked across 200 randomised id
+ * orderings, not one: each group holds together as a single cluster (pairwise
+ * cosine mostly 0.4-0.9 within a group) and no pair of groups ever merges
+ * (cross-group cosine stays near or under `TOPIC_SIMILARITY_THRESHOLD`, 0.3 —
+ * the calibration `07.6-b` documents). Six per group clears
+ * `TOPIC_MIN_CLUSTER_SIZE` with room to spare and, all four together, clears
+ * `TOPIC_MIN_CONVERSATIONS` on their own, before the two sample conversations
+ * above are even counted.
+ */
+interface TopicGroup {
+  key: string;
+  customerName: string;
+  customerEmail: string;
+  countryCode: string;
+  country: string;
+  agentReply: string;
+  texts: string[];
+}
+
+const CHAT_TOPIC_GROUPS: TopicGroup[] = [
+  {
+    key: 'delivery',
+    customerName: 'Devon Marsh',
+    customerEmail: 'devon',
+    countryCode: 'US',
+    country: 'United States',
+    agentReply: "Thanks for flagging this — I'll check the courier tracking and update you shortly.",
+    texts: [
+      'My delivery tracking shows in transit and this delivery is running late.',
+      'The delivery tracking still shows in transit, this delivery is very late.',
+      'My delivery is late, the tracking still shows the parcel in transit.',
+      'This delivery tracking has not updated, delivery is late and stuck in transit.',
+      'The tracking for my delivery shows in transit but delivery is now late.',
+      'My delivery tracking link shows in transit, the delivery is running late again.',
+    ],
+  },
+  {
+    key: 'refund',
+    customerName: 'Sana Iqbal',
+    customerEmail: 'sana',
+    countryCode: 'CA',
+    country: 'Canada',
+    agentReply: "I'm sorry for the delay — I'll confirm your refund status right away.",
+    texts: [
+      'I want a refund for my return, the money has not come back to my account.',
+      'My return refund has not been credited back to my account yet.',
+      'This return refund never arrived, the money still has not come back to my account.',
+      'I am waiting for my return refund, the money has not been credited back yet.',
+      'My refund for this return has not appeared, the money is still missing from my account.',
+      'The refund for my return never came back to my account, please credit it.',
+    ],
+  },
+  {
+    key: 'billing',
+    customerName: 'Owen Baptiste',
+    customerEmail: 'owen',
+    countryCode: 'NL',
+    country: 'Netherlands',
+    agentReply: 'Let me pull up your billing statement and get this charge corrected.',
+    texts: [
+      'My billing statement shows a charge I do not recognise on this invoice.',
+      'This billing invoice charged the wrong amount on my statement again.',
+      'My billing statement has an invoice charge that does not look right.',
+      'The invoice on my billing statement shows a charge I never expected.',
+      'This billing charge on my invoice statement does not match what I owe.',
+      'My invoice statement shows a billing charge I want explained.',
+    ],
+  },
+  {
+    key: 'product',
+    customerName: 'Yuki Tanaka',
+    customerEmail: 'yuki',
+    countryCode: 'JP',
+    country: 'Japan',
+    agentReply: "I'll check with the warehouse on the restock date for this item.",
+    texts: [
+      'This item listing shows out of stock, is the product back in stock soon.',
+      'The product listing says out of stock, when will this item be in stock again.',
+      'This item is out of stock on the listing, do you know the product restock date.',
+      'The listing shows this product unavailable, is the item back in stock yet.',
+      'This product is out of stock, the item listing has not shown a restock date.',
+      'The item listing still shows out of stock, when does this product restock.',
+    ],
+  },
+];
+
+/**
+ * The equal-length window immediately before the report's default 30-day range
+ * (`resolveRange` in `apps/api/src/routes/reports.ts`). Backdating two of the
+ * delivery group's own conversations here — rather than inventing new text —
+ * is what was actually checked against `centroidOf`/`similarity`: both
+ * reattach to the current window's delivery centroid at cosine 0.53 and 0.61,
+ * comfortably over the join threshold, so `previous_volume` and `trend` are a
+ * real number rather than the null a topic absent from history gets.
+ */
+const PREVIOUS_WINDOW_AT = new Date(Date.now() - 45 * 86_400_000);
+
+/**
  * Embeddings come from the shared stub, which derives them from the chunk's
  * *text*.
  *
@@ -533,6 +642,13 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       groupId: supportTeam.id,
       shippingTagId: tags.find((t) => t.name === 'shipping')!.id,
     });
+    await seedChatTopics({
+      licenseId,
+      organizationId: organization.id,
+      slug: spec.slug,
+      agentId: agents[0]!.id,
+      groupId: supportTeam.id,
+    });
   }
 
   const demoToken = `nexa_pat_demo_${spec.slug}`;
@@ -622,6 +738,74 @@ async function seedConversations(input: {
   });
 }
 
+/**
+ * Closed conversations across `CHAT_TOPIC_GROUPS`, so the Chat topics report
+ * (FR-MOD-07.6) has more than the one recycled sentence above to cluster — see
+ * that constant for why the wording is what it is. One dedicated customer per
+ * group (mirroring `seedConversations`'s pattern, not reusing Robin/Alex/Mira)
+ * keeps their `chats_count` — which the customer directory reads live, not
+ * from a stored column — exactly what it was before this task.
+ */
+async function seedChatTopics(input: {
+  licenseId: bigint;
+  organizationId: string;
+  slug: string;
+  agentId: string;
+  groupId: bigint;
+}): Promise<void> {
+  const { licenseId, organizationId, slug, agentId, groupId } = input;
+
+  for (const group of CHAT_TOPIC_GROUPS) {
+    const customer = await prisma.customer.create({
+      data: {
+        organizationId,
+        name: group.customerName,
+        email: `${group.customerEmail}@${slug}-customer.localhost`,
+        countryCode: group.countryCode,
+        country: group.country,
+        lastActivityAt: new Date(),
+      },
+      select: { id: true },
+    });
+
+    for (const text of group.texts) {
+      await createConversation({
+        licenseId,
+        customerId: customer.id,
+        groupId,
+        agentId,
+        active: false,
+        summary: text,
+        messages: [
+          { authorType: 'customer', text },
+          { authorType: 'agent', text: group.agentReply },
+        ],
+      });
+    }
+
+    // The delivery group also gets two of its own conversations backdated into
+    // the previous window (see `PREVIOUS_WINDOW_AT`), so at least one topic's
+    // trend is a real number in the demo rather than every topic reading null.
+    if (group.key === 'delivery') {
+      for (const text of group.texts.slice(0, 2)) {
+        await createConversation({
+          licenseId,
+          customerId: customer.id,
+          groupId,
+          agentId,
+          active: false,
+          summary: text,
+          at: PREVIOUS_WINDOW_AT,
+          messages: [
+            { authorType: 'customer', text },
+            { authorType: 'agent', text: group.agentReply },
+          ],
+        });
+      }
+    }
+  }
+}
+
 async function createConversation(input: {
   licenseId: bigint;
   customerId: string;
@@ -629,11 +813,15 @@ async function createConversation(input: {
   agentId: string | null;
   active: boolean;
   messages: Array<{ authorType: string; text: string; recipients?: string }>;
+  /** Closed-thread summary the Chat topics clusterer reads (07.6-d). Defaults to the original placeholder so the one pre-existing call site is untouched. */
+  summary?: string;
+  /** Backdates the conversation — the previous-window half of the topics demo. */
+  at?: Date;
 }): Promise<{ chatId: string; threadId: string }> {
-  const { licenseId, customerId, groupId, agentId, active, messages } = input;
+  const { licenseId, customerId, groupId, agentId, active, messages, summary, at } = input;
   const chatId = generateShortId();
   const threadId = generateShortId();
-  const startedAt = new Date(Date.now() - messages.length * 120_000);
+  const startedAt = at ?? new Date(Date.now() - messages.length * 120_000);
 
   await prisma.chat.create({
     data: { id: chatId, licenseId, customerId, active, createdAt: startedAt },
@@ -658,7 +846,12 @@ async function createConversation(input: {
       assigneeId: agentId,
       createdAt: startedAt,
       eventSequence: messages.length,
-      ...(active ? {} : { closedAt: new Date(), summary: 'Delivery query, resolved.' }),
+      ...(active
+        ? {}
+        : {
+            closedAt: at ? new Date(at.getTime() + messages.length * 120_000) : new Date(),
+            summary: summary ?? 'Delivery query, resolved.',
+          }),
       ...(firstAgentReply >= 0
         ? { firstResponseAt: new Date(startedAt.getTime() + firstAgentReply * 120_000) }
         : {}),

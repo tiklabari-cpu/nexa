@@ -15,11 +15,16 @@
  * failing that a customer message — the same rule the route's count uses.
  */
 import type { PrismaClient } from '@prisma/client';
+import { execFile } from 'node:child_process';
+import { resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
+import { TOPIC_MIN_CLUSTER_SIZE } from '@nexa/ai-mock';
 import {
   grantToken,
   ownerClient,
+  resetDatabase,
   seedFixtures,
   type Fixtures,
   type TenantFixture,
@@ -353,5 +358,105 @@ describe('chat topics report (07.6)', () => {
     expect(theirs.topics.length).toBeGreaterThanOrEqual(1);
     const labels = theirs.topics.map((topic: { label: string }) => topic.label).join(' ');
     expect(labels).not.toMatch(/deliver|refund|package|invoice/);
+  });
+});
+
+/**
+ * The demo seed itself (07.6-d): `prisma/seed.ts` used to write one recycled
+ * summary onto every closed thread, so the Chat topics report could only ever
+ * be demoed or e2e-tested in its empty state — never the sufficient-data one
+ * this suite otherwise exercises with synthetic fixtures. This runs the real
+ * seed (`pnpm db:seed`, the same command `apps/e2e`'s global setup uses)
+ * against this suite's own database and asserts the report it actually
+ * produces, not a stand-in for it.
+ *
+ * A sibling `describe`, not more `it`s above: the outer suite's `beforeEach`
+ * truncates and rebuilds `fx.a`/`fx.b` before every test, which would either
+ * fight the seed's own tenants or be immediately discarded by it. Seeding
+ * once in `beforeAll` here is also the only way to exercise the seed's actual
+ * idempotency (a second `db:seed` run is a no-op against existing tenants —
+ * re-truncating between tests would make that untestable).
+ */
+describe('chat topics — demo seed diversity (07.6-d)', () => {
+  const run = promisify(execFile);
+  // test/integration → test → api → apps → repo root.
+  const repoRoot = resolve(import.meta.dirname, '../../../..');
+
+  let owner: PrismaClient;
+  let server: TestServer;
+
+  async function runDemoSeed(): Promise<void> {
+    const { stdout } = await run('pnpm', ['db:seed'], {
+      cwd: repoRoot,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    if (!stdout.includes('Acme Bikes')) {
+      throw new Error(`Seed did not produce the expected demo tenant:\n${stdout}`);
+    }
+  }
+
+  beforeAll(async () => {
+    owner = ownerClient();
+    server = await startTestServer();
+    await resetDatabase(owner);
+    await runDemoSeed();
+  }, 60_000);
+
+  afterAll(async () => {
+    await server.close();
+    await owner.$disconnect();
+  });
+
+  it('clusters the seeded demo tenant into several topics, each over the cluster floor, with a live trend', async () => {
+    const response = await server.get('/reports/topics', {
+      authorization: 'Bearer nexa_pat_demo_acme',
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+
+    expect(body.sufficient_data).toBe(true);
+    // The seed's own four topic groups, plus whatever the pre-existing sample
+    // conversation joins — never fewer than the four groups it wrote.
+    expect(body.topics.length).toBeGreaterThanOrEqual(2);
+    for (const topic of body.topics) {
+      expect(topic.volume).toBeGreaterThanOrEqual(TOPIC_MIN_CLUSTER_SIZE);
+    }
+    // The delivery group's two backdated conversations (`PREVIOUS_WINDOW_AT`)
+    // give at least one topic a real trend rather than every topic reading the
+    // null a brand-new topic gets.
+    expect(
+      body.topics.some(
+        (topic: { previous_volume: number; trend: number | null }) =>
+          topic.previous_volume > 0 && topic.trend !== null,
+      ),
+    ).toBe(true);
+  });
+
+  it('does not leak the seeded topics into a demo tenant with no rich conversations', async () => {
+    const response = await server.get('/reports/topics', {
+      authorization: 'Bearer nexa_pat_demo_northwind',
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+
+    expect(body.analyzed).toBe(0);
+    expect(body.sufficient_data).toBe(false);
+    expect(body.topics).toEqual([]);
+  });
+
+  it('is idempotent: reseeding an already-seeded tenant leaves the same topics', async () => {
+    // A fixed range, requested identically before and after: only the seed's
+    // idempotency is under test here, not whether "the last 30 days" drifted
+    // between the two requests.
+    const to = new Date();
+    const from = new Date(to.getTime() - 30 * 86_400_000);
+    const url = `/reports/topics?from=${from.toISOString()}&to=${to.toISOString()}`;
+    const auth = { authorization: 'Bearer nexa_pat_demo_acme' };
+
+    const before = (await server.get(url, auth)).json();
+    await runDemoSeed();
+    const after = (await server.get(url, auth)).json();
+
+    expect(after).toEqual(before);
   });
 });

@@ -13,6 +13,35 @@
 
 ## Task log (newest-first)
 
+### 64.4 (07.6-d) — Demo seed'de konu çeşitliliği: kümelenebilir sohbet özetleri — done — 2026-08-03 UTC
+
+- **Yapıldı:** [SONNET-XHIGH] `apps/api/prisma/seed.ts:593`'ün her kapalı thread'e yazdığı sabit
+  özet (`'Delivery query, resolved.'`) tek başına kümeleyicinin tek vocabulary'siydi — demo
+  lisansı `/reports/topics`'i yalnız tek küme ya da `sufficient_data:false` olarak gösterebiliyordu,
+  dolu durum (kümeleme + hacim/trend) hiçbir yerde demo/e2e edilemiyordu. Yeni `CHAT_TOPIC_GROUPS`
+  (delivery/refund/billing/product — grup başına 6 kapalı sohbet + kendine ait müşteri) +
+  `seedChatTopics()`; `createConversation()`'a `summary`/`at` parametreleri eklendi (eski çağrı
+  yeri varsayılanla değişmedi). Kelime seçimleri `clusterTopics`'e karşı 200 rastgele id
+  sıralamasıyla kalibre edildi (grup-içi cosine ~0.4–0.9, gruplar-arası eşik 0.3'ün
+  altında/yakınında — birleşme yok). Delivery grubundan 2 sohbet `PREVIOUS_WINDOW_AT`'a
+  (30 günlük varsayılan pencereden bir pencere öncesine) geri tarihlendi ki en az bir konunun
+  `trend`'i demo/e2e'de gerçek bir sayı olsun (null değil).
+- **Doğrulama (DoD tam yeşil):** `pnpm -w typecheck` 11/11 (exit 0) · `pnpm -w lint` 8/8 (exit 0) ·
+  `pnpm -w build` 7/7 (exit 0) · `pnpm -w test` (@nexa/api dahil tüm paketler) — 66 dosya/1255 test
+  yeşil (yeni 3 test dahil, exit 0) · `apps/api/test/integration/reports-topics.test.ts` izole
+  koşum 17/17 (yeni `describe('chat topics — demo seed diversity (07.6-d)')`: gerçek `pnpm db:seed`
+  koşturup seed edilmiş `acme` lisansında `sufficient_data:true`+`topics.length>=2`+her kümede
+  `volume>=TOPIC_MIN_CLUSTER_SIZE`+en az bir kümede `previous_volume>0`&`trend!==null` · zengin
+  sohbeti olmayan `northwind` lisansına sızma yok (`analyzed:0`+`sufficient_data:false`) ·
+  idempotency: seed iki kez → `toEqual` aynı kümeler).
+- **Varsayımlar:** Şema/migration yok — yalnız seed verisi (görev kapsamı zaten böyle
+  tanımlıydı). Hesap/lisans/plan yapısı ve 07.6-b'nin kümeleme eşikleri değiştirilmedi (görev
+  kapsam dışı olarak işaretlemişti).
+- **Sonraki pencereye not:** 07.6 serisinde kalan: **07.6-e** (sekme UI), **07.6-f** (promo
+  bandı), **07.6-g** (CSV export grubu — `buildTopicsReport()`'u tüketecek), **07.6-h**
+  (uçtan uca e2e, dolu+empty — artık seed dolu durumu gerçekten üretiyor, bu pencerede e2e
+  testi YAZILMADI, yalnız backend/seed doğrulandı).
+
 ### 64.3 (07.6-c) — Kümelemeyi route'a bağla: tenant-scoped konu sorgusu + hacim/trend + performans tavanı — done — 2026-08-03 UTC
 
 - **Yapıldı:** [OPUS-XHIGH] 07.6-b'nin `clusterTopics()` çekirdeği `/reports/topics` route'una

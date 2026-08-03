@@ -1576,6 +1576,93 @@ describe('reports and billing', () => {
 
   // =========================================================================
 
+  describe('Team performance report (07.7-c)', () => {
+    it('returns the chat split, response time and CSAT for the assigned agent', async () => {
+      const chatId = await conversation({ agentReplies: true });
+      const thread = await owner.thread.findFirstOrThrow({ where: { chatId } });
+      await owner.rating.create({
+        data: { chatId, licenseId: fx.a.licenseId, threadId: thread.id, value: 'good' },
+      });
+
+      const report = (await server.get('/reports/team-performance', auth)).json();
+      expect(report.agents).toHaveLength(1);
+      const agent = report.agents[0];
+      expect(agent.agent_id).toBe(fx.a.ownerAccountId);
+      expect(agent.chats).toBe(1);
+      expect(agent.closed).toBe(1);
+      expect(agent.automated).toBe(0);
+      expect(agent.manual).toBe(1);
+      expect(agent.assisted).toBe(0);
+      expect(agent.avg_first_response_seconds).not.toBeNull();
+      expect(agent.csat).toEqual({ good: 1, bad: 0, responses: 1, score: 1 });
+      expect(agent.transfers).toBe(0);
+    });
+
+    it('reports CSAT as null — not zero — for an agent nobody rated', async () => {
+      await conversation({ agentReplies: true });
+      const report = (await server.get('/reports/team-performance', auth)).json();
+      expect(report.agents[0].csat).toEqual({ good: 0, bad: 0, responses: 0, score: null });
+    });
+
+    it('counts an AI→human transfer against the agent currently holding the thread', async () => {
+      const chatId = await conversation({ agentReplies: true });
+      await recordTransfer(chatId);
+      const report = (await server.get('/reports/team-performance', auth)).json();
+      expect(report.agents[0].transfers).toBe(1);
+    });
+
+    it('never writes an unassigned chat to any agent row', async () => {
+      const chatId = await conversation({ agentReplies: false });
+      await owner.thread.updateMany({ where: { chatId }, data: { assigneeId: null } });
+
+      const report = (await server.get('/reports/team-performance', auth)).json();
+      expect(report.agents).toEqual([]);
+    });
+
+    it('reports an empty window as an empty list, not an error', async () => {
+      const report = (await server.get('/reports/team-performance', auth)).json();
+      expect(report.agents).toEqual([]);
+    });
+
+    it('never counts another tenant’s agent', async () => {
+      await conversation({ agentReplies: false });
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/reports/team-performance', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      expect(theirs.agents).toEqual([]);
+    });
+
+    it('rejects a backwards date range', async () => {
+      const response = await server.get(
+        '/reports/team-performance?from=2026-08-01&to=2026-07-01',
+        auth,
+      );
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('requires the reports_read scope', async () => {
+      const scopeless = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      const response = await server.get('/reports/team-performance', {
+        authorization: `Bearer ${scopeless}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
+  // =========================================================================
+
   describe('report groups + CSV export (07.7)', () => {
     /** Grant a token with a chosen scope set — for the permission-gating cases. */
     function scopedToken(scopes: string[]): Promise<string> {
@@ -1598,6 +1685,7 @@ describe('reports and billing', () => {
           'topics',
           'cases',
           'leads',
+          'team-performance',
         ]);
         expect(groups[0]).toEqual({ id: 'overview', label: 'Overview' });
       });
@@ -1854,6 +1942,78 @@ describe('reports and billing', () => {
           ),
         );
         expect(rows[1]).toMatch(/^\d{4}-\d{2}-\d{2},1$/);
+      });
+
+      it('exports team performance one row per agent, matching the JSON report', async () => {
+        const chatId = await conversation({ agentReplies: true });
+        const thread = await owner.thread.findFirstOrThrow({ where: { chatId } });
+        await owner.rating.create({
+          data: { chatId, licenseId: fx.a.licenseId, threadId: thread.id, value: 'good' },
+        });
+
+        const [report, response] = await Promise.all([
+          server.get('/reports/team-performance', auth),
+          server.get('/reports/export?group=team-performance', auth),
+        ]);
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['content-type']).toContain('text/csv');
+        expect(response.headers['content-disposition']).toMatch(
+          /^attachment; filename="nexa-team-performance-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+        );
+
+        const rows = lines(response.body);
+        expect(rows[0]).toBe(
+          'agent_id,name,chats,closed,manual,assisted,automated,avg_first_response_seconds,avg_duration_seconds,csat_good,csat_bad,csat_responses,csat_score,transfers',
+        );
+        // Same figures the JSON report exposes — the export reuses
+        // teamPerformanceByAgent rather than recomputing, so a download can
+        // never disagree with the tab.
+        const agent = report.json().agents[0];
+        expect(rows[1]).toBe(
+          [
+            agent.agent_id,
+            agent.name,
+            agent.chats,
+            agent.closed,
+            agent.manual,
+            agent.assisted,
+            agent.automated,
+            agent.avg_first_response_seconds,
+            agent.avg_duration_seconds,
+            agent.csat.good,
+            agent.csat.bad,
+            agent.csat.responses,
+            agent.csat.score,
+            agent.transfers,
+          ].join(','),
+        );
+      });
+
+      it('neutralises formula injection in an agent name, same as any other field', async () => {
+        // Starts with a formula-lead char (`=`) *and* carries a comma, so both
+        // guards in `csvField` fire on the same field: the leading `'` defuses
+        // the formula, then the comma forces RFC 4180 quoting — same as the
+        // breakdown team-name case above.
+        const dangerous = await owner.account.create({
+          data: { email: `agent-${generateShortId()}@example.test`, name: '=Acme,Inc' },
+          select: { id: true },
+        });
+        // `accounts` is a global table whose visibility comes from shared
+        // membership, not a column (policy `accounts_tenant`). Without this row
+        // the report's `LEFT JOIN accounts` resolves no name under RLS and the
+        // cell would be empty — the fixture has to be a real agent of the
+        // licence, which is the only way a thread gets assigned in production.
+        await owner.agentMembership.create({
+          data: { licenseId: fx.a.licenseId, agentId: dangerous.id, role: 'agent' },
+        });
+        const chatId = await conversation({ agentReplies: false });
+        await owner.thread.updateMany({ where: { chatId }, data: { assigneeId: dangerous.id } });
+
+        const response = await server.get('/reports/export?group=team-performance', auth);
+        const rows = lines(response.body);
+        const agentRow = rows.find((line) => line.startsWith(dangerous.id));
+
+        expect(agentRow).toMatch(/^[0-9a-f-]+,"'=Acme,Inc",1,1,0,0,1,/);
       });
 
       it('exports only the caller’s tenant', async () => {

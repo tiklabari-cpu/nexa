@@ -13,6 +13,44 @@
 
 ## Task log (newest-first)
 
+### tm 93.3 — 07.7-c Team performance rapor grubu — ajan bazlı KPI genişletmesi — done — 2026-08-03 UTC
+
+- **Yapıldı:** `teamPerformanceByAgent(tx, licenseId, from, to)` — mevcut breakdown `by_agent` raw
+  sorgusu (`SPLIT_COUNTS` · `LEFT JOIN accounts` · chats DESC · `LIMIT 20`) ajan başına genişletildi:
+  ortalama ilk-yanıt/kapanış süresi (aynı sorguda `FILTER`'lı `avg`), `ratings`→`threads.assignee_id`
+  join'li good/bad → `csatSummary`, ve `events.properties @> '{"system_event":"chat_transferred"}'`
+  devir sayımı (üç sorgu, ajan id'siyle Map'lenip birleşiyor). `buildTeamPerformanceReport` +
+  `GET /reports/team-performance` (`reports_read` + `withTenant`, diğer sekmelerle aynı yüzey) +
+  `buildGroupCsv` 'team-performance' case'i (14 sütun) — ikisi de AYNI helper'ı çağırır, indirme
+  sekmeyle çelişemez. `REPORT_GROUPS`'a `team-performance`. Kontrat: `paths/reports.yaml`
+  `teamPerformance` op + `openapi.yaml` ref + re-bundle + `api.ts` regen.
+  **Pencereleme kararı:** CSAT ve devir kendi `created_at`'lerine göre pencerelenir
+  (`satisfactionCounts`/`transferCount` idiyomu); listeye kimin gireceği + sırası + `LIMIT 20`
+  yalnız chat-split sorgusundan gelir → mevcut by_agent kırılımının alan genişletmesi, yeni
+  görünürlük kuralı değil (kod yorumunda da yazılı).
+- **Doğrulama:** typecheck 11/11 · lint 8/8 · build 7/7 · test (serial, `--concurrency=1`):
+  types 60 · ai-mock 72 · rtm 90 · widget 52 · web 606 · **api 1536/1536** (içinde
+  `reports-export.test.ts` +1 katalog, `reports-billing.test.ts` "Team performance report (07.7-c)" 8
+  + CSV export +2, `contract-parity.test.ts` ✅). E2E koşulmadı — bu dilim salt backend,
+  UI sekmesi 07.7-j'nin işi (93.1/93.2 ile aynı gerekçe).
+- **Varsayımlar:** yok.
+- **Sonraki pencereye not:**
+  1. **Bu task iki pencerede de kapı ÖNCESİ öldü, kapı kırmızı olduğu için değil.** Her iki pencere
+     de `pnpm -w test`'in paralel turbo koşumunda Postgres deadlock'u gördü, suite'i doğru şekilde
+     serial yeniden başlattı — ama `run_in_background` ile — sonra "bildirimi bekleyeyim" deyip
+     sırasını bitirdi. `claude -p` oturumunda sıranın bitmesi oturumu kapatır; arka plandaki koşu
+     onunla ölür, bildirim asla gelmez. Sonuç: kapanış hiç çalışmadı, JSON dönmedi,
+     `run-loop.sh:status_from` boş okuyup `blocked` varsaydı. **Kural artık
+     `TASK-RUNNER-PROMPT.md` §2'de yazılı:** kapı komutları ÖN PLANDA, `timeout: 900000` ile;
+     DB testleri `npx turbo run test --filter='!@nexa/e2e' --concurrency=1`.
+  2. `accounts` görünürlüğü `agent_memberships` üzerinden (`accounts_tenant` policy) — ajan adı
+     bekleyen her yeni test fixture'ı üyelik satırını da yaratmalı, yoksa isim RLS altında
+     sessizce `null` döner.
+  3. Çalışma alanında bu task'a AİT OLMAYAN, önceden var olan değişiklikler bırakıldı:
+     `apps/e2e/kanit/*.png` (44 ekran görüntüsü — eski bir e2e koşumunun çıktısı) ve izlenmeyen
+     `.playwright-mcp/`. Bunlar bu commit'e katılmadı; kanıt görsellerini tazeleyen dilim
+     sahiplenmeli (ya da `.playwright-mcp/` `.gitignore`'a girmeli).
+
 ### tm 93.2 — 07.7-b Leads rapor grubu — org-kapsamlı `customers`'ın lisans sınırına oturtulması (izolasyon çekirdeği) — done — 2026-08-03 UTC
 
 - **Yapıldı:** Sıfırdan uygulandı (`leads` grep 0 idi — gerçek iş, "erken teslim" değil). v2 diliminin

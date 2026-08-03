@@ -337,6 +337,8 @@ paths:
     $ref: "./paths/reports.yaml#/cases"
   /reports/leads:
     $ref: "./paths/reports.yaml#/leads"
+  /reports/team-performance:
+    $ref: "./paths/reports.yaml#/teamPerformance"
   /reports/groups:
     $ref: "./paths/reports.yaml#/groups"
   /reports/export:
@@ -2765,6 +2767,76 @@ components:
           required: [leads]
           properties:
             leads: { type: integer }
+
+    ReportsTeamPerformance:
+      type: object
+      description: |
+        Team performance (FR-MOD-07.7, v2 payload): the Breakdown tab's
+        by-agent chat split (`chats`/`closed`/`manual`/`assisted`/`automated`),
+        extended per agent with average first-response and conversation
+        duration, CSAT and AI→human transfer hand-offs.
+
+        CSAT and transfers are windowed by their own timestamp (the rating's
+        or the transfer event's `created_at`) — the same convention the
+        Reviews report and the AI Agent report's `transfers` figure follow —
+        not by the thread's creation date. Which agents appear, their order
+        and the `LIMIT 20` all come from the chat-split query alone (the same
+        one `ReportsBreakdown.by_agent` uses): an agent needs at least one
+        thread *created* in the window to appear here, even if a rating or
+        transfer landed inside the window on an older thread of theirs.
+      required: [range, agents]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        agents:
+          type: array
+          description: |
+            One row per agent with at least one thread created in the window,
+            most chats first, capped at 20 — the same set, order and limit
+            `ReportsBreakdown.by_agent` uses.
+          items:
+            type: object
+            required:
+              - agent_id
+              - chats
+              - closed
+              - manual
+              - assisted
+              - automated
+              - avg_first_response_seconds
+              - avg_duration_seconds
+              - csat
+              - transfers
+            properties:
+              agent_id: { type: string, format: uuid }
+              name: { type: string, nullable: true }
+              chats: { type: integer }
+              closed: { type: integer }
+              manual: { type: integer }
+              assisted: { type: integer }
+              automated: { type: integer }
+              avg_first_response_seconds: { type: integer, nullable: true }
+              avg_duration_seconds: { type: integer, nullable: true }
+              csat:
+                type: object
+                required: [good, bad, responses, score]
+                properties:
+                  good: { type: integer }
+                  bad: { type: integer }
+                  responses: { type: integer }
+                  score:
+                    type: number
+                    nullable: true
+                    description: Null when nobody rated this agent in the window.
+              transfers:
+                type: integer
+                description: |
+                  AI→human hand-offs (chat_transferred events) landing on a
+                  thread this agent currently holds.
 
     ReportGroups:
       type: object

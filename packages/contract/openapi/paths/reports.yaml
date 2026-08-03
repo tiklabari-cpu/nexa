@@ -262,6 +262,44 @@ leads:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+teamPerformance:
+  get:
+    tags: [Reports]
+    operationId: getReportsTeamPerformance
+    summary: Team performance — per-agent KPIs
+    description: |
+      Team performance (FR-MOD-07.7, v2 payload): the Breakdown tab's by-agent
+      chat split (FR-MOD-07.5), extended per agent with average first-response
+      and duration, CSAT and AI→human transfer hand-offs. Defaults to the last
+      30 days.
+
+      Same agent set, order and `LIMIT 20` as `ReportsBreakdown.by_agent` — an
+      agent needs at least one thread *created* in the window to appear here.
+      `csat` and `transfers` are windowed by their own timestamp (the rating's
+      or the transfer event's `created_at`), the same convention the Reviews
+      report and the AI Agent report's `transfers` figure follow — not by the
+      thread's creation date.
+
+      `csat.score` is `null`, never `0`, for an agent nobody rated in the
+      window — the same rule the Reviews report's `score` follows.
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: Per-agent KPIs for the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsTeamPerformance" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 groups:
   get:
     tags: [Reports]
@@ -301,10 +339,12 @@ export:
       `label,volume,share,previous_volume,trend` — below the Chat topics
       sufficiency floor only the header row, never a fabricated zero-row;
       `cases` serialises one row per UTC day — `date,open,closed,total`;
-      `leads` serialises one row per UTC day — `date,count`; the two window
-      summaries (`overview`, `ai-agent`) serialise as `metric,value` pairs.
-      Every figure is the same one the group's JSON report exposes, so a
-      download never disagrees with the screen it came from.
+      `leads` serialises one row per UTC day — `date,count`; `team-performance`
+      serialises one row per agent —
+      `agent_id,name,chats,closed,manual,assisted,automated,avg_first_response_seconds,avg_duration_seconds,csat_good,csat_bad,csat_responses,csat_score,transfers`;
+      the two window summaries (`overview`, `ai-agent`) serialise as
+      `metric,value` pairs. Every figure is the same one the group's JSON
+      report exposes, so a download never disagrees with the screen it came from.
 
       User-influenced fields (tags, agent names) are neutralised against
       spreadsheet formula injection, and the body is `no-store`: a report is a
@@ -315,7 +355,7 @@ export:
       - name: group
         in: query
         required: true
-        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`."
+        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`."
         schema: { type: string }
       - name: from
         in: query

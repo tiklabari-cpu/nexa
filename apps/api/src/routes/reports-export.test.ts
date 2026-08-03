@@ -14,6 +14,7 @@ describe('report group catalogue', () => {
     expect(reportGroup('topics')?.label).toBe('Chat topics');
     expect(reportGroup('cases')?.label).toBe('Cases');
     expect(reportGroup('leads')?.label).toBe('Leads');
+    expect(reportGroup('team-performance')?.label).toBe('Team performance');
     expect(reportGroup('nonexistent')).toBeUndefined();
   });
 

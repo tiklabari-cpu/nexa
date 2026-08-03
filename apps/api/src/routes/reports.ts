@@ -788,6 +788,122 @@ async function transferCount(
   return Number(row?.transfers ?? 0n);
 }
 
+interface AgentPerformanceRow {
+  agent_id: string;
+  name: string | null;
+  chats: number;
+  closed: number;
+  manual: number;
+  assisted: number;
+  automated: number;
+  avg_first_response_seconds: number | null;
+  avg_duration_seconds: number | null;
+  csat: CsatSummary;
+  transfers: number;
+}
+
+/**
+ * Per-agent KPIs for one window (FR-MOD-07.7 Team performance, v2 payload):
+ * the same chat-split-by-agent query {@link buildBreakdownReport} uses
+ * (`SPLIT_COUNTS`, most chats first, `LIMIT 20`), extended per row with
+ * average first-response/duration, CSAT and transfer hand-offs. Shared by
+ * `GET /reports/team-performance` and its CSV export, so the two can never
+ * quote different figures for the same license and range.
+ *
+ * CSAT and transfers are windowed by their own timestamp (a rating's or a
+ * transfer event's `created_at`), exactly as {@link satisfactionCounts} and
+ * {@link transferCount} window the license-wide totals — not by the thread's
+ * creation date. Which agents appear, their order and the `LIMIT 20` all come
+ * from the chat-split query alone: an agent needs at least one thread
+ * *created* in the window to appear here, even if a rating or transfer landed
+ * inside the window on an older thread of theirs. This is the existing
+ * by-agent breakdown with more fields, not a new agent-visibility rule.
+ */
+async function teamPerformanceByAgent(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<AgentPerformanceRow[]> {
+  const rows = await tx.$queryRaw<
+    Array<{
+      agent_id: string;
+      name: string | null;
+      chats: bigint;
+      closed: bigint;
+      automated: bigint;
+      assisted: bigint;
+      manual: bigint;
+      avg_first_response_seconds: number | null;
+      avg_duration_seconds: number | null;
+    }>
+  >`
+    SELECT t.assignee_id::text AS agent_id, a.name,
+      ${SPLIT_COUNTS},
+      avg(EXTRACT(EPOCH FROM (t.first_response_at - t.created_at)))
+        FILTER (WHERE t.first_response_at IS NOT NULL)   AS avg_first_response_seconds,
+      avg(EXTRACT(EPOCH FROM (t.closed_at - t.created_at)))
+        FILTER (WHERE t.closed_at IS NOT NULL)            AS avg_duration_seconds
+    FROM threads t
+    LEFT JOIN accounts a ON a.id = t.assignee_id
+    WHERE t.license_id = ${licenseId}
+      AND t.assignee_id IS NOT NULL
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+    GROUP BY t.assignee_id, a.name
+    ORDER BY chats DESC
+    LIMIT 20
+  `;
+
+  // Good/bad tallies per agent, windowed by the rating's own `created_at` —
+  // same convention as `satisfactionCounts`. `ratings.thread_id` is a soft
+  // column (no FK), so the join reaches into `threads`, a table RLS already
+  // scopes to this license — the same defence-in-depth every other soft join
+  // here (breakdownByChannel, breakdownByTeam) locks explicitly.
+  const ratingRows = await tx.$queryRaw<Array<{ agent_id: string; good: bigint; bad: bigint }>>`
+    SELECT t.assignee_id::text AS agent_id,
+      count(*) FILTER (WHERE r.value = 'good') AS good,
+      count(*) FILTER (WHERE r.value = 'bad')  AS bad
+    FROM ratings r
+    JOIN threads t ON t.id = r.thread_id
+    WHERE r.license_id = ${licenseId}
+      AND t.assignee_id IS NOT NULL
+      AND r.created_at >= ${from} AND r.created_at <= ${to}
+    GROUP BY t.assignee_id
+  `;
+  const ratingsByAgent = new Map(ratingRows.map((row) => [row.agent_id, row]));
+
+  // Hand-offs per agent, windowed by the transfer event's own `created_at` —
+  // same convention as `transferCount`.
+  const transferRows = await tx.$queryRaw<Array<{ agent_id: string; transfers: bigint }>>`
+    SELECT t.assignee_id::text AS agent_id, count(*) AS transfers
+    FROM events e
+    JOIN threads t ON t.id = e.thread_id
+    WHERE e.license_id = ${licenseId}
+      AND e.properties @> '{"system_event": "chat_transferred"}'::jsonb
+      AND e.created_at >= ${from} AND e.created_at <= ${to}
+      AND t.assignee_id IS NOT NULL
+    GROUP BY t.assignee_id
+  `;
+  const transfersByAgent = new Map(transferRows.map((row) => [row.agent_id, Number(row.transfers)]));
+
+  return rows.map((row) => {
+    const rating = ratingsByAgent.get(row.agent_id);
+    return {
+      agent_id: row.agent_id,
+      name: row.name,
+      chats: Number(row.chats),
+      closed: Number(row.closed),
+      manual: Number(row.manual),
+      assisted: Number(row.assisted),
+      automated: Number(row.automated),
+      avg_first_response_seconds: roundOrNull(row.avg_first_response_seconds),
+      avg_duration_seconds: roundOrNull(row.avg_duration_seconds),
+      csat: csatSummary({ good: Number(rating?.good ?? 0n), bad: Number(rating?.bad ?? 0n) }),
+      transfers: transfersByAgent.get(row.agent_id) ?? 0,
+    };
+  });
+}
+
 /**
  * The most conversations the Chat topics report clusters in one window — a
  * ceiling on the work per request (NFR-P7). The newest `TOPIC_WINDOW_LIMIT`
@@ -1122,6 +1238,45 @@ export async function buildGroupCsv(
       return {
         headers: ['date', 'count'],
         rows: byDay.map((row) => [row.date, row.count]),
+      };
+    }
+    case 'team-performance': {
+      // Same helper the /reports/team-performance route calls, so the download
+      // can never disagree with the tab's per-agent rows.
+      const agentRows = await teamPerformanceByAgent(tx, licenseId, from, to);
+      return {
+        headers: [
+          'agent_id',
+          'name',
+          'chats',
+          'closed',
+          'manual',
+          'assisted',
+          'automated',
+          'avg_first_response_seconds',
+          'avg_duration_seconds',
+          'csat_good',
+          'csat_bad',
+          'csat_responses',
+          'csat_score',
+          'transfers',
+        ],
+        rows: agentRows.map((row) => [
+          row.agent_id,
+          row.name,
+          row.chats,
+          row.closed,
+          row.manual,
+          row.assisted,
+          row.automated,
+          row.avg_first_response_seconds,
+          row.avg_duration_seconds,
+          row.csat.good,
+          row.csat.bad,
+          row.csat.responses,
+          row.csat.score,
+          row.transfers,
+        ]),
       };
     }
     default:
@@ -1603,6 +1758,27 @@ export async function buildLeadsReport(
   };
 }
 
+/**
+ * The Team performance report for one window (FR-MOD-07.7, v2 payload):
+ * per-agent KPIs — the Breakdown tab's by-agent chat split, extended with
+ * response times, CSAT and transfers (see {@link teamPerformanceByAgent}).
+ * Shared by `GET /reports/team-performance` and the `team-performance` CSV
+ * export so the two can never quote different figures for the same license
+ * and range.
+ */
+export async function buildTeamPerformanceReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Record<string, unknown>> {
+  const agents = await teamPerformanceByAgent(tx, licenseId, from, to);
+  return {
+    range: { from: from.toISOString(), to: to.toISOString() },
+    agents,
+  };
+}
+
 export default async function reportRoutes(
   app: FastifyInstance,
   options: { env: Env },
@@ -1708,6 +1884,26 @@ export default async function reportRoutes(
     const body = await request.withTenant((tx) => buildLeadsReport(tx, tenant.licenseId, from, to));
     return reply.send(body);
   });
+
+  // Team performance (FR-MOD-07.7, v2 payload): the Breakdown tab's by-agent
+  // chat split, extended per agent with response times, CSAT and transfers
+  // (see buildTeamPerformanceReport / teamPerformanceByAgent). Same
+  // reports_read + withTenant surface as the other tabs.
+  app.get(
+    '/reports/team-performance',
+    { config: { scopes: ['reports_read'] } },
+    async (request, reply) => {
+      const parsed = rangeQuery.safeParse(request.query);
+      if (!parsed.success) throw ApiError.validation('Invalid date range.');
+      const { from, to } = resolveRange(parsed.data);
+      const tenant = request.tenant();
+
+      const body = await request.withTenant((tx) =>
+        buildTeamPerformanceReport(tx, tenant.licenseId, from, to),
+      );
+      return reply.send(body);
+    },
+  );
 
   // The report groups this caller may see (FR-MOD-07.7 permission-based
   // visibility). Deliberately *not* scope-gated at the route: a token without

@@ -3136,6 +3136,39 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/team-performance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Team performance — per-agent KPIs
+     * @description Team performance (FR-MOD-07.7, v2 payload): the Breakdown tab's by-agent
+     *     chat split (FR-MOD-07.5), extended per agent with average first-response
+     *     and duration, CSAT and AI→human transfer hand-offs. Defaults to the last
+     *     30 days.
+     *
+     *     Same agent set, order and `LIMIT 20` as `ReportsBreakdown.by_agent` — an
+     *     agent needs at least one thread *created* in the window to appear here.
+     *     `csat` and `transfers` are windowed by their own timestamp (the rating's
+     *     or the transfer event's `created_at`), the same convention the Reviews
+     *     report and the AI Agent report's `transfers` figure follow — not by the
+     *     thread's creation date.
+     *
+     *     `csat.score` is `null`, never `0`, for an agent nobody rated in the
+     *     window — the same rule the Reviews report's `score` follows.
+     */
+    get: operations['getReportsTeamPerformance'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/groups': {
     parameters: {
       query?: never;
@@ -3182,10 +3215,12 @@ export interface paths {
      *     `label,volume,share,previous_volume,trend` — below the Chat topics
      *     sufficiency floor only the header row, never a fabricated zero-row;
      *     `cases` serialises one row per UTC day — `date,open,closed,total`;
-     *     `leads` serialises one row per UTC day — `date,count`; the two window
-     *     summaries (`overview`, `ai-agent`) serialise as `metric,value` pairs.
-     *     Every figure is the same one the group's JSON report exposes, so a
-     *     download never disagrees with the screen it came from.
+     *     `leads` serialises one row per UTC day — `date,count`; `team-performance`
+     *     serialises one row per agent —
+     *     `agent_id,name,chats,closed,manual,assisted,automated,avg_first_response_seconds,avg_duration_seconds,csat_good,csat_bad,csat_responses,csat_score,transfers`;
+     *     the two window summaries (`overview`, `ai-agent`) serialise as
+     *     `metric,value` pairs. Every figure is the same one the group's JSON
+     *     report exposes, so a download never disagrees with the screen it came from.
      *
      *     User-influenced fields (tags, agent names) are neutralised against
      *     spreadsheet formula injection, and the body is `no-store`: a report is a
@@ -5621,6 +5656,58 @@ export interface components {
       totals: {
         leads: number;
       };
+    };
+    /**
+     * @description Team performance (FR-MOD-07.7, v2 payload): the Breakdown tab's
+     *     by-agent chat split (`chats`/`closed`/`manual`/`assisted`/`automated`),
+     *     extended per agent with average first-response and conversation
+     *     duration, CSAT and AI→human transfer hand-offs.
+     *
+     *     CSAT and transfers are windowed by their own timestamp (the rating's
+     *     or the transfer event's `created_at`) — the same convention the
+     *     Reviews report and the AI Agent report's `transfers` figure follow —
+     *     not by the thread's creation date. Which agents appear, their order
+     *     and the `LIMIT 20` all come from the chat-split query alone (the same
+     *     one `ReportsBreakdown.by_agent` uses): an agent needs at least one
+     *     thread *created* in the window to appear here, even if a rating or
+     *     transfer landed inside the window on an older thread of theirs.
+     */
+    ReportsTeamPerformance: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /**
+       * @description One row per agent with at least one thread created in the window,
+       *     most chats first, capped at 20 — the same set, order and limit
+       *     `ReportsBreakdown.by_agent` uses.
+       */
+      agents: {
+        /** Format: uuid */
+        agent_id: string;
+        name?: string | null;
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+        avg_first_response_seconds: number | null;
+        avg_duration_seconds: number | null;
+        csat: {
+          good: number;
+          bad: number;
+          responses: number;
+          /** @description Null when nobody rated this agent in the window. */
+          score: number | null;
+        };
+        /**
+         * @description AI→human hand-offs (chat_transferred events) landing on a
+         *     thread this agent currently holds.
+         */
+        transfers: number;
+      }[];
     };
     /**
      * @description The report groups a caller may see (FR-MOD-07.7 permission-based
@@ -11144,6 +11231,33 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getReportsTeamPerformance: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Per-agent KPIs for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsTeamPerformance'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   getReportGroups: {
     parameters: {
       query?: never;
@@ -11169,7 +11283,7 @@ export interface operations {
   exportReport: {
     parameters: {
       query: {
-        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`. */
+        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`. */
         group: string;
         from?: string;
         to?: string;

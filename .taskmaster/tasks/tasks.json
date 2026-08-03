@@ -3026,10 +3026,10 @@
             "description": "Saf, I/O'suz fonksiyon: `apps/api/src/lib/kb-render.ts` → `renderArticleBody(markdown: string): string`. Algoritma sırası ZORUNLU: (1) girdinin TAMAMI HTML-escape edilir (`& < > \" '`); (2) yalnızca escape edilmiş metin üzerinde sınırlı markdown alt kümesi tanınır ve etiketlere çevrilir: `##`/`###` başlık, paragraf, `-` liste, `**kalın**`, `` `kod` ``, `[metin](url)` link; (3) link URL'i yalnız `ht",
             "details": "PUBKB-d — Makale gövdesi güvenli render çekirdeği (BÖLÜNMEZ): escape-first sınırlı markdown  [OPUS-MAX]\n\nPRD: §5.3-Knowledge (public KB); NFR-S6, NFR-S4\nETİKET GEREKÇESİ: OPUS-MAX: stored-XSS sınırı + yeni algoritma tasarımı. Ajanın yazdığı gövde, kimlik doğrulamasız tarayıcılara HTML olarak gidecek; depoda hiçbir sanitizasyon kütüphanesi kurulu değil, dolayısıyla çıkış kodlaması sıfırdan ve DOĞRU sırayla tasarlanacak (önce tam escape, sonra beyaz-liste). SONNET koşul 2 (güvenlik sınırı) ve koşul 4 (kopyalanacak mevcut desen yok — `web-crawler.ts` TERS yönde çalışıyor) ihlal. Çekirdek bölünmez: kaçış sırası ile beyaz-liste sırası aynı fonksiyonun invariantı.\nNEDEN AÇIK: Repo genelinde (apps + packages package.json'ları) `sanitize-html`, `DOMPurify`, `marked`, `markdown-it` grep 0 — hiçbir sanitizasyon/markdown kütüphanesi kurulu değil. Tek HTML kaçış yardımcısı `apps/api/src/services/ai/web-crawler.ts:89` `escapeHtml` ve o (a) dışa aktarılmamış private bir yardımcı, (b) yalnız mock sayfa ÜRETMEK için kullanılıyor; dosyanın asıl işi `htmlToText` yani HTML→düz metin, yani TERS yön. Yani public sayfada metin→HTML üretecek güvenli hiçbir yol yok.\nKAPSAM: Saf, I/O'suz fonksiyon: `apps/api/src/lib/kb-render.ts` → `renderArticleBody(markdown: string): string`. Algoritma sırası ZORUNLU: (1) girdinin TAMAMI HTML-escape edilir (`& < > \" '`); (2) yalnızca escape edilmiş metin üzerinde sınırlı markdown alt kümesi tanınır ve etiketlere çevrilir: `##`/`###` başlık, paragraf, `-` liste, `**kalın**`, `` `kod` ``, `[metin](url)` link; (3) link URL'i yalnız `http:`/`https:` şemasına izinli (`javascript:`, `data:`, `vbscript:`, şemasız/protokol-göreli `//` reddedilir → link düz metne düşer), üretilen `<a>` `rel=\"nofollow noopener ugc\"` taşır; (4) ham HTML ASLA geçmez — beyaz-liste dışı hiçbir etiket üretilmez, girdideki `<script>`/`<img onerror>` zaten adım 1'de metne dönmüştür; (5) çıktı uzunluk tavanı + derinlik sınırı (ReDoS'a açık geri-izleyen regex yok, doğrusal tarama). Ayrıca `renderPlainExcerpt()` (meta description için, etiketsiz düz metin).\nDOSYALAR: apps/api/src/lib/kb-render.ts · apps/api/src/lib/kb-render.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/ai/web-crawler.ts · apps/api/src/lib/cc-mask.ts · apps/api/src/lib/ssrf.ts\nKK (birebir): \"KK-türetilmiş: \"SEO'lu self-servis bilgi bankası (public KB)\" — PRD §6'da KK satırı yok. Bu alt-görevin payı: bir bilgi bankası makalesinin okunabilir olması için başlık/paragraf/liste/link biçimlendirmesi gerekir ('bilgi bankası' payı); anonim kitleye servis edilen her çıktı, yazarın girdiğinden başka hiçbir şey çalıştırmamalıdır (NFR-S6 türevi). Türetme gerekçesi: PRD render biçimi hakkında hiçbir şey söylemiyor; biçim kararı §C varsayım 3 olarak kaydedildi.\"\nKK DOĞRULAMA: `kb-render.test.ts` unit: (1) `## Başlık` → `<h2>` (KK 'okunabilir makale' payı); (2) `<script>alert(1)</script>` girdisi çıktıda `&lt;script&gt;` olarak görünür, hiçbir `<script` üretilmez (KK 'çalıştırmaz' payı); (3) `[x](javascript:alert(1))` → link üretilmez, düz metne düşer; (4) `renderPlainExcerpt` çıktısında hiçbir `<` karakteri yok.\nKAPSAM DIŞI: HTML sayfa şablonu, meta/OG/JSON-LD (PUBKB-e) · Yeni bir sanitizasyon bağımlılığı eklemek (§C varsayım 3: bağımlılık eklenmez) · Frontend tarafında markdown önizleme (PUBKB-h'de düz textarea; zengin editör §C açık soru 2) · Tablo/görsel/gömülü içerik desteği (beyaz-liste dışı, v3)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF (önce yazılır, kırmızı görülür): `<script>`, `<img src=x onerror=...>`, `<iframe>`, `<style>`, `<svg onload>` → hiçbiri etiket olarak çıkmaz · NEGATİF: `javascript:`, `data:text/html`, `vbscript:`, `//evil.example` link hedefleri reddedilir (link düz metne düşer) · NEGATİF: çift/iç içe kodlama (`&lt;script&gt;`, `&#60;script&#62;`, `%3Cscript%3E`) çözülüp yeniden etiket üretmez · NEGATİF: markdown link metni içine gömülü `\"` / `>` ile attribute kaçışı denemesi → attribute sınırı kırılmaz · NEGATİF: aşırı uzun / derin iç içe girdi ile katastrofik geri izleme yok (süre tavanı testi) · unit (POZİTİF, negatiflerden sonra): başlık/paragraf/liste/kalın/kod/link doğru üretilir, determinist (aynı girdi → aynı çıktı)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "76",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-03T15:16:10.944Z"
           },
           {
             "id": 5,
@@ -3103,7 +3103,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-03T14:54:42.424Z"
+        "updatedAt": "2026-08-03T15:16:10.944Z"
       },
       {
         "id": "77",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-03T14:54:42.424Z",
+      "lastModified": "2026-08-03T15:16:10.944Z",
       "taskCount": 100,
       "completedCount": 79,
       "tags": [

@@ -13,6 +13,35 @@
 
 ## Task log (newest-first)
 
+### DÜZELTME PENCERESİ — Faz-2 özet sayacı denetimi (panel bulgusu) — done — 2026-08-07 UTC
+
+- **Yapıldı:** Faz-2 (§5) gereksinim damgaları bağımsız olarak yeniden sayıldı → **13 ⬜ · 1 ◐ ·
+  13 ✅ · 3 ⛔** (30 kalem). Özet satırı (PLAN.md:22) ve §5.0 girişi (PLAN.md:1100) bu sayımla
+  **birebir aynı** → **özet BAYAT DEĞİL, düzeltme yapılmadı.** Panelin bildirdiği
+  `2 ✅ / 0 ◐ / 1 ⬜` **yanlış pozitif**: §D74'te teşhis edilen dejenere parse birebir tekrarladı —
+  panel §5.0 tablosunu ilk sarkan devam satırında (1111) keser ve yalnız ilk 3 fiziksel satırı
+  okur (1108 ⬜ · 1109 ✅ · 1110 ✅), bu da tam olarak panelin rakamlarını verir. Tek yazılan şey
+  **PLAN.md §D75** (bulgu + kanıt + kalıcı çözüm önerisi).
+- **Doğrulama:** Sayım yöntemi: `awk` ile §5.0 satır 1108–1169 arası `^\| ` ile başlayan fiziksel
+  satırlar, damga = 6. alanın ilk karakteri → **30/30 satır damga taşıdı** (eşleşmeyen `??` yok →
+  parse tam, satır kaçmadı). Damga akışı kontrolü: `git show 593ace7:PLAN.md` (§D74'ün özet
+  düzeltmesi) aynı yöntemle sayıldı → yine `13 ⬜ · 1 ◐ · 13 ✅ · 3 ⛔`, yani o commit'ten bu yana
+  hiçbir öncü damga ilerlememiş. `git status` temiz (başlangıçta ve kapanışta).
+  **DoD kapı komutları (typecheck/lint/test/integration/build/e2e) ÇALIŞTIRILMADI** — bu pencere
+  yalnızca dokümantasyon değiştirdi (PLAN.md §D + HANDOFF.md), tek satır kod/kontrat/şema
+  dosyasına dokunulmadı; ayrıca Docker bu ortamda hâlâ ayakta değil (bkz. tm 93.4 notu).
+- **Varsayımlar:** yok.
+- **Sonraki pencereye not:**
+  1. **Bu bulgu bir sonraki taramada muhtemelen YİNE açılacak** — kök neden panelin parser'ı,
+     PLAN'ın sayaçları değil. Yeniden geldiğinde önce §D75'i oku; sayım zaten orada kanıtlı.
+  2. **Kalıcı çözüm yetki bekliyor:** §5.0'ın 4 sarkan devam satırını (1111 · 1116–1130 ·
+     1133–1146 · 1164) kendi tablo satırlarına reflow etmek tabloyu 30 temiz fiziksel satır yapar
+     ve dejenere parse'ı bitirir; damgalara dokunmaz, GFM'de eşdeğer render eder. Bu pencerenin
+     "yalnız özet satırı" kapsamı dışındaydı — açık yetkiyle tek turda yapılabilir. Alternatif:
+     panel sayacını düzeltmek (nexa-panel ayrı depo, buradan erişilmiyor).
+  3. 07.7 `◐` ve 13.5 `⬜` damgaları **doğru** — tm 93.4 blocked, 07.7'nin 12 alt-görevinden
+     yalnız a/b/c kapalı. Docker geri gelip 93.4 yeşile dönerse damga yine `◐` kalır (d/e…l açık).
+
 ### tm 93.4 — 07.7-d Sales rapor grubu — blocked — 2026-08-07 UTC
 
 - **Yapıldı:** `GET /reports/sales` + `buildSalesReport` — reviews'ün `ecommerce` bloğuyla

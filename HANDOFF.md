@@ -72,6 +72,14 @@
   5. Bu task'a ait OLMAYAN, önceden var olan kirli dosya `run-loop.sh` (deneme sayacı /
      blocked görevleri yeniden seçme iyileştirmesi) hâlâ commit'lenmemiş durumda — bilerek
      bırakıldı, ayrı bir işin parçası.
+  6. **`main`'e MERGE EDİLMEDİ — bilinçli sapma, gerekçesi:** CONVENTIONS §2 "task dalı DoD
+     yeşilse main'e merge" der ve 93.6'nın kapısı yeşil. Ama `feat/reports-pdf-serializer`
+     dalı **tm 93.4'ün (07.7-d Sales) commit'lerini de taşıyor** (`c1c1ad7`, `9c2bab8`,
+     `bdf5a1b`) ve 93.4 Task Master'da hâlâ `blocked`. Merge etmek, durumu `blocked` görünen
+     bir görevin kodunu `main`'e koyardı — protokolün önlemek için var olduğu türden bir
+     durum tutarsızlığı. NOT: 93.4'ün kodu bu turda koşan kapının içindeydi ve **yeşildi**
+     (yani bozuk değil, yalnız kapanmamış). Doğru sıra: bir sonraki pencere 93.4'ü kapıdan
+     geçirip `done` yapsın, sonra dal bir bütün olarak `main`'e merge edilsin.
 
 ### tm 93.6 — 07.7-f Deterministik, bağımlılıksız PDF serializer — blocked — 2026-08-07 UTC
 

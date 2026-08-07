@@ -13,6 +13,47 @@
 
 ## Task log (newest-first)
 
+### DÜZELTME PENCERESİ — Faz-2 özet sayacı denetimi (panel bulgusu, 2. tekrar) — done — 2026-08-07 UTC
+
+- **Yapıldı:** Faz-2 (§5.0) gereksinim damgaları bağımsız olarak yeniden sayıldı → **12 ⬜ · 2 ◐ ·
+  13 ✅ · 3 ⛔** (30 kalem). Özet satırı (`PLAN.md:22`) ve §5.0 girişi (`PLAN.md:1100`) bu sayımla
+  **birebir aynı** → **özet BAYAT DEĞİL; hiçbir sayı değiştirilmedi** (değiştirmek hatayı enjekte
+  ederdi). Panelin bildirdiği `2 ✅ / 0 ◐ / 1 ⬜` **yanlış pozitif** ve §D75'in birebir tekrarı:
+  panel §5.0 tablosunu ilk sarkan devam satırında (`1111` — `**Kalan:** 07.6-h e2e. → §5.2 |`,
+  `|` ile başlamaz) kesiyor ve yalnız ilk 3 fiziksel satırı okuyor (1108 ⬜ · 1109 ✅ · 1110 ✅) =
+  tam olarak panelin rakamları. Yazılanlar: **PLAN.md §D76** (bulgu + kanıt) + bu blok.
+- **Yeni (döngüyü kıran adım):** §D75'in "yetki bekliyor" bıraktığı kalıcı çözüm artık kuyrukta —
+  **tm 101 · priority `critical` · dependencies `[]`**: §5.0'ın 4 sarkan satırını (1111 · 1116–1130
+  · 1133–1146 · 1163–1164 → 07.6 · 08.6.3 · 08.8.3 · §5.3-KB) kendi tablo satırlarına reflow etmek.
+  Damgaya/sayaca/metne dokunmaz; doğrulama scripti görevin test stratejisinde yazılı. Bu bulgu
+  §D68'den beri 8+ pencere yaktı; tm 101 kapanmadan panel taraması aynı yanlış pozitifi üretmeye
+  devam eder.
+- **Doğrulama:** Sayım yöntemi: python ile §5.0 satır 1108–1169 **mantıksal** satırlara ayrıştırıldı
+  (`^\| ` ile başlayan satır yeni kalem, sarkan devam satırları kendi kalemine eklendi), damga =
+  6. alanın öncü karakteri → **30/30 kalem damga taşıdı** (`??` yok → parse tam). Damga akışı
+  kontrolü: `git show bdf5a1b:PLAN.md` (§D75 turu) aynı yöntemle `13 ⬜ · 1 ◐ · 13 ✅ · 3 ⛔`;
+  aradaki tek hareket `§5.3-Vardiya ⬜→◐` (tm 77.1–77.3) ve onu çeviren commit `495b059` satır 22
+  + satır 1100 sayaçlarını **aynı commit'te** güncellemiş (`git show 495b059 -- PLAN.md` ile
+  doğrulandı) → bayatlık penceresi hiç oluşmadı. `.taskmaster/tasks/tasks.json` JSON parse temiz,
+  tm 101 `critical` (MCP `add_task` "critical"i sessizce `medium`'a düşürdüğü için alan doğrudan
+  düzeltildi — CONVENTIONS §4.1 gereği bu değer tam olarak `critical` olmalı).
+  **DoD kapı komutları (typecheck/lint/test/integration/build/e2e) ÇALIŞTIRILMADI** — bu pencere
+  yalnız doküman + görev kuyruğu değiştirdi (PLAN.md §D · HANDOFF.md · tasks.json); tek satır
+  kod/kontrat/şema dosyasına dokunulmadı.
+- **Varsayımlar:** yok.
+- **Sonraki pencereye not:**
+  1. **Sıradaki iş tm 101** (tek `critical` görev, bağımlılığı yok) — doküman-only, tek turda biter.
+     Kapanınca naif satır sayımı mantıksal sayımla yakınsar ve bu bulgu bir daha açılmaz.
+  2. §5.0 sayaçlarını (satır 22 · satır 1100) **"düzeltme" dürtüsüne kapılma** — bugün doğrular.
+     Panel bir çelişki bildirirse önce §D76'daki mantıksal sayımı tekrarla; naif ham sayım yanıltır.
+  3. `run-loop.sh` çalışma alanında **hâlâ commit edilmemiş** — bu pencereden önce de öyleydi
+     (görev deneme sayacı / blocked görevlerin yeniden seçilmesi), kapsamı bu iş değil. Bilerek
+     dokunulmadı; sahibi olan tur commit'lemeli.
+  4. `tasks.json` diff'i beklenenden büyük görünüyor (~216 satır): MCP `add_task` dosyayı kendi
+     kanonik biçimine normalize etti — mevcut 100 üst görevin `id` alanı **string → sayı**
+     (`"1"` → `1`). İçerik/durum/bağımlılık **değişmedi**; tüketiciler tip-agnostik
+     (`gunluk.mjs` ve `otonom.sh` `String(x.id)` karşılaştırıyor), bu yüzden geri alınmadı.
+
 ### tm 77.3 — WORKSCHED-c GET/PUT /agents/{agentId}/work-schedule — scope kapısı ve self-vs-admin yetkilendirme — done — 2026-08-07 UTC
 
 - **Yapıldı:** WORKSCHED zincirinin ilk çalışan yüzeyi. -a tipi ve kontratı, -b tabloyu koymuştu;

@@ -13,6 +13,52 @@
 
 ## Task log (newest-first)
 
+### tm 77.10 — WORKSCHED-j uçtan uca doğrulama — blocked (2. tur, değişmedi) — 2026-08-07 UTC
+
+> Bu task 2026-08-02'de zaten `blocked` kapanmıştı (aşağıda, aynı başlıkla). Döngü onu yeniden
+> seçti; bu pencere **sıfırdan, güncel depo üzerinde** yeniden denetledi ve aynı sonuca vardı.
+> Kod YAZILMADI — yazılamazdı.
+
+- **Yapıldı:** Yalnız objektif yeniden tespit. `77.10` yalnız-doğrulama bir task
+  (`KAPSAM DIŞI: Yeni özellik eklemek`); doğrulayacağı WORKSCHED yüzeyleri depoda hâlâ yok.
+  - **Task Master:** `77.1`–`77.9`'un **tamamı** `pending`. `77.10`'un ilan edilmiş bağımlılıkları
+    (`77.3, 77.4, 77.7, 77.8, 77.9`) de `pending` — hiçbiri kapanmadı (05-08-02'den beri değişim yok).
+  - **Kod taraması (untruncated, `apps/` + `packages/`, `node_modules`/`dist` hariç):**
+    `staffing` **0 dosya** · `work_schedule` **0** · `workSchedule` **0** · `agent_presence_event`
+    **0** · `agentPresenceEvent` **0** · `staffing-forecast` **0** · `forecast` **0**. Kontratta
+    (`packages/contract/openapi/`) `work-schedule`/`staffing` yolu yok; migration dizininin sonu
+    hâlâ `20260803120000_kb_public_resolver` — `work_schedules`/`agent_presence_events` tablosu yok;
+    `apps/e2e/tests/` altındaki 22 spec içinde `staffing.spec.ts` yok.
+  - **PLAN.md:1165** (§5.3-Vardiya · gereksinim satırı, PRD sütunu = `Work scheduler`) hâlâ `⬜` —
+    **doğru**, bu pencere teslim etmediği için damga DEĞİŞTİRİLMEDİ (`✅` uydurulmadı).
+- **YENİ BULGU (önceki turda yoktu):** ADR-09 tutarlılık iddiasının (kapsam maddesi 3) **karşı
+  tarafı hazır**: `GET /reports/breakdown` yanıtı `by_hour` döndürüyor —
+  `apps/api/src/routes/reports.ts:1602` (`breakdownByHour`, `SPLIT_COUNTS` fragment'ıyla `by_day`
+  ile aynı ADR-09 tanımı) + `packages/contract/openapi/paths/reports.yaml` +
+  `apps/web/.../ReportsPage.tsx` + `apps/api/test/integration/reports-billing.test.ts`. Yani
+  `WORKSCHED-e` (tm `77.5`) fiilen **FR-MOD-07.5 Breakdown sekmesi işiyle birlikte teslim edilmiş**;
+  Task Master'daki `pending` damgası bayat. Eksik olan yalnız karşılaştırmanın öbür ucu
+  (`/reports/staffing-forecast`). *Bu satırın senkronu ayrı iş — `77.10`'un `KAPSAM DIŞI` maddesi
+  ("Task Master satır senkronu") gereği bu pencerede yapılmadı.*
+- **Doğrulama:** DoD kapısı **koşulmadı** — koşulacak yeni kod yok. Task'ın üç kanıt kaleminin
+  üçü de var olmayan yüzeye bağlı: (1) e2e → Team vardiya düzenleyici (`77.8`) + Reports Staffing
+  sekmesi (`77.9`) yok; (2) izolasyon satırları → `work_schedules`/`agent_presence_events` tabloları
+  yok; (3) ADR-09 karşılaştırması → `staffing-forecast` ucu yok. Bunları inşa etmek `77.1`–`77.9`'u
+  yapmak demek → protokol yasağı ("Asla ikinci bir task'a başlama"). Çalışma alanına ürün kodu
+  girmedi; main'e bozuk/yarım kod merge EDİLMEDİ.
+- **Varsayımlar:** Yok. Hem Task Master durumları hem kod taraması komutla, çıktıyla sabit.
+- **Sonraki pencereye NOT (önemli — döngü davranışı):** `run-loop.sh` `pick_next` kuralı **1.5**
+  yalnız *"blocked AMA tüm bağımlılıkları kapalı"* görevleri yeniden seçmeli; `77.10`'un
+  bağımlılıkları HÂLÂ AÇIK olduğu için seçilmemeliydi. İki tur üst üste seçilirse
+  `MAX_TASK_ATTEMPTS=2` sayacı onu `.loop-logs/attempts.tsv` üzerinden devre dışı bırakır, ama o da
+  bir pencere daha yakar. Doğrusu: `77.10`'a dönmeden önce dilimi sırayla kapatmak —
+  `77.1` (kontrat) → `77.2` (tablolar/RLS) → `77.6` (tahmin çekirdeği, bağımsız) → `77.3`/`77.4`
+  → `77.7` (staffing-forecast API) → `77.8`/`77.9` (ekranlar). `77.5` (by_hour) için yeni kod
+  gerekmiyor (yukarıdaki bulgu) — denetlenip kapatılabilir.
+- **Çalışma alanı notu:** `run-loop.sh`'te bu pencereden ÖNCE gelen commit'lenmemiş bir değişiklik
+  var (blocked görevleri yeniden seçme + deneme sayacı, +64/-4). Bu `77.10`'un kapsamı dışında ve
+  başka bir pencerenin işi olduğu için **commit edilmedi**, olduğu gibi bırakıldı (CONVENTIONS §5).
+
 ### tm 93.4 — 07.7-d Sales rapor grubu — done — 2026-08-07 UTC
 
 > Bir alttaki (ve HANDOFF'ta ayrıca `blocked` olarak duran) notun kapanışı. Kod iki pencere

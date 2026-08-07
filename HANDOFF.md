@@ -13,6 +13,39 @@
 
 ## Task log (newest-first)
 
+### tm 77.10 — WORKSCHED-j uçtan uca doğrulama — blocked (3. tur, değişmedi) — 2026-08-07 UTC
+
+> Üçüncü kez seçildi, üçüncü kez aynı sonuç. Aşağıdaki 2. tur notu hâlâ **birebir geçerli** —
+> tekrar etmiyorum. Bu pencere bağımsız komutlarla yeniden doğruladı ve yalnız **yeni** bulguyu
+> yazıyor. Kod YAZILMADI — yazılamazdı.
+
+- **Yeniden tespit (bağımsız, bu pencere):** `77.1`–`77.9` **tamamı hâlâ `pending`**; ilan edilmiş
+  bağımlılıklar (`77.3, 77.4, 77.7, 77.8, 77.9`) açık. `apps/` + `packages/` taramasında
+  `staffing` / `work_schedules` / `agent_presence_events` / `work-schedule` → **0 eşleşme**;
+  `packages/contract/openapi/` içinde `staffing` → **0**; `apps/e2e/tests/` altındaki 23 dosyada
+  `staffing.spec.ts` **yok**; migration dizininin sonu hâlâ `20260803120000_kb_public_resolver`.
+  `apps/api/test/integration/tenant-isolation.test.ts` **var**, ama ekleyecek tablo yok.
+- **YENİ BULGU (bu tur):** 77.10'un ADR-09 iddiası (kapsam maddesi 3) için **kopyalanacak desen
+  zaten depoda** — task'ın `REFERANS DESEN` satırı yalnız e2e dosyalarını sayıyor, bunu atlamış:
+  - `apps/api/test/integration/reports-billing.test.ts:981` — `sum(breakdown.by_hour,'chats') ===
+    totals.chats` (aranan tutarlılık iddiasının birebir şekli; `:989` aynı şeyi dört alan için).
+  - Aynı dosya `:938-941` — **cross-tenant** `by_hour` iddiası (yabancı lisans için 24 satır, hepsi
+    0). 77.10'un izolasyon maddesi bunun `work_schedules`/`agent_presence_events` eşi olacak.
+  - Karşılaştırmanın hazır ucu: `breakdownByHour` **tanım** `apps/api/src/routes/reports.ts:534`,
+    yanıta **serileşme** `:1602`. (2. turun verdiği `:1602` referansı doğru — serileşme noktası.)
+  Yani `77.5` (by_hour) için yeni kod gerekmiyor teyidi ikinci kez, farklı kanıtla sabitlendi.
+- **Doğrulama:** DoD kapısı **koşulmadı** — koşulacak yeni kod yok, üç kanıt kaleminin üçü de var
+  olmayan yüzeye bağlı. Bunları inşa etmek `77.1`–`77.9`'u yapmaktır → protokol yasağı
+  (`KAPSAM DIŞI: Yeni özellik eklemek` + "Asla ikinci bir task'a başlama"). PLAN.md:1165 damgası
+  `⬜` bırakıldı — bu pencere hiçbir şey teslim etmedi, `✅` uydurulmadı.
+- **ESKALASYON — döngüye not:** Bu artık tek bir görev sorunu değil, **döngü seçimi sorunu**:
+  bağımlılıkları açık bir `blocked` görev üç pencere yaktı. `77.10` bir daha, `77.7`+`77.8`+`77.9`
+  kapanmadan **seçilmemeli**. Sıra: `77.1` → `77.2` → `77.6` (bağımsız) → `77.3`/`77.4` → `77.7`
+  → `77.8`/`77.9` → ancak sonra `77.10`. (`77.5` denetlenip kapatılabilir; kod hazır.)
+- **Varsayımlar:** Yok — her iddia komut çıktısıyla sabit.
+- **Çalışma alanı notu:** `run-loop.sh`'teki commit'lenmemiş değişiklik (2. turdan devir, döngü
+  altyapısı) bu turda da **elle sürülmedi** — `77.10` kapsamı dışı, başka pencerenin işi.
+
 ### tm 77.10 — WORKSCHED-j uçtan uca doğrulama — blocked (2. tur, değişmedi) — 2026-08-07 UTC
 
 > Bu task 2026-08-02'de zaten `blocked` kapanmıştı (aşağıda, aynı başlıkla). Döngü onu yeniden

@@ -4116,12 +4116,12 @@
             "description": "(1) `reports.ts`'e `GET /reports/sales` handler'ı — reviews'ün `ecommerce` bloğuyla AYNI dürüst şekil: `{ range, configured:false, tracked_sales:null, attributed_revenue_cents:null, currency:null, conversions:null }`; 13.5 geldiğinde tek yerden doldurulur. (2) Kontrat: `paths/reports.yaml` `sales` operation (açıklamasında 13.5 bağımlılığı açıkça yazılır) + `openapi.yaml` ref + re-bundle. (3) REPOR",
             "details": "07.7-d — Sales rapor grubu — 13.5 Sales tracker'a bağlı `configured:false` dürüst iskelet  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.7 (+ FR-MOD-13.5 bağımlılığı)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 4 dosya + testleri. (2) Güvenlik sınırı yok — hiçbir veri okunmuyor, sabit `configured:false` bloğu dönüyor. (3) Eşzamanlılık yok. (4) Kopyalanacak desen İSMEN var ve birebir aynı problem için yazılmış: `reports.ts:796-802` reviews raporundaki `ecommerce: { configured:false, tracked_sales:null, attributed_revenue_cents:null, currency:null }` bloğu. (5) Kontrat katkısal. (6) KK mekanik: grup listede görünür, `configured:false` döner, CSV tek satır.\nNEDEN AÇIK: Şemada satış/sipariş tablosu YOK — `grep '^model ' schema.prisma` çıktısında Order/Sale/Transaction modeli bulunmuyor. Mevcut tek satış izi `reports.ts:796-802`'deki reviews raporunun `ecommerce` bloğu ve o blok zaten `configured:false` + `tracked_sales:null` döndürüyor (PLAN §4.4.8: 'e-ticaret satış izleme iskeleti (configured=false, §13.5 v2)'). `reports-export.ts:39-44` kataloğunda 'sales' yok.\nKAPSAM: (1) `reports.ts`'e `GET /reports/sales` handler'ı — reviews'ün `ecommerce` bloğuyla AYNI dürüst şekil: `{ range, configured:false, tracked_sales:null, attributed_revenue_cents:null, currency:null, conversions:null }`; 13.5 geldiğinde tek yerden doldurulur. (2) Kontrat: `paths/reports.yaml` `sales` operation (açıklamasında 13.5 bağımlılığı açıkça yazılır) + `openapi.yaml` ref + re-bundle. (3) REPORT_GROUPS'a `{ id:'sales', label:'Sales', scopes:['reports_read'] }` + `buildGroupCsv` 'sales' case'i (metric/value şekli; null değerler `csvField` ile boş hücre). (4) UI bağlama 07.7-j'de anlamlı empty state ile.\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/src/routes/reports-export.ts · apps/api/src/routes/reports-export.test.ts · packages/contract/openapi/paths/reports.yaml · packages/contract/openapi/openapi.yaml · apps/api/test/integration/reports-billing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts (satır 796-802 reviews `ecommerce: { configured:false, tracked_sales:null, ... }` bloğu — birebir aynı 'henüz yapılandırılmadı' sözleşmesi) · apps/api/src/routes/reports.ts (satır 366-377 `buildGroupCsv` 'overview' case'i — metric/value CSV şekli) · apps/api/src/routes/reports-export.ts (satır 39-44 katalog satırı)\nKK (birebir): \"İzin bazlı görünürlük\" | \"export\"\nKK DOĞRULAMA: `reports-billing.test.ts` — `GET /reports/sales` 200 + `configured:false` + tüm sayısal alanlar `null` (0 DEĞİL — yapılandırılmamış ile sıfır satış farklı şeydir, reviews `ecommerce` kuralıyla aynı). `?group=sales` CSV 200 + metric/value başlığı. `reports-export.test.ts` — katalogda 'sales' + yetkisiz scope'ta görünmez ('İzin bazlı görünürlük').\nKAPSAM DIŞI: Gerçek satış izleme, sipariş/gelir modeli, dönüşüm atfı — tamamı FR-MOD-13.5 Sales tracker'ın işi (PLAN §5.0) · `orders`/`sales` tablosu migration'ı — bu pencerede AÇILMAZ · Goals hunisi (FR-MOD-13.3) — ayrı v2 kalemi · Web UI sekmesi (07.7-j)\nSÖZLEŞME: YENİ PATH: `GET /reports/sales` → `paths/reports.yaml` + `openapi.yaml` ref + `export` açıklamasına grup eklenir. ZORUNLU re-bundle — aksi halde `contract-parity.test.ts` KIRILIR.\nMIGRATION: yok — bilinçli olarak tablo AÇILMAZ; `configured:false` sözleşmesi 13.5'e kadar geçerlidir.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce) — `reports_read` yok → 403; katalogda görünmez · cross-tenant — başka lisans token'ı da `configured:false` alır, hiçbir veri sızmaz · integration — sayısal alanlar `null`, `0` değil (regresyon kilidi: 13.5 geldiğinde bu test güncellenecek) · unit — `reports-export.test.ts` katalog + `visibleReportGroups` · integration — `contract-parity.test.ts`",
-            "status": "in-progress",
+            "status": "blocked",
             "dependencies": [
               3
             ],
             "parentId": "93",
-            "updatedAt": "2026-08-07T18:21:51.384Z"
+            "updatedAt": "2026-08-07T18:49:03.835Z"
           },
           {
             "id": 5,
@@ -4246,7 +4246,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-07T18:21:51.384Z"
+        "updatedAt": "2026-08-07T18:49:03.835Z"
       },
       {
         "id": "94",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-07T18:21:51.385Z",
+      "lastModified": "2026-08-07T18:49:03.835Z",
       "taskCount": 100,
       "completedCount": 80,
       "tags": [

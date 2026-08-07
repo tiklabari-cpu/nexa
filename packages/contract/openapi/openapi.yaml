@@ -184,6 +184,8 @@ paths:
     $ref: "./paths/agents.yaml#/agentRole"
   /agents/{agentId}/expertise:
     $ref: "./paths/agents.yaml#/agentExpertise"
+  /agents/{agentId}/work-schedule:
+    $ref: "./paths/agents.yaml#/workSchedule"
   /agents/me/routing-status:
     $ref: "./paths/agents.yaml#/routingStatus"
   /agents/me/notification-preferences:
@@ -2089,9 +2091,11 @@ components:
         An agent's declared weekly availability (PRD §5.3-Vardiya). One slot per
         weekday it lists, in `@nexa/types` `WORK_SCHEDULE_DAYS` order; a day with
         no slot is unscheduled. `enabled` distinguishes a day that is off from a
-        day whose hours have simply not been set. Not yet served by any route —
-        `@nexa/types` `normalizeWorkSchedule` is the single validation gate the
-        eventual endpoint and the settings form both defer to (WORKSCHED-c).
+        day whose hours have simply not been set. `@nexa/types`
+        `normalizeWorkSchedule` is the single validation gate both
+        `GET`/`PUT /agents/{agentId}/work-schedule` and the settings form defer
+        to, so the endpoint and the form can never disagree about what a valid
+        week is. An agent with no stored plan reads back the default week.
       required: [timezone, schedule]
       properties:
         timezone:

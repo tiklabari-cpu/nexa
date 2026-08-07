@@ -50,6 +50,13 @@ export const AUDIT_ACTIONS = [
   // owner is immutable, and no grant above the actor's own rank); the entry
   // records only the from/to roles, never the whole membership.
   'member.role_changed',
+  // A teammate's standing weekly availability was replaced (PRD §5.3-Vardiya).
+  // Recorded because an admin can rewrite *someone else's* rostered hours, and
+  // those hours are what the staffing forecast — and any later "why was nobody
+  // covering Tuesday" question — is answered from. The entry names the agent
+  // and the shape of the week (timezone, how many days are on), never the
+  // individual start/end times.
+  'work_schedule.updated',
   // Workspace configuration
   'settings.security_updated',
   'settings.routing_rule_updated',

@@ -13,6 +13,53 @@
 
 ## Task log (newest-first)
 
+### tm 77.3 — WORKSCHED-c GET/PUT /agents/{agentId}/work-schedule — scope kapısı ve self-vs-admin yetkilendirme — done — 2026-08-07 UTC
+
+- **Yapıldı:** WORKSCHED zincirinin ilk çalışan yüzeyi. -a tipi ve kontratı, -b tabloyu koymuştu;
+  bu tur ikisini birbirine bağlayan route geldi.
+  1. `apps/api/src/routes/agents.ts` — iki handler + iki yardımcı. `requireWorkScheduleAccess()`
+     self-vs-admin çizgisini çizer: rota kapısı okuma `['agents--all:ro','agents--my:ro']`, yazma
+     `['agents--my:rw','agents--all:rw']`; çağıran ≠ hedef ajan ise `agents--all:{ro|rw}` şart,
+     yoksa 403. Bot/app principal'ın hesabı yok → "self" onlar için asla doğru değil, yönetici
+     scope'una düşer. `serialiseWorkSchedule()` satırı `normalizeWorkSchedule`'dan **çıkışta da**
+     geçirir (kontratın adını verdiği tek kapı), satırı olmayan ajan default haftayı okur.
+  2. Yazım: `work_schedules` upsert `(license_id, agent_id)`, replace-not-patch (`setAgentExpertise`
+     deseni). `AUDIT_ACTIONS`'a `work_schedule.updated` eklendi — metadata yalnız `timezone` +
+     `enabled_days`; bireysel saatler audit'e YAZILMAZ.
+  3. Kontrat: `openapi.yaml` `paths:`'e `/agents/{agentId}/work-schedule` bağlandı — WORKSCHED-a'nın
+     bilinçli "documented but not served" ertelemesi bu turda kapandı. Re-bundle **140 → 141 path**,
+     `packages/contract/src/generated/api.ts` yeniden üretildi.
+- **Doğrulama:** DoD kapısının tamamı ön planda, exit 0: `pnpm -w typecheck` · `pnpm -w lint` ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` (@nexa/api **1567 → 1593**, 80 dosya) ·
+  `pnpm -w test:integration` (1245) · `pnpm -w build` · `pnpm -w test:e2e` (74 passed).
+  Yeni `work-schedule.test.ts` 25 test, negatifler önce; `route-config.test.ts` +1 (iki verb'ün
+  scope config'i `onRoute` ile birebir okunur — `findRoute` config'i vermiyor); regresyon
+  `contract-parity` 5/5, `agents-suspension` 13, `tenant-isolation` 38 yeşil.
+- **Varsayımlar:**
+  - **PUT scope listesi task metnindeki `['agents--all:rw']`'den saparak `['agents--my:rw',
+    'agents--all:rw']` oldu.** Sebep: task'ın kendi KK'sı "ajan **kendi** vardiya planını okuyup
+    **yazabilir**" diyor; yalnız `agents--all:rw` ile sıradan bir ajan (DEFAULT_AGENT_SCOPES =
+    `agents--my:rw`) kendi planını bile yazamazdı ve KK ihlal edilirdi. Test stratejisindeki
+    "`agents--my:rw` token'ı **başka** bir agentId'ye PUT → 403" ifadesi de self'in geçmesi
+    gerektiğini varsayıyor. Ayrım scope listesinde değil handler'da yapıldı.
+  - **Müşteri principal 403 değil 404 alıyor.** Test stratejisi 403 diyordu; depo genelindeki I4
+    kuralı (auth plugin, `principals` kapısı) müşteri token'ının ajan yüzeyine değmesini sınır
+    ihlali sayıp 404 veriyor — 403 dönmek ajan API'sinin haritalanmasına izin verirdi. Daha sıkı
+    olan mevcut davranış korundu ve test 404'ü doğruluyor.
+  - Satırı olmayan ajan için GET 200 + default hafta (404 değil): "ayarlanmamış" ile "default'a
+    ayarlanmış" `normalizeWorkSchedule`'da zaten aynı şey. Ajanın var olup olmadığı ayrıca
+    kontrol ediliyor, yoksa 404 — yani 200 asla bir id'yi doğrulamıyor.
+- **Sonraki pencereye not:**
+  - `run-loop.sh` çalışma alanında **commit edilmemiş** duruyor — bu pencere başlamadan önce de
+    öyleydi, kapsamı bu task değil (görev deneme sayacı / blocked görevlerin yeniden seçilmesi).
+    Bilerek dokunulmadı; sahibi olan tur commit'lemeli.
+  - `apps/e2e/kanit/*.png` bu commit'te güncellendi — E2E kapısını koşturmanın yan ürünü (bayt
+    farkı), içerik değişikliği değil.
+  - Zincirde sıradaki: **-d** (presence olay günlüğü + planlı vardiya ↔ manuel `routingStatus`
+    öncelik kuralı, `OPUS-MAX`). -d'nin varsayımı hâlâ geçerli: manuel routingStatus kazanır,
+    vardiya routing'i sürmez. **-h** (UI editör) artık bu route'a bağlanabilir; typed client
+    `packages/contract/src/generated/api.ts` içinde hazır.
+
 ### tm 77.2 — WORKSCHED-b work_schedules + agent_presence_events tabloları, Prisma modelleri ve RLS migration'ı — done — 2026-08-07 UTC
 
 - **Yapıldı:** Tek migration, iki tablo, veri yazılmaz — yazan kod yolu (-c route, -d presence

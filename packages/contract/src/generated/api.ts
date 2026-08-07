@@ -1229,6 +1229,41 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/agents/{agentId}/work-schedule': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Get an agent's weekly work schedule
+     * @description The agent's declared availability (PRD §5.3-Vardiya): a timezone plus one
+     *     start/end/enabled slot per weekday. Distinct from `routing_status`
+     *     (`PUT /agents/me/routing-status`), which is the agent's live toggle —
+     *     this is the standing plan the staffing forecast reads to predict
+     *     coverage gaps.
+     */
+    get: operations['getAgentWorkSchedule'];
+    /**
+     * Replace an agent's weekly work schedule
+     * @description Replaces the schedule wholesale — the body is the complete week, the same
+     *     replace-not-patch shape `setAgentExpertise` uses. An invalid `HH:MM`, a
+     *     start not before its end, an unknown weekday name or the same day listed
+     *     twice is a `400`: `@nexa/types` `normalizeWorkSchedule` is the single
+     *     gate this route and the settings form both validate against, so the two
+     *     can never disagree about what a valid schedule looks like.
+     */
+    put: operations['setAgentWorkSchedule'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/agents/me/routing-status': {
     parameters: {
       query?: never;
@@ -5161,9 +5196,11 @@ export interface components {
      * @description An agent's declared weekly availability (PRD §5.3-Vardiya). One slot per
      *     weekday it lists, in `@nexa/types` `WORK_SCHEDULE_DAYS` order; a day with
      *     no slot is unscheduled. `enabled` distinguishes a day that is off from a
-     *     day whose hours have simply not been set. Not yet served by any route —
-     *     `@nexa/types` `normalizeWorkSchedule` is the single validation gate the
-     *     eventual endpoint and the settings form both defer to (WORKSCHED-c).
+     *     day whose hours have simply not been set. `@nexa/types`
+     *     `normalizeWorkSchedule` is the single validation gate both
+     *     `GET`/`PUT /agents/{agentId}/work-schedule` and the settings form defer
+     *     to, so the endpoint and the form can never disagree about what a valid
+     *     week is. An agent with no stored plan reads back the default week.
      */
     WorkSchedule: {
       /** @description IANA zone, e.g. "Europe/Istanbul". */
@@ -8050,6 +8087,63 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['Agent'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAgentWorkSchedule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The agent's work schedule. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WorkSchedule'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setAgentWorkSchedule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['WorkSchedule'];
+      };
+    };
+    responses: {
+      /** @description The agent's work schedule, as stored. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WorkSchedule'];
         };
       };
       400: components['responses']['BadRequest'];

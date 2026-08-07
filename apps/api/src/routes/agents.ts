@@ -9,11 +9,20 @@
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { AGENT_ROLES, ROUTING_STATUSES, type AgentRole } from '@nexa/types';
+import {
+  AGENT_ROLES,
+  DEFAULT_WORK_SCHEDULE,
+  ROUTING_STATUSES,
+  hasAnyScope,
+  isWorkScheduleProblem,
+  normalizeWorkSchedule,
+  type AgentRole,
+  type WorkSchedule,
+} from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { RoutingService } from '../services/routing/routing-service.js';
-import { roleAtLeast } from '../services/auth/principal.js';
+import { roleAtLeast, scopesOf, type Principal } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 
 const routingStatusBody = z.object({ routing_status: z.enum(ROUTING_STATUSES) });
@@ -26,6 +35,55 @@ const roleChangeBody = z.object({ role: z.enum(AGENT_ROLES) });
 const setExpertiseBody = z.object({
   expertise_ids: z.array(z.coerce.bigint()).max(200),
 });
+
+/**
+ * A work-schedule request is two different acts wearing one URL.
+ *
+ * Reading or rewriting *your own* rostered hours is self-service — an ordinary
+ * agent, holding only `agents--my:*`, may do it. Doing either to *someone
+ * else's* week is an administrative act on another person and needs the
+ * tenant-wide `agents--all:*`. The route's scope list cannot draw that line on
+ * its own: `agents--my:rw` satisfies it whichever id is in the path, so the
+ * distinction has to be made here, against that id.
+ *
+ * Bot and app principals own no account, so "self" is never true for them and
+ * they fall through to the administrative scope — the conservative answer for a
+ * credential that belongs to no person.
+ *
+ * Deliberately a 403 and not a 404: the caller is refused for who they are, and
+ * the id was one they supplied. Whether that agent *exists* is answered
+ * afterwards under RLS, so a cross-tenant id still comes back 404 and stays
+ * un-enumerable (NFR-S5).
+ */
+function requireWorkScheduleAccess(
+  principal: Principal,
+  agentId: string,
+  adminScope: 'agents--all:ro' | 'agents--all:rw',
+): void {
+  if (principal.kind === 'agent' && principal.accountId === agentId) return;
+  if (hasAnyScope(scopesOf(principal), [adminScope])) return;
+  throw ApiError.authorization(
+    `Managing another agent's work schedule requires the ${adminScope} scope.`,
+  );
+}
+
+/**
+ * A stored row as the contract's `WorkSchedule`.
+ *
+ * Normalised on the way out as well as in. `normalizeWorkSchedule` is the one
+ * gate the contract names, so running it here too means the response can never
+ * carry a shape the document forbids — not for a row written before a rule
+ * tightened, nor for one edited by hand in psql. A row that will not normalise
+ * is treated as unset rather than raised as a 500: the agent sees the default
+ * week and can write over it. An agent with no row yet gets that same default,
+ * which is what `normalizeWorkSchedule` returns for empty input — "not set" and
+ * "set to the default" are deliberately the same answer here.
+ */
+function serialiseWorkSchedule(row: { timezone: string; schedule: unknown } | null): WorkSchedule {
+  if (!row) return DEFAULT_WORK_SCHEDULE;
+  const normalised = normalizeWorkSchedule({ timezone: row.timezone, schedule: row.schedule });
+  return isWorkScheduleProblem(normalised) ? DEFAULT_WORK_SCHEDULE : normalised;
+}
 
 /**
  * The agent columns — and the expertise areas — every response here draws on, in
@@ -414,6 +472,107 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       });
 
       return reply.send(serialiseAgent(updated));
+    },
+  );
+
+  app.get<{ Params: { agentId: string } }>(
+    '/agents/:agentId/work-schedule',
+    { config: { scopes: ['agents--all:ro', 'agents--my:ro'] } },
+    async (request, reply) => {
+      const params = z.object({ agentId: z.string().uuid() }).safeParse(request.params);
+      if (!params.success) throw ApiError.validation('agentId must be a UUID.');
+      const { agentId } = params.data;
+
+      requireWorkScheduleAccess(request.requirePrincipal(), agentId, 'agents--all:ro');
+
+      const row = await request.withTenant(async (tx) => {
+        // The membership is checked first because without it "this agent has no
+        // schedule yet" and "there is no such agent" would both answer 200 with
+        // the default week — and the second one would quietly confirm an id.
+        // RLS scopes the lookup to the caller's licence, so an agent in another
+        // workspace is simply not found (NFR-S5).
+        const member = await tx.agentMembership.findFirst({
+          where: { agentId },
+          select: { agentId: true },
+        });
+        if (!member) throw ApiError.notFound('Agent not found.');
+
+        return tx.workSchedule.findFirst({
+          where: { agentId },
+          select: { timezone: true, schedule: true },
+        });
+      });
+
+      return reply.send(serialiseWorkSchedule(row));
+    },
+  );
+
+  app.put<{ Params: { agentId: string } }>(
+    '/agents/:agentId/work-schedule',
+    // The same scope pair as `PUT /agents/me/routing-status`: the list admits
+    // both the self-service and the administrative caller, and
+    // `requireWorkScheduleAccess` decides which of the two this request is.
+    { config: { scopes: ['agents--my:rw', 'agents--all:rw'] } },
+    async (request, reply) => {
+      const params = z.object({ agentId: z.string().uuid() }).safeParse(request.params);
+      if (!params.success) throw ApiError.validation('agentId must be a UUID.');
+      const { agentId } = params.data;
+
+      requireWorkScheduleAccess(request.requirePrincipal(), agentId, 'agents--all:rw');
+
+      // The only rule applied here is that the payload is an object at all.
+      // Everything about *what a valid week is* — weekday names, `HH:MM`, start
+      // before end, no day listed twice — belongs to `normalizeWorkSchedule`,
+      // the single gate this route and the settings form share, so the two can
+      // never drift into disagreeing about what they accept.
+      const body = z.object({}).passthrough().safeParse(request.body);
+      if (!body.success) {
+        throw ApiError.validation('The request body must be a work schedule object.');
+      }
+
+      const normalised = normalizeWorkSchedule(body.data);
+      if (isWorkScheduleProblem(normalised)) {
+        throw ApiError.validation(normalised.problem.message, {
+          reason: normalised.problem.reason,
+        });
+      }
+
+      const tenant = request.tenant();
+      const schedule = normalised.schedule as unknown as Prisma.InputJsonValue;
+
+      await request.withTenant(async (tx) => {
+        const member = await tx.agentMembership.findFirst({
+          where: { agentId },
+          select: { agentId: true },
+        });
+        if (!member) throw ApiError.notFound('Agent not found.');
+
+        // Replace, not patch — the same wholesale shape `setAgentExpertise`
+        // uses. The body is the complete week, so one upsert on
+        // (licence, agent) is the entire write and two identical calls leave
+        // identical rows.
+        await tx.workSchedule.upsert({
+          where: { licenseId_agentId: { licenseId: tenant.licenseId, agentId } },
+          create: { licenseId: tenant.licenseId, agentId, timezone: normalised.timezone, schedule },
+          update: { timezone: normalised.timezone, schedule },
+        });
+
+        // Written on every accepted PUT, including one that stores the same
+        // week again: unlike a suspension flag there is no "real transition" to
+        // detect cheaply, and the question this trail answers — who rewrote
+        // whose hours, and when — is about the act, not the delta. The metadata
+        // carries the shape of the week, never the individual times.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'work_schedule.updated',
+          target: `account:${agentId}`,
+          metadata: {
+            timezone: normalised.timezone,
+            enabled_days: normalised.schedule.filter((slot) => slot.enabled).length,
+          },
+        });
+      });
+
+      return reply.send(normalised);
     },
   );
 

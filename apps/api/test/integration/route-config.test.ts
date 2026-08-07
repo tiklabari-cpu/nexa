@@ -8,8 +8,9 @@
  * than allowing it.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import type { FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import { buildServer, API_PREFIX } from '../../src/server.js';
+import agentRoutes from '../../src/routes/agents.js';
 import { testEnv } from '../helpers/fixtures.js';
 
 describe('route configuration guards', () => {
@@ -78,5 +79,34 @@ describe('route configuration guards', () => {
       expect(res.statusCode, path).not.toBe(401);
       expect(res.statusCode, path).not.toBe(403);
     }
+  });
+
+  it('keeps the work-schedule routes behind a scope, on both verbs (NFR-S3)', async () => {
+    // A new authorized surface is where a missing `config.scopes` is easiest to
+    // ship: the handler still works, every other test still passes, and the
+    // route stands open to any authenticated token. Asserted per verb because
+    // read and write deliberately carry *different* lists — the write side must
+    // never admit a read-only scope, which is what a copy-pasted config quietly
+    // undoes.
+    //
+    // Read off an `onRoute` hook rather than the built server: `findRoute` does
+    // not expose a route's config, and this reads the declaration the module
+    // actually ships.
+    const declared = new Map<string, string[] | undefined>();
+    const probe = Fastify();
+    // The module builds a publisher at registration time; nothing here sends.
+    probe.decorate('redis', {} as never);
+    probe.addHook('onRoute', (route) => {
+      const config = route.config as { scopes?: string[] } | undefined;
+      if (route.url === '/agents/:agentId/work-schedule') {
+        declared.set(String(route.method), config?.scopes);
+      }
+    });
+    await probe.register(agentRoutes);
+    await probe.ready();
+    await probe.close();
+
+    expect(declared.get('GET')).toEqual(['agents--all:ro', 'agents--my:ro']);
+    expect(declared.get('PUT')).toEqual(['agents--my:rw', 'agents--all:rw']);
   });
 });

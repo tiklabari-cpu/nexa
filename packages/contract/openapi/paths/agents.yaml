@@ -281,13 +281,11 @@ agentExpertise:
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 workSchedule:
-  # Not wired into the root `paths:` map yet: an operation documented here with
-  # no matching Fastify route fails contract-parity.test.ts ("documented but
-  # not served"). WORKSCHED-c adds `/agents/{agentId}/work-schedule` to
-  # `paths:` in the same change that lands the route and its handler (the same
-  # deferral 08.8.3-b used for its tool-call endpoint — see HANDOFF.md). The
-  # shape is frozen now so WORKSCHED-b (Prisma) and -c (route) build against
-  # one contract instead of each guessing it independently.
+  # Wired into the root `paths:` map by WORKSCHED-c, in the same change that
+  # landed the two handlers in `routes/agents.ts` — an operation documented
+  # with no matching Fastify route fails contract-parity.test.ts ("documented
+  # but not served"), which is why WORKSCHED-a froze the shape here without
+  # connecting it.
   parameters:
     - name: agentId
       in: path

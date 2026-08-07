@@ -7,7 +7,7 @@
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { WORK_SCHEDULE_DAYS, generateShortId } from '@nexa/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { RoutingService } from '../../src/services/routing/routing-service.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
@@ -859,6 +859,51 @@ describe('routing', () => {
         payload: { routing_status: 'on_holiday' },
       });
       expect(response.statusCode).toBe(400);
+    });
+  });
+
+  // =========================================================================
+  // Work schedules are not a routing input (PRD §5.3-Vardiya, WORKSCHED-d)
+  // =========================================================================
+
+  describe('rostered hours vs routing status', () => {
+    /** Roster an agent for the whole week, or for none of it. */
+    async function roster(agentId: string, enabled: boolean): Promise<void> {
+      await owner.workSchedule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          agentId,
+          timezone: 'UTC',
+          schedule: WORK_SCHEDULE_DAYS.map((day) => ({
+            day,
+            start: '00:00',
+            end: '23:59',
+            enabled,
+          })),
+        },
+      });
+    }
+
+    // Negative first: the roster must never *grant* availability.
+    it('never assigns a rostered agent who is manually offline', async () => {
+      const agent = await addAgent({ groupId: supportId, status: 'offline', name: 'rostered' });
+      await roster(agent, true);
+
+      const decision = await route();
+      expect(decision.assigneeId).toBeNull();
+      expect(decision.reason).toBe('queued');
+    });
+
+    it('assigns an accepting agent whose roster marks every day off', async () => {
+      // And never *withholds* it either. The schedule is a plan the staffing
+      // forecast compares against, not a gate on assignment — so an agent who
+      // logs in on their day off takes chats exactly as usual, and ADR-08's
+      // candidate pool stays defined by routing status alone.
+      const agent = await addAgent({ groupId: supportId, name: 'off-roster' });
+      await roster(agent, false);
+
+      const decision = await route();
+      expect(decision.assigneeId).toBe(agent);
     });
   });
 });

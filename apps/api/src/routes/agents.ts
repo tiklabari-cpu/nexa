@@ -5,6 +5,20 @@
  * being a chat closing — so it drains the queue too. Without that, an agent who
  * comes online to an empty screen sits idle while customers wait for the next
  * arrival to trigger assignment.
+ *
+ * Every change of availability is also appended to `agent_presence_events`
+ * (PRD §5.3-Vardiya, WORKSCHED-d). `agent_memberships.routing_status` is one
+ * mutable cell that only ever answers "now"; the staffing forecast needs the
+ * history behind it, and history can only be kept by writing it down as it
+ * happens. Both writers — this file's routing-status handler and its suspension
+ * handler — do that inside the transaction that made the change, so the log can
+ * never disagree with what actually took effect.
+ *
+ * The two availability concepts here do not compete. `routing_status` is the
+ * agent's live switch and the only thing routing reads; the *work schedule* is
+ * a plan the forecast compares reality against. A rostered agent who is
+ * manually offline takes no chats — the schedule never drives assignment, in
+ * either direction (PLAN §C A15).
  */
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
@@ -153,12 +167,36 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       const status = parsed.data.routing_status;
 
       const drained = await request.withTenant(async (tx) => {
-        await tx.agentMembership.update({
+        // Whether this is a real change is decided by the UPDATE's own WHERE
+        // clause rather than by reading the column and comparing. Two requests
+        // racing to set the same status would both read the old value and both
+        // conclude they were the transition, and the log's one promise — a row
+        // per actual change — would break under exactly the concurrency it
+        // exists to record. The membership itself is guaranteed to be there:
+        // resolving the bearer token already refused a principal without one
+        // (`token-service.ts`).
+        const transition = await tx.agentMembership.updateMany({
           where: {
-            licenseId_agentId: { licenseId: tenant.licenseId, agentId: principal.accountId },
+            licenseId: tenant.licenseId,
+            agentId: principal.accountId,
+            routingStatus: { not: status },
           },
           data: { routingStatus: status },
         });
+
+        // The presence log, written in the same transaction as the drain below
+        // and for the same reason the drain is in one: if the assignment rolls
+        // back, the row claiming this agent came online has to roll back with
+        // it. An event that outlived a failed request would report coverage
+        // that never happened — and nothing downstream could tell.
+        //
+        // Re-sending the status the agent already holds writes nothing, so the
+        // log stays a history of changes rather than of button presses.
+        if (transition.count > 0) {
+          await tx.agentPresenceEvent.create({
+            data: { licenseId: tenant.licenseId, agentId: principal.accountId, status },
+          });
+        }
 
         // Only becoming available can free capacity; going away cannot.
         return status === 'accepting_chats' ? routing.drainQueue(tx, tenant.licenseId) : [];
@@ -305,6 +343,29 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
           data: { suspended },
           include: { agent: { select: agentSelect } },
         });
+
+        // Suspension is a presence change too. Routing skips a suspended agent
+        // whatever their `routing_status` says (`routing-service.ts`: `AND NOT
+        // m.suspended`), so the hours between suspension and reinstatement are
+        // hours that agent covered nothing — and a forecast reading only
+        // `routing_status` would count every one of them as covered.
+        //
+        // `routing_status` itself is deliberately left alone: it is the agent's
+        // own setting, and coming back should return them to the status they
+        // chose rather than to one suspension imposed. That is why the event's
+        // status is computed rather than copied — suspending records `offline`,
+        // reinstating records whatever they still hold. An agent who was
+        // already `offline` sees no event either way: nothing about their
+        // availability changed.
+        if (target.routingStatus !== 'offline') {
+          await tx.agentPresenceEvent.create({
+            data: {
+              licenseId: target.licenseId,
+              agentId,
+              status: suspended ? 'offline' : target.routingStatus,
+            },
+          });
+        }
 
         await writeAuditEntry(tx, request.auditContext(), {
           action: suspended ? 'member.suspended' : 'member.unsuspended',

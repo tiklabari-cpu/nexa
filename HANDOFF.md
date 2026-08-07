@@ -13,6 +13,53 @@
 
 ## Task log (newest-first)
 
+### tm 77.4 — WORKSCHED-d: presence olay günlüğü yazma yolu + vardiya↔statü öncelik kuralı — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **Yazma yolu (iki nokta, ikisi de değişikliği yapan transaction'ın içinde).**
+    `PUT /agents/me/routing-status`: geçiş kararı okuma-sonra-yazma yerine `updateMany`'nin kendi
+    `where`'inde (`routingStatus: { not: status }`) — aynı duruma yarışan iki istek eski değeri
+    birlikte okuyup ikisi de olay yazamaz. `count > 0` ise `agent_presence_events` append, hemen
+    ardından **aynı `withTenant` bloğunda** `routing.drainQueue`: atama geri alınırsa "online oldu"
+    satırı da geri alınır. Aynı duruma tekrar PUT → 0 yeni satır. `PUT /agents/{id}/suspension`:
+    routing askılı ajanı `routing_status` ne derse desin atlar, o yüzden askı da presence
+    değişimidir — `routingStatus !== 'offline'` iken askı `offline`, geri alma ajanın hâlâ tuttuğu
+    statüyü yazar; **`routing_status` sütununa dokunulmaz** (ajanın kendi ayarı).
+  - **Okuma tarafı:** saf modül `apps/api/src/services/staffing/presence-coverage.ts` — olay
+    günlüğünden [from,to) için ajan × UTC saat (0-23) online-dakika ızgarası, Fastify/Prisma/env
+    importu yok. Online = YALNIZ `accepting_chats` (tanınmayan statü online sayılmaz); **hiç olay
+    yoksa 0 değil `null`**. Sözleşme: çağıran her ajan için `from` öncesi son olayı da vermeli.
+  - **Öncelik kuralı** PLAN §C **A15** olarak yazıldı: manuel `routing_status` planlı vardiyayı her
+    zaman ezer, WorkSchedule atama kararına hiç girmez (iki yönde de). ADR-08 aday havuzu
+    değişmedi; migration / kontrat / yeni `ApiError` tipi YOK.
+- **Doğrulama (hepsi ön planda, exit 0):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **1618 test / 82 dosya** (@nexa/api
+  1593 → 1618, +25: presence-coverage 14 unit · presence-log 9 integration · routing +2) ·
+  `pnpm -w test:integration` (1256) · `pnpm -w build` (7/7) · `pnpm -w test:e2e` **74/74**.
+- **Varsayımlar:** A15 (yukarıda). Vardiya başında otomatik `accepting_chats`'e geçirme **açıkça
+  yapılmadı** (§5.2.22 açık soru 3) — istenirse ayrı OPUS-MAX kalemi.
+- **Ortam notu (bir sonraki pencere için önemli, iki tuzak):**
+  1. **Docker'a gerek yok — Postgres+Redis zaten yerel olarak 5433/6380'de koşuyor** (Homebrew
+     postgresql@17 + pgvector, 41 migration yüklü). Önceki pencerelerin "Docker ortam sorunu"
+     diye bloke ettiği durum buydu: `docker` daemon kapalı ama **portlar açıktı**; kontrol
+     `nc -z localhost 5433` (5432 DEĞİL). Docker Desktop bu makinede güncelleme ekranında
+     takılıyor, açılmasını beklemeyin.
+  2. **`pnpm -w test:e2e` env'i kendi yüklemiyor** — `apps/rtm` `.env` okumaz, webServer
+     `DATABASE_URL: Required` ile düşer. Doğrusu: `set -a && . ./.env && set +a && pnpm -w test:e2e`.
+     Ayrıca e2e global-setup yalnız **seed** eder (reset etmez): art arda e2e koşuları veri
+     biriktirir ve `customers.spec.ts` sayım testleri düşer. Temiz koşu için önce herhangi bir
+     integration testi çalıştırın (`seedFixtures` → `resetDatabase` truncate eder), sonra e2e.
+- **Sonraki pencereye not:** `-d` bitti; sıradakiler `-e` (breakdown `by_hour`) ve `-f` (tahmin
+  çekirdeği) — ikisi de bağımsız, `-g` her ikisini bekliyor. `-f` girdi olarak bu turda üretilen
+  `presenceCoverage()` ızgarasını alacak; **`null` = "bilinmiyor" sözleşmesini 0'a çevirmeyin**.
+  `skills-routing.spec.ts:100` `skills.getByLabel('Skill')` **flake** (bu görevle ilgisiz): skill
+  listesi yüklenmeden fill ederse geçer, yüklendikten sonra "Delete skill X" aria-label'larına da
+  uyup strict-mode ihlali verir — tek başına yeniden koşunca geçti, temiz DB'li tam koşuda 74/74.
+  Kapsam disiplini gereği düzeltilmedi; ayrı task'lık.
+- **Çalışma alanı:** `run-loop.sh` bu pencere açılmadan önce de değişikti (döngü runner'ının
+  blocked-görev yeniden deneme sayacı) — bu görevin kapsamı olmadığı için **commit edilmedi**,
+  olduğu gibi bırakıldı.
+
 ### DÜZELTME PENCERESİ — Faz-2 özet sayacı denetimi (panel bulgusu, 2. tekrar) — done — 2026-08-07 UTC
 
 - **Yapıldı:** Faz-2 (§5.0) gereksinim damgaları bağımsız olarak yeniden sayıldı → **12 ⬜ · 2 ◐ ·

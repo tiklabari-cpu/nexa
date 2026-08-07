@@ -3123,10 +3123,10 @@
             "description": "Contract-first ilk adım, çalışan kod yok. (1) packages/contract/openapi/paths/agents.yaml'a `workSchedule` bloğu — GET + PUT /agents/{agentId}/work-schedule; (2) openapi.yaml components.schemas'a `WorkSchedule` = {timezone, schedule[{day: monday…sunday, start, end, enabled}]} (v2-03 §817 şekli birebir) ve re-bundle; (3) packages/types/src/work-schedule.ts — `WorkScheduleDay` union + `WORK_SCHEDULE",
             "details": "WORKSCHED-a — Work schedule kontratı + @nexa/types haftalık plan tipi ve normalizer  [SONNET-XHIGH]\n\nPRD: §5.3-Vardiya (WORKSCHED) — PRD §6 FR-MOD tablosunda karşılığı yok (+ NFR-M2)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 5 dosya; güvenlik sınırı yok (yalnız şema/tip, çalışan endpoint yok); eşzamanlılık yok; kopyalanacak desen ismen var (packages/types/src/widget.ts — WidgetAppearance + WIDGET_COLOR_PATTERN + normalizeWidgetAppearance); kontrat değişikliği katkısal ve mekanik; KK mekanik doğrulanabilir (normalizer unit + contract-parity).\nNEDEN AÇIK: packages/contract/openapi/paths altında 'schedule|staffing|WorkSchedule|Shift' grep → 0 eşleşme; ilgili path yok. packages/types/src listesinde 16 dosya var (apps.ts, custom-fields.ts, widget.ts, scopes.ts …) ve work-schedule tipi yok.\nKAPSAM: Contract-first ilk adım, çalışan kod yok. (1) packages/contract/openapi/paths/agents.yaml'a `workSchedule` bloğu — GET + PUT /agents/{agentId}/work-schedule; (2) openapi.yaml components.schemas'a `WorkSchedule` = {timezone, schedule[{day: monday…sunday, start, end, enabled}]} (v2-03 §817 şekli birebir) ve re-bundle; (3) packages/types/src/work-schedule.ts — `WorkScheduleDay` union + `WORK_SCHEDULE_DAYS`, `WorkScheduleSlot`, `DEFAULT_WORK_SCHEDULE`, `WORK_SCHEDULE_TIME_PATTERN` (^([01]\\d|2[0-3]):[0-5]\\d$) ve `normalizeWorkSchedule()` (bilinmeyen gün reddi, gün tekrarı reddi, start<end zorunlu, boş girdi → default); (4) index.ts export.\nDOSYALAR: packages/contract/openapi/paths/agents.yaml · packages/contract/openapi/openapi.yaml · packages/types/src/work-schedule.ts · packages/types/src/work-schedule.test.ts · packages/types/src/index.ts\nREFERANS DESEN (kopyalanacak): packages/types/src/widget.ts · packages/types/src/custom-fields.ts · packages/contract/openapi/paths/reports.yaml\nKK (birebir): \"| Ekip/Vardiya | Work scheduler / staffing prediction |\" | \"KK-türetilmiş: \"Ajan başına haftalık vardiya planı (timezone + gün/başlangıç/bitiş/etkin) tek şemada tanımlanır ve geçersiz saat/gün reddedilir.\" — Türetme gerekçesi: PRD §5.3 satır 412 iki sütunlu (\"Alan | Kapsam\") tablodadır, ayrı \"Kabul Kriteri\" sütunu yoktur ve PRD §6 FR-MOD tablosunda bu koda karşılık gelen satır yoktur. Alan listesi destek kaynaktan alındı: v2-derin-analiz/v2-03-api-veri-referans.md:817 — \"WorkScheduler | {timezone, schedule[{enabled, day (monday…sunday), start, end}]}\".\"\nKK DOĞRULAMA: packages/types/src/work-schedule.test.ts normalizer'ın her reddini kanıtlar (KK-türetilmiş \"geçersiz saat/gün reddedilir\" maddesi); apps/api/test/integration/contract-parity.test.ts yeşil kalması eklenen path'in bundle ile eşleştiğini kanıtlar (\"tek şemada tanımlanır\" maddesi).\nKAPSAM DIŞI: Prisma modeli ve migration (WORKSCHED-b) · Route/handler ve authZ (WORKSCHED-c) · Presence olay günlüğü (WORKSCHED-d) · StaffingForecast şeması (WORKSCHED-g) · UI (WORKSCHED-h)\nSÖZLEŞME: packages/contract/openapi/paths/agents.yaml → `workSchedule` (GET + PUT /agents/{agentId}/work-schedule); openapi.yaml → components.schemas.WorkSchedule. UYARI: OpenAPI'ye eklenip re-bundle edilmezse contract-parity.test.ts KIRILIR (proje notu).\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit (NEGATİF ÖNCE): geçersiz HH:MM ('24:00', '9:00', 'abc') reddi · unit (negatif): start >= end reddi · unit (negatif): bilinmeyen gün ('funday') ve aynı günün tekrarı reddi · unit (pozitif): 7 günlük tam plan normalize edilir; boş/null girdi → DEFAULT_WORK_SCHEDULE · integration: contract-parity.test.ts yeşil (path + şema bundle ile senkron) · cross-tenant: bu alt-görevde YOK — çalışan endpoint yok, izolasyon WORKSCHED-b/-c'de kanıtlanır",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "77",
-            "updatedAt": "2026-08-07T20:26:03.491Z"
+            "updatedAt": "2026-08-07T20:32:29.291Z"
           },
           {
             "id": 2,
@@ -3251,7 +3251,7 @@
             "updatedAt": "2026-08-07T20:20:22.155Z"
           }
         ],
-        "updatedAt": "2026-08-07T20:26:03.491Z"
+        "updatedAt": "2026-08-07T20:32:29.291Z"
       },
       {
         "id": "78",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-07T20:26:03.491Z",
+      "lastModified": "2026-08-07T20:32:29.291Z",
       "taskCount": 100,
       "completedCount": 80,
       "tags": [

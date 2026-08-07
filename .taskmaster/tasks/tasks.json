@@ -4145,10 +4145,10 @@
             "description": "Yalnızca SAF modül — sunucu/rota yok. `toPdf(title, headers, rows, meta)`: tek/çok sayfalı tablo düzeni, PDF core font (Helvetica — dosya gömme yok), DETERMİNİSTİK çıktı (aynı girdi → bayt-birebir aynı çıktı; değişken tarih/UUID üretilmez, `meta`'dan alınır). Metin kaçışı: `(`, `)`, `\\` PDF string kaçışı ZORUNLU. CSV'nin `FORMULA_LEAD` kalkanı PDF'te GEÇERSİZDİR (PDF formül çalıştırmaz) — gerekçes",
             "details": "07.7-f — Deterministik, bağımlılıksız PDF serializer (saf modül) — `toCsv`'nin PDF eşi  [OPUS-XHIGH]\n\nPRD: FR-MOD-07.7 (Export CSV/PDF)\nETİKET GEREKÇESİ: OPUS-XHIGH: SONNET koşul 4 ihlali — depoda kopyalanacak MEVCUT bir PDF deseni YOK (`grep -n pdf` apps/api/package.json + apps/web/package.json + kök package.json → 0 isabet; hiçbir PDF kütüphanesi bağımlılığı yok). Yeni bir çıktı-format algoritması (PDF obje/xref/stream düzeni + metin kaçışı) tasarlanıyor ve bağımlılık ekleme kararı ADR düzeyinde bir seçim. Güvenlik ÇEKİRDEĞİ değil (authZ/izolasyon yok) → MAX değil XHIGH. Çekirdek burada izole edildi; rota bağlama işi 07.7-g'ye SONNET-XHIGH olarak çıkarıldı — pahalı pencere küçültüldü.\nNEDEN AÇIK: `reports-export.ts` içinde `toCsv()` dışında hiçbir serializer yok (satır 96-104 tek serializer). `reports.ts:843` export rotası yalnız `'text/csv; charset=utf-8'` content-type döndürüyor. `apps/*` ve kök package.json dosyalarında 'pdf' geçen bağımlılık YOK (grep 0). Modülün kendi başlığı bunu ertelediğini yazıyor: `reports-export.ts:14-16` 'PDF and benchmark comparison are explicitly out of scope for v1'.\nKAPSAM: Yalnızca SAF modül — sunucu/rota yok. `toPdf(title, headers, rows, meta)`: tek/çok sayfalı tablo düzeni, PDF core font (Helvetica — dosya gömme yok), DETERMİNİSTİK çıktı (aynı girdi → bayt-birebir aynı çıktı; değişken tarih/UUID üretilmez, `meta`'dan alınır). Metin kaçışı: `(`, `)`, `\\` PDF string kaçışı ZORUNLU. CSV'nin `FORMULA_LEAD` kalkanı PDF'te GEÇERSİZDİR (PDF formül çalıştırmaz) — gerekçesiyle kod yorumuna yazılır ki yanlışlıkla taşınmasın. Dış servis yok (CONVENTIONS dış servis mock kuralıyla uyumlu: üretim tamamen yerel/deterministik).\nDOSYALAR: apps/api/src/routes/reports-export.ts · apps/api/src/routes/reports-export.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports-export.ts (satır 96-104 `toCsv` — imza şekli `(headers, rows) => string`, saf ve sunucusuz test edilebilirlik felsefesi; satır 76-95 `csvField` kaçış disiplini) · apps/api/src/routes/reports-export.ts (satır 106-113 `exportFilename` — uzantı parametrelenecek) · apps/api/src/routes/reports-export.test.ts (satır 47-79 `toCsv` unit test kalıbı — PDF için aynı yapı)\nKK (birebir): \"export\"\nKK DOĞRULAMA: `reports-export.test.ts` — `toPdf(...)` çıktısı `%PDF-` ile başlar, `%%EOF` ile biter, tutarlı `xref` taşır; AYNI girdiyle iki çağrı bayt-birebir eşit (determinizm); `(`/`)`/`\\` içeren hücre kaçışlanmış görünür ve dosya bozulmaz; 0 satırlı tablo geçerli PDF üretir (boş dosya değil).\nKAPSAM DIŞI: Rota bağlama, `format` query parametresi, content-type/attachment başlıkları — 07.7-g · Web UI indirme butonu — 07.7-k · Grafik/donut/bar çizimi — PDF yalnız TABLO üretir (varsayım §V2) · Yeni npm bağımlılığı eklemek — açıkça YAPILMAZ · Fatura PDF'i (10.3-a faturaları CSV indiriyor) — dokunulmaz\nSÖZLEŞME: yok — bu alt-görev yalnız saf modül ekler, rota/OpenAPI değişmez.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit — `%PDF-` başlığı + `%%EOF` sonu + xref offset tutarlılığı · unit — determinizm: aynı girdi iki çağrıda bayt-birebir aynı · unit — kaçış: `(`, `)`, `\\`, çok baytlı UTF-8 karakter içeren hücre bozulmadan yazılır · unit (negatif) — 0 satır / çok uzun hücre / çok sütun → geçerli PDF, exception yok · unit — `FORMULA_LEAD` kalkanının PDF'e UYGULANMADIĞI ve CSV davranışının değişmediği regresyonu",
-            "status": "pending",
+            "status": "blocked",
             "dependencies": [],
             "parentId": "93",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-07T19:37:17.667Z"
           },
           {
             "id": 7,
@@ -4246,7 +4246,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-07T18:49:03.835Z"
+        "updatedAt": "2026-08-07T19:37:17.667Z"
       },
       {
         "id": "94",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-07T18:49:03.835Z",
+      "lastModified": "2026-08-07T19:37:17.668Z",
       "taskCount": 100,
       "completedCount": 80,
       "tags": [

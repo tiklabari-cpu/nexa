@@ -13,6 +13,73 @@
 
 ## Task log (newest-first)
 
+### tm 93.6 — 07.7-f Deterministik, bağımlılıksız PDF serializer — blocked — 2026-08-07 UTC
+
+- **Yapıldı:** `toPdf(title, headers, rows, meta)` — `toCsv`'nin PDF eşi, `reports-export.ts` içinde
+  SAF modül olarak (rota/kontrat/şema/migration'a TEK satır dokunulmadı; `reports.ts` hiç
+  açılmadı). Elle yazılmış PDF 1.7 dosya yapısı, **sıfır yeni bağımlılık**: katalog + sayfa ağacı +
+  Helvetica/Helvetica-Bold core font (`/WinAnsiEncoding`, font gömme YOK) + sayfa başına
+  sıkıştırılmamış içerik akışı + bayt-ofsetli `xref` + trailer. Dönüş tipi `Buffer` — `xref` dosyaya
+  bayt ofseti taşıdığı için çağıranın yeniden kodlayıp sessizce bozması engelleniyor.
+  - **Determinizm:** modül içinde saat/rastgelelik/ortam okuması YOK; `/CreationDate` yalnız
+    `meta.createdAt`'ten gelir, verilmezse anahtar hiç yazılmaz (uydurulmuş "şimdi" yok). `/ID`
+    yok, zlib yok (zlib çıktısı Node sürümleri arasında garanti kararlı değil — determinizm birkaç
+    KB'den değerli). Aynı girdi → bayt-birebir aynı çıktı (test).
+  - **Kaçış:** `\`, `(`, `)` PDF literal kaçışı + 0x20–0x7E dışındaki her bayt `\ooo` octal →
+    içerik akışları saf ASCII, sekiz bitlik veriyi bozan hiçbir taşıma sayfayı değiştiremez.
+  - **WinAnsi:** metin CP1252'ye çevrilir (0x80–0x9F penceresi için tablo); core font 256 glif
+    adresler, dışındaki kod noktası `?` olur — **bir bayt bir glif**, dolayısıyla hiçbir ofset
+    kaymaz (bozulma değil, çizim sınırı; aşmak gömülü font = bağımlılık ister, 07.7-f yasaklıyor).
+  - **Yerleşim:** A4, sayfa başına başlık + sütun başlığı tekrarı, `Page n of m` altbilgisi, sayısal
+    hücrelerde sağa hizalama, sığmayan metinde WinAnsi üç-nokta ile kırpma. Sütun genişliği
+    **max-min fair share** (dar sütun doğal genişliğini alır, artan yalnız açgözlü sütunlar
+    arasında bölünür) — ilk sürümdeki orantısal ölçekleme tek bir uzun serbest-metin sütununun
+    sayfayı yutmasına ve `date`/`chats`'in üç-noktaya inmesine yol açıyordu (kanıt: Quick Look
+    render'ı), regresyon testle kilitlendi.
+  - **`FORMULA_LEAD` kalkanı PDF'e TAŞINMADI** — gerekçe kod yorumunda: PDF'in formül
+    değerlendiricisi yok, `'` ön eki yalnızca okuyucunun verisini bozardı (`-Acme` → `'-Acme`).
+    CSV davranışının değişmediği ayrıca regresyon testiyle kanıtlı.
+  - `exportFilename`'e opsiyonel 4. parametre `format: 'csv'|'pdf' = 'csv'` (uzantı
+    parametreleştirildi); 3 argümanlı mevcut çağıranlar birebir aynı adı alır (test).
+- **Doğrulama:** `pnpm -w typecheck` **11/11 ✅ (exit 0)** · `pnpm -w lint` **8/8 ✅ (exit 0)** ·
+  `pnpm -w build` **7/7 ✅ (exit 0)** · `pnpm -w test:unit`: `@nexa/api` **348/348 ✅** (içinde
+  `reports-export.test.ts` **11 → 24**, +13: 12 `toPdf` + 1 `exportFilename` format), types 60 ✅ ·
+  ai-mock 72 ✅ · widget 52 ✅ · web 606 ✅. Ek bağımsız kanıt: üretilen PDF `qlmanage -t` ile
+  **macOS CoreGraphics tarafından render edildi** (dosya yalnız kendi içinde tutarlı değil, gerçek
+  bir üçüncü-parti ayrıştırıcıya göre de geçerli); `xref` ofsetleri, `/Length` değerleri ve `%%EOF`
+  testte ayrıca birebir doğrulanıyor.
+  **KIRMIZI/ÇALIŞTIRILAMAYAN:** `pnpm -w test:unit` **exit 1** — yalnız `@nexa/rtm` (6 test:
+  `conflict.test.ts` + `conflict-publisher.test.ts`), sebebi `resetDatabase`/Prisma + ioredis
+  bağlantı hatası, yani Postgres:5433 ve Redis:6380 ayakta değil. `pnpm -w test`,
+  `pnpm -w test:integration`, `pnpm -w test:e2e` **koşturulamadı** (aynı sebep).
+  **Ortam:** Docker Desktop bu pencerede `open -a Docker` ile başlatılabildi (süreçler + VM
+  spawn oldu, önceki pencerenin notundan farklı olarak), fakat daemon soketi hiç açılmadı ve VM
+  ~1 dk içinde kendi kendine öldü (`~/.docker/run/` boş, `com.docker.backend` süreçleri kayboldu) —
+  bu ortamda erişilebilir GUI oturumu olmadığı için Docker Desktop ayakta kalamıyor. Homebrew'da
+  **redis var ama postgres YOK**; pgvector gerektiren şemayı brew ile ayağa kaldırmak
+  docker-compose'u tek doğruluk kaynağı olmaktan çıkarır ve RLS/izolasyon testlerini sahte-yeşile
+  düşürme riski taşır → bilerek YAPILMADI (kapsam dışı ortam mutasyonu).
+- **Varsayımlar:** PDF yalnız TABLO üretir (grafik/donut/bar yok) — task KAPSAM DIŞI maddesi §V2.
+- **Sonraki pencereye not:**
+  1. **Kod tarafı TAMDIR ve kapsamı gereği DB'ye hiç değmiyor.** Çalıştırılamayan iki kapı
+     (integration + e2e) bu task için **sıfır doğrulama sinyali** taşıyor: `toPdf` hiçbir rotaya
+     bağlı değil (bağlama işi 07.7-g), dolayısıyla integration/e2e suite'lerinde onu çalıştıran
+     tek bir satır yok. Buna rağmen CONVENTIONS §1 kapısı bir bütün olarak yeşil olmadığı için
+     `done` işaretlenmedi — 93.4'ün emsaliyle aynı çizgi.
+  2. **Asıl bloke eden ortam, kod değil** — 93.4 ile birebir aynı kök neden. Postgres:5433 +
+     Redis:6380 geri geldiğinde `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` +
+     `pnpm -w test:integration` koşulup yeşilse 93.6 (ve 93.4) tek hamlede `done`'a çekilebilir;
+     93.6 için PLAN.md 07.7 satırına 07.7-f kanıtı eklenir (satır `◐` KALIR — d/e/g…l hâlâ açık).
+  3. PLAN.md bu pencerede **kasıtlı olarak değiştirilmedi** — 93.4 emsali: blocked task PLAN'a
+     yazmıyor, "Kalan 9 alt-görev açık (07.7-d..-l)" cümlesi hâlâ doğru.
+  4. 07.7-g (PDF export rotası) için hazır: `toPdf` + `exportFilename(..., 'pdf')` + `ExportFormat`
+     tipi export edilmiş durumda; rotanın yapması gereken tek şey `format` query parametresi,
+     `application/pdf` content-type ve attachment başlığı.
+  5. Çalışma alanında bu task'a ait OLMAYAN, önceden var olan kirli dosyalar duruyor:
+     `run-loop.sh` (deneme sayacı / blocked görevleri yeniden seçme iyileştirmesi) ve
+     `.taskmaster/tasks/tasks.json` (bu pencerenin kendi in-progress→blocked damgası). `run-loop.sh`
+     bilerek commit'lenmedi: bu pencereyi çalıştıran harness'ın kendisi ve bu task'ın kapsamı değil.
+
 ### DÜZELTME PENCERESİ — Faz-2 özet sayacı denetimi (panel bulgusu) — done — 2026-08-07 UTC
 
 - **Yapıldı:** Faz-2 (§5) gereksinim damgaları bağımsız olarak yeniden sayıldı → **13 ⬜ · 1 ◐ ·

@@ -3134,12 +3134,12 @@
             "description": "Tek migration, iki tablo, veri yazılmaz. (1) `work_schedules`: license_id BIGINT, agent_id UUID, timezone TEXT, schedule JSONB, updated_at; PK (license_id, agent_id); FK licenses(id) + accounts(id) ON DELETE CASCADE. (2) `agent_presence_events` (append-only): id UUID, license_id, agent_id, status TEXT, changed_at TIMESTAMPTZ; index (license_id, agent_id, changed_at) — webhook_deliveries olay tablo",
             "details": "WORKSCHED-b — work_schedules + agent_presence_events tabloları, Prisma modelleri ve RLS migration'ı  [OPUS-XHIGH]\n\nPRD: §5.3-Vardiya (WORKSCHED) + NFR-S4 (tenant izolasyon/RLS), NFR-C9 (veri bölgesi)\nETİKET GEREKÇESİ: OPUS-XHIGH: iki yeni tenant tablosu + RLS policy = güvenlik hassasiyeti olan ama çekirdek güvenlik kararı olmayan iş (kullanıcı kuralı: hafif güvenlik dokunuşu EN AZ OPUS-XHIGH). Koşul 2 ihlali → SONNET OLAMAZ; policy unutulursa cross-tenant sızıntı olur. Yeni izolasyon algoritması tasarlanmıyor, mevcut nexa_current_license() deseni uygulanıyor → MAX değil.\nNEDEN AÇIK: apps/api/prisma/schema.prisma'da 41 model tanımlı (grep '^model '); WorkSchedule/Shift/StaffingForecast/PresenceHistory 0 eşleşme — kalıcı vardiya planı saklanamıyor. AgentMembership.routingStatus (schema.prisma:131, default 'offline') yalnız ANLIK presence. Mevcut 41 modelin tamamı RLS'li (migrations/20260726130000_inbox_settings ve 20260726150000_widget_settings: ENABLE ROW LEVEL SECURITY + nexa_current_license() policy + nexa_app GRANT) — yeni tablolar bu standarttan sapamaz.\nKAPSAM: Tek migration, iki tablo, veri yazılmaz. (1) `work_schedules`: license_id BIGINT, agent_id UUID, timezone TEXT, schedule JSONB, updated_at; PK (license_id, agent_id); FK licenses(id) + accounts(id) ON DELETE CASCADE. (2) `agent_presence_events` (append-only): id UUID, license_id, agent_id, status TEXT, changed_at TIMESTAMPTZ; index (license_id, agent_id, changed_at) — webhook_deliveries olay tablosu deseni. Her iki tabloda ENABLE ROW LEVEL SECURITY + `<tablo>_tenant` policy (USING + WITH CHECK = nexa_current_license()) + GRANT SELECT,INSERT,UPDATE,DELETE TO nexa_app. Prisma modelleri + @map/@@map.\nDOSYALAR: apps/api/prisma/schema.prisma · apps/api/prisma/migrations/20260801090000_work_scheduler/migration.sql · apps/api/test/integration/data-model.test.ts · apps/api/test/integration/tenant-isolation.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/prisma/migrations/20260726130000_inbox_settings/migration.sql · apps/api/prisma/migrations/20260726150000_widget_settings/migration.sql · apps/api/prisma/migrations/20260726090000_webhook_deliveries/migration.sql\nKK (birebir): \"| Ekip/Vardiya | Work scheduler / staffing prediction |\" | \"KK-türetilmiş: \"Vardiya planı ve presence geçmişi kalıcı olarak saklanır; bir lisansın verisi başka lisanstan ne okunabilir ne yazılabilir.\" — Türetme gerekçesi: PRD §5.3 satır 412'de KK sütunu yok, §6'da satır yok; izolasyon payı NFR-S4'ten ve depodaki 41 modelin tamamının RLS taşıması olgusundan türetildi.\"\nKK DOĞRULAMA: tenant-isolation.test.ts'e eklenen iki tablo satırı KK-türetilmiş izolasyon maddesini kanıtlar; data-model.test.ts migration'ın uygulandığını ve tabloların RLS-enabled olduğunu kanıtlar (\"kalıcı saklanır\" maddesi).\nKAPSAM DIŞI: Tabloya yazan kod yolu (WORKSCHED-d) · Route/handler (WORKSCHED-c) · StaffingForecast tablosu — AÇILMAZ, tahmin API-time hesaplanır (§C varsayımı) · Retention/temizlik politikası (açık soru 5)\nSÖZLEŞME: yok (kontrat WORKSCHED-a'da yazıldı)\nMIGRATION: GEREKLİ — yeni `work_schedules` (PK license_id+agent_id, JSONB schedule) ve `agent_presence_events` (append-only, index license_id+agent_id+changed_at); ikisinde de RLS policy + nexa_app GRANT.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration CROSS-TENANT (ÖNCE): lisans A'nın work_schedules satırı lisans B bağlamında 0 satır döner · integration NEGATİF: B, A'nın license_id'siyle INSERT denerse policy WITH CHECK reddeder (work_schedules ve agent_presence_events için ayrı ayrı) · integration CROSS-TENANT: agent_presence_events satırları diğer lisansta görünmez · integration pozitif: migration uygulanır, Prisma modelleri okunur/yazılır, index mevcut, RLS enabled · ÇALIŞTIRMA NOTU: paylaşılan Postgres nedeniyle DB süiti paket bazlı SERİ koşulur ('pnpm -w test' yarışa girer — proje notu)",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               1
             ],
             "parentId": "77",
-            "updatedAt": "2026-08-07T20:34:33.157Z"
+            "updatedAt": "2026-08-07T20:57:37.261Z"
           },
           {
             "id": 3,
@@ -3251,7 +3251,7 @@
             "updatedAt": "2026-08-07T20:20:22.155Z"
           }
         ],
-        "updatedAt": "2026-08-07T20:34:33.157Z"
+        "updatedAt": "2026-08-07T20:57:37.261Z"
       },
       {
         "id": "78",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-07T20:34:33.157Z",
+      "lastModified": "2026-08-07T20:57:37.261Z",
       "taskCount": 100,
       "completedCount": 80,
       "tags": [

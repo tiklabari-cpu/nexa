@@ -13,6 +13,66 @@
 
 ## Task log (newest-first)
 
+### tm 93.6 — 07.7-f Deterministik, bağımlılıksız PDF serializer — done — 2026-08-07 UTC
+
+> Bir alttaki `blocked` notunun kapanışı. Kod o pencerede zaten tamdı; bloke eden tek şey
+> DB'ye bağlı kapıları koşturacak Postgres/Redis'in olmamasıydı. Bu pencerede ortam ayağa
+> kaldırıldı ve **kapının tamamı yeşile döndü** — yeni ürün kodu yazılmadı.
+
+- **Yapıldı (bu pencere):** Kod değişikliği YOK — 8ba8644'teki `toPdf` olduğu gibi doğrulandı.
+  Yapılan iş, iki penceredir işi bloke eden **ortamın kurulması**:
+  - **Docker yine gelmedi** (kanıt: `open -a Docker` + 300 sn bekleme; `~/.docker/run/` boş
+    kaldı, daemon soketi hiç açılmadı). Bu ortamda erişilebilir GUI oturumu olmadığı için
+    Docker Desktop ayakta kalamıyor — üçüncü kez aynı sonuç, artık beklenen davranış.
+  - **Postgres 17 + pgvector Homebrew ile yerel kuruldu ve `docker-compose.yml` eşleniği
+    yapılandırıldı** — ayrı bir küme (`/opt/homebrew/var/nexa-pg17`), `initdb --locale=C`
+    (compose'un `LANG: C` "deterministic ordering for tests" kararı), `port=5433`,
+    `max_connections=200`, `shared_preload_libraries='pg_stat_statements'`. Ardından
+    `infra/db/init/00-extensions.sql` **birebir** uygulandı → `pgcrypto`+`citext`+`vector 0.8.6`
+    kuruldu ve `nexa_app` rolü **`rolsuper = false`** doğrulandı. Bu son madde kritik:
+    Postgres hem superuser'ı hem tablo sahibini RLS'ten muaf tutar, dolayısıyla rolün
+    superuser OLMAMASI izolasyon testlerinin sahte-yeşile düşmemesinin ön şartıdır.
+  - Redis 7 (Homebrew) `--port 6380 --appendonly yes --save ''` ile ayağa kaldırıldı.
+  - `pnpm db:migrate` (tüm migration'lar) + `pnpm db:seed` koştu.
+  - Önceki pencerenin "brew postgres docker-compose'u tek doğruluk kaynağı olmaktan çıkarır
+    ve RLS testlerini sahte-yeşile düşürür" endişesi **yerinde ama aşılabilirdi**: init
+    script'i zaten idempotent ve elle çalıştırılmak üzere tasarlanmış (`make db-extensions`),
+    RLS'i taşıyan şey de imaj değil o script'teki non-superuser rol. Eşdeğerlik kurulduktan
+    sonra `tenant-isolation.test.ts` 32/32 geçerek bunu fiilen kanıtladı.
+- **Doğrulama — DoD kapısı TAM YEŞİL (hepsi ön planda, exit code'la):**
+  `pnpm -w typecheck` **11/11 exit 0** · `pnpm -w lint` **8/8 exit 0** ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` **10/10 exit 0**
+  (`@nexa/api` **1554/1554** — içinde `reports-export.test.ts` 24 · web 606 · rtm · ai-mock 72 ·
+  widget 52 · types 60; önceki pencerede kırmızı olan `@nexa/rtm`'in 6 testi artık yeşil) ·
+  `pnpm -w test:integration` **5/5 exit 0, 1206/1206** (`tenant-isolation.test.ts` **32/32** +
+  `contract-parity` 5/5) · `pnpm -w build` **7/7 exit 0** · `pnpm -w test:e2e` **74/74 exit 0**.
+- **KK doğrulaması (task'ın kendi kabul kriteri) — testle + bağımsız ayrıştırıcıyla:**
+  `%PDF-` başlangıcı · `%%EOF` sonu · `xref` tutarlılığı testte **offset'in gerçekten kendi
+  `N 0 obj` baytlarına düştüğü** okunarak doğrulanıyor (yalnız "makul görünen" sayı değil) ·
+  determinizm bayt-birebir · `(`/`)`/`\` kaçışı · **0 satır → geçerli tek sayfa, boş dosya değil**.
+  Ek **bağımsız kanıt**: üretilen PDF Apple CoreGraphics (`qlmanage`) ile PNG'ye render edildi —
+  `Ünïcode` başlığı, hücrelerdeki `( ) \ "` bozulmadan, sağa hizalı sayısal sütun ve
+  `Page 1 of 3` doğru çizildi; 0 satırlı belge de `No data.` ile geçerli sayfa olarak render oldu.
+- **Varsayımlar:** PDF yalnız TABLO üretir (grafik/donut/bar yok) — task KAPSAM DIŞI maddesi §V2.
+- **Sonraki pencereye not:**
+  1. **Ortam artık hazır ve kalıcı.** Yeni pencere Docker'la uğraşmasın; datastore'lar zaten
+     ayakta. Yeniden başlatmak gerekirse:
+     `/opt/homebrew/opt/postgresql@17/bin/pg_ctl -D /opt/homebrew/var/nexa-pg17 -l /tmp/nexa-pg.log start`
+     ve `redis-server --port 6380 --appendonly yes --save '' --dir /tmp/nexa-redis --daemonize yes`.
+     `.env` zaten bu portları gösteriyor, değiştirilmedi. `make up` hâlâ docker'a bağlı —
+     bu ortamda `make up` yerine yukarıdaki iki komut kullanılmalı.
+  2. **tm 93.4 (07.7-d Sales rapor grubu) hâlâ `blocked` ve tek sebebi aynı ortamdı.** Kodu
+     bitmiş durumda; ortam artık var, dolayısıyla bir sonraki pencere onu doğrudan kapıdan
+     geçirip `done`'a çekebilir. Kapsam disiplini gereği bu pencerede DOKUNULMADI.
+  3. 07.7-g (PDF export rotası) için hazır: `toPdf` + `exportFilename(..., 'pdf')` + `ExportFormat`
+     tipi export edilmiş; rotanın yapması gereken tek şey `format` query parametresi,
+     `application/pdf` content-type ve attachment başlığı.
+  4. `apps/e2e/kanit/*.png` kanıt görselleri e2e koşusunun normal çıktısı olarak yenilendi —
+     bu commit'e dahil.
+  5. Bu task'a ait OLMAYAN, önceden var olan kirli dosya `run-loop.sh` (deneme sayacı /
+     blocked görevleri yeniden seçme iyileştirmesi) hâlâ commit'lenmemiş durumda — bilerek
+     bırakıldı, ayrı bir işin parçası.
+
 ### tm 93.6 — 07.7-f Deterministik, bağımlılıksız PDF serializer — blocked — 2026-08-07 UTC
 
 - **Yapıldı:** `toPdf(title, headers, rows, meta)` — `toCsv`'nin PDF eşi, `reports-export.ts` içinde

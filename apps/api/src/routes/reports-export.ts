@@ -45,6 +45,7 @@ export const REPORT_GROUPS: readonly ReportGroup[] = [
   { id: 'cases', label: 'Cases', scopes: ['reports_read'] },
   { id: 'leads', label: 'Leads', scopes: ['reports_read'] },
   { id: 'team-performance', label: 'Team performance', scopes: ['reports_read'] },
+  { id: 'sales', label: 'Sales', scopes: ['reports_read'] },
 ] as const;
 
 export type ReportGroupId = (typeof REPORT_GROUPS)[number]['id'];

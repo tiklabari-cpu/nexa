@@ -1279,6 +1279,22 @@ export async function buildGroupCsv(
         ]),
       };
     }
+    case 'sales': {
+      // Same "not configured" contract as the JSON report (buildSalesReport) —
+      // no sales source exists yet (FR-MOD-13.5), so this is the honest empty
+      // skeleton rather than a query the license has no data for. `csvField`
+      // renders every `null` as an empty cell.
+      return {
+        headers: ['metric', 'value'],
+        rows: [
+          ['configured', 'false'],
+          ['tracked_sales', null],
+          ['attributed_revenue_cents', null],
+          ['currency', null],
+          ['conversions', null],
+        ],
+      };
+    }
     default:
       // Unreachable: the route validates the id through reportGroup() first. A
       // throw keeps the switch exhaustive rather than silently emitting an empty
@@ -1759,6 +1775,33 @@ export async function buildLeadsReport(
 }
 
 /**
+ * The Sales report for one window (FR-MOD-07.7, v2 payload; FR-MOD-13.5
+ * dependency). No sales/order model exists in the schema yet (`grep '^model '
+ * schema.prisma` has no Order/Sale/Transaction) — the same honest "not set up"
+ * contract the Reviews report's `ecommerce` block uses (see
+ * buildReviewsReport): `configured` is `false` and every figure `null`, never
+ * a fabricated zero, until FR-MOD-13.5's Sales tracker wires a real source.
+ * `tx`/`licenseId` stay in the signature — unused today, matching every other
+ * builder here — so 13.5 can fill this in without moving the call site or the
+ * `GET /reports/sales` contract.
+ */
+export async function buildSalesReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Record<string, unknown>> {
+  return {
+    range: { from: from.toISOString(), to: to.toISOString() },
+    configured: false,
+    tracked_sales: null,
+    attributed_revenue_cents: null,
+    currency: null,
+    conversions: null,
+  };
+}
+
+/**
  * The Team performance report for one window (FR-MOD-07.7, v2 payload):
  * per-agent KPIs — the Breakdown tab's by-agent chat split, extended with
  * response times, CSAT and transfers (see {@link teamPerformanceByAgent}).
@@ -1904,6 +1947,21 @@ export default async function reportRoutes(
       return reply.send(body);
     },
   );
+
+  // Sales (FR-MOD-07.7, v2 payload; FR-MOD-13.5 dependency): the honest
+  // "not configured" skeleton until the Sales tracker wires a real source (see
+  // buildSalesReport). Same reports_read + withTenant surface as the other
+  // tabs, so the endpoint's permission and range handling never need to change
+  // once 13.5 fills the figures in.
+  app.get('/reports/sales', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
+    const parsed = rangeQuery.safeParse(request.query);
+    if (!parsed.success) throw ApiError.validation('Invalid date range.');
+    const { from, to } = resolveRange(parsed.data);
+    const tenant = request.tenant();
+
+    const body = await request.withTenant((tx) => buildSalesReport(tx, tenant.licenseId, from, to));
+    return reply.send(body);
+  });
 
   // The report groups this caller may see (FR-MOD-07.7 permission-based
   // visibility). Deliberately *not* scope-gated at the route: a token without

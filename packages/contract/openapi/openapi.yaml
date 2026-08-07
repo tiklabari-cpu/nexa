@@ -339,6 +339,8 @@ paths:
     $ref: "./paths/reports.yaml#/leads"
   /reports/team-performance:
     $ref: "./paths/reports.yaml#/teamPerformance"
+  /reports/sales:
+    $ref: "./paths/reports.yaml#/sales"
   /reports/groups:
     $ref: "./paths/reports.yaml#/groups"
   /reports/export:
@@ -2837,6 +2839,43 @@ components:
                 description: |
                   AI→human hand-offs (chat_transferred events) landing on a
                   thread this agent currently holds.
+
+    ReportsSales:
+      type: object
+      description: |
+        The Sales report (FR-MOD-07.7, v2 payload; FR-MOD-13.5 dependency): the
+        same tracked-sales skeleton as the Reviews report's `ecommerce` block,
+        as a report of its own. No sales/order source exists yet, so
+        `configured` is `false` and every figure `null` — an honest "not set
+        up" state, never a fabricated zero, until FR-MOD-13.5's Sales tracker
+        wires a real source.
+      required: [range, configured, tracked_sales, attributed_revenue_cents, currency, conversions]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        configured:
+          type: boolean
+          description: Whether a sales-tracking source is wired. Always false in v1.
+        tracked_sales:
+          type: integer
+          nullable: true
+          description: Attributed orders. Null until configured.
+        attributed_revenue_cents:
+          type: integer
+          nullable: true
+          description: Revenue attributed to supported conversations. Null until configured.
+        currency:
+          type: string
+          nullable: true
+          description: ISO 4217 code for the revenue figure. Null until configured.
+        conversions:
+          type: integer
+          nullable: true
+          description: Conversions attributed to supported conversations. Null until configured.
 
     ReportGroups:
       type: object

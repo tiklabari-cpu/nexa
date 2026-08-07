@@ -300,6 +300,39 @@ teamPerformance:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+sales:
+  get:
+    tags: [Reports]
+    operationId: getReportsSales
+    summary: Sales — tracked-sales skeleton pending the Sales tracker
+    description: |
+      The Sales report (FR-MOD-07.7, v2 payload). Depends on FR-MOD-13.5's Sales
+      tracker, which has no data source wired yet: `configured` is `false` and
+      every figure is `null`, the same honest "not set up" contract the Reviews
+      report's `ecommerce` block uses. Defaults to the last 30 days.
+
+      This is a deliberate skeleton, not a partial implementation — the schema
+      has no order/sale model (FR-MOD-13.5 is out of scope here), so nothing is
+      queried. Once 13.5 lands, this is the single place the figures get filled
+      in; the route, its scope and its response shape do not change.
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: Sales metrics for the requested window (always `configured:false` in v1)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportsSales" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 groups:
   get:
     tags: [Reports]
@@ -343,8 +376,11 @@ export:
       serialises one row per agent —
       `agent_id,name,chats,closed,manual,assisted,automated,avg_first_response_seconds,avg_duration_seconds,csat_good,csat_bad,csat_responses,csat_score,transfers`;
       the two window summaries (`overview`, `ai-agent`) serialise as
-      `metric,value` pairs. Every figure is the same one the group's JSON
-      report exposes, so a download never disagrees with the screen it came from.
+      `metric,value` pairs. `sales` also serialises as `metric,value` pairs, and
+      until FR-MOD-13.5 lands every value but `configured` (`false`) is an empty
+      cell — the honest skeleton, not a query the license has no data for. Every
+      figure is the same one the group's JSON report exposes, so a download
+      never disagrees with the screen it came from.
 
       User-influenced fields (tags, agent names) are neutralised against
       spreadsheet formula injection, and the body is `no-store`: a report is a
@@ -355,7 +391,7 @@ export:
       - name: group
         in: query
         required: true
-        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`."
+        description: "Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`."
         schema: { type: string }
       - name: from
         in: query

@@ -1661,6 +1661,49 @@ describe('reports and billing', () => {
     });
   });
 
+  describe('Sales report (07.7-d)', () => {
+    it('returns the honest not-configured skeleton — every figure null, not zero', async () => {
+      const report = (await server.get('/reports/sales', auth)).json();
+      expect(report.configured).toBe(false);
+      expect(report.tracked_sales).toBeNull();
+      expect(report.attributed_revenue_cents).toBeNull();
+      expect(report.currency).toBeNull();
+      expect(report.conversions).toBeNull();
+    });
+
+    it('stays configured:false for another tenant too — nothing to leak', async () => {
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/reports/sales', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      expect(theirs.configured).toBe(false);
+      expect(theirs.tracked_sales).toBeNull();
+    });
+
+    it('rejects a backwards date range', async () => {
+      const response = await server.get('/reports/sales?from=2026-08-01&to=2026-07-01', auth);
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('requires the reports_read scope', async () => {
+      const scopeless = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      const response = await server.get('/reports/sales', {
+        authorization: `Bearer ${scopeless}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
   // =========================================================================
 
   describe('report groups + CSV export (07.7)', () => {
@@ -1686,6 +1729,7 @@ describe('reports and billing', () => {
           'cases',
           'leads',
           'team-performance',
+          'sales',
         ]);
         expect(groups[0]).toEqual({ id: 'overview', label: 'Overview' });
       });
@@ -2014,6 +2058,25 @@ describe('reports and billing', () => {
         const agentRow = rows.find((line) => line.startsWith(dangerous.id));
 
         expect(agentRow).toMatch(/^[0-9a-f-]+,"'=Acme,Inc",1,1,0,0,1,/);
+      });
+
+      it('exports sales as the same not-configured skeleton — metric/value pairs, null cells empty', async () => {
+        const response = await server.get('/reports/export?group=sales', auth);
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['content-type']).toContain('text/csv');
+        expect(response.headers['content-disposition']).toMatch(
+          /^attachment; filename="nexa-sales-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+        );
+
+        const rows = lines(response.body);
+        expect(rows[0]).toBe('metric,value');
+        expect(rows.slice(1)).toEqual([
+          'configured,false',
+          'tracked_sales,',
+          'attributed_revenue_cents,',
+          'currency,',
+          'conversions,',
+        ]);
       });
 
       it('exports only the caller’s tenant', async () => {

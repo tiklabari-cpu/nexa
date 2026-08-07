@@ -13,6 +13,47 @@
 
 ## Task log (newest-first)
 
+### tm 93.4 — 07.7-d Sales rapor grubu — blocked — 2026-08-07 UTC
+
+- **Yapıldı:** `GET /reports/sales` + `buildSalesReport` — reviews'ün `ecommerce` bloğuyla
+  (`buildReviewsReport`, satır ~1717) birebir aynı `configured:false` dürüst iskelet deseni:
+  `{ range, configured:false, tracked_sales:null, attributed_revenue_cents:null, currency:null,
+  conversions:null }`; 13.5 Sales tracker geldiğinde tek yerden doldurulur. `REPORT_GROUPS`'a
+  `{ id:'sales', label:'Sales', scopes:['reports_read'] }` + `buildGroupCsv` 'sales' case'i
+  (metric/value şekli, null değerler `csvField` ile boş hücre). Kontrat: `paths/reports.yaml`
+  `sales` operation (açıklamasında 13.5 bağımlılığı yazılı) + `openapi.yaml` `/reports/sales` ref
+  + `ReportsSales` şeması + re-bundle + `packages/contract/src/generated/api.ts` regen. Testler
+  yazıldı: `reports-export.test.ts` (katalogda 'sales' + label), `reports-billing.test.ts`
+  "Sales report (07.7-d)" describe bloğu (configured:false + tüm alanlar null — 0 DEĞİL,
+  cross-tenant'ta da aynı sızıntısız `configured:false`, ters aralık 400, `reports_read` scope'suz
+  403) + CSV export testi (metric/value başlığı, null hücreler boş).
+- **Doğrulama:** typecheck `pnpm -w typecheck` 11/11 ✅ · lint `pnpm -w lint` 8/8 ✅ · build
+  `pnpm -w build` 7/7 ✅ (bu oturumda çalıştırıldı, hepsi yeşil). **Integration + tam unit test
+  suite'i (`npx turbo run test --filter='!@nexa/e2e' --concurrency=1`, `pnpm -w test:integration`)
+  bu ortamda ÇALIŞTIRILAMADI** — Docker Desktop daemon'ı ayağa kalkmadı: `docker info`/`docker pull`
+  süresiz hang oluyor (network image pull'u dahil basit `docker info` bile yanıt vermiyor).
+  Denenenler (hiçbiri işe yaramadı): `docker compose up -d` (imaj pull'unda takıldı) ·
+  `osascript -e 'quit app "Docker"'` + `open -a Docker` (GUI süreci hiç spawn olmadı) · tüm
+  Docker süreçlerini `pkill -9` ile durdurup `open -a Docker`/`open -a "Docker Desktop"` ile
+  yeniden başlatma (süreç oluşmadı — muhtemelen bu ortamda `open` için erişilebilir bir GUI/
+  WindowServer oturumu yok) · `com.docker.backend --autostart` binary'sini doğrudan arka planda
+  başlatma (log `"running fork/exec server"` sonrası hiç ilerlemedi, VM/daemon hiç ayağa
+  kalkmadı).
+- **Varsayımlar:** yok.
+- **Sonraki pencereye not:**
+  1. **UYARI:** bu pencere Docker Desktop'ı köklü şekilde durdurmayı denedi (`pkill -9`) ve geri
+     getiremedi. Bir sonraki pencere açıldığında Docker Desktop host'ta muhtemelen KAPALI —
+     `docker info` ile doğrula; kapalıysa GUI'den (fiziksel/insan erişimiyle) elle başlatılması
+     gerekebilir, otonom pencerenin `open -a Docker` çağrısı bu ortamda süreç başlatmıyor.
+  2. Docker ayağa kalktıktan sonra `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` +
+     `pnpm -w test:integration` çalıştırılıp ikisi de yeşilse kapı tamamlanmış olur: yalnız
+     PLAN.md'nin ilgili 07.7/13.5 satırını `✅` + kanıt ile güncellemek ve Task Master'da 93.4'ü
+     `done`'a çekmek kalıyor — kod, kontrat ve testler zaten bu commit'te tam.
+  3. Kod tarafı kapsam olarak tamdır: dosyalar `apps/api/src/routes/reports.ts` ·
+     `apps/api/src/routes/reports-export.ts` · `apps/api/src/routes/reports-export.test.ts` ·
+     `apps/api/test/integration/reports-billing.test.ts` · `packages/contract/openapi/openapi.yaml`
+     · `packages/contract/openapi/paths/reports.yaml` · `packages/contract/src/generated/api.ts`.
+
 ### tm 93.3 — 07.7-c Team performance rapor grubu — ajan bazlı KPI genişletmesi — done — 2026-08-03 UTC
 
 - **Yapıldı:** `teamPerformanceByAgent(tx, licenseId, from, to)` — mevcut breakdown `by_agent` raw

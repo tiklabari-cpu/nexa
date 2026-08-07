@@ -3169,6 +3169,34 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/sales': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Sales — tracked-sales skeleton pending the Sales tracker
+     * @description The Sales report (FR-MOD-07.7, v2 payload). Depends on FR-MOD-13.5's Sales
+     *     tracker, which has no data source wired yet: `configured` is `false` and
+     *     every figure is `null`, the same honest "not set up" contract the Reviews
+     *     report's `ecommerce` block uses. Defaults to the last 30 days.
+     *
+     *     This is a deliberate skeleton, not a partial implementation — the schema
+     *     has no order/sale model (FR-MOD-13.5 is out of scope here), so nothing is
+     *     queried. Once 13.5 lands, this is the single place the figures get filled
+     *     in; the route, its scope and its response shape do not change.
+     */
+    get: operations['getReportsSales'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/groups': {
     parameters: {
       query?: never;
@@ -3219,8 +3247,11 @@ export interface paths {
      *     serialises one row per agent —
      *     `agent_id,name,chats,closed,manual,assisted,automated,avg_first_response_seconds,avg_duration_seconds,csat_good,csat_bad,csat_responses,csat_score,transfers`;
      *     the two window summaries (`overview`, `ai-agent`) serialise as
-     *     `metric,value` pairs. Every figure is the same one the group's JSON
-     *     report exposes, so a download never disagrees with the screen it came from.
+     *     `metric,value` pairs. `sales` also serialises as `metric,value` pairs, and
+     *     until FR-MOD-13.5 lands every value but `configured` (`false`) is an empty
+     *     cell — the honest skeleton, not a query the license has no data for. Every
+     *     figure is the same one the group's JSON report exposes, so a download
+     *     never disagrees with the screen it came from.
      *
      *     User-influenced fields (tags, agent names) are neutralised against
      *     spreadsheet formula injection, and the body is `no-store`: a report is a
@@ -5708,6 +5739,32 @@ export interface components {
          */
         transfers: number;
       }[];
+    };
+    /**
+     * @description The Sales report (FR-MOD-07.7, v2 payload; FR-MOD-13.5 dependency): the
+     *     same tracked-sales skeleton as the Reviews report's `ecommerce` block,
+     *     as a report of its own. No sales/order source exists yet, so
+     *     `configured` is `false` and every figure `null` — an honest "not set
+     *     up" state, never a fabricated zero, until FR-MOD-13.5's Sales tracker
+     *     wires a real source.
+     */
+    ReportsSales: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /** @description Whether a sales-tracking source is wired. Always false in v1. */
+      configured: boolean;
+      /** @description Attributed orders. Null until configured. */
+      tracked_sales: number | null;
+      /** @description Revenue attributed to supported conversations. Null until configured. */
+      attributed_revenue_cents: number | null;
+      /** @description ISO 4217 code for the revenue figure. Null until configured. */
+      currency: string | null;
+      /** @description Conversions attributed to supported conversations. Null until configured. */
+      conversions: number | null;
     };
     /**
      * @description The report groups a caller may see (FR-MOD-07.7 permission-based
@@ -11258,6 +11315,33 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getReportsSales: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sales metrics for the requested window (always `configured:false` in v1) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportsSales'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   getReportGroups: {
     parameters: {
       query?: never;
@@ -11283,7 +11367,7 @@ export interface operations {
   exportReport: {
     parameters: {
       query: {
-        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`. */
+        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`. */
         group: string;
         from?: string;
         to?: string;

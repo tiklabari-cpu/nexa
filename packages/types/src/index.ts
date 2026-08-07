@@ -9,3 +9,4 @@ export * from './ids.js';
 export * from './realtime-bus.js';
 export * from './widget.js';
 export * from './home.js';
+export * from './work-schedule.js';

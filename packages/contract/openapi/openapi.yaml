@@ -2083,6 +2083,43 @@ components:
                   Assignment preference within the team (ADR-08). A full tier is
                   skipped rather than queued behind.
 
+    WorkSchedule:
+      type: object
+      description: |
+        An agent's declared weekly availability (PRD §5.3-Vardiya). One slot per
+        weekday it lists, in `@nexa/types` `WORK_SCHEDULE_DAYS` order; a day with
+        no slot is unscheduled. `enabled` distinguishes a day that is off from a
+        day whose hours have simply not been set. Not yet served by any route —
+        `@nexa/types` `normalizeWorkSchedule` is the single validation gate the
+        eventual endpoint and the settings form both defer to (WORKSCHED-c).
+      required: [timezone, schedule]
+      properties:
+        timezone:
+          type: string
+          description: IANA zone, e.g. "Europe/Istanbul".
+        schedule:
+          type: array
+          items: { $ref: "#/components/schemas/WorkScheduleSlot" }
+
+    WorkScheduleSlot:
+      type: object
+      required: [day, start, end, enabled]
+      properties:
+        day:
+          type: string
+          enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+        start:
+          type: string
+          description: 24h `HH:MM`.
+          example: "09:00"
+        end:
+          type: string
+          description: 24h `HH:MM`.
+          example: "18:00"
+        enabled:
+          type: boolean
+          description: False marks the day off without deleting its configured hours.
+
     UsageSummary:
       type: object
       required: [period, ai_resolutions, api_calls]

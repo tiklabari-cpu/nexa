@@ -5157,6 +5157,35 @@ export interface components {
         priority: 'primary' | 'first' | 'normal' | 'last';
       }[];
     };
+    /**
+     * @description An agent's declared weekly availability (PRD §5.3-Vardiya). One slot per
+     *     weekday it lists, in `@nexa/types` `WORK_SCHEDULE_DAYS` order; a day with
+     *     no slot is unscheduled. `enabled` distinguishes a day that is off from a
+     *     day whose hours have simply not been set. Not yet served by any route —
+     *     `@nexa/types` `normalizeWorkSchedule` is the single validation gate the
+     *     eventual endpoint and the settings form both defer to (WORKSCHED-c).
+     */
+    WorkSchedule: {
+      /** @description IANA zone, e.g. "Europe/Istanbul". */
+      timezone: string;
+      schedule: components['schemas']['WorkScheduleSlot'][];
+    };
+    WorkScheduleSlot: {
+      /** @enum {string} */
+      day: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+      /**
+       * @description 24h `HH:MM`.
+       * @example 09:00
+       */
+      start: string;
+      /**
+       * @description 24h `HH:MM`.
+       * @example 18:00
+       */
+      end: string;
+      /** @description False marks the day off without deleting its configured hours. */
+      enabled: boolean;
+    };
     UsageSummary: {
       /** @description `yyyymm`. */
       period: string;

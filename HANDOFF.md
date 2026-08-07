@@ -13,6 +13,48 @@
 
 ## Task log (newest-first)
 
+### tm 77.1 — WORKSCHED-a Work schedule kontratı + @nexa/types haftalık plan tipi ve normalizer — done — 2026-08-07 UTC
+
+- **Yapıldı:** Kontrat-öncesi tip katmanı, çalışan kod/route YOK (kapsamın kendisi öyle tanımlı).
+  1. `@nexa/types` `packages/types/src/work-schedule.ts` — `WORK_SCHEDULE_DAYS` (7 gün hafta
+     sırasıyla) · `WorkScheduleSlot`/`WorkSchedule` · `WORK_SCHEDULE_TIME_PATTERN`
+     (`^([01]\d|2[0-3]):[0-5]\d$`, zero-padded 24h) · `DEFAULT_WORK_SCHEDULE` (Pzt-Cuma
+     09:00-18:00 etkin, haftasonu kapalı) · `normalizeWorkSchedule()` — bilinmeyen gün/gün
+     tekrarı/geçersiz saat/`start>=end` reddi (`{problem}` union, `custom-fields.ts`'in
+     `{problem}` deseni), boş/null girdi → `DEFAULT_WORK_SCHEDULE`. `index.ts`'e export edildi.
+  2. Kontrat: `openapi.yaml` `components.schemas`'a `WorkSchedule`/`WorkScheduleSlot` eklendi;
+     `paths/agents.yaml`'a `workSchedule` (GET+PUT `/agents/{agentId}/work-schedule`) bloğu
+     eklendi — **ama bilinçli olarak kökteki `paths:` haritasına bağlanmadı.** Sunucuda
+     karşılığı olmayan bir operasyon `contract-parity.test.ts`'i "documented but not served"
+     ile kırar; aynı erteleme daha önce 08.8.3-b'nin tool-call ucunda uygulanmıştı (bu dosyada
+     yukarıda, "dokümante EDİLMEDİ" notu). WORKSCHED-c route'u eklerken aynı pencerede
+     `paths:`'e de bağlayacak.
+  3. `pnpm --filter @nexa/contract generate` ile re-bundle (140 path, DEĞİŞMEDİ — beklenen,
+     yeni path yok) + `src/generated/api.ts` regen (`WorkSchedule`/`WorkScheduleSlot` tipleri
+     `components["schemas"]` altında, path'siz de üretiliyor).
+- **Doğrulama:** DoD tam yeşil — `pnpm -w typecheck` ✓ (8 paket) · `pnpm -w lint` ✓ ·
+  `pnpm -w build` ✓ (140 path bundle DEĞİŞMEDİ) · `npx turbo run test --filter='!@nexa/e2e'
+  --concurrency=1` ✓ — `@nexa/types` yeni `work-schedule.test.ts` **11/11** (negatif önce:
+  geçersiz HH:MM ×3, start>=end ×2, bilinmeyen gün, gün tekrarı; sonra boş/null→default ×3,
+  tam-hafta pozitif ×2) · `@nexa/api` integration **1554/1554** (79 dosya) —
+  `contract-parity.test.ts` **5/5 DEĞİŞMEDİ** (workSchedule bloğu `paths:`'e bağlanmadığı için
+  "documented but not served" tetiklenmedi; bundle'da `WorkSchedule`/`WorkScheduleSlot` şeması
+  VAR, `work-schedule` path'i YOK — doğrulandı). e2e KAPSAM DIŞI (test stratejisi böyle: çalışan
+  endpoint yok, cross-tenant WORKSCHED-b/-c'de).
+- **Varsayımlar:** (1) `normalizeWorkSchedule` girdiyi `unknown` kabul eder (ağdan gelen gövde
+  güvenilmez varsayımıyla — `widget.ts`'in `Partial<T>` imzasından daha savunmacı); bilinen
+  günlerin **alt kümesi** geçerlidir, tam 7 gün zorunlu değildir (task test stratejisi yalnız
+  "7 günlük tam plan normalize edilir" diyor, kısmi seti reddet demiyor). (2) `enabled` alanı
+  `true` değilse sessizce `false`'a çevrilir (reddedilmez) — yalnız gün/saat alanları "reddedici"
+  (KK metni de yalnız "saat/gün" reddini adlandırıyor). (3) `DEFAULT_WORK_SCHEDULE.timezone`
+  `'UTC'` (PRD/v2-03'te varsayılan belirtilmiyor).
+- **Sonraki pencereye not:** `WORKSCHED-b` (77.2) sırada — `work_schedules` +
+  `agent_presence_events` tabloları + Prisma modelleri + RLS migration, `WORKSCHED-a`'nın
+  şeması bire bir hedef. `WORKSCHED-c` (77.3) route'u eklerken `paths/agents.yaml#/workSchedule`
+  bloğunu **aynı pencerede** kökteki `paths:` haritasına bağlamalı (yoksa iki ayrı pencerede
+  yapmak contract-parity'yi kırar — bu notun kendisi o riski hatırlatmak için). PLAN.md §5.2
+  `§5.3-Vardiya` satırı `⬜`→`◐` (Faz-2 özet sayacı 13⬜/1◐→12⬜/2◐, iki yerde senkron edildi).
+
 ### tm 77.10 — WORKSCHED-j uçtan uca doğrulama — blocked (3. tur, değişmedi) — 2026-08-07 UTC
 
 > Üçüncü kez seçildi, üçüncü kez aynı sonuç. Aşağıdaki 2. tur notu hâlâ **birebir geçerli** —

@@ -13,6 +13,55 @@
 
 ## Task log (newest-first)
 
+### tm 93.4 — 07.7-d Sales rapor grubu — done — 2026-08-07 UTC
+
+> Bir alttaki (ve HANDOFF'ta ayrıca `blocked` olarak duran) notun kapanışı. Kod iki pencere
+> önce zaten tamdı; bloke eden tek şey DB'ye bağlı kapıları koşturacak Postgres/Redis'in
+> olmamasıydı. tm 93.6'nın kurduğu yerel Postgres 17 + Redis ortamı hâlâ ayaktaydı, bu pencere
+> onu kullanarak **kapının tamamını yeşile çevirdi** — yeni ürün kodu yazılmadı.
+
+- **Yapıldı (bu pencere):** Kod değişikliği YOK — `c1c1ad7`'deki `GET /reports/sales` +
+  `buildSalesReport` olduğu gibi doğrulandı. Yapılan iş:
+  - Postgres 17 (`localhost:5433`) + Redis (`localhost:6380`) süreçleri zaten ayaktaydı (`pg_isready`
+    + `redis-cli ping` ile doğrulandı) — yeniden kurulum gerekmedi.
+  - Tam DoD kapısı ön planda, exit code'la koşuldu.
+  - `pnpm -w test:e2e` ilk denemede RTM webServer'ı `Invalid environment: DATABASE_URL/REDIS_URL/
+    JWT_SIGNING_KEY/CUSTOMER_TOKEN_SECRET: Required` ile patladı — **kod hatası değil, bu ortamın
+    footgun'u:** `apps/api/src/index.ts` başlarken kökteki `.env`'i `loadEnvFile()` ile kendi okur,
+    ama `apps/rtm/src/index.ts` bunu YAPMAZ; Playwright'ın `webServer` girdileri `cwd:'../..'` ile
+    `pnpm --filter @nexa/rtm dev`'i çağırdığında süreç yalnız çağıran shell'in `process.env`'ini
+    miras alır. Çözüm kod değişikliği DEĞİL — `.env`'i `set -a && source .env && set +a` ile aynı
+    komut satırında export edip `pnpm -w test:e2e`'yi o shell'den çalıştırmak (harness'ın Bash
+    tool'u komutlar arası shell state'i korumadığı için `source` ve `test:e2e` TEK komutta
+    birleştirildi). Sonraki pencere aynı footgun'a düşerse: RTM `.env` okumuyor, önce export et.
+- **Doğrulama — DoD kapısı TAM YEŞİL (hepsi ön planda, exit code'la):**
+  `pnpm -w typecheck` **11/11 exit 0** · `pnpm -w lint` **8/8 exit 0** ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` **10/10 exit 0** (`@nexa/api`
+  **1554/1554**) · `pnpm -w test:integration` **5/5 exit 0, 1206/1206** (`tenant-isolation.test.ts`
+  32/32 + `contract-parity` 5/5 dahil) · `pnpm -w build` **7/7 exit 0** ·
+  `pnpm -w test:e2e` **74/74 exit 0** (`reports.spec.ts` "opens the Reviews tab ... and the sales
+  skeleton (07.8)" dahil). Ayrıca `reports-billing.test.ts` "Sales report (07.7-d)" describe bloğu
+  tek başına da doğrulandı: `npx vitest run test/integration/reports-billing.test.ts` → 133/133,
+  içinde 4 Sales testi (configured:false + tüm alanlar null-not-zero · cross-tenant sızıntısız ·
+  ters aralık 400 · scope'suz 403) + CSV export testi (metric/value başlığı, null hücreler boş).
+- **KK doğrulaması (task'ın kendi kabul kriteri):** "İzin bazlı görünürlük" — `reports-export.test.ts`
+  katalogda 'sales' + yetkisiz scope'ta görünmez. "export" — `?group=sales` CSV 200, metric/value
+  başlığı, null alanlar boş hücre.
+- **Varsayımlar:** yok.
+- **Sonraki pencereye not:**
+  1. **07.7'nin v2 payı artık 5/12 alt-görev done** (a, b, c, d, f) — kalan 7: e (benchmark), g (PDF
+     export rotası), h (Save view), i/j (UI sekmeleri), k (export butonu), l (uçtan uca doğrulama).
+     PLAN.md §5.2.4'teki 07.7 hücresi bu pencerede güncellendi (◐ kaldı — hâlâ tamamlanmadı).
+  2. **`main`'e MERGE EDİLDİ bu pencerede** — hem 93.4 hem 93.6 artık `done` ve DoD yeşil, önceki
+     pencerenin bıraktığı "93.4 kapıdan geçince dal bütün olarak main'e merge edilsin" notu
+     uygulandı. `feat/reports-pdf-serializer` `main`'e fast-forward/no-ff ile birleşti (force yok,
+     history rewrite yok); ayrıntı için `git log`.
+  3. Ortam hâlâ ayakta ve kalıcı (bkz. tm 93.6 notu satır 58-63) — Docker'a gerek yok.
+  4. Bu task'a ait OLMAYAN, önceden var olan kirli dosya `run-loop.sh` hâlâ commit'lenmemiş —
+     bilerek dokunulmadı (93.6 emsali, ayrı bir işin parçası).
+  5. `apps/e2e/kanit/*.png` kanıt görselleri e2e koşusunun normal çıktısı olarak yenilendi — bu
+     commit'e dahil (93.6 emsali).
+
 ### tm 93.6 — 07.7-f Deterministik, bağımlılıksız PDF serializer — done — 2026-08-07 UTC
 
 > Bir alttaki `blocked` notunun kapanışı. Kod o pencerede zaten tamdı; bloke eden tek şey

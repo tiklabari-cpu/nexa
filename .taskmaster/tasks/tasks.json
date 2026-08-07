@@ -3161,12 +3161,12 @@
             "description": "(1) Olay yazımı: routingStatus değişiminde (agents.ts PUT /agents/me/routing-status) ve suspend/unsuspend'de `agent_presence_events`'e append — drainQueue ile AYNI withTenant transaction'ı içinde (atama geri alınırsa olay da geri alınır); aynı duruma tekrar PUT idempotent (yeni olay yazılmaz). (2) `presence-coverage.ts`: olay günlüğünden [from,to] aralığı için ajan × saat online-dakika kapsaması t",
             "details": "WORKSCHED-d — Presence olay günlüğü yazma yolu + planlı vardiya ↔ manuel routingStatus öncelik kuralı (bölünmez çekirdek)  [OPUS-MAX]\n\nPRD: §5.3-Vardiya (WORKSCHED) + NFR-R3 (tutarlılık), NFR-S4 (izolasyon), NFR-M2 (izlenebilirlik)\nETİKET GEREKÇESİ: OPUS-MAX: (1) EŞZAMANLILIK/TRANSACTION-INVARIANT — yazma noktası PUT /agents/me/routing-status handler'ı, aynı withTenant bloğunda routing.drainQueue çağırıyor (agents.ts:74) ve atamaları RTM'e publish ediyor; olay yazımı bu atomik bloktan koparılırsa kısmi durum oluşur → koşul 3 ihlali. (2) Planlı vardiya ile manuel durum arasındaki öncelik kararı yanlışsa ajan kuyruktan sohbet alır/almaz — yanlış kararın pahalı olduğu yüzey. (3) Yeni tenant tablosuna yazma → koşul 2 ihlali. Çekirdek bağlam bölününce güvenlik/eşzamanlılık akıl yürütmesi kaybolur → tek alt-görev.\nNEDEN AÇIK: AgentMembership.routingStatus (schema.prisma:131, default 'offline') yalnız ANLIK durum; tüketicilerinin hepsi 'şu an'ı okuyor — customer.ts:167, home-service.ts:117, chat-service.ts:936/956/959. Tarihsel presence (geçmiş online/offline aralıkları) hiçbir tabloda loglanmıyor; orkestratörün bağlayıcı 'geçmiş hacim + presence verisinden deterministik hesap' kararı bu veri üretilmeden karşılanamaz. Ayrıca agents.ts:74'teki `status === 'accepting_chats' ? routing.drainQueue(...)` satırı durum değişiminin kuyruk boşaltan yan etkisi olduğunu koda karşı gösteriyor.\nKAPSAM: (1) Olay yazımı: routingStatus değişiminde (agents.ts PUT /agents/me/routing-status) ve suspend/unsuspend'de `agent_presence_events`'e append — drainQueue ile AYNI withTenant transaction'ı içinde (atama geri alınırsa olay da geri alınır); aynı duruma tekrar PUT idempotent (yeni olay yazılmaz). (2) `presence-coverage.ts`: olay günlüğünden [from,to] aralığı için ajan × saat online-dakika kapsaması türetir; hiç olay yoksa 0 DEĞİL `null` (reports-metrics.ts'in null-when-empty felsefesi). (3) ÖNCELİK KURALI: manuel routingStatus HER ZAMAN planlı vardiyayı ezer; WorkSchedule routing/atama kararını DEĞİŞTİRMEZ (yalnız beklenen kapasite girdisi). ADR-08 atama sırası ve mevcut drainQueue davranışı korunur; kural testle sabitlenir ve §C varsayımı olarak yazılır.\nDOSYALAR: apps/api/src/routes/agents.ts · apps/api/src/services/staffing/presence-coverage.ts · apps/api/src/services/staffing/presence-coverage.test.ts · apps/api/test/integration/presence-log.test.ts · apps/api/test/integration/routing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/agents.ts · apps/api/test/integration/routing.test.ts · apps/api/src/routes/reports-metrics.ts\nKK (birebir): \"| Ekip/Vardiya | Work scheduler / staffing prediction |\" | \"KK-türetilmiş: \"Ajanın uygunluk durumundaki her değişiklik zaman damgalı olarak kaydedilir; planlı vardiya bu anlık durumu ezmez — ajan manuel olarak offline ise vardiyada olsa bile kuyruktan sohbet almaz.\" — Türetme gerekçesi: PRD §5.3 satır 412'de KK sütunu yok ve §6'da satır yok; kural, orkestratörün 'presence verisinden deterministik hesap' kapsam kararı ile depodaki mevcut davranış (agents.ts:74 — drainQueue yalnız accepting_chats'te) çakıştırılarak türetildi. Destek: rapor-1-fonksiyonel.md:573 — \"➕ Vardiya devri, denetim ve raporlama için büyük zaman tasarrufu.\"\"\nKK DOĞRULAMA: presence-log.test.ts'teki 'manuel offline → vardiyada olsa da atama yok' testi KK-türetilmiş ikinci cümleyi kanıtlar; 'durum geçişi → tam 1 olay, tekrar PUT → 0 yeni olay' testi birinci cümleyi kanıtlar; routing.test.ts'in yeşil kalması ADR-08 atama sırasının değişmediğini kanıtlar.\nKAPSAM DIŞI: Tahmin aritmetiği (WORKSCHED-f) · Endpoint (WORKSCHED-g) · UI (WORKSCHED-h/-i) · Vardiya başında otomatik accepting_chats'e geçirme — AÇIKÇA YAPILMAZ (açık soru 3) · ADR-08 atama algoritmasının kendisi değişmez\nSÖZLEŞME: yok — mevcut PUT /agents/me/routing-status yanıtı ({routing_status, assigned_from_queue}) değişmez. YENİ ApiError TİPİ AÇILMAZ: çatışma hata değil karardır (manuel kazanır) → errors.ts (×2 yer) + scopes.test.ts sayacı + openapi enum + regen zinciri TETİKLENMEZ.\nMIGRATION: yok (tablolar WORKSCHED-b'de açıldı)\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration NEGATİF (ÖNCE): planlı vardiya içinde ama routingStatus='offline' olan ajana drainQueue atama YAPMAZ · unit NEGATİF: hiç presence olayı yokken kapsama 0 değil `null` döner · integration EŞZAMANLILIK: transaction hatası enjekte edildiğinde hem durum güncellemesi hem olay geri alınır (kısmi yazma yok) · integration CROSS-TENANT: lisans B, lisans A'nın presence olaylarını okuyamaz / kapsamasında göremez · integration pozitif: her durum geçişi tam 1 olay yazar; aynı duruma tekrar PUT idempotenttir · unit pozitif: bilinen olay dizisinde ajan × saat kapsama dakikaları beklenen değerleri verir · regresyon: routing.test.ts + agents-suspension.test.ts yeşil",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               2
             ],
             "parentId": "77",
-            "updatedAt": "2026-08-07T23:12:18.932Z"
+            "updatedAt": "2026-08-07T23:48:04.743Z"
           },
           {
             "id": 5,
@@ -3251,7 +3251,7 @@
             "updatedAt": "2026-08-07T20:20:22.155Z"
           }
         ],
-        "updatedAt": "2026-08-07T23:12:18.932Z"
+        "updatedAt": "2026-08-07T23:48:04.743Z"
       },
       {
         "id": "78",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-07T23:12:18.932Z",
+      "lastModified": "2026-08-07T23:48:04.744Z",
       "taskCount": 101,
       "completedCount": 80,
       "tags": [

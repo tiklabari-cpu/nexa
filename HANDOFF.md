@@ -13,6 +13,62 @@
 
 ## Task log (newest-first)
 
+### tm 77.2 — WORKSCHED-b work_schedules + agent_presence_events tabloları, Prisma modelleri ve RLS migration'ı — done — 2026-08-07 UTC
+
+- **Yapıldı:** Tek migration, iki tablo, veri yazılmaz — yazan kod yolu (-c route, -d presence
+  günlüğü) hâlâ yok, kapsam öyle tanımlı.
+  1. `apps/api/prisma/migrations/20260807090000_work_scheduler/migration.sql` —
+     `work_schedules` (PK `(license_id, agent_id)` = agent_memberships deseni, `timezone` TEXT
+     DEFAULT `'UTC'`, `schedule` JSONB, `updated_at`) ve append-only `agent_presence_events`
+     (`id` UUID PK, `status`, `changed_at`, index `(license_id, agent_id, changed_at)` =
+     webhook_deliveries deseni). FK'ler `licenses(id)` + `accounts(id)` ON DELETE CASCADE.
+     İkisinde de `ENABLE ROW LEVEL SECURITY` + `<tablo>_tenant` policy (USING + WITH CHECK =
+     `nexa_current_license()`) + `GRANT SELECT, INSERT, UPDATE, DELETE … TO nexa_app`.
+  2. İki CHECK, ikisi de depoda mevcut desenin tekrarı: `work_schedules_schedule_is_array_check`
+     (`jsonb_typeof(schedule) = 'array'` — `skills_steps_is_array_check`'in eşi; slot-içi kurallar
+     `normalizeWorkSchedule()`'de kalır) · `agent_presence_events_status_check` (3 routing
+     statüsü — `agent_memberships_routing_status_check`'in birebir aynısı; tanınmayan statüyü
+     "müsait" sayan bir tahmin, kapsamı fazla raporlar).
+  3. Prisma modelleri `WorkSchedule` + `AgentPresenceEvent` (schema.prisma 41→43 model) +
+     `License`/`Account` ters ilişkileri. Yapısal DDL **birebir** `prisma migrate diff` çıktısı;
+     CHECK/RLS/GRANT elle eklendi (Prisma bunları göremez) — `pnpm db:check-drift` exit 0.
+- **Doğrulama:** DoD tam yeşil, hepsi exit code ile — `pnpm -w typecheck` **0** · `pnpm -w lint`
+  **0** · `pnpm -w build` **0** · `npx turbo run test --filter='!@nexa/e2e' --concurrency=1`
+  **10/10 exit 0** (`@nexa/api` **1567/1567**, 1554'ten +13) · `pnpm -w test:integration` **exit 0**
+  (`@nexa/api` 1219/56 dosya · `@nexa/rtm` 51) · `pnpm -w test:e2e` **74/74 exit 0** ·
+  `pnpm db:check-drift` **0**. Yeni test: `tenant-isolation.test.ts` **+6** (test stratejisinin
+  sırasıyla — ÖNCE çapraz-tenant okuma, sonra bileşik anahtarla IDOR, sonra WITH CHECK her iki
+  tabloda AYRI AYRI, sonra updateMany/deleteMany 0 satır + hayatta kalan satırın doğrulanması) ·
+  `data-model.test.ts` **+7** (RLS enabled + policy adı, index tanımı, iki CHECK, lisans-başına-tek-plan
+  + aynı ajanın farklı lisansta ayrı planı, Prisma round-trip + timezone default, lisans cascade).
+- **Varsayımlar:** (1) **Migration adı `20260807090000_work_scheduler`** — task `DOSYALAR`
+  satırı `20260801090000` diyordu, ama depoda `20260802*`/`20260803*` migration'ları ZATEN
+  uygulanmış; daha erken damgalı bir migration sıra-dışı (out-of-order) duruma düşerdi. Bugünün
+  damgası kullanıldı. (2) `agent_presence_events` audit_log gibi `REVOKE UPDATE, DELETE`
+  ALMADI — task kapsamı her iki tablo için tam CRUD GRANT yazıyor ve retention/temizlik politikası
+  açıkça kapsam dışı (açık soru 5); şimdi kısıtlamak, sonraki pencereyi audit_log'daki gibi bir
+  SECURITY DEFINER fonksiyonuna mecbur bırakırdı. "Append-only" burada yazma disiplini (-d), tamper
+  koruması değil. (3) `timezone` DEFAULT `'UTC'` — `DEFAULT_WORK_SCHEDULE.timezone` ile birebir.
+  (4) `work_schedules`'a `@@index([agentId])` eklendi (agent_memberships/agent_expertise ile aynı):
+  FK'nin indekssiz kalması hesap silmeyi seq scan yapardı.
+- **Sonraki pencereye not:**
+  1. **WORKSCHED-c** artık açık: route + `paths/agents.yaml`'daki `workSchedule` bloğunu kökteki
+     `paths:` haritasına bağlama işi AYNI pencerede yapılmalı (WORKSCHED-a bunu bilerek erteledi —
+     bağlanmamış operasyon `contract-parity.test.ts`'i "documented but not served" ile kırar).
+  2. **e2e suite'i tekrar koşumda idempotent DEĞİL** — bu pencerede fark edildi. `global-setup.ts`
+     yalnız `pnpm db:seed` çağırır ve seed **idempotent** olduğu için hiçbir şeyi silmez; önceki
+     e2e koşusunun mutasyonları (ban, isim düzenleme) ile integration suite'inin TRUNCATE'i üst
+     üste binince `customers.spec.ts`/`skills-routing.spec.ts` **veri yüzünden** kırmızı olur
+     (bu pencerede önce 1, sonra 4 farklı test — koşudan koşuya değişen küme = state kirliliği,
+     kod hatası değil). Çözüm: e2e'den ÖNCE tabloları TRUNCATE et, sonra koş → **74/74**.
+     `pnpm db:reset` bir seçenek DEĞİL: Prisma CLI, AI ajanının `migrate reset` çağırmasını
+     kullanıcının açık onayı olmadan reddediyor (ve MASTER-PROMPT "DB drop YOK" diyor).
+     Bunu kalıcı çözmek ayrı bir task'tır (global-setup'a TRUNCATE eklemek) — bu pencerede
+     kapsam dışı bırakıldı.
+  3. `run-loop.sh` bu pencereye **zaten değişmiş (uncommitted)** geldi — döngü altyapısı,
+     bu task'ın kapsamı değil; CONVENTIONS §5 gereği commit'e DAHİL EDİLMEDİ, çalışma alanında
+     duruyor. Sahibi olan pencere commit'lemeli.
+
 ### tm 77.1 — WORKSCHED-a Work schedule kontratı + @nexa/types haftalık plan tipi ve normalizer — done — 2026-08-07 UTC
 
 - **Yapıldı:** Kontrat-öncesi tip katmanı, çalışan kod/route YOK (kapsamın kendisi öyle tanımlı).

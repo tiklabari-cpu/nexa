@@ -11,7 +11,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId, buildEventId } from '@nexa/types';
+import { generateShortId, buildEventId, DEFAULT_WORK_SCHEDULE } from '@nexa/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 
@@ -602,6 +602,158 @@ describe('data model invariants', () => {
         where: { licenseId: fx.a.licenseId, expertiseId: area.id },
       });
       expect(orphans).toBe(0);
+    });
+  });
+
+  // =========================================================================
+  // Work scheduler (staffing — PRD §5.3-Vardiya)
+  // =========================================================================
+
+  describe('work scheduler', () => {
+    /** The plan `normalizeWorkSchedule` produces for a single working Monday. */
+    const oneDay = [{ day: 'monday', start: '09:00', end: '18:00', enabled: true }];
+
+    it('has RLS enabled and a tenant policy on both tables', async () => {
+      // The KK-derived isolation clause for WORKSCHED-b: the tables exist, are
+      // protected, and carry a policy. Asserted here by name so a regression
+      // points straight at this slice rather than at the bulk sweep.
+      const security = await owner.$queryRaw<Array<{ relname: string; enabled: boolean }>>`
+        SELECT relname, relrowsecurity AS enabled FROM pg_class
+        WHERE relname IN ('work_schedules', 'agent_presence_events')
+        ORDER BY relname
+      `;
+      expect(security).toEqual([
+        { relname: 'agent_presence_events', enabled: true },
+        { relname: 'work_schedules', enabled: true },
+      ]);
+
+      const policies = await owner.$queryRaw<Array<{ tablename: string; policyname: string }>>`
+        SELECT tablename, policyname FROM pg_policies
+        WHERE tablename IN ('work_schedules', 'agent_presence_events')
+        ORDER BY tablename
+      `;
+      expect(policies).toEqual([
+        { tablename: 'agent_presence_events', policyname: 'agent_presence_events_tenant' },
+        { tablename: 'work_schedules', policyname: 'work_schedules_tenant' },
+      ]);
+    });
+
+    it('indexes presence history by license, agent and time', async () => {
+      // Every reader of this table asks the same question — one agent's
+      // transitions inside one workspace over a window. Without the index that
+      // becomes a sequential scan over an append-only log that only ever grows,
+      // so the forecast gets slower every day it runs.
+      const [index] = await owner.$queryRaw<Array<{ indexdef: string }>>`
+        SELECT indexdef FROM pg_indexes
+        WHERE tablename = 'agent_presence_events'
+          AND indexname = 'agent_presence_events_license_id_agent_id_changed_at_idx'
+      `;
+      expect(index?.indexdef).toMatch(/license_id.*agent_id.*changed_at/s);
+    });
+
+    it('refuses a schedule that is not a JSON array', async () => {
+      // A `{"monday": …}` object would pass Prisma's `Json` type and only fail
+      // later, inside whichever reader called `.map()` on it.
+      await expect(
+        owner.$executeRaw`
+          INSERT INTO work_schedules (license_id, agent_id, timezone, schedule, updated_at)
+          VALUES (${fx.a.licenseId}, ${fx.a.agentAccountId}::uuid, 'UTC',
+                  '{"monday":"09:00"}'::jsonb, now())
+        `,
+      ).rejects.toThrow(/work_schedules_schedule_is_array_check/i);
+    });
+
+    it('refuses a presence status outside the routing domain', async () => {
+      // The forecast counts statuses. An unrecognised one would either be
+      // dropped or, worse, counted as available — over-reporting coverage.
+      await expect(
+        owner.agentPresenceEvent.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            agentId: fx.a.agentAccountId,
+            status: 'on_holiday',
+          },
+        }),
+      ).rejects.toThrow(/agent_presence_events_status_check/i);
+
+      for (const status of ['accepting_chats', 'not_accepting_chats', 'offline']) {
+        await expect(
+          owner.agentPresenceEvent.create({
+            data: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId, status },
+          }),
+        ).resolves.toBeDefined();
+      }
+    });
+
+    it('holds one plan per agent per license, and lets the same agent differ across licenses', async () => {
+      // The key is (license, agent) like agent_memberships: an agent working in
+      // two workspaces is rostered independently in each, but cannot have two
+      // conflicting plans in the same one.
+      await owner.workSchedule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          agentId: fx.a.agentAccountId,
+          timezone: 'Europe/Istanbul',
+          schedule: oneDay,
+        },
+      });
+      await expect(
+        owner.workSchedule.create({
+          data: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId, schedule: oneDay },
+        }),
+      ).rejects.toThrow(/unique constraint/i);
+
+      // The same account, rostered under the other license: a different row.
+      await owner.agentMembership.create({
+        data: { licenseId: fx.b.licenseId, agentId: fx.a.agentAccountId, role: 'agent' },
+      });
+      await expect(
+        owner.workSchedule.create({
+          data: {
+            licenseId: fx.b.licenseId,
+            agentId: fx.a.agentAccountId,
+            timezone: 'Europe/Berlin',
+            schedule: oneDay,
+          },
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('round-trips a plan through Prisma with the timezone default applied', async () => {
+      // The happy path, last: the models are usable and the column default
+      // matches DEFAULT_WORK_SCHEDULE.timezone value-for-value.
+      const saved = await owner.workSchedule.create({
+        data: { licenseId: fx.a.licenseId, agentId: fx.a.ownerAccountId, schedule: oneDay },
+      });
+      expect(saved.timezone).toBe(DEFAULT_WORK_SCHEDULE.timezone);
+      expect(saved.schedule).toEqual(oneDay);
+
+      const event = await owner.agentPresenceEvent.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          agentId: fx.a.ownerAccountId,
+          status: 'accepting_chats',
+        },
+      });
+      expect(event.changedAt).toBeInstanceOf(Date);
+    });
+
+    it('takes rosters and presence history with the license (onDelete cascade)', async () => {
+      // Both tables are tenant data: erasing a workspace must not leave its
+      // agents' working patterns behind (NFR-C9).
+      await owner.workSchedule.create({
+        data: { licenseId: fx.b.licenseId, agentId: fx.b.agentAccountId, schedule: oneDay },
+      });
+      await owner.agentPresenceEvent.create({
+        data: { licenseId: fx.b.licenseId, agentId: fx.b.agentAccountId, status: 'offline' },
+      });
+
+      await owner.license.delete({ where: { id: fx.b.licenseId } });
+
+      expect(await owner.workSchedule.count({ where: { licenseId: fx.b.licenseId } })).toBe(0);
+      expect(await owner.agentPresenceEvent.count({ where: { licenseId: fx.b.licenseId } })).toBe(
+        0,
+      );
     });
   });
 

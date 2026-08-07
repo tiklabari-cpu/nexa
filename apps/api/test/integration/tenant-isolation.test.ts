@@ -450,6 +450,167 @@ describe('tenant isolation (RLS)', () => {
     });
   });
 
+  describe('work scheduler (PRD §5.3-Vardiya) — roster and presence isolation', () => {
+    // work_schedules and agent_presence_events both carry a license_id, so the
+    // policy is the plain license match. What is behind it is a workspace's
+    // internal operating detail: who is rostered when, and who was actually at
+    // their desk. A leak here hands one company its competitor's staffing
+    // levels and its agents' working patterns — and, because the forecast
+    // (WORKSCHED-g) reads both tables, a cross-tenant row would also silently
+    // corrupt the coverage numbers the other workspace plans against.
+    beforeAll(async () => {
+      // Seeded as the owner, which is not subject to RLS.
+      await owner.workSchedule.createMany({
+        data: [
+          {
+            licenseId: fixtures.a.licenseId,
+            agentId: fixtures.a.agentAccountId,
+            timezone: 'Europe/Istanbul',
+            schedule: [{ day: 'monday', start: '09:00', end: '18:00', enabled: true }],
+          },
+          {
+            licenseId: fixtures.b.licenseId,
+            agentId: fixtures.b.agentAccountId,
+            timezone: 'Europe/Berlin',
+            schedule: [{ day: 'monday', start: '10:00', end: '19:00', enabled: true }],
+          },
+        ],
+      });
+      await owner.agentPresenceEvent.createMany({
+        data: [
+          {
+            licenseId: fixtures.a.licenseId,
+            agentId: fixtures.a.agentAccountId,
+            status: 'accepting_chats',
+          },
+          {
+            licenseId: fixtures.b.licenseId,
+            agentId: fixtures.b.agentAccountId,
+            status: 'offline',
+          },
+        ],
+      });
+    });
+
+    afterAll(async () => {
+      await owner.agentPresenceEvent.deleteMany({});
+      await owner.workSchedule.deleteMany({});
+    });
+
+    it("cannot read another license's roster", async () => {
+      const rows = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.workSchedule.findMany({ select: { licenseId: true, timezone: true } }),
+      );
+      expect(rows).toEqual([{ licenseId: fixtures.a.licenseId, timezone: 'Europe/Istanbul' }]);
+    });
+
+    it('cannot fetch a tenant B work schedule by its exact key', async () => {
+      // Correct SQL, and the row is really there — RLS is the only reason it
+      // comes back empty. The shape of an IDOR against `GET
+      // /agents/{agentId}/work-schedule` (WORKSCHED-c), which will look the row
+      // up by exactly this composite key.
+      const found = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) =>
+          tx.workSchedule.findUnique({
+            where: {
+              licenseId_agentId: {
+                licenseId: fixtures.b.licenseId,
+                agentId: fixtures.b.agentAccountId,
+              },
+            },
+          }),
+      );
+      expect(found).toBeNull();
+    });
+
+    it("cannot read another license's presence history", async () => {
+      const rows = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.agentPresenceEvent.findMany({ select: { licenseId: true, status: true } }),
+      );
+      expect(rows).toEqual([{ licenseId: fixtures.a.licenseId, status: 'accepting_chats' }]);
+    });
+
+    it('cannot plant a work schedule for tenant B (WITH CHECK)', async () => {
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.workSchedule.create({
+              data: {
+                licenseId: fixtures.b.licenseId,
+                agentId: fixtures.b.ownerAccountId,
+                timezone: 'UTC',
+                schedule: [{ day: 'sunday', start: '00:00', end: '23:59', enabled: true }],
+              },
+            }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it('cannot plant a presence event for tenant B (WITH CHECK)', async () => {
+      // Forging presence history is how a cross-tenant writer would move the
+      // other workspace's forecast: enough fabricated `offline` rows and it
+      // under-reports its own coverage.
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.agentPresenceEvent.create({
+              data: {
+                licenseId: fixtures.b.licenseId,
+                agentId: fixtures.b.ownerAccountId,
+                status: 'offline',
+              },
+            }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it("cannot overwrite or delete tenant B's roster", async () => {
+      // updateMany/deleteMany do not error under RLS — they silently match
+      // nothing. Asserting the count *and* the surviving row is what separates
+      // "the policy filtered it" from "the write went through elsewhere".
+      const updated = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) =>
+          tx.workSchedule.updateMany({
+            where: { agentId: fixtures.b.agentAccountId },
+            data: { timezone: 'Pacific/Auckland' },
+          }),
+      );
+      expect(updated.count).toBe(0);
+
+      const deleted = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.agentPresenceEvent.deleteMany({ where: { agentId: fixtures.b.agentAccountId } }),
+      );
+      expect(deleted.count).toBe(0);
+
+      const survivor = await owner.workSchedule.findUnique({
+        where: {
+          licenseId_agentId: {
+            licenseId: fixtures.b.licenseId,
+            agentId: fixtures.b.agentAccountId,
+          },
+        },
+      });
+      expect(survivor?.timezone).toBe('Europe/Berlin');
+      expect(
+        await owner.agentPresenceEvent.count({ where: { licenseId: fixtures.b.licenseId } }),
+      ).toBe(1);
+    });
+  });
+
   describe('brands — Multibrand tenant isolation (NFR-S4)', () => {
     // Brands carry only a license_id, so the policy is the plain license match,
     // like websites/widget_settings. Proven the same way as every tenant table:

@@ -99,6 +99,8 @@ model License {
   kbCategories           KbCategory[]
   kbArticles             KbArticle[]
   kbSettings             KbSettings?
+  workSchedules          WorkSchedule[]
+  presenceEvents         AgentPresenceEvent[]
 
   invitations Invitation[]
 
@@ -125,6 +127,8 @@ model Account {
   passwordResets     PasswordResetToken[]
   invitationsSent    Invitation[]
   ticketFollows      TicketFollower[]
+  workSchedules      WorkSchedule[]
+  presenceEvents     AgentPresenceEvent[]
 
   @@map("accounts")
 }
@@ -1514,4 +1518,70 @@ model KbSettings {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@map("kb_settings")
+}
+
+// ===========================================================================
+// Work scheduler / staffing prediction (PRD §5.3-Vardiya, v2)
+// ===========================================================================
+
+/// An agent's standing weekly availability (WORKSCHED). Keyed `(license, agent)`
+/// like `AgentMembership` — one plan per agent per workspace, and an agent who
+/// works in two workspaces keeps two independent plans.
+///
+/// Deliberately separate from `AgentMembership.routingStatus`: that column is
+/// the *live* toggle an agent flips themselves right now, this is the *plan*
+/// the staffing forecast (WORKSCHED-g) reads to predict coverage ahead of time.
+/// Collapsing them would make "is Ayşe online?" and "is Ayşe rostered?" the
+/// same question, and the forecast needs both.
+///
+/// `schedule` is the `WorkScheduleSlot[]` of `@nexa/types`, stored as JSONB
+/// because it is read and written whole — never queried slot-by-slot. The DB
+/// guarantees only that it is an array (`work_schedules_schedule_is_array_check`);
+/// the per-slot rules (known weekday, no repeats, `HH:MM`, start < end) are
+/// `normalizeWorkSchedule()`'s job at the boundary. No row means the agent has
+/// never opened the editor, which reads as `DEFAULT_WORK_SCHEDULE`.
+model WorkSchedule {
+  licenseId BigInt   @map("license_id")
+  agentId   String   @map("agent_id") @db.Uuid
+  /// IANA zone. A plan without one cannot be compared against real traffic, so
+  /// the column defaults to `DEFAULT_WORK_SCHEDULE.timezone` value-for-value.
+  timezone  String   @default("UTC")
+  schedule  Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  agent   Account @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@id([licenseId, agentId])
+  @@index([agentId])
+  @@map("work_schedules")
+}
+
+/// One recorded change of an agent's routing status — the presence history the
+/// forecast compares the plan against ("rostered until 18:00, actually went
+/// offline at 16:20").
+///
+/// Append-only in shape: a row is a fact about a moment, so there is no
+/// `updated_at` and nothing edits one after the fact. It is an event log like
+/// `WebhookDelivery`, not a settings row, and carries its own `license_id` so
+/// the tenant policy is the plain license match.
+///
+/// The index is `(license, agent, changed_at)` because every reader asks the
+/// same question — one agent's transitions inside one workspace over a window.
+model AgentPresenceEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  agentId   String   @map("agent_id") @db.Uuid
+  /// One of `ROUTING_STATUSES` (`@nexa/types`), the same domain as
+  /// `AgentMembership.routingStatus` — enforced by
+  /// `agent_presence_events_status_check`, the mirror of
+  /// `agent_memberships_routing_status_check`.
+  status    String
+  changedAt DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  agent   Account @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, agentId, changedAt])
+  @@map("agent_presence_events")
 }

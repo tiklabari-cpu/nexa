@@ -3147,13 +3147,13 @@
             "description": "agents.ts'e iki handler: GET ve PUT /agents/:agentId/work-schedule. (1) yazma config.scopes = ['agents--all:rw'], okuma ['agents--all:ro','agents--my:ro'] — `agents--my:*` ile gelen çağıran YALNIZ kendi accountId'sine eşit agentId'ye erişebilir, başkasına 403. (2) Gövde WORKSCHED-a'nın normalizeWorkSchedule() fonksiyonundan geçer, geçersiz → ApiError.validation (MEVCUT hata tipi — yeni ApiError ti",
             "details": "WORKSCHED-c — GET/PUT /agents/{agentId}/work-schedule — scope kapısı ve self-vs-admin yetkilendirme  [OPUS-XHIGH]\n\nPRD: §5.3-Vardiya (WORKSCHED) + NFR-S3 (yetkilendirme/scope), NFR-S4 (tenant izolasyon)\nETİKET GEREKÇESİ: OPUS-XHIGH: yeni YETKİLİ endpoint + 'kendi planım' (agents--my) ile 'başkasının planı' (agents--all) arasındaki authZ ayrımı — kullanıcının açık kuralı: yeni yetkili endpoint EN AZ OPUS-XHIGH, güvenlik işi asla sonnet'e verilmez (koşul 2 ihlali). Çekirdek izolasyon -b'deki RLS + mevcut withTenant deseninde çözüldüğü için MAX değil.\nNEDEN AÇIK: apps/api/src/routes altında 28 dosya var (agents.ts, settings.ts, reports.ts …) ve schedule/staffing route'u yok — grep 0 doğrudan eşleşme; campaigns/chat-timeout/retention'daki 'schedule' kelimesi kampanya zamanlaması / cron bağlamında, personel vardiyasıyla ilgisiz. Mevcut yüzey yalnız PUT /agents/me/routing-status (agents.ts:51-53) — anlık durum, planlı vardiya değil.\nKAPSAM: agents.ts'e iki handler: GET ve PUT /agents/:agentId/work-schedule. (1) yazma config.scopes = ['agents--all:rw'], okuma ['agents--all:ro','agents--my:ro'] — `agents--my:*` ile gelen çağıran YALNIZ kendi accountId'sine eşit agentId'ye erişebilir, başkasına 403. (2) Gövde WORKSCHED-a'nın normalizeWorkSchedule() fonksiyonundan geçer, geçersiz → ApiError.validation (MEVCUT hata tipi — yeni ApiError tipi açılmaz). (3) withTenant içinde upsert (license_id+agent_id). (4) AuditLogEntry'ye `work_schedule.updated` kaydı (audit_log mevcut, schema.prisma:1260).\nDOSYALAR: apps/api/src/routes/agents.ts · apps/api/test/integration/work-schedule.test.ts · apps/api/test/integration/route-config.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/agents.ts · apps/api/test/integration/agents-suspension.test.ts · apps/api/src/routes/settings.ts\nKK (birebir): \"| Ekip/Vardiya | Work scheduler / staffing prediction |\" | \"KK-türetilmiş: \"Ajan kendi vardiya planını okuyup yazabilir; başkasının planını yalnız yönetici scope'u (agents--all) değiştirebilir; geçersiz plan reddedilir.\" — Türetme gerekçesi: PRD §5.3 satır 412'de KK sütunu yok; yetki payı depodaki mevcut agent yüzeyinin ikili deseninden türetildi (PUT /agents/me/routing-status = agents--my:rw · PUT /agents/{agentId}/suspension = agents--all:rw).\"\nKK DOĞRULAMA: work-schedule.test.ts'teki 403 testi \"yalnız yönetici scope'u değiştirebilir\" maddesini, 400 testi \"geçersiz plan reddedilir\" maddesini, PUT→GET round-trip testi \"okuyup yazabilir\" maddesini kanıtlar; route-config.test.ts iki yeni route'un scope config'i taşıdığını kanıtlar (NFR-S3).\nKAPSAM DIŞI: Presence olay yazımı ve öncelik kuralı (WORKSCHED-d) · Vardiyanın routing'i sürmesi — YAPILMAZ (§C varsayımı: manuel routingStatus kazanır) · Tahmin endpoint'i (WORKSCHED-g) · UI (WORKSCHED-h)\nSÖZLEŞME: yok — path/şema WORKSCHED-a'da eklendi. Yanıt şekli kontrattan saparsa openapi.yaml güncellenip re-bundle edilmeli, yoksa contract-parity.test.ts kırılır. YENİ SCOPE AÇILMAZ (mevcut agents--my/all) → packages/types/src/scopes.ts + scopes.test.ts sayacına dokunulmaz.\nMIGRATION: yok (WORKSCHED-b'de)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration NEGATİF (ÖNCE): `agents--my:rw` token'ı başka bir agentId'nin planına PUT → 403 · integration NEGATİF: scope'suz/yanlış scope token → 403; müşteri principal → 403 · integration NEGATİF: geçersiz saat gövdesi (start>=end, '24:00') → 400 validation · integration CROSS-TENANT: lisans B'nin token'ı lisans A'nın agentId'sine GET/PUT → 404 (satır sızmaz) · integration pozitif: PUT sonrası GET aynı planı döner; audit_log'a `work_schedule.updated` düşer · regresyon: route-config.test.ts + agents-suspension.test.ts yeşil",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               1,
               2
             ],
             "parentId": "77",
-            "updatedAt": "2026-08-07T20:59:32.181Z"
+            "updatedAt": "2026-08-07T21:25:58.619Z"
           },
           {
             "id": 4,
@@ -3251,7 +3251,7 @@
             "updatedAt": "2026-08-07T20:20:22.155Z"
           }
         ],
-        "updatedAt": "2026-08-07T20:59:32.181Z"
+        "updatedAt": "2026-08-07T21:25:58.619Z"
       },
       {
         "id": "78",
@@ -4932,7 +4932,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-07T20:59:32.181Z",
+      "lastModified": "2026-08-07T21:25:58.619Z",
       "taskCount": 100,
       "completedCount": 80,
       "tags": [

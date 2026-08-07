@@ -1,0 +1,88 @@
+- generic [ref=f2e5]:
+  - status [ref=f2e6]:
+    - generic [ref=f2e7]: ◈
+    - generic [ref=f2e8]: Deneme sürenizde 14 gün kaldı.
+    - link "Abone Ol" [ref=f2e9] [cursor=pointer]:
+      - /url: /app/billing
+  - generic [ref=f2e10]:
+    - navigation "Modüller" [ref=f2e11]:
+      - generic [ref=f2e12]: "N"
+      - link "Ana Sayfa" [ref=f2e13] [cursor=pointer]:
+        - /url: /app/home
+        - generic [ref=f2e14]: ⌂
+      - link "Gelen Kutusu" [ref=f2e15] [cursor=pointer]:
+        - /url: /app/inbox
+        - generic [ref=f2e16]: ▤
+      - link "Müşteriler" [ref=f2e17] [cursor=pointer]:
+        - /url: /app/customers
+        - generic [ref=f2e18]: ◫
+      - link "Ekip" [ref=f2e19] [cursor=pointer]:
+        - /url: /app/team
+        - generic [ref=f2e20]: ◑
+      - link "Senaryolar" [ref=f2e21] [cursor=pointer]:
+        - /url: /app/playbook
+        - generic [ref=f2e22]: ✦
+      - link "Raporlar" [ref=f2e23] [cursor=pointer]:
+        - /url: /app/reports
+        - generic [ref=f2e25]: ◆
+      - generic [ref=f2e26]:
+        - link "Faturalandırma" [ref=f2e27] [cursor=pointer]:
+          - /url: /app/billing
+          - generic [ref=f2e28]: ◈
+        - link "Ayarlar" [ref=f2e29] [cursor=pointer]:
+          - /url: /app/settings
+          - generic [ref=f2e30]: ⚙
+        - group [ref=f2e31]:
+          - button "Hesap" [ref=f2e32] [cursor=pointer]: DO
+    - generic [ref=f2e33]:
+      - banner [ref=f2e34]:
+        - generic [ref=f2e35]:
+          - heading "Reports" [level=1] [ref=f2e36]
+          - paragraph [ref=f2e37]: Conversation volume, responsiveness and satisfaction.
+        - group "Range" [ref=f2e39]:
+          - button "7 days" [active] [pressed] [ref=f2e40] [cursor=pointer]
+          - button "30 days" [ref=f2e41] [cursor=pointer]
+          - button "90 days" [ref=f2e42] [cursor=pointer]
+          - button "365 days" [ref=f2e43] [cursor=pointer]
+          - button "Custom" [ref=f2e44] [cursor=pointer]
+      - generic [ref=f2e45]:
+        - tablist "Report" [ref=f2e46]:
+          - tab "Overview" [ref=f2e47] [cursor=pointer]
+          - tab "AI Agent" [ref=f2e48] [cursor=pointer]
+          - tab "Reviews" [ref=f2e49] [cursor=pointer]
+          - tab "Breakdown" [ref=f2e50] [cursor=pointer]
+          - tab "Chat topics" [selected] [ref=f2e51] [cursor=pointer]
+        - tabpanel "Chat topics" [ref=f2e160]:
+          - region [ref=f2e196]:
+            - generic [ref=f2e197]:
+              - heading "Chat topics" [level=2] [ref=f2e198]
+              - paragraph [ref=f2e199]: Conversations in this window, grouped into topics by AI clustering.
+            - table [ref=f2e201]:
+              - caption [ref=f2e202]: Chat topics, most voluminous first
+              - rowgroup [ref=f2e203]:
+                - row [ref=f2e204]:
+                  - columnheader "Topic" [ref=f2e205]
+                  - columnheader "Volume" [ref=f2e206]
+                  - columnheader "Share" [ref=f2e207]
+                  - columnheader "Trend" [ref=f2e208]
+              - rowgroup [ref=f2e209]:
+                - row [ref=f2e210]:
+                  - cell "delivery late track" [ref=f2e211]
+                  - cell "7" [ref=f2e212]
+                  - cell "27%" [ref=f2e213]
+                  - cell "—" [ref=f2e214]
+                - row [ref=f2e215]:
+                  - cell "bill invoice statement" [ref=f2e216]
+                  - cell "6" [ref=f2e217]
+                  - cell "23%" [ref=f2e218]
+                  - cell "—" [ref=f2e219]
+                - row [ref=f2e220]:
+                  - cell "refund return account" [ref=f2e221]
+                  - cell "6" [ref=f2e222]
+                  - cell "23%" [ref=f2e223]
+                  - cell "—" [ref=f2e224]
+                - row [ref=f2e225]:
+                  - cell "stock item list" [ref=f2e226]
+                  - cell "6" [ref=f2e227]
+                  - cell "23%" [ref=f2e228]
+                  - cell "—" [ref=f2e229]

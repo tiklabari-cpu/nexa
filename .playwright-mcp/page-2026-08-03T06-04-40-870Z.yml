@@ -1,0 +1,585 @@
+- generic [ref=f2e5]:
+  - status [ref=f2e6]:
+    - generic [ref=f2e7]: ◈
+    - generic [ref=f2e8]: Deneme sürenizde 14 gün kaldı.
+    - link "Abone Ol" [ref=f2e9] [cursor=pointer]:
+      - /url: /app/billing
+  - generic [ref=f2e10]:
+    - navigation "Modüller" [ref=f2e11]:
+      - generic [ref=f2e12]: "N"
+      - link "Ana Sayfa" [ref=f2e13] [cursor=pointer]:
+        - /url: /app/home
+        - generic [ref=f2e14]: ⌂
+      - link "Gelen Kutusu" [ref=f2e15] [cursor=pointer]:
+        - /url: /app/inbox
+        - generic [ref=f2e16]: ▤
+      - link "Müşteriler" [ref=f2e17] [cursor=pointer]:
+        - /url: /app/customers
+        - generic [ref=f2e18]: ◫
+      - link "Ekip" [ref=f2e19] [cursor=pointer]:
+        - /url: /app/team
+        - generic [ref=f2e20]: ◑
+      - link "Senaryolar" [ref=f2e21] [cursor=pointer]:
+        - /url: /app/playbook
+        - generic [ref=f2e22]: ✦
+      - link "Raporlar" [ref=f2e23] [cursor=pointer]:
+        - /url: /app/reports
+        - generic [ref=f2e24]: ◆
+      - generic [ref=f2e25]:
+        - link "Faturalandırma" [ref=f2e26] [cursor=pointer]:
+          - /url: /app/billing
+          - generic [ref=f2e27]: ◈
+        - link "Ayarlar" [ref=f2e28] [cursor=pointer]:
+          - /url: /app/settings
+          - generic [ref=f2e30]: ⚙
+        - group [ref=f2e31]:
+          - button "Hesap" [ref=f2e32] [cursor=pointer]: DO
+    - generic [ref=f2e33]:
+      - banner [ref=f2e34]:
+        - generic [ref=f2e35]:
+          - heading "Settings" [level=1] [ref=f2e36]
+          - paragraph [ref=f2e37]: Widget installation, saved replies and routing.
+      - generic [ref=f2e38]:
+        - region "Channels Everywhere your customers can reach you. Connect the ones you use; we will let you know as the rest arrive. Website widget Connected The chat bubble on your own site. Manage Chat page Ready A hosted link customers chat from — no install needed. Get link http://localhost:5174/chat.html?organization_id=cfbcd612-6030-4074-9658-659fb3399b7c Email Ready Forward your support inbox here and each email becomes a ticket. Get address cfbcd612-6030-4074-9658-659fb3399b7c@inbound.nexa.localhost Facebook Messenger Coming soon Answer Messenger conversations. Get notified WhatsApp Coming soon Answer WhatsApp messages. Get notified SMS Coming soon Reply to text messages over Twilio. Get notified Instagram Coming soon Answer Instagram direct messages. Get notified Telegram Coming soon Answer Telegram chats. Get notified" [ref=f2e39]:
+          - generic [ref=f2e40]:
+            - heading "Channels" [level=2] [ref=f2e41]
+            - paragraph [ref=f2e42]: Everywhere your customers can reach you. Connect the ones you use; we will let you know as the rest arrive.
+          - generic [ref=f2e43]:
+            - generic [ref=f2e45]:
+              - generic [ref=f2e46]:
+                - generic [ref=f2e47]: 🌐
+                - generic [ref=f2e48]: Website widget
+                - generic [ref=f2e49]:
+                  - generic [ref=f2e50]: ●
+                  - text: Connected
+              - paragraph [ref=f2e51]: The chat bubble on your own site.
+              - link "Manage" [ref=f2e52] [cursor=pointer]:
+                - /url: "#section-website-widgets"
+            - generic [ref=f2e54]:
+              - generic [ref=f2e55]:
+                - generic [ref=f2e56]: 💬
+                - generic [ref=f2e57]: Chat page
+                - generic [ref=f2e58]:
+                  - generic [ref=f2e59]: ⓘ
+                  - text: Ready
+              - paragraph [ref=f2e60]: A hosted link customers chat from — no install needed.
+              - generic [ref=f2e61]:
+                - button "Get link" [ref=f2e62] [cursor=pointer]
+                - code [ref=f2e63]: http://localhost:5174/chat.html?organization_id=cfbcd612-6030-4074-9658-659fb3399b7c
+            - generic [ref=f2e65]:
+              - generic [ref=f2e66]:
+                - generic [ref=f2e67]: ✉️
+                - generic [ref=f2e68]: Email
+                - generic [ref=f2e69]:
+                  - generic [ref=f2e70]: ⓘ
+                  - text: Ready
+              - paragraph [ref=f2e71]: Forward your support inbox here and each email becomes a ticket.
+              - generic [ref=f2e72]:
+                - button "Get address" [ref=f2e73] [cursor=pointer]
+                - code [ref=f2e74]: cfbcd612-6030-4074-9658-659fb3399b7c@inbound.nexa.localhost
+            - generic [ref=f2e76]:
+              - generic [ref=f2e77]:
+                - generic [ref=f2e78]: 📨
+                - generic [ref=f2e79]: Facebook Messenger
+                - generic [ref=f2e80]:
+                  - generic [ref=f2e81]: ·
+                  - text: Coming soon
+              - paragraph [ref=f2e82]: Answer Messenger conversations.
+              - button "Get notified" [ref=f2e83] [cursor=pointer]
+            - generic [ref=f2e85]:
+              - generic [ref=f2e86]:
+                - generic [ref=f2e87]: 📱
+                - generic [ref=f2e88]: WhatsApp
+                - generic [ref=f2e89]:
+                  - generic [ref=f2e90]: ·
+                  - text: Coming soon
+              - paragraph [ref=f2e91]: Answer WhatsApp messages.
+              - button "Get notified" [ref=f2e92] [cursor=pointer]
+            - generic [ref=f2e94]:
+              - generic [ref=f2e95]:
+                - generic [ref=f2e96]: 💬
+                - generic [ref=f2e97]: SMS
+                - generic [ref=f2e98]:
+                  - generic [ref=f2e99]: ·
+                  - text: Coming soon
+              - paragraph [ref=f2e100]: Reply to text messages over Twilio.
+              - button "Get notified" [ref=f2e101] [cursor=pointer]
+            - generic [ref=f2e103]:
+              - generic [ref=f2e104]:
+                - generic [ref=f2e105]: 📷
+                - generic [ref=f2e106]: Instagram
+                - generic [ref=f2e107]:
+                  - generic [ref=f2e108]: ·
+                  - text: Coming soon
+              - paragraph [ref=f2e109]: Answer Instagram direct messages.
+              - button "Get notified" [ref=f2e110] [cursor=pointer]
+            - generic [ref=f2e112]:
+              - generic [ref=f2e113]:
+                - generic [ref=f2e114]: ✈️
+                - generic [ref=f2e115]: Telegram
+                - generic [ref=f2e116]:
+                  - generic [ref=f2e117]: ·
+                  - text: Coming soon
+              - paragraph [ref=f2e118]: Answer Telegram chats.
+              - button "Get notified" [ref=f2e119] [cursor=pointer]
+        - region [ref=f2e120]:
+          - generic [ref=f2e121]:
+            - heading "Integrations" [level=2] [ref=f2e122]
+            - paragraph [ref=f2e123]: Connect third-party apps — CRM, payments, e-commerce and more. A connected app shows its data right inside a conversation.
+          - generic [ref=f2e125]:
+            - paragraph [ref=f2e126]: Browse the marketplace to connect the tools your team already uses.
+            - link "Open marketplace" [ref=f2e127] [cursor=pointer]:
+              - /url: /app/apps
+        - region [ref=f2e128]:
+          - generic [ref=f2e129]:
+            - heading "Notifications" [level=2] [ref=f2e130]
+            - paragraph [ref=f2e131]: How you are alerted to new messages. Sound and desktop are per-browser; e-mail follows your account.
+          - generic [ref=f2e133]:
+            - generic [ref=f2e134]:
+              - checkbox "Enable notifications Turning this off silences sound, desktop and tab alerts alike. On" [checked] [ref=f2e135]
+              - generic [ref=f2e136]:
+                - text: Enable notifications
+                - generic [ref=f2e137]: Turning this off silences sound, desktop and tab alerts alike.
+              - generic [ref=f2e138]:
+                - generic [ref=f2e139]: ●
+                - text: "On"
+            - generic [ref=f2e140]:
+              - checkbox "Play a sound A short chime when a visitor writes in." [checked] [ref=f2e141]
+              - generic [ref=f2e142]:
+                - text: Play a sound
+                - generic [ref=f2e143]: A short chime when a visitor writes in.
+            - generic [ref=f2e144]:
+              - generic [ref=f2e145]:
+                - checkbox "Desktop notifications Ask your browser for permission to show these." [ref=f2e146]
+                - generic [ref=f2e147]:
+                  - text: Desktop notifications
+                  - generic [ref=f2e148]: Ask your browser for permission to show these.
+              - button "Enable desktop notifications" [ref=f2e149] [cursor=pointer]
+            - generic [ref=f2e150]:
+              - checkbox "Email notifications Emailed when a visitor writes in a chat assigned to you, even when Nexa is closed. Applies to your account. On" [checked] [ref=f2e151]
+              - generic [ref=f2e152]:
+                - text: Email notifications
+                - generic [ref=f2e153]: Emailed when a visitor writes in a chat assigned to you, even when Nexa is closed. Applies to your account.
+              - generic [ref=f2e154]:
+                - generic [ref=f2e155]: ●
+                - text: "On"
+        - region [ref=f2e156]:
+          - generic [ref=f2e157]:
+            - heading "Brands" [level=2] [ref=f2e158]
+            - paragraph [ref=f2e159]: Run several brands under one subscription. Each has its own channels, websites and widget appearance, selected from the brand switcher.
+          - generic [ref=f2e160]:
+            - generic [ref=f2e161]:
+              - generic [ref=f2e162]:
+                - generic [ref=f2e163]: Brand name
+                - textbox "Brand name" [ref=f2e164]:
+                  - /placeholder: Acme Support
+              - button "Add brand" [disabled] [ref=f2e165]
+            - list [ref=f2e166]:
+              - listitem [ref=f2e167]:
+                - generic [ref=f2e168]:
+                  - generic [ref=f2e169]: Default name
+                  - textbox "Default name" [ref=f2e170]: Default
+                  - generic [ref=f2e171]: Default
+        - region "Website widgets Install the chat widget on your sites. Adding one here also trusts its domain, so the widget can start conversations there right away. Website domain Install method Paste code manually Add website Manual install acme-bikes.localhost Connected Test message received Get code Remove acme-bikes.localhost Paste the snippet immediately before </body> on every page. Customize widget" [ref=f2e172]:
+          - generic [ref=f2e173]:
+            - heading "Website widgets" [level=2] [ref=f2e174]
+            - paragraph [ref=f2e175]: Install the chat widget on your sites. Adding one here also trusts its domain, so the widget can start conversations there right away.
+          - generic [ref=f2e176]:
+            - generic [ref=f2e177]:
+              - generic [ref=f2e178]:
+                - generic [ref=f2e179]: Website domain
+                - textbox "Website domain" [ref=f2e180]:
+                  - /placeholder: shop.example
+              - generic [ref=f2e181]:
+                - generic [ref=f2e182]: Install method
+                - combobox "Install method" [ref=f2e183]:
+                  - option "Paste code manually" [selected]
+                  - option "Platform (Shopify / WordPress / GTM)"
+              - button "Add website" [disabled] [ref=f2e184]
+            - list [ref=f2e185]:
+              - listitem [ref=f2e186]:
+                - generic [ref=f2e187]:
+                  - generic "Manual install" [ref=f2e188]: </>
+                  - generic [ref=f2e189]: acme-bikes.localhost
+                  - generic [ref=f2e190]:
+                    - generic [ref=f2e191]:
+                      - generic [ref=f2e192]: ●
+                      - text: Connected
+                    - generic [ref=f2e193]: Test message received
+                  - button "Get code" [ref=f2e194] [cursor=pointer]
+                  - button "Remove acme-bikes.localhost" [ref=f2e195] [cursor=pointer]: Remove
+            - generic [ref=f2e196]:
+              - paragraph [ref=f2e197]:
+                - text: Paste the snippet immediately before
+                - code [ref=f2e198]: </body>
+                - text: on every page.
+              - link "Customize widget" [ref=f2e199] [cursor=pointer]:
+                - /url: "#widget-customization"
+        - region [ref=f2e200]:
+          - generic [ref=f2e201]:
+            - heading "Widget appearance" [level=2] [ref=f2e202]
+            - paragraph [ref=f2e203]: How the chat widget looks on your sites. Changes are baked into the install snippet and applied the next time the widget loads.
+          - generic [ref=f2e205]:
+            - generic [ref=f2e206]:
+              - group [ref=f2e207]:
+                - generic [ref=f2e208]:
+                  - generic [ref=f2e209]: Brand colour
+                  - generic [ref=f2e210]:
+                    - textbox "Brand colour swatch" [ref=f2e211] [cursor=pointer]: "#2f6bff"
+                    - textbox "Brand colour hex" [ref=f2e212]:
+                      - /placeholder: "#2f6bff"
+                      - text: "#2f6bff"
+                - group "Position" [ref=f2e213]:
+                  - generic [ref=f2e215]:
+                    - generic [ref=f2e216] [cursor=pointer]:
+                      - radio "Bottom right" [checked] [ref=f2e217]
+                      - text: Bottom right
+                    - generic [ref=f2e218] [cursor=pointer]:
+                      - radio "Bottom left" [ref=f2e219]
+                      - text: Bottom left
+                  - generic [ref=f2e220]: Which corner the launcher sits in.
+                - group "Colour scheme" [ref=f2e221]:
+                  - generic [ref=f2e223]:
+                    - generic [ref=f2e224] [cursor=pointer]:
+                      - radio "Auto" [checked] [ref=f2e225]
+                      - text: Auto
+                    - generic [ref=f2e226] [cursor=pointer]:
+                      - radio "Light" [ref=f2e227]
+                      - text: Light
+                    - generic [ref=f2e228] [cursor=pointer]:
+                      - radio "Dark" [ref=f2e229]
+                      - text: Dark
+                  - generic [ref=f2e230]: Auto follows each visitor's device; the others force it.
+                - generic [ref=f2e231]:
+                  - checkbox "Full screen on mobile Open edge-to-edge on phones rather than as a floating card." [checked] [ref=f2e232]
+                  - generic [ref=f2e233]:
+                    - text: Full screen on mobile
+                    - generic [ref=f2e234]: Open edge-to-edge on phones rather than as a floating card.
+                - generic [ref=f2e235]:
+                  - checkbox "Show “Powered by Nexa” A small credit in the widget footer. Turn it off to remove it." [checked] [ref=f2e236]
+                  - generic [ref=f2e237]:
+                    - text: Show “Powered by Nexa”
+                    - generic [ref=f2e238]: A small credit in the widget footer. Turn it off to remove it.
+              - button "Save appearance" [disabled] [ref=f2e240]
+            - generic [ref=f2e241]:
+              - generic [ref=f2e242]: Preview
+              - generic [ref=f2e243]:
+                - generic [ref=f2e244]:
+                  - generic [ref=f2e245]:
+                    - generic [ref=f2e246]: "N"
+                    - generic [ref=f2e247]: Chat with us
+                  - generic [ref=f2e248]:
+                    - generic [ref=f2e249]: Hi! How can we help?
+                    - generic [ref=f2e250]: I have a question
+                  - paragraph [ref=f2e251]: Powered by Nexa
+                - button [ref=f2e252] [cursor=pointer]:
+                  - generic [ref=f2e253]: 💬
+              - paragraph [ref=f2e254]: Auto shows light or dark to match each visitor’s device — light shown here.
+        - region [ref=f2e255]:
+          - generic [ref=f2e256]:
+            - heading "Trusted domains" [level=2] [ref=f2e257]
+            - paragraph [ref=f2e258]: The allowlist the widget checks. Adding a website above fills this in for you; edit it here only for finer control, such as covering subdomains.
+          - generic [ref=f2e259]:
+            - generic [ref=f2e260]:
+              - generic [ref=f2e261]:
+                - generic [ref=f2e262]: Domain
+                - textbox "Domain" [ref=f2e263]:
+                  - /placeholder: shop.example
+              - generic [ref=f2e264]:
+                - checkbox "Include subdomains" [ref=f2e265]
+                - text: Include subdomains
+              - button "Add domain" [disabled] [ref=f2e266]
+            - list [ref=f2e267]:
+              - listitem [ref=f2e268]:
+                - generic [ref=f2e269]: "*.acme-bikes.localhost"
+                - button "Remove" [ref=f2e270] [cursor=pointer]
+        - region [ref=f2e271]:
+          - generic [ref=f2e272]:
+            - heading "Blocked IP addresses" [level=2] [ref=f2e273]
+            - paragraph [ref=f2e274]: A visitor on one of these addresses is refused a chat, even from a fresh session. To ban a named contact instead, use the block action on their profile in Customers.
+          - generic [ref=f2e275]:
+            - generic [ref=f2e276]:
+              - generic [ref=f2e277]:
+                - generic [ref=f2e278]: IP address
+                - textbox "IP address An IPv4 or IPv6 address. The visitor is blocked until you remove it here." [ref=f2e279]:
+                  - /placeholder: 203.0.113.5
+                - generic [ref=f2e280]: An IPv4 or IPv6 address. The visitor is blocked until you remove it here.
+              - button "Block address" [disabled] [ref=f2e281]
+            - generic [ref=f2e282]:
+              - paragraph [ref=f2e283]: No blocked addresses
+              - paragraph [ref=f2e284]: Add an IP address to refuse chats from it. Nothing is blocked until you do.
+        - region [ref=f2e285]:
+          - generic [ref=f2e286]:
+            - heading "IP allowlist" [level=2] [ref=f2e287]
+            - paragraph [ref=f2e288]: Sources allowed to reach the agent/admin panel once enforcement is on below. A saved list can never exclude the address you are connecting from — the server refuses a change that would lock you out.
+          - generic [ref=f2e289]:
+            - generic [ref=f2e290]:
+              - generic [ref=f2e291]:
+                - generic [ref=f2e292]: Address or CIDR range
+                - textbox "Address or CIDR range" [ref=f2e293]:
+                  - /placeholder: 10.0.0.0/24
+              - generic [ref=f2e294]:
+                - generic [ref=f2e295]: Label (optional)
+                - textbox "Label (optional)" [ref=f2e296]:
+                  - /placeholder: Office VPN
+              - button "Add entry" [disabled] [ref=f2e297]
+            - generic [ref=f2e298]:
+              - paragraph [ref=f2e299]: No allowlist entries
+              - paragraph [ref=f2e300]: Nothing is restricted yet. Add the addresses your team connects from before turning enforcement on below.
+        - region [ref=f2e301]:
+          - generic [ref=f2e302]:
+            - heading "Session policy" [level=2] [ref=f2e303]
+            - paragraph [ref=f2e304]: Whether the allowlist above is enforced, how long a session may sit idle, and how many may run at once for one owner. Leave a limit blank to turn it off.
+          - generic [ref=f2e306]:
+            - generic [ref=f2e307]:
+              - checkbox "Enforce the IP allowlist Once on, only the addresses above may reach the agent/admin panel." [ref=f2e308]
+              - generic [ref=f2e309]:
+                - text: Enforce the IP allowlist
+                - generic [ref=f2e310]: Once on, only the addresses above may reach the agent/admin panel.
+            - generic [ref=f2e311]:
+              - generic [ref=f2e312]:
+                - generic [ref=f2e313]: Idle timeout (minutes)
+                - spinbutton "Idle timeout (minutes)" [ref=f2e314]
+              - generic [ref=f2e315]:
+                - generic [ref=f2e316]: Max concurrent sessions
+                - spinbutton "Max concurrent sessions" [ref=f2e317]
+              - button "Save" [ref=f2e318] [cursor=pointer]
+        - region [ref=f2e319]:
+          - generic [ref=f2e320]:
+            - heading "Audit log" [level=2] [ref=f2e321]
+            - paragraph [ref=f2e322]: Sign-ins, role changes, deletions and webhook changes — the last 30 days, kept for every plan.
+          - generic [ref=f2e324]:
+            - paragraph [ref=f2e325]: Review who did what across this workspace.
+            - link "Open audit log" [ref=f2e326] [cursor=pointer]:
+              - /url: /app/settings/audit-log
+        - region [ref=f2e327]:
+          - generic [ref=f2e328]:
+            - heading "File sharing" [level=2] [ref=f2e329]
+            - paragraph [ref=f2e330]: Applies to attachments from agents and customers alike. Anything outside these rules is refused.
+          - generic [ref=f2e332]:
+            - generic [ref=f2e333]:
+              - checkbox "Allow file sharing Turning this off refuses every attachment, whoever sends it. On" [checked] [ref=f2e334]
+              - generic [ref=f2e335]:
+                - text: Allow file sharing
+                - generic [ref=f2e336]: Turning this off refuses every attachment, whoever sends it.
+              - generic [ref=f2e337]:
+                - generic [ref=f2e338]: ●
+                - text: "On"
+            - generic [ref=f2e339]:
+              - generic [ref=f2e340]:
+                - generic [ref=f2e341]: Allowed types
+                - textbox "Allowed types MIME types, comma separated — the form a browser labels a file with." [ref=f2e342]:
+                  - /placeholder: image/png, application/pdf
+                  - text: image/png, image/jpeg, application/pdf
+                - generic [ref=f2e343]: MIME types, comma separated — the form a browser labels a file with.
+              - generic [ref=f2e344]:
+                - generic [ref=f2e345]: Max size (MB)
+                - spinbutton "Max size (MB)" [ref=f2e346]: "10"
+              - button "Save" [ref=f2e347] [cursor=pointer]
+        - region [ref=f2e348]:
+          - generic [ref=f2e349]:
+            - heading "Saved replies" [level=2] [ref=f2e350]
+            - paragraph [ref=f2e351]: "Agents insert these by typing # in the composer."
+          - generic [ref=f2e352]:
+            - generic [ref=f2e354]:
+              - generic [ref=f2e355]:
+                - generic [ref=f2e356]: Shortcut
+                - generic [ref=f2e357]:
+                  - generic [ref=f2e358]: "#"
+                  - textbox "Shortcut" [ref=f2e359]:
+                    - /placeholder: shipping
+              - generic [ref=f2e360]:
+                - generic [ref=f2e361]: Reply
+                - textbox "Reply" [ref=f2e362]:
+                  - /placeholder: Standard delivery takes 3-5 working days.
+              - button "Save reply" [disabled] [ref=f2e363]
+            - list [ref=f2e364]:
+              - listitem [ref=f2e365]:
+                - code [ref=f2e366]: "#hello"
+                - generic [ref=f2e367]: Hi there! How can I help you today?
+                - 'button "Delete #hello" [ref=f2e368] [cursor=pointer]': Delete
+              - listitem [ref=f2e369]:
+                - code [ref=f2e370]: "#shipping"
+                - generic [ref=f2e371]: Standard delivery takes 3-5 working days. I can check your order if you share the number.
+                - 'button "Delete #shipping" [ref=f2e372] [cursor=pointer]': Delete
+              - listitem [ref=f2e373]:
+                - code [ref=f2e374]: "#thanks"
+                - generic [ref=f2e375]: Thanks for your patience — anything else I can help with?
+                - 'button "Delete #thanks" [ref=f2e376] [cursor=pointer]': Delete
+        - region [ref=f2e377]:
+          - generic [ref=f2e378]:
+            - heading "Tags" [level=2] [ref=f2e379]
+            - paragraph [ref=f2e380]: Labels agents apply to conversations. The inbox suggests these as they type.
+          - generic [ref=f2e381]:
+            - generic [ref=f2e383]:
+              - generic [ref=f2e384]:
+                - generic [ref=f2e385]: Tag
+                - textbox "Tag" [ref=f2e386]:
+                  - /placeholder: vip
+              - button "Add tag" [disabled] [ref=f2e387]
+            - list [ref=f2e388]:
+              - listitem [ref=f2e389]:
+                - generic [ref=f2e390]: billing
+                - generic [ref=f2e391]: All teams · 0 in use
+                - button "Delete tag billing" [ref=f2e392] [cursor=pointer]: Delete
+              - listitem [ref=f2e393]:
+                - generic [ref=f2e394]: bug
+                - generic [ref=f2e395]: All teams · 0 in use
+                - button "Delete tag bug" [ref=f2e396] [cursor=pointer]: Delete
+              - listitem [ref=f2e397]:
+                - generic [ref=f2e398]: lead
+                - generic [ref=f2e399]: All teams · 0 in use
+                - button "Delete tag lead" [ref=f2e400] [cursor=pointer]: Delete
+              - listitem [ref=f2e401]:
+                - generic [ref=f2e402]: shipping
+                - generic [ref=f2e403]: All teams · 1 in use
+                - button "Delete tag shipping" [ref=f2e404] [cursor=pointer]: Delete
+        - region [ref=f2e405]:
+          - generic [ref=f2e406]:
+            - heading "Skills" [level=2] [ref=f2e407]
+            - paragraph [ref=f2e408]: Areas of expertise. Require one in a routing rule, or assign one to an agent in Team.
+          - generic [ref=f2e409]:
+            - generic [ref=f2e411]:
+              - generic [ref=f2e412]:
+                - generic [ref=f2e413]: Skill
+                - textbox "Skill" [ref=f2e414]:
+                  - /placeholder: Billing
+              - button "Add skill" [disabled] [ref=f2e415]
+            - list [ref=f2e416]:
+              - listitem [ref=f2e417]:
+                - generic [ref=f2e418]: Billing
+                - button "Delete skill Billing" [ref=f2e419] [cursor=pointer]: Delete
+              - listitem [ref=f2e530]:
+                - generic [ref=f2e531]: Live Verification Skill
+                - button "Delete skill Live Verification Skill" [ref=f2e532] [cursor=pointer]: Delete
+              - listitem [ref=f2e420]:
+                - generic [ref=f2e421]: Onboarding
+                - button "Delete skill Onboarding" [ref=f2e422] [cursor=pointer]: Delete
+              - listitem [ref=f2e423]:
+                - generic [ref=f2e424]: Technical support
+                - button "Delete skill Technical support" [ref=f2e425] [cursor=pointer]: Delete
+        - region [ref=f2e426]:
+          - generic [ref=f2e427]:
+            - heading "Routing" [level=2] [ref=f2e428]
+            - paragraph [ref=f2e429]: Checked in order. The first rule whose conditions all match decides the team.
+          - list [ref=f2e431]:
+            - listitem [ref=f2e432]:
+              - generic [ref=f2e433]:
+                - paragraph [ref=f2e434]: Pricing pages go to Sales
+                - paragraph [ref=f2e435]: url contains /pricing,/plans → Sales
+              - generic [ref=f2e436]:
+                - generic [ref=f2e437]: ●
+                - text: "On"
+              - button "Disable" [ref=f2e438] [cursor=pointer]
+            - listitem [ref=f2e439]:
+              - generic [ref=f2e440]:
+                - paragraph [ref=f2e441]:
+                  - text: Everything else
+                  - generic [ref=f2e442]: fallback
+                - paragraph [ref=f2e443]: Anything → Support
+              - generic [ref=f2e444]:
+                - generic [ref=f2e445]: ●
+                - text: "On"
+              - button "Disable" [disabled] [ref=f2e446]
+        - region [ref=f2e447]:
+          - generic [ref=f2e448]:
+            - heading "Ticket rules" [level=2] [ref=f2e449]
+            - paragraph [ref=f2e450]: When a ticket is opened, the first matching rule sets its priority or applies a tag.
+          - generic [ref=f2e451]:
+            - generic [ref=f2e453]:
+              - generic [ref=f2e454]:
+                - generic [ref=f2e455]: Rule name
+                - textbox "Rule name" [ref=f2e456]:
+                  - /placeholder: Refunds
+              - generic [ref=f2e457]:
+                - generic [ref=f2e458]: When subject contains
+                - textbox "When subject contains" [ref=f2e459]:
+                  - /placeholder: refund
+              - generic [ref=f2e460]:
+                - generic [ref=f2e461]: Then
+                - combobox "Then" [ref=f2e462]:
+                  - option "Set priority" [selected]
+                  - option "Add tag"
+              - generic [ref=f2e463]:
+                - generic [ref=f2e464]: Priority
+                - spinbutton "Priority" [ref=f2e465]
+              - button "Add rule" [disabled] [ref=f2e466]
+            - generic [ref=f2e467]:
+              - paragraph [ref=f2e468]: No ticket rules
+              - paragraph [ref=f2e469]: Auto-assign, prioritise or tag tickets the moment they are opened.
+        - region [ref=f2e470]:
+          - generic [ref=f2e471]:
+            - heading "Ticket email templates" [level=2] [ref=f2e472]
+            - paragraph [ref=f2e473]: "Branded, reusable replies. Insert a variable with double braces, e.g. {{ticket.id}}."
+          - generic [ref=f2e474]:
+            - generic [ref=f2e475]:
+              - generic [ref=f2e476]:
+                - generic [ref=f2e477]: Template name
+                - textbox "Template name" [ref=f2e478]:
+                  - /placeholder: Ticket received
+              - generic [ref=f2e479]:
+                - generic [ref=f2e480]: Subject
+                - textbox "Subject" [ref=f2e481]:
+                  - /placeholder: "We received your ticket {{ticket.id}}"
+              - generic [ref=f2e482]:
+                - generic [ref=f2e483]: Message
+                - textbox "Message" [ref=f2e484]:
+                  - /placeholder: "Hi {{customer.name}}, thanks for reaching out."
+              - paragraph [ref=f2e485]: "Variables: {{ticket.id}}, {{ticket.subject}}, {{ticket.status}}, {{ticket.priority}}, {{customer.name}}, {{customer.email}}, {{agent.name}}, {{company.name}}"
+              - button "Add template" [disabled] [ref=f2e487]
+            - generic [ref=f2e488]:
+              - paragraph [ref=f2e489]: No email templates
+              - paragraph [ref=f2e490]: Author a branded, variabled reply your team can send on a ticket.
+        - region [ref=f2e491]:
+          - generic [ref=f2e492]:
+            - heading "Custom fields" [level=2] [ref=f2e493]
+            - paragraph [ref=f2e494]: Extra fields on tickets and contacts — a player id, a KYC status, a balance. They appear on the ticket Details pane and in the CRM.
+          - generic [ref=f2e495]:
+            - generic [ref=f2e496]:
+              - generic [ref=f2e497]:
+                - generic [ref=f2e498]: Label
+                - textbox "Label" [ref=f2e499]:
+                  - /placeholder: Player ID
+              - generic [ref=f2e500]:
+                - generic [ref=f2e501]: "On"
+                - combobox "On" [ref=f2e502]:
+                  - option "Ticket" [selected]
+                  - option "Contact"
+              - generic [ref=f2e503]:
+                - generic [ref=f2e504]: Type
+                - combobox "Type" [ref=f2e505]:
+                  - option "text" [selected]
+                  - option "number"
+                  - option "boolean"
+                  - option "date"
+              - generic [ref=f2e506]:
+                - checkbox "Required" [ref=f2e507]
+                - text: Required
+              - button "Add field" [disabled] [ref=f2e508]
+            - generic [ref=f2e509]:
+              - paragraph [ref=f2e510]: No custom fields
+              - paragraph [ref=f2e511]: Add fields your team needs on tickets and contacts, like a player id or a KYC status.
+        - region [ref=f2e512]:
+          - generic [ref=f2e513]:
+            - heading "Pre-chat form" [level=2] [ref=f2e514]
+            - paragraph [ref=f2e515]: Ask visitors for details before the chat starts. Answers are saved to the contact and shown in the CRM.
+          - generic [ref=f2e516]:
+            - generic [ref=f2e517]:
+              - generic [ref=f2e518]:
+                - generic [ref=f2e519]: Label
+                - textbox "Label" [ref=f2e520]:
+                  - /placeholder: Order number
+              - generic [ref=f2e521]:
+                - generic [ref=f2e522]: Type
+                - combobox "Type" [ref=f2e523]:
+                  - option "text" [selected]
+                  - option "number"
+                  - option "boolean"
+                  - option "date"
+              - generic [ref=f2e524]:
+                - checkbox "Required" [ref=f2e525]
+                - text: Required
+              - button "Add field" [disabled] [ref=f2e526]
+            - generic [ref=f2e527]:
+              - paragraph [ref=f2e528]: No pre-chat questions
+              - paragraph [ref=f2e529]: Add a field to ask visitors for details — an order number, an account id — before they start chatting.

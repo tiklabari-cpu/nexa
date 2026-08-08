@@ -1669,6 +1669,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/copilot/bi': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Answer a report/metric question about the workspace's own activity
+     * @description Copilot's BI command (FR-MOD-12, §5.5 "BI komutu") — the chat-context
+     *     counterpart to the palette's account-wide AI query (FR-MOD-01.1.3,
+     *     `POST /palette/ai-query`). The two surfaces are deliberately separate:
+     *     one endpoint never has to serve two different authorization contexts.
+     *
+     *     Deterministic (`@nexa/ai-mock`, no real LLM): the question is matched
+     *     against a small set of known report metrics and, on a match, reads the
+     *     figure straight out of the same builder `GET /reports/overview` uses
+     *     (ADR-09) — Copilot never computes its own number, so it can never
+     *     disagree with Reports. An unrecognised question is not an error —
+     *     `kind: 'not_understood'` comes back with a 200, the same way an
+     *     unmatched skill intent or an empty knowledge match elsewhere in this
+     *     API is a 200 with an empty/negative result rather than a 4xx.
+     */
+    post: operations['copilotBi'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/palette/ai-query': {
     parameters: {
       query?: never;
@@ -9401,6 +9433,68 @@ export interface operations {
             text: string;
             /** @enum {string} */
             mode: 'rephrase' | 'friendly' | 'formal' | 'grammar';
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  copilotBi: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          question: string;
+        };
+      };
+    };
+    responses: {
+      /**
+       * @description Always 200 once the request itself is valid — an unmatched question
+       *     or a matched metric with nothing to report is a `kind`, not a 4xx.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            answer: string;
+            /**
+             * @description `metric` — a figure was found and `answer` quotes it.
+             *     `no_data` — the metric was understood but the window has
+             *     nothing to report yet (e.g. no ratings, so no satisfaction
+             *     score). `not_understood` — the question matched no known
+             *     metric.
+             * @enum {string}
+             */
+            kind: 'metric' | 'no_data' | 'not_understood';
+            /**
+             * @description Which report field `answer` quotes, e.g. `totals.chats`.
+             *     Null unless `kind` is `metric` or `no_data`.
+             */
+            metric: string | null;
+            /**
+             * @description The same number `GET /reports/overview` would return for
+             *     this window (ADR-09). Null unless `kind` is `metric`.
+             */
+            value: number | null;
+            /** @description The window `value` was computed over. Null unless `kind` is `metric`. */
+            range: {
+              /** Format: date-time */
+              from: string;
+              /** Format: date-time */
+              to: string;
+            } | null;
           };
         };
       };

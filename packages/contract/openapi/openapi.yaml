@@ -224,6 +224,8 @@ paths:
     $ref: "./paths/copilot.yaml#/reply"
   /copilot/chats/{chatId}/enhance:
     $ref: "./paths/copilot.yaml#/enhance"
+  /copilot/bi:
+    $ref: "./paths/copilot.yaml#/bi"
 
   /palette/ai-query:
     $ref: "./paths/command-palette.yaml#/aiQuery"

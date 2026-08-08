@@ -13,6 +13,61 @@
 
 ## Task log (newest-first)
 
+### tm 96.1 — 12.4-bi-a · Kontrat: `POST /copilot/bi` anchor'ı + bundle + tip üretimi — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `packages/contract/openapi/paths/copilot.yaml` — yeni `bi` anchor: `POST /copilot/bi`,
+    operationId `copilotBi`. Body `{ question: string }` (`minLength:1, maxLength:500` — aynı
+    tavan `command-palette.yaml#/aiQuery`'nin `query` alanıyla, kardeş yüzey). Yanıt
+    `{ answer, kind, metric, value, range }`: `kind` enum `metric|no_data|not_understood`;
+    `metric`/`value`/`range` **her zaman alanda, nullable** (task'ın kendi KAPSAM metninin
+    `string|null`/`number|null`/`{from,to}|null` yazımı — `aiQuery`'nin opsiyonel/absent alan
+    deseninden bilinçli fark) — `range` şekli `ReportsOverview.range` ile birebir (`{from,to}`
+    date-time). `openapi.yaml`'a `/copilot/bi: $ref: "./paths/copilot.yaml#/bi"`. Regenerate:
+    `pnpm --filter @nexa/contract generate` — bundle 146→**147 path**, `src/generated/api.ts`'de
+    `copilotBi` operation'ı üretildi.
+  - `PLAN.md` §5.0 satır 1126 (`12.4`): `⬜`→`◐` (kalem 6 alt-görevden 1'i indi, hepsi değil —
+    `✅` uydurulmadı, CONVENTIONS §1 kısmi-karşılama kuralı). Kanıt + kalan alt-görev listesi
+    (bi-b/-c/-d/-e/-f) satıra eklendi.
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm --filter @nexa/contract typecheck` **0**
+  · `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w build` **0** (7/7) ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` — **1930/1931** yeşil, **tek kırmızı
+  task'ın kendi KK doğrulamasının öngördüğü tam o satır:** `contract-parity.test.ts > serves every
+  route the contract documents` → `expected [ 'post /copilot/bi' ] to deeply equal []` ·
+  `pnpm -w test:integration` aynı sonuç — **1475/1476**, aynı tek kırmızı. Diğer 4
+  contract-parity assertion'ı (router parse, "documents every route", unique operationId, error
+  response shape) yeşil kaldı — regresyon yok, sayı bozulmadı.
+  - **Bu kırmızı BİLİNÇLİ ve task'ın kendi test stratejisinde yazılı:** "`contract-parity.test.ts`
+    -c ile birlikte yeşil" (12.4-bi-a etiket gerekçesi: "tek başına inerse contract-parity KIRILIR
+    (iki yönlü) → -c ile ardışık koşulur"). 12.4-bi-c (bu görevin bağımlısı, `dependencies:
+    [96.1, 96.2]`) route'u indirdiğinde iki yönlü yeşile döner. E2E koşulmadı — bu task hiçbir
+    UI/runtime yolunu etkilemiyor (yalnız şema metni), "ilgili" akış yok.
+- **Varsayımlar:**
+  - `question` maxLength **500** — task metni yalnız "(uzunluk tavanı)" diyor, sayı vermiyor;
+    kardeş yüzey `command-palette.yaml#/aiQuery`'nin `query` alanı (aynı BI-benzeri kullanım,
+    aynı NFR-S8 sınıfı) 500 kullanıyor, tutarlılık için aynısı seçildi.
+  - `metric`/`value`/`range` **required + nullable** (her zaman alanda) seçildi — task'ın KAPSAM
+    metninin birebir `string|null` yazımı bunu istiyor; `aiQuery`'nin `metric_source`/`ref` alanları
+    (opsiyonel/absent) kasıtlı olarak farklı bir desen, kopyalanmadı.
+  - `12.4-bi-c` bu pencerede yapılmadı — `dependencies: [96.1, 96.2]` ve 96.2 (bi-b, niyet
+    eşleyici) henüz `pending`; -a ile -c'yi aynı pencerede birleştirmek (01.1.3-ai-d/-e emsali,
+    tm 95.4/95.5) burada mümkün değildi çünkü -c'nin bağımlılıklarından biri (bi-b) hiç
+    başlamamıştı. Kapsam disiplini (yalnız hedef task 96.1) + eksik ön koşul ikisi birden
+    birleştirmeyi engelledi.
+  - `.taskmaster/tasks/tasks.json` (durum `in-progress`) bu commit'e dahil edildi — önceki
+    turlarda görülen "chore(taskmaster): set status" deseni.
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (tm 94.8'den beri taşınan
+    carry-over) — bu pencerenin işiyle ilgisiz, yine commit'e alınmadı.
+- **Sonraki pencereye not:**
+  - `main`'de şu an **bilinçli tek kırmızı** var: `contract-parity.test.ts`'in "serves every route"
+    assertion'ı `post /copilot/bi` için kırmızı. Bu 12.4-bi-b VE 12.4-bi-c ikisi de inene kadar
+    böyle kalacak — 12.4-bi-c inince kapanır. 12.4-bi-b (bağımsız, bağımlılığı yok) önce veya
+    sonra koşulabilir; 12.4-bi-c ikisine de bağımlı.
+  - 12.4-bi-c penceresi: route `apps/api/src/routes/copilot.ts`'e eklenirken bu turda seçilen
+    response şekline (`metric`/`value`/`range` her zaman alanda + nullable) sadık kalınmalı —
+    endpoint kodu bu kontratı üretmeli, kontratı değiştirmemeli (aksi hâlde re-bundle + bu turun
+    varsayımları yeniden gözden geçirilir).
+
 ### tm 104 — fix(e2e): `skills-routing.spec.ts:76` locator strict-mode ihlali — done — 2026-08-08 UTC
 
 - **Yapıldı:**

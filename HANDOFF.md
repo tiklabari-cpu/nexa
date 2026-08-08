@@ -64,6 +64,8 @@
   çalıştırılmadı. Ayrıca `skills-routing.spec.ts:76` bir turda strict-mode locator ihlaliyle düştü
   (`getByLabel('Skill')` "Delete skill X" aria-label'larıyla da eşleşiyor); temiz durumda geçiyor
   ama locator kırılgan — kapsam dışı, ayrı task (tm 103) açıldı.
+- **Çalışma alanında bırakılan:** `run-loop.sh` — pencere açılmadan ÖNCE de değişikti (tm 93.8'de de
+  aynı şekilde bırakılmıştı), bu task'ın kapsamıyla ilgisi yok, o yüzden commit'e alınmadı.
 
 ### tm 94.2 — 07.9-sched-b · `reports_manage` scope + zamanlanmış export listeleme/oluşturma — done — 2026-08-08 UTC
 

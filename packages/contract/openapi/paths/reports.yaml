@@ -28,6 +28,7 @@ overview:
       - name: to
         in: query
         schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
         description: Metrics for the requested window
@@ -62,6 +63,7 @@ breakdown:
       - name: to
         in: query
         schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
         description: Breakdown for the requested window
@@ -89,6 +91,7 @@ aiAgent:
       - name: to
         in: query
         schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
         description: AI Agent metrics for the requested window
@@ -128,6 +131,7 @@ reviews:
       - name: to
         in: query
         schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
         description: Reviews metrics for the requested window
@@ -169,6 +173,7 @@ topics:
       - name: to
         in: query
         schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
         description: Chat topics for the requested window
@@ -208,6 +213,7 @@ cases:
       - name: to
         in: query
         schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
         description: Case counts for the requested window
@@ -251,6 +257,7 @@ leads:
       - name: to
         in: query
         schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
         description: Lead counts for the requested window
@@ -289,6 +296,7 @@ teamPerformance:
       - name: to
         in: query
         schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
         description: Per-agent KPIs for the requested window
@@ -322,6 +330,7 @@ sales:
       - name: to
         in: query
         schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
         description: Sales metrics for the requested window (always `configured:false` in v1)
@@ -386,7 +395,15 @@ export:
       spreadsheet formula injection, and the body is `no-store`: a report is a
       point-in-time snapshot, never served from a shared cache.
 
-      PDF and benchmark comparison are v2 (PLAN §4.4.8) and not offered here.
+      `baseline` appends the benchmark block as trailing `benchmark_<key>,value`
+      rows — the same figures the group's JSON `previous_period` carries, padded
+      to the table's width. It is opt-in here, unlike the JSON reports which
+      always carry a benchmark: a JSON object gains a key harmlessly, but a CSV
+      is positional, and a trailing block would change what a script reading
+      column 1 as a date sees. Omit it and the file is byte-for-byte what this
+      endpoint has always produced.
+
+      PDF export is still v2 work (PLAN §4.4.8) and not offered here.
     parameters:
       - name: group
         in: query
@@ -399,6 +416,7 @@ export:
       - name: to
         in: query
         schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
         description: The group rendered as CSV

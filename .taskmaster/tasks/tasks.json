@@ -4129,7 +4129,7 @@
             "description": "(1) Belirsizlik kararı kodda yorumla kayda geçer: benchmark = AYNI LİSANSIN kendi geçmişiyle karşılaştırması (`baseline: previous_period | previous_year`); lisanslar-arası/sektör karşılaştırması AÇIKÇA reddedilir. (2) `reports.ts:516-517`'deki pencere hesabı ve `previous_period` üretimi tek `benchmarkWindow(from, to, baseline)` + `withBenchmark(...)` yardımcısına çıkarılır — overview/reviews davra",
             "details": "07.7-e — Benchmark karşılaştırma katmanı — tüm rapor gruplarına ortak vs-baseline (lisans-içi, dönemler-arası)  [OPUS-XHIGH]\n\nPRD: FR-MOD-07.7 (+ FR-MOD-07.3.1 vs-önceki dönem deseni, NFR-S3)\nETİKET GEREKÇESİ: OPUS-XHIGH: KK'da YORUM GEREKTİREN BELİRSİZLİK + çok yüzeyli bağlama + hafif güvenlik dokunuşu. PRD 'benchmark karşılaştırma' der ama neye karşı olduğunu söylemez; lisanslar-arası/sektör yorumu tenant izolasyonunu ihlal ederdi (RLS + ADR-12), bu yüzden yorumun kendisi bir erişim-sınırı kararıdır ve sonnet'e verilmez. Ayrıca kontrat + 8 operation + ortak yardımcı fonksiyon aynı anda bağlanıyor (yeni veri şekli tasarımı). Güvenlik çekirdeği UYGULANMIYOR (yalnız lisans-içi agregasyon) → MAX değil XHIGH.\nNEDEN AÇIK: Kod tabanında 'benchmark' kelimesi YALNIZ yorum satırlarında geçiyor — grep'in 5 isabetinin hepsi yorum/açıklama: `reports-export.ts:15`, `reports.ts:821`, `paths/reports.yaml:179`, `generated/api.ts:2720` (üretilmiş), `lib/ssrf.ts:144` (alakasız 198.18.0.0/15 CIDR'ı). Hiçbir servis/route/model implementasyonu yok. Buna karşılık karşılaştırma ALTYAPISI var: `reports.ts:516-517` 'The comparison window: the same span immediately before `from`' + `previous_period` bloğu (satır 599 overview, satır 788 reviews) — hesap iki grupta yazılmış ama ortak yardımcıya çıkarılmamış ve diğer gruplarda yok.\nKAPSAM: (1) Belirsizlik kararı kodda yorumla kayda geçer: benchmark = AYNI LİSANSIN kendi geçmişiyle karşılaştırması (`baseline: previous_period | previous_year`); lisanslar-arası/sektör karşılaştırması AÇIKÇA reddedilir. (2) `reports.ts:516-517`'deki pencere hesabı ve `previous_period` üretimi tek `benchmarkWindow(from, to, baseline)` + `withBenchmark(...)` yardımcısına çıkarılır — overview/reviews davranışı DEĞİŞMEZ. (3) `?baseline=` query parametresi tüm rapor endpoint'lerine eklenir (varsayılan `previous_period` → geriye dönük uyumlu). (4) Kontrat: her operation'a `baseline` parametresi + `previous_period` şeması; re-bundle. (5) `buildGroupCsv` çıktısına benchmark sütun/satırı.\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/src/routes/reports-export.ts · apps/api/src/routes/reports-metrics.test.ts · packages/contract/openapi/paths/reports.yaml · packages/contract/openapi/openapi.yaml · apps/api/test/integration/reports-billing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts (satır 516-520 karşılaştırma penceresi hesabı + satır 565-605 overview `previous_period` bloğu — çıkarılacak ortak mantığın kaynağı) · apps/api/src/routes/reports.ts (satır 770-795 reviews `previous_period` — ikinci kopya, aynı yardımcıya taşınacak) · apps/api/src/routes/reports.ts (satır 87 `resolveRange` — query parametresi çözümleme deseni)\nKK (birebir): \"benchmark karşılaştırma\"\nKK DOĞRULAMA: `reports-metrics.test.ts` (saf unit) — `benchmarkWindow` eşit uzunlukta ve `from`'dan 1 ms önce biten pencere üretir; `previous_year` baseline'ı 365 gün kaydırır. `reports-billing.test.ts` — her rapor grubu `?baseline=previous_period` ile `previous_period` bloğu döner; `baseline` verilmezse overview/reviews çıktısı MEVCUT testlerle birebir aynı kalır. Cross-tenant negatif: benchmark yanıtı hiçbir koşulda başka lisansın rakamını içermez.\nKAPSAM DIŞI: Lisanslar-arası / sektör / anonim havuz benchmark'ı — AÇIKÇA REDDEDİLDİ (tenant izolasyonu; varsayım §V1). İstenirse ayrı kalem olarak kendi izolasyon+anonimleştirme tasarımıyla açılmalı · Hedef/SLA eşiği tanımlama (Goals, FR-MOD-13.3) · Benchmark'ın UI rozetleri — 07.7-i/-j (mevcut `Kpi` delta bileşeni yeniden kullanılır) · PDF çıktısında benchmark yerleşimi (07.7-g)\nSÖZLEŞME: YENİ PATH YOK — mevcut reports operation'larına katkısal `baseline` query parametresi + `previous_period` şema bloğu. Yine de re-bundle (`pnpm --filter @nexa/contract generate`) ZORUNLU; parametre/şema `src/generated/api.ts`'e yansımazsa web istemcisi tip hatası verir.\nMIGRATION: yok — hesaplama katmanı; benchmark referans tablosu AÇILMAZ.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce) — `baseline=industry` / `baseline=other_license` gibi tanımsız değer → 400 (lisanslar-arası karşılaştırma yolu kapalı, kod düzeyinde kanıt) · cross-tenant — iki lisans farklı veriyle kurulur; L1'in benchmark rakamı L2'nin verisinden etkilenmez · unit — `benchmarkWindow` pencere aritmetiği (eşit uzunluk, 1 ms boşluk, UTC tutarlılığı) · integration — regresyon: overview ve reviews'ün mevcut `previous_period` çıktısı birebir değişmedi · integration — `contract-parity.test.ts` (parametre eklendi, path eklenmedi)",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               1,
               2,
@@ -4137,7 +4137,7 @@
               4
             ],
             "parentId": "93",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-07T23:50:19.299Z"
           },
           {
             "id": 6,
@@ -4246,7 +4246,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-07T20:12:09.346Z"
+        "updatedAt": "2026-08-07T23:50:19.299Z"
       },
       {
         "id": "94",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-07T23:48:04.744Z",
+      "lastModified": "2026-08-07T23:50:19.299Z",
       "taskCount": 101,
       "completedCount": 80,
       "tags": [

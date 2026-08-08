@@ -2286,6 +2286,30 @@ components:
         exp_year: { type: integer, minimum: 2000, maximum: 2100 }
         holder_name: { type: string, minLength: 1, maxLength: 120 }
 
+    BenchmarkWindow:
+      type: object
+      description: |
+        The window a report is benchmarked against (FR-MOD-07.7). Always another
+        window of the **same** license — see the `baseline` query parameter for
+        why a cross-license benchmark is refused rather than unimplemented.
+
+        `baseline` names which comparison produced the block, because the same
+        `previous_period` key carries a different window depending on the
+        request and a client rendering "vs previous" must not have to guess
+        which one it received. Each report adds its own comparable figures
+        alongside; the figures are sent rather than a pre-computed delta, so a
+        client can show the change *and* the baseline, and a rounding choice
+        stays on one side of the wire.
+      required: [baseline, range]
+      properties:
+        baseline: { type: string, enum: [previous_period, previous_year] }
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+
     ReportsOverview:
       type: object
       required:
@@ -2298,34 +2322,28 @@ components:
             from: { type: string, format: date-time }
             to: { type: string, format: date-time }
         previous_period:
-          type: object
           description: |
-            The equal-length window immediately before `range`, so every headline
-            KPI can carry a vs-previous delta (FR-MOD-07.3.1). The comparable
-            figures are sent rather than a pre-computed delta, so a client shows
-            the change and the baseline both, and a rounding choice stays on one
-            side of the wire.
-          required: [range, chats, tickets, total_cases, closed, manual, assisted, automated]
-          properties:
-            range:
-              type: object
-              required: [from, to]
+            The benchmark window's headline figures, so every KPI card can carry
+            a vs-baseline delta (FR-MOD-07.3.1). No by-agent or by-tag depth —
+            nothing on a KPI card needs it.
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - type: object
+              required: [chats, tickets, total_cases, closed, manual, assisted, automated]
               properties:
-                from: { type: string, format: date-time }
-                to: { type: string, format: date-time }
-            chats: { type: integer }
-            tickets: { type: integer }
-            total_cases: { type: integer }
-            closed: { type: integer }
-            manual: { type: integer }
-            assisted: { type: integer }
-            automated: { type: integer }
-            avg_first_response_seconds: { type: integer, nullable: true }
-            avg_duration_seconds: { type: integer, nullable: true }
-            satisfaction_score:
-              type: number
-              nullable: true
-              description: Null when nobody rated the previous window.
+                chats: { type: integer }
+                tickets: { type: integer }
+                total_cases: { type: integer }
+                closed: { type: integer }
+                manual: { type: integer }
+                assisted: { type: integer }
+                automated: { type: integer }
+                avg_first_response_seconds: { type: integer, nullable: true }
+                avg_duration_seconds: { type: integer, nullable: true }
+                satisfaction_score:
+                  type: number
+                  nullable: true
+                  description: Null when nobody rated the baseline window.
         totals:
           type: object
           required: [chats, tickets, total_cases, closed, manual, assisted, automated, queued_now]
@@ -2429,7 +2447,7 @@ components:
         `by_day` and `by_agent` are always present. `by_hour`, `by_team` and
         `by_channel` are optional — a client that only knows the original two
         dimensions keeps working unchanged.
-      required: [range, by_day, by_agent]
+      required: [range, previous_period, by_day, by_agent]
       properties:
         range:
           type: object
@@ -2437,6 +2455,23 @@ components:
           properties:
             from: { type: string, format: date-time }
             to: { type: string, format: date-time }
+        previous_period:
+          description: |
+            The benchmark window's resolution split — the whole license, not a
+            baseline copy of the five dimensions. A dimension's buckets are
+            derived from the window (which days it holds, which teams were
+            active), so a per-bucket baseline would pair rows that are not
+            counterparts; the split itself is what the two windows share.
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - type: object
+              required: [chats, closed, manual, assisted, automated]
+              properties:
+                chats: { type: integer }
+                closed: { type: integer }
+                manual: { type: integer }
+                assisted: { type: integer }
+                automated: { type: integer }
         by_day:
           type: array
           items:
@@ -2524,7 +2559,7 @@ components:
         AI Agent performance for its own report tab (FR-MOD-07.4). `resolutions`
         is ADR-09's figure — the same one the invoice's AI-resolution counter
         uses — so this surface never disagrees with the bill.
-      required: [range, resolutions, transfers, skill_runs]
+      required: [range, previous_period, resolutions, transfers, skill_runs]
       properties:
         range:
           type: object
@@ -2532,6 +2567,23 @@ components:
           properties:
             from: { type: string, format: date-time }
             to: { type: string, format: date-time }
+        previous_period:
+          description: |
+            The benchmark window's AI counters, so the tab can show each against
+            what it was. `avg_automated_duration_seconds` is not repeated here —
+            a duration average is not a figure the tab tracks a delta on.
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - type: object
+              required: [resolutions, transfers, skill_runs]
+              properties:
+                resolutions: { type: integer }
+                resolution_rate:
+                  type: number
+                  nullable: true
+                  description: Null when nothing closed in the baseline window.
+                transfers: { type: integer }
+                skill_runs: { type: integer }
         resolutions:
           type: integer
           description: Chats closed with no agent-authored event (ADR-09).
@@ -2565,7 +2617,7 @@ components:
         (not `0`) for an unrated span — the same rule the Overview's satisfaction
         follows. `ecommerce` is the tracked-sales skeleton (FR-MOD-13.5, v2): its
         shape is present but `configured` is `false` until a sales source is wired.
-      required: [range, csat, by_day, ecommerce]
+      required: [range, previous_period, csat, by_day, ecommerce]
       properties:
         range:
           type: object
@@ -2577,18 +2629,10 @@ components:
           $ref: "#/components/schemas/CsatSummary"
         previous_period:
           description: |
-            CSAT for the equal-length window immediately before this one, so the
-            tab can show a vs-previous delta (the PRD's "67% vs 57%").
+            CSAT for the benchmark window, so the tab can show a vs-baseline
+            delta (the PRD's "67% vs 57%").
           allOf:
-            - type: object
-              required: [range]
-              properties:
-                range:
-                  type: object
-                  required: [from, to]
-                  properties:
-                    from: { type: string, format: date-time }
-                    to: { type: string, format: date-time }
+            - $ref: "#/components/schemas/BenchmarkWindow"
             - $ref: "#/components/schemas/CsatSummary"
         by_day:
           type: array
@@ -2645,19 +2689,14 @@ components:
             from: { type: string, format: date-time }
             to: { type: string, format: date-time }
         previous_period:
-          type: object
           description: |
-            The equal-length window immediately before `range`. Each topic's
-            `trend` compares its volume against this window — the same
-            previous-window shape the Overview and Reviews reports carry.
-          required: [range]
-          properties:
-            range:
-              type: object
-              required: [from, to]
-              properties:
-                from: { type: string, format: date-time }
-                to: { type: string, format: date-time }
+            The benchmark window. Each topic's `previous_volume` — and so its
+            `trend` — is read here, which is why `baseline` moves the comparison
+            itself rather than only labelling it. No window-level figure rides
+            along: a topic's baseline volume belongs on the topic's own row,
+            where it can be matched to the cluster it describes.
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
         min_conversations:
           type: integer
           description: |
@@ -2723,7 +2762,7 @@ components:
         (FR-MOD-13.6). Aggregate counts only — no ticket subject or customer
         identity is in this report. A merged ticket (`merged_into_id` set) is
         excluded from every bucket.
-      required: [range, by_day, by_status, by_priority]
+      required: [range, previous_period, by_day, by_status, by_priority]
       properties:
         range:
           type: object
@@ -2731,6 +2770,20 @@ components:
           properties:
             from: { type: string, format: date-time }
             to: { type: string, format: date-time }
+        previous_period:
+          description: |
+            Ticket counts for the benchmark window, split the same way `by_day`
+            splits them and with the same merged-ticket exclusion — a benchmark
+            counted differently from the series beside it would be a number
+            nobody could reconcile.
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - type: object
+              required: [open, closed, total]
+              properties:
+                open: { type: integer }
+                closed: { type: integer }
+                total: { type: integer }
         by_day:
           type: array
           description: |
@@ -2781,7 +2834,7 @@ components:
         is bound to this license only when it has touched the license through a
         chat or a ticket. The organization-wide `is_lead` count is deliberately
         not used — it would leak a sibling license's leads into this report.
-      required: [range, by_day, totals]
+      required: [range, previous_period, by_day, totals]
       properties:
         range:
           type: object
@@ -2789,6 +2842,17 @@ components:
           properties:
             from: { type: string, format: date-time }
             to: { type: string, format: date-time }
+        previous_period:
+          description: |
+            New leads in the benchmark window, counted through the same
+            first-touch binding as `totals.leads` — so the benchmark stays
+            inside this license exactly as the window's own figure does.
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - type: object
+              required: [leads]
+              properties:
+                leads: { type: integer }
         by_day:
           type: array
           description: |
@@ -2827,7 +2891,7 @@ components:
         one `ReportsBreakdown.by_agent` uses): an agent needs at least one
         thread *created* in the window to appear here, even if a rating or
         transfer landed inside the window on an older thread of theirs.
-      required: [range, agents]
+      required: [range, previous_period, agents]
       properties:
         range:
           type: object
@@ -2835,6 +2899,25 @@ components:
           properties:
             from: { type: string, format: date-time }
             to: { type: string, format: date-time }
+        previous_period:
+          description: |
+            The license's resolution split in the benchmark window — not a
+            baseline copy of the agent table. Which agents `agents` holds is
+            derived from the window (the `LIMIT 20` over agents with a thread
+            created in it), so the two windows would list different people and a
+            row-by-row comparison would silently pair an agent with someone
+            else, or with a blank where they did not make the earlier cut. A
+            per-agent history is a different report, not this one's baseline.
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - type: object
+              required: [chats, closed, manual, assisted, automated]
+              properties:
+                chats: { type: integer }
+                closed: { type: integer }
+                manual: { type: integer }
+                assisted: { type: integer }
+                automated: { type: integer }
         agents:
           type: array
           description: |
@@ -2890,7 +2973,16 @@ components:
         `configured` is `false` and every figure `null` — an honest "not set
         up" state, never a fabricated zero, until FR-MOD-13.5's Sales tracker
         wires a real source.
-      required: [range, configured, tracked_sales, attributed_revenue_cents, currency, conversions]
+      required:
+        [
+          range,
+          previous_period,
+          configured,
+          tracked_sales,
+          attributed_revenue_cents,
+          currency,
+          conversions,
+        ]
       properties:
         range:
           type: object
@@ -2898,6 +2990,23 @@ components:
           properties:
             from: { type: string, format: date-time }
             to: { type: string, format: date-time }
+        previous_period:
+          description: |
+            The benchmark window, as honest as the report itself: with no sales
+            source there is nothing to have been better or worse than, so every
+            figure is `null` here too. Zeros would let a surface render a
+            "0 → 0, no change" badge that reads as a measurement.
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - type: object
+              required:
+                [configured, tracked_sales, attributed_revenue_cents, currency, conversions]
+              properties:
+                configured: { type: boolean }
+                tracked_sales: { type: integer, nullable: true }
+                attributed_revenue_cents: { type: integer, nullable: true }
+                currency: { type: string, nullable: true }
+                conversions: { type: integer, nullable: true }
         configured:
           type: boolean
           description: Whether a sales-tracking source is wired. Always false in v1.
@@ -3153,6 +3262,33 @@ components:
       in: query
       required: false
       schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    BenchmarkBaseline:
+      name: baseline
+      in: query
+      required: false
+      description: |
+        Which of **this license's own** past windows the report is benchmarked
+        against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+        `previous_period`, the comparison the Overview and Reviews reports made
+        before this parameter existed, so omitting it changes nothing.
+
+        - `previous_period` — the equal-length window immediately before the
+          requested one, ending a millisecond short of `from` so no instant
+          falls in both.
+        - `previous_year` — the same window shifted back 365 days: the
+          comparison for a seasonal figure, where the period immediately before
+          is the wrong yardstick. A fixed 365 days rather than calendar-year
+          arithmetic, so a leap day cannot make the two windows different
+          lengths.
+
+        There is deliberately **no** cross-license baseline — no industry
+        average, peer cohort or anonymised pool. Every report figure comes from
+        a license-scoped query under RLS (NFR-S4); a benchmark against other
+        licenses would have to read rows this tenant may not see, and
+        aggregation does not make that safe when the cohort can be narrowed to
+        one. An unrecognised value is a 400, not a silent fallback, so
+        `baseline=industry` fails loudly rather than appearing supported.
+      schema: { type: string, enum: [previous_period, previous_year] }
 
 security:
   - bearerAuth: []

@@ -13,6 +13,67 @@
 
 ## Task log (newest-first)
 
+### tm 93.5 — 07.7-e: benchmark karşılaştırma katmanı (tüm rapor gruplarına ortak vs-baseline) — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **Belirsizlik kararı koda yazıldı (§V1).** PRD "benchmark karşılaştırma" der, neye karşı
+    olduğunu söylemez. Karar: benchmark = **aynı lisansın kendi geçmişi**
+    (`baseline: previous_period | previous_year`). Lisanslar-arası / sektör / anonim havuz
+    **reddedildi** ve gerekçe erişim-sınırı olarak yazıldı (`reports-metrics.ts` blok yorumu):
+    her rapor rakamı RLS altında lisans-kapsamlı sorgudan gelir (ADR-12, NFR-S4); agregasyon
+    bunu güvenli yapmaz, çünkü kohort bire indirilebilir (veya çağıran pencereyi daraltarak
+    indirebilir) ve rakip trafiği ifşa olur. `baseline` **kapalı enum** — `industry` sessizce
+    varsayılana düşmez, **400** alır; "desteklenmiyor gibi görünmesin" diye.
+  - **Saf çekirdek:** `benchmarkWindow(from, to, baseline)` → `apps/api/src/routes/reports-metrics.ts`
+    (Fastify/Prisma/env importu yok). `previous_period` eski üç satırın birebir aynısı
+    (`from-span` → `from-1ms`); `previous_year` **sabit 365 gün** kaydırır — takvim yılı artık
+    günde iki pencereyi farklı uzunlukta yapardı (eşit-uzunluk kuralının ihlali) ve saat
+    dilimi/DST akıl yürütmesi isterdi.
+  - **`withBenchmark(...)`** `previous_period` bloğunu tek yerde üretir
+    (`{ baseline, range, ...figures }`). Overview + Reviews'ün elle yazılmış kopyaları kaldırıldı;
+    davranış birebir korundu (regresyon testi: baseline'sız çıktı `?baseline=previous_period`
+    çıktısıyla `toEqual`). `?baseline=` dokuz rapor ucunda + `/reports/export`'ta.
+  - **Grup başına baseline rakamı** ortak `groupBenchmark` dispatch'inden gelir (ekran = indirme).
+    **Bilinçli sınır:** breakdown ve team-performance için boyut/ajan tablosu **kopyalanmaz** —
+    kovalar pencereden türetilir (`LIMIT 20`, hangi günler/takımlar aktifti), satır-satır
+    karşılaştırma bir ajanı başkasıyla eşleştirirdi; karşılaştırılabilir büyüklük lisansın kendi
+    çözüm ayrımı. Sales'te baseline de `null` (0 değil — "0 → 0, değişim yok" rozeti ölçüm gibi okunur).
+    Topics'te `baseline` kümeleme çağrısına kadar iner, yani trend penceresi gerçekten kayar.
+  - **CSV benchmark bloğu opt-in.** `?baseline=` verilirse tabloya `benchmark_<key>,value`
+    satırları (tablo genişliğine pad'li) eklenir; verilmezse dosya **bayt-birebir eskisi**.
+    Gerekçe: JSON nesnesi anahtar kazanınca zararsızdır, CSV konumsaldır — 1. sütunu tarih diye
+    okuyan bir script bozulurdu.
+  - **Kontrat: YENİ PATH YOK.** `components/parameters/BenchmarkBaseline` +
+    `components/schemas/BenchmarkWindow`; dokuz operation + export parametreyi `$ref`'ler;
+    `previous_period` eksik olan altı şemaya `allOf` ile eklendi ve `required`'a alındı.
+    `pnpm --filter @nexa/contract generate` (141 path, sayı değişmedi) + contract-parity 5/5.
+    Migration YOK (hesaplama katmanı).
+- **Doğrulama (hepsi ön planda, exit 0):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → 10/10, **@nexa/api 1684**
+  (`reports-metrics` unit 12→21, `reports-billing` "benchmark comparison (07.7-e)" +55) ·
+  `pnpm -w test:integration` **1310/1310** · `pnpm -w build` (7/7) · `pnpm -w test:e2e` **74/74**.
+- **Varsayımlar:** §V1 (yukarıda). `previous_year` istenen aralık bir yıldan uzunsa istenen
+  pencereyle örtüşebilir — bu sorulan sorunun dürüst sonucu, yanlış sayım değil (iki pencere
+  bağımsız ölçülür); kod yorumunda yazılı.
+- **Ortam notu:** Postgres+Redis **yerelde 5433/6380'de** koşuyor, Docker gerekmiyor
+  (tm 77.4 notu geçerli). `pnpm -w test:e2e` env'i kendi yüklemiyor:
+  `set -a && . ./.env && set +a && pnpm -w test:e2e`. **e2e'yi arka arkaya koşmayın** —
+  global-setup yalnız seed eder, veri birikince `customers.spec.ts` sayım testleri düşer
+  (bu pencerede bir kez yaşandı); önce `seedFixtures` çağıran bir integration testi koşturun
+  (ör. `tenant-isolation.test.ts` → `resetDatabase` truncate eder), sonra e2e → 74/74.
+  `skills-routing.spec.ts:76` flake'i (tm 77.4'te de görüldü, bu görevle ilgisiz) kirli DB'li
+  koşuda düştü, tek başına ve temiz koşuda geçti.
+- **Sonraki pencereye not:** `-e` bitti; `-g` (PDF export rotası) artık **hem** `-f` hem `-e`'yi
+  hazır buluyor — `exportFilename`'in 4. parametresi (`format`) ve `toPdf` zaten var, `-g`'nin işi
+  bağlama. **`buildGroupCsv`'nin 6. parametresi (`baseline`) opsiyonel kalmalı** — `undefined`
+  "benchmark istemiyorum" demek, `'previous_period'`'a çevirmeyin, CSV'nin geriye uyumu buna bağlı.
+  UI rozetleri (`-i`/`-j`) `previous_period.baseline` alanını okuyup hangi karşılaştırmayı
+  gösterdiklerini yazabilir — alan bunun için var. `-h` (Save view) hâlâ bağımsız.
+- **Çalışma alanı:** `run-loop.sh` bu pencere açılmadan önce de değişikti (döngü runner'ının
+  blocked-görev yeniden deneme sayacı, tm 77.4 notuna bakınız) — bu görevin kapsamı olmadığı için
+  **yine commit edilmedi**. `apps/e2e/kanit/*.png` kanıt görüntüleri e2e koşusunun ürünü ve
+  önceki pencerelerdeki gibi commit'e dahil.
+
 ### tm 77.4 — WORKSCHED-d: presence olay günlüğü yazma yolu + vardiya↔statü öncelik kuralı — done — 2026-08-08 UTC
 
 - **Yapıldı:**

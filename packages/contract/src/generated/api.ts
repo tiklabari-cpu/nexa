@@ -3292,7 +3292,15 @@ export interface paths {
      *     spreadsheet formula injection, and the body is `no-store`: a report is a
      *     point-in-time snapshot, never served from a shared cache.
      *
-     *     PDF and benchmark comparison are v2 (PLAN §4.4.8) and not offered here.
+     *     `baseline` appends the benchmark block as trailing `benchmark_<key>,value`
+     *     rows — the same figures the group's JSON `previous_period` carries, padded
+     *     to the table's width. It is opt-in here, unlike the JSON reports which
+     *     always carry a benchmark: a JSON object gains a key harmlessly, but a CSV
+     *     is positional, and a trailing block would change what a script reading
+     *     column 1 as a date sees. Omit it and the file is byte-for-byte what this
+     *     endpoint has always produced.
+     *
+     *     PDF export is still v2 work (PLAN §4.4.8) and not offered here.
      */
     get: operations['exportReport'];
     put?: never;
@@ -5347,6 +5355,29 @@ export interface components {
       exp_year: number;
       holder_name: string;
     };
+    /**
+     * @description The window a report is benchmarked against (FR-MOD-07.7). Always another
+     *     window of the **same** license — see the `baseline` query parameter for
+     *     why a cross-license benchmark is refused rather than unimplemented.
+     *
+     *     `baseline` names which comparison produced the block, because the same
+     *     `previous_period` key carries a different window depending on the
+     *     request and a client rendering "vs previous" must not have to guess
+     *     which one it received. Each report adds its own comparable figures
+     *     alongside; the figures are sent rather than a pre-computed delta, so a
+     *     client can show the change *and* the baseline, and a rounding choice
+     *     stays on one side of the wire.
+     */
+    BenchmarkWindow: {
+      /** @enum {string} */
+      baseline: 'previous_period' | 'previous_year';
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+    };
     ReportsOverview: {
       range: {
         /** Format: date-time */
@@ -5355,19 +5386,11 @@ export interface components {
         to: string;
       };
       /**
-       * @description The equal-length window immediately before `range`, so every headline
-       *     KPI can carry a vs-previous delta (FR-MOD-07.3.1). The comparable
-       *     figures are sent rather than a pre-computed delta, so a client shows
-       *     the change and the baseline both, and a rounding choice stays on one
-       *     side of the wire.
+       * @description The benchmark window's headline figures, so every KPI card can carry
+       *     a vs-baseline delta (FR-MOD-07.3.1). No by-agent or by-tag depth —
+       *     nothing on a KPI card needs it.
        */
-      previous_period: {
-        range: {
-          /** Format: date-time */
-          from: string;
-          /** Format: date-time */
-          to: string;
-        };
+      previous_period: components['schemas']['BenchmarkWindow'] & {
         chats: number;
         tickets: number;
         total_cases: number;
@@ -5377,7 +5400,7 @@ export interface components {
         automated: number;
         avg_first_response_seconds?: number | null;
         avg_duration_seconds?: number | null;
-        /** @description Null when nobody rated the previous window. */
+        /** @description Null when nobody rated the baseline window. */
         satisfaction_score?: number | null;
       };
       totals: {
@@ -5454,6 +5477,20 @@ export interface components {
         from: string;
         /** Format: date-time */
         to: string;
+      };
+      /**
+       * @description The benchmark window's resolution split — the whole license, not a
+       *     baseline copy of the five dimensions. A dimension's buckets are
+       *     derived from the window (which days it holds, which teams were
+       *     active), so a per-bucket baseline would pair rows that are not
+       *     counterparts; the split itself is what the two windows share.
+       */
+      previous_period: components['schemas']['BenchmarkWindow'] & {
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
       };
       by_day: {
         /** @description UTC day as `YYYY-MM-DD`. */
@@ -5533,6 +5570,18 @@ export interface components {
         /** Format: date-time */
         to: string;
       };
+      /**
+       * @description The benchmark window's AI counters, so the tab can show each against
+       *     what it was. `avg_automated_duration_seconds` is not repeated here —
+       *     a duration average is not a figure the tab tracks a delta on.
+       */
+      previous_period: components['schemas']['BenchmarkWindow'] & {
+        resolutions: number;
+        /** @description Null when nothing closed in the baseline window. */
+        resolution_rate?: number | null;
+        transfers: number;
+        skill_runs: number;
+      };
       /** @description Chats closed with no agent-authored event (ADR-09). */
       resolutions: number;
       /** @description Share of *closed* chats the AI resolved. Null when nothing closed. */
@@ -5566,17 +5615,11 @@ export interface components {
       };
       csat: components['schemas']['CsatSummary'];
       /**
-       * @description CSAT for the equal-length window immediately before this one, so the
-       *     tab can show a vs-previous delta (the PRD's "67% vs 57%").
+       * @description CSAT for the benchmark window, so the tab can show a vs-baseline
+       *     delta (the PRD's "67% vs 57%").
        */
-      previous_period?: {
-        range: {
-          /** Format: date-time */
-          from: string;
-          /** Format: date-time */
-          to: string;
-        };
-      } & components['schemas']['CsatSummary'];
+      previous_period: components['schemas']['BenchmarkWindow'] &
+        components['schemas']['CsatSummary'];
       /** @description One row per UTC day with at least one rating, ascending by date. */
       by_day: ({
         /** @description UTC day as `YYYY-MM-DD`. */
@@ -5617,18 +5660,13 @@ export interface components {
         to: string;
       };
       /**
-       * @description The equal-length window immediately before `range`. Each topic's
-       *     `trend` compares its volume against this window — the same
-       *     previous-window shape the Overview and Reviews reports carry.
+       * @description The benchmark window. Each topic's `previous_volume` — and so its
+       *     `trend` — is read here, which is why `baseline` moves the comparison
+       *     itself rather than only labelling it. No window-level figure rides
+       *     along: a topic's baseline volume belongs on the topic's own row,
+       *     where it can be matched to the cluster it describes.
        */
-      previous_period: {
-        range: {
-          /** Format: date-time */
-          from: string;
-          /** Format: date-time */
-          to: string;
-        };
-      };
+      previous_period: components['schemas']['BenchmarkWindow'];
       /**
        * @description The floor of clusterable conversations the window needs before topics
        *     are computed. Below it, `sufficient_data` is false and `topics` is
@@ -5690,6 +5728,17 @@ export interface components {
         to: string;
       };
       /**
+       * @description Ticket counts for the benchmark window, split the same way `by_day`
+       *     splits them and with the same merged-ticket exclusion — a benchmark
+       *     counted differently from the series beside it would be a number
+       *     nobody could reconcile.
+       */
+      previous_period: components['schemas']['BenchmarkWindow'] & {
+        open: number;
+        closed: number;
+        total: number;
+      };
+      /**
        * @description One row per UTC day with at least one ticket created, ascending by
        *     date. `open`/`closed` split by the ticket's *current* status
        *     (`solved`/`closed` count as closed); `total` is `open + closed`.
@@ -5736,6 +5785,14 @@ export interface components {
         to: string;
       };
       /**
+       * @description New leads in the benchmark window, counted through the same
+       *     first-touch binding as `totals.leads` — so the benchmark stays
+       *     inside this license exactly as the window's own figure does.
+       */
+      previous_period: components['schemas']['BenchmarkWindow'] & {
+        leads: number;
+      };
+      /**
        * @description One row per UTC day on which at least one lead first touched this
        *     license, ascending by date. `count` is the number of leads whose
        *     first contact with the license fell on that day.
@@ -5775,6 +5832,22 @@ export interface components {
         from: string;
         /** Format: date-time */
         to: string;
+      };
+      /**
+       * @description The license's resolution split in the benchmark window — not a
+       *     baseline copy of the agent table. Which agents `agents` holds is
+       *     derived from the window (the `LIMIT 20` over agents with a thread
+       *     created in it), so the two windows would list different people and a
+       *     row-by-row comparison would silently pair an agent with someone
+       *     else, or with a blank where they did not make the earlier cut. A
+       *     per-agent history is a different report, not this one's baseline.
+       */
+      previous_period: components['schemas']['BenchmarkWindow'] & {
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
       };
       /**
        * @description One row per agent with at least one thread created in the window,
@@ -5820,6 +5893,19 @@ export interface components {
         from: string;
         /** Format: date-time */
         to: string;
+      };
+      /**
+       * @description The benchmark window, as honest as the report itself: with no sales
+       *     source there is nothing to have been better or worse than, so every
+       *     figure is `null` here too. Zeros would let a surface render a
+       *     "0 → 0, no change" badge that reads as a measurement.
+       */
+      previous_period: components['schemas']['BenchmarkWindow'] & {
+        configured: boolean;
+        tracked_sales: number | null;
+        attributed_revenue_cents: number | null;
+        currency: string | null;
+        conversions: number | null;
       };
       /** @description Whether a sales-tracking source is wired. Always false in v1. */
       configured: boolean;
@@ -6037,6 +6123,30 @@ export interface components {
      */
     BrandHeader: string;
     Limit: number;
+    /**
+     * @description Which of **this license's own** past windows the report is benchmarked
+     *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+     *     `previous_period`, the comparison the Overview and Reviews reports made
+     *     before this parameter existed, so omitting it changes nothing.
+     *
+     *     - `previous_period` — the equal-length window immediately before the
+     *       requested one, ending a millisecond short of `from` so no instant
+     *       falls in both.
+     *     - `previous_year` — the same window shifted back 365 days: the
+     *       comparison for a seasonal figure, where the period immediately before
+     *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+     *       arithmetic, so a leap day cannot make the two windows different
+     *       lengths.
+     *
+     *     There is deliberately **no** cross-license baseline — no industry
+     *     average, peer cohort or anonymised pool. Every report figure comes from
+     *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+     *     licenses would have to read rows this tenant may not see, and
+     *     aggregation does not make that safe when the cohort can be narrowed to
+     *     one. An unrecognised value is a 400, not a silent fallback, so
+     *     `baseline=industry` fails loudly rather than appearing supported.
+     */
+    BenchmarkBaseline: 'previous_period' | 'previous_year';
   };
   requestBodies: never;
   headers: never;
@@ -11227,6 +11337,30 @@ export interface operations {
       query?: {
         from?: string;
         to?: string;
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
       };
       header?: never;
       path?: never;
@@ -11254,6 +11388,30 @@ export interface operations {
       query?: {
         from?: string;
         to?: string;
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
       };
       header?: never;
       path?: never;
@@ -11281,6 +11439,30 @@ export interface operations {
       query?: {
         from?: string;
         to?: string;
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
       };
       header?: never;
       path?: never;
@@ -11308,6 +11490,30 @@ export interface operations {
       query?: {
         from?: string;
         to?: string;
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
       };
       header?: never;
       path?: never;
@@ -11335,6 +11541,30 @@ export interface operations {
       query?: {
         from?: string;
         to?: string;
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
       };
       header?: never;
       path?: never;
@@ -11362,6 +11592,30 @@ export interface operations {
       query?: {
         from?: string;
         to?: string;
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
       };
       header?: never;
       path?: never;
@@ -11389,6 +11643,30 @@ export interface operations {
       query?: {
         from?: string;
         to?: string;
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
       };
       header?: never;
       path?: never;
@@ -11416,6 +11694,30 @@ export interface operations {
       query?: {
         from?: string;
         to?: string;
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
       };
       header?: never;
       path?: never;
@@ -11443,6 +11745,30 @@ export interface operations {
       query?: {
         from?: string;
         to?: string;
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
       };
       header?: never;
       path?: never;
@@ -11494,6 +11820,30 @@ export interface operations {
         group: string;
         from?: string;
         to?: string;
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
       };
       header?: never;
       path?: never;

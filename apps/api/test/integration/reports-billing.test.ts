@@ -2133,6 +2133,437 @@ describe('reports and billing', () => {
 
   // =========================================================================
 
+  /**
+   * Benchmark comparison (FR-MOD-07.7, 07.7-e).
+   *
+   * The PRD says "benchmark comparison" without saying against what. This suite
+   * pins the answer the code committed to: a license is compared with its own
+   * past, never with another license. The negative cases come first, because the
+   * boundary is the point — `baseline=industry` failing is not a gap, it is the
+   * feature.
+   */
+  describe('benchmark comparison (07.7-e)', () => {
+    /** Every report group that answers on its own endpoint. */
+    const GROUP_PATHS = [
+      '/reports/overview',
+      '/reports/breakdown',
+      '/reports/ai-agent',
+      '/reports/reviews',
+      '/reports/topics',
+      '/reports/cases',
+      '/reports/leads',
+      '/reports/team-performance',
+      '/reports/sales',
+    ] as const;
+
+    const CSV_GROUPS = [
+      'overview',
+      'breakdown',
+      'ai-agent',
+      'reviews',
+      'topics',
+      'cases',
+      'leads',
+      'team-performance',
+      'sales',
+    ] as const;
+
+    /** Split a CSV body into its non-empty lines (rows are CRLF-terminated). */
+    const csvLines = (body: string): string[] => body.split('\r\n').filter((line) => line !== '');
+
+    describe('the license boundary', () => {
+      it.each(['industry', 'other_license', 'peer_cohort', 'PREVIOUS_PERIOD', ''])(
+        'rejects `baseline=%s` with 400 on every report group',
+        async (baseline) => {
+          for (const path of GROUP_PATHS) {
+            const response = await server.get(`${path}?baseline=${baseline}`, auth);
+            expect(response.statusCode, `${path}?baseline=${baseline}`).toBe(400);
+          }
+        },
+      );
+
+      it('rejects a cross-license baseline on the export endpoint too', async () => {
+        const response = await server.get('/reports/export?group=overview&baseline=industry', auth);
+        expect(response.statusCode).toBe(400);
+      });
+
+      it('names `baseline` in the error rather than blaming the date range', async () => {
+        // A caller who tried `baseline=industry` must learn which parameter was
+        // refused; "Invalid date range." would send them to the wrong place.
+        const rejected = (await server.get('/reports/overview?baseline=industry', auth)).json();
+        expect(JSON.stringify(rejected)).toContain('baseline');
+
+        // The date-range message is unchanged for an actual date-range mistake.
+        const backwards = (
+          await server.get('/reports/overview?from=2026-08-01&to=2026-07-01', auth)
+        ).json();
+        expect(JSON.stringify(backwards)).not.toContain('baseline');
+      });
+
+      it("never lets another license's data reach this license's benchmark", async () => {
+        // Two licenses, different volumes, overlapping windows. B runs three
+        // conversations in the baseline window; A runs one. A's benchmark must
+        // see its own single chat, not B's three, whichever way it is asked.
+        const theirToken = await grantToken(owner, {
+          licenseId: fx.b.licenseId,
+          organizationId: fx.b.organizationId,
+          ownerId: fx.b.ownerAccountId,
+          scopes: ['reports_read'],
+        });
+
+        const mine = await conversation({ agentReplies: true, customerName: 'A earlier' });
+        await backdateChat(mine, new Date(Date.now() - 15 * 86_400_000));
+
+        // B's chats, written straight to the database under B's license. One
+        // customer each: a license holds at most one chat per customer.
+        const earlier = new Date(Date.now() - 15 * 86_400_000);
+        for (let index = 0; index < 3; index += 1) {
+          const theirCustomer = await owner.customer.create({
+            data: { organizationId: fx.b.organizationId, name: `B visitor ${index}` },
+            select: { id: true },
+          });
+          const chatId = generateShortId();
+          await owner.chat.create({
+            data: {
+              id: chatId,
+              licenseId: fx.b.licenseId,
+              customerId: theirCustomer.id,
+              createdAt: earlier,
+            },
+          });
+          await owner.thread.create({
+            data: {
+              id: generateShortId(),
+              chatId,
+              licenseId: fx.b.licenseId,
+              active: false,
+              createdAt: earlier,
+              closedAt: earlier,
+            },
+          });
+        }
+
+        const to = new Date();
+        const from = new Date(to.getTime() - 10 * 86_400_000);
+        const query = `from=${from.toISOString()}&to=${to.toISOString()}&baseline=previous_period`;
+
+        const ours = (await server.get(`/reports/overview?${query}`, auth)).json();
+        const theirs = (
+          await server.get(`/reports/overview?${query}`, {
+            authorization: `Bearer ${theirToken}`,
+          })
+        ).json();
+
+        expect(ours.previous_period.chats).toBe(1);
+        expect(theirs.previous_period.chats).toBe(3);
+
+        // Same window, same baseline, different answers — the benchmark is a
+        // per-license figure, not a pooled one. (If it ever became pooled both
+        // would read 4, which is what this assertion exists to catch.)
+        expect(ours.previous_period.chats).not.toBe(theirs.previous_period.chats);
+      });
+    });
+
+    describe('every group carries a benchmark', () => {
+      it.each(GROUP_PATHS)('%s returns a previous_period block', async (path) => {
+        const body = (await server.get(`${path}?baseline=previous_period`, auth)).json();
+        expect(body.previous_period).toBeDefined();
+        expect(body.previous_period.baseline).toBe('previous_period');
+        // The block always states its own window, so a client never has to
+        // recompute what it is looking at.
+        expect(Date.parse(body.previous_period.range.to)).toBe(Date.parse(body.range.from) - 1);
+        expect(Date.parse(body.previous_period.range.from)).toBeLessThan(
+          Date.parse(body.previous_period.range.to),
+        );
+      });
+
+      it.each(GROUP_PATHS)('%s defaults to previous_period when none is asked for', async (path) => {
+        const [implicit, explicit] = await Promise.all([
+          server.get(path, auth),
+          server.get(`${path}?baseline=previous_period`, auth),
+        ]);
+        expect(implicit.json().previous_period.baseline).toBe('previous_period');
+        // Windows resolve to "now" per request, so the ranges differ by
+        // milliseconds; the shape and the baseline are what must match.
+        expect(Object.keys(implicit.json().previous_period).sort()).toEqual(
+          Object.keys(explicit.json().previous_period).sort(),
+        );
+      });
+
+      it('leaves the Overview and Reviews figures exactly as they were', async () => {
+        // The regression this task most had to avoid: the two reports that
+        // already compared periods must report the same numbers after the
+        // arithmetic moved into `benchmarkWindow`.
+        await conversation({ agentReplies: true, customerName: 'Now' });
+        const earlier = await conversation({ agentReplies: true, customerName: 'Earlier' });
+        await backdateChat(earlier, new Date(Date.now() - 15 * 86_400_000));
+
+        const to = new Date();
+        const from = new Date(to.getTime() - 10 * 86_400_000);
+        const range = `from=${from.toISOString()}&to=${to.toISOString()}`;
+
+        const [implicit, explicit] = await Promise.all([
+          server.get(`/reports/overview?${range}`, auth),
+          server.get(`/reports/overview?${range}&baseline=previous_period`, auth),
+        ]);
+        const withoutBaseline = implicit.json().previous_period;
+        const withBaseline = explicit.json().previous_period;
+
+        expect(withoutBaseline.chats).toBe(1);
+        expect(withoutBaseline).toEqual(withBaseline);
+        expect(withoutBaseline.range.to).toBe(new Date(from.getTime() - 1).toISOString());
+      });
+
+      it('reports the Sales benchmark as null, not zero', async () => {
+        // The skeleton stays honest on both sides: with no sales source there is
+        // nothing to have been better or worse than.
+        const sales = (await server.get('/reports/sales?baseline=previous_period', auth)).json();
+        expect(sales.previous_period.configured).toBe(false);
+        expect(sales.previous_period.tracked_sales).toBeNull();
+        expect(sales.previous_period.attributed_revenue_cents).toBeNull();
+        expect(sales.previous_period.currency).toBeNull();
+        expect(sales.previous_period.conversions).toBeNull();
+      });
+    });
+
+    describe('previous_year', () => {
+      it('moves the baseline window back 365 days on every group', async () => {
+        const to = new Date('2026-07-31T00:00:00.000Z');
+        const from = new Date('2026-07-01T00:00:00.000Z');
+        const range = `from=${from.toISOString()}&to=${to.toISOString()}`;
+
+        for (const path of GROUP_PATHS) {
+          const body = (await server.get(`${path}?${range}&baseline=previous_year`, auth)).json();
+          expect(body.previous_period.baseline, path).toBe('previous_year');
+          expect(body.previous_period.range.from, path).toBe('2025-07-01T00:00:00.000Z');
+          expect(body.previous_period.range.to, path).toBe('2025-07-31T00:00:00.000Z');
+        }
+      });
+
+      it('counts a chat that falls in the year-ago window and not in the period before', async () => {
+        const yearAgo = await conversation({ agentReplies: true, customerName: 'Year ago' });
+        await backdateChat(yearAgo, new Date(Date.now() - 365 * 86_400_000 - 3 * 86_400_000));
+
+        const to = new Date();
+        const from = new Date(to.getTime() - 10 * 86_400_000);
+        const range = `from=${from.toISOString()}&to=${to.toISOString()}`;
+
+        const lastYear = (
+          await server.get(`/reports/overview?${range}&baseline=previous_year`, auth)
+        ).json();
+        const lastPeriod = (
+          await server.get(`/reports/overview?${range}&baseline=previous_period`, auth)
+        ).json();
+
+        expect(lastYear.previous_period.chats).toBe(1);
+        expect(lastPeriod.previous_period.chats).toBe(0);
+      });
+    });
+
+    describe('per-group figures', () => {
+      it('benchmarks Cases against tickets counted the same way the day split counts them', async () => {
+        const to = new Date();
+        const from = new Date(to.getTime() - 10 * 86_400_000);
+        const inBaseline = new Date(to.getTime() - 15 * 86_400_000);
+
+        const ticket = async (status: string, createdAt: Date, mergedIntoId?: string) => {
+          const id = generateShortId();
+          await owner.ticket.create({
+            data: {
+              id,
+              licenseId: fx.a.licenseId,
+              subject: 'Benchmark ticket',
+              status,
+              priority: 0,
+              createdAt,
+              ...(mergedIntoId ? { mergedIntoId } : {}),
+            },
+          });
+          return id;
+        };
+
+        const primary = await ticket('open', inBaseline);
+        await ticket('solved', inBaseline);
+        // A merged ticket is excluded from the day split, so it must be excluded
+        // from the benchmark too — otherwise the two disagree by one.
+        await ticket('open', inBaseline, primary);
+        await ticket('open', to);
+
+        const cases = (
+          await server.get(
+            `/reports/cases?from=${from.toISOString()}&to=${to.toISOString()}&baseline=previous_period`,
+            auth,
+          )
+        ).json();
+
+        expect(cases.previous_period).toMatchObject({ open: 1, closed: 1, total: 2 });
+      });
+
+      it('benchmarks Leads through the same license-bound first touch', async () => {
+        const to = new Date();
+        const from = new Date(to.getTime() - 10 * 86_400_000);
+        const inBaseline = new Date(to.getTime() - 15 * 86_400_000);
+
+        const lead = await owner.customer.create({
+          data: { organizationId: fx.a.organizationId, name: 'Baseline lead', isLead: true },
+          select: { id: true },
+        });
+        // A sibling lead of the same organization that never touched this
+        // license: visible in `customers` under RLS, and still not ours to count.
+        await owner.customer.create({
+          data: { organizationId: fx.a.organizationId, name: 'Untouched lead', isLead: true },
+        });
+        await owner.chat.create({
+          data: {
+            id: generateShortId(),
+            licenseId: fx.a.licenseId,
+            customerId: lead.id,
+            createdAt: inBaseline,
+          },
+        });
+
+        const leads = (
+          await server.get(
+            `/reports/leads?from=${from.toISOString()}&to=${to.toISOString()}&baseline=previous_period`,
+            auth,
+          )
+        ).json();
+
+        expect(leads.previous_period.leads).toBe(1);
+      });
+
+      it('benchmarks Team performance on the license split, not on a baseline agent table', async () => {
+        // Deliberate: the agent table is derived from the window, so the two
+        // windows would list different people. The comparable quantity is the
+        // license's own split.
+        const earlier = await conversation({ agentReplies: true, customerName: 'Earlier' });
+        await backdateChat(earlier, new Date(Date.now() - 15 * 86_400_000));
+
+        const to = new Date();
+        const from = new Date(to.getTime() - 10 * 86_400_000);
+        const team = (
+          await server.get(
+            `/reports/team-performance?from=${from.toISOString()}&to=${to.toISOString()}&baseline=previous_period`,
+            auth,
+          )
+        ).json();
+
+        expect(team.previous_period).toMatchObject({ chats: 1, closed: 1, manual: 1 });
+        expect(team.previous_period).not.toHaveProperty('agents');
+      });
+
+      it('moves the Chat topics trend window, not just the label', async () => {
+        // Topics is the one group whose baseline is part of the data: each
+        // topic's `previous_volume` is read in the benchmark window, so
+        // `baseline` has to reach the clustering call, not only the block.
+        const to = new Date('2026-07-31T00:00:00.000Z');
+        const from = new Date('2026-07-01T00:00:00.000Z');
+        const range = `from=${from.toISOString()}&to=${to.toISOString()}`;
+
+        const body = (await server.get(`/reports/topics?${range}&baseline=previous_year`, auth)).json();
+        expect(body.previous_period.range.from).toBe('2025-07-01T00:00:00.000Z');
+        // No window-level figure — a topic's baseline volume rides on its row.
+        expect(body.previous_period).toEqual({
+          baseline: 'previous_year',
+          range: { from: '2025-07-01T00:00:00.000Z', to: '2025-07-31T00:00:00.000Z' },
+        });
+      });
+    });
+
+    describe('CSV export', () => {
+      it.each(CSV_GROUPS)(
+        'leaves the %s export byte-identical when no baseline is asked for',
+        async (group) => {
+          await conversation({ agentReplies: false });
+          const to = new Date();
+          const from = new Date(to.getTime() - 10 * 86_400_000);
+          const range = `from=${from.toISOString()}&to=${to.toISOString()}`;
+
+          const response = await server.get(`/reports/export?group=${group}&${range}`, auth);
+          expect(response.statusCode).toBe(200);
+          // The opt-in is the whole point: a script that parses column 1 as a
+          // date must never be handed a `benchmark_` row it did not request.
+          expect(response.body).not.toContain('benchmark_');
+        },
+      );
+
+      it.each(CSV_GROUPS)('appends the benchmark block to %s on request', async (group) => {
+        const to = new Date();
+        const from = new Date(to.getTime() - 10 * 86_400_000);
+        const range = `from=${from.toISOString()}&to=${to.toISOString()}`;
+
+        const [plain, benchmarked] = await Promise.all([
+          server.get(`/reports/export?group=${group}&${range}`, auth),
+          server.get(`/reports/export?group=${group}&${range}&baseline=previous_period`, auth),
+        ]);
+
+        const plainRows = csvLines(plain.body);
+        const rows = csvLines(benchmarked.body);
+        // Same header, same data rows, benchmark rows appended after them.
+        expect(rows.slice(0, plainRows.length)).toEqual(plainRows);
+
+        const block = rows.slice(plainRows.length);
+        expect(block.length).toBeGreaterThanOrEqual(3);
+        for (const line of block) expect(line.startsWith('benchmark_')).toBe(true);
+        expect(block[0]).toMatch(/^benchmark_baseline,previous_period(,)*$/);
+        expect(block[1]).toMatch(/^benchmark_range_from,/);
+        expect(block[2]).toMatch(/^benchmark_range_to,/);
+
+        // Every line keeps the table's field count, so a strict parser does not
+        // choke on a ragged row.
+        const width = (line: string): number => line.split(',').length;
+        for (const line of block) expect(width(line)).toBe(width(rows[0]!));
+      });
+
+      it('quotes the same benchmark figure the JSON report does', async () => {
+        await conversation({ agentReplies: true, customerName: 'Now' });
+        const earlier = await conversation({ agentReplies: true, customerName: 'Earlier' });
+        await backdateChat(earlier, new Date(Date.now() - 15 * 86_400_000));
+
+        const to = new Date();
+        const from = new Date(to.getTime() - 10 * 86_400_000);
+        const query = `from=${from.toISOString()}&to=${to.toISOString()}&baseline=previous_period`;
+
+        const [report, csv] = await Promise.all([
+          server.get(`/reports/overview?${query}`, auth),
+          server.get(`/reports/export?group=overview&${query}`, auth),
+        ]);
+
+        const chats = report.json().previous_period.chats;
+        expect(chats).toBe(1);
+        expect(csvLines(csv.body)).toContain(`benchmark_chats,${chats}`);
+      });
+
+      it('moves the CSV benchmark with the baseline', async () => {
+        const yearAgo = await conversation({ agentReplies: true, customerName: 'Year ago' });
+        await backdateChat(yearAgo, new Date(Date.now() - 368 * 86_400_000));
+
+        const to = new Date();
+        const from = new Date(to.getTime() - 10 * 86_400_000);
+        const range = `from=${from.toISOString()}&to=${to.toISOString()}`;
+
+        const lastYear = csvLines(
+          (await server.get(`/reports/export?group=overview&${range}&baseline=previous_year`, auth))
+            .body,
+        );
+        const lastPeriod = csvLines(
+          (
+            await server.get(
+              `/reports/export?group=overview&${range}&baseline=previous_period`,
+              auth,
+            )
+          ).body,
+        );
+
+        expect(lastYear).toContain('benchmark_baseline,previous_year');
+        expect(lastYear).toContain('benchmark_chats,1');
+        expect(lastPeriod).toContain('benchmark_chats,0');
+      });
+    });
+  });
+
+  // =========================================================================
+
   describe('subscription and the trial gate', () => {
     it('bills nothing during the trial', async () => {
       const response = await server.get('/billing/subscription', auth);

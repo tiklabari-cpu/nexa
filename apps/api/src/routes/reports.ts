@@ -19,7 +19,15 @@ import {
 } from '@nexa/ai-mock';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
-import { channelLabel, resolutionRate, round } from './reports-metrics.js';
+import {
+  BENCHMARK_BASELINES,
+  benchmarkWindow,
+  channelLabel,
+  DEFAULT_BENCHMARK_BASELINE,
+  resolutionRate,
+  round,
+  type BenchmarkBaseline,
+} from './reports-metrics.js';
 import {
   EXPORT_SCOPES,
   exportFilename,
@@ -86,6 +94,15 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 const rangeQuery = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
+  /**
+   * Which of *this license's* own past windows the report is benchmarked
+   * against (FR-MOD-07.7, 07.7-e). A closed enum, not a free string: the two
+   * values are the only baselines that stay inside the tenant boundary, and a
+   * name like `industry` has to fail rather than fall back to a default that
+   * would make it look supported. See `reports-metrics.ts` for why a
+   * cross-license baseline is refused rather than unimplemented.
+   */
+  baseline: z.enum(BENCHMARK_BASELINES).optional(),
 });
 
 /** An export request: which report group, over which window (defaults to 30d). */
@@ -101,6 +118,78 @@ export function resolveRange(query: z.infer<typeof rangeQuery>): { from: Date; t
   const from = query.from ?? new Date(to.getTime() - 30 * 86_400_000);
   if (from > to) throw ApiError.validation('`from` must be before `to`.');
   return { from, to };
+}
+
+/**
+ * The window and the benchmark baseline a report request asks for — the one
+ * place every `GET /reports/*` route parses its query, so the eight groups can
+ * never diverge on what a bad `from` or an unknown `baseline` does.
+ *
+ * `requested` is the baseline the caller actually named, `undefined` when they
+ * named none. Kept separate from the resolved `baseline` so a surface whose
+ * shape is positional — the CSV export — can stay byte-identical for callers
+ * that never asked for a benchmark, while the JSON reports carry the default
+ * comparison for everyone.
+ */
+function resolveReportQuery(query: unknown): {
+  from: Date;
+  to: Date;
+  baseline: BenchmarkBaseline;
+  requested: BenchmarkBaseline | undefined;
+} {
+  const parsed = rangeQuery.safeParse(query);
+  if (!parsed.success) {
+    // Name the parameter that was wrong: `baseline=industry` is a different
+    // mistake from a malformed date, and "Invalid date range." would send the
+    // caller looking in the wrong place — the more so here, where the rejected
+    // value may be one someone expected to work (§V1).
+    if (parsed.error.issues.some((issue) => issue.path[0] === 'baseline')) {
+      throw ApiError.validation(`\`baseline\` must be one of: ${BENCHMARK_BASELINES.join(', ')}.`);
+    }
+    throw ApiError.validation('Invalid date range.');
+  }
+  const { from, to } = resolveRange(parsed.data);
+  return {
+    from,
+    to,
+    baseline: parsed.data.baseline ?? DEFAULT_BENCHMARK_BASELINE,
+    requested: parsed.data.baseline,
+  };
+}
+
+/**
+ * Attaches a report's benchmark block — the same window arithmetic and the same
+ * `previous_period` key for every group, so no report grows its own dialect of
+ * "vs before" (the Overview and the Reviews report had each hand-rolled the
+ * three lines this replaces).
+ *
+ * `figures` measures the baseline window and returns whatever that group
+ * compares — headline counts, a CSAT tally, nothing at all. It is handed the
+ * window rather than computing one, so a group cannot accidentally benchmark
+ * against a different span than its neighbours. Every measurement it can make
+ * runs through the same license-scoped helpers as the report itself, which is
+ * what keeps a benchmark from ever quoting another license's number.
+ */
+async function withBenchmark(
+  body: Record<string, unknown>,
+  from: Date,
+  to: Date,
+  baseline: BenchmarkBaseline,
+  figures: (window: { from: Date; to: Date }) => Promise<Record<string, unknown>>,
+): Promise<Record<string, unknown>> {
+  const window = benchmarkWindow(from, to, baseline);
+  const measured = await figures(window);
+  return {
+    ...body,
+    previous_period: {
+      // Which comparison produced these figures. Sent because the same key
+      // carries two different windows depending on the request, and a client
+      // rendering "vs previous" must not have to guess which one it got.
+      baseline,
+      range: { from: window.from.toISOString(), to: window.to.toISOString() },
+      ...measured,
+    },
+  };
 }
 
 // ===========================================================================
@@ -1104,6 +1193,12 @@ function centroidOf(vectors: number[][]): number[] {
  * *same* one its JSON report exposes — the export reuses the report's
  * aggregation helpers rather than recomputing — so a CSV can never disagree
  * with the screen it was exported from.
+ *
+ * `baseline` appends the benchmark block (07.7-e). It is opt-in, unlike the
+ * JSON reports' always-present `previous_period`: omitting it returns the table
+ * byte-for-byte as this function has always produced it, so a script that reads
+ * these columns positionally is never handed rows it did not ask for. See
+ * {@link benchmarkCsvRows} for the block's shape.
  */
 export async function buildGroupCsv(
   tx: TenantClient,
@@ -1111,6 +1206,141 @@ export async function buildGroupCsv(
   groupId: string,
   from: Date,
   to: Date,
+  baseline?: BenchmarkBaseline,
+): Promise<{ headers: string[]; rows: CsvCell[][] }> {
+  const table = await groupCsvTable(
+    tx,
+    licenseId,
+    groupId,
+    from,
+    to,
+    baseline ?? DEFAULT_BENCHMARK_BASELINE,
+  );
+  if (baseline === undefined) return table;
+  return {
+    headers: table.headers,
+    rows: [
+      ...table.rows,
+      ...(await benchmarkCsvRows(
+        tx,
+        licenseId,
+        groupId,
+        from,
+        to,
+        baseline,
+        table.headers.length,
+      )),
+    ],
+  };
+}
+
+/**
+ * The benchmark block appended to an export — the same figures the group's JSON
+ * `previous_period` carries, as `key,value` rows padded out to the table's own
+ * width.
+ *
+ * One shape for all nine groups rather than a bespoke column per group: the
+ * groups' tables have nothing in common (a day series, a long-format
+ * dimension table, a metric/value list), so a "benchmark column" would have to
+ * mean something different in each, while a trailing key/value block reads the
+ * same everywhere. Every key is prefixed `benchmark_`, so a consumer that reads
+ * the data rows positionally can skip the block with a single test on the first
+ * cell — and only ever has to, having asked for it with `?baseline=`.
+ */
+async function benchmarkCsvRows(
+  tx: TenantClient,
+  licenseId: bigint,
+  groupId: string,
+  from: Date,
+  to: Date,
+  baseline: BenchmarkBaseline,
+  columns: number,
+): Promise<CsvCell[][]> {
+  const window = benchmarkWindow(from, to, baseline);
+  // The same measurement function the group's JSON report hands to
+  // `withBenchmark`, so the exported benchmark is the number the tab shows for
+  // that window — the invariant every other row in this file already keeps.
+  const figures = await groupBenchmark(tx, licenseId, groupId, window);
+
+  const rows: CsvCell[][] = [
+    ['benchmark_baseline', baseline],
+    ['benchmark_range_from', window.from.toISOString()],
+    ['benchmark_range_to', window.to.toISOString()],
+  ];
+  for (const [key, value] of Object.entries(figures)) {
+    rows.push([`benchmark_${key}`, csvScalar(value)]);
+  }
+
+  // Pad out to the table's own column count so every line in the file has the
+  // same number of fields — a ragged CSV is a parse error in stricter readers.
+  return rows.map((row) => [
+    ...row,
+    ...Array<CsvCell>(Math.max(0, columns - row.length)).fill(null),
+  ]);
+}
+
+/** A benchmark figure as a CSV cell; anything non-scalar is dropped, not stringified. */
+function csvScalar(value: unknown): CsvCell {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number' || typeof value === 'string') return value;
+  if (typeof value === 'boolean') return String(value);
+  return null;
+}
+
+/**
+ * What a group compares itself against, measured over one baseline window. The
+ * single dispatch both the JSON reports and the CSV export go through, so a
+ * group cannot end up with a benchmark on screen that its download computes a
+ * different way.
+ */
+function groupBenchmark(
+  tx: TenantClient,
+  licenseId: bigint,
+  groupId: string,
+  window: { from: Date; to: Date },
+): Promise<Record<string, unknown>> {
+  switch (groupId) {
+    case 'overview':
+      return overviewBenchmark(tx, licenseId, window);
+    // Both compare on the license's resolution split: the Breakdown's
+    // dimensions and Team performance's agent rows are window-derived, so only
+    // the split itself has a counterpart in the baseline window (see each
+    // builder for the full reasoning).
+    case 'breakdown':
+    case 'team-performance':
+      return splitBenchmark(tx, licenseId, window);
+    case 'ai-agent':
+      return aiAgentBenchmark(tx, licenseId, window);
+    case 'reviews':
+      return reviewsBenchmark(tx, licenseId, window);
+    case 'cases':
+      return casesBenchmark(tx, licenseId, window);
+    case 'leads':
+      return leadsBenchmark(tx, licenseId, window);
+    case 'sales':
+      return Promise.resolve(salesBenchmark());
+    case 'topics':
+      // Topics keeps each cluster's baseline volume on its own row
+      // (`previous_volume`), where it can be matched to the topic it belongs
+      // to; there is no window-level figure left to state.
+      return Promise.resolve({});
+    default:
+      throw ApiError.validation(`No exporter for report group: ${groupId}.`);
+  }
+}
+
+/**
+ * The group's data table, before any benchmark block is appended. `baseline`
+ * reaches in only where a baseline window is part of the data itself — the
+ * `topics` group, whose `previous_volume` column *is* a comparison.
+ */
+async function groupCsvTable(
+  tx: TenantClient,
+  licenseId: bigint,
+  groupId: string,
+  from: Date,
+  to: Date,
+  baseline: BenchmarkBaseline,
 ): Promise<{ headers: string[]; rows: CsvCell[][] }> {
   switch (groupId) {
     case 'overview': {
@@ -1203,12 +1433,11 @@ export async function buildGroupCsv(
       };
     }
     case 'topics': {
-      // Same equal-length previous window construction as the /reports/topics
-      // route (FR-MOD-07.6) — the CSV can never disagree with the JSON.
-      const spanMs = to.getTime() - from.getTime();
-      const prevTo = new Date(from.getTime() - 1);
-      const prevFrom = new Date(from.getTime() - spanMs);
-      const report = await buildTopicsReport(tx, licenseId, from, to, prevFrom, prevTo);
+      // Same baseline window construction as the /reports/topics route
+      // (FR-MOD-07.6) — one helper, so the CSV's `previous_volume` and `trend`
+      // can never be measured against a different span than the JSON's.
+      const window = benchmarkWindow(from, to, baseline);
+      const report = await buildTopicsReport(tx, licenseId, from, to, window.from, window.to);
       return {
         headers: ['label', 'volume', 'share', 'previous_volume', 'trend'],
         rows: report.topics.map((topic) => [
@@ -1396,13 +1625,9 @@ export async function buildOverviewReport(
   licenseId: bigint,
   from: Date,
   to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
 ): Promise<Record<string, unknown>> {
-  // The comparison window: the same span immediately before `from`, so a
-  // "vs previous" delta compares like with like (FR-MOD-07.3.1). A millisecond
-  // short of `from` keeps the two windows from sharing an instant.
   const spanMs = to.getTime() - from.getTime();
-  const prevTo = new Date(from.getTime() - 1);
-  const prevFrom = new Date(from.getTime() - spanMs);
   const windowHours = spanMs / 3_600_000;
 
   // Sequential, not Promise.all: `tx` is one connection inside a Prisma
@@ -1446,12 +1671,6 @@ export async function buildOverviewReport(
   // a ticket need not have come from a conversation at all.
   const tickets = await ticketCount(tx, licenseId, from, to);
 
-  // The previous window: the same headline figures the delta badges compare
-  // against. No by-agent or by-tag depth — nothing on a KPI card needs it.
-  const prevTotals = await windowTotals(tx, licenseId, prevFrom, prevTo);
-  const prevSatisfaction = await satisfactionCounts(tx, licenseId, prevFrom, prevTo);
-  const prevTickets = await ticketCount(tx, licenseId, prevFrom, prevTo);
-
   const good = satisfaction.good;
   const bad = satisfaction.bad;
   const rated = good + bad;
@@ -1460,75 +1679,122 @@ export async function buildOverviewReport(
   const assisted = Number(totals.assisted);
   const manual = Number(totals.manual);
   const closed = Number(totals.closed_chats);
-  const prevChats = Number(prevTotals.total_chats);
+
+  // The baseline window carries the same headline figures the delta badges
+  // compare against (FR-MOD-07.3.1) — no by-agent or by-tag depth, since
+  // nothing on a KPI card needs it. The comparable figures ride along rather
+  // than a pre-computed delta, so the client shows the change *and* the
+  // baseline, and rounding stays on one side of the wire.
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      totals: {
+        chats: totalChats,
+        tickets,
+        // The figure the PRD's KPI card shows. Sent as its own field rather than
+        // left for the client to add up, so every surface that quotes "total
+        // cases" quotes the same number.
+        total_cases: totalChats + tickets,
+        closed,
+        // PRD 07.3.2's three-way split of closed cases. Sent as three counts
+        // (not left for the client to derive) so every surface agrees, and by
+        // construction manual + assisted + automated === closed.
+        manual,
+        assisted,
+        // `automated` keeps ADR-09 unchanged — it is the invoice's number too.
+        automated,
+        // Shares of *closed* conversations, not all of them: an open chat has
+        // not resolved either way, and counting it would make the figures drop
+        // whenever the inbox is busy. Null (not 0%) when nothing closed.
+        manual_rate: resolutionRate(manual, closed),
+        assisted_rate: resolutionRate(assisted, closed),
+        automated_rate: resolutionRate(automated, closed),
+        queued_now: queued,
+      },
+      // The Chats section cards (PRD §7.3.3): how fast the AI is clearing chats
+      // and how long conversations run. `automated_per_hour` averages over the
+      // window; a zero-length window would divide by zero, so it reports 0.
+      chats: {
+        automated_per_hour: windowHours > 0 ? round(automated / windowHours) : 0,
+        automated_avg_duration_seconds: roundOrNull(totals.avg_automated_duration_seconds),
+        total_duration_seconds: Math.round(Number(totals.total_duration_seconds ?? 0)),
+      },
+      response_times: {
+        avg_first_response_seconds: roundOrNull(totals.avg_first_response_seconds),
+        avg_duration_seconds: roundOrNull(totals.avg_duration_seconds),
+      },
+      satisfaction: {
+        good,
+        bad,
+        // Null rather than 0% when nobody rated: an unrated period is unknown,
+        // not bad, and showing 0% would read as a catastrophe.
+        score: satisfactionScore(satisfaction),
+        responses: rated,
+      },
+      by_agent: byAgent.map((row) => ({
+        agent_id: row.agent_id,
+        name: row.name,
+        chats: Number(row.chats),
+      })),
+      top_tags: topTags.map((row) => ({ name: row.name, count: Number(row.count) })),
+    },
+    from,
+    to,
+    baseline,
+    (window) => overviewBenchmark(tx, licenseId, window),
+  );
+}
+
+/**
+ * The Overview's comparable figures for a baseline window — the headline counts
+ * every KPI card can show a delta against. Three license-scoped queries, the
+ * same ones the requested window uses, so the baseline is measured exactly as
+ * the figure it is compared with.
+ */
+async function overviewBenchmark(
+  tx: TenantClient,
+  licenseId: bigint,
+  window: { from: Date; to: Date },
+): Promise<Record<string, unknown>> {
+  // Sequential, not Promise.all: `tx` is one connection inside a Prisma
+  // interactive transaction (see withTenant), which does not support
+  // concurrent queries on the same client.
+  const totals = await windowTotals(tx, licenseId, window.from, window.to);
+  const satisfaction = await satisfactionCounts(tx, licenseId, window.from, window.to);
+  const tickets = await ticketCount(tx, licenseId, window.from, window.to);
+  const chats = Number(totals.total_chats);
 
   return {
-    range: { from: from.toISOString(), to: to.toISOString() },
-    // The equal-length window before this one, so every KPI card can show a
-    // vs-previous delta (FR-MOD-07.3.1). The comparable figures ride along and
-    // the client subtracts — the baseline stays visible next to the change.
-    previous_period: {
-      range: { from: prevFrom.toISOString(), to: prevTo.toISOString() },
-      chats: prevChats,
-      tickets: prevTickets,
-      total_cases: prevChats + prevTickets,
-      closed: Number(prevTotals.closed_chats),
-      manual: Number(prevTotals.manual),
-      assisted: Number(prevTotals.assisted),
-      automated: Number(prevTotals.automated),
-      avg_first_response_seconds: roundOrNull(prevTotals.avg_first_response_seconds),
-      avg_duration_seconds: roundOrNull(prevTotals.avg_duration_seconds),
-      satisfaction_score: satisfactionScore(prevSatisfaction),
-    },
-    totals: {
-      chats: totalChats,
-      tickets,
-      // The figure the PRD's KPI card shows. Sent as its own field rather than
-      // left for the client to add up, so every surface that quotes "total
-      // cases" quotes the same number.
-      total_cases: totalChats + tickets,
-      closed,
-      // PRD 07.3.2's three-way split of closed cases. Sent as three counts
-      // (not left for the client to derive) so every surface agrees, and by
-      // construction manual + assisted + automated === closed.
-      manual,
-      assisted,
-      // `automated` keeps ADR-09 unchanged — it is the invoice's number too.
-      automated,
-      // Shares of *closed* conversations, not all of them: an open chat has
-      // not resolved either way, and counting it would make the figures drop
-      // whenever the inbox is busy. Null (not 0%) when nothing closed.
-      manual_rate: resolutionRate(manual, closed),
-      assisted_rate: resolutionRate(assisted, closed),
-      automated_rate: resolutionRate(automated, closed),
-      queued_now: queued,
-    },
-    // The Chats section cards (PRD §7.3.3): how fast the AI is clearing chats
-    // and how long conversations run. `automated_per_hour` averages over the
-    // window; a zero-length window would divide by zero, so it reports 0.
-    chats: {
-      automated_per_hour: windowHours > 0 ? round(automated / windowHours) : 0,
-      automated_avg_duration_seconds: roundOrNull(totals.avg_automated_duration_seconds),
-      total_duration_seconds: Math.round(Number(totals.total_duration_seconds ?? 0)),
-    },
-    response_times: {
-      avg_first_response_seconds: roundOrNull(totals.avg_first_response_seconds),
-      avg_duration_seconds: roundOrNull(totals.avg_duration_seconds),
-    },
-    satisfaction: {
-      good,
-      bad,
-      // Null rather than 0% when nobody rated: an unrated period is unknown,
-      // not bad, and showing 0% would read as a catastrophe.
-      score: satisfactionScore(satisfaction),
-      responses: rated,
-    },
-    by_agent: byAgent.map((row) => ({
-      agent_id: row.agent_id,
-      name: row.name,
-      chats: Number(row.chats),
-    })),
-    top_tags: topTags.map((row) => ({ name: row.name, count: Number(row.count) })),
+    chats,
+    tickets,
+    total_cases: chats + tickets,
+    closed: Number(totals.closed_chats),
+    manual: Number(totals.manual),
+    assisted: Number(totals.assisted),
+    automated: Number(totals.automated),
+    avg_first_response_seconds: roundOrNull(totals.avg_first_response_seconds),
+    avg_duration_seconds: roundOrNull(totals.avg_duration_seconds),
+    satisfaction_score: satisfactionScore(satisfaction),
+  };
+}
+
+/**
+ * The resolution split for a baseline window — the shape the Breakdown and Team
+ * performance reports benchmark against. One query, license-scoped, the same
+ * {@link windowTotals} the requested window is measured with.
+ */
+async function splitBenchmark(
+  tx: TenantClient,
+  licenseId: bigint,
+  window: { from: Date; to: Date },
+): Promise<Record<string, unknown>> {
+  const totals = await windowTotals(tx, licenseId, window.from, window.to);
+  return {
+    chats: Number(totals.total_chats),
+    closed: Number(totals.closed_chats),
+    manual: Number(totals.manual),
+    assisted: Number(totals.assisted),
+    automated: Number(totals.automated),
   };
 }
 
@@ -1542,6 +1808,7 @@ export async function buildBreakdownReport(
   licenseId: bigint,
   from: Date,
   to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
 ): Promise<Record<string, unknown>> {
   // The resolution split per UTC day — the same helper the CSV export uses, so
   // the tab and its download can never quote a different split for a day.
@@ -1589,54 +1856,65 @@ export async function buildBreakdownReport(
     LIMIT 20
   `;
 
-  return {
-    range: { from: from.toISOString(), to: to.toISOString() },
-    by_day: byDay.map((row) => ({
-      date: row.date,
-      chats: row.chats,
-      closed: row.closed,
-      manual: row.manual,
-      assisted: row.assisted,
-      automated: row.automated,
-    })),
-    by_hour: byHour.map((row) => ({
-      hour: row.hour,
-      chats: row.chats,
-      closed: row.closed,
-      manual: row.manual,
-      assisted: row.assisted,
-      automated: row.automated,
-    })),
-    by_agent: byAgent.map((row) => ({
-      agent_id: row.agent_id,
-      name: row.name,
-      chats: Number(row.chats),
-      closed: Number(row.closed),
-      manual: Number(row.manual),
-      assisted: Number(row.assisted),
-      automated: Number(row.automated),
-    })),
-    by_channel: byChannel.map((row) => ({
-      channel: row.channel,
-      chats: row.chats,
-      closed: row.closed,
-      manual: row.manual,
-      assisted: row.assisted,
-      automated: row.automated,
-    })),
-    by_team: byTeam.teams.map((row) => ({
-      team_id: row.team_id,
-      name: row.name,
-      chats: row.chats,
-      closed: row.closed,
-      manual: row.manual,
-      assisted: row.assisted,
-      automated: row.automated,
-    })),
-    // Declares the by_team fan-out: a chat reachable by more than one team is
-    // counted under each, so the rows can sum past the window total.
-    overlapping: byTeam.overlapping,
-  };
+  // The benchmark is the window's *totals*, not a baseline copy of all five
+  // dimensions: a dimension's buckets are derived from the window (which days
+  // it holds, which teams were active), so a per-bucket baseline would line up
+  // rows that are not counterparts. The comparable quantity across two windows
+  // is the split itself.
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      by_day: byDay.map((row) => ({
+        date: row.date,
+        chats: row.chats,
+        closed: row.closed,
+        manual: row.manual,
+        assisted: row.assisted,
+        automated: row.automated,
+      })),
+      by_hour: byHour.map((row) => ({
+        hour: row.hour,
+        chats: row.chats,
+        closed: row.closed,
+        manual: row.manual,
+        assisted: row.assisted,
+        automated: row.automated,
+      })),
+      by_agent: byAgent.map((row) => ({
+        agent_id: row.agent_id,
+        name: row.name,
+        chats: Number(row.chats),
+        closed: Number(row.closed),
+        manual: Number(row.manual),
+        assisted: Number(row.assisted),
+        automated: Number(row.automated),
+      })),
+      by_channel: byChannel.map((row) => ({
+        channel: row.channel,
+        chats: row.chats,
+        closed: row.closed,
+        manual: row.manual,
+        assisted: row.assisted,
+        automated: row.automated,
+      })),
+      by_team: byTeam.teams.map((row) => ({
+        team_id: row.team_id,
+        name: row.name,
+        chats: row.chats,
+        closed: row.closed,
+        manual: row.manual,
+        assisted: row.assisted,
+        automated: row.automated,
+      })),
+      // Declares the by_team fan-out: a chat reachable by more than one team is
+      // counted under each, so the rows can sum past the window total.
+      overlapping: byTeam.overlapping,
+    },
+    from,
+    to,
+    baseline,
+    (window) => splitBenchmark(tx, licenseId, window),
+  );
 }
 
 /**
@@ -1649,6 +1927,7 @@ export async function buildAiAgentReport(
   licenseId: bigint,
   from: Date,
   to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
 ): Promise<Record<string, unknown>> {
   const totals = await windowTotals(tx, licenseId, from, to);
 
@@ -1666,15 +1945,48 @@ export async function buildAiAgentReport(
   // share it handed off. Null when it finished none either way.
   const finished = automated + transfers;
 
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      // ADR-09's figure, the same one the invoice's AI-resolution counter uses.
+      resolutions: automated,
+      resolution_rate: resolutionRate(automated, closed),
+      transfers,
+      transfer_rate: finished === 0 ? null : round(transfers / finished),
+      skill_runs: skillRuns,
+      avg_automated_duration_seconds: roundOrNull(totals.avg_automated_duration_seconds),
+    },
+    from,
+    to,
+    baseline,
+    (window) => aiAgentBenchmark(tx, licenseId, window),
+  );
+}
+
+/**
+ * The AI Agent report's comparable figures for a baseline window — the three
+ * counters the tab shows deltas on, plus the rate they are read against, from
+ * the same license-scoped helpers the requested window uses.
+ */
+async function aiAgentBenchmark(
+  tx: TenantClient,
+  licenseId: bigint,
+  window: { from: Date; to: Date },
+): Promise<Record<string, unknown>> {
+  // Sequential, not Promise.all — one connection inside one interactive
+  // transaction (see withTenant).
+  const totals = await windowTotals(tx, licenseId, window.from, window.to);
+  const transfers = await transferCount(tx, licenseId, window.from, window.to);
+  const skillRuns = await tx.skillRun.count({
+    where: { licenseId, ranAt: { gte: window.from, lte: window.to } },
+  });
+  const automated = Number(totals.automated);
+
   return {
-    range: { from: from.toISOString(), to: to.toISOString() },
-    // ADR-09's figure, the same one the invoice's AI-resolution counter uses.
     resolutions: automated,
-    resolution_rate: resolutionRate(automated, closed),
+    resolution_rate: resolutionRate(automated, Number(totals.closed_chats)),
     transfers,
-    transfer_rate: finished === 0 ? null : round(transfers / finished),
     skill_runs: skillRuns,
-    avg_automated_duration_seconds: roundOrNull(totals.avg_automated_duration_seconds),
   };
 }
 
@@ -1688,39 +2000,45 @@ export async function buildReviewsReport(
   licenseId: bigint,
   from: Date,
   to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
 ): Promise<Record<string, unknown>> {
-  // The equal-length window immediately before this one, so the tab can show a
-  // vs-previous CSAT delta (the PRD's "67% vs 57%") — the same construction the
-  // Overview uses for its period comparison (FR-MOD-07.3.1).
-  const spanMs = to.getTime() - from.getTime();
-  const prevTo = new Date(from.getTime() - 1);
-  const prevFrom = new Date(from.getTime() - spanMs);
-
   // Sequential, not Promise.all: withTenant is one interactive transaction and
   // Prisma forbids concurrent queries on its client.
   const counts = await satisfactionCounts(tx, licenseId, from, to);
-  const prevCounts = await satisfactionCounts(tx, licenseId, prevFrom, prevTo);
   const byDay = await satisfactionByDay(tx, licenseId, from, to);
 
-  return {
-    range: { from: from.toISOString(), to: to.toISOString() },
-    csat: csatSummary(counts),
-    previous_period: {
-      range: { from: prevFrom.toISOString(), to: prevTo.toISOString() },
-      ...csatSummary(prevCounts),
+  // The baseline window's CSAT, so the tab can show the vs-previous delta the
+  // PRD asks for (its "67% vs 57%").
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      csat: csatSummary(counts),
+      by_day: byDay.map((row) => ({ date: row.date, ...csatSummary(row) })),
+      // Tracked-sales skeleton (FR-MOD-13.5, v2). No sales source is wired yet, so
+      // the shape is present but nothing is claimed: `configured` false and every
+      // figure null, so the surface renders an honest "not set up" state rather
+      // than a fabricated zero.
+      ecommerce: {
+        configured: false,
+        tracked_sales: null,
+        attributed_revenue_cents: null,
+        currency: null,
+      },
     },
-    by_day: byDay.map((row) => ({ date: row.date, ...csatSummary(row) })),
-    // Tracked-sales skeleton (FR-MOD-13.5, v2). No sales source is wired yet, so
-    // the shape is present but nothing is claimed: `configured` false and every
-    // figure null, so the surface renders an honest "not set up" state rather
-    // than a fabricated zero.
-    ecommerce: {
-      configured: false,
-      tracked_sales: null,
-      attributed_revenue_cents: null,
-      currency: null,
-    },
-  };
+    from,
+    to,
+    baseline,
+    (window) => reviewsBenchmark(tx, licenseId, window),
+  );
+}
+
+/** The Reviews report's comparable figures: the baseline window's CSAT tally. */
+async function reviewsBenchmark(
+  tx: TenantClient,
+  licenseId: bigint,
+  window: { from: Date; to: Date },
+): Promise<Record<string, unknown>> {
+  return { ...csatSummary(await satisfactionCounts(tx, licenseId, window.from, window.to)) };
 }
 
 /**
@@ -1734,6 +2052,7 @@ export async function buildCasesReport(
   licenseId: bigint,
   from: Date,
   to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
 ): Promise<Record<string, unknown>> {
   // Sequential, not Promise.all: withTenant is one interactive transaction and
   // Prisma forbids concurrent queries on its client.
@@ -1741,11 +2060,36 @@ export async function buildCasesReport(
   const byStatus = await casesByStatus(tx, licenseId, from, to);
   const byPriority = await casesByPriority(tx, licenseId, from, to);
 
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      by_day: byDay,
+      by_status: byStatus,
+      by_priority: byPriority,
+    },
+    from,
+    to,
+    baseline,
+    (window) => casesBenchmark(tx, licenseId, window),
+  );
+}
+
+/**
+ * The Cases report's comparable figures: the baseline window's ticket counts,
+ * summed from {@link casesByDay} rather than from `ticketCount`. The day split
+ * already excludes merged tickets, and a benchmark counted a different way than
+ * the series it sits next to would be a number nobody could reconcile.
+ */
+async function casesBenchmark(
+  tx: TenantClient,
+  licenseId: bigint,
+  window: { from: Date; to: Date },
+): Promise<Record<string, unknown>> {
+  const days = await casesByDay(tx, licenseId, window.from, window.to);
   return {
-    range: { from: from.toISOString(), to: to.toISOString() },
-    by_day: byDay,
-    by_status: byStatus,
-    by_priority: byPriority,
+    open: days.reduce((sum, day) => sum + day.open, 0),
+    closed: days.reduce((sum, day) => sum + day.closed, 0),
+    total: days.reduce((sum, day) => sum + day.total, 0),
   };
 }
 
@@ -1761,17 +2105,39 @@ export async function buildLeadsReport(
   licenseId: bigint,
   from: Date,
   to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
 ): Promise<Record<string, unknown>> {
   // Sequential, not Promise.all: withTenant is one interactive transaction and
   // Prisma forbids concurrent queries on its client.
   const byDay = await leadsByDay(tx, licenseId, from, to);
   const totals = await leadTotals(tx, licenseId, from, to);
 
-  return {
-    range: { from: from.toISOString(), to: to.toISOString() },
-    by_day: byDay,
-    totals,
-  };
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      by_day: byDay,
+      totals,
+    },
+    from,
+    to,
+    baseline,
+    (window) => leadsBenchmark(tx, licenseId, window),
+  );
+}
+
+/**
+ * The Leads report's comparable figure. It goes through {@link leadTotals} — and
+ * so through {@link leadFirstTouch} — exactly as the window's own count does,
+ * which is what keeps the benchmark inside this license: a lead is counted only
+ * where it actually touched this license, in the baseline window as in the
+ * requested one.
+ */
+async function leadsBenchmark(
+  tx: TenantClient,
+  licenseId: bigint,
+  window: { from: Date; to: Date },
+): Promise<Record<string, unknown>> {
+  return { ...(await leadTotals(tx, licenseId, window.from, window.to)) };
 }
 
 /**
@@ -1790,9 +2156,32 @@ export async function buildSalesReport(
   licenseId: bigint,
   from: Date,
   to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
 ): Promise<Record<string, unknown>> {
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      configured: false,
+      tracked_sales: null,
+      attributed_revenue_cents: null,
+      currency: null,
+      conversions: null,
+    },
+    from,
+    to,
+    baseline,
+    () => Promise.resolve(salesBenchmark()),
+  );
+}
+
+/**
+ * The Sales report's baseline figures — `null`, like the report's own. With no
+ * sales source there is nothing to have been better or worse than; emitting
+ * zeros would let a surface render a "0 → 0, no change" badge that reads as a
+ * measurement.
+ */
+function salesBenchmark(): Record<string, unknown> {
   return {
-    range: { from: from.toISOString(), to: to.toISOString() },
     configured: false,
     tracked_sales: null,
     attributed_revenue_cents: null,
@@ -1814,12 +2203,27 @@ export async function buildTeamPerformanceReport(
   licenseId: bigint,
   from: Date,
   to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
 ): Promise<Record<string, unknown>> {
   const agents = await teamPerformanceByAgent(tx, licenseId, from, to);
-  return {
-    range: { from: from.toISOString(), to: to.toISOString() },
-    agents,
-  };
+
+  // License-wide totals, not a baseline copy of the agent table. Which agents
+  // the table holds is derived from the window (`LIMIT 20` over the agents with
+  // a thread created in it), so the two windows would list different people and
+  // a row-by-row "vs baseline" would silently compare an agent against someone
+  // else — or against a blank where they did not make the earlier cut. The
+  // license's own split is the quantity both windows really share; a per-agent
+  // history is a different report (a trend per agent), not this one's baseline.
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      agents,
+    },
+    from,
+    to,
+    baseline,
+    (window) => splitBenchmark(tx, licenseId, window),
+  );
 }
 
 export default async function reportRoutes(
@@ -1829,42 +2233,42 @@ export default async function reportRoutes(
   const { env } = options;
 
   app.get('/reports/overview', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const parsed = rangeQuery.safeParse(request.query);
-    if (!parsed.success) throw ApiError.validation('Invalid date range.');
-    const { from, to } = resolveRange(parsed.data);
+    const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) => buildOverviewReport(tx, tenant.licenseId, from, to));
+    const body = await request.withTenant((tx) =>
+      buildOverviewReport(tx, tenant.licenseId, from, to, baseline),
+    );
     return reply.send(body);
   });
 
   app.get('/reports/breakdown', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const parsed = rangeQuery.safeParse(request.query);
-    if (!parsed.success) throw ApiError.validation('Invalid date range.');
-    const { from, to } = resolveRange(parsed.data);
+    const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) => buildBreakdownReport(tx, tenant.licenseId, from, to));
+    const body = await request.withTenant((tx) =>
+      buildBreakdownReport(tx, tenant.licenseId, from, to, baseline),
+    );
     return reply.send(body);
   });
 
   app.get('/reports/ai-agent', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const parsed = rangeQuery.safeParse(request.query);
-    if (!parsed.success) throw ApiError.validation('Invalid date range.');
-    const { from, to } = resolveRange(parsed.data);
+    const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) => buildAiAgentReport(tx, tenant.licenseId, from, to));
+    const body = await request.withTenant((tx) =>
+      buildAiAgentReport(tx, tenant.licenseId, from, to, baseline),
+    );
     return reply.send(body);
   });
 
   app.get('/reports/reviews', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const parsed = rangeQuery.safeParse(request.query);
-    if (!parsed.success) throw ApiError.validation('Invalid date range.');
-    const { from, to } = resolveRange(parsed.data);
+    const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) => buildReviewsReport(tx, tenant.licenseId, from, to));
+    const body = await request.withTenant((tx) =>
+      buildReviewsReport(tx, tenant.licenseId, from, to, baseline),
+    );
     return reply.send(body);
   });
 
@@ -1874,42 +2278,48 @@ export default async function reportRoutes(
   // — a 200 state, not an error, so no new ApiError type. Same reports_read +
   // withTenant surface as the other tabs.
   app.get('/reports/topics', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const parsed = rangeQuery.safeParse(request.query);
-    if (!parsed.success) throw ApiError.validation('Invalid date range.');
-    const { from, to } = resolveRange(parsed.data);
+    const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    // The equal-length window immediately before this one, where each topic's
-    // previous volume (and so its trend) is read — the same construction the
-    // Overview and Reviews reports use (FR-MOD-07.3.1).
-    const spanMs = to.getTime() - from.getTime();
-    const prevTo = new Date(from.getTime() - 1);
-    const prevFrom = new Date(from.getTime() - spanMs);
+    // The baseline window is where each topic's previous volume — and so its
+    // trend — is read, so `baseline` moves the comparison the trend is against,
+    // not just a block of metadata. Same helper as every other group, so the
+    // window arithmetic cannot drift from theirs.
+    const window = benchmarkWindow(from, to, baseline);
 
     const report = await request.withTenant((tx) =>
-      buildTopicsReport(tx, tenant.licenseId, from, to, prevFrom, prevTo),
+      buildTopicsReport(tx, tenant.licenseId, from, to, window.from, window.to),
     );
 
-    return reply.send({
-      range: { from: from.toISOString(), to: to.toISOString() },
-      previous_period: { range: { from: prevFrom.toISOString(), to: prevTo.toISOString() } },
-      min_conversations: report.min_conversations,
-      analyzed: report.analyzed,
-      sufficient_data: report.sufficient_data,
-      topics: report.topics,
-    });
+    // Topics carries no comparable figure of its own in the block: each
+    // topic's baseline volume already rides on its own row, where it can be
+    // matched to the topic it belongs to.
+    const body = await withBenchmark(
+      {
+        range: { from: from.toISOString(), to: to.toISOString() },
+        min_conversations: report.min_conversations,
+        analyzed: report.analyzed,
+        sufficient_data: report.sufficient_data,
+        topics: report.topics,
+      },
+      from,
+      to,
+      baseline,
+      () => Promise.resolve({}),
+    );
+    return reply.send(body);
   });
 
   // Cases (FR-MOD-07.7, v2 payload): the asynchronous half of the inbox
   // (tickets, FR-MOD-02.6) counted by day, current status and queue priority.
   // Same reports_read + withTenant surface as the other tabs.
   app.get('/reports/cases', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const parsed = rangeQuery.safeParse(request.query);
-    if (!parsed.success) throw ApiError.validation('Invalid date range.');
-    const { from, to } = resolveRange(parsed.data);
+    const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) => buildCasesReport(tx, tenant.licenseId, from, to));
+    const body = await request.withTenant((tx) =>
+      buildCasesReport(tx, tenant.licenseId, from, to, baseline),
+    );
     return reply.send(body);
   });
 
@@ -1919,12 +2329,12 @@ export default async function reportRoutes(
   // buildLeadsReport / leadFirstTouch) — the isolation core of this report.
   // Same reports_read + withTenant surface as the other tabs.
   app.get('/reports/leads', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const parsed = rangeQuery.safeParse(request.query);
-    if (!parsed.success) throw ApiError.validation('Invalid date range.');
-    const { from, to } = resolveRange(parsed.data);
+    const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) => buildLeadsReport(tx, tenant.licenseId, from, to));
+    const body = await request.withTenant((tx) =>
+      buildLeadsReport(tx, tenant.licenseId, from, to, baseline),
+    );
     return reply.send(body);
   });
 
@@ -1936,13 +2346,11 @@ export default async function reportRoutes(
     '/reports/team-performance',
     { config: { scopes: ['reports_read'] } },
     async (request, reply) => {
-      const parsed = rangeQuery.safeParse(request.query);
-      if (!parsed.success) throw ApiError.validation('Invalid date range.');
-      const { from, to } = resolveRange(parsed.data);
+      const { from, to, baseline } = resolveReportQuery(request.query);
       const tenant = request.tenant();
 
       const body = await request.withTenant((tx) =>
-        buildTeamPerformanceReport(tx, tenant.licenseId, from, to),
+        buildTeamPerformanceReport(tx, tenant.licenseId, from, to, baseline),
       );
       return reply.send(body);
     },
@@ -1954,12 +2362,12 @@ export default async function reportRoutes(
   // tabs, so the endpoint's permission and range handling never need to change
   // once 13.5 fills the figures in.
   app.get('/reports/sales', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
-    const parsed = rangeQuery.safeParse(request.query);
-    if (!parsed.success) throw ApiError.validation('Invalid date range.');
-    const { from, to } = resolveRange(parsed.data);
+    const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) => buildSalesReport(tx, tenant.licenseId, from, to));
+    const body = await request.withTenant((tx) =>
+      buildSalesReport(tx, tenant.licenseId, from, to, baseline),
+    );
     return reply.send(body);
   });
 
@@ -1978,10 +2386,23 @@ export default async function reportRoutes(
   // CSV export of one report group (FR-MOD-07.7). Route-gated on the union of
   // every group's scope, so a token holding none is refused before any group is
   // resolved; the per-group check below then refuses a group whose own scope the
-  // token lacks. PDF and benchmark comparison are v2 (PLAN §4.4.8) — not here.
+  // token lacks.
+  //
+  // The benchmark block is opt-in here, unlike the JSON reports, which always
+  // carry one. A JSON object gains a key harmlessly; a CSV is positional, and a
+  // trailing block would change what a script reading column 1 as a date sees.
+  // So `?baseline=` appends it and its absence leaves the file byte-identical
+  // to what this endpoint has always produced.
   app.get('/reports/export', { config: { scopes: EXPORT_SCOPES } }, async (request, reply) => {
     const parsed = exportQuery.safeParse(request.query);
-    if (!parsed.success) throw ApiError.validation('Invalid export request.');
+    if (!parsed.success) {
+      // Same reasoning as resolveReportQuery: name the parameter that was wrong
+      // rather than blame the range for a rejected baseline.
+      if (parsed.error.issues.some((issue) => issue.path[0] === 'baseline')) {
+        throw ApiError.validation(`\`baseline\` must be one of: ${BENCHMARK_BASELINES.join(', ')}.`);
+      }
+      throw ApiError.validation('Invalid export request.');
+    }
     const { from, to } = resolveRange(parsed.data);
 
     const group = reportGroup(parsed.data.group);
@@ -1998,7 +2419,7 @@ export default async function reportRoutes(
 
     const tenant = request.tenant();
     const table = await request.withTenant((tx) =>
-      buildGroupCsv(tx, tenant.licenseId, group.id, from, to),
+      buildGroupCsv(tx, tenant.licenseId, group.id, from, to, parsed.data.baseline),
     );
     const csv = toCsv(table.headers, table.rows);
 

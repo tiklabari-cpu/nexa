@@ -4499,12 +4499,12 @@
             "description": "Palet girdisi bir aksiyona/navigasyona/içeriğe eşleşmiyorsa 'AI'ya sor' sonucu gösterilir; seçilince `POST /palette/ai-query` çağrılır ve cevap palet içinde bir kartta render edilir. Üç durum: `summary` (cevap + kaynak metrik adı), `no_data` (anlamlı empty state — boş dikdörtgen değil), `not_understood` (ne sorulabileceğine dair örnek). Yükleniyor durumu skeleton.",
             "details": "01.1.3-ai-f — Palette'te AI sorgu sonuç tipi + cevap kartı + boş/anlaşılmadı durumları  [SONNET-XHIGH]\n\nPRD: FR-MOD-01.1.3 + FR-EK-B.1 (anlamlı empty state)\nETİKET GEREKÇESİ: SONNET-XHIGH: 6 koşul sağlandı. (1) 2 dosya + testi. (2) Güvenlik sınırı YOK — kapı -b'de, endpoint yetkisi -e'de; burada yalnız render. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: `CopilotPanel.tsx` (AI cevabı + yükleniyor + boş durum render'ı) ve mevcut palet sonuç listesi. (5) Kontrat değişikliği yok. (6) KK mekanik: üç durumun render'ı.\nNEDEN AÇIK: `CommandPalette.tsx` serbest-dilde bir soruyu ayrıştırıp bir AI endpoint'ine yönlendiren koda sahip değil (grep 0); AI cevabı için render yolu da yok.\nKAPSAM: Palet girdisi bir aksiyona/navigasyona/içeriğe eşleşmiyorsa 'AI'ya sor' sonucu gösterilir; seçilince `POST /palette/ai-query` çağrılır ve cevap palet içinde bir kartta render edilir. Üç durum: `summary` (cevap + kaynak metrik adı), `no_data` (anlamlı empty state — boş dikdörtgen değil), `not_understood` (ne sorulabileceğine dair örnek). Yükleniyor durumu skeleton.\nDOSYALAR: apps/web/src/components/CommandPalette.tsx · apps/web/src/components/CommandPalette.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/inbox/CopilotPanel.tsx (AI cevabı + yükleniyor + boş durum render deseni) · apps/web/src/components/ui/EmptyState.tsx (EK-B.1'de kurulan anlamlı empty state bileşeni — tm 30) · apps/web/src/components/ui/Skeleton.tsx\nKK (birebir): \"3 sonuç tipi: aksiyon (\"Stop Accepting Chats\"), navigasyon, AI sorgusu (\"Summarize my team's activity…\")\" | \"\"Search Text or go to…\"\"\nKK DOĞRULAMA: `CommandPalette.test.tsx` — (1) eşleşmeyen girdi 'AI'ya sor' sonucunu gösterir; (2) seçilince endpoint çağrılır ve `summary` cevabı kartta görünür; (3) `no_data` → anlamlı empty state metni (boş dikdörtgen DEĞİL); (4) `not_understood` → örnek soru önerisi.\nKAPSAM DIŞI: Backend davranışı · Cevabın chat'e/note'a aktarılması (Copilot işi, 12.x)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: eşleşmeyen girdi → 'AI'ya sor' sonucu · unit: summary cevabı + kaynak metrik adı render edilir · unit: no_data → anlamlı empty state (boş dikdörtgen değil — FR-EK-B.1) · unit: not_understood → örnek soru önerisi · unit: yükleniyor → skeleton · cross-tenant GEREKMEZ — izolasyon backend'de (-e) doğrulandı",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               5
             ],
             "parentId": "95",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T11:05:57.801Z"
           },
           {
             "id": 7,
@@ -4536,7 +4536,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T10:59:51.057Z",
+        "updatedAt": "2026-08-08T11:05:57.801Z",
         "complexity": 7,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"01.1.3 — ⌘K command palette AI komutları  ·  dilim V2-5\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5022,7 +5022,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T10:59:51.057Z",
+      "lastModified": "2026-08-08T11:05:57.801Z",
       "taskCount": 104,
       "completedCount": 85,
       "tags": [

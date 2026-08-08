@@ -436,3 +436,186 @@ describe('command palette — action triggering', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 });
+
+/**
+ * The AI query result — FR-MOD-01.1.3, FR-EK-B.1.
+ *
+ * A query that matches no action, destination or record is not a dead end:
+ * the palette offers to ask instead, and picking that result calls `POST
+ * /palette/ai-query` and renders whichever of the endpoint's three `kind`s
+ * comes back, right where the "No matches." row would otherwise sit. Unlike
+ * a nav or action result, choosing it must not close the palette — the
+ * answer has nowhere else to appear.
+ */
+describe('command palette — AI query result', () => {
+  /** Answers `/palette/ai-query`; anything else gets the usual empty search results. */
+  function stubAiQuery(respond: (body: { query: string }) => Response) {
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.includes('/palette/ai-query')) {
+        const body = init?.body ? (JSON.parse(String(init.body)) as { query: string }) : { query: '' };
+        return respond(body);
+      }
+      return jsonResponse({ items: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  const QUERY = "Summarize my team's activity";
+
+  async function askAi(user: ReturnType<typeof userEvent.setup>, query: string) {
+    await openPalette(user);
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), query);
+    const option = await screen.findByRole('option', { name: new RegExp(`Ask AI: "${query}"`) });
+    await user.click(option);
+  }
+
+  it('offers to ask AI once the query matches no action, destination or record', async () => {
+    stubAiQuery(() => jsonResponse({ answer: 'irrelevant', kind: 'not_understood' }));
+    const user = userEvent.setup();
+    renderPalette(['reports_read']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), QUERY);
+
+    expect(
+      await screen.findByRole('option', { name: `Ask AI: "${QUERY}"` }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Ask AI')).toBeInTheDocument();
+  });
+
+  it('does not offer to ask AI for a caller without reports_read', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ items: [] })),
+    );
+    const user = userEvent.setup();
+    renderPalette([]);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), QUERY);
+
+    expect(await screen.findByText('No matches.')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Ask AI/ })).toBeNull();
+  });
+
+  it('shows a loading skeleton while the answer is in flight', async () => {
+    let resolveResponse!: (value: Response) => void;
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input.includes('/palette/ai-query')) {
+        return new Promise<Response>((resolve) => {
+          resolveResponse = resolve;
+        });
+      }
+      return jsonResponse({ items: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    renderPalette(['reports_read']);
+    await askAi(user, QUERY);
+
+    // The skeleton is a visual courtesy, not content — it stays out of the
+    // accessibility tree while the request is in flight.
+    expect(screen.getByRole('listbox')).toContainHTML('aria-hidden="true"');
+    expect(screen.queryByRole('option')).toBeNull();
+
+    resolveResponse(
+      jsonResponse({ answer: 'Your team handled 3 chats in this period.', kind: 'summary' }),
+    );
+    expect(
+      await screen.findByText('Your team handled 3 chats in this period.'),
+    ).toBeInTheDocument();
+  });
+
+  it('calls the endpoint and renders the summary answer with its source', async () => {
+    const fetchMock = stubAiQuery(() =>
+      jsonResponse({
+        answer: 'Your team handled 12 chats in this period.',
+        kind: 'summary',
+        metric_source: 'totals.chats',
+      }),
+    );
+    const user = userEvent.setup();
+    renderPalette(['reports_read']);
+
+    await askAi(user, QUERY);
+
+    expect(
+      await screen.findByText('Your team handled 12 chats in this period.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Source: totals.chats')).toBeInTheDocument();
+    // Not a launcher result: the palette stays open around its own answer.
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/palette/ai-query'));
+    expect(call).toBeDefined();
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ query: QUERY });
+  });
+
+  it('renders a meaningful empty state for no_data, not a blank rectangle', async () => {
+    stubAiQuery(() =>
+      jsonResponse({
+        answer: 'No data yet for that in this period.',
+        kind: 'no_data',
+        metric_source: 'satisfaction.score',
+      }),
+    );
+    const user = userEvent.setup();
+    renderPalette(['reports_read']);
+
+    await askAi(user, 'customer satisfaction score');
+
+    expect(await screen.findByText('No data yet')).toBeInTheDocument();
+    expect(screen.getByText('No data yet for that in this period.')).toBeInTheDocument();
+  });
+
+  it('suggests what can be asked when the query is not understood', async () => {
+    const suggestion =
+      "I couldn't match that to something I can report on yet. Try asking about team activity, " +
+      'tickets, customer satisfaction, response time, or automated resolutions.';
+    stubAiQuery(() => jsonResponse({ answer: suggestion, kind: 'not_understood' }));
+    const user = userEvent.setup();
+    renderPalette(['reports_read']);
+
+    await askAi(user, 'what is the meaning of life');
+
+    expect(await screen.findByText('Not sure what you mean')).toBeInTheDocument();
+    expect(screen.getByText(suggestion)).toBeInTheDocument();
+  });
+
+  it('shows an error notice when the request itself fails', async () => {
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input.includes('/palette/ai-query')) {
+        return {
+          ok: false,
+          status: 500,
+          headers: { get: () => null },
+          json: async () => ({ error: { type: 'internal', message: 'boom', request_id: 'req-1' } }),
+        } as unknown as Response;
+      }
+      return jsonResponse({ items: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    renderPalette(['reports_read']);
+    await askAi(user, QUERY);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not get an answer — try again.',
+    );
+  });
+
+  it('abandons the answer and returns to search when the query is edited', async () => {
+    stubAiQuery(() => jsonResponse({ answer: 'x', kind: 'not_understood' }));
+    const user = userEvent.setup();
+    renderPalette(['reports_read']);
+
+    await askAi(user, QUERY);
+    expect(await screen.findByText('Not sure what you mean')).toBeInTheDocument();
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), '!');
+    expect(screen.queryByText('Not sure what you mean')).toBeNull();
+  });
+});

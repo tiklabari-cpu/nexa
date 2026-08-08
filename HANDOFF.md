@@ -13,6 +13,65 @@
 
 ## Task log (newest-first)
 
+### tm 95.6 — 01.1.3-ai-f · Palette'te AI sorgu sonuç tipi + cevap kartı — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/components/CommandPalette.tsx` — palet girdisi hiçbir action/nav/content'e
+    eşleşmeyip (`commands.length===0`) caller `reports_read` scope'unu taşıyorsa (yeni
+    `AI_QUERY_SCOPE` — diğer gruplarla aynı 403-courtesy deseni), sonuç listesine tek bir
+    `kind:'ai'` kaydı eklenir: `Ask AI: "{query}"` (debounced `query`, customer/ticket/chat
+    aramasıyla aynı metin). Seçilince **palet kapanmaz** — nav/action'ın aksine, çünkü cevabın
+    gösterileceği yer paletin kendisi: yeni `aiAsked` state + `useMutation` ile
+    `POST /palette/ai-query` çağrılır, sonuç `AiAnswerCard` bileşeninde aynı satırda render
+    edilir — yükleniyor → `Skeleton` (`aria-hidden`, `./Skeleton.js`), `summary` → cevap metni +
+    `metric_source` etiketi, `no_data`/`not_understood` → `EmptyState` (`./EmptyState.js`,
+    FR-EK-B.1 — boş dikdörtgen değil), açıklaması **backend'in kendi `answer`'ı** (ikinci bir
+    metin yazılmadı — `not_understood` için örnek konuları zaten backend listeliyor, ADR-09
+    ruhuyla tek kaynak). İstek başarısız olursa `role="alert"` bir satır. Sorgu düzenlenince
+    (`onChange`) veya palet kapanınca (`close()`) cevap terk edilir/`reset()`lenir — bir
+    sorgunun cevabı bir sonrakinin altında kalmaz. Klavye: `aiAsked` gösterilirken ok tuşları/
+    Enter'ın işleyecek bir liste kalmaz (yalnız Escape) — dört sonuç tipinin ok/Escape
+    tutarlılığı ayrı görevin işi (-g), burada yalnız kendi durumunun bozulmaması sağlandı.
+  - i18n `palette.group.ai` + `palette.ai.ask/.source/.noData.title/.notUnderstood.title/.error`
+    (en + tr, `apps/web/src/lib/i18n.ts`).
+  - Testler — `CommandPalette.test.tsx` (+8, 16→24, yeni `describe('command palette — AI query
+    result')`): eşleşmeyen girdi 'Ask AI' sonucu gösterir · `reports_read` yoksa hiç sunulmaz
+    (mevcut scope-kapısı regresyon testiyle aynı desen — `customers:ro` ile 'stop accepting'
+    yazan eski test de bu kapıyı zımnen doğruluyordu) · seçilince endpoint çağrılır, istek
+    gövdesi `{query}` doğru, `summary` kartta + kaynak etiketi, **palet açık kalır** · `no_data`
+    → anlamlı empty state (blank box değil) · `not_understood` → backend'in kendi örnek metni ·
+    yükleniyor → skeleton (`aria-hidden`, hiçbir `option` render edilmez) · istek hatası → alert ·
+    sorgu düzenlenince cevap terk edilir.
+- **Doğrulama** (hepsi ön planda, exit code'larla):
+  `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` 0 → web **713/713** (705 → +8),
+  api **1931/1931**, ai-mock **81/81** (değişmedi) · `pnpm -w test:integration` 0 →
+  **1476/1476** · `pnpm -w build` 0 · `pnpm -w test:e2e` → **82 passed / 1 failed**;
+  `command-palette.spec.ts` **3/3 yeşil** (bu görev UI'ya dokundu ama mevcut e2e akışını
+  kırmadı). Tek kırmızı yine `skills-routing.spec.ts:76` (**tm 104**, bu pencereden önce de
+  kırık, bu pencerenin işiyle İLGİSİZ). `apps/e2e/kanit/*.png` tam e2e koşusunda yine yeniden
+  üretildi; içerik bilgi olarak değişmediği için (`git checkout -- apps/e2e/kanit`) geri alındı.
+- **Varsayımlar:**
+  - "Ask AI" sonucu `reports_read` scope'una **gizli** — task'ın KK doğrulaması bunu açıkça
+    istemiyordu ama dosyanın kendi tasarım ilkesiyle (üstteki docblock: "a token that cannot
+    read customers never fires a request that would 403") tutarlı olması ve mevcut
+    `never lists the action — nor its heading — for a caller without the scope` regresyon
+    testinin kırılmaması için gerekliydi — o test `customers:ro` scope'uyla "stop accepting"
+    yazıp 'No matches.' bekliyor; scope kapısı olmasaydı bu metnin yerini "Ask AI: …" alır ve
+    test kırılırdı.
+  - `no_data`/`not_understood` kartının açıklaması backend'in `answer` alanından okunuyor,
+    frontend'te ikinci bir metin YAZILMADI — `not_understood` için backend zaten örnek konuları
+    listeliyor (`command-palette.ts`'teki `NOT_UNDERSTOOD_ANSWER`), KK'nın istediği "örnek soru
+    önerisi" bunu tekrar yazmadan karşılanıyor.
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (94.10'dan beri taşınan
+    carry-over, bu commit'e de alınmadı — bu pencerenin işiyle ilgisiz).
+- **Sonraki pencereye not:**
+  - **Sıradaki `01.1.3-ai-g`** (`bağ: 01.1.3-ai-c, 01.1.3-ai-f`, artık karşılandı): dört sonuç
+    tipinde (`nav`/`content`/`action`/`ai`) tutarlı ok/Escape davranışı (NFR-A11Y6 regresyonu).
+    Bu turda `aiAsked` gösterilirken ok/Enter kasıtlı olarak devre dışı bırakıldı — -g'nin bunu
+    nasıl ele alacağına (klavyeyle cevaptan geri dönüş, vb.) karar vermesi gerekecek.
+  - `-h` (uçtan uca doğrulama + kapanış) hâlâ `-g`'yi bekliyor.
+
 ### tm 95.4 + 95.5 — 01.1.3-ai-d/-e · Kontrat + AI sorgu endpoint'i (`POST /palette/ai-query`) — done — 2026-08-08 UTC
 
 - **Neden iki task tek pencerede:** 95.4'ün kendi Task Master detayı açıkça uyarıyordu —

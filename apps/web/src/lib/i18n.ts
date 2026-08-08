@@ -79,6 +79,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     'palette.action.failed': 'That action did not go through.',
     'palette.action.failedFallback': 'Nothing was changed — try again.',
     'palette.action.failedDismiss': 'Dismiss',
+    'palette.group.ai': 'Ask AI',
+    'palette.ai.ask': 'Ask AI: "{query}"',
+    'palette.ai.source': 'Source: {source}',
+    'palette.ai.noData.title': 'No data yet',
+    'palette.ai.notUnderstood.title': 'Not sure what you mean',
+    'palette.ai.error': 'Could not get an answer — try again.',
   },
   tr: {
     // Shell chrome
@@ -118,6 +124,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     'palette.action.failed': 'Bu aksiyon gerçekleşmedi.',
     'palette.action.failedFallback': 'Hiçbir şey değişmedi — yeniden deneyin.',
     'palette.action.failedDismiss': 'Kapat',
+    'palette.group.ai': "AI'ya Sor",
+    'palette.ai.ask': `AI'ya sor: "{query}"`,
+    'palette.ai.source': 'Kaynak: {source}',
+    'palette.ai.noData.title': 'Henüz veri yok',
+    'palette.ai.notUnderstood.title': 'Ne demek istediğinizden emin değilim',
+    'palette.ai.error': 'Cevap alınamadı — yeniden deneyin.',
   },
 };
 

@@ -4156,14 +4156,14 @@
             "description": "(1) `exportQuery` zod şemasına `format: z.enum(['csv','pdf']).default('csv')`. (2) Rota gövdesinde tek dallanma: `format==='pdf'` → `toPdf(...)` + `content-type: application/pdf` + `.pdf` uzantılı attachment; CSV yolu DEĞİŞMEZ. (3) `exportFilename(groupId, from, to, ext)` — uzantı parametrelenir, mevcut çağrılar `'csv'` varsayılanıyla kırılmaz. (4) Mevcut güvenlik başlıkları (`x-content-type-optio",
             "details": "07.7-g — PDF export rotası — `/reports/export` `format` parametresi + content-type/attachment bağlama  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.7 (Export CSV/PDF)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 4 dosya. (2) Güvenlik sınırı yok — mevcut `EXPORT_SCOPES` route-gate + grup-bazlı `hasAnyScope` yeniden denetimi (reports.ts:822-836) AYNEN korunur, yeni scope/karar eklenmez. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: `reports.ts:838-853` mevcut CSV dalı (withTenant → buildGroupCsv → toCsv → header'lar). (5) Kontrat katkısal (mevcut path'e `format` parametresi). (6) KK mekanik: `?format=pdf` → application/pdf + .pdf uzantılı attachment.\nNEDEN AÇIK: `reports.ts:843-853` export rotası tek dalda `toCsv(...)` çağırıp `'text/csv; charset=utf-8'` gönderiyor — `format` parametresi grep 0; `exportQuery` zod şemasında yalnız `group`+`from`+`to` var. `paths/reports.yaml:180-191` `export` operation'ında yalnız `group`/`from`/`to` parametreleri tanımlı ve response yalnız `text/csv`.\nKAPSAM: (1) `exportQuery` zod şemasına `format: z.enum(['csv','pdf']).default('csv')`. (2) Rota gövdesinde tek dallanma: `format==='pdf'` → `toPdf(...)` + `content-type: application/pdf` + `.pdf` uzantılı attachment; CSV yolu DEĞİŞMEZ. (3) `exportFilename(groupId, from, to, ext)` — uzantı parametrelenir, mevcut çağrılar `'csv'` varsayılanıyla kırılmaz. (4) Mevcut güvenlik başlıkları (`x-content-type-options: nosniff`, `cache-control: no-store`) HER İKİ formatta da korunur. (5) Kontrat: `export` operation'ına `format` parametresi + `application/pdf` response içeriği; `paths/reports.yaml:179`'daki 'PDF ... v2 ... not offered here' cümlesi düzeltilir; re-bundle.\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/src/routes/reports-export.ts · apps/api/src/routes/reports-export.test.ts · packages/contract/openapi/paths/reports.yaml · packages/contract/src/generated/api.ts · apps/api/test/integration/reports-billing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts (satır 822-853 `GET /reports/export` — scope gate, grup çözümleme, withTenant, başlıklar; PDF dalı bu yapının içine girer) · apps/api/src/routes/reports-export.ts (satır 106-113 `exportFilename` — uzantı parametrelenecek fonksiyon) · packages/contract/openapi/paths/reports.yaml (satır 180-201 `export` operation parametre + response bloğu)\nKK (birebir): \"export\" | \"İzin bazlı görünürlük\"\nKK DOĞRULAMA: `reports-billing.test.ts` — `GET /reports/export?group=overview&format=pdf` 200 + `content-type: application/pdf` + `content-disposition` `.pdf` uzantılı + gövde `%PDF-` ile başlıyor ('export'). `format` verilmeyince davranış birebir eskisi (text/csv) — geriye dönük uyum regresyonu. `reports_read` taşımayan token `format=pdf` ile de 403 ('İzin bazlı görünürlük' — format yetkiyi değiştirmez).\nKAPSAM DIŞI: PDF içeriğinin görsel tasarımı/grafikleri — 07.7-f'de tablo olarak sabitlendi · Web UI indirme butonu — 07.7-k · Zamanlanmış (scheduled) export — ayrı v2 kalemi `07.9-sched` (PLAN §5.0) · Fatura PDF'i (10.3-a)\nSÖZLEŞME: YENİ PATH YOK — mevcut `GET /reports/export`'a katkısal `format` query parametresi (enum csv|pdf, default csv) + `application/pdf` response content'i; `paths/reports.yaml:179` açıklaması güncellenir. ZORUNLU re-bundle — `src/generated/api.ts` yenilenmezse web istemcisi `format`'ı tip düzeyinde göremez.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce) — `format=exe` / `format=html` → 400; `reports_read` yok + `format=pdf` → 403 (format yetkiyi baypas etmiyor) · cross-tenant — `format=pdf` çıktısında başka lisansın satırı yok · integration — tüm gruplar için `format=pdf` 200 ve `%PDF-` başlığı · integration — regresyon: `format` yokken CSV çıktısı bayt-birebir eskisiyle aynı; `nosniff`/`no-store` başlıkları iki formatta da var · integration — `contract-parity.test.ts`",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               6,
               4,
               5
             ],
             "parentId": "93",
-            "updatedAt": "2026-08-08T02:39:01.312Z"
+            "updatedAt": "2026-08-08T02:51:30.310Z"
           },
           {
             "id": 8,
@@ -4246,7 +4246,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T02:39:01.312Z"
+        "updatedAt": "2026-08-08T02:51:30.310Z"
       },
       {
         "id": "94",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T02:39:01.312Z",
+      "lastModified": "2026-08-08T02:51:30.310Z",
       "taskCount": 101,
       "completedCount": 81,
       "tags": [

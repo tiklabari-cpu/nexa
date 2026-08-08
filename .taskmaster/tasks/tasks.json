@@ -4335,10 +4335,10 @@
             "description": "Davranış-değişmez (pure refactor) taşıma. Yeni `apps/api/src/services/reports/report-csv.ts`: `buildGroupCsv` + bağlı SQL yardımcıları + paylaşılan `Prisma.sql` parçaları buraya taşınır ve export edilir. `routes/reports.ts` bunları import ederek kullanır — dört GET route'u ve `/reports/export` aynı fonksiyonlara bağlı kalır. İmzalar `(tx: TenantClient, licenseId: bigint, from: Date, to: Date)` biç",
             "details": "07.9-sched-d2 — Rapor CSV üretimini paylaşılan `services/reports/report-csv.ts` modülüne çıkar  [SONNET-MAX]\n\nPRD: FR-MOD-07.7 (+ §5.3-Reports) + ADR-09\nETİKET GEREKÇESİ: SONNET-MAX: koşul 2 ve 3 sağlandı (güvenlik sınırı yok — mevcut sorgular birebir taşınıyor, davranış değişmiyor; eşzamanlılık yok). AMA mekanik olarak GİRİFT: `buildGroupCsv` + ona bağlı ~10 özel yardımcı (`windowTotals`, `breakdownByDay`, `satisfactionByDay`, `satisfactionCounts`, `ticketCount`, `transferCount`, `csatSummary`, `satisfactionScore`, `roundOrNull` + `AGENT_EVENT`/`SKILL_RUN`/`SPLIT_COUNTS` Prisma.sql parçaları) ~250 satırlık geniş yüzey olarak taşınıyor ve `reports.ts`'in dört GET route'u ile CSV export'unun AYNI sayıyı üretmeye devam etmesi (ADR-09) satır satır doğrulanmalı → daha fazla düşünme bütçesi, MAX efor.\nNEDEN AÇIK: `buildGroupCsv` `apps/api/src/routes/reports.ts` içinde (satır ~343-427) route dosyasına gömülü ve besleyici sorguların hepsi aynı dosyada module-private. Zamanlanmış işin (-e) bu üreticiyi çağırması gerekiyor; bir arka plan servisinin `routes/` içinden import etmesi katman ihlali olur. `reports.ts` yorumu ADR-09'u açıkça bağlıyor: 'Every figure is the same one its JSON report exposes — the export reuses the report's aggregation helpers rather than recomputing' — bu sözleşme taşımada korunmak zorunda.\nKAPSAM: Davranış-değişmez (pure refactor) taşıma. Yeni `apps/api/src/services/reports/report-csv.ts`: `buildGroupCsv` + bağlı SQL yardımcıları + paylaşılan `Prisma.sql` parçaları buraya taşınır ve export edilir. `routes/reports.ts` bunları import ederek kullanır — dört GET route'u ve `/reports/export` aynı fonksiyonlara bağlı kalır. İmzalar `(tx: TenantClient, licenseId: bigint, from: Date, to: Date)` biçiminde korunur (zaten öyle) ki hem istek yolu hem arka plan işi aynı tenant-bağlı client'ı geçirebilsin. `reports-export.ts` (toCsv/csvField/exportFilename/REPORT_GROUPS) OLDUĞU YERDE KALIR — zaten route'suz saf modül. Hiçbir SQL metni, yuvarlama veya başlık adı değişmez.\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/src/services/reports/report-csv.ts · apps/api/src/services/reports/report-csv.test.ts · apps/api/test/integration/reports-billing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports-export.ts (route'tan ayrılmış saf rapor modülünün depodaki mevcut örneği — dosya başı yorum biçimi dahil) · apps/api/src/routes/reports-metrics.ts (aynı ayrıştırma deseni: resolutionRate/round) · apps/api/src/services/billing/invoice-service.ts (services/ altında CSV satırı üreten mevcut servis)\nKK (birebir): \"FR-MOD-07.7 KK (PRD satır 591, birebir): \"İzin bazlı görünürlük; export; benchmark karşılaştırma\" — bu alt-göreve düşen pay: \"export\" (CSV üretiminin tek doğruluk kaynağı olarak korunması).\" | \"KK-türetilmiş: \"Taşıma sonrası her rapor grubunun CSV çıktısı, aynı pencere için JSON raporunun verdiği sayılarla birebir aynı kalır (ADR-09).\" — Türetme gerekçesi: PRD refactor kriteri vermez; kriter `reports.ts`'in kendi yorumundaki 'a CSV can never disagree with the screen it was exported from' sözleşmesinden ve ADR-09'dan türetildi.\"\nKK DOĞRULAMA: `apps/api/test/integration/reports-billing.test.ts` DEĞİŞTİRİLMEDEN yeşil kalır — dört GET raporu ve `/reports/export` taşımadan önce ne döndürüyorsa aynısını döndürür (davranış-değişmezlik kanıtı = ADR-09 türetilmiş KK). Ek `report-csv.test.ts`: her grup için başlık satırı ve satır şekli (breakdown/reviews = gün başına satır; overview/ai-agent = `metric,value`), bilinmeyen grup → `validation` hatası.\nKAPSAM DIŞI: Yeni rapor grubu eklemek (Chat topics / Team performance ayrı v2 kalemleri) · PDF üretimi (kapsam dışı — varsayım #2) · `reports-export.ts` içindeki toCsv/csvField/exportFilename/REPORT_GROUPS'un taşınması (yerinde kalır) · Sorgu performans iyileştirmesi veya `report_aggregates` cache'i\nSÖZLEŞME: yok — hiçbir route eklenmiyor/kaldırılmıyor, `contract-parity.test.ts` etkilenmez.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "regresyon (birincil kanıt): reports-billing.test.ts + reports-export.test.ts + e2e reports.spec.ts değiştirilmeden yeşil · unit: dört grubun başlık/satır şekli doğrulanır · negatif: bilinmeyen grup id → validation hatası (switch exhaustive kalır) · lint/typecheck: import yönü routes/ → services/ (ters bağımlılık oluşmamalı)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "94",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T07:35:32.947Z"
           },
           {
             "id": 6,
@@ -4415,7 +4415,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T06:49:43.922Z",
+        "updatedAt": "2026-08-08T07:35:32.947Z",
         "complexity": 9,
         "recommendedSubtasks": 10,
         "expansionPrompt": "\"07.9 — Zamanlanmış (scheduled) rapor export  ·  dilim V2-4\" görevini 10 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5011,7 +5011,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T06:49:43.922Z",
+      "lastModified": "2026-08-08T07:35:32.947Z",
       "taskCount": 103,
       "completedCount": 84,
       "tags": [

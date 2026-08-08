@@ -72,6 +72,10 @@
   - **Ortam (tekrar):** `pnpm -w test:e2e` doğrudan çağrılırsa RTM dev sunucusu env'siz açılıp 60
     sn'de time-out veriyor. Doğru komut `set -a && . ./.env && set +a && pnpm -w test:e2e`, ve
     `pnpm -w test:integration` DB'yi truncate ettiği için önce `pnpm -w db:seed`.
+- **Çalışma alanında bırakılan:** `run-loop.sh` — bu pencere açılmadan ÖNCE de kirliydi (tm 93.8 /
+  94.3 / 94.7 notlarındaki aynı diff: deneme sayacı + blocked görevlerin yeniden seçilmesi), bu
+  task'la ilgisiz, dokunulmadı ve commit'lenmedi. Tam e2e koşusunun yeniden ürettiği
+  `apps/e2e/kanit/*.png` kanıt görselleri feature commit'ine dahil (tm 94.6'nın deseni).
 
 ### tm 94.7 — 07.9-sched-f · `scheduled-reports:run` operatör betiği + npm script (dry-run varsayılanı) — done — 2026-08-08 UTC
 

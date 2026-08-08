@@ -4171,10 +4171,10 @@
             "description": "Yalnızca SAF modül: `apps/web/src/features/reports/report-views.ts` — `SavedReportView { id, name, tab, mode, customFrom, customTo, baseline }` tipi; `isSavedReportView` katı doğrulayıcı (bilinmeyen `tab`/`mode` değerini DÜŞÜRÜR — bozuk/eski `localStorage` kaydı ekranı kırmaz); `safeStorage()`; `loadSavedReportViews`/`saveSavedReportViews`/`addSavedReportView`/`removeSavedReportView`; `useSavedRep",
             "details": "07.7-h — Reports Save view — rapora özgü kaydedilmiş görünüm (saf modül, Inbox views deseni)  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.7 (Save view)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 dosya (yeni modül + testi). (2) Güvenlik sınırı yok — yalnız istemci tarafı `localStorage`, sunucuya yazılmaz, PII taşımaz (yalnız sekme adı + tarih aralığı). (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var ve BİREBİR aynı problem için yazılmış: `apps/web/src/features/inbox/views.ts` satır 96-243 (`SavedView`/`SavedViewInput` tipleri, `isSavedView` doğrulayıcı, `safeStorage` try/catch, `loadSavedViews`/`saveSavedViews`/`addSavedView`/`removeSavedView`, `useSavedViews` hook'u). (5) Kontrat değişikliği YOK. (6) KK mekanik: ekle/sil/reload-sonrası-kalıcı.\nNEDEN AÇIK: Reports'a özgü kaydedilmiş görünüm YOK — `apps/web/src/features/reports/` dizininde yalnız `ReportsPage.tsx` + `ReportsPage.test.tsx` var (ls çıktısı); `SavedView` grep'i yalnız `features/inbox/views.ts` ve `features/inbox/InboxPage.tsx`'te isabet ediyor. `ReportsPage.tsx`'te sekme/aralık state'i (`tab`, `mode`, `customFrom`, `customTo` — satır 157-160) yalnız `useState` ile tutuluyor, hiçbir kalıcılık yok.\nKAPSAM: Yalnızca SAF modül: `apps/web/src/features/reports/report-views.ts` — `SavedReportView { id, name, tab, mode, customFrom, customTo, baseline }` tipi; `isSavedReportView` katı doğrulayıcı (bilinmeyen `tab`/`mode` değerini DÜŞÜRÜR — bozuk/eski `localStorage` kaydı ekranı kırmaz); `safeStorage()`; `loadSavedReportViews`/`saveSavedReportViews`/`addSavedReportView`/`removeSavedReportView`; `useSavedReportViews()` hook'u. Ayrı `STORAGE_KEY = 'nexa.reports.saved-views'` (Inbox'ın `nexa.inbox.saved-views` anahtarıyla çakışmaz). İsim uzunluk sınırı `SAVED_VIEW_NAME_MAX` emsaline göre. UI bağlama 07.7-k'da.\nDOSYALAR: apps/web/src/features/reports/report-views.ts · apps/web/src/features/reports/report-views.test.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/inbox/views.ts (satır 96-243 — `SavedView` tipi, `isSavedView` katı doğrulayıcı, `safeStorage`, load/save/add/remove, `useSavedViews` hook'u: BİREBİR kopyalanacak mimari) · apps/web/src/features/inbox/views.test.ts (19 test — aynı test kalıbı: bozuk kayıt düşürme, storage throw'unda çökmeme, ekle/sil/round-trip)\nKK (birebir): \"KK-türetilmiş: \"Save view\" — PRD FR-MOD-07.7 gereksinim başlığında ve rapor-1-fonksiyonel.md §MOD-07.7 öğe listesinde geçiyor ama PRD'nin KK sütunu yalnız \"İzin bazlı görünürlük; export; benchmark karşılaştırma\" diyor — Save view için KK yazılmamış. Türetilen kriter: \"Bir rapor görünümü (sekme + tarih aralığı + baseline) adla kaydedilir; listeden seçilince aynı görünüm geri gelir; silinebilir; sayfa yenilendikten sonra kalıcıdır; bozuk/eski kayıt ekranı kırmaz.\" Gerekçe: aynı özelliğin yazılı emsali FR-MOD-02.1.4 'custom saved views eklenebilir' (tm 38, teslim) — davranış oradan türetildi, uydurulmadı.\"\nKK DOĞRULAMA: `report-views.test.ts` — ekle → `loadSavedReportViews` aynı kaydı döner (kalıcılık); sil → liste küçülür; `localStorage`'a elle `{\"tab\":\"hacked\"}` yazılırsa kayıt DÜŞER (katı doğrulayıcı); `getItem` throw ederse boş liste döner ve exception sızmaz; boş ad / sınır üstü ad reddedilir.\nKAPSAM DIŞI: Sunucu tarafı kalıcılık / `report_views` tablosu — AÇILMAZ (varsayım §V4); cihazlar arası paylaşım istenirse ayrı kalem · Görünüm paylaşma / URL deep-link — 02.7-a'nın `ticket_sort` deseni ayrıdır, burada YAPILMAZ · UI çubuğu ve butonlar — 07.7-k · Inbox `views.ts`'i değiştirmek / ortaklaştırmak — dokunulmaz (regresyon riski)\nSÖZLEŞME: yok — tamamen istemci tarafı, hiçbir API çağrısı yok.\nMIGRATION: yok — bilinçli olarak `report_views` tablosu açılmaz.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit (negatif önce) — bozuk JSON / bilinmeyen `tab` / bilinmeyen `mode` → kayıt düşürülür, çökme yok · unit (negatif) — `localStorage` erişimi throw eder → boş liste, exception sızmaz · unit (negatif) — boş ad / `SAVED_VIEW_NAME_MAX` üstü ad → eklenmez (`added: null`) · unit — ekle/sil/round-trip; Inbox'ın `nexa.inbox.saved-views` anahtarına DOKUNULMADIĞI (anahtar izolasyonu)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "93",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T03:04:00.668Z"
           },
           {
             "id": 9,
@@ -4246,7 +4246,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T02:51:30.310Z"
+        "updatedAt": "2026-08-08T03:04:00.668Z"
       },
       {
         "id": "94",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T02:51:30.310Z",
+      "lastModified": "2026-08-08T03:04:00.668Z",
       "taskCount": 101,
       "completedCount": 81,
       "tags": [

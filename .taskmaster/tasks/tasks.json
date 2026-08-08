@@ -3212,13 +3212,13 @@
             "description": "TeamPage'e 'Work schedule' yüzeyi: 7 gün satırı (enabled toggle + start/end saat girdisi) + timezone seçici; apps/web/src/lib/form.tsx primitifi ile alan-altı hata (start ≥ end → satır-içi hata, geçersizken submit pasif) ve apps/web/src/lib/dirty-guard.tsx ile yarım-form kapatma onayı; GET/PUT /agents/{agentId}/work-schedule (WORKSCHED-c) çağrısı; hiç plan kaydedilmemişse components/EmptyState.tsx",
             "details": "WORKSCHED-h — Team → Work schedule düzenleyici (haftalık ızgara + timezone + alan-altı hata)  [SONNET-XHIGH]\n\nPRD: §5.3-Vardiya (WORKSCHED) + FR-EK-A.1 (tek form/validasyon), FR-EK-B.1 (anlamlı empty state)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 3 dosya + test; güvenlik kararı tamamen backend'de (WORKSCHED-c'deki scope/403 kapısı), ekran yalnız form; eşzamanlılık yok; kopyalanacak desen İSMEN var: WidgetCustomization.tsx (config formu + kaydet), InviteTeammates.tsx (form + alan-altı hata), apps/web/src/lib/form.tsx (T4-a primitifi); kontrat değişikliği yok; KK mekanik (render + hata + submit-disabled).\nNEDEN AÇIK: apps/web/src/features/team/ yalnız TeamPage.tsx, InviteTeammates.tsx, TeamAiPerformance.tsx, CopilotKnowledge.tsx (+ testleri) içeriyor — ekip yönetimi davet/AI performans/knowledge kapsıyor; vardiya takvimi/shift planlama ekranı yok. apps/web/src/features altında (15 klasör) hiçbir vardiya ekranı yok.\nKAPSAM: TeamPage'e 'Work schedule' yüzeyi: 7 gün satırı (enabled toggle + start/end saat girdisi) + timezone seçici; apps/web/src/lib/form.tsx primitifi ile alan-altı hata (start ≥ end → satır-içi hata, geçersizken submit pasif) ve apps/web/src/lib/dirty-guard.tsx ile yarım-form kapatma onayı; GET/PUT /agents/{agentId}/work-schedule (WORKSCHED-c) çağrısı; hiç plan kaydedilmemişse components/EmptyState.tsx ile anlamlı empty state (boş dikdörtgen yok).\nDOSYALAR: apps/web/src/features/team/WorkSchedule.tsx · apps/web/src/features/team/WorkSchedule.test.tsx · apps/web/src/features/team/TeamPage.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/settings/WidgetCustomization.tsx · apps/web/src/features/settings/WidgetCustomization.test.tsx · apps/web/src/features/team/InviteTeammates.tsx · apps/web/src/lib/form.tsx · apps/web/src/components/EmptyState.tsx\nKK (birebir): \"| Ekip/Vardiya | Work scheduler / staffing prediction |\" | \"KK-türetilmiş: \"Haftalık vardiya planı ekrandan gün gün düzenlenir (etkin/başlangıç/bitiş + timezone); geçersiz saat aralığında alan-altı hata gösterilir ve kaydet pasifleşir; plan yoksa anlamlı bir boş durum gösterilir.\" — Türetme gerekçesi: PRD §5.3 satır 412'de KK sütunu yok; form davranış payı PRD FR-EK-A.1 (\"Tek form/validasyon kütüphanesi; alan-altı hata mesajı\") ve FR-EK-B.1 (\"her boş liste için anlamlı empty state (boş dikdörtgen yok)\") maddelerinden türetildi. Destek: rapor-1-fonksiyonel.md:2164 — \"➕ Zaman tasarrufu + tutarlılık + vardiya devri.\"\"\nKK DOĞRULAMA: WorkSchedule.test.tsx'teki 'start ≥ end → alan-altı hata + submit pasif' testi KK-türetilmiş ikinci maddeyi (ve FR-EK-A.1'i), '7 gün render + kaydet → normalize gövde' testi birinci maddeyi, 'plan yok → EmptyState metni' testi üçüncü maddeyi (FR-EK-B.1) kanıtlar.\nKAPSAM DIŞI: Tahmin ekranı (WORKSCHED-i) · Vardiya devri/handover akışı · Grup/ekip bazlı vardiya (§C varsayımı: ajan bazlı) · Takvimde sürükle-bırak düzenleme — yapılmaz (basit gün satırı ızgarası)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit NEGATİF (ÖNCE): start ≥ end → alan-altı hata görünür ve kaydet disabled · unit NEGATİF: geçersiz saat formatı → hata; kirli form kapatılırken dirty-guard onayı çıkar · unit pozitif: 7 gün satırı + timezone render; kapalı gün saat girdilerini devre dışı bırakır · unit pozitif: kaydet PUT gövdesini normalize edilmiş şekilde gönderir · unit pozitif: plan yokken anlamlı empty state (boş dikdörtgen değil) · cross-tenant/authZ: burada test EDİLMEZ — güvenlik yüzeyi backend'de, WORKSCHED-c'de (403/404) ve WORKSCHED-j'de kanıtlanır",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               3
             ],
             "parentId": "77",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T01:47:40.588Z"
           },
           {
             "id": 9,
@@ -3251,7 +3251,7 @@
             "updatedAt": "2026-08-07T20:20:22.155Z"
           }
         ],
-        "updatedAt": "2026-08-08T01:21:55.382Z"
+        "updatedAt": "2026-08-08T01:47:40.588Z"
       },
       {
         "id": "78",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T01:21:55.382Z",
+      "lastModified": "2026-08-08T01:47:40.588Z",
       "taskCount": 101,
       "completedCount": 80,
       "tags": [

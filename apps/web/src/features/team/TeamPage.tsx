@@ -27,6 +27,7 @@ import { InviteTeammates, PendingInvitations } from './InviteTeammates.js';
 import { TeamAiPerformance } from './TeamAiPerformance.js';
 import { CopilotKnowledge } from './CopilotKnowledge.js';
 import { AgentSkills, type Expertise } from './AgentSkills.js';
+import { WorkSchedule } from './WorkSchedule.js';
 
 type Role = 'owner' | 'viceowner' | 'admin' | 'agent';
 
@@ -270,6 +271,13 @@ export function TeamPage(): ReactElement {
               )}
             </Card>
           </Section>
+
+          <WorkSchedule
+            agents={items}
+            currentAgentId={currentAgentId}
+            canManage={canManage}
+            loading={agents.isPending}
+          />
 
           <Section
             title="Chatbots"

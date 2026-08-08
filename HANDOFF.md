@@ -13,6 +13,58 @@
 
 ## Task log (newest-first)
 
+### tm 77.8 — WORKSCHED-h: Team → Work schedule düzenleyici — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **Yeni dosya** `apps/web/src/features/team/WorkSchedule.tsx` — `TeamPage`'e "Work schedule"
+    başlıklı bir `Section` ekler, WORKSCHED-c'nin self-vs-admin scope ayrımını (`agents--my` vs
+    `agents--all`) UI'da yansıtan bir roster türetimiyle: `canManage` (admin/owner) ise tüm ekip
+    seçilebilir, değilse yalnız `currentAgentId`. Kullanılamayacak bir picker girdisi hiç
+    render edilmez — sonradan 403 almak yerine.
+  - Editör bir `Modal` (`AgentSkills.tsx`'in per-satır tetikleyici deseni): `GET`/
+    `PUT /agents/{agentId}/work-schedule` (WORKSCHED-c, kontrat/route değişmedi). Tek doğrulama
+    kapısı `@nexa/types` `normalizeWorkSchedule` — Kaydet her zaman bu fonksiyonun ürettiği
+    normalize gövdeyi PUT eder, editör ve rota asla ayrı fikirde olamaz. Alan-altı hata
+    `apps/web/src/lib/form.tsx` `FieldError`'la, yalnız `enabled` gün doğrulanır (kapalı bir
+    günün saatleri ne olursa olsun hata üretmez, atılmaz — yalnız etkisiz kalır). Kapatma
+    `apps/web/src/lib/dirty-guard.tsx` `useCloseGuard` — Escape/backdrop/İptal aynı kapıdan.
+  - Timezone seçici `Intl.supportedValuesOf('timeZone')` (418 bölge) + `UTC` ön-ek (bazı
+    motorlarda `UTC` alias listede yok, `DEFAULT_WORK_SCHEDULE.timezone` tam olarak bu).
+  - `apps/web/src/features/team/TeamPage.tsx` — `WorkSchedule` import + 3 satırlık entegrasyon
+    (Teammates ile Chatbots bölümleri arasında).
+  - Test: `apps/web/src/features/team/WorkSchedule.test.tsx` (**11**) — roster kapsamı (yönetici
+    olmayan yalnız kendi satırını görür · yönetici picker'da herkesi görür · boş roster →
+    EmptyState · yükleniyorken iskelet, EmptyState değil) + editör (7 gün + timezone render +
+    kapalı günün saat alanları disabled · start≥end alan-altı hata + Kaydet pasif · geçersiz
+    saat formatı hata · kapalı gündeki saçma stored aralık doğrulanmaz · Kaydet normalize
+    edilmiş 7 günlük gövdeyi PUT eder · kirli kapatma dirty-guard sorar + reddedilince modal
+    açık kalır · temiz kapatma sormaz).
+- **Doğrulama:** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` (85 dosya/1750 `@nexa/api`
+  DEĞİŞMEDİ + 83 dosya/617 `@nexa/web`, ikisi de yeşil, integration dahil) · `pnpm -w build`
+  (7/7) · `pnpm test:e2e` (`make test-e2e` — `.env` yüklü) **73/74**: tek kırmızı
+  `skills-routing.spec.ts:76`, izole çalıştırıldığında yeşil ve HANDOFF'ta tm 77.4'ten beri
+  kayıtlı tekrarlayan pre-existing flake (paylaşılan seed DB'de test sırasına bağlı skill
+  kataloğu büyümesi) — bu görevle ilgisiz. İlgili `team.spec.ts` **3/3 yeşil**. Hepsi exit 0.
+- **Varsayımlar:**
+  - **FR-EK-B.1 empty state, KAPSAM'daki "hiç plan kaydedilmemişse":** rota her zaman bir plan
+    döner (satır yoksa `DEFAULT_WORK_SCHEDULE`, WORKSCHED-c) — tek bir ajan için gerçek bir
+    "plan yok" durumu hiç yok. Boş durum bu yüzden rosterin kendisine bağlandı: görüntüleyenin
+    zamanlayabileceği kimse yoksa (`selectable.length === 0`) `EmptyState`, roster hâlâ
+    `isPending` iken iskelet — asla erken boş durum.
+  - Zaman alanları `<input type="time">` değil düz metin (`WORK_SCHEDULE_TIME_PATTERN` ile
+    doğrulanan `HH:MM`): native time input'un jsdom/tarayıcı-arası biçim/yerelleştirme
+    tutarsızlığından kaçınmak ve "geçersiz saat formatı" testini gerçekten geçersiz bir dize ile
+    yazabilmek için.
+- **Sonraki pencereye not:**
+  - Sırada **WORKSCHED-i** (Reports → Staffing sekmesi, `SONNET-XHIGH`, -g kapalı olduğu için
+    açık) ve ardından **WORKSCHED-j** (uçtan uca doğrulama, -h ve -i ikisi de kapanınca açılır).
+  - `WorkSchedule.tsx` `TIMEZONES` listesi `Intl.supportedValuesOf('timeZone')`'a bağlı — bu
+    API'siz bir motorda (çok eski) kısa bir sabit listeye düşer; production tarayıcı hedefinde
+    risk yok.
+  - `skills-routing.spec.ts:76` flake'i hâlâ açık (kalıcı çözüm bu görevin kapsamı dışında,
+    bkz. tm 77.4 notu ve yukarıdaki satırlar) — tam suite koşusunda tek kırmızı olarak beklenir.
+
 ### tm 77.7 — WORKSCHED-g: GET /reports/staffing-forecast — done — 2026-08-08 UTC
 
 - **Yapıldı:**

@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### tm 77.5 — WORKSCHED-e: /reports/breakdown by_hour — done (kod değişikliği yok, doğrulama) — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - Task tanımı "NEDEN AÇIK" olarak `/reports/breakdown`'ın yalnız `by_day`/`by_agent` ürettiğini,
+    saat-bazlı kırılımın olmadığını iddia ediyordu. **Bu iddia yanlıştı.** `breakdownByHour()`
+    (`apps/api/src/routes/reports.ts:623`) ve yanıttaki `by_hour[]` alanı zaten mevcuttu —
+    `feat(reports): breakdownByHour() + /reports/breakdown by_hour dimension (tm 63.2)`,
+    commit `b0d7e16`, 2026-08-02 — WORKSCHED epiği açılmadan (WORKSCHED-a/tm 77.1, 2026-08-07)
+    **5 gün önce**, ilgisiz bir görevde (dört-boyutlu breakdown: by_day/by_hour/by_channel/by_team).
+    PLAN.md §5.3-Vardiya satırındaki "Kalan (e→j)" notu güncel değildi.
+  - Kod okunarak + testler koşturularak WORKSCHED-e'nin testStrategy'sindeki her madde tek tek
+    doğrulandı: `breakdownByDay` ile aynı `SPLIT_COUNTS` deseni · UTC saat kovası, 24 kova dense
+    (boş saat 0, `reports.ts:648`) · cross-tenant izolasyon (`'never counts another tenant'` —
+    `theirs.by_hour` 24 sıfır-dolu kova) · `by_hour` toplamı = `by_day` toplamı aynı pencerede
+    (`'breakdown cross-consistency'` testi) · `reports_read` scope zorunluluğu (403) + ters tarih
+    aralığı (400, rota-seviyesinde paylaşılan validasyondan) · `contract-parity.test.ts` 5/5.
+  - **Kapsam sapması not edildi, geri ALINMADI:** görev CSV export'a (`reports-export.ts`) by_hour
+    eklenmemesini şart koşuyordu — ama CSV zaten `by_hour` satırları içeriyor, tm 63.6'da
+    (`feat(reports): breakdown CSV export → long format across 4 dimensions`) kasıtlı tasarım
+    kararıyla teslim edilmiş ve test ediliyor. Bunu görev tanımına uydurmak için geri almak canlı,
+    test edilen davranışı bozardı — yapılmadı; PLAN.md'ye açıkça yazıldı.
+  - **Kod değişikliği yok** — yalnız PLAN.md (§5.3-Vardiya satırı, WORKSCHED-e teslim notu +
+    Kalan (e→j)→(f→j)) ve bu HANDOFF girdisi.
+- **Doğrulama (hepsi ön planda, exit 0):** `pnpm -w typecheck` (11/11, çoğu cache) ·
+  `pnpm -w lint` (8/8, çoğu cache) ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **@nexa/api 82 dosya / 1684 test**
+  yeşil (contract-parity 5/5 + tenant-isolation 38 dahil) · `pnpm -w build` (7/7). E2E koşulmadı —
+  by_hour hiçbir UI/e2e yüzeyinde tüketilmiyor (WORKSCHED-g/-h/-i kapsamı), sayı 1684 önceki
+  turdaki (tm 93.5) sayıyla birebir aynı → drift yok.
+- **Varsayımlar:** Yok — üretim kodu dokunulmadı.
+- **Sonraki pencereye not:** WORKSCHED zincirinde sıradaki `-f` (tahmin çekirdeği, OPUS/bölünmez
+  çekirdek — presence-coverage.ts + breakdownByHour üzerine kurulur, ikisi de hazır). `-g`
+  (staffing-forecast route) `-b/-d/-e/-f`'e bağımlı; `-e` artık gerçekten done, `-f` kalan tek
+  blokaj.
+
 ### tm 93.5 — 07.7-e: benchmark karşılaştırma katmanı (tüm rapor gruplarına ortak vs-baseline) — done — 2026-08-08 UTC
 
 - **Yapıldı:**

@@ -3174,10 +3174,10 @@
             "description": "(1) `breakdownByHour(tx, licenseId, from, to)` helper'ı — breakdownByDay ile aynı `$queryRaw` + SPLIT_COUNTS kalıbı, UTC saat kovası (0-23), boş saat 0; (2) /reports/breakdown yanıtına `by_hour[]`; (3) reports.yaml açıklaması + openapi.yaml `ReportsBreakdown` şemasına katkısal alan + re-bundle. CSV export yolu (reports-export.ts) DEĞİŞMEZ — by_day çıktısı birebir korunur (kod yorumu: tüketiciler a",
             "details": "WORKSCHED-e — /reports/breakdown yanıtına saat-bazlı hacim kırılımı (by_hour)  [SONNET-XHIGH]\n\nPRD: §5.3-Vardiya (WORKSCHED) girdisi + FR-MOD-07.5 (Metrics breakdown) · NFR-P7\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 4 dosya; YENİ route/scope yok (mevcut /reports/breakdown + reports_read aynen), izolasyon mevcut withTenant + license_id filtresinden geliyor, yeni güvenlik kararı yok; eşzamanlılık yok; kopyalanacak desen İSMEN var: apps/api/src/routes/reports.ts:279 `breakdownByDay` ve 664-723 handler; kontrat katkısal; KK mekanik (by_hour toplamı = by_day toplamı).\nNEDEN AÇIK: apps/api/src/routes/reports.ts /reports/breakdown (satır 664-723) yalnız `by_day` (breakdownByDay helper'ı, satır 279) ve `by_agent` ($queryRaw agent split) üretiyor; saat-bazlı kırılım YOK — tahmin motoru saat dilimi ister, mevcut sorgu genişletilmeden kullanılamaz.\nKAPSAM: (1) `breakdownByHour(tx, licenseId, from, to)` helper'ı — breakdownByDay ile aynı `$queryRaw` + SPLIT_COUNTS kalıbı, UTC saat kovası (0-23), boş saat 0; (2) /reports/breakdown yanıtına `by_hour[]`; (3) reports.yaml açıklaması + openapi.yaml `ReportsBreakdown` şemasına katkısal alan + re-bundle. CSV export yolu (reports-export.ts) DEĞİŞMEZ — by_day çıktısı birebir korunur (kod yorumu: tüketiciler aynı güne farklı sayı veremez).\nDOSYALAR: apps/api/src/routes/reports.ts · packages/contract/openapi/paths/reports.yaml · packages/contract/openapi/openapi.yaml · apps/api/test/integration/reports-billing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts · apps/api/src/routes/reports-export.ts · apps/api/test/integration/reports-billing.test.ts\nKK (birebir): \"| Ekip/Vardiya | Work scheduler / staffing prediction |\" | \"KK-türetilmiş: \"Geçmiş sohbet hacmi saat bazında (UTC, 24 kova) okunabilir ve bu sayılar günlük kırılımla birebir tutarlıdır.\" — Türetme gerekçesi: PRD §5.3 satır 412'de KK sütunu yok; kriter orkestratörün bağlayıcı kapsam kararındaki 'geçmiş hacim' girdisinden ve depodaki mevcut kod sözleşmesinden (breakdown ile CSV export aynı helper'ı paylaşır) türetildi.\"\nKK DOĞRULAMA: reports-billing.test.ts'e eklenen 'by_hour toplamı = by_day toplamı' iddiası KK-türetilmiş tutarlılık maddesini kanıtlar; '24 kova, boş saat 0' iddiası saat-bazlı okunabilirlik maddesini; CSV regresyon iddiası mevcut tüketicinin bozulmadığını kanıtlar; contract-parity yeşil.\nKAPSAM DIŞI: Tahmin aritmetiği (WORKSCHED-f) · Staffing endpoint'i (WORKSCHED-g) · UI (WORKSCHED-i) · CSV export'a by_hour grubu eklemek — YAPILMAZ (mevcut grup listesi korunur)\nSÖZLEŞME: packages/contract/openapi/openapi.yaml → `ReportsBreakdown` şemasına katkısal `by_hour[]`; paths/reports.yaml açıklaması. UYARI: OpenAPI'ye eklenip re-bundle edilmezse contract-parity.test.ts KIRILIR.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration CROSS-TENANT (ÖNCE): lisans B'nin sohbetleri lisans A'nın by_hour sayılarına girmez · integration NEGATİF: geçersiz/ters tarih aralığı → 400; reports_read olmayan token → 403 · integration pozitif: by_hour tam 24 kova döner, boş saat 0 · integration pozitif: aynı pencerede by_hour toplamı = by_day toplamı · REGRESYON: reports-export CSV `breakdown` grubu çıktısı değişmez (iki tüketici aynı sayıyı vermeye devam eder) · integration: contract-parity.test.ts yeşil",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "77",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T00:28:07.090Z"
           },
           {
             "id": 6,
@@ -3251,7 +3251,7 @@
             "updatedAt": "2026-08-07T20:20:22.155Z"
           }
         ],
-        "updatedAt": "2026-08-07T23:48:04.743Z"
+        "updatedAt": "2026-08-08T00:28:07.090Z"
       },
       {
         "id": "78",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T00:22:54.819Z",
+      "lastModified": "2026-08-08T00:28:07.090Z",
       "taskCount": 101,
       "completedCount": 80,
       "tags": [

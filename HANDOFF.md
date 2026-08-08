@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+### tm 102 — Faz-2 özet sayaçlarını tabloyla eşitle (DOKÜMAN-ONLY) — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **İki özet sayacı tabloya eşitlendi.** PLAN.md **satır 22** (üst-tablo `**Faz 2 — v2**` satırı) ve
+    **satır 1100** (§5.0 girişi): `**12 ⬜ açık · 1 ◐ kısmi · 14 ✅ teslim · 3 ⛔ kapsam dışı**` →
+    `**12 ⬜ açık · 0 ◐ kısmi · 15 ✅ teslim · 3 ⛔ kapsam dışı**`. Sayılar **körlemesine değil,
+    tablodan sayılarak** yazıldı (§1.2) — script çıktısı aşağıda.
+  - **Bayatlığın kaynağı:** `6230b4f` (07.7-l · tm 93.12) `07.7` damgasını `◐→✅` çevirirken iki özet
+    sayacına dokunmadı. (Karşı örnek: `5d2c096`/WORKSCHED-j aynı işi yaparken sayaçları **aynı
+    commit'te** güncellemiş, bayatlık penceresi hiç oluşmamıştı.)
+  - **§D78 kaydı** eklendi (append-only): bayat commit, yeni sayım, kapanan kaynak, dokunulmayanlar.
+- **Doğrulama** (script, exit 0 — DoD kapı komutları bu doküman-only görev için anlamlı değil
+  (tek kod dosyası değişmedi, kanıt: `git diff --numstat`), görevin kendi test stratejisindeki
+  4 kapı koşuldu):
+  1. **Sayım** — §5.0 başlığından §5.1'e kadar `^| ` ile başlayan 30 veri satırı, damga = 6. alanın
+     öncü karakteri: **12 ⬜ · 0 ◐ · 15 ✅ · 3 ⛔ = 30**; damgasız (`??`) satır **0**.
+  2. **Eşitlik** — (1)'in ürettiği özet metnini taşıyan satırlar tam olarak **[22, 1100]**; bayat
+     ifadenin dosyada kalıntısı **0** (§D77/§D78 tarihçe atıfları hariç).
+  3. **Sızıntı yok** — `git diff` PLAN.md **+3 / −2** (satır 22 · satır 1100 · D78 satırı); §5.0
+     tablosunun 30 gereksinim satırının **hiçbiri** değişmedi, damga ekleyen/silen satır **0**.
+  4. **tm 101 regresyonu yok** — §5.0 tablo bloğunda `^| ` ile başlamayan satır **0**, veri satırı **30**.
+- **Varsayımlar:** yok. `23 açık kalem` kapanış-paydası (satır 22-col5 · satır 1102 · satır 2318)
+  bilinçli olarak **dokunulmadı** — 07.7'nin teslimi payda içi ilerlemedir, kapsam değişikliği değil
+  (§D68/§D70/§D72/§D73/§D74 ile aynı ilke).
+- **Sonraki pencereye not:** §D68–§D76 serisinin **iki ayağı da kapandı** — dejenere panel parser'ı
+  (tm 101 · §D77) ve bayat özet sayacı (bu tur · §D78). Panel bir sonraki taramada §1.2 çelişkisi
+  bildirmemeli; bildirirse artık gerçek bir damga akışıdır, önce **sayarak** doğrulanmalı.
+  **Kural:** §5.0'da bir damga çevirirken satır 22 + satır 1100 sayaçlarını **aynı commit'te**
+  güncelle (`5d2c096` deseni) — bu bayatlık dizisinin tek kaynağı bu adımın atlanmasıdır.
+  `run-loop.sh` bu pencereden **önce de** kirliydi (sahibinin), commit'e alınmadı.
+
 ### tm 101 — PLAN §5.0 tablosunun 4 sarkan satırını reflow et — done — 2026-08-08 UTC
 
 - **Yapıldı:**

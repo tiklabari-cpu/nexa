@@ -18,11 +18,11 @@ import { generateShortId } from '@nexa/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import {
   buildCasesReport,
-  buildGroupCsv,
   buildLeadsReport,
   buildSalesReport,
   buildTeamPerformanceReport,
 } from '../../src/routes/reports.js';
+import { buildGroupCsv } from '../../src/services/reports/report-csv.js';
 import { toPdf, type CsvCell } from '../../src/routes/reports-export.js';
 import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 

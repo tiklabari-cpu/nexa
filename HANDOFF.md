@@ -13,6 +13,67 @@
 
 ## Task log (newest-first)
 
+### tm 94.5 — 07.9-sched-d2 · rapor CSV üretimini paylaşılan `services/reports/report-csv.ts`'e çıkar — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `buildGroupCsv` + onu besleyen **tüm** sorgu/yardımcı katmanı `apps/api/src/routes/reports.ts`'ten
+    (3068 → 1608 satır) yeni `apps/api/src/services/reports/report-csv.ts`'e (1529 satır) taşındı,
+    davranış-değişmez (pure move, 27 export): `windowTotals`/`ticketCount`/`casesByDay(+Status/Priority)`/
+    `leadFirstTouch`/`leadsByDay`/`leadTotals`/`satisfactionCounts(+Score)`/`csatSummary`/`satisfactionByDay`/
+    `breakdownByDay/Hour/Channel/Team`/`transferCount`/`teamPerformanceByAgent`/`buildTopicsReport`
+    (+ `clusterableDocs`/`centroidOf`)/`roundOrNull`/`SPLIT_COUNTS`/`AGENT_EVENT`/`SKILL_RUN` +
+    `groupCsvTable`/`benchmarkCsvRows`/`groupBenchmark`/`csvScalar` (CSV yapısı) + yedi `*Benchmark`
+    fonksiyonu (`overviewBenchmark`/`splitBenchmark`/`aiAgentBenchmark`/`reviewsBenchmark`/
+    `casesBenchmark`/`leadsBenchmark`/`salesBenchmark`).
+  - `routes/reports.ts` artık bunları geri import ediyor — hem dokuz JSON rapor builder'ı
+    (`buildOverviewReport`...`buildTeamPerformanceReport`, hepsi yerinde kaldı) hem `/reports/export`
+    aynı fonksiyonlara bağlı; `routes/ → services/` yönü korunuyor (ters bağımlılık yok — bu, `-e`
+    zamanlayıcısının `routes/`'a dokunmadan CSV üretebilmesinin ön koşuluydu). Kullanılmayan üç import
+    (`Prisma`, `channelLabel`, `type CsvCell`) `reports.ts`'ten temizlendi (lint yakaladı).
+  - `apps/api/test/integration/tenant-isolation.test.ts`'in `buildGroupCsv` import'u yeni yola
+    taşındı (o dosya `buildGroupCsv`'yi doğrudan çağırıyordu — task tanımının listelemediği bir
+    bağımlılıktı, elle bulundu).
+  - Yeni test `apps/api/src/services/reports/report-csv.test.ts` (10): dokuz grubun (overview/
+    breakdown/ai-agent/reviews/topics/cases/leads/team-performance/sales) başlık satırı + satır şekli
+    (overview/ai-agent/sales = sabit `metric,value`; reviews/cases/leads/team-performance = gün/ajan
+    başına satır; breakdown = saat ekseni dense-24 tabanlı) + bilinmeyen grup → `ApiError` `validation`
+    tipi. Tek bir tenant + minimal fixture (1 kapalı otomatik thread + rating + ticket + bir lead
+    touch) üzerinden, `withTenant`/`ownerClient` ile doğrudan çağrı (tenant-isolation.test.ts'in
+    deseni) — HTTP sunucusu ayağa kaldırılmadı.
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **1867/1867** (88 dosya, +10 yeni) ·
+  `pnpm -w test:integration` → **1429/1429** (60 dosya, değişmeden yeşil — `reports-billing.test.ts`
+  ve `tenant-isolation.test.ts` (53) dahil, davranış-değişmezlik/ADR-09 kanıtı) · `pnpm -w build` 0 ·
+  `pnpm -w db:check-drift` → "no drift" · değişen dosyalarda `prettier --check` 0 · `reports.spec.ts`
+  (e2e, task'ın kapsadığı akış) **10/10** yeşil — hem izole hem tam paket içinde, CSV/PDF indirme ve
+  "walk every tab" testleri dahil. **Tam e2e paket** (`make test-e2e`, 80 test) İKİ ayrı turda farklı
+  ve bu task'la **ilgisiz** testlerde kırmızı çıktı (1. tur: `skills-routing.spec.ts` tek başına;
+  2. tur: aynısı + 3× `customers.spec.ts`) — `skills-routing.spec.ts` izole çalıştırıldığında 2/2
+  yeşil, bu da tam paket koşusundaki paylaşılan dev-DB üzerinde önceden var olan bir sıra/durum
+  sızıntısı (flakiness) olduğunu gösteriyor, bu task'ın dokunduğu kod yoluyla (rapor CSV üretimi)
+  hiçbir ilişkisi yok. Ayrı bir bulgu olarak not edildi, bu pencerenin kapsamı değil.
+- **Varsayımlar:**
+  - Task detayı `buildGroupCsv`'yi "~250 satır, 9 yardımcı fonksiyon" olarak tanımlıyordu — bu,
+    07.6/07.7-a..l (topics/cases/leads/sales/team-performance/benchmark) `reports.ts`'e eklenmeden
+    ÖNCE yazılmış bir tahmindi. Gerçek taşıma yüzeyi ~27 export/~1300 satır: ADR-09 gereği bu
+    yardımcıların HEPSİ hem CSV yolunda (`groupCsvTable`/`groupBenchmark`) hem karşılık gelen JSON
+    builder'da kullanılıyor, o yüzden biri taşınırken hepsi taşınmak zorundaydı (yoksa
+    `services/ → routes/` ters bağımlılığı doğardı). `casesByStatus`/`casesByPriority` CSV yolunda
+    kullanılmıyor ama aynı bitişik blok içinde olduğu için (cerrahi olarak ayırmak riski artırırdı)
+    onlarla birlikte taşındı — davranışı etkilemez, yalnız dosya konumu.
+  - PLAN.md §5.0'da `07.9` satırının durum damgası tm 94.1'den beri **hatalı** ✅ idi (yalnız 1/10
+    alt-görev bitmişken "teslim" işaretlenmiş, gövde metni hep "**Açık:** ..." listesini taşımaya
+    devam etmişti — kendi içinde çelişkiliydi). Bu pencere -d2'yi kapatırken satırı düzeltti: ◐
+    (5 alt-görev hâlâ açık: -e/-f/-g/-h/-i), ve §5.0 özet sayacı da (16 ✅→15 ✅, 0 ◐→1 ◐) buna göre
+    güncellendi. `✅` UYDURMAdı — CONVENTIONS §1'in tam istediği şey.
+- **Sonraki pencereye not:** `-e` (zamanlayıcı çekirdeği, OPUS-MAX) artık açılabilir — bağımlılıkları
+  `-a`/`-b`/`-d1`/`-d2` hepsi kapalı. `-e`, CSV'yi `services/reports/report-csv.js`'ten
+  `buildGroupCsv`'yi import ederek üretmeli (ARTIK `routes/reports.js`'ten DEĞİL — bu task'ın asıl
+  amacı buydu), sonucu `-d1`'in `buildScheduledReportMail`'iyle birleştirip
+  `mailer.send({ kind: 'scheduled_report', ... })` çağırmalı. Ayrı konu: tam e2e paketindeki
+  `skills-routing`/`customers` flakiness'i (yukarıda) bir noktada ayrı bir task olarak araştırılmayı
+  hak ediyor — büyük ihtimalle paralel/sıralı testler arası paylaşılan dev-DB'de temizlenmeyen state.
+
 ### tm 94.4 — 07.9-sched-d1 · rapor teslim e-postası — mailer `kind` genişletme + saf konu/gövde biçimlendirici — done — 2026-08-08 UTC
 
 - **Yapıldı:**

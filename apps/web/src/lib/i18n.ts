@@ -66,7 +66,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     // Command palette
     'palette.label': 'Command palette',
     'palette.search': 'Search or jump to',
-    'palette.placeholder': 'Search customers, conversations, tickets — or jump to a module…',
+    // FR-MOD-01.1.3's acceptance criterion quotes this string verbatim. The
+    // longer, more descriptive line it replaced said the same thing in more
+    // words; the criterion is checkable and the prose was not, so the prose
+    // lost. What the palette can find is spelled out by the group headings a
+    // keystroke later anyway.
+    'palette.placeholder': 'Search Text or go to…',
     'palette.searching': 'Searching…',
     'palette.noMatches': 'No matches.',
     'palette.group.goTo': 'Go to',
@@ -111,7 +116,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     // Command palette
     'palette.label': 'Komut paleti',
     'palette.search': 'Ara veya git',
-    'palette.placeholder': 'Müşteri, sohbet, talep ara — veya bir modüle atla…',
+    'palette.placeholder': 'Metin ara veya git…',
     'palette.searching': 'Aranıyor…',
     'palette.noMatches': 'Eşleşme yok.',
     'palette.group.goTo': 'Git',

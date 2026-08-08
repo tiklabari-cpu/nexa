@@ -13,6 +13,59 @@
 
 ## Task log (newest-first)
 
+### tm 95.8 — 01.1.3-ai-h · Uçtan uca doğrulama + kapanış (KALEM KAPANDI) — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/e2e/tests/command-palette.spec.ts` — yeni senaryo `proves all three result kinds —
+    navigate, act, ask — in one session`. Dosyadaki üç mevcut test her sonuç tipini **ayrı ayrı**
+    kanıtlıyordu; KK'nın iddiası tek bir palet hakkında, dolayısıyla "sayfa başına bir tip"
+    çalışan bir palet üçünü de ayrı ayrı geçer ve asıl sorulanı yine karşılamaz. Bu yüzden tüm
+    KK tek oturumda, yalnız klavyeyle koşuyor: ⌘K aç → placeholder iddiası → ↑↓ **iki yönde de
+    sarar** (`aria-activedescendant`) → **navigasyon** (Enter → Reports) → **aksiyon** (Enter →
+    Stop Accepting Chats; Team ekranı API üzerinden `Not accepting` okur — yalnız yerel store'u
+    yazan bir toggle tarayıcıda aynı görünür ve routing'in umursadığı her yerde yanlış olurdu) →
+    geri alınır + reload ile `Accepting chats` doğrulanır (suite tek seed'i paylaşıyor, ajanı
+    "kabul etmiyor" bırakmak sonraki routing akışlarını kırar) → **AI sorgusu** KK'nın kendi
+    örneğiyle ("Summarize my team's activity") cevap kartına döner: `handled N chats in this
+    period` + `Source: totals.chats` → **Escape** kapatır. Kanıt
+    `apps/e2e/kanit/95-palette-ai-answer.png`.
+  - `apps/web/src/lib/i18n.ts` — `palette.placeholder` (en) `Search customers, conversations,
+    tickets — or jump to a module…` → **`Search Text or go to…`** (PRD §485 KK'da birebir bu
+    dizeyi alıntılıyor; tr `Metin ara veya git…`). KK'nın üç maddesinden ikisi (üç sonuç tipi,
+    ↑↓/esc) kodda zaten karşılanıyordu, üçüncüsü tek satırlık bir metin farkıyla
+    karşılanmıyordu — bir kapanış turunda bunu `◐` bırakmak yerine hizalamak doğru cevaptı.
+  - `apps/web/src/components/CommandPalette.test.tsx` — placeholder unit'te de sabitlendi
+    (mevcut 'opens on ⌘K and closes on Escape' testine attribute iddiası), böylece bir sonraki
+    metin turunda sessizce kaymaz. Test sayısı değişmedi (27), iddia sayısı arttı.
+  - `PLAN.md` — §5.0 `01.1.3` satırına `-h` kapanış kanıtı + "KALEM KAPANDI" (satır zaten `✅`
+    idi, `Açık: uçtan uca kapanış (-h)` notu kaldırıldı); §3.1 MVP `01.1.3` satırına v2 payının
+    kapandığı notu.
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm -w typecheck` **0** ·
+  `pnpm -w lint` **0** · `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` **0**
+  (web 716 · api 1931 · rtm 90 · ai-mock 81 · types 71 · widget 52 = **2941**) ·
+  `pnpm -w test:integration` **0** (api 1476 + rtm 51 = **1527**) · `pnpm -w build` **0** ·
+  `pnpm -w test:e2e` **0** → **84/84 passed, kırmızı yok**.
+- **Varsayımlar:**
+  - ↑↓ sarma iddiası **boş sorguda** koşuyor: doluyken palet arama isteği atar, geç gelen bir
+    cevap `commands`'ı değiştirip `activeIndex`'i 0'a sıfırlar ve iddia tuş basımıyla yarışırdı.
+    Ayrıca satırlar `onMouseEnter` ile de vurgulandığı için palet imlecin altında açılıyor ve
+    başlangıç indeksi önceki tıklamanın nereye denk geldiğine bağlı oluyordu — test imleci
+    `mouse.move(0, 0)` ile çekiyor ve başlangıç indeksini okuyup oradan yürüyor, sabit 0
+    varsaymıyor (ilk koşuda tam bu yüzden kırmızı geldi, düzeltildi).
+  - Placeholder değişimi bir "yeni özellik" değil, KK hizalaması sayıldı; kapsam dışı listesi
+    (`Yeni özellik eklemek`) ihlal edilmedi.
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (tm 94.8'den beri taşınan
+    carry-over) — bu pencerenin işiyle ilgisiz, yine commit'e alınmadı.
+- **Sonraki pencereye not:**
+  - **tm 104 (e2e `skills-routing.spec.ts:76`) bu koşuda YEŞİL geldi.** 95.2–95.6 pencerelerinde
+    kırmızıydı; bu turda hiçbir şey ona dokunmadı, yani kırmızılık ortama/zamanlamaya bağlı
+    (flaky) görünüyor. tm 104 kapatılmadı — kapatmadan önce birkaç koşuda üst üste yeşil olduğu
+    doğrulanmalı.
+  - `01.1.3-ai` kalemi (tm 95 ve tüm alt görevleri) **tamamen kapandı**; §5.0'da sırada
+    `12.4` (Copilot BI komut) var ve ADR-09 tutarlılığı için bu turda kurulan desen
+    (`buildOverviewReport`'u yeniden kullanmak, ikinci bir hesaplama yazmamak) doğrudan
+    uygulanabilir.
+
 ### tm 95.7 — 01.1.3-ai-g · Klavye/a11y: ↑↓/esc üç sonuç tipinde de tutarlı — done — 2026-08-08 UTC
 
 - **Yapıldı:**

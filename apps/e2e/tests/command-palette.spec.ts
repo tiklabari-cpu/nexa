@@ -89,4 +89,114 @@ test.describe('command palette', () => {
       'Accepting chats',
     );
   });
+
+  /**
+   * The acceptance criterion, in one session (FR-MOD-01.1.3, NFR-A11Y6).
+   *
+   * The criterion names three result kinds — an action, a destination and an
+   * AI question — plus the placeholder and ↑↓/esc. The tests above each prove
+   * one kind well, and that is exactly what leaves the criterion unproven: it
+   * is a claim about one palette, and a palette that could do any one of the
+   * three per page load would satisfy all of them separately and still fail
+   * the thing being asked. So this runs the whole criterion through a single
+   * signed-in session, on the keyboard alone, in the order an agent would
+   * meet it — jump somewhere, do something, ask something, get out.
+   *
+   * It leaves availability as it found it. The suite shares one seed and runs
+   * serially, so an agent left refusing chats breaks the routing flows that
+   * come after this file.
+   */
+  test('proves all three result kinds — navigate, act, ask — in one session', async ({
+    agentPage,
+  }) => {
+    // Four palette round trips and a reload, against live servers.
+    test.slow();
+
+    const palette = agentPage.getByRole('dialog', { name: 'Command palette' });
+    const input = agentPage.getByRole('combobox', { name: 'Search or jump to' });
+    const openPalette = async (): Promise<void> => {
+      await agentPage.keyboard.press('ControlOrMeta+k');
+      await expect(palette).toBeVisible();
+    };
+
+    // ── Opens, and says what it is for ──────────────────────────────────────
+    await openPalette();
+    await expect(input).toHaveAttribute('placeholder', 'Search Text or go to…');
+
+    // ── ↑↓ walk the list and wrap at both ends ──────────────────────────────
+    // Asserted on the empty query on purpose: with nothing typed the palette
+    // fires no searches, so the row set is fixed and the highlight cannot be
+    // reset out from under the keystroke by a reply arriving mid-assertion.
+    // Park the pointer off the rows first: they also highlight on hover, and
+    // the palette opens under wherever the mouse was left, so the starting
+    // position is whatever the previous click happened to be over.
+    await agentPage.mouse.move(0, 0);
+    const rows = await palette.getByRole('option').count();
+    expect(rows).toBeGreaterThan(1);
+    const start = await input.getAttribute('aria-activedescendant');
+    const startIndex = Number(start?.replace('command-option-', ''));
+
+    // Walk up to the first row, wherever we came in…
+    for (let i = 0; i < startIndex; i += 1) await agentPage.keyboard.press('ArrowUp');
+    await expect(input).toHaveAttribute('aria-activedescendant', 'command-option-0');
+    // …then one step past it, which lands on the last row rather than nothing.
+    await agentPage.keyboard.press('ArrowUp');
+    await expect(input).toHaveAttribute('aria-activedescendant', `command-option-${rows - 1}`);
+    // And down from the last comes back around to the first.
+    await agentPage.keyboard.press('ArrowDown');
+    await expect(input).toHaveAttribute('aria-activedescendant', 'command-option-0');
+
+    // ── Kind 1: navigation ──────────────────────────────────────────────────
+    await input.fill('Reports');
+    await expect(palette.getByRole('option', { name: /Reports/ })).toBeVisible();
+    await agentPage.keyboard.press('Enter');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+    await expect(palette).toBeHidden();
+
+    // ── Kind 2: an action, which reaches the server ─────────────────────────
+    await openPalette();
+    await input.fill('accepting');
+    await expect(palette.getByRole('option', { name: 'Stop Accepting Chats' })).toBeVisible();
+    await agentPage.keyboard.press('Enter');
+    await expect(palette).toBeHidden();
+
+    // Read back through a different screen, over the API: a toggle that moved
+    // only the local store would look identical here and be wrong everywhere
+    // routing decisions are made.
+    await agentPage.getByRole('link', { name: 'Team' }).click();
+    await expect(agentPage.getByRole('row').filter({ hasText: DEMO.agentName })).toContainText(
+      'Not accepting',
+    );
+
+    // Put it back before anything downstream depends on it.
+    await openPalette();
+    await input.fill('accepting');
+    await agentPage.getByRole('option', { name: 'Start Accepting Chats' }).click();
+    await expect(palette).toBeHidden();
+    await agentPage.reload();
+    await expect(agentPage.getByRole('row').filter({ hasText: DEMO.agentName })).toContainText(
+      'Accepting chats',
+    );
+
+    // ── Kind 3: a question nothing else can answer ──────────────────────────
+    // The criterion's own example. It matches no action, no module and no
+    // record, which is precisely when the palette stops searching and offers
+    // to ask instead.
+    await openPalette();
+    await input.fill("Summarize my team's activity");
+    await expect(palette.getByRole('option', { name: /Ask AI/ })).toBeVisible();
+    await agentPage.keyboard.press('Enter');
+
+    // A real figure, computed by the same report builder the Reports screen
+    // reads (ADR-09) — not a canned sentence — and the palette stays open to
+    // show it, because closing over the answer would discard the reason the
+    // question was asked.
+    await expect(palette).toContainText(/handled \d+ chats? in this period/);
+    await expect(palette).toContainText('Source: totals.chats');
+    await agentPage.screenshot({ path: 'kanit/95-palette-ai-answer.png', fullPage: true });
+
+    // ── And Escape ends it ──────────────────────────────────────────────────
+    await agentPage.keyboard.press('Escape');
+    await expect(palette).toBeHidden();
+  });
 });

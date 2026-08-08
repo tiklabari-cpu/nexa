@@ -129,7 +129,11 @@ describe('command palette', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull();
     await openPalette(user);
-    expect(screen.getByRole('combobox', { name: 'Search or jump to' })).toBeInTheDocument();
+    const input = screen.getByRole('combobox', { name: 'Search or jump to' });
+    expect(input).toBeInTheDocument();
+    // Quoted verbatim by FR-MOD-01.1.3's acceptance criterion, so it is pinned
+    // rather than left to drift with the next copy pass.
+    expect(input).toHaveAttribute('placeholder', 'Search Text or go to…');
 
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();

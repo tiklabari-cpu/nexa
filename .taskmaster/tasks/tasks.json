@@ -4324,10 +4324,10 @@
             "description": "(1) `mailer.ts`'te `Message.kind` union'ına `'scheduled_report'` eklenir; ayrı kind olmasının nedeni yorumla belirtilir (posta kutusunda ve testte ayırt edilebilirlik — dosya adı `${stamp}-${kind}-...`). (2) Yeni saf modül `services/reports/scheduled-report-mail.ts`: `buildScheduledReportMail({ groupLabel, periodFrom, periodTo, csv, rowCount, filename })` → `{ subject, body }`. Konu: rapor grubu e",
             "details": "07.9-sched-d1 — Rapor teslim e-postası: Mailer `kind` genişletme + saf konu/gövde biçimlendirici  [SONNET-XHIGH]\n\nPRD: §5.3-Reports (FR-MOD-07.7 uzantısı) + NFR-M4\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 kaynak dosya + 1 test; (2) güvenlik sınırı yok — authZ/izolasyon/kripto/PII maskeleme kararı içermiyor; alıcı doğrulaması -b/-c'de kapandı, burada yalnız zaten doğrulanmış alıcıya gidecek metin üretiliyor; (3) eşzamanlılık yok — saf fonksiyon; (4) kopyalanacak desen ismen var: `mailer.ts` Message arayüzü + `chat-service.ts:829` kind kullanımı; (5) union genişletme katkısal ve mekanik; (6) KK mekanik doğrulanabilir (posta kutusu dosya adı + konu/gövde alanları).\nNEDEN AÇIK: `apps/api/src/services/mail/mailer.ts:21` — `Message.kind` union'ı tam olarak `'password_reset' | 'invitation' | 'notification'`; rapor teslimi için dördüncü değer yok. Mevcut dört tüketici doğrulandı (`routes/customer.ts:137`, `routes/account-lifecycle.ts:86`, `routes/account-lifecycle.ts:217`, `services/chat/chat-service.ts:829`) — hiçbiri union'ı exhaustive switch ile tüketmiyor, bu yüzden genişletme katkısal ve mevcut testleri kırmaz.\nKAPSAM: (1) `mailer.ts`'te `Message.kind` union'ına `'scheduled_report'` eklenir; ayrı kind olmasının nedeni yorumla belirtilir (posta kutusunda ve testte ayırt edilebilirlik — dosya adı `${stamp}-${kind}-...`). (2) Yeni saf modül `services/reports/scheduled-report-mail.ts`: `buildScheduledReportMail({ groupLabel, periodFrom, periodTo, csv, rowCount, filename })` → `{ subject, body }`. Konu: rapor grubu etiketi + UTC dönem; gövde: dönem, satır sayısı, dosya adı ve CSV içeriği (FileMailer gövdeyi düz metin yazdığı için MIME ek kavramı yok — CSV gövdeye gömülür, mock teslimin dürüst şekli). Dosya adı mevcut `exportFilename()` ile üretilir. Prisma/DB/HTTP dokunuşu YOK — fonksiyon tamamen saf.\nDOSYALAR: apps/api/src/services/mail/mailer.ts · apps/api/src/services/reports/scheduled-report-mail.ts · apps/api/src/services/reports/scheduled-report-mail.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/mail/mailer.ts (Message arayüzü + FileMailer.send dosya adı şeması) · apps/api/src/services/chat/chat-service.ts (satır ~829 — transkript e-postasının konu/gövde kurma biçimi) · apps/api/src/routes/reports-export.ts (`exportFilename()` — dosya adı üretimi) · apps/api/src/routes/reports-export.test.ts (saf fonksiyon test biçimi)\nKK (birebir): \"KK-türetilmiş: \"Teslim edilen e-posta hangi rapor grubunun hangi UTC dönemine ait olduğunu ve kaç satır içerdiğini açıkça taşır; posta kutusunda rapor teslimi diğer e-posta türlerinden ayırt edilebilir.\" — Türetme gerekçesi: PRD §5.3'te bu satırın Kabul Kriteri sütunu yok (kk_yetersiz=true) ve §6'da karşılık gelen FR-MOD satırı yok. Kriter, teslimin gözlemlenebilir olması gereğinden (NFR-M4) ve depodaki mevcut kind-bazlı posta kutusu ayrımından türetildi.\"\nKK DOĞRULAMA: `scheduled-report-mail.test.ts` (unit, DB'siz): konu grup etiketi + dönem taşır; gövde satır sayısı, dosya adı ve CSV başlık satırını içerir; 0 satırlık CSV'de anlamlı 'kayıt yok' ifadesi → türetilmiş KK. Mevcut FileMailer tüketen dört integration süiti (notifications / account-lifecycle / chat-transcript / cc-masking) değişmeden yeşil kalır.\nKAPSAM DIŞI: Gerçek SMTP / MIME attachment desteği (§9 sınırı — FileMailer düz metin yazar) · Kime gönderileceğine karar verme (alıcı doğrulaması -b/-c'de) · Gönderimin ne zaman tetikleneceği (-e) · CSV'nin nasıl üretileceği (-d2)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: konu ve gövde alanları (dolu CSV durumu) · unit: 0 satırlık CSV → anlamlı 'kayıt yok' gövdesi (boş metin değil) · typecheck: genişletilmiş union ile mevcut dört kind çağrı yeri derlenmeye devam eder · regresyon: notifications.test.ts / account-lifecycle.test.ts / chat-transcript.test.ts / cc-masking.test.ts yeşil kalır",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "94",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T06:49:43.922Z"
           },
           {
             "id": 5,
@@ -4415,7 +4415,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T06:33:58.993Z",
+        "updatedAt": "2026-08-08T06:49:43.922Z",
         "complexity": 9,
         "recommendedSubtasks": 10,
         "expansionPrompt": "\"07.9 — Zamanlanmış (scheduled) rapor export  ·  dilim V2-4\" görevini 10 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5011,7 +5011,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T06:33:58.993Z",
+      "lastModified": "2026-08-08T06:49:43.922Z",
       "taskCount": 103,
       "completedCount": 84,
       "tags": [

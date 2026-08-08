@@ -13,6 +13,77 @@
 
 ## Task log (newest-first)
 
+### tm 77.7 — WORKSCHED-g: GET /reports/staffing-forecast — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **Kontrat önce:** `packages/contract/openapi/paths/reports.yaml` → `staffingForecast`
+    (`GET /reports/staffing-forecast`, yalnız `from`/`to`) · `openapi.yaml` →
+    `components.schemas.StaffingForecast` + `paths:` köküne bağlandı → re-bundle **141 → 142
+    path**, `src/generated/api.ts` yeniden üretildi. `contract-parity.test.ts` 5/5 yeşil.
+  - **Rota** `apps/api/src/routes/reports.ts` — `config.scopes = ['reports_read']`, **yeni scope
+    AÇILMADI**: yanıtın her sayısı `reports_read`'in zaten kapsadığı hacimden türüyor, ayrı bir
+    scope girdisini okuyamayan bir token'a staffing sayısı verirdi. `route-config.test.ts` +1 bunu
+    `onRoute` ile birebir doğrular (yeni yetkili yüzeyde eksik `config.scopes` en sessiz hatadır).
+  - **Üç girdi tek yanıtta**, hepsi tek `request.withTenant` bloğunda: `volumeByWeekdayHour()`
+    (-e'nin `SPLIT_COUNTS` fragmanı + aynı pencere yüklemi, `GROUP BY`'a `EXTRACT(DOW)` eklenmiş) ·
+    `presenceEvents()` + `coverageByWeekdayHour()` (-d'nin `presenceCoverage()`'ı pencerenin her UTC
+    takvim günü için çağrılır, sonuç o günün hafta-gününe katlanır; olaylar dilimlere **bir kez**
+    bölünür ve her dilim öncekinin son olayını devralır — modülün şart koştuğu açılış durumu) ·
+    `rosterPlans()` (kayıtlı `work_schedules`, normalize edilerek). Sonra `staffingForecast()` (-f).
+  - **Yeni saf modül** `apps/api/src/services/staffing/roster-coverage.ts` → `rosterCoverage()`:
+    haftalık planı UTC ızgarasına yansıtır. Birim **hafta, pencere değil** — yinelenen bir desen
+    7 ve 90 günlük raporda aynı okunmalı, bu yüzden hiçbir şey "kaç kez geçti"ye bölünmez.
+    Pazartesi-başlı hafta → Pazar-başlı `dow`, saat sınırında bölme (17:30 bitişi hour 17'ye 0.5),
+    hafta sınırında **iki yönde** sarma (Tokyo Pzt 00:00 → Pazar 15:00 UTC), offset `Intl`'den.
+  - **Dört ayrı "bilinmiyor", hiçbiri 0 değil:** eşik altı → `required_agents` null · presence logu
+    yok → `scheduled_agents` + `gap` null · kayıtlı plan yok → `rostered_agents` null · **bölen
+    bilinmiyorsa** (hiç sohbet kapanmadı → `average_chat_minutes` null; aktif ajan yok →
+    `concurrent_chats_limit` null) hacim modelden çekilir ve 168 hücrenin tamamı `required_agents:
+    null` döner. `observed_chats` her dalda kendi ızgarasından serialize edilir, yani hacim her
+    zaman gerçek kalır.
+  - **ADR-09:** bir saatin yedi günü toplanınca `/reports/breakdown` `by_hour[hour].chats` birebir
+    çıkar — aynı fragman, aynı yüklem; integration testi 24 saatin hepsi için iddia eder.
+- **Doğrulama:** `pnpm -w typecheck` · `pnpm -w lint` ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` (**85 dosya / 1750 test**,
+  `@nexa/api` 1715 → 1750) · `npx turbo run test:integration --concurrency=1` (1328) ·
+  `pnpm -w build` (7/7) · `pnpm -w test:e2e` (74/74) — hepsi **exit 0**.
+- **Varsayımlar:**
+  - **`baseline`/`previous_period` bilinçli olarak yok** (diğer 9 rapor grubunda var): bu yanıt
+    zaten penceresinden bir projeksiyon; ikinci bir projeksiyonu "vs önceki" diye sunmak
+    yanıltıcı olurdu — istenen karşılaştırma "tahmin vs gerçekleşen"dir ve saklanan tahmin
+    gerektirir (§5.2.22 açık soru 2, ertelendi). Bu yüzden `resolveReportQuery` değil
+    `rangeQuery` + `resolveRange` kullanıldı.
+  - **Roster yalnız KAYITLI planları sayar.** `GET /agents/{id}/work-schedule` kaydı olmayan ajan
+    için Pzt-Cuma 09:00-18:00 döndürür (editör ön-dolgusu); raporda bunu saymak hiç plan yapmamış
+    bir workspace'e tam bir çalışma haftası yazardı. Hiç kayıt yoksa `roster_known: false` +
+    `rostered_agents: null` (0 değil).
+  - **Çözülemeyen timezone UTC'ye düşmez, o plan düşer.** Yanlış saate yerleştirmek sabah açığını
+    gizler; düşürmek eksik roster olarak görünür — WORKSCHED-d'nin "fazla göstermek tek yasak
+    yön" kuralının aynısı. `work_schedules.timezone` serbest string (normalizer yalnız boş
+    olmamasını istiyor), o yüzden bu yol gerçekten açık.
+  - **DST yaklaşımı:** plan penceresinin **sonundaki** offset'le yerleştirilir. Yinelenen desenin
+    tek bir şekli var; her takvim günü için offset yeniden türetilse aynı plan birkaç farklı UTC
+    yerleşimi alır ve raporlanacak tek bir "hafta" kalmaz. DST içeren pencerede diğer taraf 1 saat
+    kaymış olur — modellenmedi, yazıldı (kod + kontrat).
+  - **Sınırlar 400 döner, sessiz kırpma yok:** pencere ≤ 366 gün, presence satırı ≤ 250k.
+    `resolveRange` aralığı sınırlamıyor ve bu uç — diğer raporların aksine — ham satırları JS'te
+    yürüyor. Değişim günlüğünü `LIMIT` ile kırpmak her ajanın son durumunu pencere sonuna kadar
+    sürdürür, yani tam da gizlenmemesi gereken müsaitliği fazla gösterir.
+- **Sonraki pencereye not:**
+  - Sırada **WORKSCHED-h** (Team → work schedule düzenleyici, `SONNET-XHIGH`, bağımlılıkları
+    -a/-c kapalı) ve **WORKSCHED-i** (Reports → Staffing sekmesi, `SONNET-XHIGH`, artık -g kapalı
+    olduğu için açık). `-j` (uçtan uca doğrulama) yalnız -h ve -i kapandıktan sonra denenebilir —
+    üç turdur bağımlılık yüzünden `blocked`.
+  - **-i için yanıt sözleşmesi:** `cells` her zaman 168 uzunlukta ve `day_of_week` 0-6 ×
+    `hour` 0-23 sırasında; UI'ın boşluk doldurması gerekmez. `null` = bilinmiyor, **0 değil** —
+    dört ayrı sebebi `inputs` + `coverage_known` + `roster_known` söyler, düşük-baz uyarısı
+    `low_confidence` (hem hücre hem yanıt düzeyinde) üzerinden çizilir.
+  - **CSV export'a `staffing` grubu eklenmedi** (kapsam dışıydı). Eklenecekse `reports-export.ts`
+    grup kataloğu + `groupCsvTable()` ve `getReportGroups`'un görünürlük listesi ayrı bir iş.
+  - `run-loop.sh` çalışma alanında **değiştirilmiş halde bırakıldı** — bu pencereden önce yapılmış,
+    task 77.7 ile ilgisiz bir döngü-altyapısı değişikliği (blocked görevlerin sayılı yeniden
+    denenmesi). Kapsam disiplini (CONVENTIONS §5) gereği bu commit'e alınmadı.
+
 ### tm 77.6 — WORKSCHED-f: deterministik staffing tahmin çekirdeği — done — 2026-08-08 UTC
 
 - **Yapıldı:**

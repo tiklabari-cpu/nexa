@@ -342,6 +342,83 @@ sales:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+staffingForecast:
+  get:
+    tags: [Reports]
+    operationId: getReportsStaffingForecast
+    summary: Staffing forecast — required / scheduled / rostered agents per weekday-hour
+    description: |
+      The work-scheduler forecast (PRD §5.3-Vardiya): for every hour of a week,
+      how many agents the observed load needed, how many were actually online,
+      how many the stored work schedules plan for, and the shortfall between the
+      first two. Defaults to the last 30 days.
+
+      `cells` is always the full 7 × 24 grid, ordered `day_of_week` 0-6 then
+      `hour` 0-23, both **UTC** (`day_of_week` 0 = Sunday, the convention
+      `EXTRACT(DOW …)` and `Date.getUTCDay()` share). Every hour of the week is
+      present whether or not anything happened in it, so a client never has to
+      fill gaps.
+
+      Deterministic arithmetic, no model and no LLM: `required_agents` is
+      Little's law over the window —
+      `ceil(chats-per-hour × average_chat_minutes / 60 / concurrent_chats_limit)`
+      — recomputed per request and never persisted (comparing a stored forecast
+      against what happened is separate, deferred work).
+
+      **Unknown is never reported as zero.** Four separate unknowns, each `null`:
+
+      - `required_agents` (and with it `gap` and `low_confidence: true`) when the
+        cell observed fewer than `inputs.minimum_sample_chats` chats — a rate
+        from a handful of chats is noise, and zero observed chats is not the
+        stronger claim that nobody will ever write in that hour.
+      - `inputs.average_chat_minutes` when no conversation closed in the window,
+        and `inputs.concurrent_chats_limit` when the workspace has no active
+        agent. Either one leaves the model without a divisor, so **every**
+        `required_agents` is `null` rather than sized against an invented
+        figure; `coverage_known` and the volume in `observed_chats` still hold.
+      - `scheduled_agents` (and with it `gap`) when the presence log says
+        nothing about the window — `coverage_known: false`. Subtracting a 0 that
+        means "we don't know" would report a full staffing shortfall for every
+        hour of a week nobody has data about. Once a log exists, an hour with no
+        online minutes is a real `0`.
+      - `rostered_agents` when no agent in the workspace has a stored work
+        schedule — `roster_known: false`.
+
+      `scheduled_agents` counts only `accepting_chats` presence, the exact
+      condition routing assigns on, and `rostered_agents` counts only schedules
+      that were actually saved — an agent who never opened the schedule screen
+      contributes nothing here, even though reading their schedule individually
+      returns the default week. Both err downward on purpose: over-stating
+      coverage hides understaffing instead of showing it.
+
+      No `baseline` / `previous_period` block, unlike the other report groups:
+      this response *is* a projection from its window, and a second projection
+      over an earlier window is not the comparison anyone means by "vs previous"
+      — that is forecast-vs-actual, which needs stored forecasts.
+
+      `observed_chats` is the same count, over the same window predicate, that
+      `GET /reports/breakdown` reports in `by_hour` (ADR-09 — one definition, so
+      a staffing figure can never disagree with the volume report beside it):
+      summing `observed_chats` across the seven days of one `hour` equals that
+      hour's `chats` there.
+    parameters:
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+    responses:
+      "200":
+        description: The staffing forecast for the requested window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/StaffingForecast" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 groups:
   get:
     tags: [Reports]

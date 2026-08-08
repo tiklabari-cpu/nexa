@@ -8,7 +8,7 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { hasAnyScope } from '@nexa/types';
+import { hasAnyScope, isWorkScheduleProblem, normalizeWorkSchedule } from '@nexa/types';
 import {
   clusterTopics,
   embed,
@@ -37,6 +37,17 @@ import {
   type CsvCell,
 } from './reports-export.js';
 import { scopesOf } from '../services/auth/principal.js';
+import {
+  presenceCoverage,
+  type PresenceEvent,
+} from '../services/staffing/presence-coverage.js';
+import { rosterCoverage, type RosterPlan } from '../services/staffing/roster-coverage.js';
+import {
+  DEFAULT_MINIMUM_SAMPLE_CHATS,
+  staffingForecast,
+  type CoverageCell,
+  type VolumeCell,
+} from '../services/staffing/staffing-forecast.js';
 import type { Env } from '../config/env.js';
 import type { TenantClient, TenantContext } from '../lib/tenant.js';
 import { currentPeriod, trialState, usageSummary } from '../services/billing/metering.js';
@@ -2226,6 +2237,364 @@ export async function buildTeamPerformanceReport(
   );
 }
 
+// ===========================================================================
+// Staffing forecast (PRD §5.3-Vardiya, WORKSCHED-g)
+//
+// Three histories, one grid. The arithmetic all lives in pure modules under
+// services/staffing — the capacity model (`staffingForecast`), the presence
+// interval walk (`presenceCoverage`) and the roster projection
+// (`rosterCoverage`) — so everything here is reading rows and lining the three
+// up on the same UTC weekday × hour axes. Nothing is persisted: the grid is
+// recomputed per request (PLAN §5.2.22 — no StaffingForecast table).
+// ===========================================================================
+
+const DAY_MS = 86_400_000;
+const SECONDS_PER_MINUTE = 60;
+
+/**
+ * The widest window the forecast will read.
+ *
+ * `resolveRange` caps nothing, and this endpoint — unlike every other report —
+ * pulls raw rows into JavaScript to walk them, so an unbounded range would size
+ * both the day loop and the event fetch by whatever a caller typed. A year is
+ * already far more history than a weekly staffing pattern can be argued from;
+ * past it the honest answer is "narrow the range", not a slow request.
+ */
+const STAFFING_MAX_RANGE_DAYS = 366;
+
+/**
+ * The most presence rows one forecast will hold in memory.
+ *
+ * Deliberately a refusal rather than a `LIMIT`: truncating a *change* log
+ * silently rewrites the coverage it implies (drop the tail and every agent's
+ * last known status runs to the end of the window, over-reporting exactly the
+ * availability that hides understaffing). A limit that changes the answer
+ * without saying so is worse than an error. Set far above any real workspace's
+ * year — 50 agents changing status six times a day for a year is ~110k rows.
+ */
+const PRESENCE_ROW_LIMIT = 250_000;
+
+/** A window this endpoint can actually compute over, or a 400 explaining why not. */
+function assertForecastRange(from: Date, to: Date): void {
+  if (to.getTime() - from.getTime() > STAFFING_MAX_RANGE_DAYS * DAY_MS) {
+    throw ApiError.validation(
+      `The staffing forecast reads at most ${STAFFING_MAX_RANGE_DAYS} days of history; narrow \`from\`/\`to\`.`,
+    );
+  }
+}
+
+/**
+ * Chats started per UTC (weekday, hour) — the volume half of the forecast.
+ *
+ * Reuses `SPLIT_COUNTS` and the same window predicate as {@link breakdownByHour}
+ * over the same `threads` rows, so the `chats` figure here *is* the one the
+ * Breakdown report publishes per hour (ADR-09): summing this grid's seven days
+ * of a given hour reproduces `by_hour[hour].chats` exactly, by construction
+ * rather than by coincidence. The extra split columns are computed and unused —
+ * cheaper than a second definition of "a chat in this window" that could drift
+ * from the one every other report agrees on.
+ *
+ * Sparse (only cells with chats come back); the forecast fills the 7 × 24 grid.
+ */
+async function volumeByWeekdayHour(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<VolumeCell[]> {
+  const rows = await tx.$queryRaw<Array<{ day_of_week: number; hour: number; chats: bigint }>>`
+    SELECT EXTRACT(DOW FROM t.created_at AT TIME ZONE 'UTC')::int  AS day_of_week,
+      EXTRACT(HOUR FROM t.created_at AT TIME ZONE 'UTC')::int      AS hour,
+      ${SPLIT_COUNTS}
+    FROM threads t
+    WHERE t.license_id = ${licenseId}
+      AND t.created_at >= ${from} AND t.created_at <= ${to}
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+  `;
+  return rows.map((row) => ({
+    dayOfWeek: row.day_of_week,
+    hour: row.hour,
+    chats: Number(row.chats),
+  }));
+}
+
+/**
+ * The presence log for a window, including each agent's state as the window
+ * opened.
+ *
+ * That opening row is not optional: `agent_presence_events` records *changes*,
+ * so an agent who went online last week and has not touched the switch since has
+ * no row inside the window at all, and a window read without their last previous
+ * row would count them as absent for the whole period
+ * (see `presenceCoverage`, which clips whatever it is given).
+ *
+ * license_id-scoped and run inside `withTenant`, so RLS and the explicit
+ * predicate both bound it to the caller's license (NFR-S4).
+ */
+async function presenceEvents(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<PresenceEvent[]> {
+  const rows = await tx.$queryRaw<Array<{ agent_id: string; status: string; changed_at: Date }>>`
+    WITH inside AS (
+      SELECT p.agent_id, p.status, p.changed_at
+      FROM agent_presence_events p
+      WHERE p.license_id = ${licenseId}
+        AND p.changed_at >= ${from} AND p.changed_at <= ${to}
+    ), opening AS (
+      SELECT DISTINCT ON (p.agent_id) p.agent_id, p.status, p.changed_at
+      FROM agent_presence_events p
+      WHERE p.license_id = ${licenseId} AND p.changed_at < ${from}
+      ORDER BY p.agent_id, p.changed_at DESC
+    )
+    SELECT agent_id::text AS agent_id, status, changed_at FROM inside
+    UNION ALL
+    SELECT agent_id::text AS agent_id, status, changed_at FROM opening
+    ORDER BY agent_id, changed_at
+    LIMIT ${PRESENCE_ROW_LIMIT + 1}
+  `;
+
+  if (rows.length > PRESENCE_ROW_LIMIT) {
+    // One row past the limit only proves there are more; see PRESENCE_ROW_LIMIT
+    // for why this is a refusal and not a trim.
+    throw ApiError.validation(
+      'The requested range holds too much presence history to forecast; narrow `from`/`to`.',
+    );
+  }
+
+  return rows.map((row) => ({
+    agentId: row.agent_id,
+    status: row.status,
+    changedAt: row.changed_at,
+  }));
+}
+
+/**
+ * Fold the presence log into agent-minutes per UTC (weekday, hour), or `null`
+ * when the log says nothing about the window.
+ *
+ * `presenceCoverage` buckets by hour *of day*, which is all one calendar day can
+ * tell you — so the window is walked a UTC day at a time and each day's grid is
+ * added to the weekday it fell on. Events are partitioned across the day slices
+ * once rather than re-filtered per slice, and each slice inherits the previous
+ * one's last event per agent, which is the carry-in state the module requires.
+ *
+ * The agent dimension is summed away here: the forecast is deliberately blind to
+ * which agent supplied a minute (see `staffing-forecast.ts`), so no agent id
+ * crosses into the capacity model.
+ *
+ * A day *before* the log's first event contributes nothing rather than "unknown"
+ * — it lowers coverage for windows that reach back past the log's beginning,
+ * which errs toward showing a gap rather than hiding one.
+ */
+function coverageByWeekdayHour(
+  events: readonly PresenceEvent[],
+  from: Date,
+  to: Date,
+): CoverageCell[] | null {
+  const toMs = to.getTime();
+  const minutes = new Map<number, number>();
+  let known = false;
+
+  // Events sorted by time so the carry-in state can be tracked in one pass.
+  const ordered = [...events].sort((a, b) => a.changedAt.getTime() - b.changedAt.getTime());
+  let cursorEvent = 0;
+  const carry = new Map<string, PresenceEvent>();
+
+  for (let sliceStart = from.getTime(); sliceStart < toMs; ) {
+    const sliceEnd = Math.min(toMs, Math.floor(sliceStart / DAY_MS) * DAY_MS + DAY_MS);
+    const dayOfWeek = new Date(sliceStart).getUTCDay();
+
+    const inside: PresenceEvent[] = [];
+    while (cursorEvent < ordered.length) {
+      const event = ordered[cursorEvent];
+      if (!event || event.changedAt.getTime() >= sliceEnd) break;
+      // Anything before this slice is carry-in, not part of it.
+      if (event.changedAt.getTime() >= sliceStart) inside.push(event);
+      else carry.set(event.agentId, event);
+      cursorEvent += 1;
+    }
+
+    const slice = presenceCoverage(
+      [...carry.values(), ...inside],
+      new Date(sliceStart),
+      new Date(sliceEnd),
+    );
+    if (slice) {
+      known = true;
+      for (const agent of slice) {
+        for (const [hour, online] of agent.onlineMinutes.entries()) {
+          if (online === 0) continue;
+          const key = dayOfWeek * 24 + hour;
+          minutes.set(key, (minutes.get(key) ?? 0) + online);
+        }
+      }
+    }
+
+    for (const event of inside) carry.set(event.agentId, event);
+    sliceStart = sliceEnd;
+  }
+
+  if (!known) return null;
+
+  return Array.from({ length: 7 * 24 }, (_, index) => ({
+    dayOfWeek: Math.floor(index / 24),
+    hour: index % 24,
+    onlineMinutes: minutes.get(index) ?? 0,
+  }));
+}
+
+/**
+ * Every saved work schedule in the license, normalised.
+ *
+ * Only rows that exist: an agent who has never saved a schedule is absent here,
+ * not defaulted to the Monday-Friday week `GET /agents/{agentId}/work-schedule`
+ * pre-fills — see `rosterCoverage` for why a suggestion is not a commitment. A
+ * row that will not normalise is skipped for the same reason it is treated as
+ * unset when read individually: a shape no rule admits cannot be projected onto
+ * a grid, and guessing at it would put invented hours in a report.
+ */
+async function rosterPlans(tx: TenantClient): Promise<RosterPlan[]> {
+  const rows = await tx.workSchedule.findMany({
+    select: { agentId: true, timezone: true, schedule: true },
+    orderBy: { agentId: 'asc' },
+  });
+
+  return rows.flatMap((row) => {
+    const normalised = normalizeWorkSchedule({ timezone: row.timezone, schedule: row.schedule });
+    if (isWorkScheduleProblem(normalised)) return [];
+    return [
+      {
+        agentId: row.agentId,
+        timezone: normalised.timezone,
+        schedule: normalised.schedule,
+      },
+    ];
+  });
+}
+
+/**
+ * The two divisors the capacity model needs, and how many agents the first was
+ * taken over.
+ *
+ * `concurrentChatsLimit` is the mean over *non-suspended* memberships, matching
+ * the candidate pool routing actually assigns from (`routing-service.ts` skips a
+ * suspended agent whatever their status says) — a workspace's departed agents
+ * must not dilute how much one present agent can hold. Both figures come back
+ * `null` when there is nothing to average: no active agent, or nothing closed in
+ * the window. Null, not a fallback constant — inventing a handling time would
+ * bury a product decision inside arithmetic, which is the same line
+ * `staffing-forecast.ts` draws at refusing an unstated service-level target.
+ */
+async function staffingInputs(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<{ concurrentChatsLimit: number | null; agents: number; averageChatMinutes: number | null }> {
+  const [membership, totals] = await Promise.all([
+    tx.agentMembership.aggregate({
+      where: { suspended: false },
+      _avg: { concurrentChatsLimit: true },
+      _count: { agentId: true },
+    }),
+    windowTotals(tx, licenseId, from, to),
+  ]);
+
+  const limit = Number(membership._avg.concurrentChatsLimit);
+  // `avg(EXTRACT(EPOCH …))` comes back as Postgres numeric, which the driver
+  // hands over as a Decimal object rather than a number — coerced here so the
+  // arithmetic below is arithmetic and not string concatenation.
+  const seconds = Number(totals.avg_duration_seconds);
+
+  return {
+    concurrentChatsLimit: Number.isFinite(limit) && limit > 0 ? round(limit) : null,
+    agents: membership._count.agentId,
+    averageChatMinutes:
+      Number.isFinite(seconds) && seconds > 0 ? round(seconds / SECONDS_PER_MINUTE) : null,
+  };
+}
+
+/**
+ * The staffing forecast for one window (PRD §5.3-Vardiya): required / scheduled
+ * / rostered agents per UTC weekday-hour, plus the inputs every cell was derived
+ * from so a recommendation can be argued with rather than only believed.
+ *
+ * The three histories are read here and the model is applied by
+ * `staffingForecast`; this function's own job is the fourth number —
+ * `rostered_agents` — and the honesty rules at the edges:
+ *
+ *   - `observed_chats` is serialised from the volume grid this function read, not
+ *     from the model's echo of it, so the count stays the Breakdown report's
+ *     count (ADR-09) in every branch below.
+ *   - When a divisor is unknown (nothing closed, or no active agent) the volume
+ *     is **withheld from the model** rather than sized against a made-up figure:
+ *     every cell comes back `required_agents: null` + `low_confidence: true`,
+ *     which is exactly the claim "we cannot say", and `inputs` names which
+ *     figure was missing. The placeholder divisors below can never reach a cell,
+ *     because with no volume no cell clears the sample bar.
+ */
+export async function buildStaffingForecastReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Record<string, unknown>> {
+  const volume = await volumeByWeekdayHour(tx, licenseId, from, to);
+  const coverage = coverageByWeekdayHour(await presenceEvents(tx, licenseId, from, to), from, to);
+  // The plan is read at the window's end: a standing weekly pattern has one
+  // shape, and the end is the side of any DST change that reflects how the
+  // roster stands now (see rosterCoverage).
+  const roster = rosterCoverage(await rosterPlans(tx), to);
+  const inputs = await staffingInputs(tx, licenseId, from, to);
+
+  const sizeable = inputs.concurrentChatsLimit !== null && inputs.averageChatMinutes !== null;
+  const forecast = staffingForecast({
+    volume: sizeable ? volume : [],
+    coverage,
+    from,
+    to,
+    // Unreachable placeholders when `sizeable` is false — see the doc comment.
+    concurrentChatsLimit: inputs.concurrentChatsLimit ?? 1,
+    averageChatMinutes: inputs.averageChatMinutes ?? 1,
+    minimumSampleChats: DEFAULT_MINIMUM_SAMPLE_CHATS,
+  });
+
+  const observed = new Map(volume.map((cell) => [cell.dayOfWeek * 24 + cell.hour, cell.chats]));
+
+  return {
+    range: { from: from.toISOString(), to: to.toISOString() },
+    inputs: {
+      concurrent_chats_limit: inputs.concurrentChatsLimit,
+      average_chat_minutes: inputs.averageChatMinutes,
+      minimum_sample_chats: DEFAULT_MINIMUM_SAMPLE_CHATS,
+      agents: inputs.agents,
+    },
+    coverage_known: forecast.coverageKnown,
+    roster_known: roster !== null,
+    low_confidence: forecast.lowConfidence,
+    cells: forecast.cells.map((cell) => {
+      // Keyed by the cell's own coordinates rather than its array position: all
+      // three grids happen to share an order, and nothing should depend on that
+      // staying true.
+      const index = cell.dayOfWeek * 24 + cell.hour;
+      return {
+        day_of_week: cell.dayOfWeek,
+        hour: cell.hour,
+        observed_chats: observed.get(index) ?? 0,
+        required_agents: cell.requiredAgents,
+        scheduled_agents: cell.scheduledAgents,
+        rostered_agents: roster?.[index]?.rosteredAgents ?? null,
+        gap: cell.gap,
+        low_confidence: cell.lowConfidence,
+      };
+    }),
+  };
+}
+
 export default async function reportRoutes(
   app: FastifyInstance,
   options: { env: Env },
@@ -2370,6 +2739,35 @@ export default async function reportRoutes(
     );
     return reply.send(body);
   });
+
+  // Staffing forecast (PRD §5.3-Vardiya): required / scheduled / rostered agents
+  // per UTC weekday-hour, derived from historical volume, the presence event log
+  // and the saved work schedules (see buildStaffingForecastReport). Same
+  // reports_read + withTenant surface as the other report tabs — no new scope:
+  // this is aggregate reporting over data `reports_read` already covers, and a
+  // scope of its own would let a token read staffing without being able to read
+  // the volume every figure here is derived from.
+  //
+  // No `baseline` parameter, unlike the other groups: this response *is* a
+  // projection from its window, and a second projection over an earlier window
+  // is not what "vs previous" means — that comparison is forecast-vs-actual,
+  // which needs stored forecasts (PLAN §5.2.22 open question 2, deferred).
+  app.get(
+    '/reports/staffing-forecast',
+    { config: { scopes: ['reports_read'] } },
+    async (request, reply) => {
+      const parsed = rangeQuery.safeParse(request.query);
+      if (!parsed.success) throw ApiError.validation('Invalid date range.');
+      const { from, to } = resolveRange(parsed.data);
+      assertForecastRange(from, to);
+      const tenant = request.tenant();
+
+      const body = await request.withTenant((tx) =>
+        buildStaffingForecastReport(tx, tenant.licenseId, from, to),
+      );
+      return reply.send(body);
+    },
+  );
 
   // The report groups this caller may see (FR-MOD-07.7 permission-based
   // visibility). Deliberately *not* scope-gated at the route: a token without

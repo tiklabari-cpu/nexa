@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { buildServer, API_PREFIX } from '../../src/server.js';
 import agentRoutes from '../../src/routes/agents.js';
+import reportRoutes from '../../src/routes/reports.js';
 import { testEnv } from '../helpers/fixtures.js';
 
 describe('route configuration guards', () => {
@@ -108,5 +109,25 @@ describe('route configuration guards', () => {
 
     expect(declared.get('GET')).toEqual(['agents--all:ro', 'agents--my:ro']);
     expect(declared.get('PUT')).toEqual(['agents--my:rw', 'agents--all:rw']);
+  });
+
+  it('keeps the staffing forecast behind reports_read, and opens no scope of its own', async () => {
+    // Same reasoning as the work-schedule routes: a new authorized surface is
+    // where a missing `config.scopes` ships unnoticed. The second half matters as
+    // much as the first — the forecast is derived from the volume `reports_read`
+    // already covers, so a scope of its own would let a token read staffing
+    // numbers it could not read the inputs of.
+    const declared = new Map<string, string[] | undefined>();
+    const probe = Fastify();
+    probe.addHook('onRoute', (route) => {
+      if (route.url === '/reports/staffing-forecast') {
+        declared.set(String(route.method), (route.config as { scopes?: string[] })?.scopes);
+      }
+    });
+    await probe.register(reportRoutes, { env: testEnv() });
+    await probe.ready();
+    await probe.close();
+
+    expect(declared.get('GET')).toEqual(['reports_read']);
   });
 });

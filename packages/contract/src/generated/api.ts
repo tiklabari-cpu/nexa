@@ -3232,6 +3232,78 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/staffing-forecast': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Staffing forecast — required / scheduled / rostered agents per weekday-hour
+     * @description The work-scheduler forecast (PRD §5.3-Vardiya): for every hour of a week,
+     *     how many agents the observed load needed, how many were actually online,
+     *     how many the stored work schedules plan for, and the shortfall between the
+     *     first two. Defaults to the last 30 days.
+     *
+     *     `cells` is always the full 7 × 24 grid, ordered `day_of_week` 0-6 then
+     *     `hour` 0-23, both **UTC** (`day_of_week` 0 = Sunday, the convention
+     *     `EXTRACT(DOW …)` and `Date.getUTCDay()` share). Every hour of the week is
+     *     present whether or not anything happened in it, so a client never has to
+     *     fill gaps.
+     *
+     *     Deterministic arithmetic, no model and no LLM: `required_agents` is
+     *     Little's law over the window —
+     *     `ceil(chats-per-hour × average_chat_minutes / 60 / concurrent_chats_limit)`
+     *     — recomputed per request and never persisted (comparing a stored forecast
+     *     against what happened is separate, deferred work).
+     *
+     *     **Unknown is never reported as zero.** Four separate unknowns, each `null`:
+     *
+     *     - `required_agents` (and with it `gap` and `low_confidence: true`) when the
+     *       cell observed fewer than `inputs.minimum_sample_chats` chats — a rate
+     *       from a handful of chats is noise, and zero observed chats is not the
+     *       stronger claim that nobody will ever write in that hour.
+     *     - `inputs.average_chat_minutes` when no conversation closed in the window,
+     *       and `inputs.concurrent_chats_limit` when the workspace has no active
+     *       agent. Either one leaves the model without a divisor, so **every**
+     *       `required_agents` is `null` rather than sized against an invented
+     *       figure; `coverage_known` and the volume in `observed_chats` still hold.
+     *     - `scheduled_agents` (and with it `gap`) when the presence log says
+     *       nothing about the window — `coverage_known: false`. Subtracting a 0 that
+     *       means "we don't know" would report a full staffing shortfall for every
+     *       hour of a week nobody has data about. Once a log exists, an hour with no
+     *       online minutes is a real `0`.
+     *     - `rostered_agents` when no agent in the workspace has a stored work
+     *       schedule — `roster_known: false`.
+     *
+     *     `scheduled_agents` counts only `accepting_chats` presence, the exact
+     *     condition routing assigns on, and `rostered_agents` counts only schedules
+     *     that were actually saved — an agent who never opened the schedule screen
+     *     contributes nothing here, even though reading their schedule individually
+     *     returns the default week. Both err downward on purpose: over-stating
+     *     coverage hides understaffing instead of showing it.
+     *
+     *     No `baseline` / `previous_period` block, unlike the other report groups:
+     *     this response *is* a projection from its window, and a second projection
+     *     over an earlier window is not the comparison anyone means by "vs previous"
+     *     — that is forecast-vs-actual, which needs stored forecasts.
+     *
+     *     `observed_chats` is the same count, over the same window predicate, that
+     *     `GET /reports/breakdown` reports in `by_hour` (ADR-09 — one definition, so
+     *     a staffing figure can never disagree with the volume report beside it):
+     *     summing `observed_chats` across the seven days of one `hour` equals that
+     *     hour's `chats` there.
+     */
+    get: operations['getReportsStaffingForecast'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/groups': {
     parameters: {
       query?: never;
@@ -5917,6 +5989,110 @@ export interface components {
       currency: string | null;
       /** @description Conversions attributed to supported conversations. Null until configured. */
       conversions: number | null;
+    };
+    /**
+     * @description The work-scheduler forecast (PRD §5.3-Vardiya): a fixed 7 × 24 grid of
+     *     `required` / `scheduled` / `rostered` agents per UTC weekday-hour,
+     *     derived deterministically from the observed window — historical chat
+     *     volume, the presence event log and the stored work schedules. Nothing is
+     *     persisted; the grid is recomputed per request.
+     *
+     *     Read `null` as "not known", never as zero — see the operation
+     *     description for each of the four unknowns and why a fabricated zero
+     *     would be worse than an absent number in every one of them.
+     */
+    StaffingForecast: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
+      /**
+       * @description The figures every cell was derived from, echoed so a recommendation
+       *     can be argued with rather than only believed.
+       */
+      inputs: {
+        /**
+         * @description Mean `concurrent_chats_limit` across the workspace's active
+         *     (non-suspended) agents — how many chats one agent holds at
+         *     once. Null when the workspace has no active agent, which leaves
+         *     every `required_agents` null.
+         */
+        concurrent_chats_limit: number | null;
+        /**
+         * @description Mean handling time of a conversation closed in the window, in
+         *     minutes — the same duration `GET /reports/overview` reports in
+         *     seconds. Null when nothing closed in the window, which leaves
+         *     every `required_agents` null.
+         */
+        average_chat_minutes: number | null;
+        /**
+         * @description How many chats a cell must have observed before it reports a
+         *     number instead of `null`.
+         */
+        minimum_sample_chats: number;
+        /** @description Active agents the `concurrent_chats_limit` mean was taken over. */
+        agents: number;
+      };
+      /**
+       * @description False when the presence log says nothing about this window: every
+       *     `scheduled_agents` and `gap` is null.
+       */
+      coverage_known: boolean;
+      /**
+       * @description False when no agent in the workspace has a saved work schedule:
+       *     every `rostered_agents` is null.
+       */
+      roster_known: boolean;
+      /**
+       * @description True when *no* cell cleared `inputs.minimum_sample_chats` — the
+       *     window forecasts nothing, and the whole grid is advisory at best.
+       */
+      low_confidence: boolean;
+      /**
+       * @description Exactly 168 cells (7 × 24), ordered `day_of_week` 0-6 then `hour`
+       *     0-23. Dense by construction: a week always has every hour.
+       */
+      cells: {
+        /** @description UTC weekday, 0 = Sunday … 6 = Saturday. */
+        day_of_week: number;
+        /** @description UTC hour of day. */
+        hour: number;
+        /**
+         * @description Chats that started in this cell across every occurrence of it
+         *     in the window — the evidence the verdict rests on, and the
+         *     same count `GET /reports/breakdown` gives per hour (ADR-09).
+         */
+        observed_chats: number;
+        /**
+         * @description Whole agents this hour's mean load needs. Null when the cell
+         *     has too little history, or when an input the model divides by
+         *     is unknown (see `inputs`).
+         */
+        required_agents: number | null;
+        /**
+         * @description Mean agents actually online (`accepting_chats`) during this
+         *     hour, from the presence log. Null when `coverage_known` is
+         *     false.
+         */
+        scheduled_agents: number | null;
+        /**
+         * @description Mean agents whose saved work schedule plans them onto this
+         *     hour, over a standing week. Fractional when a shift starts or
+         *     ends mid-hour. Null when `roster_known` is false.
+         */
+        rostered_agents: number | null;
+        /**
+         * @description `required_agents − scheduled_agents`: positive is a shortfall,
+         *     negative is spare capacity. Null when either side is null —
+         *     the plan is compared against what happened, never against an
+         *     assumed zero.
+         */
+        gap: number | null;
+        /** @description True exactly when `required_agents` is null. */
+        low_confidence: boolean;
+      }[];
     };
     /**
      * @description The report groups a caller may see (FR-MOD-07.7 permission-based
@@ -11783,6 +11959,33 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ReportsSales'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getReportsStaffingForecast: {
+    parameters: {
+      query?: {
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The staffing forecast for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['StaffingForecast'];
         };
       };
       400: components['responses']['BadRequest'];

@@ -343,6 +343,8 @@ paths:
     $ref: "./paths/reports.yaml#/teamPerformance"
   /reports/sales:
     $ref: "./paths/reports.yaml#/sales"
+  /reports/staffing-forecast:
+    $ref: "./paths/reports.yaml#/staffingForecast"
   /reports/groups:
     $ref: "./paths/reports.yaml#/groups"
   /reports/export:
@@ -3026,6 +3028,137 @@ components:
           type: integer
           nullable: true
           description: Conversions attributed to supported conversations. Null until configured.
+
+    StaffingForecast:
+      type: object
+      description: |
+        The work-scheduler forecast (PRD §5.3-Vardiya): a fixed 7 × 24 grid of
+        `required` / `scheduled` / `rostered` agents per UTC weekday-hour,
+        derived deterministically from the observed window — historical chat
+        volume, the presence event log and the stored work schedules. Nothing is
+        persisted; the grid is recomputed per request.
+
+        Read `null` as "not known", never as zero — see the operation
+        description for each of the four unknowns and why a fabricated zero
+        would be worse than an absent number in every one of them.
+      required:
+        [range, inputs, coverage_known, roster_known, low_confidence, cells]
+      properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        inputs:
+          type: object
+          description: |
+            The figures every cell was derived from, echoed so a recommendation
+            can be argued with rather than only believed.
+          required: [concurrent_chats_limit, average_chat_minutes, minimum_sample_chats, agents]
+          properties:
+            concurrent_chats_limit:
+              type: number
+              nullable: true
+              description: |
+                Mean `concurrent_chats_limit` across the workspace's active
+                (non-suspended) agents — how many chats one agent holds at
+                once. Null when the workspace has no active agent, which leaves
+                every `required_agents` null.
+            average_chat_minutes:
+              type: number
+              nullable: true
+              description: |
+                Mean handling time of a conversation closed in the window, in
+                minutes — the same duration `GET /reports/overview` reports in
+                seconds. Null when nothing closed in the window, which leaves
+                every `required_agents` null.
+            minimum_sample_chats:
+              type: integer
+              description: |
+                How many chats a cell must have observed before it reports a
+                number instead of `null`.
+            agents:
+              type: integer
+              description: Active agents the `concurrent_chats_limit` mean was taken over.
+        coverage_known:
+          type: boolean
+          description: |
+            False when the presence log says nothing about this window: every
+            `scheduled_agents` and `gap` is null.
+        roster_known:
+          type: boolean
+          description: |
+            False when no agent in the workspace has a saved work schedule:
+            every `rostered_agents` is null.
+        low_confidence:
+          type: boolean
+          description: |
+            True when *no* cell cleared `inputs.minimum_sample_chats` — the
+            window forecasts nothing, and the whole grid is advisory at best.
+        cells:
+          type: array
+          description: |
+            Exactly 168 cells (7 × 24), ordered `day_of_week` 0-6 then `hour`
+            0-23. Dense by construction: a week always has every hour.
+          items:
+            type: object
+            required:
+              [
+                day_of_week,
+                hour,
+                observed_chats,
+                required_agents,
+                scheduled_agents,
+                rostered_agents,
+                gap,
+                low_confidence,
+              ]
+            properties:
+              day_of_week:
+                type: integer
+                minimum: 0
+                maximum: 6
+                description: "UTC weekday, 0 = Sunday … 6 = Saturday."
+              hour: { type: integer, minimum: 0, maximum: 23, description: "UTC hour of day." }
+              observed_chats:
+                type: integer
+                description: |
+                  Chats that started in this cell across every occurrence of it
+                  in the window — the evidence the verdict rests on, and the
+                  same count `GET /reports/breakdown` gives per hour (ADR-09).
+              required_agents:
+                type: integer
+                nullable: true
+                description: |
+                  Whole agents this hour's mean load needs. Null when the cell
+                  has too little history, or when an input the model divides by
+                  is unknown (see `inputs`).
+              scheduled_agents:
+                type: number
+                nullable: true
+                description: |
+                  Mean agents actually online (`accepting_chats`) during this
+                  hour, from the presence log. Null when `coverage_known` is
+                  false.
+              rostered_agents:
+                type: number
+                nullable: true
+                description: |
+                  Mean agents whose saved work schedule plans them onto this
+                  hour, over a standing week. Fractional when a shift starts or
+                  ends mid-hour. Null when `roster_known` is false.
+              gap:
+                type: number
+                nullable: true
+                description: |
+                  `required_agents − scheduled_agents`: positive is a shortfall,
+                  negative is spare capacity. Null when either side is null —
+                  the plan is compared against what happened, never against an
+                  assumed zero.
+              low_confidence:
+                type: boolean
+                description: True exactly when `required_agents` is null.
 
     ReportGroups:
       type: object

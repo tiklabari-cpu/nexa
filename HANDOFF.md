@@ -13,6 +13,66 @@
 
 ## Task log (newest-first)
 
+### tm 94.8 — 07.9-sched-g · Teslim geçmişi okuması: kontrat + `GET /reports/scheduled-exports/{id}/runs` — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **Kontrat** (aynı pencerede, çift yönlü parity): `packages/contract/openapi/paths/reports.yaml`'a
+    `scheduledExportRuns` bloğu — `scheduledExportId` path parametresi + `limit` query
+    (`integer`, min 1, max 100, default 20), `operationId: listScheduledExportRuns`;
+    `packages/contract/openapi/openapi.yaml`'a `/reports/scheduled-exports/{scheduledExportId}/runs`
+    path girdisi + components'e `ScheduledExportRun` şeması (`period_key`, `period_from`,
+    `period_to`, `status`, `row_count`, `recipient_count`, `error`, `created_at`).
+    `pnpm --filter @nexa/contract generate` ile bundle (145 path) + `src/generated/api.ts` yeniden
+    üretildi.
+  - **Tipler**: `packages/types/src/domain.ts`'e `ScheduledExportRunStatus`
+    (`pending | delivered | failed`) + `ScheduledExportRun`, `ScheduledExport`'un hemen ardına.
+  - **Servis**: `ScheduledReportService.runs(tx, tenant, id, limit)` — önce tanımı
+    `{ id, licenseId }` ile arar; yoksa/başka lisanssa `ApiError.notFound` (boş liste DEĞİL: "hiç
+    çalışmadı" ile "böyle bir tanım yok" farklı olgular, ve yabancı bir id için boş liste sessizce
+    "orada bir şey yok" derdi). Sonra `createdAt desc` + `periodKey desc` sıralı `take: limit`.
+    İkinci sıralama anahtarı süs değil — claim `created_at`'i işlem saatiyle yazdığı için tek
+    işlemde kaydedilen iki run aynı anı paylaşır ve sıralama plana kalırdı.
+  - **DTO**: DB'nin `sent` durumu tel üzerinde **`delivered`**. Satırın yazımı
+    `scheduled_report_runs_status_check` ile sabit; tel yazımı operatörün sweep raporu ve ayarlar
+    ekranıyla aynı — bir teslim insanın baktığı her yerde aynı kelimeyle anılıyor. Tanınmayan bir
+    durum uydurulmadan olduğu gibi geçer.
+  - **Route**: `GET /reports/scheduled-exports/:scheduledExportId/runs`,
+    **`reports_read`** kapısında — tanım yüzeyinin `reports_manage`'ine karşın bilinçli olarak daha
+    zayıf, ve tam da onun gerekçesiyle: bir run alıcı **sayısını** taşır, adresini asla. Adresler
+    (`reports_manage`'in var oluş sebebi) tanımda kalıyor; "geçen haftanın raporu gitti mi?"
+    raporları okuyabilen herkesin sorusu (NFR-M5). `error` sweep'in sanitize ettiği tek satır
+    olarak döner.
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **1914/1914** (90 dosya) ·
+  `pnpm -w test:integration` → **1459/1459** (61 dosya, +16 yeni test) · `pnpm -w build` 0 ·
+  `pnpm -w test:e2e` → **80/80** (tam paket) · `pnpm -w db:check-drift` → "no drift" ·
+  `prettier --check` değişen dosyalarda 0 · `contract-parity.test.ts` **5/5**.
+  Task'ın KK doğrulaması birebir karşılandı: (i) gerçek sweep sonrası `delivered` + `row_count`
+  (sweeper'ın kendi raporundaki değerle birebir karşılaştırılıyor, elle yazılmış fixture'la değil);
+  (ii) `BrokenMailer` ile `failed` + `error` dolu; (iii) reports scope'suz token → 403 (ve
+  `reports_read` girer, ama yanıt gövdesi hiçbir posta kutusu içermez); (iv) B lisansı A'nın
+  tanımının runs'ını isterse → 404 (B iki reports scope'unu da taşırken bile); (v) `limit`
+  101/0/-1/2.5/all → 400, 100 → 200.
+- **Varsayımlar:**
+  - `status='delivered'` KK'da birebir yazılı olduğu için DB'nin `sent`'i tel üzerinde
+    yeniden adlandırıldı. Alternatif (`sent`'i olduğu gibi geçirmek) üç ayrı yüzeyde iki kelime
+    bırakırdı; operatör betiğinin JSON raporu zaten `delivered` diyor.
+  - `limit` üst sınırı aşılınca 400 (sessiz clamp değil) — task "üst sınır 100" diyor, testStrategy
+    "`limit` üst sınırı aşılırsa → 400" diyor. Kırpılmış bir sayfa tam geçmişten ayırt edilemez.
+  - Query'de `.strict()`: bilinmeyen anahtar (`?offset=10`) → 400, aynı dosyadaki body şemalarının
+    deseni.
+- **Sonraki pencereye not:**
+  - `-h` (Settings UI) bu ucu tüketecek: `GET .../runs` `{ items: ScheduledExportRun[] }` döner,
+    `status` `pending|delivered|failed`, `error` yalnız `failed`'de dolu. `last_run_at` (tanımda)
+    yalnız başarılı teslimde ilerler; "son çalışma durumu" için runs'ın ilk elemanı doğru kaynak.
+  - `-i` (uçtan uca) için hazır zincir: `scheduled-reports.test.ts` içindeki `delivery history`
+    describe'ı gerçek `ScheduledReportSweeper`'ı HTTP sunucusuyla aynı dosyada koşturuyor
+    (`appRole` = `DATABASE_APP_URL` ile ayrı `PrismaClient`, `FileMailer` geçici dizinde) — tekrar
+    tetik idempotens regresyonu aynı desenle yazılabilir.
+  - **Ortam (tekrar):** `pnpm -w test:e2e` doğrudan çağrılırsa RTM dev sunucusu env'siz açılıp 60
+    sn'de time-out veriyor. Doğru komut `set -a && . ./.env && set +a && pnpm -w test:e2e`, ve
+    `pnpm -w test:integration` DB'yi truncate ettiği için önce `pnpm -w db:seed`.
+
 ### tm 94.7 — 07.9-sched-f · `scheduled-reports:run` operatör betiği + npm script (dry-run varsayılanı) — done — 2026-08-08 UTC
 
 - **Yapıldı:**

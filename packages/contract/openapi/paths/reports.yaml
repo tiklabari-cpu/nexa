@@ -667,6 +667,62 @@ scheduledExport:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+scheduledExportRuns:
+  parameters:
+    - name: scheduledExportId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Reports]
+    operationId: listScheduledExportRuns
+    summary: Delivery history of one scheduled export
+    description: |
+      What actually happened each time this schedule ran — the period covered,
+      whether it was delivered, how many rows and mailboxes it reached, and why
+      it failed if it did (NFR-M5). Newest first.
+
+      A period is claimed before anything is mailed, so every attempt leaves a
+      run behind: a failed delivery is recorded as `failed` with its reason
+      rather than disappearing, and the period is *consumed* rather than retried
+      — an unrecallable e-mail cannot be safely re-sent on the guess that the
+      first one never left.
+
+      Gated on `reports_read`, not the `reports_manage` the definition itself
+      takes. A run carries `recipient_count`, never the addresses: who receives
+      the workspace's numbers stays with the definition, while "did last week's
+      report go out?" is part of reading reports.
+
+      An id belonging to another license answers 404, not 403 — a 403 would
+      confirm the schedule exists, and that alone tells one workspace something
+      about another's.
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        description: |
+          How many runs to return, newest first. Above 100 is a 400 rather than
+          a silent clamp, so a caller that asked for more than it gets hears so.
+    responses:
+      "200":
+        description: The schedule's delivery history (possibly empty)
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/ScheduledExportRun" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 subscription:
   get:
     tags: [Billing]

@@ -19,7 +19,12 @@
  *     workspace's numbers anywhere, to anyone, on a timer. Bounding the list by
  *     the roster keeps the blast radius inside the tenant.
  */
-import type { ScheduledExport, ScheduledExportFrequency } from '@nexa/types';
+import type {
+  ScheduledExport,
+  ScheduledExportFrequency,
+  ScheduledExportRun,
+  ScheduledExportRunStatus,
+} from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { reportGroup } from '../../routes/reports-export.js';
@@ -52,6 +57,18 @@ interface ScheduledReportRow {
   enabled: boolean;
   createdAt: Date;
   lastRunAt: Date | null;
+}
+
+interface ScheduledReportRunRow {
+  id: string;
+  periodKey: string;
+  periodFrom: Date;
+  periodTo: Date;
+  status: string;
+  rowCount: number;
+  recipientCount: number;
+  error: string | null;
+  createdAt: Date;
 }
 
 export class ScheduledReportService {
@@ -174,6 +191,43 @@ export class ScheduledReportService {
     });
     if (count === 0) throw ApiError.notFound('Scheduled export not found.');
   }
+
+  /**
+   * One definition's delivery history, newest first (NFR-M5).
+   *
+   * The definition is looked up first, so an unknown or another licence's id is
+   * a 404 rather than an empty list. The distinction matters: an empty page
+   * would read as "this schedule has never run", which is a different fact from
+   * "there is no such schedule" — and for a foreign id it would also quietly
+   * confirm nothing exists there, which is the one thing this surface must not
+   * answer either way.
+   *
+   * `take` is a plain limit rather than a cursor. The history is one row per
+   * period per definition — a daily schedule is 365 rows a year — so the newest
+   * page is the whole question anyone asks of it.
+   */
+  async runs(
+    tx: TenantClient,
+    tenant: TenantContext,
+    id: string,
+    limit: number,
+  ): Promise<{ items: ScheduledExportRun[] }> {
+    const definition = await tx.scheduledReport.findFirst({
+      where: { id, licenseId: tenant.licenseId },
+      select: { id: true },
+    });
+    if (!definition) throw ApiError.notFound('Scheduled export not found.');
+
+    const rows = await tx.scheduledReportRun.findMany({
+      where: { licenseId: tenant.licenseId, scheduledReportId: id },
+      // `periodKey` only breaks ties: a claim writes `created_at` with the
+      // transaction clock, so two runs recorded in one transaction share an
+      // instant and would otherwise come back in whatever order the plan chose.
+      orderBy: [{ createdAt: 'desc' }, { periodKey: 'desc' }],
+      take: limit,
+    });
+    return { items: rows.map(toRunDto) };
+  }
 }
 
 /**
@@ -225,6 +279,34 @@ async function resolveRecipients(
   // then mails nobody, silently, forever.
   if (resolved.length === 0) throw ApiError.validation('recipients: at least one is required.');
   return resolved;
+}
+
+/**
+ * The stored `sent` goes out as `delivered`.
+ *
+ * The row's spelling is fixed by `scheduled_report_runs_status_check`; the wire
+ * spelling matches the sweep report an operator reads and the settings screen
+ * renders, so a delivered run is called the same thing everywhere a human looks.
+ * Anything else the column could hold is passed through rather than guessed at:
+ * a status this code does not recognise should be visible, not silently renamed
+ * into one of the three it does.
+ */
+function toRunStatus(stored: string): ScheduledExportRunStatus {
+  return (stored === 'sent' ? 'delivered' : stored) as ScheduledExportRunStatus;
+}
+
+function toRunDto(row: ScheduledReportRunRow): ScheduledExportRun {
+  return {
+    id: row.id,
+    period_key: row.periodKey,
+    period_from: row.periodFrom.toISOString(),
+    period_to: row.periodTo.toISOString(),
+    status: toRunStatus(row.status),
+    row_count: row.rowCount,
+    recipient_count: row.recipientCount,
+    error: row.error,
+    created_at: row.createdAt.toISOString(),
+  };
 }
 
 function toDto(row: ScheduledReportRow): ScheduledExport {

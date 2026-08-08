@@ -353,6 +353,8 @@ paths:
     $ref: "./paths/reports.yaml#/scheduledExports"
   /reports/scheduled-exports/{scheduledExportId}:
     $ref: "./paths/reports.yaml#/scheduledExport"
+  /reports/scheduled-exports/{scheduledExportId}/runs:
+    $ref: "./paths/reports.yaml#/scheduledExportRuns"
   /billing/subscription:
     $ref: "./paths/reports.yaml#/subscription"
   /billing/usage:
@@ -3235,6 +3237,60 @@ components:
           format: date-time
           nullable: true
           description: Last successful delivery, or `null` while none has happened.
+
+    ScheduledExportRun:
+      type: object
+      description: |
+        One delivery attempt of a scheduled export (PRD §5.3-Reports). The
+        period is claimed before anything is mailed, so every attempt leaves one
+        of these behind — failures included, with their reason.
+
+        No recipient addresses, deliberately: `recipient_count` is how many
+        mailboxes the run reached. The addresses belong to the definition, read
+        under the stricter `reports_manage`.
+      required:
+        - id
+        - period_key
+        - period_from
+        - period_to
+        - status
+        - row_count
+        - recipient_count
+        - error
+        - created_at
+      properties:
+        id: { type: string, format: uuid }
+        period_key:
+          type: string
+          description: |
+            The period covered, as the deterministic label the single-delivery
+            claim is keyed on: `2026-07-31` (daily), `2026-W31` (weekly),
+            `2026-07` (monthly).
+        period_from: { type: string, format: date-time }
+        period_to: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [pending, delivered, failed]
+          description: |
+            `pending` is a claimed period not yet resolved — normally a flash,
+            but a process killed mid-delivery leaves one, and the history says
+            so rather than pretending the run never happened. `failed` keeps its
+            period: an unrecallable e-mail is not re-sent on the guess that the
+            first one never left.
+        row_count:
+          type: integer
+          description: Data rows in the CSV that was sent, excluding the header.
+        recipient_count:
+          type: integer
+          description: Mailboxes the run actually reached — not the number configured.
+        error:
+          type: string
+          nullable: true
+          description: "Why the delivery failed: one bounded, sanitised line, or `null`."
+        created_at:
+          type: string
+          format: date-time
+          description: When the period was claimed — i.e. when the attempt started.
 
     CsatSummary:
       type: object

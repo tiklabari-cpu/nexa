@@ -3486,6 +3486,45 @@ export interface paths {
     patch: operations['updateScheduledExport'];
     trace?: never;
   };
+  '/reports/scheduled-exports/{scheduledExportId}/runs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scheduledExportId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Delivery history of one scheduled export
+     * @description What actually happened each time this schedule ran — the period covered,
+     *     whether it was delivered, how many rows and mailboxes it reached, and why
+     *     it failed if it did (NFR-M5). Newest first.
+     *
+     *     A period is claimed before anything is mailed, so every attempt leaves a
+     *     run behind: a failed delivery is recorded as `failed` with its reason
+     *     rather than disappearing, and the period is *consumed* rather than retried
+     *     — an unrecallable e-mail cannot be safely re-sent on the guess that the
+     *     first one never left.
+     *
+     *     Gated on `reports_read`, not the `reports_manage` the definition itself
+     *     takes. A run carries `recipient_count`, never the addresses: who receives
+     *     the workspace's numbers stays with the definition, while "did last week's
+     *     report go out?" is part of reading reports.
+     *
+     *     An id belonging to another license answers 404, not 403 — a 403 would
+     *     confirm the schedule exists, and that alone tells one workspace something
+     *     about another's.
+     */
+    get: operations['listScheduledExportRuns'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/billing/subscription': {
     parameters: {
       query?: never;
@@ -6251,6 +6290,49 @@ export interface components {
        * @description Last successful delivery, or `null` while none has happened.
        */
       last_run_at: string | null;
+    };
+    /**
+     * @description One delivery attempt of a scheduled export (PRD §5.3-Reports). The
+     *     period is claimed before anything is mailed, so every attempt leaves one
+     *     of these behind — failures included, with their reason.
+     *
+     *     No recipient addresses, deliberately: `recipient_count` is how many
+     *     mailboxes the run reached. The addresses belong to the definition, read
+     *     under the stricter `reports_manage`.
+     */
+    ScheduledExportRun: {
+      /** Format: uuid */
+      id: string;
+      /**
+       * @description The period covered, as the deterministic label the single-delivery
+       *     claim is keyed on: `2026-07-31` (daily), `2026-W31` (weekly),
+       *     `2026-07` (monthly).
+       */
+      period_key: string;
+      /** Format: date-time */
+      period_from: string;
+      /** Format: date-time */
+      period_to: string;
+      /**
+       * @description `pending` is a claimed period not yet resolved — normally a flash,
+       *     but a process killed mid-delivery leaves one, and the history says
+       *     so rather than pretending the run never happened. `failed` keeps its
+       *     period: an unrecallable e-mail is not re-sent on the guess that the
+       *     first one never left.
+       * @enum {string}
+       */
+      status: 'pending' | 'delivered' | 'failed';
+      /** @description Data rows in the CSV that was sent, excluding the header. */
+      row_count: number;
+      /** @description Mailboxes the run actually reached — not the number configured. */
+      recipient_count: number;
+      /** @description Why the delivery failed: one bounded, sanitised line, or `null`. */
+      error: string | null;
+      /**
+       * Format: date-time
+       * @description When the period was claimed — i.e. when the attempt started.
+       */
+      created_at: string;
     };
     /**
      * @description A satisfaction tally over some span: the donut's `good` / `bad` counts,
@@ -12579,6 +12661,41 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ScheduledExport'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listScheduledExportRuns: {
+    parameters: {
+      query?: {
+        /**
+         * @description How many runs to return, newest first. Above 100 is a 400 rather than
+         *     a silent clamp, so a caller that asked for more than it gets hears so.
+         */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        scheduledExportId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The schedule's delivery history (possibly empty) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ScheduledExportRun'][];
+          };
         };
       };
       400: components['responses']['BadRequest'];

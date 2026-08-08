@@ -27,9 +27,21 @@
  * exists but the mailboxes it delivers to. Every miss is a 404, never a 403,
  * for the same reason.
  */
-import type { PrismaClient } from '@prisma/client';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { generateShortId } from '@nexa/types';
+import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
+import { ScheduledReportSweeper } from '../../src/services/reports/scheduled-report-sweeper.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 interface ScheduledExport {
@@ -41,6 +53,25 @@ interface ScheduledExport {
   enabled: boolean;
   created_at: string;
   last_run_at: string | null;
+}
+
+interface ScheduledExportRun {
+  id: string;
+  period_key: string;
+  period_from: string;
+  period_to: string;
+  status: 'pending' | 'delivered' | 'failed';
+  row_count: number;
+  recipient_count: number;
+  error: string | null;
+  created_at: string;
+}
+
+/** Fails every send — the provider outage the failed-run history is about. */
+class BrokenMailer implements Mailer {
+  async send(): Promise<void> {
+    throw new Error('smtp: connection refused');
+  }
 }
 
 const PATH = '/reports/scheduled-exports';
@@ -624,6 +655,341 @@ describe('scheduled report exports', () => {
 
       expect((await server.del(at(schedule.id), auth(manageToken))).statusCode).toBe(204);
       expect((await server.get(at(schedule.id), auth(manageToken))).statusCode).toBe(404);
+    });
+  });
+
+  // --- Delivery history (07.9-sched-g) ---------------------------------------
+  //
+  // The sweep writes a run row for every period it claims — delivered and
+  // failed alike — and until this endpoint existed nothing could read them
+  // back, so NFR-M5's observability share was recorded and then lost.
+  //
+  // Three properties carry the surface:
+  //
+  //   - it reports what actually happened. A real sweep, then the endpoint: the
+  //     delivered period comes back as `delivered` with the row and recipient
+  //     counts the run recorded, and a failed one as `failed` with its reason.
+  //     Asserting against the sweeper's own output rather than against
+  //     hand-written rows is the point — a DTO wired to the wrong column would
+  //     pass a test that inserted its own fixtures.
+  //   - it sits behind `reports_read` while the definition stays behind
+  //     `reports_manage`, and that is only defensible because a run carries
+  //     `recipient_count` and never an address. So both halves are tested: the
+  //     read scope gets in, and what it gets carries no mailbox.
+  //   - another licence's id is 404, exactly as on the definition itself. A 404
+  //     for the unknown and the foreign alike is what keeps the endpoint from
+  //     answering "that schedule is real".
+  describe('delivery history', () => {
+    /** A Saturday: with `daily`, the previous complete period is 2026-08-07. */
+    const NOW = new Date('2026-08-08T09:00:00.000Z');
+    const IN_PERIOD = new Date('2026-08-07T12:00:00.000Z');
+    const PERIOD_KEY = '2026-08-07';
+
+    let appRole: PrismaClient;
+    let mailer: FileMailer;
+    let mailDir: string;
+    let readToken: string;
+
+    const runsAt = (id: string, query = '') => `${PATH}/${id}/runs${query}`;
+
+    const history = async (
+      token: string,
+      id: string,
+      query = '',
+    ): Promise<ScheduledExportRun[]> => {
+      const response = await server.get(runsAt(id, query), auth(token));
+      expect(response.statusCode).toBe(200);
+      return (response.json() as { items: ScheduledExportRun[] }).items;
+    };
+
+    /** A definition owned by `t`, written directly so the sweep can pick it up. */
+    const defineFor = async (t: TenantFixture, group = 'team-performance'): Promise<string> => {
+      const row = await owner.scheduledReport.create({
+        data: {
+          licenseId: t.licenseId,
+          groupId: group,
+          frequency: 'daily',
+          format: 'csv',
+          recipients: [t.agentEmail],
+          enabled: true,
+        },
+        select: { id: true },
+      });
+      return row.id;
+    };
+
+    /**
+     * One closed, assigned thread inside the period — a single
+     * `team-performance` row, so `row_count` has something to be other than 0.
+     */
+    const seedAssignedThread = async (t: TenantFixture): Promise<void> => {
+      const customer = await owner.customer.create({
+        data: { organizationId: t.organizationId, name: 'History visitor' },
+        select: { id: true },
+      });
+      const chatId = generateShortId();
+      await owner.chat.create({
+        data: {
+          id: chatId,
+          licenseId: t.licenseId,
+          customerId: customer.id,
+          active: false,
+          createdAt: IN_PERIOD,
+        },
+      });
+      await owner.thread.create({
+        data: {
+          id: generateShortId(),
+          chatId,
+          licenseId: t.licenseId,
+          active: false,
+          assigneeId: t.agentAccountId,
+          createdAt: IN_PERIOD,
+          closedAt: new Date(IN_PERIOD.getTime() + 60_000),
+        },
+      });
+    };
+
+    const sweep = (mail: Mailer = mailer) =>
+      new ScheduledReportSweeper(appRole, mail).run({ now: NOW });
+
+    /**
+     * A run written straight to the table. Used only where the *shape* of the
+     * history is under test (order, limit) and the sweep would be machinery
+     * without a question — it can only produce one row per period per
+     * definition, so a multi-row history cannot come from one.
+     */
+    const recordRun = async (
+      scheduledReportId: string,
+      periodKey: string,
+      createdAt: Date,
+      overrides: Record<string, unknown> = {},
+    ): Promise<void> => {
+      await owner.scheduledReportRun.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          scheduledReportId,
+          periodKey,
+          periodFrom: new Date(`${periodKey}T00:00:00.000Z`),
+          periodTo: new Date(`${periodKey}T23:59:59.999Z`),
+          status: 'sent',
+          recipientCount: 1,
+          rowCount: 0,
+          createdAt,
+          ...overrides,
+        },
+      });
+    };
+
+    beforeAll(async () => {
+      const appUrl = process.env['DATABASE_APP_URL'];
+      if (!appUrl) throw new Error('DATABASE_APP_URL must be set');
+      appRole = new PrismaClient({ datasourceUrl: appUrl });
+      mailDir = await mkdtemp(join(tmpdir(), 'nexa-sched-history-'));
+      mailer = new FileMailer(mailDir);
+    });
+
+    afterAll(async () => {
+      await appRole.$disconnect();
+      await rm(mailDir, { recursive: true, force: true });
+    });
+
+    beforeEach(async () => {
+      await rm(mailDir, { recursive: true, force: true });
+      readToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+    });
+
+    // --- What the sweep recorded, read back (derived KK) ----------------------
+
+    it('shows the delivered period with the counts the run recorded', async () => {
+      const id = await defineFor(fx.a);
+      await seedAssignedThread(fx.a);
+
+      const report = await sweep();
+      expect(report.totals).toMatchObject({ delivered: 1, failed: 0 });
+
+      const [run] = await history(readToken, id);
+      expect(run).toMatchObject({
+        period_key: PERIOD_KEY,
+        // `delivered`, not the row's stored `sent` — one word for one thing
+        // across the sweep report, this endpoint and the settings screen.
+        status: 'delivered',
+        row_count: 1,
+        recipient_count: 1,
+        error: null,
+      });
+      expect(run?.period_from).toBe('2026-08-07T00:00:00.000Z');
+      expect(run?.period_to).toBe('2026-08-07T23:59:59.999Z');
+      // Wired to the run row rather than recomputed: the numbers the operator's
+      // sweep report shows are the numbers the workspace reads back.
+      const delivery = report.tenants.flatMap((t) => t.deliveries).find((d) => d.periodKey);
+      expect(run?.row_count).toBe(delivery?.rowCount);
+      expect(run?.recipient_count).toBe(delivery?.recipientCount);
+    });
+
+    it('shows a failed delivery with its reason rather than hiding it', async () => {
+      const id = await defineFor(fx.a);
+      await seedAssignedThread(fx.a);
+
+      const report = await sweep(new BrokenMailer());
+      expect(report.totals).toMatchObject({ delivered: 0, failed: 1 });
+
+      const [run] = await history(readToken, id);
+      expect(run?.status).toBe('failed');
+      expect(run?.period_key).toBe(PERIOD_KEY);
+      // The sanitised line the sweep stored — enough to name the cause.
+      expect(run?.error).toContain('smtp: connection refused');
+      // Nothing was delivered, and the history says so rather than reporting a
+      // partial success.
+      expect(run?.recipient_count).toBe(0);
+    });
+
+    it('is empty for a schedule that has never run — not a 404', async () => {
+      // "No deliveries yet" and "no such schedule" are different facts, and the
+      // settings screen has to be able to tell them apart.
+      const id = await defineFor(fx.a);
+      expect(await history(readToken, id)).toEqual([]);
+    });
+
+    // --- Permission-based visibility (FR-MOD-07.7 KK) -------------------------
+
+    it('refuses a token without reports_read', async () => {
+      const id = await defineFor(fx.a);
+      const strangerToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+
+      expect((await server.get(runsAt(id), auth(strangerToken))).statusCode).toBe(403);
+      expect((await server.get(runsAt(id))).statusCode).toBe(401);
+    });
+
+    it('lets reports_read in — and hands it no recipient mailbox', async () => {
+      // The whole reason the history sits behind the read scope while the
+      // definition stays behind `reports_manage`: a run counts recipients, it
+      // does not name them. If that ever stops being true this gate is wrong.
+      const id = await defineFor(fx.a);
+      await seedAssignedThread(fx.a);
+      await sweep();
+
+      const response = await server.get(runsAt(id), auth(readToken));
+      expect(response.statusCode).toBe(200);
+      expect(response.body).not.toContain(fx.a.agentEmail);
+      expect(response.body).not.toContain(fx.a.ownerEmail);
+
+      // And the read scope still cannot reach the definition that names them.
+      expect((await server.get(`${PATH}/${id}`, auth(readToken))).statusCode).toBe(403);
+    });
+
+    // --- Missing, malformed and cross-tenant ids ------------------------------
+
+    it('answers 404 for an id that never existed', async () => {
+      const ghost = '00000000-0000-4000-8000-000000000000';
+      expect((await server.get(runsAt(ghost), auth(readToken))).statusCode).toBe(404);
+    });
+
+    it('rejects a malformed id before it reaches the database', async () => {
+      expect((await server.get(runsAt('not-a-uuid'), auth(readToken))).statusCode).toBe(400);
+    });
+
+    it("answers 404 — not 403 — for another licence's definition", async () => {
+      const id = await defineFor(fx.a);
+      await seedAssignedThread(fx.a);
+      await sweep();
+      // A's own history is there to be found, so the 404 below is about the
+      // caller and not about an empty table.
+      expect(await history(readToken, id)).toHaveLength(1);
+
+      const bToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read', 'reports_manage'],
+      });
+
+      // 404 even though B holds both reports scopes: the refusal is the tenant
+      // boundary, not a missing permission, and 403 would confirm A's schedule
+      // is real.
+      expect((await server.get(runsAt(id), auth(bToken))).statusCode).toBe(404);
+    });
+
+    it("does not mix another licence's runs into the page", async () => {
+      const aId = await defineFor(fx.a);
+      const bId = await defineFor(fx.b);
+      await seedAssignedThread(fx.a);
+      await seedAssignedThread(fx.b);
+      await sweep();
+
+      const aRuns = await history(readToken, aId);
+      expect(aRuns).toHaveLength(1);
+      expect(await owner.scheduledReportRun.count({ where: { scheduledReportId: bId } })).toBe(1);
+      // B swept too, so the single row A sees is a filter working rather than a
+      // table with one row in it.
+      expect(await owner.scheduledReportRun.count()).toBe(2);
+    });
+
+    // --- Ordering and the limit ----------------------------------------------
+
+    it('returns the newest run first', async () => {
+      const id = await defineFor(fx.a);
+      await recordRun(id, '2026-08-05', new Date('2026-08-06T00:05:00.000Z'));
+      await recordRun(id, '2026-08-07', new Date('2026-08-08T00:05:00.000Z'));
+      await recordRun(id, '2026-08-06', new Date('2026-08-07T00:05:00.000Z'));
+
+      expect((await history(readToken, id)).map((run) => run.period_key)).toEqual([
+        '2026-08-07',
+        '2026-08-06',
+        '2026-08-05',
+      ]);
+    });
+
+    it('honours limit, keeping the newest', async () => {
+      const id = await defineFor(fx.a);
+      await recordRun(id, '2026-08-05', new Date('2026-08-06T00:05:00.000Z'));
+      await recordRun(id, '2026-08-06', new Date('2026-08-07T00:05:00.000Z'));
+      await recordRun(id, '2026-08-07', new Date('2026-08-08T00:05:00.000Z'));
+
+      expect((await history(readToken, id, '?limit=2')).map((run) => run.period_key)).toEqual([
+        '2026-08-07',
+        '2026-08-06',
+      ]);
+    });
+
+    it('defaults to the 20 newest', async () => {
+      const id = await defineFor(fx.a);
+      for (let day = 1; day <= 21; day += 1) {
+        const key = `2026-07-${String(day).padStart(2, '0')}`;
+        await recordRun(id, key, new Date(`${key}T23:00:00.000Z`));
+      }
+
+      const page = await history(readToken, id);
+      expect(page).toHaveLength(20);
+      expect(page[0]?.period_key).toBe('2026-07-21');
+      expect(page.at(-1)?.period_key).toBe('2026-07-02');
+    });
+
+    it('refuses a limit above the cap rather than silently clamping it', async () => {
+      // A clamped page is indistinguishable from a complete one, so a caller
+      // that asked for 500 would read 100 runs as the whole history.
+      const id = await defineFor(fx.a);
+      expect((await server.get(runsAt(id, '?limit=101'), auth(readToken))).statusCode).toBe(400);
+      expect((await server.get(runsAt(id, '?limit=0'), auth(readToken))).statusCode).toBe(400);
+      expect((await server.get(runsAt(id, '?limit=-1'), auth(readToken))).statusCode).toBe(400);
+      expect((await server.get(runsAt(id, '?limit=2.5'), auth(readToken))).statusCode).toBe(400);
+      expect((await server.get(runsAt(id, '?limit=all'), auth(readToken))).statusCode).toBe(400);
+      expect((await server.get(runsAt(id, '?limit=100'), auth(readToken))).statusCode).toBe(200);
+    });
+
+    it('rejects an unknown query parameter rather than ignoring it', async () => {
+      const id = await defineFor(fx.a);
+      expect((await server.get(runsAt(id, '?offset=10'), auth(readToken))).statusCode).toBe(400);
     });
   });
 });

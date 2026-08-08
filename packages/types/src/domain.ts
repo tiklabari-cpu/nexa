@@ -404,3 +404,51 @@ export interface ScheduledExport {
   /** Last successful delivery, or null while none has happened. */
   last_run_at: string | null;
 }
+
+/**
+ * How one delivery attempt ended.
+ *
+ * `pending` is a period the sweep has claimed but not yet resolved — normally a
+ * flash, but a process killed mid-delivery leaves one behind, and the history
+ * says so rather than pretending the run never happened.
+ *
+ * `delivered` is the row's `sent`: the stored spelling is fixed by a database
+ * CHECK, while the wire vocabulary matches the sweep report an operator reads,
+ * so one word means one thing across everything a human looks at.
+ */
+export type ScheduledExportRunStatus = 'pending' | 'delivered' | 'failed';
+
+/**
+ * One delivery attempt of a scheduled export (PRD §5.3-Reports).
+ *
+ * The counterpart to `ScheduledExport`: the definition says what should be
+ * mailed and to whom, a run says what happened when it was. A period is claimed
+ * before anything is sent, so every attempt leaves one of these behind — a
+ * failure included, with its reason — and "did last Monday's report go out?" is
+ * answerable rather than inferred from a mailbox (NFR-M5).
+ *
+ * Deliberately no recipient addresses: `recipient_count` is how many mailboxes
+ * the run actually reached. The addresses belong to the definition, which is
+ * read under the stricter `reports_manage`; the history stays readable by
+ * anyone who may read reports because it carries no such thing.
+ */
+export interface ScheduledExportRun {
+  id: string;
+  /**
+   * The period this run covers, as the deterministic label the single-delivery
+   * claim is keyed on: `2026-07-31` (daily), `2026-W31` (weekly), `2026-07`
+   * (monthly).
+   */
+  period_key: string;
+  period_from: string;
+  period_to: string;
+  status: ScheduledExportRunStatus;
+  /** Data rows in the CSV that was sent, excluding the header. */
+  row_count: number;
+  /** Mailboxes the run actually reached — not the number configured. */
+  recipient_count: number;
+  /** Why the delivery failed: one bounded, sanitised line, or null. */
+  error: string | null;
+  /** When the period was claimed — i.e. when the attempt started. */
+  created_at: string;
+}

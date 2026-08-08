@@ -1,22 +1,26 @@
 /**
- * Scheduled report exports — list, create, read, edit and cancel
- * (PRD §5.3-Reports).
+ * Scheduled report exports — list, create, read, edit and cancel, plus one
+ * definition's delivery history (PRD §5.3-Reports).
  *
  * Kept out of `reports.ts` because it is a different kind of surface: every
  * other `/reports/*` route is a synchronous read that answers "what happened in
  * this window", while these define background work that mails data out later.
  *
- * Every operation takes `reports_manage` — the write scope this slice adds —
- * rather than the read-only `reports_read`. Creating, editing and cancelling a
- * schedule are plainly mutations; the two reads take the same scope because a
- * definition carries the mailboxes its reports go to, so reading one answers
- * "who receives our numbers", which belongs to managing the schedules rather
- * than to reading a report. Only `ADMIN_SCOPES` carries it, so an ordinary agent
- * token is refused at the guard (FR-MOD-07.7 "permission-based visibility").
+ * Every operation on a *definition* takes `reports_manage` — the write scope
+ * this slice adds — rather than the read-only `reports_read`. Creating, editing
+ * and cancelling a schedule are plainly mutations; the two reads take the same
+ * scope because a definition carries the mailboxes its reports go to, so reading
+ * one answers "who receives our numbers", which belongs to managing the
+ * schedules rather than to reading a report. Only `ADMIN_SCOPES` carries it, so
+ * an ordinary agent token is refused at the guard (FR-MOD-07.7
+ * "permission-based visibility").
  *
  * That applies to the by-id read as much as to the list: it returns the same
  * DTO, recipients included, so gating it on `reports_read` would hand the read
  * scope the very thing the list refuses it.
+ *
+ * The delivery history is the one exception, and for the same reason rather
+ * than in spite of it — see the route.
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -69,6 +73,12 @@ const updateBody = z
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
 const scheduledExportIdSchema = z.string().uuid();
+
+/**
+ * `.max(100)` rejects rather than clamps: a caller that asked for 500 and got
+ * 100 back would have no way to tell a capped page from the whole history.
+ */
+const runsQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(20) }).strict();
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -149,6 +159,30 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
 
       const updated = await request.withTenant((tx) => schedules.update(tx, tenant, id, patch));
       return reply.send(updated);
+    },
+  );
+
+  /**
+   * The one route here that takes `reports_read` rather than `reports_manage`.
+   *
+   * Not an inconsistency — it is what the DTO makes possible. A run says which
+   * period it covered, how it ended and how many mailboxes it reached; it never
+   * names one. The addresses are the reason the definition surface is gated on
+   * the management scope, and with them absent, "did last week's report go
+   * out?" is a question about reports, answerable by anyone who may read them
+   * (NFR-M5). The `error` line comes back as the sweep sanitised it: one
+   * bounded line naming the cause, which is what makes a failed delivery
+   * visible instead of silent.
+   */
+  app.get<{ Params: { scheduledExportId: string } }>(
+    '/reports/scheduled-exports/:scheduledExportId/runs',
+    { config: { scopes: ['reports_read'] } },
+    async (request, reply) => {
+      const id = parse(scheduledExportIdSchema, request.params.scheduledExportId);
+      const { limit } = parse(runsQuery, request.query);
+      const tenant = request.tenant();
+      const result = await request.withTenant((tx) => schedules.runs(tx, tenant, id, limit));
+      return reply.send(result);
     },
   );
 

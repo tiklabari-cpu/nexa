@@ -13,6 +13,58 @@
 
 ## Task log (newest-first)
 
+### tm 104 — fix(e2e): `skills-routing.spec.ts:76` locator strict-mode ihlali — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/e2e/tests/skills-routing.spec.ts` — Settings → Skills adımındaki
+    `skills.getByLabel('Skill').fill(...)` →
+    `skills.getByRole('textbox', { name: 'Skill', exact: true }).fill(...)`. Playwright
+    erişilebilir adı **büyük/küçük harf duyarsız alt-dize** olarak eşliyor, bu yüzden
+    `getByLabel('Skill')` kataloğun her `Delete skill <ad>` butonunu da yakalıyordu
+    (`SettingsPage.tsx:1211`); taze seed'de üç uzmanlık var (`seed.ts` — Billing / Technical
+    support / Onboarding) → 1 input + 3 buton = 4 eleman → strict mode ihlali → `locator.fill`
+    patlıyordu. `role=textbox` butonları yapısal olarak dışarıda bırakır; `exact: true` niyeti
+    ayrıca sabitler. Ürün kodu DEĞİŞMEDİ (silme butonunun `aria-label`'ı doğru ve erişilebilir,
+    task'ın kapsam-dışı listesi).
+  - **"Flaky" görüntüsünün açıklaması** (task notundaki açık soru): kırık deterministikti ama
+    testin kendisi bir **yarışa** giriyordu — `getByLabel` yalnız Skills listesi sorgusu HÂLÂ
+    `isPending`ken (`list.isPending` dalı, silme butonları henüz render edilmemişken) tek
+    eleman buluyordu. Liste testten önce yetişirse 4 eleman → kırmızı. tm 95.8 penceresinde
+    yeşil gelmesinin sebebi budur; kod tarafında değişen bir şey yoktu. Yeni locator liste
+    durumundan bağımsız.
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm -w typecheck` **0** · `pnpm -w lint`
+  **0** · `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` **0** (2941) ·
+  `pnpm -w test:integration --force` **0** (api 1476 + rtm 51 = **1527**, DB truncate edildi) ·
+  `pnpm -w build` **0** · `pnpm -w test:e2e` **0** → **84/84 passed** (taze seed üzerinde, yani
+  task'ın tarif ettiği kırmızı koşulun tam olarak oluştuğu durumda).
+- **Mutasyon kanıtı:** aynı DB durumunda locator eski hâline geri alındı →
+  `strict mode violation: getByRole('region', { name: 'Skills' }).getByLabel('Skill') resolved to
+  4 elements` (rapor edilen hatanın birebir aynısı, aynı satır). Düzeltme geri konunca task'ın
+  test stratejisinin istediği ardışık iki koşu: `npx playwright test tests/skills-routing.spec.ts`
+  → **2/2 · 2/2** yeşil.
+- **Varsayımlar:**
+  - E2E `.env`'i shell'e export edilerek koşuldu (`set -a; . ./.env; set +a`) — `apps/api`
+    kendi `loadEnvFile()`'ıyla yükleniyor ama `apps/rtm` yüklemiyor, dolayısıyla çıplak
+    `pnpm -w test:e2e` RTM'i `Invalid environment` ile düşürüyor. `Makefile` zaten `.env`'i her
+    reçeteye export ediyor (`make test-e2e` doğru yol). Bu bir ürün hatası değil, çalıştırma
+    biçimi — bu pencerede değiştirilmedi (kapsam disiplini, CONVENTIONS §5).
+  - Tam e2e koşusu `apps/e2e/kanit/` altındaki 30+ PNG'yi yeniden üretti (aynı içerik, farklı
+    byte). tm 95.8'in yaptığı gibi bu gürültü `git checkout` ile atıldı; commit'e yalnız gerçek
+    değişiklik girdi.
+  - `PLAN.md`'de güncellenecek gereksinim satırı YOK: tm 104 bir test-altyapısı düzeltmesi
+    (başlığında iş kalemi kimliği yok, PRD kodu eşlemesi yok) ve dokunduğu testin kanıtladığı
+    `08.6.3` satırı zaten `✅ 08.6.3 TAMAMLANDI (a→i)` (PLAN.md:1114) — kapsam ne genişledi ne
+    daraldı, yalnız mevcut kanıt tekrar güvenilir hâle geldi.
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (tm 94.8'den beri taşınan
+    carry-over) — bu pencerenin işiyle ilgisiz, yine commit'e alınmadı.
+- **Sonraki pencereye not:**
+  - Aynı alt-dize tuzağı deponun başka yerlerinde de olabilir: `getByLabel('X')` bir ekranda
+    `aria-label="… x …"` taşıyan satır-aksiyon butonlarıyla birlikte kullanıldığında sessizce
+    çoğa çözünür. Yeni e2e yazarken form alanları için `getByRole('textbox', { name, exact })`
+    tercih edilmeli.
+  - E2E kapısını koşarken `.env`'i export etmeyi unutma (yukarıdaki varsayım) — aksi hâlde
+    RTM ayağa kalkmaz ve 60 sn sonra webServer timeout'u gerçek bir ürün hatası gibi görünür.
+
 ### tm 95.8 — 01.1.3-ai-h · Uçtan uca doğrulama + kapanış (KALEM KAPANDI) — done — 2026-08-08 UTC
 
 - **Yapıldı:**

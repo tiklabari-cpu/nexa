@@ -101,7 +101,13 @@ test.describe('skill-based routing + supervisor takeover (FR-MOD-08.6.3)', () =>
       await agentPage.goto('/app/settings');
       const skills = agentPage.getByRole('region', { name: 'Skills' });
       await expect(skills.getByRole('heading', { name: 'Skills', level: 2 })).toBeVisible();
-      await skills.getByLabel('Skill').fill(skillName);
+      // The new-skill box by role, exactly. `getByLabel('Skill')` matches
+      // accessible names as a case-insensitive substring, so it also picks up
+      // every `Delete skill <name>` button the seeded catalogue renders — three
+      // of them on a freshly seeded database (seed.ts: Billing, Technical
+      // support, Onboarding). That made the step race the list query: it passed
+      // only while the list was still pending and the buttons had not rendered.
+      await skills.getByRole('textbox', { name: 'Skill', exact: true }).fill(skillName);
       await skills.getByRole('button', { name: 'Add skill' }).click();
       await expect(skills.locator('li').filter({ hasText: skillName })).toBeVisible();
 

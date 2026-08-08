@@ -4570,10 +4570,10 @@
             "description": "`packages/ai-mock/src/bi-intent.ts` — saf, deterministik: `resolveBiQuestion(question) => { metric: MetricKey|null, range: RelativeRange|null, confidence: number }`. Sıralı Matcher listesi (compiler.ts mimarisi): metrik sözlüğü (chats/closed/csat/resolution split), göreli tarih ifadeleri ('bu hafta', 'son 7 gün', 'dün'). Eşiğin altında `metric:null` döner (uydurmaz). **Saf modül** — Prisma/Fastify",
             "details": "12.4-bi-b — `@nexa/ai-mock`'ta soru → rapor metriği eşleyici (deterministik, LLM yok)  [OPUS-XHIGH]\n\nPRD: §5.5-MOD-12 (v2 BI komut) + NFR-P2\nETİKET GEREKÇESİ: OPUS-XHIGH: koşul 4 tam sağlanmıyor — `compiler.ts` (NL→SkillStep) ve `intent.ts` (eşik tabanlı intent) mimari örnek verir ama 'soru → hangi metrik + hangi tarih aralığı' eşlemesi YENİ bir tasarım kararıdır (metrik sözlüğü, tarih ifadesi çözümleme, belirsizlik eşiği). Güvenlik sınırı yok, eşzamanlılık yok → MAX değil.\nNEDEN AÇIK: `packages/ai-mock` içinde 'doğal dil soru → hangi rapor sorgusu + hangi parametre' eşlemesi yapan fonksiyon YOK. En yakın parçalar başka özellikler için yazılmış: `compiler.ts` (NL→SkillStep, 06.2.3), `intent.ts` (matchIntent, eşik 0.6).\nKAPSAM: `packages/ai-mock/src/bi-intent.ts` — saf, deterministik: `resolveBiQuestion(question) => { metric: MetricKey|null, range: RelativeRange|null, confidence: number }`. Sıralı Matcher listesi (compiler.ts mimarisi): metrik sözlüğü (chats/closed/csat/resolution split), göreli tarih ifadeleri ('bu hafta', 'son 7 gün', 'dün'). Eşiğin altında `metric:null` döner (uydurmaz). **Saf modül** — Prisma/Fastify/ağ yok.\nDOSYALAR: packages/ai-mock/src/bi-intent.ts · packages/ai-mock/src/bi-intent.test.ts · packages/ai-mock/src/index.ts\nREFERANS DESEN (kopyalanacak): packages/ai-mock/src/compiler.ts (compileInstruction — sıralı regex Matcher listesi mimarisi) · packages/ai-mock/src/intent.ts (matchIntent — eşik tabanlı güven skoru, INTENT_THRESHOLD deseni)\nKK (birebir): \"KK-türetilmiş: 'Anlaşılan soru doğru metriğe ve doğru tarih aralığına eşlenir; eşik altındaki soru için metrik DÖNMEZ (uydurma yok).' — §C varsayımı; PRD'de KK sütunu yok.\"\nKK DOĞRULAMA: `pnpm --filter @nexa/ai-mock test -- bi-intent` — tablo testi: bilinen soru kalıpları doğru `metric`+`range` üretir; **NEGATİF:** alakasız/bulanık soru `metric:null` döner ve bir metrik UYDURMAZ; aynı girdi her koşuda aynı çıktı (determinizm).\nKAPSAM DIŞI: Endpoint (12.4-bi-c) · Gerçek LLM (ADR: mock) · Breakdown boyutlu sorular (07.5 indikten sonra ayrı tur)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (ÖNCE): alakasız soru → metric:null · negatif (ÖNCE): iki metriğe eşit yakın soru → belirsiz sayılır, null döner (yanlış kesinlik yok) · unit: 'bu hafta kaç sohbet kapandı' → metric=closed, range=this_week · unit: 'CSAT ne durumda' → metric=csat · unit: determinizm — aynı girdi 100 koşuda aynı çıktı · unit (ReDoS): patolojik uzun girdi lineer sürede biter (spam-filter'daki ReDoS bulgusunun regresyonu — §D59) · cross-tenant GEREKMEZ — saf modül, tenant görmez",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "96",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T12:27:46.461Z"
           },
           {
             "id": 3,
@@ -4630,7 +4630,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T12:25:50.681Z",
+        "updatedAt": "2026-08-08T12:27:46.461Z",
         "complexity": 6,
         "recommendedSubtasks": 6,
         "expansionPrompt": "\"12.4 — Copilot BI komut (rapor/metrik sorusu)  ·  dilim V2-5\" görevini 6 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5023,7 +5023,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T12:25:50.681Z",
+      "lastModified": "2026-08-08T12:27:46.462Z",
       "taskCount": 104,
       "completedCount": 87,
       "tags": [

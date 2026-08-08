@@ -13,6 +13,69 @@
 
 ## Task log (newest-first)
 
+### tm 96.2 — 12.4-bi-b · `@nexa/ai-mock`'ta soru → rapor metriği eşleyici — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `packages/ai-mock/src/bi-intent.ts` (yeni) — `resolveBiQuestion(question) => { metric, range,
+    confidence }`. **Saf modül:** Prisma/Fastify/ağ **ve saat** yok — pencere *göreli* döner
+    (`this_week`), tarihe çeviren çağıran (bi-c) olur; determinizm bu yüzden inşa gereği.
+    - **Metrik sözlüğü** (`BI_METRICS`, 6 kalem): `chats`/`closed`/`manual`/`assisted`/`automated`
+      → `totals.*`, `csat` → `satisfaction.score` (ADR-09: Copilot kendi sayısını hesaplamaz,
+      Overview alanını okur). Eşleşme `matchIntent`'in ifade-recall skoru + aynı eşik
+      (`INTENT_THRESHOLD` 0.6) — `palette-intent.ts` deseninin aynısı. İfadeler TR **ve** EN.
+    - **Pencere sözlüğü** (`RANGE_MATCHERS`, 7 kalem): `dün`/`bugün`/`bu hafta`/`geçen hafta`/
+      `bu ay`/`son 7 gün`/`son 30 gün` (+EN karşılıkları), sıralı regex listesi — `compiler.ts`
+      mimarisi (ilk eşleşen kazanır, spesifik önce).
+    - **Uydurmaz:** eşik altı → `metric: null`; **eşit kanıtlı iki metrik → `metric: null`**
+      (belirsizlik reddi). `confidence` sıfırdan büyükse metrik vardır, tersi de doğru —
+      çağıranın yüksek skora bakıp seçilmemiş bir metriğe uzanması yapısal olarak imkânsız.
+  - `packages/ai-mock/src/index.ts` — `export * from './bi-intent.js'`.
+  - `packages/ai-mock/src/bi-intent.test.ts` (yeni, **55 test**) — negatifler önce (test
+    stratejisi sırası): alakasız soru · eşit-yakın iki metrik (TR+EN) · üçlü split'e eşit yakın
+    "kaç sohbet çözüldü" · boş girdi. Sonra KK birimleri, pencere tablosu, determinizm (100 koşu),
+    ReDoS regresyonu (§D59), 500 karakter tavanı, katalog invariant'ları.
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm --filter @nexa/ai-mock test` **0** —
+  **136/136** (bi-intent **55/55**; palette/intent/compiler/topics/assist/embedding regresyonsuz) ·
+  `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w build` **0** (7/7) ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` — **1930/1931** ·
+  `pnpm -w test:integration` — **1475/1476**.
+  - **Tek kırmızı, tm 96.1'den devralınan BİLİNÇLİ boşluk:** `contract-parity.test.ts > serves
+    every route the contract documents` → `[ 'post /copilot/bi' ]`. Sayılar 96.1'in koşusuyla
+    **birebir aynı** (1930/1931 · 1475/1476) → bu pencere yeni kırmızı üretmedi. Route 12.4-bi-c'de
+    iner, o an iki yönlü yeşile döner.
+  - **E2E koşulmadı:** task hiçbir route/UI/runtime yolunu değiştirmiyor (barrel'a yeni saf modül);
+    task'ın kendi KK doğrulaması da yalnız `--filter @nexa/ai-mock test -- bi-intent` diyor ve
+    "cross-tenant GEREKMEZ — saf modül" notunu taşıyor. 96.1 emsalinin aynısı.
+- **Varsayımlar:**
+  - **Sıralama ölçütü kanıt-önce** (`hits`, sonra `score`) — saf skor-önce sıralaması gerçek bir
+    yanlış cevap üretiyordu: "how many chats" ifadesi "how many chats resolved manually"nin alt
+    kümesi olduğundan *"how many chats were resolved"* sorusunda `chats` 1.0 ile üç split'in
+    0.75'ini yeniyordu (sorulan bu değil). Eşleşen kelime sayısıyla sıralayınca manual/automated
+    3'te eşitlenip **belirsiz** sayılıyor — doğru cevap. Skor artık yalnız eşit kanıtlıları ayırıyor.
+  - **İfade listeleri uzundan kısaya sıralı** — `matchIntent` en yüksek skoru **ilk** yakalayan
+    ifadede kalıyor; kısa ifade önde olsa kanıt eksik raporlanırdı. Test bu invariant'ı koruyor
+    (`orders phrases longest-first`).
+  - **Çıplak "çözüldü"/"resolved" hiçbir metriğe verilmedi** — o kelime tam olarak üçlü split'in
+    (manual+assisted+automated) ortak kelimesi. Birine vermek KK'nın yasakladığı "yanlış kesinlik"
+    olurdu; "kaç sohbet çözüldü" bilinçli olarak `null` döner.
+  - **Pencere sözlüğü 3 değil 7 kalem** — task metni üç örnek veriyor ('bu hafta', 'son 7 gün',
+    'dün'). 'geçen hafta'/'bu ay' gibi yaygın ifadeler dışarıda kalsa `range: null` → çağıran
+    varsayılan 30 günlük pencereyi kullanır ve **yanlış dönemi** kendinden emin cevaplardı; kapsam
+    ucuz (her biri çağıranın tek satırda hesapladığı pencere).
+  - **`bu ay` için son ek kuyruğu YOK** (hafta/gün'de `\p{L}*` var) — "bu ayrıca…" cümlesini ay
+    penceresi diye okurdu. Test bu tuzağı sabitliyor.
+  - Tip adları task metnindeki gibi (`MetricKey`, `RelativeRange`) bırakıldı; ai-mock barrel'ında
+    çakışma yok (kontrol edildi).
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (tm 94.8'den beri taşınan
+    carry-over) — bu pencerenin işiyle ilgisiz, yine commit'e alınmadı.
+- **Sonraki pencereye not:** **12.4-bi-c** artık iki bağımlısını da (96.1 kontrat + 96.2 eşleyici)
+  hazır buluyor. Seam: `resolveBiQuestion()` + `biMetricSource(key)` (metrik → Overview alan yolu)
+  + `BI_CONFIDENCE_THRESHOLD`. Route'un yapacakları: göreli pencereyi `{from,to}`'ya çevirmek
+  (saat orada), `metric: null` → `kind: 'not_understood'`, alan `null` → `kind: 'no_data'`, ve
+  contract-parity kırmızısını kapatmak. Kontrat `range`'i cevapta **zorunlu** kılıyor — pencere
+  `null` geldiğinde (soru pencere adı vermedi) route kendi varsayılanını kullanıp **cevapta
+  söylemeli**; modülün okuyamadığı pencere böylece sessiz kalmaz.
+
 ### tm 96.1 — 12.4-bi-a · Kontrat: `POST /copilot/bi` anchor'ı + bundle + tip üretimi — done — 2026-08-08 UTC
 
 - **Yapıldı:**

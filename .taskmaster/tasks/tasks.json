@@ -4974,20 +4974,34 @@
         "description": "PLAN.md §5.0 \"v2 kalem envanteri\" tablosunun 30 mantıksal satırından 4'ünün hücre içeriği fiziksel satırlara hard-wrap edilmiş durumda. Panelin satır-bazlı sayacı tabloyu ilk sarkan devam satırında kesiyor ve yalnız ilk 3 satırı okuyor (2 ✅ / 0 ◐ / 1 ⬜) — bu yüzden §1.2 çelişkisi YANLIŞ POZİTİF olarak her taramada yeniden açılıyor (§D68–§D76, 8+ pencere yandı). Bu görev sarkan satırları kendi tablo satırlarına birleştirir; hiçbir durum damgası, hiçbir sayaç, hiçbir metin içeriği değişmez.",
         "details": "KÖKEN: Panel sağlık taraması bulgusu (Faz-2 özet sayacı çelişkisi). Teşhis + kanıt: PLAN.md §D75 ve §D76. Bu görev §D75'in \"(a) reflow — yetki bekliyor\" diye bıraktığı kalıcı çözümdür.\n\nSORUN (kanıtlı): PLAN.md §5.0 tablosu (başlık satırı ~1106, veri satırları ~1108-1169) 30 mantıksal satır taşır ve gerçek dağılım 12 ⬜ · 2 ◐ · 13 ✅ · 3 ⛔'dır — üst-tablo (satır 22) ve §5.0 girişi (satır 1100) bununla BİREBİR AYNI, yani özet sayaçları DOĞRU. Ama 4 satırın \"Durum / Not\" hücresi sonraki fiziksel satırlara sarkıyor:\n  - 07.6           (satır 1110) → kuyruk 1111\n  - 08.6.3         (satır 1115) → kuyruk 1116-1130\n  - 08.8.3         (satır 1132) → kuyruk 1133-1146\n  - §5.3-KB        (satır 1162) → kuyruk 1163-1164 (1163 BOŞ SATIR — GFM'de tabloyu fiilen bitirir)\nİlk kesinti 1111'de olduğu için satır-bazlı bir sayaç yalnız 1108/1109/1110'u görür = 2 ✅ / 0 ◐ / 1 ⬜ (panelin bildirdiği rakamların aritmetik kaynağı). Ayrıca 1163'teki boş satır tabloyu GFM render'ında da bölüyor.\n\nYAPILACAK (tek tur, doküman-only):\n1. §5.0 tablosundaki 4 sarkan satırın devam satırlarını kendi tablo satırlarının SONUNA birleştir (newline → tek boşluk). Sonuç: her mantıksal satır TEK fiziksel satır, tablo 30 temiz veri satırı.\n2. Karakter içeriği KORUNUR — yalnız satır sonları boşluğa döner. Birleştirme öncesi/sonrası mantıksal satır metinleri (whitespace normalize edilerek) birebir eşit olmalı; bunu bir script ile doğrula ve çıktısını HANDOFF'a yaz.\n3. Dosyanın geri kalanına DOKUNMA: gereksinim satırlarının durum damgaları (kanıta dayalı), özet sayaçları (satır 22 · satır 1100), §5.1/§5.2/§5.3, §D kayıtları (append-only tarihçe).\n4. §D'ye tek satırlık D77 kaydı: ne birleştirildi, sayımın değişmediği (12 ⬜ · 2 ◐ · 13 ✅ · 3 ⛔ · toplam 30), döngünün kapandığı.\n\nKAPSAM DIŞI: sayaçları değiştirmek (doğrular — değiştirmek hatayı ENJEKTE eder) · damga çevirmek · §5.0 dışındaki tabloları reflow etmek · nexa-panel deposundaki sayacı düzeltmek (ayrı depo, buradan erişilmiyor).\n\nRİSK/NOT: Reflow §5.0'dan sonraki satır numaralarını ~30 satır yukarı kaydırır. Canlı satır-numarası atıfları etkilenmez (tasks.json ve PLAN-V2-KIRILIM.md yalnız PLAN.md:57 ve PLAN.md:520'ye atıf yapar — ikisi de §5.0'ın ÜSTÜNDE). HANDOFF.md'deki 11xx atıfları tarihçedir, append-only bırakılır.\n\nDoD: Doküman-only değişiklik; kod/kontrat/şema dosyasına dokunulmaz. Kapı komutları bu görev için anlamlı değil, ancak `git status` kapanışta temiz olmalı (run-loop.sh bu pencereden önce de kirliydi — sahibi commit'lemeli, dokunma).",
         "testStrategy": "1. Birleştirme doğrulaması (script, exit 0): reflow ÖNCESİ ve SONRASI PLAN.md §5.0 tablosu mantıksal satırlara ayrıştırılır (`^\\| ` ile başlayan satır yeni satır, diğerleri öncekine eklenir); whitespace normalize edildikten sonra 30 satırın 30'u da birebir eşit olmalı — tek karakter kaybı/eklenmesi yok.\n2. Sayım invariantı: reflow SONRASI naif satır-bazlı sayım (`awk 'NR aralığı && /^\\| / {damga = 6. alanın ilk karakteri}'`) → 30 satır, 12 ⬜ · 2 ◐ · 13 ✅ · 3 ⛔. Yani naif sayaç artık mantıksal sayaçla YAKINSIYOR (bulgunun kapanma kanıtı).\n3. Tablo bütünlüğü: §5.0 tablo bloğunda (başlık satırından §5.1 başlığına kadar) `^\\| ` ile başlamayan satır KALMAMALI (boş satır 1163 dahil) — grep sayısı 0.\n4. Sızıntı kontrolü: `git diff --stat` yalnız PLAN.md (+ HANDOFF.md) göstermeli; `git diff` içinde durum damgası (⬜/◐/✅/⛔) ekleyen/silen tek bir satır bile olmamalı — damga sayıları diff öncesi/sonrası eşit.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "critical",
         "subtasks": [],
         "complexity": 2,
         "recommendedSubtasks": 0,
-        "expansionPrompt": "Bu görev alt göreve bölünmemeli — tek oturumda bitecek mekanik bir iş."
+        "expansionPrompt": "Bu görev alt göreve bölünmemeli — tek oturumda bitecek mekanik bir iş.",
+        "updatedAt": "2026-08-08T05:08:35.317Z"
+      },
+      {
+        "id": "102",
+        "title": "Faz-2 özet sayaçlarını tabloyla eşitle — 1 kalemlik gerçek bayatlık (07.7 ◐→✅ sonrası güncellenmedi) (DOKÜMAN-ONLY)",
+        "description": "PLAN.md satır 22 (üst-tablo Faz 2 satırı) ve §5.0 girişi (satır ~1100) hâlâ `12 ⬜ · 1 ◐ · 14 ✅ · 3 ⛔` diyor; §5.0 tablosu reflow sonrası (tm 101) `12 ⬜ · 0 ◐ · 15 ✅ · 3 ⛔` sayıyor. Tek satırlık düzeltme: iki özette `1 ◐ kısmi · 14 ✅ teslim` → `0 ◐ kısmi · 15 ✅ teslim`.",
+        "details": "KÖKEN: tm 101 (§5.0 reflow) penceresinde kanıtlanan yan bulgu — bkz. PLAN.md §D77.\n\nKANIT (git, son 12 PLAN.md revizyonunda mantıksal satır-birleştirmeli sayım):\n- `5d2c096` (WORKSCHED-j) `§5.3-Vardiya ◐→✅` çevirirken satır 22 + satır 1100 sayaçlarını AYNI commit'te güncelledi (12/1/14/3) → bayatlık oluşmadı, doğru davranış.\n- `6230b4f` (07.7-l · tm 93.12) `07.7 ◐→✅` çevirdi ama iki özet sayacına da DOKUNMADI → tek kalemlik gerçek bayatlık buradan geliyor.\n\nBu, §D68–§D76'daki YANLIŞ POZİTİF serisinden farklıdır: orada özet doğruydu ve panelin parser'ı bozuktu (tm 101 ile kapatıldı). Burada parser artık 30 satırın hepsini okuyor ve özet gerçekten geride — yani panel bir sonraki taramada §1.2 çelişkisini DOĞRU olarak bildirecek.\n\nYAPILACAK (tek tur, doküman-only):\n1. PLAN.md satır 22 (üst-tablo `**Faz 2 — v2**` satırı) içindeki `**12 ⬜ açık · 1 ◐ kısmi · 14 ✅ teslim · 3 ⛔ kapsam dışı**` → `**12 ⬜ açık · 0 ◐ kısmi · 15 ✅ teslim · 3 ⛔ kapsam dışı**`.\n2. PLAN.md §5.0 girişindeki (satır ~1100) aynı ifadeyi aynı şekilde güncelle.\n3. Değiştirmeden ÖNCE tabloyu yeniden say (aşağıdaki script) — aradan geçen pencereler damga çevirmiş olabilir; sayaçları körlemesine 0/15 yazma, SAYIMDAN yaz.\n4. §D'ye tek satırlık D78 kaydı: hangi commit'in bayattığı, yeni sayım, kaynağın kapandığı.\n\nKAPSAM DIŞI: damga çevirmek · §5.0 tablosunu yeniden düzenlemek (tm 101'de yapıldı, 30 temiz satır) · `23 açık kalem` kapanış-paydası · nexa-panel deposu.\n\nDoD: Doküman-only; kod/kontrat/şema dosyasına dokunulmaz. `git status` kapanışta temiz (run-loop.sh sahibinin, dokunma).",
+        "testStrategy": "1. Sayım (script, exit 0): §5.0 tablosu başlıktan §5.1'e kadar okunur, `^\\| ` ile başlayan her satır bir kalem (tm 101 reflow'undan sonra 30 mantıksal = 30 fiziksel satır), damga = 6. alanın öncü damga karakteri → dağılım hesaplanır ve toplam 30 çıkar.\n2. Eşitlik: satır 22 ve §5.0 girişindeki özet metinleri (1)'in çıktısıyla BİREBİR aynı olmalı — grep ile iki satır da doğrulanır.\n3. Sızıntı kontrolü: `git diff` yalnız PLAN.md (+ HANDOFF.md); diff'te damga ekleyen/silen gereksinim satırı YOK — yalnız iki özet satırı + D78 kaydı değişmiş olmalı.\n4. Regresyon: tm 101'in invariantı korunuyor — §5.0 blokta `^\\| ` ile başlamayan satır sayısı 0.",
+        "status": "pending",
+        "dependencies": [
+          "101"
+        ],
+        "priority": "high",
+        "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T04:59:45.325Z",
-      "taskCount": 101,
-      "completedCount": 82,
+      "lastModified": "2026-08-08T05:08:35.317Z",
+      "taskCount": 102,
+      "completedCount": 83,
       "tags": [
         "master"
       ]

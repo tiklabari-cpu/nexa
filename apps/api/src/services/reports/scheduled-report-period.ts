@@ -85,13 +85,23 @@ export function periodFor(frequency: ScheduledExportFrequency, now: Date): Repor
   }
 }
 
+// ---------------------------------------------------------------------------
+// UTC calendar boundaries.
+//
+// Exported, not private: Copilot's BI command resolves a spoken window ("last
+// week") to the same dates (see `biWindow` in services/ai/copilot-service.ts),
+// and a second definition of "the week starts Monday" or "a report window is
+// closed at both ends" is exactly the drift ADR-09 exists to prevent — a weekly
+// scheduled export and a "last week" question must not cover different days.
+// ---------------------------------------------------------------------------
+
 /** Midnight UTC of the day `date` falls in. */
-function startOfUtcDay(date: Date): Date {
+export function startOfUtcDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 /** Midnight UTC of the Monday that opens the ISO week `date` falls in. */
-function startOfIsoWeek(date: Date): Date {
+export function startOfIsoWeek(date: Date): Date {
   const day = startOfUtcDay(date);
   // getUTCDay() is Sunday-first (0..6); ISO weeks start on Monday, so shift it
   // to Monday-first before subtracting.
@@ -100,7 +110,7 @@ function startOfIsoWeek(date: Date): Date {
 }
 
 /** The final millisecond before an exclusive boundary — see the file header. */
-function lastInstantBefore(exclusiveEnd: Date): Date {
+export function lastInstantBefore(exclusiveEnd: Date): Date {
   return new Date(exclusiveEnd.getTime() - 1);
 }
 

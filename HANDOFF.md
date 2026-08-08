@@ -13,6 +13,78 @@
 
 ## Task log (newest-first)
 
+### tm 96.3 — 12.4-bi-c · BI endpoint çekirdeği (`POST /copilot/bi`) — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/api/src/routes/copilot.ts` — `POST /copilot/bi`. Sınır sırası: müşteri token →
+    **404** (varsayılan agent+bot `principals`, I4 — 403 DEĞİL, widget yüzeyi agent API'sini
+    haritalamaya yaramamalı) → rota kapısı **Copilot scope** (`KB_READ`) → handler'da
+    **`reports_read`** → `withTenant`. **Scope birleşimi iki yerde yazılı, çünkü olmak
+    zorunda:** `config.scopes` bilinçli olarak *any-of* (auth plugin); ikisini tek listeye
+    koymak "ya biri ya öbürü" demek olurdu — istenenin tam tersi. Bu yüzden rota "Copilot
+    kullanabilir"i, handler "rapor okuyabilir"i kanıtlar. Her iki yön de teste bağlandı
+    (yalnız Copilot scope'u olan 403, yalnız `reports_read` olan da 403).
+  - `apps/api/src/services/ai/copilot-service.ts` — `answerBi(tx, tenant, question, now)`.
+    **ADR-09: kendi SQL'i YOK.** `resolveBiQuestion` (96.2) hangi Overview alanının
+    okunacağını söyler, `buildOverviewReport` — `GET /reports/overview`'ün ta kendisi —
+    çağrılır, `biMetricSource` yolundaki alan okunur. Metrik yoksa `not_understood` (rapor
+    hiç okunmaz), alan `null` ise `no_data`, aksi hâlde `metric` + `value` + `range`.
+  - `biWindow(range, now)` — göreli pencere → tarih. Takvim sınırları
+    `services/reports/scheduled-report-period.ts`'ten **paylaşıldı** (`startOfUtcDay`,
+    `startOfIsoWeek`, `lastInstantBefore` artık export): "hafta Pazartesi başlar" ve "rapor
+    penceresi iki uçtan kapalı" kurallarının ikinci bir tanımı olmasın — haftalık zamanlanmış
+    export ile "geçen hafta" sorusu aynı günleri kapatmak zorunda. Süren dönem **şimdi**de
+    biter (bugünü gece yarısına kadar raporlamak yaşanmamış saatleri saymaktır); bitmiş
+    dönem son milisaniyesinde.
+  - Testler: `apps/api/test/integration/copilot-bi.test.ts` (**15**) + `.../services/ai/
+    copilot-service.test.ts` (**12**, `biWindow` sabit ana karşı — pazartesi/pazar kenarı,
+    ay ve yıl sınırı, ters/boş pencere yok).
+- **Doğrulama** (hepsi ön planda, exit code'larla) — **tamamı yeşil, tek kırmızı yok:**
+  `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` — **1958/1958** ·
+  `pnpm -w test:integration` — **1491/1491** · `pnpm -w build` **0** (7/7) ·
+  `pnpm -w test:e2e` — **84/84**.
+  - **96.1'den devralınan bilinçli kırmızı KAPANDI:** `contract-parity.test.ts > serves every
+    route the contract documents` artık yeşil — `post /copilot/bi` hem belgeli hem sunuluyor.
+    Önceki tur 1930/1931 + 1475/1476 idi; şimdi 1958/1958 + 1491/1491 (yeni 27 test + kapanan
+    kırmızı).
+  - **E2E koşuldu** (96.1/96.2'den farklı olarak): bu task sunucuya gerçek bir route ekliyor,
+    yani boot/routing yolunu değiştiriyor. Not: e2e'yi çalıştırmadan önce `set -a; . ./.env;
+    set +a` gerekiyor — playwright `webServer`'ı `tsx`'i doğrudan spawn ediyor ve vitest'in
+    `.env` yükleyicisinden geçmiyor; env'siz koşu rtm'de "Invalid environment" ile ölür.
+- **Varsayımlar:**
+  - **Copilot scope'u = `KB_READ`** (`agents-bot--all:ro|:rw`), `CHAT_WRITE` değil. BI komutu
+    hiçbir konuşmaya dokunmuyor (kontratta `chatId` yok); sohbet yazma yetkisi istemek, bu
+    ucun yapmadığı bir şey için yetki istemek olurdu.
+  - **`no_data`'da `range: null`** — kontratın kendi açıklaması ("Null unless `kind` is
+    `metric`") böyle diyor, ve kontrat -a'da indi, bu alt-görev onu SUNAR (değiştirmez).
+    Pencerenin sessiz kalmaması için **cümlede** söyleniyor: "No data for customer
+    satisfaction in the last 30 days." Aynı şey soru pencere adı vermediğinde de geçerli —
+    varsayılan 30 gün cevapta açıkça geçiyor.
+  - **Alan yolu bulunamazsa `no_data` DEĞİL, `throw`** (`readMetric`). Yeniden adlandırılmış
+    bir Overview alanına bakan bir `metricSource`, aksi hâlde kalıcı ve makul görünen bir
+    "henüz veri yok" olarak sızardı — bu uç için mümkün olan en kötü hata, çünkü cevap gibi
+    görünür. Ulaşılamaz: integration testi her `BI_METRICS.metricSource`'u gerçek bir Overview
+    gövdesine karşı sabitliyor.
+  - **`not_understood` yine de `withTenant` açıyor mu?** Hayır — `answerBi` metrik yoksa hiç
+    rapor okumadan döner; transaction açık ama tek sorgu bile koşmaz. Yerleşik servis şeklini
+    (herkes `tx` alır) bozmamak için route yine `withTenant` içinden çağırıyor.
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (tm 94.8'den beri taşınan
+    carry-over) — bu pencerenin işiyle ilgisiz, yine commit'e alınmadı.
+  - **`apps/e2e/kanit/*.png` commit'e ALINMADI** (`git checkout --` ile geri alındı). E2E koşusu
+    46 kanıt görselini yeniden üretti, ama bu task backend-only: hiçbir ekran değişmedi, fark
+    yalnız render belirsizliği. Görsel değişiklik taşıyan pencereler bunları commit'liyor
+    (emsal: tm 95.x); bilgi taşımayan yeniden-üretimi commit'lemek backend diff'ini 46 dosyalık
+    gürültünün altına gömerdi.
+- **Sonraki pencereye not:** **12.4-bi-d** (CopilotPanel'de BI girişi + cevap kartı) artık
+  gerçek bir uca bağlanabilir. UI'ın bilmesi gerekenler: yanıt her zaman 200 ve beş alan da
+  hep var (`answer`, `kind`, `metric`, `value`, `range`); `kind` üç değerli ve **`range`
+  yalnız `kind==='metric'` iken dolu** — `no_data`/`not_understood` kartları pencereyi
+  `answer` cümlesinden okumalı, `range`'den değil. `not_understood` metni zaten neyi
+  yanıtlayabileceğini sayıyor (bi-e'nin "örnek sorular" empty state'i bunu tekrar etmek yerine
+  genişletebilir). 403 iki ayrı sebepten gelebilir (Copilot scope'u yok / `reports_read` yok);
+  mesaj hangisi olduğunu söylüyor.
+
 ### tm 96.2 — 12.4-bi-b · `@nexa/ai-mock`'ta soru → rapor metriği eşleyici — done — 2026-08-08 UTC
 
 - **Yapıldı:**

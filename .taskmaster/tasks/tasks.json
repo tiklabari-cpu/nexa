@@ -4581,13 +4581,13 @@
             "description": "`copilot.ts`'e `POST /copilot/bi`: scope birleşimi (Copilot scope + `reports_read`), `request.withTenant`, agent+bot principals (müşteri token → 404). Akış: zod doğrula (uzunluk tavanı) → `resolveBiQuestion` (12.4-bi-b) → metrik varsa **mevcut reports servis fonksiyonunu ÇAĞIR** (kendi SQL'ini yazmaz — ADR-09 tek tanım korunur) → cevabı `{kind:'metric', metric, value, range}` olarak döndür; metrik",
             "details": "12.4-bi-c — BI endpoint çekirdeği — scope birleşimi + müşteri-token sınırı + tenant izolasyonu + ADR-09 tutarlılığı  [OPUS-MAX]\n\nPRD: §5.5-MOD-12 (v2 BI komut) + ADR-09 + NFR-S3 + NFR-S4 + NFR-S5 + NFR-S8\nETİKET GEREKÇESİ: OPUS-MAX: koşul 2 ihlal, çekirdek güvenlik/bütünlük sınırı. Üç karar aynı akıl yürütmede: scope birleşimi (en dar yetki), müşteri token'ına kapalılık + cross-tenant izolasyon, ve ADR-09 tutarlılığı (kendi SQL'ini yazmama disiplini). Bölünürse biri diğerini görmeden yazılır. Bkz. bolunmeyen_gerekce.\nNEDEN AÇIK: `apps/api/src/routes/copilot.ts` içinde BI/rapor sorgusu cevaplayan rota YOK (yalnız knowledge/summary/reply/enhance). `copilot-service.ts` içinde reports sorgularını sarmalayan metod YOK.\nKAPSAM: `copilot.ts`'e `POST /copilot/bi`: scope birleşimi (Copilot scope + `reports_read`), `request.withTenant`, agent+bot principals (müşteri token → 404). Akış: zod doğrula (uzunluk tavanı) → `resolveBiQuestion` (12.4-bi-b) → metrik varsa **mevcut reports servis fonksiyonunu ÇAĞIR** (kendi SQL'ini yazmaz — ADR-09 tek tanım korunur) → cevabı `{kind:'metric', metric, value, range}` olarak döndür; metrik yoksa `not_understood`, veri yoksa `no_data`. `copilot-service.ts`'e ince bir `answerBi()` sarmalayıcı.\nDOSYALAR: apps/api/src/routes/copilot.ts · apps/api/src/services/ai/copilot-service.ts · apps/api/test/integration/copilot-bi.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/copilot.ts (mevcut summary/reply/enhance — scope + withTenant + zod + müşteri-token 404 sınırı birebir aynı iskelet) · apps/api/src/routes/reports.ts (overview sorgusu — ADR-09'un tek tanımı; çağrılacak kaynak) · apps/api/src/routes/reports-metrics.ts (round/resolutionRate — aynı aritmetik yeniden kullanılır, kopyalanmaz)\nKK (birebir): \"KK-türetilmiş: 'Copilot bir rapor/metrik sorusuna, Reports ile BİREBİR aynı sayıyı vererek cevap verir; anlamadığı soruyu uydurmaz; başka lisansın verisi sızmaz.' — §C varsayımı.\"\nKK DOĞRULAMA: `apps/api/test/integration/copilot-bi.test.ts` — (1) **ADR-09 tutarlılığı:** aynı pencere için `/copilot/bi` cevabı ile `/reports/overview` sayısı BİREBİR aynı (bu testin kırılması sapmanın tek erken uyarısıdır); (2) **CROSS-TENANT:** başka lisansın verisi cevaba girmez; (3) **NEGATİF:** müşteri token'ı → 404; (4) **NEGATİF:** `reports_read` olmayan token → 403; (5) **NEGATİF:** tavanı aşan question → 400; (6) anlaşılmayan soru → 200 `not_understood` (hata zarfı DEĞİL).\nKAPSAM DIŞI: UI (12.4-bi-d/-e) · Kendi SQL'ini yazmak — ADR-09 gereği YASAK · Yeni scope tanımlamak · Breakdown boyutlu sorular (07.5 sonrası)\nSÖZLEŞME: yok — şema -a'da indi; bu alt-görev onu SUNAR (contract-parity iki yönlü, -a ile birlikte yeşile döner)\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (ÖNCE yazılır, kırmızı görülür): müşteri token → 404 · negatif (ÖNCE): scope'suz token → 403 · negatif (ÖNCE): aşırı uzun question → 400 (NFR-S8) · cross-tenant (ZORUNLU): başka lisansın sayıları sızmaz · integration: ADR-09 tutarlılık — /copilot/bi == /reports/overview · integration: not_understood 200, uydurma sayı yok · integration: no_data (boş pencere) doğru kind döner · not: DB süiti SERİ koşulur (--concurrency=1, paylaşılan Postgres)",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               1,
               2
             ],
             "parentId": "96",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T12:47:27.225Z"
           },
           {
             "id": 4,
@@ -4630,7 +4630,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T12:46:05.883Z",
+        "updatedAt": "2026-08-08T12:47:27.225Z",
         "complexity": 6,
         "recommendedSubtasks": 6,
         "expansionPrompt": "\"12.4 — Copilot BI komut (rapor/metrik sorusu)  ·  dilim V2-5\" görevini 6 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5023,7 +5023,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T12:46:05.884Z",
+      "lastModified": "2026-08-08T12:47:27.225Z",
       "taskCount": 104,
       "completedCount": 87,
       "tags": [

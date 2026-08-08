@@ -11,12 +11,13 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { isShortId } from '@nexa/types';
+import { hasAnyScope, isShortId } from '@nexa/types';
 import { ENHANCE_MODES, enhanceText, summariseConversation } from '@nexa/ai-mock';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
+import { scopesOf } from '../services/auth/principal.js';
 import { CopilotService } from '../services/ai/copilot-service.js';
 import { KnowledgeService } from '../services/ai/knowledge-service.js';
 import { crawl } from '../services/ai/web-crawler.js';
@@ -28,6 +29,23 @@ const KB_READ = ['agents-bot--all:ro', 'agents-bot--all:rw'];
 const KB_WRITE = ['agents-bot--all:rw'];
 /** An assist acts on a conversation, so it needs write access to chats. */
 const CHAT_WRITE = ['chats--all:rw', 'chats--access:rw'];
+
+/**
+ * The BI command (12.4) is authorised by the **union** of two permissions, not
+ * either one: it is a Copilot surface, so it needs the Copilot scope, and every
+ * word of its answer is report data, so it needs `reports_read` as well.
+ *
+ * The union has to be spelled in two places because `config.scopes` is
+ * deliberately any-of (see the auth plugin) — listing both there would grant
+ * access to a caller holding *either*, which is the opposite of what this
+ * endpoint means. So the route gate proves the caller may use Copilot, and the
+ * handler proves they may read reports. Narrowest of the two wins, either way
+ * round: a Copilot token cannot use this to read figures `reports_read` would
+ * have refused it, and a reports token cannot reach a Copilot endpoint it was
+ * never given.
+ */
+const BI_COPILOT = KB_READ;
+const BI_REPORTS = ['reports_read'];
 
 const uuid = z.string().uuid();
 const chatIdSchema = z.string().refine(isShortId, 'not a valid chat id');
@@ -60,6 +78,15 @@ const createSourceBody = z
 const enhanceBody = z.object({
   text: z.string().trim().min(1).max(10_000),
   mode: z.enum(ENHANCE_MODES).default('rephrase'),
+});
+
+/**
+ * 500 characters, the cap the contract publishes (NFR-S8). A question is one
+ * sentence; anything longer is either a paste or an attempt to make the matcher
+ * do unbounded work, and both are refused in the request rather than absorbed.
+ */
+const biBody = z.object({
+  question: z.string().trim().min(1).max(500),
 });
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
@@ -207,4 +234,44 @@ export default async function copilotRoutes(
       return reply.send({ text, mode: body.mode });
     },
   );
+
+  // --- BI command (12.4) -----------------------------------------------------
+
+  /**
+   * Answer a report/metric question about this workspace's own activity.
+   *
+   * Boundary shape, in the order it is enforced: a customer token is turned away
+   * by the default agent+bot `principals` list before a handler runs (a 404, not
+   * a 403 — the widget surface must not be usable to map the agent API); the
+   * route gate proves the Copilot scope; the check below proves `reports_read`;
+   * and `withTenant` binds every figure to the caller's own license, so another
+   * license's numbers have no path into the answer.
+   *
+   * No `chatId`, unlike the assists above: a BI question is about the workspace,
+   * not about the conversation the agent happens to have open. It takes no
+   * `from`/`to` either — the window comes from the question ("last week") and is
+   * named back in the answer, so a caller always knows what they were told.
+   */
+  app.post('/copilot/bi', { config: { scopes: BI_COPILOT } }, async (request, reply) => {
+    const body = parse(biBody, request.body);
+
+    // The second half of the scope union — see BI_COPILOT/BI_REPORTS above.
+    const principal = request.requirePrincipal();
+    if (!hasAnyScope(scopesOf(principal), BI_REPORTS)) {
+      throw ApiError.authorization(
+        `This token is missing the required scope (one of: ${BI_REPORTS.join(', ')}).`,
+      );
+    }
+
+    const tenant = request.tenant();
+    // Read once, here: the window a relative phrase names is a function of the
+    // request's instant, and resolving it twice inside one request could land a
+    // question asked at 23:59:59.999 on two different days.
+    const now = new Date();
+
+    const answer = await request.withTenant((tx) =>
+      copilot.answerBi(tx, tenant, body.question, now),
+    );
+    return reply.send(answer);
+  });
 }

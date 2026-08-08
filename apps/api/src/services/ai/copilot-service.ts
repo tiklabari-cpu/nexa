@@ -15,9 +15,21 @@
  * signal Reports counts as "assisted" (07.3.2), so using Copilot on a chat that
  * a human then closes moves it out of the "manual" column.
  */
-import type { ConversationTurn } from '@nexa/ai-mock';
+import {
+  biMetricSource,
+  resolveBiQuestion,
+  type ConversationTurn,
+  type MetricKey,
+  type RelativeRange,
+} from '@nexa/ai-mock';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
+import { buildOverviewReport, resolveRange } from '../../routes/reports.js';
+import {
+  lastInstantBefore,
+  startOfIsoWeek,
+  startOfUtcDay,
+} from '../reports/scheduled-report-period.js';
 import { KnowledgeService, type RetrievedChunk } from './knowledge-service.js';
 
 const COPILOT_KIND = 'copilot';
@@ -228,6 +240,238 @@ export class CopilotService {
       sources: chunks.map((chunk) => ({ name: chunk.sourceName, score: chunk.score })),
     };
   }
+
+  // --- BI command (12.4) -----------------------------------------------------
+
+  /**
+   * Answer a report question about this license's own activity.
+   *
+   * Thin by design, and the thinness *is* the feature (ADR-09). Three steps,
+   * none of which is arithmetic: match the question to a known Overview field
+   * (`resolveBiQuestion`, deterministic — no LLM, no clock), turn the window it
+   * named into dates, and read the figure out of the very same
+   * {@link buildOverviewReport} that `GET /reports/overview` serves. There is no
+   * SQL here and there must never be: a second query for "how many chats
+   * closed" is a second definition of it, and the first anyone notices is
+   * Copilot saying 12 while the Reports tab says 11.
+   *
+   * `now` is a parameter rather than a `new Date()` inside so a window is a
+   * function of the request's instant and a test can stand on any calendar
+   * boundary it likes.
+   */
+  async answerBi(
+    tx: TenantClient,
+    tenant: TenantContext,
+    question: string,
+    now: Date,
+  ): Promise<BiAnswer> {
+    const resolution = resolveBiQuestion(question);
+
+    // Nothing matched, or two metrics matched equally well. Either way the
+    // honest answer is that there is no answer — a 200 with `not_understood`,
+    // the same way an unmatched palette query or an empty knowledge match is a
+    // 200 with a negative result rather than a 4xx. No report is read: a
+    // question this could not place has no window to read one over.
+    if (!resolution.metric) {
+      return { answer: NOT_UNDERSTOOD_ANSWER, kind: 'not_understood', metric: null, value: null, range: null };
+    }
+
+    const { from, to } = biWindow(resolution.range, now);
+    const when = resolution.range ? RANGE_LABELS[resolution.range] : DEFAULT_RANGE_LABEL;
+    const metric = biMetricSource(resolution.metric);
+    const phrasing = BI_PHRASING[resolution.metric];
+
+    const overview = await buildOverviewReport(tx, tenant.licenseId, from, to);
+    const value = readMetric(overview, metric);
+
+    // Null is "nobody rated anything in this window", not zero — reporting a 0%
+    // satisfaction score for an unrated period would read as a catastrophe that
+    // never happened. The window is still named out loud, in prose, because the
+    // contract sends `range` only alongside a `value`.
+    if (value === null) {
+      return {
+        answer: `No data for ${phrasing.subject} ${when}.`,
+        kind: 'no_data',
+        metric,
+        value: null,
+        range: null,
+      };
+    }
+
+    return {
+      answer: phrasing.describe(value, when),
+      kind: 'metric',
+      metric,
+      value,
+      range: { from: from.toISOString(), to: to.toISOString() },
+    };
+  }
+}
+
+// ===========================================================================
+// BI command helpers (12.4)
+// ===========================================================================
+
+export interface BiAnswer {
+  answer: string;
+  /**
+   * `metric` — a figure was found and `answer` quotes it. `no_data` — the
+   * metric was understood but the window has nothing to report. Anything else
+   * about the question is `not_understood`; Copilot never guesses a figure.
+   */
+  kind: 'metric' | 'no_data' | 'not_understood';
+  /** The Overview field `answer` quotes, e.g. `totals.chats`. Null when not understood. */
+  metric: string | null;
+  value: number | null;
+  range: { from: string; to: string } | null;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The dates a spoken window covers, as of `now`.
+ *
+ * The calendar boundaries come from `scheduled-report-period.ts` rather than
+ * being re-derived here, so "last week" means the same Monday-to-Sunday UTC week
+ * a weekly scheduled export covers. Every window is closed at both ends, the
+ * interval shape every report aggregation uses (`created_at >= from AND <= to`):
+ * a completed period ends on its last millisecond, and a period still running
+ * ends *now* — reporting "today" up to midnight would quote a window that has
+ * not happened yet.
+ *
+ * A question that named no window (`null`) falls back to the report default —
+ * {@link resolveRange}'s 30 days, the span the Reports tab opens on — through
+ * that same function, so the two cannot drift apart. The answer says which
+ * window it used either way, so a default is never silently applied.
+ */
+export function biWindow(range: RelativeRange | null, now: Date): { from: Date; to: Date } {
+  switch (range) {
+    case 'today':
+      return { from: startOfUtcDay(now), to: now };
+    case 'yesterday': {
+      const startOfToday = startOfUtcDay(now);
+      return {
+        from: new Date(startOfToday.getTime() - DAY_MS),
+        to: lastInstantBefore(startOfToday),
+      };
+    }
+    case 'this_week':
+      return { from: startOfIsoWeek(now), to: now };
+    case 'last_week': {
+      const thisMonday = startOfIsoWeek(now);
+      return {
+        from: new Date(thisMonday.getTime() - 7 * DAY_MS),
+        to: lastInstantBefore(thisMonday),
+      };
+    }
+    case 'this_month':
+      return { from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)), to: now };
+    case 'last_7_days':
+      return { from: new Date(now.getTime() - 7 * DAY_MS), to: now };
+    case 'last_30_days':
+    case null:
+      // Both go through the report's own default so "the last 30 days" is one
+      // definition, shared with every `GET /reports/*` that was given no range.
+      return resolveRange({ to: now });
+    default: {
+      const unknown: never = range;
+      throw new RangeError(`unknown BI window: ${String(unknown)}`);
+    }
+  }
+}
+
+/** How each window reads inside a sentence — an adverbial, so it needs no preposition. */
+const RANGE_LABELS: Record<RelativeRange, string> = {
+  today: 'today',
+  yesterday: 'yesterday',
+  this_week: 'this week',
+  last_week: 'last week',
+  this_month: 'this month',
+  last_7_days: 'in the last 7 days',
+  last_30_days: 'in the last 30 days',
+};
+
+/** Named out loud when the question specified no window — see {@link biWindow}. */
+const DEFAULT_RANGE_LABEL = RANGE_LABELS.last_30_days;
+
+interface BiPhrasing {
+  /** What the figure counts, for the "no data" sentence. */
+  subject: string;
+  describe: (value: number, when: string) => string;
+}
+
+const plural = (value: number): string => (value === 1 ? '' : 's');
+const wasWere = (value: number): string => (value === 1 ? 'was' : 'were');
+
+/**
+ * One phrasing per metric. Prose only — every number in it came from the
+ * Overview report, and nothing here recomputes or rounds one.
+ */
+const BI_PHRASING: Record<MetricKey, BiPhrasing> = {
+  chats: {
+    subject: 'chats started',
+    describe: (value, when) => `${String(value)} chat${plural(value)} started ${when}.`,
+  },
+  closed: {
+    subject: 'chats closed',
+    describe: (value, when) => `${String(value)} chat${plural(value)} closed ${when}.`,
+  },
+  manual: {
+    subject: 'chats resolved by an agent',
+    describe: (value, when) =>
+      `${String(value)} chat${plural(value)} ${wasWere(value)} resolved by an agent ${when}.`,
+  },
+  assisted: {
+    subject: 'AI-assisted resolutions',
+    describe: (value, when) =>
+      `${String(value)} chat${plural(value)} ${wasWere(value)} resolved with AI assistance ${when}.`,
+  },
+  automated: {
+    subject: 'automated resolutions',
+    describe: (value, when) =>
+      `${String(value)} chat${plural(value)} ${wasWere(value)} resolved automatically ${when}.`,
+  },
+  csat: {
+    subject: 'customer satisfaction',
+    describe: (value, when) => `Customer satisfaction is ${String(value)}% ${when}.`,
+  },
+};
+
+/**
+ * What Copilot says when it cannot place a question. It names what it *can*
+ * answer rather than apologising — the same shape the palette's unmatched query
+ * uses — because a dead end that teaches the next question is not a dead end.
+ */
+const NOT_UNDERSTOOD_ANSWER =
+  "I couldn't match that to a report figure I can answer from. Try asking about chats started, " +
+  'chats closed, resolutions (manual, AI-assisted or automated), or customer satisfaction — ' +
+  "optionally for a window like 'yesterday', 'this week' or 'the last 30 days'.";
+
+/**
+ * Read one dotted path out of an Overview report body.
+ *
+ * `null` is a real answer ("nobody rated anything"), so it is returned as such
+ * and becomes `no_data`. A path that resolves to *nothing* is a different thing
+ * entirely — a metric pointing at a field the report no longer has — and it
+ * throws rather than degrading into a plausible "no data yet", which would hide
+ * the defect for as long as anyone kept asking. Unreachable: every
+ * `BI_METRICS.metricSource` is pinned against a real Overview body in
+ * `copilot-bi.test.ts`.
+ */
+function readMetric(report: Record<string, unknown>, path: string): number | null {
+  let cursor: unknown = report;
+  for (const segment of path.split('.')) {
+    if (typeof cursor !== 'object' || cursor === null) {
+      cursor = undefined;
+      break;
+    }
+    cursor = (cursor as Record<string, unknown>)[segment];
+  }
+
+  if (cursor === null) return null;
+  if (typeof cursor === 'number' && Number.isFinite(cursor)) return cursor;
+  /* istanbul ignore next -- pinned by copilot-bi.test.ts; a live hit means a report field moved. */
+  throw new Error(`BI metric \`${path}\` is not a field of the Overview report.`);
 }
 
 function serialiseSource(source: {

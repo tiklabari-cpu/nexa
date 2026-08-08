@@ -17,8 +17,16 @@ export interface Message {
   to: string;
   subject: string;
   body: string;
-  /** Correlates a message with the thing that caused it, for tests and support. */
-  kind: 'password_reset' | 'invitation' | 'notification';
+  /**
+   * Correlates a message with the thing that caused it, for tests and support.
+   *
+   * `scheduled_report` is its own kind rather than reusing `notification` — the
+   * file name embeds it (`${stamp}-${kind}-...`), so a scheduled delivery is
+   * distinguishable from an ordinary notification in the mailbox and in a test
+   * that filters `outbox()` by kind, without opening every message to tell them
+   * apart.
+   */
+  kind: 'password_reset' | 'invitation' | 'notification' | 'scheduled_report';
 }
 
 export interface Mailer {

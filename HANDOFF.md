@@ -13,6 +13,49 @@
 
 ## Task log (newest-first)
 
+### tm 94.4 — 07.9-sched-d1 · rapor teslim e-postası — mailer `kind` genişletme + saf konu/gövde biçimlendirici — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/api/src/services/mail/mailer.ts`: `Message.kind` union'ına `'scheduled_report'` eklendi,
+    yorumla neden ayrı kind olduğu açıklanıyor — `FileMailer` dosya adını `${stamp}-${kind}-...`
+    şemasıyla üretiyor, yani posta kutusunda ve testte teslim tipi diğer üç kind'tan (password_reset/
+    invitation/notification) ayırt edilebiliyor. Mevcut dört tüketici (`routes/customer.ts`,
+    `routes/account-lifecycle.ts` ×2, `services/chat/chat-service.ts`) hiçbiri union'ı exhaustive
+    switch ile tüketmediği için genişletme tamamen katkısal.
+  - Yeni saf modül `apps/api/src/services/reports/scheduled-report-mail.ts` →
+    `buildScheduledReportMail({ groupLabel, periodFrom, periodTo, csv, rowCount, filename })` →
+    `{ subject, body }`. Desen `services/notifications/chat-transcript.ts`'in `renderTranscript`'ı
+    ile aynı aile: dosya üstünde gerekçe yorumu, saf fonksiyon, Prisma/DB/HTTP dokunuşu yok. Konu
+    grup etiketini + UTC dönemi (`YYYY-MM-DD – YYYY-MM-DD`, `exportFilename()`'daki `day()` ile aynı
+    biçim) taşır; gövde dönemi, satır sayısını (`n row`/`n rows`) ve dosya adını yazıp ardından CSV'yi
+    gömer — `FileMailer` gövdeyi düz metin yazdığı için MIME ek kavramı yok, CSV'nin gövdeye gömülmesi
+    bu mock teslimin dürüst şekli. 0 satırlık dönem hata değil (zamanlanmış bir export için sessiz bir
+    gün geçerli bir sonuç); boş görünen bir gövde yerine "No rows for this period." cümlesi basılıyor.
+  - Test `apps/api/src/services/reports/scheduled-report-mail.test.ts` (3): dolu CSV'de konu+gövde
+    alanları (grup/dönem/satır sayısı/dosya adı/gömülü CSV) · satır sayısı çoğullaması (1 vs 2) ·
+    0 satır → "No rows for this period." (ve gövdede "0 row"/"0 rows" YOK).
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **1857/1857** (87 dosya, +3 yeni) ·
+  `pnpm -w test:integration` → **1429/1429** (60 dosya, değişmeden yeşil — `notifications.test.ts` /
+  `account-lifecycle.test.ts` (24) / `chat-transcript.test.ts` / `cc-masking.test.ts` dördü de dahil,
+  regresyon yok) · `pnpm -w build` 0 · `pnpm -w test:e2e` → **80/80** (exit 0; env `.env`'den
+  `source` edilerek çalıştırıldı — Playwright'ın `webServer` adımı `pnpm --filter @nexa/api dev`'i
+  ortam değişkenleri export edilmemiş bir shell'de başlatırsa `DATABASE_URL`/`REDIS_URL`/vb. eksik
+  hatasıyla 60s'de time-out olur; `make test-e2e` bunu Makefile'ın `.env` include'uyla otomatik
+  yapıyor, doğrudan `pnpm -w test:e2e` çağıran bir sonraki pencere önce `set -a; source .env; set +a`
+  etmeli) · `pnpm -w db:check-drift` → "no drift" · değişen üç dosyada `prettier --check` 0.
+- **Varsayımlar:** Yok — kapsam tam olarak task detayındaki gibi uygulandı, PATCH/scheduler/CLI
+  entegrasyonuna dokunulmadı (kapsam dışı, -e/-f'nin işi).
+- **Sonraki pencereye not:** `-d2` (paylaşılan CSV üretimi → `services/reports/report-csv.ts`) ve
+  `-d1` burada birlikte `-e`'nin (zamanlayıcı çekirdeği) girdisini oluşturuyor; `-e` `buildScheduledReportMail`'i
+  `-d2`'nin ürettiği CSV + satır sayısı + `exportFilename()`'dan üretilmiş dosya adıyla çağırıp
+  `mailer.send({ kind: 'scheduled_report', subject, body })` yapacak — bu task o çağrıyı yazmadı,
+  yalnızca çağrılacak saf biçimlendiriciyi hazırladı. `-e` bağımlılık listesinde hem `-d1` hem `-d2`
+  var; ikisi de artık kapalı olduğundan `-e` açılabilir durumda (kendi diğer bağımlılıkları `-a`/`-b`
+  zaten kapalıydı).
+- **Çalışma alanında bırakılan:** `run-loop.sh` — pencere açılmadan ÖNCE de değişikti (tm 93.8/94.3'te
+  de aynı şekilde bırakılmıştı), bu task'ın kapsamıyla ilgisi yok, commit'e alınmadı.
+
 ### tm 94.3 — 07.9-sched-c · zamanlanmış export tek kayıt oku/güncelle/iptal — done — 2026-08-08 UTC
 
 - **Yapıldı:**

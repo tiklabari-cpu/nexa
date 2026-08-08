@@ -165,6 +165,46 @@ interface ReportsLeads {
   totals: { leads: number };
 }
 
+/**
+ * The Sales report (FR-MOD-07.7, v2; FR-MOD-13.5 dependency): the same
+ * tracked-sales skeleton as the Reviews report's `ecommerce` block, as a
+ * report of its own. No sales/order source exists yet, so `configured` is
+ * always `false` and every figure `null` in v1 (see the API's `buildSalesReport`).
+ */
+interface ReportsSales {
+  range: { from: string; to: string };
+  configured: boolean;
+  tracked_sales: number | null;
+  attributed_revenue_cents: number | null;
+  currency: string | null;
+  conversions: number | null;
+}
+
+interface AgentPerformanceRow {
+  agent_id: string;
+  name: string | null;
+  chats: number;
+  closed: number;
+  manual: number;
+  assisted: number;
+  automated: number;
+  avg_first_response_seconds: number | null;
+  avg_duration_seconds: number | null;
+  csat: CsatSummary;
+  transfers: number;
+}
+
+/**
+ * Team performance (FR-MOD-07.7, v2): the Breakdown tab's by-agent chat split
+ * extended per agent with response time, CSAT and AI→human transfers (see the
+ * API's `teamPerformanceByAgent`). Same agent set, order and `LIMIT 20` as
+ * `ReportsBreakdown.by_agent`.
+ */
+interface ReportsTeamPerformance {
+  range: { from: string; to: string };
+  agents: AgentPerformanceRow[];
+}
+
 interface StaffingCell {
   day_of_week: number;
   hour: number;
@@ -199,6 +239,8 @@ const TABS = [
   { id: 'topics', label: 'Chat topics' },
   { id: 'cases', label: 'Cases' },
   { id: 'leads', label: 'Leads' },
+  { id: 'sales', label: 'Sales' },
+  { id: 'team-performance', label: 'Team performance' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
@@ -206,13 +248,13 @@ type TabId = (typeof TABS)[number]['id'];
  * Tabs whose visibility follows `GET /reports/groups` (07.7-i) rather than
  * always rendering. The backend is the actual permission boundary — a caller
  * missing `reports_read` (or, in the future, a narrower per-group scope)
- * still gets a 403 straight from `/reports/cases`/`/reports/leads` if they
- * reach it some other way — so hiding the tab is UX honesty ("here is what
- * you can open"), not a second enforcement layer. Only Cases and Leads are
- * gated here; Sales and Team performance join this set in 07.7-j. The other
- * tabs predate this catalogue and stay unconditional.
+ * still gets a 403 straight from `/reports/cases`/`/reports/leads`/
+ * `/reports/sales`/`/reports/team-performance` if they reach it some other
+ * way — so hiding the tab is UX honesty ("here is what you can open"), not a
+ * second enforcement layer. Cases, Leads, Sales and Team performance are
+ * gated here; the other tabs predate this catalogue and stay unconditional.
  */
-const GROUP_GATED_TABS = new Set<TabId>(['cases', 'leads']);
+const GROUP_GATED_TABS = new Set<TabId>(['cases', 'leads', 'sales', 'team-performance']);
 
 interface ReportGroupsResponse {
   groups: Array<{ id: string; label: string }>;
@@ -374,8 +416,12 @@ export function ReportsPage(): ReactElement {
           <TopicsTab rangeKey={rangeKey} range={range} />
         ) : tab === 'cases' ? (
           <CasesTab rangeKey={rangeKey} range={range} />
-        ) : (
+        ) : tab === 'leads' ? (
           <LeadsTab rangeKey={rangeKey} range={range} />
+        ) : tab === 'sales' ? (
+          <SalesTab rangeKey={rangeKey} range={range} />
+        ) : (
+          <TeamPerformanceTab rangeKey={rangeKey} range={range} />
         )}
       </div>
     </Page>
@@ -1630,6 +1676,158 @@ function LeadsDailyTable({ rows }: { rows: ReportsLeads['by_day'] }): ReactEleme
           <tr key={row.date} className="border-b border-border last:border-0">
             <td className="tabular px-4 py-2">{row.date}</td>
             <td className="tabular px-4 py-2 text-right">{formatCount(row.count)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/**
+ * Sales (FR-MOD-07.7, v2; FR-MOD-13.5 dependency): the honest "not configured"
+ * skeleton until the Sales tracker wires a real source — same contract as the
+ * Reviews tab's Ecommerce section, as a report of its own. `configured` is
+ * always `false` in v1, so this always renders the empty state below; no
+ * figure here is ever a fabricated 0 (FR-EK-B.1, null ≠ 0).
+ */
+function SalesTab(props: TabProps): ReactElement {
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<ReportsSales>('sales', api, props);
+
+  if (error) {
+    return (
+      <ErrorNotice message="Could not load the Sales report. Check that the API is reachable and try again." />
+    );
+  }
+  if (isPending) {
+    return <CardSkeleton rows={3} />;
+  }
+
+  return (
+    <Section title="Sales" description="Sales attributed to supported conversations.">
+      <Card>
+        {data.configured ? (
+          <KpiGrid>
+            <Kpi label="Tracked sales" value={formatCount(data.tracked_sales)} />
+            <Kpi
+              label="Attributed revenue"
+              value={
+                formatMoney(data.attributed_revenue_cents, data.currency ?? undefined) ?? '—'
+              }
+            />
+            <Kpi label="Conversions" value={formatCount(data.conversions)} />
+          </KpiGrid>
+        ) : (
+          <EmptyState
+            title="Sales tracking not set up"
+            description="Connect a sales source to attribute revenue to supported conversations. The Sales tracker (FR-MOD-13.5) is not available yet."
+          />
+        )}
+      </Card>
+    </Section>
+  );
+}
+
+/**
+ * Team performance (FR-MOD-07.7, v2): the Breakdown tab's by-agent chat split
+ * (chats/closed/automated/assisted/manual), extended per agent with average
+ * first-response time and CSAT. Same agent set, order and `LIMIT 20` as
+ * `ReportsBreakdown.by_agent` — an agent needs a thread *created* in the
+ * window to appear here at all.
+ */
+function TeamPerformanceTab(props: TabProps): ReactElement {
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<ReportsTeamPerformance>(
+    'team-performance',
+    api,
+    props,
+  );
+
+  if (error) {
+    return (
+      <ErrorNotice message="Could not load the Team performance report. Check that the API is reachable and try again." />
+    );
+  }
+  if (isPending) {
+    return <CardSkeleton rows={4} />;
+  }
+
+  return (
+    <Section
+      title="Team performance"
+      description="Per-agent chats, resolution split, first-response time and CSAT for the window."
+    >
+      <Card>
+        {data.agents.length === 0 ? (
+          <EmptyState
+            title="No agent activity in this window"
+            description="Once conversations are assigned to agents, their per-agent performance shows up here."
+          />
+        ) : (
+          <TeamPerformanceTable rows={data.agents} />
+        )}
+      </Card>
+    </Section>
+  );
+}
+
+/**
+ * The Team performance table: one row per agent, CSAT rendered as `—` (not
+ * `0%`) when nobody rated that agent in the window — {@link CsatSummary}'s
+ * `score` is already `null` for that case, so this only has to defer to it.
+ */
+function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }): ReactElement {
+  const numeric = 'w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary';
+  return (
+    <table className="w-full text-sm">
+      <caption className="sr-only">Per-agent chats, resolution split, response time and CSAT</caption>
+      <thead>
+        <tr className="border-b border-border text-left">
+          <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
+            Agent
+          </th>
+          <th scope="col" className={numeric}>
+            Chats
+          </th>
+          <th scope="col" className={numeric}>
+            Closed
+          </th>
+          <th scope="col" className={numeric}>
+            Automated
+          </th>
+          <th scope="col" className={numeric}>
+            Assisted
+          </th>
+          <th scope="col" className={numeric}>
+            Manual
+          </th>
+          <th scope="col" className={numeric}>
+            Avg first response
+          </th>
+          <th scope="col" className={numeric}>
+            CSAT
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.agent_id} className="border-b border-border last:border-0">
+            <td className="truncate px-4 py-2">{row.name ?? 'Unknown agent'}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.chats)}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.closed)}</td>
+            <td className="tabular px-4 py-2 text-right text-success">
+              {formatCount(row.automated)}
+            </td>
+            <td className="tabular px-4 py-2 text-right text-success">
+              {formatCount(row.assisted)}
+            </td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.manual)}</td>
+            <td className="tabular px-4 py-2 text-right">
+              {formatDuration(row.avg_first_response_seconds) ?? '—'}
+            </td>
+            <td className="tabular px-4 py-2 text-right">
+              {row.csat.score === null ? '—' : formatRate(row.csat.score)}
+            </td>
           </tr>
         ))}
       </tbody>

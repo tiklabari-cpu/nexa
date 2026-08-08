@@ -101,6 +101,42 @@ test.describe('reports overview', () => {
 
     await agentPage.screenshot({ path: 'kanit/24-reports-cases-leads.png', fullPage: true });
   });
+
+  /**
+   * Sales and Team performance (07.7-j) — join Cases/Leads as v2 report groups
+   * gated on `GET /reports/groups`. The seeded demo agent holds `reports_read`,
+   * which grants every group, so this is the tab's *visibility* proof
+   * end-to-end; Sales is honestly unconfigured in v1 (FR-MOD-13.5 dependency,
+   * covered server-side by `reports-billing.test.ts` "Sales report (07.7-d)")
+   * and Team performance's figures are covered server-side too ("Team
+   * performance report (07.7-c)") — this only proves both tabs open and render
+   * their region.
+   */
+  test('opens the Sales and Team performance tabs, each a permission-gated report group (07.7-j)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    await agentPage.getByRole('tab', { name: 'Sales' }).click();
+    await expect(agentPage.getByRole('tab', { name: 'Sales' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(agentPage.getByRole('region', { name: 'Sales' })).toBeVisible();
+
+    await agentPage.getByRole('tab', { name: 'Team performance' }).click();
+    await expect(agentPage.getByRole('tab', { name: 'Team performance' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(agentPage.getByRole('region', { name: 'Team performance' })).toBeVisible();
+
+    await agentPage.screenshot({
+      path: 'kanit/25-reports-sales-team-performance.png',
+      fullPage: true,
+    });
+  });
 });
 
 /**

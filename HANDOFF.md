@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### tm 93.10 — 07.7-j: Reports UI — Sales + Team performance sekmeleri (ajan tablosu + `configured:false` empty state) — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/reports/ReportsPage.tsx`: `TABS`'a `{id:'sales',label:'Sales'}` +
+    `{id:'team-performance',label:'Team performance'}`; `GROUP_GATED_TABS`'a (07.7-i'nin hazırladığı
+    mekanizma) `'sales'`/`'team-performance'` eklendi. **Yeni** `SalesTab` — v1'de her zaman
+    `configured:false` (FR-MOD-13.5 bağımlılığı) dönen `/reports/sales` yanıtı için `ReviewsTab`'in
+    `ecommerce` bloğuyla birebir aynı desen: 13.5'e işaret eden `EmptyState`, `KpiGrid` hiç render
+    edilmez (sıfır rakam YOK). **Yeni** `TeamPerformanceTab` + `TeamPerformanceTable` —
+    `BreakdownTab`'ın `by_agent` satır desenini chats/closed/automated/assisted/manual/avg first
+    response/CSAT yedi sütununa genişletir; CSAT `null` VE avg first response `null` satırları
+    çıplak `'—'` (`%0`/`0s` DEĞİL); 0 ajan → anlamlı empty state.
+  - Test: `ReportsPage.test.tsx`'e **+10** ("Sales + Team performance tabs, permission-gated
+    visibility"): grant/no-grant/kısmi-grant görünürlük · `configured:false` empty state + '0' yok ·
+    `configured:true` KPI'lar · ajan tablosu yedi alan · CSAT+avg-first-response null → iki `'—'` ·
+    0 ajan empty state · Sales/Team performance 403/hata → `ErrorNotice` (ayrı ayrı).
+    `apps/e2e/tests/reports.spec.ts`'e **+1** ("opens the Sales and Team performance tabs...").
+  - PLAN.md §5.0 satır 1112 (`| 07.7 |`) güncellendi — 07.7-j teslim notu eklendi, kalan alt-görev
+    sayısı 3→2.
+- **Doğrulama:** typecheck 11/11 ✅ · lint 8/8 ✅ ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` 10/10 ✅ (web 660/660, +10 yeni; api
+  1766/1766 değişmedi) · build 7/7 ✅ · `pnpm -w test:integration` 5/5 ✅ (1344/1344) ·
+  `pnpm -w test:e2e` **tam koştu** — **77/78** ✅, tek kırmızı `skills-routing.spec.ts:76` (tm
+  77.4'ten beri HANDOFF'ta kayıtlı bilinen flake, Team skill kataloğu FR-MOD-08.6.3, Reports
+  yüzeyiyle ilgisiz) izole `-g` koşusunda yeşildi — regresyon yok.
+- **Varsayımlar:** İlk yazımda Sales tab'ının `Section` açıklaması da "(FR-MOD-13.5)" taşıyordu;
+  `EmptyState`'in kendi açıklamasıyla çakışıp testte `getByText(/FR-MOD-13.5/)` iki eşleşme buldu.
+  KK zaten yalnız *empty state*'in 13.5'e işaret etmesini istiyordu — `Section` açıklaması "Sales
+  attributed to supported conversations."a sadeleştirildi, 13.5 referansı yalnız empty state'te
+  kaldı.
+- **Sonraki pencereye not:** 07.7-k (Export butonu + Save view çubuğunun UI'ye bağlanması) ve
+  07.7-l (uçtan uca doğrulama) hâlâ açık — §5.2.4. `run-loop.sh` bu pencerede de commit'siz
+  bırakıldı (tm 93.8'den beri değişmeyen, bu görevin kapsamı dışındaki iş-üstü işi — bkz. o
+  kapanışın notu); bu pencerede de dokunulmadı.
+
 ### tm 93.9 — 07.7-i: Reports UI — Leads + Cases sekmeleri (kartlar + benchmark rozetleri + empty state) — done — 2026-08-08 UTC
 
 - **Yapıldı:**

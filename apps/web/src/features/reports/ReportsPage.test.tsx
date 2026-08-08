@@ -1154,3 +1154,239 @@ describe('ReportsPage — Cases + Leads tabs, permission-gated visibility (07.7-
     expect(await screen.findByRole('alert')).toHaveTextContent(/Could not load the Cases report/);
   });
 });
+
+interface AgentPerformanceRowFixture {
+  agent_id: string;
+  name: string | null;
+  chats: number;
+  closed: number;
+  manual: number;
+  assisted: number;
+  automated: number;
+  avg_first_response_seconds: number | null;
+  avg_duration_seconds: number | null;
+  csat: { good: number; bad: number; responses: number; score: number | null };
+  transfers: number;
+}
+
+const SALES_BASE = {
+  range: OVERVIEW.range,
+  configured: false,
+  tracked_sales: null as number | null,
+  attributed_revenue_cents: null as number | null,
+  currency: null as string | null,
+  conversions: null as number | null,
+};
+
+const TEAM_PERFORMANCE_BASE = {
+  range: OVERVIEW.range,
+  agents: [] as AgentPerformanceRowFixture[],
+};
+
+/**
+ * Mocks `/reports/groups` alongside the Sales and Team performance reports.
+ * `groups` defaults to granting both — mirrors `mockGroupsCasesLeads` (07.7-i).
+ */
+function mockGroupsSalesTeam({
+  groups = [
+    { id: 'sales', label: 'Sales' },
+    { id: 'team-performance', label: 'Team performance' },
+  ],
+  sales = {},
+  teamPerformance = {},
+}: {
+  groups?: Array<{ id: string; label: string }>;
+  sales?: Partial<typeof SALES_BASE>;
+  teamPerformance?: Partial<typeof TEAM_PERFORMANCE_BASE>;
+} = {}): void {
+  const salesPayload = { ...SALES_BASE, ...sales };
+  const teamPayload = { ...TEAM_PERFORMANCE_BASE, ...teamPerformance };
+  api.get.mockImplementation((path: string) => {
+    if (path.startsWith('/reports/groups')) return Promise.resolve({ groups });
+    if (path.startsWith('/reports/sales')) return Promise.resolve(salesPayload);
+    if (path.startsWith('/reports/team-performance')) return Promise.resolve(teamPayload);
+    if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    return Promise.reject(new Error(`unexpected ${path}`));
+  });
+}
+
+async function openSalesTab(): Promise<void> {
+  await userEvent.click(await screen.findByRole('tab', { name: 'Sales' }));
+  await screen.findByRole('region', { name: 'Sales' });
+}
+
+async function openTeamPerformanceTab(): Promise<void> {
+  await userEvent.click(await screen.findByRole('tab', { name: 'Team performance' }));
+  await screen.findByRole('region', { name: 'Team performance' });
+}
+
+describe('ReportsPage — Sales + Team performance tabs, permission-gated visibility (07.7-j)', () => {
+  it('renders the Sales and Team performance tabs when /reports/groups grants them, and queries the right endpoint', async () => {
+    mockGroupsSalesTeam();
+    renderReports(<ReportsPage />);
+
+    await openSalesTab();
+    expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/sales\?from=.*&to=/));
+
+    await openTeamPerformanceTab();
+    expect(api.get).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/reports\/team-performance\?from=.*&to=/),
+    );
+  });
+
+  it('hides the Sales and Team performance tabs when /reports/groups does not grant them (İzin bazlı görünürlük)', async () => {
+    mockGroupsSalesTeam({ groups: [] });
+    renderReports(<ReportsPage />);
+
+    // Overview is ungated and renders once its own fetch resolves — proof a
+    // render past the groups response has already happened.
+    await screen.findByText('Conversations', { exact: true });
+
+    expect(screen.queryByRole('tab', { name: 'Sales' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Team performance' })).not.toBeInTheDocument();
+  });
+
+  it('hides only the ungranted one when /reports/groups grants Sales but not Team performance', async () => {
+    mockGroupsSalesTeam({ groups: [{ id: 'sales', label: 'Sales' }] });
+    renderReports(<ReportsPage />);
+
+    await screen.findByRole('tab', { name: 'Sales' });
+    expect(screen.queryByRole('tab', { name: 'Team performance' })).not.toBeInTheDocument();
+  });
+
+  it('shows a meaningful empty state pointing at 13.5, never a fabricated zero, when Sales is not configured', async () => {
+    mockGroupsSalesTeam();
+    renderReports(<ReportsPage />);
+    await openSalesTab();
+
+    expect(screen.getByText('Sales tracking not set up')).toBeInTheDocument();
+    expect(screen.getByText(/FR-MOD-13.5/)).toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('shows the Sales KPIs once a source is configured', async () => {
+    mockGroupsSalesTeam({
+      sales: {
+        configured: true,
+        tracked_sales: 42,
+        attributed_revenue_cents: 12_345,
+        currency: 'USD',
+        conversions: 9,
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openSalesTab();
+
+    expect(within(kpi('Tracked sales')).getByText('42')).toBeInTheDocument();
+    expect(within(kpi('Attributed revenue')).getByText('$123.45')).toBeInTheDocument();
+    expect(within(kpi('Conversions')).getByText('9')).toBeInTheDocument();
+  });
+
+  it('renders the Team performance agent table with chats/closed/automated/assisted/manual/avg first response/CSAT', async () => {
+    mockGroupsSalesTeam({
+      teamPerformance: {
+        agents: [
+          {
+            agent_id: 'agent-1',
+            name: 'Ada Lovelace',
+            chats: 10,
+            closed: 8,
+            manual: 1,
+            assisted: 2,
+            automated: 5,
+            avg_first_response_seconds: 125,
+            avg_duration_seconds: 400,
+            csat: { good: 4, bad: 1, responses: 5, score: 0.8 },
+            transfers: 1,
+          },
+        ],
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openTeamPerformanceTab();
+
+    const table = screen.getByRole('table');
+    const row = within(table).getByText('Ada Lovelace').closest('tr');
+    if (!row) throw new Error('agent row not found');
+    expect(within(row).getByText('10')).toBeInTheDocument();
+    expect(within(row).getByText('8')).toBeInTheDocument();
+    expect(within(row).getByText('5')).toBeInTheDocument();
+    expect(within(row).getByText('2')).toBeInTheDocument();
+    expect(within(row).getByText('1')).toBeInTheDocument();
+    expect(within(row).getByText('2m 5s')).toBeInTheDocument();
+    expect(within(row).getByText('80%')).toBeInTheDocument();
+  });
+
+  it("shows '—', not '0%', for an agent nobody rated in the window (CSAT null)", async () => {
+    mockGroupsSalesTeam({
+      teamPerformance: {
+        agents: [
+          {
+            agent_id: 'agent-2',
+            name: 'Grace Hopper',
+            chats: 4,
+            closed: 4,
+            manual: 4,
+            assisted: 0,
+            automated: 0,
+            avg_first_response_seconds: null,
+            avg_duration_seconds: null,
+            csat: { good: 0, bad: 0, responses: 0, score: null },
+            transfers: 0,
+          },
+        ],
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openTeamPerformanceTab();
+
+    const row = screen.getByText('Grace Hopper').closest('tr');
+    if (!row) throw new Error('agent row not found');
+    // CSAT and avg first response both render as em dash — neither a fabricated
+    // 0%/0s for "nobody rated" / "nothing closed with a first response".
+    expect(within(row).getAllByText('—')).toHaveLength(2);
+    expect(within(row).queryByText('0%')).not.toBeInTheDocument();
+  });
+
+  it('shows a meaningful empty state, not an empty table, when no agent has activity', async () => {
+    mockGroupsSalesTeam();
+    renderReports(<ReportsPage />);
+    await openTeamPerformanceTab();
+
+    expect(screen.getByText('No agent activity in this window')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('shows an error state when the Sales report fails to load, without crashing', async () => {
+    api.get.mockImplementation((path: string) => {
+      if (path.startsWith('/reports/groups')) {
+        return Promise.resolve({ groups: [{ id: 'sales', label: 'Sales' }] });
+      }
+      if (path.startsWith('/reports/sales')) return Promise.reject(new Error('boom'));
+      if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+      return Promise.reject(new Error(`unexpected ${path}`));
+    });
+    renderReports(<ReportsPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: 'Sales' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Could not load the Sales report/);
+  });
+
+  it('shows an error state when the Team performance report fails to load, without crashing', async () => {
+    api.get.mockImplementation((path: string) => {
+      if (path.startsWith('/reports/groups')) {
+        return Promise.resolve({ groups: [{ id: 'team-performance', label: 'Team performance' }] });
+      }
+      if (path.startsWith('/reports/team-performance')) return Promise.reject(new Error('boom'));
+      if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+      return Promise.reject(new Error(`unexpected ${path}`));
+    });
+    renderReports(<ReportsPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: 'Team performance' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /Could not load the Team performance report/,
+    );
+  });
+});

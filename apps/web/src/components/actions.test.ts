@@ -34,6 +34,10 @@ describe('action catalogue', () => {
     expect(found?.id).toBe('toggle-accepting-chats');
   });
 
+  // The other half of this pair lives in the API suite: `route-config.test.ts`
+  // pins the route's own `config.scopes` to the same literal, so a change on
+  // either side breaks a test instead of quietly leaving the palette gating by
+  // a list the endpoint no longer uses.
   it('requires the same scopes as the endpoint it calls (PUT /agents/me/routing-status)', () => {
     const toggle = ACTIONS.find((action) => action.id === 'toggle-accepting-chats');
     expect(toggle?.requiredScope).toEqual(['agents--my:rw', 'agents--all:rw']);

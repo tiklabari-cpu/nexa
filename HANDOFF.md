@@ -13,6 +13,76 @@
 
 ## Task log (newest-first)
 
+### tm 95.2 — 01.1.3-ai-b · Aksiyon sonuç tipinin scope kapısı — yetkisiz aksiyon palette GÖRÜNMEZ — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/components/CommandPalette.tsx` — sonuç listesine üçüncü üretici döngü:
+    `ACTIONS` üzerinde dönerken **önce** `has(action.requiredScope)` kapısı uygulanır
+    (nav ve içerik aramasının kullandığı aynı `useAuth().agent.scopes` kaynağı — yeni
+    endpoint AÇILMADI), sonra label/keyword eşleşmesi. Kapıdan geçen kayıt yoksa listeye
+    hiçbir şey push edilmez; grup başlığı `firstOfGroup` ile sonuç başına çizildiği için
+    **boş `Actions` başlığı da render edilmez** (NFR-S5 — yetkisiz ajan sahip olmadığı
+    yetkinin adını bile görmez). Aksiyonlar listenin **başında** (PRD'nin sonuç tipi sırası;
+    grup üyeleri bitişik kalmalı).
+  - Etiket canlı durumdan hesaplanır: `routing_status` ve `setRoutingStatus` store'dan
+    **alan bazında** seçilir (tüm `agent` nesnesi seçilseydi her ilgisiz yazımda liste
+    yeniden kurulurdu) ve `useMemo` ile `ActionDeps` olarak `label()`'a geçer.
+  - `run()` bu turda **bilinçli inert** — `action.run(deps)` bağlama + optimistic durum +
+    hata geri alma 01.1.3-ai-c'nin kapsamı; hata yolu yokken tetikleme sunmak, etkisiz kalan
+    bir toggle'ı sessizce yutan palet demektir (kodda yorumla işaretli).
+  - i18n `palette.group.actions` — en `Actions`, tr `Aksiyonlar`.
+  - **İki kapının birlikte doğrulanması** (task'ın "sınır beyanı"): UX kapısı web tarafında,
+    gerçek kapı backend'de. `apps/api/test/integration/route-config.test.ts` (+1) artık
+    `PUT /agents/me/routing-status`'un `config.scopes` çiftini `['agents--my:rw',
+    'agents--all:rw']` literaline sabitliyor — `actions.ts`'in `requiredScope`'u ile aynı
+    literal, `actions.test.ts` onu kendi tarafından zaten sabitliyordu. Backend kodu
+    DEĞİŞTİRİLMEDİ (kapsam dışı); yalnız deklarasyon teste bağlandı, böylece iki taraf
+    sessizce ayrışamaz.
+  - `CommandPalette.test.tsx` (+5, 6→11): **negatif ÖNCE yazıldı ve kırmızı görüldü** —
+    yetkisiz oturumda (`customers:ro`) ne aksiyon ne de `Actions` başlığı (hem boş sorguda
+    hem `stop accepting` aramasında, `No matches.` görünür) · `agents--my:rw` ile listelenir ·
+    `agents--all:rw` ile de listelenir (endpoint gibi) · etiket canlı `routing_status`'a göre
+    (`not_accepting_chats` → "Start Accepting Chats") · scope kümesi TAMAMEN boşken palet
+    çökmez, nav + arama çalışır. `renderPalette` yardımcısına opsiyonel `routingStatus`
+    parametresi eklendi.
+- **Doğrulama** (hepsi ön planda, exit code'larla):
+  `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` 0 → api **1922/1922**
+  (1921 → +1 route-config pin), web **696/696** (691 → +5) ·
+  `pnpm -w test:integration` 0 → **1467/1467** (1466 → +1) · `pnpm -w build` 0 ·
+  `pnpm -w test:e2e` → **81 passed / 1 failed**; task'ın kendi akışı
+  `command-palette.spec.ts` **2/2 yeşil**. Tek kırmızı `skills-routing.spec.ts:76` ve bu
+  pencerenin işiyle İLGİSİZ (aşağıda).
+- **Varsayımlar:**
+  - Aksiyonlar boş sorguda da listelenir (nav destinasyonlarıyla aynı kural) — palet açılır
+    açılmaz "ne yapabilirim" görünür. Yetkisiz oturumda bu da gizli olduğundan negatif test
+    boş sorguyu ayrıca kontrol ediyor.
+  - Grup ikonu palette sabit (`ACTION_ICON`), `ActionRecord`'a `icon` alanı EKLENMEDİ —
+    -a'nın tipini kapsam dışı genişletmemek için; ihtiyaç doğarsa -c/-f'de eklenebilir.
+- **Sonraki pencereye not:**
+  - **Sıradaki `01.1.3-ai-c`** aksiyonu gerçekten tetikleyecek: `run: () => {}` yerine
+    `action.run(actionDeps)` + optimistic + rollback. Kapı artık yerinde olduğu için ARDIŞIK
+    kısıt karşılandı.
+  - **Yeni task açıldı (tm 104, priority `high`): `skills-routing.spec.ts:76` taze seed'de deterministik
+    KIRIK — bu pencereden ÖNCE de kırık.** `getByRole('region',{name:'Skills'})
+    .getByLabel('Skill')` Playwright'ta alt-dize eşleşmesi yaptığı için seed'in üç becerisinin
+    `aria-label="Delete skill Billing|Onboarding|Technical support"` butonlarını da yakalıyor →
+    strict mode violation (4 eleman). Integration suite DB'yi TRUNCATE ettiği için e2e'nin
+    `global-setup` → `db:seed` adımı tenant'ı sıfırdan kurar ve üç beceri hep orada olur;
+    yani **DoD sırası gereği (integration → e2e) bu test her temiz koşuda kırmızı**. Bu
+    pencerenin diff'i `git stash` ile çıkarılıp AYNI DB durumunda tekrar koşuldu → aynı hata,
+    aynı satır (kanıt: iki koşu da `1 failed`). Düzeltme muhtemelen tek satır
+    (`getByLabel('Skill', { exact: true })` veya `getByRole('textbox', { name: 'Skill' })`)
+    ama kapsam disiplini (CONVENTIONS §5) gereği bu pencerede yapılmadı.
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (94.10'dan beri taşınan
+    carry-over, bu commit'e de alınmadı).
+  - Tam e2e koşusu `apps/e2e/kanit/*.png`'leri yine yeniden üretti; bu turda **geri alındı**
+    (`git checkout -- apps/e2e/kanit`) — içerik bilgi olarak değişmiyordu (yalnız zaman
+    damgası/chat id) ve diff'i bu task'ın dosyalarına odaklı tutmak istendi.
+  - `prettier --check` `CommandPalette.tsx`, `CommandPalette.test.tsx`, `i18n.ts`'te uyarı
+    veriyor; `git stash` ile doğrulandı: **üçü de bu turdan önce de uyarıyordu**, DoD kapısı
+    eslint (`pnpm -w lint` 0). Dokunulmadı — biçimlendirme diff'i kalemin dışına taşardı.
+
 ### tm 95.1 — 01.1.3-ai-a · Statik aksiyon kataloğu (`actions.ts`) + `PaletteResult` birleşik tipi — done — 2026-08-08 UTC
 
 - **Yapıldı:**

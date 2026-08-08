@@ -71,7 +71,10 @@ function stubFetch(): ReturnType<typeof vi.fn> {
   return fetchMock;
 }
 
-function renderPalette(scopes: string[]) {
+function renderPalette(
+  scopes: string[],
+  routingStatus: 'accepting_chats' | 'not_accepting_chats' | 'offline' = 'accepting_chats',
+) {
   useAuth.setState({
     status: 'signed-in',
     accessToken: 'test-token',
@@ -83,7 +86,7 @@ function renderPalette(scopes: string[]) {
       organization_id: 'o-1',
       license_id: '1000003',
       scopes,
-      routing_status: 'accepting_chats',
+      routing_status: routingStatus,
     },
   });
 
@@ -196,5 +199,87 @@ describe('command palette', () => {
     const requested = fetchMock.mock.calls.map((call) => String(call[0]));
     expect(requested.some((url) => url.includes('/customers'))).toBe(false);
     expect(requested.some((url) => url.includes('/tickets'))).toBe(false);
+  });
+});
+
+/**
+ * The action result type and its scope gate — FR-MOD-01.1.3, NFR-S3, NFR-S5.
+ *
+ * The palette already refuses to *search* what the caller cannot read; these
+ * assert the same courtesy for what it can *do*. An action whose endpoint would
+ * answer 403 is never offered, and — the part a naive filter gets wrong — the
+ * "Actions" heading disappears with it rather than standing over an empty list,
+ * which would tell an unauthorized agent exactly what they are missing.
+ *
+ * The boundary itself is elsewhere and stays elsewhere: `PUT
+ * /agents/me/routing-status` enforces the same scopes server-side, pinned by
+ * `route-config.test.ts` against the literal list `actions.ts` copies. Hiding
+ * the entry is a UX gate on top of that, never a replacement for it.
+ */
+describe('command palette — action results', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ items: [] })));
+  });
+
+  it('never lists the action — nor its heading — for a caller without the scope', async () => {
+    const user = userEvent.setup();
+    // A real scope, just not one that reaches the routing-status endpoint.
+    renderPalette(['customers:ro']);
+    await openPalette(user);
+
+    // Empty query: the palette offers its whole menu, and the action is not in it.
+    expect(screen.queryByRole('option', { name: /Accepting Chats/ })).toBeNull();
+    expect(screen.queryByText('Actions')).toBeNull();
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'stop accepting');
+
+    expect(await screen.findByText('No matches.')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Accepting Chats/ })).toBeNull();
+    expect(screen.queryByText('Actions')).toBeNull();
+  });
+
+  it('lists the action for a caller holding the self-service scope', async () => {
+    const user = userEvent.setup();
+    renderPalette(['agents--my:rw']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'stop accepting');
+
+    expect(screen.getByRole('option', { name: /Stop Accepting Chats/ })).toBeInTheDocument();
+    expect(screen.getByText('Actions')).toBeInTheDocument();
+  });
+
+  it('accepts the administrative scope too, as the endpoint does', async () => {
+    const user = userEvent.setup();
+    renderPalette(['agents--all:rw']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'stop accepting');
+
+    expect(screen.getByRole('option', { name: /Stop Accepting Chats/ })).toBeInTheDocument();
+  });
+
+  it("labels the action from the caller's live routing status", async () => {
+    const user = userEvent.setup();
+    renderPalette(['agents--my:rw'], 'not_accepting_chats');
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'accepting');
+
+    expect(screen.getByRole('option', { name: /Start Accepting Chats/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Stop Accepting Chats/ })).toBeNull();
+  });
+
+  it('keeps navigation and search working when the caller holds no scopes at all', async () => {
+    const user = userEvent.setup();
+    renderPalette([]);
+    await openPalette(user);
+
+    // An empty scope set filters every action away; the palette is unharmed.
+    expect(screen.queryByText('Actions')).toBeNull();
+    expect(screen.getByRole('option', { name: /Inbox/ })).toBeInTheDocument();
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'report');
+    expect(screen.getByRole('option', { name: /Reports/ })).toBeInTheDocument();
   });
 });

@@ -11,6 +11,13 @@
  * palette shows only what its holder is allowed to find. And a record it points
  * at is opened by the target screen through a URL parameter, so the same deep
  * link works whether it comes from here, a bookmark, or a colleague's message.
+ *
+ * Actions (`actions.ts`) are held to that same rule: an entry is offered only to
+ * a caller holding a scope its target endpoint accepts, and if none survive the
+ * filter the heading goes with them, so nobody is shown a section naming powers
+ * they do not have (NFR-S3, NFR-S5). That is a courtesy, not a boundary — the
+ * endpoint refuses the request on its own either way, and it is the refusal that
+ * protects anything.
  */
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -28,11 +35,13 @@ import { useTranslate } from '../lib/i18n.js';
 import type { CustomerSummary } from '../features/customers/types.js';
 import type { ChatSummary, Ticket } from '../features/inbox/types.js';
 import { NAV_DESTINATIONS } from './navigation.js';
-import type { PaletteResult } from './actions.js';
+import { ACTIONS, type ActionDeps, type PaletteResult } from './actions.js';
 
 const CUSTOMER_READ = ['customers:ro', 'customers:rw'];
 const TICKET_READ = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
 const CHAT_READ = ['chats--all:ro', 'chats--access:ro'];
+/** One glyph for the whole group — an action is a switch, not a place. */
+const ACTION_ICON = '⏻';
 
 export function CommandPalette(): ReactElement | null {
   const [open, setOpen] = useState(false);
@@ -51,6 +60,20 @@ export function CommandPalette(): ReactElement | null {
   const has = useCallback(
     (allowed: string[]) => allowed.some((scope) => scopes.includes(scope)),
     [scopes],
+  );
+
+  // Actions read live state to label themselves ("Stop" vs "Start Accepting
+  // Chats"), so the store is subscribed to field by field: the whole `agent`
+  // object changes identity on every unrelated write, and this list rebuilds on
+  // every one of them if it depends on the object.
+  const routingStatus = useAuth((s) => s.agent?.routing_status ?? null);
+  const setRoutingStatus = useAuth((s) => s.setRoutingStatus);
+  const actionDeps = useMemo<ActionDeps>(
+    () => ({
+      agent: routingStatus ? { routing_status: routingStatus } : null,
+      setRoutingStatus,
+    }),
+    [routingStatus, setRoutingStatus],
   );
 
   const close = useCallback(() => {
@@ -142,6 +165,39 @@ export function CommandPalette(): ReactElement | null {
     const routeNeedle = rawQuery.trim().toLowerCase();
     const list: PaletteResult[] = [];
 
+    // Actions lead: "do it from here" is the reason to reach for the palette
+    // over the rail, and the rail cannot offer it at all. Group members must
+    // stay contiguous — the heading is drawn wherever the group changes.
+    for (const action of ACTIONS) {
+      // The gate. An action whose endpoint would answer 403 is not a result the
+      // caller can use, so it is not a result — and since nothing is pushed, no
+      // heading is drawn over the gap either. The scope set comes from the auth
+      // store the searches above already gate on; no request asks what the
+      // caller may do, because the token already says so.
+      if (!has(action.requiredScope)) continue;
+
+      const label = action.label(actionDeps);
+      const matches =
+        !routeNeedle ||
+        label.toLowerCase().includes(routeNeedle) ||
+        action.keywords.some((keyword) => keyword.includes(routeNeedle));
+      if (!matches) continue;
+
+      list.push({
+        kind: 'action',
+        id: `action:${action.id}`,
+        group: t('palette.group.actions'),
+        label,
+        icon: ACTION_ICON,
+        run: () => {
+          // Deliberately inert until 01.1.3-ai-c binds `action.run(actionDeps)`
+          // with optimistic state and rollback. Offering a trigger before the
+          // failure path exists is how a palette ends up silently swallowing a
+          // toggle that never took effect.
+        },
+      });
+    }
+
     for (const dest of NAV_DESTINATIONS) {
       const label = t(dest.labelKey);
       const matches =
@@ -210,7 +266,18 @@ export function CommandPalette(): ReactElement | null {
     }
 
     return list;
-  }, [rawQuery, searching, customers.data, chatMatches, tickets.data, navigate, close, t]);
+  }, [
+    rawQuery,
+    searching,
+    customers.data,
+    chatMatches,
+    tickets.data,
+    navigate,
+    close,
+    t,
+    has,
+    actionDeps,
+  ]);
 
   // Any change to the result set puts the highlight back on the first row, so
   // Enter never fires a stale selection left over from the previous query.

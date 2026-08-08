@@ -111,6 +111,29 @@ describe('route configuration guards', () => {
     expect(declared.get('PUT')).toEqual(['agents--my:rw', 'agents--all:rw']);
   });
 
+  it('keeps the routing-status endpoint behind the scopes the command palette hides it by', async () => {
+    // The palette offers "Stop Accepting Chats" only to a caller holding one of
+    // these (`apps/web/src/components/actions.ts`, `requiredScope`), and hides
+    // the entry otherwise. That is a UX gate; this route's own list is the
+    // boundary. Pinned here so the two cannot drift apart silently: widen or
+    // narrow the route and the palette would go on gating by a stale list —
+    // either offering an action that 403s, or hiding one the caller may use.
+    // The web suite asserts the same literal from its side.
+    const declared = new Map<string, string[] | undefined>();
+    const probe = Fastify();
+    probe.decorate('redis', {} as never);
+    probe.addHook('onRoute', (route) => {
+      if (route.url === '/agents/me/routing-status') {
+        declared.set(String(route.method), (route.config as { scopes?: string[] })?.scopes);
+      }
+    });
+    await probe.register(agentRoutes);
+    await probe.ready();
+    await probe.close();
+
+    expect(declared.get('PUT')).toEqual(['agents--my:rw', 'agents--all:rw']);
+  });
+
   it('keeps the staffing forecast behind reports_read, and opens no scope of its own', async () => {
     // Same reasoning as the work-schedule routes: a new authorized surface is
     // where a missing `config.scopes` ships unnoticed. The second half matters as

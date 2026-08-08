@@ -3196,7 +3196,7 @@
             "description": "Contract-first: (1) packages/contract/openapi/paths/reports.yaml'a `staffingForecast` (GET /reports/staffing-forecast, from/to query — mevcut breakdown/aiAgent parametre bloğunun aynısı) + openapi.yaml `StaffingForecast` şeması + re-bundle. (2) reports.ts'e handler: rangeQuery/resolveRange ile aralık çözümü, `request.withTenant` içinde breakdownByHour (-e) + presence-coverage (-d) + work_schedules",
             "details": "WORKSCHED-g — GET /reports/staffing-forecast — kontrat + üç girdinin tek yanıta bağlanması  [OPUS-XHIGH]\n\nPRD: §5.3-Vardiya (WORKSCHED) · NFR-S3 (scope), NFR-S4 (izolasyon), NFR-P7\nETİKET GEREKÇESİ: OPUS-XHIGH: YENİ yetkili endpoint — kullanıcının açık kuralı 'yeni bir yetkili endpoint eklemek EN AZ OPUS-XHIGH'. Ayrıca üç ayrı girdiyi (saat-bazlı hacim, presence kapsaması, vardiya planı) tek yanıt şekline bağlayan yeni veri-şekli tasarımı var (koşul 4 sınırda). Yeni scope açılmadığı ve izolasyon mevcut withTenant + RLS deseninden geldiği için MAX değil.\nNEDEN AÇIK: packages/contract/openapi/paths altında 'schedule|staffing|WorkSchedule|Shift' grep → 0 eşleşme — staffing path'i yok. apps/api/src/routes/reports.ts'te /reports/overview, /reports/breakdown, /reports/ai-agent, /reports/reviews var; staffing endpoint'i yok.\nKAPSAM: Contract-first: (1) packages/contract/openapi/paths/reports.yaml'a `staffingForecast` (GET /reports/staffing-forecast, from/to query — mevcut breakdown/aiAgent parametre bloğunun aynısı) + openapi.yaml `StaffingForecast` şeması + re-bundle. (2) reports.ts'e handler: rangeQuery/resolveRange ile aralık çözümü, `request.withTenant` içinde breakdownByHour (-e) + presence-coverage (-d) + work_schedules (-b) okunur, staffing-forecast (-f) çağrılır. (3) config.scopes = ['reports_read'] — YENİ SCOPE AÇILMAZ. (4) ADR-09 tutarlılığı: yanıttaki hacim sayıları /reports/breakdown by_hour ile birebir aynı (aynı helper).\nDOSYALAR: packages/contract/openapi/paths/reports.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/routes/reports.ts · apps/api/test/integration/staffing-forecast.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts · packages/contract/openapi/paths/reports.yaml · apps/api/test/integration/reports-billing.test.ts\nKK (birebir): \"| Ekip/Vardiya | Work scheduler / staffing prediction |\" | \"KK-türetilmiş: \"Seçilen tarih aralığı için gün × saat personel önerisi (gerekli / planlı / açık) tek uç noktadan okunur; sayılar aynı pencerenin hacim raporuyla çelişmez ve yalnız rapor yetkisi olan kullanıcı erişir.\" — Türetme gerekçesi: PRD §5.3 satır 412'de KK sütunu yok; erişim payı depodaki mevcut rapor uçlarının reports_read kapısından, tutarlılık payı ADR-09'dan (rapor = fatura aynı sayı) türetildi.\"\nKK DOĞRULAMA: staffing-forecast.test.ts'teki 'staffing yanıtındaki saatlik hacim = /reports/breakdown by_hour' iddiası KK-türetilmiş tutarlılık maddesini, 403 testi erişim maddesini, ızgara testi 'gün × saat öneri' maddesini kanıtlar; contract-parity.test.ts yeşil kalması kontrat-kod paritesini kanıtlar.\nKAPSAM DIŞI: UI (WORKSCHED-i) · CSV export'a staffing grubu eklemek — YAPILMAZ · Tahminin persist edilmesi / geçmiş tahmin karşılaştırması (açık soru 2)\nSÖZLEŞME: packages/contract/openapi/paths/reports.yaml → `staffingForecast` (GET /reports/staffing-forecast); openapi.yaml → components.schemas.StaffingForecast. UYARI: yeni route OpenAPI'ye eklenip re-bundle edilmezse contract-parity.test.ts KIRILIR (proje notu). Yeni scope YOK → scopes.ts/scopes.test.ts sayacı değişmez.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration NEGATİF (ÖNCE): reports_read olmayan token → 403 · integration NEGATİF: geçersiz/ters aralık → 400 · integration CROSS-TENANT: lisans B'nin çağrısında lisans A'nın vardiya planı, presence olayları ve hacmi yanıtta YOK · integration pozitif: 7×24 ızgara döner; veri yokken low_confidence/null (0 değil) · integration ADR-09: aynı pencerede staffing hacmi = /reports/breakdown by_hour toplamı · integration: contract-parity.test.ts yeşil",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               2,
               4,
@@ -3204,7 +3204,7 @@
               6
             ],
             "parentId": "77",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T01:21:55.382Z"
           },
           {
             "id": 8,
@@ -3251,7 +3251,7 @@
             "updatedAt": "2026-08-07T20:20:22.155Z"
           }
         ],
-        "updatedAt": "2026-08-08T00:50:14.925Z"
+        "updatedAt": "2026-08-08T01:21:55.382Z"
       },
       {
         "id": "78",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T00:50:14.925Z",
+      "lastModified": "2026-08-08T01:21:55.382Z",
       "taskCount": 101,
       "completedCount": 80,
       "tags": [

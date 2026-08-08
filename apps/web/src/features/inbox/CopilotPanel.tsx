@@ -10,6 +10,7 @@
  * the conversation counts as "assisted" in Reports (07.3.2).
  */
 import { useState, type ReactElement } from 'react';
+import { EmptyState } from '../../components/EmptyState.js';
 import { Skeleton } from '../../components/Skeleton.js';
 import { Panel, PanelSection } from '../../components/ui/index.js';
 import { formatCount, formatDate, formatRate } from '../../lib/format.js';
@@ -28,6 +29,47 @@ const ENHANCE_MODES: Array<{ id: EnhanceMode; label: string }> = [
   { id: 'formal', label: 'More formal' },
   { id: 'grammar', label: 'Fix grammar' },
 ];
+
+/**
+ * Example questions for the `not_understood` empty state (FR-EK-B.1).
+ *
+ * `apps/web` is deliberately decoupled from `@nexa/ai-mock` (the same split
+ * `templates.test.ts` documents for skill steps), so these are not imported —
+ * each phrase is copied verbatim from a `BI_METRICS` entry in
+ * `packages/ai-mock/src/bi-intent.ts`, so clicking one is guaranteed to
+ * resolve to a real metric rather than a guess. Keep in sync by hand if that
+ * dictionary changes.
+ */
+const BI_EXAMPLE_QUESTIONS: readonly string[] = [
+  'How many chats started this week?',
+  'How many chats closed this week?',
+  'How many chats were resolved automatically today?',
+  "What's the customer satisfaction score this month?",
+];
+
+/**
+ * One canonical phrase per Overview field a `metric`/`no_data` answer can
+ * name — the same source as {@link BI_EXAMPLE_QUESTIONS} — for the `no_data`
+ * "try a wider window" suggestion.
+ */
+const BI_METRIC_PHRASE: Record<string, string> = {
+  'totals.chats': 'how many chats started',
+  'totals.closed': 'how many chats closed',
+  'totals.manual': 'how many chats resolved manually',
+  'totals.assisted': 'how many chats assisted',
+  'totals.automated': 'how many chats resolved automatically',
+  'satisfaction.score': 'customer satisfaction score',
+};
+
+/**
+ * A fresh 30-day question for `metric` — never the original question text, so
+ * a narrower window it may have named cannot linger in the new one.
+ */
+function widenedBiQuestion(metric: string): string | null {
+  const phrase = BI_METRIC_PHRASE[metric];
+  if (!phrase) return null;
+  return `${phrase[0]!.toUpperCase()}${phrase.slice(1)} in the last 30 days?`;
+}
 
 export function CopilotPanel({
   chatId,
@@ -211,7 +253,7 @@ export function CopilotPanel({
             {bi.isPending ? 'Asking…' : 'Ask'}
           </button>
         </form>
-        <BiAnswerCard bi={bi} />
+        <BiAnswerCard bi={bi} onExampleClick={setBiQuestion} />
       </PanelSection>
     </Panel>
   );
@@ -232,14 +274,26 @@ function InsertButton({ chatId, text }: { chatId: string; text: string }): React
 
 /**
  * The BI answer, in place of the row it replaced — loading, then whatever
- * `kind` came back (12.4-bi-d). Only `metric` gets the full card: `value`,
+ * `kind` came back (12.4-bi-d/-e). Only `metric` gets the full card: `value`,
  * the report field it quotes, the window it covers, and — the source
  * transparency this task exists for — where the number came from, so an agent
  * never has to take Copilot's word for it. `no_data` and `not_understood`
- * render their own `answer` sentence plainly; a dedicated empty state for
- * those is 12.4-bi-e's job, not this one's.
+ * both render through `EmptyState` (FR-EK-B.1), the same component the
+ * palette's `AiAnswerCard` uses for its identical two negative kinds — a
+ * question Copilot never learned and a window with nothing in it are both
+ * "nothing found here", and a bare empty rectangle is exactly what that
+ * component exists to replace. Their `description` comes straight from
+ * `answer` rather than a second, hand-written string, so the two copies can
+ * never drift.
  */
-function BiAnswerCard({ bi }: { bi: ReturnType<typeof useCopilotBi> }): ReactElement | null {
+function BiAnswerCard({
+  bi,
+  onExampleClick,
+}: {
+  bi: ReturnType<typeof useCopilotBi>;
+  /** Fills the question input with a suggestion — it never asks it outright, so the agent can review or edit first. */
+  onExampleClick: (question: string) => void;
+}): ReactElement | null {
   if (bi.isPending) {
     return (
       <div aria-hidden="true" className="flex flex-col gap-2 rounded-md bg-inset p-2">
@@ -261,7 +315,53 @@ function BiAnswerCard({ bi }: { bi: ReturnType<typeof useCopilotBi> }): ReactEle
   if (!bi.data) return null;
   const { answer, kind, metric, value, range } = bi.data;
 
-  if (kind !== 'metric' || value === null || range === null) {
+  if (kind === 'not_understood') {
+    return (
+      <EmptyState
+        title="Not sure what you mean"
+        description={answer}
+        action={
+          <div className="flex w-full flex-col gap-1">
+            {BI_EXAMPLE_QUESTIONS.map((question) => (
+              <button
+                key={question}
+                type="button"
+                onClick={() => onExampleClick(question)}
+                className="rounded-md border border-border px-2.5 py-1.5 text-left text-2xs text-content-secondary hover:bg-surface-2"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        }
+      />
+    );
+  }
+
+  if (kind === 'no_data') {
+    const widened = metric ? widenedBiQuestion(metric) : null;
+    return (
+      <EmptyState
+        title="No data for this window"
+        description={answer}
+        action={
+          widened ? (
+            <button
+              type="button"
+              onClick={() => onExampleClick(widened)}
+              className="w-full rounded-md border border-border px-2.5 py-1.5 text-left text-2xs text-content-secondary hover:bg-surface-2"
+            >
+              {widened}
+            </button>
+          ) : undefined
+        }
+      />
+    );
+  }
+
+  if (value === null || range === null) {
+    // `kind === 'metric'` but the contract's null pairing was not honoured —
+    // fall back to the plain sentence rather than a broken card.
     return <p className="text-2xs text-content-tertiary">{answer}</p>;
   }
 

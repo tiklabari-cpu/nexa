@@ -255,4 +255,79 @@ describe('CopilotPanel', () => {
       );
     });
   });
+
+  describe('BI command — not understood / no data (12.4-bi-e)', () => {
+    const QUESTION = 'What is the meaning of life?';
+
+    it('shows a meaningful empty state with example questions, not a blank rectangle', async () => {
+      stubFetch({
+        '/copilot/bi': {
+          answer:
+            "I couldn't match that to a report figure I can answer from. Try asking about chats started, chats closed, resolutions, or customer satisfaction.",
+          kind: 'not_understood',
+          metric: null,
+          value: null,
+          range: null,
+        },
+      });
+      renderPanel();
+
+      await userEvent.type(screen.getByLabelText('Ask about your reports'), QUESTION);
+      await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
+
+      expect(await screen.findByText('Not sure what you mean')).toBeTruthy();
+      expect(screen.getByText(/couldn't match that to a report figure/)).toBeTruthy();
+      // A real, working example — not an invented one — for every metric the
+      // question failed to name.
+      expect(screen.getByRole('button', { name: 'How many chats closed this week?' })).toBeTruthy();
+    });
+
+    it('fills the question input rather than asking it outright when an example is clicked', async () => {
+      stubFetch({
+        '/copilot/bi': {
+          answer: "I couldn't match that to a report figure I can answer from.",
+          kind: 'not_understood',
+          metric: null,
+          value: null,
+          range: null,
+        },
+      });
+      renderPanel();
+
+      const input = screen.getByLabelText('Ask about your reports') as HTMLInputElement;
+      await userEvent.type(input, QUESTION);
+      await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'How many chats closed this week?' }));
+
+      expect(input.value).toBe('How many chats closed this week?');
+    });
+
+    it('says plainly that the window has no data, with a suggestion to widen it', async () => {
+      stubFetch({
+        '/copilot/bi': {
+          answer: 'No data for customer satisfaction this week.',
+          kind: 'no_data',
+          metric: 'satisfaction.score',
+          value: null,
+          range: null,
+        },
+      });
+      renderPanel();
+
+      await userEvent.type(screen.getByLabelText('Ask about your reports'), 'CSAT this week?');
+      await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
+
+      expect(await screen.findByText('No data for this window')).toBeTruthy();
+      expect(screen.getByText('No data for customer satisfaction this week.')).toBeTruthy();
+      const widen = screen.getByRole('button', {
+        name: "Customer satisfaction score in the last 30 days?",
+      });
+      expect(widen).toBeTruthy();
+
+      const input = screen.getByLabelText('Ask about your reports') as HTMLInputElement;
+      await userEvent.click(widen);
+      expect(input.value).toBe('Customer satisfaction score in the last 30 days?');
+    });
+  });
 });

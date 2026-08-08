@@ -13,6 +13,56 @@
 
 ## Task log (newest-first)
 
+### tm 96.5 — 12.4-bi-e · Anlaşılmadı / yetersiz veri durumları — anlamlı empty state + örnek sorular — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/inbox/CopilotPanel.tsx` — `BiAnswerCard`'ın `kind !== 'metric'` dalı
+    artık düz `answer` metni yerine palette'in `AiAnswerCard`'ıyla aynı `EmptyState` bileşenini
+    (`apps/web/src/components/EmptyState.tsx`, FR-EK-B.1) kullanıyor — boş dikdörtgen yok.
+  - **`not_understood`:** başlık "Not sure what you mean" + `description={answer}` (sunucunun
+    cümlesi, ikinci el-yazması kopya yok — CommandPalette'in `AiAnswerCard`'ıyla aynı disiplin)
+    + `action`'da 4 örnek soru butonu. Örnekler `BI_EXAMPLE_QUESTIONS` sabiti: her biri
+    `packages/ai-mock/src/bi-intent.ts`'teki `BI_METRICS` sözlüğünün gerçek bir ifadesinden
+    **birebir** türetildi (chats/closed/automated/csat, ikisi de bir `RANGE_MATCHERS` ifadesiyle
+    birlikte) — `apps/web` `@nexa/ai-mock`'a bağımlı DEĞİL (`templates.test.ts`'in
+    `SkillStep`/`validateStep` için belgelediği aynı ayrım), bu yüzden liste import değil elle
+    senkron tutulan sabit bir dize dizisi; yorum bunu ve kaynağı işaret ediyor. Butona tıklamak
+    `onExampleClick` (= `setBiQuestion`) ile girdiyi doldurur, **otomatik göndermez** — KK'nın
+    istediği tam olarak bu ("tıklanınca girdiye dolar").
+  - **`no_data`:** başlık "No data for this window" + `description={answer}` + tek "son 30 gün"
+    öneri butonu. `widenedBiQuestion(metric)`, `metric` alan yolunu (`totals.closed` gibi)
+    `BI_METRIC_PHRASE` ile ai-mock'un kendi ifadesine çevirip **sıfırdan** "…in the last 30
+    days?" cümlesi kurar — orijinal `biQuestion` metnine EKLENMEZ. Bilinçli: ai-mock'un
+    `RANGE_MATCHERS`'ı sıralı bir liste (`yesterday`/`today` `last_30_days`'ten ÖNCE kontrol
+    edilir); orijinal soru "dün" gibi önce-taranan bir ifade taşıyorsa sona "son 30 gün"
+    eklemek onu geçersiz kılmazdı — taze bir cümle bu riski yapısal olarak ortadan kaldırıyor.
+  - Testler: `CopilotPanel.test.tsx`'e 3 yeni test — `not_understood` empty state + örnek
+    render (gerçek bir örneğin adıyla), örneğe tıklamak girdiyi doldurur (otomatik göndermez),
+    `no_data` anlamlı metin + widen butonu tıklamak girdiyi doldurur.
+- **Doğrulama** (hepsi ön planda, exit code'larla) — **tamamı yeşil:** `pnpm -w typecheck` **0**
+  (11/11) · `pnpm -w lint` **0** (8/8) · `npx turbo run test --filter='!@nexa/e2e'
+  --concurrency=1` — api 1958/1958, web 723/723 (+3 yeni, `CopilotPanel.test.tsx` 14/14) ·
+  `pnpm -w test:integration` — 1491/1491 · `pnpm -w build` **0** (7/7) · `pnpm -w test:e2e` —
+  **84/84** (`.env` kaynaklanarak, 96.3'ün notu geçerliliğini koruyor).
+- **Varsayımlar:**
+  - **`EmptyState` literal reuse, `apps/web/src/components/ui/EmptyState.tsx` değil** — task
+    açıklamasındaki dosya yolu (`components/ui/EmptyState.tsx`) artık doğru değil, gerçek dosya
+    `apps/web/src/components/EmptyState.tsx` (kanıt: `CommandPalette.tsx`, `TicketPane.tsx` ve
+    diğer ~20 dosya buradan import ediyor). 96.4'ün kendi notu da bu bileşeni önerdiği için
+    (bkz. tm 96.4 "Sonraki pencereye not") ekstra doğrulama gerekmedi.
+  - **Örnek soru sayısı = 4** (6 metrikten 4'ü: chats/closed/automated/csat) — KAPSAM
+    "örnek soru listesi" diyor, tam sayı vermiyor; 4 tanesi 320px panelde taşmadan sığıyor ve
+    metrik çeşitliliğini (hacim/kapanış/otomasyon/memnuniyet) gösteriyor. manual/assisted
+    listede yok ama `BI_METRIC_PHRASE`'te (widen için) hepsi mevcut.
+  - **Widen önerisi "tıklayınca doldurur", otomatik sormaz** — `not_understood` örnekleriyle
+    aynı mekanik, tutarlılık için; KK yalnız "anlamlı metin görünür" istiyor, buton KAPSAM'daki
+    "pencereyi genişletme önerisi" ifadesinin somutlaştırılması.
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (94.8'den beri taşınan
+    carry-over, bu pencerenin işiyle ilgisiz) — yine commit'e alınmadı.
+- **Sonraki pencereye not:** **12.4-bi-f** artık koşulabilir — `not_understood`/`no_data` UI'ı
+  hazır, tam DoD + Reports↔Copilot e2e karşılaştırması + PLAN §5.0 `12.4-bi` satırının nihai
+  `✅`'ye çevrilmesi kaldı (şu an PLAN §1126 hâlâ `◐`, yalnız "Kalan: bi-f" diyor).
+
 ### tm 96.4 — 12.4-bi-d · CopilotPanel'de BI soru girişi + cevap kartı — done — 2026-08-08 UTC
 
 - **Yapıldı:**

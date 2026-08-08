@@ -1669,6 +1669,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/palette/ai-query': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Answer a natural-language question about the workspace's own activity
+     * @description The ⌘K palette's third result type (FR-MOD-01.1.3): a free-text question
+     *     answered from the same report builders `GET /reports/*` uses, never a
+     *     separately-computed number (ADR-09). Account/team-wide and context-free —
+     *     unlike `/copilot/chats/{chatId}/*`, it takes no `chatId`, because it is
+     *     asked from the palette, not from inside a conversation.
+     *
+     *     The answer is deterministic (`@nexa/ai-mock`, no real LLM): the query is
+     *     matched against a small set of known topics and, on a match, reads the
+     *     corresponding figure straight out of the Overview report for the caller's
+     *     own license. An unrecognised question is not an error — `kind:
+     *     'not_understood'` comes back with a 200, the same way an unmatched skill
+     *     intent or an empty knowledge match elsewhere in this API is a 200 with an
+     *     empty/negative result rather than a 4xx.
+     */
+    post: operations['paletteAiQuery'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/trusted-domains': {
     parameters: {
       query?: never;
@@ -9369,6 +9401,57 @@ export interface operations {
             text: string;
             /** @enum {string} */
             mode: 'rephrase' | 'friendly' | 'formal' | 'grammar';
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  paletteAiQuery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          query: string;
+        };
+      };
+    };
+    responses: {
+      /**
+       * @description Always 200 once the request itself is valid — an unmatched question or
+       *     a matched topic with nothing to report is a `kind`, not a 4xx.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            answer: string;
+            /**
+             * @description `summary` — a figure was found and `answer` quotes it.
+             *     `no_data` — the topic was understood but the period has
+             *     nothing to report yet (e.g. no ratings, so no satisfaction
+             *     score). `not_understood` — the query matched no known topic.
+             * @enum {string}
+             */
+            kind: 'summary' | 'no_data' | 'not_understood';
+            /** @description Which report field `answer` quotes, e.g. `totals.chats`. Absent for `not_understood`. */
+            metric_source?: string;
+            /** @description Reserved for a future deep-link from the answer to a specific record; unused today. */
+            ref?: {
+              type: string;
+              id: string;
+            };
           };
         };
       };

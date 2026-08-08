@@ -44,6 +44,7 @@ import publicKbRoutes from './routes/public-kb.js';
 import publicKbHtmlRoutes from './routes/public-kb-html.js';
 import publicKbSitemapRoutes from './routes/public-kb-sitemap.js';
 import copilotRoutes from './routes/copilot.js';
+import commandPaletteRoutes from './routes/command-palette.js';
 import appRoutes from './routes/apps.js';
 import auditLogRoutes from './routes/audit-log.js';
 import healthRoutes from './routes/health.js';
@@ -193,6 +194,7 @@ export async function buildServer({
         canonicalBase: `${env.API_BASE_URL}${API_PREFIX}`,
       });
       await api.register(copilotRoutes, { env });
+      await api.register(commandPaletteRoutes);
       await api.register(appRoutes, { env });
       await api.register(auditLogRoutes);
     },

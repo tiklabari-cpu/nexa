@@ -4,3 +4,4 @@ export * from './compiler.js';
 export * from './intent.js';
 export * from './assist.js';
 export * from './topics.js';
+export * from './palette-intent.js';

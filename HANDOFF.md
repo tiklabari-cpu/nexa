@@ -13,6 +13,94 @@
 
 ## Task log (newest-first)
 
+### tm 95.4 + 95.5 — 01.1.3-ai-d/-e · Kontrat + AI sorgu endpoint'i (`POST /palette/ai-query`) — done — 2026-08-08 UTC
+
+- **Neden iki task tek pencerede:** 95.4'ün kendi Task Master detayı açıkça uyarıyordu —
+  kontrat tek başına inerse `apps/api/test/integration/contract-parity.test.ts` KIRILIR
+  (belgelenmiş ama sunulmayan route, testin "her belgelenen route sunulur" yönü). Aynı not
+  şunu da söylüyordu: "-e ile AYNI dilimde ve ARDIŞIK koşulur; ikisi tek pencerede de
+  birleştirilebilir — ayrı tutulmasının sebebi -e'nin OPUS olması, kontrat yazımının ucuza
+  inmesi." CONVENTIONS'ın "bozuk kodu main'e merge etme" kuralı ile "asla ikinci task'a
+  başlama" kuralı burada çatışıyordu; kontrat-only bırakıp DoD'u kırmızı halde main'e
+  taşımak birinciyi ihlal ederdi, o yüzden görevin kendi belgelenmiş çözümü (birleştirme)
+  izlendi. main hiçbir noktada kırmızı kapıyla görülmedi — tek commit, DoD baştan sona yeşil.
+- **Yapıldı (95.4 — kontrat):**
+  - `packages/contract/openapi/paths/command-palette.yaml` (yeni) — `POST /palette/ai-query`,
+    body `{ query: string }` (1-500 karakter), yanıt `{ answer, kind:
+    'summary'|'no_data'|'not_understood', metric_source?, ref? }`. `ref` alanı gelecekteki bir
+    deep-link için ayrıldı, bu turda hiçbir yerde doldurulmuyor. Desen `copilot.yaml`'dan
+    birebir kopyalandı (anchor + operationId + standart hata `$ref`'leri). Yeni `ApiError`
+    tipi AÇILMADI — anlaşılmayan soru `kind:'not_understood'` ile 200 döner.
+  - `openapi.yaml` — yeni `Command Palette` tag'i + `/palette/ai-query` path'i `$ref` ile
+    bağlandı (`/copilot/*` bloğunun hemen ardına, tematik komşuluk).
+  - `pnpm --filter @nexa/contract generate` — bundle 145→146 path, `src/generated/api.ts`
+    yeniden üretildi (`paletteAiQuery` operationId'i görünür).
+- **Yapıldı (95.5 — endpoint):**
+  - `apps/api/src/routes/command-palette.ts` (yeni) — `config.scopes: ['reports_read']`
+    (yeni scope AÇILMADI — mevcut reports scope'u yeniden kullanıldı), `request.withTenant`
+    içinde çalışır, principals varsayılanı (agent+bot, `copilot.ts` ile birebir) korunduğu
+    için müşteri token'ı 404 alır (I4 sınırı). **Kendi SQL'ini YAZMAZ** — `reports.ts`'ten
+    export edilen `buildOverviewReport`'u (aynı fonksiyon `GET /reports/overview`'un
+    kullandığı) ve `resolveRange({})`'i (30 günlük varsayılan pencere) çağırır, böylece
+    ADR-09 tutarlılığı ikinci bir hesaplama olmadan yapısal olarak korunur.
+  - `packages/ai-mock/src/palette-intent.ts` (yeni) — `matchIntent`'in aynı lexical
+    eşik/skor mantığını (tokenize + phrase-recall, `INTENT_THRESHOLD` 0.6) 5 sabit konuya
+    (`team_activity`/`tickets`/`satisfaction`/`response_time`/`automated`) uygular ve en
+    yüksek skorlu konuyu döner — deterministik (LLM yok), her konu Overview raporunun tek
+    bir alanını (`metricSource`, ör. `totals.chats`) işaret eder. `packages/ai-mock/src/index.ts`
+    export'a eklendi.
+  - Route, konuya karşılık gelen alanı okuyup (`TOPIC_READERS`) cümleye döker; alan `null`
+    ise (ör. hiç oylanmamış memnuniyet skoru — sahte 0% değil, gerçekten "henüz veri yok")
+    `kind:'no_data'` döner, konu hiç eşleşmezse `kind:'not_understood'` döner — ikisi de 200,
+    hata zarfı değil (görevin KAPSAM DIŞI kuralı: yeni `ApiError` tipi yok).
+  - `apps/api/src/server.ts` — `commandPaletteRoutes` import + register (`copilotRoutes`'un
+    hemen ardından).
+  - Testler: `packages/ai-mock/src/palette-intent.test.ts` (+9, yeni) — KK örneği
+    ("Summarize my team's activity") doğru konuya bağlanıyor · 5 konunun her biri en az bir
+    soruyla eşleşiyor · eşleşmeyen soru `null` · determinizm · her katalog kaydının
+    `metricSource` ve en az bir `phrase`'i var.
+    `apps/api/test/integration/command-palette.test.ts` (+9, yeni) — **ADR-09 tutarlılığı**
+    (cevaptaki sayı `GET /reports/overview`'un `totals.chats`'ıyla birebir) ·
+    **NEGATİF ÖNCE**: `reports_read` yok → 403 · müşteri token'ı → 404 · query 501 karakter
+    → 400 · boş query → 400 · **cross-tenant** (ZORUNLU): tenant A üç sohbet açar, tenant B
+    aynı soruyu sorar → cevap "0 chats" der, A'nın sayıları hiç sızmaz · `not_understood` ve
+    `no_data` (memnuniyet hiç oylanmamışken) 200 · determinizm (aynı sorgu → aynı
+    `metric_source`).
+- **Doğrulama** (hepsi ön planda, exit code'larla):
+  `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` 0 → api **1931/1931** (1922 →
+  +9), ai-mock **81/81** (72 → +9), web **705/705** (değişmedi — bu tur UI'ya dokunmadı, -f'in
+  işi) · `pnpm -w test:integration` 0 → **1476/1476** (1467 → +9, `command-palette.test.ts`
+  dahil) · `apps/api/test/integration/contract-parity.test.ts` **5/5** (145→146 path'e rağmen
+  sayı bozulmadı — route + kontrat aynı pencerede birlikte indiği için iki yönlü test de
+  yeşil) · `pnpm -w build` 0 · `pnpm -w test:e2e` → **82 passed / 1 failed**; tek kırmızı yine
+  `skills-routing.spec.ts:76` (**tm 104**, bu pencereden önce de kırık, bu pencerenin işiyle
+  İLGİSİZ — palet UI'ya hiç dokunulmadı, bu görevin kapsamı yalnız kontrat+backend).
+- **Varsayımlar:**
+  - İlk konu kataloğu PRD'nin somut KK örneğiyle sınırlı tutulmadı — 5 konu eklendi (takım
+    aktivitesi, tickets, memnuniyet, yanıt süresi, otomasyon), çünkü hepsi zaten
+    `buildOverviewReport`'un döndürdüğü alanlar; yeni bir sorgu AÇILMADI. Katalog
+    genişletilebilir bırakıldı.
+  - `ref` alanı (kontratta `{type, id}`) bu turda hiçbir yanıtta doldurulmuyor — KK
+    doğrulaması (-e için) bunu istemiyor, gelecekteki bir deep-link için ayrılmış alan.
+  - Palet konusu eşlemesinde ilk denemede "how many chats" ifadesi `team_activity`'ye
+    eklenmişti; `automated`'in "chats resolved automatically" ifadesiyle token örtüştüğü
+    için (ikisi de skor 1.0) sıralama-bağımlı bir çakışma yarattı — kaldırıldı, konuya özgü
+    ifadeler (`team activity`/`chats handled`) yeterli.
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (94.10'dan beri taşınan
+    carry-over, bu commit'e de alınmadı — bu pencerenin işiyle ilgisiz).
+  - Tam e2e koşusu `apps/e2e/kanit/*.png`'leri yine yeniden üretti; içerik bilgi olarak
+    değişmediği için (`git checkout -- apps/e2e/kanit`) geri alındı.
+- **Sonraki pencereye not:**
+  - **Sıradaki `01.1.3-ai-f`** (`bağ: 01.1.3-ai-e`, artık karşılandı): palette'te AI sorgu
+    sonuç tipi + cevap kartı + boş/anlaşılmadı durumları. Eşleşmeyen girdi için "AI'ya sor"
+    sonucu göstermek, seçilince `POST /palette/ai-query`'yi çağırmak ve üç `kind`'i
+    render etmek bu alt-görevin işi.
+  - `-g` (klavye/a11y, dört sonuç tipi) hâlâ -f'i bekliyor.
+  - `TOPIC_READERS` anahtarları `palette-intent.ts`'teki `PaletteTopic.id` değerleriyle
+    senkron tutulmalı — biri değişirse diğeri de değişmeli (bugün ikisi ayrı dosyada, tip
+    sistemi bunu zorlamıyor; bir sonraki değişiklikte dikkat).
+
 ### tm 95.3 — 01.1.3-ai-c · Aksiyon tetikleme — `run()` bağlama + optimistic durum + hata geri alma — done — 2026-08-08 UTC
 
 - **Yapıldı:**

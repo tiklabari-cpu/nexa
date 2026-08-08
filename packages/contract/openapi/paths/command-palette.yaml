@@ -1,0 +1,63 @@
+aiQuery:
+  post:
+    tags: [Command Palette]
+    operationId: paletteAiQuery
+    summary: Answer a natural-language question about the workspace's own activity
+    description: |
+      The ⌘K palette's third result type (FR-MOD-01.1.3): a free-text question
+      answered from the same report builders `GET /reports/*` uses, never a
+      separately-computed number (ADR-09). Account/team-wide and context-free —
+      unlike `/copilot/chats/{chatId}/*`, it takes no `chatId`, because it is
+      asked from the palette, not from inside a conversation.
+
+      The answer is deterministic (`@nexa/ai-mock`, no real LLM): the query is
+      matched against a small set of known topics and, on a match, reads the
+      corresponding figure straight out of the Overview report for the caller's
+      own license. An unrecognised question is not an error — `kind:
+      'not_understood'` comes back with a 200, the same way an unmatched skill
+      intent or an empty knowledge match elsewhere in this API is a 200 with an
+      empty/negative result rather than a 4xx.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [query]
+            properties:
+              query: { type: string, minLength: 1, maxLength: 500 }
+    responses:
+      "200":
+        description: |
+          Always 200 once the request itself is valid — an unmatched question or
+          a matched topic with nothing to report is a `kind`, not a 4xx.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer, kind]
+              properties:
+                answer: { type: string }
+                kind:
+                  type: string
+                  enum: [summary, no_data, not_understood]
+                  description: |
+                    `summary` — a figure was found and `answer` quotes it.
+                    `no_data` — the topic was understood but the period has
+                    nothing to report yet (e.g. no ratings, so no satisfaction
+                    score). `not_understood` — the query matched no known topic.
+                metric_source:
+                  type: string
+                  description: Which report field `answer` quotes, e.g. `totals.chats`. Absent for `not_understood`.
+                ref:
+                  type: object
+                  description: Reserved for a future deep-link from the answer to a specific record; unused today.
+                  required: [type, id]
+                  properties:
+                    type: { type: string }
+                    id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

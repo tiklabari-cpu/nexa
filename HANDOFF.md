@@ -13,6 +13,57 @@
 
 ## Task log (newest-first)
 
+### tm 97.1 — 06.3.2-bulk-a · RFC4180 CSV ayrıştırıcı + formül-enjeksiyon nötrleme — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/api/src/lib/csv-import.ts` (yeni, saf modül, bağımlılık eklenmedi):
+    `parseCsv(text, limits)` → `{ header: string[], rows: string[][] }` ya da **konumlu**
+    `CsvParseError` (`code` + 1-tabanlı `line`/`column` + `isCsvParseError` daraltıcısı).
+    Hata kodları: `file_too_large` · `too_many_rows` · `cell_too_long` · `unclosed_quote` ·
+    `text_after_closing_quote`.
+  - **Tek geçişli karakter yürüyüşü**, regex YOK: alan sınırları `charCodeAt` ile, tırnaklı
+    alanlar `indexOf('"', i)` ile taranıyor ve her arama bir öncekinin bittiği yerden başlıyor —
+    yani alan başına yapılan taramaların toplamı alanın kendisi kadar. Geri-izlemeli hiçbir
+    yapı yok; satır/sütun hesabı bile yalnız **hata yolunda** (`positionOf`) yapılıyor, mutlu
+    yol sayaç taşımıyor.
+  - Formül-enjeksiyon nötrleme `reports-export.ts`'teki `FORMULA_LEAD` sınıfının aynısı
+    (`=` `+` `-` `@` TAB CR) ama regex yerine karakter-kodu kümesiyle; **çözülmüş** hücreye
+    uygulanıyor (tırnak içine gizlenmiş payload da yakalanıyor) ve **başlık dahil her hücreye**
+    — bir hücre "nasılsa saklanmıyor" diye guard'dan kaçamasın diye.
+  - Bütçe aşımında **sessiz kırpma yok**: üçü de tipli hata. `maxBytes` UTF-8 bayt sayar
+    (`Buffer.byteLength`), `maxCellChars` **çözülmüş** hücreyi ölçer (`""` = 1 karakter).
+    `limits` zorunlu parametre + NaN/0/negatif değer `RangeError` — NaN bir bütçeyi sessizce
+    kapatırdı (her karşılaştırma false).
+  - Bilinçli kararlar (hepsi testli): CRLF/LF/**tek başına CR** üçü de satır sonu (CR-only bir
+    dosya yoksa tek dev satıra çökerdi) · boş satır atlanır, `""` satırı **gerçek** satırdır ·
+    başlık genişliğinden farklı satır dolgulanmaz/kırpılmaz/reddedilmez (satır şekli 97.2'nin
+    kararı; burada reddetmek onu satır-bazlı rapordan gizlerdi).
+- **Doğrulama** (hepsi exit 0, ön planda):
+  - `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build`
+  - `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **94 dosya / 1980 test**
+  - `pnpm -w test:integration` → **63 dosya / 1491 test**
+  - `make test-e2e` → **86/86**
+  - Task KK komutu birebir: `pnpm --filter @nexa/api test:unit` → 31 dosya / 489 test, içinde
+    `src/lib/csv-import.test.ts` **22 test**: (a) tırnaklı + gömülü satır-sonlu + BOM'lu + CRLF'li
+    gerçekçi dosya tam ayrışır; (b) `=cmd|' /C calc'!A0` hücresi `'` ön-ekli döner (+ beş lead
+    varyantı + tırnak içine gizlenmiş payload); (c) ~100k patolojik girdi (tırnak-çifti + ZWSP
+    dolgusu) lineer bantta — 4× girdi için süre ölçülüyor, kuadratik ~16× olurdu.
+- **Varsayımlar:** E2E kapısı `.env` export edilmiş kabuk ister — `pnpm -w test:e2e` çıplak
+  çalıştırıldığında `@nexa/rtm` `DATABASE_URL/REDIS_URL/JWT_SIGNING_KEY/CUSTOMER_TOKEN_SECRET`
+  bulamadan ölüyor. Doğru komut `make test-e2e` (Makefile `.env`'i her recipe'ye export ediyor).
+- **Sonraki pencereye not:**
+  - 97.2 (`06.3.2-bulk-b`) bu modülün üstüne oturur: `parseCsv` **kolonların ne anlama geldiğine**
+    dair hiçbir şey bilmiyor — kolon eşleme, `type` varsayılanı ve satır-başı doğrulama oraya ait.
+    Başlık hücreleri de nötrlenmiş gelir (formül-lead taşıyan bir başlık `'` ön-ekli olur);
+    normalize ederken bunu hesaba kat.
+  - `rows[i]`'nin indeksi **veri satırı** indeksidir, fiziksel dosya satırı değil (tırnak içi
+    satır sonu ve atlanan boş satırlar yüzünden). Kullanıcıya "satır no" gösterecek olan
+    97.3/97.6 bunu böyle raporlamalı.
+  - `limits` için varsayılan sabit **bilinçli olarak yok**: satır/hücre/gövde tavanlarının
+    sayısal değeri 97.3'ün kararı (tm 97 varsayımlarında ~200 satır · 100.000 karakter · ~5 MiB).
+  - Çalışma alanında `run-loop.sh` **bu pencereden önce** değişmişti (döngü retry muhasebesi,
+    görev kapsamı dışı) — commit'e alınmadı, kasten bırakıldı.
+
 ### tm 96.6 — 12.4-bi-f · Uçtan uca doğrulama + ADR-09 çapraz kontrolü + kapanış — done — 2026-08-08 UTC
 
 - **Yapıldı:**

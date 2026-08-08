@@ -4197,14 +4197,14 @@
             "description": "(1) `TABS` dizisine `{ id:'sales', label:'Sales' }` + `{ id:'team-performance', label:'Team performance' }`. (2) `SalesTab` — `configured:false` iken 13.5'e işaret eden ANLAMLI empty state, sıfır rakam GÖSTERMEZ (null ≠ 0 kuralı backend'le hizalı). (3) `TeamPerformanceTab` — ajan başına satır tablosu (chats/closed/automated/assisted/manual/avg first response/CSAT); CSAT `null` olan ajanda '—', %0 ",
             "details": "07.7-j — Reports UI — Sales + Team performance sekmeleri (ajan tablosu + `configured:false` empty state)  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.7 (+ FR-EK-B.1 anlamlı empty state, NFR-P4 liste)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 dosya + e2e dokunuşu. (2) Güvenlik sınırı yok — salt-okunur render. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: `ReportsPage.tsx:773` `BreakdownTab` içindeki `by_agent` tablosu (aynı ajan-satırı render'ı) + `ReviewsTab`'in `ecommerce.configured` dalı + `EmptyState`. (5) Kontrat değişikliği yok. (6) KK mekanik: sekme render, `configured:false` → anlamlı empty state, yetki yoksa sekme yok.\nNEDEN AÇIK: `ReportsPage.tsx:120-123` `TABS` dizisinde Sales / Team performance sekmesi yok. Ancak ajan tablosu render'ı sıfırdan değil: `ReportsBreakdown` arayüzü `by_agent: Array<SplitRow & { agent_id, name }>` taşıyor (satır 80-84) ve `BreakdownTab` (satır 773) bunu render ediyor. `configured:false` empty state emsali de var: `ReportsReviews.ecommerce.configured` alanı (satır 105-111).\nKAPSAM: (1) `TABS` dizisine `{ id:'sales', label:'Sales' }` + `{ id:'team-performance', label:'Team performance' }`. (2) `SalesTab` — `configured:false` iken 13.5'e işaret eden ANLAMLI empty state, sıfır rakam GÖSTERMEZ (null ≠ 0 kuralı backend'le hizalı). (3) `TeamPerformanceTab` — ajan başına satır tablosu (chats/closed/automated/assisted/manual/avg first response/CSAT); CSAT `null` olan ajanda '—', %0 değil. Mevcut tablo/`VirtualTable` bileşeni kullanılabiliyorsa tercih edilir. (4) Sekme görünürlüğü `/reports/groups` yanıtına bağlı.\nDOSYALAR: apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx · apps/e2e/tests/reports.spec.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/reports/ReportsPage.tsx (satır 773+ `BreakdownTab` `by_agent` tablo render'ı — Team performance satır kalıbı) · apps/web/src/features/reports/ReportsPage.tsx (satır 545+ `ReviewsTab` — `ecommerce.configured` dalı, Sales empty state emsali) · apps/web/src/components/EmptyState.tsx · apps/web/src/features/inbox/TicketGrid.tsx (sıralanabilir/virtualize tablo deseni, T6-a `VirtualTable`)\nKK (birebir): \"İzin bazlı görünürlük\"\nKK DOĞRULAMA: `ReportsPage.test.tsx` — 'Sales' ve 'Team performance' sekmeleri render edilir; `/reports/groups` bunları döndürmezse sekme YOK ('İzin bazlı görünürlük'); `configured:false` yanıtında anlamlı empty state görünür ve hiçbir sayı '0' olarak gösterilmez; CSAT `null` olan ajan satırında '—' görünür.\nKAPSAM DIŞI: Isı haritası görselleştirmesi — FR-MOD-07.5 · Satış verisi gösterimi — FR-MOD-13.5 gelince doldurulur · Export butonu + Save view çubuğu — 07.7-k · Ajan detay sayfasına derin bağlantı\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit (negatif önce) — grup yetkisiz → sekme render edilmez; 403 → `ErrorNotice` · unit — `configured:false` → empty state metni, '0' rakamı YOK (regresyon kilidi) · unit — CSAT `null` → '—'; 0 ajan → anlamlı empty state · unit — ajan satırı alanları backend yanıtıyla birebir eşleşir · e2e — `reports.spec.ts` sekme görünürlüğü",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               3,
               4,
               9
             ],
             "parentId": "93",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T03:43:34.556Z"
           },
           {
             "id": 11,
@@ -4246,7 +4246,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T03:27:42.984Z"
+        "updatedAt": "2026-08-08T03:43:34.556Z"
       },
       {
         "id": "94",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T03:27:42.984Z",
+      "lastModified": "2026-08-08T03:43:34.556Z",
       "taskCount": 101,
       "completedCount": 81,
       "tags": [

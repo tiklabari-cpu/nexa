@@ -4559,10 +4559,10 @@
             "description": "`copilot.yaml`'a `bi` anchor'ı: `POST /copilot/bi`, operationId `copilotBi`, body `{ question: string }` (uzunluk tavanı), yanıt `{ answer: string, kind: 'metric'|'no_data'|'not_understood', metric: string|null, value: number|null, range: {from,to}|null }`. `openapi.yaml`'a `$ref: './paths/copilot.yaml#/bi'`. Regenerate.",
             "details": "12.4-bi-a — Kontrat: `POST /copilot/bi` anchor'ı + bundle + tip üretimi  [SONNET-XHIGH]\n\nPRD: §5.5-MOD-12 (v2 '○ (BI komut)') + §5.3 faz başlığı\nETİKET GEREKÇESİ: SONNET-XHIGH: 6 koşul sağlandı. (1) 2 kontrat dosyası + üretilen çıktı. (2) Güvenlik sınırı yok — yalnız şema metni. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: aynı dosyadaki `summary`/`reply`/`enhance` anchor'ları (operationId + body/response deseni birebir). (5) Katkısal ve mekanik. (6) KK mekanik: contract-parity + bundle diff. UYARI: tek başına inerse contract-parity KIRILIR (iki yönlü) → -c ile ardışık koşulur.\nNEDEN AÇIK: `packages/contract/openapi/paths/copilot.yaml` anchor'ları tam olarak: knowledge, knowledgeSource, summary, reply, enhance. 'bi' veya benzeri anchor YOK; `openapi.yaml`'da da referans yok.\nKAPSAM: `copilot.yaml`'a `bi` anchor'ı: `POST /copilot/bi`, operationId `copilotBi`, body `{ question: string }` (uzunluk tavanı), yanıt `{ answer: string, kind: 'metric'|'no_data'|'not_understood', metric: string|null, value: number|null, range: {from,to}|null }`. `openapi.yaml`'a `$ref: './paths/copilot.yaml#/bi'`. Regenerate.\nDOSYALAR: packages/contract/openapi/paths/copilot.yaml · packages/contract/openapi/openapi.yaml · packages/contract/src/generated/api.ts · packages/contract/dist/openapi.json\nREFERANS DESEN (kopyalanacak): packages/contract/openapi/paths/copilot.yaml (summary/reply/enhance anchor'ları — operationId + şema deseni birebir)\nKK (birebir): \"KK-türetilmiş: 'Copilot bir rapor/metrik sorusuna, Reports ile BİREBİR aynı sayıyı vererek cevap verir; anlamadığı soruyu uydurmaz.' — PRD'de bu kalem için Kabul Kriteri sütunu YOK (yalnız §5.5 matris hücresi '○ (BI komut)'), türetme ADR-09 tutarlılık kuralı ve mevcut copilot.ts sınır deseni üzerinden yapıldı. §C varsayımı.\"\nKK DOĞRULAMA: `pnpm --filter @nexa/contract generate` sonrası üretilen tipte `copilotBi` görünür; `contract-parity.test.ts` -c ile birlikte yeşil.\nKAPSAM DIŞI: Route implementasyonu (12.4-bi-c) · Niyet eşleyici (12.4-bi-b) · UI (12.4-bi-d/-e)\nSÖZLEŞME: packages/contract/openapi/paths/copilot.yaml'a `bi` anchor + openapi.yaml $ref. UYARI: re-bundle şart; route inmeden tek başına inerse contract-parity kırılır.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration: contract-parity (-c ile) yeşil · regresyon: mevcut contract-parity sayısı bozulmaz",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "96",
-            "updatedAt": "2026-08-08T12:14:51.785Z"
+            "updatedAt": "2026-08-08T12:25:50.681Z"
           },
           {
             "id": 2,
@@ -4630,7 +4630,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T12:14:51.785Z",
+        "updatedAt": "2026-08-08T12:25:50.681Z",
         "complexity": 6,
         "recommendedSubtasks": 6,
         "expansionPrompt": "\"12.4 — Copilot BI komut (rapor/metrik sorusu)  ·  dilim V2-5\" görevini 6 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5023,7 +5023,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T12:14:51.785Z",
+      "lastModified": "2026-08-08T12:25:50.681Z",
       "taskCount": 104,
       "completedCount": 87,
       "tags": [

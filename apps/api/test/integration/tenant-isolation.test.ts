@@ -12,6 +12,9 @@
  *      including queries that explicitly ask to.
  */
 import { randomBytes } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
@@ -19,12 +22,16 @@ import { withTenant } from '../../src/lib/tenant.js';
 import {
   buildCasesReport,
   buildLeadsReport,
+  buildOverviewReport,
   buildSalesReport,
   buildTeamPerformanceReport,
 } from '../../src/routes/reports.js';
+import { FileMailer } from '../../src/services/mail/mailer.js';
 import { buildGroupCsv } from '../../src/services/reports/report-csv.js';
+import { ScheduledReportSweeper } from '../../src/services/reports/scheduled-report-sweeper.js';
 import { toPdf, type CsvCell } from '../../src/routes/reports-export.js';
-import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
 const OWNER_URL = process.env['DATABASE_URL'];
@@ -873,6 +880,283 @@ describe('tenant isolation (RLS)', () => {
       expect(
         await owner.scheduledReportRun.count({ where: { licenseId: fixtures.a.licenseId } }),
       ).toBe(1);
+    });
+  });
+
+  describe('scheduled report exports — the whole chain, licence against licence (07.9-sched-i)', () => {
+    /**
+     * Everything above this block attacks one table. This one attacks the
+     * *feature*: a schedule is defined over HTTP, the sweep claims a period and
+     * mails a CSV, and a delivery history is read back — five request surfaces
+     * and one background job, each of which has its own isolation test and none
+     * of which proves the chain holds end to end.
+     *
+     * It matters because the chain is where a leak would actually happen. A
+     * schedule that could be read across the boundary discloses who receives a
+     * workspace's numbers; one that could be *edited* across it turns the
+     * victim's own scheduler into standing egress. And the delivery itself is
+     * the part no HTTP test can see: the mail leaves the system on a timer, to
+     * addresses chosen earlier, carrying a CSV built by a job that runs outside
+     * any request. Nothing downstream would notice.
+     *
+     * The definitions are created through the API with each licence's own token
+     * — not seeded as the owner — so the request path that will be attacked is
+     * the same one that produced the rows. `team-performance` is the group
+     * because its CSV names the assignee, which makes "only its own data" a
+     * string the test can search for rather than a count it has to trust.
+     */
+    const NOW = new Date('2026-08-08T09:00:00.000Z');
+    /** Inside the previous complete day, which is what a `daily` sweep reports on. */
+    const IN_PERIOD = new Date('2026-08-07T12:00:00.000Z');
+    const PERIOD_KEY = '2026-08-07';
+    /** Tenant B's private vocabulary — a tag only its own workspace ever named. */
+    const B_TAG = 'beta-only-escalation';
+
+    let server: TestServer;
+    let mailer: FileMailer;
+    let mailDir: string;
+    let aToken: string;
+    let bToken: string;
+    let aExportId: string;
+    let bExportId: string;
+
+    const auth = (token: string) => ({ authorization: `Bearer ${token}` });
+    const PATH = '/reports/scheduled-exports';
+
+    /** Only the scheduler's own mail — the test server's mailer is a NullMailer. */
+    const mailbox = async () =>
+      (await mailer.outbox()).filter((message) => message.kind === 'scheduled_report');
+
+    /** A closed, assigned thread inside the period: one `team-performance` row naming the agent. */
+    async function seedAssignedThread(
+      tenant: { organizationId: string; licenseId: bigint },
+      agentId: string,
+    ): Promise<string> {
+      const customer = await owner.customer.create({
+        data: { organizationId: tenant.organizationId, name: 'Chain visitor' },
+        select: { id: true },
+      });
+      const chatId = generateShortId();
+      await owner.chat.create({
+        data: {
+          id: chatId,
+          licenseId: tenant.licenseId,
+          customerId: customer.id,
+          active: false,
+          createdAt: IN_PERIOD,
+        },
+      });
+      const thread = await owner.thread.create({
+        data: {
+          id: generateShortId(),
+          chatId,
+          licenseId: tenant.licenseId,
+          active: false,
+          assigneeId: agentId,
+          createdAt: IN_PERIOD,
+          closedAt: new Date(IN_PERIOD.getTime() + 60_000),
+        },
+        select: { id: true },
+      });
+      return thread.id;
+    }
+
+    beforeAll(async () => {
+      server = await startTestServer();
+      await clearRateLimits(server.app);
+      mailDir = await mkdtemp(join(tmpdir(), 'nexa-chain-'));
+      mailer = new FileMailer(mailDir);
+
+      // Both scopes on both tokens on purpose: the four definition surfaces take
+      // `reports_manage` and the history takes `reports_read`, so a token
+      // missing either would answer 403 and the 404 this block is about would
+      // never be reached. The credential is deliberately *sufficient* — the only
+      // thing standing between it and tenant A's schedule is the licence.
+      const scopes = ['reports_manage', 'reports_read'];
+      [aToken, bToken] = await Promise.all([
+        grantToken(owner, {
+          licenseId: fixtures.a.licenseId,
+          organizationId: fixtures.a.organizationId,
+          ownerId: fixtures.a.ownerAccountId,
+          scopes,
+        }),
+        grantToken(owner, {
+          licenseId: fixtures.b.licenseId,
+          organizationId: fixtures.b.organizationId,
+          ownerId: fixtures.b.ownerAccountId,
+          scopes,
+        }),
+      ]);
+
+      await seedAssignedThread(fixtures.a, fixtures.a.agentAccountId);
+      const bThreadId = await seedAssignedThread(fixtures.b, fixtures.b.agentAccountId);
+      // B's own vocabulary, applied to B's own conversation. Tags never reach any
+      // report CSV — they live only in the Overview JSON's `top_tags` — so this
+      // is the second, independent tracer: something identifying that exists on
+      // B's side of the boundary and must not turn up on A's.
+      const tag = await owner.tag.create({
+        data: { licenseId: fixtures.b.licenseId, name: B_TAG },
+        select: { id: true },
+      });
+      await owner.threadTag.create({ data: { threadId: bThreadId, tagId: tag.id } });
+
+      // Each licence names its own agent — the roster check refuses anything
+      // else, which is 07.9-sched-b's guarantee and this block's precondition.
+      const define = async (token: string, recipient: string): Promise<string> => {
+        const response = await server.post(
+          PATH,
+          { group: 'team-performance', frequency: 'daily', recipients: [recipient] },
+          auth(token),
+        );
+        expect(response.statusCode, response.body).toBe(201);
+        return (response.json() as { id: string }).id;
+      };
+      aExportId = await define(aToken, fixtures.a.agentEmail);
+      bExportId = await define(bToken, fixtures.b.agentEmail);
+
+      // The background half of the chain, run once for both licences — the same
+      // sweep an operator triggers, against the RLS-bound runtime role.
+      const report = await new ScheduledReportSweeper(app, mailer).run({ now: NOW });
+      expect(report.totals).toMatchObject({ delivered: 2, skipped: 0, failed: 0 });
+    });
+
+    afterAll(async () => {
+      await server.close();
+      await rm(mailDir, { recursive: true, force: true });
+      await owner.scheduledReportRun.deleteMany({});
+      await owner.scheduledReport.deleteMany({});
+      await owner.threadTag.deleteMany({});
+      await owner.tag.deleteMany({});
+    });
+
+    it('gives each licence a delivered schedule of its own — the fixture the attack needs', async () => {
+      // Guards the guard. Every "cannot see it" below is worthless if there was
+      // nothing to see: both licences must really hold a definition, a claimed
+      // period and a delivery before the boundary means anything.
+      for (const [token, id] of [
+        [aToken, aExportId],
+        [bToken, bExportId],
+      ] as const) {
+        const listed = await server.get(PATH, auth(token));
+        expect(listed.statusCode).toBe(200);
+        expect((listed.json() as { items: Array<{ id: string }> }).items.map((i) => i.id)).toEqual([
+          id,
+        ]);
+
+        const runs = await server.get(`${PATH}/${id}/runs`, auth(token));
+        expect(runs.statusCode).toBe(200);
+        const items = (runs.json() as { items: Array<{ status: string; period_key: string }> })
+          .items;
+        expect(items).toHaveLength(1);
+        expect(items[0]).toMatchObject({ status: 'delivered', period_key: PERIOD_KEY });
+      }
+    });
+
+    it("refuses tenant B every surface of tenant A's schedule — all five", async () => {
+      // One credential, five doors. A 403 anywhere here would be a leak of its
+      // own ("that id exists, you just may not have it"), so the whole surface
+      // answers 404 — except the list, which cannot 404 and answers with B's own
+      // rows instead.
+      const listed = await server.get(PATH, auth(bToken));
+      expect(listed.statusCode).toBe(200);
+      const listedIds = (listed.json() as { items: Array<{ id: string }> }).items.map((i) => i.id);
+      expect(listedIds).not.toContain(aExportId);
+
+      const read = await server.get(`${PATH}/${aExportId}`, auth(bToken));
+      const edited = await server.patch(
+        `${PATH}/${aExportId}`,
+        { recipients: [fixtures.b.agentEmail] },
+        auth(bToken),
+      );
+      const runs = await server.get(`${PATH}/${aExportId}/runs`, auth(bToken));
+      const cancelled = await server.del(`${PATH}/${aExportId}`, auth(bToken));
+
+      expect(read.statusCode).toBe(404);
+      expect(edited.statusCode).toBe(404);
+      expect(runs.statusCode).toBe(404);
+      expect(cancelled.statusCode).toBe(404);
+
+      // And the attempts left nothing behind. A DELETE answering 404 while the
+      // row went away, or a PATCH that redirected the recipients before the
+      // 404, are exactly the failures a status-code-only assertion misses.
+      const survivor = await owner.scheduledReport.findUnique({ where: { id: aExportId } });
+      expect(survivor?.recipients).toEqual([fixtures.a.agentEmail]);
+      expect(survivor?.licenseId).toBe(fixtures.a.licenseId);
+      expect(
+        await owner.scheduledReportRun.count({ where: { scheduledReportId: aExportId } }),
+      ).toBe(1);
+
+      // The owner still reads its own schedule back, unchanged — so the block
+      // above proved a boundary rather than a broken endpoint.
+      const mine = await server.get(`${PATH}/${aExportId}`, auth(aToken));
+      expect(mine.statusCode).toBe(200);
+      expect((mine.json() as { recipients: string[] }).recipients).toEqual([fixtures.a.agentEmail]);
+    });
+
+    it('delivers each workspace only its own figures, to only its own mailbox (NFR-S9)', async () => {
+      const inbox = await mailbox();
+      expect(inbox).toHaveLength(2);
+
+      const toA = inbox.find((message) => message.to === fixtures.a.agentEmail);
+      const toB = inbox.find((message) => message.to === fixtures.b.agentEmail);
+      expect(toA, "tenant A's agent received nothing").toBeDefined();
+      expect(toB, "tenant B's agent received nothing").toBeDefined();
+      // Nobody outside the two rosters was mailed at all.
+      expect(inbox.map((message) => message.to).sort()).toEqual(
+        [fixtures.a.agentEmail, fixtures.b.agentEmail].sort(),
+      );
+
+      // The CSV is embedded in the body, so the assertions read the delivery
+      // itself rather than something rebuilt beside it. Both directions: the
+      // tracer is present where it belongs, absent across the boundary — a
+      // "not present" that was never findable proves nothing.
+      expect(toA?.body).toContain('Agent a');
+      expect(toA?.body).toContain(fixtures.a.agentAccountId);
+      expect(toA?.body).not.toContain('Agent b');
+      expect(toA?.body).not.toContain(fixtures.b.agentAccountId);
+
+      expect(toB?.body).toContain('Agent b');
+      expect(toB?.body).toContain(fixtures.b.agentAccountId);
+      expect(toB?.body).not.toContain('Agent a');
+      expect(toB?.body).not.toContain(fixtures.a.agentAccountId);
+    });
+
+    it("never carries tenant B's tag vocabulary into tenant A's delivery", async () => {
+      // Guards the guard first: the tag is real, it is attached, and B's own
+      // reporting surfaces it. Without this, "A's mail does not contain it"
+      // would pass just as happily against a tag nobody ever created.
+      const from = new Date('2026-08-07T00:00:00.000Z');
+      const to = new Date('2026-08-07T23:59:59.999Z');
+      const topTagsFor = async (tenant: {
+        licenseId: bigint;
+        organizationId: string;
+      }): Promise<string[]> => {
+        const report = await withTenant(app, tenant, (tx) =>
+          buildOverviewReport(tx, tenant.licenseId, from, to),
+        );
+        return (report['top_tags'] as Array<{ name: string }>).map((tag) => tag.name);
+      };
+
+      expect(await topTagsFor(fixtures.b)).toEqual([B_TAG]);
+      expect(await topTagsFor(fixtures.a)).toEqual([]);
+
+      const inbox = await mailbox();
+      const toA = inbox.find((message) => message.to === fixtures.a.agentEmail);
+      expect(toA?.body).not.toContain(B_TAG);
+    });
+
+    it('mails nothing more however many times the job is triggered', async () => {
+      // The idempotence half of the chain, asserted here because it is a
+      // *cross-tenant* claim too: a second sweep must not re-deliver either
+      // workspace, and must not consume the other's period while skipping one.
+      const second = await new ScheduledReportSweeper(app, mailer).run({ now: NOW });
+      expect(second.totals).toMatchObject({ delivered: 0, skipped: 2, failed: 0 });
+
+      expect(await mailbox()).toHaveLength(2);
+      expect(await owner.scheduledReportRun.count()).toBe(2);
+      for (const id of [aExportId, bExportId]) {
+        expect(await owner.scheduledReportRun.count({ where: { scheduledReportId: id } })).toBe(1);
+      }
     });
   });
 

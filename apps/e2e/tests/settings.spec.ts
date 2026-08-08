@@ -8,6 +8,7 @@
  */
 import {
   API_BASE,
+  DEMO,
   expect,
   ownerAccessToken,
   openWidget,
@@ -278,8 +279,7 @@ test.describe('settings', () => {
       // response, not for the button.
       const saved = agentPage.waitForResponse(
         (response) =>
-          response.url().endsWith('/settings/security') &&
-          response.request().method() === 'PATCH',
+          response.url().endsWith('/settings/security') && response.request().method() === 'PATCH',
       );
       await section().getByRole('button', { name: 'Save' }).click();
       expect((await saved).status()).toBe(200);
@@ -333,8 +333,7 @@ test.describe('settings', () => {
     // the previous (empty) list back — the flake the file-sharing test above hit.
     const added = agentPage.waitForResponse(
       (response) =>
-        response.url().endsWith('/settings/ip-allowlist') &&
-        response.request().method() === 'POST',
+        response.url().endsWith('/settings/ip-allowlist') && response.request().method() === 'POST',
     );
     await section().getByRole('button', { name: 'Add entry' }).click();
     expect((await added).status()).toBe(201);
@@ -363,6 +362,119 @@ test.describe('settings', () => {
       .click();
     expect((await removed).status()).toBe(204);
     await expect(section().getByText('No allowlist entries')).toBeVisible();
+  });
+
+  /**
+   * Scheduled exports (PRD §5.3-Reports, FR-MOD-07.7) — the screen half of the
+   * chain whose backend halves are proved in the API suites.
+   *
+   * What only a browser can show is that the pieces line up: the report
+   * catalogue really fills the picker, the roster really fills the recipients,
+   * the definition survives a reload, and cancelling takes it away again. The
+   * section is created and cancelled inside one test because the seed carries no
+   * schedules — so the empty state at both ends is the tenant's true steady
+   * state, and the run leaves nothing for the next one to trip over.
+   */
+  test('schedules a report export and cancels it back to the empty state', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/settings');
+
+    // Re-resolved after each reload: the old handle points at a detached node.
+    const section = (): ReturnType<typeof agentPage.getByRole> =>
+      agentPage.getByRole('region', { name: 'Scheduled exports' });
+
+    await expect(
+      section().getByRole('heading', { name: 'Scheduled exports', level: 2 }),
+    ).toBeVisible();
+    await expect(section().getByText('No scheduled exports')).toBeVisible();
+
+    // Nothing is submittable until both halves of the decision are made — a
+    // schedule with no report or no recipient is a timer that mails nothing.
+    const submit = section().getByRole('button', { name: 'Schedule export' });
+    await expect(submit).toBeDisabled();
+
+    await section().getByLabel('Report').selectOption({ label: 'Leads' });
+    await section().getByLabel('Frequency').selectOption('weekly');
+    await expect(submit).toBeDisabled();
+    await section().locator('input[type="checkbox"]').first().check();
+    await expect(submit).toBeEnabled();
+
+    // Wait for the POST rather than the redraw: a reload racing the request
+    // would read the previous (empty) list back.
+    const created = agentPage.waitForResponse(
+      (response) =>
+        response.url().endsWith('/reports/scheduled-exports') &&
+        response.request().method() === 'POST',
+    );
+    await submit.click();
+    expect((await created).status()).toBe(201);
+
+    const row = (): ReturnType<typeof agentPage.locator> =>
+      section().locator('li').filter({ hasText: 'Leads' });
+    await expect(row()).toBeVisible();
+    // Cadence and fan-out are on the row, and the badge is honest about a
+    // schedule the sweep has not reached yet.
+    await expect(row()).toContainText('Weekly');
+    await expect(row()).toContainText('1 recipient');
+    await expect(row().getByText('Never run')).toBeVisible();
+
+    // Survives a reload — persisted server-side, not just added to the list on
+    // screen.
+    await agentPage.reload();
+    await expect(row()).toBeVisible();
+    await section().screenshot({ path: 'kanit/94.10-scheduled-exports.png' });
+
+    // Cancelling is two steps on purpose: this deletes the delivery history with
+    // the definition, so a mis-click is not recoverable.
+    await row().getByRole('button', { name: 'Cancel Leads export' }).click();
+    const removed = agentPage.waitForResponse(
+      (response) =>
+        response.url().includes('/reports/scheduled-exports/') &&
+        response.request().method() === 'DELETE',
+    );
+    await row().getByRole('button', { name: 'Confirm cancel' }).click();
+    expect((await removed).status()).toBe(204);
+
+    await expect(section().getByText('No scheduled exports')).toBeVisible();
+  });
+
+  /**
+   * The permission half of FR-MOD-07.7's KK ("izin bazlı görünürlük"), proven
+   * against a real non-owner session rather than a mocked scope list.
+   *
+   * An agent does not hold `reports_manage`, and the API gates even the *list* on
+   * it — a definition names the mailboxes a workspace's figures go to. So the
+   * right outcome is not a read-only list: it is no list and no action at all.
+   * Asserting the refusal notice as well as the absent controls is what
+   * separates "the server refused" from "the screen forgot to render".
+   */
+  test('offers an agent no way to schedule or cancel an export', async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+      // `agent2` deliberately, not `agent1`: the seed's first Acme agent is an
+      // *admin* (Sam Rivera) and carries ADMIN_SCOPES, so it would prove the
+      // opposite of what this test claims. Priya Nair holds the plain agent role.
+      await page.goto('/');
+      await page.getByLabel('Email').fill('agent2@acme.localhost');
+      await page.getByLabel('Password').fill(DEMO.password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible();
+
+      await page.goto('/app/settings');
+      const section = page.getByRole('region', { name: 'Scheduled exports' });
+      await expect(
+        section.getByRole('heading', { name: 'Scheduled exports', level: 2 }),
+      ).toBeVisible();
+
+      await expect(section.getByText('Could not load scheduled exports.')).toBeVisible();
+      await expect(section.getByRole('button', { name: 'Schedule export' })).toHaveCount(0);
+      await expect(section.getByLabel('Report')).toHaveCount(0);
+      await expect(section.getByRole('button', { name: /Cancel .* export/ })).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
   });
 
   // FR-MOD-08.8.3-g: the MCP connection screen — the KK is literally "mcp URL +

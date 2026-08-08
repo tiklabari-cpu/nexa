@@ -482,6 +482,87 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
       expect(toB?.body).not.toContain('Agent a');
     }, 30_000);
 
+    /**
+     * The single-delivery guarantee, stated the way it will actually be
+     * stressed: not "call the sweeper twice in one process" (proved above) but
+     * "trigger the job three times", each an independent process with its own
+     * Prisma client, its own connection and its own idea of `now`.
+     *
+     * That is the shape of the real hazard. A host cron that overlaps, an
+     * operator who reruns after a failed-looking exit, a second instance started
+     * during a deploy — none of them share memory with the first, so the only
+     * thing that can decide the winner is the row in the database. The dry-run
+     * is deliberately first: it is the pass most likely to have consumed the
+     * period by accident, since it reads exactly the same candidates as a real
+     * one and differs only in what it writes.
+     */
+    it('delivers once across three consecutive triggers, dry-run included', async () => {
+      await defineSchedule(fx.a);
+      await seedAssignedThread(fx.a, fx.a.agentAccountId);
+
+      const preview = JSON.parse((await runScript()).stdout) as {
+        totals: { ready: number; alreadyClaimed: number };
+      };
+      expect(preview.totals).toMatchObject({ ready: 1, alreadyClaimed: 0 });
+      // Still nothing written after the preview — the period is untouched, so
+      // the delivery below is the first claim rather than a second one.
+      expect(await runsOf(fx.a)).toHaveLength(0);
+
+      const first = JSON.parse((await runScript(['--apply'])).stdout) as {
+        totals: { delivered: number; skipped: number; failed: number };
+      };
+      const second = JSON.parse((await runScript(['--apply'])).stdout) as {
+        totals: { delivered: number; skipped: number; failed: number };
+      };
+
+      expect(first.totals).toMatchObject({ delivered: 1, skipped: 0, failed: 0 });
+      expect(second.totals).toMatchObject({ delivered: 0, skipped: 1, failed: 0 });
+
+      // The claim: three triggers, one mail, one row. A second message here is
+      // the regression this test exists to catch.
+      expect(await scriptMailbox()).toHaveLength(1);
+      const runs = await runsOf(fx.a);
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({ status: 'sent' });
+    }, 120_000);
+
+    /**
+     * Pausing a schedule must not release the period it already delivered.
+     *
+     * The disabled filter lives in the sweep rather than in the claim, so
+     * "off then on again" walks a path no other test covers: the middle run
+     * sees no candidate at all, and the last one sees a candidate whose period
+     * is already spent. If the claim were ever keyed on anything the enabled
+     * flag touches — a `last_run_at` comparison, say — this is where a second
+     * copy of last period's report would go out, to a workspace that had just
+     * turned the schedule back on and would read it as normal.
+     */
+    it('does not re-deliver a period after the definition is switched off and back on', async () => {
+      const id = await defineSchedule(fx.a);
+
+      expect(
+        (JSON.parse((await runScript(['--apply'])).stdout) as { totals: { delivered: number } })
+          .totals.delivered,
+      ).toBe(1);
+
+      await owner.scheduledReport.update({ where: { id }, data: { enabled: false } });
+      const paused = JSON.parse((await runScript(['--apply'])).stdout) as {
+        totals: { delivered: number; skipped: number };
+      };
+      // A disabled definition is not even a candidate — neither delivered nor
+      // skipped, because nothing looked at its period.
+      expect(paused.totals).toMatchObject({ delivered: 0, skipped: 0 });
+
+      await owner.scheduledReport.update({ where: { id }, data: { enabled: true } });
+      const resumed = JSON.parse((await runScript(['--apply'])).stdout) as {
+        totals: { delivered: number; skipped: number };
+      };
+      expect(resumed.totals).toMatchObject({ delivered: 0, skipped: 1 });
+
+      expect(await scriptMailbox()).toHaveLength(1);
+      expect(await runsOf(fx.a)).toHaveLength(1);
+    }, 120_000);
+
     it('exits with a non-zero code and sends nothing when the database is unreachable', async () => {
       await expect(
         runScript([], {

@@ -13,6 +13,67 @@
 
 ## Task log (newest-first)
 
+### tm 94.10 — 07.9-sched-i · Uçtan uca doğrulama: cross-tenant zinciri + tekrar-tetik idempotens regresyonu + e2e — done — 2026-08-08 UTC
+
+- **Yapıldı** (yeni kod yolu YOK — bu alt-görev yalnız doğrular; kusur çıksaydı ilgili alt-görevde
+  düzeltilecekti, çıkmadı):
+  - `apps/api/test/integration/tenant-isolation.test.ts` → yeni blok "scheduled report exports —
+    the whole chain, licence against licence (07.9-sched-i)" (+5 test, dosya 53 → 58). Blok
+    zincirin tamamını kurar: iki lisans tanımlarını **kendi token'larıyla**
+    `POST /reports/scheduled-exports`'tan açar (owner-seed değil — saldırılan yol, satırı üreten
+    yolla aynı olsun), tek `ScheduledReportSweeper.run({now})` ikisini de teslim eder, `runs`
+    geçmişi okunur. Sonra B'nin token'ı (kasten **yeterli**: `reports_manage`+`reports_read`, tek
+    engeli lisans) A'nın tanımına beş yüzeyden vurur — liste (200, A'nın id'si yok) · GET · PATCH ·
+    DELETE · `/runs` → dördü de **404** (403 değil: 403 "o id var" derdi). Statü kodu tek başına
+    yetmez, o yüzden iz de okunur: alıcı listesi değişmemiş, run satırı duruyor, A kendi tanımını
+    hâlâ 200 okuyor.
+  - PII negatifi (NFR-S9) teslimatın kendisinden okunur: posta kutusunda tam iki mesaj, her biri
+    yalnız kendi lisansının ajanına; A'nın gövdesi `Agent a` + A'nın ajan id'sini **içerir**,
+    `Agent b`/B'nin id'sini **içermez** (ve simetriği) — CSV gövdeye gömülü olduğu için aranan şey
+    gerçek teslimat. İkinci tracer B'nin tag'i: tag hiçbir rapor CSV'sine girmiyor (yalnız Overview
+    JSON'ının `top_tags`'ında yaşıyor), bu yüzden önce B'nin Overview'ında göründüğü + A'nınkinde
+    görünmediği kanıtlanıyor (guard-the-guard), sonra A'nın teslimatında geçmediği.
+  - `apps/api/test/integration/scheduled-reports-sweep.test.ts` → idempotens regresyonu (+2, 16 →
+    18): `scheduled-reports:run` **üç kez ayrı süreç** olarak tetikleniyor (dry-run → `--apply` →
+    `--apply`; dry-run kasten ilk, çünkü aynı adayları okuyup dönemi kazara tüketmeye en yakın
+    geçiş odur) → tek posta, tek `sent` satırı. İkinci test: tanım devre dışı bırakılıp yeniden
+    etkinleştirilse de aynı dönem ikinci kez teslim edilmiyor (`delivered:0 · skipped:1`).
+  - `apps/e2e/tests/settings.spec.ts` (+2, 16 → 18): admin akışı boş durum → grup+sıklık+alıcı
+    (ikisi seçilene dek submit pasif) → POST 201 → satır (`Weekly` · `1 recipient` · "Never run") →
+    reload (kalıcılık) → iki adımlı iptal → DELETE 204 → boş duruma dönüş; ayrı bir bağlamda ajan
+    rolü bölümü ne liste ne aksiyon görüyor + `Could not load scheduled exports.` uyarısı.
+    Kanıt: `apps/e2e/kanit/94.10-scheduled-exports.png`.
+- **Doğrulama** (hepsi ön planda, exit code'larla — DoD **tam sürüm**):
+  `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **api 1921/1921** (90 dosya, +7),
+  web 685/685 (değişmedi) · `pnpm -w test:integration` 0 → **1466/1466** (61 dosya, +7) ·
+  `pnpm -w build` 0 · `pnpm -w test:e2e` 0 → **82/82** (+2, tam paket tek koşuda temiz) ·
+  `prettier --check` değişen üç dosyada 0. `contract-parity.test.ts` regresyon olarak 5/5 yeşil
+  (sözleşme değişmedi — yeni route yok).
+  **Testlerin boş geçmediği mutasyonla kanıtlandı** (ikisi de geri alındı):
+  (1) sweeper'ın claim'inde `P2002 → null` dalı sahte id döndürecek şekilde bozulunca yeni
+  idempotens iddialarının üçü de (üç-tetik · devre dışı/yeniden etkin · zincirin "mails nothing
+  more" testi) kırmızıya döndü; (2) beş-yüzey testinde B'nin token'ı A'nınkiyle değiştirilince
+  test kırmızıya döndü.
+- **Varsayımlar:**
+  - "CSV'de karşı tarafın tag'i geçmiyor" iddiası doğrudan CSV'de doğrulanamıyor, çünkü **tag
+    hiçbir rapor CSV'sine girmiyor** (yalnız Overview JSON'ının `top_tags`'ında). Vakum bir
+    "yok" yazmak yerine tag'in B tarafında gerçekten var olduğu Overview üzerinden kanıtlandı,
+    sonra A'nın teslimatında yokluğu iddia edildi.
+  - E2E'de ajan rolü için `agent2@acme.localhost` (Priya Nair) kullanıldı: seed'in `agent1`'i
+    **admin** (Sam Rivera) ve ADMIN_SCOPES taşıyor — onunla test tam tersini kanıtlardı.
+  - Zincir bloğu `tenant-isolation.test.ts` içinde `seedFixtures`'ı **yeniden çağırmıyor**
+    (dosya bir kez tohumlanıyor; yeniden çağırmak TRUNCATE ile tüm dosyayı bozardı); tanımlar
+    mevcut A/B fixture'ları üzerine kuruluyor ve blok kendi `afterAll`'unda temizliyor.
+- **Sonraki pencereye not:**
+  - `07.9-sched` ailesi (a…i) kapandı; PLAN.md §4 satır `07.9` `◐` → `✅` (sayaç 11/0/16/3).
+  - `run-loop.sh`'teki değişiklik bu pencereden ÖNCE de çalışma alanında duruyordu (blocked
+    görevlerin sayılı yeniden denenmesi — `attempts.tsv`, `MAX_TASK_ATTEMPTS`). Kapsam disiplini
+    (CONVENTIONS §5) gereği bu commit'e alınmadı; hâlâ commit'siz. Ayrı bir görev olarak
+    kapatılması gerekiyor.
+  - Tam e2e koşusu `apps/e2e/kanit/*.png` görsellerini yeniden üretiyor; tm 94.6/94.9 deseniyle
+    bu commit'e dahil edildiler.
+
 ### tm 94.9 — 07.9-sched-h · Settings UI: "Scheduled exports" bölümü (liste + oluştur + iptal + son çalışma durumu) — done — 2026-08-08 UTC
 
 - **Yapıldı:**

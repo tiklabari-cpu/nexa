@@ -758,6 +758,287 @@ describe('data model invariants', () => {
   });
 
   // =========================================================================
+  // Scheduled report exports (PRD §5.3-Reports · 07.9-sched)
+  // =========================================================================
+
+  describe('scheduled report exports', () => {
+    /** A usable definition for tenant A — the caller overrides what it is testing. */
+    function definition(overrides: Record<string, unknown> = {}) {
+      return {
+        licenseId: fx.a.licenseId,
+        groupId: 'overview',
+        frequency: 'weekly',
+        recipients: ['ops@acme.test'],
+        ...overrides,
+      };
+    }
+
+    /** A run of `reportId` covering one day, so only the period key varies. */
+    function run(reportId: string, periodKey: string, overrides: Record<string, unknown> = {}) {
+      return {
+        licenseId: fx.a.licenseId,
+        scheduledReportId: reportId,
+        periodKey,
+        periodFrom: new Date('2026-07-31T00:00:00Z'),
+        periodTo: new Date('2026-08-01T00:00:00Z'),
+        ...overrides,
+      };
+    }
+
+    it('delivers a period at most once (the claim constraint)', async () => {
+      // The KK-derived idempotency clause. The scheduler inserts the run row
+      // *before* mailing, so this rejection is how a second sweep — a retry, an
+      // overlapping cron, a second API instance — learns the period is taken.
+      // Without it the same report goes out twice to real mailboxes.
+      const report = await owner.scheduledReport.create({
+        data: definition({ frequency: 'daily' }),
+        select: { id: true },
+      });
+      await owner.scheduledReportRun.create({ data: run(report.id, '2026-07-31') });
+
+      await expect(
+        owner.scheduledReportRun.create({ data: run(report.id, '2026-07-31') }),
+      ).rejects.toThrow(/unique constraint/i);
+
+      // The next period is a different claim, not a duplicate.
+      await expect(
+        owner.scheduledReportRun.create({
+          data: run(report.id, '2026-08-01', {
+            periodFrom: new Date('2026-08-01T00:00:00Z'),
+            periodTo: new Date('2026-08-02T00:00:00Z'),
+          }),
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('holds the claim against a concurrent race, not just a sequential check', async () => {
+      // Two sweeps starting in the same second is the realistic case: an
+      // operator run (07.9-sched-f) while the scheduler ticks. Exactly one
+      // insert may win.
+      const report = await owner.scheduledReport.create({
+        data: definition(),
+        select: { id: true },
+      });
+
+      const attempts = Array.from({ length: 8 }, () =>
+        owner.scheduledReportRun
+          .create({ data: run(report.id, '2026-W31') })
+          .then(() => 'created' as const)
+          .catch(() => 'rejected' as const),
+      );
+      const results = await Promise.all(attempts);
+
+      expect(results.filter((r) => r === 'created')).toHaveLength(1);
+      expect(
+        await owner.scheduledReportRun.count({ where: { scheduledReportId: report.id } }),
+      ).toBe(1);
+    });
+
+    it('has RLS enabled and a tenant policy on both tables', async () => {
+      // The KK-derived isolation clause for 07.9-sched-a: the tables exist, are
+      // protected, and carry a policy. Asserted by name so a regression points
+      // at this slice rather than at the bulk sweep.
+      const security = await owner.$queryRaw<Array<{ relname: string; enabled: boolean }>>`
+        SELECT relname, relrowsecurity AS enabled FROM pg_class
+        WHERE relname IN ('scheduled_reports', 'scheduled_report_runs')
+        ORDER BY relname
+      `;
+      expect(security).toEqual([
+        { relname: 'scheduled_report_runs', enabled: true },
+        { relname: 'scheduled_reports', enabled: true },
+      ]);
+
+      const policies = await owner.$queryRaw<Array<{ tablename: string; policyname: string }>>`
+        SELECT tablename, policyname FROM pg_policies
+        WHERE tablename IN ('scheduled_reports', 'scheduled_report_runs')
+        ORDER BY tablename
+      `;
+      expect(policies).toEqual([
+        { tablename: 'scheduled_report_runs', policyname: 'scheduled_report_runs_tenant' },
+        { tablename: 'scheduled_reports', policyname: 'scheduled_reports_tenant' },
+      ]);
+    });
+
+    it('grants the runtime role its privileges — and withholds DELETE on runs', async () => {
+      // A deletable run is a way to release a claimed period and mail the same
+      // report twice, so the API role can resolve a run but never erase one.
+      const grants = await owner.$queryRaw<Array<{ table_name: string; privilege_type: string }>>`
+        SELECT table_name, privilege_type FROM information_schema.role_table_grants
+        WHERE grantee = 'nexa_app'
+          AND table_name IN ('scheduled_reports', 'scheduled_report_runs')
+        ORDER BY table_name, privilege_type
+      `;
+      const byTable = (name: string) =>
+        grants.filter((g) => g.table_name === name).map((g) => g.privilege_type);
+
+      expect(byTable('scheduled_reports').sort()).toEqual(['DELETE', 'INSERT', 'SELECT', 'UPDATE']);
+      expect(byTable('scheduled_report_runs').sort()).toEqual(['INSERT', 'SELECT', 'UPDATE']);
+    });
+
+    it('indexes the sweep and the history read', async () => {
+      // The scheduler asks one question of the definitions ("which of this
+      // license's schedules are live?") and the history screen asks one of the
+      // runs. Both are the indexes below; without them each sweep degrades into
+      // a scan of an append-only log.
+      const indexes = await owner.$queryRaw<Array<{ indexname: string; indexdef: string }>>`
+        SELECT indexname, indexdef FROM pg_indexes
+        WHERE tablename IN ('scheduled_reports', 'scheduled_report_runs')
+        ORDER BY indexname
+      `;
+      const definitionOf = (name: string) => indexes.find((i) => i.indexname === name)?.indexdef;
+
+      expect(definitionOf('scheduled_reports_license_id_enabled_idx')).toMatch(
+        /license_id.*enabled/s,
+      );
+      expect(
+        definitionOf('scheduled_report_runs_license_id_scheduled_report_id_create_idx'),
+      ).toMatch(/license_id.*scheduled_report_id.*created_at/s);
+    });
+
+    it('refuses a frequency the period key cannot be derived from', async () => {
+      // 'hourly' has no period label, so a run of it could not be deduplicated:
+      // the schedule would either never fire or fire without a claim.
+      await expect(
+        owner.scheduledReport.create({ data: definition({ frequency: 'hourly' }) }),
+      ).rejects.toThrow(/scheduled_reports_frequency_check/i);
+
+      for (const frequency of ['daily', 'weekly', 'monthly']) {
+        await expect(
+          owner.scheduledReport.create({ data: definition({ frequency }) }),
+        ).resolves.toBeDefined();
+      }
+    });
+
+    it('refuses a definition with no recipients', async () => {
+      // Not a harmless no-op: the run still claims its period, so the report is
+      // recorded as delivered while nobody ever received it.
+      await expect(
+        owner.scheduledReport.create({ data: definition({ recipients: [] }) }),
+      ).rejects.toThrow(/scheduled_reports_recipients_not_empty_check/i);
+    });
+
+    it('refuses a period key outside the three deterministic shapes', async () => {
+      // The quiet catastrophe this guards: a free-form or empty key collapses
+      // every period onto one row, so after the first delivery the unique
+      // constraint rejects every later period and the report is never sent again.
+      const report = await owner.scheduledReport.create({
+        data: definition(),
+        select: { id: true },
+      });
+
+      for (const bad of ['', 'last week', '2026-7', '2026-W3', '2026-07-31T00:00:00Z']) {
+        await expect(
+          owner.scheduledReportRun.create({ data: run(report.id, bad) }),
+        ).rejects.toThrow(/scheduled_report_runs_period_key_check/i);
+      }
+
+      for (const good of ['2026-07-31', '2026-W31', '2026-07']) {
+        await expect(
+          owner.scheduledReportRun.create({ data: run(report.id, good) }),
+        ).resolves.toBeDefined();
+      }
+    });
+
+    it('refuses a run status outside the claim lifecycle, and a backwards period', async () => {
+      const report = await owner.scheduledReport.create({
+        data: definition(),
+        select: { id: true },
+      });
+
+      await expect(
+        owner.scheduledReportRun.create({ data: run(report.id, '2026-07', { status: 'queued' }) }),
+      ).rejects.toThrow(/scheduled_report_runs_status_check/i);
+
+      // period_from >= period_to would export an empty window while the row
+      // claims a successful delivery.
+      await expect(
+        owner.scheduledReportRun.create({
+          data: run(report.id, '2026-07', {
+            periodFrom: new Date('2026-08-01T00:00:00Z'),
+            periodTo: new Date('2026-07-31T00:00:00Z'),
+          }),
+        }),
+      ).rejects.toThrow(/scheduled_report_runs_period_range_check/i);
+    });
+
+    it('refuses a run that points at another license’s schedule (composite FK)', async () => {
+      // The cross-tenant claim RLS cannot catch: the row carries tenant A's
+      // license, so `WITH CHECK` is satisfied — but it would occupy tenant B's
+      // (schedule, period) slot and stop B's report ever going out for that
+      // period. Asserted as the owner, who bypasses RLS entirely, to show the
+      // constraint and not the policy is what refuses it.
+      const theirs = await owner.scheduledReport.create({
+        data: definition({ licenseId: fx.b.licenseId, recipients: ['b@beta.test'] }),
+        select: { id: true },
+      });
+
+      await expect(
+        owner.scheduledReportRun.create({
+          data: run(theirs.id, '2026-07', { licenseId: fx.a.licenseId }),
+        }),
+      ).rejects.toThrow(/foreign key constraint/i);
+
+      // Same row under its own license: accepted. The constraint rejects the
+      // mismatch, not the shape.
+      await expect(
+        owner.scheduledReportRun.create({
+          data: run(theirs.id, '2026-07', { licenseId: fx.b.licenseId }),
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('takes a definition’s runs with it, and both with the license (cascade)', async () => {
+      // Withholding DELETE on runs from nexa_app must not leave orphans behind
+      // when a schedule is cancelled: the referential action runs as the table
+      // owner, so the cascade still fires.
+      const report = await owner.scheduledReport.create({
+        data: definition({ licenseId: fx.b.licenseId, recipients: ['b@beta.test'] }),
+        select: { id: true },
+      });
+      await owner.scheduledReportRun.create({
+        data: run(report.id, '2026-07', { licenseId: fx.b.licenseId }),
+      });
+
+      await owner.scheduledReport.delete({ where: { id: report.id } });
+      expect(
+        await owner.scheduledReportRun.count({ where: { scheduledReportId: report.id } }),
+      ).toBe(0);
+
+      // And erasing the workspace erases both (NFR-C9).
+      const survivor = await owner.scheduledReport.create({
+        data: definition({ licenseId: fx.b.licenseId, recipients: ['b@beta.test'] }),
+        select: { id: true },
+      });
+      await owner.scheduledReportRun.create({
+        data: run(survivor.id, '2026-08', { licenseId: fx.b.licenseId }),
+      });
+
+      await owner.license.delete({ where: { id: fx.b.licenseId } });
+
+      expect(await owner.scheduledReport.count({ where: { licenseId: fx.b.licenseId } })).toBe(0);
+      expect(await owner.scheduledReportRun.count({ where: { licenseId: fx.b.licenseId } })).toBe(
+        0,
+      );
+    });
+
+    it('round-trips a definition and a run through Prisma with the defaults applied', async () => {
+      // The happy path, last: the models are usable and the column defaults are
+      // the ones the scheduler assumes — enabled, CSV, claimed-not-yet-sent.
+      const report = await owner.scheduledReport.create({ data: definition() });
+      expect(report.enabled).toBe(true);
+      expect(report.format).toBe('csv');
+      expect(report.lastRunAt).toBeNull();
+      expect(report.recipients).toEqual(['ops@acme.test']);
+
+      const claimed = await owner.scheduledReportRun.create({ data: run(report.id, '2026-W31') });
+      expect(claimed.status).toBe('pending');
+      expect(claimed.recipientCount).toBe(0);
+      expect(claimed.rowCount).toBe(0);
+      expect(claimed.error).toBeNull();
+    });
+  });
+
+  // =========================================================================
   // Brands (Multibrand — PRD §5.3 / NFR-S4)
   // =========================================================================
 

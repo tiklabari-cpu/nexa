@@ -101,6 +101,8 @@ model License {
   kbSettings             KbSettings?
   workSchedules          WorkSchedule[]
   presenceEvents         AgentPresenceEvent[]
+  scheduledReports       ScheduledReport[]
+  scheduledReportRuns    ScheduledReportRun[]
 
   invitations Invitation[]
 
@@ -1584,4 +1586,109 @@ model AgentPresenceEvent {
 
   @@index([licenseId, agentId, changedAt])
   @@map("agent_presence_events")
+}
+
+// ===========================================================================
+// Scheduled report exports (PRD §5.3-Reports, v2)
+// ===========================================================================
+
+/// A standing instruction to mail one report group out on a cadence
+/// (07.9-sched). The definition only; the scheduler that acts on it lands in
+/// 07.9-sched-e and writes a `ScheduledReportRun` per period.
+///
+/// `groupId` names a `REPORT_GROUPS` entry (`routes/reports-export.ts`) rather
+/// than a row in a table, so there is deliberately no foreign key and no domain
+/// CHECK: the catalogue lives in code and grew by four groups in 07.7 alone, and
+/// a database constraint would turn each addition into a migration. The route
+/// (07.9-sched-b) validates the id against `reportGroup()` at the boundary, the
+/// same place the manual export already does.
+model ScheduledReport {
+  id               String    @id @default(uuid()) @db.Uuid
+  licenseId        BigInt    @map("license_id")
+  /// A `REPORT_GROUPS` id — 'overview', 'leads', 'sales', …
+  groupId          String    @map("group_id")
+  /// 'daily' | 'weekly' | 'monthly'. Constrained in the database
+  /// (`scheduled_reports_frequency_check`) because the period key the scheduler
+  /// deduplicates on is derived *from* this value: an unknown frequency would
+  /// yield an undefined period, and with it no "already delivered" answer.
+  frequency        String
+  /// 'csv' — the only shape the scheduler produces. Left unconstrained on
+  /// purpose: PDF is a plausible later addition (07.7-g already renders one for
+  /// the manual export) and a CHECK here would cost a migration to allow it,
+  /// while a wrong value fails loudly at generation time rather than corrupting
+  /// anything.
+  format           String    @default("csv")
+  /// Mailbox addresses the run is delivered to. Never empty
+  /// (`scheduled_reports_recipients_not_empty_check`): a definition with no
+  /// recipients would still claim its period and so deliver to nobody, silently,
+  /// forever.
+  recipients       String[]
+  enabled          Boolean   @default(true)
+  /// Soft reference to `accounts.id`, like `Skill.createdBy` and
+  /// `KbArticle.createdBy` — no FK, so the workspace keeps its schedule when the
+  /// agent who set it up leaves.
+  createdByAgentId String?   @map("created_by_agent_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Set by the scheduler after a successful delivery. A convenience for the
+  /// list screen (07.9-sched-h) only — never the idempotency check, which reads
+  /// `scheduled_report_runs`.
+  lastRunAt        DateTime? @map("last_run_at") @db.Timestamptz(6)
+
+  license License              @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  runs    ScheduledReportRun[]
+
+  /// The sweep's only question: which of this license's schedules are live?
+  @@index([licenseId, enabled])
+  /// Not decoration — the target of `scheduled_report_runs`' composite foreign
+  /// key, which is what stops one license claiming a period on another's
+  /// schedule. Doubles as the index behind the by-id lookup routes (07.9-sched-c).
+  @@unique([licenseId, id])
+  @@map("scheduled_reports")
+}
+
+/// One period's delivery of a scheduled report — the history, and the lock.
+///
+/// `@@unique([scheduledReportId, periodKey])` is what makes the scheduler
+/// idempotent: the run row is inserted *before* the mail goes out, so a second
+/// sweep (a retry, an overlapping cron, two API instances) collides on the
+/// constraint and knows the period is taken. That is why a failed delivery keeps
+/// its row with `status = 'failed'` rather than deleting it — releasing the
+/// period would let the next sweep mail the same report again. Modelled on
+/// `CampaignSend`'s `(campaign_id, customer_id)` pair, which stops a campaign
+/// firing twice at the same visitor.
+///
+/// The link to the schedule is a *composite* foreign key on
+/// `(license_id, scheduled_report_id)` — the `AgentExpertise` pattern — and it
+/// is a tenant guard, not a formality. With a plain `scheduled_report_id` FK,
+/// tenant A could insert a run carrying its own `license_id` while pointing at
+/// tenant B's schedule: the RLS `WITH CHECK` would pass, because the row really
+/// is A's, yet the claim would occupy B's `(schedule, period)` slot and B's
+/// report would silently never be delivered for that period. The composite key
+/// makes that row impossible to write rather than merely invisible.
+model ScheduledReportRun {
+  id                String   @id @default(uuid()) @db.Uuid
+  licenseId         BigInt   @map("license_id")
+  scheduledReportId String   @map("scheduled_report_id") @db.Uuid
+  /// The period this run covers, as a deterministic label derived from the
+  /// frequency: `2026-07-31` (daily), `2026-W31` (weekly), `2026-07` (monthly).
+  /// Shape-checked in the database (`scheduled_report_runs_period_key_check`):
+  /// an empty or free-form key would collapse every period onto one row, and the
+  /// report would be delivered exactly once and never again.
+  periodKey         String   @map("period_key")
+  periodFrom        DateTime @map("period_from") @db.Timestamptz(6)
+  periodTo          DateTime @map("period_to") @db.Timestamptz(6)
+  /// 'pending' (claimed, not yet delivered) | 'sent' | 'failed'.
+  status            String   @default("pending")
+  recipientCount    Int      @default(0) @map("recipient_count")
+  rowCount          Int      @default(0) @map("row_count")
+  /// Why the delivery failed, for the history screen (07.9-sched-g).
+  error             String?
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license         License         @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  scheduledReport ScheduledReport @relation(fields: [licenseId, scheduledReportId], references: [licenseId, id], onDelete: Cascade)
+
+  @@unique([scheduledReportId, periodKey])
+  @@index([licenseId, scheduledReportId, createdAt])
+  @@map("scheduled_report_runs")
 }

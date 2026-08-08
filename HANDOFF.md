@@ -13,6 +13,57 @@
 
 ## Task log (newest-first)
 
+### tm 94.1 — 07.9-sched-a · scheduled_reports / scheduled_report_runs şema + migration — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **İki Prisma modeli** (`apps/api/prisma/schema.prisma`): `ScheduledReport` (licenseId, groupId =
+    `REPORT_GROUPS` id'si — FK/CHECK **yok**, katalog kodda yaşıyor ve 07.7'de dört grup büyüdü;
+    frequency, format `csv` varsayılan, `recipients String[]`, enabled, createdByAgentId **soft ref**,
+    lastRunAt; `@@index([licenseId, enabled])`) ve `ScheduledReportRun` (periodKey, periodFrom/To,
+    status, recipientCount, rowCount, error; **`@@unique([scheduledReportId, periodKey])`** = -e'nin
+    dayanacağı dönem talebi/idempotens kilidi; `@@index([licenseId, scheduledReportId, createdAt])`).
+  - **Migration** `apps/api/prisma/migrations/20260801090000_scheduled_reports/migration.sql`:
+    `prisma migrate diff` çıktısı + el yazımı bölüm — her iki tabloda `ENABLE ROW LEVEL SECURITY` +
+    `license_id = nexa_current_license()` USING/WITH CHECK politikası + `nexa_app` GRANT'leri.
+    5 CHECK: `frequency IN (daily|weekly|monthly)` (dönem anahtarı bundan türetiliyor),
+    `cardinality(recipients) > 0` (alıcısız tanım dönemi harcayıp kimseye gitmez),
+    `period_key ~ '^[0-9]{4}-(W[0-9]{2}|[0-9]{2}(-[0-9]{2})?)$'`, `status IN (pending|sent|failed)`,
+    `period_from < period_to`.
+  - **Kapsamın ötesinde iki karar (gerekçeli):** (1) **Composite FK**
+    `(license_id, scheduled_report_id) → scheduled_reports(license_id, id)` (agent_expertise deseni,
+    hedefi `UNIQUE (license_id, id)`). Düz FK ile A lisansı **kendi** license_id'siyle B'nin
+    tanımına run yazabiliyordu: RLS `WITH CHECK` geçer (satır gerçekten A'nın), ama talep B'nin
+    `(tanım, dönem)` yuvasını işgal eder ve **B'nin raporu o dönem hiç gitmez**. RLS satıra bakar,
+    satırın *gösterdiği yere* değil — bu yüzden kısıt taşıyor. (2) **`REVOKE DELETE ON
+    scheduled_report_runs FROM nexa_app`**: `20260722090000`'in ALTER DEFAULT PRIVILEGES'i her yeni
+    tabloya DELETE veriyor, dar GRANT tek başına no-op. Silinebilir run = talep edilmiş dönemi
+    serbest bırakıp aynı raporu ikinci kez postalama yolu (audit_log deseni).
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **1812/1812** (85 dosya) ·
+  `pnpm -w test:integration` → **1387/1387** · `pnpm -w build` 0 · `pnpm -w test:e2e` → **80/80** ·
+  `pnpm -w db:check-drift` → "no drift". Yeni test **21**: `data-model.test.ts` "scheduled report
+  exports" (10 — tekilleştirme + 8 eşzamanlı yarışta tek kazanan, RLS/politika adları, GRANT matrisi
+  **DELETE yok**, indeksler, 5 CHECK, composite FK reddi, çift cascade, defaults) ve
+  `tenant-isolation.test.ts` "scheduled report exports" (11 — bağlamsız 0 satır, alıcı listesi
+  okunamaz, id ile IDOR null, geçmiş okunamaz, B adına tanım yazılamaz, B'nin alıcı listesine ekleme
+  0 satır, iptal/geçmiş-yeniden-yazma 0 satır, **B'nin dönemini iki yoldan da talep edememe**,
+  kendi run'ını bile silememe).
+- **Varsayımlar:** (1) `status` alan adı ve `pending|sent|failed` üçlüsü PRD'de yok — PLAN §5.2.5'in
+  "önce claim, sonra gönder; gönderim hatası satırı `failed` bırakır" ifadesinden türetildi.
+  (2) `period_key` regex'i PLAN'ın verdiği üç şekli (`2026-07-31` / `2026-W31` / `2026-07`) **sıfır
+  dolgulu** biçimde sabitler. (3) `format` bilerek CHECK'siz — PDF sonradan gelirse migration
+  gerektirmesin diye.
+- **Sonraki pencereye not:** **-e (zamanlayıcı çekirdeği) bu üç varsayımı devralır**: dönem anahtarı
+  üreticisi zorunlu olarak sıfır dolgulu üretmeli (aksi hâlde CHECK reddeder) ve `status` domain'i
+  dışına çıkmamalı; ikisi de değişecekse ALTER'lı küçük bir migration gerekir. Run satırı **-e'de
+  postadan ÖNCE** yazılmalı — kilidin tamamı bu sırada. `-b`/`-c` route'ları `scheduled_reports`'u
+  id ile ararken `UNIQUE (license_id, id)` indeksinden yararlanır. Kod yolu (route/servis/job/UI)
+  bu pencerede **yok**, kontrat değişmedi → `contract-parity.test.ts` etkilenmedi.
+  §5.0 sayaçları (satır 22 · satır 1100) **bu commit'in içinde** güncellendi (§D78'in dersi):
+  `12 ⬜ · 15 ✅` → `11 ⬜ · 16 ✅`. `run-loop.sh` bu pencereden **önce de** kirliydi, dokunulmadı ve
+  commit'e alınmadı. E2E kapısının yeniden ürettiği `apps/e2e/kanit/*.png` bayt oynamaları
+  `git restore` ile geri alındı — bu dilim veri katmanı, hiçbir ekran değişmedi.
+
 ### tm 102 — Faz-2 özet sayaçlarını tabloyla eşitle (DOKÜMAN-ONLY) — done — 2026-08-08 UTC
 
 - **Yapıldı:**

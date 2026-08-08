@@ -635,6 +635,247 @@ describe('tenant isolation (RLS)', () => {
     });
   });
 
+  describe('scheduled report exports (PRD §5.3-Reports) — definition and run isolation', () => {
+    // Both tables carry a license_id, so the policy is the plain license match.
+    // What sits behind it is a workspace's reporting: the definition names who
+    // inside the company receives its business figures, and the runs are the
+    // delivery record. The write side is the graver half — adding an address to
+    // another workspace's recipient list would turn their own scheduler into a
+    // standing exfiltration channel for their numbers, with no anomaly to see
+    // anywhere except a recipient list nobody re-reads.
+    let aReportId: string;
+    let bReportId: string;
+
+    beforeAll(async () => {
+      // Seeded as the owner, which is not subject to RLS.
+      const [a, b] = await Promise.all([
+        owner.scheduledReport.create({
+          data: {
+            licenseId: fixtures.a.licenseId,
+            groupId: 'overview',
+            frequency: 'weekly',
+            recipients: ['ops@alpha.test'],
+          },
+          select: { id: true },
+        }),
+        owner.scheduledReport.create({
+          data: {
+            licenseId: fixtures.b.licenseId,
+            groupId: 'sales',
+            frequency: 'monthly',
+            recipients: ['finance@beta.test'],
+          },
+          select: { id: true },
+        }),
+      ]);
+      aReportId = a.id;
+      bReportId = b.id;
+
+      await owner.scheduledReportRun.createMany({
+        data: [
+          {
+            licenseId: fixtures.a.licenseId,
+            scheduledReportId: aReportId,
+            periodKey: '2026-W31',
+            periodFrom: new Date('2026-07-27T00:00:00Z'),
+            periodTo: new Date('2026-08-03T00:00:00Z'),
+            status: 'sent',
+            recipientCount: 1,
+          },
+          {
+            licenseId: fixtures.b.licenseId,
+            scheduledReportId: bReportId,
+            periodKey: '2026-07',
+            periodFrom: new Date('2026-07-01T00:00:00Z'),
+            periodTo: new Date('2026-08-01T00:00:00Z'),
+            status: 'sent',
+            recipientCount: 1,
+          },
+        ],
+      });
+    });
+
+    afterAll(async () => {
+      await owner.scheduledReportRun.deleteMany({});
+      await owner.scheduledReport.deleteMany({});
+    });
+
+    it('shows neither table to a connection with no tenant context', async () => {
+      // The suite's global fail-closed check runs before this block seeds, so
+      // for these two tables it could only pass vacuously there. Asserted here
+      // instead, where both tables hold rows for two licenses.
+      for (const table of ['scheduled_reports', 'scheduled_report_runs']) {
+        const [row] = await app.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `SELECT count(*) AS count FROM ${table}`,
+        );
+        expect(Number(row?.count ?? -1), `${table} must be empty without a tenant`).toBe(0);
+      }
+      // Guards the guard: the rows really are there for someone to leak.
+      expect(await owner.scheduledReport.count()).toBe(2);
+      expect(await owner.scheduledReportRun.count()).toBe(2);
+    });
+
+    it("cannot read another license's schedules — including its recipient list", async () => {
+      const rows = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.scheduledReport.findMany({ select: { licenseId: true, recipients: true } }),
+      );
+      expect(rows).toEqual([{ licenseId: fixtures.a.licenseId, recipients: ['ops@alpha.test'] }]);
+    });
+
+    it('cannot fetch a tenant B schedule by its exact id', async () => {
+      // Correct SQL against a row that is really there — RLS is the only reason
+      // it comes back empty. The shape of an IDOR against `GET
+      // /reports/scheduled-exports/{id}` (07.9-sched-c).
+      const found = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.scheduledReport.findUnique({ where: { id: bReportId } }),
+      );
+      expect(found).toBeNull();
+    });
+
+    it("cannot read another license's delivery history", async () => {
+      const rows = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.scheduledReportRun.findMany({ select: { licenseId: true, periodKey: true } }),
+      );
+      expect(rows).toEqual([{ licenseId: fixtures.a.licenseId, periodKey: '2026-W31' }]);
+    });
+
+    it('cannot plant a schedule for tenant B (WITH CHECK)', async () => {
+      // The exfiltration move: a schedule owned by B, mailing B's figures to an
+      // address of A's choosing, on B's own cadence.
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.scheduledReport.create({
+              data: {
+                licenseId: fixtures.b.licenseId,
+                groupId: 'overview',
+                frequency: 'daily',
+                recipients: ['attacker@alpha.test'],
+              },
+            }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it("cannot append a recipient to tenant B's schedule", async () => {
+      // updateMany does not error under RLS — it silently matches nothing.
+      // Asserting the count *and* the surviving recipient list is what separates
+      // "the policy filtered it" from "the write went through elsewhere".
+      const updated = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) =>
+          tx.scheduledReport.updateMany({
+            where: { id: bReportId },
+            data: { recipients: ['finance@beta.test', 'attacker@alpha.test'] },
+          }),
+      );
+      expect(updated.count).toBe(0);
+
+      const survivor = await owner.scheduledReport.findUnique({ where: { id: bReportId } });
+      expect(survivor?.recipients).toEqual(['finance@beta.test']);
+    });
+
+    it("cannot cancel tenant B's schedule, nor rewrite its history", async () => {
+      const deleted = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.scheduledReport.deleteMany({ where: { id: bReportId } }),
+      );
+      expect(deleted.count).toBe(0);
+
+      const rewritten = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) =>
+          tx.scheduledReportRun.updateMany({
+            where: { scheduledReportId: bReportId },
+            data: { status: 'failed', error: 'planted' },
+          }),
+      );
+      expect(rewritten.count).toBe(0);
+
+      expect(await owner.scheduledReport.count({ where: { id: bReportId } })).toBe(1);
+      const [theirRun] = await owner.scheduledReportRun.findMany({
+        where: { scheduledReportId: bReportId },
+      });
+      expect(theirRun?.status).toBe('sent');
+      expect(theirRun?.error).toBeNull();
+    });
+
+    it("cannot claim a period on tenant B's schedule, under either license", async () => {
+      // Denial of delivery rather than disclosure: whoever holds the
+      // (schedule, period) claim, the report is not sent again for that period.
+      // Under B's license RLS refuses the row; under A's own license the row
+      // would pass `WITH CHECK` — the composite foreign key is what stops it,
+      // which is the whole reason it is composite.
+      const period = {
+        periodKey: '2026-08',
+        periodFrom: new Date('2026-08-01T00:00:00Z'),
+        periodTo: new Date('2026-09-01T00:00:00Z'),
+      };
+
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.scheduledReportRun.create({
+              data: { licenseId: fixtures.b.licenseId, scheduledReportId: bReportId, ...period },
+            }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.scheduledReportRun.create({
+              data: { licenseId: fixtures.a.licenseId, scheduledReportId: bReportId, ...period },
+            }),
+        ),
+      ).rejects.toThrow(/foreign key constraint/i);
+
+      // B's next monthly period is still free to claim.
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.b.licenseId, organizationId: fixtures.b.organizationId },
+          (tx) =>
+            tx.scheduledReportRun.create({
+              data: { licenseId: fixtures.b.licenseId, scheduledReportId: bReportId, ...period },
+            }),
+        ),
+      ).resolves.toBeDefined();
+    });
+
+    it('cannot delete a run at all — not even its own', async () => {
+      // No DELETE grant: a deletable run is a way to release a claimed period
+      // and mail the same report twice. Distinct from the RLS cases above,
+      // which match nothing rather than being refused outright.
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) => tx.scheduledReportRun.deleteMany({ where: { scheduledReportId: aReportId } }),
+        ),
+      ).rejects.toThrow(/permission denied/i);
+
+      expect(
+        await owner.scheduledReportRun.count({ where: { licenseId: fixtures.a.licenseId } }),
+      ).toBe(1);
+    });
+  });
+
   describe('brands — Multibrand tenant isolation (NFR-S4)', () => {
     // Brands carry only a license_id, so the policy is the plain license match,
     // like websites/widget_settings. Proven the same way as every tenant table:
@@ -646,11 +887,21 @@ describe('tenant isolation (RLS)', () => {
       // Seeded as the owner, which is not subject to RLS.
       const [a, b] = await Promise.all([
         owner.brand.create({
-          data: { licenseId: fixtures.a.licenseId, name: 'Brand A', slug: 'brand-a', isDefault: true },
+          data: {
+            licenseId: fixtures.a.licenseId,
+            name: 'Brand A',
+            slug: 'brand-a',
+            isDefault: true,
+          },
           select: { id: true },
         }),
         owner.brand.create({
-          data: { licenseId: fixtures.b.licenseId, name: 'Brand B', slug: 'brand-b', isDefault: true },
+          data: {
+            licenseId: fixtures.b.licenseId,
+            name: 'Brand B',
+            slug: 'brand-b',
+            isDefault: true,
+          },
           select: { id: true },
         }),
       ]);
@@ -814,7 +1065,12 @@ describe('tenant isolation (RLS)', () => {
       // license-scoped touch tables, so both must respect the boundary).
       const leadChat = await mkLead();
       await owner.chat.create({
-        data: { id: generateShortId(), licenseId: l1, customerId: leadChat.id, createdAt: touchDay },
+        data: {
+          id: generateShortId(),
+          licenseId: l1,
+          customerId: leadChat.id,
+          createdAt: touchDay,
+        },
       });
       const leadTicket = await mkLead();
       await owner.ticket.create({
@@ -833,14 +1089,24 @@ describe('tenant isolation (RLS)', () => {
       // each license claims.
       const leadOnL2 = await mkLead();
       await owner.chat.create({
-        data: { id: generateShortId(), licenseId: l2, customerId: leadOnL2.id, createdAt: touchDay },
+        data: {
+          id: generateShortId(),
+          licenseId: l2,
+          customerId: leadOnL2.id,
+          createdAt: touchDay,
+        },
       });
     });
 
     /** Count is_lead customers the way a *naive* report would — straight off the org-scoped table. */
     async function naiveOrgWideLeadCount(licenseId: bigint): Promise<number> {
-      const [row] = await withTenant(app, { licenseId, organizationId: orgId }, (tx) =>
-        tx.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM customers WHERE is_lead = TRUE`,
+      const [row] = await withTenant(
+        app,
+        { licenseId, organizationId: orgId },
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ n: bigint }>
+          >`SELECT count(*) AS n FROM customers WHERE is_lead = TRUE`,
       );
       return Number(row?.n ?? 0n);
     }
@@ -961,7 +1227,9 @@ describe('tenant isolation (RLS)', () => {
         // membership, so the report's `LEFT JOIN accounts` only resolves a name
         // for a real member of the license — the same fixture shape the CSV
         // formula-injection test uses.
-        await owner.agentMembership.create({ data: { licenseId, agentId: account.id, role: 'agent' } });
+        await owner.agentMembership.create({
+          data: { licenseId, agentId: account.id, role: 'agent' },
+        });
         return account.id;
       };
       agentOneId = await mkAgent(AGENT_ONE, s1);
@@ -1187,8 +1455,13 @@ describe('tenant isolation (RLS)', () => {
       // organization-scoped, so both licenses of this org see all three leads.
       // The report must still claim only the ones that touched it.
       const naive = async (licenseId: bigint): Promise<number> => {
-        const [row] = await withTenant(app, { licenseId, organizationId: orgId }, (tx) =>
-          tx.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM customers WHERE is_lead = TRUE`,
+        const [row] = await withTenant(
+          app,
+          { licenseId, organizationId: orgId },
+          (tx) =>
+            tx.$queryRaw<
+              Array<{ n: bigint }>
+            >`SELECT count(*) AS n FROM customers WHERE is_lead = TRUE`,
         );
         return Number(row?.n ?? 0n);
       };

@@ -13,6 +13,62 @@
 
 ## Task log (newest-first)
 
+### tm 96.6 — 12.4-bi-f · Uçtan uca doğrulama + ADR-09 çapraz kontrolü + kapanış — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/e2e/tests/copilot-bi.spec.ts` (yeni, 2 test). Birincisi KK'nın tamamı: tek tarayıcı
+    oturumunda `/app/reports` → `Volume` bölgesinden **Conversations** ve **Closed** KPI'ları
+    okunuyor, ardından `/app/inbox` → transcript başlığından Copilot paneli açılıp aynı iki
+    figür **sözle** soruluyor (`How many chats closed?` / `How many chats started?`) ve
+    rendere edilen değerlerin **birebir aynı** olduğu iddia ediliyor.
+  - Figür, alıntıladığı rapor alanının rozeti üzerinden adresleniyor
+    (`getByText('totals.closed').locator('xpath=preceding-sibling::span[1]')`) — yani "doğru
+    sayı ama yanlış alan" bu testten geçemez; KPI tarafında da değer, etiketin bir sonraki
+    kardeş span'i (`Kpi` = etiket span + değer span, `Page.tsx`), CSS sınıfı veya "karttaki
+    ikinci span" gibi kırılgan bir yol değil.
+  - **İki taraf da varsayılan penceresinde** bırakıldı: Reports `resolveRange(30)` ile açılır,
+    pencere adı vermeyen soru `biWindow(null)` → **aynı** `resolveRange`'e düşer. Böylece
+    karşılaştırma hiç tarih seçimi içermiyor (yanlış seçilebilecek bir tarih yok). Seed
+    trafiği pencerenin **içinde** (bugün 38 sohbet) değil kenarında olmadığı için — en eski
+    iki thread −45 gün, −30 gün sınırında hiçbir şey yok — iki okuma arasında geçen saniyeler
+    hiçbir figürü oynatamıyor.
+  - Karşılaştırmanın **boş olmadığı** ayrıca iddia ediliyor (`digitsOf(...) > 0`): sıfır=sıfır
+    doğru ama kanıtsız bir eşitlik olurdu.
+  - İkinci test 12.4-bi-e'nin empty state'ini uçtan uca kapatıyor: yerleştirilemeyen soru →
+    "Not sure what you mean" + örnek soru listesi; örneğe tıklamak girdiyi **doldurur**
+    (otomatik sormaz) ve ortada `Source: Reports → Overview` satırı — yani uydurulmuş bir
+    figür — bulunmadığı `toHaveCount(0)` ile iddia ediliyor.
+  - Kanıt görüntüsü `apps/e2e/kanit/96-copilot-bi.png`: `28` · `totals.closed` ·
+    `Jul 9, 2026 – Aug 8, 2026` · `Source: Reports → Overview` (DB'de Acme'nin 30 günlük
+    kapanan sohbeti = 28).
+  - `PLAN.md` §5.0 `12.4` satırı `◐` → **`✅`** (kalem kapanışı; bi-a…bi-f kanıtları satırda).
+- **Doğrulama** (hepsi ön planda, exit code'larla) — **tamamı yeşil:** `pnpm -w typecheck` **0**
+  (11/11) · `pnpm -w lint` **0** (8/8) · `npx turbo run test --filter='!@nexa/e2e'
+  --concurrency=1` **0** — api 1958/1958, web 723/723, ai-mock 136, rtm 90, types 71, widget 52 ·
+  `pnpm -w test:integration` **0** — api 1491/1491 + rtm 51/51 · `pnpm -w build` **0** (7/7) ·
+  `pnpm -w test:e2e` **0** — **86/86** (84 + bu turun 2'si), `.env` kaynaklanarak.
+- **Varsayımlar:**
+  - **`no_data` bilinçli olarak e2e'de değil.** Overview'da null olabilen tek alan
+    `satisfaction.score`; "ratings'siz pencere" ancak seed'in ne zaman koştuğuna bağlı olarak
+    (dün/geçen hafta) seçilebilir — UTC gece yarısını geçen ya da eski bir seed üzerinde koşan
+    bir çalıştırmada bu varsayım sessizce bozulur ve test ürün hatası gibi görünen bir
+    kırmızı üretir. Kind'ın kendisi `copilot-service.test.ts` + `copilot-bi.test.ts`
+    (sunucu) ve `CopilotPanel.test.tsx` (widen butonu dâhil UI) tarafından kapsanıyor; e2e'ye
+    eklenen yalnız deterministik olan iki kind.
+  - **Karşılaştırma rendere edilmiş dizeler üzerinden** (ham sayı değil): iki yüzey de aynı
+    `formatCount`'u aynı locale ile çağırıyor, dolayısıyla dize eşitliği sayı eşitliğinden
+    daha güçlü bir iddia — binlik ayıracı dâhil ekranda görünen şeyin aynılığını kanıtlıyor.
+  - **İki metrik, bir değil** — tek eşleşme seed'in tesadüfü olabilirdi; iki farklı alanın
+    aynı anda tutması "rapor okunuyor"un kanıtı.
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (94.8'den beri taşınan
+    carry-over, bu pencerenin işiyle ilgisiz) — yine commit'e alınmadı.
+- **Sonraki pencereye not:** **12.4-bi dilimi tamamen kapandı** (bi-a…bi-f, tm 96.1–96.6);
+  PLAN §5.0 `12.4` satırı `✅`. §5.3.2 dilim tablosundaki **5 — AI yüzeyi** teması
+  (`08.8.3` · `01.1.3-ai` · `12.4-bi`) böylece üç kalemiyle birlikte kapanış kapısını
+  ("Üçü de ✅ · scope + tenant izolasyonu + ADR-09") karşılıyor. Sıradaki tema §5.3.2'den
+  seçilir. e2e artık 86 test; yeni bir e2e yazacak pencere için desen: figürü **alıntıladığı
+  alanın rozetiyle birlikte** adresle, pencereyi iki tarafta da varsayılanında bırak.
+
 ### tm 96.5 — 12.4-bi-e · Anlaşılmadı / yetersiz veri durumları — anlamlı empty state + örnek sorular — done — 2026-08-08 UTC
 
 - **Yapıldı:**

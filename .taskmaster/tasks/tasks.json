@@ -3185,10 +3185,10 @@
             "description": "Saf TypeScript modülü — Fastify/Prisma/env importu YOK (reports-metrics.ts felsefesi), tek başına unit-test edilebilir. GİRDİ: saat-bazlı geçmiş hacim (-e), ajan × saat presence kapsaması (-d), ajan başına eşzamanlı sohbet limiti (AgentMembership.concurrentChatsLimit, schema.prisma:132, default 6), ortalama sohbet süresi. ÇIKTI: gün × saat (7×24) ızgarasında {required_agents, scheduled_agents, gap",
             "details": "WORKSCHED-f — Deterministik staffing tahmin çekirdeği (saf modül, LLM yok — bölünmez)  [OPUS-MAX]\n\nPRD: §5.3-Vardiya (WORKSCHED) — 'staffing prediction' payı · NFR-P7\nETİKET GEREKÇESİ: OPUS-MAX: YENİ ALGORİTMA TASARIMI — depoda kopyalanacak eşdeğer desen YOK (reports-metrics.ts yalnız round/resolutionRate gibi oran aritmetiği içeriyor), yani koşul 4 ihlali ve SONNET'in zorunlu 'referans_desen' alanı gerçek anlamda doldurulamıyor. Kapasite modeli yanlışsa tüm öneri ve ekran yanlış olur (yanlış kararın pahalı olduğu yüzey). Çekirdek bölünmez; girdi sorgusu (-e), presence kapsaması (-d), endpoint (-g) ve UI (-i) ayrı ve ucuz alt-görevlere çıkarıldı.\nNEDEN AÇIK: apps/api/src/routes/reports-metrics.ts saf metrik modülü olarak var ama içeriği yalnız `round` ve `resolutionRate` (oran/yuvarlama) — personel ihtiyacı/kapsama açığı hesabı yok. Depo genelinde 'staffing|forecast' grep → 0 eşleşme.\nKAPSAM: Saf TypeScript modülü — Fastify/Prisma/env importu YOK (reports-metrics.ts felsefesi), tek başına unit-test edilebilir. GİRDİ: saat-bazlı geçmiş hacim (-e), ajan × saat presence kapsaması (-d), ajan başına eşzamanlı sohbet limiti (AgentMembership.concurrentChatsLimit, schema.prisma:132, default 6), ortalama sohbet süresi. ÇIKTI: gün × saat (7×24) ızgarasında {required_agents, scheduled_agents, gap}. KURALLAR: deterministik — aynı girdi = aynı çıktı, rastgelelik/LLM yok (orkestratör kararı); örneklem eşiğinin altında required_agents = null + low_confidence = true (0 DEĞİL — bilinmeyen ≠ sıfır); limit 0/negatif → bölme-sıfır koruması ve açık hata.\nDOSYALAR: apps/api/src/services/staffing/staffing-forecast.ts · apps/api/src/services/staffing/staffing-forecast.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports-metrics.ts\nKK (birebir): \"| Ekip/Vardiya | Work scheduler / staffing prediction |\" | \"KK-türetilmiş: \"Personel ihtiyacı tahmini geçmiş hacim ve presence verisinden deterministik olarak hesaplanır (aynı girdi = aynı çıktı, LLM yok); yeterli veri yoksa sayı üretilmez, 'yeterli veri yok' döner.\" — Türetme gerekçesi: PRD §5.3 satır 412'de KK sütunu yok ve §6'da satır yok; 'deterministik, LLM yok' kısıtı orkestratörün BAĞLAYICI kapsam kararından, 'null-when-empty' kuralı depodaki mevcut reports-metrics.ts sözleşmesinden türetildi.\"\nKK DOĞRULAMA: staffing-forecast.test.ts'teki determinizm testi (aynı girdi iki kez → derin-eşit çıktı) KK-türetilmiş birinci cümleyi kanıtlar; 'sıfır hacim → null + low_confidence, 0 değil' testi ikinci cümleyi kanıtlar; modülün Fastify/Prisma import etmediğinin testi saf/deterministik iddiasını yapısal olarak kanıtlar.\nKAPSAM DIŞI: Veri okuma/sorgu (WORKSCHED-d ve -e) · Endpoint ve kontrat (WORKSCHED-g) · UI (WORKSCHED-i) · Tahminin persist edilmesi — StaffingForecast tablosu AÇILMAZ (§C varsayımı) · LLM/ML tabanlı tahmin — kapsam dışı (orkestratör kararı)\nSÖZLEŞME: yok (iç servis modülü)\nMIGRATION: yok — tahmin API-time hesaplanır, kalıcı tablo açılmaz (§C varsayımı)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit NEGATİF (ÖNCE): concurrentChatsLimit 0/negatif → açık hata (bölme-sıfır yok) · unit NEGATİF: hacim 0 veya eşiğin altında → required_agents null + low_confidence true (0 DEĞİL) · unit NEGATİF: presence kapsaması null → gap hesaplanmaz, null döner; eksik/negatif girdi → hata · unit DETERMİNİZM: aynı girdi iki çağrıda birebir aynı çıktı · unit pozitif: sentetik hacim+kapsama kümesinde beklenen required/gap; 7×24 ızgara tam; kapsama > ihtiyaç → gap ≤ 0 · yapısal: modül Fastify/Prisma/env import etmez (saf modül iddiası) · cross-tenant: bu modülde YOK — tenant verisi görmez; izolasyon -d/-e/-g'de kanıtlanır",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "77",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T00:29:56.801Z"
           },
           {
             "id": 7,
@@ -3251,7 +3251,7 @@
             "updatedAt": "2026-08-07T20:20:22.155Z"
           }
         ],
-        "updatedAt": "2026-08-08T00:28:07.090Z"
+        "updatedAt": "2026-08-08T00:29:56.801Z"
       },
       {
         "id": "78",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T00:28:07.090Z",
+      "lastModified": "2026-08-08T00:29:56.801Z",
       "taskCount": 101,
       "completedCount": 80,
       "tags": [

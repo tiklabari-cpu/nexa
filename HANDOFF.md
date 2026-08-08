@@ -13,6 +13,60 @@
 
 ## Task log (newest-first)
 
+### tm 77.6 — WORKSCHED-f: deterministik staffing tahmin çekirdeği — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **Saf modül** `apps/api/src/services/staffing/staffing-forecast.ts` → `staffingForecast(input)`;
+    gün × saat **7×24 = 168** hücrelik tam ızgara (`{dayOfWeek, hour, observedChats,
+    requiredAgents, scheduledAgents, gap, lowConfidence}`). Fastify/Prisma/env importu yok —
+    aslında **hiç `import` yok** (`reports-metrics.ts` + `presence-coverage.ts` felsefesi).
+  - **Model = Little yasası, fazlası değil:** `requiredAgents = ceil((chats/occurrences) ×
+    (averageChatMinutes/60) / concurrentChatsLimit)`. `occurrences` = o hafta-günü-saatinin
+    pencerede kaç kez geçtiği; 28 günlük pencerede 4 Salı 14:00 ⇒ 160 sohbet **saatte 40**'tır,
+    160 değil. Kısmi pencere **kesirli** sayılır (yarım saatlik pencere 0.5) — hacim sorgusu da
+    yalnız o yarım saati saydığı için tam sayıya yuvarlamak hızı yarıya indirirdi.
+    Erlang-C / servis-seviyesi hedefi **bilinçli olarak yok**: yanıt-süresi hedefi PRD'de yazmıyor,
+    uydurmak ürün kararını aritmetiğin içine gömerdi.
+  - **İki ayrı "bilinmiyor", ikisi de 0 DEĞİL:** eşik altı hacim → `requiredAgents = null` +
+    `lowConfidence = true`; kapsama `null` (WORKSCHED-d'nin "hiç olay yok" sözleşmesi) →
+    `scheduledAgents = null` ve `gap = null`. Log VARSA boş hücre gerçek 0'dır (aynı modülün
+    aynası). `gap = required − scheduled`: pozitif açık, negatif fazla kapasite.
+  - **Hata kapıları:** `concurrentChatsLimit`/`averageChatMinutes` sonlu ve > 0 (0/negatif →
+    `RangeError`, `NaN`/`Infinity` → `TypeError`); negatif sayaç, ızgara dışı gün/saat, ilerlemeyen
+    pencere, **aynı hücrenin iki kez verilmesi** (sessizce toplamak tahmini ikiye katlardı) → hata.
+  - **İzolasyon yapısal:** kapsama, ajan boyutu çağıran tarafından toplanmış **dakika** olarak
+    gelir; modülde ajan/lisans/müşteri kimliği YOKTUR, dolayısıyla sızdıracak veri de yok.
+- **Doğrulama (hepsi ön planda, exit 0):** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → 10/10, **83 dosya / 1715 test**
+  (@nexa/api 1684 → 1715, +31 yeni unit) · `pnpm -w test:integration` **1310/1310** ·
+  `pnpm -w build` (7/7) · `pnpm -w test:e2e` **74/74**.
+- **Varsayımlar:**
+  - **Düşük-baz eşiği (§5.2.22 açık soru 4 — PRD'de sayı yok):** `DEFAULT_MINIMUM_SAMPLE_CHATS = 20`,
+    ürünün mevcut tek düşük-baz sayısıyla hizalı (`apps/web/src/features/playbook/performance.ts`
+    `LOW_BASE_THRESHOLD = 20`) — Nexa'da "kaç az sayılır" tek sayı olsun diye. `minimumSampleChats`
+    ile çağrı başına ezilebilir.
+  - **`scheduled_agents` presence'tan türer, work_schedules'tan değil.** Görev tanımının "kapsama
+    `null` → `gap` hesaplanmaz" kuralı ancak `gap`'in çıkardığı sayı presence kapsaması ise
+    tutarlıdır; -f'in girdi listesinde de `work_schedules` yok. Planlı roster (-b) ile ölçülen
+    kapsamayı yan yana göstermek isteyen -g/-i, planı kendi yanıtına ayrı alan olarak ekler.
+  - Alan adları **camelCase** (iç servis modülü); kontratın `required_agents`/`scheduled_agents`/
+    `low_confidence` snake_case'ine çeviren -g'dir — `reports.ts` her servis değeri için zaten
+    böyle yapıyor.
+- **Sonraki pencereye not:**
+  - **-g için girdi sözleşmesi:** iki ızgara da **UTC** `dayOfWeek` (0 = Pazar … 6 = Cumartesi —
+    `Date.getUTCDay()` ve Postgres `EXTRACT(DOW …)` aynı) + `hour` ile anahtarlanır ve **ikisi de
+    `staffingForecast`'a verilen aynı `[from, to)` penceresinde** okunmuş olmalı; pencere,
+    toplamları hıza çeviren şeydir. Kapsama, pencerenin her takvim günü için `presenceCoverage()`
+    çağırıp o günün düştüğü hafta gününe katlanarak kurulur (24 kovalı çıktı tek başına gün
+    boyutunu taşımaz). Hacim için mevcut `breakdownByHour` **yetmez** — `EXTRACT(DOW …)` boyutu da
+    gerekir; -e'nin `by_hour`'u haftanın gününü ayırt etmiyor.
+  - `null` = "bilinmiyor" sözleşmesini -g/-i'de **0'a çevirmeyin**; `coverageKnown` ve üst-seviye
+    `lowConfidence` alanları -i'nin düşük-baz uyarısı/empty state'i için oradadır.
+- **Çalışma alanı:** `run-loop.sh` bu pencere açılmadan önce de değişikti (döngü runner'ının
+  blocked-görev yeniden deneme sayacı — tm 77.4/77.5 notlarına bakınız); bu görevin kapsamı
+  olmadığı için **yine commit edilmedi**. `apps/e2e/kanit/*.png` kanıt görüntüleri e2e koşusunun
+  ürünü ve önceki pencerelerdeki gibi commit'e dahil.
+
 ### tm 77.5 — WORKSCHED-e: /reports/breakdown by_hour — done (kod değişikliği yok, doğrulama) — 2026-08-08 UTC
 
 - **Yapıldı:**

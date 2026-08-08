@@ -8,13 +8,41 @@ import { ACTIONS, type ActionDeps, type PaletteResult } from './actions.js';
 
 const acceptingDeps: ActionDeps = {
   agent: { routing_status: 'accepting_chats' },
+  applyRoutingStatus: () => {},
   setRoutingStatus: async () => {},
 };
 
 const notAcceptingDeps: ActionDeps = {
   agent: { routing_status: 'not_accepting_chats' },
+  applyRoutingStatus: () => {},
   setRoutingStatus: async () => {},
 };
+
+/**
+ * A stand-in for the store the palette hands over: `applied` is the local
+ * snapshot the optimistic guess writes to, `requested` the wire calls. Keeping
+ * them apart is what lets a test see a guess that was written and then taken
+ * back — a single combined log cannot tell rollback from never having tried.
+ */
+function trackedDeps(
+  status: 'accepting_chats' | 'not_accepting_chats' | 'offline',
+  setRoutingStatus: ActionDeps['setRoutingStatus'] = async () => {},
+): ActionDeps & { applied: string[]; requested: string[] } {
+  const applied: string[] = [];
+  const requested: string[] = [];
+  return {
+    agent: { routing_status: status },
+    applied,
+    requested,
+    applyRoutingStatus: (next) => {
+      applied.push(next);
+    },
+    setRoutingStatus: async (next) => {
+      requested.push(next);
+      await setRoutingStatus(next);
+    },
+  };
+}
 
 describe('action catalogue', () => {
   it('has every field filled in for every record', () => {
@@ -47,30 +75,73 @@ describe('action catalogue', () => {
     const toggle = ACTIONS.find((action) => action.id === 'toggle-accepting-chats')!;
     expect(toggle.label(acceptingDeps)).toBe('Stop Accepting Chats');
     expect(toggle.label(notAcceptingDeps)).toBe('Start Accepting Chats');
-    expect(toggle.label({ agent: null, setRoutingStatus: acceptingDeps.setRoutingStatus })).toBe(
-      'Start Accepting Chats',
-    );
+    expect(toggle.label({ ...acceptingDeps, agent: null })).toBe('Start Accepting Chats');
   });
 
   it('flips to the opposite status when run', async () => {
-    const calls: string[] = [];
     const toggle = ACTIONS.find((action) => action.id === 'toggle-accepting-chats')!;
 
-    await toggle.run({
-      agent: { routing_status: 'accepting_chats' },
-      setRoutingStatus: async (status) => {
-        calls.push(status);
-      },
-    });
-    expect(calls).toEqual(['not_accepting_chats']);
+    const off = trackedDeps('accepting_chats');
+    await toggle.run(off);
+    expect(off.requested).toEqual(['not_accepting_chats']);
 
-    await toggle.run({
-      agent: { routing_status: 'not_accepting_chats' },
-      setRoutingStatus: async (status) => {
-        calls.push(status);
-      },
+    const on = trackedDeps('not_accepting_chats');
+    await toggle.run(on);
+    expect(on.requested).toEqual(['accepting_chats']);
+  });
+});
+
+/**
+ * The optimistic contract (FR-EK-A.2).
+ *
+ * The negatives come first because they are the ones that matter: an action
+ * whose request fails has already moved the screen, and a rollback that never
+ * runs leaves the agent believing they stopped taking chats while the router
+ * keeps sending them work.
+ */
+describe('toggle-accepting-chats — optimistic result and rollback', () => {
+  const toggle = ACTIONS.find((action) => action.id === 'toggle-accepting-chats')!;
+
+  it('puts the previous status back when the request fails, and rethrows', async () => {
+    const deps = trackedDeps('accepting_chats', async () => {
+      throw new Error('Request failed with status 500.');
     });
-    expect(calls).toEqual(['not_accepting_chats', 'accepting_chats']);
+
+    await expect(toggle.run(deps)).rejects.toThrow('Request failed with status 500.');
+
+    // Guessed, then undone — and undone to exactly what was there before, not
+    // to a default that happens to look right in this one direction.
+    expect(deps.applied).toEqual(['not_accepting_chats', 'accepting_chats']);
+  });
+
+  it('rolls back a refused toggle in the other direction too', async () => {
+    const deps = trackedDeps('not_accepting_chats', async () => {
+      throw new Error('insufficient_scope');
+    });
+
+    await expect(toggle.run(deps)).rejects.toThrow('insufficient_scope');
+    expect(deps.applied).toEqual(['accepting_chats', 'not_accepting_chats']);
+  });
+
+  it('shows the new status before the request is even sent', async () => {
+    const seen: string[] = [];
+    const deps = trackedDeps('accepting_chats', async () => {
+      // By the time the request runs, the optimistic write must already have
+      // landed — that ordering is the whole point of calling it optimistic.
+      seen.push(...deps.applied);
+    });
+
+    await toggle.run(deps);
+    expect(seen).toEqual(['not_accepting_chats']);
+  });
+
+  it('keeps the optimistic value when the request succeeds', async () => {
+    const deps = trackedDeps('accepting_chats');
+
+    await toggle.run(deps);
+
+    expect(deps.applied).toEqual(['not_accepting_chats']);
+    expect(deps.requested).toEqual(['not_accepting_chats']);
   });
 });
 

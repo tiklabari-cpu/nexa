@@ -66,8 +66,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     // Command palette
     'palette.label': 'Command palette',
     'palette.search': 'Search or jump to',
-    'palette.placeholder':
-      'Search customers, conversations, tickets — or jump to a module…',
+    'palette.placeholder': 'Search customers, conversations, tickets — or jump to a module…',
     'palette.searching': 'Searching…',
     'palette.noMatches': 'No matches.',
     'palette.group.goTo': 'Go to',
@@ -77,13 +76,15 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     'palette.group.tickets': 'Tickets',
     'palette.unnamedVisitor': 'Unnamed visitor',
     'palette.visitor': 'Visitor',
+    'palette.action.failed': 'That action did not go through.',
+    'palette.action.failedFallback': 'Nothing was changed — try again.',
+    'palette.action.failedDismiss': 'Dismiss',
   },
   tr: {
     // Shell chrome
     'shell.modules': 'Modüller',
     'shell.subscribe': 'Abone Ol',
-    'shell.trial.ended':
-      'Deneme süreniz sona erdi — yeni sohbetler başlatmak için abone olun.',
+    'shell.trial.ended': 'Deneme süreniz sona erdi — yeni sohbetler başlatmak için abone olun.',
     'shell.trial.remaining': 'Deneme sürenizde {days} gün kaldı.',
     'shell.account': 'Hesap',
     'shell.account.agentFallback': 'Temsilci',
@@ -114,6 +115,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     'palette.group.tickets': 'Talepler',
     'palette.unnamedVisitor': 'İsimsiz ziyaretçi',
     'palette.visitor': 'Ziyaretçi',
+    'palette.action.failed': 'Bu aksiyon gerçekleşmedi.',
+    'palette.action.failedFallback': 'Hiçbir şey değişmedi — yeniden deneyin.',
+    'palette.action.failedDismiss': 'Kapat',
   },
 };
 

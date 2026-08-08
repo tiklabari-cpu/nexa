@@ -4462,12 +4462,12 @@
             "description": "Aksiyon seçilince `run()` çağrılır: (1) palet KAPANIR (kullanıcı beklemede kalmaz), (2) durum optimistic güncellenir, (3) istek başarısızsa geri alınır + hata bildirimi. İlk somut aksiyon: 'Stop/Start Accepting Chats' → `PATCH /agents/me/routing-status`. Etiket duruma göre değişir (kabul ediyorsa 'Stop', etmiyorsa 'Start').",
             "details": "01.1.3-ai-c — Aksiyon tetikleme — `run()` bağlama + optimistic durum + hata geri alma  [OPUS-XHIGH]\n\nPRD: FR-MOD-01.1.3 + FR-EK-A.2 (optimistic + hata geri alma)\nETİKET GEREKÇESİ: OPUS-XHIGH: koşul 2 ihlal — palet ilk kez bir MUTASYON tetikliyor (salt-okunur yüzeyden yazma yüzeyine geçiş). Ayrıca koşul 4 tam sağlanmıyor: optimistic + hata geri alma deseni depoda var (EK-A.2 `optimistic.ts`) ama palet bağlamına (modal kapanırken sonuçlanan istek) hiç uygulanmamış — tasarım kararı gerekiyor.\nNEDEN AÇIK: Kaynak recon: 'bugünkü palet salt-okunur (navigasyon+arama), hiçbir run() bir POST/PATCH mutasyonu tetiklemiyor'. Katalog (-a) ve kapı (-b) hazır olsa bile aksiyon hâlâ çalışmaz.\nKAPSAM: Aksiyon seçilince `run()` çağrılır: (1) palet KAPANIR (kullanıcı beklemede kalmaz), (2) durum optimistic güncellenir, (3) istek başarısızsa geri alınır + hata bildirimi. İlk somut aksiyon: 'Stop/Start Accepting Chats' → `PATCH /agents/me/routing-status`. Etiket duruma göre değişir (kabul ediyorsa 'Stop', etmiyorsa 'Start').\nDOSYALAR: apps/web/src/components/CommandPalette.tsx · apps/web/src/components/actions.ts · apps/web/src/components/CommandPalette.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/lib/optimistic.ts (EK-A.2'de kurulan optimistic + hata geri alma primitifi — tm 30) · apps/api/src/routes/agents.ts:52 (PATCH /agents/me/routing-status — çağrılacak endpoint) · apps/web/src/features/inbox/DetailsPanel.tsx (mevcut optimistic toggle kullanımı)\nKK (birebir): \"3 sonuç tipi: aksiyon (\"Stop Accepting Chats\"), navigasyon, AI sorgusu (\"Summarize my team's activity…\")\"\nKK DOĞRULAMA: `CommandPalette.test.tsx` — aksiyon seçilince (1) `PATCH /agents/me/routing-status` çağrılır, (2) palet kapanır, (3) durum optimistic döner; **NEGATİF:** istek 4xx/5xx dönerse optimistic değişiklik GERİ ALINIR ve kullanıcıya hata gösterilir (sessiz yutulmaz).\nKAPSAM DIŞI: Yeni aksiyon kayıtları eklemek · AI sorgu tipi (01.1.3-ai-d/-e/-f) · Backend endpoint'ini değiştirmek\nSÖZLEŞME: yok — mevcut `PATCH /agents/me/routing-status` kullanılır\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (ÖNCE): istek başarısız → optimistic geri alınır + hata görünür · negatif: istek 403 (scope) → geri alınır; palet 'yapabilirsin' yalanı söylemez · unit: aksiyon seçilince doğru endpoint doğru gövdeyle çağrılır · unit: palet kapanır (modal state) · unit: etiket duruma göre 'Stop'/'Start' olarak değişir · e2e: palet üzerinden accepting-chats kapatma → Team ekranında durum yansır",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               2
             ],
             "parentId": "95",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T10:16:15.841Z"
           },
           {
             "id": 4,
@@ -4536,7 +4536,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T10:12:25.876Z",
+        "updatedAt": "2026-08-08T10:16:15.841Z",
         "complexity": 7,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"01.1.3 — ⌘K command palette AI komutları  ·  dilim V2-5\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5022,7 +5022,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T10:12:25.876Z",
+      "lastModified": "2026-08-08T10:16:15.841Z",
       "taskCount": 104,
       "completedCount": 85,
       "tags": [

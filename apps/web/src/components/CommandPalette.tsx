@@ -18,6 +18,15 @@
  * they do not have (NFR-S3, NFR-S5). That is a courtesy, not a boundary — the
  * endpoint refuses the request on its own either way, and it is the refusal that
  * protects anything.
+ *
+ * Choosing an action closes the palette immediately and lets the request finish
+ * behind it (FR-EK-A.2): the palette is a launcher, and holding it open over a
+ * spinner would trap the keyboard for the one interaction that exists to free
+ * it. The catalogue entry shows its own optimistic result and rolls it back if
+ * the server refuses; what the palette owes in that case is the part rollback
+ * alone does not cover — saying so. A failed action therefore leaves an alert
+ * behind, outliving the palette that launched it, because a change that silently
+ * un-happened is worse than one that never appeared to happen at all.
  */
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -30,8 +39,9 @@ import {
   type ReactElement,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApiClient, useAuth } from '../lib/auth-store.js';
+import { useApiClient, useAuth, type CurrentAgent } from '../lib/auth-store.js';
 import { useTranslate } from '../lib/i18n.js';
+import { Banner } from './ui/index.js';
 import type { CustomerSummary } from '../features/customers/types.js';
 import type { ChatSummary, Ticket } from '../features/inbox/types.js';
 import { NAV_DESTINATIONS } from './navigation.js';
@@ -48,6 +58,11 @@ export function CommandPalette(): ReactElement | null {
   const [rawQuery, setRawQuery] = useState('');
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  // Survives the close, because the failure it reports usually arrives after it.
+  // `detail` is the server's own wording where there was any — kept beside the
+  // plain-language line rather than replacing it, since "insufficient_scope" is
+  // useful to whoever is diagnosing and meaningless to whoever is working.
+  const [actionError, setActionError] = useState<{ detail: string | null } | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -68,12 +83,24 @@ export function CommandPalette(): ReactElement | null {
   // every one of them if it depends on the object.
   const routingStatus = useAuth((s) => s.agent?.routing_status ?? null);
   const setRoutingStatus = useAuth((s) => s.setRoutingStatus);
+
+  // The optimistic half: a local write with no request behind it, which is what
+  // makes it usable as its own undo. Reading the store imperatively keeps this
+  // callback stable — it must not change identity every time the very field it
+  // writes changes, or the result list rebuilds mid-run.
+  const applyRoutingStatus = useCallback((status: CurrentAgent['routing_status']): void => {
+    const { agent } = useAuth.getState();
+    if (!agent) return;
+    useAuth.setState({ agent: { ...agent, routing_status: status } });
+  }, []);
+
   const actionDeps = useMemo<ActionDeps>(
     () => ({
       agent: routingStatus ? { routing_status: routingStatus } : null,
+      applyRoutingStatus,
       setRoutingStatus,
     }),
-    [routingStatus, setRoutingStatus],
+    [routingStatus, applyRoutingStatus, setRoutingStatus],
   );
 
   const close = useCallback(() => {
@@ -190,10 +217,16 @@ export function CommandPalette(): ReactElement | null {
         label,
         icon: ACTION_ICON,
         run: () => {
-          // Deliberately inert until 01.1.3-ai-c binds `action.run(actionDeps)`
-          // with optimistic state and rollback. Offering a trigger before the
-          // failure path exists is how a palette ends up silently swallowing a
-          // toggle that never took effect.
+          // Close before the await, not after it: the request outlives this
+          // overlay, and the entry has already painted its optimistic result,
+          // so there is nothing left here worth looking at.
+          close();
+          setActionError(null);
+          void action.run(actionDeps).catch((error: unknown) => {
+            // The entry has undone its own guess by now. The screen is honest
+            // again but silent about why it moved back, so say it out loud.
+            setActionError({ detail: error instanceof Error ? error.message : null });
+          });
         },
       });
     }
@@ -308,100 +341,135 @@ export function CommandPalette(): ReactElement | null {
     }
   };
 
-  if (!open) return null;
+  // Closed and nothing to report: the palette costs the page nothing until the
+  // next ⌘K. A pending failure notice is the one reason to stay on screen.
+  if (!open && !actionError) return null;
 
   const busy = searching && (customers.isFetching || tickets.isFetching || chats.isFetching);
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[12vh]"
-      // A mousedown on the backdrop dismisses; stopped on the panel so a drag
-      // that ends outside does not count as a dismiss.
-      onMouseDown={close}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={t('palette.label')}
-        className="flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
-        onMouseDown={(event) => event.stopPropagation()}
+  // Sits above the palette's own layer so a notice raised by one run is still
+  // readable if the agent has already reopened the palette to try again.
+  const failure = actionError && (
+    <div className="fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4">
+      <Banner
+        tone="danger"
+        role="alert"
+        title={t('palette.action.failed')}
+        dismissible
+        onDismiss={() => setActionError(null)}
+        dismissLabel={t('palette.action.failedDismiss')}
+        className="max-w-xl shadow-lg"
       >
-        <div className="flex items-center gap-2 border-b border-border px-4">
-          <span aria-hidden="true" className="text-content-tertiary">
-            ⌕
-          </span>
-          <input
-            ref={inputRef}
-            type="text"
-            role="combobox"
-            aria-expanded="true"
-            aria-controls="command-palette-list"
-            aria-activedescendant={
-              commands[activeIndex] ? `command-option-${activeIndex}` : undefined
-            }
-            aria-label={t('palette.search')}
-            placeholder={t('palette.placeholder')}
-            value={rawQuery}
-            onChange={(event) => setRawQuery(event.target.value)}
-            onKeyDown={onInputKeyDown}
-            className="flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-content-tertiary"
-          />
-          <kbd className="rounded border border-border px-1.5 py-0.5 text-2xs text-content-tertiary">
-            Esc
-          </kbd>
-        </div>
-
-        <ul id="command-palette-list" role="listbox" ref={listRef} className="overflow-y-auto py-1">
-          {commands.length === 0 ? (
-            <li role="presentation" className="px-4 py-6 text-center text-sm text-content-secondary">
-              {busy ? t('palette.searching') : t('palette.noMatches')}
-            </li>
-          ) : (
-            commands.map((command, index) => {
-              const firstOfGroup = index === 0 || commands[index - 1]!.group !== command.group;
-              return (
-                <li key={command.id} role="presentation">
-                  {firstOfGroup && (
-                    <p
-                      role="presentation"
-                      className="px-4 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary"
-                    >
-                      {command.group}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    role="option"
-                    id={`command-option-${index}`}
-                    data-index={index}
-                    aria-selected={index === activeIndex}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    // The palette is closing on select, so the click must not
-                    // also blur-then-refocus the input mid-teardown.
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={command.run}
-                    className={`flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors ${
-                      index === activeIndex ? 'bg-brand-100 dark:bg-brand-950' : 'hover:bg-surface-2'
-                    }`}
-                  >
-                    <span aria-hidden="true" className="text-content-tertiary">
-                      {command.icon}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{command.label}</span>
-                      {command.sub && (
-                        <span className="block truncate text-2xs text-content-tertiary">
-                          {command.sub}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                </li>
-              );
-            })
-          )}
-        </ul>
-      </div>
+        {actionError.detail ?? t('palette.action.failedFallback')}
+      </Banner>
     </div>
+  );
+
+  if (!open) return failure;
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[12vh]"
+        // A mousedown on the backdrop dismisses; stopped on the panel so a drag
+        // that ends outside does not count as a dismiss.
+        onMouseDown={close}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('palette.label')}
+          className="flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-center gap-2 border-b border-border px-4">
+            <span aria-hidden="true" className="text-content-tertiary">
+              ⌕
+            </span>
+            <input
+              ref={inputRef}
+              type="text"
+              role="combobox"
+              aria-expanded="true"
+              aria-controls="command-palette-list"
+              aria-activedescendant={
+                commands[activeIndex] ? `command-option-${activeIndex}` : undefined
+              }
+              aria-label={t('palette.search')}
+              placeholder={t('palette.placeholder')}
+              value={rawQuery}
+              onChange={(event) => setRawQuery(event.target.value)}
+              onKeyDown={onInputKeyDown}
+              className="flex-1 bg-transparent py-3 text-sm outline-none placeholder:text-content-tertiary"
+            />
+            <kbd className="rounded border border-border px-1.5 py-0.5 text-2xs text-content-tertiary">
+              Esc
+            </kbd>
+          </div>
+
+          <ul
+            id="command-palette-list"
+            role="listbox"
+            ref={listRef}
+            className="overflow-y-auto py-1"
+          >
+            {commands.length === 0 ? (
+              <li
+                role="presentation"
+                className="px-4 py-6 text-center text-sm text-content-secondary"
+              >
+                {busy ? t('palette.searching') : t('palette.noMatches')}
+              </li>
+            ) : (
+              commands.map((command, index) => {
+                const firstOfGroup = index === 0 || commands[index - 1]!.group !== command.group;
+                return (
+                  <li key={command.id} role="presentation">
+                    {firstOfGroup && (
+                      <p
+                        role="presentation"
+                        className="px-4 pb-1 pt-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+                      >
+                        {command.group}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      role="option"
+                      id={`command-option-${index}`}
+                      data-index={index}
+                      aria-selected={index === activeIndex}
+                      onMouseEnter={() => setActiveIndex(index)}
+                      // The palette is closing on select, so the click must not
+                      // also blur-then-refocus the input mid-teardown.
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={command.run}
+                      className={`flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors ${
+                        index === activeIndex
+                          ? 'bg-brand-100 dark:bg-brand-950'
+                          : 'hover:bg-surface-2'
+                      }`}
+                    >
+                      <span aria-hidden="true" className="text-content-tertiary">
+                        {command.icon}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{command.label}</span>
+                        {command.sub && (
+                          <span className="block truncate text-2xs text-content-tertiary">
+                            {command.sub}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        </div>
+      </div>
+      {failure}
+    </>
   );
 }

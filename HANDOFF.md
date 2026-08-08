@@ -13,6 +13,65 @@
 
 ## Task log (newest-first)
 
+### tm 95.3 — 01.1.3-ai-c · Aksiyon tetikleme — `run()` bağlama + optimistic durum + hata geri alma — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/components/CommandPalette.tsx` — aksiyon sonucunun `run()`'ı artık inert
+    değil: **önce `close()`** (palet bir başlatıcıdır, isteğin üstünde açık tutulup klavyeyi
+    hapsetmez), sonra `void action.run(actionDeps).catch(...)`. Hata yakalanınca
+    `role="alert"` bir `Banner` (tone `danger`, dismissible, ekranın altında sabit) çizilir;
+    bunun için bileşenin erken `if (!open) return null` çıkışı `if (!open && !actionError)`
+    oldu — **hata bildirimi paletten sonra da ayakta kalır**, çünkü sunucunun cevabı zaten
+    kapanıştan sonra gelir. Sunucunun kendi mesajı varsa gövdede gösterilir, yoksa
+    `palette.action.failedFallback`.
+  - `apps/web/src/components/actions.ts` — optimistic hikâyenin sahibi **katalog kaydı**:
+    `ActionDeps`'e istek yapmayan yerel yazıcı `applyRoutingStatus` eklendi (palette
+    `useAuth.setState` ile sağlar; `useCallback` ile kimliği sabit — aksi hâlde yazdığı alan
+    her değiştiğinde sonuç listesi koşu ortasında yeniden kurulurdu). `toggle-accepting-chats.run()`
+    sırası: tahmini yaz → `setRoutingStatus` (PUT `/agents/me/routing-status`) → **hata olursa
+    önceki değeri geri yaz ve yeniden fırlat**. Fırlatmak şart: yutulsaydı palet "oldu" demiş olurdu.
+  - i18n `palette.action.failed` / `.failedFallback` / `.failedDismiss` (en + tr).
+  - Testler — **negatifler önce, mutasyonla kanıtlandı** (bu turda kod önce yazıldığı için
+    kırmızı, kasıtlı mutasyonla gösterildi ve geri alındı):
+    `actions.test.ts` (+4, 6→10) — geri alma satırı silinince **2 test kırmızı**;
+    `CommandPalette.test.tsx` (+5, 11→16) — `catch` susturulunca **3 test kırmızı**.
+    Kapsanan: 403 ve 500'de store'daki durum geri döner + alert görünür + palet kapalı ·
+    başarıda PUT gövdesi `{routing_status:…}` doğru ve **istek gönderilirken store zaten yeni
+    değeri taşıyor** (optimistic sıralamasının kanıtı, gerçek store üzerinden) · ters yön ·
+    alert kapatılabilir.
+  - `apps/e2e/tests/command-palette.spec.ts` (+1, 2→3) — palet → "Stop Accepting Chats" →
+    **Team ekranı** (API'den okunan ayrı görünüm) 'Not accepting' gösterir → palet → "Start
+    Accepting Chats" ile geri alınır. Süit tek seed'i paylaşıp seri koştuğu için test kendi
+    izini **temizler**; bırakılsaydı sonraki routing akışları bozulurdu. Kanıt:
+    `apps/e2e/kanit/95-palette-action.png`.
+- **Doğrulama** (hepsi ön planda, exit code'larla):
+  `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1 --force` 0 → api **1922/1922**,
+  web **705/705** (696 → +9) · `pnpm -w test:integration` 0 → **1467/1467** · `pnpm -w build` 0 ·
+  `pnpm -w test:e2e` → **82 passed / 1 failed**; task'ın kendi akışı `command-palette.spec.ts`
+  **3/3 yeşil** (yeni aksiyon testi dahil). Tek kırmızı yine `skills-routing.spec.ts:76` —
+  **tm 104**, bu pencereden önce de kırık, bu pencerenin işiyle ilgisiz.
+- **Varsayımlar:**
+  - Optimistic + geri alma `lib/optimistic.ts` (react-query cache primitifi) ile DEĞİL,
+    doğrudan auth store üzerinde yapıldı: `routing_status` bir query cache girdisi değil,
+    oturum store'unun alanı — `optimisticCacheUpdate` bir `queryKey` ister ve burada öyle bir
+    anahtar yok. Desen aynı (snapshot → tahmin → hata olursa geri yaz), taşıyıcı farklı.
+  - `auth-store.ts`'e DOKUNULMADI (kapsam dışı): `setRoutingStatus` hâlâ istek + başarı
+    yazımı yapıyor; optimistic katman onun ÜSTÜNE, çağıranda kuruldu. Böylece Inbox'ın
+    availability select'inin davranışı değişmedi.
+  - Hata bildirimi uygulama geneli bir toast altyapısı DEĞİL — depoda öyle bir şey yok ve
+    açmak bu task'ın kapsamı dışıydı; mevcut `Banner` primitifi paletin kendi içinde kullanıldı.
+- **Sonraki pencereye not:**
+  - **Sıradaki `01.1.3-ai-d`** (kontrat `POST /palette/ai-query`) — bağımsız, -c'yi beklemiyordu;
+    **-e ile ARDIŞIK koşulmalı**, tek başına inerse `contract-parity.test.ts` kırılır (task notunda yazılı).
+  - `-g` (klavye/a11y) artık dört sonuç tipinden üçünü görebiliyor; `aria-activedescendant`
+    ve grup başlığı atlamaları için mevcut kod hazır, AI tipi indikten sonra tek listede test edilecek.
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında (94.10'dan beri taşınan
+    carry-over; bu commit'e de alınmadı — bu pencerenin işiyle ilgisiz).
+  - Tam e2e koşusu `apps/e2e/kanit/*.png`'leri yine yeniden üretti; timestamp dışında içerik
+    değişmediği için `git checkout -- apps/e2e/kanit` ile geri alındı. YENİ olan
+    `95-palette-action.png` bilinçli olarak commit'e alındı.
+
 ### tm 95.2 — 01.1.3-ai-b · Aksiyon sonuç tipinin scope kapısı — yetkisiz aksiyon palette GÖRÜNMEZ — done — 2026-08-08 UTC
 
 - **Yapıldı:**

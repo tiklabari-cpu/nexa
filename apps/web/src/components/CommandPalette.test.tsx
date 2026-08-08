@@ -8,7 +8,7 @@
  * which the API's own suites own.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -117,7 +117,10 @@ afterEach(() => {
 
 describe('command palette', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ items: [] })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ items: [] })),
+    );
   });
 
   it('opens on ⌘K and closes on Escape', async () => {
@@ -137,7 +140,15 @@ describe('command palette', () => {
     renderPalette([]);
     await openPalette(user);
 
-    for (const name of ['Inbox', 'Customers', 'Team', 'Playbook', 'Reports', 'Billing', 'Settings']) {
+    for (const name of [
+      'Inbox',
+      'Customers',
+      'Team',
+      'Playbook',
+      'Reports',
+      'Billing',
+      'Settings',
+    ]) {
       expect(screen.getByRole('option', { name: new RegExp(name) })).toBeInTheDocument();
     }
   });
@@ -218,7 +229,10 @@ describe('command palette', () => {
  */
 describe('command palette — action results', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ items: [] })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ items: [] })),
+    );
   });
 
   it('never lists the action — nor its heading — for a caller without the scope', async () => {
@@ -281,5 +295,144 @@ describe('command palette — action results', () => {
 
     await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'report');
     expect(screen.getByRole('option', { name: /Reports/ })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Triggering an action — FR-MOD-01.1.3, FR-EK-A.2.
+ *
+ * The palette stops being read-only here, so these cover the two things a
+ * mutation launched from a modal gets wrong. It must not hold the modal open
+ * over the request — the palette is how the keyboard user escapes, and a
+ * spinner in it is a trap. And, having moved the screen before the server
+ * answered, it must put the screen back when the server refuses *and say so*:
+ * a silent rollback reads as a toggle that never registered the keystroke, and
+ * the agent's next move is to press it again.
+ *
+ * The store is the assertion target rather than a mocked callback, because the
+ * optimistic value and the request are two halves of one behaviour and a test
+ * that stubs the store can only see one of them.
+ */
+describe('command palette — action triggering', () => {
+  /** Records the routing-status writes and answers them however the test says. */
+  function stubRoutingStatus(respond: (body: unknown) => Response) {
+    const seen: Array<{
+      url: string;
+      method: string;
+      body: unknown;
+      statusWhenSent: string | null;
+    }> = [];
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.includes('/agents/me/routing-status')) {
+        const body = init?.body ? JSON.parse(String(init.body)) : null;
+        seen.push({
+          url: input,
+          method: String(init?.method),
+          body,
+          // Read through the real store at send time: if the optimistic write
+          // had not landed yet this would still be the old value.
+          statusWhenSent: useAuth.getState().agent?.routing_status ?? null,
+        });
+        return respond(body);
+      }
+      return jsonResponse({ items: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return seen;
+  }
+
+  function errorResponse(status: number, type: string, message: string): Response {
+    return {
+      ok: false,
+      status,
+      headers: { get: () => null },
+      json: async () => ({ error: { type, message, request_id: 'req-test' } }),
+    } as unknown as Response;
+  }
+
+  async function chooseToggle(user: ReturnType<typeof userEvent.setup>) {
+    await openPalette(user);
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'accepting');
+    await user.click(await screen.findByRole('option', { name: /Accepting Chats/ }));
+  }
+
+  it('rolls the optimistic status back and says so when the request is refused', async () => {
+    const seen = stubRoutingStatus(() =>
+      errorResponse(403, 'insufficient_scope', 'Your token cannot change routing status.'),
+    );
+    const user = userEvent.setup();
+    renderPalette(['agents--my:rw'], 'accepting_chats');
+
+    await chooseToggle(user);
+
+    // The failure is spoken, not swallowed — and it outlives the palette that
+    // launched it, since the palette closed before the answer arrived.
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('That action did not go through.');
+    expect(alert).toHaveTextContent('Your token cannot change routing status.');
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    // And the screen tells the truth again: nothing was changed.
+    await waitFor(() => expect(useAuth.getState().agent?.routing_status).toBe('accepting_chats'));
+    expect(seen).toHaveLength(1);
+  });
+
+  it('rolls back a server error too, not only an authorization failure', async () => {
+    stubRoutingStatus(() => errorResponse(500, 'internal', 'Something went wrong.'));
+    const user = userEvent.setup();
+    renderPalette(['agents--my:rw'], 'not_accepting_chats');
+
+    await chooseToggle(user);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(useAuth.getState().agent?.routing_status).toBe('not_accepting_chats'),
+    );
+  });
+
+  it('sends the toggle, closes immediately, and keeps the new status on success', async () => {
+    const seen = stubRoutingStatus(() => jsonResponse({ routing_status: 'not_accepting_chats' }));
+    const user = userEvent.setup();
+    renderPalette(['agents--my:rw'], 'accepting_chats');
+
+    await chooseToggle(user);
+
+    // Closed on select rather than after the round trip.
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]!.method).toBe('PUT');
+    expect(seen[0]!.url).toContain('/agents/me/routing-status');
+    expect(seen[0]!.body).toEqual({ routing_status: 'not_accepting_chats' });
+    // Optimistic: the store already held the new value when the request left.
+    expect(seen[0]!.statusWhenSent).toBe('not_accepting_chats');
+
+    await waitFor(() =>
+      expect(useAuth.getState().agent?.routing_status).toBe('not_accepting_chats'),
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('toggles back on from a paused agent', async () => {
+    const seen = stubRoutingStatus(() => jsonResponse({ routing_status: 'accepting_chats' }));
+    const user = userEvent.setup();
+    renderPalette(['agents--my:rw'], 'not_accepting_chats');
+
+    await chooseToggle(user);
+
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]!.body).toEqual({ routing_status: 'accepting_chats' });
+  });
+
+  it('lets the failure notice be dismissed', async () => {
+    stubRoutingStatus(() => errorResponse(500, 'internal', 'Something went wrong.'));
+    const user = userEvent.setup();
+    renderPalette(['agents--my:rw'], 'accepting_chats');
+
+    await chooseToggle(user);
+    await screen.findByRole('alert');
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

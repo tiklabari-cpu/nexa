@@ -4512,13 +4512,13 @@
             "description": "Dört sonuç tipi tek bir düz gezinme listesine indirgenir: ↑↓ gruplar arasında da hareket eder, esc paleti kapatır, Enter seçili sonucu çalıştırır. ARIA: `role=listbox`/`option` + `aria-activedescendant`; grup başlıkları odak almaz. Görsel odak halkası her tipte görünür.",
             "details": "01.1.3-ai-g — Klavye/a11y: ↑↓/esc üç sonuç tipinde de tutarlı (NFR-A11Y6 regresyonu)  [SONNET-XHIGH]\n\nPRD: FR-MOD-01.1.3 + NFR-A11Y6\nETİKET GEREKÇESİ: SONNET-XHIGH: 6 koşul sağlandı. (1) 1 dosya + testi. (2) Güvenlik yok. (3) Eşzamanlılık yok. (4) Kopyalanacak desen: mevcut `CommandPalette.tsx` klavye gezinme kodu — yeni sonuç tipleri aynı listeye katılır. (5) Kontrat yok. (6) KK **birebir mekanik**: PRD 'klavye ↑↓/esc' diyor, test doğrudan bunu ölçer.\nNEDEN AÇIK: Klavye gezinme MVP'de iki sonuç tipi için yazıldı. Aksiyon ve AI sonuçları listeye katılınca odak sırası, sarmalama (wrap) ve esc davranışı yeni tipleri kapsamıyor — `CommandPalette.test.tsx` bugün yalnız açılma/kapanma + rota atlama + içerik araması test ediyor, karışık listede gezinme testi yok.\nKAPSAM: Dört sonuç tipi tek bir düz gezinme listesine indirgenir: ↑↓ gruplar arasında da hareket eder, esc paleti kapatır, Enter seçili sonucu çalıştırır. ARIA: `role=listbox`/`option` + `aria-activedescendant`; grup başlıkları odak almaz. Görsel odak halkası her tipte görünür.\nDOSYALAR: apps/web/src/components/CommandPalette.tsx · apps/web/src/components/CommandPalette.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/components/CommandPalette.tsx (mevcut ↑↓/esc kodu) · apps/web/src/features/playbook/step-reorder.ts (06.2.4-a'da kurulan klavye + ARIA duyuru deseni — NFR-A11Y4)\nKK (birebir): \"klavye ↑↓/esc\"\nKK DOĞRULAMA: `CommandPalette.test.tsx` — karışık sonuç listesinde (nav + content + action + ai) ↑↓ sırayla tüm seçenekleri dolaşır, grup başlıklarında durmaz, sonda başa sarar; esc kapatır; Enter seçili sonucu çalıştırır; `aria-activedescendant` seçili seçeneğe işaret eder.\nKAPSAM DIŞI: Yeni sonuç tipi eklemek · Ekran okuyucu canlı duyurusu (mevcut davranış korunur)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: ↑↓ karışık listede tüm tipleri dolaşır · unit: grup başlığı odak almaz · unit: liste sonunda sarma (wrap) çalışır · unit: esc paleti kapatır · unit: Enter seçili sonucu çalıştırır (tipe göre doğru handler) · unit (a11y): role=listbox/option + aria-activedescendant doğru · regresyon: mevcut palet testleri yeşil kalır",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               3,
               6
             ],
             "parentId": "95",
-            "updatedAt": "2026-08-08T11:34:07.305Z"
+            "updatedAt": "2026-08-08T11:41:12.564Z"
           },
           {
             "id": 8,
@@ -4536,7 +4536,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T11:34:07.305Z",
+        "updatedAt": "2026-08-08T11:41:12.564Z",
         "complexity": 7,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"01.1.3 — ⌘K command palette AI komutları  ·  dilim V2-5\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5022,7 +5022,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T11:34:07.305Z",
+      "lastModified": "2026-08-08T11:41:12.564Z",
       "taskCount": 104,
       "completedCount": 85,
       "tags": [

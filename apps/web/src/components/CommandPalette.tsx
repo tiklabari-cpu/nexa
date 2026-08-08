@@ -386,12 +386,22 @@ export function CommandPalette(): ReactElement | null {
     // The answer card has replaced the result list; there is nothing left for
     // the arrow keys or Enter to act on until the agent types again.
     if (aiAsked !== null) return;
+    // Wraps rather than clamping (NFR-A11Y6): the four result kinds share one
+    // flat list, so the end of "Tickets" and the start of "Actions" are just
+    // adjacent rows, not a wall — ArrowDown past the last one lands back on
+    // the first, and ArrowUp past the first lands on the last. Group headings
+    // are never in `commands` at all (they are drawn between rows at render
+    // time), so they are structurally unreachable by either key.
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setActiveIndex((index) => Math.min(index + 1, commands.length - 1));
+      if (commands.length > 0) {
+        setActiveIndex((index) => (index + 1) % commands.length);
+      }
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setActiveIndex((index) => Math.max(index - 1, 0));
+      if (commands.length > 0) {
+        setActiveIndex((index) => (index - 1 + commands.length) % commands.length);
+      }
     } else if (event.key === 'Enter') {
       event.preventDefault();
       commands[activeIndex]?.run();

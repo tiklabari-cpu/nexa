@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### tm 95.7 — 01.1.3-ai-g · Klavye/a11y: ↑↓/esc üç sonuç tipinde de tutarlı — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/components/CommandPalette.tsx` — dört sonuç tipi (`action`/`nav`/`content`/`ai`)
+    zaten önceki turlardan tek bir düz `commands` dizisine indirgeniyordu; eksik olan ↑↓'nün
+    **sarmasıydı** (wrap). `onInputKeyDown` iki dalı `Math.min(index+1, commands.length-1)` /
+    `Math.max(index-1, 0)` ile uçlarda kilitleniyordu (son satırda ArrowDown, ilk satırda ArrowUp
+    hiçbir şey yapmıyordu). `(index + 1) % commands.length` / `(index - 1 + commands.length) %
+    commands.length` oldu; boş listede `% 0` NaN'ı önlemek için `commands.length > 0` koruması
+    eklendi. Grup başlıkları (`role="presentation"` `<p>`) `commands` dizisinde hiç yer almadığı
+    için odağı yapısal olarak zaten alamıyordu — kod değişikliği gerekmedi, yalnız test kanıtı
+    eklendi. `role=listbox`/`option` + `aria-activedescendant` + odak halkası (tüm tiplerde aynı
+    `className`) zaten doğruydu.
+  - `apps/web/vitest.setup.ts` — jsdom `Element.prototype.scrollIntoView`'i uygulamıyor; palet
+    bugüne kadar hiçbir test ok tuşuyla `activeIndex`'i gerçekten değiştirmediği için bu hiç
+    tetiklenmemişti. Paylaşılan no-op polyfill eklendi (tüm workspace testleri için).
+  - Testler — `CommandPalette.test.tsx`, yeni `describe('command palette — mixed-kind keyboard
+    navigation')` (+3): karışık liste (action+nav+content, "o" sorgusuyla 1+8+1+1=11 satır) ↑↓ ile
+    baştan sona dolaşır, `aria-activedescendant` her adımda doğru satırı gösterir, son satırdan
+    bir adım ileri baş satıra sarar ve tersi (ArrowUp da) · Enter, ok tuşlarıyla gidilen satırı
+    (ilk sonuç değil) çalıştırır — customer sonucundan bir ArrowDown sonra ticket'a Enter,
+    `/app/inbox?ticket=TCK123`'e gider · yalın action+nav listesinde de (ağ isteği gerekmeden)
+    sarma çalışır. **Mutasyon kanıtı:** sarma satırları eski `Math.min`/`Math.max`'e geri
+    alınınca (git stash ile) sarma iddialarını taşıyan 2 test kırmızı oldu, sarmaya bağlı olmayan
+    3. test (Enter-on-second-result) yeşil kaldı — beklenen ayrım, fix geri konunca 27/27 yeşil.
+- **Doğrulama:** `pnpm -w typecheck` ✅ · `pnpm -w lint` ✅ · `npx turbo run test
+  --filter='!@nexa/e2e' --concurrency=1` ✅ (91 dosya / 1931 test @nexa/api dahil, @nexa/web 27/27)
+  · `pnpm -w build` ✅ · e2e `apps/e2e/tests/command-palette.spec.ts` ✅ (3/3, gerçek Postgres+Redis
+  + api/rtm/web/widget dev sunucularına karşı, `.env`'den export edilen ortam değişkenleriyle).
+- **Varsayımlar:** Yok — kapsam KK'nın istediği kadarıyla sınırlı tutuldu (yeni sonuç tipi
+  eklenmedi, ekran okuyucu canlı duyurusu dokunulmadı — ikisi de KK'da kapsam dışı).
+- **Sonraki pencereye not:** `01.1.3-ai-h` (uçtan uca doğrulama + kapanış) artık bağımlılıklarının
+  hepsini (c/f/g) done buluyor, sırada o var. `run-loop.sh`'taki commit'lenmemiş retry-mantığı
+  değişikliği bu pencerenin işi değildi, dokunulmadı — hâlâ working tree'de duruyor, başka bir
+  görev/pencere onu ele almalı.
+
 ### tm 95.6 — 01.1.3-ai-f · Palette'te AI sorgu sonuç tipi + cevap kartı — done — 2026-08-08 UTC
 
 - **Yapıldı:**

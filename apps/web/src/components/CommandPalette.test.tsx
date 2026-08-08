@@ -619,3 +619,104 @@ describe('command palette — AI query result', () => {
     expect(screen.queryByText('Not sure what you mean')).toBeNull();
   });
 });
+
+/**
+ * Keyboard navigation across a mixed result list — FR-MOD-01.1.3, NFR-A11Y6.
+ *
+ * The palette reduces action, nav and content results (its fourth kind, `ai`,
+ * only ever appears once the other three found nothing, and is covered above
+ * in isolation) into one flat `commands` array, so ↑↓/Enter/`aria-activedescendant`
+ * only need to work against an index into that array — never against a kind.
+ * These assert that promise holds once every producer actually contributes a
+ * row to the same list, and that the arrow keys treat the list as a ring
+ * rather than a wall at either end.
+ */
+describe('command palette — mixed-kind keyboard navigation', () => {
+  it('walks every result kind with the arrow keys, skipping headers, and wraps at both ends', async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderPalette(
+      ['agents--my:rw', 'customers:ro', 'tickets--all:ro', 'chats--all:ro'],
+      'accepting_chats',
+    );
+    await openPalette(user);
+    const combobox = screen.getByRole('combobox', { name: 'Search or jump to' });
+
+    // "o" is a deliberately broad needle: it lands the routing-status action
+    // (via its "routing status" keyword), all eight nav destinations (by
+    // label or keyword), and both stubbed content records (customer via its
+    // e-mail, ticket via "order") in one list — action, nav and content all
+    // contributing rows at once, with nothing left to the "ai" result to add.
+    await user.type(combobox, 'o');
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(11));
+    const options = screen.getAllByRole('option');
+
+    // Starts on the action (index 0, group "Actions") — its heading is drawn
+    // above the row but is not itself a row, so nothing has to be skipped.
+    expect(options[0]).toHaveTextContent(/Accepting Chats/);
+    expect(options[0]).toHaveAttribute('aria-selected', 'true');
+    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-0');
+
+    // Ten steps crosses the action → nav → content group boundaries (indices
+    // 1 and 9) without stalling on either heading and lands on the last row.
+    await user.keyboard('{ArrowDown}'.repeat(10));
+    expect(options[10]).toHaveTextContent('Refund for order 42');
+    expect(options[10]).toHaveAttribute('aria-selected', 'true');
+    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-10');
+    // Exactly one row is ever marked current.
+    expect(options.filter((option) => option.getAttribute('aria-selected') === 'true')).toHaveLength(
+      1,
+    );
+
+    // One more step wraps past the last row back to the first rather than
+    // stopping dead — the list is a ring, not a wall.
+    await user.keyboard('{ArrowDown}');
+    expect(options[0]).toHaveAttribute('aria-selected', 'true');
+    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-0');
+
+    // And the same in reverse: ArrowUp from the first row wraps to the last.
+    await user.keyboard('{ArrowUp}');
+    expect(options[10]).toHaveAttribute('aria-selected', 'true');
+    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-10');
+  });
+
+  it('lets Enter act on whichever kind the arrow keys landed on, not only the first result', async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderPalette(['customers:ro', 'tickets--all:ro', 'chats--all:ro']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'mira');
+    await screen.findByRole('option', { name: /mira@acme-customer/ });
+
+    // The customer content result is first (index 0); one ArrowDown lands on
+    // the ticket content result.
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('option', { name: /Refund for order 42/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.keyboard('{Enter}');
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/inbox?ticket=TCK123');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('wraps a plain action + nav list too, without needing any content search', async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderPalette(['agents--my:rw'], 'accepting_chats');
+    await openPalette(user);
+
+    // Unfiltered: just the action + all nav destinations, no network involved
+    // — the smallest list the wrap behaviour has to hold for.
+    const options = await screen.findAllByRole('option');
+    const combobox = screen.getByRole('combobox', { name: 'Search or jump to' });
+
+    // Exactly `options.length` steps from the first row: a clamping
+    // implementation would still be sitting on the last row; wrapping lands
+    // back on the first.
+    await user.keyboard('{ArrowDown}'.repeat(options.length));
+    expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-0');
+  });
+});

@@ -486,6 +486,250 @@ describe('ReportsPage — Breakdown report, By team / By channel (07.5-h)', () =
 
 // ===========================================================================
 
+interface StaffingCellFixture {
+  day_of_week: number;
+  hour: number;
+  observed_chats: number;
+  required_agents: number | null;
+  scheduled_agents: number | null;
+  rostered_agents: number | null;
+  gap: number | null;
+  low_confidence: boolean;
+}
+
+function emptyStaffingCell(day_of_week: number, hour: number): StaffingCellFixture {
+  return {
+    day_of_week,
+    hour,
+    observed_chats: 0,
+    required_agents: null,
+    scheduled_agents: null,
+    rostered_agents: null,
+    gap: null,
+    low_confidence: true,
+  };
+}
+
+/** A dense 168-cell grid (matching the API's guarantee), with per-cell overrides keyed `"day-hour"`. */
+function fullStaffingGrid(
+  overrides: Record<string, Partial<StaffingCellFixture>> = {},
+): StaffingCellFixture[] {
+  const cells: StaffingCellFixture[] = [];
+  for (let day = 0; day < 7; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      const base = emptyStaffingCell(day, hour);
+      const override = overrides[`${day}-${hour}`];
+      cells.push(override ? { ...base, ...override } : base);
+    }
+  }
+  return cells;
+}
+
+function knownStaffingCell(day_of_week: number, hour: number): StaffingCellFixture {
+  return {
+    day_of_week,
+    hour,
+    observed_chats: 25,
+    required_agents: 1,
+    scheduled_agents: 3,
+    rostered_agents: 1,
+    gap: -2,
+    low_confidence: false,
+  };
+}
+
+/**
+ * Same shape as `fullStaffingGrid`, but every default cell carries real
+ * (non-null, non-highlighted) data — so a single overridden "unknown" cell has
+ * a title distinct from the other 167, and `getByTitle` can find it uniquely.
+ */
+function fullKnownStaffingGrid(
+  overrides: Record<string, Partial<StaffingCellFixture>> = {},
+): StaffingCellFixture[] {
+  const cells: StaffingCellFixture[] = [];
+  for (let day = 0; day < 7; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      const base = knownStaffingCell(day, hour);
+      const override = overrides[`${day}-${hour}`];
+      cells.push(override ? { ...base, ...override } : base);
+    }
+  }
+  return cells;
+}
+
+const STAFFING_BASE = {
+  range: OVERVIEW.range,
+  inputs: {
+    concurrent_chats_limit: 4,
+    average_chat_minutes: 6,
+    minimum_sample_chats: 20,
+    agents: 5,
+  },
+  coverage_known: true,
+  roster_known: true,
+  low_confidence: false,
+  cells: fullStaffingGrid(),
+};
+
+function mockStaffing(overrides: Partial<typeof STAFFING_BASE>): void {
+  const payload = { ...STAFFING_BASE, ...overrides };
+  api.get.mockImplementation((path: string) => {
+    if (path.startsWith('/reports/staffing-forecast')) return Promise.resolve(payload);
+    if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    return Promise.reject(new Error(`unexpected ${path}`));
+  });
+}
+
+async function openStaffingTab(): Promise<void> {
+  await userEvent.click(screen.getByRole('tab', { name: 'Staffing' }));
+  await screen.findByRole('region', { name: 'Staffing' });
+}
+
+describe('ReportsPage — Staffing report (WORKSCHED-i)', () => {
+  it('renders the full 7 x 24 day-by-hour grid', async () => {
+    mockStaffing({ cells: fullKnownStaffingGrid() });
+    renderReports(<ReportsPage />);
+    await openStaffingTab();
+
+    const grid = within(screen.getByRole('region', { name: 'Staffing' }));
+    expect(grid.getAllByRole('row')).toHaveLength(8); // header + 7 days
+    expect(grid.getAllByRole('columnheader')).toHaveLength(25); // "Day" label + 24 hours
+  });
+
+  it('highlights a cell with a positive gap (understaffed)', async () => {
+    mockStaffing({
+      cells: fullStaffingGrid({
+        '2-14': {
+          observed_chats: 40,
+          required_agents: 3,
+          scheduled_agents: 2,
+          rostered_agents: 2,
+          gap: 1,
+          low_confidence: false,
+        },
+      }),
+    });
+    renderReports(<ReportsPage />);
+    await openStaffingTab();
+
+    const cell = screen.getByTitle('Required 3 · Scheduled 2 · Gap +1');
+    expect(cell).toHaveTextContent('+1');
+    expect(cell).toHaveClass('bg-warning/10');
+  });
+
+  it('does not highlight a cell with a non-positive gap', async () => {
+    mockStaffing({
+      cells: fullStaffingGrid({
+        '2-14': {
+          observed_chats: 10,
+          required_agents: 2,
+          scheduled_agents: 3,
+          rostered_agents: 2,
+          gap: -1,
+          low_confidence: false,
+        },
+      }),
+    });
+    renderReports(<ReportsPage />);
+    await openStaffingTab();
+
+    const cell = screen.getByTitle('Required 2 · Scheduled 3 · Gap -1');
+    expect(cell).toHaveTextContent('-1');
+    expect(cell).not.toHaveClass('bg-warning/10');
+  });
+
+  it('shows "—" for a low-confidence / unknown cell, never a fabricated 0', async () => {
+    // Every other cell carries real, known data (see `fullKnownStaffingGrid`),
+    // so only the overridden cell is unknown — isolating the assertion below.
+    mockStaffing({
+      cells: fullKnownStaffingGrid({
+        '2-14': {
+          observed_chats: 3,
+          required_agents: null,
+          scheduled_agents: 1,
+          rostered_agents: null,
+          gap: null,
+          low_confidence: true,
+        },
+      }),
+    });
+    renderReports(<ReportsPage />);
+    await openStaffingTab();
+
+    // The KK's "0 is never written" made concrete: a cell with too little
+    // history renders the unknown marker, not a fabricated 0.
+    const cell = screen.getByTitle('Not enough data');
+    expect(cell).toHaveTextContent('—');
+    expect(cell).not.toHaveTextContent('0');
+  });
+
+  it('shows a meaningful empty state, not an empty grid, when nothing happened in the window', async () => {
+    mockStaffing({ cells: fullStaffingGrid() });
+    renderReports(<ReportsPage />);
+    await openStaffingTab();
+
+    expect(screen.getByText('No staffing data in this window')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('shows an error state when the report fails to load', async () => {
+    api.get.mockImplementation((path: string) => {
+      if (path.startsWith('/reports/staffing-forecast')) return Promise.reject(new Error('boom'));
+      if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+      return Promise.reject(new Error(`unexpected ${path}`));
+    });
+    renderReports(<ReportsPage />);
+    await userEvent.click(screen.getByRole('tab', { name: 'Staffing' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Could not load the staffing forecast/);
+  });
+
+  it('notes when presence data is unknown for the whole window', async () => {
+    mockStaffing({
+      coverage_known: false,
+      cells: fullStaffingGrid({
+        '2-14': {
+          observed_chats: 40,
+          required_agents: 3,
+          scheduled_agents: null,
+          rostered_agents: null,
+          gap: null,
+          low_confidence: false,
+        },
+      }),
+    });
+    renderReports(<ReportsPage />);
+    await openStaffingTab();
+
+    expect(screen.getByText(/No presence data in this window/)).toBeInTheDocument();
+  });
+
+  it('queries the staffing-forecast endpoint with the selected range', async () => {
+    mockStaffing({});
+    renderReports(<ReportsPage />);
+    await openStaffingTab();
+
+    expect(api.get).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/reports\/staffing-forecast\?from=.*&to=/),
+    );
+  });
+
+  it('follows the shared role=tab/tabpanel + aria-controls pattern', async () => {
+    mockStaffing({});
+    renderReports(<ReportsPage />);
+    const tab = screen.getByRole('tab', { name: 'Staffing' });
+    await userEvent.click(tab);
+    await screen.findByRole('region', { name: 'Staffing' });
+
+    expect(tab).toHaveAttribute('aria-selected', 'true');
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).toHaveAttribute('aria-labelledby', tab.id);
+    expect(tab).toHaveAttribute('aria-controls', panel.id);
+  });
+});
+
+// ===========================================================================
+
 interface TopicRow {
   id: string;
   label: string;

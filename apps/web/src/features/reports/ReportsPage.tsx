@@ -140,11 +140,37 @@ interface ReportsTopics {
   topics: TopicRow[];
 }
 
+interface StaffingCell {
+  day_of_week: number;
+  hour: number;
+  observed_chats: number;
+  required_agents: number | null;
+  scheduled_agents: number | null;
+  rostered_agents: number | null;
+  gap: number | null;
+  low_confidence: boolean;
+}
+
+interface StaffingForecast {
+  range: { from: string; to: string };
+  inputs: {
+    concurrent_chats_limit: number | null;
+    average_chat_minutes: number | null;
+    minimum_sample_chats: number;
+    agents: number;
+  };
+  coverage_known: boolean;
+  roster_known: boolean;
+  low_confidence: boolean;
+  cells: StaffingCell[];
+}
+
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'ai-agent', label: 'AI Agent' },
   { id: 'reviews', label: 'Reviews' },
   { id: 'breakdown', label: 'Breakdown' },
+  { id: 'staffing', label: 'Staffing' },
   { id: 'topics', label: 'Chat topics' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -282,6 +308,8 @@ export function ReportsPage(): ReactElement {
           <ReviewsTab rangeKey={rangeKey} range={range} />
         ) : tab === 'breakdown' ? (
           <BreakdownTab rangeKey={rangeKey} range={range} />
+        ) : tab === 'staffing' ? (
+          <StaffingTab rangeKey={rangeKey} range={range} />
         ) : (
           <TopicsTab rangeKey={rangeKey} range={range} />
         )}
@@ -1018,6 +1046,148 @@ function SplitTable({
       </tbody>
     </table>
   );
+}
+
+const STAFFING_DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const STAFFING_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+
+/**
+ * Staffing (WORKSCHED-i, PRD §5.3-Vardiya). A read-only 7 × 24 UTC grid off
+ * `GET /reports/staffing-forecast` (-g): every cell shows the gap between what
+ * the observed load required and what was actually scheduled, highlighted
+ * when positive (a shortfall). Recomputed per request server-side — nothing
+ * here re-derives the arithmetic, only renders it.
+ *
+ * A cell that never cleared the sample floor, or whose required/scheduled
+ * side is unknown, renders "—" rather than a fabricated 0 — a real all-clear
+ * and "we don't know" are different facts, and only one of them is good news.
+ */
+function StaffingTab(props: TabProps): ReactElement {
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<StaffingForecast>('staffing-forecast', api, props);
+
+  if (error) {
+    return (
+      <ErrorNotice message="Could not load the staffing forecast. Check that the API is reachable and try again." />
+    );
+  }
+  if (isPending) {
+    return <CardSkeleton rows={7} />;
+  }
+
+  const totalObserved = data.cells.reduce((sum, cell) => sum + cell.observed_chats, 0);
+
+  return (
+    <Section
+      title="Staffing"
+      description="Required vs scheduled agents per UTC weekday and hour, from observed volume and the presence log (PRD §5.3). Gaps are the shortfall to close; a cell with too little history shows '—', never a guessed number."
+    >
+      <Card>
+        {totalObserved === 0 ? (
+          <EmptyState
+            title="No staffing data in this window"
+            description="Once conversations happen in this window, the required-vs-scheduled forecast shows up here."
+          />
+        ) : (
+          <>
+            {!data.coverage_known && (
+              <p className="border-b border-border px-4 py-2 text-2xs text-warning">
+                No presence data in this window — scheduled coverage and every gap are unknown.
+              </p>
+            )}
+            {!data.roster_known && (
+              <p className="border-b border-border px-4 py-2 text-2xs text-content-secondary">
+                No agent has a saved work schedule yet — rostered coverage is unknown.
+              </p>
+            )}
+            <StaffingGrid cells={data.cells} />
+          </>
+        )}
+      </Card>
+    </Section>
+  );
+}
+
+/** The 7 × 24 grid itself: one row per UTC weekday (0 = Sunday), one column per UTC hour. */
+function StaffingGrid({ cells }: { cells: StaffingCell[] }): ReactElement {
+  const byKey = new Map<string, StaffingCell>();
+  for (const cell of cells) {
+    byKey.set(`${cell.day_of_week}-${cell.hour}`, cell);
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <caption className="sr-only">Required vs scheduled agents per UTC weekday and hour</caption>
+        <thead>
+          <tr className="border-b border-border text-left">
+            <th scope="col" className="px-2 py-1.5 text-2xs font-medium text-content-secondary">
+              Day
+            </th>
+            {STAFFING_HOURS.map((hour) => (
+              <th
+                key={hour}
+                scope="col"
+                className="w-8 px-1 py-1.5 text-center text-2xs font-medium text-content-secondary"
+              >
+                {String(hour).padStart(2, '0')}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {STAFFING_DAY_LABELS.map((label, dayOfWeek) => (
+            <tr key={label} className="border-b border-border last:border-0">
+              <th scope="row" className="px-2 py-1.5 text-left text-2xs font-medium text-content-secondary">
+                {label}
+              </th>
+              {STAFFING_HOURS.map((hour) => (
+                <StaffingCellView key={hour} cell={byKey.get(`${dayOfWeek}-${hour}`)} />
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** One grid cell: the gap, or "—" when the cell (or an input it depends on) is unknown. */
+function StaffingCellView({ cell }: { cell: StaffingCell | undefined }): ReactElement {
+  if (!cell || cell.gap === null || cell.required_agents === null || cell.scheduled_agents === null) {
+    return (
+      <td title="Not enough data" className="tabular px-1 py-1.5 text-center text-content-tertiary">
+        —
+      </td>
+    );
+  }
+
+  const { gap, required_agents, scheduled_agents } = cell;
+  const highlight = gap > 0;
+  const title = `Required ${required_agents} · Scheduled ${formatScheduled(scheduled_agents)} · Gap ${formatGap(gap)}`;
+
+  return (
+    <td
+      title={title}
+      className={`tabular px-1 py-1.5 text-center ${
+        highlight ? 'bg-warning/10 font-semibold text-warning' : 'text-content-secondary'
+      }`}
+    >
+      {formatGap(gap)}
+    </td>
+  );
+}
+
+/** `2.5` → `"2.5"`, `2` → `"2"` — whole numbers stay whole. */
+function formatScheduled(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+/** The required-scheduled gap, signed: `1` → `"+1"`, `-1.5` → `"-1.5"`, `0` → `"0"`. */
+function formatGap(gap: number): string {
+  const rounded = Math.round(gap * 10) / 10;
+  if (rounded === 0) return '0';
+  return rounded > 0 ? `+${rounded}` : `${rounded}`;
 }
 
 /**

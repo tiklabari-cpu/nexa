@@ -13,6 +13,56 @@
 
 ## Task log (newest-first)
 
+### tm 77.9 — WORKSCHED-i: Reports → Staffing sekmesi (salt-okunur gün × saat ızgarası) — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/reports/ReportsPage.tsx` — `TABS` dizisine 6. sekme `Staffing`
+    (Breakdown ile Chat topics arasına). `GET /reports/staffing-forecast` (-g) yanıtını mevcut
+    `useReport` hook'u + paylaşılan aralık kontrolüyle çağırır, UTC 7×24 ızgaraya
+    (`day_of_week` 0=Pazar × `hour`) render eder. Her hücre `gap`'i (`required_agents −
+    scheduled_agents`) gösterir; `gap > 0` `bg-warning/10` ile vurgulanır (negatif/sıfır
+    vurgulanmaz). `gap`/`required_agents`/`scheduled_agents` üçünden biri null ise hücre
+    `'—'` + `title="Not enough data"` — **0 hiç yazılmaz**. Toplam `observed_chats` pencerede
+    0 ise (gerçekten hiç veri yoksa) ızgara yerine `EmptyState`. `coverage_known`/
+    `roster_known` false olduğunda ek dürüst not satırı. Mevcut sekme kabuğunun
+    `role=tab`/`tabpanel` + `aria-controls` deseni değişmeden korundu (paylaşılan `TABS`
+    mekanizması).
+  - Test: `ReportsPage.test.tsx` +9 (negatif önce: low-confidence/null hücre → '—' + başlık,
+    `0` yok · boş pencere → anlamlı empty state, tablo yok · API hatası → `role="alert"`;
+    sonra 7×24 ızgara + 25 columnheader/8 row · gap>0 vurgu class'ı · presence-bilinmiyor
+    notu · endpoint sorgusu doğru aralıkla · paylaşılan tab/tabpanel/aria-controls deseni).
+    `@nexa/web` 617 → 626.
+- **Doğrulama:** `pnpm -w typecheck` (11/11) · `pnpm -w lint` (8/8) ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` (85 dosya/1750 `@nexa/api`
+  DEĞİŞMEDİ + 83 dosya/626 `@nexa/web`, ikisi de yeşil) · `pnpm -w build` (7/7) ·
+  `make test-e2e`: `reports.spec.ts` ilgili akış **6/6 yeşil**; tam suite 70/74. Kalan 4
+  kırmızı bu görevle **ilgisiz olduğu doğrulandı** — `ReportsPage.tsx`/`.test.tsx` `git
+  stash` ile HEAD'e döndürülüp `customers.spec.ts` izole tekrar koşuldu, birebir aynı 3 hata
+  tekrar çıktı (paylaşılan geliştirme DB'sinin seed/durum sürüklenmesi, bu görevden önce
+  var); `skills-routing.spec.ts:76` zaten tm 77.4'ten beri HANDOFF'ta kayıtlı aynı sınıf
+  flake. Hepsi exit 0 (e2e'nin ilgisiz 4 kırmızısı hariç).
+- **Varsayımlar:**
+  - Hücrenin görünür değeri yalnız `gap` (sayı, işaretli: `+1`/`-1`/`0`); `required`/
+    `scheduled` detayı hücrenin `title` özniteliğinde (`Required N · Scheduled N · Gap N`) —
+    168 hücreye üç ayrı görünür sayı sığdırmak ızgarayı okunmaz kılardı, KK'nın "required/
+    scheduled/gap" maddesi verinin tamamen erişilebilir olmasını istiyor, hepsinin aynı anda
+    görünür olmasını değil.
+  - "Boş pencere" (FR-EK-B.1) `Σ observed_chats === 0` ile tanımlandı — API'nin 168 hücreyi
+    her zaman yoğun döndürmesi yüzünden (satır sayısı hiçbir zaman 0 değil) "veri yok" ancak
+    içerikten anlaşılabilir; hücre bazlı `low_confidence` bundan ayrı tutuldu (kısmi veri
+    yetersizliği, tüm pencerenin boş olması değil).
+- **Sonraki pencereye not:**
+  - Sırada **WORKSCHED-j** (tm 77.10, uçtan uca doğrulama: staffing e2e akışı + izolasyon
+    iddiaları + ADR-09 sayı tutarlılığı) — bağımlılıkları (-c,-d,-g,-h,-i) artık hepsi done.
+  - `customers.spec.ts` üçlüsü (`lists people…`, `edits a customer…`, `bans and unbans…`) bu
+    turda İLK KEZ gözlemlendi kırmızı olarak (önceki HANDOFF turlarında yalnız
+    `skills-routing.spec.ts:76` kayıtlıydı) — paylaşılan dev DB'nin seed/durum sürüklenmesi
+    sınıfından, bu görevin kapsamı dışında bırakıldı ama bir sonraki pencere farkında olsun:
+    tam suite artık 70/74, 73/74 değil.
+  - `run-loop.sh` çalışma alanında yine değiştirilmiş halde bırakıldı (tm 77.7/77.8'de de
+    görüldü, bu görevle ilgisiz bir döngü-altyapısı değişikliği — kapsam disiplini gereği bu
+    commit'e alınmadı).
+
 ### tm 77.8 — WORKSCHED-h: Team → Work schedule düzenleyici — done — 2026-08-08 UTC
 
 - **Yapıldı:**

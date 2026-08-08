@@ -24,10 +24,17 @@ import {
   Section,
 } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
-import { Banner } from '../../components/ui/index.js';
+import { Banner, Dropdown } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
-import type { ApiClient } from '../../lib/api-client.js';
+import { ApiClientError, type ApiClient } from '../../lib/api-client.js';
 import { formatCount, formatDuration, formatMoney, formatRate } from '../../lib/format.js';
+import { FieldError, required, useForm } from '../../lib/form.js';
+import {
+  SAVED_REPORT_VIEW_NAME_MAX,
+  useSavedReportViews,
+  type ReportBaseline,
+  type SavedReportView,
+} from './report-views.js';
 
 interface Period {
   range: { from: string; to: string };
@@ -326,6 +333,18 @@ function rangeQuery(range: { from: string; to: string }): string {
   return `from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`;
 }
 
+/**
+ * `rangeQuery` plus the benchmark baseline (07.7-e), when one is set. Omitted
+ * — not sent as an explicit default — when `baseline` is `null`, so a report
+ * fetched with no baseline chosen hits the exact same URL it always has
+ * (`?baseline=previous_period` is byte-identical in the response, but the
+ * request itself stays unchanged for anything asserting on it, e.g. a test).
+ */
+function reportQuery(range: { from: string; to: string }, baseline: ReportBaseline | null): string {
+  const query = rangeQuery(range);
+  return baseline ? `${query}&baseline=${baseline}` : query;
+}
+
 export function ReportsPage(): ReactElement {
   const api = useApiClient();
   const { data: groupsData } = useReportGroups(api);
@@ -341,25 +360,53 @@ export function ReportsPage(): ReactElement {
   const [mode, setMode] = useState<RangeMode>(30);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+  // No selector sets this away from `null` yet (the comparison window a
+  // benchmark badge would show is an open UI question, §5.2.4) — it exists so
+  // a saved view round-trips a `baseline` it may carry without silently
+  // dropping it, and so the wiring is already correct the day a control lands.
+  const [baseline, setBaseline] = useState<ReportBaseline | null>(null);
 
   const range = resolveRange(mode, customFrom, customTo);
   // Stable across renders (unlike `range`, which re-derives "now"), so it is the
   // right thing to key a query on.
   const rangeKey = mode === 'custom' ? `custom:${customFrom}:${customTo}` : String(mode);
 
+  const savedViews = useSavedReportViews();
+  // Applying a saved view sets its whole filter — tab, range and baseline — in
+  // one click (07.7-k KK, derived from 07.7-h): the same all-at-once binding
+  // Inbox uses for its own saved views (`InboxPage.tsx`'s `applySavedView`).
+  const applySavedView = (view: SavedReportView): void => {
+    setTab(view.tab);
+    setMode(view.mode);
+    setCustomFrom(view.customFrom);
+    setCustomTo(view.customTo);
+    setBaseline(view.baseline);
+  };
+
   return (
     <Page
       title="Reports"
       description="Conversation volume, responsiveness and satisfaction."
       actions={
-        <RangeControls
-          mode={mode}
-          onMode={setMode}
-          customFrom={customFrom}
-          customTo={customTo}
-          onCustomFrom={setCustomFrom}
-          onCustomTo={setCustomTo}
-        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <SavedViewsControl
+            views={savedViews.views}
+            onSelect={applySavedView}
+            onAdd={(name) =>
+              savedViews.add({ name, tab, mode, customFrom, customTo, baseline })
+            }
+            onRemove={savedViews.remove}
+          />
+          <RangeControls
+            mode={mode}
+            onMode={setMode}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomFrom={setCustomFrom}
+            onCustomTo={setCustomTo}
+          />
+          <ExportControl group={tab} range={range} visible={visibleGroupIds.has(tab)} />
+        </div>
       }
     >
       <div role="tablist" aria-label="Report" className="flex gap-1 border-b border-border">
@@ -402,26 +449,26 @@ export function ReportsPage(): ReactElement {
         ) : tab === 'overview' ? (
           <>
             <TopicsPromoBanner onSeeTopics={() => setTab('topics')} />
-            <OverviewTab rangeKey={rangeKey} range={range} />
+            <OverviewTab rangeKey={rangeKey} range={range} baseline={baseline} />
           </>
         ) : tab === 'ai-agent' ? (
-          <AiAgentTab rangeKey={rangeKey} range={range} />
+          <AiAgentTab rangeKey={rangeKey} range={range} baseline={baseline} />
         ) : tab === 'reviews' ? (
-          <ReviewsTab rangeKey={rangeKey} range={range} />
+          <ReviewsTab rangeKey={rangeKey} range={range} baseline={baseline} />
         ) : tab === 'breakdown' ? (
-          <BreakdownTab rangeKey={rangeKey} range={range} />
+          <BreakdownTab rangeKey={rangeKey} range={range} baseline={baseline} />
         ) : tab === 'staffing' ? (
-          <StaffingTab rangeKey={rangeKey} range={range} />
+          <StaffingTab rangeKey={rangeKey} range={range} baseline={baseline} />
         ) : tab === 'topics' ? (
-          <TopicsTab rangeKey={rangeKey} range={range} />
+          <TopicsTab rangeKey={rangeKey} range={range} baseline={baseline} />
         ) : tab === 'cases' ? (
-          <CasesTab rangeKey={rangeKey} range={range} />
+          <CasesTab rangeKey={rangeKey} range={range} baseline={baseline} />
         ) : tab === 'leads' ? (
-          <LeadsTab rangeKey={rangeKey} range={range} />
+          <LeadsTab rangeKey={rangeKey} range={range} baseline={baseline} />
         ) : tab === 'sales' ? (
-          <SalesTab rangeKey={rangeKey} range={range} />
+          <SalesTab rangeKey={rangeKey} range={range} baseline={baseline} />
         ) : (
-          <TeamPerformanceTab rangeKey={rangeKey} range={range} />
+          <TeamPerformanceTab rangeKey={rangeKey} range={range} baseline={baseline} />
         )}
       </div>
     </Page>
@@ -431,13 +478,21 @@ export function ReportsPage(): ReactElement {
 interface TabProps {
   rangeKey: string;
   range: { from: string; to: string } | null;
+  baseline: ReportBaseline | null;
 }
 
-function useReport<T>(kind: string, api: ApiClient, { rangeKey, range }: TabProps) {
+function useReport<T>(kind: string, api: ApiClient, { rangeKey, range, baseline }: TabProps) {
+  // `/reports/staffing-forecast` takes no `baseline` parameter — it is a
+  // projection over its own window, not a comparison against an earlier one
+  // (see the route's own comment in `reports.ts`) — so this never sends one.
+  const effectiveBaseline = kind === 'staffing-forecast' ? null : baseline;
   return useQuery({
-    queryKey: ['reports', kind, rangeKey],
+    queryKey: ['reports', kind, rangeKey, effectiveBaseline],
     enabled: range !== null,
-    queryFn: () => api.get<T>(`/reports/${kind}?${rangeQuery(range as { from: string; to: string })}`),
+    queryFn: () =>
+      api.get<T>(
+        `/reports/${kind}?${reportQuery(range as { from: string; to: string }, effectiveBaseline)}`,
+      ),
   });
 }
 
@@ -1832,6 +1887,217 @@ function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }): ReactE
         ))}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * CSV/PDF export (FR-MOD-07.7 "export"): the active tab's group, over the
+ * selected window — `GET /reports/export?group=<tab>&from&to&format=csv|pdf`,
+ * the same endpoint the backend already gates on `EXPORT_SCOPES` and a
+ * per-group scope check (`reports.ts`). Hidden until `/reports/groups`
+ * confirms this tab is one the caller may export ("İzin bazlı görünürlük"):
+ * the same fail-closed default the gated tabs above use, and the same reason
+ * — a transient loading state and "no export scope" look identical for one
+ * beat, and that is the safe default for a permission-gated download.
+ *
+ * A failed download surfaces the server's own message rather than swallowing
+ * it — an agent who cannot export a group needs to know why, not watch
+ * nothing happen (no silent failure).
+ */
+function ExportControl({
+  group,
+  range,
+  visible,
+}: {
+  group: TabId;
+  range: { from: string; to: string } | null;
+  visible: boolean;
+}): ReactElement | null {
+  const api = useApiClient();
+  const [format, setFormat] = useState<'csv' | 'pdf'>('csv');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!visible) return null;
+
+  const download = async (): Promise<void> => {
+    if (!range) return;
+    setPending(true);
+    setError(null);
+    try {
+      const { blob, filename } = await api.getFile(
+        `/reports/export?group=${group}&${rangeQuery(range)}&format=${format}`,
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // The server names the file after the group and window
+      // (`exportFilename`, `reports-export.ts`); a caller only falls back to
+      // its own name if `content-disposition` is somehow missing.
+      link.download = filename ?? `nexa-${group}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (cause) {
+      setError(cause instanceof ApiClientError ? cause.message : 'Could not export this report.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-1.5">
+        <label className="sr-only" htmlFor="export-format">
+          Export format
+        </label>
+        <select
+          id="export-format"
+          value={format}
+          onChange={(event) => setFormat(event.target.value as 'csv' | 'pdf')}
+          className="rounded-md border border-border bg-inset px-2 py-1.5 text-xs text-content"
+        >
+          <option value="csv">CSV</option>
+          <option value="pdf">PDF</option>
+        </select>
+        <button
+          type="button"
+          disabled={!range || pending}
+          onClick={() => void download()}
+          className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+        >
+          {pending ? 'Exporting…' : 'Export'}
+        </button>
+      </div>
+      {error && (
+        <p role="alert" className="text-2xs text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Saved views (FR-MOD-07.7, KK-derived from 07.7-h): the report-views store
+ * wired to the page through the same `onSelectSaved`/`onAddSavedView`/
+ * `onRemoveSavedView` shape Inbox binds its own saved filters with
+ * (`InboxPage.tsx`'s `ViewsGroup`) — a click applies a saved view, a name and
+ * Save stores the current one, and a saved row can be removed.
+ */
+function SavedViewsControl({
+  views,
+  onSelect,
+  onAdd,
+  onRemove,
+}: {
+  views: SavedReportView[];
+  onSelect: (view: SavedReportView) => void;
+  onAdd: (name: string) => SavedReportView | null;
+  onRemove: (id: string) => void;
+}): ReactElement {
+  return (
+    <Dropdown
+      label="Saved views"
+      trigger="Views"
+      triggerClassName="rounded-md border border-border bg-inset px-2.5 py-1.5 text-xs font-medium text-content-secondary transition-colors hover:text-content"
+      panelClassName="right-0 top-full mt-1 w-64 p-2"
+    >
+      {({ close }) => (
+        <div className="flex flex-col gap-2">
+          {views.length > 0 && (
+            <ul className="flex flex-col gap-0.5">
+              {views.map((view) => (
+                <li key={view.id} className="group flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelect(view);
+                      close();
+                    }}
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-content-secondary transition-colors hover:bg-surface-2"
+                  >
+                    <span aria-hidden="true" className="text-content-tertiary">
+                      ★
+                    </span>
+                    <span className="flex-1 truncate">{view.name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onRemove(view.id)}
+                    aria-label={`Remove saved view ${view.name}`}
+                    className="shrink-0 rounded-md px-1.5 py-1 text-2xs text-content-tertiary opacity-0 transition-opacity hover:text-danger focus:opacity-100 group-hover:opacity-100"
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <SaveCurrentView onAdd={onAdd} />
+        </div>
+      )}
+    </Dropdown>
+  );
+}
+
+/**
+ * "Save this view": the shared form primitive (FR-EK-A.1) rather than a bare
+ * disabled-button check — an empty name shows a field-under error, same as
+ * every other validated form, and Submit stays disabled until the name is
+ * real.
+ */
+function SaveCurrentView({
+  onAdd,
+}: {
+  onAdd: (name: string) => SavedReportView | null;
+}): ReactElement {
+  const form = useForm({
+    initial: { name: '' },
+    validators: { name: required('Enter a name for this view.') },
+    onSubmit: (values, { reset, setSubmitError }) => {
+      if (!onAdd(values.name)) {
+        setSubmitError('Enter a name for this view.');
+        return;
+      }
+      reset();
+    },
+  });
+  const nameError = form.errorFor('name');
+
+  return (
+    <form
+      onSubmit={form.handleSubmit}
+      noValidate
+      className="flex flex-col gap-1.5 border-t border-border pt-2"
+    >
+      <label
+        htmlFor="save-report-view-name"
+        className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+      >
+        Save this view
+      </label>
+      <input
+        id="save-report-view-name"
+        value={form.values.name}
+        onChange={(event) => form.setValue('name', event.target.value)}
+        onBlur={() => form.blur('name')}
+        maxLength={SAVED_REPORT_VIEW_NAME_MAX}
+        placeholder="Name this view"
+        aria-invalid={nameError ? true : undefined}
+        aria-describedby={nameError ? 'save-report-view-name-error' : undefined}
+        className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
+      />
+      <FieldError id="save-report-view-name-error" message={nameError} />
+      <button
+        type="submit"
+        disabled={!form.canSubmit}
+        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+      >
+        {form.isSubmitting ? 'Saving…' : 'Save'}
+      </button>
+    </form>
   );
 }
 

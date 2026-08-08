@@ -10,13 +10,14 @@
  * as two different things.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { ApiClientError } from '../../lib/api-client.js';
 
-const { api } = vi.hoisted(() => ({ api: { get: vi.fn() } }));
+const { api } = vi.hoisted(() => ({ api: { get: vi.fn(), getFile: vi.fn() } }));
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof AuthStore>();
@@ -111,6 +112,7 @@ async function openAiAgentTab(): Promise<void> {
 
 beforeEach(() => {
   api.get.mockReset();
+  api.getFile.mockReset();
   localStorage.clear();
 });
 
@@ -1388,5 +1390,210 @@ describe('ReportsPage — Sales + Team performance tabs, permission-gated visibi
     expect(await screen.findByRole('alert')).toHaveTextContent(
       /Could not load the Team performance report/,
     );
+  });
+});
+
+/**
+ * Mocks `/reports/groups` alongside Overview and Breakdown — enough surface
+ * for the Export control (gated on the same catalogue as the Cases/Leads and
+ * Sales/Team performance tabs) and for a saved-view round trip that switches
+ * tabs. `groups` defaults to granting Overview only, so a test that wants
+ * Breakdown's Export control visible grants it explicitly.
+ */
+function mockGroupsExport({
+  groups = [{ id: 'overview', label: 'Overview' }],
+}: {
+  groups?: Array<{ id: string; label: string }>;
+} = {}): void {
+  api.get.mockImplementation((path: string) => {
+    if (path.startsWith('/reports/groups')) return Promise.resolve({ groups });
+    if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    if (path.startsWith('/reports/breakdown')) {
+      return Promise.resolve({ range: OVERVIEW.range, by_day: [], by_agent: [] });
+    }
+    return Promise.reject(new Error(`unexpected ${path}`));
+  });
+}
+
+/** Stubs `URL.createObjectURL`/`revokeObjectURL` and `<a>`'s `click`, exactly
+ * as `BillingPage.test.tsx` does for its invoice-CSV download — jsdom has
+ * neither object-URL plumbing nor real navigation. */
+function stubDownload(): { createObjectURL: ReturnType<typeof vi.fn>; click: ReturnType<typeof vi.spyOn> } {
+  const createObjectURL = vi.fn(() => 'blob:export');
+  const revokeObjectURL = vi.fn();
+  vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  return { createObjectURL, click };
+}
+
+describe('ReportsPage — Export control (07.7-k)', () => {
+  it('hides Export until /reports/groups grants the active tab (İzin bazlı görünürlük)', async () => {
+    mockGroupsExport({ groups: [] });
+    renderReports(<ReportsPage />);
+
+    await screen.findByText('Conversations', { exact: true });
+    expect(screen.queryByRole('button', { name: 'Export' })).not.toBeInTheDocument();
+  });
+
+  it('shows Export once /reports/groups grants the active tab', async () => {
+    mockGroupsExport();
+    renderReports(<ReportsPage />);
+
+    await screen.findByText('Conversations', { exact: true });
+    expect(await screen.findByRole('button', { name: 'Export' })).toBeInTheDocument();
+  });
+
+  it("requests the active tab's group as CSV by default, and as PDF once that format is selected (export)", async () => {
+    mockGroupsExport();
+    api.getFile.mockResolvedValue({ blob: new Blob(['x']), filename: 'nexa-overview-x.csv' });
+    const { createObjectURL, click } = stubDownload();
+    const user = userEvent.setup();
+
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+
+    await user.click(await screen.findByRole('button', { name: 'Export' }));
+    expect(api.getFile).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/reports\/export\?group=overview&from=.*&to=.*&format=csv$/),
+    );
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+
+    await user.selectOptions(screen.getByLabelText('Export format'), 'pdf');
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    expect(api.getFile).toHaveBeenLastCalledWith(
+      expect.stringMatching(/^\/reports\/export\?group=overview&from=.*&to=.*&format=pdf$/),
+    );
+
+    click.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('shows a visible error when the export request fails, rather than failing silently', async () => {
+    mockGroupsExport();
+    api.getFile.mockRejectedValue(
+      new ApiClientError({
+        type: 'authorization',
+        status: 403,
+        message: 'This token cannot export the overview report.',
+        requestId: 'rq-1',
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+    await user.click(await screen.findByRole('button', { name: 'Export' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This token cannot export the overview report.',
+    );
+  });
+});
+
+describe('ReportsPage — Save view (KK-derived from 07.7-h)', () => {
+  it('rejects an empty saved-view name with a field-under error and keeps Submit disabled (T4-a form primitive)', async () => {
+    mockGroupsExport();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+
+    await user.click(screen.getByRole('button', { name: 'Saved views' }));
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+
+    // Focus then leave the name field empty — a touched, invalid field shows
+    // its error even before a submit is attempted.
+    await user.click(screen.getByLabelText('Save this view'));
+    await user.tab();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a name for this view.');
+    expect(save).toBeDisabled();
+  });
+
+  it('saves the current view and, selecting it, restores tab/mode/customFrom/customTo wholesale', async () => {
+    mockGroupsExport();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+
+    // A custom range on Breakdown — a different tab and mode than the default
+    // (Overview, 30d) — so restoring it later is a real, observable change.
+    await user.click(screen.getByRole('tab', { name: 'Breakdown' }));
+    await screen.findByRole('region', { name: 'By day' });
+    await user.click(screen.getByRole('button', { name: 'Custom' }));
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-01-01' } });
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-01-31' } });
+
+    await user.click(screen.getByRole('button', { name: 'Saved views' }));
+    await user.type(screen.getByLabelText('Save this view'), 'Jan breakdown');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    // Move away from it: a different tab and preset.
+    await user.click(screen.getByRole('tab', { name: 'Overview' }));
+    await screen.findByText('Conversations', { exact: true });
+
+    // Selecting the saved view restores the tab and the exact custom range in
+    // one click — the whole filter, not just the tab.
+    await user.click(screen.getByRole('button', { name: 'Saved views' }));
+    await user.click(screen.getByRole('button', { name: 'Jan breakdown' }));
+
+    expect(await screen.findByRole('tab', { name: 'Breakdown' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByLabelText('Start date')).toHaveValue('2026-01-01');
+    expect(screen.getByLabelText('End date')).toHaveValue('2026-01-31');
+  });
+
+  it('restores a saved baseline into the report request, even with no control to set one yet', async () => {
+    // A view carrying a non-null baseline can only exist today via storage
+    // written some other way (a future build with a baseline selector, or —
+    // as here — a fixture standing in for one); this proves the *restore*
+    // side already threads it through correctly (KAPSAM item 3), ahead of
+    // that control landing.
+    localStorage.setItem(
+      'nexa.reports.saved-views',
+      JSON.stringify([
+        {
+          id: 'v1',
+          name: 'Yearly compare',
+          tab: 'overview',
+          mode: 30,
+          customFrom: '',
+          customTo: '',
+          baseline: 'previous_year',
+        },
+      ]),
+    );
+    mockGroupsExport();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+    api.get.mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Saved views' }));
+    await user.click(screen.getByRole('button', { name: 'Yearly compare' }));
+
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/reports\/overview\?from=.*&to=.*&baseline=previous_year$/),
+      ),
+    );
+  });
+
+  it('removes a saved view, shrinking the list', async () => {
+    mockGroupsExport();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+
+    await user.click(screen.getByRole('button', { name: 'Saved views' }));
+    await user.type(screen.getByLabelText('Save this view'), 'Temp view');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('button', { name: 'Temp view' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Remove saved view Temp view' }));
+    expect(screen.queryByRole('button', { name: 'Temp view' })).not.toBeInTheDocument();
   });
 });

@@ -14,9 +14,26 @@
  */
 import { useState } from 'react';
 
-/** Mirrors `TabId` in `ReportsPage.tsx` — kept independent so this module has
- * no import edge to the page component (07.7-k wires the two together). */
-export type ReportTabId = 'overview' | 'ai-agent' | 'reviews' | 'breakdown' | 'staffing' | 'topics';
+/**
+ * Mirrors `TabId` in `ReportsPage.tsx` — kept independent so this module has
+ * no import edge to the page component (07.7-k wires the two together, in the
+ * other direction: the page imports this type, not the reverse).
+ *
+ * Written before 07.7-i/-j added the four v2 tabs (Cases, Leads, Sales, Team
+ * performance); extended here so a view saved on one of those tabs round-trips
+ * instead of being silently dropped by `isSavedReportView` as unrecognised.
+ */
+export type ReportTabId =
+  | 'overview'
+  | 'ai-agent'
+  | 'reviews'
+  | 'breakdown'
+  | 'staffing'
+  | 'topics'
+  | 'cases'
+  | 'leads'
+  | 'sales'
+  | 'team-performance';
 
 /** Mirrors `RangeMode` in `ReportsPage.tsx`. */
 export type ReportRangeMode = 7 | 30 | 90 | 365 | 'custom';
@@ -56,6 +73,10 @@ const REPORT_TABS: ReportTabId[] = [
   'breakdown',
   'staffing',
   'topics',
+  'cases',
+  'leads',
+  'sales',
+  'team-performance',
 ];
 const REPORT_RANGE_MODES: ReportRangeMode[] = [7, 30, 90, 365, 'custom'];
 const REPORT_BASELINES: ReportBaseline[] = ['previous_period', 'previous_year'];

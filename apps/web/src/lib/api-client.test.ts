@@ -65,6 +65,58 @@ describe('ApiClient', () => {
     expect(new Headers(init!.headers).get('X-Nexa-Brand')).toBe('brand-b');
   });
 
+  it('returns the blob plus the filename the server assigned via content-disposition', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () =>
+        new Response(new Blob(['date,chats\r\n'], { type: 'text/csv' }), {
+          status: 200,
+          headers: {
+            'content-disposition': 'attachment; filename="nexa-overview-2026-01-01-2026-01-31.csv"',
+          },
+        }),
+    );
+    const client = new ApiClient({ fetchImpl });
+
+    const { blob, filename } = await client.getFile('/reports/export?group=overview&format=csv');
+
+    expect(filename).toBe('nexa-overview-2026-01-01-2026-01-31.csv');
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(0);
+  });
+
+  it('returns a null filename when content-disposition is missing', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(new Blob(['x'])));
+    const client = new ApiClient({ fetchImpl });
+
+    const { filename } = await client.getFile('/reports/export?group=overview&format=csv');
+
+    expect(filename).toBeNull();
+  });
+
+  it('surfaces the server error type and message when a file request fails, unlike getBlob', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(
+        {
+          error: {
+            type: 'authorization',
+            message: 'This token cannot export the overview report.',
+            request_id: 'rq-9',
+          },
+        },
+        { status: 403 },
+      ),
+    );
+    const client = new ApiClient({ fetchImpl });
+
+    const error = (await client.getFile('/reports/export?group=overview').catch((e: unknown) => e)) as ApiClientError;
+
+    expect(error).toBeInstanceOf(ApiClientError);
+    expect(error.status).toBe(403);
+    expect(error.type).toBe('authorization');
+    expect(error.message).toBe('This token cannot export the overview report.');
+    expect(error.requestId).toBe('rq-9');
+  });
+
   it('normalises the base url so paths never double up slashes', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({}));
     const client = new ApiClient({ baseUrl: 'http://localhost:4000/api/v1/', fetchImpl });

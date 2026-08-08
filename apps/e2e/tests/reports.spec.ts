@@ -137,6 +137,47 @@ test.describe('reports overview', () => {
       fullPage: true,
     });
   });
+
+  /**
+   * Export + Save view (07.7-k) — the two controls added to the header
+   * actions row. Export hits the same `/reports/export` the backend has
+   * served since v1 (`toCsv`, `reports-export.ts`); the seeded demo agent
+   * holds `reports_read`, so Overview's control is visible ("İzin bazlı
+   * görünürlük" end-to-end). Save view goes through a real reload — not a
+   * React remount — the same proof the "Remind me later" persistence test
+   * above uses, so this is genuinely `localStorage`, not in-memory state.
+   */
+  test('exports the active tab as a CSV download, and a saved view survives a reload (07.7-k)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    const downloadPromise = agentPage.waitForEvent('download');
+    await agentPage.getByRole('button', { name: 'Export' }).click();
+    const download = await downloadPromise;
+    // Server-named (`exportFilename`, `reports-export.ts`): the group and the
+    // window as two UTC dates — proof the browser kept the name the
+    // `content-disposition` header sent, not one it invented locally.
+    expect(download.suggestedFilename()).toMatch(
+      /^nexa-overview-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
+
+    await agentPage.getByRole('button', { name: 'Saved views' }).click();
+    await agentPage.getByLabel('Save this view').fill('Overview default');
+    // `exact` matters: Playwright's default fuzzy match would also hit the
+    // "Saved views" trigger, which contains "Save" as a substring.
+    await agentPage.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await agentPage.reload();
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+    await agentPage.getByRole('button', { name: 'Saved views' }).click();
+    await expect(
+      agentPage.getByRole('button', { name: 'Overview default', exact: true }),
+    ).toBeVisible();
+
+    await agentPage.screenshot({ path: 'kanit/26-reports-export-save-view.png', fullPage: true });
+  });
 });
 
 /**

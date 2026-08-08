@@ -13,6 +13,59 @@
 
 ## Task log (newest-first)
 
+### tm 93.11 — 07.7-k: Reports UI — Export butonu (CSV/PDF indirme) + Save view çubuğu — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/lib/api-client.ts`: yeni `ApiClient.getFile()` — `getBlob`'un aksine `content-disposition`
+    başlığından dosya adını + blob'u birlikte döndürür, ve başarısız yanıtı sunucunun kendi
+    `type`/`message`'ıyla fırlatır (jenerik "Could not load attachment." DEĞİL) — export bir yetki
+    hatasıyla düşerse agent nedenini görmeli (KAPSAM "görünür hata, sessiz yutma yok").
+  - `apps/web/src/features/reports/ReportsPage.tsx`: `Page` `actions`'a `ExportControl` (format
+    seçici + Export butonu, `/reports/export?group=<tab>&from&to&format=csv|pdf`, Blob indirme,
+    sunucu dosya adı korunur) — yalnız `/reports/groups` aktif sekmeyi içeriyorsa render edilir
+    (staffing hiçbir zaman değil — `REPORT_GROUPS`'ta yok). Yeni `SavedViewsControl`
+    (paylaşılan `Dropdown` primitifi) — 07.7-h'nin `useSavedReportViews()`'ini Inbox'ın
+    `onSelectSaved`/`onAddSavedView`/`onRemoveSavedView` kalıbıyla bağlar; isim formu T4-a
+    paylaşılan primitifi (`useForm`+`required`+`FieldError`) kullanır (boş ad → alan-altı hata +
+    submit pasif), Inbox'ın elle disabled-check'inden daha katı. Kayıtlı görünüm seçimi
+    `tab`/`mode`/`customFrom`/`customTo`/`baseline` state'ini toptan uygular.
+  - `apps/web/src/features/reports/report-views.ts`: **uyumluluk düzeltmesi** — `ReportTabId`/
+    `REPORT_TABS` 07.7-h'de (07.7-i/-j'den önce) yazılmıştı ve yalnız altı sekmeyi taşıyordu; Cases/
+    Leads/Sales/Team performance'ta kaydedilen bir görünüm `isSavedReportView`'da sessizce
+    düşerdi. Dört yeni sekmeyle genişletildi (KAPSAM dosya listesinde yoktu, zorunlu düzeltmeydi).
+  - `baseline` kararı: sayfada henüz "Compare to" seçici YOK (§5.2.4 açık soru kapanmadı — hangi
+    UI'nin benchmark'ı göstereceği belirsiz, ve mevcut "vs previous"/"previous period" metinleri
+    `previous_year` aktifken yalanlardı). Yine de `baseline` state'i + restore tam bağlandı
+    (`TabProps.baseline`, staffing-forecast hariç dokuz uca `&baseline=`) — kablo hazır, ama
+    kullanıcı bugün seçici olmadığı için `baseline`'ı null'dan hiç çıkaramaz.
+  - Test: `ReportsPage.test.tsx` 58→66 (+8) · `api-client.test.ts` 12→15 (+3) → web 671/671.
+    `apps/e2e/tests/reports.spec.ts`'e +1 ("exports the active tab as a CSV download, and a saved
+    view survives a reload") — gerçek tarayıcı indirmesi (`page.waitForEvent('download')`) + tam
+    reload sonrası kayıt kalıcılığı.
+  - PLAN.md §5.0 satır 1112 (`| 07.7 |`) güncellendi — 07.7-k teslim notu eklendi, kalan alt-görev
+    sayısı 2→1.
+- **Doğrulama:** typecheck 11/11 ✅ · lint 8/8 ✅ ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` 10/10 ✅ (api 1766/1766 değişmedi, web
+  671/671 dahil +11 yeni) · build 7/7 ✅ · `pnpm -w test:integration` 5/5 ✅ (1344/1344) ·
+  `pnpm -w test:e2e` **tam koştu** — **79/79** ✅ (önceki bilinen `skills-routing.spec.ts:76` flake
+  bu turda da yeşildi — regresyon yok).
+- **Varsayımlar:** `report-views.ts` KAPSAM'ın "Dosyalar" listesinde yoktu ama `ReportTabId`
+  genişletmesi olmadan Cases/Leads/Sales/Team performance'ta kaydedilen görünümler sessizce
+  bozulacaktı — bu, kapsam dışına çıkmak değil, KAPSAM madde 3'ün ("baseline state'ini toptan
+  uygular") doğru çalışması için zorunlu bir önkoşuldu. `api-client.ts`'e `getFile()` eklendi
+  (KAPSAM'ın "content-disposition adı korunur" şartı `getBlob`'la karşılanamazdı — o metod header
+  döndürmüyor). Export isteği KAPSAM'ın birebir yazdığı gibi `baseline` TAŞIMIYOR (yalnız
+  group/from/to/format); kayıtlı-görünüm `baseline`'ı export'a değil yalnız rapor sorgusuna
+  uygulanıyor.
+- **Sonraki pencereye not:** Kalan tek alt-görev 07.7-l (uçtan uca doğrulama — izin matrisi,
+  cross-tenant süpürmesi, NFR-P7) → §5.2.4; 07.7 tüm sekme+export+save-view+benchmark yüzeyini
+  kapsamlı şekilde doğrulayacak, PDF export'u da UI'den bir kez daha kanıtlayabilir. Bir "Compare
+  to" baseline seçici hâlâ hiçbir görevde açık değil — 07.7-l bunu eklemez (KAPSAM'ı yalnızca
+  doğrulama), biri eklerse `Delta` bileşeninin `title="Compared with the previous period"`u ve
+  `ReviewsTab`'ın iki "previous period" metni baseline'a göre güncellenmeli (bu görevde bilerek
+  dokunulmadı — bkz. yukarıdaki `baseline` kararı). `run-loop.sh` bu pencerede de commit'siz
+  bırakıldı (tm 93.8'den beri değişmeyen, bu görevin kapsamı dışındaki iş-üstü işi).
+
 ### tm 93.10 — 07.7-j: Reports UI — Sales + Team performance sekmeleri (ajan tablosu + `configured:false` empty state) — done — 2026-08-08 UTC
 
 - **Yapıldı:**

@@ -115,6 +115,45 @@ export class ApiClient {
     return response.blob();
   }
 
+  /**
+   * Fetch raw bytes plus the filename the server assigned via
+   * `content-disposition` — a report export (FR-MOD-07.7) names itself after
+   * the group and window, and a caller cannot reproduce that name correctly
+   * without reading the header the server actually sent. Unlike `getBlob`,
+   * a failure here carries the server's own error type/message rather than a
+   * generic one: an export can fail on authorization (a group the token
+   * cannot read), and "Could not load attachment." would hide exactly the
+   * reason the caller needs.
+   */
+  async getFile(path: string, init: RequestInit = {}): Promise<{ blob: Blob; filename: string | null }> {
+    const headers = new Headers(init.headers);
+    const token = this.#getAccessToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    const brandId = this.#getBrandId();
+    if (brandId) headers.set('X-Nexa-Brand', brandId);
+
+    const response = await this.#fetch(`${this.#baseUrl}${path}`, {
+      ...init,
+      method: 'GET',
+      headers,
+      credentials: 'same-origin',
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
+      throw new ApiClientError({
+        type: payload?.error?.type ?? 'internal',
+        status: response.status,
+        message: payload?.error?.message ?? `Request failed with status ${response.status}.`,
+        requestId: payload?.error?.request_id ?? response.headers.get('X-Request-Id') ?? '-',
+        details: payload?.error?.details,
+      });
+    }
+    return {
+      blob: await response.blob(),
+      filename: filenameFromContentDisposition(response.headers.get('content-disposition')),
+    };
+  }
+
   async request<T>(
     method: string,
     path: string,
@@ -170,4 +209,11 @@ export class ApiClient {
 
     return payload as T;
   }
+}
+
+/** The quoted filename out of `content-disposition: attachment; filename="…"`. */
+function filenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const match = /filename="?([^";]+)"?/i.exec(header);
+  return match?.[1] ?? null;
 }

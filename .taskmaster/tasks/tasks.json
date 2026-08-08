@@ -1942,7 +1942,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 6,
+        "recommendedSubtasks": 8,
+        "expansionPrompt": "\"08.5.7 — Instagram (DM, MOCK)  ·  dilim V2-9\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "66",
@@ -2435,7 +2438,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 7,
+        "recommendedSubtasks": 8,
+        "expansionPrompt": "\"09.3 — API istek paketleri (Essential/Pro/Pro+)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "72",
@@ -2541,7 +2547,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 8,
+        "recommendedSubtasks": 8,
+        "expansionPrompt": "\"09.4 — Zapier/Make + Build-your-app  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "73",
@@ -2706,7 +2715,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 9,
+        "recommendedSubtasks": 11,
+        "expansionPrompt": "\"13.2 — Engage/Traffic (gelişmiş filtre + 360° ziyaretçi)  ·  dilim V2-8\" görevini 11 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "74",
@@ -2844,7 +2856,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 8,
+        "recommendedSubtasks": 9,
+        "expansionPrompt": "\"13.3 — Goals (ziyaretçi→sohbet→dönüşüm hunisi)  ·  dilim V2-8\" görevini 9 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "75",
@@ -2968,7 +2983,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 8,
+        "recommendedSubtasks": 8,
+        "expansionPrompt": "\"13.5 — Sales tracker (Ecommerce/Tracked sales)  ·  dilim V2-8\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "76",
@@ -4212,7 +4230,7 @@
             "description": "(1) `Page` `actions` alanına Export kontrolü: aktif sekme + seçili aralık ile `GET /reports/export?group=<tab>&from&to&format=csv|pdf` çağrısı → Blob indirme; `content-disposition` adı korunur; yetkisiz/hatalı durumda GÖRÜNÜR hata (sessiz yutma yok). (2) Save view çubuğu: 07.7-h'nin `useSavedReportViews()` hook'u bağlanır — 'Bu görünümü kaydet' (ad girişi, boş ad reddi, alan-altı hata + submit pas",
             "details": "07.7-k — Reports UI — Export butonu (CSV/PDF indirme) + Save view çubuğu  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.7 (Export + Save view) (+ FR-EK-A.1 alan-altı hata)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 3 dosya. (2) Güvenlik sınırı yok — indirme yetkisi backend'de (`EXPORT_SCOPES` + grup-bazlı denetim, reports.ts:822-836); UI yalnız mevcut token'la istek atar. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: Save view için `InboxPage.tsx` satır 300-302 (`onSelectSaved`/`onAddSavedView`/`onRemoveSavedView` bağlama); indirme için `BillingPage` fatura CSV indirme akışı; yerleşim için `ReportsPage.tsx:162` `Page actions={<RangeControls/>}` slot'u. (5) Kontrat değişikliği yok. (6) KK mekanik: butona bas → dosya iner; görünüm kaydet → yeniden yüklemede kalıcı.\nNEDEN AÇIK: `ReportsPage.tsx` içinde 'csv'/'download'/'export' araması YALNIZCA `export function ReportsPage` satırında isabet ediyor (satır 156) — yani v1'de CSV export API düzeyinde teslim edildi ama WEB'DE İNDİRME BUTONU HİÇ YOK (PLAN §D35 bunu doğruluyor: 'web rapor grupları = `ReportsPage.tsx` tabs'). Save view kontrolü de yok — sekme/aralık state'i (satır 157-160) yalnız `useState`.\nKAPSAM: (1) `Page` `actions` alanına Export kontrolü: aktif sekme + seçili aralık ile `GET /reports/export?group=<tab>&from&to&format=csv|pdf` çağrısı → Blob indirme; `content-disposition` adı korunur; yetkisiz/hatalı durumda GÖRÜNÜR hata (sessiz yutma yok). (2) Save view çubuğu: 07.7-h'nin `useSavedReportViews()` hook'u bağlanır — 'Bu görünümü kaydet' (ad girişi, boş ad reddi, alan-altı hata + submit pasif — T4-a form primitifi deseni), kayıtlı görünüm listesi (seç → sekme+aralık+baseline geri gelir), sil. (3) Kayıtlı görünüm seçimi `tab`/`mode`/`customFrom`/`customTo`/`baseline` state'ini toptan uygular.\nDOSYALAR: apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx · apps/e2e/tests/reports.spec.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/inbox/InboxPage.tsx (satır 181-184 + 300-302 — `useSavedViews` bağlama, `onSelectSaved`/`onAddSavedView`/`onRemoveSavedView` prop kalıbı) · apps/web/src/features/reports/ReportsPage.tsx (satır 160-175 `Page actions={<RangeControls .../>}` — Export kontrolünün takılacağı slot) · apps/web/src/features/billing/BillingPage.tsx (fatura CSV indirme akışı — Blob/attachment indirme deseni) · apps/web/src/features/reports/report-views.ts (07.7-h'de gelen hook)\nKK (birebir): \"export\" | \"İzin bazlı görünürlük\" | \"KK-türetilmiş: \"Save view\" (türetme gerekçesi 07.7-h'de) — bu alt-görevin payı: \"Kayıtlı görünüm listeden seçilince sekme + tarih aralığı + baseline geri gelir; adsız kayıt reddedilir; silinebilir.\"\"\nKK DOĞRULAMA: `ReportsPage.test.tsx` — Export butonuna basınca `/reports/export?group=<aktif sekme>&format=csv` çağrılır ve indirme tetiklenir; `format=pdf` seçilince aynı çağrı `format=pdf` ile gider ('export'). Yetkisiz sekmede Export butonu görünmez ('İzin bazlı görünürlük'). Görünüm kaydet → yeniden mount sonrası aynı sekme+aralık geri gelir; boş adla kaydet → alan-altı hata + submit pasif (türetilmiş Save view KK'ı). E2E `reports.spec.ts`'te indirme + kayıtlı görünüm akışı.\nKAPSAM DIŞI: Sunucu tarafı kayıtlı görünüm — 07.7-h kapsam dışı kararıyla aynı · Zamanlanmış export UI'ı — `07.9-sched` ayrı kalem · İndirilen dosyanın içeriği/serileştirmesi — 07.7-f/-g'de kilitlendi · Inbox Views çubuğunu değiştirmek\nSÖZLEŞME: yok — mevcut `/reports/export` tüketilir.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit (negatif önce) — boş ad → alan-altı hata + submit pasif (T4-a deseni); export 403 dönerse görünür hata, sessiz yutma yok · unit — Export butonu aktif sekmenin `group`'unu ve seçili aralığı doğru geçirir; `format` seçimi isteğe yansır · unit — kayıtlı görünüm seç → `tab`/`mode`/`customFrom`/`customTo`/`baseline` toptan uygulanır; sil → liste küçülür · unit — `/reports/groups` grup döndürmüyorsa o sekme için Export butonu yok · e2e — `reports.spec.ts`: görünüm kaydet → reload → kayıt duruyor; CSV indirme tetikleniyor",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               7,
               8,
@@ -4220,7 +4238,7 @@
               10
             ],
             "parentId": "93",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T04:15:58.413Z"
           },
           {
             "id": 12,
@@ -4246,7 +4264,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T03:43:34.556Z"
+        "updatedAt": "2026-08-08T04:15:58.413Z",
+        "complexity": 9,
+        "recommendedSubtasks": 12,
+        "expansionPrompt": "\"07.7 — Rapor grupları v2 payı (Team performance/PDF/benchmark/Save view)  ·  dilim V2-4\" görevini 12 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "94",
@@ -4394,7 +4415,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 9,
+        "recommendedSubtasks": 10,
+        "expansionPrompt": "\"07.9 — Zamanlanmış (scheduled) rapor export  ·  dilim V2-4\" görevini 10 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "95",
@@ -4512,7 +4536,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 7,
+        "recommendedSubtasks": 8,
+        "expansionPrompt": "\"01.1.3 — ⌘K command palette AI komutları  ·  dilim V2-5\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "96",
@@ -4603,7 +4630,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 6,
+        "recommendedSubtasks": 6,
+        "expansionPrompt": "\"12.4 — Copilot BI komut (rapor/metrik sorusu)  ·  dilim V2-5\" görevini 6 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "97",
@@ -4719,7 +4749,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 9,
+        "recommendedSubtasks": 8,
+        "expansionPrompt": "\"06.3.2-bulk — Bulk/CSV KB import (YALNIZ çoklu-satır; tek-kaynak yolu v1'de ✅)  ·  dilim V2-6\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "98",
@@ -4798,7 +4831,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 4,
+        "recommendedSubtasks": 5,
+        "expansionPrompt": "\"05.6 — Skill şablon kataloğunu 31+ (ADR-14 uyumlu ikame)  ·  dilim V2-6\" görevini 5 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "99",
@@ -4915,7 +4951,10 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-01T10:00:00.000Z"
+        "updatedAt": "2026-08-01T10:00:00.000Z",
+        "complexity": 5,
+        "recommendedSubtasks": 8,
+        "expansionPrompt": "\"09.2 — 100+ entegrasyon (marketplace katalog genişlemesi)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
       },
       {
         "id": "100",
@@ -4938,12 +4977,15 @@
         "status": "pending",
         "dependencies": [],
         "priority": "critical",
-        "subtasks": []
+        "subtasks": [],
+        "complexity": 2,
+        "recommendedSubtasks": 0,
+        "expansionPrompt": "Bu görev alt göreve bölünmemeli — tek oturumda bitecek mekanik bir iş."
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T03:43:34.556Z",
+      "lastModified": "2026-08-08T04:15:58.413Z",
       "taskCount": 101,
       "completedCount": 81,
       "tags": [

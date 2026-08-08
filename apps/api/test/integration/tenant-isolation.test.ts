@@ -63,9 +63,9 @@ describe('tenant isolation (RLS)', () => {
           AND tablename IN ('organizations','licenses','accounts','agent_memberships',
                             'oauth_clients','oauth_authorization_codes','oauth_refresh_tokens',
                             'api_tokens','customers','trusted_domains','ip_allowlist_entries',
-                            'brands')
+                            'brands','work_schedules','agent_presence_events')
       `;
-      expect(rows.length).toBe(12);
+      expect(rows.length).toBe(14);
       for (const row of rows) {
         expect(row.rowsecurity, `${row.tablename} must have RLS enabled`).toBe(true);
       }
@@ -495,6 +495,23 @@ describe('tenant isolation (RLS)', () => {
     afterAll(async () => {
       await owner.agentPresenceEvent.deleteMany({});
       await owner.workSchedule.deleteMany({});
+    });
+
+    it('shows neither table to a connection with no tenant context', async () => {
+      // The suite's global fail-closed check runs before this block seeds, so
+      // for these two tables it can only ever pass vacuously. Asserted here
+      // instead, where both tables genuinely hold rows for two licenses: with
+      // no tenant set the count must still be 0, because the dangerous default
+      // for a roster is "return everyone's".
+      for (const table of ['work_schedules', 'agent_presence_events']) {
+        const [row] = await app.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `SELECT count(*) AS count FROM ${table}`,
+        );
+        expect(Number(row?.count ?? -1), `${table} must be empty without a tenant`).toBe(0);
+      }
+      // Guards the guard: the rows really are there for someone to leak.
+      expect(await owner.workSchedule.count()).toBe(2);
+      expect(await owner.agentPresenceEvent.count()).toBe(2);
     });
 
     it("cannot read another license's roster", async () => {

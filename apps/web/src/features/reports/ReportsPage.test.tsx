@@ -704,6 +704,31 @@ describe('ReportsPage — Staffing report (WORKSCHED-i)', () => {
     expect(screen.getByText(/No presence data in this window/)).toBeInTheDocument();
   });
 
+  it('notes when no agent has a saved work schedule', async () => {
+    // The pair of the notice above, and the reason it is tested from this side:
+    // `staffing.spec.ts` proves the end-to-end chain by asserting this notice is
+    // *gone* once a week has been saved through the browser (WORKSCHED-j). An
+    // absence assertion is only worth anything if the presence it denies is
+    // itself proven — otherwise a renamed string would make the e2e proof pass
+    // by rendering nothing at all.
+    // Both notices live inside the grid branch, so the window needs volume —
+    // an all-zero grid falls to the empty state and renders neither.
+    mockStaffing({ roster_known: false, cells: fullKnownStaffingGrid() });
+    renderReports(<ReportsPage />);
+    await openStaffingTab();
+
+    expect(screen.getByText(/No agent has a saved work schedule yet/)).toBeInTheDocument();
+  });
+
+  it('keeps both unknown-input notices off a window that knows its roster and presence', async () => {
+    mockStaffing({ coverage_known: true, roster_known: true, cells: fullKnownStaffingGrid() });
+    renderReports(<ReportsPage />);
+    await openStaffingTab();
+
+    expect(screen.queryByText(/No agent has a saved work schedule yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No presence data in this window/)).not.toBeInTheDocument();
+  });
+
   it('queries the staffing-forecast endpoint with the selected range', async () => {
     mockStaffing({});
     renderReports(<ReportsPage />);

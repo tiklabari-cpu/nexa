@@ -13,6 +13,90 @@
 
 ## Task log (newest-first)
 
+### tm 77.10 — WORKSCHED-j: uçtan uca doğrulama (staffing e2e + izolasyon + ADR-09) — done — 2026-08-08 UTC
+
+> Bu task daha önce **üç kez `blocked`** kapandı (aşağıdaki notlar) — tek sebebi bağımlılıklarının
+> (77.3/77.4/77.7/77.8/77.9) açık olmasıydı. Bu pencerede hepsi `done`, doğrulanacak yüzeyler
+> depoda, ve kapı tam yeşil. **Yeni ürün kodu YAZILMADI** — task yalnız-doğrulama.
+
+- **Yapıldı:**
+  - **Yeni** `apps/e2e/tests/staffing.spec.ts` (**2** test). Zincir gerçek tarayıcıda: Team ▸ Work
+    schedule editöründen hafta kaydet → tam `reload` sonrası editörü yeniden açıp **sunucudan**
+    geri oku → Inbox ▸ Availability ile müsaitliği çevir (`accepting_chats` →
+    `not_accepting_chats` → geri) → Reports ▸ Staffing'de 7×24 ızgara (25 columnheader / 7
+    rowheader). **İddianın kalbi ızgaranın görünmesi değil, iki "bilinmiyor" notunun
+    KAYBOLMASI:** `roster_known` `work_schedules` satırı olmadan false, `coverage_known`
+    pencerede presence olayı olmadan false — ikisinin de tarayıcıdan sürülen yazmalardan sonra
+    yok olması, editörün PUT'ladığı planın ve müsaitlik kontrolünün eklediği olayın tahminin
+    okuduğu satırlarla **aynı** satırlar olduğunun bu seviyedeki tek kanıtı. İkinci test: hiç
+    sohbet olmayan pencere (2020-01-01..07) → `No staffing data in this window` + ızgara YOK.
+  - **Kanıtın vakuma düşmemesi için üç önlem** (bu görevin asıl işi — yeşil bir absence
+    assertion'ı kendiliğinden bir şey kanıtlamaz):
+    1. `ReportsPage.test.tsx` **+2** — her iki notun *render edildiği* sabitlendi
+       (`roster_known: false` → not görünür · ikisi de true → ikisi de yok). Daha önce yalnız
+       presence notunun pozitif testi vardı; **roster notunun hiç yoktu**, yani e2e'deki yokluk
+       iddiası dize değişse sessizce geçerdi. (Bu testi yazarken bir davranış da netleşti: iki
+       not `totalObserved > 0` dalının içinde yaşıyor, sıfır hacimli pencerede empty state
+       kazanır — ilk kurgum bu yüzden kırmızı düştü, `fullKnownStaffingGrid()` ile düzeltildi.)
+    2. e2e roster ayağı **kendini geçersiz kılar**: iki vardiya arasında geçiş yapar
+       (08:00-20:00 ↔ 07:00-19:00, depoda olmayanı yazar). Seed truncate etmediği için sabit
+       tek vardiya ilk koşudan sonra editör hiçbir şey yapmasa da geçerdi. Fiilen doğrulandı —
+       iki ardışık koşu `08:00` sonra `07:00` yazdı (DB'den okundu).
+    3. Zincir testi iki tablo **elle boşaltıldıktan sonra** (`0|0` teyit edildi) koşuldu ve
+       yeşil geçti; ardından DB'de 1 roster satırı + **tam 2** presence olayı bulundu. Yani
+       notlar yalnız tarayıcıdan sürülen yazmalar yüzünden yoktu.
+  - **İzolasyon (kapsam maddesi 2):** `tenant-isolation.test.ts` **+1** test; RLS-açık tablo
+    listesine `work_schedules` + `agent_presence_events` eklendi (**12 → 14**). Yeni test iki
+    tablonun **tenant bağlamı olmayan** bağlantıya 0 satır döndürdüğünü, o anda iki lisans için
+    gerçekten satır varken (guard-the-guard) iddia eder — süitin genel fail-closed kontrolü bu
+    blok seed etmeden ÖNCE koştuğu için o iki tablo için ancak **vakumda** geçebilirdi.
+    Çapraz-tenant okuma / IDOR / WITH CHECK / updateMany-deleteMany iddiaları WORKSCHED-b'de
+    (tm 77.2) zaten vardı → tekrarlanmadı. 38 → **39**.
+  - **ADR-09 (kapsam maddesi 3): yeni test YAZILMADI — WORKSCHED-g'de (tm 77.7) zaten teslim
+    edilmişti**, bu turda denetlendi: `staffing-forecast.test.ts:510`
+    `'quotes the same hourly volume as /reports/breakdown'` — staffing hücrelerinin saat bazında
+    toplamı `by_hour[hour].chats` ile 24 saatin hepsi için karşılaştırılıyor, vakum-geçiş
+    koruması (toplam 36) dahil. İkinci kopyasını yazmak kapsamı büyütmek olurdu.
+  - `PLAN.md`: §5.3-Vardiya satırı (1165) `◐` → **`✅`** + -j kanıtı; Faz-2 dağılım sayacı iki
+    yerde (satır 22 + 1100) senkron edildi `2 ◐/13 ✅` → **`1 ◐/14 ✅`** (§D68–D74'ün defalarca
+    kayda geçtiği "damga ilerledi, sayaç bayat kaldı" tuzağı — bu turda ilerlemenin aynı
+    commit'inde kapatıldı).
+- **Doğrulama — kapı (hepsi ön planda, exit code'la):** `pnpm -w typecheck` **11/11 exit 0** ·
+  `pnpm -w lint` **8/8 exit 0** · `npx turbo run test --filter='!@nexa/e2e' --concurrency=1`
+  **exit 0** (85 dosya/**1751** `@nexa/api` · 83 dosya/**628** `@nexa/web`) ·
+  `pnpm -w test:integration` **exit 0** (59 dosya/**1329**; `tenant-isolation` **39/39** +
+  `contract-parity` 5/5) · `pnpm -w build` **7/7 exit 0** · `pnpm -w test:e2e` **75/76**:
+  `staffing.spec.ts` **2/2**, testStrategy'nin adlandırdığı regresyonlar yeşil
+  (`reports.spec.ts` 5/5 · `team.spec.ts` 3/3 · `routing.test.ts` + `contract-parity`
+  integration içinde). Tek kırmızı `skills-routing.spec.ts:76` — **izole koşuldu, 2/2 yeşil**;
+  sebebi objektif olarak bulundu: kendi tekrarlı koşularının paylaşılan seed DB'sinde biriktirdiği
+  yinelenen skill satırları (`select count(*), string_agg(name…) from skills` → "Where is my
+  order" **3 kez**) → `getByLabel('Skill') resolved to 4 elements` strict-mode ihlali. tm
+  77.4'ten beri HANDOFF'ta kayıtlı pre-existing flake, WORKSCHED ile ilgisiz.
+- **Varsayımlar:**
+  - Zincirin presence ayağında "olayın TAZE olduğu" tarayıcıdan doğrulanamıyor (presence
+    geçmişini okuyan bir API yüzeyi yok, ve e2e fixture'ları bilinçli olarak DB'ye uzanmıyor).
+    Yerine üç ayaklı kanıt: müsaitlik `select`'inin yeni değere oturması (store'a ancak PUT
+    çözüldükten sonra dokunulur, `auth-store.ts:262`) + `presence-log.test.ts`'in aynı isteğin
+    olay eklediğini kanıtlaması + `coverage_known`'ın true'ya dönmesi. Spec başlığında yazılı.
+  - Müsaitlik **geri çevrildi** (`accepting_chats`): paylaşılan tenant'ı sonraki spec'ler için
+    olduğu gibi bırakmak zorunluluk, ayrıca API yalnız gerçek değişimde olay yazdığı için
+    çevir-geri-çevir iki taze olay demek.
+- **Sonraki pencereye not:**
+  - **WORKSCHED kalemi (PRD §5.3-Vardiya) KAPANDI** — a–j onu da dahil 10 alt-görev `done`, üst
+    task **77 done**. Faz-2'de kalan: 12 ⬜ · 1 ◐.
+  - **Ortam:** Docker yine yok; Homebrew Postgres 17 (5433) ayaktaydı, **Redis 6380 düşmüştü** →
+    `redis-server --port 6380 --appendonly yes --save '' --dir /tmp/nexa-redis --daemonize yes`
+    ile kaldırıldı. `.env` portları değişmedi. Pencere başında `redis-cli -p 6380 ping` ile
+    kontrol et — varsayılan 6379'a bakmak yanıltır.
+  - `skills-routing.spec.ts:76` flake'inin **kök nedeni artık kesin** (spec kendi skill'ini her
+    koşuda yeniden yaratıyor, temizlemiyor → katalog büyüyor → strict-mode). Kalıcı çözüm o
+    spec'in kendi satırını sonda silmesi ya da benzersiz isim kullanması; ayrı bir task, bu
+    pencerenin kapsamı dışı.
+  - `run-loop.sh` çalışma alanında yine değiştirilmiş halde bırakıldı (tm 77.7/77.8/77.9'da da
+    böyleydi — bu görevle ilgisiz döngü-altyapısı değişikliği, kapsam disiplini gereği bu
+    commit'e alınmadı).
+
 ### tm 77.9 — WORKSCHED-i: Reports → Staffing sekmesi (salt-okunur gün × saat ızgarası) — done — 2026-08-08 UTC
 
 - **Yapıldı:**

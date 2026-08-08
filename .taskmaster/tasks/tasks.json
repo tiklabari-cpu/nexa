@@ -4608,12 +4608,12 @@
             "description": "`not_understood` → anlamlı empty state + **örnek soru listesi** (tıklanınca girdiye dolar; ai-mock'un desteklediği kalıplardan türetilir, uydurma değil). `no_data` → 'seçili pencerede veri yok' + pencereyi genişletme önerisi. İkisi de boş dikdörtgen DEĞİL (FR-EK-B.1).",
             "details": "12.4-bi-e — Anlaşılmadı / yetersiz veri durumları — anlamlı empty state + örnek sorular  [SONNET-XHIGH]\n\nPRD: §5.5-MOD-12 + FR-EK-B.1 (anlamlı empty state — boş dikdörtgen yok)\nETİKET GEREKÇESİ: SONNET-XHIGH: 6 koşul sağlandı. (1) 1 dosya + testi. (2) Güvenlik yok. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: `apps/web/src/components/ui/EmptyState.tsx` (EK-B.1, tm 30). (5) Kontrat yok. (6) KK mekanik: iki durumun render'ı.\nNEDEN AÇIK: -d yalnız başarılı `metric` cevabını render eder; `not_understood` ve `no_data` için UI yolu yok. Bu iki durum BI komutunun en sık karşılaşılacak hâlleridir (kullanıcı ne sorabileceğini bilmiyor).\nKAPSAM: `not_understood` → anlamlı empty state + **örnek soru listesi** (tıklanınca girdiye dolar; ai-mock'un desteklediği kalıplardan türetilir, uydurma değil). `no_data` → 'seçili pencerede veri yok' + pencereyi genişletme önerisi. İkisi de boş dikdörtgen DEĞİL (FR-EK-B.1).\nDOSYALAR: apps/web/src/features/inbox/CopilotPanel.tsx · apps/web/src/features/inbox/CopilotPanel.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/components/ui/EmptyState.tsx (EK-B.1 anlamlı empty state bileşeni) · apps/web/src/features/playbook/RecommendedSkills.tsx ('Try this' → girdiyi dolduran kart deseni)\nKK (birebir): \"KK-türetilmiş: 'Anlaşılmayan soru için ne sorulabileceği gösterilir; veri yoksa bu açıkça söylenir. Boş dikdörtgen gösterilmez.' — §C varsayımı + FR-EK-B.1.\"\nKK DOĞRULAMA: `CopilotPanel.test.tsx` — `not_understood` cevabında örnek soru listesi render edilir ve bir örneğe tıklamak girdiyi doldurur; `no_data` cevabında anlamlı metin görünür; her iki durumda da boş dikdörtgen render EDİLMEZ.\nKAPSAM DIŞI: Yeni soru kalıbı eklemek (ai-mock işi, 12.4-bi-b)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: not_understood → örnek soru listesi + tıklama girdiyi doldurur · unit: no_data → anlamlı metin (boş dikdörtgen değil) · unit: örnek sorular ai-mock'un desteklediği kalıplardan gelir (uydurma yok — liste tek kaynaktan) · cross-tenant GEREKMEZ",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               4
             ],
             "parentId": "96",
-            "updatedAt": "2026-08-08T13:25:04.434Z"
+            "updatedAt": "2026-08-08T13:40:42.853Z"
           },
           {
             "id": 6,
@@ -4630,7 +4630,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T13:25:04.434Z",
+        "updatedAt": "2026-08-08T13:40:42.853Z",
         "complexity": 6,
         "recommendedSubtasks": 6,
         "expansionPrompt": "\"12.4 — Copilot BI komut (rapor/metrik sorusu)  ·  dilim V2-5\" görevini 6 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5023,7 +5023,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T13:25:04.434Z",
+      "lastModified": "2026-08-08T13:40:42.853Z",
       "taskCount": 104,
       "completedCount": 87,
       "tags": [

@@ -64,6 +64,9 @@
     risk yok.
   - `skills-routing.spec.ts:76` flake'i hâlâ açık (kalıcı çözüm bu görevin kapsamı dışında,
     bkz. tm 77.4 notu ve yukarıdaki satırlar) — tam suite koşusunda tek kırmızı olarak beklenir.
+  - `run-loop.sh` çalışma alanında **değiştirilmiş halde bırakıldı** — bu pencereden önce
+    yapılmış, tm 77.8 ile ilgisiz bir döngü-altyapısı değişikliği (tm 77.7'de de aynı şekilde
+    görüldü ve not edildi). Kapsam disiplini (CONVENTIONS §5) gereği bu commit'e alınmadı.
 
 ### tm 77.7 — WORKSCHED-g: GET /reports/staffing-forecast — done — 2026-08-08 UTC
 

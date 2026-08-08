@@ -3338,10 +3338,12 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Export a report group as CSV
-     * @description CSV export of one report group (FR-MOD-07.7). Gated on the union of every
-     *     group's scope, so a token holding none is refused; a group whose own scope
-     *     the token lacks is refused too. Defaults to the last 30 days.
+     * Export a report group as CSV or PDF
+     * @description CSV or PDF export of one report group (FR-MOD-07.7). Gated on the union of
+     *     every group's scope, so a token holding none is refused; a group whose own
+     *     scope the token lacks is refused too — `format` picks a serialiser for the
+     *     same, already-authorised table and grants nothing on its own. Defaults to
+     *     the last 30 days.
      *
      *     `reviews` serialises one row per UTC day; `breakdown` serialises all four
      *     Breakdown-tab dimensions (day, hour, team, channel) in one long-format
@@ -3357,22 +3359,29 @@ export interface paths {
      *     `metric,value` pairs. `sales` also serialises as `metric,value` pairs, and
      *     until FR-MOD-13.5 lands every value but `configured` (`false`) is an empty
      *     cell — the honest skeleton, not a query the license has no data for. Every
-     *     figure is the same one the group's JSON report exposes, so a download
-     *     never disagrees with the screen it came from.
+     *     figure is the same one the group's JSON report exposes — and the same
+     *     `headers`/`rows` table both formats render from — so a download never
+     *     disagrees with the screen it came from, and CSV and PDF never disagree
+     *     with each other.
      *
      *     User-influenced fields (tags, agent names) are neutralised against
-     *     spreadsheet formula injection, and the body is `no-store`: a report is a
+     *     spreadsheet formula injection in the CSV body; a PDF has no formula
+     *     evaluator, so that guard is CSV-only by design and would only corrupt PDF
+     *     text if applied there. Both bodies are `no-store`: a report is a
      *     point-in-time snapshot, never served from a shared cache.
      *
      *     `baseline` appends the benchmark block as trailing `benchmark_<key>,value`
      *     rows — the same figures the group's JSON `previous_period` carries, padded
-     *     to the table's width. It is opt-in here, unlike the JSON reports which
-     *     always carry a benchmark: a JSON object gains a key harmlessly, but a CSV
-     *     is positional, and a trailing block would change what a script reading
-     *     column 1 as a date sees. Omit it and the file is byte-for-byte what this
-     *     endpoint has always produced.
+     *     to the table's width — in both formats. It is opt-in here, unlike the JSON
+     *     reports which always carry a benchmark: a JSON object gains a key
+     *     harmlessly, but the export tables are positional, and a trailing block
+     *     would change what a script (or a PDF's fixed column layout) reading column
+     *     1 as a date sees. Omit it and the CSV file is byte-for-byte what this
+     *     endpoint produced before `format` existed.
      *
-     *     PDF export is still v2 work (PLAN §4.4.8) and not offered here.
+     *     The PDF is a paginated table, deterministic byte-for-byte given the same
+     *     arguments — no embedded fonts, no wall-clock timestamp — set in a core
+     *     font, so non-Latin-1 text degrades to `?` rather than failing the export.
      */
     get: operations['exportReport'];
     put?: never;
@@ -12021,6 +12030,12 @@ export interface operations {
       query: {
         /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`. */
         group: string;
+        /**
+         * @description Download format. Defaults to `csv` — the only format v1 shipped, so a
+         *     caller that never passes this parameter keeps getting exactly what it
+         *     always got, byte-for-byte.
+         */
+        format?: 'csv' | 'pdf';
         from?: string;
         to?: string;
         /**
@@ -12054,13 +12069,14 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description The group rendered as CSV */
+      /** @description The group rendered as CSV (default) or PDF, per `format` */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
           'text/csv': string;
+          'application/pdf': string;
         };
       };
       400: components['responses']['BadRequest'];

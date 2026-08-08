@@ -2129,6 +2129,107 @@ describe('reports and billing', () => {
         expect(response.statusCode).toBe(403);
       });
     });
+
+    /**
+     * PDF export (FR-MOD-07.7, 07.7-g). Adds `?format=pdf` to the same,
+     * already-authorised export endpoint — `format` picks a serialiser for
+     * the table CSV already renders, it grants nothing on its own. Negative
+     * cases first: the boundary is the point.
+     */
+    describe('PDF export', () => {
+      /** Every report group the export endpoint serves, in `/reports/groups` order. */
+      const GROUPS = [
+        'overview',
+        'breakdown',
+        'ai-agent',
+        'reviews',
+        'topics',
+        'cases',
+        'leads',
+        'team-performance',
+        'sales',
+      ] as const;
+
+      it.each(['exe', 'html', 'pdfx'])(
+        'rejects `format=%s` with 400 — only csv/pdf are real formats',
+        async (format) => {
+          const response = await server.get(
+            `/reports/export?group=overview&format=${format}`,
+            auth,
+          );
+          expect(response.statusCode).toBe(400);
+        },
+      );
+
+      it('refuses a token without an export scope for a PDF request too — format grants nothing', async () => {
+        const weak = await scopedToken(['chats--all:ro']);
+        const response = await server.get('/reports/export?group=overview&format=pdf', {
+          authorization: `Bearer ${weak}`,
+        });
+        expect(response.statusCode).toBe(403);
+      });
+
+      it.each(GROUPS)('renders the %s group as a well-formed PDF', async (group) => {
+        const response = await server.get(`/reports/export?group=${group}&format=pdf`, auth);
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['content-type']).toBe('application/pdf');
+        expect(response.headers['content-disposition']).toMatch(
+          new RegExp(
+            `^attachment; filename="nexa-${group}-\\d{4}-\\d{2}-\\d{2}-\\d{4}-\\d{2}-\\d{2}\\.pdf"$`,
+          ),
+        );
+        // Same caching/sniffing contract as CSV — the format changes the body,
+        // not the headers a report download always carries.
+        expect(response.headers['x-content-type-options']).toBe('nosniff');
+        expect(response.headers['cache-control']).toBe('no-store');
+
+        const bytes = Buffer.from(response.rawPayload);
+        expect(bytes.toString('latin1').startsWith('%PDF-1.7\n')).toBe(true);
+      });
+
+      it('leaks no row from another license into a PDF either — same isolation as CSV', async () => {
+        const theirToken = await grantToken(owner, {
+          licenseId: fx.b.licenseId,
+          organizationId: fx.b.organizationId,
+          ownerId: fx.b.ownerAccountId,
+          scopes: ['reports_read'],
+        });
+        const authB = { authorization: `Bearer ${theirToken}` };
+        // Fixed window: a wall-clock default (`to=now`) could tick over a UTC
+        // day between the two requests below and make the subtitle differ for
+        // a reason that has nothing to do with tenant isolation.
+        const window = 'from=2026-01-01&to=2026-12-31';
+
+        const before = await server.get(`/reports/export?group=breakdown&format=pdf&${window}`, authB);
+        expect(before.statusCode).toBe(200);
+
+        await conversation({ agentReplies: false }); // one automated chat, closed today, in A
+
+        const after = await server.get(`/reports/export?group=breakdown&format=pdf&${window}`, authB);
+        expect(after.statusCode).toBe(200);
+
+        // B's export is a pure function of B's own data (RLS-scoped). A gaining
+        // a chat must not change a single byte of what B downloads — the same
+        // guarantee the CSV cross-tenant test above proves by row count, here
+        // proved by exact byte equality instead of parsing PDF text operators.
+        expect(Buffer.from(after.rawPayload).equals(Buffer.from(before.rawPayload))).toBe(true);
+      });
+
+      it('is byte-for-byte the same CSV whether `format` is omitted or `csv` — the v1 default never changed', async () => {
+        await conversation({ agentReplies: false });
+
+        const [omitted, explicit] = await Promise.all([
+          server.get('/reports/export?group=overview', auth),
+          server.get('/reports/export?group=overview&format=csv', auth),
+        ]);
+        expect(omitted.statusCode).toBe(200);
+        expect(omitted.headers['content-type']).toContain('text/csv');
+        expect(omitted.body).toBe(explicit.body);
+        expect(omitted.headers['content-disposition']).toBe(explicit.headers['content-disposition']);
+        expect(omitted.headers['x-content-type-options']).toBe('nosniff');
+        expect(omitted.headers['cache-control']).toBe('no-store');
+      });
+    });
   });
 
   // =========================================================================

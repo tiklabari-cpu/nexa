@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+### tm 93.7 — 07.7-g: PDF export rotası — `/reports/export` `format` parametresi + content-type/attachment bağlama — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/api/src/routes/reports.ts`: `exportQuery` şemasına `format: z.enum(['csv','pdf']).default('csv')`;
+    `GET /reports/export` gövdesi CSV yolunu byte-birebir bırakan tek dallanma aldı —
+    `format==='pdf'` → 07.7-f'de teslim edilen `toPdf(group.label, table.headers, table.rows, { subtitle })`
+    + `content-type: application/pdf` + `exportFilename(group.id, from, to, 'pdf')`. `nosniff`/`no-store`
+    artık tek `reply.header(...)` çağrısından geliyor (iki formatta da aynı kaynak, kopya yok).
+  - Kontrat: `packages/contract/openapi/paths/reports.yaml` `export` operation'ına `format` parametresi
+    (enum `csv\|pdf`, default `csv`) + `application/pdf` response content'i; "PDF export is still v2
+    work ... not offered here" cümlesi kaldırıldı. `pnpm --filter @nexa/contract generate` ile
+    `packages/contract/src/generated/api.ts` yenilendi (142 path, sayı değişmedi).
+  - Test: `apps/api/test/integration/reports-billing.test.ts` "PDF export" describe'ı **+15** (negatif
+    format değerleri → 400 · `reports_read`'siz `format=pdf` → 403 · 9 grubun hepsi `format=pdf` ile
+    200 + `%PDF-1.7` + doğru dosya adı/header · cross-tenant bayt-eşitliği · `format` yokken CSV
+    regresyonu).
+- **Doğrulama:** typecheck 11/11 ✅ · lint 8/8 ✅ · `npx turbo run test --filter='!@nexa/e2e' --concurrency=1`
+  10/10 ✅ (api 85 dosya/1766 test, `contract-parity.test.ts` 5/5 dahil) · build 7/7 ✅.
+  `pnpm -w test:e2e` çalıştırılmadı — bu dilimin sürdüğü yüzeye (route + kontrat) dokunan e2e testi yok;
+  export butonu UI'si ayrı task (07.7-k).
+- **Varsayımlar:** PDF `subtitle` UTC `YYYY-MM-DD – YYYY-MM-DD` penceresi olarak biçimlendi (07.7-f'nin
+  `toPdf` imzasına uyan en basit deterministik seçim); benchmark bloğunun PDF'te NASIL yerleşeceği
+  (ayrı tablo mu, delta sütunu mu) kasıtlı olarak açık bırakıldı — PLAN.md §5.2.4'teki açık soru, UI
+  task'larına (07.7-h/-i/-j/-k) devrediliyor.
+- **Sonraki pencereye not:** cross-tenant PDF testinin ilk denemesi `(1) Tj` regex'iyle "breakdown"
+  raporunun `hour` boyutundaki `key=1` satırını sızıntı sandı (yanlış pozitif — o satırın `chats` sütunu
+  zaten `0`'dı). PDF içeriğini metin-operatörü regex'iyle doğrulamak yerine "B'nin çıktısı A'nın verisi
+  değişse de bayt-birebir aynı kalmalı" biçiminde bir saf-fonksiyon eşitliği kullanmak daha sağlam —
+  aynı ihtiyaç doğarsa bu deseni tekrarla. 07.7-h (Save view) ve 07.7-i/-j (UI sekmeleri) bu işten
+  bağımsız, sırayla açık.
+
 ### tm 77.10 — WORKSCHED-j: uçtan uca doğrulama (staffing e2e + izolasyon + ADR-09) — done — 2026-08-08 UTC
 
 > Bu task daha önce **üç kez `blocked`** kapandı (aşağıdaki notlar) — tek sebebi bağımlılıklarının

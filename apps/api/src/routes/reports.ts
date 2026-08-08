@@ -33,6 +33,7 @@ import {
   exportFilename,
   reportGroup,
   toCsv,
+  toPdf,
   visibleReportGroups,
   type CsvCell,
 } from './reports-export.js';
@@ -116,8 +117,16 @@ const rangeQuery = z.object({
   baseline: z.enum(BENCHMARK_BASELINES).optional(),
 });
 
-/** An export request: which report group, over which window (defaults to 30d). */
-const exportQuery = rangeQuery.extend({ group: z.string().min(1).max(64) });
+/**
+ * An export request: which report group, in which format, over which window
+ * (defaults to 30d). `format` defaults to `csv` — the only format v1 shipped —
+ * so a caller who never learned about `?format=pdf` keeps getting exactly what
+ * they always got.
+ */
+const exportQuery = rangeQuery.extend({
+  group: z.string().min(1).max(64),
+  format: z.enum(['csv', 'pdf']).default('csv'),
+});
 
 /**
  * Default window: the last 30 days, the span every dashboard opens on. Exported
@@ -2781,10 +2790,11 @@ export default async function reportRoutes(
     });
   });
 
-  // CSV export of one report group (FR-MOD-07.7). Route-gated on the union of
-  // every group's scope, so a token holding none is refused before any group is
-  // resolved; the per-group check below then refuses a group whose own scope the
-  // token lacks.
+  // CSV/PDF export of one report group (FR-MOD-07.7). Route-gated on the union
+  // of every group's scope, so a token holding none is refused before any group
+  // is resolved; the per-group check below then refuses a group whose own scope
+  // the token lacks. `format` gates nothing on its own — it only picks the
+  // serialiser for the same, already-authorised table.
   //
   // The benchmark block is opt-in here, unlike the JSON reports, which always
   // carry one. A JSON object gains a key harmlessly; a CSV is positional, and a
@@ -2819,16 +2829,31 @@ export default async function reportRoutes(
     const table = await request.withTenant((tx) =>
       buildGroupCsv(tx, tenant.licenseId, group.id, from, to, parsed.data.baseline),
     );
-    const csv = toCsv(table.headers, table.rows);
 
+    // A report is a point-in-time snapshot; never let a shared cache serve a
+    // stale one, and never let a browser sniff the bytes into something active.
+    // Identical in both branches — the format changes the body, not the
+    // caching/sniffing contract.
+    reply.header('x-content-type-options', 'nosniff').header('cache-control', 'no-store');
+
+    if (parsed.data.format === 'pdf') {
+      const pdf = toPdf(group.label, table.headers, table.rows, {
+        subtitle: `${from.toISOString().slice(0, 10)} – ${to.toISOString().slice(0, 10)}`,
+      });
+      return reply
+        .header('content-type', 'application/pdf')
+        .header(
+          'content-disposition',
+          `attachment; filename="${exportFilename(group.id, from, to, 'pdf')}"`,
+        )
+        .send(pdf);
+    }
+
+    const csv = toCsv(table.headers, table.rows);
     return reply
       .header('content-type', 'text/csv; charset=utf-8')
       // A download, named for the group and window so two exports do not collide.
       .header('content-disposition', `attachment; filename="${exportFilename(group.id, from, to)}"`)
-      // A report is a point-in-time snapshot; never let a shared cache serve a
-      // stale one, and never let a browser sniff the bytes into something active.
-      .header('x-content-type-options', 'nosniff')
-      .header('cache-control', 'no-store')
       .send(csv);
   });
 

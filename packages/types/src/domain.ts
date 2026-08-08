@@ -368,3 +368,39 @@ export interface TicketEmailTemplate {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * How often a scheduled export is delivered (PRD §5.3-Reports).
+ *
+ * Not cosmetic: the scheduler derives the period key it deduplicates on *from*
+ * this value (`2026-07-31` daily, `2026-W31` weekly, `2026-07` monthly), so an
+ * unknown frequency would mean an undefined period and no "already delivered"
+ * answer. The database constrains the same three values.
+ */
+export type ScheduledExportFrequency = 'daily' | 'weekly' | 'monthly';
+
+/**
+ * A standing instruction to mail one report group on a schedule
+ * (PRD §5.3-Reports). The definition only — each delivery attempt is a run,
+ * read separately.
+ *
+ * `recipients` are mailboxes of agents on this same license. A schedule is the
+ * one place in the product where report data leaves the workspace unattended,
+ * so the addresses it may name are bounded by the team roster rather than free
+ * text; anything else would turn "define a schedule" into a data-exfiltration
+ * primitive available to any admin token.
+ */
+export interface ScheduledExport {
+  id: string;
+  /** A `REPORT_GROUPS` id — the same vocabulary `GET /reports/export?group=` uses. */
+  group: string;
+  frequency: ScheduledExportFrequency;
+  /** `csv` — the only shape the scheduler produces today. */
+  format: 'csv';
+  recipients: string[];
+  /** Whether the scheduler picks this definition up. Off keeps it configured, inert. */
+  enabled: boolean;
+  created_at: string;
+  /** Last successful delivery, or null while none has happened. */
+  last_run_at: string | null;
+}

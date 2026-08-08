@@ -27,6 +27,10 @@ const NEXA_ADDED_SCOPES = [
   // Multibrand (PRD §5.3) makes brands a first-class resource with its own scope.
   'brands--all:ro',
   'brands--all:rw',
+  // The source platform's reports surface is read-only, so `reports_read` covered
+  // it. Scheduled exports (PRD §5.3-Reports) add a mutation — which report leaves
+  // the workspace, how often, to whom — that a read scope must not carry.
+  'reports_manage',
 ];
 
 const SOURCE_SCOPE_COUNT = 58;

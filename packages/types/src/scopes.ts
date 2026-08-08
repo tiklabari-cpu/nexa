@@ -110,6 +110,13 @@ export const SCOPES = [
   'audit_log--all:ro',
   // Reports / Billing — do not follow the `--` pattern
   'reports_read',
+  // Scheduled report exports (PRD §5.3-Reports). A Nexa addition: the source
+  // platform's reports surface is read-only, so `reports_read` was the whole of
+  // it. Defining a schedule is a *mutation* — it decides which report leaves the
+  // workspace, how often and to whose mailbox — and a read scope must not carry
+  // that. Named `reports_manage` rather than `reports_write` to match the
+  // `billing_manage` sibling, since neither follows the `--` convention.
+  'reports_manage',
   'billing_manage',
   'billing_admin',
   'billing--all:rw',

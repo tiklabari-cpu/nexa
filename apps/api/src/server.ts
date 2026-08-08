@@ -29,6 +29,7 @@ import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { FileMailer, NullMailer, type Mailer } from './services/mail/mailer.js';
 import reportRoutes from './routes/reports.js';
+import scheduledReportRoutes from './routes/scheduled-reports.js';
 import homeRoutes from './routes/home.js';
 import settingsRoutes from './routes/settings.js';
 import onboardingRoutes from './routes/onboarding.js';
@@ -170,6 +171,7 @@ export async function buildServer({
       await api.register(customFieldRoutes);
       await api.register(channelRoutes, { env });
       await api.register(reportRoutes, { env });
+      await api.register(scheduledReportRoutes);
       await api.register(homeRoutes);
       await api.register(settingsRoutes);
       await api.register(onboardingRoutes);

@@ -13,6 +13,56 @@
 
 ## Task log (newest-first)
 
+### tm 94.2 — 07.9-sched-b · `reports_manage` scope + zamanlanmış export listeleme/oluşturma — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **Yeni yazma scope'u `reports_manage`** (`packages/types/src/scopes.ts`) — kaynak platformun
+    rapor yüzeyi salt-okunur olduğu için `reports_read` tek başınaydı; zamanlanmış export TANIMLAMAK
+    bir mutasyon (hangi rapor, hangi sıklıkta, kimin posta kutusuna). `scopes.test.ts`'teki
+    `NEXA_ADDED_SCOPES` listesine gerekçeli yorumla eklendi (sayaç `58 + liste.length`).
+    `principal.ts`'te **yalnız `ADMIN_SCOPES`**'ta — `DEFAULT_AGENT_SCOPES` hiçbir rapor scope'u
+    taşımıyor, o kural korundu. Adlandırma `billing_manage` kardeşiyle hizalı (`--` desenine
+    uymayan aile).
+  - **Kontrat** (`paths/reports.yaml#scheduledExports`): `get` = `listScheduledExports`,
+    `post` = `createScheduledExport`; `openapi.yaml`'a `/reports/scheduled-exports` path'i +
+    `ScheduledExport` ve `ScheduledExportFrequency` şemaları. `pnpm --filter @nexa/contract generate`
+    ile re-bundle → `packages/contract/src/generated/api.ts` (versiyonlanan dosya) güncellendi.
+    `@nexa/types`'a `ScheduledExport` + `ScheduledExportFrequency` DTO'ları.
+  - **Route + servis**: `apps/api/src/routes/scheduled-reports.ts` (zod `.strict()` gövde;
+    `frequency` enum, `format` yalnız `csv`, `recipients` 1–20) ve
+    `apps/api/src/services/reports/scheduled-report-service.ts` (`reportGroup()` ile katalog
+    doğrulaması → bilinmeyen grup **400**, 404 değil; alıcılar aynı lisansın **askıya alınmamış**
+    ajanlarının e-postaları). `server.ts`'e kayıt. Yeni `ApiError` tipi YOK.
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **1832/1832** (86 dosya) ·
+  `pnpm -w test:integration` → **1407/1407** (60 dosya) · `pnpm -w build` 0 · `pnpm -w test:e2e` →
+  **80/80** · `pnpm -w db:check-drift` → "no drift". Yeni test **20**
+  (`test/integration/scheduled-reports.test.ts`): `reports_manage`'siz POST 403 · `reports_read` ile
+  GET de 403 · rapor scope'suz token 403 · kimliksiz 401 · create→list turu (201 + listede) ·
+  `enabled:false` ile kapalı tanım · katalogdaki **her** grup 201 · case-insensitive alıcı eşleşmesi ·
+  tekrarlı alıcı sadeleşmesi · bilinmeyen grup 400 · tanımsız sıklık 400 · boş alıcı 400 ·
+  workspace dışı alıcı 400 · **B lisansının ajanı alıcı olamaz** 400 · askıya alınmış ajan 400 ·
+  bozuk e-posta 400 · bilinmeyen gövde anahtarı 400 · `format:pdf` 400 · B, A'nın tanımını
+  listeleyemez (A kendisininkini görmeye devam eder) · satır doğru lisansa + `created_by_agent_id`'ye
+  yazılır.
+- **Varsayımlar:** (1) **GET de `reports_manage` ister** — liste alıcı posta kutularını taşıyor,
+  yani "raporumuzu kim alıyor" bilgisi; bu rapor okuma değil yönetim yüzeyi. Owner/admin ikisini de
+  taşıdığı için pratikte kısıtlayıcı değil. (2) **Askıya alınmış ajan alıcı olamaz** — `ticket-rule`
+  atama guard'ının deseni; workspace'ten kesilmiş birine rapor postalanmaya devam etmemeli.
+  (3) Alıcı listesi **≤20** ile sınırlı — zamanlanmış egress gözetimsiz tekrarlıyor, sınırsız liste
+  tek tanımı bir posta listesine çevirirdi. (4) Alıcı `citext`'e uygun case-insensitive eşleşiyor ve
+  **roster yazımıyla** saklanıyor, böylece -e teslim adımında hangi yazımın gerçek posta kutusu
+  olduğunu tahmin etmek zorunda kalmaz.
+- **Sonraki pencereye not:** `-c` (tek kayıt GET/PATCH/DELETE) doğrudan bu servisin üstüne biner;
+  `ScheduledReportService.create`'teki `resolveRecipients` PATCH'te de çağrılmalı (alıcı listesi
+  güncellemesi aynı roster sınırından geçmezse PII kapısı yalnız create'te kalır). `-h` (Settings UI)
+  liste için `reports_manage` isteyecek — admin token'ı zaten taşıyor, ama ayrı bir dar PAT
+  üretiliyorsa `reports_read` yetmez. **Uyarı (ortam):** `pnpm -w test:e2e` RTM dev sunucusunu
+  `pnpm --filter @nexa/rtm dev` ile ayağa kaldırıyor ve `apps/rtm/src/index.ts` — API'nin aksine —
+  `loadEnvFile()` ÇAĞIRMIYOR; kabuğa env yüklenmemişse RTM "Invalid environment" ile ölür ve
+  Playwright 60 sn sonra timeout verir. Doğru komut: `set -a && . ./.env && set +a && pnpm -w test:e2e`.
+  Bu kod hatası değil, koşum sırası; ayrı bir task edilebilir.
+
 ### tm 94.1 — 07.9-sched-a · scheduled_reports / scheduled_report_runs şema + migration — done — 2026-08-08 UTC
 
 - **Yapıldı:**

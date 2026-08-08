@@ -479,6 +479,94 @@ export:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+scheduledExports:
+  get:
+    tags: [Reports]
+    operationId: listScheduledExports
+    summary: Scheduled report exports defined for the workspace
+    description: |
+      The workspace's standing instructions to mail a report group on a timer
+      (PRD §5.3-Reports) — definitions only; delivery history is read per
+      definition.
+
+      Gated on `reports_manage`, the same scope that creates one, rather than the
+      read-only `reports_read`. A definition carries the mailboxes its reports
+      are sent to, so listing it exposes who receives workspace data — that is
+      part of the management surface, not part of reading a report.
+    responses:
+      "200":
+        description: The workspace's scheduled exports (possibly empty)
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/ScheduledExport" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Reports]
+    operationId: createScheduledExport
+    summary: Schedule a report group for recurring delivery
+    description: |
+      Defines a recurring export: a report group, how often it runs, and the
+      mailboxes each run is delivered to.
+
+      `group` must name a group in the report catalogue — the same vocabulary
+      `GET /reports/export?group=` accepts — and an unknown id is a 400, not a
+      404: the group is a request parameter the caller got wrong, not a resource
+      whose existence is a tenant secret.
+
+      Every address in `recipients` must belong to an active agent on this same
+      license, and the list may not be empty. A schedule is the one place report
+      data leaves the workspace unattended, so its destinations are bounded by
+      the team roster rather than free text; an outside address is refused with a
+      400. An empty list would still claim its delivery period and mail nobody,
+      silently, forever.
+
+      `format` accepts only `csv` today — the shape the scheduler produces.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [group, frequency, recipients]
+            properties:
+              group:
+                type: string
+                description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`."
+              frequency: { $ref: "../openapi.yaml#/components/schemas/ScheduledExportFrequency" }
+              format:
+                type: string
+                enum: [csv]
+                default: csv
+              recipients:
+                type: array
+                minItems: 1
+                maxItems: 20
+                items: { type: string, format: email }
+                description: Mailboxes of active agents on this license.
+              enabled:
+                type: boolean
+                default: true
+                description: Create the definition switched off by passing `false`.
+    responses:
+      "201":
+        description: Scheduled
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScheduledExport" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 subscription:
   get:
     tags: [Billing]

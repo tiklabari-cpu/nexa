@@ -349,6 +349,8 @@ paths:
     $ref: "./paths/reports.yaml#/groups"
   /reports/export:
     $ref: "./paths/reports.yaml#/export"
+  /reports/scheduled-exports:
+    $ref: "./paths/reports.yaml#/scheduledExports"
   /billing/subscription:
     $ref: "./paths/reports.yaml#/subscription"
   /billing/usage:
@@ -3179,6 +3181,50 @@ components:
                 type: string
                 description: "Group id: `overview`, `breakdown`, `ai-agent` or `reviews`."
               label: { type: string, description: Human-readable tab name. }
+
+    ScheduledExportFrequency:
+      type: string
+      enum: [daily, weekly, monthly]
+      description: |
+        How often a scheduled export runs. Not cosmetic: the scheduler derives
+        the period key it deduplicates deliveries on *from* this value
+        (`2026-07-31` daily, `2026-W31` weekly, `2026-07` monthly), so an unknown
+        frequency would mean an undefined period and no "already delivered"
+        answer.
+
+    ScheduledExport:
+      type: object
+      description: |
+        A standing instruction to mail one report group on a schedule
+        (PRD §5.3-Reports) — the definition only; each delivery attempt is a run,
+        read separately.
+      required: [id, group, frequency, format, recipients, enabled, created_at, last_run_at]
+      properties:
+        id: { type: string, format: uuid }
+        group:
+          type: string
+          description: A report group id — the same vocabulary `GET /reports/export?group=` uses.
+        frequency: { $ref: "#/components/schemas/ScheduledExportFrequency" }
+        format:
+          type: string
+          enum: [csv]
+          description: The shape each delivery is rendered in.
+        recipients:
+          type: array
+          items: { type: string, format: email }
+          description: |
+            Mailboxes each run is delivered to. Always agents of this same
+            license — the destination list is bounded by the team roster, never
+            free text.
+        enabled:
+          type: boolean
+          description: Whether the scheduler picks this definition up.
+        created_at: { type: string, format: date-time }
+        last_run_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last successful delivery, or `null` while none has happened.
 
     CsatSummary:
       type: object

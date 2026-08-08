@@ -3392,6 +3392,52 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/scheduled-exports': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Scheduled report exports defined for the workspace
+     * @description The workspace's standing instructions to mail a report group on a timer
+     *     (PRD §5.3-Reports) — definitions only; delivery history is read per
+     *     definition.
+     *
+     *     Gated on `reports_manage`, the same scope that creates one, rather than the
+     *     read-only `reports_read`. A definition carries the mailboxes its reports
+     *     are sent to, so listing it exposes who receives workspace data — that is
+     *     part of the management surface, not part of reading a report.
+     */
+    get: operations['listScheduledExports'];
+    put?: never;
+    /**
+     * Schedule a report group for recurring delivery
+     * @description Defines a recurring export: a report group, how often it runs, and the
+     *     mailboxes each run is delivered to.
+     *
+     *     `group` must name a group in the report catalogue — the same vocabulary
+     *     `GET /reports/export?group=` accepts — and an unknown id is a 400, not a
+     *     404: the group is a request parameter the caller got wrong, not a resource
+     *     whose existence is a tenant secret.
+     *
+     *     Every address in `recipients` must belong to an active agent on this same
+     *     license, and the list may not be empty. A schedule is the one place report
+     *     data leaves the workspace unattended, so its destinations are bounded by
+     *     the team roster rather than free text; an outside address is refused with a
+     *     400. An empty list would still claim its delivery period and mail nobody,
+     *     silently, forever.
+     *
+     *     `format` accepts only `csv` today — the shape the scheduler produces.
+     */
+    post: operations['createScheduledExport'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/billing/subscription': {
     parameters: {
       query?: never;
@@ -6116,6 +6162,47 @@ export interface components {
         /** @description Human-readable tab name. */
         label: string;
       }[];
+    };
+    /**
+     * @description How often a scheduled export runs. Not cosmetic: the scheduler derives
+     *     the period key it deduplicates deliveries on *from* this value
+     *     (`2026-07-31` daily, `2026-W31` weekly, `2026-07` monthly), so an unknown
+     *     frequency would mean an undefined period and no "already delivered"
+     *     answer.
+     * @enum {string}
+     */
+    ScheduledExportFrequency: 'daily' | 'weekly' | 'monthly';
+    /**
+     * @description A standing instruction to mail one report group on a schedule
+     *     (PRD §5.3-Reports) — the definition only; each delivery attempt is a run,
+     *     read separately.
+     */
+    ScheduledExport: {
+      /** Format: uuid */
+      id: string;
+      /** @description A report group id — the same vocabulary `GET /reports/export?group=` uses. */
+      group: string;
+      frequency: components['schemas']['ScheduledExportFrequency'];
+      /**
+       * @description The shape each delivery is rendered in.
+       * @enum {string}
+       */
+      format: 'csv';
+      /**
+       * @description Mailboxes each run is delivered to. Always agents of this same
+       *     license — the destination list is bounded by the team roster, never
+       *     free text.
+       */
+      recipients: string[];
+      /** @description Whether the scheduler picks this definition up. */
+      enabled: boolean;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: date-time
+       * @description Last successful delivery, or `null` while none has happened.
+       */
+      last_run_at: string | null;
     };
     /**
      * @description A satisfaction tally over some span: the donut's `good` / `bad` counts,
@@ -12283,6 +12370,75 @@ export interface operations {
         content: {
           'text/csv': string;
           'application/pdf': string;
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listScheduledExports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's scheduled exports (possibly empty) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ScheduledExport'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createScheduledExport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`. */
+          group: string;
+          frequency: components['schemas']['ScheduledExportFrequency'];
+          /**
+           * @default csv
+           * @enum {string}
+           */
+          format?: 'csv';
+          /** @description Mailboxes of active agents on this license. */
+          recipients: string[];
+          /**
+           * @description Create the definition switched off by passing `false`.
+           * @default true
+           */
+          enabled?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Scheduled */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduledExport'];
         };
       };
       400: components['responses']['BadRequest'];

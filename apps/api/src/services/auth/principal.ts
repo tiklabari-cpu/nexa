@@ -121,5 +121,9 @@ export const ADMIN_SCOPES: Scope[] = [
   // neither.
   'audit_log--all:ro',
   'reports_read',
+  // Defining a scheduled export (PRD §5.3-Reports) mails workspace data out on a
+  // timer, so it is an owner/admin power and stops here — `DEFAULT_AGENT_SCOPES`
+  // deliberately does not carry it, exactly as it carries no reports scope at all.
+  'reports_manage',
   'billing_manage',
 ];

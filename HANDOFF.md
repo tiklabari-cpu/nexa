@@ -13,6 +13,12 @@
 
 ## Task log (newest-first)
 
+> **Not (tm 93.8 kapanışı, 2026-08-08):** `run-loop.sh` bu pencere başlamadan ÖNCE de değişmiş
+> haldeydi (görev deneme sayacı / `MAX_TASK_ATTEMPTS` altyapısı — başka bir pencerenin iş-üstü işi,
+> bu görevin kapsamı DIŞINDA) ve kapanışta hâlâ commit'siz — bilinçli olarak DOKUNULMADI (tm 77.8'de
+> aynı desen: bkz. commit `8abad1d`). Bir sonraki pencere bu diff'i ya kendi işinin parçası yapıp
+> commit'lesin ya da sahibi kimse ona bıraksın.
+
 ### tm 93.8 — 07.7-h: Reports Save view — rapora özgü kaydedilmiş görünüm (saf modül) — done — 2026-08-08 UTC
 
 - **Yapıldı:**

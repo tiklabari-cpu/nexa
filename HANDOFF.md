@@ -13,6 +13,45 @@
 
 ## Task log (newest-first)
 
+### tm 101 — PLAN §5.0 tablosunun 4 sarkan satırını reflow et — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **Reflow (doküman-only).** PLAN.md §5.0 "v2 kalem envanteri" tablosunda hücre içeriği fiziksel
+    satırlara hard-wrap edilmiş **4 mantıksal satırın 32 devam satırı** kendi tablo satırının sonuna
+    birleştirildi (satır sonu → tek boşluk): `07.6` (1 kuyruk) · `08.6.3` (15) · `08.8.3` (14) ·
+    `§5.3-KB` (2 — biri **boş satır**, GFM render'ında tabloyu fiilen bitiriyordu). Tablo artık
+    **30 mantıksal = 30 fiziksel** satır; blokta `| ` ile başlamayan satır **0**. Damga, sayaç, metin
+    değişmedi — yalnız satır sonları boşluğa döndü.
+  - **§D77 kaydı** eklendi (append-only): ne birleştirildi, doğrulama çıktıları, döngünün kapandığı.
+- **Doğrulama** (script, exit 0 — DoD kapı komutları bu doküman-only görev için anlamlı değil,
+  görevin kendi test stratejisindeki 4 kapı koşuldu):
+  1. **İçerik korunumu** — reflow öncesi/sonrası 30 mantıksal satır whitespace-normalize edilerek
+     **30/30 birebir eşit**; tek karakter kaybı/eklenmesi yok.
+  2. **Naif sayaç yakınsadı (bulgunun kapanma kanıtı)** — panelin yaptığı satır-bazlı sayım
+     **önce `2 ✅ / 0 ◐ / 1 ⬜` (toplam 3 satır)**, **sonra `12 ⬜ · 0 ◐ · 15 ✅ · 3 ⛔` (toplam 30)**
+     → naif sayım artık MANTIKSAL sayımla birebir aynı. §D75/§D76'nın teşhis ettiği dejenere parse
+     aritmetiği (ilk sarkan satırda kesilme) ortadan kalktı.
+  3. **Tablo bütünlüğü** — §5.0 blokta sarkan satır 0, blok-içi boş satır 0.
+  4. **Sızıntı yok** — §5.0 tablo bloğu damga çokluğu önce=sonra (`⬜ 12 · ✅ 27 · ◐ 2 · ⛔ 3`,
+     satır-içi alt-madde damgaları dahil); dosya geneli damga çokluğu (D77 satırı hariç) birebir aynı;
+     §5.0 dışı 3682 satırın hepsi (D77 hariç) değişmedi. `git diff --numstat` PLAN.md **+5 / −36**.
+- **Varsayımlar:** yok. Satır numarası atıfları kontrol edildi — reflow §5.0 sonrasını ~32 satır yukarı
+  kaydırır, ancak `tasks.json` ve `PLAN-V2-KIRILIM.md` yalnız `PLAN.md:57` ve `PLAN.md:520`'ye atıf yapar
+  (ikisi de §5.0'ın ÜSTÜNDE, etkilenmedi); HANDOFF'taki `11xx` atıfları tarihçedir, append-only bırakıldı.
+- **Sonraki pencereye not:**
+  - **⚠️ Sayaçlar artık GERÇEKTEN 1 kalem bayat — tm 102 açıldı (`high`, dependency: 101).** Reflow
+    sonrası tablo `12 ⬜ · 0 ◐ · 15 ✅ · 3 ⛔` sayıyor; satır 22 + satır 1100 özetleri hâlâ
+    `12 ⬜ · 1 ◐ · 14 ✅ · 3 ⛔` diyor. Kaynak (git ile kanıtlı): `5d2c096` (WORKSCHED-j)
+    `§5.3-Vardiya ◐→✅` çevirirken iki özeti de aynı commit'te güncelledi (doğru davranış), ardından
+    **`6230b4f` (07.7-l · tm 93.12) `07.7 ◐→✅` çevirdi ama özet sayaçlarına dokunmadı**. tm 101 detayı
+    "sayaçları değiştirmek KAPSAM DIŞI" dediği için bu pencerede DÜZELTİLMEDİ (o premis, özet ile
+    tablonun eşit olduğu §D76 anına aitti — artık eşit değiller). Düzeltme tek satırlık:
+    iki özette `1 ◐ · 14 ✅` → `0 ◐ · 15 ✅`, ama **körlemesine yazma — tm 102'nin scriptiyle yeniden say.**
+  - Bu yüzden panelin bir sonraki §1.2 taraması çelişkiyi **DOĞRU olarak** bildirebilir; bu artık
+    §D68–§D76'daki yanlış pozitif DEĞİL. Parser tarafı kapandı (tm 101), veri tarafı tm 102'de kapanacak.
+  - `run-loop.sh` bu pencereden ÖNCE de kirliydi (86+/7−) ve göreve göre dokunulmadı → commit'e
+    alınmadı, çalışma alanında duruyor. Sahibi commit'lemeli.
+
 ### tm 93.12 — 07.7-l: Uçtan uca doğrulama — izin matrisi, cross-tenant süpürmesi, NFR-P7 — done — 2026-08-08 UTC
 
 - **Yapıldı:**

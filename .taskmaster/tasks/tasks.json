@@ -4182,14 +4182,14 @@
             "description": "(1) `TABS` dizisine `{ id:'leads', label:'Leads' }` + `{ id:'cases', label:'Cases' }`. (2) `LeadsTab` ve `CasesTab` bileşenleri — `useReport<ReportsLeads>('leads', ...)` / `useReport<ReportsCases>('cases', ...)`; `Kpi`/`KpiGrid` kartları + günlük seri; benchmark rozetleri MEVCUT `Kpi` delta desenini (Overview'ün vs-önceki rozetleri) yeniden kullanır. (3) `previous_period` alanı geldiğinde delta gö",
             "details": "07.7-i — Reports UI — Leads + Cases sekmeleri (kartlar + benchmark rozetleri + empty state)  [SONNET-XHIGH]\n\nPRD: FR-MOD-07.7 (+ FR-EK-B.1 anlamlı empty state)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 dosya (sayfa + testi) + e2e dokunuşu. (2) Güvenlik sınırı yok — salt-okunur render; yetki kararı backend'de (07.7-a/-b). (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: `ReportsPage.tsx` `TABS` dizisi (satır 120-123) + `useReport<T>()` generic hook'u (satır 238) + `ReviewsTab` (satır 545) render dalı + `Kpi`/`KpiGrid`/`Card`/`CardSkeleton`/`ErrorNotice`/`EmptyState` bileşenleri. (5) Kontrat değişikliği yok (endpoint'ler 07.7-a/-b'de geldi). (6) KK mekanik: sekme render, veri yokken empty state, yetki yokken sekme görünmez.\nNEDEN AÇIK: `ReportsPage.tsx:120-123` `TABS` dizisi yalnız 4 eleman taşıyor (`overview`/`ai-agent`/`reviews`/`breakdown`) — Leads/Cases sekmesi yok. `useReport<T>(kind, api, props)` (satır 238) grup-parametreli generic veri çekme sağlıyor ve dört tab bileşeni (satır 248/472/545/773) aynı kalıbı tekrarlıyor — yeni sekme bu kalıbın beşinci/altıncı örneğidir.\nKAPSAM: (1) `TABS` dizisine `{ id:'leads', label:'Leads' }` + `{ id:'cases', label:'Cases' }`. (2) `LeadsTab` ve `CasesTab` bileşenleri — `useReport<ReportsLeads>('leads', ...)` / `useReport<ReportsCases>('cases', ...)`; `Kpi`/`KpiGrid` kartları + günlük seri; benchmark rozetleri MEVCUT `Kpi` delta desenini (Overview'ün vs-önceki rozetleri) yeniden kullanır. (3) `previous_period` alanı geldiğinde delta gösterilir, gelmezse rozet yok (07.7-e'ye uyumlu). (4) Boş pencerede `EmptyState` (boş dikdörtgen değil — FR-EK-B.1). (5) Sekme görünürlüğü `/reports/groups` yanıtına bağlanır: yetkisiz kullanıcıda sekme RENDER EDİLMEZ (backend zaten 403 verir; UI gizleme tek başına yetki değildir — kod yorumunda not edilir).\nDOSYALAR: apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx · apps/e2e/tests/reports.spec.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/reports/ReportsPage.tsx (satır 120-123 `TABS` dizisi; satır 238 `useReport<T>` generic hook; satır 545 `ReviewsTab` — yeni sekmenin birebir kalıbı) · apps/web/src/components/Page.tsx (`Card`/`CardSkeleton`/`ErrorNotice`/`Kpi`/`KpiGrid`/`Section` bileşenleri) · apps/web/src/components/EmptyState.tsx (anlamlı empty state deseni, FR-EK-B.1) · apps/web/src/features/reports/ReportsPage.test.tsx (mevcut sekme render testleri kalıbı)\nKK (birebir): \"İzin bazlı görünürlük\" | \"benchmark karşılaştırma\"\nKK DOĞRULAMA: `ReportsPage.test.tsx` — 'Leads' ve 'Cases' sekmeleri render edilir ve tıklanınca ilgili endpoint çağrılır; `/reports/groups` yanıtında grup yoksa sekme RENDER EDİLMEZ ('İzin bazlı görünürlük'); `previous_period` gelen alanda delta rozeti görünür ('benchmark karşılaştırma'); veri boşken `EmptyState` metni görünür, boş dikdörtgen değil.\nKAPSAM DIŞI: Sales / Team performance sekmeleri — 07.7-j · Export butonu + Save view çubuğu — 07.7-k · Grafik kütüphanesi eklemek — mevcut `Kpi`/`Card` bileşenleriyle sayı/liste render edilir · Backend sorgu değişikliği — 07.7-a/-b'de kilitlendi\nSÖZLEŞME: yok — endpoint'ler 07.7-a/-b'de sözleşmeye girdi; bu alt-görev yalnız tüketir.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit (negatif önce) — `/reports/groups` 'leads'/'cases' döndürmezse sekme yok; endpoint 403 dönerse `ErrorNotice`, çökme yok · unit — sekme tıklaması doğru `kind` ile `useReport` çağırır; yükleme sırasında `CardSkeleton` · unit — boş veri → `EmptyState` (FR-EK-B.1: boş dikdörtgen yok) · unit — `previous_period` var → delta rozeti; yok → rozet yok · e2e — `reports.spec.ts`'e Leads/Cases sekmesi görünürlük iddiası",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               1,
               2,
               5
             ],
             "parentId": "93",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T03:27:42.984Z"
           },
           {
             "id": 10,
@@ -4246,7 +4246,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T03:04:00.668Z"
+        "updatedAt": "2026-08-08T03:27:42.984Z"
       },
       {
         "id": "94",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T03:04:00.668Z",
+      "lastModified": "2026-08-08T03:27:42.984Z",
       "taskCount": 101,
       "completedCount": 81,
       "tags": [

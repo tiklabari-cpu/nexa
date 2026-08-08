@@ -13,6 +13,58 @@
 
 ## Task log (newest-first)
 
+### tm 94.3 — 07.9-sched-c · zamanlanmış export tek kayıt oku/güncelle/iptal — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **Kontrat** (`paths/reports.yaml#scheduledExport`): `scheduledExportId` path parametreli blok —
+    `getScheduledExport` / `updateScheduledExport` / `deleteScheduledExport` (204). `openapi.yaml`'a
+    `/reports/scheduled-exports/{scheduledExportId}` path'i; `pnpm --filter @nexa/contract generate`
+    ile re-bundle → `packages/contract/src/generated/api.ts`. Yeni şema YOK — üçü de mevcut
+    `ScheduledExport`/`ScheduledExportFrequency` üzerinde çalışıyor.
+  - **Route** (`apps/api/src/routes/scheduled-reports.ts`): GET/PATCH/DELETE `:scheduledExportId`.
+    `updateBody`, `createBody.shape`'in parçalarını **yeniden kullanır** (doğrulama gövdeyi taşıyan
+    fiile göre değişmemeli) + `.strict()` + `.refine('at least one field is required')` → boş gövde
+    400. Path parametresi `z.string().uuid()` → bozuk id veritabanına hiç ulaşmaz (400).
+  - **Servis**: `get` / `update` / `remove`. `update` **create'in doğrulamasının aynısını uygular** —
+    değişen `group` yine `reportGroup()` kataloğundan, değişen `recipients` yine
+    `resolveRecipients()` roster kapısından geçer. `remove` `deleteMany({ id, licenseId })`; sıfır
+    satır = `not_found`, ve `scheduled_report_runs` composite FK cascade'iyle birlikte gider (-a).
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **1854/1854** (86 dosya) ·
+  `pnpm -w test:integration` → **1429/1429** (60 dosya, exit 0) · `pnpm -w build` 0 ·
+  `pnpm -w test:e2e` → **80/80** (exit 0) · `pnpm -w db:check-drift` → "no drift" ·
+  değişen dosyalarda `prettier --check` 0. Yeni test **22** (dosya toplamı 42): `reports_manage`'siz
+  GET/PATCH/DELETE 403 (ve arkasında hiçbir şey değişmemiş) · kimliksiz üç fiil de 401 · by-id okuma
+  listenin gösterdiğini döner · sıklık değişir → GET yeni değeri verir, dokunulmayan alanlar durur ·
+  `enabled:false` duraklatır (listede kalır) · alıcı listesi değişimi create'le aynı normalizasyondan
+  geçer (roster yazımı + tekrar sadeleşmesi) · grup taşıma · **PATCH ile bilinmeyen grup / tanımsız
+  sıklık / workspace dışı alıcı / B lisansının ajanı / askıya alınmış ajan → 400 ve kayıt değişmemiş**
+  · boş gövde 400 · bilinmeyen anahtar 400 · `format:pdf` 400 · DELETE 204 → sonraki GET 404, liste
+  boş, PATCH de 404 · **run satırları cascade ile gitti** · yalnız istenen kayıt silindi · olmayan id
+  404 · bozuk uuid 400 · **B lisansı A'nın id'siyle GET/PATCH/DELETE → 404 (403 değil)** ve A'nın
+  kaydı el değmemiş · tam yaşam döngüsü (create→patch→get→delete).
+- **Varsayımlar:** (1) **By-id GET `reports_manage` ister, `reports_read` değil** — task detayı
+  `reports_read` diyordu; sapma bilinçli: tek kayıt okuma listeyle **aynı DTO'yu, alıcı posta
+  kutuları dâhil** döndürüyor, dolayısıyla `reports_read`'e açmak -b'nin listede kapattığı bilgiyi
+  yan kapıdan verirdi. KK doğrulaması etkilenmiyor (istenen sınama "`reports_manage`'siz token
+  PATCH/DELETE → 403" idi; daha sıkı kapı bunu da karşılıyor). Owner/admin ikisini de taşıdığı için
+  pratik kısıt yok; `-h` (Settings UI) zaten `reports_manage` ile okuyacak.
+  (2) **Çapraz kiracı = 404, 403 değil** — 403 "bu kayıt var ama senin değil" demek olurdu.
+  (3) **PATCH tam alan değişimi** (`recipients` listeyi değiştirir, eklemez) — kısmi liste düzenleme
+  yüzeyi yok; UI listenin tamamını gönderir.
+- **Sonraki pencereye not:** `-g` (teslim geçmişi `GET .../{id}/runs`) ve `-h` (Settings UI) artık
+  açık — ikisi de bu id'li yüzeyin üstüne biner; `-h`'nin iptal butonu doğrudan DELETE'i çağırabilir.
+  `-e` (zamanlayıcı) `remove`'un cascade'ine güveniyor: iptal edilen tanımın `pending` run satırı da
+  gider, yani zamanlayıcı asla sahipsiz bir claim görmemeli. **Uyarı (ortam, tekrar):** tek bir e2e
+  spec'ini üst üste koşturmak paylaşılan seed veritabanını kirletiyor — `globalSetup` yalnız
+  `db:seed` çağırıyor ve seed **idempotent** (mevcut tenant'ı atlıyor), yani artık konuşma/müşteri
+  satırları birikiyor ve `customers.spec.ts` sayım iddiaları düşüyor. Doğru sıra kapının kendi
+  sırası: `pnpm -w test:integration` (aynı DB'yi truncate eder) → `pnpm -w test:e2e` (yeniden
+  seed'ler) → 80/80. `pnpm db:reset` Prisma'nın "dangerous AI action" onayına takılıyor; onaysız
+  çalıştırılmadı. Ayrıca `skills-routing.spec.ts:76` bir turda strict-mode locator ihlaliyle düştü
+  (`getByLabel('Skill')` "Delete skill X" aria-label'larıyla da eşleşiyor); temiz durumda geçiyor
+  ama locator kırılgan — kapsam dışı, ayrı task (tm 103) açıldı.
+
 ### tm 94.2 — 07.9-sched-b · `reports_manage` scope + zamanlanmış export listeleme/oluşturma — done — 2026-08-08 UTC
 
 - **Yapıldı:**

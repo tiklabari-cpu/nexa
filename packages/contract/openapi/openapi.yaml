@@ -351,6 +351,8 @@ paths:
     $ref: "./paths/reports.yaml#/export"
   /reports/scheduled-exports:
     $ref: "./paths/reports.yaml#/scheduledExports"
+  /reports/scheduled-exports/{scheduledExportId}:
+    $ref: "./paths/reports.yaml#/scheduledExport"
   /billing/subscription:
     $ref: "./paths/reports.yaml#/subscription"
   /billing/usage:
@@ -1660,7 +1662,17 @@ components:
         detail response). `published_at`/`updated_at` are the timestamps a
         sitemap and a reader both use.
       required:
-        [id, category_id, slug, title, excerpt, seo_title, seo_description, published_at, updated_at]
+        [
+          id,
+          category_id,
+          slug,
+          title,
+          excerpt,
+          seo_title,
+          seo_description,
+          published_at,
+          updated_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         category_id: { type: string, format: uuid, nullable: true }
@@ -3003,8 +3015,7 @@ components:
           allOf:
             - $ref: "#/components/schemas/BenchmarkWindow"
             - type: object
-              required:
-                [configured, tracked_sales, attributed_revenue_cents, currency, conversions]
+              required: [configured, tracked_sales, attributed_revenue_cents, currency, conversions]
               properties:
                 configured: { type: boolean }
                 tracked_sales: { type: integer, nullable: true }
@@ -3043,8 +3054,7 @@ components:
         Read `null` as "not known", never as zero — see the operation
         description for each of the four unknowns and why a fabricated zero
         would be worse than an absent number in every one of them.
-      required:
-        [range, inputs, coverage_known, roster_known, low_confidence, cells]
+      required: [range, inputs, coverage_known, roster_known, low_confidence, cells]
       properties:
         range:
           type: object

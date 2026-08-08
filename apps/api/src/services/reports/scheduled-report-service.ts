@@ -34,6 +34,15 @@ export interface ScheduledExportInput {
   createdByAgentId?: string;
 }
 
+/** Every field optional; only what is supplied changes. */
+export interface ScheduledExportPatch {
+  group?: string;
+  frequency?: ScheduledExportFrequency;
+  format?: 'csv';
+  recipients?: string[];
+  enabled?: boolean;
+}
+
 interface ScheduledReportRow {
   id: string;
   groupId: string;
@@ -84,6 +93,86 @@ export class ScheduledReportService {
       },
     });
     return toDto(created);
+  }
+
+  /**
+   * One definition by id.
+   *
+   * Scoped by licence in the `where` even though RLS already narrows the table:
+   * belt and braces, and it makes the miss a `not found` rather than a row this
+   * code would otherwise have had to check afterwards. Another tenant's id is
+   * indistinguishable from an id that never existed — a 403 would confirm the
+   * schedule is real, which is itself something one workspace should not learn
+   * about another.
+   */
+  async get(tx: TenantClient, tenant: TenantContext, id: string): Promise<ScheduledExport> {
+    const row = await tx.scheduledReport.findFirst({
+      where: { id, licenseId: tenant.licenseId },
+    });
+    if (!row) throw ApiError.notFound('Scheduled export not found.');
+    return toDto(row);
+  }
+
+  /**
+   * Edit a definition. Only the supplied fields change.
+   *
+   * Every value that can be changed is re-validated exactly as `create`
+   * validates it: a new `group` against the catalogue, a new `recipients` list
+   * against the licence's roster. This is not defensive duplication — the roster
+   * check is the boundary that keeps report data inside the workspace, and a
+   * PATCH that skipped it would reopen the leak `create` closes, since anyone
+   * who can create a schedule can immediately edit it.
+   */
+  async update(
+    tx: TenantClient,
+    tenant: TenantContext,
+    id: string,
+    patch: ScheduledExportPatch,
+  ): Promise<ScheduledExport> {
+    const existing = await tx.scheduledReport.findFirst({
+      where: { id, licenseId: tenant.licenseId },
+    });
+    if (!existing) throw ApiError.notFound('Scheduled export not found.');
+
+    const data: {
+      groupId?: string;
+      frequency?: string;
+      format?: string;
+      recipients?: string[];
+      enabled?: boolean;
+    } = {};
+
+    if (patch.group !== undefined) {
+      const group = reportGroup(patch.group);
+      if (!group) throw ApiError.validation(`group: unknown report group: ${patch.group}.`);
+      data.groupId = group.id;
+    }
+    if (patch.frequency !== undefined) data.frequency = patch.frequency;
+    if (patch.format !== undefined) data.format = patch.format;
+    if (patch.recipients !== undefined) {
+      data.recipients = await resolveRecipients(tx, tenant, patch.recipients);
+    }
+    if (patch.enabled !== undefined) data.enabled = patch.enabled;
+
+    const updated = await tx.scheduledReport.update({ where: { id }, data });
+    return toDto(updated);
+  }
+
+  /**
+   * Cancel a definition.
+   *
+   * `deleteMany` with the licence in the filter rather than `delete` by id: a
+   * delete keyed on the primary key alone would reach across tenants if RLS were
+   * ever misconfigured, and the zero-row result is exactly the `not found` this
+   * wants to answer. The definition's runs go with it through the composite FK's
+   * cascade (07.9-sched-a) — a cancelled schedule leaves no orphaned history
+   * pointing at a definition nobody can read.
+   */
+  async remove(tx: TenantClient, tenant: TenantContext, id: string): Promise<void> {
+    const { count } = await tx.scheduledReport.deleteMany({
+      where: { id, licenseId: tenant.licenseId },
+    });
+    if (count === 0) throw ApiError.notFound('Scheduled export not found.');
   }
 }
 

@@ -567,6 +567,106 @@ scheduledExports:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+scheduledExport:
+  parameters:
+    - name: scheduledExportId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Reports]
+    operationId: getScheduledExport
+    summary: One scheduled export definition
+    description: |
+      The definition behind an id. Same shape the list returns, and the same
+      scope: it carries the mailboxes the report is delivered to.
+
+      An id belonging to another license answers 404, not 403 — a 403 would
+      confirm the schedule exists, and that alone tells one workspace something
+      about another's.
+    responses:
+      "200":
+        description: The scheduled export
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScheduledExport" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Reports]
+    operationId: updateScheduledExport
+    summary: Change a scheduled export's group, cadence, recipients or state
+    description: |
+      Only the fields supplied change; an empty body is a 400 rather than a
+      no-op, so a client that sent nothing hears about it.
+
+      Every value goes through the same gate `POST /reports/scheduled-exports`
+      applies. A changed `group` is resolved against the report catalogue, and a
+      changed `recipients` list must still be mailboxes of active agents on this
+      license — otherwise editing a schedule would be a way around the boundary
+      creating one respects, and the validation would only ever hold on the
+      surface nobody has to use twice.
+
+      `enabled: false` is the pause: the scheduler stops picking the definition
+      up, and the delivery history is kept. To remove it outright, use DELETE.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            description: At least one field. Unsupplied fields keep their current value.
+            properties:
+              group:
+                type: string
+                description: A report group id, from the same catalogue create accepts.
+              frequency: { $ref: "../openapi.yaml#/components/schemas/ScheduledExportFrequency" }
+              format:
+                type: string
+                enum: [csv]
+              recipients:
+                type: array
+                minItems: 1
+                maxItems: 20
+                items: { type: string, format: email }
+                description: Replaces the list. Mailboxes of active agents on this license.
+              enabled:
+                type: boolean
+                description: "`false` pauses delivery without discarding the definition."
+    responses:
+      "200":
+        description: The updated scheduled export
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScheduledExport" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Reports]
+    operationId: deleteScheduledExport
+    summary: Cancel a scheduled export
+    description: |
+      Cancels the schedule for good: the definition is removed and never runs
+      again, and its delivery history goes with it. To stop deliveries while
+      keeping the definition and its history, PATCH `enabled: false` instead.
+    responses:
+      "204": { description: Cancelled }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 subscription:
   get:
     tags: [Billing]

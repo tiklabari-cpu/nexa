@@ -1,17 +1,22 @@
 /**
- * Scheduled report exports — list and create (PRD §5.3-Reports).
+ * Scheduled report exports — list, create, read, edit and cancel
+ * (PRD §5.3-Reports).
  *
  * Kept out of `reports.ts` because it is a different kind of surface: every
  * other `/reports/*` route is a synchronous read that answers "what happened in
  * this window", while these define background work that mails data out later.
  *
- * Both operations take `reports_manage` — the write scope this slice adds —
- * rather than the read-only `reports_read`. Creating a schedule is plainly a
- * mutation; listing takes the same scope because a definition carries the
- * mailboxes its reports go to, so the list answers "who receives our numbers",
- * which belongs to managing the schedules rather than to reading a report. Only
- * `ADMIN_SCOPES` carries it, so an ordinary agent token is refused at the guard
- * (FR-MOD-07.7 "permission-based visibility").
+ * Every operation takes `reports_manage` — the write scope this slice adds —
+ * rather than the read-only `reports_read`. Creating, editing and cancelling a
+ * schedule are plainly mutations; the two reads take the same scope because a
+ * definition carries the mailboxes its reports go to, so reading one answers
+ * "who receives our numbers", which belongs to managing the schedules rather
+ * than to reading a report. Only `ADMIN_SCOPES` carries it, so an ordinary agent
+ * token is refused at the guard (FR-MOD-07.7 "permission-based visibility").
+ *
+ * That applies to the by-id read as much as to the list: it returns the same
+ * DTO, recipients included, so gating it on `reports_read` would hand the read
+ * scope the very thing the list refuses it.
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -20,6 +25,7 @@ import { isAgent } from '../services/auth/principal.js';
 import {
   ScheduledReportService,
   type ScheduledExportInput,
+  type ScheduledExportPatch,
 } from '../services/reports/scheduled-report-service.js';
 
 /**
@@ -42,6 +48,27 @@ const createBody = z
     enabled: z.boolean().optional(),
   })
   .strict();
+
+/**
+ * The same pieces as `createBody`, each optional — the validation a value has to
+ * survive must not depend on which verb carried it.
+ *
+ * `.refine` rejects the empty body: a PATCH that changes nothing is a client
+ * that meant to change something and sent the wrong keys, and answering 200 to
+ * it would hide the bug behind an unchanged definition.
+ */
+const updateBody = z
+  .object({
+    group: createBody.shape.group.optional(),
+    frequency: createBody.shape.frequency.optional(),
+    format: createBody.shape.format,
+    recipients: createBody.shape.recipients.optional(),
+    enabled: createBody.shape.enabled,
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+const scheduledExportIdSchema = z.string().uuid();
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -88,6 +115,51 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
 
       const created = await request.withTenant((tx) => schedules.create(tx, tenant, input));
       return reply.status(201).send(created);
+    },
+  );
+
+  app.get<{ Params: { scheduledExportId: string } }>(
+    '/reports/scheduled-exports/:scheduledExportId',
+    { config: { scopes: ['reports_manage'] } },
+    async (request, reply) => {
+      const id = parse(scheduledExportIdSchema, request.params.scheduledExportId);
+      const tenant = request.tenant();
+      const schedule = await request.withTenant((tx) => schedules.get(tx, tenant, id));
+      return reply.send(schedule);
+    },
+  );
+
+  app.patch<{ Params: { scheduledExportId: string } }>(
+    '/reports/scheduled-exports/:scheduledExportId',
+    { config: { scopes: ['reports_manage'] } },
+    async (request, reply) => {
+      const id = parse(scheduledExportIdSchema, request.params.scheduledExportId);
+      const body = parse(updateBody, request.body);
+      const tenant = request.tenant();
+
+      // Spread rather than assign each key: an explicit `undefined` would read
+      // as "clear this field" to the service, which is not what "absent" means.
+      const patch: ScheduledExportPatch = {
+        ...(body.group === undefined ? {} : { group: body.group }),
+        ...(body.frequency === undefined ? {} : { frequency: body.frequency }),
+        ...(body.format === undefined ? {} : { format: body.format }),
+        ...(body.recipients === undefined ? {} : { recipients: body.recipients }),
+        ...(body.enabled === undefined ? {} : { enabled: body.enabled }),
+      };
+
+      const updated = await request.withTenant((tx) => schedules.update(tx, tenant, id, patch));
+      return reply.send(updated);
+    },
+  );
+
+  app.delete<{ Params: { scheduledExportId: string } }>(
+    '/reports/scheduled-exports/:scheduledExportId',
+    { config: { scopes: ['reports_manage'] } },
+    async (request, reply) => {
+      const id = parse(scheduledExportIdSchema, request.params.scheduledExportId);
+      const tenant = request.tenant();
+      await request.withTenant((tx) => schedules.remove(tx, tenant, id));
+      return reply.status(204).send();
     },
   );
 }

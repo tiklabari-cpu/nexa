@@ -3438,6 +3438,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/scheduled-exports/{scheduledExportId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scheduledExportId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * One scheduled export definition
+     * @description The definition behind an id. Same shape the list returns, and the same
+     *     scope: it carries the mailboxes the report is delivered to.
+     *
+     *     An id belonging to another license answers 404, not 403 — a 403 would
+     *     confirm the schedule exists, and that alone tells one workspace something
+     *     about another's.
+     */
+    get: operations['getScheduledExport'];
+    put?: never;
+    post?: never;
+    /**
+     * Cancel a scheduled export
+     * @description Cancels the schedule for good: the definition is removed and never runs
+     *     again, and its delivery history goes with it. To stop deliveries while
+     *     keeping the definition and its history, PATCH `enabled: false` instead.
+     */
+    delete: operations['deleteScheduledExport'];
+    options?: never;
+    head?: never;
+    /**
+     * Change a scheduled export's group, cadence, recipients or state
+     * @description Only the fields supplied change; an empty body is a 400 rather than a
+     *     no-op, so a client that sent nothing hears about it.
+     *
+     *     Every value goes through the same gate `POST /reports/scheduled-exports`
+     *     applies. A changed `group` is resolved against the report catalogue, and a
+     *     changed `recipients` list must still be mailboxes of active agents on this
+     *     license — otherwise editing a schedule would be a way around the boundary
+     *     creating one respects, and the validation would only ever hold on the
+     *     surface nobody has to use twice.
+     *
+     *     `enabled: false` is the pause: the scheduler stops picking the definition
+     *     up, and the delivery history is kept. To remove it outright, use DELETE.
+     */
+    patch: operations['updateScheduledExport'];
+    trace?: never;
+  };
   '/billing/subscription': {
     parameters: {
       query?: never;
@@ -12444,6 +12492,99 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getScheduledExport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scheduledExportId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The scheduled export */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduledExport'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteScheduledExport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scheduledExportId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Cancelled */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateScheduledExport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scheduledExportId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description A report group id, from the same catalogue create accepts. */
+          group?: string;
+          frequency?: components['schemas']['ScheduledExportFrequency'];
+          /** @enum {string} */
+          format?: 'csv';
+          /** @description Replaces the list. Mailboxes of active agents on this license. */
+          recipients?: string[];
+          /** @description `false` pauses delivery without discarding the definition. */
+          enabled?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description The updated scheduled export */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduledExport'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

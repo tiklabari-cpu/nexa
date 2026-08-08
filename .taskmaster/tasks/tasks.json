@@ -4375,13 +4375,13 @@
             "description": "Kontrat+backend aynı pencerede (parity çift yönlü). `reports.yaml`'a `scheduledExportRuns` bloğu: `get`, `scheduledExportId` path parametresi + `limit` query (varsayılan 20, üst sınır 100), `reports_read` kapısı; `openapi.yaml`'a `ScheduledExportRun` şeması (`period_key`, `period_from`, `period_to`, `status`, `row_count`, `recipient_count`, `error`, `created_at`). Route: `request.withTenant` altın",
             "details": "07.9-sched-g — Teslim geçmişi okuması: kontrat + `GET /reports/scheduled-exports/{id}/runs`  [OPUS-XHIGH]\n\nPRD: §5.3-Reports (FR-MOD-07.7 uzantısı) + NFR-M5\nETİKET GEREKÇESİ: OPUS-XHIGH: kullanıcının açık kuralı gereği 'yeni bir yetkili endpoint eklemek' en az OPUS-XHIGH — salt-okunur olsa bile yeni bir authZ kapısı (`reports_read`) + tenant-scoped okuma yüzeyi açıyor ve id başka lisansa aitse 404 (403 değil) verme kararını taşıyor. Yeni scope/eşzamanlılık/algoritma yok → MAX değil.\nNEDEN AÇIK: -e her çalışma için `scheduled_report_runs`'a satır yazıyor (delivered/failed), ama bu satırları okuyan hiçbir yüzey yok — `packages/contract/openapi/paths/reports.yaml`'da id'li runs path'i tanımlı değil ve `apps/api/src/routes/` altında karşılığı yok. Kayıt tutulup okunamıyorsa NFR-M5'in gözlemlenebilirlik payı ölü kalır; UI (-h) 'son çalışma ne oldu?' sorusunu cevaplayamaz.\nKAPSAM: Kontrat+backend aynı pencerede (parity çift yönlü). `reports.yaml`'a `scheduledExportRuns` bloğu: `get`, `scheduledExportId` path parametresi + `limit` query (varsayılan 20, üst sınır 100), `reports_read` kapısı; `openapi.yaml`'a `ScheduledExportRun` şeması (`period_key`, `period_from`, `period_to`, `status`, `row_count`, `recipient_count`, `error`, `created_at`). Route: `request.withTenant` altında önce tanımın varlığı doğrulanır (yoksa/başka lisanssa 404 — varlık sızdırmaz, `ticket-rules.ts` deseni), sonra `createdAt desc` sıralı basit sayfa döner. `error` alanı -e'de zaten sanitize edilerek yazıldığı için burada olduğu gibi döner (alıcı adresi ya da secret taşımaz).\nDOSYALAR: packages/contract/openapi/paths/reports.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/routes/scheduled-reports.ts · apps/api/src/services/reports/scheduled-report-service.ts · apps/api/test/integration/scheduled-reports.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/ticket-rules.ts (id'li alt kaynak okuması + withTenant + 404 semantiği) · packages/contract/openapi/paths/webhooks.yaml (path parametreli alt kaynak bloğu) · apps/api/src/routes/reports.ts (satır ~931 `GET /billing/invoices` — türetilmiş liste dönen salt-okunur endpoint)\nKK (birebir): \"FR-MOD-07.7 KK (PRD satır 591, birebir): \"İzin bazlı görünürlük; export; benchmark karşılaştırma\" — bu alt-göreve düşen pay: \"İzin bazlı görünürlük\" (teslim geçmişi de aynı izin kapısından geçer).\" | \"KK-türetilmiş: \"Bir zamanlanmış export'un her çalışması — teslim edilen ve başarısız olan — sahibi tarafından dönemi, durumu ve hata nedeniyle birlikte görülebilir.\" — Türetme gerekçesi: PRD §5.3'te Kabul Kriteri sütunu yok; kriter NFR-M5'in webhook tarafındaki karşılığından ('her webhook teslimi/retry loglanır' + `WebhookDelivery` tablosunun okunabilir olması) zamanlanmış teslime uyarlandı.\"\nKK DOĞRULAMA: `scheduled-reports.test.ts`: (i) sweep sonrası `GET .../runs` teslim edilen dönemi `status='delivered'` + `row_count` ile döndürür; (ii) başarısız çalışma `status='failed'` + `error` dolu döner → türetilmiş görünürlük KK'sı; (iii) `reports_read` taşımayan token → 403 → 'İzin bazlı görünürlük'; (iv) B lisansı A'nın tanımının runs'ını isterse 404; (v) `limit` üst sınırını aşan değer → 400. `contract-parity.test.ts` yeşil.\nKAPSAM DIŞI: Çalışmayı elle yeniden tetikleyen endpoint (retry — açık soru #3) · Teslim edilmiş CSV'yi endpoint'ten yeniden indirme (CSV saklanmıyor; yalnız posta kutusunda) · UI gösterimi (-h) · Keyset sayfalama (basit limit yeterli — geçmiş küçük)\nSÖZLEŞME: EVET. `reports.yaml` içine `scheduledExportRuns` bloğu (`get`) + `openapi.yaml` components'e `ScheduledExportRun` şeması. OpenAPI'ye eklenip re-bundle edilmezse `contract-parity.test.ts` KIRILIR; çift yönlü olduğu için route'suz kontrat da kırar → aynı pencerede.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (ÖNCE): `reports_read` taşımayan token → 403 · negatif: olmayan tanım id'si → 404 · negatif: `limit` üst sınırı aşılırsa → 400 · cross-tenant (zorunlu): başka lisansın tanımının runs'ı → 404 (403 değil — varlık sızdırmaz) · integration: sweep koş → runs listesi beklenen alanlarla ve `created_at desc` sırasıyla döner · contract: `contract-parity.test.ts` yeşil (bundle + route birlikte)",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               3,
               6
             ],
             "parentId": "94",
-            "updatedAt": "2026-08-08T08:17:08.891Z"
+            "updatedAt": "2026-08-08T08:37:28.488Z"
           },
           {
             "id": 9,
@@ -4415,7 +4415,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T08:17:08.891Z",
+        "updatedAt": "2026-08-08T08:37:28.488Z",
         "complexity": 9,
         "recommendedSubtasks": 10,
         "expansionPrompt": "\"07.9 — Zamanlanmış (scheduled) rapor export  ·  dilim V2-4\" görevini 10 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5011,7 +5011,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T08:17:08.891Z",
+      "lastModified": "2026-08-08T08:37:28.488Z",
       "taskCount": 103,
       "completedCount": 84,
       "tags": [

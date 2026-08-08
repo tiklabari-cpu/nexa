@@ -13,6 +13,78 @@
 
 ## Task log (newest-first)
 
+### tm 94.6 — 07.9-sched-e · zamanlayıcı çekirdeği: dönem hesabı + tek-teslim claim + tenant-scoped sweep — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - Yeni saf modül `apps/api/src/services/reports/scheduled-report-period.ts` —
+    `periodFor(frequency, now) → { periodKey, from, to }`, her zaman **önceki tam** dönem, hepsi UTC:
+    daily = dün `00:00:00.000Z`–`23:59:59.999Z`, weekly = geçen ISO haftası (Pzt–Paz), monthly = geçen
+    ay. Anahtar yalnız sıklıktan türetilir — koşu anı yalnız *hangi* dönem olduğunu seçer, etikete
+    hiç sızmaz; iki sweep aynı anahtarı üretmezse ikincisi aynı raporu tekrar postalar. Üretilen
+    biçimler `scheduled_report_runs_period_key_check`'in üç şekliyle birebir (`2026-08-07`,
+    `2026-W31`, `2026-07`). ISO haftası **hafta-numaralama yılıyla** etiketlenir (Perşembe kuralı):
+    `2026-W53` = 2026-12-28..2027-01-03, `2030-W01` = 2029-12-31..2030-01-06 — takvim yılı kullanılsa
+    iki farklı hafta tek anahtara çakışır, o rapor bir daha hiç teslim edilmezdi.
+  - Yeni `apps/api/src/services/reports/scheduled-report-sweeper.ts` —
+    `ScheduledReportSweeper(db, mailer).run({ now })`. `retention_list_tenants()` (tek SECURITY
+    DEFINER enumerator, `retention.ts`/`chat-timeout.ts` ile paylaşılan) ile tenant listesi; her
+    tenant için `withTenant` — okuma, CSV üretimi ve yazmaların HEPSİ RLS altında, çapraz-kiracı
+    muhafızı budur. Akış: `enabled` tanımlar → dönem → **claim** → CSV → e-posta → run satırını kapat.
+  - **Claim teslimden önce**: `scheduled_report_runs`'a `pending` INSERT; Prisma `P2002` "bu dönem
+    zaten alındı" demektir ve sessizce `skipped` sayılır (hata değil). INSERT'in kendisi testtir —
+    `findFirst`-sonra-`create` iki eşzamanlı sweep'in ikisini de "satır yok" görüp göndermeye
+    bırakırdı. Claim **kendi transaction'ında** commit edilir: teslim hatasıyla birlikte geri
+    alınsaydı dönem serbest kalır, sonraki koşu aynı raporu tekrar postalardı.
+  - Teslim: `buildGroupCsv` (-d2) + `toCsv` → `buildScheduledReportMail` (-d1) →
+    **alıcı başına ayrı** `Mailer.send({ kind: 'scheduled_report' })` (birleşik alıcı başlığı her
+    alıcıya diğerlerinin kim olduğunu söylerdi). Kapanış: run satırı `sent`/`failed` +
+    `rowCount`/`recipientCount`/sanitize edilmiş `error` (tek satıra indirgenmiş, 500 karakterle
+    sınırlı); `scheduled_reports.last_run_at` yalnız başarıda ilerler. Başarısız satır **silinmez** —
+    dönem tüketilmiş sayılır (retry/backoff v1 dışı, varsayım #11); satırın DELETE grant'i de yok.
+  - Rapor şekli `ChatTimeoutReport` ile hizalı: `{ startedAt, finishedAt, tenants[], totals: {
+    tenants, delivered, skipped, failed } }`; tenant başına `deliveries[]` her tanımın sonucunu
+    (grup, dönem anahtarı, durum, alıcı/satır sayısı, hata) taşır. `now` ve `Mailer` enjekte edilir.
+  - Testler: `scheduled-report-period.test.ts` (17, saf/DB'siz) + `test/integration/
+    scheduled-reports-sweep.test.ts` (12).
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **1896/1896** (90 dosya, +2 yeni
+  dosya / +29 test) · `pnpm -w test:integration` → **1441/1441** (61 dosya, +1 yeni / +12 test) ·
+  `pnpm -w build` 0 · `pnpm -w db:check-drift` → "no drift" · değişen dosyalarda `prettier --check` 0 ·
+  `reports.spec.ts` (e2e, bu alanın kapsadığı akış) **10/10** yeşil. Task'ın KK doğrulaması birebir
+  karşılandı: (i) idempotens — aynı `now` ile iki sweep → posta kutusunda TAM 1 `scheduled_report`
+  dosyası, ikinci raporda `skipped=1`, tabloda 1 satır; (ii) cross-tenant — iki lisans, her biri
+  kendi alıcısına kendi CSV'sini alır ve **karşı tarafın ajan adını içermez**; (iii) hata yolu —
+  mailer fırlatınca satır `failed` + `error` dolu, üçüncü koşu yine göndermez; (iv) `enabled=false`
+  → ne posta ne run satırı; (v) `periodFor` UTC sınırları (saf unit).
+- **Testlerin boş geçmediği kanıtlandı:** claim'in `P2002` dalı geçici olarak bozuldu (null yerine
+  sahte id döndürüldü) → tek-teslim garantisini taşıyan ÜÇ test (ikinci sweep, eşzamanlı sweep,
+  hata-sonrası retry) kırmızıya döndü, diğer 9'u yeşil kaldı; mutasyon geri alındı.
+- **Varsayımlar:**
+  - `to` dönemin **son anı** (kapalı aralık, `…T23:59:59.999Z`), dışlayıcı bir sonraki-dönem başlangıcı
+    değil: rapor sorgularının hepsi `created_at >= from AND created_at <= to` (bkz. `report-csv.ts`),
+    dışlayıcı uç sınır satırını art arda iki döneme birden yazardı. Bunun bedeli, `timestamptz(6)`
+    mikrosaniye çözünürlüğünde gün sınırındaki son 999 mikrosaniyenin hiçbir döneme düşmemesi — JS
+    `Date` ve bu sistemin yazdığı her damga milisaniye çözünürlüğünde olduğu için pratikte erişilemez.
+  - Bir tanım oluşturulduğu anda **en son tamamlanmış dönem** hâlâ teslim edilir (tanım o dönemden
+    sonra tanımlanmış olsa bile). Basit ve "zamanlama çalışıyor" teyidi verir; tanımlanma tarihinden
+    öncesini elemek ayrı bir kural olurdu ve task tanımında yok.
+  - Run satırı `pending` bırakılıp süreç ölürse dönem tüketilmiş kalır (teslim yok, satır `pending`).
+    Retry v1 dışı olduğu için bilinçli: alternatif (satırı silmek) "hiç gitmedi" ile "gitti, kayıt
+    yazılamadı"yı ayırt edemez ve yanıldığı her seferde çift e-posta üretirdi. Açık soru #3.
+  - Katalogda olmayan bir gruba işaret eden tanım da önce dönemi claim eder, sonra `failed` olur —
+    "her çalışma bir kayıt satırı bırakır" KK'sı bunu gerektiriyor. Rota (-b/-c) grup adını yazma
+    anında doğruladığı için yalnız katalog küçülürse erişilebilir.
+- **Sonraki pencereye not:**
+  - `-f` (CLI + npm script) doğrudan bunun üstüne oturur: `chat-timeout-run.ts` deseni —
+    `new ScheduledReportSweeper(db, new FileMailer(env.MAIL_DIR)).run()` + JSON rapor yazdır.
+    Dikkat: bu sweep'in `dry-run`'ı YOK ve olamaz — claim yazmadan teslim edilemez; "dry-run"
+    istenirse anlamı "hangi tanımlar hangi dönemi alacaktı" listesi olur, gönderim değil.
+  - `-g` (teslim geçmişi ucu) `scheduled_report_runs`'ı okuyacak; alanlar burada dolduruldu
+    (`status`/`period_key`/`period_from`/`period_to`/`row_count`/`recipient_count`/`error`).
+  - `run-loop.sh`'te bu pencereden ÖNCE de duran, bu task'la ilgisiz bir değişiklik var (deneme
+    sayacı + blocked görevleri yeniden seçme). tm 94.3'ten beri olduğu gibi kapsam dışı bırakıldı
+    (CONVENTIONS §5); çalışma alanında duruyor.
+
 ### tm 94.5 — 07.9-sched-d2 · rapor CSV üretimini paylaşılan `services/reports/report-csv.ts`'e çıkar — done — 2026-08-08 UTC
 
 - **Yapıldı:**

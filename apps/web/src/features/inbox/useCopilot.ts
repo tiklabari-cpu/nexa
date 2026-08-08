@@ -27,6 +27,19 @@ export interface CopilotEnhanced {
   mode: EnhanceMode;
 }
 
+export type CopilotBiKind = 'metric' | 'no_data' | 'not_understood';
+
+export interface CopilotBiAnswer {
+  answer: string;
+  kind: CopilotBiKind;
+  /** Dotted Overview report field `answer` quotes, e.g. `totals.chats`. Null unless `kind` is `metric` or `no_data`. */
+  metric: string | null;
+  /** Same figure `GET /reports/overview` returns for this window. Null unless `kind` is `metric`. */
+  value: number | null;
+  /** The window `value` was computed over. Null unless `kind` is `metric`. */
+  range: { from: string; to: string } | null;
+}
+
 /** Summarise the conversation into an internal note (12.3 / 02.5). */
 export function useCopilotSummary(chatId: string) {
   const api = useApiClient();
@@ -55,5 +68,19 @@ export function useCopilotEnhance(chatId: string) {
   return useMutation({
     mutationFn: (input: { text: string; mode: EnhanceMode }) =>
       api.post<CopilotEnhanced>(`/copilot/chats/${chatId}/enhance`, input),
+  });
+}
+
+/**
+ * Answer a report/metric question about the workspace (12.4, the BI command).
+ *
+ * Account-wide and context-free, unlike the other three assists: the endpoint
+ * takes no `chatId` (ADR-09 — it reads the same figure `GET /reports/overview`
+ * would, never a number of its own), so this hook does not either.
+ */
+export function useCopilotBi() {
+  const api = useApiClient();
+  return useMutation({
+    mutationFn: (question: string) => api.post<CopilotBiAnswer>('/copilot/bi', { question }),
   });
 }

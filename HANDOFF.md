@@ -13,6 +13,52 @@
 
 ## Task log (newest-first)
 
+### tm 96.4 — 12.4-bi-d · CopilotPanel'de BI soru girişi + cevap kartı — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/inbox/useCopilot.ts` — `useCopilotBi()`: `POST /copilot/bi` çağıran
+    yeni bir mutation hook, diğer üç Copilot hook'undan farklı olarak **`chatId` almaz** — uç
+    hiçbir konuşmaya dokunmuyor (96.3'ün notu: kontratta `chatId` yok, ADR-09 account-wide).
+    `CopilotBiAnswer` tipi kontratın beş alanını (`answer`,`kind`,`metric`,`value`,`range`)
+    birebir yansıtır.
+  - `apps/web/src/features/inbox/CopilotPanel.tsx` — panelin sonuna "Ask about your reports"
+    bölümü: metin girdisi + gönder (`<form onSubmit>`, boş soru gönderilmez). Cevap
+    `BiAnswerCard` içinde render edilir — üç durum: **pending** → `Skeleton` (üç bar,
+    `aria-hidden`, mevcut `apps/web/src/components/Skeleton.tsx`'ten, palette'in
+    `AiAnswerCard`'ıyla aynı desen); **hata** → `role="alert"` "Could not get an answer — try
+    again." (sessiz yutulmaz — KK doğrudan bunu istiyor); **`kind==='metric'`** → tam kart:
+    `value` (`metric==='satisfaction.score'` ise `formatRate`, aksi hâlde `formatCount` —
+    ReportsPage'in aynı iki alanı nasıl formatladığının tekrarı), ham `metric` alan yolu bir
+    etiket rozetinde, `range.from`–`range.to` `formatDate` ile, ve **kaynak şeffaflığı**: sabit
+    "Source: Reports → Overview" satırı. Diğer iki `kind` (`no_data`/`not_understood`) bu
+    turda yalnız `answer` cümlesini düz metin gösterir — kendi empty-state'i (KAPSAM DIŞI)
+    12.4-bi-e'nin işi.
+  - Ask alanı `chatActive`'e bağlı DEĞİL (diğer üç assist'in aksine) — BI komutu bu
+    konuşmaya değil hesaba özgü; arşivlenmiş bir konuşmadan da sorulabilir olması bilinçli.
+  - Testler: `CopilotPanel.test.tsx`'e 5 yeni test (soru gönderimi doğru gövdeyle çağırıyor,
+    value+metric+range+kaynak render, yükleniyor→skeleton, istek hatası görünür).
+- **Doğrulama** (hepsi ön planda, exit code'larla) — **tamamı yeşil:** `pnpm -w typecheck` **0**
+  (11/11) · `pnpm -w lint` **0** (8/8) · `npx turbo run test --filter='!@nexa/e2e'
+  --concurrency=1` — api 1958/1958, web 720/720 (+5 yeni), diğer paketler yeşil · `pnpm -w
+  test:integration` — 1491/1491 · `pnpm -w build` **0** (7/7) · `pnpm -w test:e2e` — **84/84**
+  (`.env` kaynaklanarak — 96.3'ün notu geçerliliğini koruyor).
+- **Varsayımlar:**
+  - **Metrik etiketi ham alan yolu** (`totals.closed` gibi), palette'in `AiAnswerCard`'ındaki
+    `Source: {metric_source}` biçimiyle aynı yaklaşım — insani bir isim eşleme tablosu bu
+    görevin kapsamında istenmedi (KK yalnız "`metric` etiketi" diyor), ve tek doğruluk kaynağı
+    contract'ın kendisi olduğundan bir eşleme tablosu ikinci bir yerde "totals.closed = Chats
+    closed" gibi bir çeviri sözlüğü demek olurdu.
+  - **"Source: Reports → Overview" sabit metin** — ADR-09 + 96.3'ün `answerBi` implementasyonu
+    gereği her `kind==='metric'` cevabı her zaman `buildOverviewReport`'tan okunuyor; bu yüzden
+    kaynak satırı koşullu değil, her zaman aynı.
+  - **`value` formatlaması metrik adına göre dallanıyor** (`satisfaction.score` → rate, diğerleri
+    → count) — kontratta bir birim alanı yok; ReportsPage'in aynı iki Overview alanını nasıl
+    gösterdiğinin (07.3.2/07.8) sabit karşılığı.
+- **Sonraki pencereye not:** **12.4-bi-e** artık gerçek bir UI'a bağlanabilir — `BiAnswerCard`'ın
+  `kind !== 'metric'` dalı şu an düz `answer` metni döndürüyor; bi-e bunu `no_data`/
+  `not_understood` için kendi empty-state bileşenine (örnek: palette'in `EmptyState` kullanımı)
+  çevirebilir. `useCopilotBi()` zaten hazır, yeniden çağrılmaz.
+
 ### tm 96.3 — 12.4-bi-c · BI endpoint çekirdeği (`POST /copilot/bi`) — done — 2026-08-08 UTC
 
 - **Yapıldı:**

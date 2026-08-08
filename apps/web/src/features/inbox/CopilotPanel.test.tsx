@@ -146,4 +146,113 @@ describe('CopilotPanel', () => {
       true,
     );
   });
+
+  describe('BI command — asking about reports (12.4-bi-d)', () => {
+    const QUESTION = 'How many chats closed this week?';
+
+    it('sends the question to POST /copilot/bi', async () => {
+      const { calls } = stubFetch({
+        '/copilot/bi': {
+          answer: 'Your team closed 12 chats this week.',
+          kind: 'metric',
+          metric: 'totals.closed',
+          value: 12,
+          range: { from: '2026-08-03T00:00:00.000Z', to: '2026-08-08T23:59:59.999Z' },
+        },
+      });
+      renderPanel();
+
+      await userEvent.type(screen.getByLabelText('Ask about your reports'), QUESTION);
+      await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
+
+      await waitFor(() => expect(screen.getByText('Your team closed 12 chats this week.')).toBeTruthy());
+      const call = calls.find((c) => c.path === '/copilot/bi');
+      expect(call?.method).toBe('POST');
+      expect(call?.body).toEqual({ question: QUESTION });
+    });
+
+    it('renders the value, the metric label and the window with its source (12.4)', async () => {
+      stubFetch({
+        '/copilot/bi': {
+          answer: 'Your team closed 12 chats this week.',
+          kind: 'metric',
+          metric: 'totals.closed',
+          value: 12,
+          range: { from: '2026-08-03T00:00:00.000Z', to: '2026-08-08T23:59:59.999Z' },
+        },
+      });
+      renderPanel();
+
+      await userEvent.type(screen.getByLabelText('Ask about your reports'), QUESTION);
+      await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
+
+      await waitFor(() => expect(screen.getByText('12')).toBeTruthy());
+      expect(screen.getByText('totals.closed')).toBeTruthy();
+      expect(screen.getByText('Source: Reports → Overview')).toBeTruthy();
+    });
+
+    it('shows a loading skeleton while the answer is in flight', async () => {
+      let resolveResponse!: (value: Response) => void;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          if (String(url).endsWith('/copilot/bi')) {
+            return new Promise<Response>((resolve) => {
+              resolveResponse = resolve;
+            });
+          }
+          return okJson({});
+        }),
+      );
+      renderPanel();
+
+      await userEvent.type(screen.getByLabelText('Ask about your reports'), QUESTION);
+      const askButton = screen.getByRole('button', { name: 'Ask' });
+      await userEvent.click(askButton);
+
+      // The skeleton is a visual courtesy, not content — it stays out of the
+      // accessibility tree while the request is in flight.
+      expect(screen.getByRole('button', { name: 'Asking…' })).toBeTruthy();
+      expect(screen.queryByText('Source: Reports → Overview')).toBeNull();
+
+      resolveResponse(
+        okJson({
+          answer: 'Your team closed 12 chats this week.',
+          kind: 'metric',
+          metric: 'totals.closed',
+          value: 12,
+          range: { from: '2026-08-03T00:00:00.000Z', to: '2026-08-08T23:59:59.999Z' },
+        }),
+      );
+      expect(
+        await screen.findByText('Your team closed 12 chats this week.'),
+      ).toBeTruthy();
+    });
+
+    it('shows an error rather than swallowing a failed request', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          if (String(url).endsWith('/copilot/bi')) {
+            return {
+              ok: false,
+              status: 500,
+              headers: { get: () => null },
+              json: async () => ({ error: { type: 'internal', message: 'boom', request_id: 'r1' } }),
+            } as unknown as Response;
+          }
+          return okJson({});
+        }),
+      );
+      renderPanel();
+
+      await userEvent.type(screen.getByLabelText('Ask about your reports'), QUESTION);
+      await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
+
+      expect(await screen.findByRole('alert')).toHaveProperty(
+        'textContent',
+        'Could not get an answer — try again.',
+      );
+    });
+  });
 });

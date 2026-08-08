@@ -28,15 +28,7 @@ import { useTranslate } from '../lib/i18n.js';
 import type { CustomerSummary } from '../features/customers/types.js';
 import type { ChatSummary, Ticket } from '../features/inbox/types.js';
 import { NAV_DESTINATIONS } from './navigation.js';
-
-interface Command {
-  id: string;
-  group: string;
-  label: string;
-  sub?: string;
-  icon: string;
-  run: () => void;
-}
+import type { PaletteResult } from './actions.js';
 
 const CUSTOMER_READ = ['customers:ro', 'customers:rw'];
 const TICKET_READ = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
@@ -144,11 +136,11 @@ export function CommandPalette(): ReactElement | null {
       .slice(0, 6);
   }, [chats.data, query, searching]);
 
-  const commands = useMemo<Command[]>(() => {
+  const commands = useMemo<PaletteResult[]>(() => {
     // Route filtering needs no network, so it tracks the raw input for an
     // instant response; only the record searches wait for the debounce.
     const routeNeedle = rawQuery.trim().toLowerCase();
-    const list: Command[] = [];
+    const list: PaletteResult[] = [];
 
     for (const dest of NAV_DESTINATIONS) {
       const label = t(dest.labelKey);
@@ -158,6 +150,7 @@ export function CommandPalette(): ReactElement | null {
         (dest.keywords ?? []).some((keyword) => keyword.includes(routeNeedle));
       if (!matches) continue;
       list.push({
+        kind: 'nav',
         id: `route:${dest.to}`,
         group: t('palette.group.goTo'),
         label,
@@ -172,6 +165,7 @@ export function CommandPalette(): ReactElement | null {
     if (searching) {
       for (const customer of customers.data?.items ?? []) {
         list.push({
+          kind: 'content',
           id: `customer:${customer.id}`,
           group: t('palette.group.customers'),
           label: customer.name ?? customer.email ?? customer.phone ?? t('palette.unnamedVisitor'),
@@ -186,6 +180,7 @@ export function CommandPalette(): ReactElement | null {
 
       for (const chat of chatMatches) {
         list.push({
+          kind: 'content',
           id: `chat:${chat.id}`,
           group: t('palette.group.conversations'),
           label: chat.customer_name ?? t('palette.visitor'),
@@ -200,6 +195,7 @@ export function CommandPalette(): ReactElement | null {
 
       for (const ticket of tickets.data?.items ?? []) {
         list.push({
+          kind: 'content',
           id: `ticket:${ticket.id}`,
           group: t('palette.group.tickets'),
           label: ticket.subject,

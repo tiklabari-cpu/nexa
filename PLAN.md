@@ -19,7 +19,7 @@
 | ------------------ | ---- | ------------------------------------ | ------------------------------ | :-----: |
 | **Faz 0 — MVP**    | §5.1 | 54 ✅ · 0 ◐ (§3) · gruplu-🔒 v1'e    | **51 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
 | Faz 1 — v1         | §5.2 | v1 payı teslim (Playbook+AI+omnichannel-MOCK+webhooks §1.3); Should çoğu ✅ · mobil 🔒 · 06.3.2-bulk→v2 | **20 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
-| **Faz 2 — v2**     | §5.3 | **📋 PLANLANDI, kod başlamadı** (2026-08-01). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: **11 ⬜ açık · 0 ◐ kısmi · 16 ✅ teslim · 3 ⛔ kapsam dışı** (7 faz çelişkisi PRD'den çözüldü). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: **23 açık kalemin hepsi ✅** | ⬜ AÇIK |
+| **Faz 2 — v2**     | §5.3 | **📋 PLANLANDI, kod başlamadı** (2026-08-01). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: **10 ⬜ açık · 0 ◐ kısmi · 17 ✅ teslim · 3 ⛔ kapsam dışı** (7 faz çelişkisi PRD'den çözüldü). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: **23 açık kalemin hepsi ✅** | ⬜ AÇIK |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı · orta derinlik (§6.1). 2026-08-01'de **13.7 mobil** buraya taşındı (§D60) · **08.9.6 IP allowlist** buradan v2'ye çıktı (§D61) | —                              |    —    |
 
 **Faz-0 kapandı (2026-07-31 · GL-3 · tm 87).** Kapanışı bloklayan 6 `Must ◐` kapatıldı: 01.3, 02.4,
@@ -1097,7 +1097,7 @@ gereği bu depodan yapılmaz.
 
 ### 5.0 v2 kalem envanteri (30 kalem — PRD'ye karşı sayıldı)
 
-**11 ⬜ açık · 0 ◐ kısmi · 16 ✅ teslim · 3 ⛔ kapsam dışı** — tablodan **sayılarak** (§1.2: bu sayılar elle yazılmaz).
+**10 ⬜ açık · 0 ◐ kısmi · 17 ✅ teslim · 3 ⛔ kapsam dışı** — tablodan **sayılarak** (§1.2: bu sayılar elle yazılmaz).
 7 kalem faz çelişkisi taşıyordu → hepsi bu turda PRD'den çözüldü (§D61/§D62).
 Açık 23 kalemin tamamı §5.2'de atomik bölündü.
 
@@ -1122,7 +1122,7 @@ Açık 23 kalemin tamamı §5.2'de atomik bölündü.
 | 09.2 | **100+ entegrasyon** (marketplace katalog genişlemesi) | v2 (§5.5 MOD-09) | ★ | ⬜ §5.5 matrisi: v1 `○ (15–20)` → v2 `○ (100+)`. v1'de 20 kart **teslim** (tm 51/52). İş = katalog + kataloğun **ölçeklendiğinin kanıtı** (arama/kategori/sayfalama). Hepsi MOCK. → §5.2 |
 | 09.3 | **API istek paketleri** (Essential/Pro/Pro+) | Could (v2) | | ⬜ Billing **teslim** üzerine (ADR-13 Stripe MOCK — gerçek ödeme yok, kota artışı gerçek). → §5.2 |
 | 09.4 | **Zapier/Make + Build-your-app** (partner/creator) | Could (v2) | | ⬜ Webhooks **teslim** (tm 34, HMAC+SSRF) üzerine. "700+ Zapier" = katalog/desen kanıtı. → §5.2 |
-| 01.1.3 | **⌘K command palette — AI komutları** | v2 (§5.5 MOD-01) | ★ | ⬜ §5.5 matrisi MOD-01 v2: `○ (AI komutları)`. Palet **teslim** MVP'de (tm 18). v2 payı = doğal-dil AI sorgu tipi + sonuç render + scope kapısı. → §5.2 |
+| 01.1.3 | **⌘K command palette — AI komutları** | v2 (§5.5 MOD-01) | ★ | ✅ §5.5 matrisi MOD-01 v2: `○ (AI komutları)`. Palet **teslim** MVP'de (tm 18). v2 payı = doğal-dil AI sorgu tipi + sonuç render + scope kapısı. **01.1.3-ai-a teslim** — statik aksiyon kataloğu + `PaletteResult` birleşik tipi: `ActionRecord`/`ActionDeps` (`apps/web/src/components/actions.ts`) — tek kayıt `toggle-accepting-chats` (dinamik `label()` mevcut `routing_status`'a göre Stop/Start metnini seçer, `requiredScope` hedef `PUT /agents/me/routing-status`'un kabul ettiği iki scope ile birebir, `run()` gerçek gövde — mevcut `useAuth().setRoutingStatus`'u çağırır, boş bırakılmadı ama palet henüz çağırmıyor) · `PaletteResult` (`kind: 'nav'|'content'|'action'|'ai'`) `CommandPalette.tsx`'in eski yerel `Command` tipinin yerini aldı (saf refactor — davranış değişmedi, yalnız `kind` eklendi) · test `actions.test.ts` (6) · regresyon `CommandPalette.test.tsx` değişmeden yeşil (6) · tm 95.1. **Açık:** scope kapısı (-b), tetikleme+optimistic+hata geri alma (-c), AI sorgu kontratı (-d), AI sorgu endpoint (-e), AI sorgu UI (-f), klavye/a11y (-g), uçtan uca kapanış (-h) → §5.2 |
 | 12.4 | **Copilot BI komut** (rapor/metrik sorusu → cevap) | v2 (§5.5 MOD-12) | ★ | ⬜ §5.5 matrisi MOD-12 v2: `○ (BI komut)`. Copilot **teslim** v1 (tm 36). ADR-09 tutarlılığı şart (aynı sorgu = aynı sayı). → §5.2 |
 | 13.2 | **Engage / Traffic** (gelişmiş filtre + ziyaretçi 360° panel) | Should (v2) | | ⬜ Faz-0'da ertelenen **03.1.1 kalan sekmeleri** (Supervised/Invited/Browsing) buraya dahil (§3.13 kararı). `visits` **teslim**. → §5.2 |
 | 13.3 | **Goals** — ziyaretçi→sohbet→dönüşüm hunisi | Should (v2) | | ⬜ `goals` tablosu **teslim** şemada ama **0 tüketici** (§8) — bu iş onu bağlar. → §5.2 |

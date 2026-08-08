@@ -13,6 +13,67 @@
 
 ## Task log (newest-first)
 
+### tm 95.1 — 01.1.3-ai-a · Statik aksiyon kataloğu (`actions.ts`) + `PaletteResult` birleşik tipi — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - Yeni `apps/web/src/components/actions.ts` — `NAV_DESTINATIONS`'ın ikizi statik katalog.
+    `ActionRecord` (`id`, `label(deps)`, `keywords[]`, `requiredScope[]`, `run(deps)`) +
+    `ActionDeps` (`agent`, `setRoutingStatus`) — deps enjekte edilir, global store burada
+    okunmaz, böylece modül DOM/store olmadan test edilebilir. Tek kayıt `ACTIONS`:
+    `toggle-accepting-chats` — `label()` mevcut `routing_status`'a göre "Stop"/"Start Accepting
+    Chats" döner (dinamik; -c'nin "etikete duruma göre değişir" KK'sını burada değil, palet
+    render ettiğinde karşılayacak), `requiredScope: ['agents--my:rw', 'agents--all:rw']` hedef
+    `PUT /agents/me/routing-status`'un (`agents.ts:155`) kabul ettiği scope çiftiyle birebir,
+    `run()` **gerçek gövde** — mevcut `useAuth().setRoutingStatus`'u ters durumla çağırır (boş
+    stub değil; yalnız palet henüz onu çağırmıyor — kapsam bilinçli olarak KAPSAM DIŞI, bkz.
+    01.1.3-ai-c).
+  - Aynı dosyada `PaletteResult` birleşik tipi (`kind: 'nav'|'content'|'action'|'ai'` +
+    ortak alanlar) — `CommandPalette.tsx`'in yerel `Command` arayüzünün yerini aldı. Palet iki
+    üretici döngüsü (rota atlama + müşteri/sohbet/ticket arama) artık `kind: 'nav'`/`kind:
+    'content'` damgalıyor; **davranış değişmedi**, saf refactor — hiçbir yeni sonuç tipi
+    render edilmiyor (aksiyon/AI sonuçları -b/-c/-f'nin işi).
+  - `apps/web/src/components/actions.test.ts` (6) — katalog kaydının dört alanı da dolu ·
+    `'stop accepting'` alt dizisi `toggle-accepting-chats`'i bulur (mevcut `NAV_DESTINATIONS`
+    substring-eşleşme deseniyle aynı) · `requiredScope` hedef endpoint'in scope çiftiyle birebir
+    · `label()` iki durumda da (accepting/not-accepting/agent yok) doğru metni döner · `run()`
+    çağrıldığında ters duruma geçer (mock `setRoutingStatus` ile, gerçek store yok) ·
+    `PaletteResult` birleşiminin dört `kind` değerinin de derlendiği + doldurulduğu.
+- **Doğrulama** (hepsi ön planda, exit code'larla — DoD tam sürüm):
+  `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → api **1921/1921** (değişmedi),
+  web **691/691** (685 → 691, +6 yeni) · `pnpm -w test:integration` 0 → **1466/1466**
+  (değişmedi — bu tur backend'e dokunmadı) · `pnpm -w build` 0 ·
+  `pnpm -w test:e2e` (`.env` source'lu) 0 → **82/82** (değişmedi, `command-palette.spec.ts`
+  dahil — mevcut nav/arama akışı refactor'dan etkilenmedi) · `apps/web/src/components/
+  CommandPalette.test.tsx` **değişmeden yeşil (6/6)** — refactor'ın davranışı bozmadığının
+  kanıtı, KK doğrulama gereği. `prettier --check` iki yeni dosyada 0 (`--write` ile
+  düzeltildi); `CommandPalette.tsx`'te prettier uyarısı var ama bu turdan ÖNCE de vardı
+  (git stash ile doğrulandı) — kapsam dışı, dokunulmadı.
+- **Varsayımlar:**
+  - `PaletteResult` düz bir arayüz (`kind` alanı literal birleşim, diğer alanlar ortak),
+    kind'e göre dallanan tam bir discriminated union DEĞİL. Bu turda hiçbir tüketici `kind`'e
+    göre daraltma yapmıyor (palet henüz action/ai üretmiyor); daha ağır bir union şimdi
+    gereksiz risk/karmaşıklık olurdu — ihtiyaç doğduğunda (-b/-f) genişletilebilir.
+  - `run()` ve `label()` `deps` parametresi alır (global store'u kendi okumaz) — böylece
+    `actions.test.ts` DOM/zustand olmadan çalışıyor; -c bu `deps`'i `useAuth()`'tan türetip
+    geçecek.
+  - `requiredScope` dizi (tekil değil) — hedef endpoint iki scope'tan herhangi birini kabul
+    ediyor (`agents--my:rw` VEYA `agents--all:rw`); -b'nin `has(allowed[])` deseniyle
+    (CommandPalette'in mevcut `CUSTOMER_READ`/`TICKET_READ`/`CHAT_READ` dizileri) tutarlı.
+- **Sonraki pencereye not:**
+  - PLAN.md §5.0 `01.1.3` satırı `⬜` → `✅` (§F.00 kalem kuralı gereği — bu ailenin ilk
+    alt-görevi, önceki `07.9-sched`/`09.4` ailelerindeki aynı desen: satır ilk teslimde ✅'a
+    döner, notta "Açık:" kalan alt-görevleri listeler). Faz-2 sayaçları güncellendi:
+    11⬜→10⬜, 16✅→17✅.
+  - Sıradaki: `01.1.3-ai-b` (scope kapısı — yetkisiz aksiyon listede görünmez), bağımlılığı
+    bu task. `-c` (tetikleme+optimistic) `-b`'ye bağımlı, ARDIŞIK olmalı (PLAN'daki
+    "bölünmeyen değil ama sıralı" notu — kapı olmadan tetikleme yazılırsa yetkisiz aksiyon
+    UI'da tetiklenebilir hale gelir).
+  - `run-loop.sh`'teki commit'siz değişiklik hâlâ çalışma alanında duruyor (94.10'dan beri
+    taşınan carry-over, kapsam disiplini gereği bu commit'e de alınmadı).
+  - Tam e2e koşusu `apps/e2e/kanit/*.png`'leri yeniden üretti; önceki pencerelerin deseniyle
+    bu commit'e dahil edildi (içerik aynı, yalnız zaman damgası değişti).
+
 ### tm 94.10 — 07.9-sched-i · Uçtan uca doğrulama: cross-tenant zinciri + tekrar-tetik idempotens regresyonu + e2e — done — 2026-08-08 UTC
 
 - **Yapıldı** (yeni kod yolu YOK — bu alt-görev yalnız doğrular; kusur çıksaydı ilgili alt-görevde

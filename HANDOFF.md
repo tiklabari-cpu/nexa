@@ -13,6 +13,71 @@
 
 ## Task log (newest-first)
 
+### tm 94.9 — 07.9-sched-h · Settings UI: "Scheduled exports" bölümü (liste + oluştur + iptal + son çalışma durumu) — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - Yeni `apps/web/src/features/settings/ScheduledExports.tsx` — Ticket rules / Ticket email
+    templates deseninin kopyası: `Section title="Scheduled exports"` + `Card`. Liste satırı rapor
+    grubu etiketini (`/reports/groups` eşlemesiyle), sıklığı, alıcı sayısını ve satır başına
+    `GET /reports/scheduled-exports/{id}/runs?limit=1`'den okunan son çalışma rozetini
+    (`StatusDot`: delivered/failed/hiç çalışmadı) gösterir. Boş durumda anlamlı `EmptyState`
+    (`title="No scheduled exports"`, boş dikdörtgen yok). `canEdit` altında oluşturma formu: grup
+    seçimi `/reports/groups`'tan (boş dönerse seçenek yok → `required` doğrulayıcı submit'i kilitli
+    tutar — İzin bazlı görünürlük), sıklık seçici, alıcı çoklu seçim `/agents`'tan (checkbox grubu,
+    en az biri seçilmeden submit pasif, T4-a form primitifi + alan-altı hata). Satır başına
+    iki-adımlı onaylı iptal ("Cancel" → "Confirm cancel"/"Keep") → `DELETE
+    /reports/scheduled-exports/{id}` + liste invalidate.
+  - `SettingsPage.tsx`: `canManageScheduledExports = scopes.includes('reports_manage')` +
+    `<ScheduledExports canEdit={canManageScheduledExports} />` bağlandı (import + JSX, iki satır).
+  - Tanımın kendisi (liste dahil) API'de `reports_manage`'e kapalı (-b/-c/-g'nin aynı gerekçesi: bir
+    tanım alıcı posta kutularını taşır). Bu yüzden `canEdit=false` yalnız formu/aksiyonları gizler;
+    scope eksikse gerçek 403 `list.error` → `ErrorNotice` olarak yüzeye çıkar — ayrı bir "salt-okunur
+    liste" yolu yok, çünkü API'nin kendisi böyle bir yol sunmuyor.
+  - Test: yeni `apps/web/src/features/settings/ScheduledExports.test.tsx` (8) — boş durum · submit
+    grup+alıcı ikisi de seçilene dek pasif + alan-altı hata · boş `/reports/groups` → oluşturma
+    kapalı · POST gövdesi (`group`/`frequency`/`recipients`) · üç son-çalışma durumu (delivered/
+    failed/hiç çalışmadı) · iki-adımlı iptal → DELETE + satır listeden kalkar · read-only görünüm.
+  - Sözleşme değişikliği yok (kontrat -b/-c/-g'de tamam); yalnız üretilmiş tipler (`ScheduledExport`,
+    `ScheduledExportFrequency`, `ScheduledExportRun`) ve mevcut typed `ApiClient` tüketildi.
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm -w typecheck` 0 · `pnpm -w lint` 0 ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **web 685/685** (85 dosya, +8 yeni
+  test) · **api 1914/1914** (90 dosya, değişmedi — bu task API'ye dokunmadı) · `pnpm -w build` 0 ·
+  `pnpm -w test:integration` → **1459/1459** (61 dosya, değişmedi) · `prettier --check` (sonra
+  `--write`) değişen dosyalarda 0.
+  E2E: `pnpm -w test:e2e` (tam paket) bu pencerede birden çok kez koşturuldu (sorun giderme) ve her
+  koşuda `tests/settings.spec.ts` (bu task'ın kapsadığı akış) **16/16 yeşil** kaldı. Tam paket
+  genelinde `customers.spec.ts`/`skills-routing.spec.ts` bazı koşularda başarısız oldu — kanıtlanmış
+  önceden var olan/ilgisiz kirlilik: değişikliğim `git stash`'lenip `skills-routing.spec.ts` tek
+  başına baseline koda karşı koşturulduğunda YEŞİL geçti; sonraki tam-paket koşularında farklı
+  testler (`customers.spec.ts`) ve farklı bir hatayla başarısız oldu — kod hatası değil, tekrarlanan
+  koşularda `apps/e2e/tests/global-setup.ts`'nin `db:seed`'i yalnız iki sabit organizasyonu upsert
+  etmesi, testlerin oluşturduğu ek satırları (skill/customer) TEMİZLEMEMESİ nedeniyle birikimli veri
+  kirliliği. `pnpm -w db:reset` denendi, Prisma'nın kendi AI-güvenlik kapısı tarafından reddedildi
+  (açık kullanıcı onayı gerektirir) — MASTER-PROMPT'un "DB drop YOK" sınırıyla da örtüşüyor, bu
+  yüzden zorlanmadı. Regenerate olan `apps/e2e/kanit/*.png` kanıt görselleri bu commit'e dahil
+  (tm 94.6'nın deseni).
+- **Varsayımlar:**
+  - Recipients bir checkbox seti (serbest metin değil) — `/agents` (varsayılan `status=active`)
+    listesinden, `useForm`'un string-only alan sözleşmesine uyması için tek virgülle-ayrılmış string
+    olarak tutulur; toggle her checkbox tıklamasında `Set`'i yeniden kurar.
+  - Onay UI'da iki-adımlı bir tıklama olarak modellendi (`window.confirm` değil) — kod tabanında
+    hiçbir yerde `window.confirm` kullanılmıyor, bu yüzden mevcut bir örüntü kopyalamak yerine test
+    edilebilir kendi örüntüsü seçildi.
+  - `/reports/groups` (scope-gated değil) canEdit'ten bağımsız her zaman çekiliyor — salt-okunur bir
+    görüntüleyici için bile satırın grup id'sinin okunabilir bir etikete çözülmesi için.
+- **Sonraki pencereye not:**
+  - **07.9-sched-i (uçtan uca doğrulama)** hâlâ açık — bu iş kalemini kapatacak son parça.
+  - **E2E veri kirliliği (bu task'ın kapsamı DIŞINDA, ayrı not):** `apps/e2e/tests/global-setup.ts`
+    yalnız `db:seed` çağırıyor, çalıştıkça biriken test-yaratımlı satırları (ör. skills-routing'in
+    oluşturduğu skill'ler) temizlemiyor — çok sayıda pencerenin kümülatif olarak her biri bir kez
+    `test:e2e` koştuğu bir ortamda bu, `getByLabel`/sayım tabanlı testlerin zamanla kırılgan hâle
+    gelmesine yol açabilir. Gerçek bir düzeltme ya global-setup'ın ekstra satırları da temizlemesini
+    (seed'in "idempotent" tanımını genişletmek) ya da `db:reset`'i (kullanıcı onayı gerektirir) bir
+    bakım adımı olarak periyodik çalıştırmayı gerektirir — ikisi de bu task'ın kapsamı dışında,
+    ayrı bir task olarak açılmalı.
+  - `run-loop.sh`'teki bu task'la ilgisiz değişiklik (deneme sayacı + blocked görevleri yeniden
+    seçme) hâlâ çalışma alanında duruyor; tm 94.3'ten beri kapsam dışı bırakıldı (CONVENTIONS §5).
+
 ### tm 94.8 — 07.9-sched-g · Teslim geçmişi okuması: kontrat + `GET /reports/scheduled-exports/{id}/runs` — done — 2026-08-08 UTC
 
 - **Yapıldı:**

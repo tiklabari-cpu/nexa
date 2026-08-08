@@ -31,6 +31,7 @@ import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { WidgetCustomization } from './WidgetCustomization.js';
 import { ChannelsGrid } from './Channels.js';
 import { IpAllowlist } from './IpAllowlist.js';
+import { ScheduledExports } from './ScheduledExports.js';
 import {
   DEFAULT_PREFS,
   loadPrefs,
@@ -106,7 +107,12 @@ interface TicketRule {
   id: string;
   name: string;
   conditions: { subject_contains?: string; source?: 'chat' | 'email' };
-  actions: { assign_agent_id?: string; assign_group_id?: number; priority?: number; add_tag?: string };
+  actions: {
+    assign_agent_id?: string;
+    assign_group_id?: number;
+    priority?: number;
+    add_tag?: string;
+  };
   enabled: boolean;
   position: number;
 }
@@ -128,6 +134,7 @@ export function SettingsPage(): ReactElement {
   const canManageTags = scopes.includes('tags--all:rw');
   const canManageTicketRules = scopes.includes('tickets--all:rw');
   const canManageBrands = scopes.includes('brands--all:rw');
+  const canManageScheduledExports = scopes.includes('reports_manage');
 
   return (
     <Page title="Settings" description="Widget installation, saved replies and routing.">
@@ -151,6 +158,7 @@ export function SettingsPage(): ReactElement {
       <TicketEmailTemplates canEdit={canManageTicketRules} />
       <CustomFieldsSettings canEdit={canManageAccess} />
       <PreChatFormSettings canEdit={canManageAccess} />
+      <ScheduledExports canEdit={canManageScheduledExports} />
     </Page>
   );
 }
@@ -668,7 +676,8 @@ function FileSharing({ canEdit }: { canEdit: boolean }): ReactElement {
   // `?? current` throughout: the inputs are uncontrolled drafts until touched,
   // so an unsaved edit survives a background refetch.
   const typesDraft = types ?? (current ? current.allowed_file_types.join(', ') : '');
-  const sizeDraft = sizeMb ?? (current ? String(Math.round(current.max_file_size_bytes / 1048576)) : '');
+  const sizeDraft =
+    sizeMb ?? (current ? String(Math.round(current.max_file_size_bytes / 1048576)) : '');
 
   function submit(event: FormEvent): void {
     event.preventDefault();
@@ -808,13 +817,18 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
   // they are, the fields cleared on success (FR-EK-A.1).
   const form = useForm({
     initial: { shortcut: '', text: '' },
-    validators: { shortcut: required('Enter a shortcut.'), text: required('Enter the reply text.') },
+    validators: {
+      shortcut: required('Enter a shortcut.'),
+      text: required('Enter the reply text.'),
+    },
     onSubmit: async (values, { setSubmitError, reset }) => {
       try {
         await create.mutateAsync({ shortcut: values.shortcut.trim(), text: values.text.trim() });
         reset();
       } catch (error) {
-        setSubmitError(error instanceof ApiClientError ? error.message : 'Could not save that reply.');
+        setSubmitError(
+          error instanceof ApiClientError ? error.message : 'Could not save that reply.',
+        );
       }
     },
   });
@@ -828,7 +842,11 @@ export function CannedResponses({ canEdit }: { canEdit: boolean }): ReactElement
       ) : (
         <Card>
           {canEdit && (
-            <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3 border-b border-border p-4">
+            <form
+              onSubmit={form.handleSubmit}
+              noValidate
+              className="flex flex-col gap-3 border-b border-border p-4"
+            >
               <div className="flex flex-wrap items-end gap-3">
                 <label htmlFor="new-shortcut" className="flex w-48 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -984,7 +1002,11 @@ export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
       ) : (
         <Card>
           {canEdit && (
-            <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3 border-b border-border p-4">
+            <form
+              onSubmit={form.handleSubmit}
+              noValidate
+              className="flex flex-col gap-3 border-b border-border p-4"
+            >
               <div className="flex flex-wrap items-end gap-3">
                 <label htmlFor="new-tag-name" className="flex min-w-56 flex-1 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -1110,7 +1132,9 @@ export function Skills({ canEdit }: { canEdit: boolean }): ReactElement {
         await create.mutateAsync({ name: values.name.trim() });
         reset();
       } catch (error) {
-        setSubmitError(error instanceof ApiClientError ? error.message : 'Could not add that skill.');
+        setSubmitError(
+          error instanceof ApiClientError ? error.message : 'Could not add that skill.',
+        );
       }
     },
   });
@@ -1126,7 +1150,11 @@ export function Skills({ canEdit }: { canEdit: boolean }): ReactElement {
       ) : (
         <Card>
           {canEdit && (
-            <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3 border-b border-border p-4">
+            <form
+              onSubmit={form.handleSubmit}
+              noValidate
+              className="flex flex-col gap-3 border-b border-border p-4"
+            >
               <div className="flex flex-wrap items-end gap-3">
                 <label htmlFor="new-skill-name" className="flex min-w-56 flex-1 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -1227,9 +1255,7 @@ export function RoutingRules({ canEdit }: { canEdit: boolean }): ReactElement {
       queryClient,
       queryKey: ['settings', 'routing-rules'],
       update: (current, { id, enabled }) => ({
-        items: (current?.items ?? []).map((rule) =>
-          rule.id === id ? { ...rule, enabled } : rule,
-        ),
+        items: (current?.items ?? []).map((rule) => (rule.id === id ? { ...rule, enabled } : rule)),
       }),
     }),
   });
@@ -1398,7 +1424,9 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
         await create.mutateAsync({ name: values.name.trim(), conditions, actions });
         reset();
       } catch (error) {
-        setSubmitError(error instanceof ApiClientError ? error.message : 'Could not save that rule.');
+        setSubmitError(
+          error instanceof ApiClientError ? error.message : 'Could not save that rule.',
+        );
       }
     },
   });
@@ -1417,7 +1445,11 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
       ) : (
         <Card>
           {canEdit && (
-            <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3 border-b border-border p-4">
+            <form
+              onSubmit={form.handleSubmit}
+              noValidate
+              className="flex flex-col gap-3 border-b border-border p-4"
+            >
               <div className="flex flex-wrap items-end gap-3">
                 <label htmlFor="rule-name" className="flex w-40 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -1525,7 +1557,9 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
                 <li key={rule.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{rule.name}</p>
-                    <p className="truncate text-2xs text-content-tertiary">{describeTicketRule(rule)}</p>
+                    <p className="truncate text-2xs text-content-tertiary">
+                      {describeTicketRule(rule)}
+                    </p>
                   </div>
 
                   <StatusDot
@@ -1566,7 +1600,8 @@ export function TicketRules({ canEdit }: { canEdit: boolean }): ReactElement {
 /** Renders a ticket rule as one readable "when … → then …" line. */
 function describeTicketRule(rule: TicketRule): string {
   const when: string[] = [];
-  if (rule.conditions.subject_contains) when.push(`subject contains “${rule.conditions.subject_contains}”`);
+  if (rule.conditions.subject_contains)
+    when.push(`subject contains “${rule.conditions.subject_contains}”`);
   if (rule.conditions.source) when.push(`from ${rule.conditions.source}`);
 
   const then: string[] = [];
@@ -1780,7 +1815,9 @@ export function TicketEmailTemplates({ canEdit }: { canEdit: boolean }): ReactEl
                       <button
                         type="button"
                         disabled={toggle.isPending}
-                        onClick={() => toggle.mutate({ id: template.id, enabled: !template.enabled })}
+                        onClick={() =>
+                          toggle.mutate({ id: template.id, enabled: !template.enabled })
+                        }
                         className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
                       >
                         {template.enabled ? 'Disable' : 'Enable'}
@@ -1859,7 +1896,9 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
         reset();
         setIsRequired(false);
       } catch (error) {
-        setSubmitError(error instanceof ApiClientError ? error.message : 'Could not add that field.');
+        setSubmitError(
+          error instanceof ApiClientError ? error.message : 'Could not add that field.',
+        );
       }
     },
   });

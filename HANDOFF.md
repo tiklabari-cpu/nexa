@@ -13,6 +13,43 @@
 
 ## Task log (newest-first)
 
+### tm 93.8 — 07.7-h: Reports Save view — rapora özgü kaydedilmiş görünüm (saf modül) — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **Yeni** `apps/web/src/features/reports/report-views.ts` — Inbox'ın `features/inbox/views.ts`
+    saved-view deposunun (satır 96-243) BİREBİR kopyası, Reports'a özgü alanlarla:
+    `SavedReportView { id, name, tab, mode, customFrom, customTo, baseline }`. `tab`/`mode`
+    `ReportsPage.tsx`'teki yerel `TabId`/`RangeMode`'u **bağımsız tip olarak yansıtır** — bilinçli
+    tercih: modül `ReportsPage.tsx`'i import ETMEDİ (görev kapsamı saf modül, UI bağlama 07.7-k'da;
+    tersi yönde bir import zaten yoktu ve şimdi eklemek dairesel bağımlılık riski taşırdı).
+    `baseline: ReportBaseline | null` `apps/api/src/routes/reports-metrics.ts`'teki
+    `BenchmarkBaseline`'ı yansıtır; `null` = kayıt anında benchmark karşılaştırması kapalıydı (JSON
+    `undefined`'ı silindiği için `null` açıkça saklanan/doğrulanan durum). Ayrı
+    `STORAGE_KEY = 'nexa.reports.saved-views'` (Inbox'ın `nexa.inbox.saved-views` anahtarıyla
+    çakışmaz — testte doğrulandı). `isSavedReportView` katı doğrulayıcı bilinmeyen `tab`/`mode`/
+    `baseline` değerini DÜŞÜRÜR (bozuk/eski kayıt ekranı kırmaz). İsim sınırı
+    `SAVED_REPORT_VIEW_NAME_MAX = 40` (Inbox'ın `SAVED_VIEW_NAME_MAX` emsaliyle aynı değer).
+  - Test: **yeni** `apps/web/src/features/reports/report-views.test.ts` (13, negatif önce): bozuk/
+    non-array storage → boş liste · bilinmeyen tab/mode/baseline'lı 6 satır tek tek düşürülür ·
+    storage `getItem`/`setItem` throw ederse çökme yok · Inbox'ın anahtarına dokunulmadığı · custom
+    aralık + `previous_year` baseline round-trip · ekle (isim trim+kırpma) · boş/boşluk-isim reddi
+    (`added: null`, liste aynı referans) · id ile sil · `useSavedReportViews` reload-sonrası kalıcılık.
+- **Doğrulama:** typecheck 11/11 ✅ · lint 8/8 ✅ · `npx turbo run test --filter='!@nexa/e2e' --concurrency=1`
+  10/10 ✅ (web 641/641 dahil, +13 yeni · api 1766/1766 değişmedi) · build 7/7 ✅ ·
+  `pnpm -w test:e2e` **tam koştu** (`make test-e2e`, gerçek Postgres/Redis'e karşı) — 75/76 ✅; tek
+  kırmızı `skills-routing.spec.ts:76` **bu görevle ilgisiz** (Team skill kataloğu, FR-MOD-08.6.3),
+  izole koşuda da aynı `getByLabel('Skill') resolved to 4 elements` strict-mode hatası → bu görevin
+  sürdüğü yüzeyde (Reports, hiçbir mevcut dosyaya dokunulmadı, iki yeni dosya) regresyon yok; flake
+  tm 77.4'ten beri HANDOFF'ta kayıtlı bilinen sorun (paylaşılan dev DB seed/durum sürüklenmesi),
+  kalıcı çözümü bu görevin kapsamı dışında.
+- **Varsayımlar:** `tab`/`mode`/`baseline` tip kümeleri `ReportsPage.tsx`/`reports-metrics.ts`'in
+  BUGÜNKÜ değerleriyle elle senkron tutuldu (import yok); 07.7-k UI'yi bağlarken bu iki tip kümesi
+  ile sayfanın gerçek `TabId`/`RangeMode`/`BenchmarkBaseline`'ı arasında sapma varsa (yeni tab/mode
+  eklenmişse) o pencere fark eder ve senkronlar — kod yorumunda not var.
+- **Sonraki pencereye not:** 07.7-i/-j/-k/-l hâlâ açık. 07.7-k bu modülü `ReportsPage.tsx`'e bağlarken
+  `ReportTabId`/`ReportRangeMode`'un sayfanın kendi `TabId`/`RangeMode`'uyla birebir eşleştiğini
+  doğrulamalı (ya tip kontrolüyle ya da sayfanın tiplerini buraya taşıyıp tek kaynak yaparak).
+
 ### tm 93.7 — 07.7-g: PDF export rotası — `/reports/export` `format` parametresi + content-type/attachment bağlama — done — 2026-08-08 UTC
 
 - **Yapıldı:**

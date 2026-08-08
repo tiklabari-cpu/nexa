@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { hasAnyScope } from '@nexa/types';
 import {
   EXPORT_SCOPES,
   REPORT_GROUPS,
@@ -47,6 +48,51 @@ describe('visibleReportGroups — permission-based visibility (07.7)', () => {
     // reports_read does not follow the `--` pattern, so it is granted only when
     // held outright — a chats grant must never leak reports visibility.
     expect(visibleReportGroups(['chats--all:rw'])).toEqual([]);
+  });
+});
+
+/**
+ * The catalogue's own invariants (07.7-l).
+ *
+ * The permission sweep in `reports-billing.test.ts` is driven off this list, so
+ * everything it can prove rests on the list being sweepable in the first place:
+ * every entry actually gated, every id distinct, every id the same string on
+ * both surfaces. These are cheap to state and silent to break.
+ */
+describe('the catalogue is safe to gate and safe to sweep (07.7-l)', () => {
+  it('gives every group a scope — an empty requirement would open it to any token', () => {
+    // `hasAnyScope(granted, [])` is `true` by design: a route that requires no
+    // scope is not an authorization failure. So a catalogue entry that declared
+    // none would be listed to, and exportable by, every authenticated caller —
+    // while still reading as gated next to its neighbours, which is exactly the
+    // kind of mistake a review does not catch.
+    for (const group of REPORT_GROUPS) {
+      expect(group.scopes.length, group.id).toBeGreaterThan(0);
+      expect(hasAnyScope([], group.scopes), group.id).toBe(false);
+      expect(hasAnyScope(['chats--all:rw'], group.scopes), group.id).toBe(false);
+    }
+  });
+
+  it('keeps every id distinct, and identical on the path and on the query string', () => {
+    // The id is the path segment of `/reports/<id>` and the value of
+    // `?group=<id>`; the two surfaces only speak one vocabulary while it needs
+    // no encoding. A duplicate would make `reportGroup()` resolve the first
+    // silently and hide the second from any sweep driven off this list.
+    expect(new Set(REPORT_GROUPS.map((group) => group.id)).size).toBe(REPORT_GROUPS.length);
+    for (const group of REPORT_GROUPS) {
+      expect(group.id, group.id).toMatch(/^[a-z][a-z0-9-]*$/);
+      expect(encodeURIComponent(group.id), group.id).toBe(group.id);
+      expect(group.label.trim(), group.id).not.toBe('');
+    }
+  });
+
+  it('resolves every catalogue id, and nothing that merely looks like one', () => {
+    for (const group of REPORT_GROUPS) expect(reportGroup(group.id)).toBe(group);
+    // A near miss must be a 400 from the route, not a silent match: casing, a
+    // stray space, the other spelling of a hyphen, and a traversal attempt.
+    for (const near of ['Overview', 'overview ', 'team_performance', '', '../overview']) {
+      expect(reportGroup(near), JSON.stringify(near)).toBeUndefined();
+    }
   });
 });
 

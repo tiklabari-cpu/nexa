@@ -11,6 +11,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
+import { REPORT_GROUPS } from '../../src/routes/reports-export.js';
+import { REPORT_MAX_RANGE_DAYS } from '../../src/routes/reports.js';
 
 describe('reports and billing', () => {
   let owner: PrismaClient;
@@ -2229,6 +2231,328 @@ describe('reports and billing', () => {
         expect(omitted.headers['x-content-type-options']).toBe('nosniff');
         expect(omitted.headers['cache-control']).toBe('no-store');
       });
+    });
+  });
+
+  // =========================================================================
+
+  /**
+   * The 07.7 surface swept end to end (07.7-l).
+   *
+   * Every earlier sub-task proved its own group. What none of them could prove
+   * is the property that only exists *across* them: that each group is gated on
+   * all four of its surfaces — the catalogue, its JSON endpoint, its CSV export
+   * and its PDF export — and that the "empty list, not a 403" decision (NFR-S3,
+   * `GET /reports/groups`) still holds now that four more groups sit behind it.
+   * A group whose route lost its `config.scopes` would keep every one of its own
+   * tests green: nothing there asks an unauthorised caller anything.
+   *
+   * Driven from `REPORT_GROUPS` rather than a written-out list, so the matrix
+   * cannot fall behind the catalogue. A tenth group added with a missing scope
+   * check fails here on the day it is added, which is the only way a permission
+   * sweep stays true after the sweep is written.
+   */
+  describe('permission matrix — every group × every surface (07.7-l)', () => {
+    const GROUP_IDS = REPORT_GROUPS.map((group) => group.id);
+
+    /** The JSON endpoint a group answers on — the catalogue id *is* the path segment. */
+    const pathOf = (id: string): string => `/reports/${id}`;
+
+    /** Grant a token with a chosen scope set — for the permission-gating cases. */
+    function scopedToken(scopes: string[]): Promise<string> {
+      return grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes,
+      });
+    }
+
+    it('serves exactly the compiled catalogue — the matrix cannot sweep a stale list', async () => {
+      const groups = (await server.get('/reports/groups', auth)).json().groups;
+      expect(groups.map((group: { id: string }) => group.id)).toEqual(GROUP_IDS);
+      // Guards the guard: a matrix over an empty catalogue would pass vacuously.
+      expect(GROUP_IDS.length).toBe(9);
+    });
+
+    it.each(GROUP_IDS)(
+      '%s answers on every granted surface — JSON, CSV, PDF and a benchmark block',
+      async (id) => {
+        const [json, csv, pdf, benchmarked] = await Promise.all([
+          server.get(pathOf(id), auth),
+          server.get(`/reports/export?group=${id}`, auth),
+          server.get(`/reports/export?group=${id}&format=pdf`, auth),
+          server.get(`${pathOf(id)}?baseline=previous_period`, auth),
+        ]);
+
+        expect(json.statusCode, pathOf(id)).toBe(200);
+
+        expect(csv.statusCode, `csv ${id}`).toBe(200);
+        expect(csv.headers['content-type']).toContain('text/csv');
+        expect(csv.headers['content-disposition']).toContain(`filename="nexa-${id}-`);
+
+        expect(pdf.statusCode, `pdf ${id}`).toBe(200);
+        expect(pdf.headers['content-type']).toBe('application/pdf');
+        expect(Buffer.from(pdf.rawPayload).toString('latin1').startsWith('%PDF-1.7\n')).toBe(true);
+
+        // "benchmark karşılaştırma" holds for every group, not only the ones
+        // that happen to carry a comparable figure of their own.
+        expect(benchmarked.json().previous_period?.baseline, `benchmark ${id}`).toBe(
+          'previous_period',
+        );
+      },
+    );
+
+    it('refuses every group on every surface to a token without reports_read, and still answers the catalogue', async () => {
+      const weak = await scopedToken(['chats--all:ro']);
+      const weakAuth = { authorization: `Bearer ${weak}` };
+
+      // The catalogue answers 200 with nothing — the decision the code committed
+      // to at `GET /reports/groups`: "here is what you can see" replies honestly
+      // rather than refusing to reply. Re-proved now that nine groups sit behind
+      // it, because the failure mode is one group leaking into the empty answer.
+      const catalogue = await server.get('/reports/groups', weakAuth);
+      expect(catalogue.statusCode).toBe(200);
+      expect(catalogue.json().groups).toEqual([]);
+
+      for (const id of GROUP_IDS) {
+        const [json, csv, pdf] = await Promise.all([
+          server.get(pathOf(id), weakAuth),
+          server.get(`/reports/export?group=${id}`, weakAuth),
+          server.get(`/reports/export?group=${id}&format=pdf`, weakAuth),
+        ]);
+        expect(json.statusCode, `json ${id}`).toBe(403);
+        expect(csv.statusCode, `csv ${id}`).toBe(403);
+        // `format` grants nothing: a caller refused the CSV is refused the PDF
+        // of the same table too.
+        expect(pdf.statusCode, `pdf ${id}`).toBe(403);
+      }
+    });
+
+    it('hands a token no group data through a neighbouring scope either', async () => {
+      // `reports_read` does not follow the `--all/--my` implication pattern, so
+      // no chats/agents grant can widen into it. Asserted against the live
+      // routes rather than only `visibleReportGroups`, because the implication
+      // that matters is the one the auth plugin applies.
+      const sideways = await scopedToken(['chats--all:rw', 'agents--all:rw', 'billing_manage']);
+      const sidewaysAuth = { authorization: `Bearer ${sideways}` };
+
+      expect((await server.get('/reports/groups', sidewaysAuth)).json().groups).toEqual([]);
+      for (const id of GROUP_IDS) {
+        expect((await server.get(pathOf(id), sidewaysAuth)).statusCode, `json ${id}`).toBe(403);
+        expect(
+          (await server.get(`/reports/export?group=${id}`, sidewaysAuth)).statusCode,
+          `csv ${id}`,
+        ).toBe(403);
+      }
+    });
+  });
+
+  // =========================================================================
+
+  /**
+   * NFR-P7 — how much history one report request may ask for (07.7-l).
+   *
+   * NFR-P7's own answer to "heavy reports" is a read replica or a column-store
+   * analytics store (PRD:748). Neither exists here and neither can: they are
+   * infrastructure, outside this repo (PLAN §9). What is available is to bound
+   * the work a single request can order, so the measurement below is half the
+   * evidence and the cap is the other half.
+   */
+  describe('NFR-P7 — the window a report may scan (07.7-l)', () => {
+    const GROUP_IDS = REPORT_GROUPS.map((group) => group.id);
+    const pathOf = (id: string): string => `/reports/${id}`;
+    const DAY = 86_400_000;
+    /** A fixed end, so the boundary arithmetic below does not race the clock. */
+    const END = new Date('2026-07-01T00:00:00.000Z');
+    const window = (days: number): string => {
+      const from = new Date(END.getTime() - days * DAY);
+      return `from=${from.toISOString()}&to=${END.toISOString()}`;
+    };
+
+    it('refuses a window past the cap on every group, in JSON and in both export formats', async () => {
+      const range = window(REPORT_MAX_RANGE_DAYS + 1);
+
+      for (const id of GROUP_IDS) {
+        for (const url of [
+          `${pathOf(id)}?${range}`,
+          `/reports/export?group=${id}&${range}`,
+          `/reports/export?group=${id}&format=pdf&${range}`,
+        ]) {
+          const response = await server.get(url, auth);
+          expect(response.statusCode, url).toBe(400);
+          // Proof the *range* guard fired and not some unrelated 400: the caller
+          // is told the span is the problem and how wide it may be.
+          expect(JSON.stringify(response.json()), url).toContain(String(REPORT_MAX_RANGE_DAYS));
+        }
+      }
+    });
+
+    it('still serves a window exactly at the cap — the boundary is inclusive, not off by a day', async () => {
+      const range = window(REPORT_MAX_RANGE_DAYS);
+      for (const id of GROUP_IDS) {
+        expect((await server.get(`${pathOf(id)}?${range}`, auth)).statusCode, `json ${id}`).toBe(
+          200,
+        );
+        expect(
+          (await server.get(`/reports/export?group=${id}&${range}`, auth)).statusCode,
+          `csv ${id}`,
+        ).toBe(200);
+      }
+    });
+
+    it("keeps the UI's widest preset working — the 365-day range the Reports page ships", async () => {
+      // `PRESETS` in ReportsPage.tsx offers 7/30/90/365 days. A cap set at 365
+      // would refuse the product's own widest button, which is why it is 366.
+      const range = window(365);
+      expect((await server.get(`/reports/overview?${range}`, auth)).statusCode).toBe(200);
+      expect((await server.get(`/reports/export?group=leads&${range}`, auth)).statusCode).toBe(200);
+    });
+
+    it('keeps the staffing forecast on its own bound, which the shared cap did not replace', async () => {
+      // The forecast parses the range itself (it takes no `baseline`), so it
+      // never reaches `assertReportRange`. Its own guard has to still be there.
+      const response = await server.get(
+        `/reports/staffing-forecast?${window(REPORT_MAX_RANGE_DAYS + 1)}`,
+        auth,
+      );
+      expect(response.statusCode).toBe(400);
+      expect(JSON.stringify(response.json())).toContain('staffing forecast');
+    });
+
+    it('keeps the Leads and Team performance queries within the NFR-P2 read budget (EXPLAIN ANALYZE)', async () => {
+      // Real rows, so the planner has joins to cost rather than empty tables:
+      // agents with assigned closed threads, a rating and a transfer each, plus
+      // leads reached through both touch tables.
+      const assisted = await conversation({ agentReplies: true, customerName: 'Perf assisted' });
+      await runSkillOn(assisted);
+      const rated = await conversation({ agentReplies: true, customerName: 'Perf rated' });
+      const ratedThread = await owner.thread.findFirstOrThrow({ where: { chatId: rated } });
+      await owner.rating.create({
+        data: { chatId: rated, licenseId: fx.a.licenseId, threadId: ratedThread.id, value: 'good' },
+      });
+      await recordTransfer(rated);
+      await conversation({ agentReplies: false, customerName: 'Perf automated' });
+
+      const chatLead = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Perf lead chat', isLead: true },
+        select: { id: true },
+      });
+      await owner.chat.create({
+        data: { id: generateShortId(), licenseId: fx.a.licenseId, customerId: chatLead.id },
+      });
+      const ticketLead = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Perf lead ticket', isLead: true },
+        select: { id: true },
+      });
+      await owner.ticket.create({
+        data: {
+          id: generateShortId(),
+          licenseId: fx.a.licenseId,
+          customerId: ticketLead.id,
+          subject: 'Perf lead ticket',
+          status: 'open',
+        },
+      });
+
+      // Reproduced from reports.ts (`leadFirstTouch`/`leadsByDay`,
+      // `teamPerformanceByAgent`) so the plan measures the real query shape —
+      // the leads CTE's UNION ALL and the split's correlated EXISTS filters are
+      // what dominate the cost, and a probe over a bare count(*) would
+      // understate both. Kept in sync deliberately, exactly as the 07.5-i probe
+      // above is: this is a performance measurement, and the functional
+      // behaviour is guarded by the report suites.
+      const SPLIT = `
+        count(*) AS chats,
+        count(*) FILTER (WHERE NOT t.active) AS closed,
+        count(*) FILTER (WHERE NOT t.active AND NOT EXISTS (
+          SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'agent')) AS automated,
+        count(*) FILTER (WHERE NOT t.active AND EXISTS (
+          SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'agent')
+          AND EXISTS (SELECT 1 FROM skill_runs sr WHERE sr.chat_id = t.chat_id AND sr.license_id = t.license_id)) AS assisted,
+        count(*) FILTER (WHERE NOT t.active AND EXISTS (
+          SELECT 1 FROM events e WHERE e.thread_id = t.id AND e.author_type = 'agent')
+          AND NOT EXISTS (SELECT 1 FROM skill_runs sr WHERE sr.chat_id = t.chat_id AND sr.license_id = t.license_id)) AS manual`;
+      const SINCE = `now() - interval '30 days'`;
+      const LEAD_FIRST_TOUCH = `
+        WITH lead_first_touch AS (
+          SELECT c.id AS customer_id, min(touch.touched_at) AS first_touch
+          FROM customers c
+          JOIN (
+            SELECT customer_id, created_at AS touched_at FROM chats WHERE license_id = $1
+            UNION ALL
+            SELECT customer_id, created_at AS touched_at FROM tickets
+              WHERE license_id = $1 AND customer_id IS NOT NULL
+          ) touch ON touch.customer_id = c.id
+          WHERE c.is_lead = TRUE
+          GROUP BY c.id
+        )`;
+
+      const queries: Record<string, string> = {
+        leads_by_day: `${LEAD_FIRST_TOUCH}
+          SELECT to_char((first_touch AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS date, count(*) AS count
+          FROM lead_first_touch
+          WHERE first_touch >= ${SINCE} AND first_touch <= now()
+          GROUP BY 1 ORDER BY 1`,
+        leads_total: `${LEAD_FIRST_TOUCH}
+          SELECT count(*) AS leads FROM lead_first_touch
+          WHERE first_touch >= ${SINCE} AND first_touch <= now()`,
+        team_split: `SELECT t.assignee_id::text AS agent_id, a.name, ${SPLIT},
+            avg(EXTRACT(EPOCH FROM (t.first_response_at - t.created_at)))
+              FILTER (WHERE t.first_response_at IS NOT NULL) AS avg_first_response_seconds,
+            avg(EXTRACT(EPOCH FROM (t.closed_at - t.created_at)))
+              FILTER (WHERE t.closed_at IS NOT NULL) AS avg_duration_seconds
+          FROM threads t
+          LEFT JOIN accounts a ON a.id = t.assignee_id
+          WHERE t.license_id = $1 AND t.assignee_id IS NOT NULL
+            AND t.created_at >= ${SINCE} AND t.created_at <= now()
+          GROUP BY t.assignee_id, a.name ORDER BY chats DESC LIMIT 20`,
+        team_ratings: `SELECT t.assignee_id::text AS agent_id,
+            count(*) FILTER (WHERE r.value = 'good') AS good,
+            count(*) FILTER (WHERE r.value = 'bad')  AS bad
+          FROM ratings r JOIN threads t ON t.id = r.thread_id
+          WHERE r.license_id = $1 AND t.assignee_id IS NOT NULL
+            AND r.created_at >= ${SINCE} AND r.created_at <= now()
+          GROUP BY t.assignee_id`,
+        team_transfers: `SELECT t.assignee_id::text AS agent_id, count(*) AS transfers
+          FROM events e JOIN threads t ON t.id = e.thread_id
+          WHERE e.license_id = $1
+            AND e.properties @> '{"system_event": "chat_transferred"}'::jsonb
+            AND e.created_at >= ${SINCE} AND e.created_at <= now()
+            AND t.assignee_id IS NOT NULL
+          GROUP BY t.assignee_id`,
+      };
+
+      // NFR-P7 names no number of its own — it names an architecture. The
+      // applicable budget is therefore NFR-P2's read figure (p99 < 150ms), the
+      // same floor the 07.5-i probe uses. On the seeded dataset execution is
+      // sub-millisecond; the assertion is a floor a plan regression (a dropped
+      // index, a bad join order) would blow through. The concrete numbers are
+      // the evidence 07.7-l owes — recorded in HANDOFF.
+      const NFR_P2_READ_BUDGET_MS = 150;
+      const timings: Record<string, number> = {};
+      for (const [name, sql] of Object.entries(queries)) {
+        const [row] = await owner.$queryRawUnsafe<Array<Record<string, unknown>>>(
+          `EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`,
+          fx.a.licenseId,
+        );
+        const raw = row?.['QUERY PLAN'];
+        const plan = (typeof raw === 'string' ? JSON.parse(raw) : raw) as
+          | Array<{ 'Execution Time': number }>
+          | undefined;
+        const executionMs = plan?.[0]?.['Execution Time'];
+        expect(executionMs, name).toBeDefined();
+        timings[name] = executionMs ?? Number.NaN;
+        expect(timings[name], name).toBeLessThan(NFR_P2_READ_BUDGET_MS);
+      }
+      // All five measured — a silently-skipped query leaves the budget unproven.
+      expect(Object.keys(timings)).toEqual([
+        'leads_by_day',
+        'leads_total',
+        'team_split',
+        'team_ratings',
+        'team_transfers',
+      ]);
     });
   });
 

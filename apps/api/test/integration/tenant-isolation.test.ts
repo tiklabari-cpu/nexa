@@ -16,7 +16,14 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
 import { withTenant } from '../../src/lib/tenant.js';
-import { buildGroupCsv, buildLeadsReport } from '../../src/routes/reports.js';
+import {
+  buildCasesReport,
+  buildGroupCsv,
+  buildLeadsReport,
+  buildSalesReport,
+  buildTeamPerformanceReport,
+} from '../../src/routes/reports.js';
+import { toPdf, type CsvCell } from '../../src/routes/reports-export.js';
 import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -876,6 +883,322 @@ describe('tenant isolation (RLS)', () => {
         buildGroupCsv(tx, l1, 'leads', from, to),
       );
       expect(l1Csv.rows).toEqual([[day, 2]]);
+    });
+  });
+
+  // =========================================================================
+
+  /**
+   * The v2 report groups, swept across the license boundary (FR-MOD-07.7, 07.7-l).
+   *
+   * The block above proves the *hardest* case for one group: `customers` is
+   * organization-scoped, so Leads had to invent a license binding. The other
+   * three v2 groups (Cases, Team performance, Sales) read license-scoped tables
+   * and so lean on RLS plus an explicit `license_id` predicate — a much shorter
+   * argument, and exactly the kind that is assumed rather than checked.
+   *
+   * So this sweeps all four, on every surface a caller can reach them through:
+   * the JSON report, the CSV table and the PDF bytes. And it does so against a
+   * **second, independent** two-license organization, deliberately not reusing
+   * `Org SIBLING`: 07.7-b's boundary decision passing on the fixture built to
+   * demonstrate it is weaker evidence than it passing on one built afterwards,
+   * for a different purpose, without that decision in mind.
+   *
+   * The agent name is the tracer: the one piece of free text any of these four
+   * reports carries, and the field a cross-tenant `LEFT JOIN accounts` would
+   * surface first. Both names are deliberately *short*. Team performance has
+   * fourteen columns, and the PDF lays a table out in fixed columns and
+   * ellipsises a cell too wide for its own — a realistic full name would print
+   * as `Swe…` and a substring search for it would pass whether the name leaked
+   * or not. Three letters fit whole in that column, so the search really is
+   * looking at what the page shows. (The agent *id* is a uuid and never fits;
+   * it is swept in the CSV, where nothing is elided.)
+   */
+  describe('v2 report groups — cross-license sweep (FR-MOD-07.7, 07.7-l)', () => {
+    /** The four groups 07.7 added; the ones already swept by earlier slices are not re-proved here. */
+    const V2_GROUPS = ['cases', 'leads', 'team-performance', 'sales'] as const;
+
+    const AGENT_ONE = 'Ada';
+    const AGENT_TWO = 'Bo';
+    // A fixed window and a fixed touch day, so every bucket is deterministic and
+    // no assertion can race midnight UTC.
+    const touch = new Date('2026-03-10T12:00:00.000Z');
+    const day = '2026-03-10';
+    const from = new Date('2026-03-01T00:00:00.000Z');
+    const to = new Date('2026-04-01T00:00:00.000Z');
+
+    let orgId: string;
+    let s1: bigint;
+    let s2: bigint;
+    let agentOneId: string;
+    let agentTwoId: string;
+
+    beforeAll(async () => {
+      // Owner-written (RLS bypassed) so one fixture can span both licenses —
+      // which is the whole point: a leak is only observable from a dataset that
+      // has something to leak.
+      const org = await owner.organization.create({
+        data: { name: 'Org SWEEP', region: 'eu' },
+        select: { id: true },
+      });
+      orgId = org.id;
+      const mkLicense = async (): Promise<bigint> =>
+        (
+          await owner.license.create({
+            data: { organizationId: orgId, plan: 'growth', status: 'trialing' },
+            select: { id: true },
+          })
+        ).id;
+      s1 = await mkLicense();
+      s2 = await mkLicense();
+
+      const mkAgent = async (name: string, licenseId: bigint): Promise<string> => {
+        const account = await owner.account.create({
+          data: { email: `${generateShortId()}@sweep.test`, name },
+          select: { id: true },
+        });
+        // `accounts` is a global table whose visibility comes from shared
+        // membership, so the report's `LEFT JOIN accounts` only resolves a name
+        // for a real member of the license — the same fixture shape the CSV
+        // formula-injection test uses.
+        await owner.agentMembership.create({ data: { licenseId, agentId: account.id, role: 'agent' } });
+        return account.id;
+      };
+      agentOneId = await mkAgent(AGENT_ONE, s1);
+      agentTwoId = await mkAgent(AGENT_TWO, s2);
+
+      /** A lead reached through a chat, plus a closed thread on that chat assigned to `agentId`. */
+      const mkLeadChatWithThread = async (licenseId: bigint, agentId: string): Promise<void> => {
+        const lead = await owner.customer.create({
+          data: { organizationId: orgId, name: 'Sweep lead', isLead: true },
+          select: { id: true },
+        });
+        const chatId = generateShortId();
+        await owner.chat.create({
+          data: { id: chatId, licenseId, customerId: lead.id, createdAt: touch },
+        });
+        await owner.thread.create({
+          data: {
+            id: generateShortId(),
+            chatId,
+            licenseId,
+            assigneeId: agentId,
+            active: false,
+            createdAt: touch,
+            closedAt: touch,
+          },
+        });
+      };
+
+      // S1: two leads (one through a chat, one through a ticket), two tickets
+      // (one still open, one solved), one closed thread on agent one.
+      await mkLeadChatWithThread(s1, agentOneId);
+      const s1LeadByTicket = await owner.customer.create({
+        data: { organizationId: orgId, name: 'Sweep lead', isLead: true },
+        select: { id: true },
+      });
+      await owner.ticket.create({
+        data: {
+          id: generateShortId(),
+          licenseId: s1,
+          customerId: s1LeadByTicket.id,
+          subject: 'S1 open',
+          status: 'open',
+          createdAt: touch,
+        },
+      });
+      await owner.ticket.create({
+        data: {
+          id: generateShortId(),
+          licenseId: s1,
+          subject: 'S1 solved',
+          status: 'solved',
+          createdAt: touch,
+        },
+      });
+
+      // S2: one lead through a chat, one open ticket, one closed thread on agent
+      // two. Deliberately *fewer* of everything than S1, so a leak shows up as a
+      // number that is too big rather than as a coincidence.
+      await mkLeadChatWithThread(s2, agentTwoId);
+      await owner.ticket.create({
+        data: {
+          id: generateShortId(),
+          licenseId: s2,
+          subject: 'S2 open',
+          status: 'open',
+          createdAt: touch,
+        },
+      });
+    });
+
+    interface CsvTable {
+      headers: string[];
+      rows: CsvCell[][];
+    }
+
+    /** Every v2 group's CSV table for one license, as the export route would build it. */
+    async function tablesFor(licenseId: bigint): Promise<Record<string, CsvTable>> {
+      const tables: Record<string, CsvTable> = {};
+      for (const group of V2_GROUPS) {
+        tables[group] = await withTenant(app, { licenseId, organizationId: orgId }, (tx) =>
+          buildGroupCsv(tx, licenseId, group, from, to),
+        );
+      }
+      return tables;
+    }
+
+    /** A table as one searchable blob — the CSV surface, where nothing is elided. */
+    const csvText = (table: CsvTable): string =>
+      [table.headers, ...table.rows].map((row) => row.join(' ')).join('\n');
+
+    /**
+     * The strings a PDF actually draws, read back out of its content stream.
+     * The layout ellipsises a cell too wide for its column, so what reaches the
+     * page is not always what went in; searching what it prints is what makes a
+     * "not present" assertion mean something.
+     */
+    const pdfStrings = (table: CsvTable): string[] =>
+      [
+        ...toPdf('Report', table.headers, table.rows, { subtitle: day })
+          .toString('latin1')
+          .matchAll(/\((.*?)\) Tj/g),
+      ].map((match) => match[1] ?? '');
+
+    it('reports each license only its own figures, on all four JSON groups', async () => {
+      const report = async (licenseId: bigint) =>
+        withTenant(app, { licenseId, organizationId: orgId }, async (tx) => ({
+          cases: await buildCasesReport(tx, licenseId, from, to),
+          leads: await buildLeadsReport(tx, licenseId, from, to),
+          team: await buildTeamPerformanceReport(tx, licenseId, from, to),
+          sales: await buildSalesReport(tx, licenseId, from, to),
+        }));
+
+      const one = await report(s1);
+      const two = await report(s2);
+
+      // Cases: S1 owns two tickets (one still open — the lead's — and one
+      // solved); S2 owns one. Sum the day split rather than trusting a total, so
+      // a leaked row cannot hide in a bucket nobody asserted on.
+      const totalCases = (report: Record<string, unknown>): number =>
+        (report['by_day'] as Array<{ total: number }>).reduce((sum, row) => sum + row.total, 0);
+      expect(totalCases(one.cases)).toBe(2);
+      expect(totalCases(two.cases)).toBe(1);
+
+      // Leads: S1's two, S2's one — never the organization's three.
+      expect((one.leads as { totals: { leads: number } }).totals.leads).toBe(2);
+      expect((two.leads as { totals: { leads: number } }).totals.leads).toBe(1);
+      expect((one.leads as { by_day: unknown[] }).by_day).toEqual([{ date: day, count: 2 }]);
+      expect((two.leads as { by_day: unknown[] }).by_day).toEqual([{ date: day, count: 1 }]);
+
+      // Team performance: one agent each, and never the sibling's.
+      const agentIds = (report: Record<string, unknown>): string[] =>
+        (report['agents'] as Array<{ agent_id: string }>).map((row) => row.agent_id);
+      expect(agentIds(one.team)).toEqual([agentOneId]);
+      expect(agentIds(two.team)).toEqual([agentTwoId]);
+
+      // Sales is the honest skeleton for both — there is no source, so there is
+      // nothing to leak, and the assertion is that it stays that way rather than
+      // quietly acquiring a figure from somewhere.
+      for (const sales of [one.sales, two.sales]) {
+        expect(sales).toMatchObject({ configured: false, tracked_sales: null, conversions: null });
+      }
+    });
+
+    it('never lets a sibling license’s agent reach either export format', async () => {
+      const [oneTables, twoTables] = [await tablesFor(s1), await tablesFor(s2)];
+
+      for (const group of V2_GROUPS) {
+        const mine = twoTables[group];
+        const theirs = oneTables[group];
+        if (!mine || !theirs) throw new Error(`no table built for ${group}`);
+
+        // Guards the guard: the tracer really is findable, in both formats, when
+        // it belongs there — so a clean sweep means "absent", not "unsearchable".
+        if (group === 'team-performance') {
+          expect(csvText(theirs), `${group} csv fixture`).toContain(AGENT_ONE);
+          expect(pdfStrings(theirs), `${group} pdf fixture`).toContain(AGENT_ONE);
+          expect(csvText(theirs), `${group} csv fixture`).toContain(agentOneId);
+        }
+
+        expect(csvText(mine), `${group} csv`).not.toContain(AGENT_ONE);
+        expect(csvText(mine), `${group} csv`).not.toContain(agentOneId);
+        // Read back out of the content stream rather than searched for as raw
+        // bytes: what the page prints is what a reader would see leak.
+        expect(pdfStrings(mine), `${group} pdf`).not.toContain(AGENT_ONE);
+      }
+    });
+
+    it('carries no identity at all in Cases, Leads and Sales — nothing there to leak (§V3)', async () => {
+      // These three are aggregate-only by design: a lead's name, a ticket's
+      // subject and a customer's email never enter them, so isolation for them
+      // is not only "the right rows" but "no identifying cell exists in either
+      // format". Asserted as a closed vocabulary, because the way this decision
+      // erodes is one helpful column at a time.
+      const SALES_METRICS = [
+        'configured',
+        'false',
+        'true',
+        'tracked_sales',
+        'attributed_revenue_cents',
+        'currency',
+        'conversions',
+      ];
+      const isAggregate = (cell: CsvCell): boolean =>
+        cell == null ||
+        typeof cell === 'number' ||
+        /^\d{4}-\d{2}-\d{2}$/.test(cell) ||
+        SALES_METRICS.includes(cell);
+
+      for (const tables of [await tablesFor(s1), await tablesFor(s2)]) {
+        for (const group of ['cases', 'leads', 'sales'] as const) {
+          const table = tables[group];
+          if (!table) throw new Error(`no table built for ${group}`);
+          // Both formats render this one table, so a cell that carries no
+          // identity carries none in the PDF either.
+          expect(table.rows.length, `${group} must have rows to sweep`).toBeGreaterThan(0);
+          for (const row of table.rows) {
+            for (const cell of row) {
+              expect(isAggregate(cell), `${group} cell ${String(cell)}`).toBe(true);
+            }
+          }
+        }
+      }
+    });
+
+    it('keeps every export row count to the license that owns the rows', async () => {
+      const [oneTables, twoTables] = [await tablesFor(s1), await tablesFor(s2)];
+
+      // Cases and Leads are day series, Team performance is one row per agent:
+      // S1 has strictly more of each, so an equal count on S2 would mean the
+      // sibling's rows arrived.
+      expect(twoTables['leads']?.rows).toEqual([[day, 1]]);
+      expect(oneTables['leads']?.rows).toEqual([[day, 2]]);
+      expect(twoTables['cases']?.rows).toEqual([[day, 1, 0, 1]]);
+      expect(oneTables['cases']?.rows).toEqual([[day, 1, 1, 2]]);
+      expect(twoTables['team-performance']?.rows).toHaveLength(1);
+      expect(oneTables['team-performance']?.rows).toHaveLength(1);
+      expect(twoTables['team-performance']?.rows[0]?.[0]).toBe(agentTwoId);
+      expect(oneTables['team-performance']?.rows[0]?.[0]).toBe(agentOneId);
+    });
+
+    it('still refuses the organization-wide lead count, on an independent fixture', async () => {
+      // 07.7-b's decision, re-derived here rather than inherited: `customers` is
+      // organization-scoped, so both licenses of this org see all three leads.
+      // The report must still claim only the ones that touched it.
+      const naive = async (licenseId: bigint): Promise<number> => {
+        const [row] = await withTenant(app, { licenseId, organizationId: orgId }, (tx) =>
+          tx.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM customers WHERE is_lead = TRUE`,
+        );
+        return Number(row?.n ?? 0n);
+      };
+      expect(await naive(s1)).toBe(3);
+      expect(await naive(s2)).toBe(3);
+
+      const csv = await withTenant(app, { licenseId: s2, organizationId: orgId }, (tx) =>
+        buildGroupCsv(tx, s2, 'leads', from, to),
+      );
+      expect(csv.rows).toEqual([[day, 1]]);
     });
   });
 });

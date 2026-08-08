@@ -22,12 +22,8 @@ overview:
       - `satisfaction.score` when nobody rated. An unrated period is unknown,
         not bad, and 0% reads as a catastrophe.
     parameters:
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
@@ -57,12 +53,8 @@ breakdown:
       `automated` keeps ADR-09's definition in every row, so a breakdown never
       disagrees with the Overview or the invoice.
     parameters:
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
@@ -85,12 +77,8 @@ aiAgent:
       the invoice's number), the share of closed chats resolved without a human,
       hand-offs to a human and how many skills ran. Defaults to the last 30 days.
     parameters:
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
@@ -125,12 +113,8 @@ reviews:
       the figures are `null` — the shape is present for the surface to render an
       honest "not set up" state rather than a fabricated zero.
     parameters:
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
@@ -167,12 +151,8 @@ topics:
       the Overview's `automated_rate` and the Reviews `score`: an unknown is not
       a zero.
     parameters:
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
@@ -207,12 +187,8 @@ cases:
       (`merged_into_id` set) is excluded from every bucket, so a merge never
       double-counts toward both the primary ticket and the one merged into it.
     parameters:
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
@@ -251,12 +227,8 @@ leads:
       again inside it; `totals.leads` is the distinct leads first seen in the
       window and equals the sum of the `by_day` counts.
     parameters:
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
@@ -290,12 +262,8 @@ teamPerformance:
       `csat.score` is `null`, never `0`, for an agent nobody rated in the
       window — the same rule the Reviews report's `score` follows.
     parameters:
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
@@ -324,12 +292,8 @@ sales:
       queried. Once 13.5 lands, this is the single place the figures get filled
       in; the route, its scope and its response shape do not change.
     parameters:
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":
@@ -402,12 +366,8 @@ staffingForecast:
       summing `observed_chats` across the seven days of one `hour` equals that
       hour's `chats` there.
     parameters:
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
     responses:
       "200":
         description: The staffing forecast for the requested window
@@ -503,12 +463,8 @@ export:
           caller that never passes this parameter keeps getting exactly what it
           always got, byte-for-byte.
         schema: { type: string, enum: [csv, pdf], default: csv }
-      - name: from
-        in: query
-        schema: { type: string, format: date-time }
-      - name: to
-        in: query
-        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
+      - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"
       - $ref: "../openapi.yaml#/components/parameters/BenchmarkBaseline"
     responses:
       "200":

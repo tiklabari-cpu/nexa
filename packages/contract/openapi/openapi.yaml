@@ -3422,6 +3422,31 @@ components:
         one. An unrecognised value is a 400, not a silent fallback, so
         `baseline=industry` fails loudly rather than appearing supported.
       schema: { type: string, enum: [previous_period, previous_year] }
+    ReportRangeFrom:
+      name: from
+      in: query
+      required: false
+      description: |
+        Start of the reporting window. Defaults to 30 days before `to`.
+
+        **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+        not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+        a read replica or a column-store analytics warehouse, neither of which
+        this deployment has, so the window a single query may scan is bounded
+        instead. 366 rather than 365 so a twelve-month window that spans a leap
+        day is not the one that fails. The limit applies to the group endpoints
+        and to `/reports/export` alike — both run the same aggregation, so
+        capping only the download would leave the identical scan one query
+        string away.
+      schema: { type: string, format: date-time }
+    ReportRangeTo:
+      name: to
+      in: query
+      required: false
+      description: |
+        End of the reporting window. Defaults to now. The 366-day span limit
+        described on `from` is measured across this pair.
+      schema: { type: string, format: date-time }
 
 security:
   - bearerAuth: []

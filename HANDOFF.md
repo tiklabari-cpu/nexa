@@ -13,6 +13,77 @@
 
 ## Task log (newest-first)
 
+### tm 93.12 — 07.7-l: Uçtan uca doğrulama — izin matrisi, cross-tenant süpürmesi, NFR-P7 — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - **İzin matrisi (NFR-S3).** `apps/api/test/integration/reports-billing.test.ts`'e iki yeni blok, ikisi de
+    `REPORT_GROUPS` katalogundan **tablo-güdümlü** — elle yazılmış grup listesi yok, çünkü bir süpürme
+    ancak listesi kendini güncelliyorsa yazıldıktan sonra da doğru kalır. Yetkili tarafta dokuz grup ×
+    {`/reports/groups` listesi, JSON uç, CSV export, PDF export} + her grup `?baseline=previous_period`
+    ile benchmark bloğu. Yetkisiz tarafta: katalog **200 + boş liste** (403 DEĞİL — dört yeni grup
+    eklendikten sonra bu karar yeniden kanıtlandı), dokuz JSON ucu 403, CSV 403, PDF 403 (`format`
+    hiçbir yetki vermez); komşu scope'lar (`chats--all:rw` + `agents--all:rw` + `billing_manage`)
+    hiçbir görünürlük açmıyor.
+  - Katalog değişmezleri birim testte (`reports-export.test.ts` 24→27): her grubun **en az bir scope**'u
+    olmalı — `hasAnyScope(granted, [])` tasarım gereği `true`, yani `scopes: []` taşıyan bir giriş
+    komşularının yanında kapılı *görünürken* her token'a açık olurdu; id'ler tekil; id `/reports/<id>`
+    ile `?group=<id>` arasında birebir aynı (encode gerektirmiyor).
+  - **Cross-tenant süpürmesi.** `tenant-isolation.test.ts`'e **ikinci ve bağımsız** iki-lisanslı
+    organizasyon (`Org SWEEP`) — 07.7-b'nin `Org SIBLING` fixture'ı bilerek kullanılmadı: bir kararın
+    onu göstermek için kurulmuş düzenekte geçmesi, sonradan başka amaçla kurulmuş bir düzenekte
+    geçmesinden zayıf kanıttır. Dört v2 grubu × {JSON builder, CSV tablosu, PDF baytları}. Ajan adı
+    izleyici; PDF sabit sütun genişliğinde eleme yaptığı için ad kısa tutuldu ve arama content
+    stream'den okunan `(...) Tj` dizgeleri üzerinde yapılıyor (ham bayt araması, sütun daralınca
+    sessizce boş bir iddiaya dönerdi). Ayrıca Cases/Leads/Sales tablolarının **her hücresi** kapalı bir
+    sözlüğe karşı denetleniyor (tarih · sayı · null · sabit metrik adı) — §V3'ün "kimlik taşımaz"
+    kararı hücre düzeyinde kilitlendi. 39→44 test.
+  - **NFR-P7 kararı (kanıtla).** `EXPLAIN (ANALYZE)` ölçümü (seed'li veri, NFR-P2 okuma bütçesi 150 ms):
+    `leads_by_day` **1.758 ms** · `leads_total` 0.013 · `team_split` 0.096 · `team_ratings` 0.010 ·
+    `team_transfers` 0.016. Yani gecikme sorun değil — sorun **sınırsız pencere**: `from=1970-01-01`
+    her grubun toplamasını tam-tarih taramasına çevirir. NFR-P7'nin kendi cevabı (read-replica /
+    kolon-tabanlı analitik depo) bu deponun sınırı dışında (§9), o yüzden **aralık üst sınırı** eklendi:
+    `REPORT_MAX_RANGE_DAYS = 366` + `assertReportRange`, hem `resolveReportQuery`'de (dokuz JSON grubu)
+    hem `/reports/export`'ta (iki format). **Rate-limit yerine aralık sınırı**, çünkü limit sorgunun ne
+    sıklıkla koştuğunu sınırlar, ne kadar pahalı olduğunu değil; ayrıca Redis durumuna bağlı olmadığı
+    için deterministik ve dürüstçe test edilebilir. Gerekçe kodda yazılı.
+  - Sözleşme: `openapi.yaml`'a paylaşılan `ReportRangeFrom`/`ReportRangeTo` parametreleri (sınır notu
+    açıklamalarında) + `paths/reports.yaml`'daki **11** inline `from`/`to` çifti bunlara `$ref`. Yeni
+    path YOK; üretilen tip `string` kaldı (tamamen additive). `pnpm --filter @nexa/contract generate`
+    koştu, contract-parity 5/5.
+  - **E2E tam akış** (`apps/e2e/tests/reports.spec.ts` +1): on sekmenin hepsi görünür → benchmark rozeti
+    (`vs previous`) → CSV indirme → PDF indirme (format seçici) → Team performance'ta kaydedilen görünüm
+    reload sonrası sekmeyi geri getiriyor. Web tarafında dört gated sekmenin süpürmesi
+    (`ReportsPage.test.tsx` 66→72): katalog boşken hiçbir gated sekme ve Export yok ama altı
+    gated-olmayan sekme duruyor; her grup tek başına verildiğinde yalnız o sekme çıkıyor; format seçici
+    tam olarak `csv`/`pdf` sunuyor.
+- **Doğrulama:** typecheck 11/11 ✅ · lint 8/8 ✅ ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` 10/10 ✅ (api 1766→**1791**,
+  web 671→**677**) · build 7/7 ✅ · `pnpm -w test:integration` 5/5 ✅ (1344→**1366**) ·
+  `make test-e2e` **80/80** ✅.
+- **Varsayımlar:**
+  - Sınır **366 gün**, KAPSAM'ın önerdiği 365 değil: artık gün içeren on iki aylık pencere gerçek bir
+    istektir ve reddedilmemeli; ayrıca UI'nin en geniş preset'i (`PRESETS` 365) tam sınırda kalırdı.
+    Aynı sayı staffing forecast'ın kendi sınırı (`STAFFING_MAX_RANGE_DAYS`) ile hizalandı, böylece iki
+    rapor yüzeyi "ne kadar geçmiş sorulabilir" sorusuna farklı cevap vermiyor.
+  - Sınır **yalnız export'a değil**, dokuz JSON grup ucuna da uygulandı. KAPSAM "export rotasına" diyor;
+    ama aynı toplama `/reports/<group>` üzerinden bir query string ötede duruyor, orayı açık bırakan bir
+    sınır isim olarak sınırdır. Gerekçe koda yazıldı.
+  - MCP `get_report` (08.8.3-e) `resolveRange`'i doğrudan kullanıyor ve **sınırsız kaldı** — bu görevin
+    dosya listesinde yok, ve kapsadığı dört rapor (overview/breakdown/ai-agent/reviews) 07.5-i'nin
+    ölçtüğü hafif sorgular. Kapatılacaksa ayrı task.
+- **Sonraki pencereye not:**
+  - **07.7 kalemi kapandı (12/12).** PLAN.md satır 1112 `◐ → ✅`.
+  - E2E süiti veri durumuna duyarlı: art arda iki kez `make test-e2e` koşturulursa ikinci turda
+    `customers.spec.ts` + `skills-routing.spec.ts:76` düşer, çünkü seed **idempotent** (tenant varsa
+    yeniden kurmaz) ve testler kalıcı mutasyon bırakır. Temiz tur için önce `pnpm -w test:integration`
+    (aynı veritabanını TRUNCATE eder), sonra e2e. `prisma migrate reset` bu pencereden koşturulamıyor
+    (Prisma'nın AI-agent koruması + MASTER-PROMPT "DB drop yok").
+  - Hâlâ açık: bir "Compare to" baseline seçici hiçbir görevde yok (§5.2.4 açık soru). Eklenirse
+    `Delta`'nın `title="Compared with the previous period"`u ve `ReviewsTab`'ın iki "previous period"
+    metni `previous_year` için yalan söylüyor — birlikte güncellenmeli.
+  - `run-loop.sh` bu pencerede de commit'siz bırakıldı (tm 93.8'den beri değişmeyen, bu görevin
+    kapsamı dışındaki iş-üstü değişiklik).
+
 ### tm 93.11 — 07.7-k: Reports UI — Export butonu (CSV/PDF indirme) + Save view çubuğu — done — 2026-08-08 UTC
 
 - **Yapıldı:**

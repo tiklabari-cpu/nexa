@@ -128,6 +128,8 @@ const exportQuery = rangeQuery.extend({
   format: z.enum(['csv', 'pdf']).default('csv'),
 });
 
+const DAY_MS = 86_400_000;
+
 /**
  * Default window: the last 30 days, the span every dashboard opens on. Exported
  * so the `get_report` MCP tool (08.8.3-e) resolves a range the exact same way —
@@ -135,9 +137,51 @@ const exportQuery = rangeQuery.extend({
  */
 export function resolveRange(query: z.infer<typeof rangeQuery>): { from: Date; to: Date } {
   const to = query.to ?? new Date();
-  const from = query.from ?? new Date(to.getTime() - 30 * 86_400_000);
+  const from = query.from ?? new Date(to.getTime() - 30 * DAY_MS);
   if (from > to) throw ApiError.validation('`from` must be before `to`.');
   return { from, to };
+}
+
+/**
+ * The widest window a report group will aggregate over (NFR-P7).
+ *
+ * NFR-P7 answers "heavy reports" with a read replica or a column-store analytics
+ * warehouse (PRD:748). Neither exists here and neither can — they are
+ * infrastructure this repo is explicitly out of scope for (PLAN §9) — so what is
+ * left is to bound the work a single request can ask for. Without a cap the
+ * window is whatever a caller typed: `from=1970-01-01` makes every group's
+ * aggregation a full-history scan of `threads`/`tickets`/`events`, on an endpoint
+ * any `reports_read` token can call as often as its rate-limit bucket allows.
+ *
+ * A range cap rather than a second rate-limit bucket, deliberately. A limit on
+ * requests-per-minute bounds how *often* an expensive query runs, not how
+ * expensive it is — one unbounded scan still ties up a connection for as long as
+ * it takes — and its behaviour depends on Redis state, so it is neither
+ * deterministic nor honestly testable. The cap bounds the query itself, refuses
+ * in the request the caller can fix, and is the same shape the staffing forecast
+ * already uses ({@link STAFFING_MAX_RANGE_DAYS}).
+ *
+ * 366 days, not 365: a "last twelve months" window that spans a leap day is a
+ * real request, and it must not be the one that fails. Past a year the honest
+ * answer is "narrow the range", not a slow request — the same reasoning, and the
+ * same number, the forecast settled on.
+ */
+export const REPORT_MAX_RANGE_DAYS = 366;
+
+/**
+ * A window a report group can be aggregated over, or a 400 explaining why not.
+ *
+ * Applied to the JSON group endpoints ({@link resolveReportQuery}) *and* the
+ * export route, because both run the same aggregations: capping only the
+ * download would leave the identical scan one query string away on
+ * `/reports/<group>`, which is a guard in name only.
+ */
+function assertReportRange(from: Date, to: Date): void {
+  if (to.getTime() - from.getTime() > REPORT_MAX_RANGE_DAYS * DAY_MS) {
+    throw ApiError.validation(
+      `A report covers at most ${REPORT_MAX_RANGE_DAYS} days; narrow \`from\`/\`to\`.`,
+    );
+  }
 }
 
 /**
@@ -169,6 +213,7 @@ function resolveReportQuery(query: unknown): {
     throw ApiError.validation('Invalid date range.');
   }
   const { from, to } = resolveRange(parsed.data);
+  assertReportRange(from, to);
   return {
     from,
     to,
@@ -2257,19 +2302,23 @@ export async function buildTeamPerformanceReport(
 // recomputed per request (PLAN §5.2.22 — no StaffingForecast table).
 // ===========================================================================
 
-const DAY_MS = 86_400_000;
 const SECONDS_PER_MINUTE = 60;
 
 /**
  * The widest window the forecast will read.
  *
- * `resolveRange` caps nothing, and this endpoint — unlike every other report —
- * pulls raw rows into JavaScript to walk them, so an unbounded range would size
- * both the day loop and the event fetch by whatever a caller typed. A year is
- * already far more history than a weekly staffing pattern can be argued from;
- * past it the honest answer is "narrow the range", not a slow request.
+ * The forecast parses `rangeQuery` directly rather than going through
+ * {@link resolveReportQuery} (it takes no `baseline` — see the route), so
+ * {@link assertReportRange} never runs for it; this is its own bound. It needs
+ * one for a second reason besides NFR-P7: unlike every other report, this
+ * endpoint pulls raw rows into JavaScript to walk them, so an unbounded range
+ * would size both the day loop and the event fetch by whatever a caller typed.
+ * A year is already far more history than a weekly staffing pattern can be
+ * argued from; past it the honest answer is "narrow the range", not a slow
+ * request. Same number as {@link REPORT_MAX_RANGE_DAYS}, so the two report
+ * surfaces never disagree about how much history a caller may ask for.
  */
-const STAFFING_MAX_RANGE_DAYS = 366;
+const STAFFING_MAX_RANGE_DAYS = REPORT_MAX_RANGE_DAYS;
 
 /**
  * The most presence rows one forecast will hold in memory.
@@ -2812,6 +2861,10 @@ export default async function reportRoutes(
       throw ApiError.validation('Invalid export request.');
     }
     const { from, to } = resolveRange(parsed.data);
+    // Same NFR-P7 bound as the JSON groups: an export runs the very same
+    // aggregation, and this is the surface most likely to be pointed at "all of
+    // it" by someone reaching for a spreadsheet of the whole history.
+    assertReportRange(from, to);
 
     const group = reportGroup(parsed.data.group);
     // A 400, not a 404: the group is a request parameter the caller got wrong,

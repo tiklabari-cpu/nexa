@@ -178,6 +178,86 @@ test.describe('reports overview', () => {
 
     await agentPage.screenshot({ path: 'kanit/26-reports-export-save-view.png', fullPage: true });
   });
+
+  /**
+   * The whole 07.7 surface in one pass (07.7-l) — the sequence a person actually
+   * performs, rather than the pieces each slice proved on its own: open the
+   * page, see every tab the catalogue grants, read a benchmark badge, download
+   * the report in both formats, save the view, and come back to it after a
+   * reload. Each step is covered above in isolation; what this adds is that they
+   * compose in one session, against a real browser and a real server.
+   *
+   * The seeded demo agent holds `reports_read`, which grants every group, so
+   * this is the "İzin bazlı görünürlük" case where everything is visible; the
+   * refusing half of the matrix is server-side, where a token can be minted
+   * without one (`reports-billing.test.ts`, "permission matrix").
+   */
+  test('walks every granted tab, reads a benchmark badge, downloads CSV and PDF, and returns to a saved view (07.7-l)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    // Six always-rendered tabs plus the four gated on `GET /reports/groups`.
+    const TABS = [
+      'Overview',
+      'AI Agent',
+      'Reviews',
+      'Breakdown',
+      'Staffing',
+      'Chat topics',
+      'Cases',
+      'Leads',
+      'Sales',
+      'Team performance',
+    ];
+    for (const name of TABS) {
+      await expect(agentPage.getByRole('tab', { name })).toBeVisible();
+    }
+
+    // Benchmark comparison, end to end: the Overview KPIs carry a vs-previous
+    // badge derived from the `previous_period` block every group returns. Both
+    // of the badge's wordings ("No change vs previous" / "↑ n vs previous") end
+    // the same way, so this matches whichever the seeded window produces.
+    await expect(agentPage.getByText(/vs previous/).first()).toBeVisible();
+
+    // Both formats, each through a real browser download, each named by the
+    // server (`exportFilename`) for the group and window.
+    for (const format of ['csv', 'pdf'] as const) {
+      await agentPage.getByLabel('Export format').selectOption(format);
+      const downloadPromise = agentPage.waitForEvent('download');
+      await agentPage.getByRole('button', { name: 'Export' }).click();
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toMatch(
+        new RegExp(`^nexa-overview-\\d{4}-\\d{2}-\\d{2}-\\d{4}-\\d{2}-\\d{2}\\.${format}$`),
+      );
+    }
+
+    // A saved view captures the tab as well as the range, so saving from Team
+    // performance, navigating away and reloading must land back on that tab —
+    // which is the part a same-tab save could never prove.
+    await agentPage.getByRole('tab', { name: 'Team performance' }).click();
+    await agentPage.getByRole('button', { name: 'Saved views' }).click();
+    await agentPage.getByLabel('Save this view').fill('Team last 30 days');
+    await agentPage.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await agentPage.getByRole('tab', { name: 'Overview' }).click();
+    await agentPage.reload();
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+    await expect(agentPage.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await agentPage.getByRole('button', { name: 'Saved views' }).click();
+    await agentPage.getByRole('button', { name: 'Team last 30 days', exact: true }).click();
+    await expect(agentPage.getByRole('tab', { name: 'Team performance' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await agentPage.screenshot({ path: 'kanit/27-reports-full-sweep.png', fullPage: true });
+  });
 });
 
 /**

@@ -6332,6 +6332,25 @@ export interface components {
      *     `baseline=industry` fails loudly rather than appearing supported.
      */
     BenchmarkBaseline: 'previous_period' | 'previous_year';
+    /**
+     * @description Start of the reporting window. Defaults to 30 days before `to`.
+     *
+     *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+     *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+     *     a read replica or a column-store analytics warehouse, neither of which
+     *     this deployment has, so the window a single query may scan is bounded
+     *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+     *     day is not the one that fails. The limit applies to the group endpoints
+     *     and to `/reports/export` alike — both run the same aggregation, so
+     *     capping only the download would leave the identical scan one query
+     *     string away.
+     */
+    ReportRangeFrom: string;
+    /**
+     * @description End of the reporting window. Defaults to now. The 366-day span limit
+     *     described on `from` is measured across this pair.
+     */
+    ReportRangeTo: string;
   };
   requestBodies: never;
   headers: never;
@@ -11520,8 +11539,25 @@ export interface operations {
   getReportsOverview: {
     parameters: {
       query?: {
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
         /**
          * @description Which of **this license's own** past windows the report is benchmarked
          *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
@@ -11571,8 +11607,25 @@ export interface operations {
   getReportsBreakdown: {
     parameters: {
       query?: {
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
         /**
          * @description Which of **this license's own** past windows the report is benchmarked
          *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
@@ -11622,8 +11675,25 @@ export interface operations {
   getReportsAiAgent: {
     parameters: {
       query?: {
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
         /**
          * @description Which of **this license's own** past windows the report is benchmarked
          *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
@@ -11673,8 +11743,25 @@ export interface operations {
   getReportsReviews: {
     parameters: {
       query?: {
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
         /**
          * @description Which of **this license's own** past windows the report is benchmarked
          *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
@@ -11724,8 +11811,25 @@ export interface operations {
   getReportsTopics: {
     parameters: {
       query?: {
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
         /**
          * @description Which of **this license's own** past windows the report is benchmarked
          *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
@@ -11775,8 +11879,25 @@ export interface operations {
   getReportsCases: {
     parameters: {
       query?: {
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
         /**
          * @description Which of **this license's own** past windows the report is benchmarked
          *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
@@ -11826,8 +11947,25 @@ export interface operations {
   getReportsLeads: {
     parameters: {
       query?: {
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
         /**
          * @description Which of **this license's own** past windows the report is benchmarked
          *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
@@ -11877,8 +12015,25 @@ export interface operations {
   getReportsTeamPerformance: {
     parameters: {
       query?: {
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
         /**
          * @description Which of **this license's own** past windows the report is benchmarked
          *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
@@ -11928,8 +12083,25 @@ export interface operations {
   getReportsSales: {
     parameters: {
       query?: {
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
         /**
          * @description Which of **this license's own** past windows the report is benchmarked
          *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
@@ -11979,8 +12151,25 @@ export interface operations {
   getReportsStaffingForecast: {
     parameters: {
       query?: {
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
       };
       header?: never;
       path?: never;
@@ -12036,8 +12225,25 @@ export interface operations {
          *     always got, byte-for-byte.
          */
         format?: 'csv' | 'pdf';
-        from?: string;
-        to?: string;
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
         /**
          * @description Which of **this license's own** past windows the report is benchmarked
          *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to

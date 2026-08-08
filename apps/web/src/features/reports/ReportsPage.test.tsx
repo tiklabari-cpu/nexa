@@ -1491,6 +1491,79 @@ describe('ReportsPage — Export control (07.7-k)', () => {
   });
 });
 
+/**
+ * Permission-gated surfaces, swept (07.7-l).
+ *
+ * Each slice proved its own pair of tabs against `/reports/groups`. What no
+ * pairwise test can show is that *every* gated surface follows the catalogue and
+ * that none of the ungated ones accidentally started to — a tab wired into
+ * `GROUP_GATED_TABS` but rendered unconditionally, or the reverse, passes every
+ * test that only looks at two tabs at a time.
+ */
+describe('ReportsPage — permission-gated surfaces, swept (07.7-l)', () => {
+  /** The four v2 report groups whose tabs follow `GET /reports/groups`. */
+  const GATED: ReadonlyArray<readonly [string, string]> = [
+    ['cases', 'Cases'],
+    ['leads', 'Leads'],
+    ['sales', 'Sales'],
+    ['team-performance', 'Team performance'],
+  ];
+
+  /** Tabs that are not report groups, and so must render whatever the catalogue says. */
+  const UNGATED = ['Overview', 'AI Agent', 'Reviews', 'Breakdown', 'Staffing', 'Chat topics'];
+
+  it('renders no gated tab and no Export control when the catalogue grants nothing', async () => {
+    mockGroupsExport({ groups: [] });
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+
+    for (const [, label] of GATED) {
+      expect(screen.queryByRole('tab', { name: label }), label).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole('button', { name: 'Export' })).not.toBeInTheDocument();
+
+    // …and the rest of the page is untouched: this is a per-group gate, not a
+    // blackout of Reports for a caller the backend would still answer.
+    for (const label of UNGATED) {
+      expect(screen.getByRole('tab', { name: label }), label).toBeInTheDocument();
+    }
+  });
+
+  it.each(GATED)(
+    'grants %s alone: that tab appears, the other three stay hidden',
+    async (id, label) => {
+      mockGroupsExport({ groups: [{ id, label }] });
+      renderReports(<ReportsPage />);
+      await screen.findByText('Conversations', { exact: true });
+
+      expect(await screen.findByRole('tab', { name: label })).toBeInTheDocument();
+      for (const [otherId, otherLabel] of GATED) {
+        if (otherId === id) continue;
+        expect(screen.queryByRole('tab', { name: otherLabel }), otherLabel).not.toBeInTheDocument();
+      }
+
+      // Overview is the open tab and this catalogue does not grant it, so the
+      // Export control stays hidden: it follows the *active* tab's grant, not
+      // the fact that the caller can see some group somewhere.
+      expect(screen.queryByRole('button', { name: 'Export' })).not.toBeInTheDocument();
+    },
+  );
+
+  it('offers exactly the two formats the export endpoint serves', async () => {
+    // `format` is a closed enum server-side (`csv | pdf`, anything else a 400).
+    // A third option here would be a download that always fails.
+    mockGroupsExport();
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+
+    const select = await screen.findByLabelText('Export format');
+    expect([...(select as HTMLSelectElement).options].map((option) => option.value)).toEqual([
+      'csv',
+      'pdf',
+    ]);
+  });
+});
+
 describe('ReportsPage — Save view (KK-derived from 07.7-h)', () => {
   it('rejects an empty saved-view name with a field-under error and keeps Submit disabled (T4-a form primitive)', async () => {
     mockGroupsExport();

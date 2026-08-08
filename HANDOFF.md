@@ -13,6 +13,57 @@
 
 ## Task log (newest-first)
 
+### tm 94.7 — 07.9-sched-f · `scheduled-reports:run` operatör betiği + npm script (dry-run varsayılanı) — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - Yeni `apps/api/src/services/reports/scheduled-reports-run.ts` — `chat-timeout-run.ts` /
+    `retention/run.ts` deseni: `loadEnvFile()` → `parseEnv()` →
+    `new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl })` → JSON rapor stdout'a, tek
+    satırlık özet stderr'e, `finally`'de `$disconnect`, hata yakalayıcı `process.exitCode = 1`.
+  - **Dry-run tasarımı** (94.6'nın notu doğrultusunda): `ScheduledReportSweeper`'ın kendi
+    `dryRun` parametresi yok ve olamaz — claim (`scheduled_report_runs`'a INSERT) tek-teslim
+    garantisinin ta kendisi, "commit etmeden çalıştır" onu geçersiz kılar. Bu yüzden dry-run
+    (bayraksız, varsayılan) sweeper'ı hiç çağırmıyor: kendi `preview()` fonksiyonu aynı
+    `retention_list_tenants()` + `withTenant` + `periodFor` ile hangi (enabled) tanımın hangi
+    dönem için hazır olduğunu (`alreadyClaimed: false` — `scheduledReportId_periodKey` compound
+    unique'i `findUnique` ile sorgulanıyor) listeler; hiçbir claim yazmaz, hiçbir e-posta göndermez.
+    `--apply` tek claim+teslim yolu: doğrudan `new ScheduledReportSweeper(db, new
+    FileMailer(env.MAIL_DIR)).run({ now })`.
+  - `apps/api/package.json`'a `"scheduled-reports:run": "tsx src/services/reports/scheduled-reports-run.ts"`.
+  - Testler `apps/api/test/integration/scheduled-reports-sweep.test.ts`'e nested `describe`
+    olarak eklendi (+4, dosya toplamı 16) — betik **gerçek bir alt-süreç olarak** çalıştırılıyor
+    (`pnpm --filter @nexa/api run scheduled-reports:run [-- --apply]`, `reports-topics.test.ts`'in
+    "demo seed diversity" testindeki `execFile`/`promisify` deseni), çünkü betiğin kendi iddiaları
+    (gerçekten hiçbir şey yazmadığı, gerçekten kendi `PrismaClient`'ını kurduğu) yalnız sınıfı
+    import edip çağırarak kanıtlanamaz: (i) dry-run → posta kutusu boş + `scheduled_report_runs`
+    satır sayısı sabit; (ii) `--apply` → rapor toplamları run tablosuyla birebir; (iii)
+    cross-tenant → iki lisans kendi CSV'sini kendi alıcısına alır, karşı tarafın ajan adını
+    içermez; (iv) DB erişilemezken (`DATABASE_APP_URL` bozuk porta işaret ediyor) alt-süreç
+    `exitCode=1` ile çıkar ve posta kutusu boş kalır.
+- **Doğrulama** (hepsi ön planda, exit code'larla): `pnpm --filter @nexa/api typecheck` 0 ·
+  `pnpm -w lint` 0 · `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` → **1900/1900**
+  (90 dosya, +4 yeni test) · `pnpm -w test:integration` → **1445/1445** (61 dosya, +4) ·
+  `pnpm -w build` 0 · `pnpm --filter @nexa/api db:check-drift` → "no drift" · `prettier --check`
+  değişen dosyalarda 0 · `reports.spec.ts` (e2e, bu alanın kapsadığı akış — bağımsız değişse de
+  94.6'nın önceki kapanış geleneği) **10/10** yeşil.
+- **Varsayımlar:**
+  - Preview'ın field adları (`ready`/`alreadyClaimed`) task tanımında birebir yazılı değildi —
+    "hangi tanımın hangi dönem için hazır olduğunu listeler" KK cümlesinden türetildi.
+  - `now = new Date()` betik seviyesinde enjekte edilmiyor (sweeper'ın `now?: Date` parametresi
+    operatör betiği için kullanılmıyor) — bu bir CLI, `chat-timeout-run.ts`/`retention/run.ts`
+    ile aynı desen (ikisi de kendi `now`'unu enjekte etmiyor); testler gerçek duvar saatine göre
+    `periodFor('daily', new Date())` ile beklenen anahtarı türetiyor, sabit bir `NOW` sabitine
+    değil.
+- **Sonraki pencereye not:**
+  - `-g` (teslim geçmişi ucu, `GET /reports/scheduled-exports/{id}/runs`) `scheduled_report_runs`'ı
+    okuyacak — alanlar `-e`'de dolduruldu (`status`/`period_key`/`period_from`/`period_to`/
+    `row_count`/`recipient_count`/`error`).
+  - `-i` (uçtan uca doğrulama) artık `-f`'in gerçek alt-süreç testleriyle örtüşüyor olabilir;
+    kapsamını -g/-h'nin UI/history yüzeyine odaklamak, `-f`'in zaten kanıtladığı
+    cross-tenant/idempotens senaryolarını tekrar etmemek gerekebilir.
+  - `run-loop.sh`'teki bu task'la ilgisiz değişiklik (deneme sayacı + blocked görevleri yeniden
+    seçme) hâlâ çalışma alanında duruyor; tm 94.3'ten beri kapsam dışı bırakıldı (CONVENTIONS §5).
+
 ### tm 94.6 — 07.9-sched-e · zamanlayıcı çekirdeği: dönem hesabı + tek-teslim claim + tenant-scoped sweep — done — 2026-08-08 UTC
 
 - **Yapıldı:**

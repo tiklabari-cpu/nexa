@@ -4362,12 +4362,12 @@
             "description": "Yeni `apps/api/src/services/reports/scheduled-reports-run.ts`: `loadEnvFile()` → `parseEnv()` → `new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl })` → `new FileMailer(env.MAIL_DIR)` → `new ScheduledReportSweeper(db, mailer).run({ dryRun })` → makine-okunur JSON rapor stdout'a, tek satırlık insan özeti stderr'e, `finally` içinde `$disconnect`, hata yakalayıcı `process.exitCode = 1`. `apps/",
             "details": "07.9-sched-f — `scheduled-reports:run` operatör betiği + npm script (dry-run varsayılanı)  [SONNET-XHIGH]\n\nPRD: §5.3-Reports (FR-MOD-07.7 uzantısı) + NFR-C8\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 1 yeni dosya + 1 package.json satırı; (2) güvenlik sınırı yok — tenant bağlamını kuran ve RLS'e dayanan mantık -e'nin içinde; bu dosya PrismaClient'ı `env.runtimeDatabaseUrl` (RLS-bağlı rol) ile kurup sweeper'ı çağırır ve JSON basar; (3) eşzamanlılık akıl yürütmesi yok; (4) desen ismen var ve satır satır eşleşiyor: `chat-timeout-run.ts`; (5) kontrat değişikliği yok; (6) KK mekanik. UYARI (gözden geçiren için): `datasourceUrl: env.runtimeDatabaseUrl` seçimi tek kritik satırdır — yanlış URL RLS'i devre dışı bırakır; bu yüzden referans dosya ismen verildi ve cross-tenant regresyonu zorunlu testlere kondu. Bu satır dışında dosyada karar yok.\nNEDEN AÇIK: `apps/api/package.json` scripts bölümünde yalnız `retention:run` (satır 22) ve `chat-timeout:run` (satır 23) var — zamanlanmış export'u tetikleyecek giriş noktası yok. Depoda production scheduler yok: `retention/run.ts` ve `chat-timeout-run.ts` dosya başı yorumları 'There is no production scheduler in this environment (a project boundary)' diyor — tetik yolu bir operatör/host-cron betiğidir.\nKAPSAM: Yeni `apps/api/src/services/reports/scheduled-reports-run.ts`: `loadEnvFile()` → `parseEnv()` → `new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl })` → `new FileMailer(env.MAIL_DIR)` → `new ScheduledReportSweeper(db, mailer).run({ dryRun })` → makine-okunur JSON rapor stdout'a, tek satırlık insan özeti stderr'e, `finally` içinde `$disconnect`, hata yakalayıcı `process.exitCode = 1`. `apps/api/package.json`'a `\"scheduled-reports:run\": \"tsx src/services/reports/scheduled-reports-run.ts\"`. VARSAYILAN DRY-RUN, `--apply` ile teslim — `retention/run.ts` gerekçesinin aynısı: yan etki geri alınamaz (gönderilmiş e-posta geri çağrılamaz), o yüzden `chat-timeout-run.ts`'in dry-run'sız biçimi değil retention'ın dry-run varsayılanı kopyalanır. Dry-run HİÇBİR claim yazmaz, yalnız hangi tanımın hangi dönem için hazır olduğunu listeler.\nDOSYALAR: apps/api/src/services/reports/scheduled-reports-run.ts · apps/api/package.json · apps/api/test/integration/scheduled-reports-sweep.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/chat/chat-timeout-run.ts (birebir yapı: loadEnvFile → parseEnv → PrismaClient(runtimeDatabaseUrl) → FileMailer → sweeper → stdout JSON / stderr özet / finally disconnect / exitCode) · apps/api/src/services/retention/run.ts (dry-run varsayılanı + `--apply` bayrağı deseni ve gerekçe yorumu) · apps/api/package.json (satır 22-23 — mevcut iki :run script'i)\nKK (birebir): \"KK-türetilmiş: \"Zamanlanmış export, operatörün (veya host cron'unun) çalıştırdığı tek bir komutla tetiklenir; komut varsayılan olarak hiçbir şey göndermez, ne teslim edeceğini listeler; `--apply` ile teslim eder ve ne teslim ettiğini, neyi atladığını, neyin başarısız olduğunu makine-okunur bir rapor olarak yazar.\" — Türetme gerekçesi: PRD §5.3 satırının Kabul Kriteri sütunu yok ve PRD zamanlama altyapısını tarif etmiyor; kriter, depodaki iki mevcut sweep betiğinin yazılı sözleşmesinden ('There is no production scheduler in this environment — a project boundary'), `retention/run.ts`'in geri-alınamaz-yan-etki gerekçesinden ve varsayım #1'den türetildi.\"\nKK DOĞRULAMA: Betik bayraksız (dry-run) koştuğunda `.data/mail` boş kalır ve `scheduled_report_runs` satır sayısı değişmez; `--apply` ile teslim gerçekleşir ve stdout'taki JSON `totals.delivered` tabloyla tutarlı → türetilmiş KK'nın iki yarısı. `scheduled-reports-sweep.test.ts`'e eklenen kanıt: betiğin kullandığı yapılandırma (RLS-bağlı runtime rolü) altında iki lisanslı senaryo çapraz teslim üretmez.\nKAPSAM DIŞI: Gerçek cron kurulumu / systemd timer / deploy (production sınırı, PLAN §9) · Retry mantığı (açık soru #3) · İş kuyruğu altyapısı (BullMQ / Redis Streams — varsayım #1) · Zamanlanmış export'u API'den elle tetikleyen endpoint (bu turda yok)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration: bayraksız (dry-run) koşu hiçbir yan etki üretmez — posta kutusu ve run tablosu değişmez · integration: `--apply` koşusu teslim eder ve rapor toplamları tabloyla tutarlı · cross-tenant (zorunlu regresyon): betiğin kurduğu client ile koşulan sweep iki lisans arasında sızdırmaz — RLS-bağlı rolün kullanıldığının kanıtı · negatif: DB erişilemezse `process.exitCode = 1` + stderr'e hata (mevcut iki betiğin davranışı)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               6
             ],
             "parentId": "94",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T08:15:13.904Z"
           },
           {
             "id": 8,
@@ -4415,7 +4415,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T07:58:05.309Z",
+        "updatedAt": "2026-08-08T08:15:13.904Z",
         "complexity": 9,
         "recommendedSubtasks": 10,
         "expansionPrompt": "\"07.9 — Zamanlanmış (scheduled) rapor export  ·  dilim V2-4\" görevini 10 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5011,7 +5011,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T07:58:05.309Z",
+      "lastModified": "2026-08-08T08:15:13.904Z",
       "taskCount": 103,
       "completedCount": 84,
       "tags": [

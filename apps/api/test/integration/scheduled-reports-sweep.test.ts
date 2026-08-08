@@ -30,11 +30,13 @@
  * makes "only its own data" something the test can read rather than infer from
  * a count.
  */
+import { execFile } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { PrismaClient } from '@prisma/client';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
 import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
 import { ScheduledReportSweeper } from '../../src/services/reports/scheduled-report-sweeper.js';
@@ -367,5 +369,126 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
 
     const keys = (await runsOf(fx.a)).map((run) => run.periodKey).sort();
     expect(keys).toEqual(['2026-07', '2026-08-07', '2026-W31']);
+  });
+
+  // ==========================================================================
+  // The operator script (07.9-sched-f) — spawned as a real process, exactly
+  // how an operator or a host cron would invoke it. This is the only way to
+  // prove its own claims: that its dry-run truly writes nothing (not merely
+  // that the sweeper's `dryRun` flag would, since the sweeper has none), and
+  // that a database it cannot reach fails the process rather than the assertion.
+  // ==========================================================================
+
+  describe('scheduled-reports:run script', () => {
+    const run = promisify(execFile);
+    // test/integration → test → api → apps → repo root.
+    const repoRoot = resolve(import.meta.dirname, '../../../..');
+
+    let scriptMailDir: string;
+
+    async function runScript(
+      args: string[] = [],
+      envOverrides: Record<string, string> = {},
+    ): Promise<{ stdout: string; stderr: string }> {
+      return run(
+        'pnpm',
+        [
+          '--filter',
+          '@nexa/api',
+          'run',
+          'scheduled-reports:run',
+          ...(args.length > 0 ? ['--', ...args] : []),
+        ],
+        {
+          cwd: repoRoot,
+          env: { ...process.env, MAIL_DIR: scriptMailDir, ...envOverrides },
+          maxBuffer: 4 * 1024 * 1024,
+        },
+      );
+    }
+
+    const scriptMailbox = async () =>
+      (await new FileMailer(scriptMailDir).outbox()).filter((m) => m.kind === 'scheduled_report');
+
+    beforeEach(async () => {
+      scriptMailDir = await mkdtemp(join(tmpdir(), 'nexa-sched-run-'));
+    });
+
+    afterEach(async () => {
+      await rm(scriptMailDir, { recursive: true, force: true });
+    });
+
+    it('dry-run lists the ready definition and claims or sends nothing', async () => {
+      await defineSchedule(fx.a);
+      await seedAssignedThread(fx.a, fx.a.agentAccountId);
+
+      const { stdout, stderr } = await runScript();
+      const report = JSON.parse(stdout) as {
+        dryRun: boolean;
+        totals: { tenants: number; ready: number; alreadyClaimed: number };
+        tenants: Array<{
+          licenseId: string;
+          definitions: Array<{ group: string; periodKey: string | null; alreadyClaimed: boolean }>;
+        }>;
+      };
+
+      expect(report.dryRun).toBe(true);
+      const tenantPreview = report.tenants.find((t) => t.licenseId === fx.a.licenseId.toString());
+      expect(tenantPreview).toBeDefined();
+      const definition = tenantPreview?.definitions.find((d) => d.group === 'team-performance');
+      expect(definition).toMatchObject({ alreadyClaimed: false });
+      expect(definition?.periodKey).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(stderr).toContain('dry-run');
+
+      // The claim to verify: nothing was written or sent.
+      expect(await runsOf(fx.a)).toHaveLength(0);
+      expect(await scriptMailbox()).toHaveLength(0);
+    }, 30_000);
+
+    it('--apply delivers, and the report totals match the run table it wrote', async () => {
+      await defineSchedule(fx.a);
+      await seedAssignedThread(fx.a, fx.a.agentAccountId);
+
+      const { stdout, stderr } = await runScript(['--apply']);
+      const report = JSON.parse(stdout) as {
+        totals: { delivered: number; skipped: number; failed: number };
+      };
+      expect(report.totals).toMatchObject({ delivered: 1, skipped: 0, failed: 0 });
+      expect(stderr).toContain('applied');
+
+      const runs = await runsOf(fx.a);
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({ status: 'sent', recipientCount: 1 });
+      expect(await scriptMailbox()).toHaveLength(1);
+    }, 30_000);
+
+    it('the client the script itself constructs does not leak one licence into another', async () => {
+      await defineSchedule(fx.a);
+      await defineSchedule(fx.b);
+      await seedAssignedThread(fx.a, fx.a.agentAccountId);
+      await seedAssignedThread(fx.b, fx.b.agentAccountId);
+
+      const { stdout } = await runScript(['--apply']);
+      const report = JSON.parse(stdout) as { totals: { delivered: number } };
+      expect(report.totals.delivered).toBe(2);
+
+      const inbox = await scriptMailbox();
+      expect(inbox).toHaveLength(2);
+      const toA = inbox.find((m) => m.to === fx.a.agentEmail);
+      const toB = inbox.find((m) => m.to === fx.b.agentEmail);
+      expect(toA?.body).toContain('Agent a');
+      expect(toA?.body).not.toContain('Agent b');
+      expect(toB?.body).toContain('Agent b');
+      expect(toB?.body).not.toContain('Agent a');
+    }, 30_000);
+
+    it('exits with a non-zero code and sends nothing when the database is unreachable', async () => {
+      await expect(
+        runScript([], {
+          DATABASE_APP_URL: 'postgresql://nexa_app:wrong@127.0.0.1:1/nexa_unreachable',
+        }),
+      ).rejects.toMatchObject({ code: 1 });
+      expect(await scriptMailbox()).toHaveLength(0);
+    }, 30_000);
   });
 });

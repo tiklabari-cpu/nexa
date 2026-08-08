@@ -4653,10 +4653,10 @@
             "description": "Saf, bağımlılıksız modül: `parseCsv(text, limits)` → `{ header: string[], rows: string[][] }` veya tipli ayrıştırma hatası (satır/sütun konumlu). Kapsanan: RFC4180 tırnaklı alanlar, alan içi virgül/çift-tırnak (ikiye katlama), gömülü satır sonu, CRLF/LF karışımı, baştaki BOM, sondaki boş satır toleransı, boş hücre. Güvenlik: her hücre `=`/`+`/`-`/`@`/TAB/CR ile başlıyorsa `'` ön-eki ile nötrlenir ",
             "details": "06.3.2-bulk-a — RFC4180 CSV ayrıştırıcı + formül-enjeksiyon nötrleme (saf modül, lineer zaman)  [OPUS-MAX]\n\nPRD: FR-MOD-06.3.2 (+ NFR-S9 PII/içerik yazma yolu, NFR-S8 DoS bütçesi)\nETİKET GEREKÇESİ: OPUS-MAX: koşul 4 ihlali — depoda kopyalanacak bir CSV *parser* yok (apps/api'de csv-parse/papaparse/multipart grep 0; reports-export.ts yalnız serileştirme, ters yön), yani yeni algoritma tasarımı. Üstüne enjeksiyon (formül lead) sınıfı + ReDoS riski var; bu depoda tam bu sınıf bir kez ısırdı (spam-filter normaliseToken O(n²), §5 tablosu 08.9.3 notu). Yanlış parser = sessiz veri bozulması → KB'den yanlış AI cevabı; kararın maliyeti yüksek. Çekirdek bölünmez.\nNEDEN AÇIK: apps/api'de CSV *ayrıştırma* kodu grep ile 0 sonuç; tek CSV-farkındalıklı dosya `apps/api/src/routes/reports-export.ts` ve o serileştirme (export) yönünde — `FORMULA_LEAD = /^[=+\\-@\\t\\r]/` + `csvField()` quoting orada var, parse yok. `csv-parse`/`papaparse`/`@fastify/multipart` apps/api/package.json'da yok (dependencies listesi doğrulandı).\nKAPSAM: Saf, bağımlılıksız modül: `parseCsv(text, limits)` → `{ header: string[], rows: string[][] }` veya tipli ayrıştırma hatası (satır/sütun konumlu). Kapsanan: RFC4180 tırnaklı alanlar, alan içi virgül/çift-tırnak (ikiye katlama), gömülü satır sonu, CRLF/LF karışımı, baştaki BOM, sondaki boş satır toleransı, boş hücre. Güvenlik: her hücre `=`/`+`/`-`/`@`/TAB/CR ile başlıyorsa `'` ön-eki ile nötrlenir (reports-export.ts'teki FORMULA_LEAD sınıfının ters yönü — içe aktarılan metin ileride 07.7 export'undan geri çıkarsa aynı risk yeniden doğar). Bütçe: `maxRows`, `maxCellChars`, `maxBytes` parametreleri; aşım tipli hata (sessiz kırpma YOK). Uygulama tek geçişli karakter yürüyüşü olur — geri-izlemeli regex YASAK (lineerlik testle kanıtlanır). Kontrat/DB'ye dokunmaz.\nDOSYALAR: apps/api/src/lib/csv-import.ts · apps/api/src/lib/csv-import.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports-export.ts · apps/api/src/services/security/spam-filter.ts · apps/api/src/lib/cc-mask.ts · apps/api/src/lib/cc-mask.test.ts\nKK (birebir): \"crawl/parse\" | \"KK-türetilmiş: ayrıştırılan her CSV hücresi, formül-lead (=,+,-,@,TAB,CR) taşıyorsa nötrlenerek saklanır ve ayrıştırma süresi girdi uzunluğunda lineer kalır. — PRD KK yalnız 'crawl/parse' diyor, ayrıştırıcının savunması gereken saldırı sınıfını (spreadsheet formula injection / ReDoS) adlandırmıyor; sınıf reports-export.ts'teki mevcut guard'dan ve depodaki spam-filter ReDoS regresyonundan türetildi.\"\nKK DOĞRULAMA: `pnpm --filter @nexa/api test:unit` → `src/lib/csv-import.test.ts`: (a) tırnaklı/gömülü-satır-sonlu CSV doğru satırlara ayrışır = 'parse' KK payı; (b) `=cmd|' /C calc'!A0` hücresi `'` ön-ekli döner = türetilmiş KK'nın enjeksiyon payı; (c) 100k'lık patolojik girdi (tırnak/ZWSP dolgusu) için süre lineer bant içinde = türetilmiş KK'nın ReDoS payı.\nKAPSAM DIŞI: HTTP route, kontrat, DB — bu alt-görev saf modül · TSV/XLSX/PDF/DOCX ayrıştırma (v2-04 §312'deki ikili doküman listesi bu kalemin dışında) · kolon→alan eşlemesi ve satır doğrulaması (06.3.2-bulk-b) · kaynak oluşturma/indeksleme (06.3.2-bulk-c)\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit NEGATİF (önce): kapanmamış tırnak → tipli hata; maxRows/maxCellChars/maxBytes aşımı → tipli hata (sessiz kırpma yok); ham CR/LF karışık dosyada satır kayması yok · unit NEGATİF (önce): formül-lead beş varyantı (=,+,-,@,TAB) ve tırnak içine gizlenmiş varyant nötrlenir · unit REGRESYON: ReDoS lineerlik — artan uzunlukta patolojik girdide süre süper-lineer değil (spam-filter.test.ts'teki lineerlik regresyonu deseni) · unit POZİTİF: BOM'lu, CRLF'li, alan içi virgül/tırnak/satır-sonu taşıyan gerçekçi CSV tam ayrışır · unit: boş dosya / yalnız başlık satırı → 0 satır, hata değil",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "97",
-            "updatedAt": "2026-08-08T13:59:15.617Z"
+            "updatedAt": "2026-08-08T14:21:14.909Z"
           },
           {
             "id": 2,
@@ -4749,7 +4749,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T13:59:15.617Z",
+        "updatedAt": "2026-08-08T14:21:14.909Z",
         "complexity": 9,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"06.3.2-bulk — Bulk/CSV KB import (YALNIZ çoklu-satır; tek-kaynak yolu v1'de ✅)  ·  dilim V2-6\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5023,7 +5023,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T13:59:15.617Z",
+      "lastModified": "2026-08-08T14:21:14.909Z",
       "taskCount": 104,
       "completedCount": 88,
       "tags": [

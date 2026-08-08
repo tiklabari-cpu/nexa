@@ -3226,12 +3226,12 @@
             "description": "ReportsPage'e 5. sekme 'Staffing': GET /reports/staffing-forecast (-g) mevcut `useReport` hook'u ve paylaşılan aralık kontrolüyle çağrılır; gün × saat ızgarası (required / scheduled / gap) render edilir, gap > 0 hücreleri vurgulanır; low_confidence/null hücreler '—' + 'yeterli veri yok' uyarısıyla gösterilir (0 YAZILMAZ); pencerede hiç veri yoksa anlamlı empty state. Mevcut sekme kabuğunun role=ta",
             "details": "WORKSCHED-i — Reports → Staffing sekmesi (salt-okunur gün × saat ızgarası + düşük-baz uyarısı)  [SONNET-XHIGH]\n\nPRD: §5.3-Vardiya (WORKSCHED) + FR-EK-B.1 (empty state) · NFR-A11Y (sekme rolleri)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 2 dosya; salt-okunur rapor sekmesi, hiçbir güvenlik/yetki kararı içermiyor (scope kapısı -g'de); eşzamanlılık yok; kopyalanacak desen İSMEN var: ReportsPage.tsx'in TABS + role=\"tablist\" kabuğu (satır 182-226) ve BreakdownTab; hesap backend'de (-f), ekran yalnız render; kontrat değişikliği yok; KK mekanik.\nNEDEN AÇIK: apps/web/src/features/reports/ReportsPage.tsx'te sekmeler overview / ai-agent / reviews / breakdown ile sınırlı (satır 219-226'daki dallanma); staffing sekmesi yok.\nKAPSAM: ReportsPage'e 5. sekme 'Staffing': GET /reports/staffing-forecast (-g) mevcut `useReport` hook'u ve paylaşılan aralık kontrolüyle çağrılır; gün × saat ızgarası (required / scheduled / gap) render edilir, gap > 0 hücreleri vurgulanır; low_confidence/null hücreler '—' + 'yeterli veri yok' uyarısıyla gösterilir (0 YAZILMAZ); pencerede hiç veri yoksa anlamlı empty state. Mevcut sekme kabuğunun role=tab/tabpanel + aria-controls deseni birebir korunur.\nDOSYALAR: apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx · apps/web/src/components/EmptyState.tsx\nKK (birebir): \"| Ekip/Vardiya | Work scheduler / staffing prediction |\" | \"KK-türetilmiş: \"Personel önerisi raporda gün × saat ızgarası olarak görünür; gerekli-planlı farkı (açık) vurgulanır; veri yetersizse sayı yerine 'yeterli veri yok' uyarısı gösterilir (sıfır gösterilmez).\" — Türetme gerekçesi: PRD §5.3 satır 412'de KK sütunu yok; 'sıfır gösterilmez' payı depodaki mevcut rapor sözleşmesinden (oy yoksa null — %0 felaket gibi okunur) ve FR-EK-B.1 empty-state maddesinden türetildi.\"\nKK DOĞRULAMA: ReportsPage.test.tsx'teki 'low_confidence → uyarı metni, 0 render edilmez' testi KK-türetilmiş üçüncü maddeyi, 'gap > 0 hücresi vurgu sınıfı taşır' testi ikinci maddeyi, 'Staffing sekmesi tıklanınca 7×24 ızgara render edilir' testi birinci maddeyi kanıtlar; role=tab/aria-controls iddiası a11y desenini kanıtlar.\nKAPSAM DIŞI: Tahmin aritmetiğini istemcide yeniden hesaplamak — YAPILMAZ (tek doğruluk kaynağı backend -f) · CSV/PDF export · Vardiya düzenleme (WORKSCHED-h)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit NEGATİF (ÖNCE): low_confidence/null veri → '—' + 'yeterli veri yok', ekranda 0 YOK · unit NEGATİF: boş pencere → anlamlı empty state (boş dikdörtgen değil) · unit NEGATİF: API hatası → hata durumu render edilir · unit pozitif: sekme render + gün × saat ızgarası + gap vurgusu · a11y: role=tab/tabpanel + aria-controls mevcut ReportsPage deseniyle aynı · cross-tenant: burada YOK — salt-okunur ekran, scope kapısı -g'de, izolasyon -g ve -j'de kanıtlanır",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               7
             ],
             "parentId": "77",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-08T02:08:40.080Z"
           },
           {
             "id": 10,
@@ -3251,7 +3251,7 @@
             "updatedAt": "2026-08-07T20:20:22.155Z"
           }
         ],
-        "updatedAt": "2026-08-08T01:47:40.588Z"
+        "updatedAt": "2026-08-08T02:08:40.080Z"
       },
       {
         "id": "78",
@@ -4943,7 +4943,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T01:47:40.588Z",
+      "lastModified": "2026-08-08T02:08:40.081Z",
       "taskCount": 101,
       "completedCount": 80,
       "tags": [

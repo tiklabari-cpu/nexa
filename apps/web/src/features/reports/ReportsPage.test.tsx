@@ -953,3 +953,204 @@ describe('ReportsPage — Overview "Chat topics" promo banner (07.6-f)', () => {
     setItem.mockRestore();
   });
 });
+
+// ===========================================================================
+
+interface CasesDayRow {
+  date: string;
+  open: number;
+  closed: number;
+  total: number;
+}
+
+const CASES_BASE = {
+  range: OVERVIEW.range,
+  previous_period: { open: 0, closed: 0, total: 0 },
+  by_day: [] as CasesDayRow[],
+  by_status: [] as Array<{ status: string; count: number }>,
+  by_priority: [] as Array<{ priority: number; count: number }>,
+};
+
+const LEADS_BASE = {
+  range: OVERVIEW.range,
+  previous_period: { leads: 0 },
+  by_day: [] as Array<{ date: string; count: number }>,
+  totals: { leads: 0 },
+};
+
+/**
+ * Mocks `/reports/groups` alongside the Cases and Leads reports. `groups`
+ * defaults to granting both — the "not granted" behaviour (07.7-i's "İzin
+ * bazlı görünürlük" KK) gets its own call with `groups: []`.
+ */
+function mockGroupsCasesLeads({
+  groups = [
+    { id: 'cases', label: 'Cases' },
+    { id: 'leads', label: 'Leads' },
+  ],
+  cases = {},
+  leads = {},
+}: {
+  groups?: Array<{ id: string; label: string }>;
+  cases?: Partial<typeof CASES_BASE>;
+  leads?: Partial<typeof LEADS_BASE>;
+} = {}): void {
+  const casesPayload = { ...CASES_BASE, ...cases };
+  const leadsPayload = { ...LEADS_BASE, ...leads };
+  api.get.mockImplementation((path: string) => {
+    if (path.startsWith('/reports/groups')) return Promise.resolve({ groups });
+    if (path.startsWith('/reports/cases')) return Promise.resolve(casesPayload);
+    if (path.startsWith('/reports/leads')) return Promise.resolve(leadsPayload);
+    if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    return Promise.reject(new Error(`unexpected ${path}`));
+  });
+}
+
+async function openCasesTab(): Promise<void> {
+  await userEvent.click(await screen.findByRole('tab', { name: 'Cases' }));
+  await screen.findByRole('region', { name: 'By status' });
+}
+
+async function openLeadsTab(): Promise<void> {
+  await userEvent.click(await screen.findByRole('tab', { name: 'Leads' }));
+  await screen.findByRole('region', { name: 'Volume' });
+}
+
+/**
+ * A Cases/Leads Volume KPI card, scoped to the Volume region. Unlike `kpi()`,
+ * this cannot use an unscoped `screen.getByText` — "Open"/"Closed"/"Total" and
+ * "New leads" also head the by-day table rendered lower on the same tab, so an
+ * unscoped lookup would match twice.
+ */
+function volumeKpi(label: string): HTMLElement {
+  const volume = screen.getByRole('region', { name: 'Volume' });
+  const labelEl = within(volume).getByText(label);
+  const card = labelEl.parentElement;
+  if (!card) throw new Error(`KPI "${label}" has no enclosing card`);
+  return card;
+}
+
+describe('ReportsPage — Cases + Leads tabs, permission-gated visibility (07.7-i)', () => {
+  it('renders the Leads and Cases tabs when /reports/groups grants them, and queries the right endpoint', async () => {
+    mockGroupsCasesLeads();
+    renderReports(<ReportsPage />);
+
+    await openCasesTab();
+    expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/cases\?from=.*&to=/));
+
+    await openLeadsTab();
+    expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/leads\?from=.*&to=/));
+  });
+
+  it('hides the Leads and Cases tabs when /reports/groups does not grant them (İzin bazlı görünürlük)', async () => {
+    mockGroupsCasesLeads({ groups: [] });
+    renderReports(<ReportsPage />);
+
+    // Overview is ungated and renders once its own fetch resolves — proof a
+    // render past the groups response has already happened.
+    await screen.findByText('Conversations', { exact: true });
+
+    expect(screen.queryByRole('tab', { name: 'Cases' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Leads' })).not.toBeInTheDocument();
+  });
+
+  it('hides only the ungranted one when /reports/groups grants Cases but not Leads', async () => {
+    mockGroupsCasesLeads({ groups: [{ id: 'cases', label: 'Cases' }] });
+    renderReports(<ReportsPage />);
+
+    await screen.findByRole('tab', { name: 'Cases' });
+    expect(screen.queryByRole('tab', { name: 'Leads' })).not.toBeInTheDocument();
+  });
+
+  it('shows the Cases KPI cards with a vs-previous delta (benchmark comparison)', async () => {
+    mockGroupsCasesLeads({
+      cases: {
+        by_day: [{ date: '2026-07-20', open: 3, closed: 4, total: 7 }],
+        previous_period: { open: 1, closed: 2, total: 3 },
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openCasesTab();
+
+    // Totals derive from `by_day` (open=3, closed=4, total=7), and each carries
+    // its delta against `previous_period` — the same `previous_period` field the
+    // Overview/Reviews cards key their badges off.
+    expect(within(volumeKpi('Open')).getByText('3')).toBeInTheDocument();
+    expect(within(volumeKpi('Open')).getByText(/↑ 2 vs previous/)).toBeInTheDocument();
+    expect(within(volumeKpi('Closed')).getByText('4')).toBeInTheDocument();
+    expect(within(volumeKpi('Closed')).getByText(/↑ 2 vs previous/)).toBeInTheDocument();
+    expect(within(volumeKpi('Total')).getByText('7')).toBeInTheDocument();
+    expect(within(volumeKpi('Total')).getByText(/↑ 4 vs previous/)).toBeInTheDocument();
+  });
+
+  it('renders the Cases by-day, by-status and by-priority tables', async () => {
+    mockGroupsCasesLeads({
+      cases: {
+        by_day: [{ date: '2026-07-20', open: 1, closed: 2, total: 3 }],
+        by_status: [{ status: 'open', count: 5 }, { status: 'closed', count: 9 }],
+        by_priority: [{ priority: 10, count: 2 }, { priority: -5, count: 1 }],
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openCasesTab();
+
+    expect(screen.getByText('2026-07-20')).toBeInTheDocument();
+    const byStatus = screen.getByRole('region', { name: 'By status' });
+    expect(within(byStatus).getByText('open')).toBeInTheDocument();
+    expect(within(byStatus).getByText('9')).toBeInTheDocument();
+    const byPriority = screen.getByRole('region', { name: 'By priority' });
+    expect(within(byPriority).getByText('10')).toBeInTheDocument();
+    expect(within(byPriority).getByText('-5')).toBeInTheDocument();
+  });
+
+  it('shows a meaningful empty state per section, not an empty table, when Cases has no data', async () => {
+    mockGroupsCasesLeads();
+    renderReports(<ReportsPage />);
+    await openCasesTab();
+
+    expect(screen.getByText('No cases in this window')).toBeInTheDocument();
+    expect(screen.getByText('No status data yet')).toBeInTheDocument();
+    expect(screen.getByText('No priority data yet')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('shows the Leads KPI with a vs-previous delta and a daily table', async () => {
+    mockGroupsCasesLeads({
+      leads: {
+        totals: { leads: 12 },
+        previous_period: { leads: 7 },
+        by_day: [{ date: '2026-07-20', count: 12 }],
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openLeadsTab();
+
+    expect(within(volumeKpi('New leads')).getByText('12')).toBeInTheDocument();
+    expect(within(volumeKpi('New leads')).getByText(/↑ 5 vs previous/)).toBeInTheDocument();
+    expect(screen.getByText('2026-07-20')).toBeInTheDocument();
+  });
+
+  it('shows a meaningful empty state, not an empty table, when Leads has no data', async () => {
+    mockGroupsCasesLeads();
+    renderReports(<ReportsPage />);
+    await openLeadsTab();
+
+    expect(screen.getByText('No new leads in this window')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('shows an error state when the Cases report fails to load, without crashing', async () => {
+    api.get.mockImplementation((path: string) => {
+      if (path.startsWith('/reports/groups')) {
+        return Promise.resolve({ groups: [{ id: 'cases', label: 'Cases' }] });
+      }
+      if (path.startsWith('/reports/cases')) return Promise.reject(new Error('boom'));
+      if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+      return Promise.reject(new Error(`unexpected ${path}`));
+    });
+    renderReports(<ReportsPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: 'Cases' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Could not load the Cases report/);
+  });
+});

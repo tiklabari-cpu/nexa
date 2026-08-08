@@ -13,6 +13,49 @@
 
 ## Task log (newest-first)
 
+### tm 93.9 — 07.7-i: Reports UI — Leads + Cases sekmeleri (kartlar + benchmark rozetleri + empty state) — done — 2026-08-08 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/reports/ReportsPage.tsx`: `TABS`'a `{id:'cases',label:'Cases'}` +
+    `{id:'leads',label:'Leads'}`. **Yeni** `CasesTab`/`LeadsTab`, MEVCUT `useReport<T>(kind, api,
+    props)` generic hook'unu ve `Kpi`/`KpiGrid`/`Card`/`CardSkeleton`/`ErrorNotice`/`EmptyState`
+    desenini `ReviewsTab`'dan birebir kopyalar. `CasesTab`'ın Open/Closed/Total kartları
+    `ReportsCases`'te top-level `totals` alanı OLMADIĞI için yeni `sumCaseSplit(by_day)` ile
+    türetilir — backend'in `casesBenchmark`'ının aynı yöntemi (`reports.ts:2103`), kart ile
+    alttaki `CasesDailyTable` asla ayrışmaz. `LeadsTab` `totals.leads`'i doğrudan kullanır. Her iki
+    sekme 07.7-e'nin HER ZAMAN dolu gelen `previous_period` alanını MEVCUT `CountDelta`'ya besler.
+    Cases ayrıca `CasesStatusTable`/`CasesPriorityTable`; priority ham işaretli tamsayı
+    (`FR-MOD-13.6`), `formatCount` DEĞİL çıplak render (negatif değer doğru görünsün diye). Üç boş
+    dizi üç AYRI `EmptyState` metni alır (`BreakdownTab`'ın per-section farklılaştırma deseni).
+  - **İzin bazlı görünürlük:** yeni `useReportGroups()` (`GET /reports/groups`,
+    `ReportsPage` üst seviyesinde) + `GROUP_GATED_TABS = new Set(['cases','leads'])` — yalnız bu
+    ikisi yanıta göre süzülür (`visibleTabs`); MEVCUT dört sekme + `staffing`/`topics` koşulsuz
+    kalır (yetki zaten backend'de `reports_read` scope'una bağlı, UI gizleme ikinci bir uygulama
+    katmanı DEĞİL — kod yorumunda not). Grup yanıtı gelene/hata verene kadar sekme GİZLİ (fail
+    closed). Sales/Team performance aynı kümeye 07.7-j'de eklenecek.
+  - Test: `ReportsPage.test.tsx`'e **+14** ("Cases + Leads tabs, permission-gated visibility"):
+    grant/no-grant/kısmi-grant görünürlük · previous_period delta · by_day/by_status/by_priority
+    tabloları · üç ayrı boş-durum + `<table>` yok · Leads KPI+tablo+boş-durum · Cases 403 →
+    `ErrorNotice`. `apps/e2e/tests/reports.spec.ts`'e **+1** ("opens the Cases and Leads tabs, each
+    a permission-gated report group").
+- **Doğrulama:** typecheck 11/11 ✅ · lint 8/8 ✅ ·
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` 10/10 ✅ (web +14 yeni, api 1766/1766
+  değişmedi) · build 7/7 ✅ · `pnpm -w test:integration` 5/5 ✅ (1344/1344) · `pnpm -w test:e2e`
+  **tam koştu** (Postgres 17 + Redis bu pencerede `brew services start` ile ayağa kaldırıldı,
+  Docker daemon bu makinede çalışmıyor) — **77/77** ✅, önceki bilinen `skills-routing.spec.ts:76`
+  flake bu turda da yeşildi.
+- **Varsayımlar:** `Kpi` etiketleri ("Open"/"Closed"/"Total"/"New leads") alttaki tablonun sütun
+  başlığıyla aynı metni taşıyor — gerçek UI'de sorun değil (iki ayrı DOM bölgesi), ama testte
+  unscoped `screen.getByText` iki eşleşme buluyordu; `Volume` bölgesine scope'lu yeni
+  `volumeKpi()` test yardımcısıyla çözüldü (`kpi()` paylaşılan yardımcıya dokunulmadı). `.env`
+  değerleri `pnpm -w test:e2e`'yi doğrudan (make dışı) çalıştırmak için `set -a && source .env &&
+  set +a` ile shell'e export edildi — `apps/rtm`/`apps/api` dev script'leri dotenv YÜKLEMİYOR, bu
+  yalnız `make test-e2e`'nin zaten yaptığı şey.
+- **Sonraki pencereye not:** 07.7-j/-k/-l hâlâ açık (§5.2.4). 07.7-j Sales+Team performance
+  sekmelerini eklerken `GROUP_GATED_TABS`'a `'sales'`/`'team-performance'` eklemeli — mekanizma
+  zaten hazır, yalnız set genişletilecek. `run-loop.sh` bu pencerede de commit'siz bırakıldı (bkz.
+  aşağıdaki not, tm 93.8'den beri değişmedi) — bu görevin kapsamı dışında, dokunulmadı.
+
 > **Not (tm 93.8 kapanışı, 2026-08-08):** `run-loop.sh` bu pencere başlamadan ÖNCE de değişmiş
 > haldeydi (görev deneme sayacı / `MAX_TASK_ATTEMPTS` altyapısı — başka bir pencerenin iş-üstü işi,
 > bu görevin kapsamı DIŞINDA) ve kapanışta hâlâ commit'siz — bilinçli olarak DOKUNULMADI (tm 77.8'de

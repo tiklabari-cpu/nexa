@@ -65,6 +65,42 @@ test.describe('reports overview', () => {
 
     await agentPage.screenshot({ path: 'kanit/22-reports-reviews.png', fullPage: true });
   });
+
+  /**
+   * Cases and Leads (07.7-i) — the v2 report groups, whose tabs are permission-gated
+   * on `GET /reports/groups` rather than always rendered (unlike the tabs above).
+   * The seeded demo agent holds `reports_read`, which grants every group, so this is
+   * the tab's *visibility* proof end-to-end; the figures themselves are covered
+   * server-side (`reports-billing.test.ts` "Cases report (07.7-a)" / "Leads report
+   * (07.7-b)") and the full permission matrix is 07.7-l's job, not this one's.
+   */
+  test('opens the Cases and Leads tabs, each a permission-gated report group (07.7-i)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    await agentPage.getByRole('tab', { name: 'Cases' }).click();
+    await expect(agentPage.getByRole('tab', { name: 'Cases' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(agentPage.getByRole('region', { name: 'By status' })).toBeVisible();
+    await expect(agentPage.getByRole('region', { name: 'By priority' })).toBeVisible();
+
+    await agentPage.getByRole('tab', { name: 'Leads' }).click();
+    await expect(agentPage.getByRole('tab', { name: 'Leads' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    // Scoped to Volume: the Leads by-day table below shares the same column
+    // header text as this KPI's label.
+    const leadsVolume = agentPage.getByRole('region', { name: 'Volume' });
+    await expect(leadsVolume).toBeVisible();
+    await expect(leadsVolume.getByText('New leads', { exact: true })).toBeVisible();
+
+    await agentPage.screenshot({ path: 'kanit/24-reports-cases-leads.png', fullPage: true });
+  });
 });
 
 /**

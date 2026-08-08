@@ -140,6 +140,31 @@ interface ReportsTopics {
   topics: TopicRow[];
 }
 
+/**
+ * The Cases report (FR-MOD-07.7, v2): tickets (FR-MOD-02.6) split by UTC day
+ * of creation, current status and stored queue priority (FR-MOD-13.6). A
+ * merged ticket (`merged_into_id` set) is excluded from every bucket.
+ */
+interface ReportsCases {
+  range: { from: string; to: string };
+  previous_period: { open: number; closed: number; total: number };
+  by_day: Array<{ date: string; open: number; closed: number; total: number }>;
+  by_status: Array<{ status: string; count: number }>;
+  by_priority: Array<{ priority: number; count: number }>;
+}
+
+/**
+ * The Leads report (FR-MOD-07.7, v2): customers flagged as leads, counted by
+ * the UTC day they first touched *this* license through a chat or ticket
+ * (never by organization-wide creation date — see the API's isolation note).
+ */
+interface ReportsLeads {
+  range: { from: string; to: string };
+  previous_period: { leads: number };
+  by_day: Array<{ date: string; count: number }>;
+  totals: { leads: number };
+}
+
 interface StaffingCell {
   day_of_week: number;
   hour: number;
@@ -172,8 +197,33 @@ const TABS = [
   { id: 'breakdown', label: 'Breakdown' },
   { id: 'staffing', label: 'Staffing' },
   { id: 'topics', label: 'Chat topics' },
+  { id: 'cases', label: 'Cases' },
+  { id: 'leads', label: 'Leads' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
+
+/**
+ * Tabs whose visibility follows `GET /reports/groups` (07.7-i) rather than
+ * always rendering. The backend is the actual permission boundary — a caller
+ * missing `reports_read` (or, in the future, a narrower per-group scope)
+ * still gets a 403 straight from `/reports/cases`/`/reports/leads` if they
+ * reach it some other way — so hiding the tab is UX honesty ("here is what
+ * you can open"), not a second enforcement layer. Only Cases and Leads are
+ * gated here; Sales and Team performance join this set in 07.7-j. The other
+ * tabs predate this catalogue and stay unconditional.
+ */
+const GROUP_GATED_TABS = new Set<TabId>(['cases', 'leads']);
+
+interface ReportGroupsResponse {
+  groups: Array<{ id: string; label: string }>;
+}
+
+function useReportGroups(api: ApiClient) {
+  return useQuery({
+    queryKey: ['reports', 'groups'],
+    queryFn: () => api.get<ReportGroupsResponse>('/reports/groups'),
+  });
+}
 
 const PRESETS = [7, 30, 90, 365] as const;
 type RangeMode = (typeof PRESETS)[number] | 'custom';
@@ -235,6 +285,16 @@ function rangeQuery(range: { from: string; to: string }): string {
 }
 
 export function ReportsPage(): ReactElement {
+  const api = useApiClient();
+  const { data: groupsData } = useReportGroups(api);
+  const visibleGroupIds = new Set((groupsData?.groups ?? []).map((group) => group.id));
+  // Hidden until the groups response confirms visibility (fail closed, not
+  // open) — a transient loading state and a caller who truly lacks the scope
+  // look the same for one beat, which is the safe default for a permission gate.
+  const visibleTabs = TABS.filter(
+    (tabDef) => !GROUP_GATED_TABS.has(tabDef.id) || visibleGroupIds.has(tabDef.id),
+  );
+
   const [tab, setTab] = useState<TabId>('overview');
   const [mode, setMode] = useState<RangeMode>(30);
   const [customFrom, setCustomFrom] = useState('');
@@ -261,7 +321,7 @@ export function ReportsPage(): ReactElement {
       }
     >
       <div role="tablist" aria-label="Report" className="flex gap-1 border-b border-border">
-        {TABS.map((tabDef) => {
+        {visibleTabs.map((tabDef) => {
           const selected = tab === tabDef.id;
           return (
             <button
@@ -310,8 +370,12 @@ export function ReportsPage(): ReactElement {
           <BreakdownTab rangeKey={rangeKey} range={range} />
         ) : tab === 'staffing' ? (
           <StaffingTab rangeKey={rangeKey} range={range} />
-        ) : (
+        ) : tab === 'topics' ? (
           <TopicsTab rangeKey={rangeKey} range={range} />
+        ) : tab === 'cases' ? (
+          <CasesTab rangeKey={rangeKey} range={range} />
+        ) : (
+          <LeadsTab rangeKey={rangeKey} range={range} />
         )}
       </div>
     </Page>
@@ -1279,6 +1343,297 @@ function TopicTrend({ trend }: { trend: number | null }): ReactElement {
     <span>
       {trend > 0 ? '↑' : '↓'} {formatRate(Math.abs(trend))}
     </span>
+  );
+}
+
+/**
+ * Cases (FR-MOD-07.7, v2): tickets (FR-MOD-02.6) in the window split
+ * open/closed/total, by UTC day, current status and stored queue priority
+ * (FR-MOD-13.6). Every card and table shares one series (`by_day`) with the
+ * CSV/PDF export, so a download can never disagree with the tab beside it.
+ */
+function CasesTab(props: TabProps): ReactElement {
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<ReportsCases>('cases', api, props);
+
+  if (error) {
+    return (
+      <ErrorNotice message="Could not load the Cases report. Check that the API is reachable and try again." />
+    );
+  }
+  if (isPending) {
+    return (
+      <>
+        <CardSkeleton rows={2} />
+        <CardSkeleton rows={4} />
+      </>
+    );
+  }
+
+  // `by_day` already excludes merged tickets (`merged_into_id`) — the same
+  // series the CSV export's benchmark sums — so the card totals below can
+  // never drift from the table underneath them.
+  const totals = sumCaseSplit(data.by_day);
+  const prev = data.previous_period;
+
+  return (
+    <>
+      <Section title="Volume" description="Tickets in the selected window, by current status.">
+        <KpiGrid>
+          <Kpi
+            label="Open"
+            value={formatCount(totals.open)}
+            delta={<CountDelta current={totals.open} previous={prev.open} />}
+          />
+          <Kpi
+            label="Closed"
+            value={formatCount(totals.closed)}
+            delta={<CountDelta current={totals.closed} previous={prev.closed} />}
+            tone="good"
+          />
+          <Kpi
+            label="Total"
+            value={formatCount(totals.total)}
+            delta={<CountDelta current={totals.total} previous={prev.total} />}
+          />
+        </KpiGrid>
+      </Section>
+
+      <Section title="By day" description="Tickets created per UTC day, split open and closed.">
+        <Card>
+          {data.by_day.length === 0 ? (
+            <EmptyState
+              title="No cases in this window"
+              description="Once a ticket is created in this window, its daily split shows up here."
+            />
+          ) : (
+            <CasesDailyTable rows={data.by_day} />
+          )}
+        </Card>
+      </Section>
+
+      <Section title="By status" description="Tickets in the window, grouped by their current status.">
+        <Card>
+          {data.by_status.length === 0 ? (
+            <EmptyState
+              title="No status data yet"
+              description="Once a ticket is created in this window, its status breakdown shows up here."
+            />
+          ) : (
+            <CasesStatusTable rows={data.by_status} />
+          )}
+        </Card>
+      </Section>
+
+      <Section
+        title="By priority"
+        description="Tickets in the window, grouped by their stored queue priority (highest first)."
+      >
+        <Card>
+          {data.by_priority.length === 0 ? (
+            <EmptyState
+              title="No priority data yet"
+              description="Once a ticket is created in this window, its priority breakdown shows up here."
+            />
+          ) : (
+            <CasesPriorityTable rows={data.by_priority} />
+          )}
+        </Card>
+      </Section>
+    </>
+  );
+}
+
+/** `by_day` summed into one open/closed/total figure — the window's own totals. */
+function sumCaseSplit(
+  rows: ReportsCases['by_day'],
+): { open: number; closed: number; total: number } {
+  return rows.reduce(
+    (acc, row) => ({
+      open: acc.open + row.open,
+      closed: acc.closed + row.closed,
+      total: acc.total + row.total,
+    }),
+    { open: 0, closed: 0, total: 0 },
+  );
+}
+
+function CasesDailyTable({ rows }: { rows: ReportsCases['by_day'] }): ReactElement {
+  const numeric = 'w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary';
+  return (
+    <table className="w-full text-sm">
+      <caption className="sr-only">Tickets per day, split open and closed</caption>
+      <thead>
+        <tr className="border-b border-border text-left">
+          <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
+            Day
+          </th>
+          <th scope="col" className={numeric}>
+            Open
+          </th>
+          <th scope="col" className={numeric}>
+            Closed
+          </th>
+          <th scope="col" className={numeric}>
+            Total
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.date} className="border-b border-border last:border-0">
+            <td className="tabular px-4 py-2">{row.date}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.open)}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.closed)}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.total)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function CasesStatusTable({ rows }: { rows: ReportsCases['by_status'] }): ReactElement {
+  return (
+    <table className="w-full text-sm">
+      <caption className="sr-only">Tickets by current status</caption>
+      <thead>
+        <tr className="border-b border-border text-left">
+          <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
+            Status
+          </th>
+          <th
+            scope="col"
+            className="w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary"
+          >
+            Tickets
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.status} className="border-b border-border last:border-0">
+            <td className="truncate px-4 py-2 capitalize">{row.status}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.count)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function CasesPriorityTable({ rows }: { rows: ReportsCases['by_priority'] }): ReactElement {
+  return (
+    <table className="w-full text-sm">
+      <caption className="sr-only">Tickets by stored queue priority</caption>
+      <thead>
+        <tr className="border-b border-border text-left">
+          <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
+            Priority
+          </th>
+          <th
+            scope="col"
+            className="w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary"
+          >
+            Tickets
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.priority} className="border-b border-border last:border-0">
+            <td className="tabular px-4 py-2">{row.priority}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.count)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/**
+ * Leads (FR-MOD-07.7, v2): customers flagged as leads, counted by the UTC day
+ * they first touched *this* license through a chat or a ticket — never by an
+ * organization-wide creation date, which could belong to a sibling license
+ * (NFR-S4; see the API's isolation note on `ReportsLeads`).
+ */
+function LeadsTab(props: TabProps): ReactElement {
+  const api = useApiClient();
+  const { data, isPending, error } = useReport<ReportsLeads>('leads', api, props);
+
+  if (error) {
+    return (
+      <ErrorNotice message="Could not load the Leads report. Check that the API is reachable and try again." />
+    );
+  }
+  if (isPending) {
+    return (
+      <>
+        <CardSkeleton rows={2} />
+        <CardSkeleton rows={4} />
+      </>
+    );
+  }
+
+  const prev = data.previous_period;
+
+  return (
+    <>
+      <Section
+        title="Volume"
+        description="Customers flagged as leads, counted by the UTC day they first touched this license."
+      >
+        <KpiGrid>
+          <Kpi
+            label="New leads"
+            value={formatCount(data.totals.leads)}
+            delta={<CountDelta current={data.totals.leads} previous={prev.leads} />}
+          />
+        </KpiGrid>
+      </Section>
+
+      <Section title="By day" description="New leads per UTC day in the window.">
+        <Card>
+          {data.by_day.length === 0 ? (
+            <EmptyState
+              title="No new leads in this window"
+              description="Once a customer's first chat or ticket with this license lands, they show up here."
+            />
+          ) : (
+            <LeadsDailyTable rows={data.by_day} />
+          )}
+        </Card>
+      </Section>
+    </>
+  );
+}
+
+function LeadsDailyTable({ rows }: { rows: ReportsLeads['by_day'] }): ReactElement {
+  return (
+    <table className="w-full text-sm">
+      <caption className="sr-only">New leads per day</caption>
+      <thead>
+        <tr className="border-b border-border text-left">
+          <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
+            Day
+          </th>
+          <th
+            scope="col"
+            className="w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary"
+          >
+            New leads
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.date} className="border-b border-border last:border-0">
+            <td className="tabular px-4 py-2">{row.date}</td>
+            <td className="tabular px-4 py-2 text-right">{formatCount(row.count)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

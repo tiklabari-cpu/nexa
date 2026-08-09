@@ -31,6 +31,16 @@ export const TEMPLATE_CATEGORIES: TemplateCategoryMeta[] = [
   { id: 'trending', label: 'Trending', icon: '↗', description: 'What teams are wiring up this month.' },
 ];
 
+/**
+ * A card highlight, orthogonal to `category` (FR-MOD-05.2 lists both axes:
+ * Prebuilt/AI/Trending for kind, Popular/Essential for standing). A template
+ * can carry at most one — or none.
+ */
+export type TemplateBadge = 'popular' | 'essential';
+
+/** Upper bound on `summary`, so the catalogue stays readable as one card line past 8 entries. */
+export const MAX_TEMPLATE_SUMMARY_LENGTH = 100;
+
 export interface SkillTemplate {
   id: string;
   name: string;
@@ -41,6 +51,8 @@ export interface SkillTemplate {
   instruction: string;
   /** Pre-fills the compiled step list — already valid, see the module note. */
   steps: SkillStep[];
+  /** Highlights the card independently of its `category`. Most templates carry none. */
+  badge?: TemplateBadge;
   /**
    * Set when the skill can only do its job once an external system is
    * connected. The card warns, and the copy still opens so the admin can see

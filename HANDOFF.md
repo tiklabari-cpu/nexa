@@ -13,6 +13,60 @@
 
 ## Task log (newest-first)
 
+### tm 98.1 — 05.6-tmpl31-a · Katalog şeması genişletme: rozet alanı (Popular/Essential) + invariant testlerinin sıkılaştırılması — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/playbook/templates.ts` — `SkillTemplate`'e opsiyonel
+    `badge?: TemplateBadge` alanı (`TemplateBadge = 'popular' | 'essential'`), `category`'den
+    ayrı bir kart vurgusu (FR-MOD-05.2: "Prebuilt/AI Agent/Trending/Popular/Essential" — ilk üçü
+    tür ekseni, son ikisi vurgu ekseni). Ayrıca `MAX_TEMPLATE_SUMMARY_LENGTH = 100` export edildi
+    (tek doğruluk kaynağı — 05.6-tmpl31-b'nin 23+ yeni kaydı da aynı sınıra karşı yazılacak).
+    Mevcut 8 kayıt **değişmedi** — badge opsiyonel, içerik eklemek bu alt-görevin kapsamı dışı.
+  - `apps/web/src/features/playbook/templates.test.ts` — invariantlar sıkılaştırıldı: (a) id
+    benzersizliği artık çakışan id'leri listeleyen bir assert ile (eskiden `Set.size` karşılaştırması
+    de yeterliydi ama 23+ kayıt eklerken hata mesajı köre işaret ediyordu); (b) yeni test — her
+    `summary` `MAX_TEMPLATE_SUMMARY_LENGTH` içinde (kart tek satır kalsın); (c) yeni `describe('badge')`
+    — set edildiğinde badge yalnız `'popular'|'essential'` olabilir ve hiçbir kategori değerini
+    taşıyamaz (rozet/kategori ayrışması KK'sının doğrudan doğrulaması). Steps≥1 + validateSteps
+    senkronu zaten iki mevcut testte vardı, dokunulmadı. 13 → 15 test (+2).
+  - Kapsam dışı (bilerek AÇILMADI): 23+ yeni kayıt (05.6-tmpl31-b), i18n (-c), galeri ölçek/arama
+    (-d), kapanış e2e regresyonu (-e) — hepsi bu alt-görevin bağımlıları, ayrı task.
+- **Doğrulama (exit code'larla):**
+  - `pnpm --filter @nexa/web exec vitest run src/features/playbook/templates.test.ts` — **15/15 yeşil** (KK doğrulama komutu, task detail'inde birebir).
+  - `pnpm -w typecheck` **11/11 exit 0** · `pnpm -w lint` **8/8 exit 0** · `pnpm -w build` **7/7 exit 0**
+  - `pnpm -w test` (unit, e2e hariç) — `@nexa/web` **753 geçti / 7 kırmızı**, kırmızıların tamamı
+    zaten bilinen **tm 108** (makine locale'i, `BillingPage`/`ReportsPage` para biçimi —
+    `templates.test.ts`'e dokunmuyor); diğer tüm paketler yeşil.
+  - `pnpm -w test:integration` — `@nexa/api` **1532 geçti / 1 kırmızı**, tek kırmızı zaten bilinen
+    **tm 107** (tarihe bağlı `scheduled-reports-sweep.test.ts`, `apps/api`'ye bu turda dokunulmadı);
+    diğer tüm paketler yeşil.
+  - İlgili e2e/smoke: `set -a; . ./.env; set +a` sonrası
+    `pnpm --filter @nexa/e2e exec playwright test playbook.spec.ts` — **2/2 yeşil** (şablon galerisi
+    + recommended skills "Try this" akışı; bu task'ın dokunduğu tek kullanıcı yüzeyi).
+  - Her iki kırmızı küme de bu turdan ÖNCE zaten kırmızıydı (stash ile doğrulandı) — bu diff sıfır
+    ürün-davranışı değişikliği taşıyor (yalnız tip + test).
+- **Varsayımlar:**
+  - `MAX_TEMPLATE_SUMMARY_LENGTH = 100`: mevcut 8 özetin en uzunu 70 karakter; 100 hem "tek satır"
+    tasarım sözünü koruyor hem 23+ yeni kayda (05.6-tmpl31-b) makul pay bırakıyor. Task detail'i bir
+    sayı vermiyordu (KK türetilmiş, kk_yetersiz) — bu bir Assumption.
+  - Badge UI'da HİÇBİR YERDE render edilmedi (TemplateGallery/RecommendedSkills dokunulmadı) — DOSYALAR
+    listesi yalnız `templates.ts`/`templates.test.ts` idi, kart görünümü muhtemelen -d'nin (galeri
+    ölçek) kapsamına giriyor; -b içerik eklerken de gerekmeyebilir. Sonraki pencere bunu netleştirmeli.
+- **Sonraki pencereye not:**
+  - `05.6-tmpl31-b` (23+ yeni kayıt) artık açık: `badge`, `TemplateBadge`, `MAX_TEMPLATE_SUMMARY_LENGTH`
+    hazır — yeni kayıtlar bu invariantlardan geçmeli (özellikle id benzersizliği ve özet sınırı).
+  - **tm 105 (izole test datastore altyapısı) working tree'de COMMIT EDİLMEMİŞ WIP olarak bulundu**:
+    `CONVENTIONS.md`/`PLAN.md`/`README.md`/`TASK-RUNNER-PROMPT.md`/`apps/api`+`apps/rtm`
+    `package.json`/`tsconfig.json`/`fixtures.ts` + `apps/api/scripts/{test-datastores,with-test-datastores}.ts`
+    + `apps/api/test/integration/test-datastores.test.ts` (untracked) — hepsi görünüşte TAMAMLANMIŞ
+    (dokümantasyon zaten "artık izole koşuyor" diye anlatıyor, script'ler DoD kapısında fiilen
+    çalıştı: bu turun `pnpm -w test`/`test:integration` koşuları bu WIP'in üzerinden geçti ve
+    yeşildi). **98.1 kapsamı bu değil** — dokunulmadı, commit'lenmedi (yalnız kendi iki dosyam +
+    PLAN/HANDOFF stage edildi). Muhtemelen bir önceki pencere kodu bitirip kapanışa (commit+push+
+    Task Master done) hiç ulaşamadan öldü (TASK-RUNNER-PROMPT'un uyardığı tm 93.3 senaryosu).
+    Task Master'da tm 105 hâlâ `in-progress` — bir sonraki pencere ya bu WIP'i doğrulayıp
+    commit'leyerek kapatmalı ya da neden yarım bırakıldığını araştırmalı.
+
 ### tm 106 — e2e-widget-send · Widget'tan müşteri mesajı tarayıcıda kırık — done — 2026-08-09 UTC
 
 - **Yapıldı:**

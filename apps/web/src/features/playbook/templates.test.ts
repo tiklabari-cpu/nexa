@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_TEMPLATE_SUMMARY_LENGTH,
   RECOMMENDED_TEMPLATE_IDS,
   SKILL_TEMPLATES,
   TEMPLATE_CATEGORIES,
@@ -58,9 +59,19 @@ describe('skill template catalogue', () => {
     }
   });
 
-  it('uses unique ids', () => {
-    const ids = SKILL_TEMPLATES.map((t) => t.id);
-    expect(new Set(ids).size).toBe(ids.length);
+  it('uses unique ids — required so 05.6-tmpl31-b can add 23+ records without a silent collision', () => {
+    const seen = new Map<string, number>();
+    for (const template of SKILL_TEMPLATES) {
+      seen.set(template.id, (seen.get(template.id) ?? 0) + 1);
+    }
+    const duplicates = [...seen.entries()].filter(([, count]) => count > 1).map(([id]) => id);
+    expect(duplicates).toEqual([]);
+  });
+
+  it(`keeps summary within ${MAX_TEMPLATE_SUMMARY_LENGTH} characters, so it reads as one card line`, () => {
+    for (const template of SKILL_TEMPLATES) {
+      expect(template.summary.length, template.id).toBeLessThanOrEqual(MAX_TEMPLATE_SUMMARY_LENGTH);
+    }
   });
 
   it('populates every advertised category', () => {
@@ -74,6 +85,18 @@ describe('skill template catalogue', () => {
     const standalone = SKILL_TEMPLATES.filter((t) => !t.requiresIntegration);
     expect(needsIntegration.length).toBeGreaterThan(0);
     expect(standalone.length).toBeGreaterThan(0);
+  });
+});
+
+describe('badge', () => {
+  const categoryIds: string[] = TEMPLATE_CATEGORIES.map((c) => c.id);
+
+  it('is a card highlight distinct from category — a template never uses one to mean the other', () => {
+    for (const template of SKILL_TEMPLATES) {
+      if (template.badge === undefined) continue;
+      expect(['popular', 'essential'], template.id).toContain(template.badge);
+      expect(categoryIds, template.id).not.toContain(template.badge);
+    }
   });
 });
 

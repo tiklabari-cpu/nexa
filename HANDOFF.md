@@ -65,14 +65,46 @@
   bu turun değişikliğinden gelmiyor: `git diff --stat` ürün kodunda **sıfır** satır gösteriyor
   (yalnız 2 api test dosyası + e2e harness + yeni spec + tazelenmiş kanıt PNG'leri). Üç kırmızı
   kümesinin üçü de koda karşı teşhis edildi ve **tm 106 / 107 / 108** olarak açıldı.
+- **Regresyon kanıtı — KONTROLLÜ ÖLÇÜM (kapanıştan sonra eklendi).** "Kırmızılar benden değil"
+  iddiası artık yalnız `git diff`'e dayanmıyor; aynı makinede, aynı temiz sunucu durumundan
+  (4000/4001/5173/5174 boş, `.env` source'lanmış) iki tam süit koşuldu:
+  **`bulk-import.spec.ts` YOKKEN 71 geçti / 15 kırmızı (86 test)** ·
+  **VARKEN 72 geçti / 15 kırmızı (87 test)**. Düşen testlerin kimlik listesi iki koşuda
+  **birebir aynı** (`diff` boş — command-palette:15 · customers:12/51/68/93 · demo-flow:14 ·
+  inbox-panel:58/114 · settings:25/560 · skills-routing:76/246 · traffic:12 · widget:118/134).
+  Yani bu tur süite **+1 geçen test** ekledi, **0 kırmızı** ekledi. Aradaki fark yalnız yeni
+  spec'in kendisi.
 - **Bulunan gerçek kusurlar (e2e koşulur hale gelince görünenler):**
   - **tm 106 [high] — Widget'tan mesaj gönderimi tarayıcıda kırık.** `api.send()` throw ediyor,
     widget optimistic mesajı geri alıyor, transkript boş kalıyor (`widget.ts:546-569`).
     **API tarafı SAĞLAM olduğu doğrudan HTTP ile kanıtlandı:** `POST /customer/token` 200 (her iki
     origin), `GET /customer/chat` 200, `POST /customer/chat/events` **201** (chat + event yazıldı),
     CORS preflight 204 + `allow-headers: authorization,content-type`. Elenen hipotezler: em-dash/
-    çok baytlı karakter, CORS, token doğrulama, SSRF, DB state. İlk adım: widget'ın
-    `console.warn('nexa widget: send failed', …)` çıktısını yakalamak.
+    çok baytlı karakter, CORS, token doğrulama, SSRF, DB state.
+    **O `console.warn` YAKALANDI** (kapanıştan sonra, `test-results/…/trace.zip` içinden;
+    "ilk adım" artık yapılmış durumda):
+
+    ```
+    nexa widget: send failed WidgetApiError: not connected
+        at #request (http://localhost:5174/src/api.ts) at WidgetApi.send
+        at send (widget.ts) at HTMLFormElement.<anonymous> (widget.ts)
+    ```
+
+    Kanıtlanan üç şey: (1) `#request` bu mesajı **yalnız** `this.#token === null` iken atar
+    (`apps/widget/src/api.ts` — fonksiyonun ilk satırı); (2) aynı koşunun ağ kaydında
+    `POST /customer/chat/events` **hiç yok** — istek ağa çıkmadan içeride öldü, yani sunucu
+    tarafını aramak boşuna (yukarıdaki 201 zaten bunu söylüyordu); (3) `widget.ts`'teki `send()`
+    fonksiyonunda `if (!api.authenticated) await connect()` **koruması YOK** — oysa hemen
+    yanındaki `onPickFile()` bu korumayı taşıyor ve yorumu nedenini birebir yazıyor:
+    _"opening the panel already started `connect`, but a fast click can beat it"_. Yükleme
+    yolunda düşünülmüş olan yarış, gönderme yolunda düşünülmemiş.
+    **Lider hipotez (henüz kanıt değil):** `connect()` daha çözülmeden Send'e basılıyor; composer
+    bağlantıdan bağımsız olarak en baştan etkin, dolayısıyla `openWidget`'ın beklediği "Message
+    textbox görünür" koşulu token'ın varlığını GARANTİ ETMİYOR. Makine yüklendikçe (17 node
+    süreci, vite derlemesi) yarışı düzenli olarak kaybediyor — 15 kırmızının tamamı müşteri mesajı
+    gönderen testler olması bununla tutarlı. Doğrulama önerisi: `send()`'e `onPickFile()`'ın
+    korumasını ekleyip süiti tekrar koşmak; tek satırla 15 testin dönmesi hipotezi doğrular.
+    (Düzeltme bilinçli olarak YAPILMADI — CONVENTIONS §5, bu tm 106'nın işi.)
   - **tm 107 [medium] — `scheduled-reports:run` sızıntı testi tarihe bağlı.** Fixture sabit
     `IN_PERIOD` (2026-08-07) yazıyor, spawn edilen CLI **gerçek** saati kullanıyor
     (`scheduled-reports-run.ts:158`), süreç-içi testler ise `{ now: NOW }` pinliyor. Yalnız

@@ -4809,12 +4809,12 @@
             "description": "Galeriye debounce'lu ada/özete göre arama + kategori sekmesi/filtresi; kart listesi mevcut `VirtualList` primitifine taşınır. Sonuç boşsa anlamlı empty state (boş dikdörtgen değil). Mevcut a11y davranışı (Escape/backdrop kapama, focus-trap) KORUNUR — regresyon testiyle bağlanır.",
             "details": "05.6-tmpl31-d — Galeri ölçek davranışı: arama + kategori filtresi + sanal liste (31+ kart)  [SONNET-XHIGH]\n\nPRD: FR-MOD-05.1/05.2 (galeri) + FR-EK-B.1 + NFR-P4\nETİKET GEREKÇESİ: SONNET-XHIGH: 6 koşul sağlandı. (1) 2 dosya. (2) Güvenlik yok. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: `apps/web/src/components/VirtualList.tsx` (EK-B.1/T6-a, tm 30) + `skill-filter.ts` (05.4-a'da kurulan arama/filtre deseni). (5) Kontrat yok. (6) KK mekanik: filtre daraltır, sanal pencere yalnız görünür kartı DOM'a koyar.\nNEDEN AÇIK: `TemplateGallery.tsx` bugün 8 kaydı kategori gruplarında düz render ediyor — arama yok, sanal liste yok. 8 kartta sorun değil; 31+ kartta modal uzar, bulunabilirlik düşer ve NFR-P4 bütçesi ölçülemez hâle gelir.\nKAPSAM: Galeriye debounce'lu ada/özete göre arama + kategori sekmesi/filtresi; kart listesi mevcut `VirtualList` primitifine taşınır. Sonuç boşsa anlamlı empty state (boş dikdörtgen değil). Mevcut a11y davranışı (Escape/backdrop kapama, focus-trap) KORUNUR — regresyon testiyle bağlanır.\nDOSYALAR: apps/web/src/features/playbook/TemplateGallery.tsx · apps/web/src/features/playbook/TemplateGallery.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/components/VirtualList.tsx (T6-a virtualized liste primitifi — tm 30) · apps/web/src/features/playbook/skill-filter.ts (05.4-a arama/filtre deseni) · apps/web/src/components/EmptyState.tsx\nKK (birebir): \"KK-türetilmiş: 'Katalog 31+ kayıtta da gezilebilir: arama ve kategori filtresi daraltır, yalnız görünür kartlar DOM'a girer, boş sonuç anlamlı empty state gösterir.' — §C-A14 + FR-EK-B.1.\"\nKK DOĞRULAMA: `TemplateGallery.test.tsx` — (1) arama sonucu daraltır; (2) kategori filtresi doğru alt kümeyi verir; (3) **sanal pencere:** 31+ kayıtta DOM'daki kart sayısı toplam kayıttan belirgin AZ (T6-a'nın görünür-satır testinin aynısı); (4) boş sonuç → anlamlı empty state; (5) **regresyon:** Escape/backdrop kapama ve focus-trap korunur.\nKAPSAM DIŞI: Yeni şablon eklemek · RecommendedSkills şeridi (mevcut davranış korunur)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: arama daraltır · unit: kategori filtresi doğru alt küme · unit (perf/NFR-P4): 31+ kayıtta DOM kart sayısı << toplam (sanal pencere çalışıyor) · unit: boş sonuç → anlamlı empty state · regresyon unit (a11y): Escape kapatır, backdrop kapatır, focus-trap korunur · e2e: galeriden arama ile şablon bulup skill oluşturma",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "98.2"
             ],
             "parentId": "98",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T12:59:50.660Z"
           },
           {
             "id": 5,
@@ -4831,7 +4831,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T12:37:51.701Z",
+        "updatedAt": "2026-08-09T12:59:50.660Z",
         "complexity": 4,
         "recommendedSubtasks": 5,
         "expansionPrompt": "\"05.6 — Skill şablon kataloğunu 31+ (ADR-14 uyumlu ikame)  ·  dilim V2-6\" görevini 5 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5080,7 +5080,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T12:37:51.701Z",
+      "lastModified": "2026-08-09T12:59:50.660Z",
       "taskCount": 109,
       "completedCount": 90,
       "tags": [

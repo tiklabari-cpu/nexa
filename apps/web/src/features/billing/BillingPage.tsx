@@ -674,8 +674,7 @@ function ApiPackageCard({
         {confirming ? (
           <div className="mt-2 flex flex-col gap-2">
             <p className="text-2xs text-content-secondary">
-              Buy {pkg.name} for {formatMoney(pkg.price_cents)}? No card is charged (mock
-              billing).
+              Buy {pkg.name} for {formatMoney(pkg.price_cents)}? No card is charged (mock billing).
             </p>
             <div className="flex gap-2">
               <button
@@ -777,7 +776,9 @@ function ApiPackagePurchasesSection(): ReactElement {
                     <td className="px-4 py-2 text-content-secondary">
                       {formatDate(purchase.purchased_at)}
                     </td>
-                    <td className="px-4 py-2 font-medium">{purchase.name ?? purchase.package_id}</td>
+                    <td className="px-4 py-2 font-medium">
+                      {purchase.name ?? purchase.package_id}
+                    </td>
                     <td className="tabular px-4 py-2 text-right">
                       +{formatCount(purchase.api_calls)}
                     </td>
@@ -1076,6 +1077,11 @@ const INVOICE_STATUS: Record<Invoice['status'], { label: string; className: stri
  * A list of statements, newest first, each downloadable as CSV. The figures are
  * derived server-side from the subscription and usage records (ADR-13) — the
  * current period's total matches the estimated total above.
+ *
+ * Every row shows the line items behind its total, not just the total: seats,
+ * either overage, and any API package bought in the period (09.3-e). The
+ * breakdown was previously only in the downloaded CSV, which made a total that
+ * moved unexplainable without leaving the screen.
  */
 function InvoicesSection(): ReactElement {
   const api = useApiClient();
@@ -1148,12 +1154,32 @@ function InvoicesSection(): ReactElement {
                     <td className="px-4 py-2">
                       <span className="font-medium">{invoice.number}</span>
                       <span className="ml-2 text-content-tertiary">{invoice.period_label}</span>
+                      {/* What the total is made of, on the statement itself. A
+                          row that shows only an amount makes "why is this
+                          $29.99 more than last month" a support ticket — and a
+                          bought API package (09.3-e) would otherwise be visible
+                          nowhere but the downloaded CSV. Keyed by description +
+                          index because two purchases of the same package in one
+                          period produce two identical descriptions. */}
+                      <ul data-testid="invoice-line-items" className="mt-1 flex flex-col gap-0.5">
+                        {invoice.line_items.map((item, index) => (
+                          <li
+                            key={`${item.description}-${index}`}
+                            className="text-2xs text-content-tertiary"
+                          >
+                            {item.description} ·{' '}
+                            <span className="tabular">
+                              {formatMoney(item.amount_cents, invoice.currency.toUpperCase())}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
                     </td>
                     <td className="px-4 py-2 text-content-secondary">
                       {formatDate(invoice.issued_at)}
                     </td>
                     <td className={`px-4 py-2 font-medium ${status.className}`}>{status.label}</td>
-                    <td className="tabular px-4 py-2 text-right">
+                    <td data-testid="invoice-total" className="tabular px-4 py-2 text-right">
                       {formatMoney(invoice.total_cents, invoice.currency.toUpperCase())}
                     </td>
                     <td className="px-4 py-2 text-right">

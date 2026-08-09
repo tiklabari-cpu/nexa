@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### tm 71.8 — 09.3-h: Uçtan uca doğrulama (satın alma → kota → geçmiş → fatura) — done — 2026-08-10 UTC
+
+- **Yapıldı:** `apps/e2e/tests/billing.spec.ts`'e tek senaryo — ekrandan Essential satın alınır, sonra
+  üç yer okunur: `api-overage-terms`'teki `included` +100.000, `api-package-purchase-row` +1 satır,
+  açık faturada `API package — Essential (100000 calls)` satırı + `invoice-total` +2999. Üçü de
+  **delta** (satın alma kalıcı kayıt, seed kendini geri alamaz) ve **ayraç-bağımsız** (`digitsOf`,
+  sayfa `Intl` ile biçimliyor); kota/toplam `expect.poll` ile (invalidate → refetch).
+  Üçüncü iddia için ekranda yüzey yoktu: `InvoicesSection` satır başına `line_items` dökümünü
+  (`invoice-line-items`) + `invoice-total` testid'ini kazandı — 09.3-e'nin satır kalemi bugüne kadar
+  yalnız indirilen CSV'de görünüyordu. `seed.ts` dokunulmadı (delta disiplini gerektirmedi).
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0**
+  (`@nexa/web` 802/802, 801'den +1 · `@nexa/api` 2134/2134) · `pnpm -w test:integration` **0**
+  (1597/1597, 66 dosya) · `pnpm -w build` **0** (7/7) · e2e `billing.spec.ts` **3/3** (yeni senaryo +
+  checkout/trial regresyonsuz) · `demo-flow.spec.ts` **3/3** (Billing'e giren diğer tek süit).
+- **Varsayımlar:** yok. Bu pencere bir **resume**'du — kod ve test önceki pencereden çalışma alanında
+  duruyordu; bu tur kapı baştan koşuldu, PLAN/HANDOFF yazıldı ve commit'lendi.
+- **⚠ Eşzamanlı pencere gözlendi (bu turun tek sürprizi):** 71.8 üzerinde İKİNCİ bir pencere hâlâ
+  canlıydı — `billing.spec.ts` + `BillingPage.tsx`'i 01:25:19'da (bu pencerenin ilk `git diff`'inden
+  SONRA) düzenledi (fatura kanıtı için ikinci ekran görüntüsü `09.3-api-package-invoice.png`) ve
+  ardından **tüm e2e süitini** koşmaya başladı (01:31→, `apps/e2e/kanit/*` toplu yeniden yazılıyor).
+  Bu yüzden kapı iki kez koşuldu: ilk tur düzenlemeden önceki dosyalara denk geldiği fark edilince
+  `typecheck`/`lint`/`@nexa/web test`/`build` güncel duruma karşı **yeniden** koşuldu (hepsi 0) ve
+  `billing.spec.ts` e2e koşusunun zaten güncel sürümü kapsadığı satır numaralarıyla (51/126/198,
+  koşu çıktısıyla birebir) doğrulandı. Commit edilen içerik = diskteki güncel sürüm.
+  Sonraki pencere için: commit'siz kalan `apps/e2e/kanit/*.png` yığını o süitin byte-churn'ü, bu
+  task'ın işi değil — CONVENTIONS §1.1'in "iki pencere aynı anda e2e koşamaz" istisnası fiilen
+  gerçekleşti; e2e'ye dokunacak pencere önce başka koşu olmadığını doğrulasın.
+- **Sonraki pencereye not:**
+  - **09.3 kalemi KAPANDI (8/8).** PLAN.md satırı `✅ → K09.3`. Kapsam dışı kalanlar ayrı kalem olur:
+    yenilenen paket aboneliği · iade/kota geri alma · dönem devri (rollover) · idempotency anahtarı.
+  - **tm 105 WIP hâlâ commit'siz ve bu tur da dokunulmadı** (kapsam disiplini, CONVENTIONS §5):
+    `README.md`, `package.json` (kök — `test:integration`'dan `--concurrency=1` kalkmış),
+    `apps/api|rtm/package.json`, `apps/api/tsconfig.json`, iki `test/helpers/fixtures.ts`,
+    `turbo.json`, `apps/api/scripts/*test-datastores.ts`, `test-datastores.test.ts`,
+    `.taskmaster/tmp-*`. Çalışma alanı bu yüzden temiz değil — tm 105'in kendi penceresi kapatmalı.
+
 ### tm 71.7 — 09.3-g: Satın alma geçmişi listesi (UI) + empty state — done — 2026-08-10 UTC
 
 - **Yapıldı:** `apps/web/src/features/billing/BillingPage.tsx`'e `ApiPackagePurchasesSection` —

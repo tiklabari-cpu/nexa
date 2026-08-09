@@ -306,6 +306,39 @@ describe('BillingPage — invoices (FR-MOD-10.3)', () => {
     expect(rows[1]).toHaveTextContent('Paid');
   });
 
+  /**
+   * A statement that shows only a total cannot answer "why did this move".
+   * The line items were previously reachable only by downloading the CSV, which
+   * is exactly where a bought API package (09.3-e) was hiding — so the breakdown
+   * is on the row itself, priced per line.
+   */
+  it('breaks each invoice down into its line items, including a bought API package', async () => {
+    mockBilling({
+      invoices: [
+        {
+          ...DEFAULT_INVOICE,
+          line_items: [
+            { description: 'Subscription — 3 seats (monthly)', amount_cents: 29700 },
+            { description: 'API package — Essential (100000 calls)', amount_cents: 2999 },
+          ],
+          subtotal_cents: 32699,
+          total_cents: 32699,
+        },
+      ],
+    });
+    renderBilling(<BillingPage />);
+
+    const row = await screen.findByTestId('invoice-row');
+    const items = within(row).getByTestId('invoice-line-items');
+    expect(items).toHaveTextContent('Subscription — 3 seats (monthly)');
+    expect(items).toHaveTextContent('$297.00');
+    expect(items).toHaveTextContent('API package — Essential (100000 calls)');
+    expect(items).toHaveTextContent('$29.99');
+    // The total is the sum of the lines, so the breakdown explains it rather
+    // than sitting beside it.
+    expect(within(row).getByTestId('invoice-total')).toHaveTextContent('$326.99');
+  });
+
   it('downloads an invoice as a CSV blob', async () => {
     const user = userEvent.setup();
     // jsdom has no object-URL plumbing; stub it for the download click.
@@ -439,14 +472,30 @@ describe('BillingPage — API packages (FR-MOD-09.3)', () => {
         purchased_at: '2026-07-15T00:00:00.000Z',
       },
       usage: {
-        ai_resolutions: { used: 12, included: 200, overage: 0, overage_cents: 0, overage_unit: 50, overage_unit_price_cents: 50 },
-        api_calls: { used: 4_812, included: 600_000, overage: 0, overage_cents: 0, overage_unit: 100_000, overage_unit_price_cents: 2_950 },
+        ai_resolutions: {
+          used: 12,
+          included: 200,
+          overage: 0,
+          overage_cents: 0,
+          overage_unit: 50,
+          overage_unit_price_cents: 50,
+        },
+        api_calls: {
+          used: 4_812,
+          included: 600_000,
+          overage: 0,
+          overage_cents: 0,
+          overage_unit: 100_000,
+          overage_unit_price_cents: 2_950,
+        },
       },
     });
     renderBilling(<BillingPage />);
 
     await screen.findByTestId('api-package-pro');
-    const usageCallsBefore = api.get.mock.calls.filter((call) => call[0] === '/billing/usage').length;
+    const usageCallsBefore = api.get.mock.calls.filter(
+      (call) => call[0] === '/billing/usage',
+    ).length;
 
     await user.click(screen.getByRole('button', { name: 'Buy Pro' }));
     await user.click(screen.getByRole('button', { name: 'Confirm buying Pro' }));
@@ -456,7 +505,9 @@ describe('BillingPage — API packages (FR-MOD-09.3)', () => {
     // Success invalidates usage (and invoices) so the raised quota is re-read
     // from the server rather than patched locally.
     await vi.waitFor(() => {
-      const usageCallsAfter = api.get.mock.calls.filter((call) => call[0] === '/billing/usage').length;
+      const usageCallsAfter = api.get.mock.calls.filter(
+        (call) => call[0] === '/billing/usage',
+      ).length;
       expect(usageCallsAfter).toBeGreaterThan(usageCallsBefore);
     });
   });
@@ -468,14 +519,18 @@ describe('BillingPage — API packages (FR-MOD-09.3)', () => {
     renderBilling(<BillingPage />);
 
     await screen.findByTestId('api-package-essential');
-    const usageCallsBefore = api.get.mock.calls.filter((call) => call[0] === '/billing/usage').length;
+    const usageCallsBefore = api.get.mock.calls.filter(
+      (call) => call[0] === '/billing/usage',
+    ).length;
 
     await user.click(screen.getByRole('button', { name: 'Buy Essential' }));
     await user.click(screen.getByRole('button', { name: 'Confirm buying Essential' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not buy the package/i);
     // The counter is untouched — no invalidation ran on a failed purchase.
-    const usageCallsAfter = api.get.mock.calls.filter((call) => call[0] === '/billing/usage').length;
+    const usageCallsAfter = api.get.mock.calls.filter(
+      (call) => call[0] === '/billing/usage',
+    ).length;
     expect(usageCallsAfter).toBe(usageCallsBefore);
     const section = screen.getByRole('heading', { name: 'API calls', level: 2 }).closest('section');
     expect(section).toHaveTextContent('4,812');

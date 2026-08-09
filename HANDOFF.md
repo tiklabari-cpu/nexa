@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### tm 71.1 — 09.3-a: Statik API paket kataloğu + tipleri (@nexa/types) — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `packages/types/src/api-packages.ts` (yeni): `ApiPackage` tipi (id, name, api_calls,
+    price_cents) + `API_PACKAGE_CATALOG` readonly dizi (Essential 100K/$29.99, Pro 500K/$149.99,
+    Pro+ 1M/$249.99) + `findApiPackage(id)` + `isApiPackageId(v)`. `apps.ts`'teki
+    APP_CATALOG/findApp/isAppId deseninin birebir eşi. Essential/Pro rakamları PRD satır 666/1412
+    gözlem notundan birebir; Pro+ rakamı PRD'de ayrıca verilmediği için türetildi (task 71.1
+    notundaki "açık soru 1" — dosya başlığındaki yorumda gerekçelendirildi).
+  - `packages/types/src/api-packages.test.ts` (yeni, 4 test): katalog tam 3 giriş + benzersiz id,
+    pozitif kota/fiyat, Essential/Pro'nun PRD rakamlarıyla birebir eşleşmesi, find/is fonksiyonlarının
+    pozitif+negatif+tip-dışı girdi davranışı.
+  - `packages/types/src/index.ts`: `export * from './api-packages.js'` eklendi.
+  - Kapsam dışı (bilerek): kontrat/route/DB/UI — bu alt-görev yalnız tip+veri katmanı (09.3-b..h'nin işi).
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `pnpm -w test` **0** (10/10; `@nexa/api` 100 dosya/2093 test, `@nexa/types` 8 dosya/75 test — +4 bu
+  görevden) · `pnpm -w test:integration` **0** (`@nexa/api` 66/66 dosya, 1556/1556) · `pnpm -w build`
+  **0** (7/7) · `pnpm -w test:e2e` **0** — 90/90 (bu görev route/UI dokunmadığı için sayı sabit).
+  Task'ın kendi KK'sı `api-packages.test.ts`'te doğrulandı.
+- **Varsayımlar:** Paket id'leri kebab-case (`essential`, `pro`, `pro-plus`) — `apps.ts`'teki id
+  konvansiyonuyla tutarlı, PRD id vermiyor.
+- **Sonraki pencereye not:**
+  - PLAN.md §F.00 `09.3` satırı ⬜→◐ (yalnız -a bitti; 09.3-b..h — DB tablosu, okuma/satın alma
+    route'ları, fatura satırı, Billing UI, E2E — hâlâ Billing teslimine bağlı, bkz. satırdaki not).
+  - **Bu pencere tm 71.1 dışında hiçbir şey yapmadı**, ama bootstrap sırasında ilgisiz bir WIP fark
+    edildi: çalışma alanında **tm 105** (apps/api integration testlerinin izole test-datastore'a
+    geçişi) için uncommitted değişiklikler vardı (`CONVENTIONS.md`, `TASK-RUNNER-PROMPT.md`,
+    `apps/api|rtm/package.json`, `turbo.json`, `apps/api/scripts/with-test-datastores.ts` +
+    `test-datastores.ts`, `apps/api/test/integration/test-datastores.test.ts`, fixture dosyaları).
+    Task Master'da tm 105 zaten `in-progress` — önceki pencere DoD'u geçtiği (bu turun tüm kapı
+    komutları bu WIP'i kullanarak koştu ve yeşildi) ama §3 kapanışını (commit+push+done) hiç
+    yapmadan ölmüş görünüyor (TASK-RUNNER-PROMPT §2'nin uyardığı senaryo — arka planda bırakılmış
+    kapı komutu). Bu tur bilerek **dokunmadı/commitlemedi** (kapsam disiplini, CONVENTIONS §5) —
+    kendi `git add` bu turda yalnız `packages/types/**` + `PLAN.md` + `HANDOFF.md` ile sınırlı.
+    tm 105'i alacak bir sonraki pencere §1 resume akışıyla bu WIP'i doğrudan devralıp bitirebilir.
+
 ### tm 65.8 — 08.5.7-h: Uçtan uca doğrulama (Instagram bağla → DM gelsin → inbox'ta chat) — done — 2026-08-09 UTC
 
 - **Yapıldı:**

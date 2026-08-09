@@ -2345,12 +2345,12 @@
             "description": "Prisma modeli `ApiPackagePurchase` → tablo `api_package_purchases`: id (uuid), licenseId (BigInt, map license_id), packageId (map package_id), apiCalls (BigInt, map api_calls — satın alınan kota), priceCents (Int, map price_cents), period (Char(6), yyyymm — kotanın eklendiği dönem), purchasedAt (Timestamptz, map purchased_at), License ilişkisi onDelete: Cascade, @@index([licenseId, period]). Migra",
             "details": "09.3-b — api_package_purchases tablosu: Prisma modeli + migration + RLS politikası  [OPUS-XHIGH]\n\nPRD: FR-MOD-09.3 (+ NFR-S4 tenant izolasyon/RLS)\nETİKET GEREKÇESİ: OPUS-XHIGH: yeni tablonun RLS politikası tenant izolasyon sınırına dokunuyor → koşul 2 ihlali, SONNET olamaz (kullanıcı kuralı: güvenlik işi asla sonnet'e verilmez). Ancak algoritma tasarımı/eşzamanlılık yok — mevcut app_installations RLS deseninin birebir kopyası ve tüketici kod yok → OPUS-MAX gerekmiyor.\nNEDEN AÇIK: apps/api/prisma/schema.prisma'da satın alınan paketi tutan model YOK: UsageRecord (satır ~1236) yalnız metric/period/quantity/included/overage_unit/overage_unit_price_cents taşıyor, Subscription (satır ~1213) plan/billing_cycle/seats/unit_price_cents/ai_resolutions_included taşıyor. Hangi lisansın hangi paketi ne zaman satın aldığı hiçbir tabloda saklanmıyor. Migration dizininde en son giriş 20260727090000_app_installations — api_package benzeri migration yok.\nKAPSAM: Prisma modeli `ApiPackagePurchase` → tablo `api_package_purchases`: id (uuid), licenseId (BigInt, map license_id), packageId (map package_id), apiCalls (BigInt, map api_calls — satın alınan kota), priceCents (Int, map price_cents), period (Char(6), yyyymm — kotanın eklendiği dönem), purchasedAt (Timestamptz, map purchased_at), License ilişkisi onDelete: Cascade, @@index([licenseId, period]). Migration SQL'de `ALTER TABLE api_package_purchases ENABLE ROW LEVEL SECURITY;` + `CREATE POLICY api_package_purchases_tenant ...` (app_installations migration.sql satır 43-44 deseninin birebir eşi). Tüketici kod YOK — yalnız şema.\nDOSYALAR: apps/api/prisma/schema.prisma · apps/api/prisma/migrations/<timestamp>_api_package_purchases/migration.sql · apps/api/test/integration/data-model.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/prisma/migrations/20260727090000_app_installations/migration.sql (satır 43-44: ENABLE ROW LEVEL SECURITY + CREATE POLICY <tablo>_tenant) · apps/api/prisma/schema.prisma (PaymentMethod ve UsageRecord modelleri — licenseId + @map + Cascade + @@map deseni) · apps/api/test/integration/data-model.test.ts (satır ~463/469: cross-tenant erişim /permission denied|policy/i ile reddedilir iddiası)\nKK (birebir): \"Fiyatlı API paketleri satışı\" | \"KK-türetilmiş: satın alınan her paket kalıcı bir kayda düşer (hangi lisans, hangi paket, ne kadar kota, ne fiyat, hangi dönem). Türetme gerekçesi: PRD KK 'satış' diyor ama kaydın nerede tutulacağını söylemiyor; ADR-13 (Stripe MOCK) gereği dış sağlayıcıda kayıt yok, dolayısıyla kayıt yerel tabloda tutulmak zorunda.\"\nKK DOĞRULAMA: data-model.test.ts: (1) migration deploy sonrası api_package_purchases tablosu ve api_package_purchases_tenant politikası mevcut, RLS enabled; (2) CROSS-TENANT NEGATİF (önce yazılır): B lisansı bağlamında A lisansının satın alma satırı okunamaz → /permission denied|policy/i. Komut: `pnpm --filter @nexa/api test -- data-model` (DB süiti serial).\nKAPSAM DIŞI: satın alma yazma yolu ve kota artışı (09.3-d) · okuma endpoint'leri (09.3-c) · fatura satırı (09.3-e) · katalog tablosu — katalog kod-içi statik kalır (varsayım 3), DB'de paket kataloğu tablosu AÇILMAZ\nMIGRATION: EVET — yeni tablo api_package_purchases (license_id, package_id, api_calls, price_cents, period, purchased_at) + ENABLE ROW LEVEL SECURITY + CREATE POLICY api_package_purchases_tenant + index (license_id, period)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration: tablo + policy varlığı, RLS enabled · cross-tenant NEGATİF (pozitiften ÖNCE yazılır): başka lisansın satın alma satırı RLS ile reddedilir · integration: License silinince satın alma satırları cascade siliniyor",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "71.1"
             ],
             "parentId": "71",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T19:59:42.717Z"
           },
           {
             "id": 3,
@@ -2438,7 +2438,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T19:25:15.617Z",
+        "updatedAt": "2026-08-09T19:59:42.717Z",
         "complexity": 7,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.3 — API istek paketleri (Essential/Pro/Pro+)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T19:25:15.621Z",
+      "lastModified": "2026-08-09T19:59:42.717Z",
       "taskCount": 109,
       "completedCount": 96,
       "tags": [

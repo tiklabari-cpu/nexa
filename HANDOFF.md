@@ -27,6 +27,13 @@
   (`@nexa/web` 802/802, 801'den +1 · `@nexa/api` 2134/2134) · `pnpm -w test:integration` **0**
   (1597/1597, 66 dosya) · `pnpm -w build` **0** (7/7) · e2e `billing.spec.ts` **3/3** (yeni senaryo +
   checkout/trial regresyonsuz) · `demo-flow.spec.ts` **3/3** (Billing'e giren diğer tek süit).
+  **EK (diğer pencere, commit sonrası ölçüm):** e2e **tam süit** commit'lenen sürüme karşı iki kez
+  koşuldu — **91/91 yeşil** (89 + 2'lik bir ara koşu vardı: `reports.spec.ts:77` ve
+  `settings.spec.ts:267`, ikisi de izole yeniden koşuda 28/28 yeşil, HANDOFF'ta kayıtlı
+  pre-existing flake ailesi, bu değişiklikle ilgisiz — Billing'e dokunmayan süitler). Yani kapı
+  yalnız iki dosya değil, tüm e2e yüzeyi için yeşil. `apps/e2e/kanit/*.png` byte-churn'ü de
+  `git restore` ile geri alındı: çalışma alanında bu task'tan kalan hiçbir şey yok
+  (yalnız tm 105 WIP duruyor).
 - **Varsayımlar:** yok. Bu pencere bir **resume**'du — kod ve test önceki pencereden çalışma alanında
   duruyordu; bu tur kapı baştan koşuldu, PLAN/HANDOFF yazıldı ve commit'lendi.
 - **⚠ Eşzamanlı pencere gözlendi (bu turun tek sürprizi):** 71.8 üzerinde İKİNCİ bir pencere hâlâ

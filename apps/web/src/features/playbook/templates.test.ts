@@ -18,6 +18,7 @@ import {
   templateToDraft,
   templatesByCategory,
   type SkillTemplate,
+  type TemplateCategory,
 } from './templates.js';
 import type { SkillStep } from './types.js';
 
@@ -43,6 +44,10 @@ function stepIsValid(step: SkillStep): boolean {
 }
 
 describe('skill template catalogue', () => {
+  it('ships at least 31 templates — PRD §5.3 / 05.6-tmpl31 catalogue-size acceptance criterion', () => {
+    expect(SKILL_TEMPLATES.length).toBeGreaterThanOrEqual(31);
+  });
+
   it('gives every template a non-empty name, instruction and at least one step', () => {
     for (const template of SKILL_TEMPLATES) {
       expect(template.name.trim(), template.id).not.toBe('');
@@ -85,6 +90,31 @@ describe('skill template catalogue', () => {
     const standalone = SKILL_TEMPLATES.filter((t) => !t.requiresIntegration);
     expect(needsIntegration.length).toBeGreaterThan(0);
     expect(standalone.length).toBeGreaterThan(0);
+  });
+});
+
+describe('original eight templates (pre-05.6-tmpl31-b)', () => {
+  const originalCategoryById: Record<string, TemplateCategory> = {
+    'order-status': 'prebuilt',
+    'returns-policy': 'prebuilt',
+    'business-hours': 'prebuilt',
+    'greet-and-route': 'ai',
+    'collect-then-handover': 'ai',
+    'shopify-order-lookup': 'trending',
+    'stripe-refund': 'trending',
+    'csat-followup': 'trending',
+  };
+
+  it('keeps every original id resolvable — adding 23+ records must not rename or drop one', () => {
+    for (const id of Object.keys(originalCategoryById)) {
+      expect(findTemplate(id), id).toBeDefined();
+    }
+  });
+
+  it('keeps each original template in its original category', () => {
+    for (const [id, category] of Object.entries(originalCategoryById)) {
+      expect(findTemplate(id)?.category, id).toBe(category);
+    }
   });
 });
 

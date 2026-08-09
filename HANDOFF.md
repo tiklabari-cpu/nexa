@@ -13,6 +13,70 @@
 
 ## Task log (newest-first)
 
+### tm 98.2 — 05.6-tmpl31-b · 23+ yeni şablon kaydı — katalog 8 → 31+ — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/playbook/templates.ts` — 25 yeni `SkillTemplate` eklendi (8 → 33,
+    PRD §5.3 "31+ şablon" hedefi karşılandı; 23+ zorunluluğuna 2 kayıt payla). Kategori dağılımı
+    dengeli: prebuilt 11 (+8) / ai 11 (+9) / trending 11 (+8). Her yeni kayıt gerçekçi bir
+    `instruction` + `steps.ts`'i `@nexa/ai-mock` `validateStep`'in (`packages/ai-mock/src/steps.ts`)
+    kurallarına birebir uyuyor (mirror `stepIsValid` testte doğrulanıyor); `summary`
+    `MAX_TEMPLATE_SUMMARY_LENGTH` (100) içinde; `id`'ler mevcut 8'le ve birbirleriyle çakışmıyor.
+    `badge` alanı (tm 98.1'de eklenmişti, hiç kullanılmıyordu) 4 yeni kayıtta seçmeli kullanıldı
+    (`shipping-cost`/`klaviyo-abandoned-cart`/`vip-customer-priority`: popular,
+    `troubleshoot-then-escalate`: essential) — FR-MOD-05.2'nin "badge alanı seçmeli kullanılır"
+    notu artık gerçek veri üzerinde de doğru. Trending'e yeni entegrasyon çeşitliliği
+    (PayPal/Salesforce/Klaviyo/Recharge/Calendly/ShipStation/QuickBooks + 1 entegrasyonsuz)
+    eklendi — mevcut Shopify/Stripe tekrarına düşülmedi. Modül üstü doc-comment ("Kept small on
+    purpose") artık yanlış olacağı için güncellendi.
+  - `apps/web/src/features/playbook/templates.test.ts` — task'ın KK doğrulama komutunun birebir
+    istediği iki test eklendi (eskiden yoktu): (1) `SKILL_TEMPLATES.length >= 31` — KK'nın sayısal
+    payının doğrudan ölçümü; (2) yeni `describe('original eight templates …')` — orijinal 8 kaydın
+    id'si VE kategorisi değişmediğini kilitleyen regresyon (23+ ekleme sırasında en olası kaza:
+    bir id'yi yanlışlıkla yeniden kullanmak/kategori kaydırmak). 15 → 18 test (+3).
+  - Kapsam dışı (bilerek AÇILMADI, bağımlı alt-görevler): i18n (-c), galeri arama/filtre/sanal
+    liste (-d), kapanış e2e regresyonu (-e) — `05.6-tmpl31` dilimi bu turda TAMAMLANMADI, PLAN.md
+    satırı `◐` bırakıldı (uydurma `✅` yok).
+- **Doğrulama (exit code'larla):**
+  - KK doğrulama komutu (task detail'inde birebir): `pnpm --filter @nexa/web exec vitest run
+    src/features/playbook/templates.test.ts` — **18/18 yeşil**.
+  - `pnpm -w typecheck` **11/11 exit 0** · `pnpm -w lint` **8/8 exit 0** · `pnpm -w build` **7/7 exit 0**.
+  - `pnpm -w test` — `@nexa/web` **756 geçti / 7 kırmızı**; kırmızılar zaten bilinen **tm 108**
+    (makine locale'i, `BillingPage`/`ReportsPage` para biçimi $0,50 vs $0.50) — aynı 7 dosya/test,
+    aynı sayı tm 98.1'de de kayıtlıydı, `apps/web/src/features/billing`|`reports`'a bu turda
+    dokunulmadı. 756 = 753 (tm 98.1 taban) + 3 (bu turun yeni testleri) — yan etkisiz doğrulaması.
+    Diğer tüm paketler yeşil.
+  - `pnpm -w test:integration` — `@nexa/api` **1532 geçti / 1 kırmızı**, tek kırmızı zaten bilinen
+    **tm 107** (tarihe bağlı `scheduled-reports-sweep.test.ts`); `apps/api`'ye bu turda hiç
+    dokunulmadı. Diğer tüm paketler yeşil.
+  - İlgili e2e: `set -a; . ./.env; set +a` sonrası
+    `pnpm --filter @nexa/e2e exec playwright test playbook.spec.ts` — **2/2 yeşil** (şablon galerisi
+    + "Try this" akışı — bu task'ın dokunduğu tek kullanıcı yüzeyi, 33 kayıtla da bozulmadı).
+- **Varsayımlar:**
+  - 23+ zorunluluğuna küçük bir pay bırakmak için 25 yeni kayıt (toplam 33, PRD "31+" hedefinin
+    2 üstünde) — tam 23/31 sınırında değil, ileride -c/-d/-e sırasında yanlışlıkla bir kayıt
+    silinirse/birleştirilirse anında ⬜'a düşmesin diye.
+  - Trending şablonlardaki entegrasyon adları (PayPal/Salesforce/Klaviyo/Recharge/Calendly/
+    ShipStation/QuickBooks) kurgusal örnekler — gerçek bir entegrasyon kataloğu/liste PRD'de yok,
+    `requiresIntegration` zaten serbest string (mevcut Shopify/Stripe ile aynı desen).
+  - Badge dağılımı (4/33) rastgele değil ama PRD sayısal bir hedef vermiyor (kk_yetersiz) —
+    "seçmeli kullanılır" ifadesinin en az bir kanıtı olacak kadar, çoğunluğu boş bırakacak kadar az.
+- **Sonraki pencereye not:**
+  - `05.6-tmpl31-c` (i18n TR/EN) artık 33 kaydın hepsini çevirecek — kapsam büyüdü (8 değil 33).
+  - `05.6-tmpl31-d` (galeri ölçek: arama/filtre/sanal liste) için artık gerçek 33 kayıtlık bir
+    katalog var, "31+ kart" senaryosunu sahte veri üretmeden test edebilir.
+  - **tm 105 (izole test datastore altyapısı) HÂLÂ working tree'de COMMIT EDİLMEMİŞ WIP** —
+    tm 98.1/tm 106'nın bıraktığı yerde değişmeden duruyor (`CONVENTIONS.md`/`PLAN.md`/`README.md`/
+    `TASK-RUNNER-PROMPT.md`/`apps/api`+`apps/rtm` `package.json`/`tsconfig.json`/`fixtures.ts` +
+    `apps/api/scripts/{test-datastores,with-test-datastores}.ts` + `apps/api/test/integration/
+    test-datastores.test.ts`). Kapsam disiplini gereği bu turda da dokunulmadı/commit'lenmedi
+    (yalnız `templates.ts`/`templates.test.ts` + PLAN/HANDOFF stage edildi) — bu DoD koşusu da
+    (typecheck/lint/test/integration/build) bu WIP'in üzerinden geçti ve yeşildi, yani hâlâ
+    fonksiyonel görünüyor. Task Master'da tm 105 hâlâ `in-progress`; devralan pencere kaldığı
+    yerden commit'leyerek kapatabilir.
+  - `.taskmaster/tmp-*.cjs` + `tmp-changelog.txt` hâlâ untracked (önceki pencerelerin artığı,
+    bu turda da dokunulmadı).
+
 ### tm 98.1 — 05.6-tmpl31-a · Katalog şeması genişletme: rozet alanı (Popular/Essential) + invariant testlerinin sıkılaştırılması — done — 2026-08-09 UTC
 
 - **Yapıldı:**

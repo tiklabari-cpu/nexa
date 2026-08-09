@@ -13,6 +13,83 @@
 
 ## Task log (newest-first)
 
+### tm 98.3 — 05.6-tmpl31-c · Katalog i18n: şablon metinleri TR/EN (NFR-I18N2) — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/lib/i18n.ts` — 33 kayıtlık kataloğun her `name`/`summary`'si için TR/EN
+    anahtar eklendi (`playbook.template.<id>.name` / `.summary`, 66×2 satır), mevcut `nav.*`/
+    `shell.*` desenini izleyerek. `translate()`'in sessiz-fallback davranışı (eksik anahtar →
+    EN → ham anahtar) katalog-tamlık testi için işe yaramaz — ondan ayrı, fallback'siz
+    `hasMessage(locale, key): boolean` eklendi (`key in MESSAGES[locale]`), yalnız "bu anahtarın
+    bu dilde açıkça karşılığı var mı" sorusuna cevap verir.
+  - `apps/web/src/features/playbook/templates.ts` — `templateNameKey(id)` /
+    `templateSummaryKey(id)` eklendi (`` `playbook.template.${id}.name|summary` `` türetir).
+    Mevcut `name`/`summary` alanları DEĞİŞMEDİ (EN kaynak metin olarak kalıyor, `templateToDraft`
+    ve diğer testler etkilenmedi) — i18n katalogdaki EN girdileri bu alanlarla senkron olacak
+    şekilde birebir kopyalandı, sync testiyle kilitlendi. `instruction`/`steps` **bilinçli
+    olarak** i18n'e taşınmadı (AI'ya giden talimat metni; dil değişimi davranışı değiştirir).
+  - `apps/web/src/features/playbook/templates.test.ts` — yeni `describe('catalogue i18n
+    (NFR-I18N2)')` bloğu (+5 test): (1) her kaydın name/summary anahtarı hem TR hem EN'de var
+    (negatif-önce: eksik TR çevirisi bu testi KIRAR); (2) EN katalog girdisi `template.name`/
+    `.summary` ile birebir eşleşiyor (kopyalama hatası/drift'i yakalar); (3) TR çevirisi gerçek
+    — anahtara veya EN'e düşmüyor; (4) `instruction` alanı için hiçbir i18n anahtarı YOK, ve
+    `template.instruction` bir anahtar biçiminde değil (bilinçli sınırın regresyon koruması);
+    (5) locale değişince galeri metni (name) değişir, ama `templateToDraft`'ın çıkardığı
+    `instruction`/`steps` locale'den bağımsız kalır. 18 → 23 test (+5).
+  - **Kapsam dışı (bilerek):** `TemplateGallery.tsx`/`RecommendedSkills.tsx`'in yeni `t()`
+    çağrısıyla bu anahtarları render etmesi — task detayının DOSYALAR listesi yalnız
+    `templates.ts`/`i18n.ts`/`templates.test.ts`; galeri dosyası -d'de (arama/kategori
+    filtresi + sanallaştırma) zaten elden geçecek, iki ayrı görevin aynı dosyada çakışmaması
+    için kapsam bilinçli olarak veri katmanında bırakıldı.
+- **Doğrulama (exit code'larla):**
+  - KK doğrulama komutu (task detayında birebir): `pnpm --filter @nexa/web exec vitest run
+    src/features/playbook/templates.test.ts src/lib/i18n.test.ts` — **30/30 yeşil** (23 + 7).
+  - `pnpm -w typecheck` **11/11 exit 0** · `pnpm -w lint` **8/8 exit 0** · `pnpm -w build`
+    **7/7 exit 0**.
+  - `pnpm -w test` — `@nexa/web` **761 geçti / 7 kırmızı**; kırmızılar zaten bilinen **tm 108**
+    (makine locale'i, `BillingPage`/`ReportsPage` para biçimi $0,50 vs $0.50) — `git stash` ile
+    aynı 7 dosyanın bu turdan BAĞIMSIZ olarak da kırmızı olduğu doğrulandı (stash altında da
+    aynı 7/84 kırmızı). 761 = 756 (tm 98.2 tabanı) + 5 (bu turun yeni testleri). Diğer tüm
+    paketler yeşil.
+  - `pnpm -w test:integration` — `@nexa/api` **1532 geçti / 1 kırmızı**, tek kırmızı zaten
+    bilinen **tm 107** (tarihe bağlı `scheduled-reports-sweep.test.ts`); `apps/api`'ye bu turda
+    hiç dokunulmadı. Diğer tüm paketler yeşil.
+  - İlgili e2e: `set -a; . ./.env; set +a` sonrası
+    `pnpm --filter @nexa/e2e exec playwright test playbook.spec.ts` — **2/2 yeşil** (şablon
+    galerisi + "Try this" akışı; UI hâlâ EN render ediyor — beklenen, bu tur veri katmanı).
+- **Varsayımlar:**
+  - Anahtar biçimi `playbook.template.<id>.name`/`.summary` olarak seçildi (mevcut `nav.*`/
+    `shell.*`/`palette.*` prefiksleriyle tutarlı); yeni bir namespace ama başka özellik
+    alanıyla çakışmıyor.
+  - `templateNameKey`/`templateSummaryKey` birer türetme fonksiyonu (id → anahtar), `SkillTemplate`
+    arayüzüne `nameKey`/`summaryKey` alanı eklenmedi — henüz hiçbir tüketici yok, alan eklemek
+    şimdilik ölü kod olurdu; -d galeriye dokunduğunda bu fonksiyonlar doğrudan kullanılabilir.
+- **Sonraki pencereye not:** 05.6-tmpl31 dilimi hâlâ TAMAMLANMADI (PLAN.md `◐` kaldı) — kalan
+  -d (galeri arama/kategori filtresi/sanal liste) ve -e (kapanış: tam DoD + galeri e2e
+  regresyonu + PLAN/HANDOFF izleri). -d, `TemplateGallery.tsx`'i düzenlerken bu turun
+  `templateNameKey`/`templateSummaryKey`'ini kullanarak kartları `useTranslate()` ile render
+  etmeyi de değerlendirebilir (KAPSAM DIŞI olarak işaretli değil ama -d'nin kendi task
+  detayında da açıkça istenmiyor — -e kapanışta bu boşluk gözden geçirilebilir). Bilinen
+  kırmızılar değişmedi: tm 107 (api, tarihe bağlı) + tm 108 (web, locale para biçimi).
+  - **Ayrı bulgu (bu turun kapsamı DIŞINDA, dokunulmadı):** bootstrap'ta `git status` **bu
+    pencere başlamadan önce** şu dosyalarda commit'lenmemiş değişiklik taşıyordu:
+    `CONVENTIONS.md`/`README.md`/`TASK-RUNNER-PROMPT.md`/`package.json`/`turbo.json`/
+    `apps/api/package.json`+`tsconfig.json`+`test/helpers/fixtures.ts`/`apps/rtm/package.json`+
+    `test/helpers/fixtures.ts` (modified) + `apps/api/scripts/test-datastores.ts`+
+    `with-test-datastores.ts`+`test/integration/test-datastores.test.ts` (untracked) +
+    birkaç `.taskmaster/tmp-*.cjs`. İçerik **tm 105**'in (test veri depolarını pencere başına
+    izole etme) çözümüyle birebir eşleşiyor — CONVENTIONS.md'nin çalışma kopyası zaten §1.1'i
+    içeriyor (bu HANDOFF'un başındaki referanslar da bu içeriğe dayanıyor) ama `git log`'da
+    hiçbir "tm 105"/"datastore" commit'i yok; Task Master'da tm 105 hâlâ `in-progress`. Yani
+    bir önceki pencere kodu bitirmiş (bu turun `pnpm -w test`/`test:integration` koşuları zaten
+    bu ALTYAPIYI kullandı — izolasyon fiilen çalışıyor) ama §3 kapanışına hiç ulaşmadan
+    ölmüş/durmuş: commit yok, push yok, PLAN/HANDOFF izi yok, Task Master `done` değil — tam
+    olarak bu dosyanın kendi uyardığı "tm 93.3" senaryosu. **Bu turda bilerek dokunulmadı**
+    (98.3'ün kapsamı değil, farklı bir task'ın yarım kalmış kodunu kendi commit'ime karıştırmak
+    kapsam disiplinini bozar). Bir sonraki pencere ya tm 105'i hedef alıp bu değişiklikleri
+    inceleyip kapatmalı, ya da orkestratör/insan bu dosyaları elle gözden geçirip bilinçli bir
+    karar vermeli — sonsuza dek çalışma alanında asılı kalmamalı.
+
 ### tm 98.2 — 05.6-tmpl31-b · 23+ yeni şablon kaydı — katalog 8 → 31+ — done — 2026-08-09 UTC
 
 - **Yapıldı:**

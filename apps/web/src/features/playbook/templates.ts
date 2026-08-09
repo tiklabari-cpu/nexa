@@ -709,6 +709,23 @@ export function findTemplate(id: string): SkillTemplate | undefined {
   return SKILL_TEMPLATES.find((template) => template.id === id);
 }
 
+/**
+ * i18n keys for a template's user-facing card text (NFR-I18N2): `name` and
+ * `summary` resolve through `apps/web/src/lib/i18n.ts`'s TR/EN catalogue
+ * (`playbook.template.<id>.name` / `.summary`), one entry per catalogue
+ * template. `instruction`/`steps` deliberately have no such key — they are the
+ * literal text sent to the AI, and translating them would change behaviour,
+ * not just chrome; see this module's top note.
+ */
+export function templateNameKey(id: string): string {
+  return `playbook.template.${id}.name`;
+}
+
+/** See {@link templateNameKey}. */
+export function templateSummaryKey(id: string): string {
+  return `playbook.template.${id}.summary`;
+}
+
 /** The display metadata (icon + label) for a category, for a card's type badge. */
 export function findCategoryMeta(category: TemplateCategory): TemplateCategoryMeta | undefined {
   return TEMPLATE_CATEGORIES.find((meta) => meta.id === category);

@@ -7,6 +7,7 @@
  * here; `playbook.spec.ts` proves the real server end of it.
  */
 import { describe, expect, it } from 'vitest';
+import { hasMessage, translate } from '../../lib/i18n.js';
 import {
   MAX_TEMPLATE_SUMMARY_LENGTH,
   RECOMMENDED_TEMPLATE_IDS,
@@ -15,6 +16,8 @@ import {
   findCategoryMeta,
   findTemplate,
   recommendedTemplates,
+  templateNameKey,
+  templateSummaryKey,
   templateToDraft,
   templatesByCategory,
   type SkillTemplate,
@@ -127,6 +130,63 @@ describe('badge', () => {
       expect(['popular', 'essential'], template.id).toContain(template.badge);
       expect(categoryIds, template.id).not.toContain(template.badge);
     }
+  });
+});
+
+describe('catalogue i18n (NFR-I18N2)', () => {
+  it('gives every template a TR and an EN entry for name and summary — a missing key fails this', () => {
+    for (const template of SKILL_TEMPLATES) {
+      expect(hasMessage('en', templateNameKey(template.id)), `${template.id} name (en)`).toBe(true);
+      expect(hasMessage('tr', templateNameKey(template.id)), `${template.id} name (tr)`).toBe(true);
+      expect(hasMessage('en', templateSummaryKey(template.id)), `${template.id} summary (en)`).toBe(
+        true,
+      );
+      expect(hasMessage('tr', templateSummaryKey(template.id)), `${template.id} summary (tr)`).toBe(
+        true,
+      );
+    }
+  });
+
+  it('keeps the English catalogue entry in sync with the template’s literal name/summary', () => {
+    for (const template of SKILL_TEMPLATES) {
+      expect(translate('en', templateNameKey(template.id)), template.id).toBe(template.name);
+      expect(translate('en', templateSummaryKey(template.id)), template.id).toBe(template.summary);
+    }
+  });
+
+  it('actually translates into Turkish rather than leaning on the key/English fallback', () => {
+    for (const template of SKILL_TEMPLATES) {
+      const nameKey = templateNameKey(template.id);
+      const summaryKey = templateSummaryKey(template.id);
+      expect(translate('tr', nameKey), template.id).not.toBe(nameKey);
+      expect(translate('tr', summaryKey), template.id).not.toBe(summaryKey);
+    }
+  });
+
+  it('leaves instruction/steps out of the i18n catalogue — a deliberate boundary, not an oversight', () => {
+    // `instruction` is what the AI reads; translating it would change what the
+    // skill does, not just how it reads on a card. Guard both ends: no
+    // `.instruction` key exists, and the literal field is prose, not a key.
+    for (const template of SKILL_TEMPLATES) {
+      const instructionKey = `playbook.template.${template.id}.instruction`;
+      expect(hasMessage('en', instructionKey), template.id).toBe(false);
+      expect(hasMessage('tr', instructionKey), template.id).toBe(false);
+      expect(template.instruction.startsWith('playbook.template.'), template.id).toBe(false);
+    }
+  });
+
+  it('changes gallery text with locale without touching template behaviour', () => {
+    const template = findTemplate('order-status') as SkillTemplate;
+    const englishName = translate('en', templateNameKey(template.id));
+    const turkishName = translate('tr', templateNameKey(template.id));
+    expect(turkishName).not.toBe(englishName);
+
+    // The behavioural payload — instruction and steps — does not take a locale
+    // and so cannot vary with one; drafting from the template is identical
+    // regardless of which language the gallery happens to be showing.
+    const draft = templateToDraft(template);
+    expect(draft.instruction).toBe(template.instruction);
+    expect(draft.steps).toEqual(template.steps);
   });
 });
 

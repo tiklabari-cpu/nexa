@@ -1555,14 +1555,27 @@ export interface paths {
      *     — malformed CSV, a header missing a required column, or a budget overrun
      *     (row/cell/byte limits, refused rather than silently truncated).
      *
-     *     `dry_run: true` runs everything except the writes and returns the same
-     *     `results`, which is where the preview in the UI comes from: the rule shown
-     *     in the preview is the same code that will run on import, not a second
-     *     implementation of it in the client.
+     *     `dry_run: true` runs everything except the writes and the fetches, and
+     *     returns the same `results` — which is where the preview in the UI comes
+     *     from: the rule shown in the preview is the same code that will run on
+     *     import, not a second implementation of it in the client. A `website`
+     *     row's URL is still checked against the SSRF guard during a preview (that
+     *     is the verdict a preview exists to give), but no page is fetched, so a
+     *     dry run never makes an outbound request.
      *
-     *     A `website` row is refused per-row here — a bulk endpoint that fetches N
-     *     admin-supplied URLs is an SSRF amplifier, so that path lands separately
-     *     with its own per-row guard and budget (06.3.2-bulk-g).
+     *     A `website` row is crawled with the same guard the one-at-a-time endpoint
+     *     uses, applied per row: the URL is refused before any fetch if it names a
+     *     private, loopback, link-local or non-http target. Because one request
+     *     here becomes one outbound fetch per website row, those rows carry their
+     *     own budget on top of the row ceiling — at most 20 per file, crawled one
+     *     at a time against a wall-clock limit the whole file shares. Over the
+     *     ceiling the request is refused whole, with nothing fetched.
+     *
+     *     Every refused `website` row comes back with the same sentence whatever
+     *     the reason was — an unparseable URL, a loopback address and a metadata
+     *     endpoint are indistinguishable in the reply. That is deliberate: across
+     *     200 rows, a reply that named the reason would map the network it was
+     *     refusing to reach.
      */
     post: operations['bulkImportKnowledgeSources'];
     delete?: never;
@@ -4463,7 +4476,18 @@ export interface components {
       id: string | null;
       /** @description Chunks indexed from this row. Null for a skipped row and for every row of a dry run. */
       chunk_count: number | null;
-      /** @description Why the row was skipped, naming the field at fault. Null for an imported row. */
+      /**
+       * @description Why the row was skipped, naming the field at fault. Null for an
+       *     imported row.
+       *
+       *     A `website` row is the one exception to "naming the reason": every
+       *     refused URL — malformed, loopback, link-local, credentialled, or
+       *     simply past the import's shared crawl budget — comes back under
+       *     `source_url` with one of three fixed sentences, none of which names
+       *     a host, an address or a network. Told apart across 200 rows, a
+       *     precise reason would be a free scan of everything the server can
+       *     reach; the precise reason is in the server log instead.
+       */
       error: string | null;
     };
     KnowledgeBulkResult: {
@@ -9329,11 +9353,13 @@ export interface operations {
            *     multipart — parsing stays on the server, where the row,
            *     cell and byte budgets cannot be bypassed by calling the
            *     API directly. Capped at 5 MiB, 200 data rows and 100000
-           *     characters per cell.
+           *     characters per cell, and separately at 20 `website` rows,
+           *     since those are the rows that cost an outbound request.
            */
           csv: string;
           /**
-           * @description Validate and report without writing anything.
+           * @description Validate and report without writing anything — and, for
+           *     `website` rows, without fetching anything either.
            * @default false
            */
           dry_run?: boolean;

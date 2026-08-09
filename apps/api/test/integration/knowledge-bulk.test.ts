@@ -239,12 +239,13 @@ describe('bulk knowledge import', () => {
     expect(await sourceCount('a')).toBe(0);
   });
 
-  // --- Negative: a website row is refused per-row, never fetched -------------
+  // --- A website row is crawled, under its own guard and budget --------------
 
-  it('skips a website row without crawling it, and keeps importing the rest', async () => {
-    // The same URL the single-source endpoint crawls successfully (see
-    // knowledge-crawl.test.ts). If bulk had reached the crawler, this row would
-    // have produced a source; it produced a verdict instead.
+  it('crawls a website row alongside a pasted-text one', async () => {
+    // The row-level guard, the amplification ceiling and the transaction
+    // boundary that path brings with it are `knowledge-bulk-website.test.ts`.
+    // What belongs here is that the two kinds of row share one file and one
+    // result envelope without either getting in the other's way.
     const response = await server.post(
       '/knowledge-sources/bulk',
       {
@@ -259,18 +260,18 @@ describe('bulk knowledge import', () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json() as BulkResult;
-    expect(body.imported).toBe(1);
-    expect(body.failed).toBe(1);
-
-    const website = body.results.find((row) => row.line === 1);
-    expect(website?.status).toBe('skipped');
-    expect(website?.error).toMatch(/website/);
+    expect(body).toMatchObject({ imported: 2, failed: 0 });
+    expect(body.results.every((row) => (row.chunk_count ?? 0) > 0)).toBe(true);
 
     const sources = await owner.knowledgeSource.findMany({
       where: { licenseId: fx.a.licenseId },
       select: { name: true, type: true, sourceUrl: true },
+      orderBy: { name: 'asc' },
     });
-    expect(sources).toEqual([{ name: 'Refunds', type: 'faq', sourceUrl: null }]);
+    expect(sources).toEqual([
+      { name: 'Help site', type: 'website', sourceUrl: 'https://help.example.com/delivery' },
+      { name: 'Refunds', type: 'faq', sourceUrl: null },
+    ]);
   });
 
   // --- Positive: import, index, and partial success --------------------------

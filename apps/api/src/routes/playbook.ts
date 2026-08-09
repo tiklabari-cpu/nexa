@@ -22,6 +22,12 @@ import {
   resolveKnowledgeBulkColumns,
   type KnowledgeBulkColumnIndex,
 } from '../services/ai/knowledge-bulk-row.js';
+import {
+  BulkWebsiteCrawler,
+  checkWebsiteUrl,
+  type BulkCrawlLimits,
+  type BulkCrawlRefusal,
+} from '../services/ai/knowledge-bulk-crawl.js';
 import { crawl } from '../services/ai/web-crawler.js';
 import { SkillEngine } from '../services/ai/skill-engine.js';
 
@@ -109,6 +115,28 @@ const BULK_CSV_LIMITS: CsvLimits = {
  * principal holding the write scope can make the process buffer this much.
  */
 const BULK_BODY_LIMIT = 12_582_912; // 12 MiB
+
+/**
+ * The separate, much smaller budget for the rows that cost an outbound request
+ * (NFR-S7 · NFR-S8).
+ *
+ * The row ceiling above bounds writes; this one bounds *fetches*, and they are
+ * not the same risk. 200 rows of pasted text is a spreadsheet. 200 rows of URLs
+ * is one HTTP call the server turns into 200 probes of whatever the file names
+ * — a port scanner with an admin's credentials in front of it. Twenty covers
+ * importing a help centre's pages in one go and caps the amplification at a
+ * number a human could have typed by hand.
+ *
+ * The time budget is shared by every crawl in the request rather than given per
+ * row, so a file cannot buy more outbound requests by pointing at slow hosts.
+ * It sits above `withTenant`'s 10s transaction timeout on purpose: crawling
+ * happens outside the transaction, and if the two were ever tangled the crawl
+ * budget outliving the transaction timeout is what makes that fail loudly.
+ */
+const BULK_CRAWL_LIMITS: BulkCrawlLimits = {
+  maxWebsiteRows: 20,
+  totalBudgetMs: 15_000,
+};
 
 const bulkImportBody = z.object({
   ai_agent_id: uuid,
@@ -537,6 +565,12 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
    *    column, a budget overrun. Once rows are being judged individually, the
    *    verdicts are the response body, and a client that reads `imported` and
    *    `failed` needs no new status code to understand them.
+   * 4. **A `website` row is fetched before its transaction opens, one at a
+   *    time, against a budget the whole file shares.** This is the single-source
+   *    path's rule (`assertPublicHttpUrl` then `crawl`, both outside the
+   *    transaction) applied per row — see `services/ai/knowledge-bulk-crawl.ts`
+   *    for why the refusals are deliberately indistinguishable from each other.
+   *    A dry run runs the guard but makes no request at all.
    */
   app.post(
     '/knowledge-sources/bulk',
@@ -577,6 +611,35 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         if (!agent) throw ApiError.validation('That AI agent does not exist.');
       });
 
+      // Every row is validated before any row is acted on. How many of them ask
+      // for a fetch decides whether this request may reach the network at all,
+      // and that has to be known before the first one goes out — not discovered
+      // on row 87, with 86 probes already sent. Mapping is pure, so the extra
+      // pass costs nothing but the ordering it buys.
+      const mapped = document.rows.map((row, index) => ({
+        // 1-based among *data* rows, matching `parseCsv`: a quoted cell may span
+        // several physical lines, so a file line number would not address the
+        // row the admin is looking for.
+        line: index + 1,
+        row,
+        result: mapKnowledgeBulkRow(columns, row),
+      }));
+
+      const websiteRows = mapped.filter(
+        (entry) => entry.result.ok && entry.result.value.type === 'website',
+      ).length;
+      if (websiteRows > BULK_CRAWL_LIMITS.maxWebsiteRows) {
+        // Refused whole, like every other budget overrun, and refused here —
+        // before the crawler is even constructed, so an oversized file buys
+        // zero outbound requests rather than the first twenty.
+        throw ApiError.validation(
+          `csv: this file has ${websiteRows} website rows; one import may crawl at most ${BULK_CRAWL_LIMITS.maxWebsiteRows}.`,
+        );
+      }
+
+      // One budget for the whole file, spent one row at a time.
+      const crawler = new BulkWebsiteCrawler(BULK_CRAWL_LIMITS);
+
       const results: BulkRowReport[] = [];
       let imported = 0;
       let failed = 0;
@@ -586,32 +649,62 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         failed += 1;
       };
 
-      for (const [index, row] of document.rows.entries()) {
-        // 1-based among *data* rows, matching `parseCsv`: a quoted cell may span
-        // several physical lines, so a file line number would not address the
-        // row the admin is looking for.
-        const line = index + 1;
+      /**
+       * The real reason stays in the log; what goes back is one sentence for
+       * every refusal, so a reply cannot be read as a map of the network.
+       */
+      const refuseWebsiteRow = (
+        line: number,
+        name: string,
+        type: string,
+        refusal: BulkCrawlRefusal,
+      ): void => {
+        request.log.warn(
+          { line, reason: refusal.reason, detail: refusal.detail },
+          'bulk knowledge import: website row refused',
+        );
+        skip(line, name, type, refusal.message);
+      };
 
-        const mapped = mapKnowledgeBulkRow(columns, row);
-        if (!mapped.ok) {
+      for (const { line, row, result } of mapped) {
+        if (!result.ok) {
           skip(
             line,
             echoCell(row[columns.name]),
             echoCell(row[columns.type]),
-            `${mapped.error.field}: ${mapped.error.message}`,
+            `${result.error.field}: ${result.error.message}`,
           );
           continue;
         }
 
-        const { name, type, content } = mapped.value;
+        const { name, type } = result.value;
+        let content = result.value.content ?? '';
+        let sourceUrl: string | null = null;
 
-        // One request turning into N outbound fetches is SSRF amplification, and
-        // the guard for it (per-row, sequential, budgeted) is a piece of work of
-        // its own. Until it lands, a website row is refused here — never
-        // half-supported, and never quietly fetched.
         if (type === 'website') {
-          skip(line, name, type, 'website: bulk import cannot crawl URLs yet; add website sources one at a time.');
-          continue;
+          const target = result.value.source_url ?? '';
+          if (body.dry_run) {
+            // A preview runs the guard and stops there. That is the verdict a
+            // preview exists to give, and fetching for one would make a dry run
+            // a way to probe hosts with nothing written to show for it.
+            const checked = checkWebsiteUrl(target);
+            if (!checked.ok) {
+              refuseWebsiteRow(line, name, type, checked);
+              continue;
+            }
+          } else {
+            // Resolved *before* the transaction below is opened, exactly as the
+            // single-source path does it: a fetch has no business holding a DB
+            // row open. A refused row is a verdict, not a reason to stop
+            // reading the file.
+            const crawled = await crawler.crawl(target);
+            if (!crawled.ok) {
+              refuseWebsiteRow(line, name, type, crawled);
+              continue;
+            }
+            content = crawled.content;
+            sourceUrl = crawled.url;
+          }
         }
 
         if (body.dry_run) {
@@ -628,8 +721,8 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
                 licenseId: tenant.licenseId,
                 type,
                 name,
-                content: content ?? '',
-                sourceUrl: null,
+                content,
+                sourceUrl,
                 status: 'indexing',
                 addedBy: principal.kind === 'agent' ? principal.accountId : null,
                 updatedAt: new Date(),
@@ -639,7 +732,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
             // Same transaction as the create, exactly as the single-source path:
             // a source that exists but is not searchable looks ready and answers
             // nothing.
-            const chunks = await knowledge.index(tx, tenant, source.id, content ?? '');
+            const chunks = await knowledge.index(tx, tenant, source.id, content);
             return { source, chunks };
           });
 

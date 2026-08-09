@@ -287,8 +287,13 @@ export function parseCsv(text: string, limits: CsvLimits): CsvDocument {
  * `FORMULA_LEAD` in `routes/reports-export.ts` — the same threat, the other
  * direction — but is tested by character code rather than by a regex so the
  * check is a single comparison with nothing to backtrack over.
+ *
+ * Exported because not every value that lands in a knowledge source arrives
+ * through `parseCsv`: a `website` row's text is fetched from a page
+ * (`services/ai/knowledge-bulk-crawl.ts`), and it reaches the same store, the
+ * same export and therefore the same spreadsheet. One rule, one implementation.
  */
-function neutraliseFormula(cell: string): string {
+export function neutraliseFormula(cell: string): string {
   // charCodeAt on an empty string is NaN, which no code in the set matches.
   return FORMULA_LEAD_CODES.has(cell.charCodeAt(0)) ? FORMULA_GUARD + cell : cell;
 }

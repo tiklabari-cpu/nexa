@@ -823,7 +823,17 @@ components:
         error:
           type: string
           nullable: true
-          description: Why the row was skipped, naming the field at fault. Null for an imported row.
+          description: |
+            Why the row was skipped, naming the field at fault. Null for an
+            imported row.
+
+            A `website` row is the one exception to "naming the reason": every
+            refused URL — malformed, loopback, link-local, credentialled, or
+            simply past the import's shared crawl budget — comes back under
+            `source_url` with one of three fixed sentences, none of which names
+            a host, an address or a network. Told apart across 200 rows, a
+            precise reason would be a free scan of everything the server can
+            reach; the precise reason is in the server log instead.
 
     KnowledgeBulkResult:
       type: object

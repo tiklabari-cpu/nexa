@@ -13,6 +13,74 @@
 
 ## Task log (newest-first)
 
+### tm 97.7 — 06.3.2-bulk-g · CSV website satırları: satır-başı SSRF guard + tx DIŞINDA, sıralı ve bütçeli crawl — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/api/src/services/ai/knowledge-bulk-crawl.ts` (yeni) — bulk akışının website-satırı
+    sarmalayıcısı. Dört kural: (1) guard satır başına ve ÖNCE çalışır (`assertPublicHttpUrl`
+    yeniden kullanıldı, `lib/ssrf.ts`'e **dokunulmadı**); (2) her ret için **tek** mesaj — bozuk
+    URL / loopback / link-local / metadata / bütçe ayırt edilemez, gerçek neden yalnız log'a
+    (200 satırda ayırt edilebilir ret nedeni = bedava ağ haritası); (3) **sıralı** yürütme +
+    tüm isteğin paylaştığı duvar-saati bütçesi (`BulkWebsiteCrawler`, eşzamanlı çağrı `throw`
+    eder ki ileride `Promise.all`'a kayma sessiz olmasın); (4) modül **hiçbir DB handle'ı
+    almaz** — bu yüzden "crawl tx dışında" disiplini döngüye girince de yapısal olarak korunur,
+    dikkatli yazılmış olmaya bağlı kalmaz.
+  - `apps/api/src/routes/playbook.ts` — `POST /knowledge-sources/bulk` artık `type:'website'`
+    satırlarını crawl ediyor (06.3.2-bulk-c'deki satır-düzeyi ret kaldırıldı). Satırlar ÖNCE
+    toptan map'leniyor: website satır sayısı **ilk fetch'ten önce** biliniyor, böylece tavan
+    aşımı 87. satırda 86 sonda atılmışken değil, **hiç dış istek yapılmadan** reddediliyor
+    (`maxWebsiteRows: 20`, `totalBudgetMs: 15_000`). Crawl tx AÇILMADAN önce; yazma yine satır
+    başına kısa tx. Dry-run guard'ı çalıştırır, fetch etmez.
+  - `apps/api/src/lib/csv-import.ts` — `neutraliseFormula` export edildi (crawl edilen metin de
+    aynı store'a ve 07.7 CSV export'una gittiği için aynı kuraldan geçmeli; tek kural, tek uygulama).
+  - Sözleşme **katkısal**: `paths/playbook.yaml` + `openapi.yaml` açıklamaları (yeni path YOK) +
+    `pnpm --filter @nexa/contract generate` ile `src/generated/api.ts` yeniden üretildi.
+  - Test: `knowledge-bulk-crawl.test.ts` (22, negatifler önce; her test crawler'ı **inject
+    eder**, yani "hiç fetch edilmedi" çağrı sayısıdır, yan etki yokluğundan çıkarım değil) +
+    integration `knowledge-bulk-website.test.ts` (9). **tx-dışı kanıtı** doğrudan iddia edildi:
+    3 crawl'lı satır 3 FARKLI `created_at` üretir (Postgres `now()`'ı tx başında dondurur), yani
+    üç ayrı tx = tek tx içinde ağ çağrısı yok.
+- **Doğrulama:** `pnpm -w typecheck` 11/11 ✅ · `pnpm -w lint` 8/8 ✅ · `pnpm -w build` 7/7 ✅ ·
+  `@nexa/api` tam suite **2030 geçti / 6 kırmızı / 2039** ✅ — 6 kırmızının **hepsi** bilinen
+  `spawn pnpm ENOENT` borcu (`scheduled-reports-sweep.test.ts` + `reports-topics.test.ts`, bu
+  turdan bağımsız). Karşılaştırma için WIP **stash'lenip HEAD** koşuldu: HEAD 15 kırmızı/2008 —
+  yani bu tur kırmızı EKLEMEDİ, azalttı; +31 test = 22 unit + 9 integration (tam olarak eklenenler).
+  Task'ın kendi dosyaları izole: `knowledge-bulk-crawl.test.ts` **22/22**, `knowledge-bulk-website.test.ts`
+  **9/9**, `knowledge-bulk.test.ts` **14/14** (üçü birlikte 23/23) ✅.
+  `@nexa/web` 751 geçti/**7 kırmızı** — aynı bilinen BillingPage/ReportsPage locale-format
+  kırmızıları (bu makinenin sistem locale'i `$0,50` vs `$0.50`); `apps/web`'e bu turda hiç
+  dokunulmadı. E2E: ilgili spec'ler `ai-agent.spec.ts` + `playbook.spec.ts` **5/5 yeşil**,
+  içinde `adds a website knowledge source by crawling a URL (FR-MOD-06.3.2)` — tek-kaynak crawl
+  yolunda regresyon YOK.
+- **Varsayımlar:**
+  - Tavan **20 website satırı / istek** ve **15 sn toplam** bütçe: PRD sayı vermiyor. 20, bir
+    yardım merkezinin sayfalarını tek dosyada aktarmaya yeter ve amplifikasyonu bir insanın elle
+    yazabileceği sayıda tutar. 15 sn kasten `withTenant`'ın 10 sn tx timeout'unun ÜSTÜNDE: crawl
+    tx dışında olduğu için bu ikisi karışırsa yüksek sesle patlar.
+  - Bütçe aşımı **satır düzeyinde** `failed` (dosyayı durdurmaz); satır-sayısı tavanı aşımı ise
+    **istek düzeyinde** 400 — çünkü ilki dosyanın kalanını yazmaya devam edebilir, ikincisi
+    "ilk 20'yi crawl et sonra dur" demek olurdu ki bu tam da engellenmek istenen sonda dalgası.
+- **Sonraki pencereye not:**
+  - Kalan tek alt-görev: **97.8** (`06.3.2-bulk-h`, uçtan uca doğrulama + RAG'de aranabilirlik).
+    Bundan sonra PLAN §5.0 `06.3.2-bulk` satırı `◐` → `✅` olabilir (şu an 7/8 teslim).
+  - **DB testleri paralel KOŞMAZ — bu turda bunu pahalıya öğrendim.** Aynı Postgres'e yazan
+    ikinci bir vitest süreci varken `@nexa/api` **1006/2039** kırmızı verdi (FK ihlalleri,
+    `beforeEach`'te `seedFixtures` çakışması); süreç bitince aynı komut **6/2039**. Kırmızı
+    görürsen ÖNCE `Get-CimInstance Win32_Process | ? { $_.CommandLine -like '*vitest*' }` ile
+    rakip süreç ara, koda bakma. Turbo bir paket kırmızı olunca abort edip **çocuk vitest'i
+    öksüz bırakabiliyor** — bu tur tam olarak öyle oldu.
+  - **E2E bu makinede kutudan çıkmıyor (ayrı görev gerek, 3 ayrı engel):** (a) `apps/e2e/tests/global-setup.ts:16`
+    `execFile('pnpm', ['db:seed'])` — `shell: true` YOK, Node'un yeni sürümü `.cmd` shim'ini
+    böyle çalıştırmıyor → `spawn pnpm ENOENT`. Tek satırlık düzeltme (`shell: true`) doğrulandı
+    ama **kapsam dışı olduğu için geri alındı** (CONVENTIONS §5). Bu, `@nexa/api`'nin 6 kırmızısıyla
+    **aynı kök neden**. (b) `apps/rtm` kendi `.env`'ini yüklemiyor (api'deki `loadEnvFile()`
+    karşılığı yok) → webServer 4 değişken eksik diye ölüyor; kabuğa `DATABASE_URL`/`REDIS_URL`/
+    `JWT_SIGNING_KEY`/`CUSTOMER_TOKEN_SECRET` export edilerek aşıldı. (c) Playwright tarayıcısı
+    kuruluydu ama sürüm atlamıştı → `playwright install chromium` ile kuruldu (kalıcı, tekrar
+    gerekmez). Ayrıca **tam e2e suite 10 dk'lık araç timeout'unu aşıyor**, hedefli spec koş.
+  - `.taskmaster/tmp-*.cjs` + `tmp-changelog.txt` önceki pencerelerden kalma untracked artık;
+    bu turda oluşturulmadı, dokunulmadı, commit'lenmedi.
+
 ### tm 97.6 — 06.3.2-bulk-f · İçe aktarma sonuç tablosu: satır no/başlık/durum/hata + kısmi-başarı özeti + empty state — done — 2026-08-09 UTC
 
 - **Yapıldı:**

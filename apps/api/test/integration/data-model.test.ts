@@ -1100,6 +1100,184 @@ describe('data model invariants', () => {
   });
 
   // =========================================================================
+  // Purchased API request packages (FR-MOD-09.3 · NFR-S4)
+  // =========================================================================
+
+  describe('api package purchases', () => {
+    /** An Essential purchase, as 09.3-d's core will write it. */
+    const purchase = (overrides: Record<string, unknown> = {}) => ({
+      licenseId: fx.a.licenseId,
+      packageId: 'essential',
+      apiCalls: 100_000n,
+      priceCents: 2999,
+      period: '202608',
+      ...overrides,
+    });
+
+    it("hides another tenant's purchases", async () => {
+      // What a leak here exposes is money: how much a competitor spends on API
+      // capacity, and when they scaled up.
+      const mine = await owner.apiPackagePurchase.create({
+        data: purchase(),
+        select: { id: true },
+      });
+      const theirs = await owner.apiPackagePurchase.create({
+        data: purchase({ licenseId: fx.b.licenseId, packageId: 'pro', apiCalls: 500_000n }),
+        select: { id: true },
+      });
+
+      const visible = await withTenant(
+        app,
+        { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+        (tx) => tx.apiPackagePurchase.findMany({ select: { id: true } }),
+      );
+      expect(visible.map((p) => p.id)).toEqual([mine.id]);
+      expect(visible.map((p) => p.id)).not.toContain(theirs.id);
+    });
+
+    it("refuses to record a purchase against another tenant's license", async () => {
+      // The write side of the same boundary, and the worse half: a row written
+      // into someone else's license bills them for a package they never asked
+      // for — the policy's WITH CHECK is what stops it.
+      await expect(
+        withTenant(app, { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId }, (tx) =>
+          tx.apiPackagePurchase.create({ data: purchase({ licenseId: fx.b.licenseId }) }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it('keeps the record of a sale append-only for the API role', async () => {
+      // A purchase is the only surviving evidence of a charge: payment is mocked
+      // (ADR-13) so no processor holds a receipt, and the quota it bought is
+      // folded into usage_records.included, a running total that remembers
+      // nothing about what raised it. An actor who can edit this row can lower
+      // the price on an invoice already issued, or delete it and leave the
+      // credited quota unexplained.
+      await owner.apiPackagePurchase.create({ data: purchase() });
+
+      await expect(
+        withTenant(app, { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId }, (tx) =>
+          tx.apiPackagePurchase.updateMany({ data: { priceCents: 0 } }),
+        ),
+      ).rejects.toThrow(/permission denied|policy/i);
+
+      await expect(
+        withTenant(app, { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId }, (tx) =>
+          tx.apiPackagePurchase.deleteMany({}),
+        ),
+      ).rejects.toThrow(/permission denied|policy/i);
+
+      // Recording one is still allowed — the grant is narrowed, not closed.
+      await expect(
+        withTenant(app, { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId }, (tx) =>
+          tx.apiPackagePurchase.create({ data: purchase({ packageId: 'pro' }) }),
+        ),
+      ).resolves.toBeDefined();
+    });
+
+    it('has RLS enabled and a tenant policy', async () => {
+      // The KK-derived isolation clause for 09.3-b, asserted by name so a
+      // regression points at this slice rather than at the bulk sweep above.
+      const [security] = await owner.$queryRaw<Array<{ relname: string; enabled: boolean }>>`
+        SELECT relname, relrowsecurity AS enabled FROM pg_class
+        WHERE relname = 'api_package_purchases'
+      `;
+      expect(security).toEqual({ relname: 'api_package_purchases', enabled: true });
+
+      const policies = await owner.$queryRaw<Array<{ tablename: string; policyname: string }>>`
+        SELECT tablename, policyname FROM pg_policies
+        WHERE tablename = 'api_package_purchases'
+      `;
+      expect(policies).toEqual([
+        { tablename: 'api_package_purchases', policyname: 'api_package_purchases_tenant' },
+      ]);
+    });
+
+    it('grants the runtime role only what recording a sale needs', async () => {
+      const grants = await owner.$queryRaw<Array<{ privilege_type: string }>>`
+        SELECT privilege_type FROM information_schema.role_table_grants
+        WHERE grantee = 'nexa_app' AND table_name = 'api_package_purchases'
+      `;
+      expect(grants.map((g) => g.privilege_type).sort()).toEqual(['INSERT', 'SELECT']);
+    });
+
+    it('indexes the read every consumer makes — one license, one period', async () => {
+      // Both readers ask the same question: what did this workspace buy for this
+      // billing period (the history list, and the invoice line items). Without
+      // the index that is a scan of an append-only ledger that only ever grows.
+      const [index] = await owner.$queryRaw<Array<{ indexdef: string }>>`
+        SELECT indexdef FROM pg_indexes
+        WHERE tablename = 'api_package_purchases'
+          AND indexname = 'api_package_purchases_license_id_period_idx'
+      `;
+      expect(index?.indexdef).toMatch(/license_id.*period/s);
+    });
+
+    it('refuses a period that is not yyyymm', async () => {
+      // `period` is the join key back to the usage_records row the quota was
+      // credited to. A shape those two do not share records a sale against a
+      // period nothing bills: money taken, quota credited out of reach.
+      for (const period of ['2026-8', '20268', 'august', '      ']) {
+        await expect(
+          owner.apiPackagePurchase.create({ data: purchase({ period }) }),
+        ).rejects.toThrow(/api_package_purchases_period_check/i);
+      }
+    });
+
+    it('refuses a purchase that buys no calls, or a negative price', async () => {
+      // Zero quota is a charge for nothing; a negative price is a refund, and
+      // giving quota back means lowering usage_records.included below what has
+      // already been spent — a slice that has not been designed yet.
+      for (const apiCalls of [0n, -1n]) {
+        await expect(
+          owner.apiPackagePurchase.create({ data: purchase({ apiCalls }) }),
+        ).rejects.toThrow(/api_package_purchases_api_calls_check/i);
+      }
+
+      await expect(
+        owner.apiPackagePurchase.create({ data: purchase({ priceCents: -1 }) }),
+      ).rejects.toThrow(/api_package_purchases_price_cents_check/i);
+
+      // A free package is representable — only a negative one is not.
+      await expect(
+        owner.apiPackagePurchase.create({ data: purchase({ priceCents: 0 }) }),
+      ).resolves.toBeDefined();
+    });
+
+    it('is removed when its license is deleted (onDelete cascade)', async () => {
+      // NFR-C9: erasing a workspace erases its billing history with it, and the
+      // narrowed grant above must not leave orphans behind — the cascade runs as
+      // the table owner, not as nexa_app.
+      await owner.apiPackagePurchase.create({ data: purchase({ licenseId: fx.b.licenseId }) });
+      await owner.license.delete({ where: { id: fx.b.licenseId } });
+
+      expect(await owner.apiPackagePurchase.count({ where: { licenseId: fx.b.licenseId } })).toBe(
+        0,
+      );
+    });
+
+    it('round-trips a purchase through Prisma with the defaults applied', async () => {
+      // The happy path, last: the model is usable and records what was sold at
+      // the price it was sold for, stamped when it happened.
+      const before = Date.now();
+      const recorded = await owner.apiPackagePurchase.create({ data: purchase() });
+
+      expect(recorded.packageId).toBe('essential');
+      expect(recorded.apiCalls).toBe(100_000n);
+      expect(recorded.priceCents).toBe(2999);
+      expect(recorded.period).toBe('202608');
+      expect(recorded.purchasedAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+
+      // Several purchases of the same package in the same period are a feature:
+      // a package is a one-off top-up, so buying twice buys twice the quota.
+      await expect(owner.apiPackagePurchase.create({ data: purchase() })).resolves.toBeDefined();
+      expect(await owner.apiPackagePurchase.count({ where: { licenseId: fx.a.licenseId } })).toBe(
+        2,
+      );
+    });
+  });
+
+  // =========================================================================
   // Referential integrity
   // =========================================================================
 

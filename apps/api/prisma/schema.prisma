@@ -89,6 +89,7 @@ model License {
   webhookDeliveries      WebhookDelivery[]
   subscriptions          Subscription[]
   usageRecords           UsageRecord[]
+  apiPackagePurchases    ApiPackagePurchase[]
   paymentMethod          PaymentMethod?
   auditEntries           AuditLogEntry[]
   ipAllowlistEntries     IpAllowlistEntry[]
@@ -1408,6 +1409,41 @@ model UsageRecord {
 
   @@unique([licenseId, metric, period])
   @@map("usage_records")
+}
+
+/// One purchased API request package (FR-MOD-09.3).
+///
+/// The quota a purchase buys lives in `usage_records.included` — buying raises
+/// the period's included calls — so this table is not the quota, it is the
+/// *record of the sale*: which license bought which catalogue package, for how
+/// many calls, at what price, into which period. Nothing else holds that.
+/// Payment is mocked (ADR-13), so no external processor keeps a receipt, and
+/// `usage_records` carries only the summed total, with no trace of what raised
+/// it. Without this row a workspace could be charged with nothing to show for
+/// what, and the invoice line item (09.3-e) would have nothing to derive from.
+///
+/// `package_id` names an `API_PACKAGE_CATALOG` entry in code rather than a row
+/// — the catalogue is static (`@nexa/types`) — so it carries no foreign key and
+/// no domain CHECK, the same way `scheduled_reports.group_id` names a
+/// REPORT_GROUPS entry; the purchase route validates it instead. The quota and
+/// the price are *copied* rather than looked up, so re-pricing a package in
+/// code never rewrites what a workspace already paid.
+model ApiPackagePurchase {
+  id          String   @id @default(uuid()) @db.Uuid
+  licenseId   BigInt   @map("license_id")
+  /// An `API_PACKAGE_CATALOG` id — `essential`, `pro`, `pro-plus`.
+  packageId   String   @map("package_id")
+  /// Calls this purchase added, as the catalogue priced them at sale time.
+  apiCalls    BigInt   @map("api_calls")
+  priceCents  Int      @map("price_cents")
+  /// `yyyymm` — the `usage_records` period the quota was added to.
+  period      String   @db.Char(6)
+  purchasedAt DateTime @default(now()) @map("purchased_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, period])
+  @@map("api_package_purchases")
 }
 
 // ===========================================================================

@@ -13,6 +13,78 @@
 
 ## Task log (newest-first)
 
+### tm 71.2 — 09.3-b: `api_package_purchases` tablosu (Prisma modeli + migration + RLS) — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/api/prisma/schema.prisma`: `ApiPackagePurchase` modeli (`api_package_purchases`) —
+    `id` uuid · `licenseId` BigInt · `packageId` · `apiCalls` BigInt · `priceCents` Int ·
+    `period` Char(6) yyyymm · `purchasedAt` Timestamptz(6) `@default(now())`;
+    `@@index([licenseId, period])`; License ilişkisi `onDelete: Cascade` + `License` modeline
+    `apiPackagePurchases` bağı.
+  - `apps/api/prisma/migrations/20260809100000_api_package_purchases/migration.sql` (yeni):
+    yapısal DDL + elle eklenen üç katman.
+    - **RLS:** `ENABLE ROW LEVEL SECURITY` + `CREATE POLICY api_package_purchases_tenant …
+      USING/WITH CHECK (license_id = nexa_current_license())` — `app_installations` deseninin eşi.
+    - **Append-only satış kaydı:** `GRANT SELECT, INSERT` + **`REVOKE UPDATE, DELETE`**
+      (20260722090000'deki ALTER DEFAULT PRIVILEGES aksi hâlde dördünü de veriyor, o yüzden dar
+      GRANT tek başına etkisiz — `audit_log` ve `scheduled_report_runs` ile aynı gerekçe).
+      Neden: ödeme mock (ADR-13) → dış sağlayıcıda makbuz yok, kotanın kendisi
+      `usage_records.included` içinde toplanıp izini kaybediyor; bu satır bir tahsilatın tek
+      kalan kanıtı. Düzenlenebilir olsaydı kesilmiş bir faturanın fiyatı sessizce indirilebilir,
+      silinebilir olsaydı kredilenmiş kota açıklamasız kalırdı. Lisans silme cascade'i etkilenmez
+      (cascade tablo sahibi olarak koşar, `nexa_app` olarak değil) → NFR-C9 korunur.
+    - **CHECK'ler:** `period ~ '^\d{6}$'` (usage_records_period_check'in birebir eşi — `period`
+      bu iki tablonun ortak birleştirme anahtarı; uyuşmayan bir şekil parası alınmış ama hiçbir
+      faturada görünmeyen bir satış üretir) · `api_calls > 0` (kotasız satış = boşa tahsilat) ·
+      `price_cents >= 0` (negatif fiyat = iade; iade `usage_records.included`'ı harcanmışın
+      altına düşürebildiği için bilerek kapsam dışı — açık soru 5).
+    - `package_id`'ye FK/CHECK YOK: katalog kod-içi statik (`@nexa/types`), tıpkı
+      `scheduled_reports.group_id` gibi; her yeni pakete migration ödememek için doğrulama
+      route'a bırakıldı (09.3-c/d). `api_calls`/`price_cents` satış anında **kopyalanır** →
+      katalogda fiyat değişse bile ödenmiş geçmiş yeniden yazılmaz.
+  - `apps/api/test/integration/data-model.test.ts`: "api package purchases" bloğu (10 test,
+    negatifler önce) — çapraz-kiracı okuma gizleniyor · başka lisansa yazma `row-level security`
+    ile reddediliyor · `nexa_app` UPDATE/DELETE edemiyor ama INSERT edebiliyor · RLS+politika adı ·
+    grant kümesi tam olarak {SELECT, INSERT} · (license_id, period) index'i · üç CHECK · lisans
+    cascade'i · Prisma round-trip (aynı paketin aynı dönemde iki kez alınabilmesi = top-up).
+  - Kapsam dışı (bilerek): tüketici kod yok — okuma endpoint'leri 09.3-c, satın alma + kota artışı
+    09.3-d, fatura satırı 09.3-e, UI 09.3-f/g, e2e 09.3-h.
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `pnpm -w test` **0** (10/10; `@nexa/api` 100 dosya / **2103** test — +10 bu görevden) ·
+  `pnpm -w test:integration` **0** (`@nexa/api` 66/66 dosya, **1566**/1566) · `pnpm -w build` **0**
+  (7/7) · `pnpm -w test:e2e` **0** — 90/90 (bu görev route/UI dokunmadığı için sayı sabit) ·
+  şema drift'i: `prisma migrate diff` yalnız bilinen pgvector ivfflat index'ini raporluyor
+  (`check-drift.ts`'in KNOWN_UNMODELLABLE listesindeki tek kalem), yeni tablodan drift yok.
+  Task'ın KK'sı `data-model.test.ts` "api package purchases" bloğunda doğrulandı.
+- **Varsayımlar:**
+  - Satın alma kaydı **değiştirilemez** (append-only). Task kapsamı yalnız "RLS politikası" diyordu;
+    UPDATE/DELETE'in geri alınması bunun üstüne eklendi çünkü 09.3-d..e'nin hiçbiri bu satırı
+    güncellemiyor/silmiyor ve satır para kanıtı. Bir sonraki pencere iade/iptal tasarlarsa bu
+    REVOKE'u gevşetmek yerine **yeni bir satır** (ters kayıt) yazmalı.
+  - `purchased_at` DB varsayılanı `CURRENT_TIMESTAMP` — 09.3-d ayrıca yazmak zorunda değil.
+- **Sonraki pencereye not:**
+  - **09.3-c (tm 71.3)** artık açılabilir: tablo, politika ve index yerinde. `purchases` okuması
+    `request.withTenant` ile gelmeli — RLS'i atlayan owner bağlantısı değil.
+  - **09.3-d (tm 71.4, OPUS-MAX) için kritik:** `nexa_app` bu tabloya yalnız INSERT edebilir;
+    satın alma yolu upsert/update denerse `permission denied` alır. Kota artışı zaten
+    `usage_records` üzerinde yapılacak (`ON CONFLICT … DO UPDATE SET included =
+    usage_records.included + <quota>` — VALUES'taki hesaplanmış değeri DEĞİL). Yazacağı `period`
+    `^\d{6}$` CHECK'inden geçmek zorunda: `currentPeriod()` (metering.ts) formatını kullan.
+  - Migration dev veritabanına (`nexa`) uygulandı; e2e paylaşılan DB'yi kullandığı için başka bir
+    pencerenin ayrıca `db:migrate` koşmasına gerek yok. Test süitleri zaten koşu başına kendi
+    DB'sini migrate ediyor (tm 105 harness'ı).
+  - `pnpm --filter @nexa/api db:check-drift` bu makinede `spawn pnpm ENOENT` ile düşüyor
+    (Windows'ta `execFile('pnpm', …)` `.cmd` shim'ini bulamıyor — script'in kendi kusuru, şemayla
+    ilgisi yok). Eşdeğeri elle koşuldu: `npx prisma migrate diff --from-schema-datamodel …
+    --to-schema-datasource … --script`. Ayrı bir düzeltme task'ına değer (DoD kapı listesinde
+    olmadığı için bu tur kapsamına alınmadı).
+  - **tm 105 WIP hâlâ commit'siz** (tm 71.1 notunda ayrıntısı var: `CONVENTIONS.md`,
+    `TASK-RUNNER-PROMPT.md`, `apps/api|rtm/package.json`, `turbo.json`, `README.md`,
+    `apps/api/scripts/{with-,}test-datastores.ts`, fixture'lar, `test-datastores.test.ts`).
+    Bu turun tüm kapı komutları o harness'ı kullanarak koştu ve yeşildi. Kapsam disiplini
+    (CONVENTIONS §5) gereği yine **dokunulmadı**; bu turun `git add`'i yalnız `apps/api/prisma/**`,
+    `apps/api/test/integration/data-model.test.ts`, `PLAN.md`, `HANDOFF.md`.
+
 ### tm 71.1 — 09.3-a: Statik API paket kataloğu + tipleri (@nexa/types) — done — 2026-08-09 UTC
 
 - **Yapıldı:**

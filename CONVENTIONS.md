@@ -14,13 +14,62 @@ doğrulanır; "gözle baktım oldu" geçersizdir.
 - [ ] İlgili E2E/smoke geçiyor — `pnpm -w test:e2e` (task'ın kapsadığı akış)
 - [ ] Task'ın kendi kabul kriteri (Task Master'daki test stratejisi / PRD FR KK) karşılandı
 - [ ] Yeni kod için test yazıldı (kapsam anlamlı; çıplak endpoint/servis testsiz kalmaz)
-- [ ] **PLAN.md gereksinim satırı güncellendi** — task'ın PRD kodundaki satır(lar) `⬜`/`◐` → `✅`
-      ve kanıt yazılı. Doğrulama: `grep -n '| <PRD kodu>' PLAN.md` çıktısındaki **durum damgalı**
-      satırlarda `⬜` kalmamalı. Bir task birden çok satır kapatıyorsa hepsi. Kısmen karşılandıysa
-      `◐` + eksik açıklaması doğru cevaptır; `✅` uydurmak bu kutuyu geçmez.
+- [ ] **PLAN.md gereksinim satırı güncellendi** — task'ın PRD kodundaki satır(lar) `⬜`/`◐` → `✅`.
+      Doğrulama: `grep -n '| <PRD kodu>' PLAN.md` çıktısındaki **durum damgalı** satırlarda `⬜`
+      kalmamalı. Bir task birden çok satır kapatıyorsa hepsi. Kısmen karşılandıysa `◐` + eksik
+      açıklaması doğru cevaptır; `✅` uydurmak bu kutuyu geçmez.
+- [ ] **Kanıt `## K. Kanıt Geçmişi`ne yazıldı, tablo hücresine DEĞİL** (§1.2). Doğrulama:
+      `grep -n '^#### K<kod>' PLAN.md` bloğu var ve bu task'ın maddesi (`tm <id>`) içinde.
 
 > Not: repo script adları farklıysa `package.json`'daki gerçek script'leri kullan; yoksa
 > önce onları ekle. Kapı komutları repo büyüdükçe bu dosyada güncellenir.
+
+### 1.2 PLAN.md kanıt disiplini: hücrede damga, dipnotta geçmiş (2026-08-09)
+Gereksinim tablosunun durum hücresi **yalnız** şu biçimdedir — başka hiçbir şey değil:
+
+```
+✅ → K07.7        ◐ → K09.3        ⬜
+```
+
+Kanıt (`ne yapıldı — dosya · test (n) · tm <id>`) `## K. Kanıt Geçmişi` bölümündeki
+`#### K<kod>` bloğuna **madde olarak eklenir**; var olan maddeler silinmez.
+
+Neden: her alt-görev aynı hücreye kanıt ekliyor, kimse silmiyordu. Ölçüldü (2026-08-09):
+tek satır **32.480 karakter** (~10k token), 16 ayrı `tm` kanıtı iç içe. Çıplak bir `grep -n`
+o satıra denk geldiğinde pencerenin bağlamının onda birini tek komutta yakıyordu; tm 65.8
+satırı okuyabilmek için `sed`/`awk`/`grep -o`/`substr` sırayla denedi — dördü de boşa tur.
+Kanıt metnindeki kaçırılmamış `|` karakterleri ayrıca 8 satırı 5 sütunluk tabloda 6-10 hücreye
+bölüyordu, yani **panel o satırların durumunu yanlış okuyordu**. Taşıma sonrası en uzun tablo
+satırı 526 karakter, hücre uyuşmazlığı 0.
+
+Bu kuralı panelin sağlık taraması denetler (`C-plan-row-length`): eşiği aşan tablo satırı
+bulunursa bulgu açılır. Yani kural yalnız iyi niyete bırakılmadı.
+
+İstisna: **faz özet tablosu** (`| Faz | PRD | Genel durum | Must sayacı | Kapanış |`) bu
+kuralın dışındadır — oradaki hücre bir sayım kaynağıdır (`54 ✅ · 0 ◐`), panel `statedCounts`
+olarak okur. Ona dokunma.
+
+### 1.1 Kapının objektifliği: test veri depoları koşu başına izole (tm 105)
+`@nexa/api` ve `@nexa/rtm` gerçek Postgres + Redis'e karşı koşar ve her süit TRUNCATE ile
+başlar. Eskiden aynı anda açık iki pencere aynı `nexa` veritabanını paylaştığı için birbirinin
+fixture'ını siliyordu; sonuç, o pencerenin HİÇ DOKUNMADIĞI dosyalarda yüzlerce kırmızıydı
+(ölçüldü: art arda iki koşuda 889 → 982). Kapı bu durumda objektif değildi.
+
+Artık bu iki paketin `test` / `test:unit` / `test:integration` script'leri
+`apps/api/scripts/with-test-datastores.ts` üzerinden geçer: her koşu kendi `nexa_test_<id>`
+veritabanını (oluştur → `migrate deploy` → koşu sonunda düşür) ve kendi Redis mantıksal
+veritabanını (1-15) alır. Koşu başına ~3 sn. Test/fixture tarafında değişiklik gerekmez —
+harness yalnız `DATABASE_URL` / `DATABASE_APP_URL` / `REDIS_URL`'i yeniden yönlendirir.
+
+Pencere için iki sonuç:
+- `pnpm -w test` artık `--concurrency=1` istemez; turbo paralelliği güvenlidir.
+- **Bir kırmızıyı "başka pencere yazıyordur" diye açıklama.** İzolasyon açıkken kırmızı ya
+  senin değişikliğindendir ya da HANDOFF/Task Master'da kayıtlı bilinen bir kusurdur; ikisi de
+  değilse gerçek bir regresyondur.
+
+İstisna: `apps/e2e` sabit portlarda gerçek sunucuları ve seed'lenmiş `nexa` veritabanını sürer;
+iki pencere aynı anda e2e koşamaz. Paylaşılan veritabanına karşı koşmak (bir testin bıraktığı
+veriyi elle incelemek) için: `NEXA_TEST_ISOLATION=off`.
 
 ## 2) Git kuralları
 - Branch: her task `feat/<kısa-slug>` (ör. `feat/rtm-websocket`) veya `fix/<slug>`.

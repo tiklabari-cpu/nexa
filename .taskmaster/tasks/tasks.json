@@ -1894,12 +1894,12 @@
             "description": "(i) ChannelsGrid, /websites'ın yanında GET /channels verisini de okur (owner/admin scope'u yoksa istek atılmaz — views.ts canReadChannels deseni). (ii) channelsFor imzası bağlı kanal listesini de alır; instagram kartı comingSoon()'dan çıkarılıp durum türetir: bağlı → 'connected' + adres gösterimi + Disconnect; bağlı değil → 'not_connected' + Connect. (iii) Connect → Modal içinde lib/form.tsx useFo",
             "details": "08.5.7-e — Settings → Channels: Instagram kartının statik 'Coming soon'dan canlı connect/disconnect kartına dönüşü  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.5.7 (+ FR-MOD-08.5.1, FR-EK-A.1 form primitifi)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 dosya (Channels.tsx + channels.test.ts). (2) Güvenlik sınırı yok — mevcut channels--all:rw scope'lu endpoint'ler çağrılır, yeni yetki/scope tanımlanmaz, izolasyon kararı sunucuda (-c/-d). (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: Website kartının veri-güdümlü status türetimi (channelsFor), useConnectedChannels hook'u ve lib/form.tsx useForm primitifi. (5) Kontrat değişikliği yok. (6) KK mekanik: kart durumu = /channels verisi, testle doğrudan kanıtlanır.\nNEDEN AÇIK: apps/web/src/features/settings/Channels.tsx:95 `comingSoon('instagram', 'Instagram', '📷', 'Answer Instagram direct messages.')` — sabit statik kart; connect/manage akışı yok. Channels.tsx GET /channels'ı HİÇ çağırmıyor (yalnız useQuery ile '/websites'); apps/web genelinde '/channels' çağrısı yalnız useInbox.ts:329'da. channels.test.ts'teki 'shows every unbuilt channel as Coming soon with Get notified' testi built = {website, chat-page, email} kümesi dışındaki HER kartın coming_soon olmasını iddia ediyor → instagram canlıya alınınca bu test güncellenmezse kırılır (bilinen regresyon).\nKAPSAM: (i) ChannelsGrid, /websites'ın yanında GET /channels verisini de okur (owner/admin scope'u yoksa istek atılmaz — views.ts canReadChannels deseni). (ii) channelsFor imzası bağlı kanal listesini de alır; instagram kartı comingSoon()'dan çıkarılıp durum türetir: bağlı → 'connected' + adres gösterimi + Disconnect; bağlı değil → 'not_connected' + Connect. (iii) Connect → Modal içinde lib/form.tsx useForm ile mock connect formu (code + ig_user_id; alan-altı hata + geçersizken submit pasif) → POST /channels/instagram/connect; başarıda query invalidate. (iv) Disconnect → POST /channels/instagram/disconnect + onay (dirty-guard/Modal deseni). (v) Loading/Error/Empty durumları mevcut Card/StatusDot/ErrorNotice ile. (vi) channels.test.ts'te built kümesine 'instagram' eklenir ve instagram için üç durum testi yazılır.\nDOSYALAR: apps/web/src/features/settings/Channels.tsx · apps/web/src/features/settings/channels.test.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/settings/Channels.tsx channelsFor() (Website kartının veri-güdümlü status/cta türetimi — birebir taklit edilecek desen) · apps/web/src/features/inbox/useInbox.ts:325-330 useConnectedChannels (GET /channels okuma deseni) · apps/web/src/features/inbox/views.ts canReadChannels() (scope kapısı — ajan /channels çağırmaz) · apps/web/src/lib/form.tsx useForm/required (alan-altı hata + submit-disabled primitifi, T4-a) · apps/web/src/components/ui/Modal.tsx (form modalı deseni) · apps/web/src/features/team/InviteTeammates.tsx (useForm + Modal + mutation birleşimi örneği)\nKK (birebir): \"\"Coming soon → Get notified → tam entegrasyon\"\" | \"rapor-1-fonksiyonel.md:1534-1541 — \"[MOD-08.5.7] Instagram (SOON) ... Mevcut Durumlar: Coming soon. Tetiklenen Eylem ve Sayfa Mantığı: [Get notified] lansman bildirimi için kayıt.\"\" | \"KK-türetilmiş: bu alt-görev KK'nın ÜÇÜNCÜ aşamasını (\"tam entegrasyon\") UI'da karşılar; 'Get notified' aşaması 08.5.7-f'te.\"\nKK DOĞRULAMA: channels.test.ts: (i) bağlı kanal listesi boşken instagram kartı status='not_connected', cta='Connect'; (ii) /channels'ta connected instagram varken status='connected', cta='Manage'/'Disconnect' ve adres görünür; (iii) 'shows every unbuilt channel as Coming soon' testi instagram'ı built kabul eder ve telegram için hâlâ geçer; (iv) render testi: geçersiz/eksik ig_user_id → alan-altı hata + submit pasif.\nKAPSAM DIŞI: 'Get notified' kalıcılığı (08.5.7-f) · messenger/whatsapp/sms kartlarının canlıya alınması — adaptörleri v1'de teslim olmasına rağmen bu kalem 08.5.7'dir; kardeş kartlar ayrı denetim kalemi · Inbox Views entegrasyonu (08.5.7-g) · e2e (08.5.7-h) · Apps Marketplace instagram kartı (packages/types/src/apps.ts:330-337 — zaten var, requireConnectableApp kapısı bilinçli 400 döndürüyor, DOKUNULMAZ)\nSÖZLEŞME: yok — yalnız mevcut /channels, /channels/instagram/connect, /channels/instagram/disconnect uçları tüketilir\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: kart durumu üç halde doğru (bağlı yok / bağlı / hata) — kodlanmış etiket değil türetilmiş · unit negatif: boş ig_user_id → alan-altı hata + submit disabled; API 4xx → ErrorNotice, kart yanlışlıkla Connected görünmez · unit regresyon: mevcut channelsFor testleri (website/chat-page/email/coming_soon) yeşil · cross-tenant: gerekmiyor — istemci tarafı; izolasyon kanıtı sunucuda (08.5.7-c/-d)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "65.3"
             ],
             "parentId": "65",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T18:08:40.083Z"
           },
           {
             "id": 6,
@@ -1942,7 +1942,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T17:35:34.093Z",
+        "updatedAt": "2026-08-09T18:08:40.083Z",
         "complexity": 6,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"08.5.7 — Instagram (DM, MOCK)  ·  dilim V2-9\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T17:35:34.094Z",
+      "lastModified": "2026-08-09T18:08:40.084Z",
       "taskCount": 109,
       "completedCount": 95,
       "tags": [

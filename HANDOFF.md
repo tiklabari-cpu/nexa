@@ -13,6 +13,25 @@
 
 ## Task log (newest-first)
 
+### tm 65.5 — 08.5.7-e: Settings → Channels — Instagram kartının statik 'Coming soon'dan canlı connect/disconnect'e dönüşü — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `channelsFor(websites, connectedChannels)` ikinci parametre aldı: Instagram kartı artık `comingSoon()` listesinden çıkarıldı, Website kartıyla BİREBİR aynı türetilmiş-durum deseniyle üretiliyor (`instagramChannel()` — `/channels` satırındaki `connected` alanı kaynak, `status` string'i değil, `connectedChannelViews`'in kullandığı aynı ayrım). Bağlı değil → `status:'not_connected', cta:'Connect'`; bağlı → `status:'connected', cta:'Disconnect', address:<ig_user_id>`.
+  - `ChannelsGrid`: `canReadChannels(agent.scopes)` (Inbox Views'in aynı kapısı) arkasında `useConnectedChannels` ile `/channels` okunuyor — owner/admin dışı bir ajanda istek hiç atılmıyor (403'e düşmüyor). Website kartının "sorgu bitene kadar yanlış rozet gösterme" davranışı Instagram'a da genişletildi (`channelsLoading`, sorgu `enabled:false` iken sonsuza dek gizlemiyor — `isLoading` kullanıldı, `isPending` değil).
+  - `InstagramChannelAction` (yeni bileşen): Connect → `lib/form.tsx useForm` ile `code`+`ig_user_id` alanlı mock-OAuth modalı (`components/ui/Modal.tsx` + `useCloseGuard` — InviteTeammates'teki üçlü birleşim birebir taklit edildi); ikisi de `required()`, boşken/geçersizken submit pasif, `POST /channels/instagram/connect` başarıda `['channels']` query invalidate. 4xx form-seviyeli `role="alert"` notu olarak gösteriliyor — cache dokunulmadığı için kart yanlışlıkla Connected görünmüyor. Disconnect → `window.confirm` sonrası `POST /channels/instagram/disconnect`.
+  - `channels.test.ts`: "built" kümesine `instagram` eklendi (regresyon: telegram hâlâ Coming soon kalıyor) + yeni `describe('channelsFor — instagram')` (+4: boş liste, bağlı-ama-connected:false, connected+adres, başka kanal tipiyle karışmama).
+  - `Channels.test.tsx` (yeni dosya — mevcut `channels.test.ts` yalnız saf fonksiyonu test ediyordu, render/form doğrulaması için ayrı dosya gerekti, InviteTeammates.test.tsx/WebsiteWidgets.test.tsx emsaliyle): connect formunun `ig_user_id` eksikken alan-altı hata + submit pasif olduğu, ikisi de doluyken submit aktif olduğu, bağlı kartın adres+Disconnect gösterdiği, onaysız disconnect'in `POST` göndermediği (+4).
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0** (10/10 paket görevi; `@nexa/web` 92 dosya/787 test, `@nexa/api` 100 dosya/2093 test) · `pnpm -w test:integration` **0** (`@nexa/api` 66/66 dosya, 1556/1556) · `pnpm -w build` **0** (7/7) · `pnpm -w test:e2e` **0** — **88/88** (Windows'ta `make` yok; `.env`'i `set -a && source .env && set +a` ile shell'e export edip koştum — `settings.spec.ts`'teki iki channels senaryosu dahil hepsi yeşil). KK'nın dördü de doğrulandı (i-iii `channels.test.ts`, iv `Channels.test.tsx`).
+  `apps/e2e/kanit/*.png` e2e koşusunda yeniden üretildi (aynı emsal — 65.1-65.4 — `git checkout -- apps/e2e/kanit` ile atıldı).
+- **Varsayımlar:**
+  - Bağlı kartın cta'sı website'nin `Manage`'i değil, görev metninin birebir istediği `Disconnect` — kendine özgü bir "yönetim" ekranı yok, ikinci tıkla bağlantı kesiliyor.
+  - Connect formu 400'ün iki nedenini (eksik alan / adres başka workspace'e ait — 08.5.7-d) ayırt etmiyor, ikisi de aynı `ErrorNotice`-benzeri form-seviyeli mesaj; görev metni özel bir çakışma ekranını kapsam dışı bırakıyordu.
+  - Disconnect onayı `window.confirm` (dirty-guard'ın `Confirmer` deseniyle aynı fikir, ayrı bir modal açmadı) — testte `vi.spyOn(window, 'confirm')` ile enjekte edildi.
+- **Sonraki pencereye not:**
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ commit edilmemiş WIP** — bu turda da dokunulmadı (CONVENTIONS §5); `git add -A` kullanılmadı, yalnız bu görevin dosyaları sahnelendi.
+  - Sıradaki: **08.5.7-f** ('Get notified' kaydının kalıcılaştırılması — kalan coming-soon kanalları) ve **08.5.7-g** (Inbox Views'te Instagram görünümü), ikisi de 08.5.7-e'ye bağımlı ve artık açık. **08.5.7-h** (e2e) bu ikisinden sonra.
+  - Docker Desktop bu pencerede zaten açıktı (`nexa-db`/`nexa-redis` healthy) — dokunulmadı.
+
 ### tm 65.4 — 08.5.7-d: Kanal adresinin lisanslar arası tekilliği — çakışan adres bağlamanın reddi — done — 2026-08-09 UTC
 
 - **Yapıldı:** (bölünmez izolasyon çekirdeği — kısıt + yazma yolu + yarış + okuma yolu tek turda)

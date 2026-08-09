@@ -2406,6 +2406,22 @@ components:
         period: { type: string, description: "The `yyyymm` period the quota was added to." }
         purchased_at: { type: string, format: date-time }
 
+    ApiPackagePurchaseResult:
+      type: object
+      description: |
+        What a purchase produced: the receipt, and the period's usage as it
+        stands after the calls were credited (FR-MOD-09.3).
+
+        `usage` is returned rather than left to a follow-up `GET /billing/usage`
+        because the whole point of the purchase is the raised allowance — a
+        client that has to ask again can render the old number in between, and
+        the two reads can disagree if anything is metered between them. This one
+        is read inside the same transaction that credited the quota.
+      required: [purchase, usage]
+      properties:
+        purchase: { $ref: "#/components/schemas/ApiPackagePurchase" }
+        usage: { $ref: "#/components/schemas/UsageSummary" }
+
     PaymentMethodInput:
       type: object
       description: |

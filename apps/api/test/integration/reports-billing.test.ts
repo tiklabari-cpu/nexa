@@ -6,28 +6,42 @@
  * counters meant to agree will not, and the first anyone notices is a customer
  * disputing a bill.
  */
-import type { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { API_PACKAGE_CATALOG, generateShortId } from '@nexa/types';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  testEnv,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 import { REPORT_GROUPS } from '../../src/routes/reports-export.js';
 import { REPORT_MAX_RANGE_DAYS } from '../../src/routes/reports.js';
+import { withTenant } from '../../src/lib/tenant.js';
+import { currentPeriod, recordApiCall } from '../../src/services/billing/metering.js';
+import { purchaseApiPackage } from '../../src/services/billing/api-package-service.js';
 
 describe('reports and billing', () => {
   let owner: PrismaClient;
+  /** The `nexa_app` role the API itself connects as — RLS applies to it. */
+  let appRole: PrismaClient;
   let server: TestServer;
   let fx: Fixtures;
   let token: string;
 
   beforeAll(async () => {
+    const appUrl = process.env['DATABASE_APP_URL'];
+    if (!appUrl) throw new Error('DATABASE_APP_URL must be set');
     owner = ownerClient();
+    appRole = new PrismaClient({ datasourceUrl: appUrl });
     server = await startTestServer();
   });
 
   afterAll(async () => {
     await server.close();
-    await owner.$disconnect();
+    await Promise.all([owner.$disconnect(), appRole.$disconnect()]);
   });
 
   beforeEach(async () => {
@@ -3635,6 +3649,315 @@ describe('reports and billing', () => {
         'pro-plus',
         'essential',
       ]);
+    });
+  });
+
+  // =========================================================================
+  // 09.3-d. Buying is where the money and the quota meet: the sale is recorded,
+  // and the same transaction raises `usage_records.included` for the period.
+  // That row is shared with the meter — `recordApiCall` upserts it on every
+  // billed call — so most of what is tested here is what happens when the two
+  // arrive together.
+  describe('API packages — buying one (09.3-d)', () => {
+    const env = testEnv();
+    const meterConfig = {
+      apiIncluded: env.API_CALLS_INCLUDED,
+      apiOverageCents: env.API_CALL_OVERAGE_CENTS,
+    };
+    const ESSENTIAL = API_PACKAGE_CATALOG.find((p) => p.id === 'essential')!;
+
+    const context = () => ({ licenseId: fx.a.licenseId, organizationId: fx.a.organizationId });
+
+    /** This period's api_calls row, read past RLS so the assertions are exact. */
+    const apiUsageRow = (licenseId = fx.a.licenseId) =>
+      owner.usageRecord.findFirst({
+        where: { licenseId, metric: 'api_calls', period: currentPeriod() },
+      });
+
+    /**
+     * The allowance as the meter would report it. Not "is there a row": every
+     * request made with a PAT — including a rejected one — is itself a billed
+     * API call, so the row exists after any HTTP call. What a refusal must
+     * leave alone is `included`.
+     */
+    const includedNow = async (licenseId = fx.a.licenseId): Promise<number> => {
+      const row = await apiUsageRow(licenseId);
+      return row === null ? env.API_CALLS_INCLUDED : Number(row.included);
+    };
+
+    /** A token with a read scope only — it may see prices, not spend money. */
+    const readerToken = () =>
+      grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+
+    // --- Negatives first -----------------------------------------------------
+
+    it('refuses a token with no billing scope at all', async () => {
+      const weak = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:ro'],
+      });
+      const response = await server.post(
+        '/billing/api-packages',
+        { package_id: 'essential' },
+        { authorization: `Bearer ${weak}` },
+      );
+      expect(response.statusCode).toBe(403);
+      expect(await includedNow()).toBe(env.API_CALLS_INCLUDED);
+    });
+
+    it('refuses reports_read — reading the price list is not permission to spend', async () => {
+      const response = await server.post(
+        '/billing/api-packages',
+        { package_id: 'essential' },
+        { authorization: `Bearer ${await readerToken()}` },
+      );
+      expect(response.statusCode).toBe(403);
+      // Nothing sold, and no quota handed out on the way to the refusal.
+      expect(await owner.apiPackagePurchase.count()).toBe(0);
+      expect(await includedNow()).toBe(env.API_CALLS_INCLUDED);
+    });
+
+    it('answers an unknown package with 404, having sold nothing', async () => {
+      const response = await server.post(
+        '/billing/api-packages',
+        { package_id: 'enterprise-unlimited' },
+        auth,
+      );
+      expect(response.statusCode).toBe(404);
+      expect(response.json().error.type).toBe('not_found');
+      expect(await owner.apiPackagePurchase.count()).toBe(0);
+      // The rollback matters: the receipt and the credit are one transaction, so
+      // a rejected id must leave the allowance exactly as it was.
+      expect(await includedNow()).toBe(env.API_CALLS_INCLUDED);
+    });
+
+    it('rejects a malformed body as validation, not as an unknown package', async () => {
+      expect((await server.post('/billing/api-packages', {}, auth)).statusCode).toBe(400);
+      expect(
+        (await server.post('/billing/api-packages', { package_id: '' }, auth)).statusCode,
+      ).toBe(400);
+      expect(
+        (await server.post('/billing/api-packages', { package_id: 42 }, auth)).statusCode,
+      ).toBe(400);
+    });
+
+    // --- Cross-tenant --------------------------------------------------------
+
+    it('credits the quota to the buyer alone — nobody else’s allowance moves', async () => {
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['billing_manage'],
+      });
+      const theirUsageBefore = (
+        await server.get('/billing/usage', { authorization: `Bearer ${theirToken}` })
+      ).json();
+
+      const bought = await server.post('/billing/api-packages', { package_id: 'pro' }, auth);
+      expect(bought.statusCode).toBe(200);
+
+      const theirUsageAfter = (
+        await server.get('/billing/usage', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      // B's included allowance is untouched: buying capacity for one workspace
+      // must never be readable — or spendable — as capacity for another.
+      expect(theirUsageAfter.api_calls.included).toBe(theirUsageBefore.api_calls.included);
+      expect(theirUsageAfter.api_calls.included).toBe(env.API_CALLS_INCLUDED);
+      expect(await owner.apiPackagePurchase.count({ where: { licenseId: fx.b.licenseId } })).toBe(
+        0,
+      );
+      // And A really did get it.
+      expect(Number((await apiUsageRow())!.included)).toBe(env.API_CALLS_INCLUDED + 500_000);
+    });
+
+    // --- The race the whole design turns on ---------------------------------
+    //
+    // `recordApiCall` owns `quantity` and never touches `included`; the purchase
+    // owns `included` and never touches `quantity`. These three tests are the
+    // proof, in the three orders the two writes can reach the shared row.
+
+    const buy = (packageId = 'essential') =>
+      withTenant(appRole, context(), (tx) =>
+        purchaseApiPackage(tx, context(), packageId, meterConfig),
+      );
+
+    const meter = () =>
+      withTenant(appRole, context(), (tx) =>
+        recordApiCall(tx, context(), meterConfig.apiOverageCents, meterConfig.apiIncluded),
+      );
+
+    /** Both writes landed, neither lost: full allowance + quota, all calls counted. */
+    async function expectSettled(calls: number, quota = ESSENTIAL.api_calls): Promise<void> {
+      const row = await apiUsageRow();
+      expect(Number(row!.included)).toBe(env.API_CALLS_INCLUDED + quota);
+      expect(Number(row!.quantity)).toBe(calls);
+    }
+
+    it('keeps the plan allowance when the purchase lands before the period’s first call', async () => {
+      // No row exists yet, so the purchase inserts it. Seeding `included` with
+      // the quota alone would silently take the plan's own 100,000 calls away
+      // from anyone who buys early.
+      await buy();
+      for (let i = 0; i < 5; i += 1) await meter();
+      await expectSettled(5);
+    });
+
+    it('adds to the allowance the meter already stamped', async () => {
+      for (let i = 0; i < 5; i += 1) await meter();
+      await buy();
+      await expectSettled(5);
+    });
+
+    it('loses nothing when the purchase and a burst of calls overlap', async () => {
+      const calls = 12;
+      // Issued together against the real database: the upsert's row lock is what
+      // has to serialise them, not the order they were started in.
+      await Promise.all([buy(), ...Array.from({ length: calls }, meter)]);
+      await expectSettled(calls);
+    });
+
+    it('stacks two purchases instead of overwriting the first', async () => {
+      // The `EXCLUDED.included` trap: `included = usage_records.included + quota`
+      // composes, `included = EXCLUDED.included` would set both purchases to
+      // "allowance + this one" and quietly refund the earlier sale.
+      await buy('essential');
+      await buy('pro');
+      const row = await apiUsageRow();
+      expect(Number(row!.included)).toBe(env.API_CALLS_INCLUDED + 100_000 + 500_000);
+      expect(await owner.apiPackagePurchase.count({ where: { licenseId: fx.a.licenseId } })).toBe(
+        2,
+      );
+    });
+
+    // --- Positives -----------------------------------------------------------
+
+    it('raises the quota and shrinks the overage the usage endpoint reports', async () => {
+      // Start the period over its allowance, so there is a real overage charge
+      // for the purchase to reduce.
+      await owner.usageRecord.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          metric: 'api_calls',
+          period: currentPeriod(),
+          quantity: BigInt(env.API_CALLS_INCLUDED + 1),
+          included: BigInt(env.API_CALLS_INCLUDED),
+          overageUnit: 100_000,
+          overageUnitPriceCents: env.API_CALL_OVERAGE_CENTS,
+        },
+      });
+      const before = (await server.get('/billing/usage', auth)).json();
+      expect(before.api_calls.overage_cents).toBe(env.API_CALL_OVERAGE_CENTS);
+
+      const response = await server.post(
+        '/billing/api-packages',
+        { package_id: 'essential' },
+        auth,
+      );
+      expect(response.statusCode).toBe(200);
+
+      const after = (await server.get('/billing/usage', auth)).json();
+      expect(after.api_calls.included).toBe(before.api_calls.included + 100_000);
+      // One call over the plan cost a whole $29.50 block; 100,000 more included
+      // calls put the workspace back inside its allowance.
+      expect(after.api_calls.overage).toBe(0);
+      expect(after.api_calls.overage_cents).toBe(0);
+    });
+
+    it('answers with the receipt and the usage the purchase produced', async () => {
+      const response = await server.post(
+        '/billing/api-packages',
+        { package_id: 'pro-plus' },
+        auth,
+      );
+      expect(response.statusCode).toBe(200);
+
+      const { purchase: receipt, usage } = response.json();
+      expect(receipt).toMatchObject({
+        package_id: 'pro-plus',
+        name: 'Pro+',
+        api_calls: 1_000_000,
+        price_cents: 24999,
+        period: currentPeriod(),
+      });
+      expect(typeof receipt.id).toBe('string');
+      expect(Date.parse(receipt.purchased_at)).not.toBeNaN();
+      // The usage in the reply is the post-purchase one — a client that renders
+      // it does not have to ask again and cannot show the stale number.
+      expect(usage.api_calls.included).toBe(env.API_CALLS_INCLUDED + 1_000_000);
+      expect(usage.period).toBe(currentPeriod());
+    });
+
+    it('shows the purchase in the history it just made', async () => {
+      await server.post('/billing/api-packages', { package_id: 'essential' }, auth);
+      const items = (await server.get('/billing/api-packages/purchases', auth)).json().items;
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({
+        package_id: 'essential',
+        api_calls: 100_000,
+        price_cents: 2999,
+      });
+    });
+
+    it('records the sale immutably — quota and price as the catalogue priced them', async () => {
+      await server.post('/billing/api-packages', { package_id: 'pro' }, auth);
+      const row = await owner.apiPackagePurchase.findFirstOrThrow({
+        where: { licenseId: fx.a.licenseId },
+      });
+      expect(row.packageId).toBe('pro');
+      expect(row.apiCalls).toBe(500_000n);
+      expect(row.priceCents).toBe(14999);
+      expect(row.period).toBe(currentPeriod());
+    });
+
+    it('writes an audit entry saying who bought what, and for how much', async () => {
+      await server.post('/billing/api-packages', { package_id: 'essential' }, auth);
+      const entry = await owner.auditLogEntry.findFirst({
+        where: { licenseId: fx.a.licenseId, action: 'billing.api_package_purchased' },
+      });
+      expect(entry).not.toBeNull();
+      expect(entry!.metadata).toMatchObject({
+        package_id: 'essential',
+        api_calls: 100_000,
+        price_cents: 2999,
+        period: currentPeriod(),
+      });
+      // The purchase row carries no actor; this entry is the only record of who.
+      expect(entry!.actorId).toBe(fx.a.ownerAccountId);
+    });
+
+    it('stays buyable once the trial is read-only — running out is why you buy', async () => {
+      await owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { trialEndsAt: new Date(Date.now() - 86_400_000) },
+      });
+      const response = await server.post(
+        '/billing/api-packages',
+        { package_id: 'essential' },
+        auth,
+      );
+      expect(response.statusCode).toBe(200);
+      expect(Number((await apiUsageRow())!.included)).toBe(env.API_CALLS_INCLUDED + 100_000);
+    });
+
+    it('charges no card and requires none on file (ADR-13)', async () => {
+      expect(await owner.paymentMethod.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+      const response = await server.post(
+        '/billing/api-packages',
+        { package_id: 'essential' },
+        auth,
+      );
+      // Mock billing: a purchase must not depend on a card, and must not create
+      // or touch one on its way through.
+      expect(response.statusCode).toBe(200);
+      expect(await owner.paymentMethod.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
     });
   });
 });

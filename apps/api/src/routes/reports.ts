@@ -9,7 +9,6 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   API_PACKAGE_CATALOG,
-  findApiPackage,
   hasAnyScope,
   isWorkScheduleProblem,
   normalizeWorkSchedule,
@@ -90,6 +89,10 @@ import {
   getPaymentMethod,
   upsertPaymentMethod,
 } from '../services/billing/payment-method-service.js';
+import {
+  purchaseApiPackage,
+  serialiseApiPackagePurchase,
+} from '../services/billing/api-package-service.js';
 
 const BILLING_WRITE_SCOPES = ['billing_manage', 'billing_admin'];
 
@@ -104,6 +107,16 @@ const paymentMethodBody = z.object({
   exp_month: z.number().int().min(1).max(12),
   exp_year: z.number().int().min(2000).max(2100),
   holder_name: z.string().trim().min(1).max(120),
+});
+
+/**
+ * Which package to buy. The id is only checked for *shape* here — whether it
+ * names a real package is the catalogue's answer, and an unknown one is a 404
+ * from the purchase service rather than a 400: asking to buy `enterprise` is a
+ * well-formed request for something that is not on sale.
+ */
+const purchaseApiPackageBody = z.object({
+  package_id: z.string().trim().min(1).max(64),
 });
 
 const updateSubscriptionBody = z
@@ -1635,10 +1648,57 @@ export default async function reportRoutes(
     reply.send({ items: API_PACKAGE_CATALOG }),
   );
 
+  // Buy one (FR-MOD-09.3). Payment is mocked (ADR-13) — no card is charged and
+  // none has to be on file — but the quota is real: the calls land in this
+  // period's allowance, and the price lands on the invoice (09.3-e).
+  app.post(
+    '/billing/api-packages',
+    // Writable while read-only, like the subscription PATCH and the payment
+    // method PUT: a workspace that has run out of capacity is exactly the one
+    // that needs to buy some, and the trial gate must not be what stops it.
+    // `reports_read` still cannot get in here — reading prices is not spending.
+    { config: { scopes: BILLING_WRITE_SCOPES, allowWhenReadOnly: true } },
+    async (request, reply) => {
+      const body = parse(purchaseApiPackageBody, request.body);
+      const tenant = request.tenant();
+
+      const result = await request.withTenant(async (tx) => {
+        const { purchase, package: pkg } = await purchaseApiPackage(
+          tx,
+          tenant,
+          body.package_id,
+          usageConfig(env),
+        );
+        // What was bought and what it cost. The amounts are already on the
+        // receipt row; the entry records them anyway because it is the one log
+        // that answers "who spent this" — the purchase row has no actor.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'billing.api_package_purchased',
+          target: `api_package_purchase:${purchase.id}`,
+          metadata: {
+            package_id: pkg.id,
+            api_calls: pkg.api_calls,
+            price_cents: pkg.price_cents,
+            period: purchase.period,
+          },
+        });
+        // Usage read back inside the same transaction, so the caller sees the
+        // allowance this purchase produced rather than whatever a second,
+        // later request would have found.
+        return {
+          purchase: serialiseApiPackagePurchase(purchase),
+          usage: await usageSummary(tx, tenant, usageConfig(env)),
+        };
+      });
+
+      return reply.send(result);
+    },
+  );
+
   // What this workspace has actually bought, newest first. The quota and price
   // come off the stored row rather than the catalogue, so a later price change
-  // never rewrites what someone was charged; only the display `name` is joined
-  // from the catalogue, and it is null for a package no longer offered.
+  // never rewrites what someone was charged — see `serialiseApiPackagePurchase`,
+  // shared with the purchase response above.
   app.get(
     '/billing/api-packages/purchases',
     { config: { scopes: BILLING_READ_SCOPES } },
@@ -1651,19 +1711,7 @@ export default async function reportRoutes(
         }),
       );
 
-      return reply.send({
-        items: purchases.map((purchase) => ({
-          id: purchase.id,
-          package_id: purchase.packageId,
-          name: findApiPackage(purchase.packageId)?.name ?? null,
-          // `api_calls` is a bigint column; the wire carries a number, the same
-          // widening `usageSummary` does for the usage counters it reads.
-          api_calls: Number(purchase.apiCalls),
-          price_cents: purchase.priceCents,
-          period: purchase.period,
-          purchased_at: purchase.purchasedAt.toISOString(),
-        })),
-      });
+      return reply.send({ items: purchases.map(serialiseApiPackagePurchase) });
     },
   );
 }

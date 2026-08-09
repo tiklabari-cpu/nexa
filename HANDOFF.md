@@ -13,6 +13,58 @@
 
 ## Task log (newest-first)
 
+### tm 71.4 — 09.3-d: Paket satın alma çekirdeği + atomik kota artışı — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - **Kontrat (önce):** `paths/reports.yaml` → `apiPackages.post` (`purchaseApiPackage`,
+    gövde `{package_id}`, 200/400/401/403/404/429); `openapi.yaml` → `ApiPackagePurchaseResult`
+    (`purchase` + `usage`). Bundle + typed client regen (150 path — POST mevcut path'e eklendi).
+  - **Çekirdek:** `apps/api/src/services/billing/api-package-service.ts`. Tek transaction'da
+    makbuz (`api_package_purchases`) + kota (`usage_records`). Kritik SQL:
+    `ON CONFLICT (license_id, metric, period) DO UPDATE SET included = usage_records.included + <kota>`
+    — **`EXCLUDED.included` DEĞİL** (o, ikinci satın almayı birincinin üstüne yazıp sessizce
+    siler); INSERT dalı `included = env varsayılanı + kota` (yalnız kota yazılsa, dönemin ilk
+    API çağrısından önce satın alan lisans plan kotasını kaybederdi). `quantity`'ye hiç
+    dokunulmaz — `recordApiCall` `quantity`'yi, satın alma `included`'ı sahiplenir.
+  - **Route:** `POST /billing/api-packages`, `BILLING_WRITE_SCOPES` + `allowWhenReadOnly: true`
+    (subscription PATCH / payment-method PUT ile aynı gerekçe). Yanıt, kotayı yükselten AYNI
+    transaction'da okunan usage'ı taşır. `serialiseApiPackagePurchase` GET geçmişiyle ortak.
+    Audit: `billing.api_package_purchased` (`AUDIT_ACTIONS`'a eklendi).
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `pnpm -w test` **0** (10/10; `@nexa/api` 100/100 dosya, **2129** test — 2113'ten **+16**) ·
+  `pnpm -w test:integration` **0** (`@nexa/api` 66/66, **1592** — 1576'dan +16) ·
+  `pnpm -w build` **0** (7/7) · `pnpm -w test:e2e` **0** — **90/90** (`.env` export edilerek;
+  bu tur UI eklemediği için regresyon kanıtı, sayı sabit). Yeni blok:
+  `reports-billing.test.ts` → `describe('API packages — buying one (09.3-d)')`, 16 test,
+  **negatifler ve çapraz-kiracı önce**. Yarış testleri gerçek DB'ye `nexa_app` rolüyle
+  (`withTenant` + `purchaseApiPackage` ∥ `recordApiCall`) üç sırayla koşuyor.
+- **Varsayımlar:**
+  - Yanıt **200** (201 değil) — görev tanımının yazdığı kod; 09.3-f bu sözleşmeye yazılacak.
+  - Yanıta `usage` konuldu: satın almanın tek görünür sonucu yükselen kota; ikinci bir
+    `GET /billing/usage` arada eski sayıyı gösterebilir ve iki okuma ayrışabilir.
+  - Reddedilen istek de metered (PAT `onSend` hook'u 4xx'i de sayar), bu yüzden testler
+    "satır yok" demiyor, `included` değişmemiş diyor.
+- **Sonraki pencereye not:**
+  - **09.3-e (tm 71.5)** açılabilir: `buildInvoices()` artık `api_package_purchases`'ı dönem
+    başına okuyup line_item üretmeli. Satır append-only ve `period` `usage_records` ile ortak
+    anahtar — faturayı o dönemden türet.
+  - **09.3-f/g için:** `POST /billing/api-packages` → `{purchase, usage}`. `usage`'ı doğrudan
+    cache'e yazmak yerine usage + invoices + purchases query'lerini invalidate etmek yeterli.
+    Read-only lisansta buton **pasif olmamalı** — backend 200 dönüyor, test bunu kilitliyor.
+  - **tm 105 WIP hâlâ commit'siz** (aynı liste: `CONVENTIONS.md`, `TASK-RUNNER-PROMPT.md`,
+    `apps/api|rtm/package.json`, `turbo.json`, `README.md`, `apps/api/scripts/*test-datastores.ts`,
+    fixture'lar, `test-datastores.test.ts`, `.taskmaster/tmp-*`). Kapsam disiplini (CONVENTIONS §5)
+    gereği yine dokunulmadı; bu turun `git add`'i yalnız kendi dosyaları + PLAN/HANDOFF.
+  - ⚠ **`PLAN.md` bu pencere koşarken BAŞKA bir pencere tarafından yeniden düzenlendi**: tablo
+    hücrelerindeki uzun kanıt metinleri K-notlarına taşınıyor (`✅ → K02.4.1-.6` biçimi, §6
+    altına ~224 satır). Çalışma alanında o düzenleme **commit'siz** duruyor. Bu turun commit'i
+    onu içermiyor — PLAN.md yalnız 09.3 satırındaki (1123) kanıt güncellemesiyle, HEAD'in
+    üstüne uygulanmış tek satırlık değişiklik olarak commit'lendi. Aynı kanıt metni çalışma
+    alanındaki K09.3 notuna da yazıldı, yani o pencere commit ettiğinde kaybolmaz. Kapanışta
+    `git status` bu yüzden temiz DEĞİL: PLAN.md diğer pencerenin işiyle kirli kalıyor.
+    E2E `apps/e2e/kanit/*.png` (48 dosya) kapı koşusunda yeniden üretildiği ve bu turda UI
+    değişmediği için `git restore` ile geri alındı.
+
 ### tm 71.3 — 09.3-c: API paketleri okuma yüzeyi (katalog + satın alma geçmişi) — done — 2026-08-09 UTC
 
 - **Yapıldı:**

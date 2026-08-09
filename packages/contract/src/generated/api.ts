@@ -3821,7 +3821,27 @@ export interface paths {
      */
     get: operations['listApiPackages'];
     put?: never;
-    post?: never;
+    /**
+     * Buy an API-call package
+     * @description Buys one catalogue package and credits its calls to the current period's
+     *     allowance (FR-MOD-09.3), returning the receipt together with usage as it
+     *     stands *after* the purchase — a client never has to re-read
+     *     `/billing/usage` to show the raised quota.
+     *
+     *     Payment is mocked (ADR-13): no card is charged, no payment method has to be
+     *     on file and no external provider is called. The quota it buys is real.
+     *
+     *     A package is a one-off top-up, not a subscription. Nothing renews, and the
+     *     calls land in the period they were bought into rather than carrying over —
+     *     `period` on the receipt says which one. Buying the same package twice adds
+     *     its quota twice; there is no idempotency key, so a client that cannot
+     *     tolerate a double submit must prevent one.
+     *
+     *     Writable while the workspace is read-only, like the subscription PATCH:
+     *     buying capacity is one of the ways an expired trial comes back. It still
+     *     takes a billing scope — `reports_read` may see the prices, not spend money.
+     */
+    post: operations['purchaseApiPackage'];
     delete?: never;
     options?: never;
     head?: never;
@@ -5824,6 +5844,20 @@ export interface components {
       period: string;
       /** Format: date-time */
       purchased_at: string;
+    };
+    /**
+     * @description What a purchase produced: the receipt, and the period's usage as it
+     *     stands after the calls were credited (FR-MOD-09.3).
+     *
+     *     `usage` is returned rather than left to a follow-up `GET /billing/usage`
+     *     because the whole point of the purchase is the raised allowance — a
+     *     client that has to ask again can render the old number in between, and
+     *     the two reads can disagree if anything is metered between them. This one
+     *     is read inside the same transaction that credited the quota.
+     */
+    ApiPackagePurchaseResult: {
+      purchase: components['schemas']['ApiPackagePurchase'];
+      usage: components['schemas']['UsageSummary'];
     };
     /**
      * @description The masked fields a processor returns after tokenising a card. There is
@@ -13354,6 +13388,38 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  purchaseApiPackage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description A catalogue id — `essential`, `pro`, `pro-plus`. */
+          package_id: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The recorded purchase, and the period's usage after it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ApiPackagePurchaseResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

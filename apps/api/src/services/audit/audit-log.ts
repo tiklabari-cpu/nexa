@@ -68,6 +68,7 @@ export const AUDIT_ACTIONS = [
   'settings.ip_allowlist_removed',
   'billing.subscription_updated',
   'billing.payment_method_updated',
+  'billing.api_package_purchased',
   // Outbound webhooks (FR-MOD-08.8.4 / NFR-S7) — the platform's highest-risk
   // egress surface, and the "webhook değişimi" NFR-S12 names by hand. The entry
   // records the host and the subscription, never the full URL or the signing

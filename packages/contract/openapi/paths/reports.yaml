@@ -962,6 +962,50 @@ apiPackages:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    tags: [Billing]
+    operationId: purchaseApiPackage
+    summary: Buy an API-call package
+    description: |
+      Buys one catalogue package and credits its calls to the current period's
+      allowance (FR-MOD-09.3), returning the receipt together with usage as it
+      stands *after* the purchase — a client never has to re-read
+      `/billing/usage` to show the raised quota.
+
+      Payment is mocked (ADR-13): no card is charged, no payment method has to be
+      on file and no external provider is called. The quota it buys is real.
+
+      A package is a one-off top-up, not a subscription. Nothing renews, and the
+      calls land in the period they were bought into rather than carrying over —
+      `period` on the receipt says which one. Buying the same package twice adds
+      its quota twice; there is no idempotency key, so a client that cannot
+      tolerate a double submit must prevent one.
+
+      Writable while the workspace is read-only, like the subscription PATCH:
+      buying capacity is one of the ways an expired trial comes back. It still
+      takes a billing scope — `reports_read` may see the prices, not spend money.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [package_id]
+            properties:
+              package_id:
+                type: string
+                description: "A catalogue id — `essential`, `pro`, `pro-plus`."
+    responses:
+      "200":
+        description: The recorded purchase, and the period's usage after it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ApiPackagePurchaseResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 apiPackagePurchases:
   get:

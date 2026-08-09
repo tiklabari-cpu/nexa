@@ -101,17 +101,20 @@ interface ApiPackageItem {
   price_cents: number;
 }
 
+/** One recorded purchase (FR-MOD-09.3) — quota and price as sold, not re-derived. */
+interface ApiPackagePurchase {
+  id: string;
+  package_id: string;
+  name: string | null;
+  api_calls: number;
+  price_cents: number;
+  period: string;
+  purchased_at: string;
+}
+
 /** The receipt plus the period's usage after the purchase credited its quota. */
 interface ApiPackagePurchaseResult {
-  purchase: {
-    id: string;
-    package_id: string;
-    name: string | null;
-    api_calls: number;
-    price_cents: number;
-    period: string;
-    purchased_at: string;
-  };
+  purchase: ApiPackagePurchase;
   usage: UsageSummary;
 }
 
@@ -358,6 +361,8 @@ export function BillingPage(): ReactElement {
       </Section>
 
       <ApiPackagesSection />
+
+      <ApiPackagePurchasesSection />
 
       <PaymentMethodSection readOnly={sub.access === 'read_only'} />
 
@@ -704,6 +709,89 @@ function ApiPackageCard({
         )}
       </div>
     </Card>
+  );
+}
+
+/**
+ * Purchase history for API packages (FR-MOD-09.3, KK-derived — the PRD does
+ * not define a purchase-history screen for 09.3; FR-MOD-10.3's invoice list
+ * is the pattern this borrows, same table shape as `InvoicesSection` below).
+ *
+ * The server already returns purchases newest-first (`purchasedAt desc`), so
+ * this renders them in that order rather than re-sorting client-side. A
+ * successful buy in `ApiPackagesSection` invalidates this query, so a new
+ * purchase appears here without a manual refresh.
+ */
+function ApiPackagePurchasesSection(): ReactElement {
+  const api = useApiClient();
+
+  const query = useQuery({
+    queryKey: ['billing', 'api-packages', 'purchases'],
+    queryFn: () => api.get<{ items: ApiPackagePurchase[] }>('/billing/api-packages/purchases'),
+  });
+
+  const description = 'Every API package this workspace has bought, newest first.';
+
+  if (query.isPending) {
+    return (
+      <Section title="Purchase history" description={description}>
+        <CardSkeleton rows={2} />
+      </Section>
+    );
+  }
+  if (query.error) {
+    return (
+      <Section title="Purchase history" description={description}>
+        <ErrorNotice message="Could not load the purchase history." />
+      </Section>
+    );
+  }
+
+  const purchases = query.data.items;
+
+  return (
+    <Section title="Purchase history" description={description}>
+      {purchases.length === 0 ? (
+        <p data-testid="api-package-purchases-empty" className="text-sm text-content-secondary">
+          You have not bought an API package yet — buy one above to raise this period's allowance.
+        </p>
+      ) : (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="api-package-purchases-table">
+              <thead>
+                <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-content-tertiary">
+                  <th className="px-4 py-2 font-medium">Date</th>
+                  <th className="px-4 py-2 font-medium">Package</th>
+                  <th className="px-4 py-2 text-right font-medium">Quota</th>
+                  <th className="px-4 py-2 text-right font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchases.map((purchase) => (
+                  <tr
+                    key={purchase.id}
+                    data-testid="api-package-purchase-row"
+                    className="border-b border-border last:border-0"
+                  >
+                    <td className="px-4 py-2 text-content-secondary">
+                      {formatDate(purchase.purchased_at)}
+                    </td>
+                    <td className="px-4 py-2 font-medium">{purchase.name ?? purchase.package_id}</td>
+                    <td className="tabular px-4 py-2 text-right">
+                      +{formatCount(purchase.api_calls)}
+                    </td>
+                    <td className="tabular px-4 py-2 text-right">
+                      {formatMoney(purchase.price_cents)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </Section>
   );
 }
 

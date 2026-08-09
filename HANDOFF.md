@@ -13,6 +13,24 @@
 
 ## Task log (newest-first)
 
+### tm 71.7 — 09.3-g: Satın alma geçmişi listesi (UI) + empty state — done — 2026-08-10 UTC
+
+- **Yapıldı:** `apps/web/src/features/billing/BillingPage.tsx`'e `ApiPackagePurchasesSection` —
+  `GET /billing/api-packages/purchases` → tarih/paket adı/kota/tutar tablosu (`InvoicesSection`
+  deseni birebir), sunucu sırası (`purchasedAt desc`) korunur; boş liste → anlamlı empty state;
+  loading → `CardSkeleton`. 09.3-f'nin zaten invalidate ettiği `['billing','api-packages',
+  'purchases']` sorgu anahtarının ilk tüketicisi oldu.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test`
+  **0** (`@nexa/web` 801/801, 798'den +3 · diğer paketler değişmedi) · `pnpm -w build` **0** ·
+  `pnpm -w test:integration` çalıştı (bu tur yalnız frontend dokundu, backend/contract etkilenmedi).
+- **Varsayımlar:** yok — desen doğrudan `InvoicesSection`'dan kopyalandı.
+- **Sonraki pencereye not:**
+  - 09.3-h (uçtan uca E2E: satın alma → kota artışı → geçmiş → fatura) hâlâ açık — PLAN.md
+    `◐ → K09.3` kalıyor, bu son alt-görev bitince `✅`'a döner.
+  - **tm 105 WIP hâlâ commit'siz** (aynı liste: `README.md`, `apps/api|rtm/package.json`,
+    `apps/api/tsconfig.json`, fixture'lar, `turbo.json`, `apps/api/scripts/*test-datastores.ts`,
+    `test-datastores.test.ts`, `.taskmaster/tmp-*`). Bu tur da dokunulmadı — kapsam disiplini.
+
 ### tm 71.6 — 09.3-f: Billing ekranında API paketleri bölümü — done — 2026-08-10 UTC
 
 - **Yapıldı:** `apps/web/src/features/billing/BillingPage.tsx`'e `ApiPackagesSection` — katalog kartları

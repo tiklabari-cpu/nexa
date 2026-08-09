@@ -55,6 +55,16 @@ interface ApiPackageOpt {
   price_cents: number;
 }
 
+interface ApiPackagePurchaseOpt {
+  id: string;
+  package_id: string;
+  name: string | null;
+  api_calls: number;
+  price_cents: number;
+  period: string;
+  purchased_at: string;
+}
+
 interface UsageOpts {
   used?: number;
   included?: number;
@@ -70,6 +80,8 @@ interface UsageOpts {
   paymentMethod?: PaymentMethodOpt | null;
   /** The API package catalogue (FR-MOD-09.3). */
   apiPackages?: ApiPackageOpt[];
+  /** This workspace's API-package purchase history (FR-MOD-09.3). */
+  apiPackagePurchases?: ApiPackagePurchaseOpt[];
 }
 
 /** The real catalogue's values (`@nexa/types` `API_PACKAGE_CATALOG`), so the
@@ -161,6 +173,9 @@ function mockBilling(opts: UsageOpts): void {
     }
     if (path === '/billing/api-packages') {
       return Promise.resolve({ items: opts.apiPackages ?? DEFAULT_API_PACKAGES });
+    }
+    if (path === '/billing/api-packages/purchases') {
+      return Promise.resolve({ items: opts.apiPackagePurchases ?? [] });
     }
     return Promise.reject(new Error(`unexpected ${path}`));
   });
@@ -472,5 +487,103 @@ describe('BillingPage — API packages (FR-MOD-09.3)', () => {
 
     const buyButton = await screen.findByRole('button', { name: 'Buy Essential' });
     expect(buyButton).toBeEnabled();
+  });
+});
+
+describe('BillingPage — API package purchase history (FR-MOD-09.3)', () => {
+  it('lists purchases with date, package name, quota and amount, newest first', async () => {
+    mockBilling({
+      apiPackagePurchases: [
+        {
+          id: 'purchase-2',
+          package_id: 'pro',
+          name: 'Pro',
+          api_calls: 500_000,
+          price_cents: 14999,
+          period: '202607',
+          purchased_at: '2026-07-15T00:00:00.000Z',
+        },
+        {
+          id: 'purchase-1',
+          package_id: 'essential',
+          name: 'Essential',
+          api_calls: 100_000,
+          price_cents: 2999,
+          period: '202606',
+          purchased_at: '2026-06-01T00:00:00.000Z',
+        },
+      ],
+    });
+    renderBilling(<BillingPage />);
+
+    const rows = await screen.findAllByTestId('api-package-purchase-row');
+    expect(rows).toHaveLength(2);
+    // The server already sorts newest-first; the list mirrors that order.
+    expect(rows[0]).toHaveTextContent('Pro');
+    expect(rows[0]).toHaveTextContent('500,000');
+    expect(rows[0]).toHaveTextContent('$149.99');
+    expect(rows[1]).toHaveTextContent('Essential');
+    expect(rows[1]).toHaveTextContent('100,000');
+    expect(rows[1]).toHaveTextContent('$29.99');
+  });
+
+  it('shows a meaningful empty state when nothing has been bought', async () => {
+    mockBilling({ apiPackagePurchases: [] });
+    renderBilling(<BillingPage />);
+
+    expect(await screen.findByTestId('api-package-purchases-empty')).toBeInTheDocument();
+    expect(screen.queryByTestId('api-package-purchases-table')).not.toBeInTheDocument();
+  });
+
+  it('shows the new purchase once the list is invalidated after a buy', async () => {
+    const user = userEvent.setup();
+    // `opts` is read by the mock at call time, so mutating it after the buy
+    // simulates the server having recorded the purchase before replying.
+    const opts: UsageOpts = { apiUsed: 4_812, apiPackagePurchases: [] };
+    mockBilling(opts);
+    api.post.mockImplementation(async () => {
+      opts.apiPackagePurchases = [
+        {
+          id: 'purchase-new',
+          package_id: 'essential',
+          name: 'Essential',
+          api_calls: 100_000,
+          price_cents: 2999,
+          period: '202607',
+          purchased_at: '2026-07-20T00:00:00.000Z',
+        },
+      ];
+      return {
+        purchase: opts.apiPackagePurchases[0],
+        usage: {
+          ai_resolutions: {
+            used: 12,
+            included: 200,
+            overage: 0,
+            overage_cents: 0,
+            overage_unit: 50,
+            overage_unit_price_cents: 50,
+          },
+          api_calls: {
+            used: 4_812,
+            included: 200_000,
+            overage: 0,
+            overage_cents: 0,
+            overage_unit: 100_000,
+            overage_unit_price_cents: 2_950,
+          },
+        },
+      };
+    });
+    renderBilling(<BillingPage />);
+
+    await screen.findByTestId('api-package-purchases-empty');
+
+    await user.click(screen.getByRole('button', { name: 'Buy Essential' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm buying Essential' }));
+
+    const row = await screen.findByTestId('api-package-purchase-row');
+    expect(row).toHaveTextContent('Essential');
+    expect(screen.queryByTestId('api-package-purchases-empty')).not.toBeInTheDocument();
   });
 });

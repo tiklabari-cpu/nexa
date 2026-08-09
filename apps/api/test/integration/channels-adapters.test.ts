@@ -496,4 +496,192 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       ).toHaveLength(0);
     });
   });
+
+  // --- Channel address ownership (08.5.7-d) ----------------------------------
+  //
+  // The property everything above rests on. An inbound webhook is
+  // unauthenticated: the address it names is the *only* thing that decides which
+  // workspace the message belongs to. So an address must belong to exactly one
+  // connected channel — otherwise `channel_resolve_license` answers with two
+  // licences and whoever Postgres lists first receives a stranger's customer
+  // (NFR-S4/S5). Refusals first; the address is only free when its owner lets go.
+
+  describe('channel address ownership', () => {
+    const ig = INSTAGRAM;
+
+    /** Whichever brand a tenant's channel is connected under (one per license
+     *  here — the single-brand default every workspace starts with). */
+    const brandOf = async (licenseId: bigint): Promise<string> =>
+      (await owner.brand.findFirstOrThrow({ where: { licenseId }, select: { id: true } })).id;
+
+    const connectedRows = (address: string) =>
+      owner.channel.findMany({ where: { status: 'connected', type: ig.type } }).then((rows) =>
+        rows.filter((row) => (row.config as { address?: string }).address === address),
+      );
+
+    // --- Refusal ------------------------------------------------------------
+
+    it.each(CASES)('refuses $type at an address another workspace already holds', async (c) => {
+      // Not Instagram-specific: an IG account id is merely the most guessable of
+      // these. Every adapter channel resolves inbound the same way, so every one
+      // is checked the same way.
+      expect((await connect(c.type, c.connect(c.addressA), adminA)).statusCode).toBe(200);
+
+      const res = await connect(c.type, c.connect(c.addressA), adminB);
+      expect(res.statusCode).toBe(400);
+
+      // B ends up with no connected channel at all — the write was refused, not
+      // half-applied.
+      const listB = (await server.get('/channels', auth(adminB))).json() as {
+        items: ConnectedChannel[];
+      };
+      expect(listB.items.filter((item) => item.connected)).toHaveLength(0);
+    });
+
+    it('names no workspace when it refuses — the address is taken, not by whom', async () => {
+      await connect(ig.type, ig.connect(ig.addressA), adminA);
+      const res = await connect(ig.type, ig.connect(ig.addressA), adminB);
+
+      const body = res.json() as { error: { type: string; message: string } };
+      expect(body.error.type).toBe('validation');
+      expect(body.error.message).toBe('That channel address is already connected.');
+
+      // Nothing in the response identifies the holder. Otherwise a public IG id
+      // becomes a lookup for "which workspace uses Nexa" (NFR-S5).
+      const raw = res.body;
+      expect(raw).not.toContain(String(fx.a.licenseId));
+      expect(raw).not.toContain(fx.a.organizationId);
+      expect(raw).not.toContain(await brandOf(fx.a.licenseId));
+      expect(raw).not.toMatch(/workspace|licen[cs]e|tenant|brand|owner/i);
+    });
+
+    it('keeps delivering that address to its owner after a refused takeover', async () => {
+      await connect(ig.type, ig.connect(ig.addressA), adminA);
+      await connect(ig.type, ig.connect(ig.addressA), adminB); // refused
+
+      // The DM still goes where it always did. A failed takeover must not shift
+      // routing even for a moment.
+      const dm = await webhook(ig.type, ig.inbound(ig.addressA, ig.sender, 'still A'));
+      expect(dm.statusCode).toBe(200);
+
+      expect(await chatsFor(fx.a.licenseId)).toHaveLength(1);
+      expect(await chatsFor(fx.b.licenseId)).toHaveLength(0);
+      expect(await identitiesFor(fx.b.licenseId)).toHaveLength(0);
+      expect(await messagesFor(fx.b.licenseId)).toHaveLength(0);
+    });
+
+    it('refuses a second brand of the same workspace at that address too', async () => {
+      await connect(ig.type, ig.connect(ig.addressA), adminA);
+      const second = await owner.brand.create({
+        data: { licenseId: fx.a.licenseId, name: 'Second', slug: 'second' },
+        select: { id: true },
+      });
+
+      // Same licence, so nothing cross-tenant here — but the resolver answers
+      // with a licence and no brand, so two rows would be ambiguous inside one
+      // workspace as well.
+      const res = await server.post(
+        `/channels/${ig.type}/connect`,
+        ig.connect(ig.addressA),
+        { ...auth(adminA), 'x-nexa-brand': second.id },
+      );
+      expect(res.statusCode).toBe(400);
+      expect(await connectedRows(ig.addressA)).toHaveLength(1);
+    });
+
+    // --- The database is the actual guarantee -------------------------------
+
+    it('refuses a duplicate at the database, not only in the service', async () => {
+      await connect(ig.type, ig.connect(ig.addressA), adminA);
+
+      // Written as the owner: no RLS, no service, no pre-check — the way a
+      // script, a fixture or a future code path could smuggle a second row in.
+      // The partial unique index is what has to stop it.
+      await expect(
+        owner.channel.create({
+          data: {
+            licenseId: fx.b.licenseId,
+            brandId: await brandOf(fx.b.licenseId),
+            type: ig.type,
+            status: 'connected',
+            config: { address: ig.addressA, ig_user_id: ig.addressA },
+          },
+        }),
+      ).rejects.toThrow(/unique constraint|channels_connected_address_key/i);
+    });
+
+    it('settles concurrent connects on one address with exactly one winner', async () => {
+      // Check-then-write: both requests can pass the pre-check, so the index
+      // decides. Which tenant wins is arbitrary; that exactly one does is not.
+      const [first, second] = await Promise.all([
+        connect(ig.type, ig.connect(ig.addressA), adminA),
+        connect(ig.type, ig.connect(ig.addressA), adminB),
+      ]);
+
+      expect([first.statusCode, second.statusCode].sort()).toEqual([200, 400]);
+      expect(await connectedRows(ig.addressA)).toHaveLength(1);
+
+      // And the inbound side agrees with whoever won: one chat, in one tenant.
+      const dm = await webhook(ig.type, ig.inbound(ig.addressA, ig.sender, 'after the race'));
+      expect(dm.statusCode).toBe(200);
+      const chats = [
+        ...(await chatsFor(fx.a.licenseId)),
+        ...(await chatsFor(fx.b.licenseId)),
+      ];
+      expect(chats).toHaveLength(1);
+    });
+
+    // --- What stays allowed -------------------------------------------------
+
+    it('frees the address when its owner disconnects, and hands routing to the next holder', async () => {
+      await connect(ig.type, ig.connect(ig.addressA), adminA);
+      await server.post(`/channels/${ig.type}/disconnect`, undefined, auth(adminA));
+
+      // Disconnect keeps A's row (its history) but drops its claim: the index is
+      // partial on `status = 'connected'` precisely so an address is never
+      // locked away by a channel nobody uses.
+      expect((await connect(ig.type, ig.connect(ig.addressA), adminB)).statusCode).toBe(200);
+
+      const dm = (await webhook(ig.type, ig.inbound(ig.addressA, ig.sender, 'now B'))).json() as {
+        chat_id: string;
+      };
+      expect(dm.chat_id).toBeTruthy();
+      expect(await chatsFor(fx.b.licenseId)).toHaveLength(1);
+      expect(await chatsFor(fx.a.licenseId)).toHaveLength(0);
+
+      // …and A cannot simply take it back while B holds it.
+      expect((await connect(ig.type, ig.connect(ig.addressA), adminA)).statusCode).toBe(400);
+    });
+
+    it('still lets a workspace re-connect and re-address its own channel', async () => {
+      // The upsert path: the owner is not a stranger to itself.
+      expect((await connect(ig.type, ig.connect(ig.addressA), adminA)).statusCode).toBe(200);
+      expect((await connect(ig.type, ig.connect(ig.addressA), adminA)).statusCode).toBe(200);
+
+      const moved = await connect(ig.type, ig.connect(ig.addressB), adminA);
+      expect(moved.statusCode).toBe(200);
+      expect((moved.json() as ConnectedChannel).address).toBe(ig.addressB);
+      // Moved, not duplicated — and the address it left is free again.
+      expect(await connectedRows(ig.addressA)).toHaveLength(0);
+      expect((await connect(ig.type, ig.connect(ig.addressA), adminB)).statusCode).toBe(200);
+    });
+
+    it('scopes the rule to one channel type, not to the address alone', async () => {
+      // `+441632000001` on WhatsApp and the same string on SMS are two different
+      // routes — `channel_resolve_license` keys on (type, address) — so holding
+      // one says nothing about the other. Over-broad uniqueness would lock a
+      // workspace's number out of a channel it legitimately owns.
+      const shared = '+441632000001';
+      expect((await connect('whatsapp', { waba_id: 'waba_mock', phone_number: shared }, adminA)).statusCode).toBe(200);
+      expect(
+        (
+          await connect(
+            'twilio',
+            { account_sid: 'ACmock', auth_token: 'sekret', phone_number: shared },
+            adminB,
+          )
+        ).statusCode,
+      ).toBe(200);
+    });
+  });
 });

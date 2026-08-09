@@ -1100,6 +1100,13 @@ model Channel {
   // type once per brand (Multibrand, PRD §5.3). RLS narrows visibility to the
   // active brand on top of this key.
   @@unique([licenseId, brandId, type])
+  // A second, platform-wide uniqueness rule lives in
+  // 20260809090000_channel_address_uniqueness and cannot be written here:
+  // UNIQUE (type, (config->>'address')) WHERE status = 'connected' AND
+  // config->>'address' IS NOT NULL. It is what makes an inbound webhook's
+  // address resolve to exactly one workspace (NFR-S4/S5); Prisma can express
+  // neither a JSON expression index nor a WHERE predicate, so it is hand-written
+  // and registered in `scripts/check-drift.ts` (KNOWN_UNMODELLABLE).
   @@map("channels")
 }
 

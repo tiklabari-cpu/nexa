@@ -13,6 +13,85 @@
 
 ## Task log (newest-first)
 
+### tm 65.4 — 08.5.7-d: Kanal adresinin lisanslar arası tekilliği — çakışan adres bağlamanın reddi — done — 2026-08-09 UTC
+
+- **Yapıldı:** (bölünmez izolasyon çekirdeği — kısıt + yazma yolu + yarış + okuma yolu tek turda)
+  - **Migration** `apps/api/prisma/migrations/20260809090000_channel_address_uniqueness/`:
+    - `CREATE UNIQUE INDEX channels_connected_address_key ON channels (type, (config->>'address'))
+      WHERE status='connected' AND config->>'address' IS NOT NULL`. İnvaryantın KENDİSİ bu:
+      veritabanı zorluyor, dolayısıyla eşzamanlılıkta da, servisi atlayan bir yazıcıya karşı da
+      geçerli. Kısmi olmasının iki nedeni de yük taşıyor: `status='connected'` — disconnect satırı
+      silmiyor (mesaj log geçmişi yaşıyor), total index olsaydı kapalı bir kanal adresi sonsuza
+      dek rehin alırdı; `address IS NOT NULL` — seed'in `config={}` website_widget satırı ve
+      `brand-isolation.test.ts`'in `config:{}` fixture'ları index dışında kalıyor.
+    - `channel_address_owner(p_type, p_address) → (license_id, brand_id)` SECURITY DEFINER
+      (`channel_resolve_license` ile aynı kalıp: REVOKE PUBLIC + GRANT nexa_app). Gerekçe: RLS
+      başka tenant'ın kanal satırını bu oturumdan gizliyor, o yüzden yazma yolu ön kontrolü
+      düz sorguyla yapamaz — "başkası tutuyor" ile "ben tutuyorum"u ayırt edemezdi.
+    - Kapsam `(type, address)` PLATFORM GENELİ, lisans başına değil: aynı lisansın iki brand'i de
+      çakışmadır, çünkü resolver lisans döndürüyor (brand değil) → ikinci satır tek bir çalışma
+      alanı içinde bile belirsizlik.
+  - **`channel-service.ts` — yazma yolu:** `connect()` upsert öncesi `assertAddressFree` (yukarıdaki
+    fonksiyon; sahibi `(licenseId, brandId)` ile karşılaştırır → kendi kanalını yeniden bağlama
+    bozulmaz). Ret: `ApiError.validation` → **400** `That channel address is already connected.`
+    — 409/yeni error tipi bilinçli olarak AÇILMADI (kontrat değişikliği + `errors.ts` iki yer +
+    `scopes.test.ts` sayacı + openapi enum + regen tuzağı; görev metni de 400'ü tercih ediyor).
+    Mesaj adresin sahibini ADLANDIRMAZ (NFR-S5: public bir `ig_user_id` "hangi şirket Nexa
+    kullanıyor" sorgusuna dönüşmesin).
+  - **`channel-service.ts` — yarış:** kontrol-sonra-yaz olduğu için iki connect ön kontrolü birlikte
+    geçebilir; upsert `P2002`'ye düşer ve AYNI 400'e çevrilir. Kazanan keyfi, sonuç deterministik.
+    İlgisiz DB hataları yutulmuyor (yeniden fırlatılıyor, testle sabitlendi).
+  - **`channel-service.ts` — okuma yolu:** `resolveLicense`, `rows.length > 1` durumunda artık
+    sessizce `rows[0]` almıyor → `ApiError.internal('Channel address is ambiguous.')`. 500 seçimi
+    bilinçli: error-handler 5xx'i **error** seviyesinde logluyor (görevin "loglanır" şartı), ve
+    kırık invaryant rutin bir 404'ün arkasına saklanmamalı. Index yerindeyken bu dal API'den
+    ulaşılamaz — o yüzden unit testte stub client ile sürülüyor (aksi halde çürüyecek bir dal).
+  - `schema.prisma` Channel modeline el yazımı index notu + `scripts/check-drift.ts`
+    KNOWN_UNMODELLABLE kaydı (brands partial index emsali).
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `pnpm -w test` **0** (100/100 dosya, **2093/2093** — 2075'ten +18) · `pnpm -w test:integration`
+  **0** (66/66 dosya, **1556/1556** — 1544'ten +12) · `pnpm -w build` **0** (7/7) ·
+  `pnpm -w test:e2e` **0** — **88/88**. Kabul kriterinin tamamı karşılandı: negatifler
+  (n1 çapraz-lisans ret — **dört kanalın hepsinde**, `it.each(CASES)`; n2 reddedilen devralmadan
+  sonra inbound HÂLÂ doğru lisansa düşüyor, B'nin chats/identities/channel_messages tabloları boş;
+  n3 hata gövdesi A'nın license/organization/brand id'sini içermiyor), pozitifler (p1 disconnect
+  sonrası adres serbest → B bağlıyor, inbound B'ye düşüyor, A geri alamıyor; p2 kendi kanalını
+  yeniden bağlama + başka adrese taşıma), yarış (r1 eşzamanlı iki connect → tam bir kazanan,
+  DB'de tek connected satır; ayrıca P2002 dalı unit'te doğrudan), ve **servis atlanarak** owner
+  client'la yazılan ikinci satırı DB'nin reddi (index'in kendisinin kanıtı). Regresyon:
+  messenger/twilio/whatsapp'ın mevcut 6 senaryosu + `tenant-isolation.test.ts` + `brand-isolation.
+  test.ts` yeşil.
+  `apps/e2e/kanit/*.png` e2e koşusunda yeniden üretildi (aynı içerik, farklı byte) — 65.1/65.2/65.3
+  emsaliyle `git checkout -- apps/e2e/kanit` ile atıldı.
+- **Varsayımlar:**
+  - Adres tekilliği yalnız `status='connected'` iken zorlanıyor (görev varsayımı birebir uygulandı).
+  - Aynı lisansın ikinci brand'i de reddediliyor. Görev metni bunu açıkça yazmıyordu; gerekçe
+    yukarıda (resolver lisans döndürüyor, brand değil). Testle sabitlendi — ileride Multibrand
+    "aynı adres, iki brand" istenirse bu bilinçli bir ürün kararı olarak açılmalı.
+  - `(type, address)` kapsamı: aynı telefon numarası twilio ve whatsapp'ta AYRI adreslerdir
+    (resolver `(type,address)` ile eşliyor) — testle sabitlendi ki index ileride aşırı
+    genişletilmesin.
+- **Sonraki pencereye not:**
+  - **08.5.7'nin açık sorusu hâlâ açık:** bu düzeltme Instagram'a özgü DEĞİL, mevcut
+    messenger/twilio/whatsapp yolunu da kapattı (ret testi dört kanalda da koşuyor). Orkestratör
+    isterse geriye dönük olarak ayrı bir güvenlik kalemi olarak da etiketleyebilir; kod tarafında
+    yapılacak bir şey kalmadı.
+  - Sıradaki: **08.5.7-e (tm 65.5, UI)**. UI tarafında bu ret jenerik hata gösterimiyle karşılanır
+    (400 + `error.message`), özel bir çakışma ekranı görev tanımı gereği kapsam dışı. Connect
+    formu artık 400'ün iki nedenini ayırt etmiyor (eksik alan / adres dolu) — ikisi de
+    `ErrorNotice` mesajı olarak yeterli.
+  - `pnpm -w db:check-drift` bu makinede `spawn pnpm ENOENT` ile düşüyor (Windows'ta script
+    `pnpm`i shell'siz spawn ediyor) — **benim değişikliğimden bağımsız, önceden var olan bir
+    ortam kusuru**, DoD kapısında da değil. Altındaki gerçek kontrol elle koşuldu:
+    `prisma migrate diff --from-schema-datamodel --to-schema-datasource` yalnız bilinen pgvector
+    ifadesini döndürüyor → drift yok. (Partial index'leri Prisma diff hiç üretmiyor; brands
+    kaydı da bu yüzden görünmüyor. KNOWN_UNMODELLABLE kaydım belgesel/savunmacı.)
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ commit edilmemiş WIP** — bu turda da
+    dokunulmadı (CONVENTIONS §5); `git add -A` kullanılmadı, yalnız bu görevin dosyaları
+    sahnelendi. `.taskmaster/tmp-*.cjs` scratch dosyaları da untracked bırakıldı.
+  - Docker Desktop bu pencerede kapalıydı; `docker compose up -d` ile `nexa-db`/`nexa-redis`
+    ayağa kaldırıldı ve dev veritabanına `db:migrate` uygulandı (43 migration).
+
 ### tm 65.3 — 08.5.7-c: instagram'ın adapter kanalı olarak devreye alınması (CHANNEL_TYPES + registry) + inbound→chat / outbound uçtan uca kanıtı — done — 2026-08-09 UTC
 
 - **Yapıldı:**

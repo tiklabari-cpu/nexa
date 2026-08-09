@@ -33,6 +33,24 @@ import type { ChannelType } from './channel-adapter.js';
 const CONNECTED = 'connected';
 const OFF = 'off';
 
+/**
+ * The refusal both halves of the address-ownership guard raise (08.5.7-d).
+ *
+ * Deliberately says nothing about *who* holds the address. That the address is
+ * taken is unavoidable — it is the rejection — but naming the workspace behind
+ * it would turn a public page id into a lookup for "which company uses Nexa"
+ * (NFR-S5). `validation` (400) rather than a new conflict type: the contract
+ * already documents 400 here, so the client story is unchanged.
+ */
+function addressTaken(): ApiError {
+  return ApiError.validation('That channel address is already connected.');
+}
+
+/** A unique-index violation, as Prisma reports it (same probe as websites.ts). */
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
 export interface ConnectedChannel {
   type: string;
   /** The brand this channel belongs to (Multibrand, PRD §5.3). */
@@ -70,8 +88,14 @@ export class ChannelService {
 
   /**
    * Connect a channel (the mock OAuth / provisioning / linking step) and mark it
-   * `on`. Upsert on the `(license_id, type)` unique key: re-connecting a channel
-   * updates its config in place rather than failing or duplicating.
+   * `on`. Upsert on the `(license_id, brand_id, type)` unique key: re-connecting
+   * a channel updates its config in place rather than failing or duplicating.
+   *
+   * Refuses an address another connected channel already owns (08.5.7-d). That
+   * check is what makes the inbound side safe: an address is the only thing an
+   * unauthenticated webhook presents, so two channels answering to one address
+   * would mean a customer's message landing in whichever workspace Postgres
+   * returned first (NFR-S4/S5).
    */
   async connect(
     tx: TenantClient,
@@ -88,15 +112,55 @@ export class ChannelService {
     // license default — which is the sole brand for a single-brand workspace.
     const brandId = tenant.brandId ?? (await this.defaultBrandId(tx));
 
-    const row = await tx.channel.upsert({
-      where: { licenseId_brandId_type: { licenseId: tenant.licenseId, brandId, type } },
-      // `connected` is the "on" value the channels_status_check allows (the
-      // others are `off` and `soon`).
-      create: { licenseId: tenant.licenseId, brandId, type, status: CONNECTED, config: stored },
-      update: { status: CONNECTED, config: stored },
-      select: { type: true, brandId: true, status: true, config: true, createdAt: true },
-    });
-    return this.serialise(row);
+    await this.assertAddressFree(tx, type, address, tenant.licenseId, brandId);
+
+    try {
+      const row = await tx.channel.upsert({
+        where: { licenseId_brandId_type: { licenseId: tenant.licenseId, brandId, type } },
+        // `connected` is the "on" value the channels_status_check allows (the
+        // others are `off` and `soon`).
+        create: { licenseId: tenant.licenseId, brandId, type, status: CONNECTED, config: stored },
+        update: { status: CONNECTED, config: stored },
+        select: { type: true, brandId: true, status: true, config: true, createdAt: true },
+      });
+      return this.serialise(row);
+    } catch (error) {
+      // The check above is check-then-write, so two connects racing on the same
+      // address can both pass it. The partial unique index is what actually
+      // decides; the loser arrives here and gets the identical refusal, so the
+      // outcome is deterministic even though the winner is not.
+      if (isUniqueViolation(error)) throw addressTaken();
+      throw error;
+    }
+  }
+
+  /**
+   * Refuse `address` if a *different* channel row already holds it while
+   * connected.
+   *
+   * Goes through the SECURITY DEFINER `channel_address_owner` rather than a
+   * plain query, because RLS hides other tenants' channels from this session by
+   * design — without it the write path could not tell "another workspace owns
+   * this" from "nobody does". Compared against `(license, brand)`, the same key
+   * the upsert targets, so re-connecting or re-configuring one's own channel
+   * stays allowed and a second brand of the same license is refused like anyone
+   * else (the resolver answers with a license, not a brand, so two rows are
+   * ambiguous even inside one workspace).
+   */
+  private async assertAddressFree(
+    tx: TenantClient,
+    type: ChannelType,
+    address: string,
+    licenseId: bigint,
+    brandId: string,
+  ): Promise<void> {
+    const owners = await tx.$queryRaw<Array<{ license_id: bigint; brand_id: string }>>(
+      Prisma.sql`SELECT * FROM channel_address_owner(${type}, ${address})`,
+    );
+    const heldByAnother = owners.some(
+      (owner) => owner.license_id !== licenseId || owner.brand_id !== brandId,
+    );
+    if (heldByAnother) throw addressTaken();
   }
 
   /**
@@ -209,6 +273,9 @@ export class ChannelService {
    * permanent. `channel_resolve_license` only matches a channel that is `on`, so
    * a disconnected channel stops accepting inbound at once. A closed workspace
    * is a 404 too — the address no longer routes anywhere.
+   *
+   * The read half of address ownership (08.5.7-d): more than one match is
+   * refused outright rather than resolved to `rows[0]`.
    */
   async resolveLicense(
     db: PrismaClient,
@@ -218,6 +285,18 @@ export class ChannelService {
     const rows = await db.$queryRaw<
       Array<{ license_id: bigint; organization_id: string; license_status: string }>
     >(Prisma.sql`SELECT * FROM channel_resolve_license(${type}, ${address})`);
+
+    // The unique index makes this unreachable for anything written since it
+    // exists — which is exactly why the branch stays: it covers what the index
+    // cannot, i.e. rows that predate it or a manual write around the service.
+    // Taking `rows[0]` there would hand a stranger's message to whichever tenant
+    // Postgres listed first, in undefined order and with no trace (NFR-S5).
+    // `internal` because the caller did nothing wrong and the invariant is
+    // broken on our side: 5xx is logged at error level, so it surfaces instead
+    // of hiding behind a routine "unknown recipient" 404.
+    if (rows.length > 1) {
+      throw ApiError.internal('Channel address is ambiguous.');
+    }
 
     const match = rows[0];
     if (!match || match.license_status === 'canceled') {

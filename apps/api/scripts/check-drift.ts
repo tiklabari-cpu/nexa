@@ -37,6 +37,13 @@ const KNOWN_UNMODELLABLE = [
     pattern: /CREATE UNIQUE INDEX "brands_one_default_per_license" ON "public"\."brands"/,
     reason: 'partial unique index (one default brand per license) — Prisma cannot express a WHERE predicate',
   },
+  {
+    // Created as `ON channels(type, (config->>'address')) WHERE status = 'connected'
+    // AND config->>'address' IS NOT NULL` in 20260809090000_channel_address_uniqueness.
+    pattern: /CREATE UNIQUE INDEX "channels_connected_address_key" ON "public"\."channels"/,
+    reason:
+      'partial expression unique index (one workspace per connected channel address) — Prisma cannot express a JSON expression index or a WHERE predicate',
+  },
 ];
 
 async function main(): Promise<void> {

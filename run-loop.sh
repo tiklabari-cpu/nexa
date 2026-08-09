@@ -159,11 +159,19 @@ Hiçbir aday doğrulamadan geçmiyorsa has_task=false döndür — yanlış gör
 1) Durumu 'in-progress' olan bir görev VEYA alt-görev varsa ONU seç. Bu yarım kalmış iştir —
    önceki pencere kota/çökme/elle durdurma yüzünden kapanmış olabilir. Açılacak pencere
    protokolün resume adımıyla kaldığı yerden devam edecek, atlanırsa o iş sonsuza kadar asılı kalır.
+   ⚠ ALT-GÖREVLİ ÜST GÖREV TUZAĞI: bir üst görev, alt-görevlerinden yalnız BİRİ bittiği için de
+   'in-progress' görünür (CONVENTIONS §4: alt-görevlerin hepsi done olunca üst task done). Bu
+   NORMAL bir ara durumdur, asılı kalmış iş değildir — ve üst görevin KENDİSİ kod yazmaz.
+   Bu yüzden 'in-progress' bir üst görevin alt-görevleri VARSA üst görevi DEĞİL, onun ilk uygun
+   alt-görevini seç: önce 'in-progress' alt-görev, o yoksa bağımlılıkları kapalı (done/cancelled)
+   en küçük 'pending' alt-görev — bağımlılık kimliği yukarıdaki kardeş-numarası kuralıyla çözülür.
+   Üst görevin kendisini seçmek boş pencere açar: pencere yapacak iş bulamaz, ilerleme olmaz.
 1.5) Yoksa: durumu 'blocked' AMA TÜM bağımlılıkları kapalı (done/cancelled) olan bir görev
    VEYA alt-görev varsa ONU seç. Bu, doğrulama kapısını geçemeyip yarıda bırakılmış iştir;
    hiçbir şeyi beklemiyor, yeniden denenebilir ve denenmelidir — yoksa kalıcı olarak terk edilir.
    ⛔ Bağımlılığı HÂLÂ AÇIK olan blocked görevleri SEÇME: onlar gerçekten bekliyor, tekrar
    denemek anlamsızdır. Birden çok aday varsa en küçük id'yi seç.
+   (1'deki ÜST GÖREV kuralı burada da geçerlidir: alt-görevi olan üst görevi değil, alt-görevi seç.)
 2) Yoksa priority='critical' olan bir 'pending' görev varsa ONU seç. Bunlar panelin sağlık
    taramasından doğan DÜZELTME görevleridir ve normal backlog'un (high/medium/low) ÖNÜNE geçer.
    Birden çoksa en eski (en küçük id) olanı seç.

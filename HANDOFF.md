@@ -13,6 +13,46 @@
 
 ## Task log (newest-first)
 
+### tm 97 — "in-progress'te asılı" bulgusu · DÜZELTME PENCERESİ — yanlış pozitif, durum korundu — done — 2026-08-09 UTC
+
+- **Bulgu:** Panel tm 97'yi (`06.3.2-bulk`) "in-progress ama çalıştıran canlı pencere yok" diye
+  işaretledi ve terk edilmiş iş şüphesi doğurdu.
+- **Denetim — terk edilmiş iş YOK:**
+  - tm 97 bir **üst görevdir**; kendi `details`'i "bu görevin kendisi kod YAZMAZ, alt-görevleri
+    sırayla koşulur" der. `in-progress` olmasının tek sebebi **97.1'in done** olmasıdır —
+    CONVENTIONS §4'ün ("hepsi done olunca üst task done") normal ara durumu.
+  - `.loop-logs/task-97.jsonl` **yok** (üst görev hiç koşulmadı). Yalnız `task-97.1.jsonl` var ve
+    **temiz** kapanmış: `terminal_reason: completed` · `{"status":"done","task_id":"97.1"}` ·
+    DoD tam yeşil (unit 1980 · integration 1491 · e2e 86/86) · commit `6d31a76` + `34ec673`
+    push edildi · `feat/csv-import-parser` dalı silindi.
+  - PLAN §5.1 `06.3.2-bulk` satırı zaten ⬜→◐ + kanıtlı; 97.1 HANDOFF notu zaten yazılmış.
+  - `git status` temiz; alt-görev durumları: 97.1 done, 97.2–97.8 pending.
+- **Karar — tm 97 `pending`'e ÇEKİLMEDİ:** çekmek 97.1'in bittiğini inkâr eden bir gerileme olurdu.
+  `in-progress` bu üst görev için **doğru** durumdur. Statü değişmedi.
+- **Yapıldı (bulgunun ortaya çıkardığı gerçek kusur):**
+  - `run-loop.sh` `pick_next` **kuralı 1**, kural 3'teki "üst görev kod yazmaz, alt-görevleri
+    koşulur" istisnasını taşımıyordu → döngü açıldığında üst görev 97'yi seçip **boş** bir pahalı
+    pencere açabilirdi. Kural 1'e üst-görev→alt-görev yönlendirmesi eklendi (önce `in-progress`
+    alt-görev, yoksa bağımlılıkları kapalı en küçük `pending` alt-görev); 1.5'e tek satır atıf.
+  - `.gitignore`: `package-lock.json` + `yarn.lock`. Depo pnpm-only (`packageManager: pnpm@11.15.1`);
+    yanlışlıkla koşulan `npm install` artığı her taramada "kirli çalışma alanı" bulgusu üretiyordu.
+    Hiçbir dalda izlenmemişti (`git log --all -- package-lock.json` boş).
+- **Doğrulama:** `bash -n run-loop.sh` exit 0 · `git status` temiz. Bu turda **TypeScript kaynağına
+  dokunulmadı** (değişenler: `run-loop.sh` döngü scripti + `.gitignore` + PLAN/HANDOFF) — bu yüzden
+  `pnpm -w typecheck/lint/test/build` çalıştırılmadı; kod DoD kapısı bu değişikliklere uygulanmaz.
+  HEAD kod tarafı en son 97.1 turunda tam yeşil doğrulanmıştı.
+- **Not (altyapı, kod değil):** Pencere ortasında `C:\Users\Hobbie\Desktop\nexa-main` birkaç dakika
+  boyunca **boş** göründü (`.git` dahil 0 girdi; Test-Path False) ve sonra kendiliğinden geri geldi
+  (45 girdi, HEAD `dbfdb0d`, tree temiz). Silme değil, geçici dosya sistemi/senkron kesintisi —
+  Recycle Bin boş, remote (`main` @ `dbfdb0d`) sağlam. Kayıp yok, ama Desktop OneDrive kapsamında
+  (`$env:OneDrive` set) — depo senkronlanan bir klasörde durduğu sürece bu tekrarlayabilir.
+  **Sonraki pencereye:** bir tur aniden "dosya yok" hatası verirse önce bunu şüphelen, panik
+  re-clone yapma; birkaç saniye sonra yeniden bak.
+- **Sonraki pencereye not:** `06.3.2-bulk` dilimi ◐, uçtan uca bulk yolu hâlâ YOK (yalnız saf
+  ayrıştırıcı modülü var). Bağımlılığı olmayan ve hemen alınabilir alt-görevler: **97.2**
+  (`06.3.2-bulk-b`, satır şeması/kolon eşleme, SONNET-XHIGH) ve **97.4** (`06.3.2-bulk-d`,
+  frontend saf yardımcılar, SONNET-XHIGH). 97.3 (kontrat+route, OPUS-MAX) 97.2'yi bekliyor.
+
 ### tm 97.1 — 06.3.2-bulk-a · RFC4180 CSV ayrıştırıcı + formül-enjeksiyon nötrleme — done — 2026-08-08 UTC
 
 - **Yapıldı:**

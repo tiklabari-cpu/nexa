@@ -8,6 +8,11 @@ secrets/
 
 # --- Bağımlılıklar / çıktı ---
 node_modules/
+# Depo pnpm-only (package.json packageManager: pnpm@11.15.1 · pnpm-lock.yaml tek kilit dosyası).
+# Yanlışlıkla koşulan bir `npm install` package-lock.json bırakıp çalışma alanını kirletiyor ve
+# sağlık taramasında yeni bir bulgu olarak geri geliyor — hiçbir dalda izlenmedi, izlenmeyecek.
+package-lock.json
+yarn.lock
 dist/
 build/
 .next/

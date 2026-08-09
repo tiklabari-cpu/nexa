@@ -13,6 +13,90 @@
 
 ## Task log (newest-first)
 
+### tm 98.4 — 05.6-tmpl31-d · Galeri ölçek davranışı: arama + kategori filtresi + sanal liste (31+ kart) — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/playbook/TemplateGallery.tsx` — kategori bazlı gruplu 2 sütunlu grid
+    kaldırıldı; yerine debounce'lu (200ms, `skill-tabs.ts`/`kb-tabs.ts` ile aynı beat) ad/özet
+    araması + kategori sekmesi (`role="tablist"`, `skill-tabs.ts`/`kb-tabs.ts`'in aynı deseni:
+    `role="tab"`/`aria-selected`/`aria-controls` + sayaç rozetleri) + tek sütunlu, mevcut
+    `VirtualList` primitifine (T6-a, tm 30) taşınmış satır listesi eklendi. Satırlar sabit
+    `ROW_HEIGHT=88`px — primitifin tek sert kısıtı ("Fixed row height", `VirtualList.tsx`'in
+    kendi modül notu); `requiresIntegration` taşımayan bir satır kısalmasın diye o satırın yerini
+    `aria-hidden` + `text-transparent` bir placeholder satırı hep dolduruyor (görünmez ama
+    yüksekliği aynı). Boş sonuç `EmptyState` + aktif filtre varsa "Clear filters" gösteriyor. Her
+    açılışta arama/kategori sıfırlanıyor (önceki ziyaretten kalan bir filtre şablonu sessizce
+    gizlemesin diye).
+  - Mevcut a11y sözleşmesi (Escape kapatır, backdrop kapatır ama panel içi tıklama kapatmaz,
+    açılışta Close düğmesine focus) **davranışça değişmedi** — ama öncesinde yalnız Escape
+    testliydi; backdrop kapama ve açılış-focus'u hiç test edilmiyordu (regresyon riski sessizdi).
+    Üçü de artık ayrı testle kilitli.
+  - `apps/web/src/features/playbook/TemplateGallery.test.tsx` — 5 → 11 test (+6): kategori sekmesi
+    sayımlarıyla render oluyor · arama sonucu daraltır (+ temizleyince geri gelir) · kategori
+    sekmesi doğru alt kümeyi veriyor · **sanal pencere:** 33 kayıtta DOM'daki `listitem` sayısı
+    33'ten belirgin az (jsdom'un `ResizeObserver`'ı yok → `VirtualList`'in 640px fallback
+    viewport'u + overscan 6 ile ≤20 satır, gerçek T6-a testinin aynı ölçüm biçimi) · boş sonuç →
+    "No templates match" + "Clear filters" düğmesi geri getiriyor · backdrop kapatıyor ama panel
+    içi tıklama kapatmıyor (regresyon) · açılışta Close'a focus (regresyon).
+  - **Dosya listesinin dışına tek zorunlu istisna:** `apps/e2e/tests/playbook.spec.ts`. Task
+    detayının DOSYALAR listesi yalnız `TemplateGallery.tsx`/`.test.tsx` idi, ama bu dosyanın
+    mevcut e2e'si `getByRole('heading', {name: /Prebuilt/})` gibi artık var olmayan "gruplu
+    heading" DOM'unu doğruluyordu — dokunmadan bırakmak CONVENTIONS §1'in "ilgili E2E geçiyor"
+    kapısını objektif olmaktan çıkarırdı (kırmızı, ama bu turun DEĞİL bir önceki tasarımın
+    kırmızısı). Heading assertion'ları sekme (`role="tab"`) assertion'larına çevrildi, "Shopify
+    app connected" kontrolü artık Trending sekmesine tıklayıp (ilk trending kaydı garantili
+    pencerede) doğruluyor, ve KK'nın açıkça istediği "e2e: galeriden arama ile şablon bulup skill
+    oluşturma" senaryosu yeni bir test olarak eklendi (ara → "warranty" → tek sonuç → seç → editör
+    "Warranty coverage" ile dolu). `RecommendedSkills.tsx`'i doğrulayan ikinci test dokunulmadan
+    kaldı (o dosya bu turun kapsamında değil, davranışı değişmedi).
+- **Doğrulama (exit code'larla):**
+  - KK doğrulama komutu (task detayında birebir, yol güncellendi): `pnpm --filter @nexa/web exec
+    vitest run src/features/playbook/TemplateGallery.test.tsx` — **11/11 yeşil**.
+  - `pnpm -w typecheck` **11/11 exit 0** · `pnpm -w lint` **8/8 exit 0** · `pnpm -w build`
+    **7/7 exit 0**.
+  - `pnpm -w test` — `@nexa/web` **767 geçti / 7 kırmızı**; kırmızılar zaten bilinen **tm 108**
+    (makine locale'i, `BillingPage`/`ReportsPage` para biçimi $0,50 vs $0.50) — 767 = 761
+    (tm 98.3 tabanı) + 6 (bu turun yeni testleri). Diğer tüm paketler yeşil.
+  - `pnpm -w test:integration` — `@nexa/api` **1532 geçti / 1 kırmızı**, tek kırmızı zaten bilinen
+    **tm 107** (tarihe bağlı `scheduled-reports-sweep.test.ts`); `apps/api`'ye bu turda hiç
+    dokunulmadı. Diğer tüm paketler yeşil.
+  - İlgili e2e: `set -a; . ./.env; set +a` sonrası
+    `pnpm --filter @nexa/e2e exec playwright test playbook.spec.ts` — **3/3 yeşil** (gruplu-heading
+    testi sekme testine çevrildi + arama senaryosu yeni eklendi + "Try this" şeridi testi
+    dokunulmadan geçti).
+- **Varsayımlar:**
+  - `ROW_HEIGHT=88`px tahminî bir değer (3 satır metin + dikey padding); jsdom testinde gerçek
+    layout ölçülmediği için (no `ResizeObserver`) bu sayı testleri etkilemiyor, yalnız gerçek
+    tarayıcıda satır aralığının VirtualList'in spacer matematiğiyle örtüşmesini sağlıyor. Küçük
+    bir piksel sapması olursa (satır içeriği biraz taşarsa) satırın kendi `overflow-hidden`'ı
+    kırpar — kayan/örtüşen satır riski yok, yalnız kozmetik.
+  - Açılışta arama/kategori sıfırlama davranışı KK'da açıkça istenmiyordu ama mevcut
+    `CommandPalette.tsx`'in `close()`'daki aynı sıfırlama desenine (ve UX sağduyusuna) dayanarak
+    eklendi — galeri her açılışta State'i taşıyan tek bir bileşen örneği olarak kalıyor (`open`
+    prop'u `false` iken `return null`, unmount olmuyor), sıfırlama olmasa önceki ziyaretin filtresi
+    sessizce yapışık kalırdı.
+  - Kart tasarımı (2 sütunlu grid → tek sütunlu satır) bilinçli bir basitleştirme: `VirtualList`
+    primitifi sabit satır yüksekliğine dayanan DÜZ bir liste ölçer, grid değil — Skills listesinin
+    (`PlaybookPage.tsx`) zaten kullandığı desenle aynı hizaya getirildi.
+- **Sonraki pencereye not:**
+  - `05.6-tmpl31` dilimi hâlâ TAMAMLANMADI (PLAN.md `◐` kaldı) — yalnız **-e** kaldı (kapanış: tam
+    DoD + galeri e2e regresyonu + PLAN/HANDOFF izleri). Bu turun kendisi zaten tam DoD'yi çalıştırdı
+    ve `playbook.spec.ts`'i güncelledi — **-e penceresi bunu mükerrer yapmamalı**, onun yerine
+    tm 98.1–98.4'ün toplamını tek bir kapanış merceğinden gözden geçirmeli (ör. 33 kayıtlık
+    kataloğun i18n + arama + sanallaştırma + rozet üçünün BİRLİKTE hâlâ tutarlı olduğunu, ör.
+    `templateNameKey`/`templateSummaryKey`'in galeri tarafında hâlâ hiç tüketilmediğini —
+    98.3'ün notu bunu kapsam dışı bırakmıştı, -e'nin kendi task detayı bunu istiyorsa değerlendirmeli).
+  - **tm 105 (izole test datastore altyapısı) HÂLÂ working tree'de COMMIT EDİLMEMİŞ WIP** — bu
+    turun bootstrap'ında da aynı durumda bulundu (`CONVENTIONS.md`/`README.md`/
+    `TASK-RUNNER-PROMPT.md`/`package.json`/`turbo.json`/`apps/api`+`apps/rtm`
+    `package.json`/`tsconfig.json`/`fixtures.ts` + `apps/api/scripts/{test-datastores,
+    with-test-datastores}.ts` + `apps/api/test/integration/test-datastores.test.ts` +
+    birkaç `.taskmaster/tmp-*.cjs`). Bu turda da **bilerek dokunulmadı/commit edilmedi** — 98.4'ün
+    kapsamı `05.6-tmpl31-d` idi, tm 105'in WIP'ini kendi commit'ime karıştırmak kapsam disiplinini
+    bozar (CONVENTIONS §5). Üç pencere üst üste aynı notu bırakıyor: bir sonraki pencere ya tm 105'i
+    hedef almalı ya da orkestratör/insan bu dosyaları elle gözden geçirip bilinçli bir karar
+    vermeli — sonsuza dek çalışma alanında asılı kalmamalı.
+
 ### tm 98.3 — 05.6-tmpl31-c · Katalog i18n: şablon metinleri TR/EN (NFR-I18N2) — done — 2026-08-09 UTC
 
 - **Yapıldı:**

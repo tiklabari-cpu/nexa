@@ -1854,12 +1854,12 @@
             "description": "`export class InstagramAdapter implements ChannelAdapter` (type = 'instagram'). parseConnect: zod şeması { code (mock OAuth kodu), ig_user_id (kanal adresi), username? } → { address: ig_user_id, config: { ig_user_id, username?, ig_access_token: mock } }; `code` ASLA config'e yazılmaz (Twilio'nun auth_token'ı saklamama deseniyle aynı ilke). parseInbound: { recipient:{id}, sender:{id, username?}, me",
             "details": "08.5.7-b — InstagramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.5.7 (+ NFR-S9 girdi doğrulama)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 dosya (yeni instagram.ts + mevcut adapters.test.ts'e describe bloğu). (2) Güvenlik sınırı yok — dosya saf zod parse + mock id üretimi; tenant çözümü/RLS channel-service.ts'te, bu dosyada değil; adaptör hiçbir DB'ye ve principal'a dokunmuyor. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen verilebiliyor: messenger.ts (Instagram DM aynı Meta Graph ailesinde — OAuth code + hesap id + scoped sender id modeli birebir aynı). (5) Kontrat değişikliği -a'da yapıldı, burada yok. (6) KK mekanik: alan eşlemesi + 400 reddi.\nNEDEN AÇIK: apps/api/src/services/channels/ dizin listesi: adapters.test.ts, channel-adapter.ts, channel-service.ts, email-inbound.ts, messenger.ts, registry.ts, twilio.ts, whatsapp.ts — instagram.ts YOK. Depo genelinde 'instagram' grep'i yalnız 5 yerde geçiyor (Channels.tsx:95 statik kart, migration.sql:826 CHECK listesi, domain.ts:104, openapi.yaml:1361, apps.ts:330-337 marketplace kartı) — hiçbiri adaptör değil. Yani InstagramAdapter grep 0.\nKAPSAM: `export class InstagramAdapter implements ChannelAdapter` (type = 'instagram'). parseConnect: zod şeması { code (mock OAuth kodu), ig_user_id (kanal adresi), username? } → { address: ig_user_id, config: { ig_user_id, username?, ig_access_token: mock } }; `code` ASLA config'e yazılmaz (Twilio'nun auth_token'ı saklamama deseniyle aynı ilke). parseInbound: { recipient:{id}, sender:{id, username?}, message:{text} } → NormalizedInbound (address=recipient.id, externalId=sender.id (IGSID), senderName=username ?? null, text). send: mock providerMessageId `aigid.<token>`. Kayıt (registry/CHANNEL_TYPES) BU ALT-GÖREVDE YAPILMAZ.\nDOSYALAR: apps/api/src/services/channels/instagram.ts · apps/api/src/services/channels/adapters.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/channels/messenger.ts (parseConnect/parseInbound/send iskeleti — birebir kopyalanacak ana örnek) · apps/api/src/services/channels/whatsapp.ts (ikinci örnek: profile_name → senderName eşlemesi) · apps/api/src/services/channels/channel-adapter.ts (parseWith + ChannelAdapter arayüzü + phoneNumber deseni) · apps/api/src/services/channels/adapters.test.ts 'Messenger adapter (08.5.4)' describe bloğu (test şekli birebir)\nKK (birebir): \"\"Coming soon → Get notified → tam entegrasyon\"\" | \"KK-türetilmiş: \"tam entegrasyon\" payının provider-özel yüzeyi. PRD 08.5.7 satırı davranışsal kriter taşımıyor (kardeş satırlar 08.5.4 'OAuth; mesaj → inbox chat', 08.5.6 'WhatsApp bağlama; mesaj → chat' taşırken). Türetme gerekçesi: mock adaptörün inbound/outbound sözleşmesi PRD'den çıkarılamıyor; en yakın kardeş 08.5.4 Messenger deseni (aynı Meta ailesi) esas alındı.\"\nKK DOĞRULAMA: adapters.test.ts yeni 'Instagram adapter (08.5.7)' describe'ı: (i) connect → address === ig_user_id, config'te ig_user_id var, `code` YOK, token mock önekli; (ii) ig_user_id eksik connect → ApiError status 400; (iii) inbound normalize → {address, externalId=IGSID, senderName, text}; (iv) message.text yoksa throw; (v) send → providerMessageId `aigid.` öneki.\nKAPSAM DIŞI: registry.ts / CHANNEL_TYPES kaydı ve route yüzeyinin açılması (08.5.7-c) · adres sahiplenme çakışması guard'ı (08.5.7-d) · gerçek Meta imza doğrulaması (NFR-S7 — MASTER-PROMPT §9 gereği kapsam dışı) · UI (08.5.7-e/-f/-g)\nSÖZLEŞME: yok (08.5.7-a'da tamamlandı; bu alt-görev yeni path/şema eklemez)\nMIGRATION: yok — channels_type_check CHECK constraint'i (apps/api/prisma/migrations/20260722154008_domain_model/migration.sql:822-826) 'instagram' değerini zaten kabul ediyor; channel_identities.channel_type ve channel_messages.channel_type serbest string\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit pozitif: connect alan eşlemesi + inbound normalize + send id şekli · unit negatif (pozitiften ÖNCE yazılır): ig_user_id eksik → 400, message.text boş/yok → 400, aşırı uzun metin (>10_000) → 400 · cross-tenant: gerekmiyor — bu dosya tenant bağlamı görmüyor (izolasyon kanıtı 08.5.7-c ve -d'de)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "65.1"
             ],
             "parentId": "65",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T16:32:26.117Z"
           },
           {
             "id": 3,
@@ -1942,7 +1942,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T16:06:10.520Z",
+        "updatedAt": "2026-08-09T16:32:26.117Z",
         "complexity": 6,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"08.5.7 — Instagram (DM, MOCK)  ·  dilim V2-9\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T16:06:10.521Z",
+      "lastModified": "2026-08-09T16:32:26.117Z",
       "taskCount": 109,
       "completedCount": 95,
       "tags": [

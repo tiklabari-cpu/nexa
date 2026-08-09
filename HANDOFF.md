@@ -13,6 +13,50 @@
 
 ## Task log (newest-first)
 
+### tm 65.2 — 08.5.7-b: InstagramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/api/src/services/channels/instagram.ts` (yeni): `InstagramAdapter` — Messenger'ın
+    (`messenger.ts`) parseConnect/parseInbound/send iskeleti birebir kopyalandı, Instagram alan
+    adlarına uyarlandı. `parseConnect`: zod `{code, ig_user_id, username?}` → `{address: ig_user_id,
+    config: {ig_user_id, username?, ig_access_token}}` — `code` (mock OAuth kodu) Twilio'nun
+    `auth_token`'ı saklamama ilkesiyle aynı şekilde config'e ASLA yazılmaz, doğrulanır ve atılır.
+    `parseInbound`: `{recipient:{id}, sender:{id, username?}, message:{text}}` → `NormalizedInbound`
+    (address=recipient.id, externalId=sender.id (IGSID), senderName=username ?? null, text).
+    `send`: mock `providerMessageId` `aigid.<token>` öneki (PLAN.md §5.2.6 varsayımıyla tutarlı).
+  - `apps/api/src/services/channels/adapters.test.ts`: yeni `'Instagram adapter (08.5.7)'` describe
+    bloğu (+6 test, dosya toplam 21) — KK'daki beş madde (i–v) birebir + testStrategy'nin istediği
+    ekstra negatif: aşırı uzun mesaj (>10_000 char) reddi.
+  - **Bilerek yapılmayan (görev tanımı gereği, 08.5.7-c'ye bırakıldı):** `CHANNEL_TYPES` /
+    `registry.ts` kaydı. Bunun doğrudan sonucu: `InstagramAdapter`, `ChannelAdapter` arayüzünü
+    (`channel-adapter.ts`) TS `implements` anahtar sözcüğüyle bildirmiyor — `ChannelType` bugün
+    `'messenger'|'twilio'|'whatsapp'` (CHANNEL_TYPES'tan türüyor), `type='instagram'` bu union'a
+    ait değil; `implements` yazsaydım `pnpm -w typecheck` kırmızı verirdi. Sınıf yine de tüm paylaşılan
+    şekilleri (`ConnectResult`/`NormalizedInbound`/`OutboundInput`/`OutboundResult`/`parseWith`)
+    kullanıyor — 08.5.7-c `CHANNEL_TYPES`'a `'instagram'` eklediğinde sınıf arayüze yapısal olarak
+    zaten uyuyor, `implements` eklemek (istenirse) kozmetik bir satır.
+- **Doğrulama (exit code'larla):**
+  - Kabul kriteri (KK DOĞRULAMA i–v, testStrategy negatifleri dahil): tüm 6 yeni test yeşil.
+  - Tam DoD kapısı: `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+    `pnpm -w test` **0** (99/99 dosya, **2066/2066** test — api'de +6) ·
+    `pnpm -w test:integration` **0** (5/5 — api 1535/1535, değişmedi — bu görev integration yüzeyine
+    dokunmuyor) · `pnpm -w build` **0** (7/7) · `pnpm -w test:e2e` **0** — **88/88** (`.env`
+    kaynaklanarak; bu görev route/UI eklemiyor, e2e regresyon kanıtı için koşuldu).
+  - `apps/e2e/kanit/*.png` e2e koşusu yeniden üretti (aynı içerik, farklı byte) — tm 103/104/107/
+    108/109/65.1 emsaliyle `git checkout -- apps/e2e/kanit` ile atıldı.
+- **Varsayımlar:** yok — görev metnindeki alan adları/önekler (`ig_user_id`, `aigid.` öneki,
+  PLAN.md §5.2.6'da zaten kayıtlı) birebir uygulandı.
+- **Sonraki pencereye not:**
+  - 08.5.7-c (CHANNEL_TYPES + registry kaydı + inbound→chat kayıt yolu) artık başlayabilir;
+    `InstagramAdapter`'ı `registry.ts`'e eklerken `CHANNEL_TYPES`'a `'instagram'` eklenince
+    `channel-adapter.ts`'teki `ChannelType` union'ı genişler — o noktada `instagram.ts`'e
+    `implements ChannelAdapter` eklemek istenirse artık typecheck kırmadan eklenebilir (opsiyonel).
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ commit edilmemiş WIP** — bu turda da
+    dokunulmadı (CONVENTIONS §5), `git add -A` kullanılmadı, yalnız bu görevin dosyaları
+    sahnelendi: `apps/api/src/services/channels/instagram.ts`, `adapters.test.ts`, `PLAN.md`,
+    `HANDOFF.md`.
+  - `.taskmaster/tmp-*.cjs` / `tmp-changelog.txt` yine untracked scratch, dokunulmadı.
+
 ### tm 65.1 — 08.5.7-a: Instagram kanal tipinin kontrata eklenmesi — done — 2026-08-09 UTC
 
 - **Yapıldı:**

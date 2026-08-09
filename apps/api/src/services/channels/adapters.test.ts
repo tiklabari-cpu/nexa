@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { isApiError } from '../../lib/api-error.js';
 import { isChannelType, CHANNEL_TYPES } from './channel-adapter.js';
 import { getAdapter } from './registry.js';
+import { InstagramAdapter } from './instagram.js';
 import { MessengerAdapter } from './messenger.js';
 import { TwilioAdapter } from './twilio.js';
 import { WhatsAppAdapter } from './whatsapp.js';
@@ -169,5 +170,71 @@ describe('WhatsApp adapter (08.5.6)', () => {
       text: 'selam',
     });
     expect(providerMessageId).toMatch(/^wamid\./);
+  });
+});
+
+describe('Instagram adapter (08.5.7)', () => {
+  const adapter = new InstagramAdapter();
+
+  it('connects with the IG user id as the address and mints a mock token', () => {
+    const { address, config } = adapter.parseConnect({
+      code: 'IGQmock_oauth_code',
+      ig_user_id: '17841400000000000',
+      username: 'acme_support',
+    });
+    expect(address).toBe('17841400000000000');
+    expect(config['ig_user_id']).toBe('17841400000000000');
+    expect(config['username']).toBe('acme_support');
+    // The OAuth exchange is mocked, but a token is produced (not the raw code).
+    expect(config['ig_access_token']).toMatch(/^mock_ig_access_token_/);
+    expect(config).not.toHaveProperty('code');
+  });
+
+  it('rejects a connect body missing the IG user id', () => {
+    try {
+      adapter.parseConnect({ code: 'x' });
+      throw new Error('should have thrown');
+    } catch (error) {
+      expect(isApiError(error) && error.status).toBe(400);
+    }
+  });
+
+  it('normalizes an inbound DM to sender IGSID + text', () => {
+    const inbound = adapter.parseInbound({
+      recipient: { id: '17841400000000000' },
+      sender: { id: 'igsid_88421', username: 'dana_h' },
+      message: { text: 'hello there' },
+    });
+    expect(inbound).toEqual({
+      address: '17841400000000000',
+      externalId: 'igsid_88421',
+      senderName: 'dana_h',
+      text: 'hello there',
+    });
+  });
+
+  it('rejects an inbound with no message text', () => {
+    expect(() =>
+      adapter.parseInbound({ recipient: { id: 'p' }, sender: { id: 's' }, message: {} }),
+    ).toThrow();
+  });
+
+  it('rejects an inbound with an over-length message', () => {
+    expect(() =>
+      adapter.parseInbound({
+        recipient: { id: 'p' },
+        sender: { id: 's' },
+        message: { text: 'x'.repeat(10_001) },
+      }),
+    ).toThrow();
+  });
+
+  it('sends and returns an Instagram-style message id', async () => {
+    const { providerMessageId } = await adapter.send({
+      config: { ig_user_id: '17841400000000000' },
+      externalId: 'igsid_88421',
+      text: 'hi',
+    });
+    expect(providerMessageId).toMatch(/^aigid\./);
   });
 });

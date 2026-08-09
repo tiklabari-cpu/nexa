@@ -13,6 +13,92 @@
 
 ## Task log (newest-first)
 
+### tm 97.3 — 06.3.2-bulk-c · POST /knowledge-sources/bulk (kontrat + route) — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - **Kontrat (önce):** `packages/contract/openapi/paths/playbook.yaml`'a `knowledgeSourcesBulk`
+    bloğu (`POST`, gövde `{ai_agent_id, csv, dry_run}`), `openapi.yaml`'a `/knowledge-sources/bulk`
+    path'i + `KnowledgeBulkResult` / `KnowledgeBulkRowResult` şemaları;
+    `pnpm --filter @nexa/contract generate` ile re-bundle (148 path) + `src/generated/api.ts`
+    yeniden üretildi. `contract-parity.test.ts` **5/5** — iki yön de yeşil (belgelenmemiş route yok,
+    servis edilmeyen belge satırı yok), yani 96.1'deki gibi bilinçli-kırmızı bırakılmadı: kontrat ve
+    route aynı pencerede indi.
+  - **Route:** `apps/api/src/routes/playbook.ts` — `POST /knowledge-sources/bulk`, mevcut
+    `agents-bot--all:rw` scope'u (**yeni scope YOK**), route-özel `bodyLimit` 12 MiB
+    (`uploads.ts:69-79` deseni; `server.ts`'in 1 MiB varsayılanı diğer route'larda yerinde kalır).
+    Akış: `parseCsv` (97.1) → `resolveKnowledgeBulkColumns`/`mapKnowledgeBulkRow` (97.2) → satır
+    başına yazım. İki saf modül ilk kez bir HTTP yoluna bağlandı.
+  - **Dört karar, gerekçeleriyle kodda yazılı:** (1) *Sahiplik bir kez, döngüden önce* — bu güvenli,
+    çünkü `ai_agent_id` gövde alanı, kolon DEĞİL; dosyada hedefi değiştirebilecek ikinci bir ajan
+    kimliği yok (bilinmeyen kolon 97.2'de yok sayılıyor). RLS altında yabancı ajan görünmez →
+    "does not exist" (varlık oracle'ı da yok). (2) *Satır başına kısa tx* — kısmi başarı zaten
+    sözleşme olduğu için tek uzun tx hiçbir şey kazandırmaz, 200 create+embed çifti boyunca bağlantı
+    tutardı. (3) *Kısmi başarı = 200*, 207 değil; ADR-06 zarfı yalnız TÜM isteğin reddinde
+    (ayrıştırılamayan CSV · eksik kolon · bütçe aşımı). Yeni `ApiError` tipi eklenmedi →
+    `errors.ts`/`scopes.test.ts` sayacı/openapi enum zinciri tetiklenmedi. (4) *`type:'website'`
+    satırı satır düzeyinde reddedilir* ve hiçbir dış istek yapılmaz — tek istek → N fetch = SSRF
+    amplifikasyonu, o kapı 97.7'nin işi; yarım desteklenmiş bir yol bırakılmadı.
+  - **Bütçe (NFR-S8):** `maxRows:200` · `maxCellChars:100.000` (= `createSourceBody.content` tavanı)
+    · `maxBytes:5 MiB`; aşım tipli `validation`, **kırpma yok**. Yanıt amplifikasyonu da kapalı:
+    reddedilen satırın echo'su 200 karakterle sınırlı (satır çoğu zaman *fazla büyük olduğu için*
+    reddediliyor; 200 tanesini olduğu gibi geri yazmak küçük bir reddi devasa bir yanıta çevirirdi).
+  - **Migration YOK** — mevcut `knowledge_sources` + `knowledge_chunks`'a satır satır INSERT; batch/
+    job tablosu bilinçli olarak eklenmedi (görev §varsayım 2).
+  - Test: `apps/api/test/integration/knowledge-bulk.test.ts` (**14**, negatifler önce) — cross-tenant
+    ajan reddi (iki tarafta da 0 satır) · `ai_agent_id` kolonu yok sayılır, tüm satırlar doğrulanmış
+    ajana bağlanır · satır/hücre/bayt tavanı aşımı → `validation` + 0 yazım · eksik kolon başlığı
+    (eksiklerin tamamı mesajda) + kapanmamış tırnak → istek reddi · `:ro` token 403, kimliksiz 401 ·
+    website satırı crawl edilmeden atlanır ve kalan satır yazılır (aynı URL tek-kaynak yolunda
+    başarıyla crawl oluyor — yani crawler erişilebilirdi, çağrılmadı) · 3 geçerli satır indekslenir,
+    `chunk_count` gerçek chunk sayısıyla eşleşir (gömülü virgüllü tırnaklı hücre dahil) · karışık
+    dosyada 2 geçerli/2 geçersiz, satır no + neden korunur, dönen id'ler gerçek satırlar · formül-lead
+    hücre `'` ön-ekiyle SAKLANIR (guard'lı okuyucunun bu yolda olduğunun uçtan uca kanıtı) · dry-run
+    0 yazım ve gerçek koşuyla birebir aynı kararlar.
+- **Doğrulama:** `pnpm -w typecheck` **11/11** · `pnpm -w lint` **8/8** · `pnpm -w build` **7/7** ·
+  yeni süit **14/14** · `contract-parity.test.ts` **5/5** · regresyon `knowledge-crawl.test.ts`
+  **11/11** · tam `npx turbo run test --filter='!@nexa/e2e' --concurrency=1` →
+  **1999 geçti / 3 skip / 6 kırmızı**. Altı kırmızının tamamı iki dosyada
+  (`scheduled-reports-sweep.test.ts` 5, `reports-topics.test.ts` 1) ve hepsi `spawn pnpm ENOENT`.
+  **Bu pencereden bağımsız olduğu iki ayrı yolla kanıtlandı:** (a) A/B — bu turun tracked
+  değişiklikleri `git stash`'lenip aynı iki dosya koşuldu, **birebir aynı 6 hata**; (b) sayı —
+  97.2 tabanı 1985 geçti/3 skip/6 kırmızı (1994), bu tur 1999/3/6 (2008); fark tam **14**, yani bu
+  turun eklediği test sayısı. Daha önce geçen hiçbir test kırmızıya dönmedi.
+- **Varsayımlar:** `bodyLimit` içerik tavanının (5 MiB) üstünde (12 MiB) tutuldu: CSV JSON dizesi
+  olarak taşındığı için tırnak/satır-sonu kaçışı tırnak-yoğun bir dosyayı neredeyse iki katına
+  çıkarabiliyor; taşıma tavanı içerik tavanının altında kalsaydı meşru bir dosya, limiti adıyla
+  söyleyen tipli hata yerine opak bir "body too large" ile reddedilirdi. Gövde ayrıştırma auth'tan
+  (`onRequest` hook) SONRA çalıştığı için bu tamponu ancak yazma scope'lu kimlikli çağıran doldurabilir.
+  · Ajan sahipliği kontrolünde `kind` filtresi **eklenmedi** — tek-kaynak `POST /knowledge-sources`
+  ile birebir parite (o da yalnız `{id}` bakıyor); bulk'a `kind:'ai_agent'` koymak iki yolu birbirinden
+  ayırırdı ve bunu isteyen bir gereksinim/test yok. Kapsam disiplini (CONVENTIONS §5) gereği
+  dokunulmadı — gerçek bir sorunsa iki yol için tek ayrı görev olmalı.
+- **Sonraki pencereye not:**
+  - **E2E kapısı bu makinede KOŞULAMIYOR** ve nedeni artık kesin: bu makinede `pnpm.exe` yok
+    (yalnız `pnpm.cmd` / `pnpm.ps1` / uzantısız `pnpm`), dolayısıyla Node'un `execFile('pnpm', …)`
+    çağrısı `shell:true` olmadan **her kabukta** ENOENT veriyor —
+    `node -e "require('child_process').execFile('pnpm',['--version'],(e)=>…)"` → ENOENT,
+    `{shell:true}` ile → `11.15.1`. Aynı tek kök neden üç yeri birden vuruyor:
+    `apps/e2e/tests/global-setup.ts:16` (tüm e2e süiti burada düşüyor, testler hiç başlamıyor),
+    `scheduled-reports-sweep.test.ts` ve `reports-topics.test.ts`. Bash'te `.env` source'lamak
+    yetmiyor, PowerShell'den koşmak da yetmiyor — kabuk sorunu değil, `CreateProcess` PATH'te
+    yalnız `.exe` arıyor. **Düzeltmesi tek kelime** (`{ shell: true }`), ama üç dosya da bu
+    görevin kapsamı dışında ve paylaşılan harness — CONVENTIONS §5 gereği bilerek dokunulmadı;
+    97.2 de aynı kararı vermişti. **Bunun ayrı bir görev olarak açılması gerekiyor**, yoksa hiçbir
+    pencere DoD'nin e2e kutusunu işaretleyemez.
+  - Bu görev için e2e'nin kapsam payı zaten yok: bulk UI henüz mevcut değil (97.4–97.6) ve uçtan uca
+    CSV akışının e2e'si açıkça **97.8 / 06.3.2-bulk-h**'ye ait. Bu turda doğrulama unit + integration
+    + contract-parity üzerinden yapıldı.
+  - Artık bağımlılığı çözülen iki iş **paralel** ilerleyebilir: **97.7** (`06.3.2-bulk-g`, website
+    satırları + satır-başı SSRF, yalnız 97.3'e bağlıydı) ve **97.5** (`06.3.2-bulk-e`, form —
+    97.3 + 97.4'e bağlı, yani önce 97.4). 97.7 kontrata **katkısal** dokunacak
+    (`KnowledgeBulkRowResult`'a website'e özgü ret nedeni) — `generate` çalıştırmayı unutmasın,
+    yoksa contract-parity + tip derlemesi kırılır. Route'ta bekleyeceği yer:
+    `if (type === 'website') skip(...)` dalı (playbook.ts, bulk handler'ı içinde).
+  - Çalışma alanında bu pencereye ait OLMAYAN 5 dosya duruyor: `.taskmaster/tmp-analyze-deps.cjs`,
+    `tmp-changelog.txt`, `tmp-count-54.cjs`, `tmp-fix-deps.cjs`, `tmp-precheck.cjs` — önceki bir
+    pencerenin scratch dosyaları, bu turdan önce de untracked'dı. Ne commit'lendi ne silindi
+    (başkasının artığını commit'lemek de silmek de bu pencerenin işi değil); sahibi temizlemeli.
+
 ### tm 97.2 — 06.3.2-bulk-b · CSV satır şeması: kolon eşleme + satır-başı doğrulama — done — 2026-08-09 UTC
 
 - **Yapıldı:**

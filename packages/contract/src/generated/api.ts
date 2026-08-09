@@ -1528,6 +1528,49 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/knowledge-sources/bulk': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Import many sources from one CSV
+     * @description The multi-row counterpart of `POST /knowledge-sources` (FR-MOD-06.3.2,
+     *     "bulk/CSV import"). Same columns as that endpoint's body — `name`, `type`,
+     *     `content`, `source_url` — one source per CSV row, imported into the one
+     *     `ai_agent_id` the request names. The file cannot pick its own target: an
+     *     `ai_agent_id` column is not part of the schema and is ignored like any
+     *     other unrecognised column, so ownership is checked once and every row
+     *     lands on the agent that check approved.
+     *
+     *     **Partial success is the normal outcome, and it is a 200.** A spreadsheet
+     *     with 200 correct rows and one typo must not lose all 200, so each row gets
+     *     its own verdict in `results` and its own short transaction; a row that
+     *     fails validation or fails to write is reported and the import continues.
+     *     The ADR-06 error envelope is reserved for a request refused *as a whole*
+     *     — malformed CSV, a header missing a required column, or a budget overrun
+     *     (row/cell/byte limits, refused rather than silently truncated).
+     *
+     *     `dry_run: true` runs everything except the writes and returns the same
+     *     `results`, which is where the preview in the UI comes from: the rule shown
+     *     in the preview is the same code that will run on import, not a second
+     *     implementation of it in the client.
+     *
+     *     A `website` row is refused per-row here — a bulk endpoint that fetches N
+     *     admin-supplied URLs is an SSRF amplifier, so that path lands separately
+     *     with its own per-row guard and budget (06.3.2-bulk-g).
+     */
+    post: operations['bulkImportKnowledgeSources'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/knowledge-sources/{sourceId}': {
     parameters: {
       query?: never;
@@ -4391,6 +4434,46 @@ export interface components {
       chunk_count: number;
       /** Format: date-time */
       updated_at?: string;
+    };
+    /**
+     * @description One CSV data row's verdict. `line` is the row's 1-based position among
+     *     data rows, not a physical line in the file — a quoted cell may span
+     *     several lines, which makes a file line number ambiguous.
+     */
+    KnowledgeBulkRowResult: {
+      line: number;
+      /**
+       * @description The row's title. For a skipped row this echoes the raw cell
+       *     (truncated) so the admin can find the row in their spreadsheet;
+       *     null when the row has no name cell to echo.
+       */
+      name: string | null;
+      /** @description The row's `type` cell — the validated value when it parsed, the raw cell otherwise. */
+      type: string | null;
+      /**
+       * @description In a dry run `imported` means "would be imported" — nothing was
+       *     written. `dry_run` on the envelope is what distinguishes the two.
+       * @enum {string}
+       */
+      status: 'imported' | 'skipped';
+      /**
+       * Format: uuid
+       * @description The created source. Null for a skipped row and for every row of a dry run.
+       */
+      id: string | null;
+      /** @description Chunks indexed from this row. Null for a skipped row and for every row of a dry run. */
+      chunk_count: number | null;
+      /** @description Why the row was skipped, naming the field at fault. Null for an imported row. */
+      error: string | null;
+    };
+    KnowledgeBulkResult: {
+      /** @description Rows written (or */
+      imported: number;
+      failed: number;
+      /** @description True when nothing was written. */
+      dry_run: boolean;
+      /** @description One entry per data row, in file order. */
+      results: components['schemas']['KnowledgeBulkRowResult'][];
     };
     TrustedDomain: {
       /** Format: uuid */
@@ -9218,6 +9301,57 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['KnowledgeSource'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  bulkImportKnowledgeSources: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * Format: uuid
+           * @description The agent every row is imported into. Verified once, before any row is written.
+           */
+          ai_agent_id: string;
+          /**
+           * @description The file's text, sent as a JSON string rather than
+           *     multipart — parsing stays on the server, where the row,
+           *     cell and byte budgets cannot be bypassed by calling the
+           *     API directly. Capped at 5 MiB, 200 data rows and 100000
+           *     characters per cell.
+           */
+          csv: string;
+          /**
+           * @description Validate and report without writing anything.
+           * @default false
+           */
+          dry_run?: boolean;
+        };
+      };
+    };
+    responses: {
+      /**
+       * @description The per-row report. 200 covers full success, partial success and
+       *     "every row failed" alike — the request itself was understood in all
+       *     three, and `imported`/`failed` say which happened.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeBulkResult'];
         };
       };
       400: components['responses']['BadRequest'];

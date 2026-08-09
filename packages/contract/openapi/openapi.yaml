@@ -211,6 +211,8 @@ paths:
     $ref: "./paths/playbook.yaml#/runs"
   /knowledge-sources:
     $ref: "./paths/playbook.yaml#/knowledgeSources"
+  /knowledge-sources/bulk:
+    $ref: "./paths/playbook.yaml#/knowledgeSourcesBulk"
   /knowledge-sources/{sourceId}:
     $ref: "./paths/playbook.yaml#/knowledgeSource"
 
@@ -782,6 +784,58 @@ components:
           { type: string, nullable: true, description: The crawled URL, for website sources. }
         chunk_count: { type: integer }
         updated_at: { type: string, format: date-time }
+
+    KnowledgeBulkRowResult:
+      type: object
+      description: |
+        One CSV data row's verdict. `line` is the row's 1-based position among
+        data rows, not a physical line in the file — a quoted cell may span
+        several lines, which makes a file line number ambiguous.
+      required: [line, name, type, status, id, chunk_count, error]
+      properties:
+        line: { type: integer, minimum: 1 }
+        name:
+          type: string
+          nullable: true
+          description: |
+            The row's title. For a skipped row this echoes the raw cell
+            (truncated) so the admin can find the row in their spreadsheet;
+            null when the row has no name cell to echo.
+        type:
+          type: string
+          nullable: true
+          description: The row's `type` cell — the validated value when it parsed, the raw cell otherwise.
+        status:
+          type: string
+          enum: [imported, skipped]
+          description: |
+            In a dry run `imported` means "would be imported" — nothing was
+            written. `dry_run` on the envelope is what distinguishes the two.
+        id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The created source. Null for a skipped row and for every row of a dry run.
+        chunk_count:
+          type: integer
+          nullable: true
+          description: Chunks indexed from this row. Null for a skipped row and for every row of a dry run.
+        error:
+          type: string
+          nullable: true
+          description: Why the row was skipped, naming the field at fault. Null for an imported row.
+
+    KnowledgeBulkResult:
+      type: object
+      required: [imported, failed, dry_run, results]
+      properties:
+        imported: { type: integer, description: Rows written (or, in a dry run, rows that would be). }
+        failed: { type: integer }
+        dry_run: { type: boolean, description: True when nothing was written. }
+        results:
+          type: array
+          description: One entry per data row, in file order.
+          items: { $ref: "#/components/schemas/KnowledgeBulkRowResult" }
 
     TrustedDomain:
       type: object

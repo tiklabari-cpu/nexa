@@ -13,8 +13,15 @@ import { z } from 'zod';
 import { compileInstruction, validateSteps } from '@nexa/ai-mock';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
+import { isCsvParseError, parseCsv, type CsvLimits } from '../lib/csv-import.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { KnowledgeService } from '../services/ai/knowledge-service.js';
+import {
+  isKnowledgeBulkHeaderError,
+  mapKnowledgeBulkRow,
+  resolveKnowledgeBulkColumns,
+  type KnowledgeBulkColumnIndex,
+} from '../services/ai/knowledge-bulk-row.js';
 import { crawl } from '../services/ai/web-crawler.js';
 import { SkillEngine } from '../services/ai/skill-engine.js';
 
@@ -71,6 +78,72 @@ const createSourceBody = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['content'], message: 'content is required' });
     }
   });
+
+/**
+ * The bulk import budget (NFR-S8).
+ *
+ * Synchronous and bounded on purpose: 200 rows is a spreadsheet an admin
+ * assembled by hand, which finishes inside one request, so there is no job
+ * table, no queue and no progress bar to build, watch and get wrong. Exceeding
+ * any of the three refuses the request — `parseCsv` never truncates to fit,
+ * because a silently shortened import looks exactly like a complete one.
+ */
+const BULK_CSV_LIMITS: CsvLimits = {
+  maxRows: 200,
+  // The same ceiling `createSourceBody` puts on a single source's `content`, so
+  // a row cannot carry text the one-at-a-time endpoint would have refused.
+  maxCellChars: 100_000,
+  maxBytes: 5_242_880, // 5 MiB
+};
+
+/**
+ * The buffer ceiling for this route only, so the 1 MiB `bodyLimit` every other
+ * route inherits stays where `server.ts` put it.
+ *
+ * Higher than `maxBytes` above rather than equal to it: the CSV travels as a
+ * JSON string, and escaping quotes and newlines can nearly double a
+ * quote-heavy file. Sizing the transport ceiling above the content ceiling
+ * means an oversized file is refused by the *typed* budget error that names the
+ * limit, instead of by an opaque body-too-large before the handler ever runs.
+ * Auth is an `onRequest` hook and body parsing is not, so only an authenticated
+ * principal holding the write scope can make the process buffer this much.
+ */
+const BULK_BODY_LIMIT = 12_582_912; // 12 MiB
+
+const bulkImportBody = z.object({
+  ai_agent_id: uuid,
+  // No length cap here: `BULK_CSV_LIMITS.maxBytes` is the single authority on
+  // size, and duplicating it would produce two different messages for one rule.
+  csv: z.string().min(1),
+  dry_run: z.boolean().default(false),
+});
+
+/** One row's verdict, mirroring `KnowledgeBulkRowResult` in the contract. */
+interface BulkRowReport {
+  line: number;
+  name: string | null;
+  type: string | null;
+  status: 'imported' | 'skipped';
+  id: string | null;
+  chunk_count: number | null;
+  error: string | null;
+}
+
+/**
+ * What a skipped row shows in the results table.
+ *
+ * A rejected row's cells are echoed back so the admin can find it in their
+ * spreadsheet — but a row is often rejected *for* being oversized, and 200 of
+ * those echoed whole would turn a small refusal into a huge response. So the
+ * echo is capped at the same 200 characters a valid `name` may hold.
+ */
+const ECHO_MAX = 200;
+
+function echoCell(value: string | undefined): string | null {
+  const trimmed = value?.trim() ?? '';
+  if (trimmed === '') return null;
+  return trimmed.length > ECHO_MAX ? `${trimmed.slice(0, ECHO_MAX)}…` : trimmed;
+}
 
 const updateAgentBody = z
   .object({
@@ -443,6 +516,156 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       updated_at: created.source.updatedAt.toISOString(),
     });
   });
+
+  /**
+   * Bulk import — the multi-row counterpart of the endpoint above.
+   *
+   * Three decisions carry it.
+   *
+   * 1. **The file cannot choose its target.** `ai_agent_id` is a body field,
+   *    not a column, so a stray `ai_agent_id` column is ignored like any other
+   *    unrecognised header. That is what makes checking ownership once — before
+   *    the loop — sound rather than a shortcut: there is no second agent id
+   *    anywhere in the request for a later row to smuggle in, and every row is
+   *    written against the id that check approved.
+   * 2. **One short transaction per row, not one long one.** Partial success is
+   *    already the contract, so a single transaction would buy nothing and cost
+   *    a great deal: it would hold a connection open across 200 create+embed
+   *    pairs. The row is the unit of work and the unit of failure.
+   * 3. **Partial success is a 200, not a 207.** The ADR-06 error envelope is
+   *    for a request refused as a whole — unparseable CSV, a header missing a
+   *    column, a budget overrun. Once rows are being judged individually, the
+   *    verdicts are the response body, and a client that reads `imported` and
+   *    `failed` needs no new status code to understand them.
+   */
+  app.post(
+    '/knowledge-sources/bulk',
+    { config: { scopes: WRITE }, bodyLimit: BULK_BODY_LIMIT },
+    async (request, reply) => {
+      const body = parse(bulkImportBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      // Neither a malformed file nor a header missing a column can be blamed on
+      // one row — nothing can be salvaged from either, so both refuse the whole
+      // request rather than producing 200 identical row failures.
+      let document;
+      try {
+        document = parseCsv(body.csv, BULK_CSV_LIMITS);
+      } catch (error) {
+        if (isCsvParseError(error)) throw ApiError.validation(`csv: ${error.message}`);
+        throw error;
+      }
+
+      let columns: KnowledgeBulkColumnIndex;
+      try {
+        columns = resolveKnowledgeBulkColumns(document.header);
+      } catch (error) {
+        if (isKnowledgeBulkHeaderError(error)) throw ApiError.validation(`csv header: ${error.message}`);
+        throw error;
+      }
+
+      // Ownership first, and outside the loop. Under RLS a foreign agent simply
+      // is not visible, so this resolves "does not exist" and "belongs to
+      // someone else" into the same answer — and it runs before a single row is
+      // written, so a refused import writes nothing at all.
+      await request.withTenant(async (tx) => {
+        const agent = await tx.aiAgent.findFirst({
+          where: { id: body.ai_agent_id },
+          select: { id: true },
+        });
+        if (!agent) throw ApiError.validation('That AI agent does not exist.');
+      });
+
+      const results: BulkRowReport[] = [];
+      let imported = 0;
+      let failed = 0;
+
+      const skip = (line: number, name: string | null, type: string | null, error: string): void => {
+        results.push({ line, name, type, status: 'skipped', id: null, chunk_count: null, error });
+        failed += 1;
+      };
+
+      for (const [index, row] of document.rows.entries()) {
+        // 1-based among *data* rows, matching `parseCsv`: a quoted cell may span
+        // several physical lines, so a file line number would not address the
+        // row the admin is looking for.
+        const line = index + 1;
+
+        const mapped = mapKnowledgeBulkRow(columns, row);
+        if (!mapped.ok) {
+          skip(
+            line,
+            echoCell(row[columns.name]),
+            echoCell(row[columns.type]),
+            `${mapped.error.field}: ${mapped.error.message}`,
+          );
+          continue;
+        }
+
+        const { name, type, content } = mapped.value;
+
+        // One request turning into N outbound fetches is SSRF amplification, and
+        // the guard for it (per-row, sequential, budgeted) is a piece of work of
+        // its own. Until it lands, a website row is refused here — never
+        // half-supported, and never quietly fetched.
+        if (type === 'website') {
+          skip(line, name, type, 'website: bulk import cannot crawl URLs yet; add website sources one at a time.');
+          continue;
+        }
+
+        if (body.dry_run) {
+          results.push({ line, name, type, status: 'imported', id: null, chunk_count: null, error: null });
+          imported += 1;
+          continue;
+        }
+
+        try {
+          const created = await request.withTenant(async (tx) => {
+            const source = await tx.knowledgeSource.create({
+              data: {
+                aiAgentId: body.ai_agent_id,
+                licenseId: tenant.licenseId,
+                type,
+                name,
+                content: content ?? '',
+                sourceUrl: null,
+                status: 'indexing',
+                addedBy: principal.kind === 'agent' ? principal.accountId : null,
+                updatedAt: new Date(),
+              },
+            });
+
+            // Same transaction as the create, exactly as the single-source path:
+            // a source that exists but is not searchable looks ready and answers
+            // nothing.
+            const chunks = await knowledge.index(tx, tenant, source.id, content ?? '');
+            return { source, chunks };
+          });
+
+          results.push({
+            line,
+            name,
+            type,
+            status: 'imported',
+            id: created.source.id,
+            chunk_count: created.chunks,
+            error: null,
+          });
+          imported += 1;
+        } catch (error) {
+          // A row that fails to write is a row-level verdict like any other: the
+          // 199 rows after it still deserve to be imported. Logged in full,
+          // reported generically — a database message is not something to hand
+          // back over HTTP.
+          request.log.error({ err: error, line }, 'bulk knowledge import: row failed to save');
+          skip(line, name, type, 'This row could not be saved.');
+        }
+      }
+
+      return reply.send({ imported, failed, dry_run: body.dry_run, results });
+    },
+  );
 
   app.delete<{ Params: { sourceId: string } }>(
     '/knowledge-sources/:sourceId',

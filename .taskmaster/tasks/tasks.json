@@ -4664,10 +4664,10 @@
             "description": "Saf modül: (1) başlık satırı normalizasyonu — kırpma, küçük harfe indirme, BOM kalıntısı temizliği, bilinmeyen kolona tolerans (yok sayılır, hata değil); (2) zorunlu kolon seti `name,type,content,source_url` (createSourceBody alan adlarıyla birebir) — eksik zorunlu kolon → tüm dosya reddi için tipli hata; (3) satır → `{ name, type, content?, source_url? }` eşlemesi, `type` boşsa `article` varsayıl",
             "details": "06.3.2-bulk-b — CSV satır şeması: kolon eşleme + satır-başı doğrulama (saf modül)  [SONNET-XHIGH]\n\nPRD: FR-MOD-06.3.2\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 2 dosya; güvenlik sınırı yok (authN/authZ/tenant/kripto/SSRF'e dokunmaz, yalnız şekil doğrulaması); eşzamanlılık yok; kopyalanacak mevcut desen ismen var (`createSourceBody` zod bloğu, playbook.ts:56-72 — website→source_url / diğer→content zorunluluğu dahil `superRefine` mantığı birebir aynadır); kontrat değişikliği yok; kabul kriteri mekanik (satır geçer/geçmez).\nNEDEN AÇIK: `createSourceBody` (apps/api/src/routes/playbook.ts:56-72) tek bir JSON gövdesi için yazılmış: `type` enum website/file/article/faq, `content` maks 100.000 karakter, website ise `source_url` zorunlu. CSV'deki bir *satırı* bu kurallara çeviren hiçbir kod yok — bulk parametresi/endpoint/dosya alanı grep ile 0.\nKAPSAM: Saf modül: (1) başlık satırı normalizasyonu — kırpma, küçük harfe indirme, BOM kalıntısı temizliği, bilinmeyen kolona tolerans (yok sayılır, hata değil); (2) zorunlu kolon seti `name,type,content,source_url` (createSourceBody alan adlarıyla birebir) — eksik zorunlu kolon → tüm dosya reddi için tipli hata; (3) satır → `{ name, type, content?, source_url? }` eşlemesi, `type` boşsa `article` varsayılanı (createSourceBody `.default('article')` ile aynı); (4) satır-başı zod doğrulaması, createSourceBody'nin superRefine kuralını birebir yansıtır (website→source_url zorunlu, diğer→content zorunlu); (5) her satır için `{ line, ok, value | error }` sonucu — ilk hatada durmaz, tüm satırları raporlar.\nDOSYALAR: apps/api/src/services/ai/knowledge-bulk-row.ts · apps/api/src/services/ai/knowledge-bulk-row.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/playbook.ts · apps/web/src/features/playbook/knowledge-tabs.ts · apps/web/src/features/playbook/knowledge-tabs.test.ts · apps/api/src/services/security/spam-filter.ts\nKK (birebir): \"Geçersiz URL/tür reddi\" | \"KK-türetilmiş: bir CSV satırının `type` değeri enum dışıysa veya türünün gerektirdiği alan (website→source_url, diğer→content) boşsa o SATIR reddedilir, dosyanın geri kalanı işlenmeye devam eder. — PRD KK 'Geçersiz URL/tür reddi' der ama tek-kaynak/all-or-nothing bağlamında yazılmıştır; N-satırlık bir dosyada reddin satır düzeyinde olduğu PRD'de yazmıyor, kısmi-başarı kararından (§varsayım 3) türetildi.\"\nKK DOĞRULAMA: `pnpm --filter @nexa/api test:unit` → `src/services/ai/knowledge-bulk-row.test.ts`: `type: 'workflow'` satırı ve `type: 'website'` + boş `source_url` satırı `ok:false` + konumlu hata döner (= 'Geçersiz URL/tür reddi' payı), aynı dosyadaki geçerli satırlar `ok:true` kalır (= türetilmiş kısmi-red maddesi).\nKAPSAM DIŞI: CSV metnini satırlara ayırma (06.3.2-bulk-a) · DB yazımı, tenant/ai_agent sahiplik kontrolü, indeksleme (06.3.2-bulk-c) · website satırının gerçekten crawl edilmesi/SSRF guard'ı (06.3.2-bulk-g) — burada yalnız alan varlığı doğrulanır, URL ağa çıkmaz\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit NEGATİF (önce): enum dışı `type`; website satırında boş `source_url`; article satırında boş `content`; 100.000 karakteri aşan `content`; boş `name` → her biri satır düzeyinde tipli hata · unit NEGATİF (önce): zorunlu kolon eksik başlık satırı → dosya düzeyinde tipli hata (satır bazlı değil) · unit POZİTİF: karışık türlü 5 satırlık dosyada 3 geçerli / 2 geçersiz → sonuç dizisi sırayı ve satır numarasını korur · unit: bilinmeyen fazladan kolon yok sayılır, hata üretmez; `type` boşsa `article` varsayılır",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "97",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T02:39:43.313Z"
           },
           {
             "id": 3,
@@ -4749,7 +4749,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-08T14:21:14.909Z",
+        "updatedAt": "2026-08-09T02:39:43.313Z",
         "complexity": 9,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"06.3.2-bulk — Bulk/CSV KB import (YALNIZ çoklu-satır; tek-kaynak yolu v1'de ✅)  ·  dilim V2-6\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5023,13 +5023,12 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-08T14:21:14.909Z",
+      "lastModified": "2026-08-09T02:39:43.314Z",
       "taskCount": 104,
       "completedCount": 88,
       "tags": [
         "master"
-      ],
-      "updated": "2026-08-09T02:05:40.359Z"
+      ]
     }
   }
 }

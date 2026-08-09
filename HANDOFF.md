@@ -13,6 +13,39 @@
 
 ## Task log (newest-first)
 
+### tm 97.2 — 06.3.2-bulk-b · CSV satır şeması: kolon eşleme + satır-başı doğrulama — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/api/src/services/ai/knowledge-bulk-row.ts` (yeni, saf modül): `resolveKnowledgeBulkColumns(header)`
+    — başlık hücrelerini kırpar/küçük harfe indirir/BOM kalıntısını temizler, `name,type,content,source_url`
+    kolonlarını sırasız eşler, bilinmeyen fazladan kolonu yok sayar; eksik zorunlu kolon(lar)ı **dosya
+    düzeyinde** `KnowledgeBulkHeaderError` (`missing: string[]`, TÜM eksikleri listeler) ile reddeder.
+    `mapKnowledgeBulkRow(columns, row)` — tek satırı `routes/playbook.ts`'teki `createSourceBody`'nin
+    `superRefine` kuralıyla birebir doğrular (website→`source_url` zorunlu, diğer→`content` zorunlu, aynı
+    uzunluk tavanları: name≤200, content≤100.000, source_url≤2048); blank `type` → `article` varsayılanı
+    (`createSourceBody`'nin `.default('article')`'ı ile aynı); boş hücre "geçersiz" değil "yok" sayılır
+    (blank-to-undefined ön işleme). `mapKnowledgeBulkRows(document)` — her satır için `{line, ok, value|error}`,
+    **ilk hatada durmaz**, sırayı ve 1-tabanlı satır no'yu korur.
+  - `apps/api/src/services/ai/knowledge-bulk-row.test.ts` (14 test): enum-dışı `type` · website+boş
+    `source_url` · diğer türde boş `content` · 100k karakter aşımı · boş `name` (hepsi satır reddi) ·
+    eksik kolon → dosya reddi + eksiklerin TAMAMI · bilinmeyen kolon yok sayılır · blank `type`→`article` ·
+    5 satırlık karışık dosyada 3 geçerli/2 geçersiz, sıra+satır no korunur.
+  - `routes/playbook.ts`'e veya herhangi bir route'a **bağlanmadı** — bu modül 97.3'ün (kontrat+route)
+    tüketeceği saf yapı taşı; şu an hiçbir HTTP yolundan erişilmiyor.
+- **Doğrulama:** `pnpm --filter @nexa/api test:unit` → yeni dosya 14/14 yeşil · `pnpm -w typecheck` 11/11 ·
+  `pnpm -w lint` 8/8 · `pnpm -w build` 7/7 · tam `npx turbo run test --filter='!@nexa/e2e' --concurrency=1`
+  1985/1994 yeşil (3 skip) + **2 dosya kırmızı** (`scheduled-reports-sweep.test.ts`, `reports-topics.test.ts`
+  — ikisi de `spawn pnpm ENOENT`). Bu iki kırmızı **97.2'den bağımsız, önceden var olan Windows ortam
+  kusuru**: `execFile('pnpm', …)` `shell:true` olmadan çağrılıyor, Windows'ta `.cmd` doğrudan spawn
+  edilemiyor. `git stash` ile aynı iki dosya değişiklik OLMADAN da aynı hatayla kırmızı doğrulandı — bu
+  pencerenin kodu bu iki test dosyasına hiç dokunmuyor (scheduled-reports/reports-topics ile ilgisiz, saf
+  bir CSV-satır modülü). E2E çalıştırılmadı: bu modül henüz hiçbir route'a bağlı değil, dokunduğu ilgili
+  bir akış yok (97.3 bağlayacak).
+- **Sonraki pencereye not:** 97.3 (`06.3.2-bulk-c`, kontrat+route, OPUS-MAX) artık bağımlılıksız —
+  97.1+97.2 ikisi de done. `spawn pnpm ENOENT` (scheduled-reports-sweep.test.ts, reports-topics.test.ts)
+  bu makinede/ortamda kalıcı görünüyor; bir pencere bu testlere dokunacaksa `execFile`/`spawn` çağrısına
+  `shell: true` eklemeyi düşünsün — ama bu 97.2'nin kapsamı dışında, bilerek dokunulmadı.
+
 ### tm 97 — "in-progress'te asılı" bulgusu · DÜZELTME PENCERESİ — yanlış pozitif, durum korundu — done — 2026-08-09 UTC
 
 - **Bulgu:** Panel tm 97'yi (`06.3.2-bulk`) "in-progress ama çalıştıran canlı pencere yok" diye

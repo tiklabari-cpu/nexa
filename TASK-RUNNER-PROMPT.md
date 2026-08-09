@@ -10,14 +10,25 @@ Sırayla oku:
 2. `CONVENTIONS.md` — Definition of Done (DoD) kapısı, git kuralları, handoff formatı.
 3. Task Master'dan HEDEF TASK'ı çek (get_task / show): başlık, detay, test stratejisi, kabul
    kriteri, bağımlılıklar, alt-görevler.
-4. `PLAN.md` — **baştan sona OKUMA** (≈168 KB, bağlamı boşa harcar). Şu iki adımı yap:
+4. `PLAN.md` — **baştan sona OKUMA** (≈770 KB / 3.700 satır, bağlamı boşa harcar). Şu iki adımı yap:
    a. Task başlığındaki iş kalemi kimliğini (ör. `11.7-a`) `### Düz tablo (aktarım kaynağı)`
       bölümünde ara → `PRD` sütunu sana gereksinim kodunu verir (`11.7`). Eşleme burada
       yazılıdır, tahmin etme.
-   b. O kodun gereksinim satır(lar)ını bul: `grep -n '| 11\.7' PLAN.md`. Senin hedefin
-      **durum damgası (`⬜`/`◐`/`✅`) taşıyan** satırlar; Düz tablo / dilim tablosu satırları
-      değil. Bir task birden çok satır kapatabilir (ör. `02.9-a` → hem `02.9` hem `11.8`).
+   b. O kodun gereksinim satır(lar)ını bul: `grep -n '| 11\.7' PLAN.md | cut -c1-200`. Senin
+      hedefin **durum damgası (`⬜`/`◐`/`✅`) taşıyan** satırlar; Düz tablo / dilim tablosu
+      satırları değil. Bir task birden çok satır kapatabilir (ör. `02.9-a` → hem `02.9` hem `11.8`).
    §3'te (kapanış) bu satırları güncelleyeceksin — şimdi yalnız yerlerini ve mevcut durumlarını not al.
+
+   c. **Kanıt tabloda DEĞİL, `## K. Kanıt Geçmişi` bölümündedir.** Gereksinim satırı artık
+      yalnız damga + referans taşır: `| 07.7 | … | Should | ★ | ✅ → K07.7 |`. O kalemin
+      geçmişi lazımsa: `grep -n '^#### K07.7' PLAN.md` → bulduğun satırdan itibaren oku
+      (`Read` ile dar `offset`/`limit`). Kanıt gerekmiyorsa **hiç açma** — damga yeter.
+
+   ⚠ Bu düzen 2026-08-09'da kuruldu, sebebi ölçümdür: kanıt hücrede birikince satır 32.480
+   karaktere çıkmıştı (tek başına ~10k token) ve çıplak bir `grep` pencerenin tur bütçesini
+   yakıyordu — tm 65.8 tek satırı okuyabilmek için `sed`, `awk`, `grep -o`, `substr` sırayla
+   denedi, hepsi boşa tur. Taşıma sonrası en uzun tablo satırı 526 karakter. **Bu kazancı
+   koru: tablo hücresine kanıt YAZMA** (§3'e bak).
 5. `git log --oneline -20` + `git status` — repo şu an nerede.
 6. Task'ın dokunacağı mevcut dosyalar.
 
@@ -25,6 +36,11 @@ Sırayla oku:
 Bu task daha önce yarım kalmış olabilir. ÖNCE mevcut durumu tespit et: ilgili dosyalar/branch
 var mı, testler ne durumda, `git status` ne diyor, `HANDOFF.md`'de bu task için not var mı.
 **Sıfırdan yapma** — kaldığı yerden devam et veya hatayı düzelt.
+
+`HANDOFF.md`'yi **tam okuma** (≈880 KB, 244 blok). Bloklar newest-first sıralı ve `## Task log`
+başlığı 14. satırdadır — sana gereken yalnız en üstteki birkaç blok. Kalıp: `head -60 HANDOFF.md`
+veya `Read(limit: 60)`. Daha eski bir işi arıyorsan tam metin yerine hedefli ara:
+`grep -n 'tm <id>' HANDOFF.md | head -5` → dönen satır numarası çevresini dar bir aralıkla oku.
 
 Tespit biter bitmez task'ı Task Master'da **in-progress** işaretle (CONVENTIONS §4). Bu adım
 opsiyonel DEĞİL: pencere beklenmedik şekilde ölürse (kota bitti, çökme, elle durdurma) geride
@@ -53,10 +69,21 @@ koşu da onunla birlikte ölür — sonuç bildirimi ASLA gelmez. "Bildirim bekl
 bitirmek = pencerenin sonu: kapanış (§3) hiç çalışmaz, JSON sonuç dönmez, döngü bunu `blocked`
 sayar ve DURUR. (Görülen vaka: tm 93.3 — kod bitmişti, iki pencere de tam bu şekilde öldü.)
 
-**DB testleri paralel koşmaz.** `pnpm -w test` turbo'yu paralel çalıştırır; `@nexa/api` ve
-`@nexa/rtm` aynı Postgres'e girdiği için deadlock/FK hatası verir — bunlar kod hatası DEĞİL.
-Doğru komut tek satır, ön planda:
-`npx turbo run test --filter='!@nexa/e2e' --concurrency=1`
+**DB testleri artık izole koşar (tm 105).** `@nexa/api` ve `@nexa/rtm`'in `test` /
+`test:unit` / `test:integration` script'leri her koşuya KENDİ Postgres veritabanını
+(`nexa_test_<id>`) ve KENDİ Redis mantıksal veritabanını (1-15) verir; koşu bitince ikisi de
+silinir (`apps/api/scripts/with-test-datastores.ts`). Bu yüzden ne turbo'nun paralelliği ne
+de aynı anda açık BAŞKA BİR PENCERE artık senin sonucunu kirletebilir — eskiden ikisi de
+aynı `nexa` veritabanını TRUNCATE ettiği için kendi kodunla ilgisi olmayan yüzlerce kırmızı
+üretiyordu. `--concurrency=1` gerekmez; `pnpm -w test` doğrudan çalışır.
+
+Bunun pratik sonucu: **kırmızı gördüğünde artık "başka pencere yazıyordur" diye elle kök-neden
+analizi yapma.** İzolasyon açıkken bir kırmızı ya senin değişikliğinden ya da HANDOFF/Task
+Master'da zaten kayıtlı bilinen bir kusurdan gelir. Paylaşılan `nexa` veritabanına karşı
+koşmak istersen (bir testin bıraktığı veriyi elle incelemek için) `NEXA_TEST_ISOLATION=off`.
+
+İstisna: `apps/e2e` sabit portlarda gerçek sunucuları ve seed'lenmiş `nexa` veritabanını
+kullanır — iki pencere aynı anda e2e koşamaz (port çakışması olarak gürültülü biçimde düşer).
 
 **Tur/bütçe disiplini:** build kısmında iterasyona kilitlenip kalma. Kapanış (§3) — done da
 olsa blocked de olsa — **opsiyonel değil, bu pencerenin zorunlu son adımıdır**. Elindeki tur
@@ -67,14 +94,28 @@ dalını çalıştırarak kapat — ama MUTLAKA kapat.
 
 ## 3) Kapanış
 - **Kapı YEŞİL ise:** (sıra önemli — 1–2 dosya değişikliği, 3 onları commit'ler)
-  1. **`PLAN.md`'yi güncelle** — §0'da (bootstrap) bulduğun gereksinim satır(lar)ının durum damgasını
-     `⬜`/`◐` → `✅` yap ve **kanıt** yaz: tabloda `Nerede` sütunu varsa oraya, yoksa (Faz-1
-     tabloları 4 sütunlu) `Durum` hücresinin içine, mevcut ✅ satırlarındaki biçimde:
-     ``✅ <ne yapıldı> — `<dosya>` · test `<dosya>` (n) · tm <id>``.
+  1. **`PLAN.md`'yi güncelle — iki ayrı yer, karıştırma:**
+
+     **(i) Tablo satırı — yalnız damga.** §0'da bulduğun gereksinim satır(lar)ının damgasını
+     `⬜`/`◐` → `✅` yap. Hücrenin tamamı şu iki biçimden biri olmalı, başka hiçbir şey değil:
+     `✅ → K<kod>`  ·  `◐ → K<kod>`
+     **Hücreye kanıt, dosya adı, test sayısı, tarih, açıklama YAZMA.** Kanıt hücrede birikince
+     satır 32.000 karakteri aşıyor ve sonraki her pencerenin `grep`'ini zehirliyor — bu düzen
+     tam olarak onu önlemek için kuruldu. Referansı olmayan bir satır kapatıyorsan `K<kod>`
+     kodunu PRD kodundan türet (`07.7` → `K07.7`) ve (ii)'de bloğunu aç.
+
+     **(ii) `## K. Kanıt Geçmişi` — kanıt buraya.** İlgili `#### K<kod>` bloğunu bul
+     (`grep -n '^#### K07.7' PLAN.md`) ve **bloğun sonuna bir madde ekle**, mevcut biçimde:
+     ``- ✅ <ne yapıldı> — `<dosya>` · test `<dosya>` (n) · tm <id>``
+     Blok yoksa `## K.` bölümünün sonuna `#### K<kod> — <PRD kodu> · <kısa başlık>` diye aç.
+     Var olan maddeleri SİLME, üstüne yazma — bu bir geçmiş kaydıdır, ekleyerek büyür.
+
      Task'ın kapattığı **her** satırı güncelle. Gereksinimi yalnız kısmen karşıladıysan `◐`
-     bırak ve eksiği yaz — kapanış uğruna `✅` UYDURMA.
+     bırak ve eksiği (ii)'deki maddeye yaz — kapanış uğruna `✅` UYDURMA.
   2. `HANDOFF.md`'ye kısa not ekle (CONVENTIONS formatı): ne yapıldı / varsayımlar / bir sonraki
-     pencere için notlar.
+     pencere için notlar. Ekleme noktası **`## Task log (newest-first)` başlığının hemen altı**;
+     `Edit`'in `old_string`'i o başlık + bir sonraki bloğun ilk satırı olsun. Dosyayı yeniden
+     okumana gerek yok (bu noktayı §1'de zaten gördün) ve blok **kısa** olsun — 4 madde yeter.
   3. `git add -A` → Conventional Commit (`feat(<alan>): ...` / `fix: ...`), CONVENTIONS'a uygun.
      PLAN.md ve HANDOFF.md düzenlemeleri **bu commit'in içinde** olmalı — ayrı commit'e bırakma,
      çalışma alanını kirli BIRAKMA.

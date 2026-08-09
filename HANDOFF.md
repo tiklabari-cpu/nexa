@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### tm 71.5 — 09.3-e: Satın alınan paketin fatura satır kalemi — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `buildInvoices()` (`apps/api/src/services/billing/invoice-service.ts`) artık dönem başına
+    `api_package_purchases`'ı okuyor ve her satın alma için `{ description: 'API package —
+    <ad> (<kota> calls)', amount_cents: price_cents }` line_item'ı ekliyor. Kota/fiyat satın
+    alma satırından okunur (kataloğdan yeniden türetilmez — `serialiseApiPackagePurchase`'ın
+    aynı disiplini); yalnız görüntü adı kataloğdan join, düşmüş paket id'ye düşer. Mevcut
+    seat+overage hesabı değişmedi. Trial döneminde plan satırı ücretsiz kalır ama satın alma
+    ayrı gerçek satır olarak görünür (satın alma trial gate'inden etkilenmiyor). CSV indirme
+    kod değişmeden yeni satırı taşıyor; kontrat değişmedi.
+  - Test: `reports-billing.test.ts` → `describe('a bought API package, as its own line item
+    (09.3-e)')`, 5 test — satır+toplam, satın alma-yok regresyonu, CSV, trial'da ayrı harcama,
+    çapraz-kiracı negatif.
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0**
+  (8/8) · `pnpm -w test` **0** (100/100 dosya, **2134** test — 2129'dan +5) ·
+  `pnpm -w test:integration` **0** (66/66, **1597** — 1592'den +5) · `pnpm -w build` **0**
+  (7/7) · `pnpm -w test:e2e` **0** — **90/90** (`.env` export edilerek; `billing.spec.ts`
+  dahil, regresyon).
+- **Varsayımlar:**
+  - Trial'da da satın alınan paket faturaya ayrı satır olarak yazılır (toplam artık 0 olmayabilir):
+    `POST /billing/api-packages` trial gate'ini hiç görmüyor (`allowWhenReadOnly`), ve
+    api-package-service.ts'in kendi yorumu ("the money the invoice will later show for it") bu
+    yönde. `estimated_total_cents` (subscription view) paketleri hâlâ saymıyor — bu görevin
+    kapsamı dışında, ayrı bir borç.
+- **Sonraki pencereye not:**
+  - 09.3-f/g (Billing UI kartları + satın alma geçmişi listesi) ve 09.3-h (uçtan uca E2E)
+    hâlâ açık — PLAN.md tablo satırı `◐ → K09.3` kalıyor, `✅` değil.
+  - **tm 105 WIP hâlâ commit'siz** (aynı liste: `CONVENTIONS.md`, `TASK-RUNNER-PROMPT.md`,
+    `apps/api|rtm/package.json`, `turbo.json`, `README.md`, `apps/api/scripts/*test-datastores.ts`,
+    fixture'lar, `test-datastores.test.ts`, `.taskmaster/tmp-*`). Kapsam disiplini gereği yine
+    dokunulmadı; bu turun commit'i yalnız kendi dosyaları + PLAN/HANDOFF/tasks.json.
+  - E2E `apps/e2e/kanit/*.png` kapı koşusunda yeniden üretildi, bu tur UI değiştirmediği için
+    `git restore` ile geri alındı.
+
 ### tm 71.4 — 09.3-d: Paket satın alma çekirdeği + atomik kota artışı — done — 2026-08-09 UTC
 
 - **Yapıldı:**

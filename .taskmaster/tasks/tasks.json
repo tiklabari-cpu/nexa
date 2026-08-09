@@ -2387,12 +2387,12 @@
             "description": "buildInvoices() içinde dönem başına api_package_purchases okuması ekle; her satın alma için line_item üret ({ description: 'API package — <ad> (<kota> calls)', amount_cents: price_cents }) ve subtotal/total'a ekle. Mevcut seat + overage satırlarının hesabı DEĞİŞMEZ. CSV indirme (invoiceCsvRows) yeni satırı kendiliğinden taşır — injection-safe kaçış deseni korunur. Kontrat değişmez.",
             "details": "09.3-e — Satın alınan paketin fatura satır kalemi (invoice line_item)  [SONNET-XHIGH]\n\nPRD: FR-MOD-09.3 (+ FR-MOD-10.3)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 2 dosya + test; güvenlik sınırı yok (endpoint, scope ve RLS zaten yerinde, yeni yüzey açılmıyor); eşzamanlılık yok (kapanmış/açık dönemin salt okuması); kopyalanacak desen AYNI dosyada (invoice-service.ts overageCents + line_items üretimi); kontrat değişikliği yok (Invoice.line_items zaten dizi, openapi.yaml:1723); kabul mekanik (total === subtotal === satırların toplamı).\nNEDEN AÇIK: apps/api/src/services/billing/invoice-service.ts buildInvoices() faturayı subscription + usage_records + agentMembership'ten TÜRETİYOR (dosya başı yorumu: 'derives them from the two things that are real — the subscription and the per-period usage records'); api_package_purchases tablosunu okumuyor. 09.3-b'de açılan tablo bu değişiklik olmadan faturada 0 tüketicili kalır — satın alınan paket para harcatır ama hiçbir faturada görünmez.\nKAPSAM: buildInvoices() içinde dönem başına api_package_purchases okuması ekle; her satın alma için line_item üret ({ description: 'API package — <ad> (<kota> calls)', amount_cents: price_cents }) ve subtotal/total'a ekle. Mevcut seat + overage satırlarının hesabı DEĞİŞMEZ. CSV indirme (invoiceCsvRows) yeni satırı kendiliğinden taşır — injection-safe kaçış deseni korunur. Kontrat değişmez.\nDOSYALAR: apps/api/src/services/billing/invoice-service.ts · apps/api/test/integration/reports-billing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/billing/invoice-service.ts (overageCents() satır ~78-97 ve buildInvoices() satır ~100-130 — dönem başına kayıt okuma + line_item üretme + toplama deseni; InvoiceLineItem tipi satır 39) · apps/api/src/routes/reports.ts satır 931-960 (fatura listesi + CSV indirme yolu — değiştirilmez, yalnız yeni satırı taşır)\nKK (birebir): \"Fiyatlı API paketleri satışı\" | \"KK-türetilmiş: satın alınan paket, satın alındığı dönemin faturasında ayrı bir satır kalemi olarak görünür ve fatura toplamına eklenir. Türetme gerekçesi: PRD 09.3 KK yalnız 'satış' diyor, faturalandırmayı FR-MOD-10.3 ('Fatura listesi/indirme') taşıyor; ADR-13 gereği fatura türetilmiş olduğundan satır kalemi türetme yolunda üretilmek zorunda.\"\nKK DOĞRULAMA: reports-billing.test.ts: (1) satın alma sonrası GET /billing/invoices'ta ilgili dönemin faturasında 'API package' satırı var ve amount_cents = paket fiyatı; (2) total_cents === subtotal_cents === line_items toplamı (mevcut seat/overage satırlarıyla birlikte); (3) satın alma yokken fatura satır sayısı değişmiyor (regresyon); (4) CSV indirmede satır görünür; (5) CROSS-TENANT: başka lisansın satın alması bu lisansın faturasına girmiyor.\nKAPSAM DIŞI: fatura şemasında yeni alan (line_items zaten var — kontrat değişmez) · PDF fatura (v2 kapsam dışı) · iade satırı / negatif line_item (açık soru 5) · UI (09.3-f/g)\nSÖZLEŞME: yok (Invoice.line_items dizisi openapi.yaml:1723'te tanımlı; yeni path/schema eklenmiyor → contract-parity etkilenmez)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration: satın alma → fatura satırı + toplam artışı · integration: satın alma yok → mevcut fatura şekli değişmemiş (regresyon) · integration: CSV indirmede satır mevcut · CROSS-TENANT negatif: başka lisansın satın alması faturaya sızmıyor",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "71.4"
             ],
             "parentId": "71",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T21:59:20.622Z"
           },
           {
             "id": 6,
@@ -2438,7 +2438,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T21:29:45.537Z",
+        "updatedAt": "2026-08-09T21:59:20.622Z",
         "complexity": 7,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.3 — API istek paketleri (Essential/Pro/Pro+)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T21:29:45.539Z",
+      "lastModified": "2026-08-09T21:59:20.623Z",
       "taskCount": 109,
       "completedCount": 96,
       "tags": [

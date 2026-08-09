@@ -3378,6 +3378,90 @@ describe('reports and billing', () => {
       // B sees only its own open invoice — none of A's past periods.
       expect(theirs.every((i: { period: string }) => i.period === period)).toBe(true);
     });
+
+    describe('a bought API package, as its own line item (09.3-e)', () => {
+      const ESSENTIAL = API_PACKAGE_CATALOG.find((p) => p.id === 'essential')!;
+
+      /** The invoice for the current, still-open period. */
+      const openInvoice = async (): Promise<{
+        status: string;
+        total_cents: number;
+        subtotal_cents: number;
+        line_items: { description: string; amount_cents: number }[];
+      }> => {
+        const invoices = (await server.get('/billing/invoices', auth)).json().invoices;
+        return invoices.find((i: { period: string }) => i.period === period);
+      };
+
+      it('lists the purchase priced from the receipt, summed into the total', async () => {
+        await activate();
+        const bought = await server.post('/billing/api-packages', { package_id: 'essential' }, auth);
+        expect(bought.statusCode).toBe(200);
+
+        const open = await openInvoice();
+        const line = open.line_items.find((l) => l.description.includes('API package'));
+        expect(line).toEqual({
+          description: `API package — Essential (${ESSENTIAL.api_calls} calls)`,
+          amount_cents: ESSENTIAL.price_cents,
+        });
+        // Seats ($198) + the package price — itemised, and the total agrees
+        // with subtotal and with summing the lines by hand.
+        expect(open.total_cents).toBe(2 * 9900 + ESSENTIAL.price_cents);
+        expect(open.subtotal_cents).toBe(open.total_cents);
+        expect(open.line_items.reduce((sum, l) => sum + l.amount_cents, 0)).toBe(open.total_cents);
+      });
+
+      it('leaves the invoice exactly as before when nothing was bought (regression)', async () => {
+        await activate();
+        const open = await openInvoice();
+        expect(open.line_items).toHaveLength(1);
+        expect(open.line_items.some((l) => l.description.includes('API package'))).toBe(false);
+        expect(open.total_cents).toBe(2 * 9900);
+      });
+
+      it('carries the line onto the injection-safe CSV download', async () => {
+        await activate();
+        await server.post('/billing/api-packages', { package_id: 'essential' }, auth);
+
+        const response = await server.get(`/billing/invoices/${period}/download`, auth);
+        const rows = response.body.split('\r\n').filter((l: string) => l !== '');
+        expect(rows).toContain(`API package — Essential (${ESSENTIAL.api_calls} calls),${ESSENTIAL.price_cents}`);
+      });
+
+      it('is a real charge even while the plan itself is free during the trial', async () => {
+        // The fixture license is trialing — the trial gate never blocks
+        // buying a package (api-package-service.ts), so the purchase still
+        // happens and is a deliberate spend the plan-free line does not cover.
+        const bought = await server.post('/billing/api-packages', { package_id: 'essential' }, auth);
+        expect(bought.statusCode).toBe(200);
+
+        const open = await openInvoice();
+        expect(open.status).toBe('trial');
+        const line = open.line_items.find((l) => l.description.includes('API package'));
+        expect(line?.amount_cents).toBe(ESSENTIAL.price_cents);
+        expect(open.total_cents).toBe(ESSENTIAL.price_cents);
+      });
+
+      it('never puts another tenant’s purchase on this invoice', async () => {
+        await activate();
+        const theirToken = await grantToken(owner, {
+          licenseId: fx.b.licenseId,
+          organizationId: fx.b.organizationId,
+          ownerId: fx.b.ownerAccountId,
+          scopes: ['billing_manage'],
+        });
+        const bought = await server.post(
+          '/billing/api-packages',
+          { package_id: 'essential' },
+          { authorization: `Bearer ${theirToken}` },
+        );
+        expect(bought.statusCode).toBe(200);
+
+        const open = await openInvoice();
+        expect(open.line_items.some((l) => l.description.includes('API package'))).toBe(false);
+        expect(open.total_cents).toBe(2 * 9900);
+      });
+    });
   });
 
   // =========================================================================

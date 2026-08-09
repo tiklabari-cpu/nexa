@@ -2,12 +2,12 @@
  * Invoices (FR-MOD-10.3, "fatura listesi/indirme").
  *
  * Billing is mocked (ADR-13): no external provider issues invoices, so Nexa
- * *derives* them from the two things that are real — the subscription and the
- * per-period usage records — rather than persisting a parallel invoice table
- * that could drift from them. One invoice per billing period the workspace has
- * touched, plus the current (open) one; its total is the same arithmetic the
- * subscription view quotes, so the current invoice and `estimated_total_cents`
- * can never disagree.
+ * *derives* them from the things that are real — the subscription, the
+ * per-period usage records, and any API packages bought in the period (09.3) —
+ * rather than persisting a parallel invoice table that could drift from them.
+ * One invoice per billing period the workspace has touched, plus the current
+ * (open) one; its seat + overage total is the same arithmetic the subscription
+ * view quotes, so the two can never disagree on those two lines.
  *
  * The seat charge is taken from the *current* subscription applied to each
  * period — an honest approximation for a mock, since historical seat counts are
@@ -15,6 +15,7 @@
  * allowance and price that produced it, and this reads them back rather than
  * re-deriving.
  */
+import { findApiPackage } from '@nexa/types';
 import type { Env } from '../../config/env.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { currentPeriod, trialState } from './metering.js';
@@ -110,13 +111,14 @@ export async function buildInvoices(
   tenant: TenantContext,
   env: Env,
 ): Promise<Invoice[]> {
-  const [subscription, trial, records, activeUsers] = await Promise.all([
+  const [subscription, trial, records, purchases, activeUsers] = await Promise.all([
     tx.subscription.findFirst({
       where: { licenseId: tenant.licenseId },
       orderBy: { createdAt: 'desc' },
     }),
     trialState(tx, tenant),
     tx.usageRecord.findMany({ where: { licenseId: tenant.licenseId } }),
+    tx.apiPackagePurchase.findMany({ where: { licenseId: tenant.licenseId } }),
     tx.agentMembership.count({ where: { suspended: false } }),
   ]);
 
@@ -129,23 +131,27 @@ export async function buildInvoices(
   const { seatChargeCents } = priceSeats(unitPrice, seats, billingCycle);
   const trialing = trial.access === 'trialing';
 
-  // Every period with usage, plus the current one — so the open invoice always
-  // exists. A Set de-duplicates the current period if a usage record already
-  // wrote it.
-  const periods = [...new Set([now, ...records.map((r) => r.period)])].sort((a, b) =>
-    b.localeCompare(a),
-  );
+  // Every period with usage or a package purchase, plus the current one — so
+  // the open invoice always exists. A Set de-duplicates the current period if
+  // a usage record or purchase already wrote it.
+  const periods = [
+    ...new Set([now, ...records.map((r) => r.period), ...purchases.map((p) => p.period)]),
+  ].sort((a, b) => b.localeCompare(a));
 
   return periods.map((period) => {
     const ai = records.find((r) => r.metric === 'ai_resolutions' && r.period === period);
     const api = records.find((r) => r.metric === 'api_calls' && r.period === period);
+    const packagesBought = purchases.filter((p) => p.period === period);
 
     const status: InvoiceStatus = trialing ? 'trial' : period < now ? 'paid' : 'open';
 
     let lineItems: InvoiceLineItem[];
     if (trialing) {
-      // Nothing is billed during the trial, so the statement is $0 and says why —
-      // matching `estimated_total_cents`, which is also 0 while trialing.
+      // The subscription itself is free during the trial, so the statement
+      // says why — matching `estimated_total_cents`, which is also 0 while
+      // trialing. A package purchase is a separate, deliberate spend (the
+      // trial gate never blocks `POST /billing/api-packages`), so it still
+      // lands below as its own line rather than being folded into "free".
       lineItems = [{ description: `${plan} plan — free during trial`, amount_cents: 0 }];
     } else {
       lineItems = [
@@ -173,6 +179,21 @@ export async function buildInvoices(
           });
         }
       }
+    }
+
+    // A bought package's quota and price come off its own receipt row, never
+    // re-looked-up from today's catalogue — the same reasoning
+    // `serialiseApiPackagePurchase` uses: what the workspace was actually
+    // charged must not restate itself when a price changes later. Only the
+    // display name is joined from the catalogue, and falls back to the id for
+    // a package that has since been withdrawn, so a past purchase never drops
+    // off its own invoice.
+    for (const purchase of packagesBought) {
+      const name = findApiPackage(purchase.packageId)?.name ?? purchase.packageId;
+      lineItems.push({
+        description: `API package — ${name} (${Number(purchase.apiCalls)} calls)`,
+        amount_cents: purchase.priceCents,
+      });
     }
 
     const total = lineItems.reduce((sum, item) => sum + item.amount_cents, 0);

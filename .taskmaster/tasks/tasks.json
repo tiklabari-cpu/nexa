@@ -2414,13 +2414,13 @@
             "description": "BillingPage.tsx'e `ApiPackagePurchasesSection`: GET /billing/api-packages/purchases → tarih / paket adı / kota / tutar satırları (formatDate + formatCount + formatMoney), en yeni önce; satın alma yokken anlamlı empty state (boş dikdörtgen değil, EK-B.1 kuralı); yükleme durumu. Kısa liste olduğu için VirtualTable gerekmez.",
             "details": "09.3-g — Satın alma geçmişi listesi (UI) + empty state  [SONNET-XHIGH]\n\nPRD: FR-MOD-09.3 (+ FR-EK-B.1 anlamlı empty state)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 2 dosya + test; güvenlik sınırı yok (salt-okunur liste, izolasyon 09.3-c'de kapatıldı); eşzamanlılık yok; kopyalanacak desen aynı dosyada ismen var (BillingPage.tsx InvoicesSection satır 801 — liste + formatMoney/formatDate + boş durum); kontrat değişikliği yok; kabul mekanik (satır sayısı + empty state).\nNEDEN AÇIK: 09.3-c'de eklenen GET /billing/api-packages/purchases endpoint'i tüketicisiz kalır. apps/web/src/features/billing/BillingPage.tsx'te satın alma geçmişi bölümü yok; en yakın liste deseni InvoicesSection (satır 801) ve o yalnız faturaları listeliyor.\nKAPSAM: BillingPage.tsx'e `ApiPackagePurchasesSection`: GET /billing/api-packages/purchases → tarih / paket adı / kota / tutar satırları (formatDate + formatCount + formatMoney), en yeni önce; satın alma yokken anlamlı empty state (boş dikdörtgen değil, EK-B.1 kuralı); yükleme durumu. Kısa liste olduğu için VirtualTable gerekmez.\nDOSYALAR: apps/web/src/features/billing/BillingPage.tsx · apps/web/src/features/billing/BillingPage.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/billing/BillingPage.tsx satır 801-900 (InvoicesSection: useQuery + satır listesi + formatMoney/formatDate + indirme bağlantısı) · apps/web/src/lib/format.ts (formatDate/formatMoney/formatCount) · apps/web/src/components/ui/index.js (Banner/Panel bileşenleri)\nKK (birebir): \"Fiyatlı API paketleri satışı\" | \"KK-türetilmiş: satın alınan paketlerin geçmişi (tarih, paket, kota, tutar) ekranda görünür. Türetme gerekçesi: PRD'de 09.3 için satın alma geçmişi/iptal ekranı tanımlanmamış (eksik #1); FR-MOD-10.3 fatura listesi deseniyle hizalanarak türetildi.\"\nKK DOĞRULAMA: BillingPage.test.tsx: (1) purchases yanıtındaki her satın alma bir satır olarak render ediliyor (tarih/ad/kota/tutar); (2) boş yanıt → anlamlı empty state metni, boş dikdörtgen değil; (3) sıralama en yeni önce; (4) 09.3-f'deki satın alma sonrası liste invalidate olup yeni satır görünüyor.\nKAPSAM DIŞI: fatura ekranı (mevcut InvoicesSection değişmez) · filtre/arama/sayfalama (liste kısa) · iptal/iade aksiyonu (kapsam dışı — açık soru 5) · e2e (09.3-h)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: dolu liste render (tarih/ad/kota/tutar) · unit: boş liste → anlamlı empty state · unit: satın alma sonrası liste yenileniyor (invalidate)",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "71.3",
               "71.6"
             ],
             "parentId": "71",
-            "updatedAt": "2026-08-09T22:37:42.001Z"
+            "updatedAt": "2026-08-09T22:58:30.948Z"
           },
           {
             "id": 8,
@@ -2438,7 +2438,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T22:37:42.001Z",
+        "updatedAt": "2026-08-09T22:58:30.948Z",
         "complexity": 7,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.3 — API istek paketleri (Essential/Pro/Pro+)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T22:37:42.002Z",
+      "lastModified": "2026-08-09T22:58:30.949Z",
       "taskCount": 109,
       "completedCount": 96,
       "tags": [

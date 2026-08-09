@@ -48,8 +48,9 @@ describe('channel views', () => {
     ]);
   });
 
-  it('orders channels Messenger → WhatsApp → SMS regardless of API order', () => {
+  it('orders channels Messenger → WhatsApp → SMS → Instagram regardless of API order', () => {
     const channels: ConnectedChannelLike[] = [
+      { type: 'instagram', connected: true },
       { type: 'twilio', connected: true },
       { type: 'whatsapp', connected: true },
       { type: 'messenger', connected: true },
@@ -58,6 +59,7 @@ describe('channel views', () => {
       'messenger',
       'whatsapp',
       'twilio',
+      'instagram',
     ]);
     // The provider type `twilio` surfaces to the agent as "SMS".
     expect(connectedChannelViews(channels).find((v) => v.type === 'twilio')?.label).toBe('SMS');
@@ -65,6 +67,21 @@ describe('channel views', () => {
 
   it('ignores an unknown channel type', () => {
     const channels: ConnectedChannelLike[] = [{ type: 'telegram', connected: true }];
+    expect(connectedChannelViews(channels)).toEqual([]);
+    expect(showChannelPromo(channels)).toBe(true);
+  });
+
+  it('lists a connected Instagram channel and hides the promo', () => {
+    // KK: bağlı instagram → satır görünür; yalnız instagram bağlıyken promo GÖSTERİLMEZ.
+    const channels: ConnectedChannelLike[] = [{ type: 'instagram', connected: true }];
+    expect(connectedChannelViews(channels)).toEqual([
+      { type: 'instagram', label: 'Instagram', icon: '📷' },
+    ]);
+    expect(showChannelPromo(channels)).toBe(false);
+  });
+
+  it('treats a disconnected Instagram channel as not connected', () => {
+    const channels: ConnectedChannelLike[] = [{ type: 'instagram', connected: false }];
     expect(connectedChannelViews(channels)).toEqual([]);
     expect(showChannelPromo(channels)).toBe(true);
   });

@@ -26,11 +26,11 @@ import type { InboxView, TrafficTab } from './types.js';
 
 /**
  * The messaging channels an inbox view can represent — the adapter channels
- * (FR-MOD-08.5.4-.6), whose provider type `twilio` surfaces to the agent as
- * "SMS". Email and the Website widget resolve tenants their own way and are not
- * adapter channels, so they are not listed here.
+ * (FR-MOD-08.5.4-.6, FR-MOD-08.5.7), whose provider type `twilio` surfaces to
+ * the agent as "SMS". Email and the Website widget resolve tenants their own
+ * way and are not adapter channels, so they are not listed here.
  */
-export type ChannelViewType = 'messenger' | 'twilio' | 'whatsapp';
+export type ChannelViewType = 'messenger' | 'twilio' | 'whatsapp' | 'instagram';
 
 export interface ChannelView {
   type: ChannelViewType;
@@ -47,6 +47,7 @@ const CHANNEL_VIEW_META: Record<ChannelViewType, { label: string; icon: string }
   messenger: { label: 'Messenger', icon: '📨' },
   whatsapp: { label: 'WhatsApp', icon: '📱' },
   twilio: { label: 'SMS', icon: '💬' },
+  instagram: { label: 'Instagram', icon: '📷' },
 };
 
 /** The `/channels` row shape, narrowed to what the Views group reads. */
@@ -56,13 +57,16 @@ export interface ConnectedChannelLike {
 }
 
 function isChannelViewType(value: string): value is ChannelViewType {
-  return value === 'messenger' || value === 'twilio' || value === 'whatsapp';
+  return (
+    value === 'messenger' || value === 'twilio' || value === 'whatsapp' || value === 'instagram'
+  );
 }
 
 /**
  * The channel views to show: one per connected, known channel, in the fixed
- * Messenger → WhatsApp → SMS order (stable rather than whatever order the API
- * returned). A disconnected or unrecognised channel yields nothing.
+ * Messenger → WhatsApp → SMS → Instagram order (stable rather than whatever
+ * order the API returned). A disconnected or unrecognised channel yields
+ * nothing.
  */
 export function connectedChannelViews(channels: ConnectedChannelLike[]): ChannelView[] {
   const connected = new Set(

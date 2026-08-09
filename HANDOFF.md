@@ -13,6 +13,47 @@
 
 ## Task log (newest-first)
 
+### tm 65.7 — 08.5.7-g: Inbox Views grubunda Instagram kanal görünümü — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/inbox/views.ts`: `ChannelViewType` birleşimine `'instagram'` eklendi;
+    `CHANNEL_VIEW_META`'ya Settings → Channels kartıyla birebir aynı `{ label: 'Instagram', icon:
+    '📷' }` girdisi eklendi (üçüncü sıradan sonra, `twilio`'dan hemen sonra); `isChannelViewType()`
+    dördüncü değeri tanıyacak şekilde güncellendi. Sabit rail sırası `CHANNEL_VIEW_META`'nın nesne
+    anahtar sırasından geldiği için ekleme noktası aynı zamanda sırayı belirledi — Messenger →
+    WhatsApp → SMS → Instagram (görev metninin istediği sıra), `connectedChannelViews`'in filtresi
+    zaten API'nin döndürdüğü sıradan bağımsız çalışıyordu.
+  - Öncesinde bilinmeyen bir kanal tipi `isChannelViewType` tarafından sessizce eleniyordu —
+    instagram bağlansa bile Inbox Views'da hiç satır göstermiyordu VE tek bağlı kanal instagram
+    olduğunda `showChannelPromo()` yanlışlıkla `true` dönüyordu (bağlı kanal varken promo
+    gösterilmesi, FR-MOD-02.1.4 KK'sının doğrudan ihlali). Bu iki dal artık kapalı.
+  - `InboxPage.tsx`'in `connectedChannelViews` kullanımı jenerik olduğu için dokunulmadı (görev
+    metninin öngördüğü gibi) — yeni kanal tipi otomatik olarak sidebar'a akıyor.
+  - `apps/web/src/features/inbox/views.test.ts`: 'channel views' describe'una +2 yeni test (bağlı
+    instagram → tek satır `{type:'instagram',label:'Instagram',icon:'📷'}` + `showChannelPromo`
+    `false`; bağlı değil instagram → satır yok + promo `true`); mevcut sabit-sıra testi dört kanalı
+    (instagram dahil) kapsayacak şekilde genişletildi — dosya toplam 19→21 test.
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `pnpm -w test` **0** (10/10 paket görevi; `@nexa/web` 92/92 dosya, **793** test — 791'den +2) ·
+  `pnpm -w test:integration` **0** (`@nexa/api` 66/66 dosya, 1556/1556 — bu görev backend'e
+  dokunmadığı için sayı sabit) · `pnpm -w build` **0** (7/7) · `pnpm -w test:e2e` **0** — **88/88**
+  (Docker zaten açıktı; `.env`'i `set -a && source .env && set +a` ile export edip koştum;
+  `settings.spec.ts:104`'ün mevcut whatsapp/website channels senaryoları regresyonsuz geçti).
+  KK'nın dördü de `views.test.ts`'te doğrulandı: (i) bağlı instagram → satır + label 'Instagram',
+  (ii) yalnız instagram bağlıyken promo gösterilmiyor, (iii) bağlı değilken satır yok, (iv) sıra
+  sabit: messenger, whatsapp, twilio, instagram.
+  `apps/e2e/kanit/*.png` e2e koşusunda yeniden üretildi (aynı içerik, farklı byte) — 65.1-65.6
+  emsaliyle `git checkout -- apps/e2e/kanit` ile atıldı.
+- **Varsayımlar:** Yok — görev metni mekanikti (üç mevcut kanal girdisinin deseni birebir
+  kopyalandı), yorum yorumu gerektiren bir karar çıkmadı.
+- **Sonraki pencereye not:**
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ commit edilmemiş WIP** — bu turda da dokunulmadı
+    (CONVENTIONS §5); `git add -A` kullanılmadı, yalnız bu görevin dosyaları (`views.ts`,
+    `views.test.ts`) + `PLAN.md`/`HANDOFF.md`/Task Master durumu sahnelendi.
+  - Sıradaki: **08.5.7-h** (uçtan uca doğrulama: Instagram bağla → DM gelsin → inbox'ta chat, e2e)
+    — 08.5.7'nin son alt-görevi, `08.5.7-e` ve `08.5.7-g`'ye bağımlı, ikisi de artık kapalı.
+  - Docker Desktop bu pencerede zaten açıktı (`nexa-db`/`nexa-redis` healthy) — dokunulmadı.
+
 ### tm 65.6 — 08.5.7-f: 'Get notified' kaydının kalıcılaştırılması (kalan coming-soon kanalları) — done — 2026-08-09 UTC
 
 - **Yapıldı:**

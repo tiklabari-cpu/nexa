@@ -1920,12 +1920,12 @@
             "description": "ChannelViewType birleşimine 'instagram' eklenir; CHANNEL_VIEW_META'ya { label: 'Instagram', icon: '📷' } girdisi Settings → Channels kartıyla aynı etiket/ikonla eklenir; isChannelViewType() güncellenir; sabit rail sırası (Messenger → WhatsApp → SMS → Instagram) korunacak şekilde anahtar sırası belirlenir. views.test.ts'e: bağlı instagram → satır görünür; yalnız instagram bağlıyken promo GÖSTERİLMEZ",
             "details": "08.5.7-g — Inbox Views grubunda Instagram kanal görünümü  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.5.7 (+ FR-MOD-02.1.4)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 dosya (views.ts + views.test.ts), saf fonksiyon katmanı. (2) Güvenlik sınırı yok — scope kapısı canReadChannels zaten var ve değişmiyor. (3) Eşzamanlılık yok. (4) Kopyalanacak desen aynı dosyada: CHANNEL_VIEW_META'nın üç mevcut girdisi. (5) Kontrat değişikliği yok. (6) KK mekanik: bağlı kanal → görünen satır.\nNEDEN AÇIK: apps/web/src/features/inbox/views.ts:31 `export type ChannelViewType = 'messenger' | 'twilio' | 'whatsapp'`; isChannelViewType() (satır ~58) üç değeri sabit karşılaştırıyor; CHANNEL_VIEW_META (satır ~46-50) üç girdili. connectedChannelViews() bilinmeyen tipi sessizce eliyor → instagram bağlansa bile Inbox Views'da HİÇ görünmez ve tek kanal instagram ise showChannelPromo() yanlışlıkla true döner (kanal bağlıyken promo gösterilir).\nKAPSAM: ChannelViewType birleşimine 'instagram' eklenir; CHANNEL_VIEW_META'ya { label: 'Instagram', icon: '📷' } girdisi Settings → Channels kartıyla aynı etiket/ikonla eklenir; isChannelViewType() güncellenir; sabit rail sırası (Messenger → WhatsApp → SMS → Instagram) korunacak şekilde anahtar sırası belirlenir. views.test.ts'e: bağlı instagram → satır görünür; yalnız instagram bağlıyken promo GÖSTERİLMEZ; bağlı değilken satır yok.\nDOSYALAR: apps/web/src/features/inbox/views.ts · apps/web/src/features/inbox/views.test.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/inbox/views.ts CHANNEL_VIEW_META + isChannelViewType + connectedChannelViews (aynı dosyadaki üç mevcut kanal girdisi) · apps/web/src/features/inbox/views.test.ts mevcut kanal görünümü vakaları (19 test) · apps/web/src/features/settings/Channels.tsx (etiket/ikon eşleşmesi için tek doğruluk referansı: '📷' Instagram)\nKK (birebir): \"\"Coming soon → Get notified → tam entegrasyon\"\" | \"KK-türetilmiş: \"tam entegrasyon\"ın inbox payı. Destek KK (PRD 02.1.4, birebir): \"Kanal bağlı değilse channel-promo; custom saved views eklenebilir\" — bağlı kanalın görünmesi bu kriterin karşıtı-doğrusu; instagram eklenmezse bağlı kanal varken promo gösterilir (kriter ihlali).\"\nKK DOĞRULAMA: views.test.ts: (i) connectedChannelViews([{type:'instagram',connected:true}]) → tek satır, label 'Instagram'; (ii) showChannelPromo(aynı girdi) === false (bağlı kanal varken promo yok — 02.1.4 KK'sının doğrudan ihlali önlenir); (iii) connected:false instagram → satır yok; (iv) sıra sabit: messenger, whatsapp, twilio, instagram.\nKAPSAM DIŞI: telegram kanal görünümü (Enterprise, kapsam dışı) · yeni saved-view davranışı · kanal bazlı sohbet filtreleme sorgusunun backend tarafı (mevcut davranış korunur)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: bağlı instagram → satır; bağlı değil → satır yok; sabit sıra · unit negatif: showChannelPromo yalnız instagram bağlıyken false (regresyon kanıtı) · unit regresyon: mevcut views.test.ts vakaları (19) yeşil · cross-tenant: gerekmiyor — saf istemci fonksiyonu, veri /channels'tan gelir ve RLS ile zaten tenant-scoped",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "65.3"
             ],
             "parentId": "65",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T18:39:40.273Z"
           },
           {
             "id": 8,
@@ -1942,7 +1942,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T18:24:36.946Z",
+        "updatedAt": "2026-08-09T18:39:40.273Z",
         "complexity": 6,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"08.5.7 — Instagram (DM, MOCK)  ·  dilim V2-9\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T18:24:36.946Z",
+      "lastModified": "2026-08-09T18:39:40.274Z",
       "taskCount": 109,
       "completedCount": 95,
       "tags": [

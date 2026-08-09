@@ -17,12 +17,19 @@ import { TwilioAdapter } from './twilio.js';
 import { WhatsAppAdapter } from './whatsapp.js';
 
 describe('channel type guard', () => {
-  it('recognises the three adapter channels and rejects others', () => {
-    expect(CHANNEL_TYPES).toEqual(['messenger', 'twilio', 'whatsapp']);
+  it('recognises the adapter channels and rejects others', () => {
+    // Pinned deliberately: this list is the runtime gate on
+    // /channels/:type/{connect,disconnect,messages,webhook} — the last one
+    // public. Widening it is a route-surface decision, so it changes here too.
+    expect(CHANNEL_TYPES).toEqual(['messenger', 'twilio', 'whatsapp', 'instagram']);
     for (const t of CHANNEL_TYPES) expect(isChannelType(t)).toBe(true);
     expect(isChannelType('email')).toBe(false);
     expect(isChannelType('sms')).toBe(false);
     expect(isChannelType('website')).toBe(false);
+    // Named in the domain channel list and the channels_type_check constraint,
+    // but with no adapter — still a 404 (Telegram is Enterprise, out of scope).
+    expect(isChannelType('telegram')).toBe(false);
+    expect(isChannelType('website_widget')).toBe(false);
     expect(isChannelType('')).toBe(false);
   });
 

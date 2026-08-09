@@ -1,5 +1,6 @@
 /**
- * Omnichannel adapters (MOCK) — FR-MOD-08.5.4/.5/.6 (v1, Must).
+ * Omnichannel adapters (MOCK) — FR-MOD-08.5.4/.5/.6 (v1, Must) and
+ * FR-MOD-08.5.7 (Instagram DMs, v2).
  *
  * The properties the acceptance criteria name, proven end to end against real
  * Postgres + Redis + Fastify:
@@ -26,9 +27,9 @@ interface ConnectedChannel {
   created_at: string;
 }
 
-/** One channel's provider-specific shapes, so the KK runs against all three. */
+/** One channel's provider-specific shapes, so the KK runs against every one. */
 interface ChannelCase {
-  type: 'messenger' | 'twilio' | 'whatsapp';
+  type: 'messenger' | 'twilio' | 'whatsapp' | 'instagram';
   addressA: string;
   addressB: string;
   sender: string;
@@ -70,7 +71,29 @@ const CASES: ChannelCase[] = [
       ...(name ? { profile_name: name } : {}),
     }),
   },
+  {
+    // Instagram DMs (08.5.7): the connected IG account's id is the address, the
+    // sender is an IGSID — Instagram-scoped, so the same person writing to two
+    // workspaces is two senders at the provider as well as two customers here.
+    type: 'instagram',
+    addressA: '17841400000000001',
+    addressB: '17841400000000009',
+    sender: 'igsid_sender_alpha',
+    connect: (ig_user_id) => ({
+      code: 'IGQ_mock_oauth_code',
+      ig_user_id,
+      username: 'acme_support',
+    }),
+    inbound: (ig_user_id, sender, text, name) => ({
+      recipient: { id: ig_user_id },
+      sender: { id: sender, ...(name ? { username: name } : {}) },
+      message: { text },
+    }),
+  },
 ];
+
+/** The Instagram case, for the assertions that are about it specifically. */
+const INSTAGRAM = CASES.find((c) => c.type === 'instagram')!;
 
 describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
   let owner: PrismaClient;
@@ -342,6 +365,46 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
     });
   });
 
+  // --- Instagram wiring (08.5.7-c) -------------------------------------------
+
+  describe('instagram (FR-MOD-08.5.7)', () => {
+    const c = INSTAGRAM;
+
+    it('reaches the Instagram adapter specifically, not merely some adapter', async () => {
+      // Every case above would still pass if the registry mapped `instagram` to
+      // the wrong adapter — the shapes are shared. The provider message id and
+      // the stored config are the tell that the right one is on the other end.
+      await connect(c.type, c.connect(c.addressA));
+
+      const row = await owner.channel.findFirst({
+        where: { licenseId: fx.a.licenseId, type: 'instagram' },
+      });
+      const config = (row?.config ?? {}) as Record<string, unknown>;
+      expect(config['ig_user_id']).toBe(c.addressA);
+      expect(config['address']).toBe(c.addressA);
+      expect(config['ig_access_token']).toMatch(/^mock_ig_access_token_/);
+      // The OAuth code was exchanged and discarded, never persisted.
+      expect(config).not.toHaveProperty('code');
+
+      const inbound = (await webhook(c.type, c.inbound(c.addressA, c.sender, 'hi'))).json() as {
+        chat_id: string;
+      };
+      const sent = (await sendOut(c.type, { chat_id: inbound.chat_id, text: 'on it' })).json() as {
+        provider_message_id: string;
+      };
+      expect(sent.provider_message_id).toMatch(/^aigid\./);
+    });
+
+    it('carries the sender username onto the customer it creates', async () => {
+      await connect(c.type, c.connect(c.addressA));
+      const res = (await webhook(c.type, c.inbound(c.addressA, c.sender, 'hey', 'dana_h'))).json() as {
+        customer_id: string;
+      };
+      const customer = await owner.customer.findUnique({ where: { id: res.customer_id } });
+      expect(customer?.name).toBe('dana_h');
+    });
+  });
+
   // --- Cross-tenant isolation (NFR-S5) ---------------------------------------
 
   describe('cross-tenant isolation', () => {
@@ -396,6 +459,41 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       expect(res.statusCode).toBe(404);
       // Nothing was recorded for B.
       expect((await messagesFor(fx.b.licenseId)).filter((m) => m.direction === 'outbound')).toHaveLength(0);
+    });
+
+    it('routes an Instagram DM by the receiving account while both tenants hold instagram', async () => {
+      // The one Instagram-specific isolation risk: an IG account id is public
+      // and guessable, and the inbound webhook is unauthenticated. What decides
+      // the tenant is the recipient address, not "who has instagram connected".
+      const ig = INSTAGRAM;
+      await connect(ig.type, ig.connect(ig.addressA), adminA);
+      await connect(ig.type, ig.connect(ig.addressB), adminB);
+
+      const dm = (await webhook(ig.type, ig.inbound(ig.addressA, ig.sender, 'DM for A'))).json() as {
+        chat_id: string;
+      };
+
+      expect(await chatsFor(fx.a.licenseId)).toHaveLength(1);
+      expect(await chatsFor(fx.b.licenseId)).toHaveLength(0);
+      expect(await identitiesFor(fx.b.licenseId)).toHaveLength(0);
+      expect(await messagesFor(fx.b.licenseId)).toHaveLength(0);
+
+      // B cannot reply into it, by chat id or by naming the sender's IGSID —
+      // the second is B's own channel, but that sender is a stranger there.
+      expect(
+        (await sendOut(ig.type, { chat_id: dm.chat_id, text: 'intrusion' }, adminB)).statusCode,
+      ).toBe(404);
+      expect(
+        (await sendOut(ig.type, { external_id: ig.sender, text: 'intrusion' }, adminB)).statusCode,
+      ).toBe(200);
+      // …and that reply is B's own outbound to a sender B has never heard from,
+      // logged under B — it never touches A's chat or message log.
+      const outboundB = (await messagesFor(fx.b.licenseId)).filter((m) => m.direction === 'outbound');
+      expect(outboundB).toHaveLength(1);
+      expect(outboundB[0]).toMatchObject({ chatId: null });
+      expect(
+        (await messagesFor(fx.a.licenseId)).filter((m) => m.direction === 'outbound'),
+      ).toHaveLength(0);
     });
   });
 });

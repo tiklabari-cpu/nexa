@@ -5,6 +5,7 @@
  * channel type without an adapter here is a compile error, not a 500 at runtime.
  */
 import { CHANNEL_TYPES, type ChannelAdapter, type ChannelType } from './channel-adapter.js';
+import { InstagramAdapter } from './instagram.js';
 import { MessengerAdapter } from './messenger.js';
 import { TwilioAdapter } from './twilio.js';
 import { WhatsAppAdapter } from './whatsapp.js';
@@ -13,6 +14,7 @@ const ADAPTERS: Record<ChannelType, ChannelAdapter> = {
   messenger: new MessengerAdapter(),
   twilio: new TwilioAdapter(),
   whatsapp: new WhatsAppAdapter(),
+  instagram: new InstagramAdapter(),
 };
 
 export function getAdapter(type: ChannelType): ChannelAdapter {

@@ -13,6 +13,61 @@
 
 ## Task log (newest-first)
 
+### tm 65.3 — 08.5.7-c: instagram'ın adapter kanalı olarak devreye alınması (CHANNEL_TYPES + registry) + inbound→chat / outbound uçtan uca kanıtı — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/api/src/services/channels/channel-adapter.ts`: `CHANNEL_TYPES` `['messenger','twilio',
+    'whatsapp']` → `+'instagram'`. Yorum bloğu bu listenin ne olduğunu açık yazacak şekilde
+    genişletildi: bu liste **runtime kapısıdır** — `routes/channels.ts` `:type` segmentini
+    `isChannelType` ile daraltıyor, dolayısıyla listeye giren tip için connect/disconnect/
+    messages (`channels--all:rw`) ve **webhook** (`config:{public:true}`, imzasız) açılır.
+    Ayrıca `@nexa/types`'ın domain-scoped 8 değerli `CHANNEL_TYPES`'ıyla karıştırılmaması için
+    ayrım yorumu eklendi (görev varsayımı: iki liste birleştirilmez).
+  - `registry.ts`: `ADAPTERS`'a `instagram: new InstagramAdapter()`. `Record<ChannelType,
+    ChannelAdapter>` olduğu için tip eklenip adaptör eklenmemesi derleme hatası olurdu.
+  - `instagram.ts`: 65.2'nin bıraktığı "henüz kayıtlı değil" başlık yorumu güncellendi ve sınıf
+    artık `implements ChannelAdapter` (65.2'de `ChannelType` union'ı `instagram` içermediği için
+    yazılamıyordu — handoff'ta opsiyonel olarak not edilmişti, yapıldı).
+  - **Route/servis katmanında kod değişikliği GEREKMEDİ** — görev metninin beklentisi doğrulandı:
+    `channels.ts` ve `channel-service.ts` tamamen jenerik, tek satır dokunulmadı.
+  - Kanıt (`apps/api/test/integration/channels-adapters.test.ts`): `CASES` dizisine instagram
+    case'i (addressA/B = ig_user_id, sender = IGSID, connect `{code, ig_user_id, username}`,
+    inbound `{recipient.id, sender.id/username, message.text}`) → `describe.each`'teki altı
+    senaryo instagram için de koşuyor (+6). Yeni `describe('instagram (FR-MOD-08.5.7)')` (+2):
+    (i) registry'nin **doğru** adaptöre bağlandığı — jenerik testler yanlış eşlemede de geçerdi:
+    `provider_message_id` `aigid.` önekli, `channels.config`'te `ig_user_id`+`address`+
+    `ig_access_token` var ve `code` YOK; (ii) `sender.username` → `customer.name`. Cross-tenant
+    describe'ına instagram vakası (+1): iki tenant da instagram bağlıyken DM **alıcı hesaba**
+    göre yönleniyor (adres tahmin edilebilir + webhook imzasız olduğu için asıl risk bu),
+    B ne A'nın chat'ine yazabiliyor (404) ne de A'nın log'una satır düşürebiliyor.
+  - Regresyon: `adapters.test.ts` `CHANNEL_TYPES` sabiti güncellendi (+ `telegram` ve
+    `website_widget` negatifleri — kanal listelerinde/CHECK constraint'te adı geçen ama adaptörü
+    olmayan tipler hâlâ 404); `reports-metrics.test.ts`'e `channelLabel('instagram')` iddiası —
+    `channelLabel` `CHANNEL_TYPES`'ı okuduğu için instagram artık `'website'` kovasına düşmüyor,
+    kendi adıyla raporlanıyor (bu değişikliğin tek dolaylı davranış etkisi, bilinçli).
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `pnpm -w test` **0** (99/99 dosya, **2075/2075** — 2066'dan +9) · `pnpm -w test:integration`
+  **0** (66/66 dosya, **1544/1544** — 1535'ten +9) · `pnpm -w build` **0** (7/7) ·
+  `pnpm -w test:e2e` **0** — **88/88** (`.env` kaynaklanarak). Kabul kriterinin tamamı
+  (inbound→routed chat + customer-authored event + identity + inbound log, outbound iki yol,
+  404/403/400 negatifleri, cross-tenant) integration süitinde yeşil.
+  `apps/e2e/kanit/*.png` e2e koşusunda yeniden üretildi (aynı içerik, farklı byte) — tm 65.1/65.2
+  emsaliyle `git checkout -- apps/e2e/kanit` ile atıldı.
+- **Varsayımlar:** yok — alan adları/önekler 65.1/65.2'de kilitlenmişti, birebir tüketildi.
+- **Sonraki pencereye not:**
+  - **08.5.7-d (tm 65.4, OPUS-MAX) artık gerçekten açık ve önceliklidir.** Bu pencere adresleri
+    testlerde bilinçli ayrık tuttu (görev tanımı gereği); yani "aynı adresi iki lisans bağlarsa
+    ne olur" HÂLÂ tanımsız: `channel_resolve_license` çoklu satır dönebiliyor ve
+    `channel-service.ts:222` sessizce `rows[0]`'ı alıyor. instagram'ın devreye girmesi bu
+    yüzeyi genişletti (ig_user_id herkese açık/tahmin edilebilir), riski yaratmadı ama
+    somutlaştırdı.
+  - 08.5.7-e (UI) için hazır: `POST /channels/instagram/connect` gövdesi `{code, ig_user_id,
+    username?}`, `GET /channels` bağlı kanalı `{type:'instagram', address, connected}` ile
+    döndürüyor. 08.5.7-g için `views.ts`'e eklenecek tip artık sunucu tarafında gerçek.
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ commit edilmemiş WIP** — bu turda da
+    dokunulmadı (CONVENTIONS §5); `git add -A` kullanılmadı, yalnız bu görevin dosyaları
+    sahnelendi. `.taskmaster/tmp-*.cjs` scratch dosyaları da untracked bırakıldı.
+
 ### tm 65.2 — 08.5.7-b: InstagramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri — done — 2026-08-09 UTC
 
 - **Yapıldı:**

@@ -1,5 +1,5 @@
 /**
- * Instagram adapter (Meta OAuth) — FR-MOD-08.5.7 (v1, Must). MOCK.
+ * Instagram adapter (Meta OAuth) — FR-MOD-08.5.7 (v2, Should). MOCK.
  *
  * Instagram DMs sit in the same Meta Graph family as Messenger (FR-MOD-08.5.4):
  * connect stands in for the OAuth handshake — an admin authorizes the app, gets
@@ -12,13 +12,14 @@
  * account) and a sender identified by IGSID (an Instagram-scoped id, the
  * sender's stable identity for that account).
  *
- * Not yet registered in `CHANNEL_TYPES` / the adapter registry — that wiring is
- * FR-MOD-08.5.7-c. This class is written against the shared adapter shapes so
- * that registration is a one-line addition, not a rewrite.
+ * Registered in `CHANNEL_TYPES` and the adapter registry (08.5.7-c), which is
+ * what opens `/channels/instagram/{connect,disconnect,messages,webhook}` — the
+ * routes are generic over the channel type, so nothing there is Instagram-aware.
  */
 import { z } from 'zod';
 import { generateToken } from '../../lib/crypto.js';
 import {
+  type ChannelAdapter,
   type ConnectResult,
   type NormalizedInbound,
   type OutboundInput,
@@ -43,7 +44,7 @@ const inboundSchema = z.object({
   message: z.object({ text: z.string().min(1).max(10_000) }),
 });
 
-export class InstagramAdapter {
+export class InstagramAdapter implements ChannelAdapter {
   readonly type = 'instagram' as const;
 
   parseConnect(input: unknown): ConnectResult {

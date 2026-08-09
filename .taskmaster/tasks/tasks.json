@@ -5063,10 +5063,11 @@
         "description": "`apps/web/src/lib/format.ts` `Intl.NumberFormat(undefined)` ile ÇALIŞMA ORTAMININ varsayılan locale'ini kullanıyor; tr-TR bir makinede `$123,45` üretiyor, testler `$123.45` bekliyor. `pnpm -w test` bu yüzden bu makinede asla exit 0 vermiyor.",
         "details": "BULUNDUĞU TUR: tm 97.8 doğrulaması (ve daha önce 97.4/97.5/97.6 turlarında da \"bilinen kırmızı\" olarak not edilmişti — ama kök nedeni ilk kez burada yazılıyor).\n\nKÖK NEDEN: `apps/web/src/lib/format.ts`\n  - satır 22: `let activeLocale: string | undefined;` — i18n store `setFormatLocale()` çağırana kadar `undefined`.\n  - satır 35: `new Intl.NumberFormat(locale).format(value)` ve satır 80: `new Intl.NumberFormat(locale, { style:'currency', currency }).format(cents/100)`.\n  - `locale === undefined` → Intl **runtime'ın varsayılan locale'ini** kullanır = işletim sisteminin locale'i. Bu makine tr-TR → ondalık ayırıcı virgül → `$123,45`.\n  - Testler (`ReportsPage.test.tsx:1284`, `BillingPage.test.tsx`) en-US biçimi bekliyor → 2 dosya / 7 test kırmızı.\n\nSAYIM: `@nexa/web` 751 geçti / 7 kırmızı (2 dosya). Sayı turdan tura sabit; hiçbir ürün turu bunu değiştirmedi.\n\nKARAR GEREKTİREN NOKTA (ikisinden biri, ürün kararı):\n  (a) TESTLER pinlensin — test kurulumunda `setFormatLocale('en-US')` (veya vitest `environmentOptions`/`TZ`+`LANG` gibi) ile locale sabitlensin. En küçük değişiklik; ürün davranışı aynı kalır (kullanıcı locale'ine uyum KORUNUR).\n  (b) ÜRÜN pinlensin — `format.ts` varsayılanı açıkça bir locale'e (ör. 'en-US') sabitlesin. Bu, i18n'in \"kullanıcının locale'ine uy\" davranışını değiştirir → PRD/i18n kararına aykırı olabilir, dikkatli düşünülmeli.\n  ÖNERİ: (a). Testin amacı biçimlendirme mantığını doğrulamak, koşan makinenin locale'ini değil.\n\nNEDEN ÖNEMLİ: CONVENTIONS §1 DoD kapısı `pnpm -w test` exit 0 istiyor. Bu 7 kırmızı durdukça HİÇBİR pencere o kutuyu dürüstçe işaretleyemez ve kapı gerçek regresyonları saklayan bir gürültüye dönüşür.",
         "testStrategy": "`pnpm --filter @nexa/web test` → 758/758 yeşil. Ek regresyon: locale'i değiştirerek (ör. `LANG`/`LC_ALL` veya store üzerinden `setFormatLocale('tr-TR')`) testin hâlâ geçtiğini göster — yoksa kusur yalnız bu makineden başka bir makineye taşınmış olur.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T15:00:17.392Z"
       },
       {
         "id": "109",
@@ -5082,9 +5083,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T14:26:59.321Z",
+      "lastModified": "2026-08-09T15:00:17.392Z",
       "taskCount": 109,
-      "completedCount": 93,
+      "completedCount": 94,
       "tags": [
         "master"
       ]

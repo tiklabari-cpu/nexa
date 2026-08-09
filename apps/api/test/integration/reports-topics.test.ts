@@ -488,6 +488,10 @@ describe('chat topics — demo seed diversity (07.6-d)', () => {
   async function runDemoSeed(): Promise<void> {
     const { stdout } = await run('pnpm', ['db:seed'], {
       cwd: repoRoot,
+      // Same reason as `apps/e2e/tests/global-setup.ts`, which runs this exact
+      // command: `pnpm` is a shell shim and `CreateProcess` only finds `.exe`
+      // on PATH, so without a shell this is ENOENT rather than a seed run.
+      shell: true,
       maxBuffer: 4 * 1024 * 1024,
     });
     if (!stdout.includes('Acme Bikes')) {

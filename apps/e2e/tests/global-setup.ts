@@ -15,6 +15,12 @@ const repoRoot = resolve(import.meta.dirname, '../../..');
 export default async function globalSetup(): Promise<void> {
   const { stdout } = await run('pnpm', ['db:seed'], {
     cwd: repoRoot,
+    // `pnpm` is a shell shim, not an executable, wherever it was installed by
+    // npm — on Windows that is `pnpm.cmd`/`pnpm.ps1` plus an extensionless
+    // script, and `CreateProcess` searches PATH for `.exe` only. Without this
+    // the whole suite dies in setup with `spawn pnpm ENOENT` and not a single
+    // test runs, which reads exactly like a broken product and is not one.
+    shell: true,
     // The seed prints credentials; keep the buffer generous so a failure shows
     // the real output rather than a truncation error.
     maxBuffer: 4 * 1024 * 1024,

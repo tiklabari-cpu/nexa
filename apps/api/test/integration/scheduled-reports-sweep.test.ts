@@ -402,6 +402,14 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
         {
           cwd: repoRoot,
           env: { ...process.env, MAIL_DIR: scriptMailDir, ...envOverrides },
+          // `pnpm` is a shell shim, not an executable: where npm installed it
+          // there is a `.cmd`, a `.ps1` and an extensionless script, and
+          // `CreateProcess` searches PATH for `.exe` only. Without a shell the
+          // spawn fails with ENOENT before the script runs, and five tests
+          // about the operator script report a product failure that is really
+          // a PATH one. Every argument below is a literal — nothing here comes
+          // from a caller, so concatenation has nothing to quote wrongly.
+          shell: true,
           maxBuffer: 4 * 1024 * 1024,
         },
       );

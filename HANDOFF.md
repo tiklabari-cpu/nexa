@@ -13,6 +13,103 @@
 
 ## Task log (newest-first)
 
+### tm 97.8 — 06.3.2-bulk-h · Uçtan uca doğrulama: E2E CSV içe aktarma + RAG'de aranabilirlik — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/e2e/tests/bulk-import.spec.ts` (yeni, 1 test, tek sürekli yolculuk — ara adımların
+    hepsi bir öncekinin yazdığı satırlara dayandığı için bölmek daha az kanıtlar, daha çok
+    maliyet çıkarırdı): Playbook → Knowledge → **Bulk import** → şablonu indir
+    (`knowledge-bulk-import-template.csv`, gerçek tarayıcı indirmesi) → 5 satırlık CSV yükle →
+    **dry-run önizleme** tablosu (`3 imported · 2 skipped`) → **önizlemenin hiçbir şey yazmadığı
+    ayrıca iddia edildi** (kaynak listesi hâlâ boş; bu, önizlemeyi "farklı sözcüklerle import"
+    olmaktan ayıran şey) → Import → `Import complete` tablosunda satır satır sonuç → article/faq/
+    website satırları Knowledge listesinde ve **doğru alt-sekmede** (`knowledge-tabs.ts` filtresi:
+    Articles / FAQ / Websites), website satırı `Indexed` + crawl edilen URL ile → **iki ret satırı
+    listeye hiç girmiyor**.
+  - **KK'nın dört payı da tek testte kanıtlandı:** (a) *bulk/CSV import* — yükleme→önizleme→
+    aktarma→listede görünme; (b) *crawl/parse* — `type:website` satırı gerçekten crawl edilip
+    indekslendi (`Indexed`, chunk > 0); (c) *Geçersiz URL/tür reddi* — `type: podcast` satırı
+    `type: …` satır hatasıyla, `http://169.254.169.254/latest/meta-data/` satırı tek ve
+    **sızdırmayan** `source_url: this URL cannot be fetched.` mesajıyla `Skipped`; yanıtta
+    `169.254` geçmediği de ayrıca iddia edildi (97.7'nin ayırt-edilemez-ret kuralının e2e kanıtı);
+    (d) **RAG indeksleme — gerçekten geri okundu**: CSV'den gelen cümle, Playbook skill **Preview**
+    yüzeyinden (`POST /skills/preview` → aynı `SkillEngine` → `KnowledgeService.retrieve` →
+    pgvector; canlı widget cevabının kullandığı yolun ta kendisi, yalnız yazmasız) cevap olarak
+    döndü ve çalışma günlüğü kaynağı **adıyla alıntıladı**:
+    `send_message — answered from "Zephyr warranty <run>" (0.7217)`.
+    Retrieval sözlüksel olduğu için ayırt edici bir uydurma token (`flugelbrace<run>`) kullanıldı —
+    cevap dönüyorsa yalnız bu CSV'den dönmüş olabilir. Kanıt:
+    `apps/e2e/kanit/33-bulk-import-{preview,results,rag-answer}.png`.
+  - **E2E kapısı bu makinede İLK KEZ koşturuldu.** `apps/e2e/tests/global-setup.ts`'in
+    `execFile('pnpm', ['db:seed'])` çağrısına `shell: true` eklendi. Bu makinede `pnpm.exe` yok
+    (yalnız `.cmd`/`.ps1`/uzantısız shim) ve `CreateProcess` PATH'te yalnız `.exe` arıyor →
+    süit kurulumda `spawn pnpm ENOENT` ile ölüyor, **tek bir test bile koşmuyordu**. Aynı tek
+    kelimelik onarım `apps/api/test/integration/scheduled-reports-sweep.test.ts` ve
+    `reports-topics.test.ts`'e de uygulandı (aynı kök neden; ikisi de yalnız test dosyası).
+    **Kapsam gerekçesi:** bu görevin teslimi "DoD kapısının tam sürümünü koşmak"; kapının kendisi
+    koşulamıyorsa görev tanımı gereği yapılamaz. Önceki üç pencere bunu haklı olarak kendi
+    kapsamları dışında bırakmıştı (onların işi e2e değildi) ve "ayrı görev açılmalı" notunu
+    düşmüştü — o görev fiilen buydu.
+- **Doğrulama (exit code'larla):**
+  - `pnpm -w typecheck` **11/11 exit 0** · `pnpm -w lint` **8/8 exit 0** · `pnpm -w build` **7/7 exit 0**
+  - `bulk-import.spec.ts` **1/1 yeşil** — hem paylaşılan `nexa` DB'sinde hem sıfırdan
+    migrate+seed edilmiş izole DB'de, ayrı ayrı.
+  - `contract-parity.test.ts` **5/5 yeşil** (iki yön).
+  - `@nexa/api` **2030 geçti / 6 kırmızı** → `shell: true` sonrası **2035 / 1**; kalan 1 kırmızı
+    tarihe bağlı bir test kusuru → **tm 107** (aşağıda).
+  - `@nexa/web` **751 geçti / 7 kırmızı** — makine locale'i kaynaklı, değişmedi → **tm 108**.
+  - Tam e2e: **72 geçti / 15 kırmızı** (87 test). Kırmızıların **tamamı** widget'tan müşteri
+    mesajı gönderen testler → **tm 106**. Temiz kurulmuş DB'de 23 testin 4'ü (yalnız widget yolu);
+    paylaşılan DB'de state kirliliği birkaç `customers.spec` testini de düşürüyor.
+- **Kapı DURUMU — dürüst özet:** `pnpm -w test` ve tam e2e **KIRMIZI**, ama kırmızıların hiçbiri
+  bu turun değişikliğinden gelmiyor: `git diff --stat` ürün kodunda **sıfır** satır gösteriyor
+  (yalnız 2 api test dosyası + e2e harness + yeni spec + tazelenmiş kanıt PNG'leri). Üç kırmızı
+  kümesinin üçü de koda karşı teşhis edildi ve **tm 106 / 107 / 108** olarak açıldı.
+- **Bulunan gerçek kusurlar (e2e koşulur hale gelince görünenler):**
+  - **tm 106 [high] — Widget'tan mesaj gönderimi tarayıcıda kırık.** `api.send()` throw ediyor,
+    widget optimistic mesajı geri alıyor, transkript boş kalıyor (`widget.ts:546-569`).
+    **API tarafı SAĞLAM olduğu doğrudan HTTP ile kanıtlandı:** `POST /customer/token` 200 (her iki
+    origin), `GET /customer/chat` 200, `POST /customer/chat/events` **201** (chat + event yazıldı),
+    CORS preflight 204 + `allow-headers: authorization,content-type`. Elenen hipotezler: em-dash/
+    çok baytlı karakter, CORS, token doğrulama, SSRF, DB state. İlk adım: widget'ın
+    `console.warn('nexa widget: send failed', …)` çıktısını yakalamak.
+  - **tm 107 [medium] — `scheduled-reports:run` sızıntı testi tarihe bağlı.** Fixture sabit
+    `IN_PERIOD` (2026-08-07) yazıyor, spawn edilen CLI **gerçek** saati kullanıyor
+    (`scheduled-reports-run.ts:158`), süreç-içi testler ise `{ now: NOW }` pinliyor. Yalnız
+    2026-08-08'de geçebilir. `shell: true` onarımından ÖNCE hiç koşmamıştı.
+  - **tm 108 [medium] — `@nexa/web` 7 kırmızı makine locale'ine bağlı.** `format.ts`
+    `Intl.NumberFormat(undefined)` → OS locale (tr-TR) → `$123,45`, test `$123.45` bekliyor.
+- **Varsayımlar:** RAG geri okuma kanıtı için **skill Preview** yüzeyi seçildi; Copilot'un kendi
+  bilgi tabanı ayrı bir `AiAgent` (`kind: 'copilot'`) ve bulk import müşteriye bakan ajana
+  yazdığı için Copilot'tan geri okuma yapısal olarak imkânsızdı. Preview, canlı widget cevabıyla
+  **aynı** retrieval kodunu koşar (`skill-engine.ts` `#sendMessage`), yalnız yazma yapmaz.
+- **Sonraki pencereye not:**
+  - **ORTAM TUZAKLARI — bu turda pahalıya öğrenildi, tekrarlama:**
+    1. `apps/rtm` kendi `.env`'ini YÜKLEMİYOR (api'deki `loadEnvFile()` karşılığı yok). e2e'yi
+       daima `set -a && . ./.env && set +a` ile koş; yoksa RTM ayağa kalkmaz, Playwright 60 sn
+       sonra `webServer` timeout verir ve bu bir ürün hatası gibi okunur.
+    2. `reuseExistingServer: !CI` → portta KALAN bir dev sunucu varsa Playwright onu **env'i
+       uyuşmasa bile** yeniden kullanır. API'nin bir DB'ye, RTM'in başkasına baktığı bir koşu
+       tamamen sahte hatalar üretir. **Koşmadan önce 4000/4001/5173/5174'ü boşalt.** Bu tur iki
+       ayrı yanlış teşhis bundan doğdu.
+    3. Tam e2e süiti 10 dk'lık araç timeout'unu aşıyor → iki parçada koş.
+    4. Kabuk üzerinden curl ile API sondalarken **çıktıyı adım adım doğrula**: bu turda boş bir
+       değişken yüzünden "customer token 401" diye YANLIŞ bir teşhis üretildi ve ancak yeniden
+       ölçünce çürütüldü. Git Bash'te `/tmp` yolunu Node çözemiyor (`C:\tmp` arıyor) — dosyaları
+       depo içine yaz.
+  - **İKİ PENCERE AYNI ANDA KOŞUYORDU** (claude.exe 10444 = bu tur, 12080 = başka bir tur) ve ikisi
+    de aynı Postgres'e yazıyordu → `@nexa/api` süiti 1080/2039 kırmızı verdi (deadlock, `TRUNCATE`
+    vs sorgu). Aynı komut **izole bir DB'de 6/2039** verdi. Kırmızı görünce ÖNCE rakip süreç ara.
+    İzole DB tarifi: `docker exec nexa-db psql -U nexa -d postgres -c "CREATE DATABASE nexa_tmp OWNER nexa;"`
+    → `DATABASE_URL`/`DATABASE_APP_URL`'i `nexa_tmp`'e çevirip `npx prisma migrate deploy` → koş.
+    **`REDIS_URL`'e DB indeksi (`/7`) EKLEME** — RTM/API arasında pub-sub'ı ayırma riski var.
+    Bu turda açılan iki geçici DB (`nexa_v978`, `nexa_e2e978`) **temizlendi**; `nexa` dokunulmadı.
+  - Ayrıca 07:21'de başlamış, penceresi ölmüş bir **öksüz** `pnpm -w test:e2e` süreç ağacı 37
+    dakikadır DB'ye bağlıydı; temizlendi. Öksüz koşular her kapıyı zehirliyor — kapı kırmızıysa
+    `Get-CimInstance Win32_Process | ? { $_.CommandLine -like '*vitest*' -or $_.CommandLine -like '*playwright*' }`.
+  - `.taskmaster/tmp-*.cjs` + `tmp-changelog.txt` hâlâ untracked; önceki pencerelerin artığı,
+    bu turda oluşturulmadı, dokunulmadı, commit'lenmedi.
+
 ### tm 97.7 — 06.3.2-bulk-g · CSV website satırları: satır-başı SSRF guard + tx DIŞINDA, sıralı ve bütçeli crawl — done — 2026-08-09 UTC
 
 - **Yapıldı:**

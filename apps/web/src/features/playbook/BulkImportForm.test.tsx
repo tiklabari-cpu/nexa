@@ -2,16 +2,18 @@
  * BulkImportForm's contract (FR-MOD-06.3.2): a selected file is only ever
  * previewed (`dry_run: true`) before Import writes anything, Import stays
  * disabled until that preview names at least one row it would actually
- * import (EK-A.1), and a server refusal surfaces in a Banner without locking
- * the file picker.
+ * import (EK-A.1), a server refusal surfaces in a Banner without locking the
+ * file picker, and a completed import shows its own row-by-row result
+ * (`BulkImportResults`, bulk-f) rather than closing the panel out from under
+ * the admin.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
-import type { KnowledgeBulkResult } from './types.js';
+import type { KnowledgeBulkResult, KnowledgeBulkRowResult } from './types.js';
 
 const { api } = vi.hoisted(() => ({ api: { post: vi.fn() } }));
 
@@ -29,8 +31,33 @@ function csvFile(content: string, name = 'sources.csv', type = 'text/csv'): File
   return new File([content], name, { type });
 }
 
+/** Row results shaped to match `imported`/`failed` — a bare `[]` would make `BulkImportResults` render its empty state instead of the summary a test wants to see. */
+function bulkRows(imported: number, failed: number): KnowledgeBulkRowResult[] {
+  const line = (i: number) => i + 2;
+  return [
+    ...Array.from({ length: imported }, (_, i) => ({
+      line: line(i),
+      name: `Row ${i}`,
+      type: 'article',
+      status: 'imported' as const,
+      id: `src-${i}`,
+      chunk_count: 1,
+      error: null,
+    })),
+    ...Array.from({ length: failed }, (_, i) => ({
+      line: line(imported + i),
+      name: null,
+      type: null,
+      status: 'skipped' as const,
+      id: null,
+      chunk_count: null,
+      error: 'type: must be one of website, file, article, faq.',
+    })),
+  ];
+}
+
 function dryRunResult(imported: number, failed: number): KnowledgeBulkResult {
-  return { imported, failed, dry_run: true, results: [] };
+  return { imported, failed, dry_run: true, results: bulkRows(imported, failed) };
 }
 
 function renderForm(
@@ -103,7 +130,7 @@ describe('BulkImportForm', () => {
       }),
     );
 
-    expect(await screen.findByText(/1 will be skipped/)).toBeInTheDocument();
+    expect(await screen.findByText('0 imported · 1 skipped')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
   });
 
@@ -152,10 +179,10 @@ describe('BulkImportForm', () => {
     );
   });
 
-  it('imports after a successful dry run and reports back to the caller', async () => {
+  it('imports after a successful dry run, shows the completed result and reports back to the caller', async () => {
     api.post
       .mockResolvedValueOnce(dryRunResult(2, 0))
-      .mockResolvedValueOnce({ imported: 2, failed: 0, dry_run: false, results: [] });
+      .mockResolvedValueOnce({ imported: 2, failed: 0, dry_run: false, results: bulkRows(2, 0) });
     const user = userEvent.setup();
     const { onImported } = renderForm();
     await openPanel(user);
@@ -178,5 +205,22 @@ describe('BulkImportForm', () => {
       }),
     );
     await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
+
+    // The completed import's own row-by-row result stays visible — the panel
+    // does not close out from under the admin the instant the request resolves.
+    // "Import complete" legitimately appears twice (Banner heading + the
+    // table's sr-only caption), so scope to the visible status banner.
+    const banner = await screen.findByRole('status');
+    expect(within(banner).getByText('Import complete')).toBeInTheDocument();
+    expect(within(banner).getByText('2 imported · 0 skipped')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
+
+    // "Done" resets the panel closed, ready for a fresh file next time.
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByText('Import complete')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bulk import' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });

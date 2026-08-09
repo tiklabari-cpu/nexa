@@ -13,6 +13,58 @@
 
 ## Task log (newest-first)
 
+### tm 97.6 — 06.3.2-bulk-f · İçe aktarma sonuç tablosu: satır no/başlık/durum/hata + kısmi-başarı özeti + empty state — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/playbook/BulkImportResults.tsx` (yeni) — `KnowledgeBulkResult` zarfını
+    satır no / başlık / tür / durum rozeti (`Imported`/`Skipped`, `StatusDot`) / hata nedeniyle
+    `VirtualTable` üzerinde render eder (EK-B.1 — 200 satır sunucu tavanında bile yalnız görünür
+    satırlar DOM'da). Üstte özet `Banner` (`X imported · Y skipped`; kısmi başarıda `warning`
+    tonu, tam başarıda `success`). `results` boşsa `EmptyState` ("Nothing to show yet" + ne
+    yapılacağını söyleyen açıklama) — boş tablo YOK. Dry-run önizleme ve gerçek içe aktarma AYNI
+    bileşeni kullanır, yalnız çağıranın verdiği `title` farklı.
+  - `apps/web/src/features/playbook/BulkImportForm.tsx` — ham-sayı önizlemesi yerine
+    `BulkImportResults` bağlandı (dry-run sonucu + gerçek import sonucu). Gerçek import
+    tamamlanınca panel artık `onSuccess`'te otomatik kapanıp sıfırlanmıyor — admin kendi
+    satır-satır sonucunu görür, yeni "Done" butonuyla panel kapanır/sıfırlanır
+    (`resetPanel()` hem dry-run hem import mutasyonunu `reset()`'ler).
+  - Test: `BulkImportResults.test.tsx` (5, negatif önce: boş `results` → `EmptyState` + `table`
+    rolü yok · kısmi başarı → uyarı `Banner` + her atlanan satırın numarası+nedeni DOM'da · tam
+    başarı → atlanan satır bölümü hiç render edilmez · dry-run/gerçek aynı bileşen farklı
+    başlıkla (Banner + tablo sr-only caption'ı ayırt etmek için `within(getByRole('status'))`
+    kullanıldı) · 200 satırlık zarfta `role=row` sayısı 60'ın altında, yalnız pencere içi
+    satırlar). `BulkImportForm.test.tsx` genişletildi (7 → aynı sayı ama son test artık
+    tamamlanmış-import sonucunun görünürlüğünü + "Done" ile panel kapanışını da doğruluyor).
+- **Doğrulama:** `pnpm -w typecheck` 11/11 · `pnpm -w lint` 8/8 · `pnpm -w build` 7/7 · izole
+  `BulkImportResults.test.tsx`+`BulkImportForm.test.tsx` **12/12 yeşil**; tam suite `@nexa/web`
+  751 geçti/**7 kırmızı** — aynı bilinen BillingPage/ReportsPage locale-format kırmızıları
+  (tm 97.3'ten beri dokümante, bu turdan bağımsız, dokunulmadı).
+  **`@nexa/api` bu turda ciddi ölçüde kırmızıydı (889→982/2008, art arda iki koşuda FARKLI
+  sayı) — kök neden araştırıldı ve KOD HATASI OLMADIĞI doğrulandı:** bu turun `apps/api` diff'i
+  **sıfır** (`git diff --stat -- apps/api` boş çıktı verdi, hiç dokunulmadı). `pg_stat_activity`
+  incelemesinde yarım kalmış `idle in transaction` bağlantı bulundu (muhtemelen daha önce ölmüş
+  bir pencereden kalma — TASK-RUNNER-PROMPT §2'nin tarif ettiği senaryonun tam kendisi);
+  `pg_terminate_backend` ile temizlendi ama kırmızı sayısı düşmedi (889→982), yani sorun yalnız
+  eski bağlantı değil, o anda ayrıca çalışan başka bir pencere/süreç. İzole geçici DB'de
+  (`nexa_verify_976`, migrate deploy) bile `work-schedule.test.ts` 24/25 kırmızı verdi (çoğu
+  401) — paylaşılan Redis (rate-limit/session) üzerinden çapraz kirlenme de olası. `apps/api
+  test:unit` (DB'ye dokunması beklenmeyen `src/` testleri) bile CANLI bir `unique constraint
+  (email)` çakışmasıyla kırmızı verdi (`report-csv.test.ts`) — başka bir sürecin O ANDA aynı
+  deterministik fixture email'iyle yazdığının doğrudan kanıtı. Bu, CONVENTIONS.md'nin zaten
+  uyardığı "DB testleri paralel koşmaz" sınırının bir turbo-içi paralellik değil, SÜREÇLER ARASI
+  (paralel pencere/oturum) versiyonu — daha önce hiç belgelenmemişti çünkü şimdiye kadar
+  gözlemlenen ölçek (6-8 kırmızı) bu kadar büyük değildi. Geçici DB temizlendi (`DROP DATABASE
+  nexa_verify_976`), kalıcı bağlantı bırakılmadı. Kalıcı çözüm için **tm 105** açıldı (ayrı,
+  bu turun kapsamı dışında — CONVENTIONS §5).
+- **Varsayımlar:** Yok — bu dilim tamamen 97.5'in üstüne oturdu, kapsam dışına çıkılmadı.
+- **Sonraki pencereye not:**
+  - 06.3.2-bulk zinciri: `06.3.2-bulk-g` (website satırı SSRF + tx dışı crawl, `[MAX]`) ve
+    `06.3.2-bulk-h` (uçtan uca doğrulama) hâlâ açık; `06.3.2-bulk-g` bu turdan bağımsız.
+  - **tm 105 (yeni):** apps/api integration testlerinin paylaşılan yerel Postgres/Redis üzerinde
+    eşzamanlı pencerelerce kirletilmesi — kalıcı izolasyon/kilit çözümü gerekiyor, aksi halde
+    her pencere kendi kod değişikliğinden bağımsız kırmızı `apps/api` sonuçlarıyla karşılaşmaya
+    devam edecek ve DoD kapısının objektifliği zedelenecek.
+
 ### tm 97.5 — 06.3.2-bulk-e · Knowledge panelinde "Bulk import" formu: dosya seç → dry-run önizleme — done — 2026-08-09 UTC
 
 - **Yapıldı:**

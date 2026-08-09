@@ -7,7 +7,9 @@
  * every developer's database means a leak shows up as visibly wrong data rather
  * than as nothing at all.
  *
- * Idempotent: re-running against a seeded database is a no-op.
+ * Idempotent: re-running against a seeded database is a no-op. Set
+ * `NEXA_SEED_RESET=1` to wipe first and lay the fixture down from scratch —
+ * see `resetDemoData` for who needs that and why it is opt-in.
  */
 import { PrismaClient } from '@prisma/client';
 import { embed, toVectorLiteral } from '@nexa/ai-mock';
@@ -908,14 +910,78 @@ async function createConversation(input: {
   return { chatId, threadId };
 }
 
+/**
+ * Whether the caller asked for a wipe before seeding.
+ *
+ * An unrecognised value throws rather than reading as "no". Silently doing
+ * nothing is precisely the failure mode this whole flag exists to remove, and a
+ * caller who typed `NEXA_SEED_RESET=yes` would get the accumulating database
+ * back with no hint of why.
+ */
+function resetRequested(): boolean {
+  const raw = process.env['NEXA_SEED_RESET'];
+  if (raw === undefined || raw === '') return false;
+  if (raw === '1' || raw === 'true') return true;
+  if (raw === '0' || raw === 'false') return false;
+  throw new Error(`NEXA_SEED_RESET must be one of 1/0/true/false, got "${raw}"`);
+}
+
+/**
+ * Wipe every tenant table so the seed below builds the fixture from scratch.
+ *
+ * Opt-in, never the default. `pnpm db:seed` is what a developer runs against
+ * their own workspace, and deleting their data unasked would be a worse defect
+ * than the one this fixes.
+ *
+ * The e2e suite is the caller that needs it. Its global setup ran the plain
+ * seed and promised "every run starts from the same fixture" — but the seed is
+ * idempotent, so a second run *added to* the first instead of replacing it.
+ * Every widget spec mints a customer token with no stored id, so each run left
+ * another anonymous visitor behind; the customer directory orders by
+ * `last_activity_at DESC`, and after a few runs the seeded Robin/Alex/Mira were
+ * no longer on the first page. `customers.spec.ts` and `command-palette.spec.ts`
+ * failed against a product with nothing wrong with it (tm 109).
+ *
+ * Truncation, not `migrate reset` — the schema and the database itself stay put
+ * (MASTER-PROMPT forbids dropping either), and this is the same wipe the
+ * integration suite already performs against this database before every file.
+ *
+ * The table list is discovered from the catalogue rather than hard-coded,
+ * matching `test/helpers/fixtures.ts`: a literal list goes stale the moment a
+ * slice adds a table, and the residue left behind is exactly the order-dependent
+ * failure this is here to prevent. Partitions are truncated through their
+ * parent; Prisma's own migration bookkeeping is left alone.
+ */
+async function resetDemoData(): Promise<void> {
+  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+    SELECT tablename FROM pg_tables
+    WHERE schemaname = 'public'
+      AND tablename <> '_prisma_migrations'
+      -- Partitions are truncated through their parent.
+      AND tablename NOT LIKE 'events\\_%'
+  `;
+  if (tables.length === 0) return;
+
+  const quoted = tables.map((t) => `"${t.tablename}"`).join(', ');
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE`);
+  console.log(`  truncated ${tables.length} tables`);
+}
+
 async function main(): Promise<void> {
   if (process.env['NODE_ENV'] === 'production') {
     throw new Error('The demo seed must never run against production.');
   }
 
+  const reset = resetRequested();
+
   // Hash once: scrypt is deliberately slow, and every demo account shares the
   // same password anyway.
   const passwordHash = await hashPassword(DEMO_PASSWORD);
+
+  if (reset) {
+    console.log('resetting demo data (NEXA_SEED_RESET)');
+    await resetDemoData();
+  }
 
   console.log('seeding demo data');
   for (const spec of TENANTS) {

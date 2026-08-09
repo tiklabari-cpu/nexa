@@ -13,6 +13,72 @@
 
 ## Task log (newest-first)
 
+### tm 109 — e2e seed kirliliği: `db:seed` idempotent, koşular birikiyordu — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - Kök neden koda karşı doğrulandı: `global-setup.ts`'in _"Every run starts from the same
+    fixture"_ yorumu **yanlıştı**. `seedTenant()` var olan organizasyonu görünce
+    `already present, skipping` deyip çıkıyor, hiçbir tabloyu TRUNCATE etmiyor — yani her e2e
+    koşusu bir öncekinin **üstüne** yazıyordu. Her widget spec'i saklı `customer_id` olmadan
+    token mint ettiği için her koşu yeni anonim ziyaretçi bırakıyor; müşteri dizini
+    `last_activity_at DESC, id DESC` sıralı ve sayfa boyu **25**
+    (`apps/api/src/routes/customers.ts:18`), bu yüzden taze ziyaretçiler seed'lenmiş
+    Robin/Alex/Mira'yı ilk sayfadan taşıyordu. Ölçülen giriş durumu: `customers=29 chats=42
+    orgs=7`, oysa seed'in yatırdığı fixture `customers=10 orgs=2`.
+  - **Yön 1 (seed'den önce reset) seçildi.** Yön 2 (e2e'yi tm 105'in izolasyon harness'ına
+    bağlamak) reddedildi: e2e sabit portlarda gerçek sunucular sürüyor ve `REDIS_URL`'e mantıksal
+    index eklemek API ile RTM'in pub/sub'ını ayırırdı (bu dosyada kayıtlı tuzak) — süiti
+    düzeltmek yerine sessizce bozardı. `prisma migrate reset --force` de reddedildi:
+    veritabanını **düşürür**, MASTER-PROMPT sınırı.
+  - `apps/api/prisma/seed.ts` → `NEXA_SEED_RESET=1` ile opsiyonel sıfırlama: katalogdan
+    keşfedilen tüm public tablolara `TRUNCATE ... RESTART IDENTITY CASCADE` (partition'lar
+    ebeveyni üzerinden, `_prisma_migrations` hariç) — `test/helpers/fixtures.ts`'in
+    `resetDatabase()`'i ile birebir aynı kural ve entegrasyon süitinin bu veritabanına karşı
+    zaten yaptığı silme. **Varsayılan KAPALI**: `pnpm db:seed` geliştiricinin kendi çalışma
+    alanına karşı koştuğu komut, sorulmadan veri silmek düzelttiğinden kötü olurdu. Tanınmayan
+    değer (`NEXA_SEED_RESET=yes`) sessizce "hayır" saymak yerine **fırlatıyor**.
+  - `apps/e2e/tests/global-setup.ts`: bayrak argüman değil **env** ile geçiriliyor (iki kat
+    `pnpm run` içinde çıplak `--reset` pnpm'in kendi bayraklarıyla belirsiz); yeni kapı — seed
+    çıktısında `already present` görürse hata veriyor, yani sıfırlama bir gün sessizce
+    çalışmazsa süit birikime geri kaymak yerine kurulumda düşer. Yanıltıcı yorum (task detayı
+    madde 3) değiştirildi: mekanizma, maliyet ve Playwright'ın `webServer`'ı global setup'tan
+    ÖNCE başlattığı (TRUNCATE canlı sunucular bağlıyken iner) artık yazılı.
+- **Doğrulama (exit code'larla):**
+  - **Kabul kriteri:** paylaşılan `nexa`'ya karşı art arda İKİ tam koşu — **88/88** ve **88/88**
+    (her biri 4.1 dk). Satır sayımı koşular ARASINDA büyümedi: her ikisinin sonunda da
+    `customers=26 chats=41 orgs=5 licenses=5`. Düzeltmeden önce koşu 2, koşu 1'in bıraktığı
+    26'nın üstüne ekleyerek başlıyordu.
+  - **Mutasyonla doğrulandı (boş geçmiyor):** sıfırlama kapatılıp iki `widget.spec.ts` koşusuyla
+    gerçek birikim üretildi (Acme müşterileri **34** > 25 sayfa boyu) → `customers.spec.ts:12/51/68`
+    **kırmızı** — tm 106'nın kaydettiği satırların birebir aynısı. Sıfırlama geri açılıp AYNI
+    veritabanı durumunda tekrar koşuldu → **10/10 yeşil**.
+  - Tam DoD kapısı: `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+    `pnpm -w build` **0** (7/7) · `pnpm -w test` **0** (10/10 — api 2060) ·
+    `pnpm -w test:integration` **0** (5/5 — api 1535) · `pnpm -w test:e2e` **0** ×2.
+- **Varsayımlar:**
+  - `PLAN.md`'de çevrilecek gereksinim damgası YOK — tm 109 bir PRD gereksinimi değil, e2e
+    kapısının objektifliğini onaran test-altyapısı düzeltmesi (başlıkta iş kalemi kimliği yok,
+    `Düz tablo`da karşılığı yok). §D80/§D81/§D82 emsaliyle kayıt **§D83**'e düşüldü.
+  - Bu makinede `licenses_id_seq`'in `START WITH`'i **1000001**; tm 105 harness'ının
+    `ALTER SEQUENCE ... RESTART WITH` çağrısı restart noktasını kalıcı olarak taşımış. Zararsız:
+    `RESTART IDENTITY` her sıfırlamada aynı yere döndüğü için lisans id'leri koşular arası
+    **deterministik** (Acme 1000001, Northwind 1000002) ve e2e hiçbir yerde lisans id'sini
+    sabitlemiyor (`fixtures.ts` API'den okuyor).
+  - Tam e2e koşuları `apps/e2e/kanit/`'teki PNG'leri yeniden üretti (aynı içerik, farklı byte) —
+    tm 103/104/107/108 ile aynı gerekçeyle `git checkout -- apps/e2e/kanit` ile atıldı.
+- **Sonraki pencereye not:**
+  - **Davranış değişikliği, bilerek:** `pnpm -w test:e2e` artık paylaşılan `nexa` veritabanını
+    **siler** (önceden yalnız üstüne eklerdi). Orada elle incelemek istediğin veri varsa e2e
+    koşmadan önce al. Yalnız e2e'nin global setup'ı bayrağı geçiriyor; `pnpm db:seed` tek başına
+    hâlâ hiçbir şey silmiyor.
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ commit edilmemiş WIP** — yedinci pencere aynı
+    notu bırakıyor; bu turda da dokunulmadı (CONVENTIONS §5). Bu yüzden bu turun commit'i
+    `git add -A` DEĞİL, yalnız kendi dört dosyasını sahneledi: `apps/api/prisma/seed.ts`,
+    `apps/e2e/tests/global-setup.ts`, `PLAN.md`, `HANDOFF.md`. `git add -A` tm 105'in
+    `package.json`/`turbo.json` değişikliklerini, referans ettikleri untracked script'ler olmadan
+    commit'lerdi — depoyu klonlayan için kırık bir ağaç.
+  - `.taskmaster/tmp-*.cjs` / `tmp-changelog.txt` yine untracked scratch, dokunulmadı.
+
 ### tm 108 — `@nexa/web`'in 7 kırmızısı makine locale'ineydi; testler pinlendi — done — 2026-08-09 UTC
 
 - **Yapıldı:**

@@ -17,7 +17,7 @@ import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 
 const { api } = vi.hoisted(() => ({
-  api: { get: vi.fn(), patch: vi.fn(), put: vi.fn(), getBlob: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), getBlob: vi.fn() },
 }));
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
@@ -48,6 +48,13 @@ interface PaymentMethodOpt {
   updated_at: string;
 }
 
+interface ApiPackageOpt {
+  id: string;
+  name: string;
+  api_calls: number;
+  price_cents: number;
+}
+
 interface UsageOpts {
   used?: number;
   included?: number;
@@ -61,7 +68,17 @@ interface UsageOpts {
   invoices?: InvoiceOpt[];
   /** Payment method on file, or null (FR-MOD-10.3). */
   paymentMethod?: PaymentMethodOpt | null;
+  /** The API package catalogue (FR-MOD-09.3). */
+  apiPackages?: ApiPackageOpt[];
 }
+
+/** The real catalogue's values (`@nexa/types` `API_PACKAGE_CATALOG`), so the
+ *  default in tests matches what production actually serves. */
+const DEFAULT_API_PACKAGES: ApiPackageOpt[] = [
+  { id: 'essential', name: 'Essential', api_calls: 100_000, price_cents: 2999 },
+  { id: 'pro', name: 'Pro', api_calls: 500_000, price_cents: 14999 },
+  { id: 'pro-plus', name: 'Pro+', api_calls: 1_000_000, price_cents: 24999 },
+];
 
 const DEFAULT_INVOICE: InvoiceOpt = {
   number: 'NEXA-202607',
@@ -142,6 +159,9 @@ function mockBilling(opts: UsageOpts): void {
     if (path === '/billing/payment-method') {
       return Promise.resolve({ payment_method: opts.paymentMethod ?? null });
     }
+    if (path === '/billing/api-packages') {
+      return Promise.resolve({ items: opts.apiPackages ?? DEFAULT_API_PACKAGES });
+    }
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -153,6 +173,7 @@ function renderBilling(ui: ReactElement): void {
 
 beforeEach(() => {
   api.get.mockReset();
+  api.post.mockReset();
   api.patch.mockReset();
   api.put.mockReset();
   api.getBlob.mockReset();
@@ -358,5 +379,98 @@ describe('BillingPage — payment method (FR-MOD-10.3)', () => {
     });
     // The section re-reads from the reply — the saved card is now shown.
     expect(await screen.findByTestId('payment-method')).toHaveTextContent('ending 1111');
+  });
+});
+
+describe('BillingPage — API packages (FR-MOD-09.3)', () => {
+  it('shows the three catalogue packages with their quota and price', async () => {
+    mockBilling({});
+    renderBilling(<BillingPage />);
+
+    const essential = await screen.findByTestId('api-package-essential');
+    expect(essential).toHaveTextContent('Essential');
+    expect(essential).toHaveTextContent('100,000');
+    expect(essential).toHaveTextContent('$29.99');
+
+    const pro = screen.getByTestId('api-package-pro');
+    expect(pro).toHaveTextContent('Pro');
+    expect(pro).toHaveTextContent('500,000');
+    expect(pro).toHaveTextContent('$149.99');
+
+    const proPlus = screen.getByTestId('api-package-pro-plus');
+    expect(proPlus).toHaveTextContent('Pro+');
+    expect(proPlus).toHaveTextContent('1,000,000');
+    expect(proPlus).toHaveTextContent('$249.99');
+  });
+
+  it('shows a meaningful empty state when the catalogue is empty', async () => {
+    mockBilling({ apiPackages: [] });
+    renderBilling(<BillingPage />);
+
+    expect(await screen.findByTestId('api-packages-empty')).toBeInTheDocument();
+  });
+
+  it('buys a package through a confirm step and raises the quota on success', async () => {
+    const user = userEvent.setup();
+    mockBilling({ apiUsed: 4_812 });
+    api.post.mockResolvedValue({
+      purchase: {
+        id: 'purchase-1',
+        package_id: 'pro',
+        name: 'Pro',
+        api_calls: 500_000,
+        price_cents: 14999,
+        period: '202607',
+        purchased_at: '2026-07-15T00:00:00.000Z',
+      },
+      usage: {
+        ai_resolutions: { used: 12, included: 200, overage: 0, overage_cents: 0, overage_unit: 50, overage_unit_price_cents: 50 },
+        api_calls: { used: 4_812, included: 600_000, overage: 0, overage_cents: 0, overage_unit: 100_000, overage_unit_price_cents: 2_950 },
+      },
+    });
+    renderBilling(<BillingPage />);
+
+    await screen.findByTestId('api-package-pro');
+    const usageCallsBefore = api.get.mock.calls.filter((call) => call[0] === '/billing/usage').length;
+
+    await user.click(screen.getByRole('button', { name: 'Buy Pro' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm buying Pro' }));
+
+    expect(api.post).toHaveBeenCalledWith('/billing/api-packages', { package_id: 'pro' });
+
+    // Success invalidates usage (and invoices) so the raised quota is re-read
+    // from the server rather than patched locally.
+    await vi.waitFor(() => {
+      const usageCallsAfter = api.get.mock.calls.filter((call) => call[0] === '/billing/usage').length;
+      expect(usageCallsAfter).toBeGreaterThan(usageCallsBefore);
+    });
+  });
+
+  it('shows a banner and leaves the counter unchanged when the purchase fails', async () => {
+    const user = userEvent.setup();
+    mockBilling({ apiUsed: 4_812 });
+    api.post.mockRejectedValue(new Error('boom'));
+    renderBilling(<BillingPage />);
+
+    await screen.findByTestId('api-package-essential');
+    const usageCallsBefore = api.get.mock.calls.filter((call) => call[0] === '/billing/usage').length;
+
+    await user.click(screen.getByRole('button', { name: 'Buy Essential' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm buying Essential' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not buy the package/i);
+    // The counter is untouched — no invalidation ran on a failed purchase.
+    const usageCallsAfter = api.get.mock.calls.filter((call) => call[0] === '/billing/usage').length;
+    expect(usageCallsAfter).toBe(usageCallsBefore);
+    const section = screen.getByRole('heading', { name: 'API calls', level: 2 }).closest('section');
+    expect(section).toHaveTextContent('4,812');
+  });
+
+  it('keeps the buy button enabled while the workspace is read-only', async () => {
+    mockBilling({ access: 'read_only' });
+    renderBilling(<BillingPage />);
+
+    const buyButton = await screen.findByRole('button', { name: 'Buy Essential' });
+    expect(buyButton).toBeEnabled();
   });
 });

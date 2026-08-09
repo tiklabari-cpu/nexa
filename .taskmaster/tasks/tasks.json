@@ -2400,13 +2400,13 @@
             "description": "BillingPage.tsx'e `ApiPackagesSection`: GET /billing/api-packages ile üç paket kartı (ad, kota, fiyat — formatCount/formatMoney ile); 'Buy' → onay adımı → POST /billing/api-packages; başarıda usage + invoices + purchases query'lerini invalidate (kota artışı sayaçta anında görünür); hata → Banner (tone='error'); loading/disabled durumları; ödeme mock olduğunu söyleyen açık metin (ADR-13). Read-only",
             "details": "09.3-f — Billing ekranında API paketleri bölümü: kartlar + mock satın alma akışı  [SONNET-XHIGH]\n\nPRD: FR-MOD-09.3\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 2 dosya (aynı feature klasörü) + test; güvenlik kararı tamamen backend'de (09.3-d), UI yalnız endpoint çağırıyor; eşzamanlılık yok; kopyalanacak desen ismen var (BillingPage.tsx PaymentMethodSection satır 531 ve ManagePlan satır 388 — useQuery + useMutation + invalidateQueries + readOnly gating; kart gridi için AppsMarketplace.tsx); kontrat değişikliği yok (09.3-c/d'de indi); kabul mekanik (render + çağrı + pasif buton + hata bannerı).\nNEDEN AÇIK: apps/web/src/features/billing/BillingPage.tsx (900 satır) subscription/usage okuyor ve ManagePlan (satır 388), QuotaBar (357), PaymentMethodSection (531), PaymentMethodForm (628), InvoicesSection (801) render ediyor; api_calls yalnız sayaç olarak okunuyor (satır 140) ve 'overage-package' testid'i (satır 273) OTOMATİK aşım bloğunu gösteriyor — satın alınabilir paket kartı/checkout YOK. apps/web/src/features/ altında 09.3'e özgü ekran yok (mevcut tek marketplace ekranı apps/AppsMarketplace.tsx, entegrasyon kartları = 09.1/09.2).\nKAPSAM: BillingPage.tsx'e `ApiPackagesSection`: GET /billing/api-packages ile üç paket kartı (ad, kota, fiyat — formatCount/formatMoney ile); 'Buy' → onay adımı → POST /billing/api-packages; başarıda usage + invoices + purchases query'lerini invalidate (kota artışı sayaçta anında görünür); hata → Banner (tone='error'); loading/disabled durumları; ödeme mock olduğunu söyleyen açık metin (ADR-13). Read-only lisansta buton pasif DEĞİL — backend allowWhenReadOnly (09.3-d) olduğu için satın alma açık kalır; bu davranış testte kilitlenir.\nDOSYALAR: apps/web/src/features/billing/BillingPage.tsx · apps/web/src/features/billing/BillingPage.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/billing/BillingPage.tsx satır 531-700 (PaymentMethodSection + PaymentMethodForm: useQuery + useMutation + useQueryClient.invalidateQueries + readOnly gating + Banner hata gösterimi) · apps/web/src/features/billing/BillingPage.tsx satır 388-530 (ManagePlan: seçim → mutation → yeniden okuma deseni) · apps/web/src/features/apps/AppsMarketplace.tsx (katalog kartı gridi deseni) · apps/web/src/lib/format.ts (formatCount/formatMoney)\nKK (birebir): \"Fiyatlı API paketleri satışı\" | \"KK-türetilmiş: kullanıcı Billing ekranında üç paketi fiyat ve kotasıyla görür ve tek akışta satın alabilir; satın alma sonrası API çağrı sayacındaki kota anında güncellenir. Türetme gerekçesi: PRD'de 09.3 için ayrı UX/akış tanımı yok — rapor-1-fonksiyonel.md'de [MOD-09.3] alt bölümü YOK (grep 0), v2-01/03/04'te paket adları geçmiyor; ekran davranışı mevcut Billing ekranı desenlerinden türetildi.\"\nKK DOĞRULAMA: BillingPage.test.tsx: (1) üç paket kartı ad/kota/fiyatla render ediliyor; (2) 'Buy' → POST /billing/api-packages çağrılıyor ve usage query invalidate ediliyor (sayaç yeniden okunuyor); (3) POST hata dönerse Banner görünüyor ve sayaç değişmiyor; (4) katalog yüklenirken loading, boş katalogda anlamlı empty state; (5) read-only lisansta buton etkin kalıyor (backend allowWhenReadOnly ile hizalı).\nKAPSAM DIŞI: satın alma geçmişi listesi (09.3-g) · e2e (09.3-h) · kart/ödeme bilgisi girişi — mevcut PaymentMethodForm'a dokunulmaz (NFR-C5, gerçek PAN yok) · paket karşılaştırma tablosu / pazarlama sayfası\nSÖZLEŞME: yok (endpoint'ler 09.3-c/d'de kontrata girdi)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: üç kart render (ad/kota/fiyat) · unit: Buy → POST + usage invalidate · unit: hata → Banner, sayaç değişmiyor · unit: loading + empty state · unit: read-only lisansta buton etkin (backend davranışıyla hizalı)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "71.3",
               "71.4"
             ],
             "parentId": "71",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T22:33:56.680Z"
           },
           {
             "id": 7,
@@ -2438,7 +2438,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T21:59:20.622Z",
+        "updatedAt": "2026-08-09T22:33:56.680Z",
         "complexity": 7,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.3 — API istek paketleri (Essential/Pro/Pro+)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T21:59:20.623Z",
+      "lastModified": "2026-08-09T22:33:56.681Z",
       "taskCount": 109,
       "completedCount": 96,
       "tags": [

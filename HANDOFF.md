@@ -13,6 +13,29 @@
 
 ## Task log (newest-first)
 
+### tm 71.6 — 09.3-f: Billing ekranında API paketleri bölümü — done — 2026-08-10 UTC
+
+- **Yapıldı:** `apps/web/src/features/billing/BillingPage.tsx`'e `ApiPackagesSection` — katalog kartları
+  (ad/kota/fiyat) + kart-içi onay adımı + `POST /billing/api-packages`; başarıda usage/invoices/
+  purchases invalidate; hata → `Banner tone="danger"`; loading/empty state; buton read-only'de gate'siz.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0**
+  (`@nexa/web` 798/798, 793'ten +5 · `@nexa/api` 2134/2134 değişmedi) · `pnpm -w test:integration`
+  **0** (1597/1597, değişmedi) · `pnpm -w build` **0** · `pnpm -w test:e2e` **0** — 90/90 (billing.spec.ts
+  dahil, regresyon; `.env` export edilerek).
+- **Varsayımlar:** Banner'da `tone="error"` yok — görev metni gerçek bileşenle uyuşmuyor, `tone="danger"`
+  kullanıldı (aynı görsel/rol). Purchases invalidate hedefi (`['billing','api-packages','purchases']`)
+  henüz hiçbir query tarafından okunmuyor (09.3-g bunu ekleyecek) — şimdilik no-op ama ileriye dönük.
+- **Sonraki pencereye not:**
+  - 09.3-g (satın alma geçmişi listesi UI) + 09.3-h (uçtan uca E2E) hâlâ açık — PLAN.md `◐ → K09.3` kalıyor.
+  - **tm 105 WIP hâlâ commit'siz** (aynı liste: `README.md`, `apps/api|rtm/package.json`, `apps/api/tsconfig.json`,
+    fixture'lar, `turbo.json`, `apps/api/scripts/*test-datastores.ts`, `test-datastores.test.ts`, `.taskmaster/tmp-*`).
+    Bu tur da dokunulmadı. `CONVENTIONS.md`/`TASK-RUNNER-PROMPT.md` bu turun başında hâlâ WIP olarak
+    görünüyordu ama pencere sürerken başka bir pencere (`fix/plan-evidence-log` merge, 91073c0/e5a0437) main'e
+    push etti ve bu iki dosyayı kendiliğinden temizledi — **repo eşzamanlı pencerelerle paylaşılıyor**,
+    `git status` her zaman en güncel halini göster.
+  - E2E `apps/e2e/kanit/*.png` kapı koşusunda yeniden üretildi, bu tur UI'ye eklenen yeni bölüm dahil hiçbir
+    ekran görüntüsü kasıtlı güncellenmediği için (09.3-h kapsamı) `git restore` ile geri alındı.
+
 ### tm 71.5 — 09.3-e: Satın alınan paketin fatura satır kalemi — done — 2026-08-09 UTC
 
 - **Yapıldı:**

@@ -93,6 +93,28 @@ interface PaymentMethod {
   updated_at: string;
 }
 
+/** A catalogue entry a workspace can buy (FR-MOD-09.3). */
+interface ApiPackageItem {
+  id: string;
+  name: string;
+  api_calls: number;
+  price_cents: number;
+}
+
+/** The receipt plus the period's usage after the purchase credited its quota. */
+interface ApiPackagePurchaseResult {
+  purchase: {
+    id: string;
+    package_id: string;
+    name: string | null;
+    api_calls: number;
+    price_cents: number;
+    period: string;
+    purchased_at: string;
+  };
+  usage: UsageSummary;
+}
+
 const CARD_BRANDS = ['visa', 'mastercard', 'amex', 'discover'] as const;
 
 export function BillingPage(): ReactElement {
@@ -335,6 +357,8 @@ export function BillingPage(): ReactElement {
         </Card>
       </Section>
 
+      <ApiPackagesSection />
+
       <PaymentMethodSection readOnly={sub.access === 'read_only'} />
 
       <InvoicesSection />
@@ -513,6 +537,173 @@ function ManagePlan({
         </div>
       </Card>
     </Section>
+  );
+}
+
+/**
+ * API packages (FR-MOD-09.3, "Fiyatlı API paketleri satışı").
+ *
+ * A one-off top-up on top of the plan's included API calls — distinct from the
+ * automatic overage billed in the section above. Buying a package is a single
+ * confirm step; success raises the *current* period's allowance and adds a
+ * line item the next invoice read shows (09.3-e), so the purchase invalidates
+ * the usage and invoices queries rather than trying to patch them locally —
+ * `usage` on the reply is `UsageSummary`, not the full `Usage` this page reads
+ * (missing `quota_warning`/`period_label`), so a refetch is the only way to get
+ * a shape the rest of the page can render. The purchase-history query is
+ * invalidated too, for the list a later screen (09.3-g) will add.
+ *
+ * The buy buttons are never disabled for a read-only workspace: like the
+ * subscription PATCH and payment-method PUT, this write is `allowWhenReadOnly`
+ * on the backend (09.3-d) — buying capacity is one of the ways an expired
+ * trial comes back.
+ */
+function ApiPackagesSection(): ReactElement {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  const catalog = useQuery({
+    queryKey: ['billing', 'api-packages'],
+    queryFn: () => api.get<{ items: ApiPackageItem[] }>('/billing/api-packages'),
+  });
+
+  const buy = useMutation({
+    mutationFn: (packageId: string) =>
+      api.post<ApiPackagePurchaseResult>('/billing/api-packages', { package_id: packageId }),
+    onSuccess: async () => {
+      setConfirmingId(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['billing', 'usage'] }),
+        queryClient.invalidateQueries({ queryKey: ['billing', 'invoices'] }),
+        queryClient.invalidateQueries({ queryKey: ['billing', 'api-packages', 'purchases'] }),
+      ]);
+    },
+  });
+
+  const description =
+    "One-off top-ups on top of your plan's included API calls. Billing is mocked (ADR-13) — buying a package charges no card.";
+
+  if (catalog.isPending) {
+    return (
+      <Section title="API packages" description={description}>
+        <CardSkeleton rows={2} />
+      </Section>
+    );
+  }
+
+  if (catalog.error) {
+    return (
+      <Section title="API packages" description={description}>
+        <ErrorNotice message="Could not load the API package catalogue." />
+      </Section>
+    );
+  }
+
+  const items = catalog.data.items;
+
+  return (
+    <Section title="API packages" description={description}>
+      {buy.isError && (
+        <Banner tone="danger" role="alert" title="Could not buy the package.">
+          The purchase did not go through — your quota is unchanged. Try again.
+        </Banner>
+      )}
+
+      {items.length === 0 ? (
+        <p data-testid="api-packages-empty" className="text-sm text-content-secondary">
+          No API packages are available to buy right now.
+        </p>
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+          {items.map((pkg) => (
+            <ApiPackageCard
+              key={pkg.id}
+              pkg={pkg}
+              confirming={confirmingId === pkg.id}
+              pending={buy.isPending && buy.variables === pkg.id}
+              onBuyClick={() => {
+                buy.reset();
+                setConfirmingId(pkg.id);
+              }}
+              onCancel={() => {
+                buy.reset();
+                setConfirmingId(null);
+              }}
+              onConfirm={() => buy.mutate(pkg.id)}
+            />
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function ApiPackageCard({
+  pkg,
+  confirming,
+  pending,
+  onBuyClick,
+  onCancel,
+  onConfirm,
+}: {
+  pkg: ApiPackageItem;
+  confirming: boolean;
+  pending: boolean;
+  onBuyClick: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}): ReactElement {
+  return (
+    <Card>
+      <div data-testid={`api-package-${pkg.id}`} className="flex h-full flex-col gap-1 p-4">
+        <span className="text-sm font-medium">{pkg.name}</span>
+        <span className="tabular text-xl font-bold">
+          {formatCount(pkg.api_calls)}
+          <span className="ml-1 text-2xs font-normal text-content-tertiary">calls</span>
+        </span>
+        <span className="tabular text-sm text-content-secondary">
+          {formatMoney(pkg.price_cents)}
+        </span>
+
+        {confirming ? (
+          <div className="mt-2 flex flex-col gap-2">
+            <p className="text-2xs text-content-secondary">
+              Buy {pkg.name} for {formatMoney(pkg.price_cents)}? No card is charged (mock
+              billing).
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                aria-label={`Confirm buying ${pkg.name}`}
+                disabled={pending}
+                onClick={onConfirm}
+                className="rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              >
+                {pending ? 'Buying…' : 'Confirm purchase'}
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={onCancel}
+                className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            aria-label={`Buy ${pkg.name}`}
+            onClick={onBuyClick}
+            className="mt-2 self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
+          >
+            Buy
+          </button>
+        )}
+      </div>
+    </Card>
   );
 }
 

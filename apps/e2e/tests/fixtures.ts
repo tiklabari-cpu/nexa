@@ -169,6 +169,29 @@ export async function ownerAccessToken(context: APIRequestContext): Promise<stri
   return ownerAccessTokenFor(context, ACME_OWNER);
 }
 
+/**
+ * Deliver a provider webhook the way the provider itself would (FR-MOD-08.5.4-.7):
+ * unauthenticated, at the public `/channels/:type/webhook` endpoint, with the
+ * channel address in the body as the only thing that routes it to a workspace.
+ *
+ * Deliberately not a database insert and not an authenticated call. The inbound
+ * path's whole claim is that an anonymous POST carrying a connected address
+ * becomes a chat in that workspace and nowhere else; a helper holding a token
+ * would prove something the real provider never does.
+ */
+export async function channelWebhook(
+  context: APIRequestContext,
+  type: string,
+  body: Record<string, unknown>,
+): Promise<{ chat_id: string; customer_id: string }> {
+  const response = await context.post(`${API_BASE}/channels/${type}/webhook`, { data: body });
+  expect(
+    response.ok(),
+    `${type} webhook failed: ${response.status()} ${await response.text()}`,
+  ).toBe(true);
+  return (await response.json()) as { chat_id: string; customer_id: string };
+}
+
 export async function signIn(page: Page): Promise<void> {
   await page.goto('/');
   await page.getByLabel('Email').fill(DEMO.email);

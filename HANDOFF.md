@@ -13,6 +13,59 @@
 
 ## Task log (newest-first)
 
+### tm 65.8 — 08.5.7-h: Uçtan uca doğrulama (Instagram bağla → DM gelsin → inbox'ta chat) — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/e2e/tests/instagram.spec.ts` (yeni, 2 test). Bu kalemi kapatan kanıt: altı slice
+    (kontrat -a, adaptör -b, registry -c, adres sahipliği -d, Settings kartı -e, Views satırı -g)
+    ayrı ayrı yeşildi ama hiçbiri **birbirine değdiğini** kanıtlamıyordu.
+    - **Ana test** (`test.slow()` — altı yüzey tek testte, 45 sn'lik varsayılan bütçeyi aşıyor):
+      Settings → Channels → Instagram kartı Connect → mock OAuth modalı (`code` dolu +
+      `ig_user_id` boşken submit **pasif**, ikisi de doluyken aktif) → `POST .../connect` 200
+      beklendi (redraw değil, round trip) → kart 'Connected' + adres (`ig_user_id`) okunuyor +
+      Disconnect butonu; **anonim** `POST /channels/instagram/webhook` (gerçek sağlayıcının
+      yaptığı gibi: token yok, DB'ye yazma yok, yönlendiren tek şey adres) → Inbox'ta DM metni
+      hem listede hem transkriptte, müşteri adı sender'ın IG kullanıcı adı; Views grubunda
+      'Instagram' satırı var + `channel-promo` yok; Disconnect (`window.confirm` accept +
+      `POST .../disconnect` 204) → kart 'Not connected' + rail'de satır gidip promo geri geliyor.
+    - **Negatif ön-koşul testi** (önce koşar): bağlı hiçbir kanal yokken promo görünür, Instagram
+      satırı yok, kart 'Coming soon' DEĞİL — 'Not connected' + Connect (08.5.7-e regresyon kapısı).
+      Bu test olmadan ana testin "bağlandı" iddiaları çok daha az şey kanıtlıyor: hep orada olan
+      bir rail satırı da, hep 'Connect' yazan bir kart da onları geçerdi.
+  - `apps/e2e/tests/fixtures.ts`: `channelWebhook(context, type, body)` — public webhook'u
+    kimliksiz POST eder, `ok()` değilse gövdeyi hata mesajına koyar, `{chat_id, customer_id}`
+    döner. Dosyanın baştaki sözleşmesine uygun (her şey public API'den; DB'ye uzanan yardımcı yok).
+  - `apps/e2e/tests/settings.spec.ts`: 'channels' testinin coming-soon iddiası gözden geçirildi.
+    Davranış değişmedi (whatsapp hâlâ `coming_soon`); yorum, instagram'ın 08.5.7-e ile bu kümeden
+    çıktığını ve kapsamının yeni spec'e taşındığını yazacak şekilde güncellendi.
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `pnpm -w test` **0** (10/10; `@nexa/api` 100 dosya/2093 test — bu görev app kodu değiştirmediği
+  için sayılar sabit) · `pnpm -w test:integration` **0** (`@nexa/api` 66/66 dosya, 1556/1556) ·
+  `pnpm -w build` **0** (7/7) · `pnpm -w test:e2e` **0** — **90/90** (88'den **+2**; Docker zaten
+  açıktı, `.env` `set -a && source .env && set +a` ile export edildi). KK'nın beşi de tek testte
+  kanıtlandı (i connect+Connected+adres, ii webhook, iii inbox'ta chat + metin okunur, iv Views
+  satırı + promo yok, v disconnect → Not connected). Kanıt ekran görüntüleri:
+  `apps/e2e/kanit/08.5.7-instagram-{connected,inbox,disconnected}.png`.
+- **Varsayımlar:**
+  - `ig_user_id` koşuya özel üretiliyor (`1784140` + `Date.now()` son 10 hanesi, gerçek IG id'si
+    gibi 17 hane). Gerekçe: 08.5.7-d'nin kısmi unique index'i `status='connected'` iken adresi
+    kilitliyor; yarım kalan bir koşunun bıraktığı satır sabit bir adresi bir sonraki koşuda 400'e
+    düşürürdü. (global-setup zaten reseed ediyor — bu ikinci savunma hattı.)
+  - Kart 'Connected' iddiası için önce `'Not connected'` **yokluğu** doğrulanıyor: ikincisi
+    birincisini alt-dize olarak içeriyor, yani tek başına `getByText('Connected')` bağlı-değil
+    kartında da geçerdi. Pozitifi anlamlı kılan şey negatifin yokluğu.
+- **Sonraki pencereye not:**
+  - **08.5.7 (Instagram DM) kalemi KAPANDI** — 8/8 alt-görev. PLAN.md §5.0 satırı ◐→✅ ve envanter
+    sayacı yeniden sayıldı: **6 ⬜ · 0 ◐ · 21 ✅ · 3 ⛔** (sayaç 65.1–65.7 turlarında güncellenmemişti,
+    tm 98.5'ten kalmaydı — 30 satır bu turda tekrar sayıldı). PLAN §F.00: `08.5.7` ✅ oldu, Faz-2
+    dilim 9'un kapanması artık yalnız `Work scheduler`'a bağlı.
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ commit edilmemiş WIP** — bu turda da dokunulmadı
+    (CONVENTIONS §5); `git add -A` kullanılmadı, yalnız bu görevin dosyaları sahnelendi.
+  - `apps/e2e/kanit/*.png` e2e koşusunda yeniden üretildi (aynı içerik, farklı byte) — 65.1-65.7
+    emsaliyle mevcut dosyalar `git checkout -- apps/e2e/kanit` ile atıldı; yalnız bu görevin ürettiği
+    üç yeni `08.5.7-instagram-*.png` eklendi.
+  - Docker Desktop bu pencerede zaten açıktı (`nexa-db`/`nexa-redis` healthy) — dokunulmadı.
+
 ### tm 65.7 — 08.5.7-g: Inbox Views grubunda Instagram kanal görünümü — done — 2026-08-09 UTC
 
 - **Yapıldı:**

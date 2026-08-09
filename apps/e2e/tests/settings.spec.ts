@@ -101,6 +101,11 @@ test.describe('channels', () => {
   // FR-MOD-08.5.1: a card grid whose Website status is read from the live
   // /websites data (the seed connects one), while unbuilt channels say
   // "Coming soon" and offer to notify.
+  //
+  // WhatsApp carries the coming-soon half deliberately: Instagram left that set
+  // when 08.5.7-e made its card a live connect surface, and its own behaviour is
+  // covered end to end in `instagram.spec.ts`. WhatsApp and Telegram are what
+  // remain unbuilt, so the assertion below still describes the product.
   test('shows a channel grid with a data-driven Website status', async ({ agentPage }) => {
     await agentPage.goto('/app/settings');
     const channels = agentPage.getByRole('region', { name: 'Channels' });

@@ -5026,10 +5026,11 @@
         "description": "Otonom döngüde birden fazla temiz pencere aynı anda çalışırken (tm 97.6 kapanışında gözlemlendi), hepsi aynı yerel docker Postgres/Redis'e (nexa-db:5433, nexa-redis:6380) karşı `apps/api` integration testlerini koşuyor. CONVENTIONS.md zaten tek-turbo-içi paralelliği (@nexa/api + @nexa/rtm) uyarıyor ama bu, SÜREÇLER ARASI (ayrı pencere/oturum) çakışma — kapsam dışı kaldığı için hiç belgelenmemişti.",
         "details": "Gözlem (tm 97.6 kapanışı, 2026-08-09): `npx turbo run test --filter=@nexa/api --concurrency=1` art arda iki koşuda 889 → 982 (2008 testten) farklı kırmızı sayısı verdi — deterministik değil. Kök neden kanıtları:\n- `pg_stat_activity`'de yarım kalmış `idle in transaction` bağlantı bulundu (muhtemelen daha önce ölmüş bir pencereden kalma, TASK-RUNNER-PROMPT §2'nin uyardığı senaryo).\n- Bağlantıları `pg_terminate_backend` ile temizledikten SONRA bile kırmızı sayısı düşmedi (889→982), yani sorun yalnız eski bağlantı değil, o AN çalışan başka bir süreç.\n- İzole geçici DB'de (`nexa_verify_976`, migrate deploy edildi) bile `work-schedule.test.ts` 24/25 kırmızı verdi (çoğu 401) — paylaşılan Redis (rate-limit/session) üzerinden de çapraz kirlenme olası.\n- `apps/api test:unit` (src dizini, DB'ye dokunması beklenmeyen testler) bile CANLI bir `unique constraint (email)` çakışmasıyla kırmızı verdi (`report-csv.test.ts`) — başka bir sürecin O ANDA aynı deterministik fixture email'iyle yazdığının kanıtı.\n- Bu turun kendi `apps/api` diff'i SIFIR (`git diff --stat -- apps/api` boş) — yani kırmızılar tm 97.6'nın kodundan bağımsız.\n\nKapsam: bu tek bir görevin çözebileceği bir \"bug\" değil — otonom çoklu-pencere mimarisinin altyapı sınırlaması. Olası çözüm yönleri (araştırılacak, karar bu görevde verilecek):\n1. Pencereler arası bir DB-erişim kilidi/mutex (ör. run-loop seviyesinde, `apps/api`/`apps/rtm` integration testi koşan pencere sayısını 1'le sınırlama).\n2. Her pencere için ayrı, ucuz bir şema/DB (ör. `CREATE DATABASE nexa_test_<pencere-id>` + migrate, test sonunda drop) — Redis için de benzer namespace izolasyonu (prefix veya ayrı DB index).\n3. CI/test-runner seviyesinde bir \"DB testi çalışıyor\" flag dosyası/lock — run-loop `pick_next` bu flag'i görürse DB-bağımlı görevi ertelesin.\n\nDoD kapısının objektifliği bu sorunla zedeleniyor: gelecekteki pencereler kendi kodlarından bağımsız kırmızı `apps/api` sonuçları görüp ya yanlışlıkla \"blocked\" ilan edecek ya da (bu turda yapıldığı gibi) her seferinde elle kök-neden analizi yapmak zorunda kalacak. Kalıcı bir çözüm gerekiyor.",
         "testStrategy": "Kabul kriteri: iki pencere aynı anda `apps/api` integration testlerini koştuğunda, ikisi de birbirinden bağımsız kırmızısız (veya en azından deterministik, kendi kod değişikliğiyle açıklanabilir) sonuç almalı. Doğrulama: iki paralel `npx turbo run test --filter=@nexa/api --concurrency=1` koşusu (elle simüle edilmiş iki pencere) art arda çalıştırılıp ikisinin de temiz suite üzerinde yeşil olduğu gösterilmeli.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T07:10:52.930Z"
       },
       {
         "id": "106",
@@ -5037,10 +5038,11 @@
         "description": "Widget iframe'inden mesaj gönderimi tarayıcıda başarısız: transkript boş kalıyor, optimistic mesaj geri alınıyor. Aynı akış doğrudan HTTP ile ÇALIŞIYOR (201), yani hata istemci tarafında. `visitorSends()` kullanan HER e2e testi düşüyor.",
         "details": "BULUNDUĞU TUR: tm 97.8 (06.3.2-bulk-h). Bu tur `apps/e2e/tests/global-setup.ts`'e `shell: true` ekleyerek e2e süitini bu makinede İLK KEZ koşulur hale getirdi; bu regresyon o anda görünür oldu. **tm 97.8'in kendi değişikliği ürün koduna DOKUNMUYOR** (`git diff` yalnız 2 api test dosyası + e2e harness + yeni spec), dolayısıyla bu regresyon ÖNCEDEN vardı ve e2e koşulamadığı için görülmemişti.\n\nSEMPTOM: `apps/e2e/tests/fixtures.ts` `visitorSends()` → widget iframe'inde mesaj yazılıp Send'e basılıyor, ardından `role=log[name=\"Conversation\"]` BOŞ kalıyor. `apps/widget/src/widget.ts:546-569` optimistic olarak mesajı hemen basıyor ve `api.send()` throw ederse geri alıyor (`state.events.filter(...)` + `transcript.replaceChildren()`), tam olarak gözlenen davranış bu → **`api.send()` tarayıcıda throw ediyor.** Widget `console.warn('nexa widget: send failed', error)` yazıyor (widget.ts:569) — İLK ADIM bu konsol çıktısını yakalamak olmalı.\n\nAPI TARAFININ SAĞLAM OLDUĞU KANITLANDI (bu turda doğrudan HTTP ile, paylaşılan `nexa` DB'sine karşı):\n  - `POST /api/v1/customer/token` → 200, `nxc1.…` token (hem `origin: http://localhost:5174` hem `http://acme-bikes.localhost:5174` ile)\n  - `GET /api/v1/customer/chat` → 200 (geçerli token ile)\n  - `POST /api/v1/customer/chat/events` → **201**, chat + event gerçekten yazıldı\n  - CORS preflight `OPTIONS /api/v1/customer/chat/events` → 204, `access-control-allow-headers: authorization,content-type`, `allow-origin` doğru\n  → Yani SSRF/CORS/token/route DEĞİL. Hata widget istemcisinde ya da widget dev sunucusunun servis ettiği bundle'da.\n\nDÜŞEN TESTLER (2026-08-09, temiz kurulmuş izole DB + sourced .env; ayrıca paylaşılan DB'de birebir aynı):\n  demo-flow.spec.ts:14 · customers.spec.ts:93 · widget.spec.ts:118 · widget.spec.ts:134 ·\n  inbox-panel.spec.ts:58 · inbox-panel.spec.ts:114 · settings.spec.ts (composer shortcut + website widgets) ·\n  skills-routing.spec.ts (2) · traffic.spec.ts · ve paylaşılan DB'de state kirliliğiyle birlikte customers.spec.ts:12/51/68\n  Toplam: temiz DB'de 4/23 düşüyor (widget yolu), tam süitte 15/87.\n\nELENEN HİPOTEZLER (bu turda tek tek denendi): em-dash/çok baytlı karakter (ASCII metin gönderen `traffic.spec` de düşüyor) · CORS · customer token doğrulaması · SSRF guard · paylaşılan DB state kirliliği (sıfırdan migrate+seed edilmiş DB'de de düşüyor).\n\nDİKKAT — ORTAM TUZAKLARI (bu turda pahalıya öğrenildi):\n  1. `apps/rtm` kendi `.env`'ini YÜKLEMİYOR (apps/api'deki `loadEnvFile()` karşılığı yok). e2e'yi `set -a && . ./.env && set +a` ile koş, yoksa RTM ayağa kalkmaz ve Playwright 60 sn sonra webServer timeout verir.\n  2. `reuseExistingServer: !CI` → portta KALAN bir dev sunucu varsa Playwright onu YENİDEN KULLANIR, env'i uyuşmasa bile. Bu, API'nin bir DB'ye, RTM'in BAŞKA bir DB'ye bakmasına yol açar ve gerçek olmayan hatalar üretir. Koşmadan önce 4000/4001/5173/5174'ü boşalt.\n  3. Tam süit 10 dk'lık araç timeout'unu aşıyor → iki parçada koş.",
         "testStrategy": "İlk adım: Playwright ile widget iframe'inin `console` ve `requestfailed`/`response` olaylarını dinleyip `nexa widget: send failed` uyarısının taşıdığı hatayı ve varsa başarısız isteği yakala (tek atılık tanı scripti, sonra silinir). Ardından: `apps/widget/src/api.ts` `#request`/`send` yolunda hatanın nerede doğduğunu bul (401 → re-mint → sonsuz özyineleme riski widget.ts/api.ts:196-202'de ayrıca incelenmeli). Kapı: `demo-flow.spec.ts`, `widget.spec.ts`, `customers.spec.ts:93`, `inbox-panel.spec.ts`, `traffic.spec.ts`, `settings.spec.ts`, `skills-routing.spec.ts` yeşile döner; tam e2e süiti 87/87.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T11:31:07.800Z"
       },
       {
         "id": "107",
@@ -5063,13 +5065,24 @@
         "dependencies": [],
         "priority": "medium",
         "subtasks": []
+      },
+      {
+        "id": "109",
+        "title": "e2e-seed-pollution — `db:seed` idempotent, TRUNCATE etmiyor: paylaşılan `nexa`'da e2e koşuları birikip customers/command-palette testlerini düşürüyor",
+        "description": "`apps/e2e/tests/global-setup.ts` her koşudan önce `pnpm db:seed` çağırıyor ve yorumu \"Every run starts from the same fixture\" diyor — ama seed IDEMPOTENT: var olan tenant'ı görünce hiçbir şey silmiyor. Her e2e koşusu paylaşılan `nexa` veritabanına yeni müşteri + sohbet bırakıyor, birikim seed'lenmiş Alex/Mira/Robin'i müşteri listesinin ilk sayfasından taşırıyor ve bu testler düşüyor. Aynı testler sıfırdan migrate edilmiş izole bir DB'de yeşil.",
+        "details": "BULUNDUĞU TUR: tm 106 (widget send yarışı düzeltilirken). Kusur tm 106'nın değişikliğinden BAĞIMSIZ ve ondan ÖNCE de vardı — tm 97.8 kapanışı da \"paylaşılan DB'de state kirliliğiyle birlikte customers.spec.ts:12/51/68\" diye kaydetmişti, ama nedeni o zaman teşhis edilmemişti.\n\nKANIT (tm 106 turunda ölçüldü):\n- Paylaşılan `nexa`'ya karşı alt küme koşusu: `customers.spec.ts:12/51/68` + `command-palette.spec.ts:15` kırmızı. Playwright hata bağlamı `waiting for getByRole('button', { name: /Mira Haddad/ })` diyor — yani seed'lenmiş müşteri listede YOK, silinmiş değil, sayfanın dışına taşmış.\n- Sıfırdan `CREATE DATABASE nexa_e2e106` + `prisma migrate deploy` yapılmış izole DB'de AYNI testler ve TAM SÜİT **87/87 yeşil**.\n- Kök neden `apps/api/prisma/seed.ts` + `apps/e2e/tests/global-setup.ts`: global-setup yalnız çıktıda `Acme Bikes` arıyor; seed tenant'ı bulunca sessizce çıkıyor, hiçbir tabloyu TRUNCATE etmiyor. Widget e2e testlerinin her biri saklı `customer_id` olmadan token mint ettiği için her koşu YENİ müşteri yaratıyor — birikim doğrusal.\n\nÇÖZÜM YÖNLERİ (karar bu görevde verilecek):\n1. `global-setup.ts` seed'den ÖNCE reset etsin (`prisma migrate reset --force` ya da hedefli TRUNCATE). Dikkat: MASTER-PROMPT \"DB drop YOK\" sınırı — `nexa` geliştirme veritabanı; `migrate reset` yerine seed'in kendi TRUNCATE'i tercih edilebilir.\n2. e2e'yi tm 105'in izolasyon harness'ına bağla (`apps/api/scripts/test-datastores.ts`): koşu başına kendi DB'si. DİKKAT: e2e sabit portlarda gerçek sunucular sürüyor ve `REDIS_URL`'e index eklemek RTM/API pub-sub'ını ayırır — HANDOFF'ta kayıtlı tuzak.\n3. `global-setup.ts`'in yanlış yorumunu düzelt (hangi çözüm seçilirse seçilsin): bugünkü hali okuyanı \"her koşu temiz başlar\" diye yanıltıyor ve bu yanlış teşhise yol açtı.\n\nYAN NOT: `apps/e2e/playwright.config.ts` `workers: 1` + `fullyParallel: false` zaten süit içi sırayı garanti ediyor; sorun süit İÇİ değil, koşular ARASI birikim.",
+        "testStrategy": "Kabul kriteri: paylaşılan `nexa` veritabanına karşı, art arda İKİ tam e2e koşusu da 87/87 yeşil vermeli (bugün ikinci koşu birikim yüzünden düşüyor). Doğrulama: `pnpm -w test:e2e` iki kez üst üste; ayrıca üçüncü bir koşudan önce `SELECT count(*) FROM customers` sayısının koşular arasında büyümediği (ya da testlerin buna duyarsız olduğu) gösterilmeli.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T07:03:14.658Z",
-      "taskCount": 108,
-      "completedCount": 89,
+      "lastModified": "2026-08-09T11:31:07.800Z",
+      "taskCount": 109,
+      "completedCount": 90,
       "tags": [
         "master"
       ]

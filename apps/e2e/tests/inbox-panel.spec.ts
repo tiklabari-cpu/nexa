@@ -86,6 +86,15 @@ test.describe('multi-agent composing conflict', () => {
       await secondAgent.goto('/app/inbox');
       await openConversation(secondAgent, question);
 
+      // Both sockets must be live before either types. The composer emits one
+      // "start" per burst (`Composer.tsx` `signalTyping`) and `sendTyping` drops
+      // it while the socket is not live, so a keystroke that lands during the
+      // connect is not queued — it is gone, and with it the registration that
+      // makes the second composer a conflict. A real agent reads this badge
+      // before they trust the inbox; the test has to as well.
+      await expectRealtimeLive(agentPage);
+      await expectRealtimeLive(secondAgent);
+
       // Both start replying to the same conversation at once.
       await agentPage.getByPlaceholder('Type your reply').fill('Looking into this now');
       await secondAgent.getByPlaceholder('Type your reply').fill('I can take this one');
@@ -147,6 +156,25 @@ test.describe('supervisor takeover', () => {
     }
   });
 });
+
+/**
+ * Wait until the inbox's own connection badge says the RTM socket is live.
+ *
+ * The badge is the product's answer to "is this inbox stale?", so waiting on it
+ * asserts through the same surface an agent uses rather than reaching into the
+ * client. In dev the socket is opened twice (StrictMode mounts the effect, tears
+ * it down and mounts it again) and the second attempt goes through the reconnect
+ * backoff, which is seconds — invisible to a human, decisive to a test that
+ * types the instant the conversation opens.
+ */
+async function expectRealtimeLive(page: Page): Promise<void> {
+  // Not an exact match: the badge's glyph and its label share one element, so
+  // its text is "●Live". Scoping to the views rail keeps that loose match off
+  // the conversation named "Live traffic …" that the traffic spec seeds.
+  await expect(
+    page.getByRole('navigation', { name: 'Inbox views' }).getByText('Live'),
+  ).toBeVisible({ timeout: 20_000 });
+}
 
 /** Open the conversation whose last message matches `text` — never "the first one". */
 async function openConversation(page: Page, text: string): Promise<void> {

@@ -422,8 +422,27 @@ export function mount(doc: Document = document, win: Window = window): void {
 
   // --- Data ----------------------------------------------------------------
 
+  /**
+   * The mint in flight, so a second caller joins it instead of starting its own.
+   *
+   * Opening the panel fires `connect`, and a fast Send or file pick fires
+   * another before the first has resolved — `state.connected` is still false, so
+   * the plain guard above does not catch it. Two mints would be two identities
+   * on a first-ever visit: neither request carries a stored customer id, so the
+   * server creates a customer for each, and whichever token lands second speaks
+   * for a conversation the visitor cannot see.
+   */
+  let connecting: Promise<void> | null = null;
+
   async function connect(): Promise<void> {
     if (state.connected) return;
+    connecting ??= mint().finally(() => {
+      connecting = null;
+    });
+    return connecting;
+  }
+
+  async function mint(): Promise<void> {
     try {
       const snapshot = await api.connect();
       // The token mint carried the workspace's appearance; the server wins over
@@ -523,6 +542,15 @@ export function mount(doc: Document = document, win: Window = window): void {
     // The draft is on its way — retract the sneak-peek so the agent's preview
     // does not linger behind the real message.
     stopTyping();
+
+    // Sending needs a token. Opening the panel already started `connect`, but
+    // the composer is on screen from the first frame — nothing makes the visitor
+    // wait for the mint, so a fast typist beats it and `api.send` throws "not
+    // connected". Same guard `onPickFile` carries, and it belongs here first:
+    // losing a message is worse than losing an upload. Awaited *before* the
+    // optimistic bubble, because a successful connect replaces `state.events`
+    // wholesale and would drop a bubble pushed ahead of it.
+    if (!api.authenticated) await connect();
 
     // Optimistic: the message appears immediately, because a visitor who sees
     // nothing happen presses enter again.

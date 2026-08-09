@@ -13,6 +13,77 @@
 
 ## Task log (newest-first)
 
+### tm 106 — e2e-widget-send · Widget'tan müşteri mesajı tarayıcıda kırık — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - **Kök neden kanıtlandı, sonra düzeltildi** (önceki pencerenin "lider hipotez"i doğru çıktı):
+    widget composer'ı ilk kareden itibaren ekranda (`renderPrechat()` onu yalnız pre-chat formu
+    varsa gizler), ama token minti `setOpen(true)` içinde `void connect()` ile ateşlenip
+    beklenmiyordu. Hızlı yazan biri minti geçince `api.send()` `#token === null` yüzünden
+    `WidgetApiError: not connected` atıyor, `send()`'in catch dalı optimistic balonu geri alıyor,
+    transkript boş kalıyor ve **istek ağa hiç çıkmıyor**.
+  - `apps/widget/src/widget.ts` — iki parçalı düzeltme:
+    (a) `send()` artık `if (!api.authenticated) await connect()` taşıyor (aynı koruma
+    `onPickFile()`'da zaten vardı). **Optimistic balonun ÖNCESİNE** konuldu: başarılı bir
+    `connect()` `state.events`'i toptan değiştirir, önüne itilmiş balonu düşürürdü.
+    (b) `connect()` **tek-uçuşlu** (`connecting ??= mint().finally(...)`). Bu (a) olmadan
+    yeni bir kusur doğururdu: `state.connected` mint bitene kadar `false`, yani sade gardiyan
+    ikinci çağrıyı yakalamaz ve **iki mint = iki kimlik** — ilk ziyarette hiçbiri saklı bir
+    `customer_id` taşımaz, sunucu her biri için ayrı müşteri yaratır, ikinci sıraya düşen token
+    ziyaretçinin göremediği bir konuşma adına konuşur.
+  - `apps/widget/test/send-race.test.ts` (yeni, 2 test, jsdom): minti kasten açık tutup Send'e
+    basıyor. **Düzeltme olmadan kırmızı** — `git stash push -- apps/widget/src/widget.ts` ile
+    birebir doğrulandı, konsolda tm 97.8'in `trace.zip`'inden çıkan stack'in aynısı
+    (`api.ts:185`). Testler ayrıca **tek** token minti atıldığını sayıyor, ve DOM iddiasını
+    sunucu yerleşene kadar bekletiyor — aksi halde geri alınmadan önceki optimistic balona
+    takılıp yanlış yeşil verirdi (bu kusurun saklanma biçiminin ta kendisi).
+  - `apps/widget/tsconfig.json` — `include`'a `test/**/*.ts` eklendi; yeni test dosyası artık
+    typecheck kapısının içinde (eskiden `src` dışı hiç bakılmıyordu).
+  - **İkinci, maskelenmiş kusur** (widget düzelince ilk kez görünür oldu): `inbox-panel.spec.ts:58`
+    çoklu-ajan çakışma bandı testi `visitorSends`'i geçti ve **kendi** yarışında düştü. WS çerçeve
+    kaydıyla ölçüldü: dev'de StrictMode ajan soketini iki kez kurar, ikinci deneme reconnect
+    backoff'una girer; test ise konuşmayı açar açmaz yazıyordu. `sendTyping()` soket `live`
+    değilse çerçeveyi **kuyruğa almaz, atar** ve composer patlama başına tek "start" yolladığı
+    için kayıt o tuş vuruşuyla birlikte kaybolur → ikinci composer çakışma sayılmaz.
+    Test artık ürünün kendi bağlantı rozetini (`ConnectionBadge` → "Live") bekliyor; bir ajanın
+    gözüyle aynı sinyal. Ürün kodu değişmedi — dev'e özgü bağlanma gecikmesi, üretim davranışı değil.
+- **Doğrulama (exit code'larla):**
+  - `pnpm -w typecheck` **11/11 exit 0** · `pnpm -w lint` **8/8 exit 0** · `pnpm -w build` **7/7 exit 0**
+  - `@nexa/widget` **54/54** · `@nexa/rtm` **90/90** · `@nexa/types` **71/71** · `@nexa/ai-mock` **136/136**
+  - `@nexa/api` **2057 geçti / 1 kırmızı** — kalan tek kırmızı bilinen **tm 107** (tarihe bağlı
+    `scheduled-reports-sweep.test.ts`); `apps/api`'ye bu turda dokunulmadı.
+  - `@nexa/web` **751 geçti / 7 kırmızı** — bilinen **tm 108** (makine locale'i); `apps/web`'e
+    bu turda dokunulmadı.
+  - **Tam e2e: 87/87 YEŞİL** (tm 97.8 tabanı: 72/87). Ölçüm sıfırdan `CREATE DATABASE` +
+    `migrate deploy` yapılmış izole `nexa_e2e106` üzerinde; koşu sonunda `DROP DATABASE` ile
+    düşürüldü, **`nexa` veritabanına dokunulmadı**.
+- **Varsayımlar:**
+  - E2E ölçümü için izole DB seçildi çünkü paylaşılan `nexa` kirli (aşağıya bakın). Bu, süitin
+    tasarım varsayımıyla (globalSetup her koşuda seed'ler) aynı hizada.
+  - `inbox-panel:58` için ürün değil test düzeltildi: gözlenen gecikme dev-mode StrictMode +
+    Vite'a özgü. Üretimde soket bir kez kurulur ve gerçek bir ajan yazmaya başlamadan çok önce
+    `live` olur. Rozeti beklemek ürünün kendi yüzeyinden doğrulama yapar, istemciye elle uzanmaz.
+- **Sonraki pencereye not:**
+  - **Yeni kusur — `db:seed` idempotent, TRUNCATE ETMİYOR.** `apps/e2e/tests/global-setup.ts`'in
+    yorumu "her koşu aynı fixture'dan başlar" diyor ama bu doğru değil: her e2e koşusu paylaşılan
+    `nexa`'ya yeni müşteri + sohbet bırakıyor, seed'lenmiş Alex/Mira/Robin zamanla ilk sayfadan
+    taşıyor ve `customers.spec.ts:12/51/68` + `command-palette.spec.ts:15` paylaşılan DB'de
+    düşüyor (izole DB'de üçü de yeşil). Bu tm 106'nın kusuru DEĞİL ve düzeltilmedi (kapsam) —
+    **tm 109 [medium]** olarak açıldı. O gün gelene kadar: e2e'yi izole DB'de koş (tarif
+    aşağıda), paylaşılan `nexa`'da değil.
+  - **İzole e2e DB tarifi** (bu turda kullanıldı, `nexa`'ya dokunmaz):
+    `docker exec nexa-db psql -U nexa -d postgres -c 'CREATE DATABASE nexa_e2e106 OWNER nexa;'` →
+    `DATABASE_URL`/`DATABASE_APP_URL`'i o DB'ye çevir → `apps/api`'de `npx prisma migrate deploy`
+    (grant'lar migration'ların içinde, ayrıca bir şey gerekmiyor) → `npx playwright test` →
+    bitince `DROP DATABASE ... WITH (FORCE)`. `REDIS_URL`'e index EKLEME (RTM/API pub-sub ayrışır).
+  - **Çalışma alanı temiz DEĞİL, bilerek:** tm 105'in işi (`apps/api/scripts/test-datastores.ts`,
+    `with-test-datastores.ts`, iki `fixtures.ts`, `CONVENTIONS.md` §1.1, `TASK-RUNNER-PROMPT.md`,
+    `README.md`, `turbo.json`, paket `package.json`'ları) hâlâ **commit'lenmemiş** duruyor ve
+    tm 105 Task Master'da **in-progress** — penceresi ölmüş görünüyor. Kapsam disiplini gereği
+    o dosyalara dokunmadım ve commit'ime ALMADIM; tm 106'nın commit'i yalnız kendi 4 dosyasını
+    taşıyor. tm 105'i devralan pencere kaldığı yerden devam edebilir.
+  - `.taskmaster/tmp-*.cjs` + `tmp-changelog.txt` hâlâ untracked (önceki pencerelerin artığı).
+
 ### tm 97.8 — 06.3.2-bulk-h · Uçtan uca doğrulama: E2E CSV içe aktarma + RAG'de aranabilirlik — done — 2026-08-09 UTC
 
 - **Yapıldı:**

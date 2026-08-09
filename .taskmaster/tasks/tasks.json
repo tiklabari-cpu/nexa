@@ -4783,12 +4783,12 @@
             "description": "Kataloğa 23+ yeni `SkillTemplate`. Kategori dağılımı dengeli (prebuilt/ai/trending), `badge` alanı seçmeli kullanılır. Her kayıt: gerçekçi `instruction` (seed.ts'teki skill.create içeriği kalibrasyon referansı) + `validateSteps`'ten geçen `steps` + doğru `requiresIntegration` bayrağı. **Bu alt-görev 2 pencereye taşabilir** — taşarsa kategori bazında ikiye bölünür (prebuilt+ai / trending), bölme no",
             "details": "05.6-tmpl31-b — 23+ yeni şablon kaydı — katalog 8 → 31+  [SONNET-MAX]\n\nPRD: §5.3-Otomasyon ('31+ şablon') + FR-MOD-05.1/05.2 (galeri + öneri kartları)\nETİKET GEREKÇESİ: SONNET-MAX: koşul 2 ve 3 sağlanıyor (güvenlik/eşzamanlılık YOK — statik veri), ama iş **mekanik olarak girifttir**: 23+ ayrı şablonun her biri gerçekçi bir `instruction` + tutarlı `steps` dizisi ister; her adımın `validateSteps` ile senkron kalması, id'lerin çakışmaması, kategori dağılımının dengeli olması gerekir. Geniş yüzey + çok sayıda benzer dönüşüm = SONNET-MAX tanımı. Etrafındaki her şey ucuz SONNET-XHIGH.\nNEDEN AÇIK: `apps/web/src/features/playbook/templates.ts` `SKILL_TEMPLATES` bugün TAM OLARAK 8 kayıt: prebuilt 3 (order-status, returns-policy, business-hours), ai 2 (greet-and-route, collect-then-handover), trending 3 (shopify-o…). PRD hedefi 31+ → en az 23 yeni kayıt eksik (somut sayısal açık).\nKAPSAM: Kataloğa 23+ yeni `SkillTemplate`. Kategori dağılımı dengeli (prebuilt/ai/trending), `badge` alanı seçmeli kullanılır. Her kayıt: gerçekçi `instruction` (seed.ts'teki skill.create içeriği kalibrasyon referansı) + `validateSteps`'ten geçen `steps` + doğru `requiresIntegration` bayrağı. **Bu alt-görev 2 pencereye taşabilir** — taşarsa kategori bazında ikiye bölünür (prebuilt+ai / trending), bölme noktası şimdiden belli.\nDOSYALAR: apps/web/src/features/playbook/templates.ts · apps/web/src/features/playbook/templates.test.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/playbook/templates.ts (mevcut 8 kayıt — şekil, ton ve ayrıntı düzeyi kalibrasyonu) · apps/api/prisma/seed.ts (skill.create çağrısı ~satır 379 — gerçekçi bir Skill'in instruction/steps şekli) · packages/ai-mock/src/compiler.ts (validateSteps — adımların geçerli sayılma kuralı)\nKK (birebir): \"KK-türetilmiş: 'Katalog en az 31 şablon içerir; her şablon şema-geçerlidir ve adımları doğrulamadan geçer.' — §C-A14 (PRD §5.3 hücresinde Kabul Kriteri sütunu yok).\"\nKK DOĞRULAMA: `pnpm --filter @nexa/web test -- templates` — (1) `SKILL_TEMPLATES.length >= 31` iddiası (KK'nın sayısal payının doğrudan ölçümü); (2) -a'da sıkılaştırılan invariantların hepsi 31+ kayıt için yeşil; (3) her kategoride en az N kayıt (galeri boş grup göstermez).\nKAPSAM DIŞI: i18n çevirisi (05.6-tmpl31-c) · Galeri arama/filtre/sanal liste (05.6-tmpl31-d) · Regüle/bahis dikeyi şablonları — açık soru, ürün kararı bekliyor\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: SKILL_TEMPLATES.length >= 31 (KK sayısal kapısı) · unit: tüm id'ler benzersiz (23+ eklerken en olası hata) · unit: her kaydın steps'i validateSteps'ten geçer · unit: her kategoride en az 1 kayıt (boş grup yok) · unit: requiresIntegration bayrağı olan kayıtlar galeride uyarı tetikler (mevcut RecommendedSkills davranışı korunur) · regresyon: mevcut 8 kaydın id/davranışı DEĞİŞMEZ (kullanıcı kayıtlı skill'leri bozulmaz)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "98.1"
             ],
             "parentId": "98",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T12:18:17.693Z"
           },
           {
             "id": 3,
@@ -4831,7 +4831,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T11:55:20.293Z",
+        "updatedAt": "2026-08-09T12:18:17.693Z",
         "complexity": 4,
         "recommendedSubtasks": 5,
         "expansionPrompt": "\"05.6 — Skill şablon kataloğunu 31+ (ADR-14 uyumlu ikame)  ·  dilim V2-6\" görevini 5 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5080,7 +5080,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T11:55:20.293Z",
+      "lastModified": "2026-08-09T12:18:17.694Z",
       "taskCount": 109,
       "completedCount": 90,
       "tags": [

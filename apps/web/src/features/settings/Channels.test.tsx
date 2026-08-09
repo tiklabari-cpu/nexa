@@ -1,14 +1,14 @@
 /**
- * Instagram connect/disconnect render behaviour (FR-MOD-08.5.7-e). The status
- * derivation itself (not_connected/connected/address) is covered as a pure
- * function in channels.test.ts — this file covers what only a render can show:
- * the connect form's field-under validation and the connected card's actions.
+ * Render behaviour that a pure-function test cannot show. channels.test.ts
+ * covers the status derivation (not_connected/connected/address) as data; this
+ * file covers Instagram's connect form + connected-card actions (FR-MOD-08.5.7-e)
+ * and the "Get notified" click's localStorage persistence (FR-MOD-08.5.7-f).
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelsGrid } from './Channels.js';
+import { channelNotifiedKey, ChannelsGrid } from './Channels.js';
 import { useAuth, useBrandStore } from '../../lib/auth-store.js';
 
 function okJson(body: unknown): Response {
@@ -61,6 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  localStorage.clear();
 });
 
 describe('Instagram card — not connected', () => {
@@ -140,5 +141,64 @@ describe('Instagram card — connected', () => {
     expect(window.confirm).toHaveBeenCalled();
     // Still showing Disconnect (not "Disconnecting…") — nothing was sent.
     expect(within(card).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * "Get notified" persistence (FR-MOD-08.5.7-f). Coming-soon cards used to hold
+ * this in plain component state — a reload lost the click. This mirrors
+ * Banner.tsx's keyed, storage-backed dismiss (bannerDismissKey) one-for-one,
+ * scoped per channel id via channelNotifiedKey.
+ */
+describe('Get notified — persistence', () => {
+  beforeEach(() => stubFetch({}));
+
+  it('remembers a channel’s click across remounts', async () => {
+    const view = renderChannels();
+    const card = await screen.findByTestId('channel-whatsapp');
+    await userEvent.click(within(card).getByRole('button', { name: 'Get notified' }));
+    expect(within(card).getByText(/let you know/i)).toBeInTheDocument();
+    expect(localStorage.getItem(channelNotifiedKey('whatsapp'))).toBe('1');
+
+    // A fresh mount — as a reload would be — stays acknowledged.
+    view.unmount();
+    renderChannels();
+    const remounted = await screen.findByTestId('channel-whatsapp');
+    expect(await within(remounted).findByText(/let you know/i)).toBeInTheDocument();
+  });
+
+  it('does not let one channel’s click acknowledge another', async () => {
+    renderChannels();
+    const whatsapp = await screen.findByTestId('channel-whatsapp');
+    await userEvent.click(within(whatsapp).getByRole('button', { name: 'Get notified' }));
+
+    const telegram = await screen.findByTestId('channel-telegram');
+    expect(within(telegram).getByRole('button', { name: 'Get notified' })).toBeInTheDocument();
+    expect(localStorage.getItem(channelNotifiedKey('telegram'))).toBeNull();
+  });
+
+  it('does not throw when localStorage.getItem fails, defaulting to not notified', async () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+
+    renderChannels();
+    const card = await screen.findByTestId('channel-whatsapp');
+    expect(within(card).getByRole('button', { name: 'Get notified' })).toBeInTheDocument();
+
+    getItem.mockRestore();
+  });
+
+  it('does not throw when localStorage.setItem fails, still reflecting the click for the session', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+
+    renderChannels();
+    const card = await screen.findByTestId('channel-whatsapp');
+    await userEvent.click(within(card).getByRole('button', { name: 'Get notified' }));
+    expect(within(card).getByText(/let you know/i)).toBeInTheDocument();
+
+    setItem.mockRestore();
   });
 });

@@ -13,6 +13,21 @@
 
 ## Task log (newest-first)
 
+### tm 65.6 — 08.5.7-f: 'Get notified' kaydının kalıcılaştırılması (kalan coming-soon kanalları) — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `Channels.tsx`: coming-soon kartlarının 'Get notified' tıklaması artık `localStorage`'a kalıcı yazılıyor — `Banner.tsx`'in `bannerDismissKey`/`readDismissed`/`persistDismissed` üçlüsü birebir taklit edildi (`channelNotifiedKey(channelId)` → `nexa.channels.notified.<channelId>`, aynı try/catch savunması: storage erişilemezse sessizce `false`'a düşer, patlamaz). `ChannelCardView`'daki `useState(false)` → lazy-init `useState(() => readNotified(channel.id))`; kart `channel.id` ile keylendiği (bkz. `ChannelsGrid`'in `.map(... key={channel.id})`) için her remount doğru kanalın kaydını okur. Tıklama hem `setNotified(true)` (aynı render'da anında görünür) hem `persistNotified(channel.id)` (kalıcılık) yapıyor.
+  - Backend'e dokunulmadı — görev metni bilinçli olarak yeni route/tablo açılmamasını istiyordu (MASTER-PROMPT sınırları, istemci-tarafı tercih, PII yok).
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0** (10/10 paket görevi; `@nexa/web` 92/92 dosya, **791** test — 787'den +4) · `pnpm -w test:integration` **0** (`@nexa/api` 66/66 dosya, 1556/1556 — bu görev backend'e dokunmadığı için sayı sabit) · `pnpm -w build` **0** (7/7) · `pnpm -w test:e2e` **0** — **88/88** (Docker zaten açıktı; `.env`'i `set -a && source .env && set +a` ile export edip koştum; `settings.spec.ts:104`'ün mevcut whatsapp 'Get notified' oturum-içi iddiası regresyonsuz geçti). KK'nın dördü de `Channels.test.tsx`'teki yeni `describe('Get notified — persistence')`de doğrulandı: (i) tıkla→'We'll let you know.' görünür, (ii) remount'ta hâlâ görünür (kalıcılık kanıtı — `localStorage.getItem(channelNotifiedKey('whatsapp'))==='1'`), (iii) farklı kanal (telegram) etkilenmez, (iv) `Storage.prototype.getItem`/`setItem` fırlatınca bileşen patlamıyor (ReportsPage.test.tsx'teki "dismisses even when localStorage is unavailable" testinin aynı deseni).
+  `apps/e2e/kanit/*.png` e2e koşusunda yeniden üretildi (aynı içerik, farklı byte) — 65.1-65.5 emsaliyle `git checkout -- apps/e2e/kanit` ile atıldı.
+- **Varsayımlar:**
+  - Instagram kartı kapsam dışı bırakıldı (görev metni gereği — 08.5.7-e'den sonra artık `coming_soon` değil, zaten kendi `useState`'i yok).
+  - Anahtar şeması kanal id'si (`whatsapp`, `telegram`, `messenger`, `sms`) üzerinden — kullanıcıya/tenant'a özel değil (bu kart grubu tenant verisiyle ilgisiz, herkes aynı "yakında gelecek" listesini görüyor).
+- **Sonraki pencereye not:**
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ commit edilmemiş WIP** — bu turda da dokunulmadı (CONVENTIONS §5); `git add -A` kullanılmadı, yalnız bu görevin dosyaları (`Channels.tsx`, `Channels.test.tsx`) + `PLAN.md`/`HANDOFF.md`/Task Master durumu sahnelendi.
+  - Sıradaki: **08.5.7-g** (Inbox Views'te Instagram görünümü) ve **08.5.7-h** (e2e), ikisi de artık açık.
+  - Docker Desktop bu pencerede zaten açıktı (`nexa-db`/`nexa-redis` healthy) — dokunulmadı.
+
 ### tm 65.5 — 08.5.7-e: Settings → Channels — Instagram kartının statik 'Coming soon'dan canlı connect/disconnect'e dönüşü — done — 2026-08-09 UTC
 
 - **Yapıldı:**

@@ -1907,12 +1907,12 @@
             "description": "'Get notified' tıklaması kanal başına kalıcı kaydedilir (localStorage, Banner'ın kalıcı dismiss deseniyle aynı anahtar şeması: `nexa.channels.notified.<channelId>`); yeniden mount/reload sonrası kart 'We'll let you know.' göstermeye devam eder. Backend kaydı YOK — yeni route/tablo açılmaz (MASTER-PROMPT sınırları; gerçek bildirim gönderimi kapsam dışı). Bu alt-görev 08.5.7-e sonrası kalan coming-s",
             "details": "08.5.7-f — 'Get notified' kaydının kalıcılaştırılması (kalan coming-soon kanalları)  [SONNET-XHIGH]\n\nPRD: FR-MOD-08.5.7 (+ FR-MOD-08.5.1)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 1-2 dosya. (2) Güvenlik sınırı yok — istemci tarafı tercih kaydı, PII yok, yetki kararı yok. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: components/ui/Banner.tsx'in localStorage ile kalıcı dismiss'i (bannerDismissKey + getItem/setItem, satır 73-90) ve views.ts useSavedViews. (5) Kontrat değişikliği yok. (6) KK mekanik: tıkla → yeniden mount'ta durum korunur.\nNEDEN AÇIK: apps/web/src/features/settings/Channels.tsx ChannelCardView içinde `const [notified, setNotified] = useState(false)` — yalnız bileşen state'i. Channels.tsx'te localStorage grep 0, herhangi bir notify API çağrısı grep 0 → sayfa yenilenince 'We'll let you know.' kayboluyor ve PRD'nin ikinci aşaması (\"[Get notified] lansman bildirimi için kayıt\") gerçek bir kayıt DEĞİL. e2e settings.spec.ts:121-123 yalnız aynı oturum içindeki görünürlüğü iddia ediyor, kalıcılığı değil.\nKAPSAM: 'Get notified' tıklaması kanal başına kalıcı kaydedilir (localStorage, Banner'ın kalıcı dismiss deseniyle aynı anahtar şeması: `nexa.channels.notified.<channelId>`); yeniden mount/reload sonrası kart 'We'll let you know.' göstermeye devam eder. Backend kaydı YOK — yeni route/tablo açılmaz (MASTER-PROMPT sınırları; gerçek bildirim gönderimi kapsam dışı). Bu alt-görev 08.5.7-e sonrası kalan coming-soon kartlarını (telegram) ve genel deseni kapsar.\nDOSYALAR: apps/web/src/features/settings/Channels.tsx · apps/web/src/features/settings/channels.test.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/components/ui/Banner.tsx:73-90 (bannerDismissKey + localStorage kalıcı dismiss — birebir taklit edilecek desen) · apps/web/src/features/inbox/views.ts useSavedViews (localStorage destekli hook deseni, STORAGE_KEY sabiti) · apps/web/src/components/ui/Banner.test.tsx (kalıcılık testi şekli)\nKK (birebir): \"\"Coming soon → Get notified → tam entegrasyon\"\" | \"rapor-1-fonksiyonel.md:1467 — \"Instagram — Coming soon — [Get notified].\"\" | \"rapor-1-fonksiyonel.md:1534-1541 — \"[Get notified] lansman bildirimi için kayıt. Validasyon ve Hata Senaryoları: Yok.\"\"\nKK DOĞRULAMA: channels.test.ts / yeni render testi: (i) 'Get notified' tıklanır → 'We'll let you know.' görünür; (ii) bileşen yeniden mount edilir (yeni render) → hâlâ 'We'll let you know.' (kalıcı kayıt kanıtı); (iii) farklı kanal kartı etkilenmez (anahtar kanal başına); (iv) localStorage erişilemezse (SSR/erişim hatası) bileşen patlamaz, eski davranışa düşer.\nKAPSAM DIŞI: backend 'notify' kaydı / tablo / route (bilinçli olarak yapılmaz) · gerçek lansman e-postası gönderimi (13.8 bildirim kanalı işi) · instagram kartı — 08.5.7-e'den sonra artık coming_soon değildir\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: tıkla → kayıt; yeniden mount → durum korunur; kanal başına izolasyon · unit negatif: localStorage yok/erişilemez → hata fırlatmaz (Banner.tsx'in savunmacı deseni) · e2e regresyon: settings.spec.ts'in mevcut whatsapp 'Get notified' iddiası yeşil kalır · cross-tenant: gerekmiyor — istemci tarafı, tenant verisi yok",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "65.5"
             ],
             "parentId": "65",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T18:24:36.946Z"
           },
           {
             "id": 7,
@@ -1942,7 +1942,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T18:08:40.083Z",
+        "updatedAt": "2026-08-09T18:24:36.946Z",
         "complexity": 6,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"08.5.7 — Instagram (DM, MOCK)  ·  dilim V2-9\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T18:08:40.084Z",
+      "lastModified": "2026-08-09T18:24:36.946Z",
       "taskCount": 109,
       "completedCount": 95,
       "tags": [

@@ -57,6 +57,31 @@ const STATUS_META: Record<ChannelStatus, { tone: StatusTone; label: string }> = 
   coming_soon: { tone: 'neutral', label: 'Coming soon' },
 };
 
+const NOTIFIED_STORE_PREFIX = 'nexa.channels.notified.';
+
+/** The `localStorage` key a channel's "Get notified" click is remembered under. */
+export function channelNotifiedKey(channelId: string): string {
+  return `${NOTIFIED_STORE_PREFIX}${channelId}`;
+}
+
+/** Mirrors Banner.tsx's readDismissed/persistDismissed — storage can throw (private mode). */
+function readNotified(channelId: string): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(channelNotifiedKey(channelId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function persistNotified(channelId: string): void {
+  try {
+    localStorage.setItem(channelNotifiedKey(channelId), '1');
+  } catch {
+    // Storage unavailable — the click still holds for this session via state.
+  }
+}
+
 /**
  * Build the grid from the live website data.
  *
@@ -272,7 +297,9 @@ function ChannelCardView({
   websitesLoading: boolean;
   channelsLoading: boolean;
 }): ReactElement {
-  const [notified, setNotified] = useState(false);
+  // Lazy-init reads the persisted flag once per mount; the card is keyed by
+  // channel.id (see ChannelsGrid), so a remount always re-derives the same id.
+  const [notified, setNotified] = useState<boolean>(() => readNotified(channel.id));
   const meta = STATUS_META[channel.status];
   // The Website/Instagram status is unknown until its query resolves; do not
   // flash a wrong badge in the meantime. `channelsLoading` is false while the
@@ -300,7 +327,10 @@ function ChannelCardView({
           ) : (
             <button
               type="button"
-              onClick={() => setNotified(true)}
+              onClick={() => {
+                setNotified(true);
+                persistNotified(channel.id);
+              }}
               className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
             >
               {channel.cta}

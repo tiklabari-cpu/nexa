@@ -13,6 +13,55 @@
 
 ## Task log (newest-first)
 
+### tm 65.1 — 08.5.7-a: Instagram kanal tipinin kontrata eklenmesi — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `packages/contract/openapi/openapi.yaml`: `ChannelType` enum'ına `instagram` eklendi
+    (`[messenger, twilio, whatsapp, instagram]`), açıklama FR-MOD-08.5.7'ye referans verecek
+    şekilde güncellendi. `AppListItem.channel`'ın zaten taşıdığı 8 değerli listeyle artık
+    tutarlı (o listede instagram zaten vardı — tek dosya içi iki enum çelişkisi kapandı).
+  - `packages/contract/openapi/paths/channels.yaml`: `channelConnect` açıklamasına Instagram'ın
+    mock connect alan seti eklendi (Messenger'a paralel: OAuth `code` + `ig_user_id`; adres =
+    ig_user_id). `channelWebhook` açıklamasına IG inbound gövde şekli eklendi — Messenger'ın
+    gerçek kodundaki (`apps/api/src/services/channels/messenger.ts`) `recipient.id`/`sender.id`/
+    `message.text` desenini birebir yansıtacak şekilde: `recipient.id`=ig_user_id,
+    `sender.id`=IGSID (Instagram-scoped id), `message.text`=DM gövdesi.
+  - Bundle yeniden üretildi (`packages/contract/dist/openapi.json`, gitignored) ve
+    `@nexa/contract` generated client regen edildi (`packages/contract/src/generated/api.ts`) —
+    `pnpm --filter @nexa/contract generate`. Path sayısı **148 → 148** (değişmedi): yeni route
+    eklenmedi, yalnız var olan generic `/channels/{type}` path'leri artık `instagram`'ı da
+    kapsıyor.
+  - Kapsam dışı bırakılan (görev tanımı gereği, ayrı alt-görevler): `channel-adapter.ts`
+    runtime `CHANNEL_TYPES` guard'ı (08.5.7-c), `InstagramAdapter` kodu (08.5.7-b), UI
+    (08.5.7-e/-f/-g), `packages/types/src/domain.ts` (instagram zaten vardı, dokunulmadı).
+- **Doğrulama (exit code'larla):**
+  - Kabul kriteri: bundle'da `ChannelType.enum` içinde `instagram` var (grep ile doğrulandı,
+    `dist/openapi.json:12728-12736`) · `src/generated/api.ts` `ChannelType` union'ı
+    `'messenger' | 'twilio' | 'whatsapp' | 'instagram'` (grep ile doğrulandı).
+  - Tam DoD kapısı: `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+    `pnpm -w build` **0** (7/7) · `pnpm -w test` **0** (10/10 — api 2060/2060, contract-parity
+    dahil) · `pnpm -w test:integration` **0** (5/5 — api 1535/1535, `contract-parity.test.ts`
+    5/5 — path kümesi değişmedi, regresyon kanıtı) · `pnpm -w test:e2e` **0** — **88/88**
+    (`.env` kaynaklanarak).
+  - `apps/e2e/kanit/*.png` e2e koşusu yeniden üretti (aynı içerik, farklı byte) — tm 103/104/
+    107/108/109 emsaliyle `git checkout -- apps/e2e/kanit` ile atıldı.
+- **Varsayımlar:**
+  - Görev metni "packages/contract/openapi.json" diyor ama gerçek bundle çıktısı
+    `packages/contract/dist/openapi.json` (gitignored build artefact); commit edilen tek
+    üretilmiş dosya `src/generated/api.ts`. Bu, dosya listesindeki bir isim farkı — davranış
+    aynı (bundle + regen ikisi de çalıştı).
+  - PLAN.md §5.2 satırı (`08.5.7`) tam ✅ değil **◐** bırakıldı: bu alt-görev yalnız kontrat
+    payını kapatıyor, Instagram kanalı uçtan uca çalışmıyor (adapter/UI/e2e hâlâ eksik, 08.5.7-b
+    ilâ -h).
+- **Sonraki pencereye not:**
+  - 08.5.7-b (`InstagramAdapter`) bu görevin kontratına bağımlı, artık başlayabilir — desen
+    `apps/api/src/services/channels/messenger.ts` (parseConnect/parseInbound/send + zod şemaları).
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ commit edilmemiş WIP** — bu turda da
+    dokunulmadı (CONVENTIONS §5), `git add -A` kullanılmadı, yalnız bu görevin dört dosyası
+    sahnelendi: `PLAN.md`, `HANDOFF.md`, `packages/contract/openapi/openapi.yaml`,
+    `packages/contract/openapi/paths/channels.yaml`, `packages/contract/src/generated/api.ts`.
+  - `.taskmaster/tmp-*.cjs` / `tmp-changelog.txt` yine untracked scratch, dokunulmadı.
+
 ### tm 109 — e2e seed kirliliği: `db:seed` idempotent, koşular birikiyordu — done — 2026-08-09 UTC
 
 - **Yapıldı:**

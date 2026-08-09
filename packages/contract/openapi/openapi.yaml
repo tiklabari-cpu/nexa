@@ -963,10 +963,10 @@ components:
     ChannelType:
       type: string
       description: |
-        A connected omnichannel adapter (FR-MOD-08.5.4-.6). SMS is `twilio`, its
-        provider. The Website widget and e-mail forwarding are not adapters and
-        are not listed here.
-      enum: [messenger, twilio, whatsapp]
+        A connected omnichannel adapter (FR-MOD-08.5.4-.7). SMS is `twilio`, its
+        provider. `instagram` is DM-only (FR-MOD-08.5.7). The Website widget and
+        e-mail forwarding are not adapters and are not listed here.
+      enum: [messenger, twilio, whatsapp, instagram]
 
     ConnectedChannel:
       type: object

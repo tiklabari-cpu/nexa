@@ -2816,10 +2816,11 @@ export interface paths {
      * Connect a channel (mock)
      * @description Runs the channel's mock connect step and marks it on. The body differs by
      *     channel — a Messenger OAuth `code` + `page_id`, a Twilio `account_sid` +
-     *     `auth_token` + `phone_number`, or a WhatsApp `waba_id` + `phone_number` —
-     *     and the resulting channel *address* (page id / phone number) becomes the
-     *     key inbound webhooks resolve to this workspace. A credential in the body
-     *     (Twilio's `auth_token`) is verified but never stored back on the channel.
+     *     `auth_token` + `phone_number`, a WhatsApp `waba_id` + `phone_number`, or an
+     *     Instagram OAuth `code` + `ig_user_id` — and the resulting channel *address*
+     *     (page id / phone number / IG user id) becomes the key inbound webhooks
+     *     resolve to this workspace. A credential in the body (Twilio's `auth_token`)
+     *     is verified but never stored back on the channel.
      *
      *     Idempotent on the channel type: connecting again re-configures the existing
      *     channel rather than creating a second.
@@ -2921,6 +2922,11 @@ export interface paths {
      *     because no session exists yet. The sender is matched to a customer by their
      *     per-channel identity (reused on return), then the message opens or continues
      *     a chat exactly as the widget does.
+     *
+     *     Instagram mirrors the Messenger shape: `recipient.id` is the connected
+     *     channel's `ig_user_id`, `sender.id` is the IGSID (an Instagram-scoped id,
+     *     the sender's stable identity for that account), and `message.text` is the
+     *     DM body.
      *
      *     Public and unsigned in this build (the provider is mocked, MASTER-PROMPT
      *     §5); a real deployment verifies the provider signature at the edge.
@@ -4602,12 +4608,12 @@ export interface components {
       snippet: string;
     };
     /**
-     * @description A connected omnichannel adapter (FR-MOD-08.5.4-.6). SMS is `twilio`, its
-     *     provider. The Website widget and e-mail forwarding are not adapters and
-     *     are not listed here.
+     * @description A connected omnichannel adapter (FR-MOD-08.5.4-.7). SMS is `twilio`, its
+     *     provider. `instagram` is DM-only (FR-MOD-08.5.7). The Website widget and
+     *     e-mail forwarding are not adapters and are not listed here.
      * @enum {string}
      */
-    ChannelType: 'messenger' | 'twilio' | 'whatsapp';
+    ChannelType: 'messenger' | 'twilio' | 'whatsapp' | 'instagram';
     /** @description A channel the workspace has connected through an adapter. */
     ConnectedChannel: {
       type: components['schemas']['ChannelType'];

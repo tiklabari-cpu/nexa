@@ -4700,13 +4700,13 @@
             "description": "`BulkImportForm.tsx`: Knowledge panelinin içinde ikincil eylem (\"Bulk import\") → dosya seçici (06.3.2-bulk-d'nin `bulk-file.ts` ön-kontrolleriyle) + \"Şablonu indir\" (bulk-template.ts Blob'u) + hedef `ai_agent_id` mevcut panelden devralınır. Dosya seçilince `POST /knowledge-sources/bulk` **`dry_run: true`** ile çağrılır ve dönen `results` önizleme olarak gösterilir (istemcide parse YOK). \"İçe aktar",
             "details": "06.3.2-bulk-e — Knowledge panelinde \"Bulk import\" formu: dosya seç → dry-run önizleme  [SONNET-XHIGH]\n\nPRD: FR-MOD-06.3.2 (+ FR-EK-A.1 alan-altı hata / geçersizken submit pasif)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 3 dosya (bileşen + test + mount); güvenlik sınırı yok (mevcut `useApiClient` ile aynı scope'ta çağrı, yetki kararı sunucuda); eşzamanlılık yok; kopyalanacak desen ismen var (`PlaybookPage.tsx` `KnowledgePanel` formu satır 606-680: aynı `useQuery`/`useMutation` + `Section`/`Card` düzeni; `TemplateGallery.tsx` galeri/modal deseni; `lib/form.tsx` alan-altı hata primitifi); kontrat 06.3.2-bulk-c'de sabitlendi, burada değişmiyor; kabul kriteri mekanik (render + çağrı iddiaları).\nNEDEN AÇIK: `PlaybookPage.tsx` `KnowledgePanel` (satır ~606-680) tek satırlık form; `create` mutation'ı `api.post('/knowledge-sources', …)` tek kaynak gönderiyor. Dosya/CSV yükleme input'u, çoklu-satır önizleme yok. v2-01 §94: \"toplu içe aktarma (bulk import/CSV) arayüzde görünmüyor\".\nKAPSAM: `BulkImportForm.tsx`: Knowledge panelinin içinde ikincil eylem (\"Bulk import\") → dosya seçici (06.3.2-bulk-d'nin `bulk-file.ts` ön-kontrolleriyle) + \"Şablonu indir\" (bulk-template.ts Blob'u) + hedef `ai_agent_id` mevcut panelden devralınır. Dosya seçilince `POST /knowledge-sources/bulk` **`dry_run: true`** ile çağrılır ve dönen `results` önizleme olarak gösterilir (istemcide parse YOK). \"İçe aktar\" düğmesi yalnız en az bir geçerli satır varken etkin (EK-A.1: geçersizken submit pasif); ret nedenleri alan-altı hata olarak. Yükleme sırasında `Skeleton`, hata durumunda `Banner`. `PlaybookPage.tsx`'te `KnowledgePanel` içine mount + başarıdan sonra `['playbook']` query invalidasyonu (mevcut `invalidate` deseni).\nDOSYALAR: apps/web/src/features/playbook/BulkImportForm.tsx · apps/web/src/features/playbook/BulkImportForm.test.tsx · apps/web/src/features/playbook/PlaybookPage.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/playbook/PlaybookPage.tsx · apps/web/src/features/playbook/TemplateGallery.tsx · apps/web/src/lib/form.tsx · apps/web/src/components/ui/Modal.tsx · apps/web/src/components/Skeleton.tsx · apps/web/src/features/team/CopilotKnowledge.tsx\nKK (birebir): \"**bulk/CSV import** (Nexa)\" | \"KK-türetilmiş: yönetici bir CSV seçtiğinde, yazma yapılmadan önce hangi satırların geçeceğini/düşeceğini görür ve hiç geçerli satır yoksa içe aktarma düğmesi pasif kalır. — PRD KK arayüz davranışını tarif etmiyor; madde v2-01 §94 (\"arayüzde görünmüyor\") ile depodaki EK-A.1 kapısından (\"alan-altı hata mesajı; geçersizken submit pasif\") türetildi.\"\nKK DOĞRULAMA: `BulkImportForm.test.tsx`: (a) dosya seçimi `dry_run:true` gövdesiyle `/knowledge-sources/bulk` çağırır ve yazma çağrısı yapılmaz (= türetilmiş önizleme maddesi); (b) tüm satırlar geçersiz dönen dry-run'da \"İçe aktar\" düğmesi `disabled` (= EK-A.1 payı); (c) \"İçe aktar\" `dry_run:false` ile ikinci çağrıyı yapar ve `['playbook']` invalidasyonu tetiklenir (= 'bulk/CSV import' payı).\nKAPSAM DIŞI: Sonuç tablosu ve kısmi-başarı özeti bileşeni (06.3.2-bulk-f) — bu alt-görevde önizleme ham sayılarla gösterilir · Sürükle-bırak dosya alanı · İlerleme çubuğu / asenkron iş takibi (senkron akış, §varsayım 2)\nSÖZLEŞME: yok (06.3.2-bulk-c'de tanımlanan path tüketilir)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit NEGATİF (önce): CSV olmayan dosya → alan-altı hata, hiçbir ağ çağrısı yapılmaz · unit NEGATİF (önce): dry-run 0 geçerli satır döndüğünde submit pasif kalır · unit NEGATİF: sunucu ADR-06 zarfıyla `validation` döndüğünde (tavan aşımı) Banner'da mesaj görünür, form kilitlenmez · unit POZİTİF: geçerli CSV → dry-run çağrısı → içe aktar çağrısı → invalidasyon · unit: yükleme sırasında Skeleton görünür, `ai_agent_id` yokken form hiç render edilmez (mevcut `canEdit && aiAgentId` kapısıyla tutarlı)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "97.3",
               "97.4"
             ],
             "parentId": "97",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T03:43:22.465Z"
           },
           {
             "id": 6,
@@ -4749,7 +4749,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T03:23:14.875Z",
+        "updatedAt": "2026-08-09T03:43:22.465Z",
         "complexity": 9,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"06.3.2-bulk — Bulk/CSV KB import (YALNIZ çoklu-satır; tek-kaynak yolu v1'de ✅)  ·  dilim V2-6\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5023,7 +5023,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T03:23:14.875Z",
+      "lastModified": "2026-08-09T03:43:22.466Z",
       "taskCount": 104,
       "completedCount": 88,
       "tags": [

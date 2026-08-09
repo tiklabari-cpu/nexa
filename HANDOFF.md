@@ -13,6 +13,55 @@
 
 ## Task log (newest-first)
 
+### tm 97.5 — 06.3.2-bulk-e · Knowledge panelinde "Bulk import" formu: dosya seç → dry-run önizleme — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/playbook/BulkImportForm.tsx` — Knowledge panelinde ikincil eylem
+    ("Bulk import" toggle, `aria-expanded`). Dosya seçilince `bulk-file.ts`'in `readBulkFile()`
+    ön-kontrolüyle okunur (geçersizse alan-altı hata, ağ çağrısı YOK); geçerse
+    `POST /knowledge-sources/bulk` **`dry_run:true`** ile çağrılır ve dönen `{imported,failed}`
+    ham sayı önizlemesi gösterilir (satır-satır tablo 97.6'nın işi, bilinçli kapsam dışı).
+    "Import" yalnız dry-run ≥1 satırı `imported` işaretlerse etkin (EK-A.1); sunucu reddi
+    `Banner`'da gösterilir (form kilitlenmez, dosya input'u etkin kalır); yükleme sırasında
+    `Skeleton`. Başarılı import → `['playbook']` invalidasyonu (`onImported` prop, SkillEditor/
+    ProfileForm'un `onSaved` deseniyle paralel) + panel kapanır. "Şablonu indir"
+    `bulk-template.ts`'in `toTemplateBlob()`'unu indirir (BillingPage'in fatura-indirme
+    desenini izler: `URL.createObjectURL` + geçici `<a download>`).
+  - `apps/web/src/features/playbook/types.ts` — `KnowledgeBulkRowResult`/`KnowledgeBulkResult`
+    tipleri eklendi (openapi `KnowledgeBulkResult` şemasının web-tarafı ayna karşılığı,
+    `apps/api`'ye import yok — dosyadaki diğer tiplerle aynı bilinçli ayrım).
+  - `apps/web/src/features/playbook/PlaybookPage.tsx` — `KnowledgePanel` içine, tek-kaynak
+    formunun hemen altına `<BulkImportForm canEdit={canEdit} aiAgentId={aiAgentId}
+    onImported={invalidate} />` mount edildi; bileşen kendi içinde `canEdit && aiAgentId`
+    kapısını taşıdığı için ajan yokken/izinsizken hiç render edilmez.
+  - Test: `BulkImportForm.test.tsx` (7, negatifler önce): yanlış uzantı/MIME → alan-altı hata +
+    `api.post` çağrılmaz · dry-run 0 geçerli satır → Import disabled kalır · sunucu `validation`
+    hatası → Banner + form kilitlenmez (dosya input'u etkin kalır) · ajan yokken/izinsizken hiç
+    render edilmez (boş DOM); pozitifler: yükleme sırasında `bulk-import-preview-loading`
+    skeleton görünür · geçerli CSV → dry-run çağrısı → Import → `dry_run:false` ikinci çağrısı +
+    `onImported` invalidasyonu.
+- **Doğrulama:** `pnpm -w typecheck` 11/11 · `pnpm -w lint` 8/8 · `pnpm -w build` 7/7 (tam
+  workspace) · tam suite `npx turbo run test --filter='!@nexa/e2e' --concurrency=1`: `@nexa/web`
+  746 geçti/**7 kırmızı**, `@nexa/api` 1999 geçti/**6 kırmızı** — **ikisi de bu pencereden
+  bağımsız, dokunulmadı** (tm 97.3/97.4'te de dokümante edilen aynı iki ortam kısıtı): (a)
+  `@nexa/web` kırmızıları `BillingPage.test.tsx`+`ReportsPage.test.tsx`'te locale-format
+  ($123,45 vs $123.45, bu makinenin sistem locale'i); (b) `@nexa/api` kırmızıları `spawn pnpm
+  ENOENT` (`scheduled-reports-sweep.test.ts`+`reports-topics.test.ts`, bu makinede `pnpm.exe`
+  child_process'e görünmüyor). Bu task'ın kendi test dosyası izole `7/7` yeşil.
+- **Varsayımlar:** Önizleme yalnız ham sayı (`imported`/`failed`) gösterir — satır-satır tablo
+  ve kısmi-başarı özeti kasıtlı olarak 97.6'ya bırakıldı (görev kapsamı, "KAPSAM DIŞI" maddesi).
+  "Bulk import" ikincil eylemi Modal değil satır-içi açılır/kapanır bir disclosure olarak
+  uygulandı — TemplateGallery'nin modal deseni yerine, çünkü akış (dosya seç → önizle → içe
+  aktar) tek adımlı ve odak-tuzağı/backdrop-kapatma gerektirecek kadar karmaşık değil.
+- **Sonraki pencereye not:**
+  - 97.6 (sonuç tablosu + kısmi-başarı özeti) bu formun üstüne oturur — `dryRun.data.results`
+    zaten `KnowledgeBulkRowResult[]` olarak elde ediliyor; 97.6 yalnız bir tablo bileşeni ekleyip
+    mevcut ham-sayı önizlemesini genişletecek/değiştirecek.
+  - 97.7 (website satırı SSRF) ve 97.8 (e2e uçtan uca doğrulama) hâlâ açık/bağımsız.
+  - `@nexa/web` locale-format kırmızıları ve `@nexa/api` `spawn pnpm ENOENT` kırmızıları (sayı
+    test gruplamasına göre 6-8 arası değişebiliyor, kök neden aynı) hâlâ bu turdan bağımsız,
+    ayrı görev açılması gereken bilinen borç.
+
 ### tm 97.4 — 06.3.2-bulk-d · Frontend saf yardımcılar: CSV şablonu + dosya ön-kontrol — done — 2026-08-09 UTC
 
 - **Yapıldı:**

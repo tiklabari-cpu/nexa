@@ -23,6 +23,7 @@ import { SkillEditor } from './SkillEditor.js';
 import { ProfileForm } from './ProfileForm.js';
 import { AiPerformance } from './AiPerformance.js';
 import { TemplateGallery } from './TemplateGallery.js';
+import { BulkImportForm } from './BulkImportForm.js';
 import { RecommendedSkills } from './RecommendedSkills.js';
 import { KbArticleList } from './KbArticleList.js';
 import { templateToDraft, type SkillTemplate } from './templates.js';
@@ -766,6 +767,8 @@ function KnowledgePanel({
             </div>
           </form>
         )}
+
+        <BulkImportForm canEdit={canEdit} aiAgentId={aiAgentId} onImported={invalidate} />
 
         {allItems.length > 0 && (
           <div

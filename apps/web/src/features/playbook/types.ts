@@ -64,6 +64,29 @@ export interface KnowledgeSource {
   updated_at: string;
 }
 
+/** One CSV data row's verdict from a bulk import (FR-MOD-06.3.2). */
+export interface KnowledgeBulkRowResult {
+  line: number;
+  name: string | null;
+  type: string | null;
+  status: 'imported' | 'skipped';
+  id: string | null;
+  chunk_count: number | null;
+  error: string | null;
+}
+
+/**
+ * The response from `POST /knowledge-sources/bulk`. `dry_run` is what makes
+ * `imported`/`results` a preview rather than a write — see
+ * `BulkImportForm.tsx`.
+ */
+export interface KnowledgeBulkResult {
+  imported: number;
+  failed: number;
+  dry_run: boolean;
+  results: KnowledgeBulkRowResult[];
+}
+
 /** A public KB category (PUBKB-a), used to file and label an article. */
 export interface KbCategory {
   id: string;

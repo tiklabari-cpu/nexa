@@ -5051,10 +5051,11 @@
         "description": "`scheduled-reports-sweep.test.ts`'teki \"the client the script itself constructs does not leak one licence into another\" testi yalnız gerçek tarih 2026-08-08 iken geçebilir: fixture sabit `IN_PERIOD`e yazıyor, spawn edilen script ise gerçek saati kullanıyor.",
         "details": "BULUNDUĞU TUR: tm 97.8 (06.3.2-bulk-h). Bu tur `execFile('pnpm', …)` çağrılarına `shell: true` ekleyerek bu dosyadaki `scheduled-reports:run script` bloğunu bu makinede İLK KEZ gerçekten koşulur hale getirdi (önceden 5 test `spawn pnpm ENOENT` ile düşüyordu, yani ASLA çalışmamışlardı). Beş testin dördü yeşile döndü; bu biri gerçek bir kusuru ortaya çıkardı.\n\nKÖK NEDEN:\n  - `apps/api/test/integration/scheduled-reports-sweep.test.ts:53-54` — `NOW = 2026-08-08T09:00Z`, `IN_PERIOD = 2026-08-07T12:00Z`. `seedAssignedThread()` chat/thread'i `IN_PERIOD`e yazıyor.\n  - Süreç-içi `sweep()` (aynı dosya:73) sweeper'a `{ now: NOW }` VERİYOR → önceki tam gün = 2026-08-07 = `IN_PERIOD`. Bu yüzden süreç-içi testler geçiyor.\n  - `runScript()` ise gerçek CLI'ı spawn ediyor ve `apps/api/src/services/reports/scheduled-reports-run.ts:158` `const now = new Date()` — yani GERÇEK saat. 2026-08-09'da önceki tam gün 2026-08-08, `IN_PERIOD` (08-07) o pencerenin DIŞINDA kalıyor.\n  - Sonuç: rapor \"No rows for this period\" ile geliyor, `expect(toA?.body).toContain('Agent a')` düşüyor.\n  - Kardeş script testleri (`--apply delivers`, `dry-run`, üç tetikleme, vb.) yalnız `delivered/skipped/failed` sayılarına baktığı için VACUOUS geçiyor — \"veri olmayan dönem yine de gönderilir\" davranışı sayesinde. Yani sızıntı testi bu blokta gövde içeriğine bakan TEK test ve tarihe bağlı olan da o.\n\nOLASI ÇÖZÜMLER (biri seçilecek):\n  (a) `runScript` kullanan testler için fixture'ı GERÇEK saatin seçeceği döneme yaz (ör. `seedAssignedThread`'e opsiyonel zaman damgası; script blokları \"dün 12:00 UTC\" kullanır). En küçük değişiklik.\n  (b) CLI'a test edilebilir bir saat girişi ekle (`--now` argümanı veya `SCHEDULED_REPORTS_NOW` env) ve testler onu pinlesin — süreç-içi testlerle aynı determinizm, ama ÜRÜN kodu değişir.\n  DİKKAT: (a) seçilirse dönem sınırı UTC'dir; yerel saat (bu makinede UTC+3) ile hesaplamak gece yarısı civarı yeniden kırılganlık üretir.\n\nKAPSAM NOTU: tm 97.8 bunu bilerek DÜZELTMEDİ (CONVENTIONS §5 — 07.9-sched-f alanına ait ayrı bir kusur, farklı kök neden). O tur yalnız `shell: true` onarımını yaptı; 6 kırmızıdan 5'i böylece kapandı.",
         "testStrategy": "`npx vitest run test/integration/scheduled-reports-sweep.test.ts` (apps/api, sourced .env, izole DB önerilir) → 19/19 yeşil. Ek regresyon: testin farklı bir takvim gününde de geçtiğini göster (ör. fixture'ı gerçek `now`'dan türeterek), yoksa kusur yalnız yer değiştirmiş olur.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-09T14:26:59.320Z"
       },
       {
         "id": "108",
@@ -5081,9 +5082,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T13:43:52.058Z",
+      "lastModified": "2026-08-09T14:26:59.321Z",
       "taskCount": 109,
-      "completedCount": 92,
+      "completedCount": 93,
       "tags": [
         "master"
       ]

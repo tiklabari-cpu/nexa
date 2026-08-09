@@ -3802,6 +3802,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/billing/api-packages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The purchasable API-call packages
+     * @description The API request packages a workspace can buy on top of its plan's included
+     *     calls (FR-MOD-09.3). The catalogue is static and global — the same three
+     *     packages for every workspace, never filtered or repriced per tenant — so
+     *     this read touches no tenant data.
+     *
+     *     Billing is mocked (ADR-13): the prices here are what a purchase *would*
+     *     cost, and buying a package charges no card.
+     */
+    get: operations['listApiPackages'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/billing/api-packages/purchases': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * API packages this workspace has bought
+     * @description The workspace's own API-package purchases, newest first (FR-MOD-09.3).
+     *     Each row carries the quota and price the catalogue charged at the time of
+     *     sale, so a later catalogue change never rewrites history.
+     *
+     *     A workspace that has bought nothing gets an empty list, not a 404 — "you
+     *     have no purchases" is an answer, not a failure.
+     */
+    get: operations['listApiPackagePurchases'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/audit-log': {
     parameters: {
       query?: never;
@@ -5732,6 +5783,47 @@ export interface components {
       holder_name: string;
       /** Format: date-time */
       updated_at: string;
+    };
+    /**
+     * @description A named, purchasable block of API calls (FR-MOD-09.3). The catalogue is
+     *     static and global — the same three packages for every workspace, never
+     *     filtered or repriced per tenant — so a price change is a code change
+     *     (ADR-13 keeps billing mocked, so there is no provider-side catalogue to
+     *     sync with).
+     *
+     *     Distinct from the automatic overage in `UsageSummary.api_calls`: that is
+     *     what a workspace is charged for going past its allowance, this is what it
+     *     buys *before* it does.
+     */
+    ApiPackage: {
+      /** @description Catalogue id — `essential`, `pro`, `pro-plus`. */
+      id: string;
+      name: string;
+      /** @description The calls this package adds. */
+      api_calls: number;
+      price_cents: number;
+    };
+    /**
+     * @description One recorded API-package purchase (FR-MOD-09.3). The quota and price are
+     *     the catalogue's values *at the time of sale*, stored on the row rather
+     *     than looked up, so a later price change never rewrites what a workspace
+     *     was charged. `name` is joined from the catalogue for display; a purchase
+     *     of a package that has since left the catalogue still reports its
+     *     `package_id`.
+     */
+    ApiPackagePurchase: {
+      /** Format: uuid */
+      id: string;
+      package_id: string;
+      /** @description Catalogue name, or null if the package is no longer offered. */
+      name: string | null;
+      /** @description Calls this purchase added. */
+      api_calls: number;
+      price_cents: number;
+      /** @description The `yyyymm` period the quota was added to. */
+      period: string;
+      /** Format: date-time */
+      purchased_at: string;
     };
     /**
      * @description The masked fields a processor returns after tokenising a card. There is
@@ -13235,6 +13327,56 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listApiPackages: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The package catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ApiPackage'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listApiPackagePurchases: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's purchases, newest first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ApiPackagePurchase'][];
+          };
+        };
+      };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];

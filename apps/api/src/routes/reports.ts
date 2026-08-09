@@ -7,7 +7,13 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { hasAnyScope, isWorkScheduleProblem, normalizeWorkSchedule } from '@nexa/types';
+import {
+  API_PACKAGE_CATALOG,
+  findApiPackage,
+  hasAnyScope,
+  isWorkScheduleProblem,
+  normalizeWorkSchedule,
+} from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
@@ -1617,6 +1623,47 @@ export default async function reportRoutes(
       });
 
       return reply.send(paymentMethod);
+    },
+  );
+
+  // The API request packages on sale (FR-MOD-09.3). The catalogue is a code
+  // constant, identical for every workspace — no tenant query, and deliberately
+  // no per-tenant filtering: a price that differs by who is asking is a pricing
+  // feature nobody asked for. Still behind the billing read scopes, because
+  // what a product charges is not something an unauthenticated caller enumerates.
+  app.get('/billing/api-packages', { config: { scopes: BILLING_READ_SCOPES } }, async (_, reply) =>
+    reply.send({ items: API_PACKAGE_CATALOG }),
+  );
+
+  // What this workspace has actually bought, newest first. The quota and price
+  // come off the stored row rather than the catalogue, so a later price change
+  // never rewrites what someone was charged; only the display `name` is joined
+  // from the catalogue, and it is null for a package no longer offered.
+  app.get(
+    '/billing/api-packages/purchases',
+    { config: { scopes: BILLING_READ_SCOPES } },
+    async (request, reply) => {
+      const tenant = request.tenant();
+      const purchases = await request.withTenant((tx) =>
+        tx.apiPackagePurchase.findMany({
+          where: { licenseId: tenant.licenseId },
+          orderBy: { purchasedAt: 'desc' },
+        }),
+      );
+
+      return reply.send({
+        items: purchases.map((purchase) => ({
+          id: purchase.id,
+          package_id: purchase.packageId,
+          name: findApiPackage(purchase.packageId)?.name ?? null,
+          // `api_calls` is a bigint column; the wire carries a number, the same
+          // widening `usageSummary` does for the usage counters it reads.
+          api_calls: Number(purchase.apiCalls),
+          price_cents: purchase.priceCents,
+          period: purchase.period,
+          purchased_at: purchase.purchasedAt.toISOString(),
+        })),
+      });
     },
   );
 }

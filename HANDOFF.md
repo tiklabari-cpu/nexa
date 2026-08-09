@@ -13,6 +13,70 @@
 
 ## Task log (newest-first)
 
+### tm 71.3 — 09.3-c: API paketleri okuma yüzeyi (katalog + satın alma geçmişi) — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - **Kontrat (önce):** `packages/contract/openapi/paths/reports.yaml` → `apiPackages.get`
+    (`listApiPackages`) + `apiPackagePurchases.get` (`listApiPackagePurchases`), ikisi de
+    `Billing` tag'i ve 401/403/429 ref deseniyle. `packages/contract/openapi/openapi.yaml` →
+    iki path (`/billing/api-packages`, `/billing/api-packages/purchases`) + iki şema
+    (`ApiPackage`, `ApiPackagePurchase`). Bundle + typed client regen
+    (`pnpm --filter @nexa/contract generate` → 150 path, `src/generated/api.ts`).
+  - **Route'lar:** `apps/api/src/routes/reports.ts`, ikisi de `BILLING_READ_SCOPES`
+    (`billing_manage` / `billing_admin` / `reports_read` — fatura listesiyle aynı kapı).
+    - `GET /billing/api-packages`: doğrudan `@nexa/types` `API_PACKAGE_CATALOG`. Tenant sorgusu
+      YOK ve bilerek tenant'a göre filtreleme yok — fiyatın kime sorulduğuna göre değişmesi
+      kimsenin istemediği bir fiyatlandırma özelliği olurdu. Yine de scope arkasında: bir ürünün
+      ne kadara sattığı kimliksiz çağıranın sayacağı şey değil.
+    - `GET /billing/api-packages/purchases`: `request.withTenant` + `purchasedAt desc`.
+      **Kota ve fiyat satırdan okunur, katalogdan yeniden türetilmez** — satır makbuzdur;
+      bugünün kataloğundan yeniden hesaplanırsa bir sonraki fiyat değişimi kesilmiş faturayı
+      sessizce yeniden yazar (09.3-b'nin append-only kararıyla aynı gerekçe zinciri).
+      Yalnız görüntülenen `name` katalogdan join edilir ve katalogdan düşmüş bir pakette `null`
+      olur — satır kaybolmaz, aksi hâlde gerçekten harcanmış para listeden silinirdi.
+      `api_calls` bigint kolonu `Number()` ile genişletilir (`usageSummary`'nin sayaçlar için
+      yaptığının aynısı).
+- **Doğrulama (exit code'larla):** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `pnpm -w test` **0** (10/10 paket görevi; `@nexa/api` 100/100 dosya, **2113** test — 2103'ten
+  **+10**) · `pnpm -w test:integration` **0** (`@nexa/api` 66/66 dosya **1576/1576**;
+  `@nexa/rtm` 1/1, 51/51) · `pnpm -w build` **0** (7/7) · `pnpm -w test:e2e` **0** — **90/90**
+  (`.env`'i `set -a && source .env && set +a` ile export edip koştum; bu görev UI eklemediği için
+  e2e regresyon kanıtı olarak koşuldu — sayı sabit).
+  KK'nın dördü de `reports-billing.test.ts` içindeki yeni
+  `describe('API packages — the catalogue and the receipts (09.3)')` bloğunda (10 test,
+  **negatifler ve çapraz-kiracı önce**): (i) scope'suz token → **403** hem katalogda hem
+  geçmişte, (ii) **CROSS-TENANT** — A'nın satın alması B'nin yanıtında yok, B yalnız kendi
+  satırını görüyor, (iii) katalog yanıtı `API_PACKAGE_CATALOG` ile **birebir** (elle yazılmış
+  ikinci kopya değil — yeniden fiyatlama tek yerden akar), (iv) satın alma yokken **`[]`**
+  (200, 404 değil). Ek üç invariant: satılan fiyat katalog değişse de korunuyor, katalogdan
+  düşmüş paket `name: null` ile hâlâ listeleniyor, sıralama newest-first.
+  `contract-parity.test.ts` **5/5** — parite iki yönlü olduğu için kontrat ve route aynı
+  pencerede indi.
+- **Varsayımlar:**
+  - `ApiPackagePurchase` şemasına görev tanımındaki altı alana ek olarak satırın `id`'si
+    (uuid) kondu: 09.3-g geçmiş listesini render edecek ve stabil bir anahtara ihtiyacı var;
+    `purchased_at`+`package_id` bileşimi aynı gün iki kez alınan pakette (varsayım 7: idempotency
+    anahtarı yok, tekrar satın alma serbest) çakışırdı.
+  - `name` nullable: katalog kod-içi ve değişebilir (varsayım 3), o yüzden sözleşme kataloğu
+    terk etmiş bir `package_id`'yi ifade edebilmek zorunda.
+- **Sonraki pencereye not:**
+  - Sıradaki: **09.3-d** (`OPUS-MAX`, bölünmez çekirdek — POST /billing/api-packages + atomik
+    kota artışı) artık açık; bağımlılıkları (71.1/71.2/71.3) kapandı. Dikkat: `usage_records`
+    upsert'ünde `ON CONFLICT ... DO UPDATE SET included = usage_records.included + <kota>`
+    olmak zorunda — VALUES'taki hesaplanmış değer yazılırsa dönemin ilk `recordApiCall`'ı ile
+    sıraya göre kota kaybolur/çift eklenir (metering.ts:117'nin ON CONFLICT'i `included`'a
+    dokunmuyor).
+  - **Çalışma alanı temiz bırakılmadı, bilerek:** `CONVENTIONS.md`, `TASK-RUNNER-PROMPT.md`,
+    `README.md`, `package.json`, `turbo.json`, `apps/api/package.json`, `apps/api/tsconfig.json`,
+    `apps/{api,rtm}/test/helpers/fixtures.ts`, `apps/api/scripts/{test-datastores,
+    with-test-datastores}.ts`, `apps/api/test/integration/test-datastores.test.ts` ve
+    `.taskmaster/tmp-*` **tm 105'e** (test veri deposu izolasyonu, Task Master'da `in-progress`)
+    ait ve bu pencere başladığında zaten commit'lenmemişti. Kapsam disiplini (CONVENTIONS §5)
+    gereği commit'e ALINMADI — commit yalnız 09.3-c dosyalarını taşıyor. tm 105 penceresi
+    kendi kapanışında bunları commit'lemeli.
+  - `.taskmaster/tasks/tasks.json` commit'e dahil (71.3 done damgası). Aynı dosya tm 105'in
+    `in-progress` damgasını da taşıyor — paylaşılan durum dosyası, bu beklenen.
+
 ### tm 71.2 — 09.3-b: `api_package_purchases` tablosu (Prisma modeli + migration + RLS) — done — 2026-08-09 UTC
 
 - **Yapıldı:**

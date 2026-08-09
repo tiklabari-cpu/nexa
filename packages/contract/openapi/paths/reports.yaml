@@ -933,3 +933,60 @@ paymentMethod:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+apiPackages:
+  get:
+    tags: [Billing]
+    operationId: listApiPackages
+    summary: The purchasable API-call packages
+    description: |
+      The API request packages a workspace can buy on top of its plan's included
+      calls (FR-MOD-09.3). The catalogue is static and global — the same three
+      packages for every workspace, never filtered or repriced per tenant — so
+      this read touches no tenant data.
+
+      Billing is mocked (ADR-13): the prices here are what a purchase *would*
+      cost, and buying a package charges no card.
+    responses:
+      "200":
+        description: The package catalogue
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/ApiPackage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+apiPackagePurchases:
+  get:
+    tags: [Billing]
+    operationId: listApiPackagePurchases
+    summary: API packages this workspace has bought
+    description: |
+      The workspace's own API-package purchases, newest first (FR-MOD-09.3).
+      Each row carries the quota and price the catalogue charged at the time of
+      sale, so a later catalogue change never rewrites history.
+
+      A workspace that has bought nothing gets an empty list, not a 404 — "you
+      have no purchases" is an answer, not a failure.
+    responses:
+      "200":
+        description: The workspace's purchases, newest first
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/ApiPackagePurchase" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

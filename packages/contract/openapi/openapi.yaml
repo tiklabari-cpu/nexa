@@ -374,6 +374,10 @@ paths:
     $ref: "./paths/reports.yaml#/invoiceDownload"
   /billing/payment-method:
     $ref: "./paths/reports.yaml#/paymentMethod"
+  /billing/api-packages:
+    $ref: "./paths/reports.yaml#/apiPackages"
+  /billing/api-packages/purchases:
+    $ref: "./paths/reports.yaml#/apiPackagePurchases"
 
   /audit-log:
     $ref: "./paths/audit-log.yaml#/auditLog"
@@ -2360,6 +2364,47 @@ components:
         exp_year: { type: integer }
         holder_name: { type: string }
         updated_at: { type: string, format: date-time }
+
+    ApiPackage:
+      type: object
+      description: |
+        A named, purchasable block of API calls (FR-MOD-09.3). The catalogue is
+        static and global — the same three packages for every workspace, never
+        filtered or repriced per tenant — so a price change is a code change
+        (ADR-13 keeps billing mocked, so there is no provider-side catalogue to
+        sync with).
+
+        Distinct from the automatic overage in `UsageSummary.api_calls`: that is
+        what a workspace is charged for going past its allowance, this is what it
+        buys *before* it does.
+      required: [id, name, api_calls, price_cents]
+      properties:
+        id: { type: string, description: "Catalogue id — `essential`, `pro`, `pro-plus`." }
+        name: { type: string }
+        api_calls: { type: integer, description: The calls this package adds. }
+        price_cents: { type: integer }
+
+    ApiPackagePurchase:
+      type: object
+      description: |
+        One recorded API-package purchase (FR-MOD-09.3). The quota and price are
+        the catalogue's values *at the time of sale*, stored on the row rather
+        than looked up, so a later price change never rewrites what a workspace
+        was charged. `name` is joined from the catalogue for display; a purchase
+        of a package that has since left the catalogue still reports its
+        `package_id`.
+      required: [id, package_id, name, api_calls, price_cents, period, purchased_at]
+      properties:
+        id: { type: string, format: uuid }
+        package_id: { type: string }
+        name:
+          type: string
+          nullable: true
+          description: Catalogue name, or null if the package is no longer offered.
+        api_calls: { type: integer, description: Calls this purchase added. }
+        price_cents: { type: integer }
+        period: { type: string, description: "The `yyyymm` period the quota was added to." }
+        purchased_at: { type: string, format: date-time }
 
     PaymentMethodInput:
       type: object

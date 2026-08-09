@@ -8,7 +8,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { API_PACKAGE_CATALOG, generateShortId } from '@nexa/types';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 import { REPORT_GROUPS } from '../../src/routes/reports-export.js';
@@ -3490,6 +3490,151 @@ describe('reports and billing', () => {
         await server.get('/billing/payment-method', { authorization: `Bearer ${theirToken}` })
       ).json();
       expect(theirs.payment_method).toBeNull();
+    });
+  });
+
+  // =========================================================================
+  describe('API packages — the catalogue and the receipts (09.3)', () => {
+    /** An Essential purchase, as 09.3-d's core will write it. */
+    const purchase = (overrides: Record<string, unknown> = {}) => ({
+      licenseId: fx.a.licenseId,
+      packageId: 'essential',
+      apiCalls: 100_000n,
+      priceCents: 2999,
+      period: '202608',
+      ...overrides,
+    });
+
+    /** A token that can read nothing billing-shaped. */
+    const weakToken = () =>
+      grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:ro'],
+      });
+
+    it('refuses the catalogue to a token with neither a billing nor a reports scope', async () => {
+      const response = await server.get('/billing/api-packages', {
+        authorization: `Bearer ${await weakToken()}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('refuses the purchase history to that same token', async () => {
+      const response = await server.get('/billing/api-packages/purchases', {
+        authorization: `Bearer ${await weakToken()}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('never shows another tenant a purchase — what it spends on capacity is its own', async () => {
+      const mine = await owner.apiPackagePurchase.create({
+        data: purchase(),
+        select: { id: true },
+      });
+      await owner.apiPackagePurchase.create({
+        data: purchase({ licenseId: fx.b.licenseId, packageId: 'pro', apiCalls: 500_000n }),
+      });
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/billing/api-packages/purchases', {
+          authorization: `Bearer ${theirToken}`,
+        })
+      ).json().items;
+
+      // B sees its own single purchase and nothing of A's.
+      expect(theirs).toHaveLength(1);
+      expect(theirs[0].package_id).toBe('pro');
+      expect(theirs.map((p: { id: string }) => p.id)).not.toContain(mine.id);
+    });
+
+    it('serves the catalogue verbatim — the ids, quotas and prices @nexa/types compiles', async () => {
+      const response = await server.get('/billing/api-packages', auth);
+      expect(response.statusCode).toBe(200);
+      // Not a hand-written second copy: a repriced package shows up here without
+      // anyone remembering to edit the numbers twice.
+      expect(response.json().items).toEqual(API_PACKAGE_CATALOG.map((entry) => ({ ...entry })));
+      expect(response.json().items).toHaveLength(3);
+    });
+
+    it('is readable with reports_read alone, not only with a billing scope', async () => {
+      const reader = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const response = await server.get('/billing/api-packages', {
+        authorization: `Bearer ${reader}`,
+      });
+      expect(response.statusCode).toBe(200);
+    });
+
+    it('answers an empty history with an empty list, not a 404', async () => {
+      const response = await server.get('/billing/api-packages/purchases', auth);
+      expect(response.statusCode).toBe(200);
+      expect(response.json().items).toEqual([]);
+    });
+
+    it('reports each purchase with the quota and price it was sold at', async () => {
+      await owner.apiPackagePurchase.create({ data: purchase() });
+
+      const items = (await server.get('/billing/api-packages/purchases', auth)).json().items;
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({
+        package_id: 'essential',
+        name: 'Essential',
+        api_calls: 100_000,
+        price_cents: 2999,
+        period: '202608',
+      });
+      expect(typeof items[0].id).toBe('string');
+      expect(Date.parse(items[0].purchased_at)).not.toBeNaN();
+    });
+
+    it('keeps the sold price even after the catalogue moves on', async () => {
+      // The row is the receipt. Re-deriving the price from today's catalogue
+      // would silently restate an old bill the next time pricing changes.
+      await owner.apiPackagePurchase.create({
+        data: purchase({ priceCents: 999, apiCalls: 1_000n }),
+      });
+
+      const items = (await server.get('/billing/api-packages/purchases', auth)).json().items;
+      expect(items[0]).toMatchObject({ price_cents: 999, api_calls: 1_000, name: 'Essential' });
+    });
+
+    it('still reports a purchase of a package that has left the catalogue', async () => {
+      await owner.apiPackagePurchase.create({ data: purchase({ packageId: 'legacy-mega' }) });
+
+      const items = (await server.get('/billing/api-packages/purchases', auth)).json().items;
+      // The id survives; only the display name is unknown. Dropping the row
+      // instead would lose money the workspace actually spent.
+      expect(items[0]).toMatchObject({ package_id: 'legacy-mega', name: null });
+    });
+
+    it('lists purchases newest first', async () => {
+      const day = 86_400_000;
+      await owner.apiPackagePurchase.createMany({
+        data: [
+          purchase({ packageId: 'essential', purchasedAt: new Date(Date.now() - 2 * day) }),
+          purchase({ packageId: 'pro-plus', purchasedAt: new Date(Date.now() - day) }),
+          purchase({ packageId: 'pro', purchasedAt: new Date() }),
+        ],
+      });
+
+      const items = (await server.get('/billing/api-packages/purchases', auth)).json().items;
+      expect(items.map((p: { package_id: string }) => p.package_id)).toEqual([
+        'pro',
+        'pro-plus',
+        'essential',
+      ]);
     });
   });
 });

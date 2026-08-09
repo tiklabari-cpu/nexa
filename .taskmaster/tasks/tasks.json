@@ -2358,13 +2358,13 @@
             "description": "Contract-first: (1) packages/contract/openapi/paths/reports.yaml'a `apiPackages.get` (katalog) + `apiPackagePurchases.get` (satın alma geçmişi) operasyonları, ADR-13 mock notu açıklamada; (2) openapi.yaml components/schemas'a `ApiPackage` (id, name, api_calls, price_cents) + `ApiPackagePurchase` (package_id, name, api_calls, price_cents, period, purchased_at); (3) bundle regen; (4) apps/api/src/ro",
             "details": "09.3-c — Okuma yüzeyi: GET /billing/api-packages (katalog) + GET /billing/api-packages/purchases + OpenAPI şemaları  [OPUS-XHIGH]\n\nPRD: FR-MOD-09.3 (+ NFR-S4)\nETİKET GEREKÇESİ: OPUS-XHIGH: iki YENİ yetkili endpoint ekleniyor (BILLING_READ_SCOPES kapısı) — kullanıcı kuralı 'yeni bir yetkili endpoint eklemek / mevcut scope'u genişletmek EN AZ OPUS-XHIGH olur'. purchases tenant-scoped okuma olduğu için izolasyon hassasiyeti var (koşul 2 ihlali → SONNET olamaz). Ancak yazma, kota mutasyonu, kripto veya eşzamanlılık yok → çekirdek güvenlik sınırı değil, MAX gerekmiyor.\nNEDEN AÇIK: apps/api/src/routes/reports.ts'te billing route'ları: GET /billing/subscription (857), PATCH /billing/subscription (868), GET /billing/usage (909), GET /billing/invoices (931), GET /billing/invoices/:period/download (940), GET /billing/payment-method (968), PUT /billing/payment-method (978). 09.3'e özgü paket route'u YOK (grep 'api-packages' 0 sonuç). packages/contract/openapi/paths/reports.yaml'da subscription/usage/invoices/invoiceDownload/paymentMethod operasyonları tanımlı, api-packages tanımlı değil; openapi.yaml'da UsageSummary (1626), SubscriptionView (1677), Invoice (1723), PaymentMethod (1750) şemaları var, ApiPackage/ApiPackagePurchase yok.\nKAPSAM: Contract-first: (1) packages/contract/openapi/paths/reports.yaml'a `apiPackages.get` (katalog) + `apiPackagePurchases.get` (satın alma geçmişi) operasyonları, ADR-13 mock notu açıklamada; (2) openapi.yaml components/schemas'a `ApiPackage` (id, name, api_calls, price_cents) + `ApiPackagePurchase` (package_id, name, api_calls, price_cents, period, purchased_at); (3) bundle regen; (4) apps/api/src/routes/reports.ts'e iki GET — katalog @nexa/types API_PACKAGE_CATALOG'dan (tenant sorgusu yok), purchases request.withTenant ile api_package_purchases'tan (purchasedAt desc). İkisi de `config: { scopes: BILLING_READ_SCOPES }`. UYARI: contract-parity.test.ts İKİ YÖNLÜ çalışıyor ('an undocumented route fails, and so does a documented route that nothing serves') — bu yüzden kontrat ve route AYNI pencerede iner; salt-kontrat alt-görevi DoD kapısından geçemez.\nDOSYALAR: packages/contract/openapi/paths/reports.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/routes/reports.ts · apps/api/test/integration/reports-billing.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts satır 931-938 (GET /billing/invoices: BILLING_READ_SCOPES + request.withTenant + reply.send({ items })) · packages/contract/openapi/paths/reports.yaml satır 300-330 (invoices.get: tags/operationId/summary/description + 401/403/429 ref deseni) · apps/api/src/routes/apps.ts satır 43-51 (GET /settings/apps: statik katalog + kurulum durumu birleştirme)\nKK (birebir): \"Fiyatlı API paketleri satışı\" | \"KK-türetilmiş: satın alınabilir paketler ve satın alınmış paketlerin geçmişi API üzerinden okunabilir. Türetme gerekçesi: PRD 'satış' diyor; satış akışının önkoşulu katalogun ve geçmişin okunabilmesidir, PRD bu iki okumayı ayrıca yazmıyor.\"\nKK DOĞRULAMA: reports-billing.test.ts: (1) GET /billing/api-packages üç paketi (@nexa/types kataloğuyla aynı id/kota/fiyat) döner; (2) GET /billing/api-packages/purchases yalnız kendi lisansının satırlarını döner — CROSS-TENANT: A lisansının satın alması B'nin yanıtında görünmez; (3) NEGATİF: billing/reports scope'u olmayan token → 403; (4) satın alma yokken purchases boş dizi (200, hata değil). contract-parity.test.ts yeşil (iki yön).\nKAPSAM DIŞI: POST satın alma ve kota artışı (09.3-d) · fatura satırı (09.3-e) · UI (09.3-f/g) · katalogun tenant'a göre filtrelenmesi/özelleştirilmesi (katalog global sabittir)\nSÖZLEŞME: OpenAPI: paths/reports.yaml'a `apiPackages.get` + `apiPackagePurchases.get`; openapi.yaml components/schemas'a `ApiPackage` + `ApiPackagePurchase`. YENİ ROUTE EKLENDİĞİ İÇİN packages/contract/openapi'ye eklenip RE-BUNDLE EDİLMEZSE contract-parity.test.ts KIRILIR; parite iki yönlü olduğu için kontrat ile route aynı pencerede inmelidir.\nMIGRATION: yok (tablo 09.3-b'de açıldı)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration: katalog yanıtı @nexa/types kataloğuyla birebir · integration: purchases listesi (dolu + boş) · NEGATİF (önce): scope'suz token → 403 · CROSS-TENANT (önce): başka lisansın satın alması sızmıyor · contract-parity.test.ts (iki yönlü parite)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "71.1",
               "71.2"
             ],
             "parentId": "71",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T20:47:05.642Z"
           },
           {
             "id": 4,
@@ -2438,7 +2438,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T19:59:42.717Z",
+        "updatedAt": "2026-08-09T20:47:05.642Z",
         "complexity": 7,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.3 — API istek paketleri (Essential/Pro/Pro+)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T19:59:42.717Z",
+      "lastModified": "2026-08-09T20:47:05.642Z",
       "taskCount": 109,
       "completedCount": 96,
       "tags": [

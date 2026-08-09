@@ -13,6 +13,51 @@
 
 ## Task log (newest-first)
 
+### tm 97.4 — 06.3.2-bulk-d · Frontend saf yardımcılar: CSV şablonu + dosya ön-kontrol — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - `apps/web/src/features/playbook/bulk-template.ts` — `BULK_TEMPLATE_COLUMNS` kolon sözlüğü
+    (`name/type/content/source_url`, `apps/api`'deki `KNOWLEDGE_BULK_COLUMNS`/
+    `knowledge-bulk-row.ts` ile birebir mirror — `templates.ts`'in `apps/api` kararından bilinçli
+    ayrı kaldığı desenin aynısı, import yok). `toTemplateCsv()` header'ı sözlükten TÜRETİR (elle
+    yazılmaz — sözlüğe kolon eklenince şablon otomatik değişir); iki örnek satır (website/
+    `source_url` ve article/`content`) dört kolonun karşılıklı-dışlayıcı kuralını gösterir.
+    `toTemplateBlob()` + `BULK_TEMPLATE_FILENAME`/`_MIME_TYPE` indirilebilir dosya için hazır.
+  - `apps/web/src/features/playbook/bulk-file.ts` — `precheckBulkFile()` (senkron: `.csv` uzantı +
+    gevşek MIME allow-list — tarayıcı/OS'a göre CSV için `text/csv`/`application/vnd.ms-excel`/
+    boş string gibi tutarsız değerler bildiriyor, bu yüzden uzantı asıl sinyal — + 0 bayt + boyut
+    tavanı, okumadan ÖNCE anında ret) ve `readBulkFile()` (aynı ön-kontrol + metne çevirme +
+    boşluk-yalnız içerik de `empty_file`). Boyut tavanı (`BULK_FILE_MAX_BYTES` = 5 MiB) `apps/api`
+    `BULK_CSV_LIMITS.maxBytes` ile mirror — sunucunun 12 MiB gövde tavanı JSON-kaçış payı taşır,
+    admin'in akıl yürüteceği sayı o değil.
+  - İki modül de saf ve yerel — hiçbir bileşene mount edilmedi (görev kapsamı, 06.3.2-bulk-e'nin işi).
+  - Test: `bulk-template.test.ts` (10) + `bulk-file.test.ts` (13) — negatifler önce: `.txt`/yanlış
+    MIME reddi · 0 bayt reddi · tavan üstü reddi (neden metninde tavan MiB olarak yazılı) ·
+    boşluk-yalnız dosya `empty_file`; pozitifler: geçerli `.csv` metne çevrilir, BOM'lu dosyada
+    içerik kaybı yok, şablon header'ı sunucu kolon setiyle birebir, deterministik.
+- **Doğrulama:** `pnpm --filter @nexa/web test` (yeni **23/23** yeşil) · `pnpm -w typecheck` **11/11**
+  · `pnpm -w lint` **8/8** · `pnpm -w build` **7/7** · tam
+  `npx turbo run test --filter='!@nexa/e2e' --concurrency=1`: `@nexa/web` 739 geçti/**7 kırmızı**,
+  `@nexa/api` 1997 geçti/**8 kırmızı** — **ikisi de bu pencereden bağımsız, dokunulmadı:**
+  (a) `@nexa/web` kırmızıları `BillingPage.test.tsx`+`ReportsPage.test.tsx`'te `$123.45` beklenirken
+  `$123,45` (locale-format, bu makinenin sistem locale'i kaynaklı) — bulk dosyaları hariç izole
+  koşulduğunda da **birebir aynı 7 kırmızı**, bulk-file/bulk-template'in dahil/hariç olması sonucu
+  değiştirmiyor; (b) `@nexa/api` kırmızıları `spawn pnpm ENOENT` (`scheduled-reports-sweep.test.ts`+
+  `reports-topics.test.ts`) — tm 97.3'te de dokümante edilen aynı ortam kısıtı (bu makinede
+  `pnpm.exe` yok), bu turda `apps/api`'ye hiç dokunulmadı.
+- **Varsayımlar:** MIME allow-list gevşek tutuldu (`text/csv`/`application/csv`/
+  `application/vnd.ms-excel`/`text/plain`/boş string) — tarayıcılar arası CSV MIME raporlaması
+  tutarsız; asıl ret sinyali `.csv` uzantısı. `FileReader.readAsText` kullanıldı, `Blob.text()`
+  DEĞİL — bu ortamdaki jsdom (`File`/`Blob`) `.text()`'i desteklemiyor (`TypeError: file.text is
+  not a function`), `FileReader` her iki tarafta da (gerçek tarayıcı + jsdom) çalışıyor.
+- **Sonraki pencereye not:**
+  - 97.5/97.6 (form + sonuç tablosu) ve 97.7 (website satırı SSRF) hâlâ bağımsız/açık; 97.4'ün
+    ürettiği iki modül onların girdisi (`toTemplateBlob`/`BULK_TEMPLATE_FILENAME` indirme linki
+    için, `precheckBulkFile`/`readBulkFile` form'un dosya seçim adımı için).
+  - `@nexa/web`'in locale-format 7 kırmızısı ve `@nexa/api`'nin `spawn pnpm ENOENT` 8 kırmızısı bu
+    turdan önce de vardı, bu turda da aynı kaldı — ayrı görev açılması gereken, bu kapsamın dışında
+    iki bilinen borç (ikincisi zaten tm 97.3 notunda kayıtlı).
+
 ### tm 97.3 — 06.3.2-bulk-c · POST /knowledge-sources/bulk (kontrat + route) — done — 2026-08-09 UTC
 
 - **Yapıldı:**

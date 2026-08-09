@@ -4689,10 +4689,10 @@
             "description": "İki saf modül + testleri, hiçbir bileşene mount edilmeden. (1) `bulk-template.ts` — kolon sözlüğü (`name,type,content,source_url`, her biri için kısa açıklama + zorunluluk kuralı) ve bu sözlükten üretilen örnek CSV metni (`toTemplateCsv()`), indirilebilir Blob adı/tipi dahil; katalog deterministik ve yerel (dış servis yok). (2) `bulk-file.ts` — seçilen `File`'ı metne çeviren yardımcı + ön-kontroll",
             "details": "06.3.2-bulk-d — Frontend saf yardımcılar: örnek CSV şablonu katalogu + dosya okuma/ön-kontrol modülü  [SONNET-XHIGH]\n\nPRD: FR-MOD-06.3.2\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 4 dosya (2 modül + 2 test); güvenlik sınırı yok (sunucu yeniden doğruluyor, bu katman salt UX ön-kontrolü); eşzamanlılık yok; kopyalanacak desen ismen var (`apps/web/src/features/playbook/templates.ts` — aynı klasörde deterministik yerel katalog + test); kontrat değişikliği yok; kabul kriteri mekanik.\nNEDEN AÇIK: `apps/web/src/features/playbook/PlaybookPage.tsx`'teki `KnowledgePanel` (satır ~606-680) yalnız tek satırlık name/content/source_url girişi taşıyor ve `api.post('/knowledge-sources', …)` ile tek çağrı yapıyor; dosya seçici, CSV okuma veya kolon sözlüğü yok. v2-01 §94: \"toplu içe aktarma (bulk import/CSV) arayüzde görünmüyor\".\nKAPSAM: İki saf modül + testleri, hiçbir bileşene mount edilmeden. (1) `bulk-template.ts` — kolon sözlüğü (`name,type,content,source_url`, her biri için kısa açıklama + zorunluluk kuralı) ve bu sözlükten üretilen örnek CSV metni (`toTemplateCsv()`), indirilebilir Blob adı/tipi dahil; katalog deterministik ve yerel (dış servis yok). (2) `bulk-file.ts` — seçilen `File`'ı metne çeviren yardımcı + ön-kontroller: uzantı/MIME (`text/csv`, `.csv`), boyut tavanı (sunucu gövde tavanının altında), boş dosya; her ret için kullanıcıya gösterilecek tipli neden döner. Ön-kontroller UX'tir — otorite sunucudur, bu modül hiçbir güvenlik kararı vermez.\nDOSYALAR: apps/web/src/features/playbook/bulk-template.ts · apps/web/src/features/playbook/bulk-template.test.ts · apps/web/src/features/playbook/bulk-file.ts · apps/web/src/features/playbook/bulk-file.test.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/playbook/templates.ts · apps/web/src/features/playbook/templates.test.ts · apps/web/src/features/playbook/knowledge-tabs.ts · apps/web/src/lib/format.ts\nKK (birebir): \"KK-türetilmiş: yönetici, beklenen kolonları gösteren örnek bir CSV şablonu indirebilir ve seçtiği dosya CSV değilse/boşsa/tavanı aşıyorsa yüklemeden önce anlaşılır bir neden görür. — PRD KK bulk import'un arayüz payını hiç tarif etmiyor; madde v2-01 §350 \"Knowledge kaynakları için toplu içe aktarma (CSV/klasör yükleme) eklemek\" ve depodaki mevcut EK-A.1 alan-altı hata disiplininden türetildi.\"\nKK DOĞRULAMA: `pnpm --filter @nexa/web test` → `bulk-template.test.ts`: üretilen şablon CSV'nin başlık satırı sunucunun beklediği kolon setiyle birebir aynı (sözlükten türetiliyor, elle yazılmıyor); `bulk-file.test.ts`: `.txt` uzantılı dosya, 0 bayt dosya ve tavan üstü dosya için üç ayrı tipli ret nedeni döner.\nKAPSAM DIŞI: Herhangi bir React bileşeni / ekrana mount (06.3.2-bulk-e) · İstemci tarafı CSV *ayrıştırma* — bilinçli olarak yapılmaz; önizleme sunucu `dry_run` çağrısıyla gelir (§varsayım 5) · Klasör yükleme (v2-01 §350'deki \"klasör\" payı) — yalnız tek CSV dosyası\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit NEGATİF (önce): CSV olmayan uzantı/MIME → tipli ret; 0 bayt dosya → tipli ret; boyut tavanı üstü → tipli ret (neden metni tavanı içerir) · unit POZİTİF: geçerli `.csv` dosyası metne çevrilir, BOM'lu dosyada da içerik kaybı yok · unit: şablon CSV başlık satırı kolon sözlüğünden türetilir (sözlüğe kolon eklenince şablon otomatik değişir — sabit metin regresyonu)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "97",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T03:23:14.875Z"
           },
           {
             "id": 5,
@@ -4749,7 +4749,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T03:03:16.314Z",
+        "updatedAt": "2026-08-09T03:23:14.875Z",
         "complexity": 9,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"06.3.2-bulk — Bulk/CSV KB import (YALNIZ çoklu-satır; tek-kaynak yolu v1'de ✅)  ·  dilim V2-6\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5023,7 +5023,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T03:03:16.314Z",
+      "lastModified": "2026-08-09T03:23:14.875Z",
       "taskCount": 104,
       "completedCount": 88,
       "tags": [

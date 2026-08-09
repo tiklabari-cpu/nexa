@@ -13,6 +13,55 @@
 
 ## Task log (newest-first)
 
+### tm 103 — e2e: skills-routing.spec.ts kırılgan locator — done (zaten çözülmüştü, doğrulama) — 2026-08-09 UTC
+
+- **Yapıldı:** Task detayı **tm 104**'ün (commit `e620765`, 2026-08-08) düzelttiği birebir aynı
+  kusuru tarif ediyordu: `skills.getByLabel('Skill')` → `skills.getByRole('textbox', { name:
+  'Skill', exact: true })`. Kod zaten `main`'de düzeltilmiş haldeydi (`git log -- skills-routing.spec.ts`
+  → `e620765 fix(e2e): narrow the new-skill locator to the textbox (tm 104)`), `getByLabel` artık
+  yalnız `signInAs`'in Email/Password alanlarında kalıyor (ayrı bir sayfada, çakışma riski yok —
+  task'ın istediği "aynı dosyada benzer alt-dize eşleşmesi" taraması bunu doğruladı). **Yeni kod
+  değişikliği yok**; bu pencere yalnız task'ın kendi test stratejisini çalıştırıp kanıtladı ve
+  Task Master'ı senkronladı (tm 104 kapanırken tm 103 açık unutulmuş — iki task aynı kusuru
+  tarif ediyordu, biri kapanınca diğeri otomatik kapanmıyor).
+- **Doğrulama:**
+  - İlk koşu (`playwright test tests/skills-routing.spec.ts --repeat-each=3`) locator hatası
+    vermedi ama **farklı** bir kırmızı verdi: "the chat never routed to the skilled agent" — 3/6
+    düştü. Kök neden bulundu: paylaşılan `nexa` geliştirme DB'si önceki pencerelerin birikimiyle
+    kirliydi (uzun süredir HANDOFF'ta kayıtlı ayrı bir olgu, bkz. eski `skills-routing`/`customers`
+    flake notları) — routing motoru artık isole test-datastore altyapısı (tm 105 WIP, henüz
+    commit'lenmemiş ama diskte aktif) yüzünden `pnpm -w test:integration`'ın DEFAULT koşusu artık
+    paylaşılan `nexa` DB'sini TRUNCATE etmiyor (kendi izole `nexa_test_<id>`'sine gidiyor), yani
+    e2e'nin dayandığı eski "test:integration truncate eder → e2e yeniden seed'ler" tarifi artık
+    yalnız `NEXA_TEST_ISOLATION=off` ile çalışıyor. `NEXA_TEST_ISOLATION=off pnpm --filter @nexa/api
+    test:integration` ile paylaşılan DB'yi truncate edip temizledikten sonra aynı komut
+    **6/6 yeşil** (repeat-each=3, iki test × 3 tekrar). Bu DB kirliliği bu görevin kapsamı DEĞİL
+    (locator'ın kendisi hiç kırılmadı) — yalnız task'ın kendi kabul kriterini (3 ardışık yeşil koşu)
+    objektif biçimde gözlemleyebilmek için gerekliydi.
+  - Tam DoD kapısı (temiz DB üzerinden, sırayla, hepsi exit code ile): `pnpm -w typecheck` **0**
+    (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w build` **0** (7/7) · `pnpm -w test` — **767/774**,
+    7 kırmızı = bilinen **tm 108** (makine locale'i tr-TR, `BillingPage`/`ReportsPage` `$0,50` vs
+    `$0.50`, bu görevle ilgisiz) · `pnpm -w test:integration` (izole, default) — **1532/1533**,
+    tek kırmızı = bilinen **tm 107** (`scheduled-reports-sweep.test.ts`, tarihe bağlı fixture —
+    gerçek tarih 2026-08-09, test 2026-08-08 varsayıyor, bu görevle ilgisiz) · `pnpm -w test:e2e`
+    (tam paket, `.env` export'lu) — **88/88 yeşil**, `skills-routing.spec.ts`'in iki testi dahil.
+  - Task'ın kendi kabul kriteri ("locator tekilleştirildi, aynı dosyada benzer alt-dize eşleşmesi
+    taşıyan başka locator yok, 3 ardışık koşu yeşil") **karşılandı**.
+- **Varsayımlar:** `PLAN.md`'de güncellenecek gereksinim satırı YOK — tm 104 ile aynı gerekçe: bu
+  bir test-altyapısı düzeltmesi/doğrulaması, iş kalemi kimliği veya PRD kodu eşlemesi taşımıyor
+  (tm 104'ün kendi kapanış notunda da aynı karar var, bkz. aşağıda).
+  Tam e2e koşusu `apps/e2e/kanit/*.png`'yi yeniden üretti (aynı içerik, farklı byte) — tm 104/98.x
+  ile aynı gerekçeyle `git checkout -- apps/e2e/kanit` ile geri alındı, commit'e girmedi.
+- **Sonraki pencereye not:**
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ working tree'de COMMIT EDİLMEMİŞ WIP** —
+    dördüncü pencere aynı notu bırakıyor (bkz. tm 98.4/98.5 notları). Bu turda da bilerek
+    dokunulmadı/commit edilmedi (CONVENTIONS §5). **Yeni gözlem bu turdan:** bu altyapı artık
+    `pnpm -w test:integration`'ın paylaşılan `nexa` DB'sini truncate ETMEME davranışını
+    üretiyor — e2e'yi hazırlamak isteyen bir sonraki pencere bunu bilerek `NEXA_TEST_ISOLATION=off`
+    kullanmalı, yoksa "clean state" varsayımı artık yanlış.
+  - `.taskmaster/tmp-*.cjs`/`tmp-changelog.txt` yine untracked/scratch, bu turun ürünü değil,
+    dokunulmadı.
+
 ### tm 98.5 — 05.6-tmpl31-e · Kapanış: tam DoD + galeri e2e regresyonu + PLAN/HANDOFF izleri — done — 2026-08-09 UTC
 - **Yapıldı:**
   - `05.6-tmpl31`'in (Skill şablon kataloğunu 31+'a genişlet) son alt-görevi: tam DoD kapısını bu

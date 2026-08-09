@@ -13,6 +13,67 @@
 
 ## Task log (newest-first)
 
+### tm 107 — scheduled-reports:run “licence sızıntısı” testi tarihe bağlıydı — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - Kök neden doğrulandı ve yeniden üretildi: `scheduled-reports-sweep.test.ts`'in **betik**
+    blokundaki testler gerçek bir alt-süreç (`pnpm … scheduled-reports:run`) spawn eder; o süreç
+    dönemi kendi saatinden hesaplar (`scheduled-reports-run.ts:158` `new Date()`), fixture ise
+    sabit `IN_PERIOD = 2026-08-07`e yazıyordu. Bugün (2026-08-09) beklenen dönem 2026-08-08 →
+    rapor `No rows for this period` ile geliyor, `expect(toA?.body).toContain('Agent a')` düşüyor.
+  - Task detayındaki **(a)** yolu seçildi (ürün kodu değişmedi; `retention:run` /
+    `chat-timeout:run` kardeşlerinin hiçbirinde saat girişi yok, `--now`/env eklemek bu desenden
+    sapardı ve operatöre yanlış dönem gönderebilecek bir bayrak açardı).
+  - `seedAssignedThread(t, agentId, at = IN_PERIOD)` — opsiyonel zaman damgası. Betik blokunda yeni
+    `seedAssignedThreadInScriptPeriod` **iki** çapa yazıyor (saf `scriptPeriodAnchors`): önceki tam
+    UTC gününün öğlesi **ve** bir dakika öncesi. İki çapa, çünkü çocuk süreç tohumlamadan saniyeler
+    sonra başlıyor — arada UTC gece yarısı geçerse "önceki tam gün" bir gün kayar; iki aday günün
+    ikisinde de veri olunca iddia hangi tarafa düşüldüğünden bağımsız. Sınır UTC ile hesaplanıyor
+    (makine UTC+3; yerel takvim okunsaydı aynı çürüme üç saat erken dönerdi).
+  - `--apply` kardeş testine `rowCount: 1` eklendi: verisiz dönem de teslim edildiği için
+    (`No rows for this period` geçerli bir posta) yalnız `delivered/skipped/failed` sayımlarına
+    bakan testler fixture dönemden kaysa bile boş geçiyordu — kusur sessizce yer değiştiremesin.
+  - Yeni saf blok: `the script fixture lands in the script’s period on any calendar day` (+2 test) —
+    8 düşman an (gece yarısının iki yanı, ay/yıl sınırı, artık gün ve ertesi günü, UTC+3'te ertesi
+    güne düşen 22:30Z) × 5 çocuk gecikmesi (0…5 dk) için en az bir çapanın dönemin içinde kaldığını
+    ve hiçbir çapanın geleceğe yazılmadığını kanıtlıyor. Test stratejisinin “farklı bir takvim
+    gününde de geçtiğini göster” maddesi bu — sistem saatini oynatmadan.
+- **Doğrulama (exit code'larla):**
+  - Önce/sonra tek dosya (izole DB): önce **17/18**, tek kırmızı tam da bu test
+    (`expected 'Team performance — 2026-08-08 to 2026…' to contain 'Agent a'`); sonra **20/20**.
+  - Testin boş geçmediği mutasyonla doğrulandı: ikinci çapa sabit `2026-08-07T12:00Z`e çevrilince
+    yeni saf blok kırmızıya döndü (`seeded 2026-08-09T23:59:59.999Z, child 1ms later → period
+    2026-08-09: expected 0 to be greater than 0`); geri alındı.
+  - Tam DoD kapısı: `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+    `pnpm -w build` **0** (7/7) · `pnpm -w test:integration` **0** — **1535/1535** (önceki
+    pencerede 1532/1533'tü; tm 107 kırmızısı gitti, +2 yeni saf test) ·
+    `pnpm -w test:e2e` **0** — **88/88** · `pnpm -w test` **1** — 767/774, 7 kırmızı = bilinen
+    **tm 108** (makine locale'i tr-TR, `BillingPage`/`ReportsPage` `$123,45` vs `$123.45`), bu
+    görevle ilgisiz ve dokunulmadı; diğer 9 turbo task'ının hepsi yeşil (`--continue` ile teyit).
+  - E2E ilk koşuda 84/88 idi (`customers` ×3, `skills-routing` ×1) — tm 103'te kayıtlı paylaşılan
+    `nexa` DB kirliliği. Aynı reçete (`NEXA_TEST_ISOLATION=off pnpm --filter @nexa/api
+    test:integration` → 1535/1535, ardından e2e) ile **88/88**. Bu değişiklik e2e'ye dokunmuyor
+    (yalnız bir api test dosyası).
+- **Varsayımlar:** Çapa kuralı “çocuk süreç tohumlamadan en fazla dakikalar sonra başlar”
+  varsayımına dayanır (pratikte ~2-3 sn `pnpm` açılışı); saf blok bunu 5 dk'ya kadar kanıtlıyor.
+  Bir günden fazla gecikme hiçbir süreç-içi fixture'ın karşılayamayacağı bir durum.
+  `PLAN.md` §07.9 satırı zaten `✅`'ti (07.9-sched-f, tm 94.7) — yeni damga uydurulmadı; satırın
+  kendi kanıt cümlesi bu testi adıyla andığı için oraya tm 107 düzeltme notu eklendi.
+  Tam e2e koşusu `apps/e2e/kanit/*.png`'yi yeniden üretti (aynı içerik, farklı byte) — tm 103/104
+  ile aynı gerekçeyle `git checkout -- apps/e2e/kanit` ile geri alındı, commit'e girmedi.
+- **Sonraki pencereye not:**
+  - **tm 105 (izole test-datastore altyapısı) hâlâ commit edilmemiş WIP** — beşinci pencere aynı
+    notu bırakıyor. Bu turda da bilerek dokunulmadı (CONVENTIONS §5): `CONVENTIONS.md`,
+    `TASK-RUNNER-PROMPT.md`, `README.md`, `package.json`, `turbo.json`, `apps/{api,rtm}/package.json`,
+    `apps/{api,rtm}/test/helpers/fixtures.ts`, `apps/api/tsconfig.json`,
+    `apps/api/scripts/{test-datastores,with-test-datastores}.ts`,
+    `apps/api/test/integration/test-datastores.test.ts`. Bu iş kendi task'ını hak ediyor —
+    kapı bu altyapıya dayanıyor ama repo onu tanımıyor.
+  - **tm 108 (tr-TR locale, 7 web unit kırmızısı) açık** ve `pnpm -w test`'i kırmızı tutuyor;
+    kapının "unit yeşil" maddesi o kapanana dek her pencerede elle gerekçelendiriliyor.
+  - `.taskmaster/tmp-*.cjs` / `tmp-changelog.txt` yine untracked scratch, dokunulmadı.
+
+
 ### tm 103 — e2e: skills-routing.spec.ts kırılgan locator — done (zaten çözülmüştü, doğrulama) — 2026-08-09 UTC
 
 - **Yapıldı:** Task detayı **tm 104**'ün (commit `e620765`, 2026-08-08) düzelttiği birebir aynı

@@ -29,6 +29,11 @@
  * agent and the `team-performance` group, because its CSV names the agent — that
  * makes "only its own data" something the test can read rather than infer from
  * a count.
+ *
+ * That fixed instant reaches only the in-process sweeps. The script block at the
+ * bottom spawns a real process, which has its own clock and cannot be handed
+ * one, so it seeds from the real date instead — see
+ * `seedAssignedThreadInScriptPeriod`.
  */
 import { execFile } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -39,6 +44,7 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
 import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
+import { periodFor, startOfUtcDay } from '../../src/services/reports/scheduled-report-period.js';
 import { ScheduledReportSweeper } from '../../src/services/reports/scheduled-report-sweeper.js';
 import {
   ownerClient,
@@ -59,6 +65,25 @@ class BrokenMailer implements Mailer {
   async send(): Promise<void> {
     throw new Error('smtp: connection refused');
   }
+}
+
+/**
+ * The two instants a fixture for the *spawned script* is written to, given the
+ * moment the seed runs — see `seedAssignedThreadInScriptPeriod` for why there
+ * are two of them rather than one.
+ *
+ * Pure and at module scope so the block at the bottom of this file can prove,
+ * for calendar days the suite will not be run on, that at least one anchor
+ * always lands inside the period the script picks. Without that the date
+ * dependency this fixture removes would only have moved to a different date.
+ */
+function scriptPeriodAnchors(seededAt: Date): [Date, Date] {
+  return [
+    // Midday of the UTC day before the seed.
+    new Date(startOfUtcDay(seededAt).getTime() - 12 * 3_600_000),
+    // A minute before the seed.
+    new Date(seededAt.getTime() - 60_000),
+  ];
 }
 
 describe('scheduled report sweep (PRD §5.3-Reports)', () => {
@@ -105,8 +130,18 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
   /**
    * A closed, assigned thread inside the period — one `team-performance` row,
    * carrying the assignee's name.
+   *
+   * `at` is a parameter because the period a delivery covers is not the same for
+   * every caller here: the in-process sweeps stand on the fixed `NOW`, while the
+   * spawned script reads the real clock (see `seedAssignedThreadInScriptPeriod`).
+   * The thread is what puts the agent's name in the CSV, so it has to be written
+   * into whichever window the delivery under test will actually report on.
    */
-  async function seedAssignedThread(t: TenantFixture, agentId: string): Promise<void> {
+  async function seedAssignedThread(
+    t: TenantFixture,
+    agentId: string,
+    at: Date = IN_PERIOD,
+  ): Promise<void> {
     seq += 1;
     const customer = await owner.customer.create({
       data: { organizationId: t.organizationId, name: `Visitor ${String(seq)}` },
@@ -119,7 +154,7 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
         licenseId: t.licenseId,
         customerId: customer.id,
         active: false,
-        createdAt: IN_PERIOD,
+        createdAt: at,
       },
     });
     await owner.thread.create({
@@ -129,8 +164,8 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
         licenseId: t.licenseId,
         active: false,
         assigneeId: agentId,
-        createdAt: IN_PERIOD,
-        closedAt: new Date(IN_PERIOD.getTime() + 60_000),
+        createdAt: at,
+        closedAt: new Date(at.getTime() + 60_000),
       },
     });
   }
@@ -418,6 +453,37 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
     const scriptMailbox = async () =>
       (await new FileMailer(scriptMailDir).outbox()).filter((m) => m.kind === 'scheduled_report');
 
+    /**
+     * The fixture for a delivery made by the spawned process, which reports on
+     * whatever period *its own* clock selects.
+     *
+     * `NOW` cannot reach it. The script is a real CLI with no clock input — it
+     * calls `new Date()` — so a fixture written to the fixed `IN_PERIOD` sits
+     * inside the delivered window on exactly one calendar day and outside it on
+     * every other, which is how this block came to hold a test that only passed
+     * on 2026-08-08. Seeding from the real date instead removes the dependency
+     * rather than moving it to a different date.
+     *
+     * Two threads, not one, because the child starts seconds after the seed: if
+     * UTC midnight falls in that gap, the script's "previous complete day" is
+     * the day this seed ran in rather than the one before it. Those two days are
+     * the only candidates, so anchoring a thread in each makes the assertion
+     * independent of which side of midnight the child lands on. Both anchors are
+     * derived with the UTC boundary the scheduler itself uses (`startOfUtcDay`);
+     * reading the local calendar here — the machine is UTC+3 — would just
+     * reintroduce the same rot three hours earlier. `team-performance` groups by
+     * agent, so the pair is still a single CSV row even when both fall in one
+     * period.
+     */
+    async function seedAssignedThreadInScriptPeriod(
+      t: TenantFixture,
+      agentId: string,
+    ): Promise<void> {
+      for (const at of scriptPeriodAnchors(new Date())) {
+        await seedAssignedThread(t, agentId, at);
+      }
+    }
+
     beforeEach(async () => {
       scriptMailDir = await mkdtemp(join(tmpdir(), 'nexa-sched-run-'));
     });
@@ -428,7 +494,7 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
 
     it('dry-run lists the ready definition and claims or sends nothing', async () => {
       await defineSchedule(fx.a);
-      await seedAssignedThread(fx.a, fx.a.agentAccountId);
+      await seedAssignedThreadInScriptPeriod(fx.a, fx.a.agentAccountId);
 
       const { stdout, stderr } = await runScript();
       const report = JSON.parse(stdout) as {
@@ -455,7 +521,7 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
 
     it('--apply delivers, and the report totals match the run table it wrote', async () => {
       await defineSchedule(fx.a);
-      await seedAssignedThread(fx.a, fx.a.agentAccountId);
+      await seedAssignedThreadInScriptPeriod(fx.a, fx.a.agentAccountId);
 
       const { stdout, stderr } = await runScript(['--apply']);
       const report = JSON.parse(stdout) as {
@@ -466,15 +532,19 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
 
       const runs = await runsOf(fx.a);
       expect(runs).toHaveLength(1);
-      expect(runs[0]).toMatchObject({ status: 'sent', recipientCount: 1 });
+      // `rowCount` and not just `sent`: a period the script reports on but the
+      // fixture missed still delivers — "No rows for this period" is a valid
+      // mail — so the counts alone would pass with no data behind them. It is
+      // the cheap guard that the seed and the script agree on which day this is.
+      expect(runs[0]).toMatchObject({ status: 'sent', recipientCount: 1, rowCount: 1 });
       expect(await scriptMailbox()).toHaveLength(1);
     }, 30_000);
 
     it('the client the script itself constructs does not leak one licence into another', async () => {
       await defineSchedule(fx.a);
       await defineSchedule(fx.b);
-      await seedAssignedThread(fx.a, fx.a.agentAccountId);
-      await seedAssignedThread(fx.b, fx.b.agentAccountId);
+      await seedAssignedThreadInScriptPeriod(fx.a, fx.a.agentAccountId);
+      await seedAssignedThreadInScriptPeriod(fx.b, fx.b.agentAccountId);
 
       const { stdout } = await runScript(['--apply']);
       const report = JSON.parse(stdout) as { totals: { delivered: number } };
@@ -506,7 +576,7 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
      */
     it('delivers once across three consecutive triggers, dry-run included', async () => {
       await defineSchedule(fx.a);
-      await seedAssignedThread(fx.a, fx.a.agentAccountId);
+      await seedAssignedThreadInScriptPeriod(fx.a, fx.a.agentAccountId);
 
       const preview = JSON.parse((await runScript()).stdout) as {
         totals: { ready: number; alreadyClaimed: number };
@@ -579,5 +649,61 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
       ).rejects.toMatchObject({ code: 1 });
       expect(await scriptMailbox()).toHaveLength(0);
     }, 30_000);
+  });
+});
+
+/**
+ * The script fixture, proved for the days this suite will not be run on.
+ *
+ * The tests above can only ever exercise today's date, which is how the defect
+ * these anchors replace survived: a fixture pinned to 2026-08-07 read as correct
+ * for as long as the calendar agreed with it, then failed every day afterwards
+ * with nothing in the code having changed. Seeding from the real clock is only
+ * an improvement if it holds on *every* date, so the rule is checked here
+ * directly — no database, no process, just the arithmetic — against the instants
+ * where a day-boundary rule is most likely to be wrong.
+ *
+ * The one thing the fixture cannot control is the gap between the seed and the
+ * child process's own `new Date()`. It is seconds in practice (a `pnpm` start),
+ * so the property is stated for any lag up to five minutes; beyond a day it is
+ * false and no in-process fixture could make it true.
+ */
+describe('the script fixture lands in the script’s period on any calendar day', () => {
+  const SEED_INSTANTS = [
+    '2026-08-09T15:48:00.000Z', // an ordinary afternoon, the case that already worked
+    '2026-08-09T00:00:00.000Z', // the first instant of a UTC day
+    '2026-08-09T23:59:59.999Z', // the last one — a rollover mid-test is live here
+    '2026-08-09T22:30:00.000Z', // 01:30 *tomorrow* in this machine's UTC+3: a local
+    //                             reading of the calendar would pick the wrong day
+    '2026-09-01T00:00:30.000Z', // month boundary
+    '2027-01-01T00:00:30.000Z', // year boundary
+    '2028-02-29T23:59:59.500Z', // leap day
+    '2028-03-01T00:00:00.500Z', // …and the day after it
+  ].map((iso) => new Date(iso));
+
+  /** Seed → child `new Date()`. Zero, plausible, and generously beyond it. */
+  const LAGS_MS = [0, 1, 2_500, 30_000, 5 * 60_000];
+
+  it('covers the previous complete UTC day whichever side of midnight the child starts on', () => {
+    for (const seededAt of SEED_INSTANTS) {
+      for (const lag of LAGS_MS) {
+        const period = periodFor('daily', new Date(seededAt.getTime() + lag));
+        const covering = scriptPeriodAnchors(seededAt).filter(
+          (anchor) => anchor >= period.from && anchor <= period.to,
+        );
+        expect(
+          covering.length,
+          `seeded ${seededAt.toISOString()}, child ${String(lag)}ms later → period ${period.periodKey}`,
+        ).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('never writes a thread into the future, which would make the report unreadable', () => {
+    for (const seededAt of SEED_INSTANTS) {
+      for (const anchor of scriptPeriodAnchors(seededAt)) {
+        expect(anchor.getTime()).toBeLessThan(seededAt.getTime());
+      }
+    }
   });
 });

@@ -13,6 +13,59 @@
 
 ## Task log (newest-first)
 
+### tm 98.5 — 05.6-tmpl31-e · Kapanış: tam DoD + galeri e2e regresyonu + PLAN/HANDOFF izleri — done — 2026-08-09 UTC
+- **Yapıldı:**
+  - `05.6-tmpl31`'in (Skill şablon kataloğunu 31+'a genişlet) son alt-görevi: tam DoD kapısını bu
+    dilimin tüm alt-görevleri (a–d) bir arada koşarken doğrulamak, ve `PLAN.md`/`HANDOFF.md`'yi
+    kapanışa göre güncellemek. **Yeni kod yok** — tm 98.4'ün kapanış notu zaten bu turun e2e
+    ihtiyacının (`playbook.spec.ts`'e "arama ile şablon bulup skill oluşturma" testi) o turda
+    karşılandığını işaretlemişti; bu pencere o notu doğruladı, mükerrer dosya değişikliği yapmadı.
+  - `PLAN.md` §5.0: `05.6` satırı `◐`→`✅` + kapanış kanıtı eklendi; §5.0 üst özeti
+    `7⬜/1◐/19✅/3⛔` → `7⬜/0◐/20✅/3⛔` (tablodan sayılarak, §1.2). §5.0'daki `13.4` satırının
+    ADR-14 ikame notu (görsel canvas ⛔, şablon sayısı hedefi `05.6-tmpl31`'e yönlendiriliyor)
+    teyit edildi — değişiklik gerekmedi, zaten doğruydu.
+- **Doğrulama (tam DoD kapısı, exit code'larla):**
+  - `pnpm -w typecheck` — exit 0 (8 paket).
+  - `pnpm -w lint` — exit 0 (8 paket).
+  - `pnpm -w build` — exit 0 (7 paket).
+  - `pnpm -w test` — 767/774 yeşil, **7 kırmızı** = bilinen **tm 108** (makine locale'i tr-TR,
+    `BillingPage.test.tsx`+`ReportsPage.test.tsx`'te `$0,50` vs `$0.50`) — bu dilimin dosyalarına
+    dokunulmadı, HANDOFF'ta onlarca önceki turda aynı sayıyla kayıtlı bilinen kusur.
+  - `pnpm -w test:integration` — 1532/1533 yeşil, **1 kırmızı** = bilinen **tm 107**
+    (`scheduled-reports-sweep.test.ts`, "does not leak one licence into another" testi sabit
+    fixture tarihine karşı script'in gerçek `now()`'unu kullanıyor — yalnız gerçek tarih
+    2026-08-08 iken geçer, bugün 2026-08-09) — dosya tek başına da izole koşulup aynı kırmızı
+    doğrulandı (regresyon değil, önceden tanımlı tarih-bağımlılığı).
+  - E2E (görev kapsamının akışı): `set -a; . ./.env; set +a` sonrası
+    `pnpm --filter @nexa/e2e exec playwright test playbook.spec.ts` — **3/3 yeşil**: galeri aç →
+    kart seç → ön-dolu editör (kart 1) · **ara ("warranty") → tek sonuç → seç → ön-dolu editör**
+    (KK'nın istediği akış) · "Try this" önerilen kart → ön-dolu editör.
+  - Task'ın kendi KK'sı ("Katalog en az 31 şablon içerir ve galeri bu ölçekte gezilebilir; şablondan
+    skill oluşturma akışı bozulmamıştır") — katalog 33 kayıt (tm 98.2), galeri arama/kategori/sanal
+    liste ile bu ölçekte gezilebilir (tm 98.4), e2e round-trip yukarıda yeşil → **karşılandı**.
+- **Varsayımlar:** DOSYALAR listesindeki `apps/e2e/tests/playbook-templates.spec.ts` adı
+  betimseldi — repodaki gerçek dosya `apps/e2e/tests/playbook.spec.ts`'tir (tm 98.4'ün kapanış
+  notunda da aynı dosya kullanılmıştı); yeni bir dosya açmak yerine mevcut olanı doğrulamak
+  MASTER-PROMPT'un "kapsam dışına çıkma" ilkesiyle tutarlı.
+- **Not (bu görevin kapsamı dışı, ama pencereye bulaşmıştı):** Bu pencere açıldığında çalışma
+  alanı zaten kirliydi — `tm 105`'in (test veri depolarını pencere başına izole etme) tamamlanmış
+  görünen ama hiç commit'lenmemiş kodu (CONVENTIONS.md/TASK-RUNNER-PROMPT.md/README.md/
+  package.json/turbo.json + apps/api,rtm'nin package.json/tsconfig/fixtures.ts'i +
+  `apps/api/scripts/{test-datastores,with-test-datastores}.ts` + yeni bir entegrasyon testi),
+  yani önceki bir pencerenin TASK-RUNNER-PROMPT §2'nin tam da uyardığı şekilde (kapanışa hiç
+  gelmeden) öldüğü bir örnek daha. Task Master'da `tm 105` hâlâ `in-progress`. CONVENTIONS §5
+  (kapsam disiplini) gereği bu pencere o işi ne tamamladı ne de attı — yalnız KENDİ commit'ine
+  dahil ETMEDİ (git add ile yalnız bu görevin dosyaları eklendi). `tm 105`'in kodu diskte duruyor
+  ve zaten aktif kullanılıyor (bu turun `pnpm -w test`/`test:integration` koşuları da
+  `with-test-datastores.ts` üzerinden geçti — üstteki sayılar o izolasyonla alınmış sayılardır).
+  **Sonraki pencereye not:** `tm 105`'i ele alan pencere önce bu WIP'i (zaten çalışır görünüyor,
+  DoD'dan geçti) kendi commit'ine alıp kapanışını tamamlamalı — sıfırdan yazmaya gerek yok.
+  Ayrıca `.taskmaster/tmp-*.cjs`/`tmp-changelog.txt` de untracked/scratch olarak duruyor, bu
+  pencerenin ürünü değil, dokunulmadı.
+- **Sonraki pencereye not:** `05.6-tmpl31` (5/5 alt-görev) ve dolayısıyla PRD §5.3-Otomasyon'un
+  "31+ şablon" ikame hedefi **tamamlandı**. v2 kalem envanterinde artık `0 ◐ kısmi` kaldı —
+  sıradaki iş tamamen `⬜ açık` 7 kalemden seçilecek.
+
 ### tm 98.4 — 05.6-tmpl31-d · Galeri ölçek davranışı: arama + kategori filtresi + sanal liste (31+ kart) — done — 2026-08-09 UTC
 
 - **Yapıldı:**

@@ -4760,7 +4760,7 @@
         "description": "Faz 2 (v2) · PLAN §5.2 · 5 atomik alt-görev. Bu turda kapsam süpürmesinde bulundu (PLAN §D62).",
         "details": "Faz 2 (v2) · PLAN §5.2 · kalem `05.6-tmpl31`.\n\n5 atomik alt-görev · ~6 pencere · etiket dağılımı: SONNET-MAX x1 · SONNET-XHIGH x4\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  05.6-tmpl31-a [SONNET-XHIGH] Katalog şeması genişletme: rozet alanı (Popular/Essential) + invariant testlerinin sıkılaştırılması  (bağ: —)\n  05.6-tmpl31-b [SONNET-MAX] 23+ yeni şablon kaydı — katalog 8 → 31+  (bağ: 05.6-tmpl31-a)\n  05.6-tmpl31-c [SONNET-XHIGH] Katalog i18n: şablon metinleri TR/EN (NFR-I18N2)  (bağ: 05.6-tmpl31-b)\n  05.6-tmpl31-d [SONNET-XHIGH] Galeri ölçek davranışı: arama + kategori filtresi + sanal liste (31+ kart)  (bağ: 05.6-tmpl31-b)\n  05.6-tmpl31-e [SONNET-XHIGH] Kapanış: tam DoD + galeri e2e regresyonu + PLAN/HANDOFF izleri  (bağ: 05.6-tmpl31-c, 05.6-tmpl31-d)\n\nBÖLÜNMEYEN ÇEKİRDEK (PLAN §5.1.2 istisnası): Bölünemez çekirdek YOK — bu kalemde güvenlik sınırı, eşzamanlılık veya algoritma tasarımı bulunmuyor. Kaynak recon'un birebir tespiti: iş, `templates.ts` içindeki salt-okunur statik bir diziye kayıt eklemekten ibaret; authN/authZ, tenant izolasyonu, SSRF, kripto, rate-limit veya PII yüzeyi AÇMIYOR (katalog dış servise bağlanmıyor, kullanıcı girdisi almıyor, yeni DB/API yazma yolu eklemiyor). Bu yüzden kalemin TAMAMI `SONNET-*` etiketlidir — v2'de bu özelliğe sahip tek kalem.\n\nVARSAYIMLAR: KK-türetilmiş: PRD §5.3 'Otomasyon' hücresi '31+ şablon' der ama aynı hücredeki görsel node/edge Workflow builder ADR-14 ile ⛔. Şablon SAYISI hedefi, ADR-14'ten bağımsız olarak Skill şablon galerisi (05.1/05.2, v1'de ✅ teslim) üzerinden onurlandırıldı. Görsel canvas YAPILMAZ. §C-A14. · Katalog DETERMİNİSTİK ve YERELDİR (apps/web/src/features/playbook/templates.ts) — dış servis, backend route veya DB tablosu AÇILMAZ. Bu, ADR-14 ve mevcut mimariyle tutarlıdır: 'template' kavramı bugün kontratta hiç yok (grep 0) ve orada kalır. · Hedef sayı 31+; bugünkü katalog 8 kayıt (3 prebuilt + 2 ai + 3 trending) → en az 23 yeni kayıt. · Yeni kayıtlar mevcut `SkillTemplate` şeklini korur (id/name/category/summary/instruction/steps/requiresIntegration) ve `templates.test.ts`'in üç mevcut invariantını (name/instruction dolu + ≥1 step; her step validateSteps ile senkron; id benzersiz) sağlar.\n\nAÇIK SORULAR (ürün kararı): Katalog bugün tamamen İngilizce ve `apps/web/src/lib/i18n.ts`'e hiç bağlı değil. NFR-I18N2 'en az TR/EN' istiyor. 23+ yeni kayıt eklemeden ÖNCE i18n'e bağlanmalı mı (12.4-bi-c sırası) yoksa katalog İngilizce kalıp yalnız UI mi çevrilmeli? Şu anki kırılım i18n'i ayrı alt-göreve (-c) aldı ve içerik ekleme (-b) ondan ÖNCE geliyor — tersine çevrilirse 23 kayıt iki dilde yazılır (daha pahalı ama tek geçiş). · Kaynak recon bir kapsam boşluğu işaret etti: katalogda regüle/bahis dikeyine (KYC, para çekme, çevrim şartı, sorumlu oyun) özel TEK BİR şablon yok (grep 0). PRD satır 114 bu dikeye değiniyor. Bu dikey ilk 31'e dahil edilmeli mi, yoksa ayrı bir ürün kararı mı? · FR-MOD-05.2 kart rozetlerinde 'Popular'/'Essential' geçiyor ama TEMPLATE_CATEGORIES yalnız 3 sabit tür tanımlıyor (prebuilt/ai/trending). Rozetler ayrı bir kategori mi olmalı yoksa kart üstü etiket mi?\n\nNOT: Bu görevin kendisi kod YAZMAZ — alt-görevleri sırayla koşulur. Her alt-görev CONVENTIONS.md DoD kapısından (typecheck+lint+unit+integration+build+e2e) geçer.",
         "testStrategy": "Bu görev alt-görevleriyle tamamlanır. Her alt-görev kendi DoD kapısından geçer (typecheck+lint+unit+integration+build+e2e, exit 0). Güvenlik yüzeyi olan alt-görevlerde NEGATİF testler pozitiflerden ÖNCE yazılır ve CROSS-TENANT izolasyon testi zorunludur. DB süiti paylaşılan Postgres`te seri koşulur (--concurrency=1).",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "78"
         ],
@@ -4822,16 +4822,16 @@
             "description": "Tam DoD kapısı (exit 0). E2E: galeri aç → ara → şablon seç → skill editörü ön-dolu açılır → kaydet. PLAN §5.0 `05.6-tmpl31` satırı ⬜→✅ + §5.0'daki 13.4 satırının ADR-14 ikame notunun teyidi. HANDOFF notu.",
             "details": "05.6-tmpl31-e — Kapanış: tam DoD + galeri e2e regresyonu + PLAN/HANDOFF izleri  [SONNET-XHIGH]\n\nPRD: §5.3-Otomasyon (kalem kapanışı)\nETİKET GEREKÇESİ: SONNET-XHIGH: 6 koşul sağlandı. Bu kalemde kapanış turu bile ucuzdur çünkü güvenlik yüzeyi yok, ADR tutarlılığı sorgusu yok ve doğrulama tamamen mekanik (sayı ≥31, testler yeşil, DoD exit 0). Kalemin diğer alt-görevleriyle aynı sınıf.\nNEDEN AÇIK: Alt-görevler ayrı pencerelerde iner; '31+ şablon' iddiası ve galerinin ölçekte çalıştığı ancak hepsi bir arada koşulunca doğrulanır.\nKAPSAM: Tam DoD kapısı (exit 0). E2E: galeri aç → ara → şablon seç → skill editörü ön-dolu açılır → kaydet. PLAN §5.0 `05.6-tmpl31` satırı ⬜→✅ + §5.0'daki 13.4 satırının ADR-14 ikame notunun teyidi. HANDOFF notu.\nDOSYALAR: apps/e2e/tests/playbook-templates.spec.ts · PLAN.md · HANDOFF.md\nREFERANS DESEN (kopyalanacak): apps/e2e/tests/ (mevcut playbook e2e akışları) · PLAN.md §4.4 kapanış alt-görev örnekleri\nKK (birebir): \"KK-türetilmiş: 'Katalog en az 31 şablon içerir ve galeri bu ölçekte gezilebilir; şablondan skill oluşturma akışı bozulmamıştır.' — §C-A14.\"\nKK DOĞRULAMA: E2E tek akışta 31+ kataloglu galeriden arama ile şablon bulup skill oluşturur — KK'nın hem sayısal hem işlevsel payı bu akışta.\nKAPSAM DIŞI: Yeni özellik\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "e2e: galeri → arama → şablon → skill oluşturma · tam DoD kapısı exit 0 · not: e2e `.env` SOURCE'lu koşulur",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "98.3",
               "98.4"
             ],
             "parentId": "98",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T13:15:43.414Z"
           }
         ],
-        "updatedAt": "2026-08-09T12:59:50.660Z",
+        "updatedAt": "2026-08-09T13:15:43.414Z",
         "complexity": 4,
         "recommendedSubtasks": 5,
         "expansionPrompt": "\"05.6 — Skill şablon kataloğunu 31+ (ADR-14 uyumlu ikame)  ·  dilim V2-6\" görevini 5 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5080,9 +5080,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T12:59:50.660Z",
+      "lastModified": "2026-08-09T13:15:43.414Z",
       "taskCount": 109,
-      "completedCount": 90,
+      "completedCount": 91,
       "tags": [
         "master"
       ]

@@ -13,6 +13,70 @@
 
 ## Task log (newest-first)
 
+### tm 108 — `@nexa/web`'in 7 kırmızısı makine locale'ineydi; testler pinlendi — done — 2026-08-09 UTC
+
+- **Yapıldı:**
+  - Kök neden koda karşı doğrulandı: `format.ts`'in `activeLocale`'i i18n store bir locale
+    bağlayana kadar `undefined`, ve `new Intl.NumberFormat(undefined)` **runtime'ın varsayılan**
+    locale'ini (= OS locale'i) kullanır. Bu makine tr-TR → render edilen DOM `$297,00` · `4.812` ·
+    `31 Tem 2026`; testler `$297.00` · `4,812` bekliyor. Yalnız `BillingPage` (5) + `ReportsPage`
+    (2) düşüyor çünkü bu iki ekranın modül grafiği `i18n.ts`'i çekmiyor — çekseydi modül init'i
+    (`applyLocale(detectLocale())`) jsdom'un `navigator.language`'ından `'en'` bağlar ve kusur
+    görünmez olurdu.
+  - Task detayındaki **(a)** yolu seçildi: locale **testte** pinlendi (`apps/web/vitest.setup.ts`
+    → `setFormatLocale('en-US')`), `format.ts`'te değil. (b) ürün varsayılanını sabitlemek
+    i18n'in "ajanın diline uy" davranışını (I18N2) geri alırdı. Pin, test dosyası import
+    edilmeden önce koşuyor, dolayısıyla kendi locale'ini bağlayan test hâlâ kazanır —
+    `format.test.ts`'in `setFormatLocale('tr')` bloğuna dokunulmadı, yeşil kaldı.
+  - Pin tek başına yetmez: en-US bir makinede pinsiz süit de yeşildir, yani kusur yalnız yer
+    değiştirir. İki mekanizma eklendi. (1) `NEXA_TEST_RUNTIME_LOCALE=<bcp47>` — setup runtime'ın
+    **varsayılan** locale'ini süit boyunca yeniden yazar (`Intl.NumberFormat`/`DateTimeFormat` +
+    `Date.prototype.toLocale{,Date,Time}String`; sonuncular `format.ts`'ten geçmeyen çağrı
+    yerleri, atlanırsa simülasyon eksik kalır). (2) `src/lib/format.locale-pin.test.ts` (+5 test)
+    runtime varsayılanını kasten tr-TR yapıp helper'ların hâlâ en-US ürettiğini kanıtlıyor — pin
+    kalkarsa **her** makinede kırmızı verir, oysa bileşen süitleri yalnız İngilizce-olmayan bir
+    makinede kırmızı olurdu.
+- **Doğrulama (exit code'larla):**
+  - Önce/sonra: `@nexa/web` **767/774 → 779/779** (+5 yeni guard testi, 7 kırmızı gitti).
+  - Makine bağımsızlığı ölçüldü, iddia edilmedi: aynı süit `NEXA_TEST_RUNTIME_LOCALE` ile
+    **en-US · tr-TR · de-DE** üçünde de **779/779**.
+  - Testin boş geçmediği mutasyonla doğrulandı: setup'taki pin çıkarılıp `en-US` zorlanmış
+    runtime ile koşuldu → guard **3/5 kırmızı** (`expected '$297,00' to be '$297.00'`,
+    `'4.812'` vs `'4,812'`, `'31 Tem 2026'` biçim eşleşmedi); pin geri konunca guard +
+    `BillingPage` + `ReportsPage` **89/89**.
+  - Tam DoD kapısı: `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+    `pnpm -w build` **0** (7/7) · `pnpm -w test` **0** (10/10 task) — api 2060 · web 779 ·
+    rtm 90 · widget 54 · ai-mock 136 · types 71 · `pnpm -w test:integration` **0** (5/5) —
+    api 1535 · rtm 51 · `pnpm -w test:e2e` **0** — **88/88** (`.env` export'lu kabuk).
+  - **`pnpm -w test` bu depoda bu makinede ilk kez exit 0.** Kapının "unit yeşil" maddesi artık
+    elle gerekçelendirilmiyor.
+- **Varsayımlar:**
+  - `PLAN.md`'de çevrilecek gereksinim damgası YOK — tm 108 bir PRD gereksinimi değil, sağlık
+    taramasından doğan test-altyapısı düzeltmesi (başlıkta iş kalemi kimliği yok, `Düz tablo`da
+    karşılığı yok). §D80 (tm 105) / §D81 (tm 106) emsaliyle kayıt **§D82**'ye düşüldü; `✅`
+    uydurulmadı.
+  - E2E öncesi paylaşılan `nexa` DB'si tm 103'ün reçetesiyle temizlendi
+    (`NEXA_TEST_ISOLATION=off pnpm --filter @nexa/api test:integration` → 1535/1535). Bu
+    değişiklik e2e'ye dokunmuyor (`vitest.setup.ts` build'e girmez), kapı bütünlüğü için koşuldu.
+  - Tam e2e koşusu `apps/e2e/kanit/`'teki 46 PNG'yi yeniden üretti (aynı içerik, farklı byte) —
+    tm 103/104/107 ile aynı gerekçeyle `git checkout -- apps/e2e/kanit` ile atıldı.
+- **Sonraki pencereye not:**
+  - **Aynı sınıf gizli makine bağımlılığı repoda duruyor, bilerek dokunulmadı (CONVENTIONS §5):**
+    `Transcript.tsx:155/162`, `DetailsPanel.tsx:115/231`, `TicketPane.tsx:428` doğrudan
+    `toLocale*` çağırıyor ve `format.ts`'ten geçmiyor. Bugün kırmızı üretmiyorlar çünkü hiçbir
+    test çıktılarını iddia etmiyor — biri iddia ettiği anda tm 108'in aynısı geri gelir. Ayrıca
+    tarih iddiaları hâlâ **zaman dilimine** duyarlı (locale'den ayrı eksen); guard bu yüzden
+    tarihte tam dize değil biçim iddia ediyor. Bunlar ayrı task'a değer.
+  - **tm 105 (izole test-datastore altyapısı) HÂLÂ commit edilmemiş WIP** — altıncı pencere aynı
+    notu bırakıyor; bu turda da dokunulmadı (CONVENTIONS §5). `CONVENTIONS.md`,
+    `TASK-RUNNER-PROMPT.md`, `README.md`, `package.json`, `turbo.json`,
+    `apps/{api,rtm}/package.json`, `apps/{api,rtm}/test/helpers/fixtures.ts`,
+    `apps/api/tsconfig.json`, `apps/api/scripts/{test-datastores,with-test-datastores}.ts`,
+    `apps/api/test/integration/test-datastores.test.ts`. Yukarıdaki kapı sayıları bu altyapı
+    diskte aktifken alındı; repo onu hâlâ tanımıyor.
+  - `.taskmaster/tmp-*.cjs` / `tmp-changelog.txt` yine untracked scratch, dokunulmadı.
+
+
 ### tm 107 — scheduled-reports:run “licence sızıntısı” testi tarihe bağlıydı — done — 2026-08-09 UTC
 
 - **Yapıldı:**

@@ -275,7 +275,7 @@
             "description": "skill_executions + agent-authored event ile Manual/Assisted/Automated ayrimi; ADR-09 automated korunur.",
             "status": "done",
             "dependencies": [
-              "1"
+              "20.1"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T00:10:56.605Z"
@@ -286,7 +286,7 @@
             "description": "manual_rate/assisted_rate; closed=0 -> null; automated_rate mevcut mantikla tutarli.",
             "status": "done",
             "dependencies": [
-              "2"
+              "20.2"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T00:10:56.609Z"
@@ -297,7 +297,7 @@
             "description": "ReportsPage.tsx uc kart (Manual/Assisted/Automated) + Total cases; automated karti korunur.",
             "status": "done",
             "dependencies": [
-              "3"
+              "20.3"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T00:10:56.611Z"
@@ -308,7 +308,7 @@
             "description": "Fixtür'ler; toplam=closed; automated=ADR-09; cross-tenant negatif; rate unit.",
             "status": "done",
             "dependencies": [
-              "4"
+              "20.4"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T00:10:56.614Z"
@@ -343,7 +343,7 @@
             "description": "reports.ts onceki donem + delta; range dogrulama; yeni aggregation sorgulari.",
             "status": "done",
             "dependencies": [
-              "1"
+              "21.1"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T07:24:02.619Z"
@@ -354,7 +354,7 @@
             "description": "ReportsPage sekme yapisi + rota/durum.",
             "status": "done",
             "dependencies": [
-              "2"
+              "21.2"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T07:24:02.624Z"
@@ -365,7 +365,7 @@
             "description": "Date picker; delta rozetleri; Chats bolumu kartlari.",
             "status": "done",
             "dependencies": [
-              "3"
+              "21.3"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T07:24:02.627Z"
@@ -376,7 +376,7 @@
             "description": "Delta dogrulugu; custom range; e2e navigasyon.",
             "status": "done",
             "dependencies": [
-              "4"
+              "21.4"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T07:24:02.630Z"
@@ -409,7 +409,7 @@
             "description": "Demo veri seed fn (RLS uyumlu) + tamamlanma durumu.",
             "status": "done",
             "dependencies": [
-              "1"
+              "22.1"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T01:57:14.214Z"
@@ -420,7 +420,7 @@
             "description": "Persona/website/invite/seed adimlari; mevcut bilesenleri yeniden kullan; atla.",
             "status": "done",
             "dependencies": [
-              "2"
+              "22.2"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T01:57:14.223Z"
@@ -431,7 +431,7 @@
             "description": "Cross-tenant seed; skip ve complete e2e yollari.",
             "status": "done",
             "dependencies": [
-              "3"
+              "22.3"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T01:57:14.225Z"
@@ -464,7 +464,7 @@
             "description": "Tek giris noktasi; UPDATE/DELETE policy reddini dogrula.",
             "status": "done",
             "dependencies": [
-              "1"
+              "23.1"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T00:50:01.363Z"
@@ -475,7 +475,7 @@
             "description": "auth/settings/billing/PAT/trusted-domains handler'larinda writeAuditEntry cagrilari.",
             "status": "done",
             "dependencies": [
-              "2"
+              "23.2"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T00:50:01.364Z"
@@ -486,7 +486,7 @@
             "description": "Her eylemde 1 append; UPDATE/DELETE red; cross-tenant negatif; PII yok.",
             "status": "done",
             "dependencies": [
-              "3"
+              "23.3"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T00:50:01.375Z"
@@ -519,7 +519,7 @@
             "description": "package.json script; batch, idempotent, RLS-guvenli.",
             "status": "done",
             "dependencies": [
-              "1"
+              "24.1"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T01:20:39.152Z"
@@ -530,7 +530,7 @@
             "description": "Kesin WHERE; dry-run; silinen sayaci log; cross-tenant koruma.",
             "status": "done",
             "dependencies": [
-              "2"
+              "24.2"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T01:20:39.154Z"
@@ -541,7 +541,7 @@
             "description": "Tam kapsama negatif+pozitif.",
             "status": "done",
             "dependencies": [
-              "3"
+              "24.3"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T01:20:39.155Z"
@@ -574,7 +574,7 @@
             "description": "server.ts; span attribute request_id.",
             "status": "done",
             "dependencies": [
-              "1"
+              "25.1"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T02:22:42.068Z"
@@ -585,7 +585,7 @@
             "description": "auth/chats/reports.",
             "status": "done",
             "dependencies": [
-              "2"
+              "25.2"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T02:22:42.071Z"
@@ -596,7 +596,7 @@
             "description": "Span dustu + attribute assertion.",
             "status": "done",
             "dependencies": [
-              "3"
+              "25.3"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T02:22:42.073Z"
@@ -629,7 +629,7 @@
             "description": "apps/web string'leri + format.ts locale.",
             "status": "done",
             "dependencies": [
-              "1"
+              "26.1"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T06:19:30.324Z"
@@ -640,7 +640,7 @@
             "description": "apps/widget; boyut korunur.",
             "status": "done",
             "dependencies": [
-              "2"
+              "26.2"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T06:35:21.088Z"
@@ -651,7 +651,7 @@
             "description": "Fallback; locale-degisim; P3 boyut.",
             "status": "done",
             "dependencies": [
-              "3"
+              "26.3"
             ],
             "parentId": "undefined",
             "updatedAt": "2026-07-25T06:44:31.405Z"
@@ -688,7 +688,7 @@
             "testStrategy": "unit (React render): ziyaret verisiyle sayfa listesi + device/IP görünür; veri yokken empty state metni.\nE2E `apps/e2e/tests/demo-flow.spec.ts`'e ziyaret-bilgisi görünürlük iddiası. DoD kapısı tam.",
             "status": "done",
             "dependencies": [
-              1
+              "27.1"
             ],
             "parentId": "27",
             "updatedAt": "2026-07-25T13:35:07.829Z"
@@ -737,7 +737,7 @@
             "testStrategy": "unit: her taşınan formda validasyon. Regresyon: mevcut E2E'ler (billing/settings/onboarding) yeşil kalır.\nDoD kapısı tam.",
             "status": "done",
             "dependencies": [
-              1
+              "29.1"
             ],
             "parentId": "29",
             "updatedAt": "2026-07-25T17:00:58.283Z"
@@ -750,7 +750,7 @@
             "testStrategy": "unit: kirli form kapatma → onay; optimistic hata → geri alma. E2E: Invite modal yarım doldurup kapatma →\nonay. DoD kapısı tam.",
             "status": "done",
             "dependencies": [
-              1
+              "29.1"
             ],
             "parentId": "29",
             "updatedAt": "2026-07-25T17:23:10.066Z"
@@ -787,7 +787,7 @@
             "testStrategy": "unit: boş liste → anlamlı empty state (boş dikdörtgen değil) her listede. DoD kapısı tam.",
             "status": "done",
             "dependencies": [
-              1
+              "30.1"
             ],
             "parentId": "30",
             "updatedAt": "2026-07-25T18:17:51.549Z"
@@ -836,7 +836,7 @@
             "testStrategy": "unit: Try this → editör kopya; entegrasyon-gerekli kart uyarı. DoD tam.",
             "status": "done",
             "dependencies": [
-              1
+              "32.1"
             ],
             "parentId": "32",
             "updatedAt": "2026-07-25T22:34:12.309Z"
@@ -860,7 +860,7 @@
             "testStrategy": "unit: arama/filtre daraltır. DoD tam.",
             "status": "done",
             "dependencies": [
-              3
+              "32.3"
             ],
             "parentId": "32",
             "updatedAt": "2026-07-25T23:09:26.730Z"
@@ -886,8 +886,8 @@
             "testStrategy": "unit: boş KB+skill → readiness uyarısı + aktive engeli. DoD tam.",
             "status": "done",
             "dependencies": [
-              5,
-              6
+              "33.5",
+              "33.6"
             ],
             "parentId": "33",
             "updatedAt": "2026-07-26T00:04:00.066Z"
@@ -979,7 +979,7 @@
             "testStrategy": "unit: imza determinizmi + timingSafeEqual. NEGATİF (önce): yanlış imza/eski timestamp reddi. DoD tam.",
             "status": "done",
             "dependencies": [
-              1
+              "34.1"
             ],
             "parentId": "34",
             "updatedAt": "2026-07-26T03:49:30.344Z"
@@ -992,7 +992,7 @@
             "testStrategy": "NEGATİF (önce): 127.0.0.1/10.x/169.254.169.254/file:///redirect → reddedilir. POZİTİF: public https → geçer. DoD tam.",
             "status": "done",
             "dependencies": [
-              1
+              "34.1"
             ],
             "parentId": "34",
             "updatedAt": "2026-07-26T03:49:30.360Z"
@@ -1005,9 +1005,9 @@
             "testStrategy": "integration: 2 hata → 3. başarı; kalıcı hata → log + işaret. DoD tam.",
             "status": "done",
             "dependencies": [
-              1,
-              2,
-              3
+              "34.1",
+              "34.2",
+              "34.3"
             ],
             "parentId": "34",
             "updatedAt": "2026-07-26T03:49:30.365Z"
@@ -1044,7 +1044,7 @@
             "testStrategy": "integration: inbound→chat + outbound kaydı + CROSS-TENANT. DoD tam.",
             "status": "done",
             "dependencies": [
-              1
+              "35.1"
             ],
             "parentId": "35",
             "updatedAt": "2026-07-26T04:29:11.576Z"
@@ -1057,7 +1057,7 @@
             "testStrategy": "integration: inbound→chat + outbound + CROSS-TENANT. DoD tam.",
             "status": "done",
             "dependencies": [
-              1
+              "35.1"
             ],
             "parentId": "35",
             "updatedAt": "2026-07-26T04:29:11.580Z"
@@ -1070,7 +1070,7 @@
             "testStrategy": "integration: inbound→chat + outbound + CROSS-TENANT. DoD tam.",
             "status": "done",
             "dependencies": [
-              1
+              "35.1"
             ],
             "parentId": "35",
             "updatedAt": "2026-07-26T04:29:11.582Z"
@@ -1109,7 +1109,7 @@
             "testStrategy": "unit: panel açılır; Assisted sayacı 07.3.2 ile hizalı. DoD tam.",
             "status": "done",
             "dependencies": [
-              1
+              "36.1"
             ],
             "parentId": "36",
             "updatedAt": "2026-07-26T15:58:18.389Z"
@@ -1122,8 +1122,8 @@
             "testStrategy": "integration: özet internal note olur + arşivde görünür. unit: reply taslak composer'a. DoD tam.",
             "status": "done",
             "dependencies": [
-              1,
-              2
+              "36.1",
+              "36.2"
             ],
             "parentId": "36",
             "updatedAt": "2026-07-26T15:58:18.391Z"
@@ -1240,7 +1240,7 @@
             "testStrategy": "integration: koşul eşleşince gönderim; eşleşmeyince gönderilmez; CROSS-TENANT. DoD tam.",
             "status": "done",
             "dependencies": [
-              1
+              "43.1"
             ],
             "parentId": "43",
             "updatedAt": "2026-07-26T19:18:39.034Z"
@@ -1253,7 +1253,7 @@
             "testStrategy": "unit. DoD tam.",
             "status": "done",
             "dependencies": [
-              2
+              "43.2"
             ],
             "parentId": "43",
             "updatedAt": "2026-07-26T19:18:39.038Z"
@@ -1410,7 +1410,7 @@
             "testStrategy": "unit: liste + kanal-tipli çapraz. DoD tam.",
             "status": "done",
             "dependencies": [
-              1
+              "53.1"
             ],
             "parentId": "53",
             "updatedAt": "2026-07-27T00:51:10.142Z"
@@ -1423,7 +1423,7 @@
             "testStrategy": "unit: giriş → 09.1. DoD tam.",
             "status": "done",
             "dependencies": [
-              1
+              "53.1"
             ],
             "parentId": "53",
             "updatedAt": "2026-07-27T00:59:53.934Z"
@@ -1598,7 +1598,7 @@
             "testStrategy": "integration: 24 dense kova + hour değerleri 0..23 + doğru kovaya düşme · integration: satır-içi invariant (manual+assisted+automated === closed) · CROSS-TENANT negatif (önce yazılır): mevcut cross-tenant iddiası (reports-billing.test.ts:616) `by_hour`'u kapsayacak şekilde genişletilir — başka lisansın chat'i hiçbir saat kovasına girmez · NOT (MEMORY: nexa-test-gate-parallel-db): DB süiti paket içinde SERİ koşulur",
             "status": "done",
             "dependencies": [
-              1
+              "63.1"
             ],
             "parentId": "63",
             "updatedAt": "2026-08-02T21:45:06.310Z"
@@ -1622,8 +1622,8 @@
             "testStrategy": "NEGATİF + CROSS-TENANT ÖNCE (bu depoda negatifler pozitiflerden önce yazılır ve kırmızı görülür): yabancı license_id'li aynı-chat_id satırı sızmaz · NEGATİF: `reports_read` scope'u olmayan token → 403 · NEGATİF: `chat_id` NULL taşıyan channel_messages satırları hiçbir kovayı bozmaz · integration pozitif: üç adaptör kanalı (messenger/twilio/whatsapp) + 'website' fallback doğru kovada · integration: toplam invariantı SUM(by_channel.chats) === toplam chats + satır-içi manual+assisted+automated===closed · NOT (MEMORY: nexa-test-gate-parallel-db): DB süiti SERİ koşulur",
             "status": "done",
             "dependencies": [
-              1,
-              3
+              "63.1",
+              "63.3"
             ],
             "parentId": "63",
             "updatedAt": "2026-08-02T22:05:51.504Z"
@@ -1636,7 +1636,7 @@
             "testStrategy": "CROSS-TENANT ÖNCE: aynı group_id'ye sahip iki lisans kurgusu — başka lisansın takımı/sohbeti sızmaz · NEGATİF: `reports_read` olmayan token → 403 · integration: M:N fan-out beyanı (`overlapping` true/false doğru) · integration: 'Unassigned' kovası — gruba açık olmayan sohbet kaybolmaz · integration: satır-içi invariant (manual+assisted+automated === closed) + tek-grup senaryosunda toplam eşitliği · NOT (MEMORY: nexa-test-gate-parallel-db): DB süiti SERİ koşulur",
             "status": "done",
             "dependencies": [
-              1
+              "63.1"
             ],
             "parentId": "63",
             "updatedAt": "2026-08-02T23:41:34.736Z"
@@ -1649,9 +1649,9 @@
             "testStrategy": "integration: ekran–CSV değer eşitliği + satır sayısı (dört dimension) · unit: yeni `dimension`/`key` kolonlarında formula-injection guard hâlâ uygulanıyor (`=`,`+`,`-`,`@` ile başlayan takım adı kaçırılır) · REGRESYON: mevcut export testleri (Content-Disposition dosya adı, scope gating 403) kırılmaz · CROSS-TENANT: mevcut export cross-tenant testi yeni boyut satırlarını da kapsayacak şekilde genişletilir (export `withTenant` içinden geçer)",
             "status": "done",
             "dependencies": [
-              2,
-              4,
-              5
+              "63.2",
+              "63.4",
+              "63.5"
             ],
             "parentId": "63",
             "updatedAt": "2026-08-03T00:03:21.626Z"
@@ -1664,7 +1664,7 @@
             "testStrategy": "unit: by_hour dolu → 24 satır + saat etiketleri · unit: by_hour boş veya alan yok → EmptyState (çökme yok, geriye dönük uyum) · e2e: Breakdown sekmesinde 'By hour' region görünür · NEGATİF/CROSS-TENANT YOK ve gerekmiyor — gerekçe: salt-okunur render; izolasyon 07.5-b'nin backend testlerinde kanıtlanıyor",
             "status": "done",
             "dependencies": [
-              2
+              "63.2"
             ],
             "parentId": "63",
             "updatedAt": "2026-08-03T00:16:56.505Z"
@@ -1677,8 +1677,8 @@
             "testStrategy": "unit: by_team render (takım adları + 'Unassigned') · unit: overlapping true → dipnot görünür; false → görünmez · unit: by_channel render ('website' dahil) · unit: her iki boyut boş/alan yok → EmptyState, çökme yok · e2e: 'By team' ve 'By channel' region'ları görünür · NEGATİF/CROSS-TENANT YOK ve gerekmiyor — gerekçe: salt-okunur render; izolasyon 07.5-d/-e'nin cross-tenant testlerinde kanıtlanıyor",
             "status": "done",
             "dependencies": [
-              4,
-              5
+              "63.4",
+              "63.5"
             ],
             "parentId": "63",
             "updatedAt": "2026-08-03T00:30:47.498Z"
@@ -1691,9 +1691,9 @@
             "testStrategy": "integration: çapraz-boyut toplam invariantları (day = hour = channel = Overview chats) · integration: team toplamı >= chats ve fark yalnız overlapping=true iken (ADR-09 hizası bozulmaz) · e2e: dört bölüm görünür + CSV indirme dört dimension içerir · CROSS-TENANT REGRESYON: 07.5-d ve 07.5-e'nin cross-tenant testleri aynı süitte yeşil kalır (izolasyonun toplu kapısı) · perf: EXPLAIN planı + süre ölçümü, NFR-P2 bütçesine karşı yargı — kanıt HANDOFF'a · NOT (MEMORY: nexa-test-gate-parallel-db): DB süiti SERİ koşulur",
             "status": "done",
             "dependencies": [
-              6,
-              7,
-              8
+              "63.6",
+              "63.7",
+              "63.8"
             ],
             "parentId": "63",
             "updatedAt": "2026-08-03T00:54:35.485Z"
@@ -1732,7 +1732,7 @@
             "testStrategy": "unit: determinizm — girdi sırası değişse de aynı küme/etiket/sıra · unit: kümeleme doğruluğu — benzer metinler aynı kümede, ilgisiz metin ayrı kümede · unit: etiket tie-break kararlılığı (hacim azalan, sonra alfabetik) · negatif (önce yazılır): boş girdi / tek doküman / eşik altı → sufficient:false + topics: [] · negatif (önce yazılır): salt-rakam token etikete GİRMEZ (16 haneli dizi → etikette rakam yok) — PII sızıntı negatifi · negatif: boş/whitespace-only metin fonksiyonu çökertmez · regresyon: packages/ai-mock mevcut süiti + knowledge/RAG integration testleri yeşil (embedding.ts değişmedi) · cross-tenant testi YOK ve gerekmez — saf fonksiyon, tenant kavramı taşımıyor (izolasyon 07.6-a/07.6-c'de kanıtlanır)",
             "status": "done",
             "dependencies": [
-              1
+              "64.1"
             ],
             "parentId": "64",
             "updatedAt": "2026-08-03T01:45:02.960Z"
@@ -1745,8 +1745,8 @@
             "testStrategy": "integration: kümeler + volume + share + previous_volume/trend doğru; aynı istek iki kez → aynı yanıt · negatif (önce yazılır): reports_read yok → 403; ters/geçersiz aralık → 400 · negatif: metni olmayan thread kümeye girmez; önceki dönem boşken trend null (0/NaN değil) · cross-tenant (zorunlu): A'da 'kargo', B'de 'iade' konulu sohbetler varken B'nin yanıtında A'nın konusu/hacmi görünmez ve analyzed yalnız B'yi sayar (NFR-S4) · perf: 1000 sohbet tavanında yanıt süresi ölçümü (NFR-P7 notu) · DB süiti paket başına SERİ koşulur (nexa-test-gate-parallel-db)",
             "status": "done",
             "dependencies": [
-              1,
-              2
+              "64.1",
+              "64.2"
             ],
             "parentId": "64",
             "updatedAt": "2026-08-03T02:07:06.748Z"
@@ -1759,8 +1759,8 @@
             "testStrategy": "integration: seed sonrası ≥2 küme + en az bir kümede trend null değil · integration: seed idempotency korunuyor (iki kez koş → aynı kümeler) · negatif: yeni/boş bir lisansta hâlâ sufficient_data:false (seed sızıntısı yok) · cross-tenant: seed'in ikinci demo lisansının konuları birinciye karışmıyor · DB süiti paket başına SERİ koşulur (nexa-test-gate-parallel-db)",
             "status": "done",
             "dependencies": [
-              2,
-              3
+              "64.2",
+              "64.3"
             ],
             "parentId": "64",
             "updatedAt": "2026-08-03T02:47:13.824Z"
@@ -1773,8 +1773,8 @@
             "testStrategy": "unit: sekme render + hacim/trend hücreleri + null → '—' (0% değil) · unit negatif: sufficient_data:false → anlamlı empty state (boş dikdörtgen değil) · unit negatif: hata → ErrorNotice; pending → CardSkeleton · regresyon: mevcut ReportsPage.test.tsx sekme gezinme iddiaları (Overview/AI Agent/Reviews) yeşil kalır · cross-tenant testi bu alt-görevde gerekmez — salt-okunur UI, tenant kapısı 07.6-c'de kanıtlandı",
             "status": "done",
             "dependencies": [
-              1,
-              3
+              "64.1",
+              "64.3"
             ],
             "parentId": "64",
             "updatedAt": "2026-08-03T03:04:35.229Z"
@@ -1787,7 +1787,7 @@
             "testStrategy": "unit: band render + 'See chat topics' CTA → topics sekmesi aria-selected=true · unit: 'Remind me later' → band kapanır ve remount sonrası geri gelmez · unit: band yalnız Overview sekmesinde render edilir · negatif: localStorage erişilemezken dismiss bandı yine kapatır ve hata fırlatmaz · cross-tenant testi gerekmez — veri okumayan görsel band",
             "status": "done",
             "dependencies": [
-              5
+              "64.5"
             ],
             "parentId": "64",
             "updatedAt": "2026-08-03T03:16:16.545Z"
@@ -1800,7 +1800,7 @@
             "testStrategy": "integration: CSV içeriği JSON raporla birebir aynı; dosya adı `nexa-topics-<from>-<to>.csv` · negatif (önce yazılır): reports_read'siz token → export 403 ve /reports/groups listesinde topics görünmez · negatif (önce yazılır): `=`/`+` ile başlayan konu etiketi CSV'de `'` ile nötralize edilir (formül enjeksiyonu) · negatif: yetersiz veri → yalnız başlık satırı, uydurma 0 satırı yok · cross-tenant: A lisansının CSV'sinde B lisansının konusu yok · unit: REPORT_GROUPS/EXPORT_SCOPES türetimi bozulmadı (mevcut reports-export.test.ts yeşil)",
             "status": "done",
             "dependencies": [
-              3
+              "64.3"
             ],
             "parentId": "64",
             "updatedAt": "2026-08-03T03:34:00.289Z"
@@ -1813,10 +1813,10 @@
             "testStrategy": "e2e: dolu durum — konu satırları + hacim + trend görünür, kanıt ekran görüntüsü · e2e: empty durum — verisiz aralıkta anlamlı empty state (boş tablo değil) · e2e: promo bandı CTA sekmeyi açar; 'Remind me later' reload sonrası kalıcı · regresyon (zorunlu): packages/ai-mock unit süiti + knowledge/RAG integration süiti aynı turda yeşil · cross-tenant: ikinci lisansın ajanıyla girildiğinde konu listesi farklı/boş · perf: NFR-P7 ölçümü HANDOFF'a kanıt · DB süitleri paket başına SERİ koşulur (nexa-test-gate-parallel-db); e2e öncesi truncate+reseed (nexa-e2e-clean-db)",
             "status": "done",
             "dependencies": [
-              3,
-              4,
-              5,
-              6
+              "64.3",
+              "64.4",
+              "64.5",
+              "64.6"
             ],
             "parentId": "64",
             "updatedAt": "2026-08-03T04:01:15.945Z"
@@ -1856,7 +1856,7 @@
             "testStrategy": "unit pozitif: connect alan eşlemesi + inbound normalize + send id şekli · unit negatif (pozitiften ÖNCE yazılır): ig_user_id eksik → 400, message.text boş/yok → 400, aşırı uzun metin (>10_000) → 400 · cross-tenant: gerekmiyor — bu dosya tenant bağlamı görmüyor (izolasyon kanıtı 08.5.7-c ve -d'de)",
             "status": "pending",
             "dependencies": [
-              1
+              "65.1"
             ],
             "parentId": "65",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -1869,8 +1869,8 @@
             "testStrategy": "negatif (ÖNCE): bilinmeyen adres 404, disconnect sonrası inbound 404, ro scope 403, hatalı adresleme (chat_id+external_id birlikte veya ikisi de yok) 400 · integration: inbound → routed chat + customer-authored event + identity + inbound log; outbound iki yol + provider_message_id · cross-tenant (NFR-S5): B, A'nın instagram chat_id'sine yanıt yazamaz (404); B'nin GET /channels listesi boş; B'nin channel_messages'ında kayıt yok · unit regresyon: adapters.test.ts CHANNEL_TYPES eşitliği ve isChannelType negatifleri güncel",
             "status": "pending",
             "dependencies": [
-              1,
-              2
+              "65.1",
+              "65.2"
             ],
             "parentId": "65",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -1883,7 +1883,7 @@
             "testStrategy": "negatif (pozitiften ÖNCE): çapraz-lisans aynı adres → 4xx; hata mesajı bilgi sızdırmıyor · cross-tenant: çakışma denemesi sonrası inbound doğru lisansa düşüyor; B'nin channel_messages/chats tabloları boş · integration: disconnect sonrası adresin serbest kalması; aynı lisansın yeniden bağlaması (upsert) bozulmuyor · yarış/invaryant: P2002 unique-violation dalı → deterministik 4xx (kontrol-sonra-yaz yarışı kapanıyor) · regresyon: channels-adapters.test.ts'in mevcut 3 kanal senaryosu + tenant-isolation.test.ts yeşil · NOT: paylaşılan Postgres yarışı nedeniyle bu süit paket-paket SERİ koşulmalı (pnpm -w test paralel koşumu 40P01 yanlış-pozitifi verir)",
             "status": "pending",
             "dependencies": [
-              3
+              "65.3"
             ],
             "parentId": "65",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -1896,7 +1896,7 @@
             "testStrategy": "unit: kart durumu üç halde doğru (bağlı yok / bağlı / hata) — kodlanmış etiket değil türetilmiş · unit negatif: boş ig_user_id → alan-altı hata + submit disabled; API 4xx → ErrorNotice, kart yanlışlıkla Connected görünmez · unit regresyon: mevcut channelsFor testleri (website/chat-page/email/coming_soon) yeşil · cross-tenant: gerekmiyor — istemci tarafı; izolasyon kanıtı sunucuda (08.5.7-c/-d)",
             "status": "pending",
             "dependencies": [
-              3
+              "65.3"
             ],
             "parentId": "65",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -1909,7 +1909,7 @@
             "testStrategy": "unit: tıkla → kayıt; yeniden mount → durum korunur; kanal başına izolasyon · unit negatif: localStorage yok/erişilemez → hata fırlatmaz (Banner.tsx'in savunmacı deseni) · e2e regresyon: settings.spec.ts'in mevcut whatsapp 'Get notified' iddiası yeşil kalır · cross-tenant: gerekmiyor — istemci tarafı, tenant verisi yok",
             "status": "pending",
             "dependencies": [
-              5
+              "65.5"
             ],
             "parentId": "65",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -1922,7 +1922,7 @@
             "testStrategy": "unit: bağlı instagram → satır; bağlı değil → satır yok; sabit sıra · unit negatif: showChannelPromo yalnız instagram bağlıyken false (regresyon kanıtı) · unit regresyon: mevcut views.test.ts vakaları (19) yeşil · cross-tenant: gerekmiyor — saf istemci fonksiyonu, veri /channels'tan gelir ve RLS ile zaten tenant-scoped",
             "status": "pending",
             "dependencies": [
-              3
+              "65.3"
             ],
             "parentId": "65",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -1935,8 +1935,8 @@
             "testStrategy": "e2e: bağla → inbound DM → inbox'ta chat + Views satırı (KK'nın uçtan uca kanıtı) · e2e negatif: bağlı değilken instagram Views satırı yok / promo görünür; disconnect sonrası kart Not connected · e2e regresyon: settings.spec.ts mevcut channels + email testleri yeşil · NOT: e2e temiz DB gerektirir — truncate+reseed, .env source, portların serbest bırakılması (idempotent seed mutasyona uğramış tenant'ı sıfırlamaz)",
             "status": "pending",
             "dependencies": [
-              5,
-              7
+              "65.5",
+              "65.7"
             ],
             "parentId": "65",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -1978,7 +1978,7 @@
             "testStrategy": "negatif (agent rolü reddi + bot/PAT principal reddi + scope reddi + yabancı skill_id reddi — pozitiflerden ÖNCE yazılır) · cross-tenant (B lisansı A'nın skill'ini listeleyemez, silemez, atayamaz) · integration (katalog CRUD + idempotent PUT + GET /agents yanıtında skill listesi) · contract-parity (iki yönlü — kontrat ve route eşleşiyor)",
             "status": "done",
             "dependencies": [
-              1
+              "66.1"
             ],
             "parentId": "66",
             "updatedAt": "2026-08-03T04:55:44.066Z"
@@ -1991,8 +1991,8 @@
             "testStrategy": "negatif (skill'siz ajan asla seçilmez; yabancı skill_id ile kural güncellemesi reddedilir — pozitiflerden ÖNCE) · regresyon (mevcut ADR-08 routing.test.ts senaryoları bit-bit korunur) · cross-tenant (başka lisansın agent_skills satırı adaylığa etki etmez) · eşzamanlılık (arka arkaya iki route → concurrent_chats_limit aşılmaz) · integration. UYARI: DB-bağımlı süit `pnpm -w test` ile paralel koşarsa paylaşılan Postgres'te yarışır — paket bazında SERİ koşulur (hafıza notu: nexa-test-gate-parallel-db)",
             "status": "done",
             "dependencies": [
-              1,
-              2
+              "66.1",
+              "66.2"
             ],
             "parentId": "66",
             "updatedAt": "2026-08-03T05:22:07.031Z"
@@ -2016,8 +2016,8 @@
             "testStrategy": "unit (katalog render + anlamlı empty state) · unit negatif (boş ad → alan-altı hata + submit pasif; canEdit=false → kontroller render edilmez — önce yazılır) · unit (optimistic silme + sunucu hatasında geri alma) · unit (skill_ids taşıyan kural satırında skill adı görünür). Cross-tenant UI'da uygulanamaz — 08.6.3-b ve -i'de karşılanır",
             "status": "done",
             "dependencies": [
-              2,
-              3
+              "66.2",
+              "66.3"
             ],
             "parentId": "66",
             "updatedAt": "2026-08-03T06:08:16.328Z"
@@ -2030,7 +2030,7 @@
             "testStrategy": "unit (mevcut seçimin işaretli açılması + kaydet gövdesinin doğru skill_ids taşıması) · unit negatif (katalog boş → yönlendirmeli empty state; rol yetersiz → kontroller devre dışı — önce yazılır) · E2E (team.spec.ts — skill atama yüzeyi görünür). Cross-tenant/negatif yetki sunucu tarafında 08.6.3-b'de kanıtlanır",
             "status": "done",
             "dependencies": [
-              2
+              "66.2"
             ],
             "parentId": "66",
             "updatedAt": "2026-08-03T06:28:06.670Z"
@@ -2043,7 +2043,7 @@
             "testStrategy": "unit negatif (agent rolünde buton render edilmez — pozitiflerden ÖNCE) · unit (onay modali → doğru endpoint çağrısı + başarıda invalidate) · unit (403 ve 409 yanıtları ayrı ve anlamlı mesaja çevrilir) · E2E (inbox-panel.spec.ts — admin oturumunda takeover görünür)",
             "status": "done",
             "dependencies": [
-              4
+              "66.4"
             ],
             "parentId": "66",
             "updatedAt": "2026-08-03T06:56:43.548Z"
@@ -2067,11 +2067,11 @@
             "testStrategy": "cross-tenant (dört yüzey için negatif matris: skill CRUD, skill ataması, skill routing, takeover — önce yazılır) · regresyon (mevcut ADR-08 routing senaryoları + mevcut transfer davranışı değişmedi) · E2E (uçtan uca skill → atama → routing → takeover akışı) · negatif E2E (agent rolünde takeover aksiyonu görünmüyor). E2E öncesi truncate+reseed, .env source, portlar boş (nexa-e2e-clean-db); DB süitleri seri (nexa-test-gate-parallel-db)",
             "status": "done",
             "dependencies": [
-              3,
-              4,
-              5,
-              6,
-              7
+              "66.3",
+              "66.4",
+              "66.5",
+              "66.6",
+              "66.7"
             ],
             "parentId": "66",
             "updatedAt": "2026-08-03T07:44:46.715Z"
@@ -2110,7 +2110,7 @@
             "testStrategy": "negatif (önce): Authorization başlığı yok → 401 · negatif (önce): müşteri (nxc1.) token'ı → 404 (403 değil) · negatif (önce): geçersiz/iptal edilmiş token → 401 · integration: manifest 4 tool adını + server URL + sürüm döner · cross-tenant: iki farklı lisans aynı statik katalogu görür; yanıtta license_id/organization_id yok · regresyon: contract-parity.test.ts iki yönlü yeşil",
             "status": "done",
             "dependencies": [
-              1
+              "67.1"
             ],
             "parentId": "67",
             "updatedAt": "2026-08-03T08:15:11.573Z"
@@ -2123,8 +2123,8 @@
             "testStrategy": "negatif (önce, kırmızı görülecek): gerekli scope'u taşımayan token → 403 authorization · negatif (önce): bilinmeyen tool adı → 404 (403/400 değil) · negatif (önce): bozuk/eksik argüman → 400 validation (ADR-06 zarfı) · negatif (önce): başka lisansın ticket id'si → 404, 403 DEĞİL (NFR-S5) · negatif (önce): müşteri (nxc1.) token'ı → 404 · cross-tenant: iki lisanslı fixture — A'nın çağrısı B'nin hiçbir satırını döndürmüyor; yanıtta tenant tanımlayıcısı sızmıyor · integration: pozitif search_tickets çağrısı TicketService sonucunu döner · integration: her başarılı çağrı 'mcp.tool_called' audit kaydı üretir ve metadata'da argüman metni yok · unit: scope gate saf fonksiyonu tablo testi (kesişim/boş küme/üst küme) · regresyon: contract-parity.test.ts yeşil; DB süiti paket başına SERİ koşulur (paylaşılan Postgres yarışı)",
             "status": "done",
             "dependencies": [
-              1,
-              2
+              "67.1",
+              "67.2"
             ],
             "parentId": "67",
             "updatedAt": "2026-08-03T08:41:20.073Z"
@@ -2137,7 +2137,7 @@
             "testStrategy": "negatif (önce): chats scope'u olmayan token → 403 · negatif (önce): geçersiz durum/limit argümanı → 400 validation · cross-tenant: A'nın çağrısında B'nin chat'i yok; B'nin chat id'siyle filtre → boş sonuç/404 · integration: pozitif liste + sayfalama alanı (next_page_id) doğru · regresyon: mevcut chats integration süiti yeşil",
             "status": "done",
             "dependencies": [
-              3
+              "67.3"
             ],
             "parentId": "67",
             "updatedAt": "2026-08-03T09:05:51.736Z"
@@ -2150,7 +2150,7 @@
             "testStrategy": "negatif (önce): geçersiz `report` değeri → 400 validation · negatif (önce): reports_read taşımayan token → 403 · negatif (önce): ters/bozuk tarih aralığı → 400 · cross-tenant: A ve B lisansı farklı sayılar döner; A'nın çağrısı B'nin verisini içermez · integration: dört enum × dolu yanıt + rapor sayısı = fatura sayacı (ADR-09) tutarlılığı · regresyon: reports-billing.test.ts + reports-metrics.test.ts değişmeden yeşil",
             "status": "done",
             "dependencies": [
-              3
+              "67.3"
             ],
             "parentId": "67",
             "updatedAt": "2026-08-03T09:27:16.553Z"
@@ -2163,7 +2163,7 @@
             "testStrategy": "negatif (önce): başka lisansın chatId'si → 404 (403 değil) · negatif (önce): chats scope'suz token → 403 · negatif (önce): arşivlenmiş/erişilemeyen chat → 404 · negatif (önce): geçerli Luhn kart numaralı transcript → yanıtta maskeli (ham PAN assert edilerek kırmızı görülür) · cross-tenant: iki lisanslı fixture üzerinde özet çağrısı karşı lisansı görmüyor · integration: pozitif özet + özetin internal note OLARAK YAZILMADIĞI (chat event sayısı değişmiyor) iddiası · regresyon: copilot.test.ts (mevcut summary akışı) değişmeden yeşil",
             "status": "done",
             "dependencies": [
-              3
+              "67.3"
             ],
             "parentId": "67",
             "updatedAt": "2026-08-03T09:45:33.243Z"
@@ -2176,7 +2176,7 @@
             "testStrategy": "unit: MCP URL görünür + [Copy] panoya yazar · unit: 'Claude setup' bölümü katlanır/açılır (a11y: aria-expanded) · unit: örnek prompt bloğu render edilir · negatif (önce): DOM'da hiçbir token/secret metni yok (assert) · negatif: manifest çağrısı hata verirse anlamlı hata durumu; tool listesi boşsa anlamlı empty state (boş dikdörtgen değil) · e2e: settings.spec.ts'te MCP bölümü görünürlük iddiası · cross-tenant testi YOK — bileşen tenant verisi göstermiyor (manifest statik katalog, 08.8.3-b'de kanıtlandı)",
             "status": "done",
             "dependencies": [
-              2
+              "67.2"
             ],
             "parentId": "67",
             "updatedAt": "2026-08-03T10:17:08.882Z"
@@ -2189,10 +2189,10 @@
             "testStrategy": "negatif (önce): kova dolduğunda 429 + ADR-06 hata zarfı · negatif (önce): scope'u daraltılmış PAT ile yasak tool → 403 · negatif (önce): iptal edilmiş (revoked) PAT → 401 · cross-tenant: iki lisanslı uçtan uca akış, karşılıklı sızıntı yok · integration: dört tool sıralı akış + her çağrı için bir 'mcp.tool_called' audit kaydı · integration: audit metadata'da argüman metni/PII yok · DB süiti paket başına SERİ koşulur (paylaşılan Postgres yarışı)",
             "status": "done",
             "dependencies": [
-              3,
-              4,
-              5,
-              6
+              "67.3",
+              "67.4",
+              "67.5",
+              "67.6"
             ],
             "parentId": "67",
             "updatedAt": "2026-08-03T10:33:52.851Z"
@@ -2227,7 +2227,7 @@
             "description": "banned_customer_ips kontrata + Settings→Security listesi; CustomersPage ban/unban UI doğrula/ekle; E2E görsel kanıt.",
             "status": "done",
             "dependencies": [
-              1
+              "68.1"
             ],
             "updatedAt": "2026-07-31T18:27:15.748Z",
             "parentId": "undefined"
@@ -2262,7 +2262,7 @@
             "description": "Widget chat start/ilk mesaj + email-inbound aynı motora; davranış kararı §C'ye; integration iki yol + cross-tenant.",
             "status": "done",
             "dependencies": [
-              1
+              "69.1"
             ],
             "updatedAt": "2026-07-31T19:23:43.165Z",
             "parentId": "undefined"
@@ -2297,7 +2297,7 @@
             "description": "chats.ts + customer.ts (+pre-chat custom_fields) + email-inbound.ts kaynağında maskeler; integration: DB'de ham PAN yok (SQL doğrulama).",
             "status": "done",
             "dependencies": [
-              1
+              "70.1"
             ],
             "updatedAt": "2026-07-31T17:58:11.835Z",
             "parentId": "undefined"
@@ -2308,7 +2308,7 @@
             "description": "request log + audit_log + .data/mail + skill/AI giriş metni; ham PAN sızmaz integration kanıtı; NFR-C5/S9 güncelle.",
             "status": "done",
             "dependencies": [
-              2
+              "70.2"
             ],
             "updatedAt": "2026-07-31T17:58:11.841Z",
             "parentId": "undefined"
@@ -2347,7 +2347,7 @@
             "testStrategy": "integration: tablo + policy varlığı, RLS enabled · cross-tenant NEGATİF (pozitiften ÖNCE yazılır): başka lisansın satın alma satırı RLS ile reddedilir · integration: License silinince satın alma satırları cascade siliniyor",
             "status": "pending",
             "dependencies": [
-              1
+              "71.1"
             ],
             "parentId": "71",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2360,8 +2360,8 @@
             "testStrategy": "integration: katalog yanıtı @nexa/types kataloğuyla birebir · integration: purchases listesi (dolu + boş) · NEGATİF (önce): scope'suz token → 403 · CROSS-TENANT (önce): başka lisansın satın alması sızmıyor · contract-parity.test.ts (iki yönlü parite)",
             "status": "pending",
             "dependencies": [
-              1,
-              2
+              "71.1",
+              "71.2"
             ],
             "parentId": "71",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2374,9 +2374,9 @@
             "testStrategy": "NEGATİF (önce): scope'suz → 403; bilinmeyen package_id → 404 · CROSS-TENANT (önce): A'nın satın alması B'nin included/usage'ını değiştirmiyor · EŞZAMANLILIK: satın alma ∥ N recordApiCall → included ve quantity invariantı (iki sıralamada da) · integration: satın alma → GET /billing/usage'da included artışı, overage düşüşü · integration: audit girdisi yazılıyor · integration: read-only lisansta satın alma yazılabilir (allowWhenReadOnly) · contract-parity.test.ts",
             "status": "pending",
             "dependencies": [
-              1,
-              2,
-              3
+              "71.1",
+              "71.2",
+              "71.3"
             ],
             "parentId": "71",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2389,7 +2389,7 @@
             "testStrategy": "integration: satın alma → fatura satırı + toplam artışı · integration: satın alma yok → mevcut fatura şekli değişmemiş (regresyon) · integration: CSV indirmede satır mevcut · CROSS-TENANT negatif: başka lisansın satın alması faturaya sızmıyor",
             "status": "pending",
             "dependencies": [
-              4
+              "71.4"
             ],
             "parentId": "71",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2402,8 +2402,8 @@
             "testStrategy": "unit: üç kart render (ad/kota/fiyat) · unit: Buy → POST + usage invalidate · unit: hata → Banner, sayaç değişmiyor · unit: loading + empty state · unit: read-only lisansta buton etkin (backend davranışıyla hizalı)",
             "status": "pending",
             "dependencies": [
-              3,
-              4
+              "71.3",
+              "71.4"
             ],
             "parentId": "71",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2416,8 +2416,8 @@
             "testStrategy": "unit: dolu liste render (tarih/ad/kota/tutar) · unit: boş liste → anlamlı empty state · unit: satın alma sonrası liste yenileniyor (invalidate)",
             "status": "pending",
             "dependencies": [
-              3,
-              6
+              "71.3",
+              "71.6"
             ],
             "parentId": "71",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2430,9 +2430,9 @@
             "testStrategy": "e2e: satın alma → kota artışı → geçmiş satırı → fatura satırı (tek akış) · e2e regresyon: mevcut billing.spec.ts senaryoları yeşil · integration regresyon: reports-billing.test.ts tamamı yeşil (ADR-09 sayaç = fatura invariantı korunuyor)",
             "status": "pending",
             "dependencies": [
-              5,
-              6,
-              7
+              "71.5",
+              "71.6",
+              "71.7"
             ],
             "parentId": "71",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2497,7 +2497,7 @@
             "testStrategy": "negatif (ÖNCE): rotate sonrası eski secret ile POST /auth/token → invalid_client · negatif: `client_type='public'` client'ta rotate → 400 · negatif: audit metadata'sında secret string'i yok (yanıttaki secret ile karşılaştırma) · cross-tenant: başka organizasyonun client'ında rotate → 404 · integration pozitif: yeni secret ile POST /auth/token geçiyor; created/updated/deleted/secret_rotated için audit_log_entries'te birer satır · integration: contract-parity.test.ts yeşil (rotate operasyonu belgeli)",
             "status": "pending",
             "dependencies": [
-              3
+              "72.3"
             ],
             "parentId": "72",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2510,7 +2510,7 @@
             "testStrategy": "unit: boş liste → anlamlı empty state (boş dikdörtgen değil) · unit: display_name boşken submit pasif + alan-altı hata (FR-EK-A.1) · unit: secret bir kez render edilir, panel kapanınca kaybolur, liste satırında yok · unit: sunucudan gelen 400 (geçersiz redirect_uri) kullanıcıya hata olarak yansır · negatif: ajan rolünde navigasyon girdisi ve portal görünmüyor (access_rules:rw kapısı) · e2e: portal → app kaydet → client_id + secret görünür · cross-tenant GEREKMEZ — gerekçe: ekran tenant kararı vermez; izolasyon 09.4-c integration testinde kanıtlanır",
             "status": "pending",
             "dependencies": [
-              3
+              "72.3"
             ],
             "parentId": "72",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2523,9 +2523,9 @@
             "testStrategy": "unit: abonelik listesi render + boşken anlamlı empty state · unit: action seçenekleri manifest yanıtından türüyor (sabit liste kopyası yok) · negatif: private/loopback URL sunucu reddi (400) alan-altı hata olarak yansıyor · negatif: secret liste satırında görünmüyor, yalnız kayıt/rotate anında bir kez · negatif: ajan rolünde sekme gizli · e2e: portal → webhook ekle → listede görünür → sil → listeden düşer",
             "status": "pending",
             "dependencies": [
-              2,
-              4,
-              5
+              "72.2",
+              "72.4",
+              "72.5"
             ],
             "parentId": "72",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2538,10 +2538,10 @@
             "testStrategy": "integration: portalda kaydedilen confidential client ile authorize→token uçtan uca geçiyor; token scope'ları client'ın kayıtlı kümesiyle sınırlı · negatif: kayıtlı olmayan redirect_uri → 400 · negatif: yanlış client_secret → invalid_client · negatif: client'ın kayıtlı scope'u dışında scope isteği → daraltılır veya 400 · cross-tenant: başka organizasyonun client_id'si ile authorize/list/rotate/delete → 404 veya validation; portal listesi sızmıyor · e2e regresyon: developers.spec.ts yeşil · tam DoD kapısı: typecheck + lint + unit + integration + build + e2e (DB süitleri paket bazlı seri)",
             "status": "pending",
             "dependencies": [
-              3,
-              4,
-              5,
-              6
+              "72.3",
+              "72.4",
+              "72.5",
+              "72.6"
             ],
             "parentId": "72",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2583,7 +2583,7 @@
             "testStrategy": "NEGATİF (önce): `engaged=true` olan send invited üretmez · NEGATİF (önce): canlı pencere dışındaki send invited üretmez · CROSS-TENANT (önce): başka lisansın campaign_sends satırı listeye sızmaz (NFR-S4) · integration (pozitif): davet edilmiş ziyaretçi `activity='invited'` satırıyla listede · integration (öncelik): aktif sohbeti olan ziyaretçide invited, sohbet durumunu ezmez · integration (regresyon): mevcut browsing/queued/waiting/chatting davranışı kırılmaz",
             "status": "pending",
             "dependencies": [
-              1
+              "73.1"
             ],
             "parentId": "73",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2607,7 +2607,7 @@
             "testStrategy": "NEGATİF (önce, kırmızı görülerek): scope'suz token → 403 · CROSS-TENANT (önce): başka kiracının chatId'si → 404 (403 DEĞİL — id enumerasyonu engellenir, NFR-S5) · NEGATİF (önce): `chats--access:ro` ajanı, grubunun `chat_access` üzerinden erişmediği sohbeti izleyemez → 404 · NEGATİF (önce): A ajanı B ajanının supervision satırını DELETE edemez · NEGATİF (önce): bayat satır (lastSeenAt < pencere) canlı sayılmaz · integration (pozitif): idempotent POST — ikinci çağrı tek satır bırakır ve lastSeenAt'i tazeler · integration (pozitif): iki farklı ajan aynı sohbeti izler → iki satır; DELETE yalnız kendi satırını siler · integration: contract-parity yeşil (route + OpenAPI path aynı pencerede)",
             "status": "pending",
             "dependencies": [
-              3
+              "73.3"
             ],
             "parentId": "73",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2620,8 +2620,8 @@
             "testStrategy": "CROSS-TENANT (önce): B'nin supervision satırı A'nın yanıtını etkilemez (NFR-S4) · NEGATİF (önce): bayat (pencere dışı) supervision satırı supervised üretmez · integration (pozitif): canlı supervision → `activity='supervised'` · integration (öncelik tablosu): queued > supervised > waiting > chatting · integration (regresyon): mevcut 4 + invited durumları kırılmaz · perf: supervision okuması tek toplu sorgu — N+1 yok (NFR-P2)",
             "status": "pending",
             "dependencies": [
-              1,
-              4
+              "73.1",
+              "73.4"
             ],
             "parentId": "73",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2634,9 +2634,9 @@
             "testStrategy": "NEGATİF (önce): bilinmeyen filtre anahtarı → 400 (`.strict()`) · NEGATİF (önce): geçersiz `activity` enum değeri → 400 · CROSS-TENANT (önce): başka kiracının `group_id`'si ile sorgu, o kiracının ziyaretçilerini DÖNDÜRMEZ (NFR-S4) · integration (regresyon): filtre verilmediğinde davranış birebir eskisi · integration (pozitif): her koşul tek başına listeyi daraltır · integration (pozitif): iki koşul birlikte AND'lenir (Match all) · perf: filtreli sorgu `take` sınırında kalır, sorgu sayısı artmaz — ölçüm HANDOFF'a kanıt (NFR-P2)",
             "status": "pending",
             "dependencies": [
-              1,
-              2,
-              5
+              "73.1",
+              "73.2",
+              "73.5"
             ],
             "parentId": "73",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2649,7 +2649,7 @@
             "testStrategy": "unit: 7 sekme tam ve sırası rapor-1 §644 ile aynı · unit: her sekme doğru `activity` query parametresini üretir (All kısıt eklemez) · unit: sayaçlar toplamı All'a eşit · unit: boş sekme → anlamlı empty state (FR-EK-B.1) · unit: sekme seçimi URL parametresine yazılır ve reload'da korunur · a11y: `role=tablist`/`role=tab`/`aria-selected` + ok tuşlarıyla gezinme (NFR-A11Y4/A11Y5) · negatif/cross-tenant: GEREKMİYOR — yetki sunucuda (13.2-d/-f) kanıtlandı",
             "status": "pending",
             "dependencies": [
-              6
+              "73.6"
             ],
             "parentId": "73",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2662,8 +2662,8 @@
             "testStrategy": "unit: koşul ekle → doğru query parametresi; kaldır → parametre düşer · unit: iki koşul birlikte gönderilir (Match all = AND) · NEGATİF unit: geçersiz/boş değer → alan-altı hata + istek GİTMEZ (FR-EK-A.1) · unit: debounce — hızlı yazımda tek istek · unit: 'Temizle' tüm koşulları kaldırır ve liste eski hâline döner · a11y: her koşul satırı etiketlenmiş kontroller + klavye ile ekleme/kaldırma · cross-tenant: GEREKMİYOR — tenant kapısı 13.2-f'de kanıtlandı",
             "status": "pending",
             "dependencies": [
-              6,
-              7
+              "73.6",
+              "73.7"
             ],
             "parentId": "73",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2687,7 +2687,7 @@
             "testStrategy": "NEGATİF (önce): hiçbir IP değeri DOM'a render edilmiyor (NFR-S9) · unit: `visits_count > 1` → 'Returning visitor' rozeti; `visits_count` dl'de görünür · unit: `came_from` dolu ziyarette metin görünür; null'da satır sessizce yok · unit: `came_from` link olarak DEĞİL düz metin olarak render edilir · unit: `groups` boş → anlamlı empty state; dolu → grup adları (FR-EK-B.1) · unit (regresyon): mevcut panel kartları (Custom fields, Visited pages, Conversations) kırılmaz",
             "status": "pending",
             "dependencies": [
-              9
+              "73.9"
             ],
             "parentId": "73",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2700,16 +2700,16 @@
             "testStrategy": "e2e: 7 sekme görünür; Browsing sekmesi canlı ziyaretçiyi listeler · e2e: 'Add filter' ile page-URL koşulu → liste daralır; koşul kaldırılınca geri gelir · e2e: 'Supervise chat' → satır 'Supervised' durumuna geçer (13.2-d+e uçtan uca) · e2e: satırdan 'Edit contact' → 360° panelde 'Visits' sayacı + 'Came from' görünür (deep-link) · a11y: tablist klavye gezinme + `aria-selected` (NFR-A11Y4/A11Y5) · perf: filtreli `GET /traffic` süre ölçümü NFR-P2 bütçesinde — kanıt HANDOFF'a · DoD tam sürüm: typecheck + lint + unit + integration + build + e2e (DB süitleri paket başına seri)",
             "status": "pending",
             "dependencies": [
-              1,
-              2,
-              3,
-              4,
-              5,
-              6,
-              7,
-              8,
-              9,
-              10
+              "73.1",
+              "73.2",
+              "73.3",
+              "73.4",
+              "73.5",
+              "73.6",
+              "73.7",
+              "73.8",
+              "73.9",
+              "73.10"
             ],
             "parentId": "73",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2762,7 +2762,7 @@
             "testStrategy": "negatif (önce): tanımsız definition anahtarı → 400 · negatif (önce): boş/whitespace `name` → 400 · negatif (önce): `customers:ro` ile POST/PATCH → 403 (route seviyesinde, NFR-S3) · cross-tenant negatif: başka lisansın goalId'si GET/PATCH'te 404 ve listede görünmez · pozitif: create → list → patch(active=false) → list(status=inactive) CRUD döngüsü · contract-parity regresyonu (yeni path + route birlikte)",
             "status": "pending",
             "dependencies": [
-              1
+              "74.1"
             ],
             "parentId": "74",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2775,8 +2775,8 @@
             "testStrategy": "negatif (önce): boş/eşleşmeyen definition → 0 achievement · negatif (önce): pasif (active=false) goal → 0 achievement · cross-tenant negatif: başka lisansın goal'ı tetiklenmez; achievement yanlış license_id'ye yazılmaz; başka lisansın campaign_sends'i converted olmaz · idempotency: aynı (goal, customer) ikinci tetik → satır sayısı değişmez · unit: saf matchesGoal/hasGoalTrigger determinizmi + malformed jsonb dayanıklılığı · regresyon: mevcut apps/api/test/integration/campaigns.test.ts ve apps/web CampaignsPage.test.tsx yeşil kalır (conversion semantiği değişimi mevcut beklentileri kırmamalı) · dayanıklılık: goals.evaluate throw ederse ziyaretçinin mesaj gönderimi başarılı kalır (best-effort)",
             "status": "pending",
             "dependencies": [
-              2,
-              3
+              "74.2",
+              "74.3"
             ],
             "parentId": "74",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2789,8 +2789,8 @@
             "testStrategy": "unit: goalConversionRate payda 0 → null (0 değil) · integration: pencere içi sayım doğru · integration: pencere sınırı — önceki pencereye düşen kayıt previous_period'da · cross-tenant negatif: başka lisansın achievement'ı sayıya girmez · regresyon: mevcut reports integration süiti yeşil (yanıt katkısal büyüdü, alan kaybı yok)",
             "status": "pending",
             "dependencies": [
-              2,
-              4
+              "74.2",
+              "74.4"
             ],
             "parentId": "74",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2803,9 +2803,9 @@
             "testStrategy": "negatif (önce): geçersiz from/to aralığı → 400 · negatif (önce): `reports_read` olmayan token → export 403 ve gruplar listesinde `goals` yok · cross-tenant negatif: başka lisansın hedefi/achievement'ı by_goal'de veya funnel sayılarında görünmez · integration: huni sayıları + pencere sınırı + previous_period · unit (reports-export.test.ts): goals grubu katalogda ve CSV başlıkları/injection guard'ı doğru · contract-parity regresyonu",
             "status": "pending",
             "dependencies": [
-              2,
-              3,
-              4
+              "74.2",
+              "74.3",
+              "74.4"
             ],
             "parentId": "74",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2818,7 +2818,7 @@
             "testStrategy": "unit: saf filterGoals/goalCounts · unit: geçersiz form → alan-altı hata + submit pasif · unit: empty state (boş liste) ve skeleton (pending) durumları · unit: `customers:rw` yokken yazma kontrolleri gizli (UI gating — API gating 13.3-c'de test edilir)",
             "status": "pending",
             "dependencies": [
-              3
+              "74.3"
             ],
             "parentId": "74",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2831,9 +2831,9 @@
             "testStrategy": "unit: üç aşamanın da render edilmesi (huni bütünlüğü) · unit: payda 0 → oran '—', NaN/Infinity render edilmez · unit: huni verisi yokken anlamlı empty state · unit: Reports Overview 'Achieved goals' kartı + delta · regresyon: mevcut ReportsPage.test.tsx iddiaları yeşil kalır",
             "status": "pending",
             "dependencies": [
-              5,
-              6,
-              7
+              "74.5",
+              "74.6",
+              "74.7"
             ],
             "parentId": "74",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2846,11 +2846,11 @@
             "testStrategy": "e2e: hedef oluştur → widget ziyaret+mesaj → Goals huni Conversions=1 → Reports 'Achieved goals'=1 · e2e negatif: pasif hedef tetiklenmez (sayı 0 kalır) · e2e idempotency: ikinci tetik sonrası sayı 1'de kalır · regresyon: mevcut 20 e2e spec yeşil (özellikle campaigns.spec.ts — conversion semantiği değişti) · tam DoD kapısı: typecheck + lint + unit + integration + build + e2e (DB süitleri serial)",
             "status": "pending",
             "dependencies": [
-              4,
-              5,
-              6,
-              7,
-              8
+              "74.4",
+              "74.5",
+              "74.6",
+              "74.7",
+              "74.8"
             ],
             "parentId": "74",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2894,7 +2894,7 @@
             "testStrategy": "negatif (önce): `currency:'DOLLAR'` / 2 harfli kod → 400 validation; `attribution_window_days: 0` ve `-1` → 400; bilinmeyen alan reddi · negatif: `access_rules:rw` olmayan ajan token'ı PUT → 403; hiç scope'suz → 403 · cross-tenant: A lisansının PUT'u B lisansının satırını değiştirmez; B'nin GET'i kendi varsayılanını döner · integration (pozitif): ilk PUT upsert ile satır yaratır, ikinci PUT günceller (çift satır oluşmaz) · integration: contract-parity yeşil",
             "status": "pending",
             "dependencies": [
-              1
+              "75.1"
             ],
             "parentId": "75",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2907,8 +2907,8 @@
             "testStrategy": "negatif (ÖNCE, kırmızı görülür): sales tracker kapalı/satır yok → 4xx, satır yazılmaz · negatif: currency konfigüre edilenden farklı → 400; 3 harf olmayan kod → 400 · negatif: amount_cents negatif / ondalık / üst sınır aşımı → 400 · negatif: gövdede license_id veya chat_id enjeksiyonu → yok sayılır (IDOR/NFR-S5); başka lisansın chat_id'si ile atıf kurulamaz · negatif/eşzamanlılık: aynı external_order_id ile iki POST → tek satır, tek ciro (çift sayım yok) · cross-tenant: A müşteri token'ı ile yazılan satış B lisansının raporunda görünmez · unit: attribution.ts saf fonksiyon — pencere içi/dışı/chat yok üç dalı · integration (pozitif, negatiflerden sonra): geçerli POST → 201 + attributed:true + chat bağı · integration: contract-parity yeşil",
             "status": "pending",
             "dependencies": [
-              1,
-              2
+              "75.1",
+              "75.2"
             ],
             "parentId": "75",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2921,8 +2921,8 @@
             "testStrategy": "integration: kapalıyken yanıt şekli bugünküyle birebir (geriye dönük uyum regresyonu) · integration: açıkken sayı ve tutar doğru; attributed=false hariç tutulur; pencere dışı hariç tutulur · cross-tenant: B lisansının satışları A'nın raporuna girmez (withTenant/RLS kanıtı) · negatif: geçersiz from/to aralığı → 400 (mevcut rangeQuery davranışı korunur) · integration: contract-parity yeşil (şema alanları değişmedi)",
             "status": "pending",
             "dependencies": [
-              2,
-              3
+              "75.2",
+              "75.3"
             ],
             "parentId": "75",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2935,7 +2935,7 @@
             "testStrategy": "unit: değerler yüklenir + kaydet doğru gövdeyi gönderir · unit (negatif): 0/negatif atıf penceresi → alan-altı hata, submit pasif · unit (negatif): canEdit=false → salt-okunur, mutation tetiklenmez · unit: PUT hatasında hata mesajı gösterilir ve form değerleri kaybolmaz",
             "status": "pending",
             "dependencies": [
-              2
+              "75.2"
             ],
             "parentId": "75",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2948,7 +2948,7 @@
             "testStrategy": "unit: configured=true → iki KPI + para birimi görünür · unit (negatif/empty): configured=false → anlamlı empty state + CTA; 'later release' metni yok · unit: configured=true fakat 0 satış → '0' gösterilir, boş dikdörtgen değil (FR-EK-B.1) · e2e: Reviews sekmesinde Ecommerce bölümü görünür (reports.spec.ts)",
             "status": "pending",
             "dependencies": [
-              4
+              "75.4"
             ],
             "parentId": "75",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2961,7 +2961,7 @@
             "testStrategy": "unit: boot sonrası trackSale doğru endpoint + gövde · unit: boot öncesi çağrı kuyruklanır, boot sonrası tam bir kez gönderilir · unit (negatif): sunucu 4xx / fetch reject → throw yok, sayfa akışı bozulmaz · unit (negatif): eksik/geçersiz payload istemcide de gönderilmez (sunucu doğrulaması yine de son söz) · bundle: widget boyutu NFR-P3 bütçesinde",
             "status": "pending",
             "dependencies": [
-              3
+              "75.3"
             ],
             "parentId": "75",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -2974,10 +2974,10 @@
             "testStrategy": "e2e (pozitif): trackSale → Reports Ecommerce KPI artışı · e2e (negatif): sales tracker kapalı → dürüst empty state, sahte sıfır yok · integration/cross-tenant: seed edilen A lisansı verisi B lisansının raporunda görünmez · integration: seed iki kez koşulduğunda tracked_sales çiftlenmez (idempotency) · tutarlılık: 13.3 dönüşüm sayacı ile tracked_sales sayısı çelişmiyor (bulgu HANDOFF'a)",
             "status": "pending",
             "dependencies": [
-              4,
-              5,
-              6,
-              7
+              "75.4",
+              "75.5",
+              "75.6",
+              "75.7"
             ],
             "parentId": "75",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -3019,7 +3019,7 @@
             "testStrategy": "integration: kb-articles/kb-categories tam CRUD + kb-settings oku/yaz · cross-tenant negatif: license B'nin articleId'si ile GET/PATCH/DELETE → 404 (403 DEĞİL, NFR-S5) · negatif: yinelenen slug → `validation` hatası; boş/ASCII-dışı slug → reddedilir · negatif: `minimumRole` altındaki rol `PUT /kb-settings` → 403 · unit: slug normalizasyon saf fonksiyonu (boşluk, büyük harf, arka arkaya tire, baş/son tire) · integration: publish + kb_settings.enabled değişimi audit kaydı üretir (NFR-C2)",
             "status": "done",
             "dependencies": [
-              1
+              "76.1"
             ],
             "parentId": "76",
             "updatedAt": "2026-08-03T14:26:49.873Z"
@@ -3032,8 +3032,8 @@
             "testStrategy": "NEGATİF (önce yazılır, kırmızı görülür): bilinmeyen workspaceSlug → 404 · NEGATİF: taslak (`status='draft'`) makale slug'ı → 404, gövdesinde makale metninin hiçbir parçası yok · NEGATİF (CROSS-TENANT): license B'ye ait articleSlug + license A'nın workspaceSlug'ı → 404; ayrıca license B'nin workspaceSlug'ı + license A'nın articleSlug'ı → 404 · NEGATİF: `kb_settings.enabled=false` → 404 (dört senaryonun dördü de aynı gövde/aynı status) · NEGATİF: Authorization header ile geçerli ajan token'ı gönderilse bile yanıt aynı — public yol yetki yükseltmiyor · NEGATİF: enumeration — ardışık/tahmin edilebilir slug denemeleri 404 dışında bilgi (farklı mesaj, farklı header) sızdırmıyor · integration (POZİTİF, negatiflerden sonra): yayınlanmış makale + kategori listesi doğru sırada; keyset sayfalama · integration: rate-limit — public KB kovası anon kovasından ayrı; limit aşımında 429; `/health` dışında skipRateLimit kullanılmıyor · unit: SQL resolver yalnız enabled+aktif license döndürür (canceled license → boş)",
             "status": "done",
             "dependencies": [
-              1,
-              2
+              "76.1",
+              "76.2"
             ],
             "parentId": "76",
             "updatedAt": "2026-08-03T14:54:42.424Z"
@@ -3057,8 +3057,8 @@
             "testStrategy": "NEGATİF (önce): taslak/başka-tenant/kapalı-KB → 404 HTML, gövdede içerikten hiçbir parça yok (CROSS-TENANT dahil) · NEGATİF: XSS regresyonu — gövdesinde `<img src=x onerror=alert(1)>` olan makale sayfasında hiçbir aktif etiket üretilmez (PUBKB-d ile uçtan uca bağ) · NEGATİF: `seo_title`/`seo_description` içindeki `<`/`\"` karakterleri meta attribute'unu kırmaz · integration: JS'siz ilk boyama — HTML'de hiç `<script src>` yok (JSON-LD hariç), makale metni ham gövdede · integration: canonical/OG/JSON-LD alanları makale alanlarıyla eşleşiyor · a11y unit: tek `<h1>`, `lang` attribute, `<main>`/`<nav>` landmark'ları, başlık seviyeleri atlamıyor (NFR-A11Y1)",
             "status": "done",
             "dependencies": [
-              3,
-              4
+              "76.3",
+              "76.4"
             ],
             "parentId": "76",
             "updatedAt": "2026-08-03T15:46:48.707Z"
@@ -3071,8 +3071,8 @@
             "testStrategy": "NEGATİF (önce): taslak makale slug'ı sitemap'te YOK · NEGATİF (CROSS-TENANT): license B'nin makale URL'leri, license A'nın sitemap'inde YOK · NEGATİF: `kb_settings.enabled=false` → sitemap 404, robots.txt `Disallow: /` · NEGATİF: XML enjeksiyonu — slug/başlıktaki `& < > \"` kaçırılır, üretilen XML iyi biçimli (parse edilerek doğrulanır) · integration (POZİTİF): yayınlanmış N makale → N adet `<url>`; `lastmod` ISO-8601 · integration: `contract-parity` yeşil",
             "status": "done",
             "dependencies": [
-              3,
-              5
+              "76.3",
+              "76.5"
             ],
             "parentId": "76",
             "updatedAt": "2026-08-03T16:34:55.372Z"
@@ -3085,7 +3085,7 @@
             "testStrategy": "unit: sekme filtresi her durum için doğru alt küme (saf fonksiyon) · unit: arama debounce + kategori filtresi birlikte daraltır · unit: her sekmede boş liste → anlamlı empty state (üç sekme ayrı ayrı) · unit: a11y — `role=tablist`, `aria-selected`, klavye ile sekme gezinme · unit: yükleme durumunda skeleton, hata durumunda hata mesajı",
             "status": "done",
             "dependencies": [
-              2
+              "76.2"
             ],
             "parentId": "76",
             "updatedAt": "2026-08-03T16:54:38.657Z"
@@ -3098,8 +3098,8 @@
             "testStrategy": "unit: zorunlu alan boş → alan-altı hata + submit pasif · unit: slug türetme saf fonksiyonu (büyük harf, boşluk, arka arkaya tire, baş/son tire, rezerve kelimeler: `articles`/`categories`/`sitemap.xml`/`robots.txt` reddi) · negatif: backend'den dönen slug çakışması → ilgili alanın altında hata gösterilir (genel toast değil) · unit: publish/unpublish durum geçişi + Public link görünürlüğü + kopyalama · unit: kirli formu kapatma → onay istenir (T5-a dirty-guard) · unit: a11y — her alanın label'ı, hata mesajı `aria-describedby` ile bağlı",
             "status": "done",
             "dependencies": [
-              2,
-              7
+              "76.2",
+              "76.7"
             ],
             "parentId": "76",
             "updatedAt": "2026-08-03T17:22:14.394Z"
@@ -3112,10 +3112,10 @@
             "testStrategy": "e2e NEGATİF (önce): taslak makalenin public adresi 404; sayfada makale metninin hiçbir parçası yok · e2e NEGATİF (CROSS-TENANT): tenant B'nin workspaceSlug'ı + tenant A'nın articleSlug'ı → 404; tersi de 404 · e2e NEGATİF: unpublish → public adres 404 ve sitemap'ten düşer · e2e NEGATİF (XSS): gövdeye enjekte edilen `<img src=x onerror>` public sayfada aktif etiket üretmez (DOM sorgusu ile `img[onerror]` sayısı 0) · e2e POZİTİF: oturumsuz context'te makale okunur; kategori→makale gezinmesi çalışır · e2e POZİTİF: `<title>`, meta description, canonical, sitemap.xml içeriği doğru · e2e: JS engellenmiş context'te makale metni yine görünür (JS'siz ilk boyama, NFR-P2/SEO) · ölçüm: public makale yanıt süresi + gövde boyutu HANDOFF'a kanıt olarak yazılır",
             "status": "done",
             "dependencies": [
-              3,
-              5,
-              6,
-              8
+              "76.3",
+              "76.5",
+              "76.6",
+              "76.8"
             ],
             "parentId": "76",
             "updatedAt": "2026-08-03T17:59:54.647Z"
@@ -3154,7 +3154,7 @@
             "testStrategy": "integration CROSS-TENANT (ÖNCE): lisans A'nın work_schedules satırı lisans B bağlamında 0 satır döner · integration NEGATİF: B, A'nın license_id'siyle INSERT denerse policy WITH CHECK reddeder (work_schedules ve agent_presence_events için ayrı ayrı) · integration CROSS-TENANT: agent_presence_events satırları diğer lisansta görünmez · integration pozitif: migration uygulanır, Prisma modelleri okunur/yazılır, index mevcut, RLS enabled · ÇALIŞTIRMA NOTU: paylaşılan Postgres nedeniyle DB süiti paket bazlı SERİ koşulur ('pnpm -w test' yarışa girer — proje notu)",
             "status": "done",
             "dependencies": [
-              1
+              "77.1"
             ],
             "parentId": "77",
             "updatedAt": "2026-08-07T20:57:37.261Z"
@@ -3167,8 +3167,8 @@
             "testStrategy": "integration NEGATİF (ÖNCE): `agents--my:rw` token'ı başka bir agentId'nin planına PUT → 403 · integration NEGATİF: scope'suz/yanlış scope token → 403; müşteri principal → 403 · integration NEGATİF: geçersiz saat gövdesi (start>=end, '24:00') → 400 validation · integration CROSS-TENANT: lisans B'nin token'ı lisans A'nın agentId'sine GET/PUT → 404 (satır sızmaz) · integration pozitif: PUT sonrası GET aynı planı döner; audit_log'a `work_schedule.updated` düşer · regresyon: route-config.test.ts + agents-suspension.test.ts yeşil",
             "status": "done",
             "dependencies": [
-              1,
-              2
+              "77.1",
+              "77.2"
             ],
             "parentId": "77",
             "updatedAt": "2026-08-07T21:25:58.619Z"
@@ -3181,7 +3181,7 @@
             "testStrategy": "integration NEGATİF (ÖNCE): planlı vardiya içinde ama routingStatus='offline' olan ajana drainQueue atama YAPMAZ · unit NEGATİF: hiç presence olayı yokken kapsama 0 değil `null` döner · integration EŞZAMANLILIK: transaction hatası enjekte edildiğinde hem durum güncellemesi hem olay geri alınır (kısmi yazma yok) · integration CROSS-TENANT: lisans B, lisans A'nın presence olaylarını okuyamaz / kapsamasında göremez · integration pozitif: her durum geçişi tam 1 olay yazar; aynı duruma tekrar PUT idempotenttir · unit pozitif: bilinen olay dizisinde ajan × saat kapsama dakikaları beklenen değerleri verir · regresyon: routing.test.ts + agents-suspension.test.ts yeşil",
             "status": "done",
             "dependencies": [
-              2
+              "77.2"
             ],
             "parentId": "77",
             "updatedAt": "2026-08-07T23:48:04.743Z"
@@ -3216,10 +3216,10 @@
             "testStrategy": "integration NEGATİF (ÖNCE): reports_read olmayan token → 403 · integration NEGATİF: geçersiz/ters aralık → 400 · integration CROSS-TENANT: lisans B'nin çağrısında lisans A'nın vardiya planı, presence olayları ve hacmi yanıtta YOK · integration pozitif: 7×24 ızgara döner; veri yokken low_confidence/null (0 değil) · integration ADR-09: aynı pencerede staffing hacmi = /reports/breakdown by_hour toplamı · integration: contract-parity.test.ts yeşil",
             "status": "done",
             "dependencies": [
-              2,
-              4,
-              5,
-              6
+              "77.2",
+              "77.4",
+              "77.5",
+              "77.6"
             ],
             "parentId": "77",
             "updatedAt": "2026-08-08T01:21:55.382Z"
@@ -3232,8 +3232,8 @@
             "testStrategy": "unit NEGATİF (ÖNCE): start ≥ end → alan-altı hata görünür ve kaydet disabled · unit NEGATİF: geçersiz saat formatı → hata; kirli form kapatılırken dirty-guard onayı çıkar · unit pozitif: 7 gün satırı + timezone render; kapalı gün saat girdilerini devre dışı bırakır · unit pozitif: kaydet PUT gövdesini normalize edilmiş şekilde gönderir · unit pozitif: plan yokken anlamlı empty state (boş dikdörtgen değil) · cross-tenant/authZ: burada test EDİLMEZ — güvenlik yüzeyi backend'de, WORKSCHED-c'de (403/404) ve WORKSCHED-j'de kanıtlanır",
             "status": "done",
             "dependencies": [
-              1,
-              3
+              "77.1",
+              "77.3"
             ],
             "parentId": "77",
             "updatedAt": "2026-08-08T01:47:40.588Z"
@@ -3246,7 +3246,7 @@
             "testStrategy": "unit NEGATİF (ÖNCE): low_confidence/null veri → '—' + 'yeterli veri yok', ekranda 0 YOK · unit NEGATİF: boş pencere → anlamlı empty state (boş dikdörtgen değil) · unit NEGATİF: API hatası → hata durumu render edilir · unit pozitif: sekme render + gün × saat ızgarası + gap vurgusu · a11y: role=tab/tabpanel + aria-controls mevcut ReportsPage deseniyle aynı · cross-tenant: burada YOK — salt-okunur ekran, scope kapısı -g'de, izolasyon -g ve -j'de kanıtlanır",
             "status": "done",
             "dependencies": [
-              7
+              "77.7"
             ],
             "parentId": "77",
             "updatedAt": "2026-08-08T02:08:40.080Z"
@@ -3259,11 +3259,11 @@
             "testStrategy": "integration CROSS-TENANT (ÖNCE): iki lisans fixture'ı — A'nın vardiya planı ve presence olayları B'nin work-schedule GET'inde, staffing yanıtında ve Staffing ekranında YOK · integration NEGATİF: rapor yetkisi olmayan kullanıcı staffing verisini alamaz (403) · e2e pozitif: vardiya kaydet → durum değiştir → Reports ▸ Staffing ızgarası görünür · e2e: veri yetersizken 'yeterli veri yok' durumu görünür (0 görünmez) · REGRESYON: apps/e2e/reports.spec.ts + team.spec.ts + apps/api/test/integration/routing.test.ts yeşil; contract-parity yeşil · ÇALIŞTIRMA NOTU: e2e için truncate+reseed + .env source + portlar boş; DB süitleri paket bazlı seri",
             "status": "done",
             "dependencies": [
-              3,
-              4,
-              7,
-              8,
-              9
+              "77.3",
+              "77.4",
+              "77.7",
+              "77.8",
+              "77.9"
             ],
             "parentId": "77",
             "updatedAt": "2026-08-08T02:32:42.413Z"
@@ -3304,7 +3304,7 @@
             "testStrategy": "negatif (ÖNCE, kırmızı görülerek): A markası bağlamında B markasının channel id'si → 404/0 satır · negatif (ÖNCE): başka lisansa ait brand id başlıkta → 404 (403 değil) · negatif: malformed brand UUID → TypeError (sessiz eşleşmeme yok) · eşzamanlılık/context-sızıntısı: aynı havuz bağlantısında ardışık farklı-marka istekleri — ikincisi birincinin context'ini görmez · cross-tenant: mevcut NFR-S4 regresyonu (tenant-isolation.test.ts) bozulmadı · integration: channels CRUD marka bazında ayrışıyor; `X-Nexa-Brand` yokken lisans-geneli davranış korunuyor · unit: `withTenant` üç set_config'i de yayıyor · DB süitleri paket bazında SERİ koşulur (MEMORY 'Test gate & parallel DB')",
             "status": "done",
             "dependencies": [
-              1
+              "78.1"
             ],
             "parentId": "78",
             "updatedAt": "2026-08-02T12:51:20.503Z"
@@ -3317,7 +3317,7 @@
             "testStrategy": "negatif (ÖNCE): cross-brand ayar okuma/yazma reddi (A'nın PUT'u B'yi değiştirmez) · negatif (ÖNCE): marka A bağlamıyla marka B'nin websiteId'si → 404 · cross-tenant: tenant-isolation.test.ts regresyonu yeşil · integration: dört tabloda marka bazında ayrışma + aynı domain'in iki markada yaşayabilmesi · migration testi: backfill sonrası hiçbir satırda brand_id NULL değil · regresyon: WidgetCustomization.test.tsx / BannedCustomerIps.test.tsx / chat-timeout.test.ts onarılıp yeşil · DB süitleri paket bazında SERİ (MEMORY)",
             "status": "done",
             "dependencies": [
-              2
+              "78.2"
             ],
             "parentId": "78",
             "updatedAt": "2026-08-02T13:34:19.122Z"
@@ -3330,8 +3330,8 @@
             "testStrategy": "negatif (ÖNCE): cross-tenant — başka lisansın brandId'si ile GET/PATCH/DELETE → 404 · negatif (ÖNCE): varsayılan marka silme reddi · negatif: duplicate slug → 409 · negatif: `brands--all` scope'suz token → 403 · integration: CRUD döngüsü (POST/GET/PATCH/DELETE) · contract-parity (iki yönlü) yeşil · unit: ERROR_STATUS eksiksizliği + SCOPES/ERROR_TYPES sayacları (scopes.test.ts)",
             "status": "done",
             "dependencies": [
-              1,
-              2
+              "78.1",
+              "78.2"
             ],
             "parentId": "78",
             "updatedAt": "2026-08-02T16:56:12.406Z"
@@ -3344,7 +3344,7 @@
             "testStrategy": "unit: liste render · unit: marka ekleme (mutation çağrılır, liste güncellenir) · unit: yeniden adlandırma · unit: varsayılan markada sil butonu yok/pasif · unit: boş liste → anlamlı EmptyState (boş dikdörtgen değil) · unit: canEdit=false → tüm kontroller pasif · negatif: boş ad → alan-altı hata + submit pasif; sunucu 409'u ErrorNotice olarak görünür · NOT: güvenlik yüzeyi sunucuda olduğu için cross-tenant testi bu alt-görevde değil, -d ve -h'de karşılanıyor",
             "status": "done",
             "dependencies": [
-              4
+              "78.4"
             ],
             "parentId": "78",
             "updatedAt": "2026-08-02T17:18:10.807Z"
@@ -3357,9 +3357,9 @@
             "testStrategy": "unit: seçici render / tek markada gizlenme · unit: seçimin localStorage'da persist edilmesi ve yeniden kurulumda korunması · unit: marka değişiminde queryClient.invalidateQueries çağrılıyor · unit: api-client — seçili markada `X-Nexa-Brand` başlığı var, seçimsizken başlık hiç yok · negatif: localStorage'da geçersiz/silinmiş marka id'si → varsayılana düşer, istek kırılmaz · NOT: sunucu tarafı marka doğrulaması -b'de, cross-brand negatifleri -b ve -h'de",
             "status": "done",
             "dependencies": [
-              2,
-              4,
-              5
+              "78.2",
+              "78.4",
+              "78.5"
             ],
             "parentId": "78",
             "updatedAt": "2026-08-02T17:36:23.872Z"
@@ -3372,8 +3372,8 @@
             "testStrategy": "unit: marka değişimi → ilgili markanın verisi fetch edilip render ediliyor · unit: önceki markanın değeri ekranda kalmıyor (cache anahtarı markaya özgü) · unit: başlıkta düzenlenen markanın adı görünüyor · unit: website listesi marka değişince yenileniyor, diğer markanın domain'i yok · regresyon: marka seçili değilken mevcut testler yeşil kalıyor",
             "status": "done",
             "dependencies": [
-              3,
-              6
+              "78.3",
+              "78.6"
             ],
             "parentId": "78",
             "updatedAt": "2026-08-02T19:41:55.979Z"
@@ -3386,8 +3386,8 @@
             "testStrategy": "cross-brand negatif MATRİSİ: her brand-scoped tablo için 'A'nın bağlamı + B'nin ID'si → boş/404' · kapsam-kaçağı alarm testi: matrise yazılmamış bir brand_id kolonu → test kırılır (alarmın kendisi kanıtlanır) · cross-tenant: mevcut NFR-S4 regresyonu (tenant-isolation.test.ts) yeşil · e2e: iki markalı lisansta marka değiştirme → widget ayarı + website listesi değişiyor, diğer marka görünmüyor · DB süitleri paket bazında SERİ koşulur (MEMORY 'Test gate & parallel DB'); e2e için truncate+reseed (MEMORY 'E2E clean DB')",
             "status": "done",
             "dependencies": [
-              3,
-              7
+              "78.3",
+              "78.7"
             ],
             "parentId": "78",
             "updatedAt": "2026-08-02T20:12:09.600Z"
@@ -3460,8 +3460,8 @@
             "testStrategy": "NEGATİF (ÖNCE): geçersiz CIDR/IP → 400 validation · NEGATİF (ÖNCE): çağıranın adresini kapsamayan kayıt → 400 (self-lockout guard) · NEGATİF (ÖNCE): access_rules:rw olmayan token POST/DELETE'te 403 · NEGATİF: aynı entry ikinci kez → çakışma reddi (unique index) · CROSS-TENANT: B lisansının entry id'si ile DELETE → 404 (403 değil — NFR-S5 enumeration koruması) · CROSS-TENANT: A'nın GET'i B'nin kayıtlarını göstermez · POZİTİF integration: CRUD akışı + canonical saklama + audit_log satırları · contract-parity.test.ts yeşil (path + route iki yönlü eşleşiyor)",
             "status": "done",
             "dependencies": [
-              2,
-              3
+              "80.2",
+              "80.3"
             ],
             "parentId": "80",
             "updatedAt": "2026-08-01T19:04:17.199Z"
@@ -3474,9 +3474,9 @@
             "testStrategy": "NEGATİF (ÖNCE): enforce açık + eşleşmeyen IP → 403 not_allowed (ADR-06 zarfı) · NEGATİF (ÖNCE): sahte X-Forwarded-For başlığıyla allowlist atlatılamaz (trustProxy taklit yüzeyi) · NEGATİF (ÖNCE): clientIp çözülemediğinde dolu listede erişim reddedilir · NEGATİF: müşteri/widget token'ı muaf — allowlist onu reddetmez · REGRESYON: ip_allowlist_enforced=false iken hiçbir kontrol yapılmaz; mevcut tüm integration süiti yeşil · CROSS-TENANT: A lisansının allowlist'i B lisansının ajanını etkilemez (B'nin isteği 200) · POZİTİF: eşleşen IP → 200; audit_log'a auth.ip_denied yazılır ve metadata'da ham IP YOKTUR (NFR-C1/C2) · route-config.test.ts: public uçlar (login/authorize/token/revoke) etkilenmez",
             "status": "done",
             "dependencies": [
-              1,
-              2,
-              3
+              "80.1",
+              "80.2",
+              "80.3"
             ],
             "parentId": "80",
             "updatedAt": "2026-08-01T19:34:59.360Z"
@@ -3489,7 +3489,7 @@
             "testStrategy": "NEGATİF (ÖNCE): 0 / negatif / üst sınır üstü değer → 400 validation · NEGATİF (ÖNCE): tip hatası (string/float) → 400 validation · NEGATİF: access_rules:rw olmayan token → 403 · CROSS-TENANT: A lisansının PATCH'i B'nin security_settings satırını değiştirmez (RLS + licenseId anahtarlı upsert) · POZİTİF integration: PATCH persist + GET geri okuma + null ile kapatma · integration: audit_log'da settings.security_updated metadata'sı yalnız değişen alan adlarını taşır · REGRESYON: mevcut settings.test.ts 6 alanlık senaryoları yeşil kalır",
             "status": "done",
             "dependencies": [
-              1
+              "80.1"
             ],
             "parentId": "80",
             "updatedAt": "2026-08-01T20:24:20.519Z"
@@ -3502,8 +3502,8 @@
             "testStrategy": "NEGATİF (ÖNCE): idle penceresi aşılmış token → 401 authentication; yanıt 'expired/idle' ayrımını sızdırmaz · NEGATİF (ÖNCE): max_concurrent_sessions=1 iken ikinci oturum ilkini kapatır; ilk token'ın sonraki isteği 401 · NEGATİF/REGRESYON: PAT idle ve limit politikalarından etkilenmez (yanlışlıkla iptal testi) · REGRESYON: her iki politika null iken hiçbir davranış değişmez; mevcut auth süiti yeşil · EŞZAMANLILIK: paralel iki issue() sonrası canlı token sayısı limiti aşmaz (invariant) · CROSS-TENANT: A lisansının max_concurrent_sessions değeri B lisansındaki aynı hesabın token'larını revoke etmez · CROSS-TENANT: A'nın idle penceresi B'nin token'ını geçersizleştirmez · POZİTİF: pencere içi çağrı 200; revoked_at gerçekten yazılır",
             "status": "done",
             "dependencies": [
-              1,
-              6
+              "80.1",
+              "80.6"
             ],
             "parentId": "80",
             "updatedAt": "2026-08-01T20:56:30.761Z"
@@ -3516,8 +3516,8 @@
             "testStrategy": "unit: liste render + kayıt yokken anlamlı EmptyState (boş dikdörtgen değil) · unit: ekle → mutation doğru gövdeyle çağrılır; sil → doğru id · unit: oturum politikası alanları PATCH /settings/security gövdesini doğru kurar · unit NEGATİF: sunucu 400'ü alan-altı hata olarak (role=\"alert\") görünür · unit NEGATİF: yükleme hatası → ErrorNotice · unit: canEdit=false iken düzenleme formu render edilmez · CROSS-TENANT testi YOK — gerekçe: tenant sınırı sunucuda (RLS + -d/-e testleri); UI kendi token'ıyla tek tenant görür",
             "status": "done",
             "dependencies": [
-              4,
-              6
+              "80.4",
+              "80.6"
             ],
             "parentId": "80",
             "updatedAt": "2026-08-01T21:06:20.806Z"
@@ -3530,10 +3530,10 @@
             "testStrategy": "E2E: allowlist kayıt ekle → listede görünür → sil → boş durum (enforce kapalı) · integration: enforce açık + eşleşmeyen IP → 403 ve /audit-log'da auth.ip_denied girdisi görünür · integration NEGATİF/PII: audit metadata'sında ham IP YOK (NFR-C1/C2) · NEGATİF: X-Forwarded-For taklidi uçtan uca kontrolü atlatamaz (trustProxy davranışı sabitlenir) · REGRESYON: enforce kapalıyken tüm mevcut integration + e2e süiti yeşil · CROSS-TENANT regresyon: tenant-isolation süiti yeni tabloyla birlikte yeşil · performans: allowlist okumasının istek başına maliyeti ölçülür; cache kararı + kanıt HANDOFF'a yazılır",
             "status": "done",
             "dependencies": [
-              4,
-              5,
-              7,
-              8
+              "80.4",
+              "80.5",
+              "80.7",
+              "80.8"
             ],
             "parentId": "80",
             "updatedAt": "2026-08-02T00:05:35.888Z"
@@ -3614,7 +3614,7 @@
             "description": "Crawl+SSRF negatif süiti koş; PLAN §4.2 satırını ✅ yap; §5.1'e '06.3.2-bulk (Should, v2)' satırı ekle.",
             "status": "done",
             "dependencies": [
-              1
+              "85.1"
             ],
             "updatedAt": "2026-07-31T13:05:39.013Z",
             "parentId": "undefined"
@@ -3625,7 +3625,7 @@
             "description": "BillingPage meter/quota_warning süiti koş; PLAN §4.3 satırını ✅ yap.",
             "status": "done",
             "dependencies": [
-              2
+              "85.2"
             ],
             "updatedAt": "2026-07-31T13:05:39.015Z",
             "parentId": "undefined"
@@ -3636,7 +3636,7 @@
             "description": "Bayat denetim bloğunu yeniden yaz; §2 MOD-05/06 satırlarını sayarak güncelle; HANDOFF + commit + push.",
             "status": "done",
             "dependencies": [
-              3
+              "85.3"
             ],
             "updatedAt": "2026-07-31T13:05:39.017Z",
             "parentId": "undefined"
@@ -3669,7 +3669,7 @@
             "description": "Kararı uygula (taşı+test veya sil); git status temiz; §D + HANDOFF + commit + push.",
             "status": "done",
             "dependencies": [
-              1
+              "86.1"
             ],
             "updatedAt": "2026-07-31T13:13:14.349Z",
             "parentId": "undefined"
@@ -3705,7 +3705,7 @@
             "description": "Kapsam süpürmesi (PRD §6 Faz-0) + faz sızıntısı + NFR ölçümleri + şema artıkları + contract-parity; kanıtları topla.",
             "status": "done",
             "dependencies": [
-              1
+              "87.1"
             ],
             "updatedAt": "2026-07-31T13:39:01.814Z",
             "parentId": "undefined"
@@ -3716,7 +3716,7 @@
             "description": "Sessiz borç grep + ölü kod + doküman tazeliği + temiz kurulum provası (make dev) + kapsam dışı doğrulaması; kanıtları topla.",
             "status": "done",
             "dependencies": [
-              2
+              "87.2"
             ],
             "updatedAt": "2026-07-31T13:39:01.820Z",
             "parentId": "undefined"
@@ -3727,7 +3727,7 @@
             "description": "Üst tablo Faz-0 ✅ KAPALI; §F.2 Türkçe raporu HANDOFF'a; commit + push.",
             "status": "done",
             "dependencies": [
-              3
+              "87.3"
             ],
             "updatedAt": "2026-07-31T13:39:01.824Z",
             "parentId": "undefined"
@@ -3762,7 +3762,7 @@
             "description": "10 madde v1 için; GL-5/6/7 = belgeli sapma (§D52), belgesiz sızıntı ara.",
             "status": "done",
             "dependencies": [
-              1
+              "88.1"
             ],
             "updatedAt": "2026-07-31T17:30:07.930Z",
             "parentId": "undefined"
@@ -3773,7 +3773,7 @@
             "description": "Tam Playwright süiti + tam DoD kapısı (son bakım penceresinin koşmadığı kapı).",
             "status": "done",
             "dependencies": [
-              2
+              "88.2"
             ],
             "updatedAt": "2026-07-31T17:30:07.935Z",
             "parentId": "undefined"
@@ -3784,7 +3784,7 @@
             "description": "Üst tablo v1 ✅ KAPALI; rapor HANDOFF'a; commit + push.",
             "status": "done",
             "dependencies": [
-              3
+              "88.3"
             ],
             "updatedAt": "2026-07-31T17:30:07.939Z",
             "parentId": "undefined"
@@ -3845,7 +3845,7 @@
             "testStrategy": "negatif (önce): yetkisiz/erişilemez chat → kayıt yok + boş küme; is_typing=false → kayıt silinir · cross-tenant: aynı chatId + farklı licenseId → kümeler tamamen izole · unit (atomiklik): Promise.all ile iki eşzamanlı register → her ikisi de 2 elemanlı küme görür (kayıp güncelleme yok) · unit: tek ajanın tekrarlı kaydı çakışma üretmez (idempotent) · unit: TTL dolunca küme boşalır (düşen socket kalıcı çakışma bırakmaz) · not: DB'ye dokunan süit paket bazında seri koşulur (memory: 'Test gate & parallel DB')",
             "status": "done",
             "dependencies": [
-              1
+              "91.1"
             ],
             "parentId": "91",
             "updatedAt": "2026-08-02T01:37:15.572Z"
@@ -3858,8 +3858,8 @@
             "testStrategy": "negatif (önce): yetkisiz chat → not_found + push yok; is_typing=false → uyarı yok; abone olmayan socket push almaz; Redis publish hatası typing yanıtını bozmaz · cross-tenant: farklı licenseId socket'ine push gitmez (fanout licence eşleşmesi) · integration: RTM harness ile iki socket → çift yönlü `agent_conflict_warning` · integration: tek ajan yazarken 0 push · regresyon: typing.test.ts / protocol.test.ts / connection.test.ts / rtm.test.ts yeşil",
             "status": "done",
             "dependencies": [
-              1,
-              2
+              "91.1",
+              "91.2"
             ],
             "parentId": "91",
             "updatedAt": "2026-08-02T01:57:20.460Z"
@@ -3872,8 +3872,8 @@
             "testStrategy": "negatif (önce): yazan yok → uyarı yok; publisher/Redis hatası transfer'i bozmaz; chat audience'ı dışındaki ajan audience'a girmez · cross-tenant: başka lisansın ajanı audience'ta yer almaz / uyarı sızmaz · integration: A yazarken B'ye devir → `agent_conflict_warning` yayınlanır ve audience A+B içerir · regresyon: mevcut chats.test.ts transfer testleri yeşil · not: DB süiti paket bazında seri koşulur (memory: 'Test gate & parallel DB')",
             "status": "done",
             "dependencies": [
-              1,
-              2
+              "91.1",
+              "91.2"
             ],
             "parentId": "91",
             "updatedAt": "2026-08-02T02:18:49.791Z"
@@ -3886,7 +3886,7 @@
             "testStrategy": "unit: iki ajanlı payload → şerit + ajan listesi render · unit (empty state/negatif): boş veya tek ajan → null render · unit: clear + idle süre aşımı → şerit kaybolur · unit (a11y): role='status' + aria-live='polite' · not: güvenlik yüzeyi yok (salt görünüm, ağ yok) → cross-tenant iddiası -c/-d'de kapatıldı, burada uygulanmaz",
             "status": "done",
             "dependencies": [
-              1
+              "91.1"
             ],
             "parentId": "91",
             "updatedAt": "2026-08-02T02:29:08.721Z"
@@ -3899,8 +3899,8 @@
             "testStrategy": "unit: push → store → ConflictBanner render zinciri · unit (negatif): eksik/bozuk payload (chat_id yok, agents dizi değil) sessizce yok sayılır, çökmez · unit: chat_deactivated → çakışma temizlenir · e2e: inbox-panel.spec.ts'te şerit görünürlük iddiası · regresyon: mevcut inbox unit + e2e süitleri",
             "status": "done",
             "dependencies": [
-              3,
-              5
+              "91.3",
+              "91.5"
             ],
             "parentId": "91",
             "updatedAt": "2026-08-02T03:01:24.922Z"
@@ -3913,9 +3913,9 @@
             "testStrategy": "negatif (önce): tek ajan → 0 push; yetkisiz chat → 0 push; Redis/publish hatası enjekte edilince typing yanıtı ve transfer bozulmaz · cross-tenant: ikinci lisansın socket'i aynı chatId ile hiçbir push almaz (RTM) ve API audience'ına girmez · integration: RTM iki-socket tam senaryo (yaz → çift uyarı → bırak → uyarı düşer) · integration: API devir senaryosunun uçtan uca hâli · şekil paritesi: RTM payload'ı ile web applyPush'un okuduğu alanlar aynı · e2e: inbox'ta şeridin görünmesi · regresyon: typing/sync/fanout/protocol süitleri + tam DoD kapısı (typecheck+lint+unit+integration+build+e2e); DB süitleri paket bazında seri",
             "status": "done",
             "dependencies": [
-              3,
-              4,
-              6
+              "91.3",
+              "91.4",
+              "91.6"
             ],
             "parentId": "91",
             "updatedAt": "2026-08-02T03:23:50.449Z"
@@ -3952,7 +3952,7 @@
             "testStrategy": "negatif (önce): tanımsız action değeri → 400 (validation, hata zarfı ADR-06) · negatif (önce): date_from > date_to → 400 · cross-tenant: filtreli sorgu da RLS'yi atlamıyor — B'nin kayıtları hiçbir filtre kombinasyonunda görünmüyor · integration: her filtrenin listeyi daralttığı (pozitif) + sayfalamanın filtre altında da çakışmasız kaldığı",
             "status": "done",
             "dependencies": [
-              1
+              "92.1"
             ],
             "parentId": "92",
             "updatedAt": "2026-08-02T06:24:34.375Z"
@@ -3976,7 +3976,7 @@
             "testStrategy": "negatif (önce): var olmayan id ile silme (404) → entry yazılmaz · negatif (önce): silinen kaydın adı/gövdesi/değeri audit metadata'sında geçmiyor (haystack iddiası) · cross-tenant: B'nin kaydını silme denemesi 404 ve A'nın log'una entry düşmüyor · integration (pozitif): uç başına tam 1 entry, doğru target biçimi",
             "status": "done",
             "dependencies": [
-              3
+              "92.3"
             ],
             "parentId": "92",
             "updatedAt": "2026-08-02T09:30:52.023Z"
@@ -3989,7 +3989,7 @@
             "testStrategy": "negatif (önce): 404 silme → entry yazılmaz · negatif (önce): silinen kaynağın adı/URL'i/içeriği metadata'ya düşmüyor · cross-tenant: başka lisansın kaydını silme denemesi 404 + log'a entry yok · integration (pozitif): uç başına tam 1 entry",
             "status": "done",
             "dependencies": [
-              4
+              "92.4"
             ],
             "parentId": "92",
             "updatedAt": "2026-08-02T09:41:29.244Z"
@@ -4002,7 +4002,7 @@
             "testStrategy": "negatif (önce): ajan rolündeki kullanıcı → 403 · negatif (önce): kendi rolünü değiştirme denemesi → 403 · negatif (önce): owner'ın rolünü değiştirme denemesi → 403 · negatif (önce): admin'in birini owner'a yükseltme denemesi (kendi rolünün üstü) → 403 · negatif (önce): kendinden üst rolde birini değiştirme denemesi → 403 · cross-tenant (önce): başka lisansın ajanı → 404 (id enumerasyonu yok) ve log'a entry yazılmaz · integration: no-op (aynı rol) → 200 ama entry YOK · integration (pozitif): geçerli düşürme/yükseltme → tam 1 entry + üyelik rolü gerçekten değişti · integration: contract-parity yeşil",
             "status": "done",
             "dependencies": [
-              3
+              "92.3"
             ],
             "parentId": "92",
             "updatedAt": "2026-08-02T10:02:21.186Z"
@@ -4026,7 +4026,7 @@
             "testStrategy": "negatif (önce): nexa_app hâlâ doğrudan DELETE/UPDATE edemiyor (permission denied) — mevcut testler regresyon olarak korunur · negatif (önce): p_cutoff NULL / now() veya sonrası → fonksiyon exception atar (tüm tabloyu silme yolu yok) · cross-tenant (önce, ZORUNLU): A lisansı için çağrılan budama B'nin satırlarına dokunmuyor — SECURITY DEFINER RLS'i atladığı için tek savunma bu yüklem · integration: sınır — cutoff'tan yeni satır kalır, eski satır gider · integration: dryRun hiçbir şey silmez, yalnız sayar · integration: idempotent — ikinci koşu 0 döner · integration: budama sonrası data.retention_pruned metadata'sında audit_entries sayacı doğru · NOT: DB süitleri paylaşılan Postgres'te SERİ koşulmalı (satır sayımı testleri yarışa girer)",
             "status": "done",
             "dependencies": [
-              7
+              "92.7"
             ],
             "parentId": "92",
             "updatedAt": "2026-08-02T10:24:32.416Z"
@@ -4039,7 +4039,7 @@
             "testStrategy": "unit (negatif önce): audit_log--all:ro scope'u olmayan kullanıcıda Settings girişi görünmüyor ve sayfa veri çekmiyor · unit: liste render (satır alanları doğru) · unit: boş liste → anlamlı empty state · unit: hata → ErrorNotice; yükleme → skeleton",
             "status": "done",
             "dependencies": [
-              1
+              "92.1"
             ],
             "parentId": "92",
             "updatedAt": "2026-08-02T10:41:41.149Z"
@@ -4052,8 +4052,8 @@
             "testStrategy": "unit (negatif önce): next_page_id yokken 'daha fazla yükle' render edilmiyor · unit: eylem filtresi seçimi doğru sorgu parametresini gönderiyor ve listeyi daraltıyor · unit: tarih aralığı değişimi varsayılan 30 günü geçersiz kılıyor · unit: filtre seçimi URL parametresine yazılıyor ve reload'da korunuyor · e2e: Settings → Audit log → login kaydı görünür",
             "status": "done",
             "dependencies": [
-              2,
-              9
+              "92.2",
+              "92.9"
             ],
             "parentId": "92",
             "updatedAt": "2026-08-02T11:00:45.602Z"
@@ -4066,12 +4066,12 @@
             "testStrategy": "cross-tenant (önce): B'nin dört olayının hiçbiri A'nın yanıtında/ekranında yok · negatif (önce): ajan rolü ekranı/ucu göremiyor · integration: dört olay ailesi de tek senaryoda üretilip listede doğrulanıyor · integration: 30 gün sınırı (31 gün yok / 29 gün var) · integration: farklı planlı iki lisansta aynı davranış (plan kapısı yok kanıtı) · e2e: ekranda dört olaydan en az login + webhook değişimi görünür",
             "status": "done",
             "dependencies": [
-              2,
-              3,
-              5,
-              6,
-              8,
-              10
+              "92.2",
+              "92.3",
+              "92.5",
+              "92.6",
+              "92.8",
+              "92.10"
             ],
             "parentId": "92",
             "updatedAt": "2026-08-02T11:49:58.703Z"
@@ -4110,7 +4110,7 @@
             "testStrategy": "negatif (ÖNCE) — aynı organizasyonun kardeş lisansının lead'i bu lisansın raporunda 0; farklı organizasyon 0 · cross-tenant — `/reports/leads` ve `?group=leads` CSV'si için ayrı ayrı (negatif testler pozitiflerden önce yazılır) · negatif — `reports_read` yok → `/reports/leads` 403; `/reports/groups` yanıtında 'leads' yok (403 değil boş katalog — mevcut NFR-S3 tasarım kararı korunur) · integration — lead'i olmayan pencere 0 döner (null/hata değil); sayı `is_lead=true` + bu lisansa bağlı olanla birebir · unit — `reports-export.test.ts` katalogda 'leads' + `visibleReportGroups` filtresi",
             "status": "done",
             "dependencies": [
-              1
+              "93.1"
             ],
             "parentId": "93",
             "updatedAt": "2026-08-03T18:52:42.874Z"
@@ -4123,7 +4123,7 @@
             "testStrategy": "negatif (önce) — `reports_read` yok → 403; `/reports/groups` yanıtında 'team-performance' yok · cross-tenant — başka lisansın ajanı ne JSON ne CSV yanıtında görünmez · integration — atanmamış (assignee_id NULL) sohbetler ajan satırına yazılmaz; oy yoksa CSAT null · unit — katalog + `visibleReportGroups` + formül-enjeksiyon (`=SUM(A1)` adlı ajan → `'=SUM(A1)`) · integration — `contract-parity.test.ts`",
             "status": "done",
             "dependencies": [
-              2
+              "93.2"
             ],
             "parentId": "93",
             "updatedAt": "2026-08-03T20:15:54.052Z"
@@ -4136,7 +4136,7 @@
             "testStrategy": "negatif (önce) — `reports_read` yok → 403; katalogda görünmez · cross-tenant — başka lisans token'ı da `configured:false` alır, hiçbir veri sızmaz · integration — sayısal alanlar `null`, `0` değil (regresyon kilidi: 13.5 geldiğinde bu test güncellenecek) · unit — `reports-export.test.ts` katalog + `visibleReportGroups` · integration — `contract-parity.test.ts`",
             "status": "done",
             "dependencies": [
-              3
+              "93.3"
             ],
             "parentId": "93",
             "updatedAt": "2026-08-07T20:12:09.346Z"
@@ -4149,10 +4149,10 @@
             "testStrategy": "negatif (önce) — `baseline=industry` / `baseline=other_license` gibi tanımsız değer → 400 (lisanslar-arası karşılaştırma yolu kapalı, kod düzeyinde kanıt) · cross-tenant — iki lisans farklı veriyle kurulur; L1'in benchmark rakamı L2'nin verisinden etkilenmez · unit — `benchmarkWindow` pencere aritmetiği (eşit uzunluk, 1 ms boşluk, UTC tutarlılığı) · integration — regresyon: overview ve reviews'ün mevcut `previous_period` çıktısı birebir değişmedi · integration — `contract-parity.test.ts` (parametre eklendi, path eklenmedi)",
             "status": "done",
             "dependencies": [
-              1,
-              2,
-              3,
-              4
+              "93.1",
+              "93.2",
+              "93.3",
+              "93.4"
             ],
             "parentId": "93",
             "updatedAt": "2026-08-08T00:22:54.819Z"
@@ -4176,9 +4176,9 @@
             "testStrategy": "negatif (önce) — `format=exe` / `format=html` → 400; `reports_read` yok + `format=pdf` → 403 (format yetkiyi baypas etmiyor) · cross-tenant — `format=pdf` çıktısında başka lisansın satırı yok · integration — tüm gruplar için `format=pdf` 200 ve `%PDF-` başlığı · integration — regresyon: `format` yokken CSV çıktısı bayt-birebir eskisiyle aynı; `nosniff`/`no-store` başlıkları iki formatta da var · integration — `contract-parity.test.ts`",
             "status": "done",
             "dependencies": [
-              6,
-              4,
-              5
+              "93.6",
+              "93.4",
+              "93.5"
             ],
             "parentId": "93",
             "updatedAt": "2026-08-08T02:51:30.310Z"
@@ -4202,9 +4202,9 @@
             "testStrategy": "unit (negatif önce) — `/reports/groups` 'leads'/'cases' döndürmezse sekme yok; endpoint 403 dönerse `ErrorNotice`, çökme yok · unit — sekme tıklaması doğru `kind` ile `useReport` çağırır; yükleme sırasında `CardSkeleton` · unit — boş veri → `EmptyState` (FR-EK-B.1: boş dikdörtgen yok) · unit — `previous_period` var → delta rozeti; yok → rozet yok · e2e — `reports.spec.ts`'e Leads/Cases sekmesi görünürlük iddiası",
             "status": "done",
             "dependencies": [
-              1,
-              2,
-              5
+              "93.1",
+              "93.2",
+              "93.5"
             ],
             "parentId": "93",
             "updatedAt": "2026-08-08T03:27:42.984Z"
@@ -4217,9 +4217,9 @@
             "testStrategy": "unit (negatif önce) — grup yetkisiz → sekme render edilmez; 403 → `ErrorNotice` · unit — `configured:false` → empty state metni, '0' rakamı YOK (regresyon kilidi) · unit — CSAT `null` → '—'; 0 ajan → anlamlı empty state · unit — ajan satırı alanları backend yanıtıyla birebir eşleşir · e2e — `reports.spec.ts` sekme görünürlüğü",
             "status": "done",
             "dependencies": [
-              3,
-              4,
-              9
+              "93.3",
+              "93.4",
+              "93.9"
             ],
             "parentId": "93",
             "updatedAt": "2026-08-08T03:43:34.556Z"
@@ -4232,10 +4232,10 @@
             "testStrategy": "unit (negatif önce) — boş ad → alan-altı hata + submit pasif (T4-a deseni); export 403 dönerse görünür hata, sessiz yutma yok · unit — Export butonu aktif sekmenin `group`'unu ve seçili aralığı doğru geçirir; `format` seçimi isteğe yansır · unit — kayıtlı görünüm seç → `tab`/`mode`/`customFrom`/`customTo`/`baseline` toptan uygulanır; sil → liste küçülür · unit — `/reports/groups` grup döndürmüyorsa o sekme için Export butonu yok · e2e — `reports.spec.ts`: görünüm kaydet → reload → kayıt duruyor; CSV indirme tetikleniyor",
             "status": "done",
             "dependencies": [
-              7,
-              8,
-              9,
-              10
+              "93.7",
+              "93.8",
+              "93.9",
+              "93.10"
             ],
             "parentId": "93",
             "updatedAt": "2026-08-08T04:15:58.413Z"
@@ -4248,17 +4248,17 @@
             "testStrategy": "negatif (önce) — 8 grup × yetkisiz token: `/reports/groups` boş liste, endpoint 403, export 403 (tablo-güdümlü) · cross-tenant — 4 yeni endpoint × {JSON, CSV, PDF}: başka lisansın verisi yok; AYRICA aynı organizasyonun kardeş lisansı (07.7-b kararının bağımsız doğrulaması) · integration — `contract-parity.test.ts` + `route-config.test.ts` (yeni rotaların scope config'i eksiksiz) · perf/NFR-P7 — Team performance + Leads sorgusu için ölçüm notu; aralık üst sınırı veya rate-limit kararı kanıtla HANDOFF'a · e2e — `reports.spec.ts`: 8 sekme görünürlüğü → benchmark rozeti → CSV indirme → PDF indirme → save view kalıcılığı",
             "status": "done",
             "dependencies": [
-              1,
-              2,
-              3,
-              4,
-              5,
-              6,
-              7,
-              8,
-              9,
-              10,
-              11
+              "93.1",
+              "93.2",
+              "93.3",
+              "93.4",
+              "93.5",
+              "93.6",
+              "93.7",
+              "93.8",
+              "93.9",
+              "93.10",
+              "93.11"
             ],
             "parentId": "93",
             "updatedAt": "2026-08-08T04:59:45.325Z"
@@ -4300,7 +4300,7 @@
             "testStrategy": "negatif (ÖNCE yazılır, kırmızı görülür): `reports_manage` taşımayan token POST → 403 · negatif: bilinmeyen rapor grubu → 400 · negatif: tanımsız sıklık → 400 · negatif: boş alıcı listesi → 400 · negatif: workspace dışı alıcı e-postası → 400 (PII dışa taşıma kapanır) · cross-tenant: B lisansı A'nın tanımını listeleyemez · integration: create → list yuvarlak turu (201 + listede görünür) · unit: scope kataloğu sayacı + `hasAnyScope('reports_manage')` beklenen sonucu verir · contract: `contract-parity.test.ts` + bundle yeşil",
             "status": "done",
             "dependencies": [
-              1
+              "94.1"
             ],
             "parentId": "94",
             "updatedAt": "2026-08-08T06:05:16.863Z"
@@ -4313,7 +4313,7 @@
             "testStrategy": "negatif (ÖNCE): scope'suz token PATCH/DELETE → 403 · negatif: boş gövde PATCH → 400 · negatif: geçersiz grup / sıklık / workspace dışı alıcı ile PATCH → 400 · negatif: olmayan id → 404 · cross-tenant: başka lisansın id'siyle GET/PATCH/DELETE → 404 (403 değil — varlık sızdırmaz) · integration: create→patch→get→delete tam yaşam döngüsü + run satırlarının cascade ile silinmesi · contract: `contract-parity.test.ts` yeşil",
             "status": "done",
             "dependencies": [
-              2
+              "94.2"
             ],
             "parentId": "94",
             "updatedAt": "2026-08-08T06:33:58.993Z"
@@ -4348,10 +4348,10 @@
             "testStrategy": "negatif (ÖNCE yazılır, kırmızı görülür): ikinci sweep aynı dönem için ikinci e-posta üretmemeli · negatif (ÖNCE): mailer hatası dönemi serbest bırakmamalı — sonraki koşu da göndermez · negatif: `enabled=false` tanım hiç gönderim ve hiç run satırı üretmemeli · cross-tenant (zorunlu): iki lisanslı sweep — çapraz teslim yok, çapraz CSV içeriği yok · unit: `periodFor` sınır vakaları (ay başı/ay sonu, ISO hafta başı, artık yıl, yıl sınırı) · integration: tek tenant uçtan uca teslim + run satırı alanları (status/rowCount/recipientCount/period) · İşletme notu: DB'ye vuran bu süit `pnpm -w test` ile paralel değil, paket bazında SERİ koşturulur (paylaşılan Postgres yarışı)",
             "status": "done",
             "dependencies": [
-              1,
-              2,
-              4,
-              5
+              "94.1",
+              "94.2",
+              "94.4",
+              "94.5"
             ],
             "parentId": "94",
             "updatedAt": "2026-08-08T07:58:05.309Z"
@@ -4364,7 +4364,7 @@
             "testStrategy": "integration: bayraksız (dry-run) koşu hiçbir yan etki üretmez — posta kutusu ve run tablosu değişmez · integration: `--apply` koşusu teslim eder ve rapor toplamları tabloyla tutarlı · cross-tenant (zorunlu regresyon): betiğin kurduğu client ile koşulan sweep iki lisans arasında sızdırmaz — RLS-bağlı rolün kullanıldığının kanıtı · negatif: DB erişilemezse `process.exitCode = 1` + stderr'e hata (mevcut iki betiğin davranışı)",
             "status": "done",
             "dependencies": [
-              6
+              "94.6"
             ],
             "parentId": "94",
             "updatedAt": "2026-08-08T08:15:13.904Z"
@@ -4377,8 +4377,8 @@
             "testStrategy": "negatif (ÖNCE): `reports_read` taşımayan token → 403 · negatif: olmayan tanım id'si → 404 · negatif: `limit` üst sınırı aşılırsa → 400 · cross-tenant (zorunlu): başka lisansın tanımının runs'ı → 404 (403 değil — varlık sızdırmaz) · integration: sweep koş → runs listesi beklenen alanlarla ve `created_at desc` sırasıyla döner · contract: `contract-parity.test.ts` yeşil (bundle + route birlikte)",
             "status": "done",
             "dependencies": [
-              3,
-              6
+              "94.3",
+              "94.6"
             ],
             "parentId": "94",
             "updatedAt": "2026-08-08T08:37:28.488Z"
@@ -4391,8 +4391,8 @@
             "testStrategy": "unit (render): tanım yokken anlamlı empty state — boş dikdörtgen değil · unit (form): geçersizken submit pasif + alan-altı hata mesajı · unit: görünür grup listesi boşsa oluşturma kapalı (izin bazlı görünürlük) · unit: son çalışma rozeti üç durum (delivered / failed / hiç çalışmadı) · unit: iptal akışı → DELETE çağrısı + satır listeden kalkar · regresyon: SettingsPage mevcut bölüm testleri (SettingsForms.test.tsx vb.) yeşil kalır",
             "status": "done",
             "dependencies": [
-              3,
-              8
+              "94.3",
+              "94.8"
             ],
             "parentId": "94",
             "updatedAt": "2026-08-08T09:01:44.145Z"
@@ -4405,11 +4405,11 @@
             "testStrategy": "cross-tenant (zorunlu, birincil): beş endpoint yüzeyinde çapraz erişim reddi · cross-tenant: posta kutusu izolasyonu — B'nin kutusunda A'nın raporu yok · cross-tenant: CSV içerik izolasyonu — A'nın CSV'sinde B'nin agent adı/tag'i geçmiyor (NFR-S9) · negatif (ÖNCE): üçüncü koşuda ikinci e-posta çıkarsa test kırmızı (idempotens regresyonu) · negatif: tanım devre dışı bırakılıp yeniden etkinleştirilse de aynı dönem ikinci kez teslim edilmez · negatif: ajan rolünde oluşturma denemesi → 403 ve UI'da aksiyon yok · e2e: Settings → Scheduled exports tam akış (temiz DB — truncate+reseed, sourced .env, boş portlar) · regresyon: reports-billing.test.ts + reports.spec.ts + FileMailer tüketen dört mevcut süit yeşil · İşletme notu: DB'ye vuran süitler `pnpm -w test` ile paralel değil, paket bazında SERİ koşturulur",
             "status": "done",
             "dependencies": [
-              3,
-              6,
-              7,
-              8,
-              9
+              "94.3",
+              "94.6",
+              "94.7",
+              "94.8",
+              "94.9"
             ],
             "parentId": "94",
             "updatedAt": "2026-08-08T09:28:33.195Z"
@@ -4451,7 +4451,7 @@
             "testStrategy": "negatif (ÖNCE yazılır, kırmızı görülür): yetkisiz oturumda aksiyon listede YOK · negatif: yetkisiz oturumda 'aksiyon' bölüm başlığı render edilmez · unit: yetkili oturumda aksiyon listelenir · unit: scope kümesi boşken palet çökmez, diğer sonuç tipleri çalışır · cross-tenant GEREKMEZ — scope kümesi zaten oturuma bağlı; tenant sınırı backend'de (hedef endpoint) doğrulanır",
             "status": "done",
             "dependencies": [
-              1
+              "95.1"
             ],
             "parentId": "95",
             "updatedAt": "2026-08-08T10:12:25.876Z"
@@ -4464,7 +4464,7 @@
             "testStrategy": "negatif (ÖNCE): istek başarısız → optimistic geri alınır + hata görünür · negatif: istek 403 (scope) → geri alınır; palet 'yapabilirsin' yalanı söylemez · unit: aksiyon seçilince doğru endpoint doğru gövdeyle çağrılır · unit: palet kapanır (modal state) · unit: etiket duruma göre 'Stop'/'Start' olarak değişir · e2e: palet üzerinden accepting-chats kapatma → Team ekranında durum yansır",
             "status": "done",
             "dependencies": [
-              2
+              "95.2"
             ],
             "parentId": "95",
             "updatedAt": "2026-08-08T10:35:36.560Z"
@@ -4488,7 +4488,7 @@
             "testStrategy": "negatif (ÖNCE yazılır, kırmızı görülür): scope'suz token → 403 · negatif (ÖNCE): müşteri token'ı → 404 (sınır sızmaz) · negatif (ÖNCE): aşırı uzun query → 400 (NFR-S8) · cross-tenant (ZORUNLU): başka lisansın sayıları cevapta yok · integration: ADR-09 tutarlılık — cevap sayısı /reports/overview ile birebir · integration: anlaşılmayan soru → kind:'not_understood', 200 (hata zarfı değil) · integration: veri yok → kind:'no_data' · unit (ai-mock): niyet eşleme deterministik — aynı girdi aynı çıktı · not: DB süiti paylaşılan Postgres'te SERİ koşulur (--concurrency=1)",
             "status": "done",
             "dependencies": [
-              4
+              "95.4"
             ],
             "parentId": "95",
             "updatedAt": "2026-08-08T10:59:51.057Z"
@@ -4501,7 +4501,7 @@
             "testStrategy": "unit: eşleşmeyen girdi → 'AI'ya sor' sonucu · unit: summary cevabı + kaynak metrik adı render edilir · unit: no_data → anlamlı empty state (boş dikdörtgen değil — FR-EK-B.1) · unit: not_understood → örnek soru önerisi · unit: yükleniyor → skeleton · cross-tenant GEREKMEZ — izolasyon backend'de (-e) doğrulandı",
             "status": "done",
             "dependencies": [
-              5
+              "95.5"
             ],
             "parentId": "95",
             "updatedAt": "2026-08-08T11:28:32.784Z"
@@ -4514,8 +4514,8 @@
             "testStrategy": "unit: ↑↓ karışık listede tüm tipleri dolaşır · unit: grup başlığı odak almaz · unit: liste sonunda sarma (wrap) çalışır · unit: esc paleti kapatır · unit: Enter seçili sonucu çalıştırır (tipe göre doğru handler) · unit (a11y): role=listbox/option + aria-activedescendant doğru · regresyon: mevcut palet testleri yeşil kalır",
             "status": "done",
             "dependencies": [
-              3,
-              6
+              "95.3",
+              "95.6"
             ],
             "parentId": "95",
             "updatedAt": "2026-08-08T11:41:12.564Z"
@@ -4528,9 +4528,9 @@
             "testStrategy": "e2e: üç sonuç tipi tek akışta · tam DoD kapısı exit 0 · not: e2e `.env` SOURCE'lu koşulur (set -a; . ./.env) — Playwright webServer spawn'ları env'i process'ten alır",
             "status": "done",
             "dependencies": [
-              3,
-              6,
-              7
+              "95.3",
+              "95.6",
+              "95.7"
             ],
             "parentId": "95",
             "updatedAt": "2026-08-08T11:56:58.564Z"
@@ -4583,8 +4583,8 @@
             "testStrategy": "negatif (ÖNCE yazılır, kırmızı görülür): müşteri token → 404 · negatif (ÖNCE): scope'suz token → 403 · negatif (ÖNCE): aşırı uzun question → 400 (NFR-S8) · cross-tenant (ZORUNLU): başka lisansın sayıları sızmaz · integration: ADR-09 tutarlılık — /copilot/bi == /reports/overview · integration: not_understood 200, uydurma sayı yok · integration: no_data (boş pencere) doğru kind döner · not: DB süiti SERİ koşulur (--concurrency=1, paylaşılan Postgres)",
             "status": "done",
             "dependencies": [
-              1,
-              2
+              "96.1",
+              "96.2"
             ],
             "parentId": "96",
             "updatedAt": "2026-08-08T13:09:37.761Z"
@@ -4597,7 +4597,7 @@
             "testStrategy": "unit: soru gönderimi doğru endpoint'i doğru gövdeyle çağırır · unit: metric cevabı value + metric + range + kaynak etiketiyle render edilir · unit: yükleniyor → skeleton · unit: istek hatası → kullanıcıya hata görünür (sessiz yutulmaz) · cross-tenant GEREKMEZ — izolasyon -c'de",
             "status": "done",
             "dependencies": [
-              3
+              "96.3"
             ],
             "parentId": "96",
             "updatedAt": "2026-08-08T13:23:36.050Z"
@@ -4610,7 +4610,7 @@
             "testStrategy": "unit: not_understood → örnek soru listesi + tıklama girdiyi doldurur · unit: no_data → anlamlı metin (boş dikdörtgen değil) · unit: örnek sorular ai-mock'un desteklediği kalıplardan gelir (uydurma yok — liste tek kaynaktan) · cross-tenant GEREKMEZ",
             "status": "done",
             "dependencies": [
-              4
+              "96.4"
             ],
             "parentId": "96",
             "updatedAt": "2026-08-08T13:40:42.853Z"
@@ -4623,8 +4623,8 @@
             "testStrategy": "e2e: Reports KPI == Copilot BI cevabı (ADR-09 uçtan uca) · tam DoD kapısı exit 0 · not: e2e `.env` SOURCE'lu koşulur",
             "status": "done",
             "dependencies": [
-              4,
-              5
+              "96.4",
+              "96.5"
             ],
             "parentId": "96",
             "updatedAt": "2026-08-08T13:56:31.689Z"
@@ -4677,8 +4677,8 @@
             "testStrategy": "integration CROSS-TENANT (önce): B lisansının `ai_agent_id`'si ile A lisansının token'ıyla bulk çağrısı → reddedilir, A'da da B'de de 0 satır oluşur · integration NEGATİF (önce): sahiplik kontrolünün döngüde atlanmadığı — geçerli bir agent ile başlayıp gövdede ikinci bir `ai_agent_id` taşıyan satır varsa o satır kabul edilmez (kaynaklar yalnız doğrulanmış ajana bağlanır) · integration NEGATİF (önce): satır tavanı + gövde tavanı aşımı → ADR-06 zarfı `validation`, 0 satır yazılır · integration NEGATİF (önce): scope'suz token (`agents-bot--all:ro`) → 403; kimliksiz → 401 · integration NEGATİF: CSV'de `type:'website'` satırı → satır düzeyinde reddedilir ve hiçbir dış istek yapılmaz (crawler çağrılmadı iddiası) · integration POZİTİF: karışık dosyada kısmi başarı + `dry_run` yazma yapmaz · contract: `contract-parity.test.ts` (belgelenmemiş route ve servis edilmeyen belge satırı — iki yön de) · NOT: bu süit paylaşılan Postgres'e vurur — paket içinde SERİ koşulmalı (paralel DB yarışı)",
             "status": "pending",
             "dependencies": [
-              1,
-              2
+              "97.1",
+              "97.2"
             ],
             "parentId": "97",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4702,8 +4702,8 @@
             "testStrategy": "unit NEGATİF (önce): CSV olmayan dosya → alan-altı hata, hiçbir ağ çağrısı yapılmaz · unit NEGATİF (önce): dry-run 0 geçerli satır döndüğünde submit pasif kalır · unit NEGATİF: sunucu ADR-06 zarfıyla `validation` döndüğünde (tavan aşımı) Banner'da mesaj görünür, form kilitlenmez · unit POZİTİF: geçerli CSV → dry-run çağrısı → içe aktar çağrısı → invalidasyon · unit: yükleme sırasında Skeleton görünür, `ai_agent_id` yokken form hiç render edilmez (mevcut `canEdit && aiAgentId` kapısıyla tutarlı)",
             "status": "pending",
             "dependencies": [
-              3,
-              4
+              "97.3",
+              "97.4"
             ],
             "parentId": "97",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4716,7 +4716,7 @@
             "testStrategy": "unit NEGATİF (önce): boş sonuç dizisi → EmptyState (boş dikdörtgen yok) · unit: kısmi başarı → uyarı tonlu Banner + her atlanan satır satır-numarası ve nedeniyle listelenir · unit: tam başarı → başarı tonlu özet, atlanan satır bölümü hiç render edilmez · unit: tavan sayıda satırda yalnız görünür satırlar DOM'da (VirtualList.test.tsx'teki sınırlı-düğüm iddiası deseni) · unit: dry-run ve gerçek sonuç aynı bileşenle, farklı başlıkla render edilir",
             "status": "pending",
             "dependencies": [
-              5
+              "97.5"
             ],
             "parentId": "97",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4729,7 +4729,7 @@
             "testStrategy": "integration NEGATİF (ÖNCE, kırmızı görülecek): loopback / private / link-local / IPv4-mapped IPv6 / http olmayan şema satırları → satır düzeyinde ret, fetcher'a hiç ulaşmaz, 0 kaynak · integration NEGATİF (önce): tek CSV'de N adet engelli hedef → website-satırı üst sınırı devreye girer, sonda sayısı sınırlanır (amplifikasyon kapısı) · integration NEGATİF (önce): hata mesajı hedef host/IP veya iç ağ ipucu içermez (jenerik metin iddiası) · integration NEGATİF: crawl sırasında hata/zaman aşımı → o satır `failed`, diğer satırlar yazılmaya devam eder · integration CROSS-TENANT: B lisansının ajanına website satırı yazılamaz · integration POZİTİF: public https satırları crawl edilir, indekslenir, `chunk_count > 0` · integration/perf iddiası: crawl DB transaction'ı açıkken yapılmıyor (tx içinde ağ çağrısı olmadığının kanıtı) · NOT: paylaşılan Postgres → paket içinde SERİ koşulmalı",
             "status": "pending",
             "dependencies": [
-              3
+              "97.3"
             ],
             "parentId": "97",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4742,8 +4742,8 @@
             "testStrategy": "e2e POZİTİF: uçtan uca CSV içe aktarma akışı (şablon indir → yükle → önizle → aktar → listede gör) · e2e NEGATİF: içinde geçersiz tür/URL satırı olan CSV → kısmi başarı özeti görünür, geçerli satırlar yine de eklenir · e2e: içe aktarılan içerik RAG'den geri okunur (AI/Copilot cevabında görünür) · regresyon: mevcut `knowledge-crawl.test.ts`, `uploads.test.ts`, `contract-parity.test.ts` ve playbook e2e'leri yeşil kalır · NOT: e2e temiz DB ister — truncate+reseed, `.env` source'lanmış, portlar boş; idempotent seed mutasyona uğramış tenant'ı sıfırlamaz",
             "status": "pending",
             "dependencies": [
-              6,
-              7
+              "97.6",
+              "97.7"
             ],
             "parentId": "97",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4785,7 +4785,7 @@
             "testStrategy": "unit: SKILL_TEMPLATES.length >= 31 (KK sayısal kapısı) · unit: tüm id'ler benzersiz (23+ eklerken en olası hata) · unit: her kaydın steps'i validateSteps'ten geçer · unit: her kategoride en az 1 kayıt (boş grup yok) · unit: requiresIntegration bayrağı olan kayıtlar galeride uyarı tetikler (mevcut RecommendedSkills davranışı korunur) · regresyon: mevcut 8 kaydın id/davranışı DEĞİŞMEZ (kullanıcı kayıtlı skill'leri bozulmaz)",
             "status": "pending",
             "dependencies": [
-              1
+              "98.1"
             ],
             "parentId": "98",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4798,7 +4798,7 @@
             "testStrategy": "negatif (ÖNCE): eksik TR çevirisi → test kırmızı · unit: her şablonun name/summary iki dilde mevcut · unit: instruction/steps i18n'e taşınmadı (bilinçli sınır korunur) · unit: dil değişince galeri metinleri değişir, şablon davranışı değişmez",
             "status": "pending",
             "dependencies": [
-              2
+              "98.2"
             ],
             "parentId": "98",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4811,7 +4811,7 @@
             "testStrategy": "unit: arama daraltır · unit: kategori filtresi doğru alt küme · unit (perf/NFR-P4): 31+ kayıtta DOM kart sayısı << toplam (sanal pencere çalışıyor) · unit: boş sonuç → anlamlı empty state · regresyon unit (a11y): Escape kapatır, backdrop kapatır, focus-trap korunur · e2e: galeriden arama ile şablon bulup skill oluşturma",
             "status": "pending",
             "dependencies": [
-              2
+              "98.2"
             ],
             "parentId": "98",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4824,8 +4824,8 @@
             "testStrategy": "e2e: galeri → arama → şablon → skill oluşturma · tam DoD kapısı exit 0 · not: e2e `.env` SOURCE'lu koşulur",
             "status": "pending",
             "dependencies": [
-              3,
-              4
+              "98.3",
+              "98.4"
             ],
             "parentId": "98",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4878,8 +4878,8 @@
             "testStrategy": "integration NEGATİF (pozitiflerden ÖNCE yazılır): query>320, limit sınır dışı, geçersiz category, bilinmeyen page_id → hepsi 400 hata zarfıyla (ADR-06) · integration POZİTİF: arama/kategori daraltma, sayfa zinciri tam kapsama, total doğruluğu · integration CROSS-TENANT: sayfalanmış listede başka lisansın kurulumu sızmaz (mevcut testin sayfalama altında regresyonu) · integration regresyon: mevcut 8 apps testi (OAuth akışı, disconnect 404, kanal 400, read-only admin) yeşil kalır · NOT: süit `--concurrency=1` ile paket-paket seri koşulur ([[nexa-test-gate-parallel-db]] — paylaşılan Postgres deadlock 40P01 riski)",
             "status": "pending",
             "dependencies": [
-              1,
-              2
+              "99.1",
+              "99.2"
             ],
             "parentId": "99",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4903,7 +4903,7 @@
             "testStrategy": "unit: katalog eşiği (>= 100) + id tekilliği + kart bütünlüğü invariant'ı · unit: `findApp` katalogdaki her id'yi çözer, bilinmeyen id `undefined` (mevcut satır 64-70 testi genişletilmiş katalogda) · integration regresyon: 8 apps testi + (09.2-v2-c teslimse) sayfalama testleri 100+ katalogda yeşil",
             "status": "pending",
             "dependencies": [
-              4
+              "99.4"
             ],
             "parentId": "99",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4916,7 +4916,7 @@
             "testStrategy": "unit: debounce sonrası arama query parametresiyle istek atılır (keystroke başına istek atılmaz) · unit: kategori çipi filtreyi uygular + aria-pressed durumu (NFR-A11Y6) · unit: boş sonuç → anlamlı EmptyState (filtre varken/yokken farklı metin); yükleme → Skeleton · unit regresyon: mevcut 4 AppsMarketplace testi (özellikle `data-testid=\"app-${id}\"` seçicileri) değişmeden geçer",
             "status": "pending",
             "dependencies": [
-              3
+              "99.3"
             ],
             "parentId": "99",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4929,8 +4929,8 @@
             "testStrategy": "unit: yalnız görünür satır DOM'da (100+ kart → DOM'daki listitem sayısı << toplam) — NFR-P4 kanıtı · unit: `chunkIntoRows` saf testleri (tam satır, eksik son satır, boş liste, sütun=1 sınırı) · unit: sayfa zinciri (next_page_id → ikinci sayfa eklenir; son sayfada düğme yok) · unit a11y: `role=\"list\"`/`role=\"listitem\"` sözleşmesi ve klavyeyle erişilebilir \"Daha fazla yükle\" düğmesi (NFR-A11Y6) · unit regresyon: mevcut kart/consent/disconnect/kanal-link testleri virtualization altında (ilk pencerede kalan kartlarla) yeşil",
             "status": "pending",
             "dependencies": [
-              6,
-              5
+              "99.6",
+              "99.5"
             ],
             "parentId": "99",
             "updatedAt": "2026-08-01T10:00:00.000Z"
@@ -4943,9 +4943,9 @@
             "testStrategy": "e2e: arama daraltma + kategori daraltma + sayfa zinciri + kanal kartı Channels linki · integration regresyon: 100+ katalog altında OAuth akışı, disconnect 404, kanal 400, read-only admin scope ayrımı · integration CROSS-TENANT (zorunlu): bir lisansın kurulumu diğerinin hiçbir sayfasında/filtresinde görünmez · contract-parity 5/5 + bundle idempotent · NFR-P4 ölçüm notu (görünür-DOM kart sayısı) — HANDOFF kanıtı · NOT: DB süitleri paket-paket seri koşulur ([[nexa-test-gate-parallel-db]]); e2e için truncate+reseed + sourced .env + boş portlar gerekir ([[nexa-e2e-clean-db]])",
             "status": "pending",
             "dependencies": [
-              3,
-              5,
-              7
+              "99.3",
+              "99.5",
+              "99.7"
             ],
             "parentId": "99",
             "updatedAt": "2026-08-01T10:00:00.000Z"

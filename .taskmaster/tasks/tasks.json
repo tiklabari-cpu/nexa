@@ -4796,12 +4796,12 @@
             "description": "Şablonların kullanıcıya görünen metinleri (`name`, `summary`) i18n anahtarlarına taşınır; `instruction`/`steps` **çevrilmez** (bunlar AI'ya giden talimat metnidir, dil değişimi davranışı değiştirir — bilinçli sınır). TR karşılıkları eklenir. Eksik çeviri anahtarı testle yakalanır.",
             "details": "05.6-tmpl31-c — Katalog i18n: şablon metinleri TR/EN (NFR-I18N2)  [SONNET-XHIGH]\n\nPRD: §5.3-Otomasyon + NFR-I18N2 (en az TR/EN)\nETİKET GEREKÇESİ: SONNET-XHIGH: 6 koşul sağlandı. (1) 2-3 dosya. (2) Güvenlik yok. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: `apps/web/src/lib/i18n.ts` (tm 26'da kurulan TR/EN altyapısı; nav etiketleri aynı desenle çevrildi). (5) Kontrat yok. (6) KK mekanik: her anahtarın iki dilde karşılığı var mı.\nNEDEN AÇIK: Katalog tamamen İngilizce; `apps/web/src/lib/i18n.ts` sistemine hiç bağlı değil (`templates.ts`'te sabit İngilizce string'ler). NFR-I18N2 'en az TR/EN' istiyor → doğrulanmamış boşluk. 31+ kayıtla bu boşluk 4 kat büyür.\nKAPSAM: Şablonların kullanıcıya görünen metinleri (`name`, `summary`) i18n anahtarlarına taşınır; `instruction`/`steps` **çevrilmez** (bunlar AI'ya giden talimat metnidir, dil değişimi davranışı değiştirir — bilinçli sınır). TR karşılıkları eklenir. Eksik çeviri anahtarı testle yakalanır.\nDOSYALAR: apps/web/src/features/playbook/templates.ts · apps/web/src/lib/i18n.ts · apps/web/src/features/playbook/templates.test.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/lib/i18n.ts (tm 26 — TR/EN anahtar deseni, nav.home vb.) · apps/web/src/features/playbook/TemplateGallery.tsx (metinlerin tüketildiği yer)\nKK (birebir): \"KK-türetilmiş: 'Kullanıcıya görünen şablon metinleri TR ve EN'de eksiksizdir; talimat metni çevrilmez.' — §C-A14 + NFR-I18N2.\"\nKK DOĞRULAMA: `pnpm --filter @nexa/web test -- templates` — her şablonun `name`/`summary` anahtarının hem TR hem EN sözlükte karşılığı var; eksik anahtar testi KIRAR. `instruction` alanının i18n'e taşınMADIĞı da iddia edilir (bilinçli sınırın regresyon koruması).\nKAPSAM DIŞI: instruction/steps çevirisi — bilinçli olarak YAPILMAZ · 45+ dil hedefi (PRD hedefi; NFR-I18N2 en az TR/EN diyor)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (ÖNCE): eksik TR çevirisi → test kırmızı · unit: her şablonun name/summary iki dilde mevcut · unit: instruction/steps i18n'e taşınmadı (bilinçli sınır korunur) · unit: dil değişince galeri metinleri değişir, şablon davranışı değişmez",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "98.2"
             ],
             "parentId": "98",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-09T12:37:51.701Z"
           },
           {
             "id": 4,
@@ -4831,7 +4831,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-09T12:18:17.693Z",
+        "updatedAt": "2026-08-09T12:37:51.701Z",
         "complexity": 4,
         "recommendedSubtasks": 5,
         "expansionPrompt": "\"05.6 — Skill şablon kataloğunu 31+ (ADR-14 uyumlu ikame)  ·  dilim V2-6\" görevini 5 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5080,7 +5080,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-09T12:18:17.694Z",
+      "lastModified": "2026-08-09T12:37:51.701Z",
       "taskCount": 109,
       "completedCount": 90,
       "tags": [

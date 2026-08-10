@@ -2632,14 +2632,14 @@
             "description": "Contract-first. (1) `paths/traffic.yaml` → `listTraffic`'e AND'lenen ayrık query parametreleri: `activity` (enum, çoklu), `page_url_contains`, `came_from_contains`, `country_code`, `is_lead`, `group_id`. Verilen TÜM koşullar sağlanmalı = 'Match all filters'; verilmeyen parametre kısıt getirmez = 'Add filter'. (2) `traffic.ts` zod şeması `.strict()` (campaigns.ts:22 deseni) — bilinmeyen anahtar 400",
             "details": "13.2-f — \"Match all filters + Add filter\": GET /traffic çoklu-koşul filtre çekirdeği (kontrat + backend)  [OPUS-MAX]\n\nPRD: FR-MOD-13.2 (+ NFR-S4, NFR-P2)\nETİKET GEREKÇESİ: OPUS-MAX: istemciden gelen filtre koşullarının çok-kiracılı bir sorguya çevrilmesi — allowlist dışı bir anahtar veya tenant kapısı atlanmış bir `group_id` doğrudan izolasyon ihlalidir (koşul 2), ve indekssiz JSONB taraması NFR-P2 (<150ms okuma) bütçesini patlatır. Predicate derleyicisi yeni algoritma tasarımıdır (koşul 4) ve çekirdeği bölünmez: allowlist + tenant kapısı + sorgu şekli aynı kararın üç yüzü. Yanlış kararın maliyeti yüksek → MAX. Filtre UI'ı (13.2-h) ve sekmeler (13.2-g) bu çekirdekten tamamen ayrıldı ve SONNET'e verildi.\nNEDEN AÇIK: traffic.ts satır 15-17: `const listQuery = z.object({ limit: z.coerce.number()… })` — TEK parametre; filtre/koşul parametresi yok. paths/traffic.yaml `parameters:` yalnız `$ref: \"../openapi.yaml#/components/parameters/Limit\"` taşıyor. En yakın emsal campaigns.ts:22 `conditionsSchema` ama o tek koşullu (`url_contains`) ve Traffic'e bağlı değil; `GET /customers` ise yalnız tek `segment` enum'u + serbest metin `query` destekliyor — çoklu-koşul yapısı depoda YOK.\nKAPSAM: Contract-first. (1) `paths/traffic.yaml` → `listTraffic`'e AND'lenen ayrık query parametreleri: `activity` (enum, çoklu), `page_url_contains`, `came_from_contains`, `country_code`, `is_lead`, `group_id`. Verilen TÜM koşullar sağlanmalı = 'Match all filters'; verilmeyen parametre kısıt getirmez = 'Add filter'. (2) `traffic.ts` zod şeması `.strict()` (campaigns.ts:22 deseni) — bilinmeyen anahtar 400. (3) `group_id`, çağıranın kiracısının grupları içinde doğrulanır; doğrulanmadan sorguya girmez (başka kiracının grubuna sızma yok). (4) `page_url_contains`/`came_from_contains` servisin ZATEN yaptığı over-fetch + JS de-dup adımında uygulanır — `visits.pages` JSONB üzerinde indekssiz LIKE'tan kaçınmak için — ve `take` sınırının içinde kalır. YENİ PATH YOK: mevcut `GET /traffic` genişler.\nDOSYALAR: packages/contract/openapi/paths/traffic.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/routes/traffic.ts · apps/api/src/services/traffic/traffic-service.ts · apps/api/test/integration/traffic.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/campaigns.ts (satır 20-22, `.strict()` conditionsSchema — bilinmeyen anahtar 400 kararı ve yorumu) · apps/api/src/routes/customers.ts (listQuery + parse() + segment enum deseni) · packages/contract/openapi/paths/customers.yaml (query parametrelerinin kontratta ifadesi)\nKK (birebir): \"Gelişmiş filtre\" | \"KK-türetilmiş: 'Match all filters' = verilen tüm koşulların AND'lenmesi; 'Add filter' = koşulun isteğe bağlı eklenmesi. Türetme gerekçesi: PRD satırı yapıyı ismen veriyor ama koşul kataloğunu ve kodlamasını vermiyor; katalog (activity/page URL/came from/country/lead/group) PRD'nin 360° panel alan listesinden ve mevcut şema kolonlarından türetildi, kodlama tercihi §C varsayımı.\"\nKK DOĞRULAMA: integration `traffic.test.ts`: her koşul tek başına listeyi daraltır · iki koşul birlikte AND'lenir (biri sağlanmayan satır düşer) · bilinmeyen anahtar → 400 · geçersiz `activity` değeri → 400 · başka kiracının `group_id`'si sonuç sızdırmaz · filtre verilmediğinde davranış birebir eskisi (regresyon). contract-parity yeşil.\nKAPSAM DIŞI: 'Match any' (OR) mantığı — PRD birebir 'Match all filters' diyor · Kaydedilmiş filtre görünümleri (saved views — 07.7 kalemi) · Filtre paneli UI'ı (13.2-h) · Sekme UI'ı (13.2-g) · GET /customers'a çoklu-koşul filtre eklemek (bu kalem Traffic yüzeyidir)\nSÖZLEŞME: packages/contract/openapi/paths/traffic.yaml → `listTraffic` `parameters` listesine 6 yeni query parametresi (+ gerekirse openapi.yaml `components/parameters` ortak tanımları). YENİ PATH YOK, ama re-bundle ZORUNLU (`pnpm --filter @nexa/contract generate`) — aksi hâlde üretilmiş tipler ve web istemci sözleşmesi bayatlar.\nMIGRATION: yok — filtreler mevcut kolonlar üzerinden: `customers.country_code`/`is_lead`, `visits.came_from`/`pages`, `chat_access.group_id`. Ziyaret sorgusu zaten `(license_id, started_at DESC)` indeksini kullanıyor (schema.prisma:845); ölçüm NFR-P2'yi aşarsa indeks kararı ayrı bir iş olarak açılır, bu pencerede migration YOK.\nTAHMİN: 2 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF (önce): bilinmeyen filtre anahtarı → 400 (`.strict()`) · NEGATİF (önce): geçersiz `activity` enum değeri → 400 · CROSS-TENANT (önce): başka kiracının `group_id`'si ile sorgu, o kiracının ziyaretçilerini DÖNDÜRMEZ (NFR-S4) · integration (regresyon): filtre verilmediğinde davranış birebir eskisi · integration (pozitif): her koşul tek başına listeyi daraltır · integration (pozitif): iki koşul birlikte AND'lenir (Match all) · perf: filtreli sorgu `take` sınırında kalır, sorgu sayısı artmaz — ölçüm HANDOFF'a kanıt (NFR-P2)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "73.1",
               "73.2",
               "73.5"
             ],
             "parentId": "73",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T08:23:13.012Z"
           },
           {
             "id": 7,
@@ -2715,7 +2715,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T07:39:53.146Z",
+        "updatedAt": "2026-08-10T08:23:13.012Z",
         "complexity": 9,
         "recommendedSubtasks": 11,
         "expansionPrompt": "\"13.2 — Engage/Traffic (gelişmiş filtre + 360° ziyaretçi)  ·  dilim V2-8\" görevini 11 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5096,7 +5096,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T07:39:53.147Z",
+      "lastModified": "2026-08-10T08:23:13.013Z",
       "taskCount": 110,
       "completedCount": 99,
       "tags": [

@@ -2801,14 +2801,14 @@
             "description": "(1) Kontrat: `packages/contract/openapi/paths/reports.yaml`'a `goals` operasyonu (`getReportsGoals`, from/to query) + `openapi.yaml` `paths:` `/reports/goals` + re-bundle. (2) Route (reports.ts): pencere içi **sıralı** sorgular — `visitors` = pencerede ziyareti olan distinct `visits.customer_id` (tenant), `chats` = pencerede açılan distinct thread'in müşterisi, `by_goal[] = { goal_id, name, conver",
             "details": "13.3-f — GET /reports/goals — 3 aşamalı huni raporu + rapor grubu + CSV export  [OPUS-XHIGH]\n\nPRD: FR-MOD-13.3 (+ NFR-P2, NFR-S3 izin bazlı görünürlük)\nETİKET GEREKÇESİ: OPUS-XHIGH: yeni YETKİLİ endpoint (mevcut `reports_read` scope'unu yeni bir yüzeye genişletir) → kullanıcı kuralı gereği en az OPUS-XHIGH, koşul 2 ihlali. Ayrıca huninin denominatör tasarımı (ziyaretçi/sohbet aşamalarının hangi kümeden sayılacağı) PRD'de yazmıyor, yorum gerektiriyor → koşul 6 de tam sağlanmıyor. Güvenlik/algoritma çekirdeği veya eşzamanlılık yok → OPUS-MAX değil.\nNEDEN AÇIK: 3 aşamalı huniyi (ziyaretçi→sohbet→dönüşüm) hedef bazında veren hiçbir endpoint yok. `REPORT_GROUPS` (apps/api/src/routes/reports-export.ts:39-43) yalnız overview/breakdown/ai-agent/reviews taşıyor — goals grubu yok, dolayısıyla CSV export'ta da yok.\nKAPSAM: (1) Kontrat: `packages/contract/openapi/paths/reports.yaml`'a `goals` operasyonu (`getReportsGoals`, from/to query) + `openapi.yaml` `paths:` `/reports/goals` + re-bundle. (2) Route (reports.ts): pencere içi **sıralı** sorgular — `visitors` = pencerede ziyareti olan distinct `visits.customer_id` (tenant), `chats` = pencerede açılan distinct thread'in müşterisi, `by_goal[] = { goal_id, name, conversions }` = `goal_achievements` gruplaması; `conversion_rate` = `goalConversionRate` (13.3-e'den) ile; `previous_period` bloğu overview kalıbıyla. (3) `REPORT_GROUPS`'a `{ id: 'goals', label: 'Goals', scopes: ['reports_read'] }` + `/reports/export?group=goals` için CSV satır serileştirici (mevcut `toCsv` + injection guard kullanılır).\nDOSYALAR: packages/contract/openapi/paths/reports.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/routes/reports.ts · apps/api/src/routes/reports-export.ts · apps/api/src/routes/reports-export.test.ts · apps/api/test/integration/reports.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts:510-600 (GET /reports/overview — pencere + önceki pencere sıralı agregasyon kalıbı) · apps/api/src/routes/reports-export.ts:39-68 (REPORT_GROUPS katalogu + visibleReportGroups + toCsv) · packages/contract/openapi/paths/reports.yaml (`overview` / `reviews` operasyon kalıbı)\nKK (birebir): \"3 aşamalı huni\" | \"rapor entegrasyonu\"\nKK DOĞRULAMA: integration: (a) yanıt `funnel.visitors >= funnel.chats >= toplam conversions` invariantını sağlar → \"3 aşamalı huni\"; (b) `by_goal` yalnız çağıranın lisansındaki hedefleri listeler — **cross-tenant:** B lisansının hedefi A'nın yanıtında yok; (c) `GET /reports/groups` `goals` grubunu içerir ve `reports_read` taşımayan token'da içermez (`visibleReportGroups`); (d) `GET /reports/export?group=goals` CSV döner; (e) contract-parity yeşil (path + route aynı pencerede).\nKAPSAM DIŞI: Tracked sales / atfedilen gelir (13.5 v2 — 07.8'de `ecommerce.configured=false` iskeleti duruyor) · PDF ve benchmark karşılaştırma (v2, PLAN §4.4.8'de v1 dışı işaretli) · hedef bazında ziyaretçi denominatörü (tenant geneli seçildi — bkz. §varsayımlar-4, §açık sorular-4) · UI (13.3-h)\nSÖZLEŞME: YENİ PATH: `paths/reports.yaml`'a `goals` operasyonu (`getReportsGoals`) + `openapi.yaml` `paths:` `/reports/goals`; ayrıca `/reports/export` `group` enum'una `goals` (katkısal). **OpenAPI'ye eklenip re-bundle edilmezse contract-parity.test.ts kırılır.**\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): geçersiz from/to aralığı → 400 · negatif (önce): `reports_read` olmayan token → export 403 ve gruplar listesinde `goals` yok · cross-tenant negatif: başka lisansın hedefi/achievement'ı by_goal'de veya funnel sayılarında görünmez · integration: huni sayıları + pencere sınırı + previous_period · unit (reports-export.test.ts): goals grubu katalogda ve CSV başlıkları/injection guard'ı doğru · contract-parity regresyonu",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "74.2",
               "74.3",
               "74.4"
             ],
             "parentId": "74",
-            "updatedAt": "2026-08-10T14:59:51.504Z"
+            "updatedAt": "2026-08-10T15:58:55.135Z"
           },
           {
             "id": 7,
@@ -2856,7 +2856,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T14:59:51.504Z",
+        "updatedAt": "2026-08-10T15:58:55.135Z",
         "complexity": 8,
         "recommendedSubtasks": 9,
         "expansionPrompt": "\"13.3 — Goals (ziyaretçi→sohbet→dönüşüm hunisi)  ·  dilim V2-8\" görevini 9 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5110,7 +5110,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T14:59:51.505Z",
+      "lastModified": "2026-08-10T15:58:55.138Z",
       "taskCount": 111,
       "completedCount": 102,
       "tags": [

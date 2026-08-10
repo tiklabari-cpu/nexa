@@ -211,6 +211,92 @@ describe('tenant isolation (RLS)', () => {
     });
   });
 
+  describe('oauth_clients — the rows the partner portal writes (FR-MOD-09.4)', () => {
+    // Alone among the tables here, this policy keys on the *organization*
+    // rather than the license (`oauth_clients_tenant`), so it fails
+    // independently of everything above. It also has the most to lose: a row
+    // here is not data, it is a credential that `POST /auth/authorize` will
+    // later trust. Reaching into another organization's row would not leak a
+    // conversation — repointing its `redirect_uris` would deliver that
+    // workspace's authorization codes to an attacker's callback.
+    const tenantA = () => ({
+      licenseId: fixtures.a.licenseId,
+      organizationId: fixtures.a.organizationId,
+    });
+
+    it("reads only its own organization's clients", async () => {
+      const visible = await withTenant(app, tenantA(), (tx) =>
+        tx.oauthClient.findMany({ select: { id: true } }),
+      );
+      const ids = visible.map((c) => c.id);
+      expect(ids).toContain(fixtures.a.clientId);
+      expect(ids).not.toContain(fixtures.b.clientId);
+    });
+
+    it('cannot fetch a tenant B client by its exact id', async () => {
+      // The id is guessable in a way a uuid is not, which is what makes the
+      // 404 the portal returns depend on this being invisible rather than
+      // merely unauthorized.
+      const found = await withTenant(app, tenantA(), (tx) =>
+        tx.oauthClient.findUnique({ where: { id: fixtures.b.clientId } }),
+      );
+      expect(found).toBeNull();
+    });
+
+    it("cannot repoint a tenant B client's redirect_uris", async () => {
+      const result = await withTenant(app, tenantA(), (tx) =>
+        tx.oauthClient.updateMany({
+          where: { id: fixtures.b.clientId },
+          data: { redirectUris: ['https://attacker.example.test/callback'] },
+        }),
+      );
+      expect(result.count).toBe(0);
+
+      const untouched = await owner.oauthClient.findUnique({
+        where: { id: fixtures.b.clientId },
+      });
+      expect(untouched?.redirectUris).not.toContain('https://attacker.example.test/callback');
+    });
+
+    it("cannot strip a tenant B client's scope ceiling", async () => {
+      // An empty `scopes` array means "grant whatever is asked for"
+      // (`routes/auth.ts`: `client.scopes.length > 0 ? client.scopes : requested`).
+      // Emptying another workspace's client is therefore a privilege
+      // escalation dressed up as a deletion.
+      const result = await withTenant(app, tenantA(), (tx) =>
+        tx.oauthClient.updateMany({ where: { id: fixtures.b.clientId }, data: { scopes: [] } }),
+      );
+      expect(result.count).toBe(0);
+    });
+
+    it('cannot delete a tenant B client', async () => {
+      const result = await withTenant(app, tenantA(), (tx) =>
+        tx.oauthClient.deleteMany({ where: { id: fixtures.b.clientId } }),
+      );
+      expect(result.count).toBe(0);
+      expect(
+        await owner.oauthClient.findUnique({ where: { id: fixtures.b.clientId } }),
+      ).not.toBeNull();
+    });
+
+    it('cannot plant a client in tenant B (WITH CHECK)', async () => {
+      await expect(
+        withTenant(app, tenantA(), (tx) =>
+          tx.oauthClient.create({
+            data: {
+              id: `client_planted_${generateShortId()}`,
+              organizationId: fixtures.b.organizationId,
+              displayName: 'Planted',
+              clientType: 'public',
+              redirectUris: ['https://attacker.example.test/callback'],
+              scopes: ['chats--all:rw'],
+            },
+          }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+  });
+
   describe('ip_allowlist_entries — the allow-side of IP security', () => {
     // The counterpart to banned_customer_ips: the sources a license trusts for
     // its own staff. Proven the same way as every tenant table — by attacking

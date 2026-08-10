@@ -363,6 +363,40 @@ describe('partner apps (FR-MOD-09.4)', () => {
       expect(idsB).toContain(theirs.client_id);
       expect(idsB).not.toContain(mine.client_id);
     });
+
+    /**
+     * The isolation the CRUD tests assert is enforced by RLS on the portal
+     * surface. `POST /auth/authorize` is public and looks its client up
+     * *without* a tenant context — a different code path, and the one that
+     * actually hands out authorization codes. Asserted here so a registered
+     * client stays confined to its own workspace on both surfaces.
+     */
+    it("refuses to authorize against another organization's client", async () => {
+      const theirsRedirect = 'https://partner-b.example.test/cb';
+      const theirs = (
+        await server.post(
+          '/partner/apps',
+          body({ display_name: 'Theirs', redirect_uris: [theirsRedirect] }),
+          auth(adminTokenB),
+        )
+      ).json() as PartnerAppRegistration;
+
+      const { challenge } = pkce();
+      const response = await server.post('/auth/authorize', {
+        client_id: theirs.client_id,
+        redirect_uri: theirsRedirect,
+        code_challenge: challenge,
+        // Valid credentials and a workspace this account really belongs to —
+        // just not the one the client was registered in.
+        email: fx.a.ownerEmail,
+        password: TEST_PASSWORD,
+        license_id: fx.a.licenseId.toString(),
+      });
+      // 404, not 403: a 403 would confirm the client id is real, which is how
+      // an attacker enumerates other workspaces' apps (NFR-S5).
+      expect(response.statusCode, response.payload).toBe(404);
+      expect(response.json().error.type).toBe('not_found');
+    });
   });
 
   // --- The workspace's own sign-in client is not a partner app ---------------
@@ -517,6 +551,85 @@ describe('partner apps (FR-MOD-09.4)', () => {
       expect(granted.statusCode, String(secret)).toBe(401);
       expect(granted.json().error.details.oauth_error).toBe('invalid_client');
     }
+  });
+
+  // --- The registered scope set bounds the grant (09.4-g) --------------------
+
+  /**
+   * Registration caps a client against the *session* that registered it; these
+   * cap the grant against the *client*. Both are needed: without this one, a
+   * client registered for a single read scope would still receive the owner's
+   * whole admin set the moment that owner signed into it, and the registration
+   * ceiling would be decoration.
+   */
+  describe('the grant is bounded by what the client registered, not by who signs in', () => {
+    const authorize = async (app: PartnerAppRegistration, scope?: string) => {
+      const { verifier, challenge } = pkce();
+      const response = await server.post('/auth/authorize', {
+        client_id: app.client_id,
+        redirect_uri: CALLBACK,
+        code_challenge: challenge,
+        email: fx.a.ownerEmail,
+        password: TEST_PASSWORD,
+        license_id: fx.a.licenseId.toString(),
+        ...(scope === undefined ? {} : { scope }),
+      });
+      return { response, verifier };
+    };
+
+    it('narrows a request that asks for more than the client holds', async () => {
+      const app = await registered({ scopes: ['chats--all:ro'] });
+      // The signer is the workspace owner, so `customers:ro` is theirs to give;
+      // it is the client that never registered for it.
+      const { response, verifier } = await authorize(app, 'chats--all:ro,customers:ro');
+      expect(response.statusCode, response.payload).toBe(200);
+
+      const granted = await server.post('/auth/token', {
+        grant_type: 'authorization_code',
+        code: (response.json() as { code: string }).code,
+        code_verifier: verifier,
+        client_id: app.client_id,
+        client_secret: app.client_secret,
+        redirect_uri: CALLBACK,
+      });
+      expect(granted.statusCode, granted.payload).toBe(200);
+
+      const grant = granted.json() as { access_token: string; scope: string };
+      expect(grant.scope.split(' ').filter(Boolean)).toEqual(['chats--all:ro']);
+
+      // The dropped scope is unusable, not merely unreported — the narrowing is
+      // enforced by the route gate, not just written into the response body.
+      const denied = await server.get('/customers', auth(grant.access_token));
+      expect(denied.statusCode, denied.payload).toBe(403);
+    });
+
+    it('refuses outright when nothing requested is registered', async () => {
+      const app = await registered({ scopes: ['chats--all:ro'] });
+      const { response } = await authorize(app, 'customers:ro');
+      // Better than issuing an empty grant: a token with no scopes would sail
+      // through the exchange and fail confusingly at the first real call.
+      expect(response.statusCode, response.payload).toBe(400);
+      expect(response.json().error.message).toMatch(/scopes/i);
+    });
+
+    it('falls back to the registered set when the request names no scope at all', async () => {
+      const app = await registered({ scopes: ['customers:ro'] });
+      const { response, verifier } = await authorize(app);
+      expect(response.statusCode, response.payload).toBe(200);
+
+      const granted = await server.post('/auth/token', {
+        grant_type: 'authorization_code',
+        code: (response.json() as { code: string }).code,
+        code_verifier: verifier,
+        client_id: app.client_id,
+        client_secret: app.client_secret,
+        redirect_uri: CALLBACK,
+      });
+      expect(granted.statusCode, granted.payload).toBe(200);
+      expect((granted.json() as { scope: string }).scope.split(' ').filter(Boolean)).toEqual([
+        'customers:ro',
+      ]);
+    });
   });
 
   // --- Secret rotation (09.4-d) ----------------------------------------------

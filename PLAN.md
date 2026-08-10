@@ -1121,7 +1121,7 @@ Açık 23 kalemin tamamı §5.2'de atomik bölündü.
 | 08.9.7 | **Temel audit log — TÜM PLANLARDA** + kullanıcıya görünür ekran | v2 (§5.3 Güvenlik) · NFR-S12 | ★ | ✅ → K08.9.7 |
 | 09.2 | **100+ entegrasyon** (marketplace katalog genişlemesi) | v2 (§5.5 MOD-09) | ★ | ⬜ §5.5 matrisi: v1 `○ (15–20)` → v2 `○ (100+)`. v1'de 20 kart **teslim** (tm 51/52). İş = katalog + kataloğun **ölçeklendiğinin kanıtı** (arama/kategori/sayfalama). Hepsi MOCK. → §5.2 |
 | 09.3 | **API istek paketleri** (Essential/Pro/Pro+) | Could (v2) |  | ✅ → K09.3 |
-| 09.4 | **Zapier/Make + Build-your-app** (partner/creator) | Could (v2) | | ◐ → K09.4 |
+| 09.4 | **Zapier/Make + Build-your-app** (partner/creator) | Could (v2) | | ✅ → K09.4 |
 | 01.1.3 | **⌘K command palette — AI komutları** | v2 (§5.5 MOD-01) | ★ | ✅ → K01.1.3 |
 | 12.4 | **Copilot BI komut** (rapor/metrik sorusu → cevap) | v2 (§5.5 MOD-12) | ★ | ✅ → K12.4 |
 | 13.2 | **Engage / Traffic** (gelişmiş filtre + ziyaretçi 360° panel) | Should (v2) | | ⬜ Faz-0'da ertelenen **03.1.1 kalan sekmeleri** (Supervised/Invited/Browsing) buraya dahil (§3.13 kararı). `visits` **teslim**. → §5.2 |
@@ -3939,7 +3939,43 @@ Tam `pnpm -w test:e2e` süiti koşulmadı; tam kapanış kanıtı 09.4-g'nin (tm
 
 ✅ **09.4-f teslim** — Portal'a ikinci ve üçüncü sekme, `apps/web/src/features/developers/WebhookSubscriptions.tsx` (yeni): `WebhookSubscriptions` — `GET /webhooks` listesi (url/action/type/enabled/created_at, anlamlı empty state) + Subscribe formu (action seçenekleri **09.4-b'nin `GET /integrations/manifest` yanıtından** türer, sabit `WEBHOOK_ACTIONS` kopyası YOK) + `POST /webhooks` yanıtındaki `secret`'ı `WebhookSecretPanel`'da bir kez gösterip kapanınca state'ten silen akış (liste sunucudan zaten secret almıyor) + `DELETE /webhooks/{webhookId}` onay modalıyla + sunucudan gelen 400'ün (SSRF reddi — `assertPublicHttpUrl`, tm 34) `url` alanının altına yansıması. `IntegrationManifestReference` — aynı manifest sorgusunu paylaşan salt-okunur üçüncü sekme: triggers/actions/subscribe-unsubscribe, geliştiriciye Zapier/Make app tanımı için referans. `DeveloperPortal.tsx` üç sekmeli hale getirildi (`role="tablist"`/`"tab"`/`"tabpanel"`, ReportsPage'in aynı deseni) — Apps sekmesindeki mevcut akış (liste/register/secret-once/sil) davranış değişikliği olmadan korundu; header'daki 'Register app' eylemi yalnız Apps sekmesinde görünür. 09.4-d'nin rotate-secret'ı burada yüzeye çıktı: `AppRow`'a yalnız `client_type==='confidential'` satırlarda "Rotate secret" düğmesi (public client'ta sunucu zaten 400 döner — bu istemci-taraflı, işyeri-bağımsız bir gerçek olduğundan düğme hiç gösterilmedi) + `RotateSecretModal` (onay) + `POST /partner/apps/{clientId}/rotate-secret` + `SecretOncePanel` genelleştirildi (`title` prop, register ve rotate arasında paylaşılıyor). Testler: `WebhookSubscriptions.test.tsx` (yeni, 7 — empty state · action seçenekleri manifest yanıtından türüyor/sabit liste yok · secret bir kez + panel kapanınca DOM'dan gidiyor + liste satırında yok · sunucu 400'ü `url` alanının altında (`aria-invalid`) · sil akışı · `canEdit=false`'ta Subscribe/Delete gizli · manifest sekmesi triggers/actions/subscribe-unsubscribe'i yanıttan render eder) · `DeveloperPortal.test.tsx` (+3 — sekmeler arası geçiş (Apps→Webhooks→Manifest, header eylemi Apps dışında görünmüyor) · Rotate secret düğmesi yalnız confidential'da · rotate akışı: onay → yeni secret bir kez → Done sonrası DOM'dan gidiyor) · `apps/e2e/tests/developers.spec.ts` (yeni, 1 — gerçek sunucuya karşı: portal → Webhooks sekmesi → abone ol → secret bir kez → listede görünür (reload sonrası da) → sil → listeden düşer). DoD tam yeşil: typecheck **0** (11/11) · lint **0** (8/8) · `pnpm -w test` **0** (`@nexa/web` 823/823, 813'ten +10) · `pnpm -w test:integration` **0** (`@nexa/api` 1644/1644 — bu tur backend'e dokunmadı, regresyon yok) · build **0** (7/7) · `developers.spec.ts` + `developer-portal.spec.ts` (regresyon kontrolü) **0** (2/2, `.env` kabuğa source edilerek elle koşuldu — aynı tm 72.5'te not edilen RTM `.env` yükleyici kusuru, hâlâ ayrı bir düzeltme görevi olarak açık). Tam `pnpm -w test:e2e` süiti koşulmadı; tam kapanış kanıtı 09.4-g'nin işi. tm 72.6.
 
-Kalan: 09.4-g. → §5.2
+✅ **09.4-g teslim — KALEM KAPANDI.** Doğrulama turu: yeni üretim kodu yazılmadı, yalnız açık kalan
+dört iddia teste bağlandı ve tam kapanış kapısı koşuldu. `apps/api/test/integration/partner-apps.test.ts`
++4 (36→40): **grant tavanı** — portalda kayıtlı client `chats--all:ro` ile kaydedilip owner oturumu
+`chats--all:ro,customers:ro` isterse token yalnız `chats--all:ro` taşır **ve düşen scope gerçekten
+kullanılamaz** (`GET /customers` → 403; yanıt gövdesindeki dizeye değil rota kapısına bakılıyor) ·
+kayıtlı kümenin tamamen dışında bir scope istenirse authorize **400** (boş grant vermek yerine —
+scope'suz token değişimden geçip ilk gerçek çağrıda kafa karıştırıcı biçimde düşerdi) · `scope`
+hiç verilmezse kayıtlı küme varsayılan olur (rol varsayılanı değil) · **cross-tenant authorize** —
+B organizasyonunda kaydedilen client'a A'nın owner'ı geçerli parola + kendi lisansıyla authorize
+olamaz, **404 + `error.type==='not_found'`** (403 client_id'nin gerçek olduğunu doğrulardı, NFR-S5).
+Bu son test kasıtlı olarak partner-apps süitinde: portal CRUD'unu RLS koruyor, ama `POST /auth/authorize`
+**public** bir rota ve client'ını tenant bağlamı OLMADAN buluyor — kod yetkilendirmesini fiilen dağıtan
+yol o, ve bugüne kadar portalın ÜRETTİĞİ bir client'la sınanmamıştı. `tenant-isolation.test.ts` +6:
+`oauth_clients` politikası (`oauth_clients_tenant`) bu süitte tek başına **organizasyon** anahtarlı
+olduğu için diğerlerinden bağımsız kırılabilir ve kaybedecek en çok şeye sahip — buradaki satır veri
+değil, `POST /auth/authorize`'ın sonradan güveneceği bir kimlik bilgisi. Altı iddia: kendi org'unu
+okur · B'nin client'ını tam id ile çekemez · `redirect_uris`'ini repoint edemez (edebilseydi o
+çalışma alanının authorization code'ları saldırganın callback'ine giderdi) · **scope tavanını
+boşaltamaz** (boş `scopes` route'ta "tavan yok" demek, yani silme kılığında yetki yükseltme) ·
+silemez · B'ye client ekemez (WITH CHECK). 09.4-c/d'den gelen üç iddia
+(kayıtlı olmayan redirect_uri → 400 · yanlış/eksik `client_secret` → `invalid_client` · rotate/delete
+yabancı client'a değmiyor, secret_hash sağlam) ve manifest↔`WEBHOOK_ACTIONS` senkron testi zaten
+yerindeydi, bu turda regresyon kontrolü olarak yeşil koşuldu. **KK kapanışı — '700+ Zapier' payı:**
+katalogda Zapier+Make kartı (09.4-a) · `GET /integrations/manifest` her trigger'ı ve
+subscribe/unsubscribe yolunu yayınlıyor (09.4-b) · portalda webhook aboneliği kurulup silinebiliyor
+(09.4-f) · ve portalda üretilen confidential client gerçek OAuth 2.1 `authorize→token` akışını kayıtlı
+scope tavanıyla tamamlıyor — yani Zapier/Make tarafında tek bir Nexa app'i tanımlamak için gereken
+her şey Nexa tarafında mevcut ve kanıtlı. Gerçek platformda app yayınlamak depo dışıdır (kapsam dışı).
+**Tam DoD kapısı yeşil:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+`pnpm -w test` **0** (`@nexa/api` 2191/2191, 2181'den +10) · `pnpm -w test:integration` **0**
+(`@nexa/api` 1654/1654, 1644'ten +10 = partner-apps 4 + tenant-isolation 6; 67 dosya —
+`contract-parity`, manifest senkronu ve `apps` katalog sınırı dahil) · `pnpm -w build` **0** (7/7) ·
+`pnpm -w test:e2e` **TAM SÜİT 93/93** (`developers.spec.ts` + `developer-portal.spec.ts` dahil;
+09.4-e/f'nin borç bıraktığı tam koşu bu turda kapandı — `.env` kabuğa source edilerek, RTM `.env`
+yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
+
+→ §5.2
 
 #### K01.1.3 — 01.1.3 · ⌘K command palette — AI komutları
 

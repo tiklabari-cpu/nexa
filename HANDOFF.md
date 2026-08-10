@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+### tm 72.7 — 09.4-g: Uçtan uca partner akışı doğrulaması + 09.4 kalem kapanışı — done — 2026-08-10 UTC
+
+- **Yapıldı:** Yeni üretim kodu YOK (doğrulama turu). `apps/api/test/integration/partner-apps.test.ts`
+  +4 (36→40): portalda kayıtlı client'ın OAuth grant'i **kayıtlı scope kümesiyle sınırlı** (fazlası
+  daraltılıyor **ve düşen scope gerçekten kullanılamıyor** — `GET /customers` → 403, yani kapı rota
+  tarafında da uygulanıyor) · kayıtlı kümenin tamamen dışında scope istenirse authorize **400** ·
+  `scope` verilmezse kayıtlı küme varsayılan · **cross-tenant authorize → 404 + `not_found`**. Son test
+  bilerek burada: portal CRUD'unu RLS koruyor ama `POST /auth/authorize` public ve client'ını tenant
+  bağlamı olmadan buluyor — kodu fiilen dağıtan yol o ve portalın ÜRETTİĞİ client'la hiç sınanmamıştı.
+  `apps/api/test/integration/tenant-isolation.test.ts` +6 (`oauth_clients` RLS: kendi org'unu okur ·
+  B'nin client'ını id ile çekemez · `redirect_uris`'ini repoint edemez · scope tavanını boşaltamaz
+  (boş `scopes` = "tavan yok", yani silme kılığında yetki yükseltme) · silemez · B'ye client ekemez
+  (WITH CHECK)). PLAN.md `09.4` satırı `◐` → **`✅ → K09.4`**, kanıt `#### K09.4` bloğuna eklendi.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0**
+  (`@nexa/api` 2191/2191) · `pnpm -w test:integration` **0** (`@nexa/api` 1654/1654, 67 dosya —
+  `contract-parity`, manifest↔`WEBHOOK_ACTIONS` senkronu ve apps katalog sınırı dahil) · `pnpm -w build`
+  **0** (7/7) · `pnpm -w test:e2e` **TAM SÜİT 93/93** (`developers.spec.ts` + `developer-portal.spec.ts`
+  dahil) — 09.4-e/f'nin bıraktığı "tam e2e koşulmadı" borcu bu turda kapandı.
+- **Varsayımlar:** `tenant-isolation.test.ts`'teki `oauth_clients` bloğu bu pencere çalışırken çalışma
+  alanında belirdi (bu pencerenin yazdığı bir düzenleme değil — aynı task üzerinde eşzamanlı bir
+  pencerenin işi olmalı). Task'ın kendi DOSYALAR listesinde olduğu ve tam kapıdan yeşil geçtiği için
+  terk edilmek yerine bu commit'e alındı; kapı (typecheck dahil) blok yerindeyken yeniden koşuldu.
+- **Sonraki pencereye not:**
+  - **tm 105 WIP hâlâ commit'siz** (kapsam disiplini, bu turda da dokunulmadı, commit'e alınmadı):
+    `README.md`, kök `package.json`, `apps/api|rtm/package.json`, `apps/api/tsconfig.json`, iki
+    `test/helpers/fixtures.ts`, `turbo.json`, `apps/api/scripts/*test-datastores.ts`,
+    `test-datastores.test.ts`. Kapı bu WIP açıkken koşuldu (izolasyon devrede) ve tamamı yeşil.
+  - RTM `.env` yükleyici kusuru (tm 72.5) hâlâ açık: `apps/rtm/src/index.ts` `loadEnvFile()`
+    çağırmıyor, e2e için `.env` kabuğa `source` edilmesi gerekti. Ayrı düzeltme görevi.
+  - Dilim 72 (09.4) tamamlandı; alt-görev kalmadı.
+
 ### tm 72.6 — 09.4-f: Portal'da Zapier REST Hooks yüzeyi (webhook abonelik + manifest sekmesi + rotate düğmesi) — done — 2026-08-10 UTC
 
 - **Yapıldı:** `WebhookSubscriptions.tsx` (yeni) — Webhooks sekmesi (liste + subscribe formu, action

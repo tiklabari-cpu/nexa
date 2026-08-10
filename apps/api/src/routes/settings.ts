@@ -11,8 +11,12 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
+  DEFAULT_SALES_TRACKER_CONFIG,
   DEFAULT_WIDGET_APPEARANCE,
   EXPERTISE_NAME_MAX_LENGTH,
+  SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS,
+  SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS,
+  SALES_TRACKER_CURRENCIES,
   WIDGET_COLOR_PATTERN,
   WIDGET_POSITIONS,
   WIDGET_THEMES,
@@ -176,6 +180,37 @@ const updateWidgetBody = z
     mobile_fullscreen: z.boolean().optional(),
     powered_by: z.boolean().optional(),
   })
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/**
+ * Sales tracker configuration (FR-MOD-13.5). Every field is optional so the
+ * settings screen can save one control at a time, but a body with none is
+ * rejected — empty is a mistake, not "reset to defaults".
+ *
+ * `.strict()`, unlike the other settings bodies here, because this one is
+ * partial *and* every field changes what a revenue report claims: a mistyped
+ * `attribution_window` would otherwise be stripped, the upsert would write
+ * nothing, and the screen would report a successful save of a window that was
+ * never stored. The currency is upper-cased before the whitelist check so
+ * `usd` from a hand-written call is the same configuration as `USD`.
+ */
+const updateSalesTrackerBody = z
+  .object({
+    enabled: z.boolean().optional(),
+    currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .pipe(z.enum(SALES_TRACKER_CURRENCIES as unknown as [string, ...string[]]))
+      .optional(),
+    attribution_window_days: z
+      .number()
+      .int()
+      .min(SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS)
+      .max(SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS)
+      .optional(),
+  })
+  .strict()
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
 const updateSecurityBody = z
@@ -826,6 +861,67 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     },
   );
 
+  // --- Sales tracker (FR-MOD-13.5) -------------------------------------------
+
+  app.get(
+    '/settings/sales-tracker',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
+    async (request, reply) => {
+      // License-scoped, not brand-scoped, so `findFirst` under RLS is already
+      // this license's only row. No row means the workspace has never
+      // configured tracking, which reads as the defaults — off — rather than
+      // materialising a row to answer a read.
+      const row = await request.withTenant((tx) => tx.salesTrackerSettings.findFirst());
+      return reply.send(serialiseSalesTracker(row));
+    },
+  );
+
+  app.put(
+    '/settings/sales-tracker',
+    { config: { scopes: ['access_rules:rw'] } },
+    async (request, reply) => {
+      const body = parse(updateSalesTrackerBody, request.body);
+      const tenant = request.tenant();
+
+      const data = {
+        ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
+        ...(body.currency !== undefined ? { currency: body.currency } : {}),
+        ...(body.attribution_window_days !== undefined
+          ? { attributionWindowDays: body.attribution_window_days }
+          : {}),
+      };
+
+      // Upsert because signup leaves no row: a workspace turning tracking on
+      // for the first time would otherwise get a 404 for a setting it can
+      // plainly see. The create fills unset fields from the defaults, so a
+      // partial first save lands a complete, valid row. Keyed on the license
+      // alone — the table's primary key — so a second save updates rather than
+      // adding a duplicate configuration.
+      const updated = await request.withTenant(async (tx) => {
+        const row = await tx.salesTrackerSettings.upsert({
+          where: { licenseId: tenant.licenseId },
+          create: {
+            licenseId: tenant.licenseId,
+            enabled: DEFAULT_SALES_TRACKER_CONFIG.enabled,
+            currency: DEFAULT_SALES_TRACKER_CONFIG.currency,
+            attributionWindowDays: DEFAULT_SALES_TRACKER_CONFIG.attribution_window_days,
+            ...data,
+          },
+          update: data,
+        });
+        // Field names, not values: the trail shows what was touched without
+        // copying the configuration into an append-only table.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.sales_tracker_updated',
+          metadata: { fields: Object.keys(body) },
+        });
+        return row;
+      });
+
+      return reply.send(serialiseSalesTracker(updated));
+    },
+  );
+
   // --- Routing rules ---------------------------------------------------------
 
   app.get(
@@ -1244,6 +1340,28 @@ function serialiseWidget(
     theme: row?.theme ?? DEFAULT_WIDGET_APPEARANCE.theme,
     mobile_fullscreen: row?.mobileFullscreen ?? DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen,
     powered_by: row?.poweredBy ?? DEFAULT_WIDGET_APPEARANCE.powered_by,
+    updated_at: row ? row.updatedAt.toISOString() : null,
+  };
+}
+
+/**
+ * The sales tracker configuration, plus when it was last changed. No row means
+ * the defaults — the same values the schema columns default to — so a workspace
+ * that has never configured tracking reads "off" rather than an error.
+ */
+function serialiseSalesTracker(
+  row: {
+    enabled: boolean;
+    currency: string;
+    attributionWindowDays: number;
+    updatedAt: Date;
+  } | null,
+) {
+  return {
+    enabled: row?.enabled ?? DEFAULT_SALES_TRACKER_CONFIG.enabled,
+    currency: row?.currency ?? DEFAULT_SALES_TRACKER_CONFIG.currency,
+    attribution_window_days:
+      row?.attributionWindowDays ?? DEFAULT_SALES_TRACKER_CONFIG.attribution_window_days,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

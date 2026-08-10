@@ -2460,6 +2460,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/sales-tracker': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Sales tracker configuration
+     * @description How the workspace tracks orders reported by the widget snippet
+     *     (FR-MOD-13.5): whether tracking is on, the currency revenue is recorded
+     *     in, and how many days after a chat a sale still counts as attributed to
+     *     it. A workspace that has never configured it reads the shipped defaults
+     *     (`enabled` false), with no side effect — there is no row until the first
+     *     save. License-scoped, not brand-scoped: tracking does not vary by brand.
+     */
+    get: operations['getSalesTrackerSettings'];
+    /**
+     * Change the sales tracker configuration
+     * @description Creates the row on first write, filling unset fields from the defaults, so
+     *     a partial save lands a complete, valid configuration. At least one field
+     *     is required and unknown fields are rejected — a mistyped name would
+     *     otherwise be dropped silently while the screen reported a successful save.
+     *     The currency must be one of the supported ISO 4217 codes and the
+     *     attribution window an integer between 1 and 90 days.
+     */
+    put: operations['setSalesTrackerSettings'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/apps': {
     parameters: {
       query?: never;
@@ -5404,6 +5438,67 @@ export interface components {
       powered_by: boolean;
       /** Format: date-time */
       updated_at: string | null;
+    };
+    /**
+     * @description Per-license sales tracker configuration (FR-MOD-13.5,
+     *     `sales_tracker_settings`). A workspace that has never configured it
+     *     reads the shipped defaults — tracking off, USD, a 7-day attribution
+     *     window — since no row exists until the first save.
+     *
+     *     License-scoped, not brand-scoped: FR-MOD-13.5 gives no indication
+     *     tracking should differ per brand, so there is one configuration per
+     *     workspace.
+     */
+    SalesTrackerSettings: {
+      /** @description Whether orders reported by the widget snippet are tracked at all. */
+      enabled: boolean;
+      currency: components['schemas']['SalesTrackerCurrency'];
+      /**
+       * Format: int32
+       * @description Days after a chat during which a sale still counts as attributed to it. A zero or negative window could never attribute anything.
+       */
+      attribution_window_days: number;
+      /** Format: date-time */
+      updated_at: string | null;
+    };
+    /**
+     * @description ISO 4217 alpha-3 code the tracked revenue is recorded in. A whitelist rather than any three letters: the code is stored on every order and summed in the Ecommerce report, so a typo would produce a report denominated in a currency that does not exist.
+     * @enum {string}
+     */
+    SalesTrackerCurrency:
+      | 'AED'
+      | 'AUD'
+      | 'BRL'
+      | 'CAD'
+      | 'CHF'
+      | 'CNY'
+      | 'DKK'
+      | 'EUR'
+      | 'GBP'
+      | 'INR'
+      | 'JPY'
+      | 'MXN'
+      | 'NOK'
+      | 'NZD'
+      | 'PLN'
+      | 'SAR'
+      | 'SEK'
+      | 'SGD'
+      | 'TRY'
+      | 'USD'
+      | 'ZAR';
+    /**
+     * @description A partial change to the sales tracker configuration. Every field is
+     *     optional so the settings screen can save one control at a time, but a
+     *     body with none is rejected — empty is a mistake, not "reset to
+     *     defaults" — and so is any field not listed here, so a mistyped name
+     *     cannot be dropped silently while the screen reports a successful save.
+     */
+    UpdateSalesTrackerSettings: {
+      enabled?: boolean;
+      currency?: components['schemas']['SalesTrackerCurrency'];
+      /** Format: int32 */
+      attribution_window_days?: number;
     };
     /**
      * @description First-run setup state (FR-MOD-00.4). `completed` is a per-license fact —
@@ -11790,6 +11885,57 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['WidgetSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getSalesTrackerSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SalesTrackerSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setSalesTrackerSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateSalesTrackerSettings'];
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SalesTrackerSettings'];
         };
       };
       400: components['responses']['BadRequest'];

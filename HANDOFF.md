@@ -13,6 +13,30 @@
 
 ## Task log (newest-first)
 
+## tm 75.2 — 13.5-b: sales tracker konfigürasyon endpoint'i (GET/PUT /settings/sales-tracker) — done — 2026-08-10 UTC
+
+- **Yapıldı:** Contract-first `GET/PUT /settings/sales-tracker` — kontrat (`paths/settings.yaml#salesTracker`
+  + `SalesTrackerSettings`/`SalesTrackerCurrency`/`UpdateSalesTrackerSettings`, re-bundle + tip regen),
+  route `settings.ts` (GET `access_rules:ro|:rw` satır yoksa varsayılan/yazmaz · PUT `access_rules:rw`
+  upsert-on-`licenseId`), paylaşılan doğrulama `packages/types/src/sales-tracker.ts` (21 kodluk ISO 4217
+  beyaz listesi + 1..90 pencere + şema varsayılanlarının aynası), audit
+  `settings.sales_tracker_updated` (yalnız alan adları). **Yeni scope/ApiError AÇILMADI.**
+  `settings.test.ts`'e +17 test.
+- **Varsayımlar:** (1) Zod gövdesi `.strict()` — diğer settings gövdelerinden bilinçli sapma; gövde
+  kısmi olduğu için bilinmeyen alan sessizce ayıklansa upsert hiçbir şey yazmaz, ekran yine
+  "kaydedildi" derdi. (2) Currency serbest 3 harf değil beyaz liste — kod 13.5-c'de her siparişe
+  yazılıp 13.5-d'de toplanacak. (3) `AuditLogPage.tsx`'in elle-tutulan aksiyon aynasına da eklendi
+  (aksi halde yeni kayıt filtre menüsünde görünmezdi).
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2376/2376, +17) ·
+  `pnpm -w test:integration` 0 (1827/1827) · build 0 (7/7) · `pnpm -w test:e2e` **96/96**.
+- **Sonraki pencereye not:** 13.5-c (BÖLÜNMEZ) ingest+atıf çekirdeğini bu ayarların üstüne kuracak —
+  `enabled`/`currency`/`attribution_window_days` okuma noktası hazır. ⚠ **`reports-billing.test.ts`
+  FLAKY** (bu turda ölçüldü, benim değişikliğimle ilgisiz): DEĞİŞMEMİŞ ağaçta aynı dosya arka arkaya
+  18 kırmızı → 269/269 yeşil verdi; kırmızılar her koşuda BAŞKA testlerde ve hep "sayaç 0/eksik geldi"
+  şeklinde (achieved_goals, skill_runs, leads, CSV gün kovaları). Tam suite koşusunda yeşil geçti.
+  Bir sonraki pencere burada rastgele kırmızı görürse önce tek dosyayı tekrar koşsun; kök-neden ayrı
+  bir task'a değer (Task Master'a açılmadı — kapsam disiplini).
+
 ## tm 75.1 — 13.5-a: sales tracker veri modeli — sales_tracker_settings + tracked_sales — done — 2026-08-10 UTC
 
 - **Yapıldı:** `sales_tracker_settings` (lisans-tekil, `licenseId BigInt @id`) + `tracked_sales`

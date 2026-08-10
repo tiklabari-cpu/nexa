@@ -1278,6 +1278,209 @@ describe('settings', () => {
     });
   });
 
+  describe('sales tracker', () => {
+    // FR-MOD-13.5's acceptance criterion is literally "İzleme yapılandırması" —
+    // a tracking configuration that can be read and written. Every field here
+    // decides what a revenue report later claims, so the tests worth having are
+    // the ones proving a value that would corrupt that report cannot be stored:
+    // an unsupported currency, a window outside 1..90, a mistyped field name.
+    // The table is license-scoped (no brand), so its identity is the license.
+
+    it('reads the shipped defaults until it is configured, without writing a row', async () => {
+      expect(
+        await owner.salesTrackerSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+      ).toBeNull();
+
+      const response = await server.get('/settings/sales-tracker', auth(readToken));
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        enabled: false,
+        currency: 'USD',
+        attribution_window_days: 7,
+        updated_at: null,
+      });
+
+      // A read must not materialise a row.
+      expect(
+        await owner.salesTrackerSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+      ).toBeNull();
+    });
+
+    it('persists the configuration and reads it back — the acceptance criterion', async () => {
+      const saved = await server.put(
+        '/settings/sales-tracker',
+        { enabled: true, currency: 'EUR', attribution_window_days: 30 },
+        auth(adminToken),
+      );
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({
+        enabled: true,
+        currency: 'EUR',
+        attribution_window_days: 30,
+      });
+
+      const after = await server.get('/settings/sales-tracker', auth(readToken));
+      expect(after.json()).toMatchObject({
+        enabled: true,
+        currency: 'EUR',
+        attribution_window_days: 30,
+      });
+      expect((after.json() as { updated_at: string | null }).updated_at).not.toBeNull();
+    });
+
+    it('saves a partial change and fills the rest from the defaults', async () => {
+      const saved = await server.put('/settings/sales-tracker', { enabled: true }, auth(adminToken));
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({
+        enabled: true,
+        currency: 'USD',
+        attribution_window_days: 7,
+      });
+
+      // A second partial save updates the same row rather than adding another —
+      // two configurations for one license would make "the" setting ambiguous.
+      const again = await server.put(
+        '/settings/sales-tracker',
+        { attribution_window_days: 14 },
+        auth(adminToken),
+      );
+      expect(again.statusCode).toBe(200);
+      expect(again.json()).toMatchObject({ enabled: true, attribution_window_days: 14 });
+      expect(await owner.salesTrackerSettings.count({ where: { licenseId: fx.a.licenseId } })).toBe(1);
+    });
+
+    it('accepts a lower-case currency as the same configuration', async () => {
+      const saved = await server.put('/settings/sales-tracker', { currency: 'try' }, auth(adminToken));
+      expect(saved.statusCode).toBe(200);
+      expect((saved.json() as { currency: string }).currency).toBe('TRY');
+    });
+
+    it.each([{ currency: 'DOLLAR' }, { currency: 'US' }, { currency: 'XYZ' }, { currency: '' }])(
+      'rejects the unsupported currency %j and stores nothing',
+      async (body) => {
+        const response = await server.put('/settings/sales-tracker', body, auth(adminToken));
+        expect(response.statusCode).toBe(400);
+        expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
+        expect(
+          await owner.salesTrackerSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+        ).toBeNull();
+      },
+    );
+
+    it.each([0, -1, 91, 1.5])(
+      'rejects the out-of-range attribution window %j and stores nothing',
+      async (days) => {
+        const response = await server.put(
+          '/settings/sales-tracker',
+          { attribution_window_days: days },
+          auth(adminToken),
+        );
+        expect(response.statusCode).toBe(400);
+        expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
+        expect(
+          await owner.salesTrackerSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+        ).toBeNull();
+      },
+    );
+
+    it('rejects an unknown field rather than silently dropping it', async () => {
+      // Stripping it would report a successful save of a window that was never
+      // stored — the screen and the database would then disagree with nothing
+      // anywhere to explain why.
+      const response = await server.put(
+        '/settings/sales-tracker',
+        { attribution_window: 30 },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(400);
+      expect(
+        await owner.salesTrackerSettings.findUnique({ where: { licenseId: fx.a.licenseId } }),
+      ).toBeNull();
+    });
+
+    it('rejects an empty body rather than treating it as a reset', async () => {
+      const response = await server.put('/settings/sales-tracker', {}, auth(adminToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('requires write scope to change the configuration, and some scope to read it', async () => {
+      const written = await server.put(
+        '/settings/sales-tracker',
+        { enabled: true },
+        auth(readToken),
+      );
+      expect(written.statusCode).toBe(403);
+
+      const unscoped = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:ro'],
+      });
+      expect((await server.get('/settings/sales-tracker', auth(unscoped))).statusCode).toBe(403);
+      expect(
+        (await server.put('/settings/sales-tracker', { enabled: true }, auth(unscoped))).statusCode,
+      ).toBe(403);
+    });
+
+    it('records a change with only the changed field names', async () => {
+      const auditWhere = { licenseId: fx.a.licenseId, action: 'settings.sales_tracker_updated' };
+      expect(await owner.auditLogEntry.count({ where: auditWhere })).toBe(0);
+
+      const response = await server.put(
+        '/settings/sales-tracker',
+        { enabled: true, currency: 'GBP' },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(200);
+      expect(await owner.auditLogEntry.count({ where: auditWhere })).toBe(1);
+
+      const entry = await owner.auditLogEntry.findFirst({
+        where: auditWhere,
+        orderBy: { createdAt: 'desc' },
+      });
+      const metadata = entry?.metadata as { fields: string[] };
+      expect(metadata.fields).toEqual(expect.arrayContaining(['enabled', 'currency']));
+      expect(metadata.fields).toHaveLength(2);
+      // Names, not values: the configuration itself must not be copied into an
+      // append-only table.
+      expect(JSON.stringify(metadata)).not.toContain('GBP');
+    });
+
+    it("never reads or writes another tenant's configuration", async () => {
+      await owner.salesTrackerSettings.create({
+        data: {
+          licenseId: fx.b.licenseId,
+          enabled: true,
+          currency: 'JPY',
+          attributionWindowDays: 60,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Their row must not leak into our read — we see our own defaults…
+      const read = await server.get('/settings/sales-tracker', auth(readToken));
+      expect(read.json()).toMatchObject({
+        enabled: false,
+        currency: 'USD',
+        attribution_window_days: 7,
+      });
+
+      // …and our write must not reach it.
+      const written = await server.put(
+        '/settings/sales-tracker',
+        { enabled: true, currency: 'EUR', attribution_window_days: 1 },
+        auth(adminToken),
+      );
+      expect(written.statusCode).toBe(200);
+
+      const theirs = await owner.salesTrackerSettings.findUnique({
+        where: { licenseId: fx.b.licenseId },
+      });
+      expect(theirs).toMatchObject({ enabled: true, currency: 'JPY', attributionWindowDays: 60 });
+    });
+  });
+
   // --- Brand isolation within one license (Multibrand · NFR-S4/S5) ------------
   //
   // The property 78.3 adds: the widget/security/inbox settings are per *brand*,

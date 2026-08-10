@@ -77,6 +77,7 @@ const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }
       'settings.routing_rule_updated',
       'settings.chat_timeout_updated',
       'settings.widget_updated',
+      'settings.sales_tracker_updated',
       'settings.trusted_domain_added',
       'settings.trusted_domain_removed',
       'settings.ip_allowlist_added',

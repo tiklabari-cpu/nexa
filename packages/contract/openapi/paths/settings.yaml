@@ -491,6 +491,55 @@ widgetSettings:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+salesTracker:
+  get:
+    tags: [Settings]
+    operationId: getSalesTrackerSettings
+    summary: Sales tracker configuration
+    description: |
+      How the workspace tracks orders reported by the widget snippet
+      (FR-MOD-13.5): whether tracking is on, the currency revenue is recorded
+      in, and how many days after a chat a sale still counts as attributed to
+      it. A workspace that has never configured it reads the shipped defaults
+      (`enabled` false), with no side effect — there is no row until the first
+      save. License-scoped, not brand-scoped: tracking does not vary by brand.
+    responses:
+      "200":
+        description: The current configuration
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SalesTrackerSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Settings]
+    operationId: setSalesTrackerSettings
+    summary: Change the sales tracker configuration
+    description: |
+      Creates the row on first write, filling unset fields from the defaults, so
+      a partial save lands a complete, valid configuration. At least one field
+      is required and unknown fields are rejected — a mistyped name would
+      otherwise be dropped silently while the screen reported a successful save.
+      The currency must be one of the supported ISO 4217 codes and the
+      attribution window an integer between 1 and 90 days.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/UpdateSalesTrackerSettings" }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SalesTrackerSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 routingRules:
   get:
     tags: [Settings]

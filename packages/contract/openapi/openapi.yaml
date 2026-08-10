@@ -283,6 +283,8 @@ paths:
     $ref: "./paths/settings.yaml#/chatTimeout"
   /settings/widget:
     $ref: "./paths/settings.yaml#/widgetSettings"
+  /settings/sales-tracker:
+    $ref: "./paths/settings.yaml#/salesTracker"
 
   /settings/apps:
     $ref: "./paths/apps.yaml#/apps"
@@ -1510,6 +1512,64 @@ components:
           type: boolean
           description: The removable "Powered by Nexa" footer (FR-MOD-11.5).
         updated_at: { type: string, format: date-time, nullable: true }
+
+    SalesTrackerSettings:
+      type: object
+      description: |
+        Per-license sales tracker configuration (FR-MOD-13.5,
+        `sales_tracker_settings`). A workspace that has never configured it
+        reads the shipped defaults — tracking off, USD, a 7-day attribution
+        window — since no row exists until the first save.
+
+        License-scoped, not brand-scoped: FR-MOD-13.5 gives no indication
+        tracking should differ per brand, so there is one configuration per
+        workspace.
+      required: [enabled, currency, attribution_window_days, updated_at]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether orders reported by the widget snippet are tracked at all.
+        currency:
+          $ref: "#/components/schemas/SalesTrackerCurrency"
+        attribution_window_days:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 90
+          description: >-
+            Days after a chat during which a sale still counts as attributed to
+            it. A zero or negative window could never attribute anything.
+        updated_at: { type: string, format: date-time, nullable: true }
+
+    SalesTrackerCurrency:
+      type: string
+      description: >-
+        ISO 4217 alpha-3 code the tracked revenue is recorded in. A whitelist
+        rather than any three letters: the code is stored on every order and
+        summed in the Ecommerce report, so a typo would produce a report
+        denominated in a currency that does not exist.
+      enum:
+        [AED, AUD, BRL, CAD, CHF, CNY, DKK, EUR, GBP, INR, JPY, MXN, NOK, NZD, PLN, SAR, SEK, SGD, TRY, USD, ZAR]
+
+    UpdateSalesTrackerSettings:
+      type: object
+      description: |
+        A partial change to the sales tracker configuration. Every field is
+        optional so the settings screen can save one control at a time, but a
+        body with none is rejected — empty is a mistake, not "reset to
+        defaults" — and so is any field not listed here, so a mistyped name
+        cannot be dropped silently while the screen reports a successful save.
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean }
+        currency:
+          $ref: "#/components/schemas/SalesTrackerCurrency"
+        attribution_window_days:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 90
 
     OnboardingState:
       type: object

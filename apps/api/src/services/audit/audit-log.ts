@@ -62,6 +62,11 @@ export const AUDIT_ACTIONS = [
   'settings.routing_rule_updated',
   'settings.chat_timeout_updated',
   'settings.widget_updated',
+  // Sales tracking (FR-MOD-13.5). Recorded because this configuration decides
+  // what the Ecommerce report claims: turning tracking on, changing the currency
+  // revenue is recorded in, or widening the attribution window all move the
+  // revenue figures a workspace reports. The entry names the changed fields only.
+  'settings.sales_tracker_updated',
   'settings.trusted_domain_added',
   'settings.trusted_domain_removed',
   'settings.ip_allowlist_added',

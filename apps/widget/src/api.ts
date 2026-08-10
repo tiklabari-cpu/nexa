@@ -17,6 +17,13 @@ export interface WidgetEvent {
   attachment_url: string | null;
 }
 
+/** The order fields `POST /customer/chat/sale` accepts (FR-MOD-13.5). */
+export interface TrackSaleInput {
+  external_order_id: string;
+  amount_cents: number;
+  currency: string;
+}
+
 export interface WidgetState {
   online: boolean;
   /** Whether an agent is mid-reply, for the "…is typing" line (FR-MOD-02.9). */
@@ -181,6 +188,17 @@ export class WidgetApi {
 
   async close(): Promise<void> {
     await this.#request('POST', '/customer/chat/close');
+  }
+
+  /**
+   * Report a completed order (FR-MOD-13.5), attributed server-side to the
+   * visitor's most recent chat within the workspace's configured window.
+   * Fired from the host page's `nexa('trackSale', …)` tracking call, relayed
+   * into the widget document — same fire-and-forget shape as `typing`/`rate`,
+   * the response body is nothing the widget needs to act on.
+   */
+  async trackSale(input: TrackSaleInput): Promise<void> {
+    await this.#request('POST', '/customer/chat/sale', input);
   }
 
   async #request<T>(method: string, path: string, body?: unknown): Promise<T> {

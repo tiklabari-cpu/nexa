@@ -2959,12 +2959,12 @@
             "description": "(1) `apps/widget/src/api.ts`e `trackSale({ external_order_id, amount_cents, currency })` → `POST /customer/chat/sale` (mevcut `#request` + token yenileme yolu aynen kullanılır). (2) `apps/widget/src/loader.ts`ta `window.__nexa` üzerinden çağrılabilir genel bir komut yüzeyi: `nexa('trackSale', {...})`; widget yüklenmeden önce çağrılırsa kuyruğa alınıp boot sonrası boşaltılır (klasik komut kuyruğu).",
             "details": "13.5-g — Widget izleme kodu — nexa('trackSale', …) JS API + kurulum snippet'i  [SONNET-XHIGH]\n\nPRD: FR-MOD-13.5 (+ NFR-P3 widget bundle bütçesi)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 3-4 dosya (koşul 1); istemci tarafı kod — TÜM doğrulama, yetki ve idempotency sunucuda (13.5-c) yapıldı, burada hiçbir güvenlik kararı verilmiyor ve istemci zaten güvenilmez taraf (koşul 2); eşzamanlılık yok (koşul 3); kopyalanacak desen ismen var — `loader.ts` `window.__nexa` boot deseni + `api.ts` `#request` (koşul 4); kontrat 13.5-c'de kilitlendi, burada katkısal tüketim (koşul 5); KK mekanik doğrulanabilir (koşul 6).\nNEDEN AÇIK: `apps/widget/src/loader.ts`ta dışa açılan tek giriş `boot()` ve `window.__nexa` konfigürasyonu (satır 5, 17, 53); satış/dönüşüm bildiren bir genel API YOK. `apps/widget/src/api.ts`ta `WidgetApi` sınıfının çağrıları token/olay/yükleme ile sınırlı — satış çağrısı yok. PRD §6 satır 717 birebir 'satış/dönüşüm izleme kodu/kuralı' diyor; 'izleme kodu' karşılığı olan istemci yüzeyi mevcut değil.\nKAPSAM: (1) `apps/widget/src/api.ts`e `trackSale({ external_order_id, amount_cents, currency })` → `POST /customer/chat/sale` (mevcut `#request` + token yenileme yolu aynen kullanılır). (2) `apps/widget/src/loader.ts`ta `window.__nexa` üzerinden çağrılabilir genel bir komut yüzeyi: `nexa('trackSale', {...})`; widget yüklenmeden önce çağrılırsa kuyruğa alınıp boot sonrası boşaltılır (klasik komut kuyruğu). (3) Hatalar SESSİZ yutulur — müşterinin checkout sayfasını asla bozmaz (konsola uyarı, exception yok). (4) `WebsiteWidgets.tsx`teki kurulum snippet'ine örnek `trackSale` satırı (yalnız metin/dokümantasyon). (5) NFR-P3 bundle bütçesi korunur (mevcut ölçüm eşiği aşılmaz).\nDOSYALAR: apps/widget/src/api.ts · apps/widget/src/loader.ts · apps/widget/src/loader.test.ts · apps/web/src/features/settings/WebsiteWidgets.tsx\nREFERANS DESEN (kopyalanacak): apps/widget/src/loader.ts:53-175 (boot + window.__nexa okuma + normaliseOrigin — genel API yerleştirme noktası) · apps/widget/src/api.ts:184-209 (#request — 401'de token yenileyip yeniden deneyen çağrı deseni) · apps/widget/src/loader.test.ts (loader birim testi kurulumu) · apps/widget/src/widget.prechat.test.ts (widget davranış testi deseni)\nKK (birebir): \"KK-türetilmiş: PRD KK sütunu istemci yüzeyini tanımlamıyor. Türetme dayanağı PRD §6 satır 717 Gereksinim sütunundaki birebir ifade: \"satış/dönüşüm izleme kodu/kuralı\". Türetilmiş KK: \"Müşterinin sitesine yerleştirilen izleme kodu tek bir çağrıyla satışı bildirir; widget henüz yüklenmemişse çağrı kaybolmaz; çağrı başarısız olsa bile barındıran sayfa bozulmaz.\" Gerekçe: 'izleme kodu'nun doğrulanabilir karşılığı bir genel JS API + kuyruk + hata izolasyonudur.\"\nKK DOĞRULAMA: `apps/widget/src/loader.test.ts` — (a) boot'tan SONRA `nexa('trackSale', payload)` çağrısı `/customer/chat/sale`e beklenen gövdeyle gider; (b) boot'tan ÖNCE yapılan çağrı kuyruğa alınır ve boot sonrası tam bir kez gönderilir (kaybolmaz, çift gitmez); (c) sunucu 4xx/ağ hatası verdiğinde çağrı reject ETMEZ, exception fırlamaz (barındıran sayfa korunur). Üç iddia türetilmiş KK'nın üç cümlesinin birebir karşılığıdır. Bundle bütçesi ölçümü NFR-P3 eşiğinin altında.\nKAPSAM DIŞI: Sunucu tarafı doğrulama/idempotency/atıf (13.5-c — istemciye ASLA güvenilmez) · Ürün/varyant/adet alanları (legacy postback, varsayım 1) · Harici e-ticaret platformu SDK'sı veya piksel entegrasyonu (MOD-09.2, ertelendi) · Widget görünümü/tema değişikliği\nSÖZLEŞME: yok — 13.5-c'de kilitlenen `/customer/chat/sale` sözleşmesi tüketilir. (Bu alt-görev yeni path EKLEMEZ; eklerse contract-parity.test.ts iki yönlü kırılır.)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: boot sonrası trackSale doğru endpoint + gövde · unit: boot öncesi çağrı kuyruklanır, boot sonrası tam bir kez gönderilir · unit (negatif): sunucu 4xx / fetch reject → throw yok, sayfa akışı bozulmaz · unit (negatif): eksik/geçersiz payload istemcide de gönderilmez (sunucu doğrulaması yine de son söz) · bundle: widget boyutu NFR-P3 bütçesinde",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "75.3"
             ],
             "parentId": "75",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T23:10:59.466Z"
           },
           {
             "id": 8,
@@ -2983,7 +2983,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T21:51:36.543Z",
+        "updatedAt": "2026-08-10T23:10:59.466Z",
         "complexity": 8,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"13.5 — Sales tracker (Ecommerce/Tracked sales)  ·  dilim V2-8\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5133,7 +5133,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T21:51:36.544Z",
+      "lastModified": "2026-08-10T23:10:59.467Z",
       "taskCount": 113,
       "completedCount": 104,
       "tags": [

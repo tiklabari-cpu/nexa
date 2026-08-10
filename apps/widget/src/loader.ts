@@ -52,6 +52,32 @@ const ALLOWED_INBOUND = new Set(['nexa:ready', 'nexa:resize', 'nexa:open', 'nexa
 
 const IFRAME_ID = 'nexa-widget-frame';
 
+/** Opaque here — the widget document (not this script) validates the shape. */
+type NexaCommandPayload = Record<string, unknown> | undefined;
+
+/** Commands called before the widget can receive them, flushed once it is ready. */
+let pendingCommands: Array<{ command: string; payload: NexaCommandPayload }> = [];
+/** Set once the current widget instance confirms (`nexa:ready`) it can receive commands. */
+let relayCommand: ((command: string, payload: NexaCommandPayload) => void) | null = null;
+
+/**
+ * `nexa('trackSale', …)` (FR-MOD-13.5) — the general command surface a host
+ * page's own scripts call. Exposed as soon as this script runs, since a page's
+ * own script may call it before the widget has finished booting; queued
+ * rather than dropped, and flushed once the frame confirms it is ready
+ * (classic command-queue snippet pattern). Never throws — a checkout page
+ * must not break because a call arrived early or was misused.
+ */
+function nexa(command: string, payload?: NexaCommandPayload): void {
+  try {
+    if (relayCommand) relayCommand(command, payload);
+    else pendingCommands.push({ command, payload });
+  } catch {
+    // Never propagates into the host page — not even a relay failure against
+    // a frame that has since gone away.
+  }
+}
+
 export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (() => void) | null {
   const config = win.__nexa;
   if (!config?.organizationId) {
@@ -69,6 +95,11 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
   // `allow-scripts allow-same-origin` a same-origin frame can reach into the
   // embedder and even strip its own sandbox. Refuse rather than run degraded.
   if (widgetOrigin === win.location.origin) return null;
+
+  // A fresh instance is booting — any relay bound to a previous (now gone)
+  // frame is stale. Queued commands are kept: they were issued for whichever
+  // widget boots next, which is this one.
+  relayCommand = null;
 
   const frame = win.document.createElement('iframe');
   frame.id = IFRAME_ID;
@@ -144,6 +175,15 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
     if (data.type === 'nexa:open') open = true;
     if (data.type === 'nexa:close') open = false;
 
+    if (data.type === 'nexa:ready') {
+      relayCommand = (command, payload): void => {
+        frame.contentWindow?.postMessage({ type: 'nexa:command', command, payload }, widgetOrigin);
+      };
+      const queued = pendingCommands;
+      pendingCommands = [];
+      for (const item of queued) relayCommand(item.command, item.payload);
+    }
+
     if (data.type === 'nexa:resize') {
       const height = clampDimension(data.height, 84, 720);
       const width = clampDimension(data.width, 84, 420);
@@ -168,6 +208,7 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
     delete config.open;
     delete config.close;
     delete config.destroy;
+    relayCommand = null;
   };
   config.destroy = destroy;
 
@@ -244,6 +285,12 @@ function hostPageUrl(win: Window): { origin: string; url: string; referrer: stri
 function clampDimension(value: unknown, min: number, max: number): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+// Exposed unconditionally, independent of boot() succeeding — a misconfigured
+// `window.__nexa` should not also take down the tracking call surface.
+if (typeof window !== 'undefined') {
+  (window as Window & { nexa?: typeof nexa }).nexa = nexa;
 }
 
 // Auto-boot when loaded as a plain script tag, but stay inert under test/import.

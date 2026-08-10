@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { boot, type NexaWidgetConfig } from './loader.js';
 
 type TestWindow = Window & {
@@ -269,5 +269,76 @@ describe('loader message boundary', () => {
     const el = frame()!;
     expect(() => dispatch('hello', 'https://widget.test', el.contentWindow)).not.toThrow();
     expect(() => dispatch(null, 'https://widget.test', el.contentWindow)).not.toThrow();
+  });
+});
+
+/**
+ * The `nexa('trackSale', …)` command surface (FR-MOD-13.5, 13.5-g). The
+ * customer token this call needs lives inside the sandboxed frame, never on
+ * the host page (NFR-S6), so the loader's part is only to relay a validated
+ * command across the message boundary the tests above establish — the widget
+ * document is what actually calls `/customer/chat/sale` (pinned separately,
+ * `widget.tracksale.test.ts`, since a plain jsdom iframe never executes the
+ * document at `frame.src`).
+ */
+describe('nexa command queue (FR-MOD-13.5)', () => {
+  beforeEach(() => setup());
+
+  function nexaGlobal(): (command: string, payload?: unknown) => void {
+    return (window as unknown as { nexa: (command: string, payload?: unknown) => void }).nexa;
+  }
+
+  function markReady(el: HTMLIFrameElement): void {
+    const event = new MessageEvent('message', {
+      data: { type: 'nexa:ready' },
+      origin: 'https://widget.test',
+    });
+    Object.defineProperty(event, 'source', { value: el.contentWindow });
+    window.dispatchEvent(event);
+  }
+
+  const payload = { external_order_id: 'o-1', amount_cents: 500, currency: 'USD' };
+
+  it('exposes a global command function', () => {
+    expect(typeof nexaGlobal()).toBe('function');
+  });
+
+  it('relays a command issued after the widget signals ready', () => {
+    boot(setup({}));
+    const el = frame()!;
+    markReady(el);
+    const post = vi.spyOn(el.contentWindow!, 'postMessage');
+
+    nexaGlobal()('trackSale', payload);
+
+    expect(post).toHaveBeenCalledWith(
+      { type: 'nexa:command', command: 'trackSale', payload },
+      'https://widget.test',
+    );
+  });
+
+  it('queues a command issued before the widget is ready and flushes it exactly once', () => {
+    boot(setup({}));
+    const el = frame()!;
+    const post = vi.spyOn(el.contentWindow!, 'postMessage');
+
+    nexaGlobal()('trackSale', payload);
+    expect(post).not.toHaveBeenCalled();
+
+    markReady(el);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith(
+      { type: 'nexa:command', command: 'trackSale', payload },
+      'https://widget.test',
+    );
+
+    // Not sent twice: a second ready (there will not be one in practice) must
+    // not replay an already-flushed call.
+    markReady(el);
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not throw when called before the widget has ever booted', () => {
+    expect(() => nexaGlobal()('trackSale', payload)).not.toThrow();
   });
 });

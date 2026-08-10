@@ -9,7 +9,7 @@
  * rather than relying on anyone remembering (NFR-S6).
  */
 import type { PreChatFormField, WidgetAppearance } from '@nexa/types';
-import { WidgetApi, type WidgetEvent, type WidgetState } from './api.js';
+import { WidgetApi, type TrackSaleInput, type WidgetEvent, type WidgetState } from './api.js';
 import { createTranslator, type WidgetTranslate } from './i18n.js';
 
 const LAUNCHER_SIZE = 84;
@@ -482,6 +482,27 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
   }
 
+  /**
+   * `nexa('trackSale', …)` (FR-MOD-13.5), relayed here from the loader. The
+   * host page is untrusted, so the payload is reshaped rather than trusted —
+   * an unrecognised shape is dropped rather than sent on. The visitor may
+   * never have opened the panel (a checkout confirmation page fires this on
+   * its own), so a token is minted here if there is not one yet, reusing the
+   * same returning-visitor identity the panel would. Silent on failure by
+   * contract (13.5-g KK): the host page must never see this feature break it.
+   */
+  async function trackSale(payload: unknown): Promise<void> {
+    const sale = asTrackSaleInput(payload);
+    if (!sale) return;
+    if (!api.authenticated) await connect();
+    if (!api.authenticated) return; // connect already logged its own failure
+    try {
+      await api.trackSale(sale);
+    } catch (error) {
+      console.warn('nexa widget: trackSale failed', error);
+    }
+  }
+
   async function onPickFile(): Promise<void> {
     const file = ui.file.files?.[0];
     ui.file.value = ''; // allow re-picking the same file
@@ -693,11 +714,12 @@ export function mount(doc: Document = document, win: Window = window): void {
   });
 
   win.addEventListener('message', (event: MessageEvent) => {
-    // The host page is cross-origin and untrusted: accept only the two commands
-    // it may issue, and ignore anything else without replying.
-    const data = event.data as { type?: unknown };
+    // The host page is cross-origin and untrusted: accept only the known
+    // commands it may issue, and ignore anything else without replying.
+    const data = event.data as { type?: unknown; command?: unknown; payload?: unknown };
     if (data?.type === 'nexa:host-open') setOpen(true);
     if (data?.type === 'nexa:host-close') setOpen(false);
+    if (data?.type === 'nexa:command' && data.command === 'trackSale') void trackSale(data.payload);
   });
 
   if (config.chatPage) {
@@ -1049,6 +1071,20 @@ function formatTime(iso: string): string {
   return Number.isNaN(date.getTime())
     ? ''
     : date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Narrow an untrusted `nexa('trackSale', …)` payload to the shape the API
+ * accepts. The server is the final authority (13.5-c) — this only stops an
+ * obviously wrong call (missing field, wrong type) from going out at all.
+ */
+function asTrackSaleInput(payload: unknown): TrackSaleInput | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const { external_order_id, amount_cents, currency } = payload as Record<string, unknown>;
+  if (typeof external_order_id !== 'string' || external_order_id.length === 0) return null;
+  if (typeof amount_cents !== 'number' || !Number.isFinite(amount_cents)) return null;
+  if (typeof currency !== 'string' || currency.length !== 3) return null;
+  return { external_order_id, amount_cents, currency };
 }
 
 /** Map the API's snake_case identity to the widget's shape. */

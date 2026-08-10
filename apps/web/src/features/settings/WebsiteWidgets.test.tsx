@@ -70,6 +70,44 @@ describe('WebsiteWidgets validation', () => {
 });
 
 /**
+ * The `nexa('trackSale', …)` tracking call (FR-MOD-13.5, 13.5-g) is
+ * documentation only here — the panel just needs to show a developer the
+ * exact line to paste into their own checkout confirmation script.
+ */
+describe('WebsiteWidgets trackSale documentation', () => {
+  const site = {
+    id: 'site-1',
+    domain: 'shop.example',
+    setup: 'manual' as const,
+    status: 'connected' as const,
+    connected_at: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    snippet: '<script>window.__nexa = { organizationId: "org-1" };</script>',
+  };
+
+  beforeEach(() => {
+    useAuth.setState({ status: 'signed-in', accessToken: 'test-token', agent: null });
+    useBrandStore.setState({ brandId: null });
+    vi.stubGlobal('fetch', vi.fn(async () => okJson({ items: [site] })));
+  });
+
+  it('shows the trackSale example once the snippet panel is opened', async () => {
+    renderWidgets();
+    await userEvent.click(await screen.findByRole('button', { name: 'Get code' }));
+
+    expect(screen.getByTestId('website-snippet-track-sale')).toHaveTextContent(
+      "nexa('trackSale',",
+    );
+  });
+
+  it('hides the example until the snippet panel is opened', async () => {
+    renderWidgets();
+    await screen.findByText('shop.example');
+    expect(screen.queryByTestId('website-snippet-track-sale')).not.toBeInTheDocument();
+  });
+});
+
+/**
  * Brand scoping (MULTIBRAND-g, PRD §5.3-Marka): the site list and the section
  * heading both follow the selected brand, so switching brands shows that
  * brand's sites rather than the ones left over from before.

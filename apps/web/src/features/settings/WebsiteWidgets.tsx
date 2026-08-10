@@ -31,6 +31,17 @@ interface Website {
   snippet: string;
 }
 
+/**
+ * Documentation only (FR-MOD-13.5, 13.5-g) — shown alongside the install
+ * snippet so a developer wiring up the checkout confirmation page sees the
+ * call right next to where the widget itself is pasted in. `nexa` is the
+ * general command surface the loader exposes once pasted above; calling it
+ * before the widget has finished loading queues the call rather than losing
+ * it.
+ */
+const TRACK_SALE_EXAMPLE =
+  "nexa('trackSale', { external_order_id: 'order-123', amount_cents: 4999, currency: 'USD' });";
+
 const STATUS: Record<Website['status'], { tone: StatusTone; label: string }> = {
   connected: { tone: 'success', label: 'Connected' },
   pending: { tone: 'warning', label: 'Waiting for first message' },
@@ -269,6 +280,17 @@ function SnippetPanel({ snippet, domain }: { snippet: string; domain: string }):
       >
         {snippet}
       </pre>
+      <div className="border-t border-border px-3 py-2">
+        <p className="text-2xs text-content-tertiary">
+          To report a sale once checkout completes, call the tracking code from your own script:
+        </p>
+        <pre
+          data-testid="website-snippet-track-sale"
+          className="mt-1 overflow-x-auto font-mono text-2xs leading-relaxed text-content-secondary"
+        >
+          {TRACK_SALE_EXAMPLE}
+        </pre>
+      </div>
       <div className="flex items-center gap-2 border-t border-border px-3 py-2">
         <button
           type="button"

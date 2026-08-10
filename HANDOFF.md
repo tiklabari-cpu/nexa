@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 75.7 — 13.5-g: Widget izleme kodu — nexa('trackSale', …) JS API + kurulum snippet'i — done — 2026-08-11 UTC
+
+- **Yapıldı:** `apps/widget/src/api.ts`e `WidgetApi#trackSale()` (`POST /customer/chat/sale`). `apps/widget/src/loader.ts`ta `window.nexa(command, payload)` genel komut yüzeyi — boot'tan bağımsız hemen atanır, `nexa:ready` öncesi çağrılar kuyruklanıp ready sonrası tam bir kez flush edilir. `widget.ts`te `trackSale` relay'i: payload şekil daraltması, gerekirse önce `connect()`, hata her zaman `console.warn`'a yutulur (asla throw). `WebsiteWidgets.tsx` kurulum snippet paneline salt-metin örnek satır eklendi.
+- **Varsayımlar:** Yok — bu bir bulunan iş, önceki pencere (kota/çökme ile ölmüş, HANDOFF'ta izi yoktu) implementasyon+testleri zaten bitirmişti; bu pencere yalnız DoD kapısını koşup kapanışı tamamladı.
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/web` 929/929 · `@nexa/api` 2410/2410 · `@nexa/widget` 69/69, bundle-size dahil) · `pnpm -w test:integration` 0 (`@nexa/api` 1851/1851) · build 0 (7/7) · `pnpm -w test:e2e` **96/96** (sayı sabit).
+- **Sonraki pencereye not:** 13.5-h (uçtan uca doğrulama — seed/demo + e2e, izleme kodu → Reports Ecommerce, + 13.3 Goals tutarlılığı) hâlâ açık; PLAN.md K13.5 satırı `◐` kalıyor.
+
 ## tm 75.6 — 13.5-f: Reports/Reviews Ecommerce KPI'ları + dürüst empty state + CTA — done — 2026-08-10 UTC
 
 - **Yapıldı:** `ReportsPage.tsx`'in Reviews → Ecommerce'i: `ecommerce` alanı ayrık union'a geçti

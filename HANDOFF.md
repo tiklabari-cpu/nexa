@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+### İŞLETİM UYARISI — tm 73.3 için AYNI ANDA İKİ PENCERE açıldı — 2026-08-10 UTC
+
+- **Ne oldu:** Runner tm 73.3 için 06:33:30'da bir pencere (PID 6800), 06:37:07'de İKİNCİ bir
+  pencere (PID 11004) açtı. Task Master görevi ikinci pencere devraldığında zaten `in-progress`
+  idi (`set_task_status` `oldStatus: "in-progress"` döndürdü) — yani "yarım kalmış işi devral"
+  sinyali ile "başka pencere şu an yazıyor" sinyali AYIRT EDİLEMİYOR. İkinci pencere çakışmayı
+  yalnız dosya `LastWriteTime` damgalarından fark etti (schema 06:36:34 → migration 06:37:58 →
+  test 06:39:13/06:39:41, hepsi kendisi hiçbir şey yazmamışken ilerliyordu).
+- **Neden önemli:** İkinci pencere protokolü harfiyen uygulasaydı (§1 "kaldığı yerden devam et")
+  aynı dosyaları eşzamanlı `Edit`'leyecekti — `data-model.test.ts` / `tenant-isolation.test.ts` /
+  `PLAN.md` / `HANDOFF.md` karşılıklı ezilir, iki commit çakışırdı. Ayrıca ikisi aynı anda e2e
+  koşsaydı sabit portlarda gürültülü biçimde düşerdi (CONVENTIONS §1.1 istisnası).
+- **Bu turda ne yapıldı:** İkinci pencere YAZMADI. Birinci pencerenin işini salt-okunur inceledi,
+  commit'ini bekledi, sonra bağımsız doğrulama koştu: `pnpm -w test:integration` **1671/1671**
+  (67 dosya — birinci pencerenin raporladığı sayının birebir aynısı) · `pnpm -w typecheck` **0**
+  (11/11). Birinci pencere `47d6f89` + `cc56693` ile kapandı ve temiz çıktı; iş kaybı yok.
+- **Sonraki pencereye not:** Bir pencere hedef task'ı ZATEN `in-progress` bulursa, körlemesine
+  devralmadan önce canlılık kontrolü yapsın: ilgili dosyaların `LastWriteTime`'ı son birkaç
+  dakika içinde mi, başka bir `claude` süreci açık mı. Taze damga varsa yazmayın — bekleyin.
+  Kalıcı çözüm runner tarafında: `pick_next` `in-progress` görevleri atlamalı veya pencere
+  başına bir kilit dosyası (`.taskmaster/locks/<id>`) tutulmalı. Bu ayrı bir görev olarak açılmalı.
+
 ### tm 73.3 — 13.2-c: `chat_supervisions` tablosu + RLS politikası + Prisma modeli — done — 2026-08-10 UTC
 
 - **Yapıldı:** Yeni `ChatSupervision` modeli (`schema.prisma`, ChatAccess'in hemen ardında) +

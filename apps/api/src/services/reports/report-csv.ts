@@ -31,6 +31,7 @@ import {
   benchmarkWindow,
   channelLabel,
   DEFAULT_BENCHMARK_BASELINE,
+  goalConversionRate,
   resolutionRate,
   round,
   type BenchmarkBaseline,
@@ -150,6 +151,124 @@ export function achievedGoalCount(
   to: Date,
 ): Promise<number> {
   return tx.goalAchievement.count({ where: { licenseId, achievedAt: { gte: from, lte: to } } });
+}
+
+/** The three stages of the Goals funnel over one window, as raw counts. */
+export interface GoalFunnelCounts {
+  visitors: number;
+  chats: number;
+  conversions: number;
+}
+
+/**
+ * The visitor → chat → conversion funnel for one window (FR-MOD-13.3).
+ *
+ * The three stages are **nested** — each counts a subset of the customers the
+ * one before it counted — which is what makes the answer a funnel rather than
+ * three unrelated totals that happen to sit next to each other:
+ *
+ * - `visitors`: distinct customers with a visit in the window, workspace wide.
+ *   Not per goal: nothing records which visitors a goal was *eligible* to
+ *   catch (a goal only leaves a trace once it is reached), so a per-goal
+ *   denominator would be invented rather than measured.
+ * - `chats`: of those visitors, the ones who also opened a conversation in the
+ *   window. Restricted to the visitor cohort deliberately — a chat that arrived
+ *   by email or a channel adapter has no visit behind it, and counting it would
+ *   let stage two exceed stage one.
+ * - `conversions`: of those, the ones who reached at least one goal in the
+ *   window. Distinct *customers*, so a visitor who reached three goals counts
+ *   once; the per-goal hit counts are {@link goalConversionsByGoal}'s job.
+ *
+ * One statement, not three round trips: the stages read each other, and a
+ * single query keeps them measured against one snapshot of the data.
+ */
+export async function goalFunnelCounts(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<GoalFunnelCounts> {
+  const [row] = await tx.$queryRaw<
+    Array<{ visitors: bigint; chats: bigint; conversions: bigint }>
+  >`
+    WITH seen AS (
+      SELECT DISTINCT v.customer_id
+      FROM visits v
+      WHERE v.license_id = ${licenseId}
+        AND v.started_at >= ${from} AND v.started_at <= ${to}
+    ),
+    chatted AS (
+      SELECT DISTINCT c.customer_id
+      FROM threads t
+      -- Locked on license *and* id: chat ids are per-license, so an unlocked
+      -- join could pair this license's thread with a sibling's chat row.
+      JOIN chats c ON c.id = t.chat_id AND c.license_id = t.license_id
+      WHERE t.license_id = ${licenseId}
+        AND t.created_at >= ${from} AND t.created_at <= ${to}
+        AND c.customer_id IN (SELECT customer_id FROM seen)
+    ),
+    converted AS (
+      SELECT DISTINCT ga.customer_id
+      FROM goal_achievements ga
+      WHERE ga.license_id = ${licenseId}
+        AND ga.achieved_at >= ${from} AND ga.achieved_at <= ${to}
+        AND ga.customer_id IN (SELECT customer_id FROM chatted)
+    )
+    SELECT (SELECT count(*) FROM seen)      AS visitors,
+           (SELECT count(*) FROM chatted)   AS chats,
+           (SELECT count(*) FROM converted) AS conversions
+  `;
+  return {
+    visitors: Number(row?.visitors ?? 0),
+    chats: Number(row?.chats ?? 0),
+    conversions: Number(row?.conversions ?? 0),
+  };
+}
+
+/**
+ * What each goal contributed in a window (FR-MOD-13.3), most conversions first.
+ *
+ * Driven from `goals`, not from `goal_achievements`, so every goal the
+ * workspace has defined appears — including the ones nobody reached, which are
+ * a reportable result rather than an absence, and the retired ones, which keep
+ * the conversions they already earned (retiring a goal is `active: false`, and
+ * it must not rewrite last month's numbers).
+ *
+ * `conversions` counts every achievement in the window, *not* the funnel's
+ * nested stage: these sum to the figure the Overview reports as
+ * `totals.achieved_goals` ({@link achievedGoalCount}), which is the number this
+ * breakdown has to agree with. It can therefore exceed `funnel.conversions` —
+ * a visitor who converted without ever chatting, or who reached two goals,
+ * shows up here and not (or once) there.
+ *
+ * The join is locked on `license_id` as well as `goal_id`: goal ids are uuids,
+ * so a collision is not the threat, but the lock is what makes the isolation
+ * legible next to the RLS policy rather than resting on it alone.
+ */
+export async function goalConversionsByGoal(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<Array<{ goal_id: string; name: string; conversions: number }>> {
+  const rows = await tx.$queryRaw<Array<{ goal_id: string; name: string; conversions: bigint }>>`
+    SELECT g.id::text AS goal_id, g.name, count(ga.id) AS conversions
+    FROM goals g
+    LEFT JOIN goal_achievements ga
+      ON ga.goal_id = g.id
+     AND ga.license_id = g.license_id
+     AND ga.achieved_at >= ${from} AND ga.achieved_at <= ${to}
+    WHERE g.license_id = ${licenseId}
+    GROUP BY g.id, g.name
+    -- Ties broken by name then id, so the order is stable across requests and a
+    -- CSV of the same window is byte-identical twice running.
+    ORDER BY count(ga.id) DESC, g.name ASC, g.id ASC
+  `;
+  return rows.map((row) => ({
+    goal_id: row.goal_id,
+    name: row.name,
+    conversions: Number(row.conversions),
+  }));
 }
 
 interface CaseDaySplit {
@@ -1179,6 +1298,8 @@ function groupBenchmark(
       return leadsBenchmark(tx, licenseId, window);
     case 'sales':
       return Promise.resolve(salesBenchmark());
+    case 'goals':
+      return goalsBenchmark(tx, licenseId, window);
     case 'topics':
       // Topics keeps each cluster's baseline volume on its own row
       // (`previous_volume`), where it can be matched to the topic it belongs
@@ -1381,6 +1502,36 @@ async function groupCsvTable(
         ]),
       };
     }
+    case 'goals': {
+      // Long format, like the Breakdown: the Goals tab is two tables (a funnel
+      // and a per-goal list) and a CSV is one, so `section` names which table a
+      // row belongs to rather than inventing a second file. `key` is the
+      // funnel figure's name or the goal's id, `name` its label — so a row
+      // carries both something stable to join on and something to read.
+      //
+      // Sequential, not `Promise.all` — `tx` is one connection inside a Prisma
+      // interactive transaction (see withTenant), which does not support
+      // concurrent queries on the same client.
+      const funnel = await goalFunnelCounts(tx, licenseId, from, to);
+      const byGoal = await goalConversionsByGoal(tx, licenseId, from, to);
+      return {
+        headers: ['section', 'key', 'name', 'value'],
+        rows: [
+          ['funnel', 'visitors', 'Visitors', funnel.visitors],
+          ['funnel', 'chats', 'Chats', funnel.chats],
+          ['funnel', 'conversions', 'Conversions', funnel.conversions],
+          [
+            'funnel',
+            'conversion_rate',
+            'Conversion rate',
+            goalConversionRate(funnel.conversions, funnel.chats),
+          ],
+          // A goal's name is user-written free text — the field `toCsv`'s
+          // formula-injection guard exists for.
+          ...byGoal.map((goal): CsvCell[] => ['goal', goal.goal_id, goal.name, goal.conversions]),
+        ],
+      };
+    }
     case 'sales': {
       // Same "not configured" contract as the JSON report (buildSalesReport) —
       // no sales source exists yet (FR-MOD-13.5), so this is the honest empty
@@ -1552,6 +1703,27 @@ export function salesBenchmark(): Record<string, unknown> {
     currency: null,
     conversions: null,
   };
+}
+
+/**
+ * The Goals report's comparable figures: the same three-stage funnel, measured
+ * over the baseline window by the same {@link goalFunnelCounts} — so the
+ * comparison is nested exactly as the figure it is compared with, and stays
+ * inside this license through the same explicit `license_id` filters.
+ *
+ * The per-goal breakdown deliberately has no counterpart here: which goals a
+ * window holds is derived from what the workspace has defined *now*, and a
+ * goal created mid-window would line up against a baseline row that never
+ * existed — the same reasoning that keeps Team performance's agent table out
+ * of its benchmark.
+ */
+export async function goalsBenchmark(
+  tx: TenantClient,
+  licenseId: bigint,
+  window: { from: Date; to: Date },
+): Promise<Record<string, unknown>> {
+  const funnel = await goalFunnelCounts(tx, licenseId, window.from, window.to);
+  return { ...funnel, conversion_rate: goalConversionRate(funnel.conversions, funnel.chats) };
 }
 
 export function roundOrNull(value: number | null | undefined): number | null {

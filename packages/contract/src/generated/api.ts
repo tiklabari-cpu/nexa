@@ -3624,6 +3624,53 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/goals': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Goals — the visitor → chat → conversion funnel
+     * @description The Goals report (FR-MOD-13.3): the three-stage funnel over the window,
+     *     plus what each goal contributed. Defaults to the last 30 days.
+     *
+     *     `funnel` is genuinely nested — each stage is a subset of the one before,
+     *     so `visitors >= chats >= conversions` always holds:
+     *
+     *     - `visitors` — distinct customers with a visit in the window, workspace
+     *       wide. Not per goal: nothing records which visitors a goal was *eligible*
+     *       to catch, so a per-goal denominator would be invented rather than
+     *       measured.
+     *     - `chats` — of those visitors, the ones who also opened a conversation in
+     *       the window.
+     *     - `conversions` — of those, the ones who reached at least one goal in the
+     *       window. A visitor who reached three goals counts once: this stage counts
+     *       people through the funnel, not goal hits.
+     *
+     *     `conversion_rate` is `conversions / chats`, and `null` — never `0` — when
+     *     the window held no chats to convert, the same "unknown is not a failure"
+     *     rule `automated_rate` and `satisfaction.score` follow.
+     *
+     *     `by_goal` answers a different question and is deliberately *not* filtered
+     *     through the funnel: it counts every achievement in the window per goal,
+     *     workspace wide, so it agrees with the Overview's `totals.achieved_goals`
+     *     (their sum) rather than with `funnel.conversions`. The two differ whenever
+     *     a visitor converts without ever chatting, or reaches more than one goal.
+     *     Every goal the workspace has defined appears, active or not, including
+     *     those with `conversions: 0` — a goal nobody reached is a reportable
+     *     result, and a retired goal keeps the conversions it already earned.
+     */
+    get: operations['getReportsGoals'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/staffing-forecast': {
     parameters: {
       query?: never;
@@ -3747,6 +3794,10 @@ export interface paths {
      *     `leads` serialises one row per UTC day — `date,count`; `team-performance`
      *     serialises one row per agent —
      *     `agent_id,name,chats,closed,manual,assisted,automated,avg_first_response_seconds,avg_duration_seconds,csat_good,csat_bad,csat_responses,csat_score,transfers`;
+     *     `goals` serialises the funnel and the per-goal breakdown in one
+     *     long-format table — `section,key,name,value`, where `section` is `funnel`
+     *     (one row per funnel figure) or `goal` (one row per defined goal, `key`
+     *     being its id);
      *     the two window summaries (`overview`, `ai-agent`) serialise as
      *     `metric,value` pairs. `sales` also serialises as `metric,value` pairs, and
      *     until FR-MOD-13.5 lands every value but `configured` (`false`) is an empty
@@ -5601,27 +5652,66 @@ export interface components {
       /** Format: date-time */
       created_at: string;
     };
-    /** @description The visitor→chat→conversion funnel for a goal, or goals in aggregate (FR-MOD-13.3). */
+    /**
+     * @description The visitor→chat→conversion funnel for a goal, or goals in aggregate
+     *     (FR-MOD-13.3). The stages are nested — each is a subset of the one
+     *     before it — so `visitors >= chats >= conversions` always holds.
+     */
     GoalFunnel: {
-      /** @description Distinct visitors seen in the window. */
+      /**
+       * @description Distinct visitors with a visit in the window, workspace wide. Not
+       *     per goal: nothing records which visitors a goal was eligible to
+       *     catch, so a per-goal denominator would be invented, not measured.
+       */
       visitors: number;
-      /** @description Of those, how many opened a conversation. */
+      /** @description Of those, how many also opened a conversation in the window. */
       chats: number;
-      /** @description Of those, how many reached the goal. */
+      /**
+       * @description Of those, how many reached at least one goal in the window. A
+       *     visitor who reached three goals counts once — this stage counts
+       *     people through the funnel, not goal hits (see `by_goal` for those).
+       */
       conversions: number;
-      /** @description `conversions / chats`; null when there are no chats to divide by. */
+      /** @description `conversions / chats`; null — never 0 — when there are no chats to divide by. */
       conversion_rate: number | null;
     };
-    /** @description The `/reports/goals` payload (FR-MOD-13.3) — the aggregate funnel, a per-goal breakdown, and the prior window for comparison. */
+    /**
+     * @description The `/reports/goals` payload (FR-MOD-13.3) — the aggregate funnel, a
+     *     per-goal breakdown, and the prior window for comparison.
+     */
     GoalsReport: {
+      range: {
+        /** Format: date-time */
+        from: string;
+        /** Format: date-time */
+        to: string;
+      };
       funnel: components['schemas']['GoalFunnel'];
+      /**
+       * @description One row per goal the workspace has defined — active or not, and
+       *     including goals with `conversions: 0`: a goal nobody reached is a
+       *     reportable result, and a retired goal keeps the conversions it
+       *     already earned. Ordered by conversions, most first.
+       *
+       *     Deliberately *not* filtered through the funnel: `conversions` here
+       *     counts every achievement in the window, so these sum to the
+       *     Overview's `totals.achieved_goals` rather than to
+       *     `funnel.conversions`. The two differ whenever a visitor converts
+       *     without ever chatting, or reaches more than one goal.
+       */
       by_goal: {
         /** Format: uuid */
         goal_id: string;
         name: string;
         conversions: number;
       }[];
-      previous_period: components['schemas']['GoalFunnel'];
+      /**
+       * @description The same funnel measured over the benchmark window, through the
+       *     same license-scoped queries — so the comparison is this workspace's
+       *     own past, never a pooled or cross-license figure.
+       */
+      previous_period: components['schemas']['BenchmarkWindow'] &
+        components['schemas']['GoalFunnel'];
     };
     /**
      * @description A ticket rule's trigger (FR-MOD-08.6.2). Every key set must hold (AND).
@@ -13668,6 +13758,74 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getReportsGoals: {
+    parameters: {
+      query?: {
+        /**
+         * @description Start of the reporting window. Defaults to 30 days before `to`.
+         *
+         *     **A report covers at most 366 days.** A wider `from`/`to` span is a 400,
+         *     not a slow request (NFR-P7): the "heavy reports" answer the PRD gives is
+         *     a read replica or a column-store analytics warehouse, neither of which
+         *     this deployment has, so the window a single query may scan is bounded
+         *     instead. 366 rather than 365 so a twelve-month window that spans a leap
+         *     day is not the one that fails. The limit applies to the group endpoints
+         *     and to `/reports/export` alike — both run the same aggregation, so
+         *     capping only the download would leave the identical scan one query
+         *     string away.
+         */
+        from?: components['parameters']['ReportRangeFrom'];
+        /**
+         * @description End of the reporting window. Defaults to now. The 366-day span limit
+         *     described on `from` is measured across this pair.
+         */
+        to?: components['parameters']['ReportRangeTo'];
+        /**
+         * @description Which of **this license's own** past windows the report is benchmarked
+         *     against (FR-MOD-07.7 "benchmark comparison"). Defaults to
+         *     `previous_period`, the comparison the Overview and Reviews reports made
+         *     before this parameter existed, so omitting it changes nothing.
+         *
+         *     - `previous_period` — the equal-length window immediately before the
+         *       requested one, ending a millisecond short of `from` so no instant
+         *       falls in both.
+         *     - `previous_year` — the same window shifted back 365 days: the
+         *       comparison for a seasonal figure, where the period immediately before
+         *       is the wrong yardstick. A fixed 365 days rather than calendar-year
+         *       arithmetic, so a leap day cannot make the two windows different
+         *       lengths.
+         *
+         *     There is deliberately **no** cross-license baseline — no industry
+         *     average, peer cohort or anonymised pool. Every report figure comes from
+         *     a license-scoped query under RLS (NFR-S4); a benchmark against other
+         *     licenses would have to read rows this tenant may not see, and
+         *     aggregation does not make that safe when the cohort can be narrowed to
+         *     one. An unrecognised value is a 400, not a silent fallback, so
+         *     `baseline=industry` fails loudly rather than appearing supported.
+         */
+        baseline?: components['parameters']['BenchmarkBaseline'];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The funnel and the per-goal breakdown for the requested window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GoalsReport'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   getReportsStaffingForecast: {
     parameters: {
       query?: {
@@ -13737,7 +13895,7 @@ export interface operations {
   exportReport: {
     parameters: {
       query: {
-        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`. */
+        /** @description Group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`. */
         group: string;
         /**
          * @description Download format. Defaults to `csv` — the only format v1 shipped, so a
@@ -13846,7 +14004,7 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`. */
+          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`. */
           group: string;
           frequency: components['schemas']['ScheduledExportFrequency'];
           /**

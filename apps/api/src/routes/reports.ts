@@ -12,6 +12,7 @@ import {
   hasAnyScope,
   isWorkScheduleProblem,
   normalizeWorkSchedule,
+  type GoalFunnel,
 } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -19,6 +20,7 @@ import {
   BENCHMARK_BASELINES,
   benchmarkWindow,
   DEFAULT_BENCHMARK_BASELINE,
+  goalConversionRate,
   resolutionRate,
   round,
   type BenchmarkBaseline,
@@ -45,6 +47,9 @@ import {
   casesByPriority,
   casesByStatus,
   csatSummary,
+  goalConversionsByGoal,
+  goalFunnelCounts,
+  goalsBenchmark,
   leadsBenchmark,
   leadsByDay,
   leadTotals,
@@ -818,6 +823,53 @@ export async function buildSalesReport(
 }
 
 /**
+ * The Goals report for one window (FR-MOD-13.3): the visitor → chat →
+ * conversion funnel and what each goal contributed. Shared by `GET
+ * /reports/goals` and the `goals` CSV export so the two can never quote
+ * different figures for the same license and range.
+ *
+ * The funnel's stages are nested (see {@link goalFunnelCounts}), so the
+ * response always satisfies `visitors >= chats >= conversions` — the property
+ * that makes it a funnel rather than three totals side by side. `by_goal`
+ * answers the other question: how many achievements each goal recorded in the
+ * window, unconditioned by the funnel, so its counts sum to the Overview's
+ * `totals.achieved_goals` (see {@link goalConversionsByGoal} for why the two
+ * differ and when).
+ */
+export async function buildGoalsReport(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+  baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
+): Promise<Record<string, unknown>> {
+  // Sequential, not Promise.all: withTenant is one interactive transaction and
+  // Prisma forbids concurrent queries on its client.
+  const funnel = await goalFunnelCounts(tx, licenseId, from, to);
+  const byGoal = await goalConversionsByGoal(tx, licenseId, from, to);
+
+  const body: GoalFunnel = {
+    ...funnel,
+    // Null, not 0%, when nothing chatted: a window with no conversations is
+    // unknown, not a total failure to convert — the same rule the Overview's
+    // rates follow.
+    conversion_rate: goalConversionRate(funnel.conversions, funnel.chats),
+  };
+
+  return withBenchmark(
+    {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      funnel: body,
+      by_goal: byGoal,
+    },
+    from,
+    to,
+    baseline,
+    (window) => goalsBenchmark(tx, licenseId, window),
+  );
+}
+
+/**
  * The Team performance report for one window (FR-MOD-07.7, v2 payload):
  * per-agent KPIs — the Breakdown tab's by-agent chat split, extended with
  * response times, CSAT and transfers (see {@link teamPerformanceByAgent}).
@@ -1364,6 +1416,23 @@ export default async function reportRoutes(
 
     const body = await request.withTenant((tx) =>
       buildSalesReport(tx, tenant.licenseId, from, to, baseline),
+    );
+    return reply.send(body);
+  });
+
+  // Goals (FR-MOD-13.3): the visitor → chat → conversion funnel plus what each
+  // goal contributed (see buildGoalsReport). Same reports_read + withTenant
+  // surface as the other tabs — no new scope: the funnel is aggregate
+  // reporting over visits, chats and achievements, and a scope of its own
+  // would let a token read conversions without being able to read the volume
+  // every stage is measured against. Defining the goals themselves is a
+  // different permission (`customers:rw`, see routes/goals.ts).
+  app.get('/reports/goals', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
+    const { from, to, baseline } = resolveReportQuery(request.query);
+    const tenant = request.tenant();
+
+    const body = await request.withTenant((tx) =>
+      buildGoalsReport(tx, tenant.licenseId, from, to, baseline),
     );
     return reply.send(body);
   });

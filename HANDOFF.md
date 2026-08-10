@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+### tm 74.6 — 13.3-f: GET /reports/goals — 3 aşamalı huni + rapor grubu + CSV export — done — 2026-08-10 UTC
+
+- **Yapıldı:** Kontrat `paths/reports.yaml#goals` (`getReportsGoals`) + `openapi.yaml` `/reports/goals`
+  (157→158 path) + `GoalsReport` gerçeğe çekildi (`range`, `previous_period` = `allOf[BenchmarkWindow,
+  GoalFunnel]`) + re-bundle. `report-csv.ts`'e `goalFunnelCounts` (tek CTE'li sorgu) +
+  `goalConversionsByGoal` + `goalsBenchmark`; `reports.ts`'e `buildGoalsReport` + rota
+  (`reports_read`, `resolveReportQuery` → aralık kapağı bedava). `REPORT_GROUPS`'a `goals` (9→10) —
+  `/reports/groups`, CSV+PDF export, `?baseline=` ve zamanlanmış rapor bu tek satırdan geliyor.
+- **Doğrulama:** `pnpm -w typecheck` 0 (11/11) · `lint` 0 (8/8) · `test` 0 (`@nexa/api` 2348/2348,
+  +17) · `test:integration` 0 (1799/1799, +16; contract-parity çift yönlü yeşil) · `build` 0 (7/7) ·
+  e2e `reports.spec.ts` **10/10**. İlk `pnpm -w test` koşusunda 16 kırmızı çıktı (hepsi
+  `reports-billing.test.ts`, hiçbiri bu dilimin dokunduğu iddialar değil); art arda iki tam koşu
+  **temiz** — 74.5'te kayıtlı yük altındaki flake, regresyon değil.
+- **Varsayımlar:** (1) **Huni İÇ İÇE**: `chats` yalnız penceredeki ziyaretçilerden, `conversions`
+  yalnız o sohbet edenlerden sayılır. Kontrat (13.3-a `GoalFunnel`: "Of those…") ve KK
+  (`visitors >= chats >= conversions`) bunu istiyor; bağımsız sayımda e-postadan gelen sohbet 2.
+  aşamayı 1.'nin üstüne çıkarabiliyor ve `conversion_rate` 1'i aşabiliyordu. (2) `by_goal` BİLEREK
+  huniden geçirilmedi — pencere içi tüm achievement'ları sayar, böylece toplamı Overview'un
+  `achieved_goals`'ıyla aynı; fark (sohbetsiz dönüşen / çok-hedefli ziyaretçi) OpenAPI'de ve kodda
+  yazılı. (3) 0 dönüşümlü ve pasif hedefler de `by_goal`'de listelenir.
+- **Sonraki pencereye not:** 13.3-h huniyi `GET /reports/goals`'tan okuyacak — `funnel.conversions`
+  (huniden geçen KİŞİ) ile `by_goal` toplamı (ACHIEVEMENT) farklı sorulardır, kartlarda karıştırma.
+  Goals bir rapor grubu olduğu için `/reports/groups`'ta görünüyor ama `ReportsPage` TABS listesinde
+  yok — sekme açılacaksa 13.3-h orada. `.gitignore` + `kanit/*.png` kirliliğine yine dokunulmadı.
+
 ### tm 74.5 — 13.3-e: /reports/overview "Achieved goals" sayacı (pencere + önceki pencere) — done — 2026-08-10 UTC
 
 - **Yapıldı:** `report-csv.ts`'e `achievedGoalCount(tx, licenseId, from, to)` (`ticketCount`'un eşi) —

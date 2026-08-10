@@ -20,6 +20,8 @@ import { buildGroupCsv } from './report-csv.js';
 describe('buildGroupCsv — header + row shape (07.9-sched-d2)', () => {
   let owner: PrismaClient;
   let fx: Fixtures;
+  /** The one goal the fixture defines — its id is a cell in the goals table. */
+  let goalId: string;
 
   const from = new Date('2026-01-01T00:00:00.000Z');
   const to = new Date('2026-01-01T23:59:59.999Z');
@@ -71,6 +73,27 @@ describe('buildGroupCsv — header + row shape (07.9-sched-d2)', () => {
     });
     await owner.chat.create({
       data: { id: 'csvshapelead', licenseId: fx.a.licenseId, customerId: lead.id, createdAt: from },
+    });
+
+    // The Goals funnel (FR-MOD-13.3): the chat's customer also visited and
+    // converted in the window, so all three nested stages carry a real 1 —
+    // enough to pin the row shape without re-proving the figures, which
+    // `reports-billing.test.ts` owns.
+    await owner.visit.create({
+      data: { licenseId: fx.a.licenseId, customerId: fx.a.customerId, startedAt: from },
+    });
+    const goal = await owner.goal.create({
+      data: { licenseId: fx.a.licenseId, name: 'Signed up' },
+      select: { id: true },
+    });
+    goalId = goal.id;
+    await owner.goalAchievement.create({
+      data: {
+        licenseId: fx.a.licenseId,
+        goalId: goal.id,
+        customerId: fx.a.customerId,
+        achievedAt: from,
+      },
     });
   });
 
@@ -183,6 +206,23 @@ describe('buildGroupCsv — header + row shape (07.9-sched-d2)', () => {
     // the empty-but-headered shape 07.6-a's "no fabricated zero-row" rule asks
     // for, proven here as a row-shape property rather than a topics figure.
     expect(rows).toEqual([]);
+  });
+
+  it('goals — the funnel then one row per defined goal, section,key,name,value', async () => {
+    const { headers, rows } = await csv('goals');
+    expect(headers).toEqual(['section', 'key', 'name', 'value']);
+    for (const row of rows) expect(row).toHaveLength(4);
+    // The funnel block is fixed: four rows, always in stage order, so a reader
+    // that takes them positionally is not at the mercy of the window's data.
+    expect(rows.slice(0, 4)).toEqual([
+      ['funnel', 'visitors', 'Visitors', 1],
+      ['funnel', 'chats', 'Chats', 1],
+      ['funnel', 'conversions', 'Conversions', 1],
+      ['funnel', 'conversion_rate', 'Conversion rate', 1],
+    ]);
+    // Then one row per goal — the id in `key` so a consumer can join, the name
+    // in `name` so a spreadsheet is readable.
+    expect(rows.slice(4)).toEqual([['goal', goalId, 'Signed up', 1]]);
   });
 
   it('an unknown group is a validation error, not an empty file', async () => {

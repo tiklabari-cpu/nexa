@@ -370,6 +370,8 @@ paths:
     $ref: "./paths/reports.yaml#/teamPerformance"
   /reports/sales:
     $ref: "./paths/reports.yaml#/sales"
+  /reports/goals:
+    $ref: "./paths/reports.yaml#/goals"
   /reports/staffing-forecast:
     $ref: "./paths/reports.yaml#/staffingForecast"
   /reports/groups:
@@ -1815,31 +1817,59 @@ components:
 
     GoalFunnel:
       type: object
-      description: The visitor→chat→conversion funnel for a goal, or goals in aggregate (FR-MOD-13.3).
+      description: |
+        The visitor→chat→conversion funnel for a goal, or goals in aggregate
+        (FR-MOD-13.3). The stages are nested — each is a subset of the one
+        before it — so `visitors >= chats >= conversions` always holds.
       required: [visitors, chats, conversions, conversion_rate]
       properties:
         visitors:
           type: integer
-          description: Distinct visitors seen in the window.
+          description: |
+            Distinct visitors with a visit in the window, workspace wide. Not
+            per goal: nothing records which visitors a goal was eligible to
+            catch, so a per-goal denominator would be invented, not measured.
         chats:
           type: integer
-          description: Of those, how many opened a conversation.
+          description: Of those, how many also opened a conversation in the window.
         conversions:
           type: integer
-          description: Of those, how many reached the goal.
+          description: |
+            Of those, how many reached at least one goal in the window. A
+            visitor who reached three goals counts once — this stage counts
+            people through the funnel, not goal hits (see `by_goal` for those).
         conversion_rate:
           type: number
           nullable: true
-          description: "`conversions / chats`; null when there are no chats to divide by."
+          description: "`conversions / chats`; null — never 0 — when there are no chats to divide by."
 
     GoalsReport:
       type: object
-      description: The `/reports/goals` payload (FR-MOD-13.3) — the aggregate funnel, a per-goal breakdown, and the prior window for comparison.
-      required: [funnel, by_goal, previous_period]
+      description: |
+        The `/reports/goals` payload (FR-MOD-13.3) — the aggregate funnel, a
+        per-goal breakdown, and the prior window for comparison.
+      required: [range, funnel, by_goal, previous_period]
       properties:
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
         funnel: { $ref: "#/components/schemas/GoalFunnel" }
         by_goal:
           type: array
+          description: |
+            One row per goal the workspace has defined — active or not, and
+            including goals with `conversions: 0`: a goal nobody reached is a
+            reportable result, and a retired goal keeps the conversions it
+            already earned. Ordered by conversions, most first.
+
+            Deliberately *not* filtered through the funnel: `conversions` here
+            counts every achievement in the window, so these sum to the
+            Overview's `totals.achieved_goals` rather than to
+            `funnel.conversions`. The two differ whenever a visitor converts
+            without ever chatting, or reaches more than one goal.
           items:
             type: object
             required: [goal_id, name, conversions]
@@ -1847,7 +1877,14 @@ components:
               goal_id: { type: string, format: uuid }
               name: { type: string }
               conversions: { type: integer }
-        previous_period: { $ref: "#/components/schemas/GoalFunnel" }
+        previous_period:
+          description: |
+            The same funnel measured over the benchmark window, through the
+            same license-scoped queries — so the comparison is this workspace's
+            own past, never a pooled or cross-license figure.
+          allOf:
+            - $ref: "#/components/schemas/BenchmarkWindow"
+            - $ref: "#/components/schemas/GoalFunnel"
 
     TicketRuleConditions:
       type: object

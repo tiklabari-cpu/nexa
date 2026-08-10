@@ -1786,6 +1786,267 @@ describe('reports and billing', () => {
 
   // =========================================================================
 
+  /**
+   * The Goals funnel (FR-MOD-13.3, 13.3-f).
+   *
+   * The property under test is that the three stages are a *funnel*: each one
+   * counts a subset of the stage before it, so `visitors >= chats >=
+   * conversions` holds by construction rather than by luck of the fixture.
+   * Three unrelated totals sitting next to each other would pass a happy-path
+   * assertion and then report a 300% conversion rate the first time a chat
+   * arrived by email or a visitor tripped two goals.
+   */
+  describe('Goals report (13.3-f)', () => {
+    /** Define a conversion target in a license. */
+    async function defineGoal(name: string, licenseId = fx.a.licenseId): Promise<string> {
+      const goal = await owner.goal.create({
+        data: { licenseId, name },
+        select: { id: true },
+      });
+      return goal.id;
+    }
+
+    /**
+     * A visitor at whichever funnel stage the options ask for — seen (always: a
+     * visit), chatted (a chat and its thread), converted (an achievement).
+     * Written directly, like the other report fixtures here, so a stage can be
+     * reached without driving the widget's whole page-view flow (13.3-d proves
+     * that end to end).
+     */
+    async function visitor(
+      options: {
+        chatted?: boolean;
+        goalId?: string;
+        licenseId?: bigint;
+        when?: Date;
+        name?: string;
+      } = {},
+    ): Promise<string> {
+      const when = options.when ?? new Date();
+      const licenseId = options.licenseId ?? fx.a.licenseId;
+      const organizationId =
+        licenseId === fx.a.licenseId ? fx.a.organizationId : fx.b.organizationId;
+
+      const customer = await owner.customer.create({
+        data: { organizationId, name: options.name ?? 'Funnel visitor' },
+        select: { id: true },
+      });
+      await owner.visit.create({
+        data: { licenseId, customerId: customer.id, startedAt: when },
+      });
+
+      if (options.chatted) {
+        const chatId = generateShortId();
+        await owner.chat.create({
+          data: { id: chatId, licenseId, customerId: customer.id, createdAt: when },
+        });
+        await owner.thread.create({
+          data: {
+            id: generateShortId(),
+            chatId,
+            licenseId,
+            active: false,
+            createdAt: when,
+            closedAt: when,
+          },
+        });
+      }
+
+      if (options.goalId) {
+        await owner.goalAchievement.create({
+          data: { licenseId, goalId: options.goalId, customerId: customer.id, achievedAt: when },
+        });
+      }
+      return customer.id;
+    }
+
+    it('reports three nested stages — visitors ⊇ chats ⊇ conversions', async () => {
+      const goalId = await defineGoal('Signed up');
+      await visitor({ name: 'Only browsed' });
+      await visitor({ chatted: true, name: 'Talked to us' });
+      await visitor({ chatted: true, goalId, name: 'Converted' });
+
+      const report = (await server.get('/reports/goals', auth)).json();
+
+      expect(report.funnel).toEqual({
+        visitors: 3,
+        chats: 2,
+        conversions: 1,
+        conversion_rate: 0.5,
+      });
+      // The invariant, stated as such: this is what makes the answer a funnel.
+      expect(report.funnel.visitors).toBeGreaterThanOrEqual(report.funnel.chats);
+      expect(report.funnel.chats).toBeGreaterThanOrEqual(report.funnel.conversions);
+    });
+
+    it('keeps a chat with no visit behind it from overtaking the visitor stage', async () => {
+      // A chat that arrived by email or a channel adapter has no `visits` row.
+      // If `chats` were counted independently it would exceed `visitors` here —
+      // a funnel that widens as it descends.
+      await visitor({ name: 'Browsed only' });
+      await conversation({ agentReplies: true, customerName: 'Wrote in by email' });
+
+      const funnel = (await server.get('/reports/goals', auth)).json().funnel;
+      expect(funnel.visitors).toBe(1);
+      expect(funnel.chats).toBe(0);
+      expect(funnel.conversion_rate).toBeNull();
+    });
+
+    it('counts a visitor once however many goals they reach', async () => {
+      const first = await defineGoal('Signed up');
+      const second = await defineGoal('Booked a demo');
+      const customerId = await visitor({ chatted: true, goalId: first, name: 'Reached two' });
+      await owner.goalAchievement.create({
+        data: { licenseId: fx.a.licenseId, goalId: second, customerId },
+      });
+
+      const report = (await server.get('/reports/goals', auth)).json();
+      // The funnel counts people through it; `by_goal` counts hits. Both are
+      // right, and the response says so rather than quietly picking one.
+      expect(report.funnel.conversions).toBe(1);
+      expect(
+        report.by_goal.reduce((sum: number, row: { conversions: number }) => sum + row.conversions, 0),
+      ).toBe(2);
+    });
+
+    it('lists every goal of this license — including one nobody reached', async () => {
+      const reached = await defineGoal('Signed up');
+      await defineGoal('Never reached');
+      await visitor({ chatted: true, goalId: reached });
+
+      const byGoal = (await server.get('/reports/goals', auth)).json().by_goal;
+      expect(byGoal).toEqual([
+        { goal_id: reached, name: 'Signed up', conversions: 1 },
+        { goal_id: expect.any(String), name: 'Never reached', conversions: 0 },
+      ]);
+    });
+
+    it("never shows another license's goal, achievement or visitor", async () => {
+      const mine = await defineGoal('Signed up');
+      await visitor({ chatted: true, goalId: mine, name: 'Mine' });
+
+      const theirs = await defineGoal('Their goal', fx.b.licenseId);
+      await visitor({
+        chatted: true,
+        goalId: theirs,
+        licenseId: fx.b.licenseId,
+        name: 'Theirs',
+      });
+
+      const report = (await server.get('/reports/goals', auth)).json();
+      expect(report.by_goal).toEqual([{ goal_id: mine, name: 'Signed up', conversions: 1 }]);
+      // B's visitor, chat and conversion are all absent from A's funnel — the
+      // stages are license-scoped at every level, not only the goal list.
+      expect(report.funnel).toMatchObject({ visitors: 1, chats: 1, conversions: 1 });
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirReport = (
+        await server.get('/reports/goals', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      expect(theirReport.by_goal).toEqual([
+        { goal_id: theirs, name: 'Their goal', conversions: 1 },
+      ]);
+    });
+
+    it('agrees with the Overview on how many goals were reached', async () => {
+      // `by_goal` is unconditioned by the funnel, so it sums to the number the
+      // Overview KPI shows (13.3-e) — the two surfaces cannot drift.
+      const goalId = await defineGoal('Signed up');
+      await visitor({ chatted: true, goalId, name: 'Chatted then converted' });
+      await visitor({ goalId, name: 'Converted without chatting' });
+
+      const [goals, overview] = await Promise.all([
+        server.get('/reports/goals', auth),
+        server.get('/reports/overview', auth),
+      ]);
+      const total = goals
+        .json()
+        .by_goal.reduce((sum: number, row: { conversions: number }) => sum + row.conversions, 0);
+
+      expect(total).toBe(2);
+      expect(overview.json().totals.achieved_goals).toBe(total);
+      // And the funnel still counts only the one who came through it.
+      expect(goals.json().funnel.conversions).toBe(1);
+    });
+
+    it('drops a conversion before the window into the previous period, not the current one', async () => {
+      const goalId = await defineGoal('Signed up');
+      await visitor({ chatted: true, goalId, name: 'Now' });
+      const earlier = new Date(Date.now() - 15 * 86_400_000);
+      await visitor({ chatted: true, goalId, when: earlier, name: 'Earlier' });
+
+      const to = new Date();
+      const from = new Date(to.getTime() - 10 * 86_400_000);
+      const report = (
+        await server.get(
+          `/reports/goals?from=${from.toISOString()}&to=${to.toISOString()}&baseline=previous_period`,
+          auth,
+        )
+      ).json();
+
+      expect(report.funnel).toMatchObject({ visitors: 1, chats: 1, conversions: 1 });
+      expect(report.previous_period).toMatchObject({
+        baseline: 'previous_period',
+        visitors: 1,
+        chats: 1,
+        conversions: 1,
+        conversion_rate: 1,
+      });
+    });
+
+    it('exports the same funnel as CSV, with the goal name injection-guarded', async () => {
+      // A goal name is user-written free text and lands in a spreadsheet cell.
+      const goalId = await defineGoal('=1+1,Signed up');
+      await visitor({ chatted: true, goalId });
+
+      const [report, csv] = await Promise.all([
+        server.get('/reports/goals', auth),
+        server.get('/reports/export?group=goals', auth),
+      ]);
+      expect(csv.statusCode).toBe(200);
+      expect(csv.headers['content-type']).toContain('text/csv');
+
+      const rows = csv.body.split('\r\n').filter((line: string) => line !== '');
+      expect(rows[0]).toBe('section,key,name,value');
+      // Every figure is the one the JSON report quotes — ADR-09's rule for this
+      // surface: a download never disagrees with the screen it came from.
+      const funnel = report.json().funnel;
+      expect(rows).toContain(`funnel,visitors,Visitors,${funnel.visitors}`);
+      expect(rows).toContain(`funnel,chats,Chats,${funnel.chats}`);
+      expect(rows).toContain(`funnel,conversions,Conversions,${funnel.conversions}`);
+      // The formula lead is neutralised with a leading quote, and the cell is
+      // then quoted because it also carries a comma.
+      expect(rows).toContain(`goal,${goalId},"'=1+1,Signed up",1`);
+    });
+
+    it('rejects a backwards date range', async () => {
+      const response = await server.get('/reports/goals?from=2026-08-01&to=2026-07-01', auth);
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('requires the reports_read scope', async () => {
+      const scopeless = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['customers:rw'],
+      });
+      // Defining goals is `customers:rw`; *reading the funnel* is not — a token
+      // that can create a goal still cannot read the workspace's conversions.
+      const response = await server.get('/reports/goals', {
+        authorization: `Bearer ${scopeless}`,
+      });
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
+  // =========================================================================
+
   describe('report groups + CSV export (07.7)', () => {
     /** Grant a token with a chosen scope set — for the permission-gating cases. */
     function scopedToken(scopes: string[]): Promise<string> {
@@ -1810,6 +2071,7 @@ describe('reports and billing', () => {
           'leads',
           'team-performance',
           'sales',
+          'goals',
         ]);
         expect(groups[0]).toEqual({ id: 'overview', label: 'Overview' });
       });
@@ -2228,6 +2490,7 @@ describe('reports and billing', () => {
         'leads',
         'team-performance',
         'sales',
+        'goals',
       ] as const;
 
       it.each(['exe', 'html', 'pdfx'])(
@@ -2350,7 +2613,7 @@ describe('reports and billing', () => {
       const groups = (await server.get('/reports/groups', auth)).json().groups;
       expect(groups.map((group: { id: string }) => group.id)).toEqual(GROUP_IDS);
       // Guards the guard: a matrix over an empty catalogue would pass vacuously.
-      expect(GROUP_IDS.length).toBe(9);
+      expect(GROUP_IDS.length).toBe(10);
     });
 
     it.each(GROUP_IDS)(
@@ -2657,6 +2920,7 @@ describe('reports and billing', () => {
       '/reports/leads',
       '/reports/team-performance',
       '/reports/sales',
+      '/reports/goals',
     ] as const;
 
     const CSV_GROUPS = [
@@ -2669,6 +2933,7 @@ describe('reports and billing', () => {
       'leads',
       'team-performance',
       'sales',
+      'goals',
     ] as const;
 
     /** Split a CSV body into its non-empty lines (rows are CRLF-terminated). */

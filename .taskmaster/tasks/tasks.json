@@ -2760,12 +2760,12 @@
             "description": "Contract-first, tek pencerede: (1) `packages/contract/openapi/paths/goals.yaml` — `goals` (GET list, query `status=all|active|inactive`; POST create) + `goal` (PATCH, `goalId` uuid path param); (2) `openapi.yaml` `paths:` altına `/goals` ve `/goals/{goalId}` $ref girişleri + re-bundle; (3) `apps/api/src/routes/goals.ts` — zod şemaları: `definitionSchema = z.object({ url_contains: z.string().trim()",
             "details": "13.3-c — Goals CRUD — kontrat path + route + servis (license-scoped, .strict() definition)  [OPUS-XHIGH]\n\nPRD: FR-MOD-13.3 (+ NFR-S3 route seviyesinde scope, NFR-S4 RLS, NFR-S5 enumeration'a 404)\nETİKET GEREKÇESİ: OPUS-XHIGH: yeni YETKİLİ endpoint eklemek (customers:ro/rw kapılı, license-scoped kaynak) — kullanıcının açık kuralı gereği en az OPUS-XHIGH; koşul 2 ihlali (tenant izolasyon/IDOR yüzeyi) olduğu için SONNET OLAMAZ. OPUS-MAX değil çünkü izolasyon mekanizması (request.withTenant + goals RLS politikası, migration 20260722154008:935) zaten mevcut ve apps/api/src/routes/campaigns.ts + campaign-service.ts birebir kopyalanabilir emsal; yeni algoritma/kripto/eşzamanlılık yok.\nNEDEN AÇIK: `apps/api/src/routes/goals.ts` mevcut değil (routes/ dizininde 24 dosya var, goals yok). `packages/contract/openapi/paths/goals.yaml` mevcut değil (paths/ dizininde 23 dosya var, goals yok). `grep -rn \"Goal\" apps/api/src` 0 sonuç — okuyan/yazan tek bir route/service/test dahi yok.\nKAPSAM: Contract-first, tek pencerede: (1) `packages/contract/openapi/paths/goals.yaml` — `goals` (GET list, query `status=all|active|inactive`; POST create) + `goal` (PATCH, `goalId` uuid path param); (2) `openapi.yaml` `paths:` altına `/goals` ve `/goals/{goalId}` $ref girişleri + re-bundle; (3) `apps/api/src/routes/goals.ts` — zod şemaları: `definitionSchema = z.object({ url_contains: z.string().trim().max(2048).optional() }).strict()` (tanımsız anahtar → 400, campaigns.ts:22 gerekçesi: sessizce kimseyi eşleştirmeyen hedef oluşmasın), `name` 1-120, `active` opsiyonel; scope: GET `['customers:ro','customers:rw']`, POST/PATCH `['customers:rw']`; (4) `apps/api/src/services/goals/goal-service.ts` — list/create/update, her sorguda `licenseId: tenant.licenseId`, `request.withTenant` içinde; bulunamayan → `ApiError.notFound` (403 değil, NFR-S5); (5) `apps/api/src/server.ts`'e `goalRoutes` register (campaignRoutes'un yanına, satır ~147).\nDOSYALAR: packages/contract/openapi/paths/goals.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/routes/goals.ts · apps/api/src/services/goals/goal-service.ts · apps/api/src/server.ts · apps/api/test/integration/goals.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/campaigns.ts (parse() + ApiError.validation + scope config + listQuery/createBody/updateBody kalıbı) · apps/api/src/services/campaigns/campaign-service.ts (list/create/update + licenseId filtresi + #reload + #toDto) · packages/contract/openapi/paths/campaigns.yaml (path dosyası yapısı, operationId, 400/401/403/404/429 response ref'leri)\nKK (birebir): \"hedef tanımı\"\nKK DOĞRULAMA: integration `goals.test.ts`: (a) POST `/goals` 201 + GET listede görünür + PATCH ile `active` toggle → \"hedef tanımı\" oluşturulabiliyor/düzenlenebiliyor; (b) `definition: { url_contain: 'x' }` (typo) → 400 (`.strict()`); (c) **cross-tenant:** B lisansının goalId'siyle PATCH → 404 (403 değil); (d) `customers:ro` token'ıyla POST → 403; (e) `contract-parity.test.ts` yeşil (path + route aynı pencerede eklendiği için her iki yön de tutar).\nKAPSAM DIŞI: hedef eşleşme / achievement yazımı (13.3-d) · rapor sorguları (13.3-e, 13.3-f) · UI (13.3-g) · DELETE `/goals/{goalId}` — v1 Campaigns'te de yok, `active=false` yeterli · yeni scope veya yeni ApiError tipi üretmek (bkz. §varsayımlar-6 — errors.ts ×2 + scopes.test.ts sayacı + openapi enum + regen zinciri bilinçli olarak açılmıyor)\nSÖZLEŞME: YENİ PATH: `paths/goals.yaml` (`listGoals`, `createGoal`, `updateGoal` operationId'leri) + `openapi.yaml` `paths:` altına `/goals` ve `/goals/{goalId}`. **OpenAPI'ye eklenip re-bundle edilmezse contract-parity.test.ts kırılır** — hem 'documents every route the server registers' hem 'serves every route the contract documents' yönü.\nMIGRATION: yok — `goals` tablosu ve `goals_tenant` RLS politikası migration 20260722154008'de zaten var\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): tanımsız definition anahtarı → 400 · negatif (önce): boş/whitespace `name` → 400 · negatif (önce): `customers:ro` ile POST/PATCH → 403 (route seviyesinde, NFR-S3) · cross-tenant negatif: başka lisansın goalId'si GET/PATCH'te 404 ve listede görünmez · pozitif: create → list → patch(active=false) → list(status=inactive) CRUD döngüsü · contract-parity regresyonu (yeni path + route birlikte)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "74.1"
             ],
             "parentId": "74",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T13:46:52.613Z"
           },
           {
             "id": 4,
@@ -2856,7 +2856,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T13:24:39.864Z",
+        "updatedAt": "2026-08-10T13:46:52.613Z",
         "complexity": 8,
         "recommendedSubtasks": 9,
         "expansionPrompt": "\"13.3 — Goals (ziyaretçi→sohbet→dönüşüm hunisi)  ·  dilim V2-8\" görevini 9 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5110,7 +5110,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T13:24:39.864Z",
+      "lastModified": "2026-08-10T13:46:52.614Z",
       "taskCount": 111,
       "completedCount": 102,
       "tags": [

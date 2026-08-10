@@ -32,6 +32,10 @@
 - **Sonraki pencereye not:** 13.3-i (uçtan uca doğrulama) ya da sonraki bir tur `GoalsFunnel`'i
   bir ekrana (muhtemelen `GoalsPage.tsx`) monte etmeli — bileşen hazır ve test edilmiş durumda,
   yalnız hiçbir route onu render etmiyor. PLAN.md `13.3` satırı `◐` kaldı (K13.3'e madde eklendi).
+- **Kapanışta çalışma alanı tam temiz değil, bilerek:** pencere açılışında zaten `.gitignore`
+  (yeni `.taskmaster/tmp-*` deseni) + ~49 `apps/e2e/kanit/*.png` değişik/uncommitted duruyordu —
+  bu tur onlara dokunmadı (kapsam disiplini, CONVENTIONS §5) ve DoD kapısı bunlardan etkilenmedi.
+  Bir sonraki pencere ya sahiplenip commit'lesin ya da neden orada durduğunu araştırsın.
 
 ---
 

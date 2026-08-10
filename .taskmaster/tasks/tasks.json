@@ -2570,10 +2570,10 @@
             "description": "Contract-first, tek turda üç katman senkronlanır: (1) `packages/contract/openapi/openapi.yaml` → `TrafficVisitor.activity` enum'ı 4→6 (`supervised`, `invited`); (2) `paths/traffic.yaml` açıklamasındaki funnel maddelerine iki satır; (3) `pnpm --filter @nexa/contract generate` ile re-bundle + `src/generated/api.ts` yenilenir; (4) `traffic-service.ts` `TrafficActivity` union'ı ve web `types.ts` union",
             "details": "13.2-a — TrafficActivity sözlüğünün supervised + invited ile genişletilmesi (kontrat + tip + web etiket haritası)  [SONNET-XHIGH]\n\nPRD: FR-MOD-13.2 (+ FR-MOD-03.1.1)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 5 dosya + testleri; güvenlik sınırı yok (enum değeri eklemek authN/authZ/izolasyon kararı değil, hiçbir yetki dalı değişmiyor); eşzamanlılık yok; kopyalanacak desen ismen var (openapi.yaml:1102-1105 mevcut 4 enum değeri + TrafficPage.tsx:28-33 ACTIVITY map'i); değişiklik tamamen katkısal (additive) ve mekanik; KK mekanik olarak doğrulanır (contract-parity yeşil + exhaustive Record derleme zorunluluğu).\nNEDEN AÇIK: openapi.yaml:1104 `activity` enum'ı tam olarak `[browsing, queued, waiting, chatting]`; traffic-service.ts satır 20 `export type TrafficActivity = 'browsing' | 'queued' | 'waiting' | 'chatting'`; apps/web/src/features/traffic/types.ts aynı 4 değerli union'ı, TrafficPage.tsx satır 28-33 `ACTIVITY` map'i aynı 4 anahtarı taşıyor. rapor-1 §644 sekme listesi yedi öğe sayıyor — 'Supervised' ve 'Invited' üç katmanın hiçbirinde yok.\nKAPSAM: Contract-first, tek turda üç katman senkronlanır: (1) `packages/contract/openapi/openapi.yaml` → `TrafficVisitor.activity` enum'ı 4→6 (`supervised`, `invited`); (2) `paths/traffic.yaml` açıklamasındaki funnel maddelerine iki satır; (3) `pnpm --filter @nexa/contract generate` ile re-bundle + `src/generated/api.ts` yenilenir; (4) `traffic-service.ts` `TrafficActivity` union'ı ve web `types.ts` union'ı genişletilir; (5) `TrafficPage.tsx` `ACTIVITY` map'ine `supervised` (tone 'info') + `invited` (tone 'warning') satırları. Servis bu iki değeri HENÜZ üretmez — üretimi 13.2-b ve 13.2-e yapar; bu adım yalnız sözlüğü tek yerden senkronlar ve contract-parity kırılma riskini tek pencereye hapseder.\nDOSYALAR: packages/contract/openapi/openapi.yaml · packages/contract/openapi/paths/traffic.yaml · apps/api/src/services/traffic/traffic-service.ts · apps/web/src/features/traffic/types.ts · apps/web/src/features/traffic/TrafficPage.tsx\nREFERANS DESEN (kopyalanacak): packages/contract/openapi/openapi.yaml (satır 1089-1119, TrafficVisitor şeması + mevcut enum) · apps/web/src/features/traffic/TrafficPage.tsx (satır 28-33, ACTIVITY Record map'i) · apps/api/src/services/traffic/traffic-service.ts (satır 20, union tanımı)\nKK (birebir): \"Gelişmiş filtre\" | \"KK-türetilmiş: Traffic funnel sözlüğü `Supervised` ve `Invited` durumlarını içerir. Türetme kaynağı rapor-1 §644 birebir: \"Öğeler: All · Chatting · Supervised · Queued · Waiting for reply · Invited · Browsing (gözlemde hepsi 0).\" — PRD 13.2 KK'sı yalnız 'Gelişmiş filtre' diyor, filtrelenebilir durum listesini vermiyor; liste rapor-1'den alındı.\"\nKK DOĞRULAMA: contract-parity.test.ts yeşil kalır (yeni PATH eklenmediği, yalnız şema enum'ı genişlediği için çift yönlü parity bozulmaz) — bu, kontratın koda karşı hâlâ doğru olduğunun kanıtı. `ACTIVITY` bir `Record<TrafficActivity, …>` olduğu için eksik anahtar `pnpm typecheck`'te derleme hatası verir; bu da sözlüğün üç katmanda senkron olduğunun mekanik kanıtıdır.\nKAPSAM DIŞI: Backend'in supervised/invited üretmesi (13.2-b, 13.2-e) · Sekme UI'ı (13.2-g) · Filtre parametreleri (13.2-f) · chat_supervisions tablosu (13.2-c)\nSÖZLEŞME: packages/contract/openapi/openapi.yaml → `TrafficVisitor.activity` enum'ına `supervised` + `invited`; paths/traffic.yaml `listTraffic` açıklaması. YENİ PATH YOK. Re-bundle ZORUNLU (`pnpm --filter @nexa/contract generate`) — aksi hâlde üretilmiş tipler bayatlar ve contract-parity.test.ts kırılır.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: ACTIVITY map'inin her `TrafficActivity` değeri için etiket + tone döndürdüğü (exhaustive) testi · integration: mevcut `traffic.test.ts` regresyonu — yanıt hâlâ eski 4 değerden birini döndürür, hiçbir satır kırılmaz · integration: contract-parity.test.ts yeşil (re-bundle unutulursa kırmızı) · negatif/cross-tenant: bu alt-görevde GEREKMİYOR — yetki/izolasyon dalı değişmiyor; 13.2-b'den itibaren zorunlu",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "73",
-            "updatedAt": "2026-08-10T03:47:53.343Z"
+            "updatedAt": "2026-08-10T04:10:47.651Z"
           },
           {
             "id": 2,
@@ -2715,7 +2715,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T03:47:53.343Z",
+        "updatedAt": "2026-08-10T04:10:47.651Z",
         "complexity": 9,
         "recommendedSubtasks": 11,
         "expansionPrompt": "\"13.2 — Engage/Traffic (gelişmiş filtre + 360° ziyaretçi)  ·  dilim V2-8\" görevini 11 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T03:47:53.343Z",
+      "lastModified": "2026-08-10T04:10:47.652Z",
       "taskCount": 109,
       "completedCount": 98,
       "tags": [

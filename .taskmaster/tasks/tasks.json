@@ -2594,10 +2594,10 @@
             "description": "Yalnız veri katmanı. (1) Prisma modeli `ChatSupervision`: `chatId VarChar(12)` (FK chats), `agentId uuid` (FK accounts), `licenseId BigInt` (FK licenses), `startedAt`, `lastSeenAt`; `@@id([chatId, agentId])`; `@@index([licenseId, lastSeenAt(sort: Desc)])`. (2) migration.sql: CREATE TABLE + FK'ler + `ALTER TABLE chat_supervisions ENABLE ROW LEVEL SECURITY` + `CREATE POLICY chat_supervisions_tenant ",
             "details": "13.2-c — `chat_supervisions` tablosu + RLS politikası + Prisma modeli (yalnız migration, route yok)  [OPUS-XHIGH]\n\nPRD: FR-MOD-13.2 (+ FR-MOD-03.1.1; NFR-S4)\nETİKET GEREKÇESİ: OPUS-XHIGH: yeni tablo doğrudan çok-kiracılı izolasyon yüzeyine giriyor — RLS politikası unutulur veya yanlış yazılırsa kiracı sızıntısı olur (koşul 2 ihlali) → kullanıcı kuralı gereği SONNET OLAMAZ. Ancak politika mevcut `campaign_sends` migration'ından birebir kopyalanabilir ve endpoint yetki kararı bu alt-görevde YOK; pahalı MAX penceresi (13.2-d) küçültülsün diye bilinçli olarak ayrıştırıldı, bu yüzden MAX değil.\nNEDEN AÇIK: grep: 'supervisor' depoda yalnız yorum/docstring metninde geçiyor; şemada bir sohbeti kimin izlediğini tutan tablo/alan/kolon yok. UI'da `supervise` aksiyonu hiçbir yere yazmıyor — TrafficPage.tsx satır ~95 kendi yorumunda söylüyor: 'Watching is just opening the conversation in the inbox' ve yalnız `navigate('/app/inbox?chat=…')` çalıştırıyor. Yani 'Supervised' durumunun kaynak verisi SIFIR.\nKAPSAM: Yalnız veri katmanı. (1) Prisma modeli `ChatSupervision`: `chatId VarChar(12)` (FK chats), `agentId uuid` (FK accounts), `licenseId BigInt` (FK licenses), `startedAt`, `lastSeenAt`; `@@id([chatId, agentId])`; `@@index([licenseId, lastSeenAt(sort: Desc)])`. (2) migration.sql: CREATE TABLE + FK'ler + `ALTER TABLE chat_supervisions ENABLE ROW LEVEL SECURITY` + `CREATE POLICY chat_supervisions_tenant ON chat_supervisions …` (campaign_sends politikasının birebir eşi) + indeks. (3) Prisma client regenerate. ROUTE VE OPENAPI PATH YOK — bilinçli: contract-parity.test.ts çift yönlü çalışıyor (implementedOperations ↔ documentedOperations), handler'sız bir path testi kırar; path ancak handler'ıyla birlikte 13.2-d'de eklenir.\nDOSYALAR: apps/api/prisma/schema.prisma · apps/api/prisma/migrations/<yeni>/migration.sql · apps/api/test/integration/data-model.test.ts · apps/api/test/integration/tenant-isolation.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/prisma/migrations/20260726170000_campaign_sends/migration.sql (tablo + RLS + indeks üçlüsünün en küçük ve en yeni örneği) · apps/api/prisma/schema.prisma (satır 789-809, CampaignSend modeli: licenseId + FK + @@index deseni) · apps/api/prisma/migrations/20260726090000_webhook_deliveries/migration.sql (CREATE POLICY …_tenant örneği)\nKK (birebir): \"KK-türetilmiş: bir sohbeti hangi ajanın şu an izlediği kalıcı ve kiracı-kapsamlı olarak kaydedilir. Türetme kaynağı rapor-1 §678 birebir: \"Supervise → mevcut sohbeti izler\" ve §644'teki 'Supervised' öğesi. PRD 13.2 KK'sı ('Gelişmiş filtre; ziyaretçi geçmişi; proaktif aksiyon') veri modelini söylemiyor; kalıcı tablo tercihi §C varsayımı olarak kaydedildi (Redis/RTM presence alternatifi reddedildi — DoD kapısında deterministik kanıtı yok).\"\nKK DOĞRULAMA: data-model.test.ts: `chat_supervisions` tablosu var; `pg_class.relrowsecurity` true; `pg_policies` içinde `chat_supervisions_tenant` mevcut. tenant-isolation.test.ts: A lisansının supervision satırı B kiracısının oturumunda 0 satır döner — RLS unutulursa bu test KIRMIZI olur, kanıt budur.\nKAPSAM DIŞI: register/release endpoint ve yetki kararı (13.2-d) · Traffic listesine bağlama (13.2-e) · OpenAPI path'i (bilinçli olarak açılmaz — parity çift yönlü) · Redis/RTM presence yaklaşımı (§C'de reddedildi)\nSÖZLEŞME: yok — bilinçli olarak OpenAPI'ye DOKUNULMAZ. contract-parity.test.ts hem belgesiz route'u hem servissiz path'i fail ettiği için, handler'sız bir path eklemek bu pencereyi kırardı.\nMIGRATION: EVET — yeni tablo `chat_supervisions` (chat_id, agent_id, license_id, started_at, last_seen_at) + `chat_supervisions_tenant` RLS politikası + `(license_id, last_seen_at DESC)` indeksi.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "CROSS-TENANT/NEGATİF (önce): B kiracısı oturumunda A'nın supervision satırı görünmez (RLS kapalı bırakılırsa kırmızı) · integration (data-model): tablo/kolon/FK/indeks varlığı + `relrowsecurity` true + `chat_supervisions_tenant` politikası mevcut · integration: migration temiz uygulanır ve `prisma migrate diff` boş · İşletim notu: DB süiti paket başına SERİ koşulur (paylaşılan Postgres yarışı)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "73",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T05:02:47.202Z"
           },
           {
             "id": 4,
@@ -2715,7 +2715,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T04:30:15.263Z",
+        "updatedAt": "2026-08-10T05:02:47.202Z",
         "complexity": 9,
         "recommendedSubtasks": 11,
         "expansionPrompt": "\"13.2 — Engage/Traffic (gelişmiş filtre + 360° ziyaretçi)  ·  dilim V2-8\" görevini 11 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T04:30:15.264Z",
+      "lastModified": "2026-08-10T05:02:47.203Z",
       "taskCount": 109,
       "completedCount": 98,
       "tags": [

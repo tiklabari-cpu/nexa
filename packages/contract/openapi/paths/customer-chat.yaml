@@ -69,6 +69,20 @@ events:
                 type: string
                 maxLength: 2048
                 description: Page the visitor is on. Feeds the routing rules.
+              referrer:
+                type: string
+                maxLength: 2048
+                description: |
+                  Where the visitor arrived from, recorded once as the visit's
+                  `came_from` (FR-MOD-13.2). Only the loader can supply it: a
+                  cross-origin frame's own `document.referrer` is the embedding
+                  page, not the page before it.
+
+                  Stored as origin + path — the query string and fragment are
+                  dropped server-side whatever is sent, because a referrer's
+                  query string is where reset tokens and e-mail addresses live
+                  (NFR-S9). Omit it for a direct arrival; `came_from` then stays
+                  null and the agent's panel simply says nothing.
               name: { type: string, maxLength: 120, description: Pre-chat form value. }
               email: { type: string, format: email, maxLength: 320 }
               idempotency_key: { type: string, maxLength: 128 }

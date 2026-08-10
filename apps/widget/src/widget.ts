@@ -571,9 +571,14 @@ export function mount(doc: Document = document, win: Window = window): void {
     // Captured before the await so a failed send can put them back.
     const details = state.pendingDetails;
     const customFields = state.pendingCustomFields;
+    const referrer = hostReferrer(win);
     try {
       const result = await api.send(text, {
         url: hostPageUrl(win),
+        // Sent on every message, not just the first: the server only keeps it
+        // when it opens a new visit, and the widget cannot know which message
+        // that is (a visit expires after 30 minutes of quiet).
+        ...(referrer ? { referrer } : {}),
         ...(attachment ? { attachment_url: attachment.fileUrl } : {}),
         ...(details ?? {}),
         ...(customFields ? { custom_fields: customFields } : {}),
@@ -1136,6 +1141,19 @@ function appearanceFromApi(a: WidgetAppearance): Appearance {
 function hostPageUrl(win: Window): string | undefined {
   const fromLoader = new URLSearchParams(win.location.search).get('host_url');
   return fromLoader || win.document.referrer || undefined;
+}
+
+/**
+ * Where the visitor was before the host page (FR-MOD-13.2) — the loader's
+ * reading, already trimmed to origin + path.
+ *
+ * No fallback to `document.referrer`, unlike `hostPageUrl` above: in here that
+ * is the embedding page itself, so falling back would record every visitor as
+ * having come from the site they are already on. Absent is the honest answer,
+ * and `came_from` stays null.
+ */
+function hostReferrer(win: Window): string | undefined {
+  return new URLSearchParams(win.location.search).get('host_referrer') || undefined;
 }
 
 /** Origin part of the referrer, for when the loader did not pass one through. */

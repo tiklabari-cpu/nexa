@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+### tm 111 — 13.2-l: `visits.came_from` yazma yolu (referrer: widget → servis) — done — 2026-08-10 UTC
+
+- **Yapıldı:** Referrer uçtan uca bağlandı, contract-first: OpenAPI `sendCustomerMessage`
+  gövdesine katkısal `referrer` (≤2048) → `startSchema`'da `referrer` + gövdenin tamamına
+  `.strict()` (yanlış yazılmış `referer` artık 400) → rota `recordPageView`'a geçiriyor → servis
+  yazıyor. Host sayfada okuyan tek kod loader (`document.referrer` → `host_referrer` frame
+  parametresi); widget onu gövdeye taşıyor, **fallback YOK** (frame'in kendi `document.referrer`'ı
+  gömüldüğü sayfadır — fallback her ziyaretçiyi "zaten üstünde olduğu siteden gelmiş" gösterirdi).
+  `came_from` yalnız ziyaret OLUŞURKEN yazılır; sonraki sayfa varış referrer'ını ezmez.
+- **Doğrulama:** `pnpm -w typecheck` **0** · `pnpm -w lint` **0** · `pnpm -w test` **0** ·
+  `pnpm -w test:integration` **0** (1741/1741) · `pnpm -w build` **0** · **tam e2e 94/94**.
+  Yeni test: types 6 · widget +3 loader / +2 yeni dosya · api integration +7 (customer-chat) +2
+  (traffic). E2E artık ziyaretçiyi üçüncü bir origin'den (`searchy.localhost:5174`) link'e
+  tıklayarak getiriyor; 360° panelde "Came from …" düz metin + "Came from contains" filtresi
+  assert'li (`kanit/13.2-l-came-from-filter.png`).
+- **Varsayımlar:** **PLAN §C-A16 (NFR-S9):** `came_from` yalnız **origin+path** saklar, query
+  string + fragment düşer — `hostPageUrl`'ün kararıyla aynı gerekçe. Kural `@nexa/types`
+  `sanitizeReferrer`'da tek yerde, iki kez uygulanıyor (loader: düşen kısım tarayıcıdan çıkmasın;
+  servis: gövde istemci girdisidir). Sonucu: UTM/attribution ayrıştırma YOK (kapsam dışı).
+- **Sonraki pencereye not:** PRD **13.2 satırı artık `✅`** (K13.2'ye kapanış maddesi eklendi).
+  `POST /customer/chat/events` gövdesi bu turda `.strict()` oldu — bu yüzeye alan ekleyen bir
+  sonraki iş kontratı ve zod şemasını AYNI turda güncellemeli, yoksa 400 alır. tm 73.11'in
+  bıraktığı iki borç duruyor: çıplak `Array.includes` scope deseni web'de başka ekranlarda
+  (ör. `CustomersPage.tsx`), ve ok-tuşu gezinmesi yalnız Traffic tablist'inde. tm 105 WIP
+  (test-datastore izolasyon script'leri) hâlâ commit'siz — bu pencere de dokunmadı (§5); tam e2e
+  koşusunun yeniden ürettiği diğer `kanit/*.png` dosyaları da başka task'lara ait, kirli bırakıldı
+  (yalnız Traffic'in kendi kareleri commit'lendi).
+  Tam koşuda `reports-billing.test.ts` "CSAT donut" bir kez kırmızı geldi (`csat.bad` 0≠1),
+  tek başına ve tekrar tam koşuda yeşil — bu turun değişiklikleriyle temas etmiyor (rating'ler
+  Prisma ile doğrudan yazılıyor); flake olarak kaydedildi.
+
 ### tm 73.11 — 13.2-k: Uçtan uca doğrulama (sekme + filtre + supervise + 360° panel) + NFR-P2 + a11y — done — 2026-08-10 UTC
 
 - **Yapıldı:** `traffic.spec.ts`'e tek uçtan uca senaryo (13.2-a…j'nin hepsi TEK gerçek ziyaretçide):

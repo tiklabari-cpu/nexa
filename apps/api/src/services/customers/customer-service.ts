@@ -15,7 +15,7 @@
  * include conversations they can never open.
  */
 import type { Prisma } from '@prisma/client';
-import type { CustomFieldValue } from '@nexa/types';
+import { sanitizeReferrer, type CustomFieldValue } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
 
@@ -188,6 +188,11 @@ export class CustomerService {
    * A visit is continued rather than created when the last one is still recent:
    * a visitor clicking through five pages is one visit, and one row per page
    * would make the history unreadable and the table enormous.
+   *
+   * `referrer` is therefore only written when a visit is *created*: "came from"
+   * is a property of the arrival, and letting a later page overwrite it would
+   * replace the search engine that brought them with whichever page of the site
+   * they clicked next.
    */
   async recordPageView(
     tx: TenantClient,
@@ -232,7 +237,11 @@ export class CustomerService {
       data: {
         customerId: input.customerId,
         licenseId: tenant.licenseId,
-        cameFrom: input.referrer?.slice(0, 2048) ?? null,
+        // Trimmed here, not at the caller: this is the single write to the
+        // column, so "came_from never carries a query string" (NFR-S9) holds for
+        // whatever route grows a referrer next. The widget already trims on the
+        // host page; a hand-rolled request does not.
+        cameFrom: sanitizeReferrer(input.referrer),
         pages: [entry] as Prisma.InputJsonValue,
         userAgent: input.userAgent?.slice(0, 512) ?? null,
         os: detectOs(input.userAgent),

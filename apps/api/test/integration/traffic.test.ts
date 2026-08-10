@@ -197,6 +197,17 @@ describe('traffic', () => {
     return (response.json() as { items: TrafficVisitor[] }).items;
   };
 
+  /** A real visitor token, for the tests that drive the widget's own write path. */
+  async function widgetToken(t: TenantFixture): Promise<{ token: string; customer_id: string }> {
+    const response = await server.post(
+      '/customer/token',
+      { organization_id: t.organizationId },
+      { origin: `https://${t.trustedDomain}` },
+    );
+    expect(response.statusCode).toBe(200);
+    return response.json() as { token: string; customer_id: string };
+  }
+
   beforeAll(async () => {
     owner = ownerClient();
     server = await startTestServer();
@@ -741,6 +752,50 @@ describe('traffic', () => {
       const ids = (await listTraffic('?came_from_contains=google')).map((v) => v.customer_id);
       expect(ids).toEqual([fromGoogle]);
       expect(ids).not.toContain(fromNewsletter);
+    });
+
+    it('finds a visitor by the referrer the widget itself sent (13.2-l)', async () => {
+      // Every other referrer test above seeds `came_from` directly. That proves
+      // the filter reads the column and nothing about whether the product can
+      // ever fill it — which it could not until the widget carried a referrer
+      // through `POST /customer/chat/events`. This drives the real write path,
+      // so the filter and the write cannot drift apart unnoticed.
+      const visitor = await widgetToken(fx.a);
+      const sent = await server.post(
+        '/customer/chat/events',
+        {
+          text: 'Do you have this in blue?',
+          url: 'https://shop.example/product/42',
+          referrer: 'https://www.searchy.test/search',
+        },
+        auth(visitor.token),
+      );
+      expect(sent.statusCode).toBe(201);
+
+      expect((await listTraffic('?came_from_contains=searchy.test')).map((v) => v.customer_id))
+        .toContain(visitor.customer_id);
+      expect(
+        (await listTraffic('?came_from_contains=no-such-referrer')).map((v) => v.customer_id),
+      ).not.toContain(visitor.customer_id);
+    });
+
+    it('hides a widget-written referrer from the neighbouring tenant', async () => {
+      const visitor = await widgetToken(fx.b);
+      await server.post(
+        '/customer/chat/events',
+        {
+          text: 'hello',
+          url: 'https://northwind.example/',
+          referrer: 'https://www.searchy.test/search',
+        },
+        auth(visitor.token),
+      );
+
+      // `readToken` belongs to tenant A; the visit it would have to read lives
+      // under tenant B's license.
+      expect(
+        (await listTraffic('?came_from_contains=searchy.test')).map((v) => v.customer_id),
+      ).not.toContain(visitor.customer_id);
     });
 
     it('narrows by country, case-insensitively', async () => {

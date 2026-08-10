@@ -197,6 +197,139 @@ describe('customer chat api', () => {
 
   // =========================================================================
 
+  describe('where the visitor came from (FR-MOD-13.2)', () => {
+    /** The visit the message opened, if the body carried a page. */
+    const lastVisit = async (customerId: string) =>
+      owner.visit.findFirstOrThrow({
+        where: { customerId },
+        orderBy: { startedAt: 'desc' },
+      });
+
+    it('records the referrer as the visit it came in on', async () => {
+      const { token, customer_id } = await widgetToken();
+
+      await server.post(
+        '/customer/chat/events',
+        {
+          text: 'Do you ship to Ankara?',
+          url: 'https://shop.test/delivery',
+          referrer: 'https://www.searchy.test/search',
+        },
+        auth(token),
+      );
+
+      expect((await lastVisit(customer_id)).cameFrom).toBe('https://www.searchy.test/search');
+    });
+
+    it('leaves came_from null for a direct arrival', async () => {
+      const { token, customer_id } = await widgetToken();
+
+      await server.post(
+        '/customer/chat/events',
+        { text: 'Hi', url: 'https://shop.test/delivery' },
+        auth(token),
+      );
+
+      expect((await lastVisit(customer_id)).cameFrom).toBeNull();
+    });
+
+    it('drops the query string and fragment, whatever the client sent', async () => {
+      // The loader already trims on the host page, but the body is client input
+      // and a hand-rolled request carries whatever it likes. A referrer's query
+      // string is where reset tokens and e-mail addresses live (NFR-S9).
+      const { token, customer_id } = await widgetToken();
+
+      await server.post(
+        '/customer/chat/events',
+        {
+          text: 'Hi',
+          url: 'https://shop.test/delivery',
+          referrer: 'https://mail.test/inbox?token=secret-token&to=robin@example.test#msg',
+        },
+        auth(token),
+      );
+
+      const cameFrom = (await lastVisit(customer_id)).cameFrom;
+      expect(cameFrom).toBe('https://mail.test/inbox');
+      expect(cameFrom).not.toContain('secret-token');
+      expect(cameFrom).not.toContain('robin@example.test');
+    });
+
+    it('keeps the arrival referrer when a later page continues the same visit', async () => {
+      // "Came from" is a property of the arrival. Letting the second page
+      // overwrite it would replace the search engine that brought them with
+      // whichever page of the site they clicked next.
+      const { token, customer_id } = await widgetToken();
+
+      await server.post(
+        '/customer/chat/events',
+        { text: 'one', url: 'https://shop.test/a', referrer: 'https://www.searchy.test/search' },
+        auth(token),
+      );
+      await server.post(
+        '/customer/chat/events',
+        { text: 'two', url: 'https://shop.test/b', referrer: 'https://shop.test/a' },
+        auth(token),
+      );
+
+      expect(await owner.visit.count({ where: { customerId: customer_id } })).toBe(1);
+      expect((await lastVisit(customer_id)).cameFrom).toBe('https://www.searchy.test/search');
+    });
+
+    it('refuses an oversized referrer rather than truncating it silently', async () => {
+      const { token } = await widgetToken();
+
+      const response = await server.post(
+        '/customer/chat/events',
+        { text: 'Hi', url: 'https://shop.test/a', referrer: `https://x.test/${'a'.repeat(2100)}` },
+        auth(token),
+      );
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('refuses a misspelled key instead of dropping it', async () => {
+      // `.strict()`: `referer` is the header's spelling and the mistake a client
+      // will actually make. Silently accepting it would record every such
+      // visitor as a direct arrival with nothing to show for it.
+      const { token } = await widgetToken();
+
+      const response = await server.post(
+        '/customer/chat/events',
+        { text: 'Hi', url: 'https://shop.test/a', referer: 'https://www.searchy.test/search' },
+        auth(token),
+      );
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('writes the visit under the visitor’s own license, not a neighbour’s', async () => {
+      const { token: tokenA, customer_id: customerA } = await widgetToken(fx.a);
+      const { token: tokenB, customer_id: customerB } = await widgetToken(fx.b);
+
+      await server.post(
+        '/customer/chat/events',
+        { text: 'a', url: 'https://a.test/', referrer: 'https://tenant-a-referrer.test/' },
+        auth(tokenA),
+      );
+      await server.post(
+        '/customer/chat/events',
+        { text: 'b', url: 'https://b.test/', referrer: 'https://tenant-b-referrer.test/' },
+        auth(tokenB),
+      );
+
+      expect((await lastVisit(customerA)).licenseId).toBe(fx.a.licenseId);
+      expect((await lastVisit(customerB)).licenseId).toBe(fx.b.licenseId);
+      expect(
+        await owner.visit.count({
+          where: { licenseId: fx.a.licenseId, cameFrom: { contains: 'tenant-b' } },
+        }),
+      ).toBe(0);
+    });
+  });
+
+  // =========================================================================
+
   describe('reading the conversation', () => {
     it('returns the whole widget state in one call', async () => {
       const { token } = await widgetToken();

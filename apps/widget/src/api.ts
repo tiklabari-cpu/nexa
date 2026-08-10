@@ -111,6 +111,8 @@ export class WidgetApi {
     text: string,
     options: {
       url?: string;
+      /** Where the visitor arrived from — the visit's `came_from` (FR-MOD-13.2). */
+      referrer?: string;
       name?: string;
       email?: string;
       attachment_url?: string;

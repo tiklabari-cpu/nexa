@@ -11,6 +11,13 @@ import { expect, request, test as base, type APIRequestContext, type Page } from
 export const API_BASE = 'http://localhost:4000/api/v1';
 export const HOST_PAGE = 'http://acme-bikes.localhost:5174';
 export const WIDGET_ORIGIN = 'http://localhost:5174';
+/**
+ * A third site the visitor can arrive *from*, for `visits.came_from`
+ * (FR-MOD-13.2). Same Vite server, a third origin — a referrer only exists when
+ * the previous page is a real navigation away from somewhere else, and a
+ * cross-origin one is trimmed by the browser to exactly this origin.
+ */
+export const REFERRING_SITE = 'http://searchy.localhost:5174';
 
 export const DEMO = {
   email: 'owner@acme.localhost',
@@ -207,8 +214,33 @@ export function widgetFrame(page: Page) {
   return page.frameLocator('#nexa-widget-frame');
 }
 
-export async function openWidget(page: Page, organizationId: string): Promise<void> {
-  await page.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
+export async function openWidget(
+  page: Page,
+  organizationId: string,
+  options: { from?: string } = {},
+): Promise<void> {
+  const target = `${HOST_PAGE}/demo.html?organization_id=${organizationId}`;
+
+  if (options.from) {
+    // Arrive by clicking a link on another site, because that is the only thing
+    // that gives the host page a `document.referrer` — `page.goto` leaves it
+    // empty however the URL is dressed up, and the loader reads that property.
+    // The other site is the same demo page with no organization configured, so
+    // its loader stays inert and no stray visitor is created.
+    await page.goto(`${options.from}/demo.html`);
+    await page.evaluate((href) => {
+      const link = document.createElement('a');
+      link.id = 'e2e-continue';
+      link.href = href;
+      link.textContent = 'Continue';
+      document.body.append(link);
+    }, target);
+    await page.click('#e2e-continue');
+    await page.waitForURL(target);
+  } else {
+    await page.goto(target);
+  }
+
   const frame = widgetFrame(page);
   await frame.getByRole('button', { name: 'Open chat' }).click();
   // The composer only appears once the token exchange has succeeded.

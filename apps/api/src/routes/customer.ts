@@ -12,7 +12,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { SNEAK_PEEK_MAX_LENGTH, typingStateKey } from '@nexa/types';
+import { REFERRER_MAX_LENGTH, SNEAK_PEEK_MAX_LENGTH, typingStateKey } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { maskCardNumbers, maskOptional } from '../lib/cc-mask.js';
 import { isIpBanned } from '../lib/banned-ip.js';
@@ -38,6 +38,12 @@ const startSchema = z
     attachment_url: z.string().max(2048).optional(),
     /** Page the visitor is on — feeds the routing rules. */
     url: z.string().max(2048).optional(),
+    /**
+     * Where the visitor came from, recorded once as the visit's `came_from`
+     * (FR-MOD-13.2). Trimmed to origin + path before it is stored — see
+     * `sanitizeReferrer`; the cap here only bounds the body.
+     */
+    referrer: z.string().max(REFERRER_MAX_LENGTH).optional(),
     /** Optional pre-chat form values. */
     name: z.string().trim().max(120).optional(),
     email: z.string().email().max(320).optional(),
@@ -49,6 +55,10 @@ const startSchema = z
     custom_fields: z.record(z.string().max(5000).nullable()).optional(),
     idempotency_key: z.string().min(1).max(128).optional(),
   })
+  // `.strict()` for the reason `campaigns.ts` gives for its conditions: a typo
+  // in a key the visitor's context rides on (`referer`, `custom_field`) must be
+  // a 400 rather than a message that silently arrives stripped of it.
+  .strict()
   .refine((body) => Boolean(body.text?.trim()) || Boolean(body.attachment_url), {
     message: 'A message must have text or an attachment.',
   });
@@ -329,16 +339,17 @@ export default async function customerRoutes(
         );
       }
 
-      // The page the visitor wrote from. Recorded on a best-effort basis: it
-      // feeds the "Visited pages" panel an agent reads for context, and losing
-      // that context is not worth failing the message the visitor is trying to
-      // send.
+      // The page the visitor wrote from, and — when this is the first page of a
+      // new visit — where they came from before it. Recorded on a best-effort
+      // basis: both feed the panels an agent reads for context, and losing that
+      // context is not worth failing the message the visitor is trying to send.
       if (body.url) {
         try {
           await request.withTenant((tx) =>
             customerDirectory.recordPageView(tx, tenant, {
               customerId: principal.customerId,
               url: body.url!,
+              referrer: body.referrer,
               userAgent: request.headers['user-agent'],
               ip: request.ip,
             }),

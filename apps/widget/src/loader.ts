@@ -14,6 +14,8 @@
  * adds the chat surface behind it.
  */
 
+import { sanitizeReferrer } from '@nexa/types';
+
 export interface NexaWidgetConfig {
   /** Tenant this widget talks to. */
   organizationId: string;
@@ -189,7 +191,7 @@ function normaliseOrigin(value: string): string | null {
 function buildFrameUrl(
   origin: string,
   config: NexaWidgetConfig,
-  host: { origin: string; url: string },
+  host: { origin: string; url: string; referrer: string | null },
 ): string {
   const url = new URL('/widget.html', origin);
   url.searchParams.set('organization_id', config.organizationId);
@@ -198,6 +200,10 @@ function buildFrameUrl(
   // trusted domains — see the note on `host_origin` in the token route.
   url.searchParams.set('host_origin', host.origin);
   url.searchParams.set('host_url', host.url);
+  // Only present when the visitor arrived from somewhere; a direct arrival
+  // carries no parameter at all rather than an empty one, so the widget can
+  // tell "came from nowhere" from "came from the empty string".
+  if (host.referrer) url.searchParams.set('host_referrer', host.referrer);
   if (config.language) url.searchParams.set('language', config.language);
   // Appearance the widget applies at mount, so the launcher is on-brand before
   // the first open rather than flashing the default (FR-MOD-11.7). Only what the
@@ -211,20 +217,28 @@ function buildFrameUrl(
 }
 
 /**
- * The embedded page, as origin + path.
+ * The embedded page, as origin + path, plus the page before it.
  *
- * The widget cannot work this out for itself: `document.referrer` inside a
+ * The widget cannot work either out for itself: `document.referrer` inside a
  * cross-origin frame is trimmed to the origin by the default referrer policy,
  * so an agent would see "they are on the shop" and never "they are on
- * /checkout" — which is the entire point of showing visited pages.
+ * /checkout" — which is the entire point of showing visited pages. And the
+ * frame's referrer is the *host page*, never the page the visitor came from;
+ * only code running on the host page can see that one (FR-MOD-13.2).
  *
- * Query string and fragment are dropped. They are where session tokens, reset
- * links and email addresses live, and a support transcript is the last place
- * those should end up. The path answers the question an agent actually has.
+ * Query string and fragment are dropped from both. They are where session
+ * tokens, reset links and email addresses live, and a support transcript is the
+ * last place those should end up. The path answers the question an agent
+ * actually has. Trimming the referrer here, rather than only server-side, means
+ * the dropped parts never leave the visitor's browser at all.
  */
-function hostPageUrl(win: Window): { origin: string; url: string } {
+function hostPageUrl(win: Window): { origin: string; url: string; referrer: string | null } {
   const { origin, pathname } = win.location;
-  return { origin, url: `${origin}${pathname}`.slice(0, 2048) };
+  return {
+    origin,
+    url: `${origin}${pathname}`.slice(0, 2048),
+    referrer: sanitizeReferrer(win.document.referrer),
+  };
 }
 
 function clampDimension(value: unknown, min: number, max: number): number | null {

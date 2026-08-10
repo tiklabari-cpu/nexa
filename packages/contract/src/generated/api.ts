@@ -8420,6 +8420,19 @@ export interface operations {
           attachment_url?: string;
           /** @description Page the visitor is on. Feeds the routing rules. */
           url?: string;
+          /**
+           * @description Where the visitor arrived from, recorded once as the visit's
+           *     `came_from` (FR-MOD-13.2). Only the loader can supply it: a
+           *     cross-origin frame's own `document.referrer` is the embedding
+           *     page, not the page before it.
+           *
+           *     Stored as origin + path — the query string and fragment are
+           *     dropped server-side whatever is sent, because a referrer's
+           *     query string is where reset tokens and e-mail addresses live
+           *     (NFR-S9). Omit it for a direct arrival; `came_from` then stays
+           *     null and the agent's panel simply says nothing.
+           */
+          referrer?: string;
           /** @description Pre-chat form value. */
           name?: string;
           /** Format: email */

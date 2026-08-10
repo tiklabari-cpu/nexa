@@ -10,6 +10,9 @@
  * status tabs (13.2-g), the "Match all filters" panel (13.2-f/h), the
  * supervised state (13.2-d/e) and the 360° panel (13.2-i/j) were each proven in
  * isolation, and nothing until now proved they compose on one real visitor.
+ * It also carries 13.2-l: the visitor arrives from another site, so "Came from"
+ * and the `came_from_contains` condition are exercised on a referrer the
+ * product itself recorded rather than one a test inserted.
  */
 import {
   expect,
@@ -17,6 +20,7 @@ import {
   API_BASE,
   openWidget,
   ownerAccessToken,
+  REFERRING_SITE,
   visitorSends,
 } from './fixtures.js';
 
@@ -78,7 +82,10 @@ test.describe('real-time traffic', () => {
 
     try {
       // --- 1. A real visitor, from the widget on the customer's own site ----
-      await openWidget(visitor, organizationId);
+      // Arriving from another site, so the visit records where they came from
+      // (13.2-l). A cross-origin referrer is trimmed by the browser to its
+      // origin, which is what the panel and the filter below expect to see.
+      await openWidget(visitor, organizationId, { from: REFERRING_SITE });
       await visitorSends(visitor, `Traffic sweep ${stamp}`);
 
       // The widget mints an anonymous contact with `last_activity_at` set, and
@@ -178,6 +185,28 @@ test.describe('real-time traffic', () => {
       await expect(row).toBeVisible();
       expect(await table.getByRole('row').count()).toBe(unfilteredRows);
 
+      // --- 5b. The same, on the referrer this visitor actually arrived with --
+      // The sixth condition of the "Match all filters" panel (13.2-f) had no
+      // data to stand on until the write path existed: `came_from` was null for
+      // every visitor the product could create (13.2-l).
+      await agentPage.getByRole('button', { name: 'Add filter' }).click();
+      await agentPage.getByRole('button', { name: 'Came from contains' }).click();
+      const cameFromFilter = agentPage.getByRole('textbox', { name: 'Came from contains' });
+
+      await cameFromFilter.fill('searchy.localhost');
+      await expect(agentPage).toHaveURL(/came_from_contains=searchy\.localhost/);
+      await expect(row).toBeVisible();
+      await agentPage.screenshot({ path: 'kanit/13.2-l-came-from-filter.png', fullPage: true });
+
+      // A referrer nobody arrived from drops them, so the match above is the
+      // filter working rather than the filter being ignored.
+      await cameFromFilter.fill(`nowhere-${stamp}.example`);
+      await expect(row).toHaveCount(0);
+
+      await agentPage.getByRole('button', { name: 'Remove Came from contains filter' }).click();
+      await expect(row).toBeVisible();
+      expect(await table.getByRole('row').count()).toBe(unfilteredRows);
+
       // --- 6. Start a chat, then supervise it -------------------------------
       // A browsing visitor has nothing to watch yet, so the proactive action is
       // what creates one — assigned to me, which is what keeps the state below
@@ -217,16 +246,15 @@ test.describe('real-time traffic', () => {
       // the card names a team rather than showing its empty state.
       await expect(agentPage.getByRole('heading', { name: 'Groups', level: 3 })).toBeVisible();
       await expect(agentPage.getByText('Not routed to a team yet.')).toHaveCount(0);
-      //
-      // NOT asserted here, deliberately: the panel's "Came from <referrer>"
-      // line. `visits.came_from` is written by `CustomerService.recordPageView`,
-      // and the only caller (`POST /customer/chat`) never passes a referrer —
-      // the widget does not send one and the contract has no field for it. So
-      // the column is null for every visitor the product can actually create,
-      // and an e2e assertion on that text could only pass against a row this
-      // test inserted itself. The render path is covered by
-      // `CustomerDetailPanel.test.tsx` and the `came_from_contains` filter by
-      // `traffic.test.ts`; what is missing is the write, recorded as a gap.
+
+      // Came from (13.2-l): the site the visitor was on before this one, which
+      // travelled loader → widget → `POST /customer/chat/events` → the visit.
+      // Plain text, never a link — a link would be a one-click path to whatever
+      // a stranger's page put in the address bar.
+      const cameFrom = agentPage.getByText(`Came from ${REFERRING_SITE}/`);
+      await expect(cameFrom).toBeVisible();
+      await expect(cameFrom.locator('a')).toHaveCount(0);
+      await expect(agentPage.getByRole('link', { name: /Came from/ })).toHaveCount(0);
 
       await agentPage.screenshot({ path: 'kanit/13.2-k-visitor-360.png', fullPage: true });
 

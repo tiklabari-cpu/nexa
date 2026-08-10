@@ -18,6 +18,19 @@ function setup(config?: Partial<NexaWidgetConfig>): TestWindow {
 
 const frame = () => document.getElementById('nexa-widget-frame') as HTMLIFrameElement | null;
 
+/**
+ * jsdom hard-codes an empty `document.referrer`; a visitor usually has one.
+ * Shadowed on the instance, so removing it hands the prototype getter back.
+ */
+function withReferrer(value: string, run: () => void): void {
+  Object.defineProperty(document, 'referrer', { value, configurable: true });
+  try {
+    run();
+  } finally {
+    Reflect.deleteProperty(document, 'referrer');
+  }
+}
+
 describe('widget loader', () => {
   beforeEach(() => {
     setup();
@@ -84,6 +97,39 @@ describe('widget loader', () => {
     } finally {
       window.history.replaceState({}, '', '/');
     }
+  });
+
+  it('passes the page the visitor came from, which only this script can see', () => {
+    // Inside the frame `document.referrer` is the host page itself, so the
+    // widget would record every visitor as having come from the site they are
+    // already on. The loader runs on the host page and sees the real one
+    // (FR-MOD-13.2).
+    withReferrer('https://www.searchy.test/search', () => {
+      boot(setup({}));
+      expect(new URL(frame()!.src).searchParams.get('host_referrer')).toBe(
+        'https://www.searchy.test/search',
+      );
+    });
+  });
+
+  it('strips the referrer query string before it leaves the page', () => {
+    // A referrer is an external URL and its query string is where reset tokens
+    // and email addresses live (NFR-S9). Trimmed here as well as server-side, so
+    // the dropped parts never travel at all.
+    withReferrer('https://mail.test/inbox?token=secret-token&to=robin@example.test', () => {
+      boot(setup({}));
+      const referrer = new URL(frame()!.src).searchParams.get('host_referrer');
+      expect(referrer).toBe('https://mail.test/inbox');
+      expect(referrer).not.toContain('secret-token');
+      expect(referrer).not.toContain('robin@example.test');
+    });
+  });
+
+  it('sends no referrer at all for a direct arrival', () => {
+    withReferrer('', () => {
+      boot(setup({}));
+      expect(new URL(frame()!.src).searchParams.has('host_referrer')).toBe(false);
+    });
   });
 
   it('refuses to boot a same-origin widget', () => {

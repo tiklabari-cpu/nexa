@@ -13,6 +13,40 @@
 
 ## Task log (newest-first)
 
+## tm 110 — PLAN Faz-2 özet sayaçları tabloyla eşitlendi (panel bulgusu) — done — 2026-08-10 UTC
+
+- **Yapıldı:** PLAN.md satır **22** (faz özet tablosu) + satır **1100** (§5.0 kendi sayacı) →
+  `3 ⬜ açık · 1 ◐ kısmi · 23 ✅ teslim · 3 ⛔ kapsam dışı` (önce sırasıyla `7/1/19/3` ve
+  `6/0/21/3`). Sebep §D84'e tek kayıt olarak düşüldü. **Gereksinim satır damgalarına ve koda
+  dokunulmadı** — diff yalnız 3 satır (22 · 1100 · yeni D84).
+- **Teşhis (git ile kanıtlandı):** satır 22 en son `6679c26`'da (tm 98.1) yazıldı ve o an
+  DOĞRUYDU; sonrasında §5.0 tablosuna satır eklenmedi/silinmedi (iki tarafta da 30 satır, aynı
+  PRD kodları, aynı sıra) — yalnız 5 damga çevrildi ve hiçbir çeviren commit özeti güncellemedi:
+  `05.6` ◐→✅ (`60b967c`/98.5) · `08.5.7` ⬜→✅ (`51e2643`/65.8) · `09.3` ⬜→✅ (`9dfed5f`/71.8) ·
+  `09.4` ⬜→✅ (`4ac9cb7`/72.7) · `13.2` ⬜→◐ (`05229bd`/73.1). `7⬜/1◐/19✅` + 5 çevrim =
+  `3⬜/1◐/23✅`. Yani **bayat özet**, damga hatası değil.
+- **Doğrulama:** (1) sayım script'i (§5.0→§5.1 arası `^| ` satırları, damga = 6. alanın öncü
+  karakteri) **exit 0** → `satır=30 ✅=23 ◐=1 ⬜=3 ⛔=3 ??=0`; (2) Task Master çapraz kontrolü
+  örtüşüyor — done olmayan v2 kalemleri tm 73 (13.2, in-progress) · 74 (13.3) · 75 (13.5) ·
+  99 (09.2) = 1 ◐ + 3 ⬜; (3) iki özet birbiriyle birebir; (4) `git diff -U0`'da §5.0 gereksinim
+  satırı (1106–1137) **yok**. **Derleme kapıları koşulmadı ve kapsam dışıdır** — bu turda ürün
+  kodu değişmedi, yalnız `.md` + `tasks.json` (§D78/§D83 emsali).
+- **Varsayımlar:** satır 1100 görev metninde ismen istenmedi ama §D78 emsaliyle **birlikte**
+  düzeltildi: gereksinim satırı değil türetilmiş sayımdır ve bayat bırakılsaydı bir sonraki
+  taramada aynı bulguyu geri açıp kuyruğu kendi kendine beslerdi. `23 açık kalem` kapanış
+  paydasına (satır 22-col5 · 1102 · §5.2 başlığı · 2318) dokunulmadı — o, planlama anındaki
+  açık kümedir, canlı sayaç değil.
+- **Sonraki pencereye not:** **Kaynak kapanmadı, yalnız sonuç düzeltildi.** Bu §D78'in (tm 102)
+  ikinci tekrarı; sayaç bir sonraki `⬜→✅`da yeniden bayatlar. Doğru davranış emsali
+  `5d2c096`/WORKSCHED-j: damgayı çeviren pencere satır 22 + satır 1100'ü **aynı commit'te**
+  günceller. Kalıcı çözüm bunu DoD kapısına bir kutu olarak eklemektir (CONVENTIONS §1) —
+  ayrı iş, bu pencerede açılmadı. **Araç kusuru:** MCP `add_task` `priority`'yi high/medium/low'a
+  zorluyor (`critical` yazılamıyor) ve yazma yolu 109 üst-görev `id`'sini string→sayı normalize
+  edip ~220 satır ilgisiz churn üretiyor; tm 110 bu yüzden tasks.json'a **elle**, mevcut kayıt
+  şekliyle eklendi (diff 12 satır). `set_task_status` bu kusuru taşımıyor.
+
+---
+
 ### İŞLETİM UYARISI — tm 73.3 için AYNI ANDA İKİ PENCERE açıldı — 2026-08-10 UTC
 
 - **Ne oldu:** Runner tm 73.3 için 06:33:30'da bir pencere (PID 6800), 06:37:07'de İKİNCİ bir

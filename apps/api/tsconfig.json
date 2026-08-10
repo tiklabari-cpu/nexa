@@ -6,5 +6,5 @@
     "types": ["node"],
     "moduleResolution": "Bundler"
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "prisma/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "prisma/**/*.ts", "scripts/**/*.ts"]
 }

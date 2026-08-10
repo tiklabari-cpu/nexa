@@ -40,6 +40,24 @@ export async function resetDatabase(db: PrismaClient): Promise<void> {
   await db.$executeRawUnsafe(
     `TRUNCATE TABLE ${tables.map((t) => `"${t.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`,
   );
+  await applyLicenseIdOffset(db);
+}
+
+/**
+ * Pushes `licenses_id_seq` past this run's reserved range — see the twin of this
+ * helper in `apps/api/test/helpers/fixtures.ts` for why. It matters most here:
+ * the fan-out suites subscribe to `licenseChannel()` directly, and Redis pub/sub
+ * ignores the logical database that otherwise separates two concurrent runs.
+ */
+async function applyLicenseIdOffset(db: PrismaClient): Promise<void> {
+  const raw = process.env['NEXA_TEST_LICENSE_ID_OFFSET'];
+  if (!raw) return;
+
+  const offset = Number(raw);
+  if (!Number.isSafeInteger(offset) || offset <= 0) {
+    throw new Error(`NEXA_TEST_LICENSE_ID_OFFSET must be a positive integer, got "${raw}"`);
+  }
+  await db.$executeRawUnsafe(`ALTER SEQUENCE IF EXISTS licenses_id_seq RESTART WITH ${offset + 1}`);
 }
 
 async function seedTenant(db: PrismaClient, slug: string): Promise<RtmTenant> {

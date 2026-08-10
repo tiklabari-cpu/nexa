@@ -146,6 +146,27 @@ pnpm format         # prettier
 External services — Stripe, WhatsApp/Meta, LLM providers, SMTP, object storage — are
 mocked behind interfaces. The LLM mock is deterministic so tests never flake.
 
+### Test datastores are private to each run
+
+`@nexa/api` and `@nexa/rtm` talk to a real Postgres and a real Redis, and every suite
+starts by truncating. Two test runs against one database therefore destroy each other's
+fixtures — and the damage lands as unique-constraint violations and 401s in whatever
+happened to be running, not as anything to do with the change under test.
+
+So each run gets its own. `pnpm test`, `test:unit` and `test:integration` in those two
+packages go through `apps/api/scripts/with-test-datastores.ts`, which creates a
+`nexa_test_<id>` database, migrates it, leases one of Redis' logical databases (1-15),
+runs the command against them and drops both afterwards. A run that dies without
+cleaning up leaves a lease that expires; the next run sweeps what it left behind.
+
+Nothing in a test needs to know: the harness only rewrites `DATABASE_URL`,
+`DATABASE_APP_URL` and `REDIS_URL`. Adds ~3 s per run. `NEXA_TEST_ISOLATION=off` runs
+against the shared development database instead, for picking through the wreckage of a
+failing test by hand.
+
+The e2e suite is the exception — it drives the real servers on fixed ports against the
+seeded development database, so two of those still cannot run at once.
+
 Environment lives in `.env` (created from `.env.example` by `make env`). It is
 gitignored; no secret is ever committed.
 

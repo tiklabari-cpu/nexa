@@ -65,6 +65,31 @@ export async function resetDatabase(db: PrismaClient): Promise<void> {
 
   const quoted = tables.map((t) => `"${t.tablename}"`).join(', ');
   await db.$executeRawUnsafe(`TRUNCATE TABLE ${quoted} RESTART IDENTITY CASCADE`);
+  await applyLicenseIdOffset(db);
+}
+
+/**
+ * Pushes `licenses_id_seq` past this run's reserved range.
+ *
+ * Redis pub/sub channels are *not* scoped by logical database, and
+ * `licenseChannel()` names them after an autoincrement id — so two concurrent
+ * runs would both publish and subscribe on `nexa:rtm:license:1` and read each
+ * other's envelopes, however well the rows underneath are separated. Offsetting
+ * the sequence makes the channel names disjoint too.
+ *
+ * `RESTART IDENTITY` above resets the sequence to 1, so this has to run *after*
+ * every truncation, not once at provisioning time. Unset (a developer running
+ * against the shared database) means offset 0 and today's behaviour.
+ */
+async function applyLicenseIdOffset(db: PrismaClient): Promise<void> {
+  const raw = process.env['NEXA_TEST_LICENSE_ID_OFFSET'];
+  if (!raw) return;
+
+  const offset = Number(raw);
+  if (!Number.isSafeInteger(offset) || offset <= 0) {
+    throw new Error(`NEXA_TEST_LICENSE_ID_OFFSET must be a positive integer, got "${raw}"`);
+  }
+  await db.$executeRawUnsafe(`ALTER SEQUENCE IF EXISTS licenses_id_seq RESTART WITH ${offset + 1}`);
 }
 
 let passwordHashCache: string | null = null;

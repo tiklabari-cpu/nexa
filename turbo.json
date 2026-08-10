@@ -11,6 +11,9 @@
     "DATABASE_APP_URL",
     "REDIS_URL",
 
+    "NEXA_TEST_ISOLATION",
+    "NEXA_TEST_LICENSE_ID_OFFSET",
+
     "API_PORT",
     "API_HOST",
     "API_BASE_URL",

@@ -13,6 +13,55 @@
 
 ## Task log (newest-first)
 
+### tm 105 — Koşu başına izole test veri depoları — KURTARMA turu (kod commit'lendi) — done — 2026-08-10 UTC
+
+- **Neden bu pencere açıldı:** tm 105 Task Master'da `in-progress` asılı kalmıştı ama onu koşturan
+  pencere yoktu. `.loop-logs/task-105.jsonl` **tail**'i sebebi tek başına veriyor: 2026-08-09T07:56Z'de
+  art arda iki oturum, ikisi de **tek turda HTTP 429** (_"You've hit your session limit"_, 5 saatlik
+  kota) — pencere kapanışı yapamadan öldü, `.state/last-stop.json` de yok.
+- **Bulunan durum (asıl mesele):** iş **fiilen bitmişti** ve o pencere dokümanını da yazmıştı; ama
+  **yalnız doküman commit'lendi, kod commit'lenmedi.** `CONVENTIONS.md` §1.1 (`e5a0437`),
+  `PLAN.md` §D80 (`6679c26`) ve `TASK-RUNNER-PROMPT.md` §2 izolasyonun yürürlükte olduğunu
+  anlatıyordu — sonraki pencereler o dosyaları kendi işleri için düzenlerken kirli çalışma alanında
+  duran tm 105 doküman değişikliklerini **farkında olmadan kendi commit'lerine aldılar**. Mekanizmanın
+  kodu ise 9 dosyada commit'siz bekliyordu (tm 111 penceresi bunu HANDOFF'ta not etmiş ama dokunmamıştı).
+  Yani depoyu klonlayan biri **belgelenen izolasyonu almıyordu**.
+- **Bu pencere KOD YAZMADI** — §D80'in teslimini olduğu gibi doğruladı ve kapattı. Tek eklenen:
+  PLAN §D85 + bu not.
+- **Doğrulama (hepsi bu turda çalıştırıldı, exit 0):** kabul kriteri **birebir** — iki eşzamanlı
+  `npx turbo run test --filter=@nexa/api --concurrency=1 **--force**` → **A: 2278/2278 · B: 2278/2278**,
+  ikisi de yeşil. `--force` şart: ilk `pnpm -w test` denemem exit 0 verdi ama **10 turbo task'ının 9'u
+  önbellek replay'iydi**, yani harness hiç koşmamıştı — önbellekli yeşil bu görevde hiçbir şey kanıtlamaz.
+  Koşu sırasında ayrı depolar canlı gözlendi (`nexa_test_348f98feb624`/db1 · `nexa_test_b1ed2cfbd9e7`/db2,
+  her biri kendi kira anahtarıyla); koşu sonrası **0 veritabanı · 0 kira anahtarı** (temizlik çalışıyor).
+  Ayrıca `pnpm -w test:integration --force` (kökten `--concurrency=1` kalkmış haliyle) turbo'yu
+  `@nexa/api` + `@nexa/rtm`'i **paralel** koşturdu, ikisi ayrı depo aldı → api **1741/1741** · rtm **51/51**.
+  Kapının geri kalanı da **önbelleksiz** koşuldu: `pnpm -w test --force` **exit 0** (10/10 turbo task,
+  replay yok) — api **2278** · web **896** · ai-mock **136** · rtm **90** · types **86** · widget **59**.
+  typecheck **11/11** · lint **8/8** (`eslint src scripts` yeni dizini kapsıyor) · build **7/7**.
+  §D80'in kaydettiği "tm 107'nin bilinen tarih kusuru" artık yok (`bac4584`) — bu yüzden §D80'in
+  kırmızılı sonucunun aksine bu tur **tam yeşil**.
+- **e2e KOŞULMADI, bilerek:** `apps/e2e` bu mekanizmanın **belgelenmiş istisnasıdır** (sabit portlar +
+  seed'lenmiş `nexa` veritabanı, CONVENTIONS §1.1) ve bu turda `apps/e2e` altında **hiçbir dosya
+  değişmedi**; kök `test` filtresi zaten e2e'yi dışlıyor. Yeşil olduğunu iddia etmiyorum — koşmadım.
+- **Sonraki pencereye not:** Artık **kapının objektifliği kodda da yürürlükte** — bir kırmızıyı
+  "başka pencere yazıyordur" diye açıklama (CONVENTIONS §1.1). Kaçış kapağı `NEXA_TEST_ISOLATION=off`.
+  **Kalan kirlilik, bu pencere DOKUNMADI:** `apps/e2e/kanit/*.png` **51 dosya** — bunlar başka
+  task'ların kanıt kareleri, tam e2e koşuları tarafından yeniden üretilmiş; tm 111 penceresi de
+  bilerek kirli bırakmıştı. Kendi commit'ime almadım çünkü **başkasının kanıtını benim turumun
+  kanıtıymış gibi damgalamak olurdu**; ama her taramada bulgu üretmeye devam edecekler — kalıcı
+  karar (kanıt karelerini yeniden üretilebilir sayıp commit'lemek mi, yoksa `kanit/` üretimini
+  deterministik kılmak mı) hâlâ verilmedi.
+- **Bu turda CANLI bir başka pencere vardı — commit'ime ALMADIM (kasıtlı):** tur ortasında
+  `packages/contract/openapi/openapi.yaml`, `packages/contract/src/generated/api.ts`,
+  `packages/types/src/domain.ts` ve `.taskmaster/tasks/tasks.json` **14:03–14:13'te** değişti;
+  içerik tm 74'ün (13.3 Goals, `in-progress`) uçuş hâlindeki kontrat işi. Ayrıca `.gitignore`'da
+  bir başka pencerenin bıraktığı `.taskmaster/tmp-*` kuralı (dün 04:00) commit'siz duruyor.
+  Hiçbirine dokunmadım: **tm 105'i bu hâle sokan kusurun ta kendisi**, pencerelerin kirli çalışma
+  alanındaki yabancı değişiklikleri kendi commit'lerine süpürmesiydi (§D85). Çalışma alanı bu
+  yüzden temiz DEĞİL ve bu turda temiz bırakılamazdı — kalan her şey ya canlı bir pencereye ya da
+  başka bir task'a ait.
+
 ### tm 111 — 13.2-l: `visits.came_from` yazma yolu (referrer: widget → servis) — done — 2026-08-10 UTC
 
 - **Yapıldı:** Referrer uçtan uca bağlandı, contract-first: OpenAPI `sendCustomerMessage`

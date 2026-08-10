@@ -10,9 +10,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
-    "test": "vitest run --passWithNoTests",
-    "test:unit": "vitest run --passWithNoTests --dir src",
-    "test:integration": "vitest run --passWithNoTests --dir test/integration"
+    "test": "tsx ../api/scripts/with-test-datastores.ts vitest run --passWithNoTests",
+    "test:unit": "tsx ../api/scripts/with-test-datastores.ts vitest run --passWithNoTests --dir src",
+    "test:integration": "tsx ../api/scripts/with-test-datastores.ts vitest run --passWithNoTests --dir test/integration"
   },
   "dependencies": {
     "@nexa/types": "workspace:*",

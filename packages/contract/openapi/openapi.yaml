@@ -1784,6 +1784,66 @@ components:
         created_at: { type: string, format: date-time }
         performance: { $ref: "#/components/schemas/CampaignPerformance" }
 
+    GoalDefinition:
+      type: object
+      description: |
+        A goal's trigger predicate (FR-MOD-13.3) — same vocabulary as
+        `CampaignConditions`. `url_contains` — the one condition v1 ships —
+        targets the page a visitor is on; the shape stays an open object so
+        geo/event conditions slot in later without a contract change.
+      properties:
+        url_contains:
+          type: string
+          maxLength: 2048
+          description: Case-insensitive substring the visitor's current page URL must contain.
+
+    Goal:
+      type: object
+      description: A tracked conversion target (FR-MOD-13.3).
+      required: [id, name, definition, active, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        definition: { $ref: "#/components/schemas/GoalDefinition" }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    GoalFunnel:
+      type: object
+      description: The visitor→chat→conversion funnel for a goal, or goals in aggregate (FR-MOD-13.3).
+      required: [visitors, chats, conversions, conversion_rate]
+      properties:
+        visitors:
+          type: integer
+          description: Distinct visitors seen in the window.
+        chats:
+          type: integer
+          description: Of those, how many opened a conversation.
+        conversions:
+          type: integer
+          description: Of those, how many reached the goal.
+        conversion_rate:
+          type: number
+          nullable: true
+          description: "`conversions / chats`; null when there are no chats to divide by."
+
+    GoalsReport:
+      type: object
+      description: The `/reports/goals` payload (FR-MOD-13.3) — the aggregate funnel, a per-goal breakdown, and the prior window for comparison.
+      required: [funnel, by_goal, previous_period]
+      properties:
+        funnel: { $ref: "#/components/schemas/GoalFunnel" }
+        by_goal:
+          type: array
+          items:
+            type: object
+            required: [goal_id, name, conversions]
+            properties:
+              goal_id: { type: string, format: uuid }
+              name: { type: string }
+              conversions: { type: integer }
+        previous_period: { $ref: "#/components/schemas/GoalFunnel" }
+
     TicketRuleConditions:
       type: object
       description: |

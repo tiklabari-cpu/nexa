@@ -295,6 +295,41 @@ export interface Campaign {
   performance: CampaignPerformance;
 }
 
+// --- Goals (FR-MOD-13.3) -----------------------------------------------------
+
+/**
+ * A goal's trigger predicate (FR-MOD-13.3) — same vocabulary as
+ * {@link CampaignConditions}. `url_contains` is the one condition v1 ships;
+ * the shape stays an open object so geo/event conditions slot in later
+ * without a contract change.
+ */
+export interface GoalDefinition {
+  /** Case-insensitive substring the visitor's current page URL must contain. */
+  url_contains?: string;
+}
+
+/** A tracked conversion target (FR-MOD-13.3). */
+export interface Goal {
+  id: string;
+  name: string;
+  definition: GoalDefinition;
+  active: boolean;
+  created_at: string;
+}
+
+/** The visitor→chat→conversion funnel for a goal, or goals in aggregate (FR-MOD-13.3). */
+export interface GoalFunnel {
+  visitors: number;
+  chats: number;
+  conversions: number;
+  /** `conversions / chats`; null when there are no chats to divide by. */
+  conversion_rate: number | null;
+}
+
+/** The status sub-tabs on the Goals screen. */
+export const GOAL_FILTERS = ['all', 'active', 'inactive'] as const;
+export type GoalFilter = (typeof GOAL_FILTERS)[number];
+
 // --- Ticket rules (FR-MOD-08.6.2) -------------------------------------------
 
 /**

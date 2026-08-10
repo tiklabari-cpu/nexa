@@ -13,6 +13,26 @@
 
 ## Task log (newest-first)
 
+### tm 74.1 — 13.3-a: Goal veri sözlüğü — @nexa/types tipleri + OpenAPI component şemaları (path YOK) — done — 2026-08-10 UTC
+
+- **Yapıldı:** Goals (13.3) için contract-first ilk adım, yalnız vokabüler. `packages/types/src/domain.ts`'e
+  `GoalDefinition`/`Goal`/`GoalFunnel` + `GOAL_FILTERS`/`GoalFilter` (Campaign bloğu deseni). `openapi.yaml`
+  `components/schemas`'a birebir eşi (+`GoalsReport`) — **path eklenmedi** (contract-parity çift yönlü;
+  path+route 13.3-c'nin işi). Re-bundle + `generated/api.ts` yenilendi.
+- **Doğrulama:** Bu 3 dosyanın değişikliği pencere açıldığında önceki bir pencereden commit'siz duruyordu
+  (task Task Master'da `in-progress` idi) — bu pencere onu doğruladı ve kapattı, yeniden yazmadı.
+  `pnpm -w typecheck` **0** · `pnpm -w lint` **0** · `pnpm -w test` **0** (`@nexa/api` 2278/2278) ·
+  `pnpm -w test:integration` **0** (1741/1741, `contract-parity.test.ts` 5/5) · `pnpm -w build` **0** (7/7).
+  E2E koşulmadı — bu iş hiçbir route/UI eklemiyor, task'ın kendi test stratejisi kapsam dışı bırakıyor.
+- **Varsayımlar:** Yok (mevcut varsayımlar 13.3 üst görevinde zaten yazılı).
+- **Sonraki pencereye not:** PLAN §13.3 satırı `◐` (K13.3) — Goals'ın 8 alt-görevi kaldı (13.3-b…-i).
+  Sıradaki 13.3-b migration+RLS'tir (74.1'e bağımlı değil, hemen başlayabilir); 13.3-c artık açık (74.1
+  bağımlılığı karşılandı). Bu pencere çalışma alanındaki **tm 105 WIP'e ve `.gitignore`'daki ayrı
+  `.taskmaster/tmp-*` değişikliğine dokunmadı** — kapsam dışı (tm 105 bu turda başka bir pencere
+  tarafından ayrıca commit'lendi, bkz. az aşağıdaki blok). Tam koşuda üretilen `kanit/*.png`
+  değişiklikleri de (49 dosya, çeşitli önceki e2e koşularından) kirli bırakıldı — bu tur hiçbirine
+  dokunmadı.
+
 ### tm 105 — Koşu başına izole test veri depoları — KURTARMA turu (kod commit'lendi) — done — 2026-08-10 UTC
 
 - **Neden bu pencere açıldı:** tm 105 Task Master'da `in-progress` asılı kalmıştı ama onu koşturan

@@ -5530,6 +5530,48 @@ export interface components {
       performance: components['schemas']['CampaignPerformance'];
     };
     /**
+     * @description A goal's trigger predicate (FR-MOD-13.3) — same vocabulary as
+     *     `CampaignConditions`. `url_contains` — the one condition v1 ships —
+     *     targets the page a visitor is on; the shape stays an open object so
+     *     geo/event conditions slot in later without a contract change.
+     */
+    GoalDefinition: {
+      /** @description Case-insensitive substring the visitor's current page URL must contain. */
+      url_contains?: string;
+    };
+    /** @description A tracked conversion target (FR-MOD-13.3). */
+    Goal: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      definition: components['schemas']['GoalDefinition'];
+      active: boolean;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /** @description The visitor→chat→conversion funnel for a goal, or goals in aggregate (FR-MOD-13.3). */
+    GoalFunnel: {
+      /** @description Distinct visitors seen in the window. */
+      visitors: number;
+      /** @description Of those, how many opened a conversation. */
+      chats: number;
+      /** @description Of those, how many reached the goal. */
+      conversions: number;
+      /** @description `conversions / chats`; null when there are no chats to divide by. */
+      conversion_rate: number | null;
+    };
+    /** @description The `/reports/goals` payload (FR-MOD-13.3) — the aggregate funnel, a per-goal breakdown, and the prior window for comparison. */
+    GoalsReport: {
+      funnel: components['schemas']['GoalFunnel'];
+      by_goal: {
+        /** Format: uuid */
+        goal_id: string;
+        name: string;
+        conversions: number;
+      }[];
+      previous_period: components['schemas']['GoalFunnel'];
+    };
+    /**
      * @description A ticket rule's trigger (FR-MOD-08.6.2). Every key set must hold (AND).
      *     An empty predicate matches nothing, so a rule with no condition is
      *     rejected rather than saved to fire at every ticket.

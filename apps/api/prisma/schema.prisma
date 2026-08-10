@@ -105,6 +105,7 @@ model License {
   scheduledReports       ScheduledReport[]
   scheduledReportRuns    ScheduledReportRun[]
   chatSupervisions       ChatSupervision[]
+  goalAchievements       GoalAchievement[]
 
   invitations Invitation[]
 
@@ -262,6 +263,7 @@ model Customer {
   channelIdentities ChannelIdentity[]
   campaignSends     CampaignSend[]
   customFieldValues CustomFieldValue[]
+  goalAchievements  GoalAchievement[]
 
   @@index([organizationId, lastActivityAt(sort: Desc)])
   @@index([organizationId, email])
@@ -439,15 +441,16 @@ model Chat {
   active     Boolean  @default(true)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  license      License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  customer     Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  threads      Thread[]
-  users        ChatUser[]
-  access       ChatAccess[]
-  supervisions ChatSupervision[]
-  ratings      Rating[]
-  tickets      Ticket[]
-  skillRuns    SkillRun[]
+  license          License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  threads          Thread[]
+  users            ChatUser[]
+  access           ChatAccess[]
+  supervisions     ChatSupervision[]
+  ratings          Rating[]
+  tickets          Ticket[]
+  skillRuns        SkillRun[]
+  goalAchievements GoalAchievement[]
 
   @@index([licenseId, createdAt(sort: Desc)])
   @@index([customerId])
@@ -935,10 +938,45 @@ model Goal {
   active     Boolean  @default(true)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  license      License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  achievements GoalAchievement[]
 
   @@index([licenseId, active])
   @@map("goals")
+}
+
+/// One row per visitor who has reached a goal (FR-MOD-13.3) — the last stage of
+/// the visitor → chat → conversion funnel.
+///
+/// `goals` holds only the *definition* of a conversion; until now nothing
+/// recorded that one had happened, so "achieved goals in this window" was not a
+/// question the database could answer. A timestamped row is what makes it
+/// answerable — and comparable with the window before it.
+///
+/// `campaign_sends.converted` is not that record: it is a free boolean with no
+/// `goal_id`, so it cannot say *which* goal was reached, and it exists only for
+/// visitors a campaign happened to fire at.
+model GoalAchievement {
+  id         String   @id @default(uuid()) @db.Uuid
+  licenseId  BigInt   @map("license_id")
+  goalId     String   @map("goal_id") @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  /// The conversation the visitor was in when the goal was reached, when there
+  /// was one — the funnel's middle stage.
+  chatId     String?  @map("chat_id") @db.VarChar(12)
+  achievedAt DateTime @default(now()) @map("achieved_at") @db.Timestamptz(6)
+
+  license  License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  goal     Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  chat     Chat?    @relation(fields: [chatId], references: [id], onDelete: SetNull)
+
+  /// The idempotency constraint. The matcher (13.3-d) re-evaluates a visitor on
+  /// every page view; a person converts on a goal once, and the second hit must
+  /// be a no-op rather than a second row inflating the funnel.
+  @@unique([goalId, customerId])
+  @@index([licenseId, achievedAt])
+  @@map("goal_achievements")
 }
 
 /// Browsing telemetry behind the real-time visitor list.
@@ -1715,12 +1753,12 @@ model ScheduledReport {
   license License              @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   runs    ScheduledReportRun[]
 
-  /// The sweep's only question: which of this license's schedules are live?
-  @@index([licenseId, enabled])
   /// Not decoration — the target of `scheduled_report_runs`' composite foreign
   /// key, which is what stops one license claiming a period on another's
   /// schedule. Doubles as the index behind the by-id lookup routes (07.9-sched-c).
   @@unique([licenseId, id])
+  /// The sweep's only question: which of this license's schedules are live?
+  @@index([licenseId, enabled])
   @@map("scheduled_reports")
 }
 

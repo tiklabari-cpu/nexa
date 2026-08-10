@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+### tm 74.2 — 13.3-b: `goal_achievements` tablosu + RLS + idempotency kısıtı — done — 2026-08-10 UTC
+
+- **Yapıldı:** `GoalAchievement` modeli + `20260810100000_goal_achievements` migration'ı.
+  `UNIQUE(goal_id, customer_id)` idempotency kısıtı, `INDEX(license_id, achieved_at)` pencere
+  sorgusu, `goal_achievements_tenant` RLS policy (`USING`+`WITH CHECK`, `campaign_sends_tenant`
+  kalıbı). FK'ler: licenses/goals/customers CASCADE, **chats `SET NULL`** — retention sohbeti
+  silince dönüşüm yaşamalı, yoksa geçmiş dönem sayıları sonradan küçülür. Yeni test dosyası
+  `apps/api/test/integration/goal-achievements-rls.test.ts` (12).
+- **Doğrulama:** `pnpm -w typecheck` 0 (11/11) · `lint` 0 (8/8) · `test` 0 (`@nexa/api` 2290/2290,
+  önceki 2278 + 12) · `test:integration` 0 (1753/1753, önceki 1741 + 12) · `build` 0 (7/7) ·
+  `prisma migrate diff` sürüklenme yok. E2E koşulmadı — bu iş hiçbir route/UI eklemiyor,
+  task'ın kendi test stratejisi integration ile sınırlı (74.1 ile aynı gerekçe).
+- **Varsayımlar:** (1) Task metnindeki `20260801090000` damgası `scheduled_reports` tarafından
+  alınmış → zincirin sonuna `20260810100000`. (2) "4 FK (licenses/goals/customers CASCADE)"
+  ifadesindeki 4. FK `chats` olarak yorumlandı, `SET NULL` ile. (3) `campaign_sends.goal_id`
+  eklenmedi (task'ın açık kapsam-dışısı).
+- **Sonraki pencereye not:** 13.3-c (CRUD, 74.1 bağımlılığı karşılı) ve 13.3-d (eşleşme çekirdeği,
+  artık iki bağımlılığı da hazır) açık. `apps/api/scripts/check-drift.ts` **Windows'ta koşmuyor**
+  (`execFile('pnpm')` → `spawn pnpm ENOENT`; `.cmd` uzantısı gerekiyor) — bu turda `prisma migrate
+  diff`'i elle koşarak eşdeğer doğrulama yapıldı; ayrı bir task'a değer, bu pencerenin kapsamında
+  değildi. Çalışma alanındaki `.gitignore` + `kanit/*.png` kirliliğine yine dokunulmadı.
+
 ### tm 74.1 — 13.3-a: Goal veri sözlüğü — @nexa/types tipleri + OpenAPI component şemaları (path YOK) — done — 2026-08-10 UTC
 
 - **Yapıldı:** Goals (13.3) için contract-first ilk adım, yalnız vokabüler. `packages/types/src/domain.ts`'e

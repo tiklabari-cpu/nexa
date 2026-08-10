@@ -2739,6 +2739,95 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/partner/apps': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * OAuth clients registered for this workspace
+     * @description Oldest first. Never includes the client secret — that is shown only once,
+     *     when the app is registered.
+     */
+    get: operations['listPartnerApps'];
+    put?: never;
+    /**
+     * Register a partner app (OAuth 2.1 client)
+     * @description Creates an OAuth client owned by the caller's organization and returns its
+     *     `client_id`.
+     *
+     *     `client_type: confidential` additionally mints a `client_secret` and
+     *     returns it on **this response only** — storage keeps a one-way hash, so a
+     *     lost secret can be rotated but never recovered. `client_type: public` (a
+     *     browser or mobile app, where no secret stays secret) gets no secret and
+     *     authenticates with PKCE alone, which OAuth 2.1 requires of every client.
+     *
+     *     `redirect_uris` must be absolute `https` URIs (or `http://localhost` /
+     *     `http://127.0.0.1` for local development), free of fragments, wildcards
+     *     and embedded credentials, and already in canonical form — the
+     *     authorization endpoint compares them by exact string, so a URI that would
+     *     have to be normalised to match is refused here rather than failing
+     *     silently at sign-in.
+     *
+     *     `scopes` is required and bounded by the caller: requesting a scope the
+     *     registering session does not itself hold is a 403.
+     */
+    post: operations['registerPartnerApp'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/partner/apps/{clientId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clientId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * One registered partner app
+     * @description A `client_id` belonging to another organization answers 404, not 403 —
+     *     confirming that an id exists elsewhere would make this an enumeration
+     *     oracle (NFR-S5).
+     */
+    get: operations['getPartnerApp'];
+    put?: never;
+    post?: never;
+    /**
+     * Remove a registered partner app
+     * @description Immediately ends the app's access: its authorization codes and refresh
+     *     tokens are removed with it, so nothing issued to it can be exchanged or
+     *     renewed.
+     *
+     *     The workspace's own sign-in client cannot be removed here (400) —
+     *     deleting it would lock every member out of the agent app.
+     */
+    delete: operations['deletePartnerApp'];
+    options?: never;
+    head?: never;
+    /**
+     * Update a registered partner app
+     * @description Partial update — at least one field is required. `redirect_uris` and
+     *     `scopes` replace the stored list wholesale and are validated exactly as
+     *     they are at registration, including the scope ceiling.
+     *
+     *     `client_type` is immutable: switching a confidential client to public
+     *     would leave a live secret in place while the token endpoint stopped
+     *     requiring it, silently downgrading the client's authentication. Register a
+     *     new app instead.
+     *
+     *     The workspace's own sign-in client cannot be edited here (400) — it is
+     *     first-party infrastructure, not a partner app.
+     */
+    patch: operations['updatePartnerApp'];
+    trace?: never;
+  };
   '/mcp/manifest': {
     parameters: {
       query?: never;
@@ -4836,6 +4925,72 @@ export interface components {
         method: 'DELETE';
         path: string;
       };
+    };
+    /**
+     * @description `confidential` — a server-side app that can keep a secret, and so
+     *     authenticates with `client_secret` at the token endpoint.
+     *     `public` — a browser or mobile app, where no secret stays secret; it
+     *     authenticates with PKCE alone, which OAuth 2.1 requires of every client
+     *     regardless.
+     * @enum {string}
+     */
+    PartnerAppClientType: 'public' | 'confidential';
+    /**
+     * @description A registered OAuth 2.1 client owned by the caller's organization
+     *     (FR-MOD-09.4). The client secret is deliberately absent — it is returned
+     *     only once, by the register call (see `PartnerAppRegistration`).
+     */
+    PartnerApp: {
+      /**
+       * @description Identifies the app to `POST /auth/authorize` and `POST /auth/token`.
+       *     Randomly generated, so it carries no organization identifier.
+       */
+      client_id: string;
+      display_name: string;
+      client_type: components['schemas']['PartnerAppClientType'];
+      /**
+       * @description The allowlist the authorization endpoint matches against, by exact
+       *     string. Stored verbatim — never normalised.
+       */
+      redirect_uris: string[];
+      /**
+       * @description The ceiling on what a token issued to this app may carry. Never
+       *     empty: an empty list means "no ceiling" to the authorization
+       *     endpoint, so registration requires at least one scope.
+       */
+      scopes: string[];
+      /** Format: date-time */
+      created_at: string;
+    };
+    PartnerAppRegistrationRequest: {
+      display_name: string;
+      /** @default public */
+      client_type: components['schemas']['PartnerAppClientType'];
+      redirect_uris: string[];
+      /** @description Must be a subset of what the registering session holds. */
+      scopes: string[];
+    };
+    /**
+     * @description At least one field. `client_type` is absent by design — it is immutable
+     *     after registration.
+     */
+    PartnerAppPatch: {
+      display_name?: string;
+      redirect_uris?: string[];
+      scopes?: string[];
+    };
+    /**
+     * @description The register response. For a confidential client it carries the
+     *     `client_secret` in addition to the app fields — the **only** time it is
+     *     ever returned.
+     */
+    PartnerAppRegistration: components['schemas']['PartnerApp'] & {
+      /**
+       * @description Present only for `client_type: confidential`. Store it now; only
+       *     a one-way hash is kept, so it is never shown again — a lost
+       *     secret must be rotated.
+       */
+      client_secret?: string;
     };
     /**
      * @description One MCP tool as advertised by the manifest (FR-MOD-08.8.3) — enough for a
@@ -11807,6 +11962,141 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listPartnerApps: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's registered apps */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['PartnerApp'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  registerPartnerApp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PartnerAppRegistrationRequest'];
+      };
+    };
+    responses: {
+      /** @description Registered — the client secret is present on this response only */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PartnerAppRegistration'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getPartnerApp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clientId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The app */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PartnerApp'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deletePartnerApp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clientId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updatePartnerApp: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clientId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PartnerAppPatch'];
+      };
+    };
+    responses: {
+      /** @description The updated app */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PartnerApp'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

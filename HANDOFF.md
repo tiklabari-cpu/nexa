@@ -13,6 +13,38 @@
 
 ## Task log (newest-first)
 
+### tm 72.3 — 09.4-c: Partner app kaydı çekirdeği (oauth_clients self-servis CRUD) — done — 2026-08-10 UTC
+
+- **Yapıldı:** `oauth_clients`'ın ilk YAZMA yolu. Kontrat `paths/partner-apps.yaml` (yeni, 5 operasyon)
+  + `openapi.yaml`'a `Partner` tag'i, 2 path, 5 şema; re-bundle 151→153. `services/partner/
+  partner-app-service.ts` + `routes/partner-apps.ts` (yeni) + `server.ts` kaydı. Güvenlik çekirdeği:
+  `generateClientId()` · secret yalnız confidential (`nxcs_`+256bit), saklanan `hashToken(secret)`,
+  `SAFE_SELECT` secret'ı hiç seçmez, `no-store` · `redirect_uris` normalize EDİLMEDEN saklanır ama
+  **kanonik biçim zorunlu** (`:443`/büyük-harf-host/`%2e%2e`/IDN kaydedilse asla eşleşmezdi — sessiz
+  kırılma engeli) · scope tavanı `effectiveScopes` ile (create + update), boş küme 400 çünkü authorize
+  boş listeyi "tavan yok" okuyor · org-scoped RLS + `updateMany`/`deleteMany` count=0 → **404** ·
+  yeni scope YOK (`access_rules:ro`/`:rw`). Migration yok.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0**
+  (`@nexa/api` 2168/2168, 2140'tan +28) · `pnpm -w test:integration` **0** (`@nexa/api` 1631/1631,
+  67 dosya; `@nexa/rtm` 51/51) · `pnpm -w build` **0** (7/7) · `contract-parity.test.ts` yeşil.
+  E2E koşulmadı — bu alt-görev backend-only, UI'ı 09.4-e/-f getiriyor ve task'ın kendi test stratejisi
+  e2e istemiyor (09.4-g uçtan uca kapanışı yapacak).
+- **Varsayımlar:** (1) `client_type` kayıttan sonra immutable — confidential→public canlı secret'ı
+  yerinde bırakıp doğrulamayı sessizce düşürürdü; PATCH gövdesi alanı hiç kabul etmiyor.
+  (2) **Kapsam ötesi ama bilinçli:** organizasyonun kendi giriş client'ı aynı tabloda ve
+  `auth_list_memberships` onu "en eski client" diye tanımlıyor — korumasız bırakılsa admin onu portaldan
+  silip tüm workspace'i girişten kilitleyebilirdi; `firstPartyClientId()` PATCH/DELETE'i 400 ile
+  reddediyor (listede görünmeye devam ediyor).
+- **Sonraki pencereye not:**
+  - 09.4-d (rotate + `partner_app.*` audit) artık açık: rotate route'u `partner-apps.yaml`'a eklenip
+    **re-bundle edilmeli** yoksa contract-parity kırılır. Audit çağrısı bu turda BİLEREK yazılmadı
+    (09.4-d'nin kapsamı) — yani şu an kayıt/güncelleme/silme denetim izi bırakmıyor.
+  - PLAN.md `09.4` satırı `◐ → K09.4` kaldı — 4 alt-görev açık (09.4-d…g).
+  - **tm 105 WIP hâlâ commit'siz, bu tur da dokunulmadı** (kapsam disiplini): `README.md`,
+    `package.json` (kök), `apps/api|rtm/package.json`, `apps/api/tsconfig.json`, iki
+    `test/helpers/fixtures.ts`, `turbo.json`, `apps/api/scripts/*test-datastores.ts`,
+    `test-datastores.test.ts`, `.taskmaster/tmp-*`, `.taskmaster/tasks/tasks.json`.
+
 ### tm 72.2 — 09.4-b: Entegrasyon manifesti (trigger + action kataloğu): kontrat + statik endpoint — done — 2026-08-10 UTC
 
 - **Yapıldı:** `GET /integrations/manifest` (`apps/api/src/routes/webhooks.ts`) — MCP manifest deseniyle kayıt anında bir kez inşa edilen statik yanıt, `GET /webhooks` ile AYNI scope (`webhooks--all:ro`/`:rw`, yeni scope yok). `packages/types/src/integrations.ts` (yeni): `INTEGRATION_TRIGGERS` (WEBHOOK_ACTIONS'ın 5 aksiyonu, her biri `sample_payload` ile) + `INTEGRATION_ACTIONS` (3 mevcut yaz uç noktası — mesaj gönder/ticket oluştur/etiket ekle — `required_scopes` ilgili rotanın `config.scopes`'unu birebir kopyalar). Kontrat: `paths/webhooks.yaml` + `openapi.yaml` (`IntegrationManifest`/`IntegrationTrigger`/`IntegrationAction`), re-bundle 150→151 path.

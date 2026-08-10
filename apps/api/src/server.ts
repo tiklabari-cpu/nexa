@@ -36,6 +36,7 @@ import onboardingRoutes from './routes/onboarding.js';
 import websiteRoutes from './routes/websites.js';
 import brandRoutes from './routes/brands.js';
 import webhookRoutes from './routes/webhooks.js';
+import partnerAppRoutes from './routes/partner-apps.js';
 import mcpRoutes from './routes/mcp.js';
 import uploadRoutes from './routes/uploads.js';
 import playbookRoutes from './routes/playbook.js';
@@ -179,6 +180,7 @@ export async function buildServer({
       await api.register(websiteRoutes, { env });
       await api.register(brandRoutes);
       await api.register(webhookRoutes);
+      await api.register(partnerAppRoutes);
       await api.register(mcpRoutes, {
         serverUrl: `${env.API_BASE_URL}${API_PREFIX}/mcp`,
         version: VERSION,

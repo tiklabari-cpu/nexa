@@ -1,0 +1,168 @@
+# Partner app registration — FR-MOD-09.4 (v2, Could). The self-service half of
+# "build your own app": a developer registers an OAuth 2.1 client against their
+# own workspace and gets back the `client_id` (and, for a confidential client,
+# the `client_secret`) that `POST /auth/authorize` and `POST /auth/token`
+# already understand. No new authentication machinery — this writes the
+# `oauth_clients` rows the OAuth flow has always read.
+#
+# Four security properties travel with these five operations:
+#
+#   - The secret is returned **once**, from register. Storage keeps only
+#     `sha256(secret)`, which is what the token endpoint compares against, so
+#     list and get can never hand it back (NFR-S2).
+#   - `redirect_uris` are an allowlist and a security boundary. They are
+#     validated on the way in — absolute, `https` (or `http` on localhost for
+#     development), no fragment, no wildcard, no embedded credentials — and
+#     stored **verbatim**, because the authorization endpoint matches them by
+#     exact string. Normalising here would create pairs that look equal and
+#     compare unequal (NFR-S3).
+#   - `scopes` can never exceed what the caller registering the app already
+#     holds. A session cannot mint a client more powerful than itself (NFR-S5).
+#   - Registration is authenticated and admin-gated (`access_rules:rw`); a
+#     client belongs to exactly one organization and another organization's
+#     `client_id` answers 404, never 403 (NFR-S4/S5).
+#
+# Deliberately *not* RFC 7591 dynamic client registration: that permits an
+# anonymous caller to create a client. Every operation here requires a
+# workspace admin credential.
+
+partnerApps:
+  get:
+    tags: [Partner]
+    operationId: listPartnerApps
+    summary: OAuth clients registered for this workspace
+    description: |
+      Oldest first. Never includes the client secret — that is shown only once,
+      when the app is registered.
+    responses:
+      "200":
+        description: The workspace's registered apps
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/PartnerApp" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Partner]
+    operationId: registerPartnerApp
+    summary: Register a partner app (OAuth 2.1 client)
+    description: |
+      Creates an OAuth client owned by the caller's organization and returns its
+      `client_id`.
+
+      `client_type: confidential` additionally mints a `client_secret` and
+      returns it on **this response only** — storage keeps a one-way hash, so a
+      lost secret can be rotated but never recovered. `client_type: public` (a
+      browser or mobile app, where no secret stays secret) gets no secret and
+      authenticates with PKCE alone, which OAuth 2.1 requires of every client.
+
+      `redirect_uris` must be absolute `https` URIs (or `http://localhost` /
+      `http://127.0.0.1` for local development), free of fragments, wildcards
+      and embedded credentials, and already in canonical form — the
+      authorization endpoint compares them by exact string, so a URI that would
+      have to be normalised to match is refused here rather than failing
+      silently at sign-in.
+
+      `scopes` is required and bounded by the caller: requesting a scope the
+      registering session does not itself hold is a 403.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PartnerAppRegistrationRequest" }
+    responses:
+      "201":
+        description: Registered — the client secret is present on this response only
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PartnerAppRegistration" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+partnerApp:
+  parameters:
+    - name: clientId
+      in: path
+      required: true
+      schema: { type: string, maxLength: 128 }
+
+  get:
+    tags: [Partner]
+    operationId: getPartnerApp
+    summary: One registered partner app
+    description: |
+      A `client_id` belonging to another organization answers 404, not 403 —
+      confirming that an id exists elsewhere would make this an enumeration
+      oracle (NFR-S5).
+    responses:
+      "200":
+        description: The app
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PartnerApp" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Partner]
+    operationId: updatePartnerApp
+    summary: Update a registered partner app
+    description: |
+      Partial update — at least one field is required. `redirect_uris` and
+      `scopes` replace the stored list wholesale and are validated exactly as
+      they are at registration, including the scope ceiling.
+
+      `client_type` is immutable: switching a confidential client to public
+      would leave a live secret in place while the token endpoint stopped
+      requiring it, silently downgrading the client's authentication. Register a
+      new app instead.
+
+      The workspace's own sign-in client cannot be edited here (400) — it is
+      first-party infrastructure, not a partner app.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PartnerAppPatch" }
+    responses:
+      "200":
+        description: The updated app
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PartnerApp" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Partner]
+    operationId: deletePartnerApp
+    summary: Remove a registered partner app
+    description: |
+      Immediately ends the app's access: its authorization codes and refresh
+      tokens are removed with it, so nothing issued to it can be exchanged or
+      renewed.
+
+      The workspace's own sign-in client cannot be removed here (400) —
+      deleting it would lock every member out of the agent app.
+    responses:
+      "204": { description: Removed }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

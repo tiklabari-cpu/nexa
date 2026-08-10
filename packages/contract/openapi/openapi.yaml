@@ -59,6 +59,8 @@ tags:
     description: Subscription, usage metering, trial.
   - name: Webhooks
     description: Outbound webhooks — signed, SSRF-guarded event delivery.
+  - name: Partner
+    description: Build-your-own-app — self-service registration of OAuth 2.1 clients.
   - name: Mcp
     description: MCP server — tool catalogue an AI client discovers and calls.
   - name: Audit
@@ -309,6 +311,11 @@ paths:
     $ref: "./paths/webhooks.yaml#/webhook"
   /integrations/manifest:
     $ref: "./paths/webhooks.yaml#/integrationManifest"
+
+  /partner/apps:
+    $ref: "./paths/partner-apps.yaml#/partnerApps"
+  /partner/apps/{clientId}:
+    $ref: "./paths/partner-apps.yaml#/partnerApp"
 
   /mcp/manifest:
     $ref: "./paths/mcp.yaml#/manifest"
@@ -1129,6 +1136,99 @@ components:
             method: { type: string, enum: [DELETE] }
             path: { type: string }
           description: Where a trigger subscription is removed — `DELETE /webhooks/{webhookId}`.
+
+    PartnerAppClientType:
+      type: string
+      description: |
+        `confidential` — a server-side app that can keep a secret, and so
+        authenticates with `client_secret` at the token endpoint.
+        `public` — a browser or mobile app, where no secret stays secret; it
+        authenticates with PKCE alone, which OAuth 2.1 requires of every client
+        regardless.
+      enum: [public, confidential]
+
+    PartnerApp:
+      type: object
+      description: |
+        A registered OAuth 2.1 client owned by the caller's organization
+        (FR-MOD-09.4). The client secret is deliberately absent — it is returned
+        only once, by the register call (see `PartnerAppRegistration`).
+      required: [client_id, display_name, client_type, redirect_uris, scopes, created_at]
+      properties:
+        client_id:
+          type: string
+          description: |
+            Identifies the app to `POST /auth/authorize` and `POST /auth/token`.
+            Randomly generated, so it carries no organization identifier.
+        display_name: { type: string }
+        client_type: { $ref: "#/components/schemas/PartnerAppClientType" }
+        redirect_uris:
+          type: array
+          items: { type: string, format: uri }
+          description: |
+            The allowlist the authorization endpoint matches against, by exact
+            string. Stored verbatim — never normalised.
+        scopes:
+          type: array
+          items: { type: string }
+          description: |
+            The ceiling on what a token issued to this app may carry. Never
+            empty: an empty list means "no ceiling" to the authorization
+            endpoint, so registration requires at least one scope.
+        created_at: { type: string, format: date-time }
+
+    PartnerAppRegistrationRequest:
+      type: object
+      required: [display_name, redirect_uris, scopes]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+        client_type:
+          allOf: [{ $ref: "#/components/schemas/PartnerAppClientType" }]
+          default: public
+        redirect_uris:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: { type: string, format: uri, maxLength: 2048 }
+        scopes:
+          type: array
+          minItems: 1
+          items: { type: string }
+          description: Must be a subset of what the registering session holds.
+
+    PartnerAppPatch:
+      type: object
+      minProperties: 1
+      description: |
+        At least one field. `client_type` is absent by design — it is immutable
+        after registration.
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+        redirect_uris:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: { type: string, format: uri, maxLength: 2048 }
+        scopes:
+          type: array
+          minItems: 1
+          items: { type: string }
+
+    PartnerAppRegistration:
+      description: |
+        The register response. For a confidential client it carries the
+        `client_secret` in addition to the app fields — the **only** time it is
+        ever returned.
+      allOf:
+        - $ref: "#/components/schemas/PartnerApp"
+        - type: object
+          properties:
+            client_secret:
+              type: string
+              description: |
+                Present only for `client_type: confidential`. Store it now; only
+                a one-way hash is kept, so it is never shown again — a lost
+                secret must be rotated.
 
     McpToolDescriptor:
       type: object

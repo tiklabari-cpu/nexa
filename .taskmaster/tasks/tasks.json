@@ -2892,12 +2892,12 @@
             "description": "Contract-first: (1) `packages/contract/openapi/paths/settings.yaml`e `salesTracker` operasyon bloğu (get/put) + `packages/contract/openapi/openapi.yaml`e `/settings/sales-tracker` path girişi ve `SalesTrackerSettings` / `UpdateSalesTrackerSettings` şemaları; re-bundle. (2) `apps/api/src/routes/settings.ts`e GET (`scopes: ['access_rules:ro','access_rules:rw']`, `findFirst` + satır yoksa şema varsay",
             "details": "13.5-b — Sales tracker konfigürasyon endpoint'i — GET/PUT /settings/sales-tracker (kontrat + route + scope kapısı + audit)  [OPUS-XHIGH]\n\nPRD: FR-MOD-13.5 (+ NFR-S3 authZ, NFR-S4 tenant izolasyon, NFR-S12 audit)\nETİKET GEREKÇESİ: OPUS-XHIGH: kullanıcının açık kuralı — 'yeni bir yetkili endpoint eklemek ... EN AZ OPUS-XHIGH olur'. Bu alt-görev yeni bir scope-gated (`access_rules:ro/rw`), tenant-scoped yazma endpoint'i açıyor; desen mevcut (chat-timeout) ama karar yüzeyi authZ + tenant sınırı içeriyor → SONNET koşul 2 ihlali. Çekirdek güvenlik sınırı (kripto/izolasyon algoritması) DEĞİL, mevcut RLS+scope altyapısına oturuyor → MAX değil, XHIGH.\nNEDEN AÇIK: 'Settings/Sales tracker' ekranının arkasında ne bir Prisma modeli ne de bir `/settings/sales-tracker` route'u var — grep 0 sonuç. `packages/contract/openapi/paths/settings.yaml` anahtarları: trustedDomains, trustedDomain, cannedResponses, cannedResponse, securitySettings, chatTimeout, widgetSettings, routingRules, routingRule, tags, tag — sales-tracker YOK. PRD KK'sı birebir 'İzleme yapılandırması' diyor; yapılandırmayı okuyup yazacak yüzey mevcut değil.\nKAPSAM: Contract-first: (1) `packages/contract/openapi/paths/settings.yaml`e `salesTracker` operasyon bloğu (get/put) + `packages/contract/openapi/openapi.yaml`e `/settings/sales-tracker` path girişi ve `SalesTrackerSettings` / `UpdateSalesTrackerSettings` şemaları; re-bundle. (2) `apps/api/src/routes/settings.ts`e GET (`scopes: ['access_rules:ro','access_rules:rw']`, `findFirst` + satır yoksa şema varsayılanları — chat-timeout'un 'satır yok = kapalı' okuması) ve PUT (`scopes: ['access_rules:rw']`, zod ile `enabled: boolean`, `currency: 3 harf ISO 4217 whitelist`, `attribution_window_days: int 1..90`; upsert-on-licenseId; `writeAuditEntry(... action: 'settings.sales_tracker_updated', metadata: { fields: Object.keys(body) })`). (3) `packages/types` regen. YENİ SCOPE AÇILMAZ (mevcut `access_rules:*` kullanılır) — böylece `packages/types/src/scopes.test.ts:31`'deki SCOPES sayacı bozulmaz.\nDOSYALAR: packages/contract/openapi/paths/settings.yaml · packages/contract/openapi/openapi.yaml · apps/api/src/routes/settings.ts · apps/api/test/integration/settings.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/settings.ts:474-515 (GET/PUT /settings/chat-timeout — findFirst + upsert + audit) · apps/api/src/routes/settings.ts:517-560 (GET/PUT /settings/widget — kısmi gövde + varsayılanlarla create) · packages/contract/openapi/paths/settings.yaml#chatTimeout (satır 266) ve #widgetSettings (satır 320)\nKK (birebir): \"İzleme yapılandırması\"\nKK DOĞRULAMA: `apps/api/test/integration/settings.test.ts` — (a) satır yokken GET varsayılanları döner (`enabled:false`), PUT sonrası GET yazılanı döner (= 'yapılandırma' kalıcıdır, KK'nın birebir karşılığı); (b) `contract-parity.test.ts` yeşil (yeni iki operasyon hem belgede hem router'da); (c) audit: PUT sonrası `audit_log`da `settings.sales_tracker_updated` satırı var ve metadata yalnız ALAN ADLARI taşıyor.\nKAPSAM DIŞI: Satış olayı yazma yolu (13.5-c) · Rapor tarafındaki ecommerce agregasyonu (13.5-d) · Settings UI bölümü (13.5-e) · Harici e-ticaret platformu (Shopify/BigCommerce) OAuth/webhook bağlama — MOD-09.2 ertelendi, bkz. varsayım 1 · Yeni scope tanımı — mevcut access_rules:* yeniden kullanılır\nSÖZLEŞME: EVET — `packages/contract/openapi/openapi.yaml`e `/settings/sales-tracker` path'i (get+put) ve `SalesTrackerSettings` + `UpdateSalesTrackerSettings` şemaları; `packages/contract/openapi/paths/settings.yaml`e `salesTracker` bloğu. **OpenAPI'ye eklenip re-bundle EDİLMEZSE `apps/api/test/integration/contract-parity.test.ts` KIRILIR** (test iki yönlüdür: belgelenmemiş route da, sunulmayan belgelenmiş path de kırar) — bu yüzden kontrat satırı ve route AYNI pencerede gider. `packages/types` generate koşulur. Yeni ApiError tipi HEDEFLENMİYOR; gerekirse tuzak: `packages/types/src/errors.ts` (×2 yer) + `packages/types/src/scopes.test.ts:95` ERROR_TYPES sayacı + openapi enum + regen.\nMIGRATION: yok (tablolar 13.5-a'da geldi)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): `currency:'DOLLAR'` / 2 harfli kod → 400 validation; `attribution_window_days: 0` ve `-1` → 400; bilinmeyen alan reddi · negatif: `access_rules:rw` olmayan ajan token'ı PUT → 403; hiç scope'suz → 403 · cross-tenant: A lisansının PUT'u B lisansının satırını değiştirmez; B'nin GET'i kendi varsayılanını döner · integration (pozitif): ilk PUT upsert ile satır yaratır, ikinci PUT günceller (çift satır oluşmaz) · integration: contract-parity yeşil",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "75.1"
             ],
             "parentId": "75",
-            "updatedAt": "2026-08-10T18:32:07.842Z"
+            "updatedAt": "2026-08-10T19:08:06.045Z"
           },
           {
             "id": 3,
@@ -2983,7 +2983,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T18:32:07.842Z",
+        "updatedAt": "2026-08-10T19:08:06.045Z",
         "complexity": 8,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"13.5 — Sales tracker (Ecommerce/Tracked sales)  ·  dilim V2-8\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5122,7 +5122,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T18:32:07.843Z",
+      "lastModified": "2026-08-10T19:08:06.046Z",
       "taskCount": 112,
       "completedCount": 104,
       "tags": [

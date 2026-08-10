@@ -310,6 +310,62 @@ takeover:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
 
+supervise:
+  post:
+    tags: [Chats]
+    operationId: superviseChat
+    summary: Register (or refresh) the caller as a supervisor of this chat
+    description: |
+      Records that the caller is *watching* a conversation someone else is
+      handling — the state the Traffic board reports as `supervised`
+      (FR-MOD-13.2). Supervising is not assignment: nothing about the thread,
+      its assignee or its routing changes.
+
+      **Read scopes, deliberately.** Watching is a read, so a token that may
+      already open the transcript may register as a watcher; no chat *write*
+      scope is asked for. What a `chats--access:ro` token may watch is exactly
+      what it may open — a conversation reachable through one of the caller's
+      teams, or one handed to them personally.
+
+      **Idempotent heartbeat.** A second call from the same agent updates
+      `last_seen_at` on the one existing row instead of adding another, so the
+      client can simply repeat the call on a timer. A row whose `last_seen_at`
+      has fallen outside the liveness window is a closed tab, not a watcher, and
+      stops counting as live — which is why the refresh matters. Two different
+      agents watching one chat are two rows.
+
+      Always `200`: registering and heart-beating are the same call, and the
+      caller has no use for the distinction.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    responses:
+      "200":
+        description: Watching, with the heartbeat refreshed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ChatSupervision" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      # Also the answer for a chat in another workspace, and for one the
+      # caller's teams do not reach: a 403 would confirm the id is real
+      # (NFR-S5).
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+  delete:
+    tags: [Chats]
+    operationId: stopSupervisingChat
+    summary: Stop supervising this chat
+    description: |
+      Removes **the caller's own** watch on the conversation and nothing else.
+      One supervisor closing their tab never clears another's row. Releasing a
+      chat that was not being watched succeeds too — stopping something that is
+      already stopped is not an error.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+    responses:
+      "204": { description: No longer watching }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
 tags:
   post:
     tags: [Chats]

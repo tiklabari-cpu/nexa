@@ -6,6 +6,7 @@ import { ApiError } from '../lib/api-error.js';
 import { maskCardNumbers } from '../lib/cc-mask.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { hasChatScope } from '../services/chat/access.js';
+import { SupervisionService } from '../services/traffic/supervision-service.js';
 import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
@@ -95,6 +96,7 @@ export default async function chatRoutes(
     // The agent-archive path mails the transcript on close (FR-MOD-08.7.4).
     mailer,
   );
+  const supervisions = new SupervisionService();
 
   // An attachment may only be a file this licence uploaded through `/uploads`
   // (FR-MOD-08.9.4). Shared with the customer send path so the boundary has a
@@ -326,6 +328,45 @@ export default async function chatRoutes(
         request.auditContext(),
       );
       return reply.send(chat);
+    },
+  );
+
+  // --- Supervision (FR-MOD-13.2) --------------------------------------------
+  //
+  // Read scopes, not write. Watching a conversation is a read — the supervisor
+  // sees what is already visible to them and changes nothing about the thread,
+  // its assignee or its routing — so demanding `chats--*:rw` here would mean an
+  // agent could open a transcript but not admit to reading it. This is the same
+  // call `rowActions.ts` made on the web side, kept identical so the button and
+  // the endpoint cannot drift into disagreeing about what Supervise costs.
+  //
+  // `principals: ['agent']` because `chat_supervisions.agent_id` references
+  // `accounts`: a bot has no row there, and a watcher is a person anyway.
+
+  app.post<{ Params: { chatId: string } }>(
+    '/chats/:chatId/supervise',
+    { config: { scopes: ['chats--all:ro', 'chats--access:ro'], principals: ['agent'] } },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const principal = request.requirePrincipal();
+      const tenant = request.tenant();
+
+      const supervision = await request.withTenant((tx) =>
+        supervisions.register(tx, tenant.licenseId, principal, chatId),
+      );
+      return reply.send(supervision);
+    },
+  );
+
+  app.delete<{ Params: { chatId: string } }>(
+    '/chats/:chatId/supervise',
+    { config: { scopes: ['chats--all:ro', 'chats--access:ro'], principals: ['agent'] } },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const principal = request.requirePrincipal();
+
+      await request.withTenant((tx) => supervisions.release(tx, principal, chatId));
+      return reply.status(204).send();
     },
   );
 

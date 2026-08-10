@@ -133,6 +133,8 @@ paths:
     $ref: "./paths/chats.yaml#/transfer"
   /chats/{chatId}/takeover:
     $ref: "./paths/chats.yaml#/takeover"
+  /chats/{chatId}/supervise:
+    $ref: "./paths/chats.yaml#/supervise"
   /chats/{chatId}/tags:
     $ref: "./paths/chats.yaml#/tags"
   /chats/{chatId}/tags/{tagName}:
@@ -609,6 +611,20 @@ components:
               type: string
               nullable: true
               description: Visitor IP (NFR-S9 personal data; agents only).
+
+    ChatSupervision:
+      type: object
+      required: [chat_id, agent_id, started_at, last_seen_at]
+      description: |
+        One agent watching one conversation they do not own (FR-MOD-13.2).
+        `started_at` is when they began and survives every heartbeat;
+        `last_seen_at` is the heartbeat itself, and once it falls outside the
+        liveness window the row is treated as a closed tab rather than a watcher.
+      properties:
+        chat_id: { type: string }
+        agent_id: { type: string, format: uuid }
+        started_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
 
     Event:
       type: object

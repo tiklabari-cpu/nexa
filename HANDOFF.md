@@ -13,6 +13,38 @@
 
 ## Task log (newest-first)
 
+### tm 73.4 — 13.2-d: Supervision register/release API + yetki sınırı + heartbeat — done — 2026-08-10 UTC
+
+- **Yapıldı:** `POST`/`DELETE /chats/{chatId}/supervise` — kontrat + route + servis aynı turda.
+  Yeni `apps/api/src/services/traffic/supervision-service.ts`: idempotent upsert (`last_seen_at`
+  tazelenir, `started_at` korunur), release yalnız çağıranın satırını siler (`agentId` principal'den
+  gelir), yetki `chat/access.ts`'in `resolveVisibility`+`canSeeChat` çiftiyle — `GET /chats/{chatId}`
+  ile birebir aynı. Scope `chats--all:ro`/`chats--access:ro` (yazma scope'u İSTENMEDİ),
+  `principals: ['agent']`. Kontrat: `paths/chats.yaml` +`supervise`, `openapi.yaml`
+  +`ChatSupervision` + path, re-bundle (155 path).
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test`
+  **0** (`@nexa/api` 2236/2236, 2208→+28) · `pnpm -w test:integration` **0** (1699/1699, 68 dosya)
+  · `pnpm -w build` **0** (7/7) · e2e `traffic.spec.ts` **1/1** (regresyon; `.env` source'lanarak).
+  **Testlerin kuralı ölçtüğü mutasyonla kanıtlandı:** `canSeeChat` kaldır → 4 kırmızı · sohbet
+  çözümünü tamamen atla (naif FK-only) → 8 kırmızı (13.2-c'nin uyardığı cross-tenant satır fiilen
+  yazılıyor) · `deleteMany`'den `agentId` düşür → 2 kırmızı. Üçü geri konunca 28/28 yeşil.
+- **Varsayımlar:** Canlılık penceresi `SUPERVISION_LIVE_WINDOW_SECONDS = 90` (30 sn'lik
+  heartbeat'in iki kaçırmasını tolere eder) — `TrafficService`'in 30 dk'lık ziyaret penceresinden
+  bilinçli olarak farklı: o "kişi sitede mi", bu "sekme açık mı". Bayat satır SİLİNMEZ, canlı
+  sayılmaz. IDOR yanıtı her miss için tek 404. Kapalı sohbeti izlemeye 409 EKLENMEDİ (task
+  istemiyor; supervisor arşivi okuyabilir).
+- **Sonraki pencereye not:**
+  - **13.2-e doğrudan `SupervisionService.liveByChat(tx, licenseId, chatIds)` çağırsın** — toplu
+    lookup, bayatlık filtresi içinde, `(license_id, last_seen_at DESC)` indeksinden. Funnel
+    önceliğinde `supervised`'ın `chatting`/`waiting` ile ilişkisi 13.2-e'nin kararı.
+  - Heartbeat'i **kim** atacak henüz yok: `TrafficPage.tsx`'in Supervise düğmesi hâlâ yalnız
+    navigate ediyor. UI bağlama 13.2-g; o pencere `POST`'u bir timer'a bağlamalı, yoksa satır 90
+    sn sonra kendiliğinden ölür.
+  - tm 105 WIP hâlâ commit'siz (`apps/api/scripts/with-test-datastores.ts` + `test-datastores.ts`
+    + `test/integration/test-datastores.test.ts` untracked; `package.json`×3 · `turbo.json` ·
+    `README.md` · `.gitignore` · iki `fixtures.ts` uncommitted) ve `apps/e2e/kanit/*.png` (~50)
+    hâlâ `modified`. Bu pencere de ikisine dokunmadı (kapsam disiplini, §5) — beşinci tur.
+
 ### İŞLETİM UYARISI — tm 110 için AYNI ANDA İKİ PENCERE (ikinci vaka, art arda) — 2026-08-10 UTC
 
 - **Ne oldu:** tm 110'u panelin **düzeltme penceresi** (PID 30064, 07:03:56) açtı ve kendisi

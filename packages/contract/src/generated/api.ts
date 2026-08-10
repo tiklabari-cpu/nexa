@@ -541,6 +541,52 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/supervise': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Register (or refresh) the caller as a supervisor of this chat
+     * @description Records that the caller is *watching* a conversation someone else is
+     *     handling — the state the Traffic board reports as `supervised`
+     *     (FR-MOD-13.2). Supervising is not assignment: nothing about the thread,
+     *     its assignee or its routing changes.
+     *
+     *     **Read scopes, deliberately.** Watching is a read, so a token that may
+     *     already open the transcript may register as a watcher; no chat *write*
+     *     scope is asked for. What a `chats--access:ro` token may watch is exactly
+     *     what it may open — a conversation reachable through one of the caller's
+     *     teams, or one handed to them personally.
+     *
+     *     **Idempotent heartbeat.** A second call from the same agent updates
+     *     `last_seen_at` on the one existing row instead of adding another, so the
+     *     client can simply repeat the call on a timer. A row whose `last_seen_at`
+     *     has fallen outside the liveness window is a closed tab, not a watcher, and
+     *     stops counting as live — which is why the refresh matters. Two different
+     *     agents watching one chat are two rows.
+     *
+     *     Always `200`: registering and heart-beating are the same call, and the
+     *     caller has no use for the distinction.
+     */
+    post: operations['superviseChat'];
+    /**
+     * Stop supervising this chat
+     * @description Removes **the caller's own** watch on the conversation and nothing else.
+     *     One supervisor closing their tab never clears another's row. Releasing a
+     *     chat that was not being watched succeeds too — stopping something that is
+     *     already stopped is not an error.
+     */
+    delete: operations['stopSupervisingChat'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/tags': {
     parameters: {
       query?: never;
@@ -4505,6 +4551,21 @@ export interface components {
         ip: string | null;
       };
     };
+    /**
+     * @description One agent watching one conversation they do not own (FR-MOD-13.2).
+     *     `started_at` is when they began and survives every heartbeat;
+     *     `last_seen_at` is the heartbeat itself, and once it falls outside the
+     *     liveness window the row is treated as a closed tab rather than a watcher.
+     */
+    ChatSupervision: {
+      chat_id: string;
+      /** Format: uuid */
+      agent_id: string;
+      /** Format: date-time */
+      started_at: string;
+      /** Format: date-time */
+      last_seen_at: string;
+    };
     Event: {
       /** @description `<thread_id>_<sequence>` — ordering is decidable from the id alone. */
       id: string;
@@ -8159,6 +8220,54 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+    };
+  };
+  superviseChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Watching, with the heartbeat refreshed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ChatSupervision'];
+        };
+      };
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+    };
+  };
+  stopSupervisingChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No longer watching */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
     };
   };
   tagThread: {

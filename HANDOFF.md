@@ -25,17 +25,24 @@
   iki kusur düzeltildi: (1) register mutation'ı listeyi invalidate etmiyordu — `DeleteAppModal` ile
   aynı `invalidateQueries` deseni eklendi; (2) redirect-URI ipucu metni `<label>` içindeydi ve alanın
   erişilebilir adını kirletiyordu — `InviteTeammates.tsx` deseniyle dışarı taşındı. Testler:
-  `DeveloperPortal.test.tsx` (yeni, 7) · `AppShell.test.tsx` (+2) · `CommandPalette.test.tsx` (+2).
-  E2E YAZILMADI: bu görevin KK'sındaki basit "kayıt → client_id + secret görünür" akışı unit süitinde
-  DOM seviyesinde zaten kanıtlanıyor; gerçek tarayıcı kanıtı 09.4-f'nin `developers.spec.ts`'i
-  (rotate düğmesini test etmek için zaten "önce bir app kaydet" adımını setup olarak gerektirecek) ile
-  gelecek.
+  `DeveloperPortal.test.tsx` (yeni, 7) · `AppShell.test.tsx` (+2) · `CommandPalette.test.tsx` (+2) ·
+  `apps/e2e/tests/developer-portal.spec.ts` (yeni, 1 — gerçek sunucuya karşı: kayıt → secret bir kez →
+  Done sonrası DOM'dan gidiyor → reload sonrası liste sunucudan geliyor (client-side kalıntı değil) →
+  sil).
 - **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0**
   (`@nexa/web` 813/813, 802'den +11 · `@nexa/api` 2181/2181 · `@nexa/rtm` 90/90) · `pnpm -w test:integration`
   **0** (`@nexa/api` 1644/1644 · `@nexa/rtm` 51/51 — bu tur backend'e dokunmadı) · `pnpm -w build` **0**
-  (7/7).
+  (7/7) · `developer-portal.spec.ts` **0** (1/1, elle koşuldu — bkz. not; tam `pnpm -w test:e2e` süiti
+  koşulmadı, kapsam bu görevin akışıyla sınırlı, tam kapanış 09.4-g'nin işi).
 - **Varsayımlar:** yok.
 - **Sonraki pencereye not:**
+  - **Altyapı kusuru (bu turun kapsamı DIŞINDA, dokunulmadı):** `apps/rtm/src/index.ts` hiçbir `.env`
+    yükleyicisi çağırmıyor (`apps/api/src/index.ts`'in aksine `loadEnvFile()` yok). `pnpm --filter
+    @nexa/e2e test` bu yüzden RTM'nin ortam değişkenlerini miras almayan bir kabukta çalıştırılırsa
+    `webServer` 60 sn'de zaman aşımına düşer ("Invalid environment: DATABASE_URL... Required") —
+    doğrulandı, gerçek bir kusur. Bu tur `.env`'i kabuğa elle `source` ederek spec'i doğruladım; kalıcı
+    düzeltme `apps/rtm/src/index.ts`'e de `loadEnvFile()` eklemek olurdu ama bu tm 72.5'in dosya
+    kapsamının dışında — ayrı bir düzeltme görevi olarak açılmalı.
   - 09.4-f (webhook aboneliği + manifest sekmesi + rotate düğmesi + `developers.spec.ts`) artık açık;
     `DeveloperPortal.tsx`'e ikinci/üçüncü sekme ekleyecek.
   - PLAN.md `09.4` satırı `◐ → K09.4` kaldı — 2 alt-görev açık (09.4-f/-g).

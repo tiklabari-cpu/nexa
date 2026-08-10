@@ -30,6 +30,10 @@ export interface Visit {
 
 export interface CustomerDetail extends CustomerSummary {
   banned_at: string | null;
+  /** True total — `visits` below is capped at the most recent entries. */
+  visits_count: number;
+  /** Teams this visitor's conversations have been routed to, deduplicated. */
+  groups: Array<{ id: number; name: string }>;
   visits: Visit[];
   chats: Array<{
     id: string;

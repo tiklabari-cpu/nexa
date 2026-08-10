@@ -2268,13 +2268,30 @@ components:
       allOf:
         - $ref: "#/components/schemas/CustomerSummary"
         - type: object
-          required: [visits, chats, custom_fields]
+          required: [visits, chats, custom_fields, visits_count, groups]
           properties:
             banned_at: { type: string, format: date-time, nullable: true }
             custom_fields:
               type: array
               description: Custom fields defined for contacts, with this contact's values (FR-MOD-08.7.6).
               items: { $ref: "#/components/schemas/CustomFieldValue" }
+            visits_count:
+              type: integer
+              description: |
+                The true total, unlike `visits` below which is capped at the
+                most recent entries — a returning visitor's real count cannot
+                be read from the truncated array (FR-MOD-13.2).
+            groups:
+              type: array
+              description: |
+                Teams this visitor's conversations have been routed to
+                (FR-MOD-13.2), deduplicated. Empty for a visitor with no chats.
+              items:
+                type: object
+                required: [id, name]
+                properties:
+                  id: { type: integer, format: int64 }
+                  name: { type: string }
             visits:
               type: array
               description: Most recent first.

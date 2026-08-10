@@ -13,6 +13,34 @@
 
 ## Task log (newest-first)
 
+### tm 73.9 — 13.2-i: CustomerDetail'e `visits_count` + `groups[]` (kontrat + servis) — done — 2026-08-10 UTC
+
+- **Yapıldı:** Bu pencere açıldığında task Task Master'da zaten **in-progress** idi ve çalışma
+  alanı tam olarak bu görevin DOSYALAR listesiyle eşleşen değişiklikler içeriyordu (önceki pencere
+  koda yazmış, kapanışı hiç çalıştırmadan ölmüş — TASK-RUNNER-PROMPT §2'nin uyardığı tm 93.3 deseni,
+  bkz. de tm 73.3/tm 110'daki mükerrer-pencere notları). Kod incelendi, eksik/hatalı bir şey
+  bulunmadı: `CustomerService.get()`'e `visits_count` (`tx.visit.count`) + `groups` (yeni özel
+  `#groups()`, `chatAccess`→`groups` iki adımlı okuma, license daraltmalı, dedup'lı) eklenmiş;
+  `openapi.yaml` `CustomerDetail` şeması iki katkısal alanla genişletilmiş ve re-bundle edilmiş
+  (`src/generated/api.ts` güncel); `apps/web/.../customers/types.ts` senkron; `customers.test.ts`
+  KK'nın istediği 5 testin hepsi (kırpma tuzağı, dedup, boş durum, iki cross-tenant negatif) zaten
+  yazılmıştı. Bu pencere yalnız DoD kapısını uçtan uca koşup doğruladı ve kapanışı tamamladı.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test`
+  **0** (`@nexa/api` 2269/2269, `customers.test.ts` 32/32) · `pnpm -w test:integration` **0**
+  (1732/1732 — ilk koşuda `mcp-tools.test.ts`'in bir cross-tenant rapor testi tek başına kırmızıydı,
+  izole tekrarda ve tam-suite ikinci koşuda yeşile döndü; bu dilimin dosyalarıyla hiç ilgisi yok,
+  flaky olarak kayıtlı) · `pnpm -w build` **0** (7/7) · e2e `customers.spec.ts` **6/6** (regresyon
+  — bu dilim UI render'ı yapmadı, 13.2-j'nin kapsamı).
+- **Varsayımlar:** Yok — önceki pencerenin bıraktığı kod ve testler KK'yı birebir karşılıyordu,
+  değiştirilmedi.
+- **Sonraki pencereye not:** Orkestratöre not: bu, aynı task'ın iki pencereye dağıtıldığı üçüncü
+  gözlemlenen vaka (önceki ikisi tm 73.3 ve tm 110'da kayıtlı) — bu kez pencere ölmüş, çakışan
+  ikinci pencere değil, ama sonuç aynı: task uzun süre yanlışlıkla in-progress görünüyor. tm 105
+  WIP (test-datastore izolasyon script'leri, `apps/api/scripts/{test-datastores,with-test-datastores}.ts`
+  + `.gitignore`/`package.json`/`turbo.json`/`tsconfig.json`/rtm fixtures'daki ilişkili değişiklikler)
+  hâlâ commit'siz — bu pencere de dokunmadı (kapsam disiplini, §5). 13.2-j (360° panel UI) artık
+  `visits_count`+`groups[]`'u sunan bir API'ye bağlanabilir.
+
 ### tm 73.8 — 13.2-h: "Match all filters + Add filter" filtre paneli UI + query builder — done — 2026-08-10 UTC
 
 - **Yapıldı:** Saf `traffic-filters.ts` (13.2-f'nin altı parametresini birebir örten alan kataloğu,

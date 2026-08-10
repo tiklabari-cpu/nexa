@@ -5932,6 +5932,21 @@ export interface components {
       banned_at?: string | null;
       /** @description Custom fields defined for contacts, with this contact's values (FR-MOD-08.7.6). */
       custom_fields: components['schemas']['CustomFieldValue'][];
+      /**
+       * @description The true total, unlike `visits` below which is capped at the
+       *     most recent entries — a returning visitor's real count cannot
+       *     be read from the truncated array (FR-MOD-13.2).
+       */
+      visits_count: number;
+      /**
+       * @description Teams this visitor's conversations have been routed to
+       *     (FR-MOD-13.2), deduplicated. Empty for a visitor with no chats.
+       */
+      groups: {
+        /** Format: int64 */
+        id: number;
+        name: string;
+      }[];
       /** @description Most recent first. */
       visits: components['schemas']['Visit'][];
       chats: {

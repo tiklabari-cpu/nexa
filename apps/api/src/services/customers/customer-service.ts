@@ -45,6 +45,10 @@ export interface CustomerSummary {
 
 export interface CustomerDetail extends CustomerSummary {
   banned_at: string | null;
+  /** True total — `visits` below is capped at `MAX_VISITS`. */
+  visits_count: number;
+  /** Teams this visitor's conversations have been routed to, deduplicated. */
+  groups: Array<{ id: number; name: string }>;
   visits: Array<{
     id: string;
     came_from: string | null;
@@ -148,17 +152,18 @@ export class CustomerService {
     });
     if (!customer) return null;
 
-    const customFields = await readCustomFieldValues(
-      tx,
-      tenant.licenseId,
-      'contact',
-      customer.id,
-    );
+    const [customFields, visitsCount, groups] = await Promise.all([
+      readCustomFieldValues(tx, tenant.licenseId, 'contact', customer.id),
+      tx.visit.count({ where: { customerId, licenseId: tenant.licenseId } }),
+      this.#groups(tx, tenant, customerId),
+    ]);
 
     return {
       ...toSummary(customer),
       banned_at: customer.bannedAt?.toISOString() ?? null,
       custom_fields: customFields,
+      visits_count: visitsCount,
+      groups,
       visits: customer.visits.map((visit) => ({
         id: visit.id,
         came_from: visit.cameFrom,
@@ -280,6 +285,34 @@ export class CustomerService {
         },
       },
     } satisfies Prisma.CustomerInclude;
+  }
+
+  /**
+   * Teams this visitor's conversations have been routed to (13.2), derived
+   * from `chat_access` rather than a stored field — there is no
+   * `customer_groups` table (§C). Scoped to the caller's license the same way
+   * `visits`/`chats` are: a `chat_access` row only ever names a group in the
+   * chat's own license, but the join is still filtered explicitly rather than
+   * trusted, matching the rest of this service.
+   */
+  async #groups(
+    tx: TenantClient,
+    tenant: TenantContext,
+    customerId: string,
+  ): Promise<Array<{ id: number; name: string }>> {
+    const access = await tx.chatAccess.findMany({
+      where: { chat: { customerId, licenseId: tenant.licenseId } },
+      select: { groupId: true },
+    });
+    const groupIds = [...new Set(access.map((a) => a.groupId))];
+    if (groupIds.length === 0) return [];
+
+    const groups = await tx.group.findMany({
+      where: { licenseId: tenant.licenseId, id: { in: groupIds } },
+      orderBy: { id: 'asc' },
+      select: { id: true, name: true },
+    });
+    return groups.map((g) => ({ id: Number(g.id), name: g.name }));
   }
 }
 

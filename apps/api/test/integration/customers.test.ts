@@ -94,6 +94,35 @@ describe('customers', () => {
       const untouched = await owner.customer.findUnique({ where: { id: fx.b.customerId } });
       expect(untouched?.bannedAt).toBeNull();
     });
+
+    it("excludes another license's visits from visits_count (NFR-S4)", async () => {
+      // A stray row for the same customer but a foreign license — the
+      // read must filter on licenseId, not trust customerId alone.
+      await owner.visit.create({
+        data: { customerId: fx.a.customerId, licenseId: fx.b.licenseId, pages: [] },
+      });
+
+      const response = await server.get(`/customers/${fx.a.customerId}`, auth(readToken));
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as { visits_count: number }).visits_count).toBe(0);
+    });
+
+    it("excludes another license's groups from the visitor's groups list", async () => {
+      const foreignGroup = await owner.group.create({
+        data: { licenseId: fx.b.licenseId, name: 'Foreign team' },
+        select: { id: true },
+      });
+      await owner.chat.create({
+        data: { id: 'CUSTGRPFOR', licenseId: fx.a.licenseId, customerId: fx.a.customerId },
+      });
+      await owner.chatAccess.create({
+        data: { chatId: 'CUSTGRPFOR', groupId: foreignGroup.id },
+      });
+
+      const response = await server.get(`/customers/${fx.a.customerId}`, auth(readToken));
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as { groups: unknown[] }).groups).toEqual([]);
+    });
   });
 
   // --- Scope enforcement -----------------------------------------------------
@@ -328,6 +357,74 @@ describe('customers', () => {
     it('rejects an id that is not a uuid', async () => {
       const response = await server.get('/customers/not-a-uuid', auth(readToken));
       expect(response.statusCode).toBe(400);
+    });
+
+    it('reports the true visit count, not the truncated visits array (MAX_VISITS=10)', async () => {
+      await owner.visit.createMany({
+        data: Array.from({ length: 12 }, (_, i) => ({
+          customerId: fx.a.customerId,
+          licenseId: fx.a.licenseId,
+          pages: [],
+          startedAt: new Date(Date.now() - i * 60_000),
+        })),
+      });
+
+      const response = await server.get(`/customers/${fx.a.customerId}`, auth(readToken));
+      expect(response.statusCode).toBe(200);
+
+      const body = response.json() as { visits: unknown[]; visits_count: number };
+      expect(body.visits.length).toBe(10);
+      expect(body.visits_count).toBe(12);
+    });
+
+    it('lists distinct groups from the chats this visitor has been routed to', async () => {
+      const sales = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Sales' },
+        select: { id: true },
+      });
+      const support = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Support' },
+        select: { id: true },
+      });
+
+      // Only one *active* chat per customer+license is allowed (uq_one_active_chat) —
+      // these model a visitor's closed history plus their one current chat.
+      await owner.chat.create({
+        data: {
+          id: 'CUSTGRP001',
+          licenseId: fx.a.licenseId,
+          customerId: fx.a.customerId,
+          active: false,
+        },
+      });
+      await owner.chat.create({
+        data: {
+          id: 'CUSTGRP002',
+          licenseId: fx.a.licenseId,
+          customerId: fx.a.customerId,
+          active: false,
+        },
+      });
+      // A third chat routed to the same team as the first must not
+      // duplicate that team in the result.
+      await owner.chat.create({
+        data: { id: 'CUSTGRP003', licenseId: fx.a.licenseId, customerId: fx.a.customerId },
+      });
+      await owner.chatAccess.create({ data: { chatId: 'CUSTGRP001', groupId: sales.id } });
+      await owner.chatAccess.create({ data: { chatId: 'CUSTGRP002', groupId: support.id } });
+      await owner.chatAccess.create({ data: { chatId: 'CUSTGRP003', groupId: sales.id } });
+
+      const response = await server.get(`/customers/${fx.a.customerId}`, auth(readToken));
+      expect(response.statusCode).toBe(200);
+
+      const body = response.json() as { groups: Array<{ id: number; name: string }> };
+      expect(body.groups.map((g) => g.name).sort()).toEqual(['Sales', 'Support']);
+    });
+
+    it('returns an empty groups array for a visitor with no chats', async () => {
+      const response = await server.get(`/customers/${fx.a.customerId}`, auth(readToken));
+      expect(response.statusCode).toBe(200);
+      expect((response.json() as { groups: unknown[] }).groups).toEqual([]);
     });
   });
 

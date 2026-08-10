@@ -13,6 +13,7 @@ const TABS = [
   { to: '/app/customers', label: 'Contacts', end: true },
   { to: '/app/customers/real-time', label: 'Real-time', end: false },
   { to: '/app/customers/campaigns', label: 'Campaigns', end: false },
+  { to: '/app/customers/goals', label: 'Goals', end: false },
 ];
 
 export function CustomersTabs(): ReactElement {

@@ -13,6 +13,26 @@
 
 ## Task log (newest-first)
 
+## tm 74.7 — 13.3-g: Goals ekranı — liste + Create goal formu (Customers 4. sekme) — done — 2026-08-10 UTC
+
+- **Yapıldı:** `apps/web/src/features/goals/{goals.ts, GoalBuilder.tsx, GoalsPage.tsx}` (yeni) —
+  `CampaignsPage.tsx`/`CampaignBuilder.tsx`/`campaigns.ts` desenini kopyalar: sekmeli liste
+  (All/Active/Inactive), `ListSkeleton`, anlamlı `EmptyState`, `customers:rw` yoksa yazma
+  kontrolleri gizli, `PATCH /goals/{id}` ile aç/kapa. `GoalBuilder`: `name` + `definition.url_contains`
+  ikisi de zorunlu (backend `hasGoalTrigger` zaten boş tanımı reddediyor), alan-altı hata + geçersizken
+  submit pasif. `CustomersTabs.tsx`'e Goals sekmesi + `App.tsx`'e `customers/goals` route.
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · build 0 (7/7) · `pnpm -w test:integration`
+  1799/1799. `pnpm -w test` ilk koşuda 6 kırmızı — tamamı `reports-billing.test.ts` (bu dilimin
+  dokunmadığı dosya), izole tekrar koşusunda 269/269 yeşil → 74.5/74.6'da kayıtlı yük-altı flake,
+  regresyon değil. Yeni `goals.test.ts` (8) + `GoalsPage.test.tsx` (6) hepsi yeşil.
+- **Varsayımlar:** E2E koşulmadı (13.3-i kapsamı, task scope'unda KAPSAM DIŞI); mevcut
+  `campaigns.spec.ts` `CustomersTabs`'ın etiket/route'una dokunmadığından yeni sekme onu bozmaz.
+- **Sonraki pencereye not:** 13.3-h (huni gösterimi + Reports Overview KPI kartı) bu ekranın
+  üstüne inşa edecek — `GoalsPage.tsx`'teki `GoalCard` şu an yalnız tanım+aç/kapa gösteriyor, huni
+  (`GET /reports/goals`) henüz bağlanmadı. PLAN.md `13.3` satırı `◐` kaldı (K13.3'e madde eklendi).
+
+---
+
 ## tm 112 — PLAN Faz-2 özet sayaçları tabloyla eşitlendi (panel bulgusu · §D84'ün tekrarı) — done — 2026-08-10 UTC
 
 - **Yapıldı:** PLAN.md satır **22** (faz özet tablosu) + satır **1100** (§5.0 kendi sayacı) →

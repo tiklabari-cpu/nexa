@@ -2749,10 +2749,10 @@
             "description": "(1) `apps/api/prisma/schema.prisma`'ya `GoalAchievement` modeli: `id uuid pk`, `licenseId BigInt @map(\"license_id\")`, `goalId @map(\"goal_id\")`, `customerId @map(\"customer_id\")`, `chatId String? @db.VarChar(12) @map(\"chat_id\")` (huninin 'sohbet' aşaması izi), `achievedAt @default(now()) @db.Timestamptz(6)`; `@@unique([goalId, customerId])` (idempotency kısıtı), `@@index([licenseId, achievedAt])` (p",
             "details": "13.3-b — goal_achievements tablosu + RLS politikası + idempotency kısıtı (Prisma migration)  [OPUS-XHIGH]\n\nPRD: FR-MOD-13.3 (+ NFR-S4 RLS, NFR-S5 IDOR/enumeration)\nETİKET GEREKÇESİ: OPUS-XHIGH: migration SQL'i RLS politikasını (tenant izolasyon mekanizmasının kendisi) kuruyor — koşul 2 ihlali, SONNET olamaz. Ancak politika `campaign_sends` migration'ından (20260726170000) birebir kopyalanabilir bir satırdır ve yeni bir izolasyon modeli tasarlanmıyor; güvenlik/algoritma çekirdeği değil → OPUS-MAX de değil. Kullanıcı kuralı: güvenlik hassasiyeti olan ama çekirdek sınır olmayan iş = OPUS-XHIGH.\nNEDEN AÇIK: `goals` tablosu (schema.prisma:812-824) hedef TANIMINI tutuyor ama hedefe ULAŞMA olayını tutan hiçbir tablo yok. Mevcut tek 'conversion' izi `campaign_sends.converted` (schema.prisma:799) — serbest boolean, `goal_id` FK'i yok, yani hangi Goal'e karşılık geldiği kayıtlı değil. Pencere içi \"Achieved goals\" sayımı (13.3-e/-f) zaman damgalı satır olmadan yapılamaz.\nKAPSAM: (1) `apps/api/prisma/schema.prisma`'ya `GoalAchievement` modeli: `id uuid pk`, `licenseId BigInt @map(\"license_id\")`, `goalId @map(\"goal_id\")`, `customerId @map(\"customer_id\")`, `chatId String? @db.VarChar(12) @map(\"chat_id\")` (huninin 'sohbet' aşaması izi), `achievedAt @default(now()) @db.Timestamptz(6)`; `@@unique([goalId, customerId])` (idempotency kısıtı), `@@index([licenseId, achievedAt])` (pencere sorgusu), `@@map(\"goal_achievements\")`; `Goal.achievements`, `License.goalAchievements`, `Customer` ters ilişkileri. (2) Migration SQL: CREATE TABLE + 4 FK (licenses/goals/customers ON DELETE CASCADE) + unique index + `ALTER TABLE goal_achievements ENABLE ROW LEVEL SECURITY; CREATE POLICY goal_achievements_tenant ON goal_achievements USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());`\nDOSYALAR: apps/api/prisma/schema.prisma · apps/api/prisma/migrations/20260801090000_goal_achievements/migration.sql · apps/api/test/integration/goal-achievements-rls.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/prisma/migrations/20260726170000_campaign_sends/migration.sql (CREATE TABLE + FK + unique + RLS policy birebir kalıp) · apps/api/prisma/migrations/20260722154008_domain_model/migration.sql:935-937 (goals_tenant RLS politikası — nexa_current_license() kalıbı) · apps/api/prisma/schema.prisma:789-824 (CampaignSend + Goal modelleri)\nKK (birebir): \"KK-türetilmiş: \"3 aşamalı huni\" — huninin 3. aşamasının bir zaman penceresinde SAYILABİLMESİ için zaman damgalı hedef-ulaşma satırı gerekir. Türetme gerekçesi: PRD §8.4 (satır 960) yalnız `goals`(`id`,`license_id`,`name`,`definition`,`active`) tanımını verir, olay tablosu vermez; PRD KK 'rapor entegrasyonu' pencere içi sayım ister, bu da tanım tablosundan üretilemez.\"\nKK DOĞRULAMA: integration: migration uygulandıktan sonra (a) `goal_achievements` tablosu var ve aynı (goal_id, customer_id) ikinci INSERT unique ihlali verir (idempotency kısıtı kanıtı); (b) **cross-tenant:** `nexa_current_license()` A lisansına set edilmişken B lisansının satırı SELECT'te dönmez (RLS USING); (c) B lisansına ait `license_id` ile INSERT denemesi WITH CHECK'e takılır.\nKAPSAM DIŞI: `campaign_sends.goal_id` FK EKLENMEZ — geriye dönük veri migrasyonu + mevcut Campaigns testlerinin (CampaignsPage.test.tsx, campaigns.test.ts) conversion beklentisini bozma riski (bkz. §varsayımlar-3) · hedef eşleşme mantığı ve satırı kimin yazdığı (13.3-d) · `goals` tablosunun kendisi — zaten var, RLS'i de var (migration 20260722154008:935)\nMIGRATION: EVET — yeni `goal_achievements` tablosu: FK'ler (licenses, goals, customers), `UNIQUE(goal_id, customer_id)`, `INDEX(license_id, achieved_at)` ve `ENABLE ROW LEVEL SECURITY` + `goal_achievements_tenant` politikası.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "negatif (önce): cross-tenant SELECT 0 satır döner (RLS USING) · negatif: yanlış license_id ile INSERT reddedilir (RLS WITH CHECK) · negatif: aynı (goal_id, customer_id) ikinci INSERT → unique ihlali · pozitif: kendi lisansının satırı okunur/yazılır · regresyon: `prisma migrate deploy` mevcut migration zincirini bozmaz (DB süiti serial koşulur — bellek: nexa-test-gate-parallel-db)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "74",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T13:24:39.864Z"
           },
           {
             "id": 3,
@@ -2856,7 +2856,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T12:36:13.727Z",
+        "updatedAt": "2026-08-10T13:24:39.864Z",
         "complexity": 8,
         "recommendedSubtasks": 9,
         "expansionPrompt": "\"13.3 — Goals (ziyaretçi→sohbet→dönüşüm hunisi)  ·  dilim V2-8\" görevini 9 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5110,7 +5110,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T12:36:13.728Z",
+      "lastModified": "2026-08-10T13:24:39.864Z",
       "taskCount": 111,
       "completedCount": 102,
       "tags": [

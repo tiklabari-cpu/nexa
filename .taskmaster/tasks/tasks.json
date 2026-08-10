@@ -2829,14 +2829,14 @@
             "description": "(1) `GoalsFunnel.tsx` — `/reports/goals`'tan gelen 3 aşamalı huni (Visitors → Chats → Conversions) stat kartları + `%` dönüşüm oranı; veri yoksa anlamlı empty state (\"Henüz dönüşüm yok\"), 0'a bölme yok (`conversionRate` deseni: payda 0 → 0/—). (2) `goals.ts`'e saf `funnelStages(funnel)` yardımcısı (etiket + değer + oran üçlüsü — test edilebilir saf fonksiyon). (3) `ReportsPage.tsx` OverviewTab Vol",
             "details": "13.3-h — 3 aşamalı huni gösterimi (Goals ekranı) + Reports Overview \"Achieved goals\" KPI kartı  [SONNET-XHIGH]\n\nPRD: FR-MOD-13.3 (+ FR-EK-B.1 empty state, NFR-A11Y4)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 4 dosya + testleri. (2) Güvenlik sınırı yok — salt-okunur rapor gösterimi. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: CampaignsPage.tsx:248-271 (`Stat` + 3'lü dl grid) ve campaigns.ts:66 (`conversionRate`), ReportsPage.tsx OverviewTab `Kpi`/`CountDelta`/`Section` bileşenleri. (5) Kontrat değişikliği yok. (6) KK mekanik (sayı/etiket render iddiası).\nNEDEN AÇIK: `grep -rln -i goal apps/web/src` 0 sonuç — huni gösterimi yok. `apps/web/src/features/reports/ReportsPage.tsx` OverviewTab'ında Volume/Resolution/Chats bölümleri var, goal ile ilgili hiçbir kart yok.\nKAPSAM: (1) `GoalsFunnel.tsx` — `/reports/goals`'tan gelen 3 aşamalı huni (Visitors → Chats → Conversions) stat kartları + `%` dönüşüm oranı; veri yoksa anlamlı empty state (\"Henüz dönüşüm yok\"), 0'a bölme yok (`conversionRate` deseni: payda 0 → 0/—). (2) `goals.ts`'e saf `funnelStages(funnel)` yardımcısı (etiket + değer + oran üçlüsü — test edilebilir saf fonksiyon). (3) `ReportsPage.tsx` OverviewTab Volume bölümüne `Achieved goals` Kpi kartı + `CountDelta current={totals.achieved_goals} previous={prev.achieved_goals}`.\nDOSYALAR: apps/web/src/features/goals/GoalsFunnel.tsx · apps/web/src/features/goals/goals.ts · apps/web/src/features/goals/GoalsFunnel.test.tsx · apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/campaigns/CampaignsPage.tsx:248-271 (Stat bileşeni + 3 sütunlu dl grid — Displayed/Chats/Conversion) · apps/web/src/features/campaigns/campaigns.ts:61-69 (conversionRate saf fonksiyonu, payda 0 koruması) · apps/web/src/features/reports/ReportsPage.tsx:266-295 (Section + KpiGrid + Kpi + CountDelta)\nKK (birebir): \"3 aşamalı huni\" | \"rapor entegrasyonu\"\nKK DOĞRULAMA: unit `GoalsFunnel.test.tsx`: üç aşama da (Visitors/Chats/Conversions) etiketi ve sayısıyla render edilir → \"3 aşamalı huni\"; ziyaretçi 0 iken oran `—` (NaN/Infinity yok); veri yokken empty state. unit `ReportsPage.test.tsx`: Overview'da 'Achieved goals' kartı sayıyı ve önceki döneme göre deltayı gösterir → \"rapor entegrasyonu\".\nKAPSAM DIŞI: hedef oluşturma/düzenleme formu (13.3-g) · CSV export butonu (mevcut export akışı 07.7'de zaten var, grup 13.3-f'te eklendi) · Tracked sales kartı (13.5 v2) · E2E (13.3-i)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: üç aşamanın da render edilmesi (huni bütünlüğü) · unit: payda 0 → oran '—', NaN/Infinity render edilmez · unit: huni verisi yokken anlamlı empty state · unit: Reports Overview 'Achieved goals' kartı + delta · regresyon: mevcut ReportsPage.test.tsx iddiaları yeşil kalır",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "74.5",
               "74.6",
               "74.7"
             ],
             "parentId": "74",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T17:28:04.291Z"
           },
           {
             "id": 9,
@@ -2856,7 +2856,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T17:02:22.909Z",
+        "updatedAt": "2026-08-10T17:28:04.291Z",
         "complexity": 8,
         "recommendedSubtasks": 9,
         "expansionPrompt": "\"13.3 — Goals (ziyaretçi→sohbet→dönüşüm hunisi)  ·  dilim V2-8\" görevini 9 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5122,7 +5122,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T17:02:22.909Z",
+      "lastModified": "2026-08-10T17:28:04.291Z",
       "taskCount": 112,
       "completedCount": 103,
       "tags": [

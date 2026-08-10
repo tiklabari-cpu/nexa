@@ -2816,12 +2816,12 @@
             "description": "(1) `apps/web/src/App.tsx`'e `customers/goals` route (satır 86'daki `customers/campaigns` girişinin yanına) + `CustomersTabs.tsx` TABS dizisine `{ to: '/app/customers/goals', label: 'Goals' }`. (2) Saf `goals.ts` — `GOAL_TABS`, `filterGoals(goals, 'all'|'active'|'inactive')`, `goalCounts` (campaigns.ts:14-48 deseni birebir). (3) `GoalsPage.tsx` — liste + `ListSkeleton` + anlamlı `EmptyState` (boş ",
             "details": "13.3-g — Goals ekranı — liste + Create goal formu (Customers alanının 4. sekmesi)  [SONNET-XHIGH]\n\nPRD: FR-MOD-13.3 (+ FR-EK-A.1 form validasyon primitifi, FR-EK-B.1 skeleton/empty state, NFR-A11Y4)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 5 dosya + testleri. (2) Güvenlik sınırı YOK — yetki API tarafında 13.3-c'de zorlanıyor; UI yalnız `scopes.includes('customers:rw')` ile kontrolleri gizler (CampaignsPage.tsx:44 deseninin aynısı), gizlemek karar değil kozmetik. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: CampaignsPage.tsx + CampaignBuilder.tsx + CustomersTabs.tsx. (5) Kontrat değişikliği yok. (6) KK mekanik (sekme doğru alt kümeyi gösterir, geçersiz form submit pasif).\nNEDEN AÇIK: `grep -rln -i goal apps/web/src` 0 sonuç — Goals ekranı ve 'Create goal' formu yok. `apps/web/src/features/customers/CustomersTabs.tsx` yalnız Contacts / Real-time / Campaigns sekmelerini taşıyor (TABS dizisi).\nKAPSAM: (1) `apps/web/src/App.tsx`'e `customers/goals` route (satır 86'daki `customers/campaigns` girişinin yanına) + `CustomersTabs.tsx` TABS dizisine `{ to: '/app/customers/goals', label: 'Goals' }`. (2) Saf `goals.ts` — `GOAL_TABS`, `filterGoals(goals, 'all'|'active'|'inactive')`, `goalCounts` (campaigns.ts:14-48 deseni birebir). (3) `GoalsPage.tsx` — liste + `ListSkeleton` + anlamlı `EmptyState` (boş dikdörtgen yok, EK-B.1) + active toggle (`PATCH /goals/{id}`) + `customers:rw` yoksa yazma kontrolleri gizli. (4) `GoalBuilder.tsx` — 'Create goal' modalı: isim zorunlu, `definition.url_contains`; alan-altı hata + geçersizken submit pasif (EK-A.1 primitifi, CampaignBuilder.tsx deseni).\nDOSYALAR: apps/web/src/features/goals/GoalsPage.tsx · apps/web/src/features/goals/GoalBuilder.tsx · apps/web/src/features/goals/goals.ts · apps/web/src/features/goals/goals.test.ts · apps/web/src/features/goals/GoalsPage.test.tsx · apps/web/src/features/customers/CustomersTabs.tsx · apps/web/src/App.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/campaigns/CampaignsPage.tsx (liste + sekme + skeleton + EmptyState + canWrite gizleme + toggle mutation) · apps/web/src/features/campaigns/CampaignBuilder.tsx (modal form + alan-altı hata + submit pasif) · apps/web/src/features/campaigns/campaigns.ts (saf filterCampaigns / campaignCounts / isCampaignActive) · apps/web/src/features/customers/CustomersTabs.tsx (NavLink sekme kalıbı) · apps/web/src/App.tsx:86 (route kaydı)\nKK (birebir): \"hedef tanımı\"\nKK DOĞRULAMA: unit `goals.test.ts`: her sekme doğru alt kümeyi döndürür; `goalCounts` sayıları tutar. unit `GoalsPage.test.tsx`: (a) 'Create goal' → isim boşken submit pasif + alan-altı hata (\"hedef tanımı\" oluşturma kapısı); (b) `customers:ro` scope'unda 'New goal' / toggle butonları render edilmez; (c) boş liste → anlamlı empty state metni (boş dikdörtgen değil).\nKAPSAM DIŞI: huni gösterimi ve Reports KPI kartı (13.3-h) · hedef silme (DELETE yok — `active=false`) · Engage adında ayrı bir üst alan açmak (bkz. §varsayımlar-5) · E2E (13.3-i)\nSÖZLEŞME: yok (mevcut `/goals` endpoint'leri tüketilir)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: saf filterGoals/goalCounts · unit: geçersiz form → alan-altı hata + submit pasif · unit: empty state (boş liste) ve skeleton (pending) durumları · unit: `customers:rw` yokken yazma kontrolleri gizli (UI gating — API gating 13.3-c'de test edilir)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "74.3"
             ],
             "parentId": "74",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T17:02:22.909Z"
           },
           {
             "id": 8,
@@ -2856,7 +2856,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T15:58:55.135Z",
+        "updatedAt": "2026-08-10T17:02:22.909Z",
         "complexity": 8,
         "recommendedSubtasks": 9,
         "expansionPrompt": "\"13.3 — Goals (ziyaretçi→sohbet→dönüşüm hunisi)  ·  dilim V2-8\" görevini 9 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5122,7 +5122,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T16:20:00.000Z",
+      "lastModified": "2026-08-10T17:02:22.909Z",
       "taskCount": 112,
       "completedCount": 103,
       "tags": [

@@ -2647,12 +2647,12 @@
             "description": "(1) Saf `traffic-tabs.ts`: `TRAFFIC_TABS` sabiti (7 sekme, rapor-1 sırasıyla) + `tabToActivity()` + `countByTab()`. (2) TrafficPage.tsx'e `role=tablist` sekme şeridi; seçilen sekme 13.2-f'nin `activity` query parametresini doldurur — İSTEMCİ TARAFI YENİDEN FİLTRELEME YOK, tek doğruluk kaynağı sunucudur. (3) Her sekme için anlamlı empty state (`EmptyState` bileşeni; FR-EK-B.1 'boş dikdörtgen yok' k",
             "details": "13.2-g — Traffic durum sekmeleri (All/Chatting/Supervised/Queued/Waiting/Invited/Browsing) + sayaç + anlamlı empty state  [SONNET-XHIGH]\n\nPRD: FR-MOD-13.2 (+ FR-MOD-03.1.1; NFR-A11Y4, NFR-A11Y5, FR-EK-B.1)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 4 dosya + testleri; güvenlik sınırı YOK (sekme yalnız 13.2-f'nin mevcut `activity` query parametresini önceden dolduruyor; hiçbir yetki/izolasyon kararı burada verilmiyor, sunucu zaten doğruluyor); eşzamanlılık yok; kopyalanacak desen İSMEN var (`playbook/knowledge-tabs.ts` saf partition+sayaç, `customers/CustomersTabs.tsx` tablist görünümü, `components/EmptyState.tsx`); kontrat değişikliği yok; KK mekanik doğrulanır (her sekme doğru alt küme + 7 sekme tam).\nNEDEN AÇIK: TrafficPage.tsx'te durum sekmesi yok — sayfada yalnız üst-seviye `CustomersTabs` (Contacts/Real-time/Campaigns) var ve `role=tablist` grep 0. rapor-1 §644 birebir yedi öğe sayıyor. PLAN §3.13 Faz-0 kapanışında 'kalan 3 sekme (Supervised/Invited/Browsing) v2 gelişmiş' denerek bu kaleme taşınmıştı; Browsing bir `activity` DEĞERİ olarak teslim ama SEKME olarak hiç yok.\nKAPSAM: (1) Saf `traffic-tabs.ts`: `TRAFFIC_TABS` sabiti (7 sekme, rapor-1 sırasıyla) + `tabToActivity()` + `countByTab()`. (2) TrafficPage.tsx'e `role=tablist` sekme şeridi; seçilen sekme 13.2-f'nin `activity` query parametresini doldurur — İSTEMCİ TARAFI YENİDEN FİLTRELEME YOK, tek doğruluk kaynağı sunucudur. (3) Her sekme için anlamlı empty state (`EmptyState` bileşeni; FR-EK-B.1 'boş dikdörtgen yok' kararı). (4) Seçili sekme URL parametresinde kalıcı (deep-link/reload) — CustomersPage.tsx `useSearchParams` deseni. (5) Supervise satır aksiyonu artık ek olarak 13.2-d'nin `POST /chats/{id}/supervise` çağrısını yapar; mevcut navigate davranışı korunur.\nDOSYALAR: apps/web/src/features/traffic/traffic-tabs.ts (yeni) · apps/web/src/features/traffic/traffic-tabs.test.ts (yeni) · apps/web/src/features/traffic/TrafficPage.tsx · apps/web/src/features/traffic/types.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/playbook/knowledge-tabs.ts (saf partition + sayaç + 'bilinmeyen değer All'da kalır' güvenli-başarısızlık deseni) · apps/web/src/features/playbook/skill-tabs.ts · apps/web/src/features/customers/CustomersTabs.tsx (sekme şeridi görünümü + aria-label) · apps/web/src/features/customers/CustomersPage.tsx (useSearchParams deep-link + debounce deseni) · apps/web/src/components/EmptyState.tsx\nKK (birebir): \"Gelişmiş filtre\" | \"KK-türetilmiş: sekme listesi rapor-1 §644 birebir — \"Öğeler: All · Chatting · Supervised · Queued · Waiting for reply · Invited · Browsing (gözlemde hepsi 0).\" PRD 13.2 KK'sı sekme listesini vermiyor; liste rapor-1'den, empty-state şartı FR-EK-B.1'den (\"her boş liste için anlamlı empty state (boş dikdörtgen yok)\") alındı.\"\nKK DOĞRULAMA: unit `traffic-tabs.test.ts`: 7 sekme tam ve sırası rapor-1 §644 ile aynı · her sekme doğru `activity` parametresini üretir (All hiçbir kısıt eklemez) · sayaçlar toplamı All'a eşit. `TrafficPage.test.tsx`: boş sekme → anlamlı empty state (boş dikdörtgen değil) · sekme değişimi URL parametresini günceller ve reload'da korunur.\nKAPSAM DIŞI: Filtre paneli / 'Add filter' UI'ı (13.2-h) · Backend filtre mantığı (13.2-f) · 360° panel değişiklikleri (13.2-j) · Sekme başına farklı sütun düzeni\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: 7 sekme tam ve sırası rapor-1 §644 ile aynı · unit: her sekme doğru `activity` query parametresini üretir (All kısıt eklemez) · unit: sayaçlar toplamı All'a eşit · unit: boş sekme → anlamlı empty state (FR-EK-B.1) · unit: sekme seçimi URL parametresine yazılır ve reload'da korunur · a11y: `role=tablist`/`role=tab`/`aria-selected` + ok tuşlarıyla gezinme (NFR-A11Y4/A11Y5) · negatif/cross-tenant: GEREKMİYOR — yetki sunucuda (13.2-d/-f) kanıtlandı",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "73.6"
             ],
             "parentId": "73",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T08:44:10.350Z"
           },
           {
             "id": 8,
@@ -2715,7 +2715,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T08:23:13.012Z",
+        "updatedAt": "2026-08-10T08:44:10.350Z",
         "complexity": 9,
         "recommendedSubtasks": 11,
         "expansionPrompt": "\"13.2 — Engage/Traffic (gelişmiş filtre + 360° ziyaretçi)  ·  dilim V2-8\" görevini 11 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5096,7 +5096,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T08:23:13.013Z",
+      "lastModified": "2026-08-10T08:44:10.350Z",
       "taskCount": 110,
       "completedCount": 99,
       "tags": [

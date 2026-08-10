@@ -11,8 +11,9 @@
  * larger, separate slice (FR-EK-C.1); until then a short refetch interval keeps
  * it live enough to act on, and every row action invalidates it immediately.
  */
+import { hasAnyScope } from '@nexa/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState, type ReactElement } from 'react';
+import { useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -77,8 +78,18 @@ export const ACTIVITY: Record<TrafficActivity, { tone: StatusTone; label: string
   invited: { tone: 'warning', label: 'Invited' },
 };
 
+/**
+ * Scope check via `@nexa/types`, not `Array.includes` (13.2-k).
+ *
+ * A raw `includes` misses every implication the server applies: `chats--all:rw`
+ * expands to `chats--all:ro` there, so a plain membership test asked whether the
+ * caller holds a *literal* read scope. Owners and admins hold none — their set
+ * is `chats--all:rw` — which left **Supervise chat** disabled for precisely the
+ * people who supervise, on a call the API would have accepted. One shared
+ * expander is what keeps the button's answer and the route's answer the same.
+ */
 function hasAny(scopes: string[], ...wanted: string[]): boolean {
-  return wanted.some((scope) => scopes.includes(scope));
+  return hasAnyScope(scopes, wanted);
 }
 
 export function TrafficPage(): ReactElement {
@@ -91,7 +102,7 @@ export function TrafficPage(): ReactElement {
   const ctx = {
     canChatWrite: hasAny(scopes, 'chats--all:rw', 'chats--access:rw'),
     canChatRead: hasAny(scopes, 'chats--all:ro', 'chats--access:ro'),
-    canEditCustomer: scopes.includes('customers:rw'),
+    canEditCustomer: hasAny(scopes, 'customers:rw'),
   };
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -110,6 +121,41 @@ export function TrafficPage(): ReactElement {
     if (next === 'all') params.delete(TAB_PARAM);
     else params.set(TAB_PARAM, next);
     setSearchParams(params, { replace: true });
+  }
+
+  // Arrow-key navigation over the strip (WAI-ARIA tabs pattern, NFR-A11Y4/5).
+  // Tab/Shift+Tab alone would walk all seven buttons one by one and make the
+  // strip a keyboard trap in the middle of the page, so the strip is a single
+  // stop (roving `tabIndex`) and the arrows move within it. Activation follows
+  // focus, which is the right mode here: selecting a tab only re-runs the board
+  // query, so nothing is lost by landing on one in passing.
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  function onTabKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    const last = TRAFFIC_TABS.length - 1;
+    const current = TRAFFIC_TABS.findIndex((t) => t.id === tab);
+    let next: number;
+    switch (event.key) {
+      case 'ArrowRight':
+        next = current === last ? 0 : current + 1;
+        break;
+      case 'ArrowLeft':
+        next = current === 0 ? last : current - 1;
+        break;
+      case 'Home':
+        next = 0;
+        break;
+      case 'End':
+        next = last;
+        break;
+      default:
+        return;
+    }
+    // Only now: an unhandled key (Tab out of the strip, typing a shortcut) must
+    // keep its default behaviour.
+    event.preventDefault();
+    selectTab(TRAFFIC_TABS[next]!.id);
+    tabRefs.current[next]?.focus();
   }
 
   function handleFiltersChange(next: TrafficCondition[]): void {
@@ -210,8 +256,13 @@ export function TrafficPage(): ReactElement {
       }
       actions={<CustomersTabs />}
     >
-      <div role="tablist" aria-label="Traffic status" className="flex flex-wrap gap-1 border-b border-border pb-2">
-        {TRAFFIC_TABS.map((t) => {
+      <div
+        role="tablist"
+        aria-label="Traffic status"
+        onKeyDown={onTabKeyDown}
+        className="flex flex-wrap gap-1 border-b border-border pb-2"
+      >
+        {TRAFFIC_TABS.map((t, index) => {
           const active = t.id === tab;
           // Only ever shown for a bucket the current response actually
           // covers — the active tab, or every tab while viewing the
@@ -221,9 +272,13 @@ export function TrafficPage(): ReactElement {
           return (
             <button
               key={t.id}
+              ref={(element) => {
+                tabRefs.current[index] = element;
+              }}
               type="button"
               role="tab"
               aria-selected={active}
+              tabIndex={active ? 0 : -1}
               onClick={() => selectTab(t.id)}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
                 active

@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### tm 73.11 — 13.2-k: Uçtan uca doğrulama (sekme + filtre + supervise + 360° panel) + NFR-P2 + a11y — done — 2026-08-10 UTC
+
+- **Yapıldı:** `traffic.spec.ts`'e tek uçtan uca senaryo (13.2-a…j'nin hepsi TEK gerçek ziyaretçide):
+  7 sekme · Browsing kovası · "Add filter" page-URL koşulu (önce EŞLEŞEN değerle pozitif kontrol,
+  sonra eşleşmeyenle daralma + empty state, "✕" ile geri dönüş) · Start chat → `Chatting` →
+  Supervise → `Supervised` · "Edit contact" deep-link'i 360° paneli açıyor (`Visits` sayacı +
+  `demo.html` + `Groups` kartı). **a11y:** tablist ok-tuşu gezinmesi (roving `tabIndex` + Arrow/
+  Home/End, aktivasyon focus'u izler) bu turda YAZILDI — yoktu; `aria-selected` tekliği assert'li.
+  **E2E'nin bulduğu gerçek kusur:** `TrafficPage.tsx` scope'ları çıplak `Array.includes` ile
+  okuyordu; sunucu `chats--all:rw` → `chats--all:ro` genişletmesi yaptığından owner/admin'de
+  literal `:ro` yok → **"Supervise chat" tam olarak supervise eden herkes için devre dışıydı**.
+  `hasAnyScope` (`@nexa/types`) paylaşılan genişleticisine geçirildi.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test`
+  **0** (`@nexa/web` 896/896, 892'den +4) · `pnpm -w test:integration` **0** (1732/1732) ·
+  `pnpm -w build` **0** (7/7) · **tam e2e süiti 94/94** (26 spec, +1 yeni test).
+  **NFR-P2 ölçümü** (filtreli `GET /traffic`, 1 ısınma + 20 örnek): **medyan 28–34 ms · p95
+  55–132 ms · max 132 ms**, bütçe 150 ms okuma. Assert medyan üzerinde; kuyruk yalnız kayda
+  geçiyor — ölçüm `tsx watch` dev sunucusunda, kuyruğu sorgudan çok harness'i anlatıyor, yani
+  p99 üretim iddiasını destekler ama tek başına kanıtlamaz.
+- **Varsayımlar:** E2E ziyaretçiye `PATCH /customers/{id}` ile ad veriliyor (paylaşılan board'da
+  "Unnamed visitor" satırları ayırt edilemez) ve "en yeni müşteri bizimki" varsayımı `name === null`
+  assert'iyle korunuyor. `browsing` kovasına düşürmek için sohbet API'den kapatılıyor — widget'ta
+  sohbeti kapatan bir kontrol yok (`api.close()` UI'ya bağlı değil). Supervise'dan önce "Start chat"
+  (assign_to_me) kullanılıyor: kuyruğa düşen sohbette `queued` `supervised`'ı ezerdi.
+- **Sonraki pencereye not:** **PRD 13.2 satırı bilerek `◐` bırakıldı** — `visits.came_from`'un
+  YAZMA yolu yok (`recordPageView` `referrer` alıyor, tek çağıran `POST /customer/chat` hiç
+  geçirmiyor, kontratta alan yok), yani 13.2-j'nin "Came from …" satırı ve 13.2-f'nin
+  `came_from_contains` filtresi gerçek hiçbir ziyaretçide çalışmıyor. KK'nın "Came from görünür"
+  maddesi bu yüzden assert edilemedi; render/filtre yolları alt seviyede kaplı, eksik olan yalnız
+  yazma. Ayrı task açıldı: **tm 111 (13.2-l)** — kapanınca 13.2 `✅`ya döner. Ayrıca: aynı çıplak
+  `Array.includes` scope deseni web'de başka ekranlarda da var (ör. `CustomersPage.tsx`) — bu
+  pencere kapsam disiplini gereği yalnız Traffic'i düzeltti; tarama ayrı bir iş. Ok-tuşu gezinmesi
+  de yalnız Traffic tablist'ine eklendi, diğer 9 `role="tablist"` hâlâ tuşsuz. tm 105 WIP
+  (test-datastore izolasyon script'leri) hâlâ commit'siz — bu pencere de dokunmadı (§5).
+
 ### tm 73.10 — 13.2-j: Ziyaretçi 360° panel — N visits özeti + Came from + Groups kartları (UI) — done — 2026-08-10 UTC
 
 - **Yapıldı:** `CustomerDetailPanel.tsx` dl bloğuna `Visits` satırı (`visits_count`, kırpılmış

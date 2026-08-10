@@ -13,6 +13,25 @@
 
 ## Task log (newest-first)
 
+### tm 73.8 — 13.2-h: "Match all filters + Add filter" filtre paneli UI + query builder — done — 2026-08-10 UTC
+
+- **Yapıldı:** Saf `traffic-filters.ts` (13.2-f'nin altı parametresini birebir örten alan kataloğu,
+  alan başına en fazla bir koşul, `conditionError`/`buildTrafficParams`/`resolveActivity`) +
+  `TrafficFilters.tsx` ("Match all filters" paneli, `Dropdown`'la "Add filter", satır kaldırma,
+  "Clear") + `TrafficPage.tsx` entegrasyonu (koşullar `?<field>=` URL'de kalıcı; panelin kendi
+  `activity` koşulu sekmenin yerine geçer, diğer beş alan sekmeyle AND'lenir).
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test`
+  **0** (`@nexa/web` 884/884, 849'dan +35: `traffic-filters.test.ts` 23 yeni · `TrafficFilters.test.tsx`
+  12 yeni) · `pnpm -w test:integration` **0** (1727/1727, regresyon — backend'e dokunulmadı) ·
+  `pnpm -w build` **0** (7/7) · e2e `traffic.spec.ts` **1/1** (regresyon).
+- **Varsayımlar:** `group_id` ham sayısal id metin kutusuyla filtrelenir, `GET /groups` seçici
+  DEĞİL (13.2-f zaten yabancı id'yi sessizce boş board'a çeviriyor; KK seçici zorunlu kılmıyor).
+  Panel + sekme çakışması: panelin kendi `activity` koşulu varsa sekmenin yerine geçer ("sekme =
+  önceden dolu activity koşulu" maddesinin okunuşu).
+- **Sonraki pencereye not:** `group_id` filtresi istenirse `GET /groups`'a bağlı bir seçiciye
+  yükseltilebilir (13.2-f'nin notu, hâlâ açık). tm 105 WIP hâlâ commit'siz — bu pencere de
+  dokunmadı (kapsam disiplini, §5).
+
 ### tm 73.7 — 13.2-g: Traffic durum sekmeleri (All/Chatting/Supervised/Queued/Waiting/Invited/Browsing) + sayaç + empty state — done — 2026-08-10 UTC
 
 - **Yapıldı:** `traffic-tabs.ts` (pure: `TRAFFIC_TABS` rapor-1 §644 sırasıyla · `tabToActivity` ·

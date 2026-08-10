@@ -12,7 +12,7 @@
  * it live enough to act on, and every row action invalidates it immediately.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, type ReactElement } from 'react';
+import { useMemo, useState, type ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -23,6 +23,14 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { visitorRowActions, type RowActionId } from './rowActions.js';
+import { TrafficFilters } from './TrafficFilters.js';
+import {
+  buildTrafficParams,
+  conditionsFromSearchParams,
+  resolveActivity,
+  TRAFFIC_FIELD_DEFS,
+  type TrafficCondition,
+} from './traffic-filters.js';
 import { countByTab, isTrafficTab, tabToActivity, TRAFFIC_TABS, type TrafficTab } from './traffic-tabs.js';
 import type { TrafficActivity, TrafficVisitor } from './types.js';
 
@@ -90,6 +98,13 @@ export function TrafficPage(): ReactElement {
   const tabParam = searchParams.get(TAB_PARAM);
   const tab: TrafficTab = isTrafficTab(tabParam) ? tabParam : 'all';
 
+  // The filter panel (13.2-h) is uncontrolled once mounted (see
+  // `TrafficFilters`); this only seeds it from a reload/shared link and holds
+  // the last list it reported — always a fully valid one, see `onChange`.
+  const [conditions, setConditions] = useState<TrafficCondition[]>(() =>
+    conditionsFromSearchParams(searchParams),
+  );
+
   function selectTab(next: TrafficTab): void {
     const params = new URLSearchParams(searchParams);
     if (next === 'all') params.delete(TAB_PARAM);
@@ -97,14 +112,28 @@ export function TrafficPage(): ReactElement {
     setSearchParams(params, { replace: true });
   }
 
+  function handleFiltersChange(next: TrafficCondition[]): void {
+    setConditions(next);
+    const params = new URLSearchParams(searchParams);
+    for (const def of TRAFFIC_FIELD_DEFS) params.delete(def.field);
+    for (const condition of next) params.set(condition.field, condition.value);
+    setSearchParams(params, { replace: true });
+  }
+
   const live = useQuery({
-    queryKey: ['traffic', tab],
+    queryKey: ['traffic', tab, conditions],
     queryFn: () => {
       // The selected tab fills 13.2-f's `activity` filter — the server is the
       // one and only place that decides who is on the board, so a tab switch
       // is a new request rather than a client-side re-slice of the last one.
+      // The filter panel's own conditions AND with it: its own `activity`
+      // condition (if any) takes over from the tab (see `resolveActivity`),
+      // and every other field it sets joins as one more `AND`ed parameter.
       const params = new URLSearchParams({ limit: '100' });
-      for (const activity of tabToActivity(tab) ?? []) params.append('activity', activity);
+      const activities = resolveActivity(tabToActivity(tab), conditions);
+      for (const activity of activities ?? []) params.append('activity', activity);
+      const filterParams = buildTrafficParams(conditions.filter((c) => c.field !== 'activity'));
+      for (const [key, value] of filterParams) params.append(key, value);
       return api.get<{ items: TrafficVisitor[]; total: number }>(`/traffic?${params.toString()}`);
     },
     // Poll: the board must feel live without an RTM socket of its own yet.
@@ -208,6 +237,8 @@ export function TrafficPage(): ReactElement {
           );
         })}
       </div>
+
+      <TrafficFilters initialConditions={conditions} onChange={handleFiltersChange} />
 
       {live.error ? (
         <ErrorNotice message="Could not load live traffic. Check that the API is reachable and try again." />

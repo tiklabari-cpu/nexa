@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+## tm 75.1 — 13.5-a: sales tracker veri modeli — sales_tracker_settings + tracked_sales — done — 2026-08-10 UTC
+
+- **Yapıldı:** `sales_tracker_settings` (lisans-tekil, `licenseId BigInt @id`) + `tracked_sales`
+  (olay tablosu, nullable `chatId`/`customerId` + `SET NULL`) `schema.prisma`'ya eklendi;
+  migration `20260810110000_sales_tracker` (RLS + tenant policy iki tabloda, `UNIQUE(license_id,
+  external_order_id)`, `amount_cents>=0`/`char_length(currency)=3`/`attribution_window_days>0`
+  CHECK'leri, GRANT yok — `ALTER DEFAULT PRIVILEGES` zaten kapsıyor). `data-model.test.ts`'e 10
+  yeni test (RLS+policy, cross-tenant, unique, CHECK'ler, SET NULL, cascade, round-trip).
+- **Varsayım (bilinçli sapma):** task metni `sales_tracker_settings`'i "WidgetSettings'in birebir
+  eşi" diyordu, ama `WidgetSettings` artık Multibrand retrofit'inden geçip `(license_id,
+  brand_id)` composite PK oldu. Retrofit yalnız Multibrand-ÖNCESİ üç singleton'a (security/inbox/
+  widget) uygulandı; Multibrand-SONRASI açılan `goals`/`goal_achievements` brand-scope'suz kaldı
+  ve FR-MOD-13.5 marka bazında ayrışma istemiyor — o yüzden `licenseId BigInt @id` (task'ın
+  orijinal tasarımı) korundu, brand_id EKLENMEDİ. Migration damgası da task'ın önerdiği
+  `20260801100000` yerine `20260810110000` (zincirin ucu; öneri 9 migration'ın gerisine düşerdi).
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2359/2359) ·
+  `pnpm -w test:integration` 0 (1810/1810) · build 0 (7/7) · `prisma migrate deploy` temiz ·
+  `pnpm -w test:e2e` **96/96** (sayı sabit — route/UI dokunulmadı).
+- **Sonraki pencereye not:** 13.5-b (konfigürasyon endpoint'i) bu tablonun üstüne GET/PUT
+  `/settings/sales-tracker` kuracak; 13.5-c (BÖLÜNMEZ) ingest+atıf çekirdeğini `POST
+  /customer/chat/sale` ile ekleyecek. PLAN.md `13.5` satırı `◐` (K13.5, tm 75.1); Faz-2 sayaçları
+  (satır 22 · §5.0) `1 ⬜ · 1 ◐ · 25 ✅ · 3 ⛔`'a eşitlendi (09.2 tek kalan ⬜).
+
+---
+
 ## tm 74.9 — 13.3-i: uçtan uca doğrulama (ziyaret→sohbet→hedef) — done — 2026-08-10 UTC
 
 - **Yapıldı:** `apps/e2e/tests/goals.spec.ts` (yeni, 2 test) — hedef tanımla → ziyaretçi widget'tan

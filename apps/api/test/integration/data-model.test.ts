@@ -1413,6 +1413,174 @@ describe('data model invariants', () => {
   });
 
   // =========================================================================
+  // Sales tracker (FR-MOD-13.5 · NFR-S4)
+  // =========================================================================
+
+  describe('sales tracker', () => {
+    /** An order, as the ingest endpoint (13.5-c) will write it. */
+    const sale = (overrides: Record<string, unknown> = {}) => ({
+      licenseId: fx.a.licenseId,
+      externalOrderId: 'order-1',
+      amountCents: 4999,
+      currency: 'USD',
+      ...overrides,
+    });
+
+    it('has RLS enabled and a tenant policy on both tables', async () => {
+      const security = await owner.$queryRaw<Array<{ relname: string; enabled: boolean }>>`
+        SELECT relname, relrowsecurity AS enabled FROM pg_class
+        WHERE relname IN ('sales_tracker_settings', 'tracked_sales')
+      `;
+      expect(security.sort((a, b) => a.relname.localeCompare(b.relname))).toEqual([
+        { relname: 'sales_tracker_settings', enabled: true },
+        { relname: 'tracked_sales', enabled: true },
+      ]);
+
+      const policies = await owner.$queryRaw<Array<{ tablename: string; policyname: string }>>`
+        SELECT tablename, policyname FROM pg_policies
+        WHERE tablename IN ('sales_tracker_settings', 'tracked_sales')
+      `;
+      expect(policies.sort((a, b) => a.tablename.localeCompare(b.tablename))).toEqual([
+        { tablename: 'sales_tracker_settings', policyname: 'sales_tracker_settings_tenant' },
+        { tablename: 'tracked_sales', policyname: 'tracked_sales_tenant' },
+      ]);
+    });
+
+    it("hides another tenant's tracked sales", async () => {
+      // What a leak here exposes is revenue: how much a competitor sells, and
+      // through which conversations.
+      const mine = await owner.trackedSale.create({ data: sale(), select: { id: true } });
+      const theirs = await owner.trackedSale.create({
+        data: sale({ licenseId: fx.b.licenseId, externalOrderId: 'order-2' }),
+        select: { id: true },
+      });
+
+      const visible = await withTenant(
+        app,
+        { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+        (tx) => tx.trackedSale.findMany({ select: { id: true } }),
+      );
+      expect(visible.map((s) => s.id)).toEqual([mine.id]);
+      expect(visible.map((s) => s.id)).not.toContain(theirs.id);
+    });
+
+    it("refuses to write a tracked sale into another tenant's license", async () => {
+      await expect(
+        withTenant(app, { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId }, (tx) =>
+          tx.trackedSale.create({ data: sale({ licenseId: fx.b.licenseId }) }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it("hides another tenant's sales tracker settings", async () => {
+      await owner.salesTrackerSettings.create({ data: { licenseId: fx.a.licenseId, enabled: true } });
+      await owner.salesTrackerSettings.create({ data: { licenseId: fx.b.licenseId, enabled: true } });
+
+      const visible = await withTenant(
+        app,
+        { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+        (tx) => tx.salesTrackerSettings.findMany({ select: { licenseId: true } }),
+      );
+      expect(visible).toEqual([{ licenseId: fx.a.licenseId }]);
+    });
+
+    it('refuses a second order with the same external id in the same license', async () => {
+      // The ingest endpoint may see the same order more than once — an
+      // at-least-once retry from the merchant's own backend — and a second row
+      // would double the sale in every downstream report.
+      await owner.trackedSale.create({ data: sale() });
+      await expect(owner.trackedSale.create({ data: sale() })).rejects.toThrow(
+        /unique constraint/i,
+      );
+
+      // The same external id in a different license is not a conflict.
+      await expect(
+        owner.trackedSale.create({ data: sale({ licenseId: fx.b.licenseId }) }),
+      ).resolves.toBeDefined();
+    });
+
+    it('refuses a negative order amount', async () => {
+      await expect(owner.trackedSale.create({ data: sale({ amountCents: -1 }) })).rejects.toThrow(
+        /tracked_sales_amount_cents_check/i,
+      );
+
+      // Zero is a representable (fully-discounted) order.
+      await expect(
+        owner.trackedSale.create({ data: sale({ amountCents: 0 }) }),
+      ).resolves.toBeDefined();
+    });
+
+    it('refuses a currency that is not a 3-letter code, on both tables', async () => {
+      for (const currency of ['US', 'DOLLAR', '']) {
+        await expect(owner.trackedSale.create({ data: sale({ currency }) })).rejects.toThrow(
+          /tracked_sales_currency_check/i,
+        );
+      }
+
+      await expect(
+        owner.salesTrackerSettings.create({ data: { licenseId: fx.a.licenseId, currency: 'EU' } }),
+      ).rejects.toThrow(/sales_tracker_settings_currency_check/i);
+    });
+
+    it('refuses a non-positive attribution window', async () => {
+      for (const attributionWindowDays of [0, -1]) {
+        await expect(
+          owner.salesTrackerSettings.create({
+            data: { licenseId: fx.a.licenseId, attributionWindowDays },
+          }),
+        ).rejects.toThrow(/sales_tracker_settings_attribution_window_days_check/i);
+      }
+    });
+
+    it('drops the chat and customer pointer, not the sale, when either is deleted', async () => {
+      // A sale must outlive the chat's retention window and a purged customer —
+      // the same choice `goal_achievements.chat_id` already makes.
+      const { chatId } = await openChat();
+      const recorded = await owner.trackedSale.create({
+        data: sale({ chatId, customerId: fx.a.customerId, attributed: true }),
+      });
+
+      await owner.chat.delete({ where: { id: chatId } });
+      const afterChatDelete = await owner.trackedSale.findUniqueOrThrow({
+        where: { id: recorded.id },
+      });
+      expect(afterChatDelete.chatId).toBeNull();
+      expect(afterChatDelete.attributed).toBe(true);
+
+      await owner.customer.delete({ where: { id: fx.a.customerId } });
+      const afterCustomerDelete = await owner.trackedSale.findUniqueOrThrow({
+        where: { id: recorded.id },
+      });
+      expect(afterCustomerDelete.customerId).toBeNull();
+    });
+
+    it('is removed when its license is deleted (onDelete cascade)', async () => {
+      await owner.trackedSale.create({ data: sale({ licenseId: fx.b.licenseId }) });
+      await owner.salesTrackerSettings.create({ data: { licenseId: fx.b.licenseId } });
+      await owner.license.delete({ where: { id: fx.b.licenseId } });
+
+      expect(await owner.trackedSale.count({ where: { licenseId: fx.b.licenseId } })).toBe(0);
+      expect(
+        await owner.salesTrackerSettings.count({ where: { licenseId: fx.b.licenseId } }),
+      ).toBe(0);
+    });
+
+    it('round-trips a tracked sale and settings row through Prisma with the defaults applied', async () => {
+      const recorded = await owner.trackedSale.create({ data: sale() });
+      expect(recorded.attributed).toBe(false);
+      expect(recorded.chatId).toBeNull();
+      expect(recorded.customerId).toBeNull();
+
+      const settings = await owner.salesTrackerSettings.create({
+        data: { licenseId: fx.a.licenseId },
+      });
+      expect(settings.enabled).toBe(false);
+      expect(settings.currency).toBe('USD');
+      expect(settings.attributionWindowDays).toBe(7);
+    });
+  });
+
+  // =========================================================================
   // Referential integrity
   // =========================================================================
 

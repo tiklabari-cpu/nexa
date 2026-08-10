@@ -106,6 +106,8 @@ model License {
   scheduledReportRuns    ScheduledReportRun[]
   chatSupervisions       ChatSupervision[]
   goalAchievements       GoalAchievement[]
+  salesTrackerSettings   SalesTrackerSettings?
+  trackedSales           TrackedSale[]
 
   invitations Invitation[]
 
@@ -264,6 +266,7 @@ model Customer {
   campaignSends     CampaignSend[]
   customFieldValues CustomFieldValue[]
   goalAchievements  GoalAchievement[]
+  trackedSales      TrackedSale[]
 
   @@index([organizationId, lastActivityAt(sort: Desc)])
   @@index([organizationId, email])
@@ -451,6 +454,7 @@ model Chat {
   tickets          Ticket[]
   skillRuns        SkillRun[]
   goalAchievements GoalAchievement[]
+  trackedSales     TrackedSale[]
 
   @@index([licenseId, createdAt(sort: Desc)])
   @@index([customerId])
@@ -977,6 +981,60 @@ model GoalAchievement {
   @@unique([goalId, customerId])
   @@index([licenseId, achievedAt])
   @@map("goal_achievements")
+}
+
+/// Per-license sales tracker configuration (FR-MOD-13.5, "İzleme yapılandırması").
+///
+/// A per-license singleton shaped like `widget_settings` before Multibrand
+/// touched it: `license_id` alone is the primary key. Unlike widget
+/// appearance or inbox behaviour, nothing in FR-MOD-13.5 varies tracking by
+/// brand — a conversion either counts for the workspace or it doesn't — so
+/// this table was designed brand-agnostic from the start, the same way
+/// `goals` (13.3) was. Nothing creates the row at signup; the settings
+/// endpoint (13.5-b) upserts it on first save, and a read with no row falls
+/// back to the schema defaults (tracking off).
+model SalesTrackerSettings {
+  licenseId             BigInt   @id @map("license_id")
+  enabled               Boolean  @default(false)
+  currency              String   @default("USD")
+  attributionWindowDays Int      @default(7) @map("attribution_window_days")
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("sales_tracker_settings")
+}
+
+/// One order reported by the widget snippet's `nexa('trackSale', …)` call
+/// (FR-MOD-13.5) — `Rating`'s event-table shape: one row per occurrence, not
+/// a running total. `attributed`, `chatId` and `customerId` stay at their
+/// unset defaults until the ingest endpoint (13.5-c) matches the order to a
+/// chat within the license's attribution window.
+model TrackedSale {
+  id              String   @id @default(uuid()) @db.Uuid
+  licenseId       BigInt   @map("license_id")
+  /// The chat the visitor was in when attributed, or null before attribution
+  /// runs (or when none is found). `SET NULL` on delete, like
+  /// `goal_achievements.chat_id`: a sale must outlive the chat's retention
+  /// window, so purging the chat drops only the pointer.
+  chatId          String?  @map("chat_id") @db.VarChar(12)
+  customerId      String?  @map("customer_id") @db.Uuid
+  externalOrderId String   @map("external_order_id")
+  amountCents     Int      @map("amount_cents")
+  currency        String
+  attributed      Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license  License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  chat     Chat?     @relation(fields: [chatId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  /// The ingest endpoint may see the same order more than once (an
+  /// at-least-once retry from the merchant's own backend); a second row would
+  /// double the sale in every downstream report.
+  @@unique([licenseId, externalOrderId])
+  @@index([licenseId, createdAt])
+  @@map("tracked_sales")
 }
 
 /// Browsing telemetry behind the real-time visitor list.

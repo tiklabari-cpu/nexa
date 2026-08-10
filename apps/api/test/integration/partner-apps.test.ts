@@ -13,7 +13,9 @@
  *     credentials, relative and non-canonical URIs are all refused (NFR-S3).
  *   - Scopes have a ceiling: a session cannot register a client stronger than
  *     itself, on create *or* update (NFR-S5).
- *   - The secret is returned once and stored only as `sha256(secret)` (NFR-S2).
+ *   - The secret is returned once and stored only as `sha256(secret)` (NFR-S2),
+ *     and rotation replaces it with no overlap window — the old one is dead the
+ *     moment the new one exists.
  *
  * The last test is the one the whole slice rests on: a client registered
  * *through this API* completes a real OAuth 2.1 authorize → token exchange. It
@@ -515,6 +517,122 @@ describe('partner apps (FR-MOD-09.4)', () => {
       expect(granted.statusCode, String(secret)).toBe(401);
       expect(granted.json().error.details.oauth_error).toBe('invalid_client');
     }
+  });
+
+  // --- Secret rotation (09.4-d) ----------------------------------------------
+
+  describe('rotating a client secret', () => {
+    const rotate = (clientId: string, token = adminToken) =>
+      server.post(`/partner/apps/${clientId}/rotate-secret`, undefined, auth(token));
+
+    /** A full authorize → token exchange with the given secret. */
+    const exchange = async (clientId: string, secret: string | undefined) => {
+      const { verifier, challenge } = pkce();
+      const authorized = await server.post('/auth/authorize', {
+        client_id: clientId,
+        redirect_uri: CALLBACK,
+        code_challenge: challenge,
+        email: fx.a.ownerEmail,
+        password: TEST_PASSWORD,
+        license_id: fx.a.licenseId.toString(),
+      });
+      expect(authorized.statusCode, authorized.payload).toBe(200);
+
+      return server.post('/auth/token', {
+        grant_type: 'authorization_code',
+        code: (authorized.json() as { code: string }).code,
+        code_verifier: verifier,
+        client_id: clientId,
+        ...(secret === undefined ? {} : { client_secret: secret }),
+        redirect_uri: CALLBACK,
+      });
+    };
+
+    it('refuses a public client — there is no secret to rotate', async () => {
+      const app = await registered({ client_type: 'public' });
+      const res = await rotate(app.client_id);
+      expect(res.statusCode, res.payload).toBe(400);
+
+      // And nothing was minted behind the refusal: a stored hash on a public
+      // client would be a credential the token endpoint never asks for.
+      const row = await owner.oauthClient.findUnique({ where: { id: app.client_id } });
+      expect(row?.secretHash).toBeNull();
+    });
+
+    it("refuses another organization's client with 404, leaving its secret intact", async () => {
+      const mine = await registered();
+      const before = await owner.oauthClient.findUnique({ where: { id: mine.client_id } });
+
+      const res = await rotate(mine.client_id, adminTokenB);
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error.type).toBe('not_found');
+
+      const after = await owner.oauthClient.findUnique({ where: { id: mine.client_id } });
+      expect(after?.secretHash).toBe(before?.secretHash);
+    });
+
+    it("refuses the workspace's own sign-in client", async () => {
+      expect((await rotate(fx.a.clientId)).statusCode).toBe(400);
+    });
+
+    it('is admin-gated: 401 unauthenticated, 403 read-only', async () => {
+      const app = await registered();
+      expect(
+        (await server.post(`/partner/apps/${app.client_id}/rotate-secret`)).statusCode,
+      ).toBe(401);
+      expect((await rotate(app.client_id, readToken)).statusCode).toBe(403);
+    });
+
+    it('answers 404 for a client that does not exist', async () => {
+      expect((await rotate('0'.repeat(32))).statusCode).toBe(404);
+    });
+
+    it('invalidates the old secret immediately and mints a working new one', async () => {
+      const app = await registered();
+
+      const res = await rotate(app.client_id);
+      expect(res.statusCode, res.payload).toBe(200);
+      const rotated = res.json() as PartnerAppRegistration;
+
+      expect(rotated.client_secret).toMatch(/^nxcs_/);
+      expect(rotated.client_secret).not.toBe(app.client_secret);
+      // Everything else about the app is untouched — rotation re-keys, it does
+      // not re-register: the client_id survives, so existing authorizations do.
+      expect(rotated.client_id).toBe(app.client_id);
+      expect(rotated.redirect_uris).toEqual([CALLBACK]);
+      expect(rotated.scopes).toEqual(['chats--all:rw']);
+
+      // No overlap window: the leaked secret is dead the moment this commits.
+      const withOld = await exchange(app.client_id, app.client_secret);
+      expect(withOld.statusCode).toBe(401);
+      expect(withOld.json().error.details.oauth_error).toBe('invalid_client');
+
+      // And the new one really authenticates — the same `secret_hash` format
+      // claim registration makes, re-asserted for the rotation path.
+      const withNew = await exchange(app.client_id, rotated.client_secret);
+      expect(withNew.statusCode, withNew.payload).toBe(200);
+    });
+
+    it('stores only the new hash, and never re-exposes it', async () => {
+      const app = await registered();
+      const rotated = (await rotate(app.client_id)).json() as PartnerAppRegistration;
+
+      const row = await owner.oauthClient.findUnique({ where: { id: app.client_id } });
+      expect(row?.secretHash).toBe(hashToken(rotated.client_secret!));
+      expect(row?.secretHash).not.toBe(hashToken(app.client_secret!));
+
+      const one = await server.get(`/partner/apps/${app.client_id}`, auth(readToken));
+      expect(one.json()).not.toHaveProperty('client_secret');
+      expect(one.payload).not.toContain(rotated.client_secret);
+
+      const list = await server.get('/partner/apps', auth(readToken));
+      expect(list.payload).not.toContain(rotated.client_secret);
+    });
+
+    it('marks the rotate response uncacheable', async () => {
+      const app = await registered();
+      expect((await rotate(app.client_id)).headers['cache-control']).toBe('no-store');
+    });
   });
 
   it('refuses an authorization request for a redirect_uri it never registered', async () => {

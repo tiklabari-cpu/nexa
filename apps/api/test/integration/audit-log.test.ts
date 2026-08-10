@@ -273,6 +273,150 @@ describe('audit log writer (NFR-S12)', () => {
       expect(await count('webhook.deleted', fx.a.licenseId)).toBe(beforeA + 1);
     });
 
+    /**
+     * Partner apps (FR-MOD-09.4). Each write hands out, narrows or replaces a
+     * third-party credential, so each is recorded — and the credential itself
+     * never is.
+     */
+    describe('partner app lifecycle', () => {
+      const CALLBACK = 'https://partner.audit.example/callback';
+
+      const registerApp = async (
+        overrides: Record<string, unknown> = {},
+      ): Promise<{ client_id: string; client_secret?: string }> => {
+        const res = await server.post(
+          '/partner/apps',
+          {
+            display_name: 'Audited App',
+            client_type: 'confidential',
+            redirect_uris: [CALLBACK],
+            scopes: ['chats--all:rw'],
+            ...overrides,
+          },
+          auth(adminToken),
+        );
+        expect(res.statusCode, res.payload).toBe(201);
+        return res.json() as { client_id: string; client_secret?: string };
+      };
+
+      it('records a registration with what bounds the client, never its secret', async () => {
+        const before = await count('partner_app.created');
+        const app = await registerApp();
+
+        expect(await count('partner_app.created')).toBe(before + 1);
+        const entry = await latest('partner_app.created');
+        expect(entry?.actorId).toBe(fx.a.ownerAccountId);
+        expect(entry?.actorType).toBe('agent');
+        expect(entry?.target).toBe(`partner_app:${app.client_id}`);
+        expect(entry?.metadata).toMatchObject({
+          client_type: 'confidential',
+          scopes: ['chats--all:rw'],
+          redirect_uri_count: 1,
+        });
+
+        // The scopes and a count, and nothing else: not the secret the response
+        // carried once, and not the callback URL (which can embed a token).
+        const blob = JSON.stringify({ target: entry?.target, metadata: entry?.metadata });
+        expect(blob).not.toContain(app.client_secret);
+        expect(blob).not.toContain(CALLBACK);
+      });
+
+      it('records an update with the fields touched', async () => {
+        const app = await registerApp();
+
+        const before = await count('partner_app.updated');
+        const res = await server.patch(
+          `/partner/apps/${app.client_id}`,
+          { display_name: 'Renamed', scopes: ['chats--all:ro'] },
+          auth(adminToken),
+        );
+        expect(res.statusCode, res.payload).toBe(200);
+
+        expect(await count('partner_app.updated')).toBe(before + 1);
+        const entry = await latest('partner_app.updated');
+        expect(entry?.target).toBe(`partner_app:${app.client_id}`);
+        expect(entry?.metadata).toMatchObject({
+          fields: ['display_name', 'scopes'],
+          scopes: ['chats--all:ro'],
+        });
+      });
+
+      it('records a secret rotation, with no secret in the entry', async () => {
+        const app = await registerApp();
+
+        const before = await count('partner_app.secret_rotated');
+        const res = await server.post(
+          `/partner/apps/${app.client_id}/rotate-secret`,
+          undefined,
+          auth(adminToken),
+        );
+        expect(res.statusCode, res.payload).toBe(200);
+        const rotated = res.json() as { client_secret: string };
+
+        expect(await count('partner_app.secret_rotated')).toBe(before + 1);
+        const entry = await latest('partner_app.secret_rotated');
+        expect(entry?.actorId).toBe(fx.a.ownerAccountId);
+        expect(entry?.target).toBe(`partner_app:${app.client_id}`);
+
+        // Neither the secret that was just invalidated nor the one that
+        // replaced it: the trail records *that* a live credential changed hands.
+        const blob = JSON.stringify(entry?.metadata);
+        expect(blob).not.toContain(rotated.client_secret);
+        expect(blob).not.toContain(app.client_secret);
+      });
+
+      it('records a deletion (and not a no-op delete)', async () => {
+        const app = await registerApp();
+
+        const before = await count('partner_app.deleted');
+        expect(
+          (await server.del(`/partner/apps/${app.client_id}`, auth(adminToken))).statusCode,
+        ).toBe(204);
+        expect(await count('partner_app.deleted')).toBe(before + 1);
+        const entry = await latest('partner_app.deleted');
+        expect(entry?.target).toBe(`partner_app:${app.client_id}`);
+        expect(entry?.metadata).toMatchObject({
+          client_type: 'confidential',
+          scopes: ['chats--all:rw'],
+        });
+
+        // The second attempt matches nothing and must leave the trail alone.
+        const afterFirst = await count('partner_app.deleted');
+        expect(
+          (await server.del(`/partner/apps/${app.client_id}`, auth(adminToken))).statusCode,
+        ).toBe(404);
+        expect(await count('partner_app.deleted')).toBe(afterFirst);
+      });
+
+      it("a cross-tenant rotate or delete writes to no one's log", async () => {
+        const mine = await registerApp();
+        const tokenB = await grantToken(owner, {
+          licenseId: fx.b.licenseId,
+          organizationId: fx.b.organizationId,
+          ownerId: fx.b.ownerAccountId,
+          scopes: ['access_rules:rw'],
+        });
+
+        for (const action of ['partner_app.secret_rotated', 'partner_app.deleted']) {
+          const beforeA = await count(action, fx.a.licenseId);
+          const beforeB = await count(action, fx.b.licenseId);
+
+          const res =
+            action === 'partner_app.deleted'
+              ? await server.del(`/partner/apps/${mine.client_id}`, auth(tokenB))
+              : await server.post(
+                  `/partner/apps/${mine.client_id}/rotate-secret`,
+                  undefined,
+                  auth(tokenB),
+                );
+          expect(res.statusCode, action).toBe(404);
+
+          expect(await count(action, fx.a.licenseId), action).toBe(beforeA);
+          expect(await count(action, fx.b.licenseId), action).toBe(beforeB);
+        }
+      });
+    });
+
     it('records a security-settings change with the field names touched', async () => {
       const before = await count('settings.security_updated');
       const res = await server.patch(

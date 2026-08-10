@@ -166,3 +166,40 @@ partnerApp:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+partnerAppSecret:
+  parameters:
+    - name: clientId
+      in: path
+      required: true
+      schema: { type: string, maxLength: 128 }
+
+  post:
+    tags: [Partner]
+    operationId: rotatePartnerAppSecret
+    summary: Issue a new client secret for a partner app
+    description: |
+      Replaces the app's `client_secret` and returns the new one on **this
+      response only** — the recovery path for a leaked or lost secret, without
+      re-registering (which would change the `client_id` and break every
+      existing authorization).
+
+      The previous secret stops working immediately: storage keeps a single
+      hash, so there is no overlap window in which both are valid. Deploy the
+      new secret before rotating, not after.
+
+      Takes no request body. Only a `confidential` client can be rotated — a
+      `public` client authenticates with PKCE alone and has no secret (400) —
+      and the workspace's own sign-in client is refused here as it is for edit
+      and delete (400). Another organization's `client_id` answers 404.
+    responses:
+      "200":
+        description: Rotated — the new client secret is present on this response only
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PartnerAppSecretRotation" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

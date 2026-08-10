@@ -61,6 +61,15 @@ export interface PartnerAppRegistration extends PartnerApp {
   client_secret?: string;
 }
 
+/**
+ * The rotate response. Unlike registration the secret is not optional here:
+ * rotation only applies to a confidential client, so a successful rotation
+ * always carries exactly one new secret.
+ */
+export interface PartnerAppSecretRotation extends PartnerApp {
+  client_secret: string;
+}
+
 export interface PartnerAppInput {
   displayName: string;
   clientType: PartnerAppClientType;
@@ -197,6 +206,18 @@ export function narrowScopes(requested: string[], held: readonly string[]): stri
   return [...new Set(scopes)];
 }
 
+/**
+ * A fresh client secret: 256 bits of entropy behind a recognisable prefix, so a
+ * value that ends up in a log line or a paste is identifiable as a Nexa client
+ * secret rather than an opaque blob nobody thinks to revoke. One function
+ * because registration and rotation must mint the *same* shape — a rotation
+ * that produced a differently-formed secret would still authenticate, and the
+ * inconsistency would only surface much later, in whatever reads the prefix.
+ */
+function mintClientSecret(): string {
+  return `nxcs_${generateToken(32)}`;
+}
+
 export class PartnerAppService {
   async list(tx: TenantClient): Promise<PartnerApp[]> {
     // RLS narrows to the caller's organization; oldest-first gives a stable
@@ -232,10 +253,7 @@ export class PartnerAppService {
     // organization or the name, so a client id reveals nothing about the
     // workspace behind it and cannot be guessed from one.
     const clientId = generateClientId();
-    // 256 bits, prefixed so a value leaked into a log or a paste is
-    // recognisable as a Nexa client secret.
-    const secret =
-      input.clientType === 'confidential' ? `nxcs_${generateToken(32)}` : undefined;
+    const secret = input.clientType === 'confidential' ? mintClientSecret() : undefined;
 
     const row = await tx.oauthClient.create({
       data: {
@@ -270,6 +288,49 @@ export class PartnerAppService {
       },
     });
     return count;
+  }
+
+  /**
+   * Re-key a confidential client: mint a new secret, store its hash, return the
+   * plaintext exactly once. The old secret stops working the moment this
+   * commits — `#authenticateClient` compares against the single `secret_hash`
+   * column, so there is no overlap window in which both are valid. That is the
+   * point: rotation exists because a secret leaked, and a grace period would
+   * leave the leaked one usable for the length of it.
+   *
+   * Returns null when the id matches nothing the caller may see — another
+   * organization's client reads as null under RLS, which the route turns into
+   * 404 rather than 403 (NFR-S5). A public client is refused outright: it has no
+   * secret to rotate (the schema's `oauth_clients_secret_required_check` and
+   * OAuth 2.1 both say so), and silently minting one would leave a credential
+   * the token endpoint never asks for and nobody knows exists.
+   */
+  async rotateSecret(
+    tx: TenantClient,
+    clientId: string,
+  ): Promise<PartnerAppSecretRotation | null> {
+    const existing = await tx.oauthClient.findFirst({
+      where: { id: clientId },
+      select: SAFE_SELECT,
+    });
+    if (!existing) return null;
+    if (existing.clientType !== 'confidential') {
+      throw ApiError.validation(
+        'A public client has no secret to rotate; it authenticates with PKCE alone.',
+      );
+    }
+
+    const secret = mintClientSecret();
+    // `updateMany`, like the other writes: the RLS predicate is part of the
+    // statement, so a row outside the tenant cannot be re-keyed even if the
+    // read above somehow returned one.
+    const { count } = await tx.oauthClient.updateMany({
+      where: { id: clientId },
+      data: { secretHash: hashToken(secret) },
+    });
+    if (count === 0) return null;
+
+    return { ...this.serialise(existing), client_secret: secret };
   }
 
   /**

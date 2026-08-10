@@ -15,14 +15,23 @@
  * so another organization's `client_id` answers 404 rather than 403 — a 403
  * would confirm the id is real (NFR-S5).
  *
- * The `client_secret` is returned from the register response and from nowhere
- * else; storage keeps only `sha256(secret)`. Rotation and the audit trail are
- * 09.4-d's job, so a lost secret is currently a re-registration.
+ * The `client_secret` is returned from the register response — and from the
+ * rotate response, the only other place one ever exists. Storage keeps only
+ * `sha256(secret)`, so a lost secret is re-keyed, never recovered.
+ *
+ * Every write here leaves an entry in the append-only audit log (NFR-S12).
+ * Registering, re-scoping, deleting and re-keying a client are all changes to
+ * *who may act on this workspace and with what authority* — the same class of
+ * change the requirement names by hand for webhooks — and rotation in
+ * particular is indistinguishable, after the fact, from an attacker locking the
+ * owner out of their own app. The entries carry client type, granted scopes and
+ * redirect-URI counts; never a secret, never a URI.
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import type { TenantClient } from '../lib/tenant.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { scopesOf } from '../services/auth/principal.js';
 import {
   MAX_REDIRECT_URIS,
@@ -97,6 +106,11 @@ async function assertNotFirstParty(
   }
 }
 
+/** `partner_app:<client_id>` — the object an entry is about. */
+function auditTarget(clientId: string): string {
+  return `partner_app:${clientId}`;
+}
+
 export default async function partnerAppRoutes(app: FastifyInstance): Promise<void> {
   const partnerApps = new PartnerAppService();
 
@@ -132,14 +146,29 @@ export default async function partnerAppRoutes(app: FastifyInstance): Promise<vo
     const uris = validateRedirectUris(body.redirect_uris);
     const granted = narrowScopes(body.scopes, scopesOf(principal));
 
-    const registration = await request.withTenant((tx) =>
-      partnerApps.register(tx, tenant, {
+    const registration = await request.withTenant(async (tx) => {
+      const created = await partnerApps.register(tx, tenant, {
         displayName: body.display_name,
         clientType: body.client_type,
         redirectUris: uris,
         scopes: granted,
-      }),
-    );
+      });
+      // Same transaction as the insert, so the trail can never disagree with
+      // the registry: either both land or neither. What is recorded is what
+      // bounds the client — its type and the scopes it may ever carry — plus
+      // how many callbacks it declared. Not the callbacks themselves (a URI can
+      // embed a token) and, obviously, not the secret in the response below.
+      await writeAuditEntry(tx, request.auditContext(), {
+        action: 'partner_app.created',
+        target: auditTarget(created.client_id),
+        metadata: {
+          client_type: created.client_type,
+          scopes: created.scopes,
+          redirect_uri_count: created.redirect_uris.length,
+        },
+      });
+      return created;
+    });
 
     // The secret is in this body and will never be in another one.
     reply.header('Cache-Control', 'no-store');
@@ -168,7 +197,25 @@ export default async function partnerAppRoutes(app: FastifyInstance): Promise<vo
           ...(uris !== undefined ? { redirectUris: uris } : {}),
           ...(granted !== undefined ? { scopes: granted } : {}),
         });
-        return count === 0 ? null : partnerApps.get(tx, clientId);
+        // Nothing changed means nothing to record: a cross-tenant miss updates
+        // no row and must leave the trail untouched, exactly as the 404 below
+        // leaves the caller none the wiser.
+        if (count === 0) return null;
+
+        const updated = await partnerApps.get(tx, clientId);
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'partner_app.updated',
+          target: auditTarget(clientId),
+          metadata: {
+            // Which fields were rewritten, and the new authority where it
+            // changed — a scope widening is the part of an edit worth reading
+            // back later.
+            fields: Object.keys(body).sort(),
+            ...(granted !== undefined ? { scopes: granted } : {}),
+            ...(uris !== undefined ? { redirect_uri_count: uris.length } : {}),
+          },
+        });
+        return updated;
       });
       if (!item) throw ApiError.notFound('App not found.');
 
@@ -184,11 +231,62 @@ export default async function partnerAppRoutes(app: FastifyInstance): Promise<vo
 
       const removed = await request.withTenant(async (tx) => {
         await assertNotFirstParty(partnerApps, tx, clientId, 'removed');
-        return partnerApps.remove(tx, clientId);
+        // Read before deleting so the entry can say what the client was
+        // allowed to do; `remove` returns only a count. The read is RLS-scoped,
+        // so another tenant's id reads as null, deletes nothing and logs
+        // nothing.
+        const doomed = await partnerApps.get(tx, clientId);
+        const count = await partnerApps.remove(tx, clientId);
+        if (count > 0 && doomed) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'partner_app.deleted',
+            target: auditTarget(clientId),
+            metadata: { client_type: doomed.client_type, scopes: doomed.scopes },
+          });
+        }
+        return count;
       });
       if (removed === 0) throw ApiError.notFound('App not found.');
 
       return reply.status(204).send();
+    },
+  );
+
+  /**
+   * Re-key a confidential client. POST rather than a PATCH field because it is
+   * not an edit of the app but an action on it: it takes no body, it is not
+   * idempotent, and it invalidates the live credential the moment it commits.
+   *
+   * The workspace's own sign-in client is refused here for the same reason it
+   * cannot be edited or deleted — it is first-party infrastructure, and
+   * re-keying it would break the agent app rather than a partner integration.
+   */
+  app.post<{ Params: { clientId: string } }>(
+    '/partner/apps/:clientId/rotate-secret',
+    { config: { scopes: ['access_rules:rw'] } },
+    async (request, reply) => {
+      const clientId = parse(clientIdSchema, request.params.clientId);
+
+      const rotated = await request.withTenant(async (tx) => {
+        await assertNotFirstParty(partnerApps, tx, clientId, 're-keyed');
+        const result = await partnerApps.rotateSecret(tx, clientId);
+        if (!result) return null;
+
+        // In the rotation's own transaction: an entry without the rotation
+        // would be a false alarm, and a rotation without the entry would erase
+        // the only evidence that a live credential was replaced.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'partner_app.secret_rotated',
+          target: auditTarget(clientId),
+          metadata: { client_type: result.client_type },
+        });
+        return result;
+      });
+      if (!rotated) throw ApiError.notFound('App not found.');
+
+      // As at registration: this body carries the only copy of the new secret.
+      reply.header('Cache-Control', 'no-store');
+      return reply.send(rotated);
     },
   );
 }

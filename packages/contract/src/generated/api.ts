@@ -2828,6 +2828,40 @@ export interface paths {
     patch: operations['updatePartnerApp'];
     trace?: never;
   };
+  '/partner/apps/{clientId}/rotate-secret': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clientId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Issue a new client secret for a partner app
+     * @description Replaces the app's `client_secret` and returns the new one on **this
+     *     response only** — the recovery path for a leaked or lost secret, without
+     *     re-registering (which would change the `client_id` and break every
+     *     existing authorization).
+     *
+     *     The previous secret stops working immediately: storage keeps a single
+     *     hash, so there is no overlap window in which both are valid. Deploy the
+     *     new secret before rotating, not after.
+     *
+     *     Takes no request body. Only a `confidential` client can be rotated — a
+     *     `public` client authenticates with PKCE alone and has no secret (400) —
+     *     and the workspace's own sign-in client is refused here as it is for edit
+     *     and delete (400). Another organization's `client_id` answers 404.
+     */
+    post: operations['rotatePartnerAppSecret'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/mcp/manifest': {
     parameters: {
       query?: never;
@@ -4991,6 +5025,15 @@ export interface components {
        *     secret must be rotated.
        */
       client_secret?: string;
+    };
+    /**
+     * @description The rotate response. Always carries a `client_secret` — rotation applies
+     *     only to a confidential client — and, like registration, carries it
+     *     exactly once. The previous secret is already invalid by the time this
+     *     response is written.
+     */
+    PartnerAppSecretRotation: components['schemas']['PartnerApp'] & {
+      client_secret: string;
     };
     /**
      * @description One MCP tool as advertised by the manifest (FR-MOD-08.8.3) — enough for a
@@ -12091,6 +12134,33 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['PartnerApp'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  rotatePartnerAppSecret: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        clientId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Rotated — the new client secret is present on this response only */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PartnerAppSecretRotation'];
         };
       };
       400: components['responses']['BadRequest'];

@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+### tm 72.4 — 09.4-d: Partner app secret rotate + denetim izi — done — 2026-08-10 UTC
+
+- **Yapıldı:** `POST /partner/apps/{clientId}/rotate-secret` + `PartnerAppService.rotateSecret` —
+  yeni secret register ile ORTAK `mintClientSecret()`'ten, `hashToken` ile üstüne yazılır, düz metin
+  yalnız bu yanıtta (`no-store`), `client_id` sabit. **Örtüşme penceresi yok** (tek `secret_hash`
+  kolonu) — eski secret commit anında ölür. Public client 400, başka org 404, first-party giriş
+  client'ı 400. `AUDIT_ACTIONS`'a `partner_app.created/.updated/.deleted/.secret_rotated`; dört yazma
+  yolunun hepsi kendi transaction'ında `writeAuditEntry` çağırıyor (no-op/cross-tenant ıskalama satır
+  yazmaz). Metadata: `client_type` · `scopes` · `redirect_uri_count` · PATCH alan adları — secret ve
+  URI'lar asla. Kontrat: `partner-apps.yaml` + `PartnerAppSecretRotation`, re-bundle 153→154.
+  Migration yok (`audit_log.action`'da CHECK yok — doğrulandı). `apps/web` `ACTION_GROUPS` aynası da
+  güncellendi.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0**
+  (`@nexa/api` 2181/2181, 2168'den +13 · `@nexa/web` 802/802) · `pnpm -w test:integration` **0**
+  (`@nexa/api` 1644/1644, 67 dosya · `@nexa/rtm` 51/51) · `pnpm -w build` **0** (7/7) ·
+  `contract-parity.test.ts` yeşil. E2E koşulmadı — backend-only, partner app UI'ı 09.4-e/-f getirecek.
+- **Varsayımlar:** (1) Rotate POST + gövdesiz, PATCH alanı değil: uygulamanın düzenlenmesi değil,
+  üstünde yapılan idempotent-olmayan bir eylem. (2) first-party client rotate'ta da reddediliyor —
+  bugün zaten `public` olduğu için 400 alırdı, ama kural `assertNotFirstParty`'de açık dursun.
+- **Sonraki pencereye not:**
+  - **⚠ `reports-billing.test.ts` yük altında kırılgan (yeni gözlem, bu tura ait DEĞİL):** tam
+    integration koşusunda `exports reviews CSAT bucketed by day` + kardeşleri iki koşuda 13 ve 1 kez
+    düştü, tek dosya izole koşuda 250/250 yeşil. **Kontrol koşusu yapıldı:** değişikliklerim
+    `git stash`'lenip tam süit temiz ağaçta koşuldu → 1631/1631 yeşil; stash geri alınıp tekrar
+    koşuldu → 1644/1644 yeşil. Yani kusur bu değişiklikten gelmiyor, yükle/zamanlamayla geliyor
+    (hepsi `to = new Date()` çapalı pencereler; DB saati host'un birkaç ms önünde ölçüldü). Kırmızı
+    görürsen önce o dosyayı izole koş.
+  - 09.4-e (developer portal kabuğu) ve 09.4-f (rotate düğmesi + webhook yüzeyi) artık açık; rotate
+    endpoint'i ve `PartnerAppSecretRotation` şeması hazır.
+  - PLAN.md `09.4` satırı `◐ → K09.4` kaldı — 3 alt-görev açık (09.4-e/-f/-g).
+  - **tm 105 WIP hâlâ commit'siz, bu tur da dokunulmadı** (kapsam disiplini): `README.md`,
+    `package.json` (kök), `apps/api|rtm/package.json`, `apps/api/tsconfig.json`, iki
+    `test/helpers/fixtures.ts`, `turbo.json`, `apps/api/scripts/*test-datastores.ts`,
+    `test-datastores.test.ts`, `.taskmaster/tmp-*`, `.taskmaster/tasks/tasks.json`.
+
 ### tm 72.3 — 09.4-c: Partner app kaydı çekirdeği (oauth_clients self-servis CRUD) — done — 2026-08-10 UTC
 
 - **Yapıldı:** `oauth_clients`'ın ilk YAZMA yolu. Kontrat `paths/partner-apps.yaml` (yeni, 5 operasyon)

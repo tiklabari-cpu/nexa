@@ -316,6 +316,8 @@ paths:
     $ref: "./paths/partner-apps.yaml#/partnerApps"
   /partner/apps/{clientId}:
     $ref: "./paths/partner-apps.yaml#/partnerApp"
+  /partner/apps/{clientId}/rotate-secret:
+    $ref: "./paths/partner-apps.yaml#/partnerAppSecret"
 
   /mcp/manifest:
     $ref: "./paths/mcp.yaml#/manifest"
@@ -1229,6 +1231,19 @@ components:
                 Present only for `client_type: confidential`. Store it now; only
                 a one-way hash is kept, so it is never shown again — a lost
                 secret must be rotated.
+
+    PartnerAppSecretRotation:
+      description: |
+        The rotate response. Always carries a `client_secret` — rotation applies
+        only to a confidential client — and, like registration, carries it
+        exactly once. The previous secret is already invalid by the time this
+        response is written.
+      allOf:
+        - $ref: "#/components/schemas/PartnerApp"
+        - type: object
+          required: [client_secret]
+          properties:
+            client_secret: { type: string }
 
     McpToolDescriptor:
       type: object

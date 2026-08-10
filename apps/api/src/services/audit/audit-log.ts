@@ -92,6 +92,18 @@ export const AUDIT_ACTIONS = [
   // Credentials
   'pat.created',
   'pat.revoked',
+  // Partner apps (FR-MOD-09.4). Registering an OAuth client hands a third party
+  // a credential that can later act on this workspace, and its scopes, redirect
+  // allowlist and secret are the whole of what bounds it — the same class of
+  // change as a webhook subscription, which NFR-S12 names by hand. Rotation
+  // matters most: it invalidates a live secret instantly, so both a legitimate
+  // re-key and an attacker locking the owner out of their own app look like this
+  // entry. Metadata carries the client type, granted scopes and how many
+  // redirect URIs there are — never a secret, and never the URIs themselves.
+  'partner_app.created',
+  'partner_app.updated',
+  'partner_app.deleted',
+  'partner_app.secret_rotated',
   // MCP tool calls (FR-MOD-08.8.3). An MCP client (Claude, ChatGPT, …) invoked a
   // tool against the workspace. Recorded because these calls read tenant data
   // through an automated agent that can chain many requests, so the trail of

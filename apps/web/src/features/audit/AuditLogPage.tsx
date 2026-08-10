@@ -96,7 +96,17 @@ const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }
       'ticket.follower_removed',
     ],
   },
-  { label: 'Credentials', actions: ['pat.created', 'pat.revoked'] },
+  {
+    label: 'Credentials',
+    actions: [
+      'pat.created',
+      'pat.revoked',
+      'partner_app.created',
+      'partner_app.updated',
+      'partner_app.deleted',
+      'partner_app.secret_rotated',
+    ],
+  },
   { label: 'Data', actions: ['data.retention_pruned', 'data.deleted'] },
 ];
 

@@ -6816,8 +6816,9 @@ export interface components {
      *     ratings the widget writes. `csat` feeds the donut, `by_day` the daily bar,
      *     and `previous_period` the two-period comparison. Every `score` is `null`
      *     (not `0`) for an unrated span — the same rule the Overview's satisfaction
-     *     follows. `ecommerce` is the tracked-sales skeleton (FR-MOD-13.5, v2): its
-     *     shape is present but `configured` is `false` until a sales source is wired.
+     *     follows. `ecommerce` carries the tracked-sales figures (FR-MOD-13.5) when
+     *     the workspace has sales tracking switched on, and an honest "not set up"
+     *     block when it has not.
      */
     ReportsReviews: {
       range: {
@@ -6839,18 +6840,34 @@ export interface components {
         date: string;
       } & components['schemas']['CsatSummary'])[];
       /**
-       * @description Tracked-sales skeleton (FR-MOD-13.5, v2). `configured` is `false` and
-       *     every figure `null` until a sales source is wired — an honest "not set
-       *     up" placeholder, never a fabricated zero.
+       * @description Sales the workspace's tracking snippet reported, credited to the
+       *     conversations that supported them (FR-MOD-13.5).
+       *
+       *     Two states, and the difference matters. Until Settings → Sales
+       *     tracker is switched on, `configured` is `false` and every figure is
+       *     `null` — an honest "not set up" placeholder, never a fabricated
+       *     zero. Once it is on, the figures are real, and a window with no
+       *     attributed order reports `0` rather than `null`: that zero is a
+       *     known answer, not an unknown one.
+       *
+       *     Only orders the attribution window tied to a chat are counted, so
+       *     this is revenue live chat can take credit for, not the workspace's
+       *     turnover.
        */
       ecommerce: {
-        /** @description Whether a sales-tracking source is wired. Always false in v1. */
+        /** @description Whether sales tracking is switched on for this workspace. */
         configured: boolean;
-        /** @description Attributed orders. Null until configured. */
+        /** @description Attributed orders in the window; 0 if none. Null while unconfigured. */
         tracked_sales: number | null;
-        /** @description Revenue attributed to supported conversations. Null until configured. */
+        /**
+         * @description Revenue attributed to supported conversations, in minor units of
+         *     `currency`; 0 if none. Null while unconfigured.
+         */
         attributed_revenue_cents: number | null;
-        /** @description ISO 4217 code for the revenue figure. Null until configured. */
+        /**
+         * @description ISO 4217 code the revenue figure is denominated in, as configured
+         *     in Settings → Sales tracker. Null while unconfigured.
+         */
         currency: string | null;
       };
     };

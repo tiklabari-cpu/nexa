@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+## tm 75.4 — 13.5-d: /reports/reviews ecommerce bloğu gerçek veriyle — done — 2026-08-10 UTC
+
+- **Yapıldı:** `trackedSalesSummary` (`report-csv.ts`) — `tracked_sales` üzerinde `attributed=true`
+  + tarih aralığı için tek `aggregate` (COUNT+SUM, `(license_id, created_at)` indeksi);
+  `trackedSalesBlock` (`reports.ts`) — `sales_tracker_settings` satırı yok VEYA `enabled=false`
+  ise 13.5 öncesi iskelet BİREBİR (`configured:false` + üç null), açıksa gerçek rakamlar +
+  konfigürasyondan `currency`. Kontratta yalnız `ecommerce` AÇIKLAMA metni değişti (alanlar ve
+  `required` aynı) → generated tip diff'i salt yorum. +7 integration testi.
+- **Varsayımlar:** (1) `configured` = satır var **ve** enabled — 13.5-c'nin ingest koşuluyla aynı,
+  tek switch. (2) Açıkken satış yoksa **0**, null değil (CSAT'ın "oy yok = null" kuralından
+  bilinçli fark: bu bilinen bir sıfır). (3) 07.7'nin ayrı Sales rapor grubu bilerek bağlanmadı —
+  kendi kalemi; `buildSalesReport` yorumu buna göre güncellendi.
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2410/2410) ·
+  `pnpm -w test:integration` 0 (`@nexa/api` 1851/1851) · build 0 (7/7) · `pnpm -w test:e2e` 96/96.
+- **Sonraki pencereye not:** ⚠ 75.2/75.3'ün "tekrar üretilemeyen `reports-billing.test.ts` flake"i
+  ARTIK ÖLÇÜLDÜ: Postgres saati Node sürecinin ~10 ms önünde seyredebiliyor (probe:
+  `created_at=…37.140Z` vs aynı isteğin `range.to=…37.139Z`), yani kolon varsayılanıyla "şimdi"
+  yazılan fixture satırı 30 günlük pencerenin dışına düşüp rapordan kayboluyor. Ürün hatası
+  DEĞİL (pencere mantığı doğru), test ortamı artefaktı. İmza: `createdAt`i açıkça geçmişe veren
+  testler hep yeşil, "şimdi" yazanlar aynı koşuda topluca kırmızı. Yeni testler `created_at`i
+  1 dk geriye damgalayarak bağışıklandı (6/6 temiz koşu; öncesi ~%20-30 kırmızı). Dosyanın geri
+  kalanı (CSAT `rate()`, 07.3.1 period comparison, CSV reviews-by-day) hâlâ açık → **tm 113**
+  bunun için açıldı. Bir kırmızı görürsen önce oraya bak. 13.5-f artık gerçek `configured:true`
+  dalını tüketebilir.
+
 ## tm 75.3 — 13.5-c: tracked-sale ingest + atıf çekirdeği (POST /customer/chat/sale) — done — 2026-08-10 UTC
 
 - **Yapıldı:** Contract-first `POST /customer/chat/sale` (`paths/customer-chat.yaml#sale` +

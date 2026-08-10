@@ -1343,14 +1343,178 @@ describe('reports and billing', () => {
       expect(reviews.by_day[1].score).toBe(0);
     });
 
-    it('exposes the tracked-sales skeleton as not configured (FR-MOD-13.5, v2)', async () => {
+    // --- Ecommerce / tracked sales (FR-MOD-13.5, 13.5-d) --------------------
+
+    /** Switch sales tracking on (or off) for a license, as the settings screen would. */
+    async function configureTracking(options: {
+      licenseId: bigint;
+      enabled: boolean;
+      currency?: string;
+    }): Promise<void> {
+      await owner.salesTrackerSettings.create({
+        data: {
+          licenseId: options.licenseId,
+          enabled: options.enabled,
+          currency: options.currency ?? 'USD',
+          attributionWindowDays: 7,
+        },
+      });
+    }
+
+    let orderSeq = 0;
+
+    /**
+     * Record one order the way the ingest endpoint (13.5-c) would have left it.
+     *
+     * `created_at` is stamped a minute back rather than left to the column
+     * default, and that is not cosmetic. The default is Postgres' clock, the
+     * window's `to` is the API process' `new Date()`, and the two disagree here
+     * by up to ~10ms in bursts (measured: a row written at `…37.140Z` against a
+     * request whose `to` was `…37.139Z`). A row inserted microseconds before the
+     * request can therefore land *after* the window closes and vanish from a
+     * report that should show it — an environment artifact, not a product bug,
+     * but one that would make these assertions fail perhaps one run in five. A
+     * minute of slack is far inside the 30-day window and immune to the skew.
+     */
+    async function sale(options: {
+      licenseId: bigint;
+      amountCents: number;
+      chatId?: string;
+      attributed?: boolean;
+      currency?: string;
+      createdAt?: Date;
+    }): Promise<void> {
+      orderSeq += 1;
+      await owner.trackedSale.create({
+        data: {
+          licenseId: options.licenseId,
+          chatId: options.chatId ?? null,
+          externalOrderId: `order-${orderSeq}`,
+          amountCents: options.amountCents,
+          currency: options.currency ?? 'USD',
+          attributed: options.attributed ?? true,
+          createdAt: options.createdAt ?? new Date(Date.now() - 60_000),
+        },
+      });
+    }
+
+    it('keeps the not-set-up skeleton when tracking was never configured', async () => {
       const reviews = (await server.get('/reports/reviews', auth)).json();
-      // Sales tracking has no source wired yet: an honest "not set up" shape, not
-      // a fabricated zero.
-      expect(reviews.ecommerce.configured).toBe(false);
-      expect(reviews.ecommerce.tracked_sales).toBeNull();
-      expect(reviews.ecommerce.attributed_revenue_cents).toBeNull();
-      expect(reviews.ecommerce.currency).toBeNull();
+      // A workspace that never opened the screen has no settings row at all, and
+      // reads as an honest "not set up" shape rather than a fabricated zero —
+      // byte for byte what every pre-13.5 consumer was written against.
+      expect(reviews.ecommerce).toEqual({
+        configured: false,
+        tracked_sales: null,
+        attributed_revenue_cents: null,
+        currency: null,
+      });
+    });
+
+    it('keeps the not-set-up skeleton while tracking is switched off', async () => {
+      const chat = await conversation({ agentReplies: true });
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: false });
+      // Orders from an earlier, enabled spell are still on the table.
+      await sale({ licenseId: fx.a.licenseId, chatId: chat, amountCents: 9_900 });
+
+      const reviews = (await server.get('/reports/reviews', auth)).json();
+      // Switching tracking off is one switch: the intake stops and the report
+      // goes back to "not set up", rather than leaving a screen quoting figures
+      // nothing is feeding any more.
+      expect(reviews.ecommerce).toEqual({
+        configured: false,
+        tracked_sales: null,
+        attributed_revenue_cents: null,
+        currency: null,
+      });
+    });
+
+    it('reports the attributed orders and their revenue once tracking is on', async () => {
+      const chat = await conversation({ agentReplies: true });
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: true, currency: 'EUR' });
+      await sale({ licenseId: fx.a.licenseId, chatId: chat, amountCents: 12_500, currency: 'EUR' });
+      await sale({ licenseId: fx.a.licenseId, chatId: chat, amountCents: 7_499, currency: 'EUR' });
+
+      const reviews = (await server.get('/reports/reviews', auth)).json();
+      expect(reviews.ecommerce.configured).toBe(true);
+      expect(reviews.ecommerce.tracked_sales).toBe(2);
+      expect(reviews.ecommerce.attributed_revenue_cents).toBe(19_999);
+      // The code comes from the configuration, not from the orders: the cents
+      // are only summable under one currency.
+      expect(reviews.ecommerce.currency).toBe('EUR');
+    });
+
+    it('reports a configured window with no sale as zero, not unknown', async () => {
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: true });
+
+      const reviews = (await server.get('/reports/reviews', auth)).json();
+      // Unlike CSAT — where nobody rating leaves the score genuinely unknown —
+      // "tracking is on and no order landed" is a known answer, and it is zero.
+      // Null here would send the screen back to "not set up" for a workspace
+      // that plainly did set it up.
+      expect(reviews.ecommerce.configured).toBe(true);
+      expect(reviews.ecommerce.tracked_sales).toBe(0);
+      expect(reviews.ecommerce.attributed_revenue_cents).toBe(0);
+      expect(reviews.ecommerce.currency).toBe('USD');
+    });
+
+    it('leaves unattributed orders out of the revenue it claims', async () => {
+      const chat = await conversation({ agentReplies: true });
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: true });
+      await sale({ licenseId: fx.a.licenseId, chatId: chat, amountCents: 5_000 });
+      // No chat inside the attribution window, so 13.5-c wrote the row with
+      // `attributed: false`: real revenue, but not revenue live chat may take
+      // credit for. Summing it would turn this block into total turnover.
+      await sale({ licenseId: fx.a.licenseId, amountCents: 90_000, attributed: false });
+
+      const reviews = (await server.get('/reports/reviews', auth)).json();
+      expect(reviews.ecommerce.tracked_sales).toBe(1);
+      expect(reviews.ecommerce.attributed_revenue_cents).toBe(5_000);
+    });
+
+    it('counts only the orders inside the requested window', async () => {
+      const chat = await conversation({ agentReplies: true });
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: true });
+      await sale({ licenseId: fx.a.licenseId, chatId: chat, amountCents: 2_500 });
+      // 45 days back falls outside the default 30-day window.
+      await sale({
+        licenseId: fx.a.licenseId,
+        chatId: chat,
+        amountCents: 80_000,
+        createdAt: new Date(Date.now() - 45 * 86_400_000),
+      });
+
+      const reviews = (await server.get('/reports/reviews', auth)).json();
+      expect(reviews.ecommerce.tracked_sales).toBe(1);
+      expect(reviews.ecommerce.attributed_revenue_cents).toBe(2_500);
+    });
+
+    it('never counts sales from another tenant', async () => {
+      const chat = await conversation({ agentReplies: true });
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: true });
+      await configureTracking({ licenseId: fx.b.licenseId, enabled: true, currency: 'GBP' });
+      await sale({ licenseId: fx.a.licenseId, chatId: chat, amountCents: 1_000 });
+      await sale({ licenseId: fx.b.licenseId, amountCents: 4_000, currency: 'GBP' });
+
+      const mine = (await server.get('/reports/reviews', auth)).json();
+      expect(mine.ecommerce.tracked_sales).toBe(1);
+      expect(mine.ecommerce.attributed_revenue_cents).toBe(1_000);
+      expect(mine.ecommerce.currency).toBe('USD');
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const theirs = (
+        await server.get('/reports/reviews', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      // Both the configuration and the figures are read under RLS, so neither
+      // the currency nor the revenue crosses the tenant boundary.
+      expect(theirs.ecommerce.tracked_sales).toBe(1);
+      expect(theirs.ecommerce.attributed_revenue_cents).toBe(4_000);
+      expect(theirs.ecommerce.currency).toBe('GBP');
     });
 
     it('never counts another tenant', async () => {

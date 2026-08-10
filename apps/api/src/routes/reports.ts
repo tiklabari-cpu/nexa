@@ -64,6 +64,7 @@ import {
   SPLIT_COUNTS,
   teamPerformanceByAgent,
   ticketCount,
+  trackedSalesSummary,
   transferCount,
   windowTotals,
 } from '../services/reports/report-csv.js';
@@ -681,6 +682,62 @@ export async function buildAiAgentReport(
   );
 }
 
+/** The Reviews report's `ecommerce` block: either the honest skeleton or real figures. */
+interface EcommerceBlock {
+  configured: boolean;
+  tracked_sales: number | null;
+  attributed_revenue_cents: number | null;
+  currency: string | null;
+}
+
+/**
+ * The tracked-sales block for one window (FR-MOD-13.5).
+ *
+ * "Configured" means a `sales_tracker_settings` row exists *and* is enabled —
+ * the same thing the ingest endpoint (13.5-c) requires before it will record an
+ * order. Defining it that way keeps one switch: turning tracking off stops the
+ * intake and returns the report to the not-set-up state in the same move,
+ * rather than leaving a screen quoting figures nothing is feeding any more.
+ * Signup writes no row, so a workspace that has never opened the screen reads
+ * as unconfigured without a row having to exist to say so.
+ *
+ * Unconfigured returns the pre-13.5 skeleton byte for byte — `configured`
+ * false, three nulls — because every consumer written against it is still
+ * correct: nothing is claimed about sales the workspace never asked us to
+ * track.
+ *
+ * Configured returns real numbers, and 0 when no sale landed. That reads
+ * differently from CSAT's "nobody rated is null, not 0%", and deliberately: an
+ * unrated window leaves satisfaction genuinely *unknown*, whereas a workspace
+ * that switched tracking on and saw no attributed order has a known answer, and
+ * it is zero. Null there would send the screen back to "not set up" for a
+ * workspace that plainly did set it up.
+ */
+async function trackedSalesBlock(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<EcommerceBlock> {
+  // License-scoped table under RLS, so this license's row is the only one
+  // `findFirst` can see — the same read `GET /settings/sales-tracker` does.
+  const settings = await tx.salesTrackerSettings.findFirst();
+  if (!settings?.enabled) {
+    return {
+      configured: false,
+      tracked_sales: null,
+      attributed_revenue_cents: null,
+      currency: null,
+    };
+  }
+
+  const summary = await trackedSalesSummary(tx, licenseId, from, to);
+  // The currency comes from the configuration rather than from the orders:
+  // `amount_cents` values are only summable under one code, and the settings
+  // row is what the ingest endpoint validates every order against.
+  return { configured: true, ...summary, currency: settings.currency };
+}
+
 /**
  * The Reviews report for one window (FR-MOD-07.8). Shared by `GET
  * /reports/reviews` and `get_report` so the two can never quote different
@@ -697,6 +754,7 @@ export async function buildReviewsReport(
   // Prisma forbids concurrent queries on its client.
   const counts = await satisfactionCounts(tx, licenseId, from, to);
   const byDay = await satisfactionByDay(tx, licenseId, from, to);
+  const ecommerce = await trackedSalesBlock(tx, licenseId, from, to);
 
   // The baseline window's CSAT, so the tab can show the vs-previous delta the
   // PRD asks for (its "67% vs 57%").
@@ -705,16 +763,7 @@ export async function buildReviewsReport(
       range: { from: from.toISOString(), to: to.toISOString() },
       csat: csatSummary(counts),
       by_day: byDay.map((row) => ({ date: row.date, ...csatSummary(row) })),
-      // Tracked-sales skeleton (FR-MOD-13.5, v2). No sales source is wired yet, so
-      // the shape is present but nothing is claimed: `configured` false and every
-      // figure null, so the surface renders an honest "not set up" state rather
-      // than a fabricated zero.
-      ecommerce: {
-        configured: false,
-        tracked_sales: null,
-        attributed_revenue_cents: null,
-        currency: null,
-      },
+      ecommerce,
     },
     from,
     to,
@@ -790,14 +839,17 @@ export async function buildLeadsReport(
 
 /**
  * The Sales report for one window (FR-MOD-07.7, v2 payload; FR-MOD-13.5
- * dependency). No sales/order model exists in the schema yet (`grep '^model '
- * schema.prisma` has no Order/Sale/Transaction) — the same honest "not set up"
- * contract the Reviews report's `ecommerce` block uses (see
- * buildReviewsReport): `configured` is `false` and every figure `null`, never
- * a fabricated zero, until FR-MOD-13.5's Sales tracker wires a real source.
- * `tx`/`licenseId` stay in the signature — unused today, matching every other
- * builder here — so 13.5 can fill this in without moving the call site or the
- * `GET /reports/sales` contract.
+ * dependency) — the honest "not set up" state: `configured` is `false` and
+ * every figure `null`, never a fabricated zero.
+ *
+ * 13.5 has since landed `tracked_sales` and wired it into the Reviews tab's
+ * `ecommerce` block ({@link trackedSalesBlock}), so the data this group needs
+ * now exists. This report group stays unwired on purpose: it is 07.7's own
+ * separate Sales tab, with a `conversions` figure the Reviews block does not
+ * carry, and filling it in is that line item's work rather than a side effect
+ * of 13.5-d. `tx`/`licenseId` stay in the signature — unused today, matching
+ * every other builder here — so it can be filled in without moving the call
+ * site or the `GET /reports/sales` contract.
  */
 export async function buildSalesReport(
   tx: TenantClient,

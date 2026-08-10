@@ -536,6 +536,50 @@ export async function satisfactionByDay(
   return rows.map((row) => ({ date: row.date, good: Number(row.good), bad: Number(row.bad) }));
 }
 
+/** The tracked-sales figures the Reviews report's `ecommerce` block quotes. */
+export interface TrackedSalesSummary {
+  tracked_sales: number;
+  attributed_revenue_cents: number;
+}
+
+/**
+ * Sales credited to a conversation in a window (FR-MOD-13.5) — the count and
+ * the revenue behind the Reviews tab's Ecommerce block.
+ *
+ * `attributed` is the filter, not a nicety. 13.5-c writes a row for *every*
+ * order the snippet reports, attributed or not, so an unfiltered sum would be
+ * the merchant's total turnover dressed up as "revenue live chat produced" —
+ * the one claim this block exists to make. An order the attribution window
+ * could not tie to a chat is real revenue, but not revenue this report may
+ * take credit for.
+ *
+ * Both figures come from one aggregate over `(license_id, created_at)` — the
+ * index the table carries — so the count and the sum can never describe
+ * different sets of rows. An empty window is 0/0, not null: unlike CSAT, where
+ * nobody rating means the score is *unknown*, "configured and no sale landed"
+ * is a known zero. Whether the block is shown at all is the caller's decision
+ * (see `buildReviewsReport`), and that is where the honest "not set up" state
+ * lives.
+ */
+export async function trackedSalesSummary(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<TrackedSalesSummary> {
+  const aggregate = await tx.trackedSale.aggregate({
+    where: { licenseId, attributed: true, createdAt: { gte: from, lte: to } },
+    _count: { _all: true },
+    _sum: { amountCents: true },
+  });
+  return {
+    tracked_sales: aggregate._count._all,
+    // Postgres `sum()` is null over no rows; the count is already 0 there, and
+    // a null revenue next to 0 sales would be two answers to one question.
+    attributed_revenue_cents: aggregate._sum.amountCents ?? 0,
+  };
+}
+
 interface DaySplit {
   date: string;
   chats: number;

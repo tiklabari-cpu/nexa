@@ -13,6 +13,32 @@
 
 ## Task log (newest-first)
 
+### İŞLETİM UYARISI — tm 110 için AYNI ANDA İKİ PENCERE (ikinci vaka, art arda) — 2026-08-10 UTC
+
+- **Ne oldu:** tm 110'u panelin **düzeltme penceresi** (PID 30064, 07:03:56) açtı ve kendisi
+  yapıyordu; runner 07:11:48'de görevi `in-progress` gördüğü için AYNI iş için ikinci bir
+  task-runner penceresi (PID 2380) daha açtı. Bu, bir önceki bloktaki tm 73.3 vakasının
+  **birebir tekrarı** — ama bu sefer kaynak runner'ın kendi kuyruğu değil, **düzeltme akışı ile
+  run-loop'un çakışması**. `pick_next`'in `in-progress` görevleri atlaması artık iki bağımsız
+  vakayla gerekçelendi; kilit dosyası (`.taskmaster/locks/<id>`) ayrı görev olarak açılmalı.
+- **Guard çalıştı:** İkinci pencere tm 73.3 notundaki canlılık kontrolünü uyguladı —
+  `PLAN.md` damgası (07:11:58) kendi başlangıcından (07:11:48) **sonraydı** ve PID 30064 canlıydı
+  → **hiçbir şey yazmadı**, birinci pencerenin commit'ini (`7680328`) bekledi. Yani o not
+  spekülatif değil, ölçülmüş bir çakışmayı fiilen önledi.
+- **Bağımsız doğrulama (salt-okunur, birinci pencereden ayrı koşuldu):** sayım script'i
+  **exit 0** → `satır=30 ✅=23 ◐=1 ⬜=3 ⛔=3 ??=0` · Task Master çapraz kontrolü örtüşüyor
+  (tm 73 `in-progress` → 1 ◐; tm 74/75/99 `pending` → 3 ⬜) · `git diff -U0 PLAN.md`'de
+  gereksinim satırı **0** (damga regresyonu yok) · `23 açık kalem` paydası değişmemiş.
+  Dört madde de birinci pencerenin raporladığının aynısı; `main` ↔ `origin/main` senkron.
+- **Sonraki pencereye not (tm 110 kapsamı DIŞI, ama kapıyı etkiler):** `tm 105` hâlâ
+  `in-progress` ve **izolasyon harness'ı hiç commit'lenmemiş** — `apps/api/scripts/
+  with-test-datastores.ts` + `test-datastores.ts` + `test/integration/test-datastores.test.ts`
+  **untracked**, `apps/api|rtm/package.json` · `turbo.json` · `README.md` · `.gitignore` ·
+  iki `fixtures.ts` **uncommitted**. Yani CONVENTIONS §1.1'in "artık koşu başına izole"
+  anlatısı **yalnız bu çalışma alanında** doğru; temiz bir klonda kapı eski paylaşılan-DB
+  davranışına düşer. Ayrıca ~50 `apps/e2e/kanit/*.png` tm 109'un iki tam koşusundan kirli.
+  Bunlar tm 110'un değil; kapsam disiplini (§5) gereği bu pencerede commit EDİLMEDİ.
+
 ## tm 110 — PLAN Faz-2 özet sayaçları tabloyla eşitlendi (panel bulgusu) — done — 2026-08-10 UTC
 
 - **Yapıldı:** PLAN.md satır **22** (faz özet tablosu) + satır **1100** (§5.0 kendi sayacı) →

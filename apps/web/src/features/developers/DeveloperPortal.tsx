@@ -1,18 +1,18 @@
 /**
  * Developer portal — FR-MOD-09.4 (v2, Could). "Build your own app": a shell
- * over `/partner/apps` (09.4-c register/list/delete, 09.4-d rotate). This
- * screen is a pure contract consumer — every real rule (redirect URI shape,
- * the scope ceiling, cross-tenant isolation) is enforced server-side; a 400
- * or 403 here is shown, never second-guessed.
+ * over `/partner/apps` (09.4-c register/list/delete, 09.4-d rotate) with two
+ * more tabs (09.4-f) — webhook subscriptions and the integration manifest,
+ * both in `WebhookSubscriptions.tsx`. This screen is a pure contract
+ * consumer — every real rule (redirect URI shape, the scope ceiling,
+ * cross-tenant isolation) is enforced server-side; a 400 or 403 here is
+ * shown, never second-guessed.
  *
- * Rotate and the Zapier/webhook-subscription surface are 09.4-f; this turn
- * covers list, register and delete only.
- *
- * The client secret exists in the browser for exactly one render: the value
- * lives only in `newRegistration` state, shown once in `SecretOncePanel`, and
- * is discarded — not merely hidden — the moment that panel closes. The list
- * itself never carries a secret; the server response it reads never includes
- * one (`SAFE_SELECT` on the API side never selects `secretHash`).
+ * Every secret this screen ever shows — a fresh registration's, a rotation's —
+ * exists in the browser for exactly one render: the value lives only in
+ * component state, shown once in `SecretOncePanel`, and is discarded — not
+ * merely hidden — the moment that panel closes. The list itself never carries
+ * one; the server response it reads never includes one (`SAFE_SELECT` on the
+ * API side never selects `secretHash`).
  *
  * Visible only to `access_rules:rw` (owner/admin) — the same scope every
  * write on this surface requires, so a teammate without it would only ever
@@ -29,8 +29,16 @@ import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { FieldError, required, splitList, useForm, type Validator } from '../../lib/form.js';
+import { IntegrationManifestReference, WebhookSubscriptions } from './WebhookSubscriptions.js';
 
 const PARTNER_APPS_KEY = ['developers', 'partner-apps'] as const;
+
+const TABS = [
+  { id: 'apps', label: 'Apps' },
+  { id: 'webhooks', label: 'Webhooks' },
+  { id: 'manifest', label: 'Manifest' },
+] as const;
+type TabId = (typeof TABS)[number]['id'];
 
 type PartnerAppClientType = 'public' | 'confidential';
 
@@ -47,6 +55,12 @@ interface PartnerApp {
  *  only for a confidential client. */
 interface PartnerAppRegistration extends PartnerApp {
   client_secret?: string;
+}
+
+/** The rotate response — always carries the new secret (rotation only ever
+ *  applies to a confidential client; a public one has none to reissue). */
+interface PartnerAppSecretRotation extends PartnerApp {
+  client_secret: string;
 }
 
 /** The textarea holds one redirect URI per line; at least one is required.
@@ -79,9 +93,12 @@ export function DeveloperPortalPage(): ReactElement {
 
 function DeveloperPortalContent(): ReactElement {
   const api = useApiClient();
+  const [tab, setTab] = useState<TabId>('apps');
   const [registerOpen, setRegisterOpen] = useState(false);
   const [newRegistration, setNewRegistration] = useState<PartnerAppRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PartnerApp | null>(null);
+  const [rotateTarget, setRotateTarget] = useState<PartnerApp | null>(null);
+  const [newSecretRotation, setNewSecretRotation] = useState<PartnerAppSecretRotation | null>(null);
 
   const list = useQuery({
     queryKey: PARTNER_APPS_KEY,
@@ -102,33 +119,74 @@ function DeveloperPortalContent(): ReactElement {
     <Page
       title="Developers"
       description="Register OAuth apps that can act on this workspace through the API."
-      actions={registerButton}
+      actions={tab === 'apps' ? registerButton : undefined}
     >
-      <Section
-        title="Partner apps"
-        description="Apps your team has registered, and what each one may do on this workspace."
+      <div role="tablist" aria-label="Developer portal" className="flex gap-1 border-b border-border">
+        {TABS.map((tabDef) => {
+          const selected = tab === tabDef.id;
+          return (
+            <button
+              key={tabDef.id}
+              type="button"
+              role="tab"
+              id={`developer-portal-tab-${tabDef.id}`}
+              aria-selected={selected}
+              aria-controls={`developer-portal-panel-${tabDef.id}`}
+              onClick={() => setTab(tabDef.id)}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                selected
+                  ? 'border-brand-500 text-content'
+                  : 'border-transparent text-content-secondary hover:text-content'
+              }`}
+            >
+              {tabDef.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        role="tabpanel"
+        id={`developer-portal-panel-${tab}`}
+        aria-labelledby={`developer-portal-tab-${tab}`}
+        className="flex flex-col gap-6"
       >
-        {list.error ? (
-          <ErrorNotice message="Could not load your partner apps." />
-        ) : (
-          <Card>
-            {list.isPending ? (
-              <p className="p-4 text-sm text-content-secondary">Loading…</p>
-            ) : list.data.items.length === 0 ? (
-              <EmptyState
-                title="No partner apps yet"
-                description="Register an OAuth client to let a script, a Zap, or a service you build call the Nexa API on this workspace's behalf."
-              />
+        {tab === 'apps' && (
+          <Section
+            title="Partner apps"
+            description="Apps your team has registered, and what each one may do on this workspace."
+          >
+            {list.error ? (
+              <ErrorNotice message="Could not load your partner apps." />
             ) : (
-              <ul className="divide-y divide-border">
-                {list.data.items.map((app) => (
-                  <AppRow key={app.client_id} app={app} onDelete={() => setDeleteTarget(app)} />
-                ))}
-              </ul>
+              <Card>
+                {list.isPending ? (
+                  <p className="p-4 text-sm text-content-secondary">Loading…</p>
+                ) : list.data.items.length === 0 ? (
+                  <EmptyState
+                    title="No partner apps yet"
+                    description="Register an OAuth client to let a script, a Zap, or a service you build call the Nexa API on this workspace's behalf."
+                  />
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {list.data.items.map((app) => (
+                      <AppRow
+                        key={app.client_id}
+                        app={app}
+                        onDelete={() => setDeleteTarget(app)}
+                        onRotate={() => setRotateTarget(app)}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </Card>
             )}
-          </Card>
+          </Section>
         )}
-      </Section>
+
+        {tab === 'webhooks' && <WebhookSubscriptions canEdit />}
+        {tab === 'manifest' && <IntegrationManifestReference />}
+      </div>
 
       {registerOpen && (
         <RegisterAppModal
@@ -143,15 +201,47 @@ function DeveloperPortalContent(): ReactElement {
       {/* The secret lives only here. Closing the panel drops this state, not
           just the dialog — there is no other copy to leak. */}
       {newRegistration && (
-        <SecretOncePanel registration={newRegistration} onClose={() => setNewRegistration(null)} />
+        <SecretOncePanel
+          title={`${newRegistration.display_name} registered`}
+          registration={newRegistration}
+          onClose={() => setNewRegistration(null)}
+        />
       )}
 
       {deleteTarget && <DeleteAppModal app={deleteTarget} onClose={() => setDeleteTarget(null)} />}
+
+      {rotateTarget && (
+        <RotateSecretModal
+          app={rotateTarget}
+          onClose={() => setRotateTarget(null)}
+          onRotated={(rotation) => {
+            setRotateTarget(null);
+            setNewSecretRotation(rotation);
+          }}
+        />
+      )}
+
+      {/* Same one-render discipline as a fresh registration's secret. */}
+      {newSecretRotation && (
+        <SecretOncePanel
+          title={`${newSecretRotation.display_name} secret rotated`}
+          registration={newSecretRotation}
+          onClose={() => setNewSecretRotation(null)}
+        />
+      )}
     </Page>
   );
 }
 
-function AppRow({ app, onDelete }: { app: PartnerApp; onDelete: () => void }): ReactElement {
+function AppRow({
+  app,
+  onDelete,
+  onRotate,
+}: {
+  app: PartnerApp;
+  onDelete: () => void;
+  onRotate: () => void;
+}): ReactElement {
   return (
     <li data-testid={`partner-app-${app.client_id}`} className="flex flex-col gap-1.5 px-4 py-3">
       <div className="flex flex-wrap items-center gap-3">
@@ -159,6 +249,19 @@ function AppRow({ app, onDelete }: { app: PartnerApp; onDelete: () => void }): R
         <span className="self-start rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
           {app.client_type === 'confidential' ? 'Confidential' : 'Public'}
         </span>
+        {/* A public client authenticates with PKCE alone and has no secret to
+            reissue (server 400s it) — hiding the button here is a known,
+            client-side-only fact, not a second guess of a workspace decision. */}
+        {app.client_type === 'confidential' && (
+          <button
+            type="button"
+            onClick={onRotate}
+            aria-label={`Rotate secret for ${app.display_name}`}
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+          >
+            Rotate secret
+          </button>
+        )}
         <button
           type="button"
           onClick={onDelete}
@@ -368,16 +471,19 @@ function RegisterAppModal({
 }
 
 /**
- * The secret-once panel (KK "secret bir kez"). It renders the register
- * response's `client_secret` — the only place that value ever appears — with
- * a copy button and an explicit "won't be shown again" warning. Closing it
- * (Done, Escape, or a backdrop click, all routed through `onClose`) is what
- * discards the secret from state; nothing here persists it anywhere else.
+ * The secret-once panel (KK "secret bir kez") — shared by register and rotate,
+ * the only two responses that ever carry a `client_secret`. It renders that
+ * value with a copy button and an explicit "won't be shown again" warning.
+ * Closing it (Done, Escape, or a backdrop click, all routed through
+ * `onClose`) is what discards the secret from state; nothing here persists it
+ * anywhere else.
  */
 function SecretOncePanel({
+  title,
   registration,
   onClose,
 }: {
+  title: string;
   registration: PartnerAppRegistration;
   onClose: () => void;
 }): ReactElement {
@@ -395,12 +501,7 @@ function SecretOncePanel({
   }
 
   return (
-    <Modal
-      onClose={onClose}
-      title={`${registration.display_name} registered`}
-      description="Save these credentials now."
-      className="w-[28rem]"
-    >
+    <Modal onClose={onClose} title={title} description="Save these credentials now." className="w-[28rem]">
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -490,6 +591,66 @@ function DeleteAppModal({ app, onClose }: { app: PartnerApp; onClose: () => void
           className="rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
         >
           {remove.isPending ? 'Deleting…' : 'Delete app'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Re-key a confidential client (09.4-d's `rotate-secret` action, surfaced
+ * here in 09.4-f): a confirm step, since the previous secret dies the instant
+ * this commits — no overlap window, no undo. Success hands the new
+ * `PartnerAppSecretRotation` up to `SecretOncePanel`, the only place it is
+ * ever shown.
+ */
+function RotateSecretModal({
+  app,
+  onClose,
+  onRotated,
+}: {
+  app: PartnerApp;
+  onClose: () => void;
+  onRotated: (rotation: PartnerAppSecretRotation) => void;
+}): ReactElement {
+  const api = useApiClient();
+
+  const rotate = useMutation({
+    mutationFn: () =>
+      api.post<PartnerAppSecretRotation>(`/partner/apps/${app.client_id}/rotate-secret`),
+    onSuccess: (rotation) => onRotated(rotation),
+  });
+
+  return (
+    <Modal
+      onClose={onClose}
+      title={`Rotate secret for ${app.display_name}?`}
+      description="The current secret stops working immediately. Update every integration that uses it with the new one."
+    >
+      {rotate.isError && (
+        <ErrorNotice
+          message={
+            rotate.error instanceof ApiClientError
+              ? rotate.error.message
+              : 'Could not rotate that secret.'
+          }
+        />
+      )}
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md border border-border px-3 py-1.5 text-sm"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => rotate.mutate()}
+          disabled={rotate.isPending}
+          className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+        >
+          {rotate.isPending ? 'Rotating…' : 'Rotate secret'}
         </button>
       </div>
     </Modal>

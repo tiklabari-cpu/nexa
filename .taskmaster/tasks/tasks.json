@@ -2521,14 +2521,14 @@
             "description": "Portal'a ikinci ve üçüncü sekme. (1) `WebhookSubscriptions.tsx`: `GET /webhooks` listesi (url / action / type / enabled / created_at) + anlamlı empty state; 'Subscribe' formu — action seçenekleri 09.4-b manifestinden okunur (sabit liste KOPYALANMAZ), url girdisi; `POST /webhooks` yanıtındaki `secret` BİR KEZ gösterilir (kopyala + uyarı); `DELETE /webhooks/{webhookId}` onay modalıyla. Sunucudan gel",
             "details": "09.4-f — Portal'da Zapier REST Hooks yüzeyi: webhook aboneliği yönetimi + trigger manifesti + secret rotate düğmesi  [SONNET-XHIGH]\n\nPRD: FR-MOD-09.4 (+ FR-MOD-08.8.4 mevcut webhook yüzeyinin arayüzü)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 4 dosya; güvenlik kararı YOK: SSRF/HMAC/izolasyon kararlarının tamamı zaten sunucuda (webhooks.ts + lib/ssrf.ts, tm 34) ve rotate kararı 09.4-d'de; ekran yalnız çağırıp sonucu gösteriyor (koşul 2 ✅); eşzamanlılık yok (koşul 3 ✅); kopyalanacak desen ismen var: WebsiteWidgets.tsx (liste+ekle+sil) ve AppsMarketplace.tsx (Modal onay) (koşul 4 ✅); kontrat değişikliği YOK (koşul 5 ✅); KK mekanik doğrulanabilir (koşul 6 ✅).\nNEDEN AÇIK: Koda karşı: `grep -rln webhook apps/web/src` → 0 sonuç (yalnız apps/e2e/tests/settings.spec.ts:140'ta yorum geçiyor). Webhook kaydı/listesi/silme route'ları tm 34'te üretimde (apps/api/src/routes/webhooks.ts, HMAC + assertPublicHttpUrl) ama web'de HİÇBİR ekran onları tüketmiyor — abonelik yalnız ham API çağrısıyla yönetilebiliyor. Zapier'in REST Hooks akışının (subscribe/unsubscribe) insan tarafındaki karşılığı yok.\nKAPSAM: Portal'a ikinci ve üçüncü sekme. (1) `WebhookSubscriptions.tsx`: `GET /webhooks` listesi (url / action / type / enabled / created_at) + anlamlı empty state; 'Subscribe' formu — action seçenekleri 09.4-b manifestinden okunur (sabit liste KOPYALANMAZ), url girdisi; `POST /webhooks` yanıtındaki `secret` BİR KEZ gösterilir (kopyala + uyarı); `DELETE /webhooks/{webhookId}` onay modalıyla. Sunucudan gelen 400 (private/loopback URL SSRF reddi) kullanıcıya alan-altı hata olarak yansır. (2) Manifest sekmesi: `GET /integrations/manifest` triggers/actions listesi — Zapier/Make app tanımını kuran geliştiriciye salt-okunur referans (subscribe/unsubscribe path'leri dahil). (3) 09.4-d'nin `rotate-secret` düğmesi partner app satırına: onay modalı + yeni secret'ın bir kez gösterimi. (4) e2e `apps/e2e/tests/developers.spec.ts`.\nDOSYALAR: apps/web/src/features/developers/WebhookSubscriptions.tsx · apps/web/src/features/developers/WebhookSubscriptions.test.tsx · apps/web/src/features/developers/DeveloperPortal.tsx · apps/e2e/tests/developers.spec.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/settings/WebsiteWidgets.tsx (liste + ekle formu + sil, sunucu hatası gösterimi) · apps/web/src/features/apps/AppsMarketplace.tsx (Modal onay akışı + useMutation invalidate) · apps/e2e/tests/settings.spec.ts (e2e spec iskeleti + fixture kullanımı)\nKK (birebir): \"700+ Zapier\" | \"partner/creator portalı\"\nKK DOĞRULAMA: unit (`WebhookSubscriptions.test.tsx`): (1) abonelik listesi ve boşken anlamlı empty state; (2) kayıt yanıtındaki secret bir kez render ediliyor ve liste satırında YOK (sunucu zaten döndürmüyor — ekran da göstermiyor); (3) sunucudan 400 gelen private/loopback URL denemesinde alan-altı hata görünüyor; (4) action seçenekleri manifest yanıtından türüyor (sabit liste yok). E2E `developers.spec.ts`: portal → webhook ekle → listede görünür → sil → listeden düşer.\nKAPSAM DIŞI: Webhook teslimat/retry davranışını değiştirmek (08.8.4-d, tm 34 — done) · SSRF/HMAC mantığına dokunmak (sunucuda, tm 34) · Yeni WEBHOOK_ACTION eklemek · Teslimat log ekranı (webhook_deliveries görünümü — ayrı iş)\nSÖZLEŞME: yok — mevcut `/webhooks` (tm 34), 09.4-b manifesti ve 09.4-d rotate endpoint'i tüketilir.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: abonelik listesi render + boşken anlamlı empty state · unit: action seçenekleri manifest yanıtından türüyor (sabit liste kopyası yok) · negatif: private/loopback URL sunucu reddi (400) alan-altı hata olarak yansıyor · negatif: secret liste satırında görünmüyor, yalnız kayıt/rotate anında bir kez · negatif: ajan rolünde sekme gizli · e2e: portal → webhook ekle → listede görünür → sil → listeden düşer",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "72.2",
               "72.4",
               "72.5"
             ],
             "parentId": "72",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T03:13:39.737Z"
           },
           {
             "id": 7,
@@ -2547,7 +2547,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T02:31:27.061Z",
+        "updatedAt": "2026-08-10T03:13:39.737Z",
         "complexity": 8,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.4 — Zapier/Make + Build-your-app  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T02:31:27.063Z",
+      "lastModified": "2026-08-10T03:13:39.738Z",
       "taskCount": 109,
       "completedCount": 97,
       "tags": [

@@ -182,6 +182,97 @@ describe('DeveloperPortal', () => {
     );
   });
 
+  describe('tabs', () => {
+    /** Path-aware, unlike the apps-only tests above: switching tabs means the
+     *  Webhooks and Manifest panels issue their own `/webhooks` and
+     *  `/integrations/manifest` requests, which need shapes of their own. */
+    function mockTabbedResponses(): void {
+      api.get.mockImplementation((path: string) => {
+        if (path === '/integrations/manifest') {
+          return Promise.resolve({
+            triggers: [
+              {
+                action: 'chat_started',
+                label: 'Chat started',
+                description: 'Fires when a new chat begins.',
+                sample_payload: {},
+              },
+            ],
+            actions: [],
+            subscribe: { method: 'POST', path: '/webhooks' },
+            unsubscribe: { method: 'DELETE', path: '/webhooks/{webhookId}' },
+          });
+        }
+        return Promise.resolve({ items: [] });
+      });
+    }
+
+    it('switches between Apps, Webhooks and Manifest', async () => {
+      mockTabbedResponses();
+      renderPortal();
+
+      expect(await screen.findByText('No partner apps yet')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('tab', { name: 'Webhooks' }));
+      expect(await screen.findByText('No webhook subscriptions yet')).toBeInTheDocument();
+      // The Apps-tab header action does not follow onto another tab.
+      expect(screen.queryByRole('button', { name: 'Register app' })).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('tab', { name: 'Manifest' }));
+      expect(await screen.findByText('Chat started')).toBeInTheDocument();
+    });
+  });
+
+  describe('rotate secret', () => {
+    const confidentialApp = { ...registeredApp, client_type: 'confidential' as const };
+    const publicApp = {
+      ...registeredApp,
+      client_id: 'f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3',
+      display_name: 'Acme Public Client',
+      client_type: 'public' as const,
+    };
+
+    it('offers Rotate secret only for a confidential app', async () => {
+      api.get.mockResolvedValue({ items: [confidentialApp, publicApp] });
+      renderPortal();
+
+      await screen.findByTestId(`partner-app-${confidentialApp.client_id}`);
+      expect(
+        screen.getByRole('button', { name: `Rotate secret for ${confidentialApp.display_name}` }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: `Rotate secret for ${publicApp.display_name}` }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('rotates a secret, shows it once, then discards it', async () => {
+      api.get.mockResolvedValue({ items: [confidentialApp] });
+      api.post.mockResolvedValue({ ...confidentialApp, client_secret: 'nxcs_rotated-secret-value' });
+      renderPortal();
+
+      await userEvent.click(
+        await screen.findByRole('button', {
+          name: `Rotate secret for ${confidentialApp.display_name}`,
+        }),
+      );
+      const confirmDialog = screen.getByRole('dialog', {
+        name: `Rotate secret for ${confidentialApp.display_name}?`,
+      });
+      await userEvent.click(within(confirmDialog).getByRole('button', { name: 'Rotate secret' }));
+
+      expect(api.post).toHaveBeenCalledWith(
+        `/partner/apps/${confidentialApp.client_id}/rotate-secret`,
+      );
+      const secretDialog = await screen.findByRole('dialog', {
+        name: `${confidentialApp.display_name} secret rotated`,
+      });
+      expect(within(secretDialog).getByText('nxcs_rotated-secret-value')).toBeInTheDocument();
+
+      await userEvent.click(within(secretDialog).getByRole('button', { name: 'Done' }));
+      expect(screen.queryByText('nxcs_rotated-secret-value')).not.toBeInTheDocument();
+    });
+  });
+
   describe('access_rules:rw gate', () => {
     it('hides the portal for a caller without access_rules:rw', () => {
       currentScopes = [];

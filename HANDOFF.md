@@ -13,6 +13,29 @@
 
 ## Task log (newest-first)
 
+### tm 72.6 — 09.4-f: Portal'da Zapier REST Hooks yüzeyi (webhook abonelik + manifest sekmesi + rotate düğmesi) — done — 2026-08-10 UTC
+
+- **Yapıldı:** `WebhookSubscriptions.tsx` (yeni) — Webhooks sekmesi (liste + subscribe formu, action
+  seçenekleri `GET /integrations/manifest`'ten türer, sabit liste yok + secret bir kez + sil) ve
+  `IntegrationManifestReference` (salt-okunur Manifest sekmesi). `DeveloperPortal.tsx` üç sekmeli
+  oldu (Apps/Webhooks/Manifest, `role=tablist/tab/tabpanel`); Apps sekmesine 09.4-d'nin rotate-secret'ı
+  yüzeye çıktı (yalnız confidential client'ta düğme, onay modalı, `SecretOncePanel` `title` prop'uyla
+  register+rotate arasında paylaşıldı).
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0**
+  (`@nexa/web` 823/823, 813'ten +10) · `pnpm -w test:integration` **0** (`@nexa/api` 1644/1644) ·
+  `pnpm -w build` **0** (7/7) · `apps/e2e/tests/developers.spec.ts` (yeni) + `developer-portal.spec.ts`
+  (regresyon) **0** (2/2, elle koşuldu — `.env` kabuğa source edilerek, RTM `.env` yükleyici kusuru
+  hâlâ ayrı açık). Tam `test:e2e` süiti koşulmadı — kapanışı 09.4-g'nin işi.
+- **Varsayımlar:** Rotate secret düğmesi yalnız `client_type==='confidential'` satırlarda gösterildi
+  (public client'ta sunucu zaten 400 döner — istemci-taraflı, tahmin gerektirmeyen bir gerçek).
+- **Sonraki pencereye not:**
+  - **tm 105 WIP hâlâ commit'siz** (kapsam disiplini, bu turda da dokunulmadı): `README.md`,
+    kök `package.json`, `apps/api|rtm/package.json`, `apps/api/tsconfig.json`, iki
+    `test/helpers/fixtures.ts`, `turbo.json`, `apps/api/scripts/*test-datastores.ts`,
+    `test-datastores.test.ts`.
+  - PLAN.md `09.4` satırı `◐ → K09.4` kaldı — yalnız 09.4-g (uçtan uca partner akışı + tam e2e) açık.
+  - RTM `.env` yükleyici kusuru (tm 72.5'te not edildi) hâlâ düzeltilmedi — ayrı görev.
+
 ### tm 72.5 — 09.4-e: Developer portal kabuğu (partner app listesi + kayıt + secret bir kez) — done — 2026-08-10 UTC
 
 - **Yapıldı:** `DeveloperPortal.tsx` (yeni) — `/partner/apps` listesi (anlamlı empty state) + register

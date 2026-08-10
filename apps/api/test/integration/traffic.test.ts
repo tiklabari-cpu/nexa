@@ -9,7 +9,11 @@
  * isolation across the org/license boundary.
  */
 import type { PrismaClient } from '@prisma/client';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  SUPERVISION_LIVE_WINDOW_SECONDS,
+  SupervisionService,
+} from '../../src/services/traffic/supervision-service.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -36,6 +40,7 @@ describe('traffic', () => {
     return prefix + String(seq).padStart(width - 1, '0');
   };
   const minutesAgo = (n: number): Date => new Date(Date.now() - n * 60_000);
+  const secondsAgo = (n: number): Date => new Date(Date.now() - n * 1000);
 
   /** A customer in the given tenant's organization. */
   async function seedCustomer(t: TenantFixture, name: string, email?: string): Promise<string> {
@@ -132,6 +137,22 @@ describe('traffic', () => {
     });
   }
 
+  /**
+   * A watch on a conversation — the row `POST /chats/{id}/supervise` writes.
+   * Seeded directly so the funnel can be exercised at every heartbeat age, and
+   * (the case that matters) with a licence that does not own the chat.
+   */
+  async function seedSupervision(
+    t: TenantFixture,
+    chatId: string,
+    agentId: string,
+    lastSeenAt: Date = new Date(),
+  ): Promise<void> {
+    await owner.chatSupervision.create({
+      data: { chatId, agentId, licenseId: t.licenseId, startedAt: lastSeenAt, lastSeenAt },
+    });
+  }
+
   async function seedPersona(t: TenantFixture, name: string): Promise<void> {
     await owner.aiAgent.create({
       data: { licenseId: t.licenseId, kind: 'ai_agent', name, active: true },
@@ -163,6 +184,10 @@ describe('traffic', () => {
       ownerId: fx.a.ownerAccountId,
       scopes: ['customers:ro'],
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   // --- Tenant isolation ------------------------------------------------------
@@ -199,6 +224,24 @@ describe('traffic', () => {
       const ids = (await listTraffic()).map((v) => v.customer_id);
       expect(ids).toContain(mineInvited);
       expect(ids).not.toContain(theirsInvited);
+    });
+
+    it("never lets another workspace's supervision colour one of our rows", async () => {
+      const id = await seedCustomer(fx.a, 'Mine, Watched By Nobody');
+      const chatId = await seedActiveChat(fx.a, id, {
+        assigneeId: fx.a.agentAccountId,
+        lastAuthor: 'agent',
+      });
+
+      // The trap 13.2-c wrote a note about: the three foreign keys are checked
+      // by the table owner, which is exempt from RLS, so a row may legitimately
+      // point at *our* chat while carrying tenant B's licence. Nothing stops
+      // such a row existing — what must hold is that reading the board under
+      // A's session never sees it.
+      await seedSupervision(fx.b, chatId, fx.b.agentAccountId);
+
+      const row = (await listTraffic()).find((v) => v.customer_id === id);
+      expect(row?.activity).toBe('chatting');
     });
   });
 
@@ -297,6 +340,139 @@ describe('traffic', () => {
       expect(rows[0]?.activity).toBe('waiting');
       expect(rows[0]?.chatting_with).toMatchObject({ kind: 'human' });
       expect(rows[0]?.chat_id).not.toBeNull();
+    });
+  });
+
+  // --- Supervised (13.2-d's rows → the funnel) -------------------------------
+
+  describe('supervised', () => {
+    it('ignores a watch whose heartbeat has gone stale', async () => {
+      const id = await seedCustomer(fx.a, 'Watched By A Closed Tab');
+      const chatId = await seedActiveChat(fx.a, id, {
+        assigneeId: fx.a.agentAccountId,
+        lastAuthor: 'agent',
+      });
+      await seedSupervision(
+        fx.a,
+        chatId,
+        fx.a.agentAccountId,
+        secondsAgo(SUPERVISION_LIVE_WINDOW_SECONDS + 30),
+      );
+
+      // The row is still there — an abandoned tab is not a watcher, and the
+      // board must say so rather than claim someone is looking on forever.
+      const row = (await listTraffic()).find((v) => v.customer_id === id);
+      expect(row?.activity).toBe('chatting');
+    });
+
+    it('reports a watched conversation as supervised', async () => {
+      const id = await seedCustomer(fx.a, 'Being Watched');
+      const chatId = await seedActiveChat(fx.a, id, {
+        assigneeId: fx.a.agentAccountId,
+        lastAuthor: 'agent',
+      });
+      await seedSupervision(fx.a, chatId, fx.a.ownerAccountId);
+
+      const rows = (await listTraffic()).filter((v) => v.customer_id === id);
+      // One visitor, one bucket — supervision recolours the row, it never adds
+      // a second one.
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.activity).toBe('supervised');
+      expect(rows[0]?.chat_id).toBe(chatId);
+    });
+
+    it('puts supervised ahead of waiting', async () => {
+      const id = await seedCustomer(fx.a, 'Waiting And Watched');
+      const chatId = await seedActiveChat(fx.a, id, {
+        assigneeId: fx.a.agentAccountId,
+        lastAuthor: 'customer',
+      });
+      await seedSupervision(fx.a, chatId, fx.a.ownerAccountId);
+
+      // Without the watch this row reads `waiting`; being watched is the rarer
+      // fact and nothing else on the row carries it.
+      const row = (await listTraffic()).find((v) => v.customer_id === id);
+      expect(row?.activity).toBe('supervised');
+    });
+
+    it('leaves a queued conversation queued while it is watched', async () => {
+      await seedPersona(fx.a, 'Hazal');
+      const id = await seedCustomer(fx.a, 'Queued And Watched');
+      const chatId = await seedActiveChat(fx.a, id, { queuePosition: 0, lastAuthor: 'customer' });
+      await seedSupervision(fx.a, chatId, fx.a.ownerAccountId);
+
+      // Reading over the queue's shoulder does not answer anybody: the chat is
+      // still unclaimed, and hiding it from the queue bucket would hide it from
+      // the exact list a supervisor scans.
+      const row = (await listTraffic()).find((v) => v.customer_id === id);
+      expect(row?.activity).toBe('queued');
+      expect(row?.chatting_with).toBeNull();
+    });
+
+    it('keeps naming who is actually answering while a supervisor watches', async () => {
+      await seedPersona(fx.a, 'Hazal');
+      const withHuman = await seedCustomer(fx.a, 'Watched, Human Answering');
+      const humanChat = await seedActiveChat(fx.a, withHuman, {
+        assigneeId: fx.a.agentAccountId,
+        lastAuthor: 'agent',
+      });
+      await seedSupervision(fx.a, humanChat, fx.a.ownerAccountId);
+
+      const withAi = await seedCustomer(fx.a, 'Watched, AI Answering');
+      const aiChat = await seedActiveChat(fx.a, withAi, { lastAuthor: 'customer' });
+      await seedSupervision(fx.a, aiChat, fx.a.ownerAccountId);
+
+      // Watching is not answering, so the Chatting-with column is untouched by
+      // this slice: the human still wins over the persona, and an unassigned
+      // watched chat still names the persona.
+      const rows = await listTraffic();
+      expect(rows.find((v) => v.customer_id === withHuman)?.chatting_with).toMatchObject({
+        kind: 'human',
+        name: 'Agent a',
+      });
+      expect(rows.find((v) => v.customer_id === withAi)?.chatting_with).toMatchObject({
+        kind: 'ai',
+        name: 'Hazal',
+      });
+    });
+
+    it('puts nobody on the board for a watch on a conversation that has ended', async () => {
+      const id = await seedCustomer(fx.a, 'Watched After Closing');
+      const chatId = await seedActiveChat(fx.a, id, { assigneeId: fx.a.agentAccountId });
+      await owner.chat.update({ where: { id: chatId }, data: { active: false } });
+      await seedSupervision(fx.a, chatId, fx.a.ownerAccountId);
+
+      // Traffic is the *live* board. A supervisor reading an archived chat is
+      // not a visitor on the site, and a supervision row must not resurrect one.
+      const ids = (await listTraffic()).map((v) => v.customer_id);
+      expect(ids).not.toContain(id);
+    });
+
+    it('reads every watch on the board in a single query (NFR-P2)', async () => {
+      const liveByChat = vi.spyOn(SupervisionService.prototype, 'liveByChat');
+
+      const ids: string[] = [];
+      for (let i = 0; i < 3; i += 1) {
+        const customerId = await seedCustomer(fx.a, `Watched ${i}`);
+        const chatId = await seedActiveChat(fx.a, customerId, {
+          assigneeId: fx.a.agentAccountId,
+          lastAuthor: 'agent',
+          createdAt: minutesAgo(i + 1),
+        });
+        await seedSupervision(fx.a, chatId, fx.a.ownerAccountId);
+        ids.push(customerId);
+      }
+
+      const rows = await listTraffic();
+      expect(rows.filter((v) => ids.includes(v.customer_id)).map((v) => v.activity)).toEqual([
+        'supervised',
+        'supervised',
+        'supervised',
+      ]);
+      // One call carrying all three chat ids — a per-visitor lookup would show
+      // up here as three calls of one id each.
+      expect(liveByChat).toHaveBeenCalledTimes(1);
+      expect(liveByChat.mock.calls[0]?.[2]).toHaveLength(3);
     });
   });
 

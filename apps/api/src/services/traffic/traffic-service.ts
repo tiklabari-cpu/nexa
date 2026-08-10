@@ -14,9 +14,12 @@
  * widget never disagree about who is answering.
  *
  * Read-only: every action a row offers (start / supervise / assign) is an
- * existing chat endpoint the UI calls separately. This service only reports.
+ * existing chat endpoint the UI calls separately. This service only reports —
+ * including on supervision, whose rows are written by `SupervisionService` and
+ * only read back here to colour the funnel (FR-MOD-13.2).
  */
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { SupervisionService } from './supervision-service.js';
 
 export type TrafficActivity =
   | 'browsing'
@@ -47,6 +50,8 @@ export interface TrafficVisitor {
 const LIVE_WINDOW_MINUTES = 30;
 
 export class TrafficService {
+  constructor(private readonly supervisions: SupervisionService = new SupervisionService()) {}
+
   async listLive(
     tx: TenantClient,
     tenant: TenantContext,
@@ -96,7 +101,7 @@ export class TrafficService {
           .filter((id): id is string => typeof id === 'string'),
       ),
     ];
-    const [assignees, persona] = await Promise.all([
+    const [assignees, persona, watched] = await Promise.all([
       assigneeIds.length > 0
         ? tx.account.findMany({
             where: { id: { in: assigneeIds } },
@@ -110,6 +115,17 @@ export class TrafficService {
         orderBy: { createdAt: 'asc' },
         select: { name: true, avatarUrl: true },
       }),
+      // Who is being watched right now (13.2-d writes these rows). One indexed
+      // read for the whole page, alongside the other two rather than after
+      // them, because a query per visitor is the shape NFR-P2 rules out. Every
+      // fetched chat id goes in, not just the ones that survive the de-dup
+      // below: the list is already bounded by `limit`, and pre-scanning it to
+      // shave a few ids off a single `IN` would cost more than it saves.
+      this.supervisions.liveByChat(
+        tx,
+        tenant.licenseId,
+        chats.map((chat) => chat.id),
+      ),
     ]);
     const accountById = new Map(assignees.map((account) => [account.id, account]));
 
@@ -124,13 +140,30 @@ export class TrafficService {
       const lastEvent = thread?.events[0] ?? null;
 
       // Most-specific first, so a visitor lands in exactly one bucket: still in
-      // the queue, or waiting on a reply, or otherwise mid-conversation.
+      // the queue, or watched by a supervisor, or waiting on a reply, or
+      // otherwise mid-conversation.
+      //
+      // The two ends of that order are the decisions (the PRD names the states
+      // but not their precedence — recorded as an assumption in PLAN §C):
+      //
+      //   queued > supervised — a queued conversation belongs to nobody yet,
+      //     and "nobody has picked this up" is the fact the board exists to
+      //     surface. Someone reading over the queue's shoulder does not change
+      //     that it is still unanswered, so a watcher must not hide it from the
+      //     one bucket a supervisor is scanning for.
+      //   supervised > waiting/chatting — those two are the ordinary state of
+      //     every live conversation and are re-derivable from the transcript at
+      //     a glance; being watched is the rare fact, visible nowhere else on
+      //     the row. Ranking it lower would mean the state could exist in the
+      //     dictionary and never once be produced for a chat that has events.
       const activity: TrafficActivity =
         thread?.queuePosition != null
           ? 'queued'
-          : lastEvent?.authorType === 'customer'
-            ? 'waiting'
-            : 'chatting';
+          : watched.has(chat.id)
+            ? 'supervised'
+            : lastEvent?.authorType === 'customer'
+              ? 'waiting'
+              : 'chatting';
 
       let respondent: TrafficRespondent | null = null;
       if (thread?.assigneeId) {
@@ -140,7 +173,10 @@ export class TrafficService {
         }
       }
       // The persona answers first only when no human has the chat and it is not
-      // still sitting unclaimed in the queue.
+      // still sitting unclaimed in the queue. A supervisor is not a respondent —
+      // watching is not answering — so `supervised` deliberately falls through
+      // here and the column keeps naming whoever the visitor is actually
+      // talking to. (Naming the watcher too is a separate field, not this one.)
       if (!respondent && activity !== 'queued' && persona) {
         respondent = { kind: 'ai', name: persona.name, avatar_url: persona.avatarUrl };
       }

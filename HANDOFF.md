@@ -13,6 +13,35 @@
 
 ## Task log (newest-first)
 
+### tm 73.5 — 13.2-e: `supervised` durumunun Traffic funnel'ına bağlanması + öncelik — done — 2026-08-10 UTC
+
+- **Yapıldı:** `TrafficService.listLive` artık `chat_supervisions`'ı okuyor —
+  `SupervisionService.liveByChat(...)` mevcut assignee/persona `Promise.all`'ının üçüncü elemanı
+  (board başına tek indeksli sorgu, ziyaretçi başına sorgu YOK). Öncelik **`queued` > `supervised`
+  > `waiting` > `chatting`**; gerekçe kodun içinde yazılı (kuyruktaki sohbet hâlâ kimseye ait
+  değil, izleyici onu yanıtlamaz / `waiting`+`chatting` transkriptten okunur, "izleniyor" nadir
+  bilgi). `chatting_with` DEĞİŞMEDİ — izlemek yanıtlamak değil. Kontrat/migration yok.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test`
+  **0** (`@nexa/api` 2244/2244, 2236→+8) · `pnpm -w test:integration` **0** (api 1707/1707 · rtm
+  51/51) · `pnpm -w build` **0** (7/7) · e2e `traffic.spec.ts` **1/1** (regresyon).
+  **Mutasyonla kanıtlandı:** supervised dalı silinince 3 kırmızı · supervised'ı queued'ın üstüne
+  alınca 1 · waiting'in altına indirince 1 · toplu okumayı ziyaretçi-başına döngüye çevirince 1
+  (NFR-P2 testi) · canlılık penceresini bir güne açınca 1. Beşi geri alınınca 23/23 yeşil.
+- **Varsayımlar:** Öncelik sırası PRD'de yok, §C varsayımı olarak PLAN K13.2'ye yazıldı.
+  **Dürüst sınır:** cross-tenant satırı fiilen `chat_supervisions_tenant` RLS politikası durduruyor
+  — `liveByChat`'in `licenseId` filtresi kaldırılınca testler yeşil kalıyor. O filtre derinlemesine
+  savunma + `(license_id, last_seen_at DESC)` indeksini kullanmak içindir, tek koruma değil.
+- **Sonraki pencereye not:**
+  - **13.2-f** (çoklu-koşul filtre) artık altı durumun hepsini üretilebilir görüyor; `supervised`
+    filtresi `liveByChat` sonucuna göre süzmeli, ayrı bir sorgu AÇMAMALI (N+1 testi bunu kilitliyor).
+  - Heartbeat'i **kim** atacak hâlâ yok (13.2-g): `TrafficPage.tsx`'in Supervise düğmesi yalnız
+    navigate ediyor. O bağlanana kadar `supervised` üretimi ancak elle yazılmış satırla görülür.
+  - tm 105 WIP hâlâ commit'siz (`apps/api/scripts/with-test-datastores.ts` + `test-datastores.ts`
+    + `test/integration/test-datastores.test.ts` untracked; `package.json`×3 · `turbo.json` ·
+    `README.md` · `.gitignore` · iki `fixtures.ts`) ve `apps/e2e/kanit/*.png` (~50) hâlâ `modified`.
+    Bu pencere de dokunmadı (kapsam disiplini, §5) — **altıncı** tur; commit'e yalnız kendi üç
+    dosyası eklendi, `git add -A` bilerek kullanılmadı.
+
 ### tm 73.4 — 13.2-d: Supervision register/release API + yetki sınırı + heartbeat — done — 2026-08-10 UTC
 
 - **Yapıldı:** `POST`/`DELETE /chats/{chatId}/supervise` — kontrat + route + servis aynı turda.

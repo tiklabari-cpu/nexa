@@ -25,11 +25,13 @@ import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { visitorRowActions, type RowActionId } from './rowActions.js';
 import type { TrafficActivity, TrafficVisitor } from './types.js';
 
-const ACTIVITY: Record<TrafficActivity, { tone: StatusTone; label: string }> = {
+export const ACTIVITY: Record<TrafficActivity, { tone: StatusTone; label: string }> = {
   browsing: { tone: 'info', label: 'Browsing' },
   queued: { tone: 'warning', label: 'Queued' },
   waiting: { tone: 'warning', label: 'Waiting for reply' },
   chatting: { tone: 'success', label: 'Chatting' },
+  supervised: { tone: 'info', label: 'Supervised' },
+  invited: { tone: 'warning', label: 'Invited' },
 };
 
 function hasAny(scopes: string[], ...wanted: string[]): boolean {

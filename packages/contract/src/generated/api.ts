@@ -1027,10 +1027,12 @@ export interface paths {
      *     person, ordered by most recent activity.
      *
      *     `activity` is where they are in the funnel:
-     *       - `browsing` — on the site, no conversation yet.
-     *       - `queued`   — wrote in, still waiting in the routing queue.
-     *       - `waiting`  — an agent has the chat, the visitor's last message is unanswered.
-     *       - `chatting` — mid-conversation, the ball is not in the visitor's court.
+     *       - `browsing`   — on the site, no conversation yet.
+     *       - `queued`     — wrote in, still waiting in the routing queue.
+     *       - `waiting`    — an agent has the chat, the visitor's last message is unanswered.
+     *       - `chatting`   — mid-conversation, the ball is not in the visitor's court.
+     *       - `supervised` — an agent is watching the conversation without being the respondent yet.
+     *       - `invited`    — proactively invited to chat, hasn't replied yet.
      *
      *     `chatting_with` is who is answering: a human assignee wins over the AI
      *     persona, exactly as the widget header resolves it (FR-MOD-11.3). Null while
@@ -5395,7 +5397,7 @@ export interface components {
        * @description Where the visitor is in the funnel — see `listTraffic`.
        * @enum {string}
        */
-      activity: 'browsing' | 'queued' | 'waiting' | 'chatting';
+      activity: 'browsing' | 'queued' | 'waiting' | 'chatting' | 'supervised' | 'invited';
       /** @description The active conversation, when there is one; null while browsing. */
       chat_id: string | null;
       /** @description Who is answering, or null while nobody is. */

@@ -1682,7 +1682,7 @@ components:
         email: { type: string, nullable: true }
         activity:
           type: string
-          enum: [browsing, queued, waiting, chatting]
+          enum: [browsing, queued, waiting, chatting, supervised, invited]
           description: Where the visitor is in the funnel — see `listTraffic`.
         chat_id:
           type: string

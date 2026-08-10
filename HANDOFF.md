@@ -13,6 +13,32 @@
 
 ## Task log (newest-first)
 
+### tm 73.1 — 13.2-a: TrafficActivity sözlüğünün supervised + invited ile genişletilmesi — done — 2026-08-10 UTC
+
+- **Yapıldı:** `TrafficActivity` 4→6 (`supervised`, `invited`), üç katman senkron: `openapi.yaml`
+  `TrafficVisitor.activity` enum'ı + `paths/traffic.yaml` funnel açıklaması (2 satır) → re-bundle
+  (`pnpm --filter @nexa/contract generate`) → `traffic-service.ts` + web `types.ts` union'ları →
+  `TrafficPage.tsx` `ACTIVITY` map'ine `supervised` (info) + `invited` (warning), map artık `export`.
+  Servis bu iki değeri henüz ÜRETMİYOR — üretim 13.2-b/e'nin işi. PLAN.md `13.2` satırı `⬜` → `◐ →
+  K13.2` (11 alt-görevden yalnız 1'i bitti, kalanı K13.2 bloğunda listeli).
+- **Doğrulama:** `pnpm -w typecheck` **0** · `pnpm -w lint` **0** · `pnpm -w test` **0** (`@nexa/web`
+  829/829, +6 yeni `TrafficPage.test.ts`; `@nexa/api` 2191/2191) · `pnpm -w test:integration` **0**
+  (`@nexa/api` 1654/1654 — `contract-parity` + `traffic.test.ts` regresyon dahil) · `pnpm -w build`
+  **0** · e2e `apps/e2e/tests/traffic.spec.ts` **1/1** (regresyon; `.env` kabuğa source edilerek —
+  RTM `.env` yükleyici kusuru tm 72.5'ten hâlâ açık).
+- **Varsayımlar:** Yok.
+- **Sonraki pencereye not:**
+  - tm 105 WIP hâlâ commit'siz (bu turda da dokunulmadı, kapsam dışı — bkz. önceki bloklar).
+  - RTM `.env` yükleyici kusuru (tm 72.5) hâlâ açık.
+  - **Yeni gözlem:** bu pencere açıldığında `apps/e2e/kanit/*.png` (60+ dosya, traffic'le
+    ilgisiz olanlar dahil — campaigns/channels/reports/vb.) çalışma alanında zaten `modified`
+    idi (bu turun yaptığı DEĞİL — muhtemelen önceki bir pencerenin tam e2e koşusu commit'lenmeden
+    kaldı). Bu pencere kendi doğrulaması için yalnız `traffic.spec.ts` koştu (o da
+    `03-traffic-board.png`'yi tazeledi) ve kapsam disiplini gereği HİÇBİRİNİ commit'e almadı.
+    Sonraki pencere bunları ya commit'lesin ya da neden bekletildiğini netleştirsin.
+  - 13.2-b (invited üretimi) ve 13.2-c (chat_supervisions tablosu) bu kalemin bağımlılıksız
+    sıradaki adımları.
+
 ### tm 72.7 — 09.4-g: Uçtan uca partner akışı doğrulaması + 09.4 kalem kapanışı — done — 2026-08-10 UTC
 
 - **Yapıldı:** Yeni üretim kodu YOK (doğrulama turu). `apps/api/test/integration/partner-apps.test.ts`

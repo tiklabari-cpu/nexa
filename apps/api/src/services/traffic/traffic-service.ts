@@ -18,7 +18,13 @@
  */
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
-export type TrafficActivity = 'browsing' | 'queued' | 'waiting' | 'chatting';
+export type TrafficActivity =
+  | 'browsing'
+  | 'queued'
+  | 'waiting'
+  | 'chatting'
+  | 'supervised'
+  | 'invited';
 
 export interface TrafficRespondent {
   kind: 'human' | 'ai';

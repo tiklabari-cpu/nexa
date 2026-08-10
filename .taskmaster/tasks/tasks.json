@@ -2946,12 +2946,12 @@
             "description": "(1) `ReviewsTab`ın Ecommerce bölümü: `configured:true` dalında KPI grid'e `currency` görünürlüğü ve 'atıflı satış yok' durumunda 0 değerinin dürüst gösterimi (null-fallback `?? 0` yerine gerçek 0); (2) `configured:false` empty state metni güncellenir — 'later release' ifadesi kaldırılır, yerine Settings/Sales tracker'a giden **'Configure sales platforms'** CTA (react-router `Link`, rapor-1:1290 re",
             "details": "13.5-f — Reports/Reviews — Ecommerce KPI'ları + dürüst empty state + 'Configure sales platforms' CTA  [SONNET-XHIGH]\n\nPRD: FR-MOD-13.5 · FR-MOD-07.8\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 3 dosya (koşul 1); salt-okunur rapor kartı, hiçbir yetki/izolasyon kararı yok — veri zaten scope'lu endpoint'ten geliyor (koşul 2); eşzamanlılık yok (koşul 3); dokunulacak bileşen ve KPI grid kodu ZATEN yazılmış durumda (`ReportsPage.tsx:611-639`), iş onu doğru metin+CTA ile tamamlamak (koşul 4); kontrat değişmiyor (koşul 5); KK mekanik doğrulanabilir (koşul 6).\nNEDEN AÇIK: `apps/web/src/features/reports/ReportsPage.tsx:611-639` 'Ecommerce' bölümünü zaten render ediyor: `data.ecommerce.configured` false ise EmptyState('Sales tracking not set up ... Tracked sales arrive in a later release'), true ise `Tracked sales` + `Attributed revenue` KPI gridi. Ama `configured` sunucuda sabit false olduğu için KPI dalı HİÇ çalışmıyor ve empty state metni 'later release' diyerek artık yanlış olacak. rapor-1-fonksiyonel.md:1290 bu ekranın referans davranışını birebir veriyor: 'All sales $0 [Configure sales platforms].'\nKAPSAM: (1) `ReviewsTab`ın Ecommerce bölümü: `configured:true` dalında KPI grid'e `currency` görünürlüğü ve 'atıflı satış yok' durumunda 0 değerinin dürüst gösterimi (null-fallback `?? 0` yerine gerçek 0); (2) `configured:false` empty state metni güncellenir — 'later release' ifadesi kaldırılır, yerine Settings/Sales tracker'a giden **'Configure sales platforms'** CTA (react-router `Link`, rapor-1:1290 referansı); (3) `ReportsPage.test.tsx`e her iki dalın testi; (4) `apps/e2e/tests/reports.spec.ts`e Reviews sekmesinde Ecommerce bölümünün görünürlük iddiası.\nDOSYALAR: apps/web/src/features/reports/ReportsPage.tsx · apps/web/src/features/reports/ReportsPage.test.tsx · apps/e2e/tests/reports.spec.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/reports/ReportsPage.tsx:543-639 (ReviewsTab — Section/Card/EmptyState/KpiGrid/Kpi kompozisyonu, tam olarak genişletilecek yer) · apps/web/src/components/EmptyState.tsx (anlamlı empty state deseni, T6-b) · apps/web/src/features/settings/SettingsPage.tsx (Integrations bölümü — bir başka ekrana Link ile CTA verme deseni)\nKK (birebir): \"Reports Ecommerce ile ilişki\"\nKK DOĞRULAMA: `ReportsPage.test.tsx` — (a) `ecommerce.configured=true` mock'unda 'Tracked sales' ve 'Attributed revenue' KPI'ları ekrandaki sayılarla render olur (= 'Reports Ecommerce ile ilişki' KK'sının görünür karşılığı); (b) `configured=false` mock'unda EmptyState + 'Configure sales platforms' CTA görünür ve Settings'e link verir; (c) 'later release' metni artık DOM'da yok (grep-benzeri negatif iddia). E2E `reports.spec.ts` Reviews sekmesinde Ecommerce bölümünü görür.\nKAPSAM DIŞI: Yeni bir 'Sales' rapor sekmesi/grubu (MOD-07.7 v2 payı — açık soru 2) · Grafik/zaman serisi (satış trendi) — bu kalemde yalnız KPI · CSV/PDF export'a satış sütunu ekleme (07.7 v2)\nSÖZLEŞME: yok (13.5-d'de semantiği açılan mevcut `ReportsReviews.ecommerce` alanları tüketilir)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: configured=true → iki KPI + para birimi görünür · unit (negatif/empty): configured=false → anlamlı empty state + CTA; 'later release' metni yok · unit: configured=true fakat 0 satış → '0' gösterilir, boş dikdörtgen değil (FR-EK-B.1) · e2e: Reviews sekmesinde Ecommerce bölümü görünür (reports.spec.ts)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "75.4"
             ],
             "parentId": "75",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T21:51:36.543Z"
           },
           {
             "id": 7,
@@ -2983,7 +2983,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T21:23:57.659Z",
+        "updatedAt": "2026-08-10T21:51:36.543Z",
         "complexity": 8,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"13.5 — Sales tracker (Ecommerce/Tracked sales)  ·  dilim V2-8\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5133,7 +5133,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T21:23:57.660Z",
+      "lastModified": "2026-08-10T21:51:36.544Z",
       "taskCount": 113,
       "completedCount": 104,
       "tags": [

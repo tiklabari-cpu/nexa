@@ -12,6 +12,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
@@ -96,7 +97,11 @@ function mockReports(aiAgent: AiAgent): void {
 
 function renderReports(ui: ReactElement): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>,
+  );
 }
 
 /** The card enclosing a KPI, found by its label; scopes value/hint assertions. */
@@ -302,15 +307,19 @@ describe('ReportsPage — Reviews report (07.8)', () => {
     expect(screen.getByText('0%')).toBeInTheDocument();
   });
 
-  it('shows the tracked-sales skeleton as not set up (FR-MOD-13.5, v2)', async () => {
+  it('shows a meaningful empty state with a CTA to Settings, not a "later release" excuse, when Sales is not configured', async () => {
     mockReviews({});
     renderReports(<ReportsPage />);
     await openReviewsTab();
 
     expect(screen.getByText('Sales tracking not set up')).toBeInTheDocument();
+    expect(screen.queryByText(/later release/)).not.toBeInTheDocument();
+
+    const cta = screen.getByRole('link', { name: 'Configure sales platforms' });
+    expect(cta).toHaveAttribute('href', '/app/settings#section-sales-tracker');
   });
 
-  it('renders tracked sales once a source is configured', async () => {
+  it('renders tracked sales and the reporting currency once a source is configured', async () => {
     mockReviews({
       ecommerce: {
         configured: true,
@@ -324,6 +333,27 @@ describe('ReportsPage — Reviews report (07.8)', () => {
 
     expect(within(kpi('Tracked sales')).getByText('12')).toBeInTheDocument();
     expect(within(kpi('Attributed revenue')).getByText('$345.00')).toBeInTheDocument();
+    expect(within(kpi('Attributed revenue')).getByText('USD')).toBeInTheDocument();
+  });
+
+  it('reads zero tracked sales plainly as 0, not as an empty dash (FR-EK-B.1)', async () => {
+    mockReviews({
+      ecommerce: {
+        configured: true,
+        tracked_sales: 0,
+        attributed_revenue_cents: 0,
+        currency: 'USD',
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    expect(within(kpi('Tracked sales')).getByText('0')).toBeInTheDocument();
+    expect(within(kpi('Attributed revenue')).getByText('$0.00')).toBeInTheDocument();
+    // A configured source with nothing attributed yet is a known zero, not the
+    // "no data" dash Kpi renders for a null value.
+    expect(within(kpi('Tracked sales')).queryByText('—')).not.toBeInTheDocument();
+    expect(within(kpi('Attributed revenue')).queryByText('—')).not.toBeInTheDocument();
   });
 
   it('queries the reviews endpoint with the selected range', async () => {

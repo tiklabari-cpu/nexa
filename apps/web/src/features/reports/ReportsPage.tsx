@@ -14,6 +14,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Card,
   CardSkeleton,
@@ -122,12 +123,14 @@ interface ReportsReviews {
   csat: CsatSummary;
   previous_period: CsatSummary & { range: { from: string; to: string } };
   by_day: Array<CsatSummary & { date: string }>;
-  ecommerce: {
-    configured: boolean;
-    tracked_sales: number | null;
-    attributed_revenue_cents: number | null;
-    currency: string | null;
-  };
+  ecommerce:
+    | { configured: true; tracked_sales: number; attributed_revenue_cents: number; currency: string }
+    | {
+        configured: false;
+        tracked_sales: null;
+        attributed_revenue_cents: null;
+        currency: null;
+      };
 }
 
 interface TopicRow {
@@ -876,21 +879,25 @@ function ReviewsTab(props: TabProps): ReactElement {
         <Card>
           {data.ecommerce.configured ? (
             <KpiGrid>
-              <Kpi label="Tracked sales" value={formatCount(data.ecommerce.tracked_sales ?? 0)} />
+              <Kpi label="Tracked sales" value={formatCount(data.ecommerce.tracked_sales)} />
               <Kpi
                 label="Attributed revenue"
-                value={
-                  formatMoney(
-                    data.ecommerce.attributed_revenue_cents,
-                    data.ecommerce.currency ?? undefined,
-                  ) ?? '—'
-                }
+                value={formatMoney(data.ecommerce.attributed_revenue_cents, data.ecommerce.currency)}
+                hint={data.ecommerce.currency}
               />
             </KpiGrid>
           ) : (
             <EmptyState
               title="Sales tracking not set up"
-              description="Connect a sales source to attribute revenue to supported conversations. Tracked sales arrive in a later release."
+              description="Connect a sales source to attribute revenue to supported conversations."
+              action={
+                <Link
+                  to="/app/settings#section-sales-tracker"
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+                >
+                  Configure sales platforms
+                </Link>
+              }
             />
           )}
         </Card>

@@ -13,6 +13,23 @@
 
 ## Task log (newest-first)
 
+## tm 75.6 — 13.5-f: Reports/Reviews Ecommerce KPI'ları + dürüst empty state + CTA — done — 2026-08-10 UTC
+
+- **Yapıldı:** `ReportsPage.tsx`'in Reviews → Ecommerce'i: `ecommerce` alanı ayrık union'a geçti
+  (`configured:true` dalında `tracked_sales`/`attributed_revenue_cents`/`currency` artık
+  non-null tipli) — `?? 0` / `?? '—'` null-fallback'leri kalktı, gerçek 0 doğrudan akıyor.
+  "Attributed revenue" KPI'sine `hint={currency}` (ISO kodu görünür). `configured:false` empty
+  state'ten "later release" metni kaldırıldı, yerine `Link to="/app/settings#section-sales-tracker"`
+  ile **"Configure sales platforms"** CTA'sı (13.5-e'nin açtığı çapa).
+- **Varsayımlar:** Kontrat değişmedi — yalnız yerel TS arayüzü ayrık union'a daraltıldı
+  (OpenAPI/`@nexa/types` dokunulmadı). Currency hint'i "Tracked sales" değil "Attributed
+  revenue" kartına eklendi (para birimi tutarla ilgili, sayımla değil).
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/web` 927/927, +1)
+  · `pnpm -w test:integration` 0 (`@nexa/api` 1851/1851) · build 0 (7/7) · `pnpm -w test:e2e`
+  **96/96** (sayı sabit).
+- **Sonraki pencereye not:** 13.5-g (widget izleme kodu, `nexa('trackSale', …)`) ve 13.5-h
+  (uçtan uca doğrulama) hâlâ açık; PLAN.md K13.5 satırı `◐` kalıyor.
+
 ## tm 75.5 — 13.5-e: Settings ekranı 'Sales tracker' bölümü — done — 2026-08-10 UTC
 
 - **Yapıldı:** `apps/web/src/features/settings/SalesTracker.tsx` (yeni) — enabled/currency/atıf

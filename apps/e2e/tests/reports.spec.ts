@@ -61,7 +61,15 @@ test.describe('reports overview', () => {
     // daily rating bar, and the tracked-sales skeleton — each its own region.
     await expect(agentPage.getByRole('region', { name: 'Satisfaction (CSAT)' })).toBeVisible();
     await expect(agentPage.getByRole('region', { name: 'Ratings by day' })).toBeVisible();
-    await expect(agentPage.getByRole('region', { name: 'Ecommerce' })).toBeVisible();
+    const ecommerce = agentPage.getByRole('region', { name: 'Ecommerce' });
+    await expect(ecommerce).toBeVisible();
+
+    // The seeded demo license never configures sales tracking (13.5-e), so this
+    // is the honest "not set up" state — a CTA to Settings, not the "later
+    // release" placeholder 13.5-f replaced.
+    const cta = ecommerce.getByRole('link', { name: 'Configure sales platforms' });
+    await expect(cta).toBeVisible();
+    await expect(cta).toHaveAttribute('href', '/app/settings#section-sales-tracker');
 
     await agentPage.screenshot({ path: 'kanit/22-reports-reviews.png', fullPage: true });
   });

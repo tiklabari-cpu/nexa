@@ -13,6 +13,26 @@
 
 ## Task log (newest-first)
 
+### tm 73.10 — 13.2-j: Ziyaretçi 360° panel — N visits özeti + Came from + Groups kartları (UI) — done — 2026-08-10 UTC
+
+- **Yapıldı:** `CustomerDetailPanel.tsx` dl bloğuna `Visits` satırı (`visits_count`, kırpılmış
+  `visits[]`'ten bağımsız) + `visits_count > 1`'de `StatusDot` "Returning visitor" rozeti · her
+  ziyaret satırında `came_from` doluysa düz metin "Came from …" (link YOK, dosyanın mevcut URL
+  kararıyla aynı gerekçe), null'da satır sessizce yok · yeni `Groups` kartı ("Conversations"
+  kartıyla aynı iskelet), boşsa anlamlı empty state (FR-EK-B.1), doluysa takım adları. `Visit.ip`
+  frontend tipinde hiç yok (NFR-S9); negatif test sızdırılmış bir `ip` alanını simüle ederek de
+  doğruluyor.
+- **Doğrulama:** `pnpm -w typecheck` 0 (11/11) · `pnpm -w lint` 0 (8/8) · `pnpm -w test` 0
+  (`@nexa/web` 892/892, 884'ten +8: `CustomerDetailPanel.test.tsx` yeni) · `pnpm -w test:integration`
+  0 (1732/1732, regresyon) · `pnpm -w build` 0 (7/7) · e2e `customers.spec.ts` 6/6 (regresyon).
+- **Varsayımlar:** Groups kartı empty state, dosyanın kendi kart deseni (düz `<p>`) ile yazıldı —
+  `EmptyState.tsx` bileşeni DEĞİL; o bileşen bu panelin diğer kartlarında da kullanılmıyor, tutarlı
+  kalmak için aynı yerel desen izlendi.
+- **Sonraki pencereye not:** 13.2-k (uçtan uca doğrulama: E2E + NFR-P2 + a11y) artık tüm 13.2-a..j
+  bitmiş halde açılabilir — bu, PRD 13.2 satırının `✅`ya dönmesi için son kalem. tm 105 WIP
+  (test-datastore izolasyon script'leri) hâlâ commit'siz — bu pencere de dokunmadı (kapsam
+  disiplini, §5).
+
 ### tm 73.9 — 13.2-i: CustomerDetail'e `visits_count` + `groups[]` (kontrat + servis) — done — 2026-08-10 UTC
 
 - **Yapıldı:** Bu pencere açıldığında task Task Master'da zaten **in-progress** idi ve çalışma

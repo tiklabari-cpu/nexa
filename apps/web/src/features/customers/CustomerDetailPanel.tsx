@@ -104,6 +104,11 @@ export function CustomerDetailPanel({
           <dd className="tabular text-right">{customer.chats_count}</dd>
           <dt className="text-content-secondary">Tickets</dt>
           <dd className="tabular text-right">{customer.tickets_count}</dd>
+          <dt className="text-content-secondary">Visits</dt>
+          <dd className="flex items-center justify-end gap-1.5">
+            <span className="tabular">{customer.visits_count}</span>
+            {customer.visits_count > 1 && <StatusDot tone="info" label="Returning visitor" />}
+          </dd>
           <dt className="text-content-secondary">Country</dt>
           <dd className="text-right">{customer.country ?? customer.country_code ?? '—'}</dd>
           <dt className="text-content-secondary">Last active</dt>
@@ -161,6 +166,13 @@ export function CustomerDetailPanel({
                   {visit.browser ? ` · ${visit.browser}` : ''}
                   {visit.os ? ` · ${visit.os}` : ''}
                 </p>
+                {visit.came_from && (
+                  // Visitor-supplied, rendered as text, never as a link — same
+                  // reasoning as the page URLs below.
+                  <p className="mt-0.5 truncate text-2xs text-content-tertiary" title={visit.came_from}>
+                    Came from {visit.came_from}
+                  </p>
+                )}
                 <ul className="mt-1 flex flex-col gap-0.5">
                   {visit.pages.map((page, index) => (
                     <li
@@ -199,6 +211,26 @@ export function CustomerDetailPanel({
                   tone={chat.active ? 'success' : 'neutral'}
                   label={chat.active ? 'Open' : 'Closed'}
                 />
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card>
+        <h3 className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-content-tertiary">
+          Groups
+        </h3>
+        {customer.groups.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-content-secondary">
+            Not routed to a team yet. Groups appear here once one of their conversations is
+            assigned.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {customer.groups.map((group) => (
+              <li key={group.id} className="px-4 py-2.5 text-sm">
+                {group.name}
               </li>
             ))}
           </ul>

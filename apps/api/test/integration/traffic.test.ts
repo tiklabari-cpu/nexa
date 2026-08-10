@@ -10,10 +10,12 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withTenant, type TenantClient } from '../../src/lib/tenant.js';
 import {
   SUPERVISION_LIVE_WINDOW_SECONDS,
   SupervisionService,
 } from '../../src/services/traffic/supervision-service.js';
+import { TrafficService } from '../../src/services/traffic/traffic-service.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -43,24 +45,54 @@ describe('traffic', () => {
   const secondsAgo = (n: number): Date => new Date(Date.now() - n * 1000);
 
   /** A customer in the given tenant's organization. */
-  async function seedCustomer(t: TenantFixture, name: string, email?: string): Promise<string> {
+  async function seedCustomer(
+    t: TenantFixture,
+    name: string,
+    opts: { email?: string; countryCode?: string; isLead?: boolean } = {},
+  ): Promise<string> {
     const customer = await owner.customer.create({
-      data: { organizationId: t.organizationId, name, ...(email ? { email } : {}) },
+      data: {
+        organizationId: t.organizationId,
+        name,
+        ...(opts.email ? { email: opts.email } : {}),
+        ...(opts.countryCode ? { countryCode: opts.countryCode } : {}),
+        ...(opts.isLead !== undefined ? { isLead: opts.isLead } : {}),
+      },
       select: { id: true },
     });
     return customer.id;
   }
 
   /** A recent visit — what puts a browsing visitor on the board. */
-  async function seedVisit(t: TenantFixture, customerId: string, startedAt: Date): Promise<void> {
+  async function seedVisit(
+    t: TenantFixture,
+    customerId: string,
+    startedAt: Date,
+    opts: { urls?: string[]; cameFrom?: string } = {},
+  ): Promise<void> {
+    const urls = opts.urls ?? ['https://shop.example/pricing'];
     await owner.visit.create({
       data: {
         customerId,
         licenseId: t.licenseId,
-        pages: [{ url: 'https://shop.example/pricing', at: startedAt.toISOString() }],
+        pages: urls.map((url) => ({ url, at: startedAt.toISOString() })),
+        ...(opts.cameFrom ? { cameFrom: opts.cameFrom } : {}),
         startedAt,
       },
     });
+  }
+
+  /** A team, and the `chat_access` row that routes a conversation to it. */
+  async function seedGroup(t: TenantFixture, name: string): Promise<bigint> {
+    const group = await owner.group.create({
+      data: { licenseId: t.licenseId, name },
+      select: { id: true },
+    });
+    return group.id;
+  }
+
+  async function routeToGroup(chatId: string, groupId: bigint): Promise<void> {
+    await owner.chatAccess.create({ data: { chatId, groupId } });
   }
 
   /**
@@ -261,7 +293,7 @@ describe('traffic', () => {
   // --- Who is on the board ---------------------------------------------------
 
   it('lists a browsing visitor with no conversation', async () => {
-    const id = await seedCustomer(fx.a, 'Browser', 'browser@example.test');
+    const id = await seedCustomer(fx.a, 'Browser', { email: 'browser@example.test' });
     await seedVisit(fx.a, id, minutesAgo(3));
 
     const row = (await listTraffic()).find((v) => v.customer_id === id);
@@ -304,7 +336,7 @@ describe('traffic', () => {
     });
 
     it('lists an invited visitor who has not answered yet', async () => {
-      const id = await seedCustomer(fx.a, 'Invited', 'invited@example.test');
+      const id = await seedCustomer(fx.a, 'Invited', { email: 'invited@example.test' });
       await seedInvite(fx.a, id);
 
       const row = (await listTraffic()).find((v) => v.customer_id === id);
@@ -518,6 +550,385 @@ describe('traffic', () => {
     // Nobody has picked it up, so the persona is not yet "chatting with" them.
     expect(row?.chatting_with).toBeNull();
   });
+
+  // --- Match all filters + Add filter (FR-MOD-13.2) ---------------------------
+
+  describe('filters', () => {
+    /** Every condition the caller sent has to hold; an absent one restricts nothing. */
+
+    // --- Negative, first: a filter that is not understood must not be ignored.
+
+    it('rejects an unknown filter key', async () => {
+      // The `campaigns.ts` rule, applied to the query string: a typo has to be
+      // a 400. Ignored, `country_cod=TR` would leave every country on a board
+      // the supervisor believes they narrowed.
+      const response = await server.get('/traffic?country_cod=TR', auth(readToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('rejects an activity outside the funnel dictionary', async () => {
+      const response = await server.get('/traffic?activity=lurking', auth(readToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('rejects an is_lead that is not a boolean', async () => {
+      // `Boolean('no')` is `true`, so a coercing parser would answer this with
+      // the leads — the exact opposite of what was asked.
+      const response = await server.get('/traffic?is_lead=no', auth(readToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('rejects a country code that is not two letters', async () => {
+      const response = await server.get('/traffic?country_code=TUR', auth(readToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    // --- Cross-tenant, second (NFR-S4/S5).
+
+    it("returns nothing for a group id belonging to another tenant", async () => {
+      const mine = await seedCustomer(fx.a, 'Mine, In A Team');
+      const chatId = await seedActiveChat(fx.a, mine, { assigneeId: fx.a.agentAccountId });
+      await routeToGroup(chatId, await seedGroup(fx.a, 'Sales'));
+
+      const theirGroup = await seedGroup(fx.b, 'Their Sales');
+      const items = await listTraffic(`?group_id=${theirGroup}`);
+
+      // Empty, not 404: a foreign id and an id of ours nobody is chatting from
+      // have to be indistinguishable, or the parameter counts another
+      // license's teams. What must never happen is our own rows coming back
+      // for a team we were not asked about.
+      expect(items).toEqual([]);
+      expect(items.map((v) => v.customer_id)).not.toContain(mine);
+    });
+
+    it('never lets an unvalidated group id reach the visitor query', async () => {
+      await seedActiveChat(fx.a, await seedCustomer(fx.a, 'Mine'), {
+        assigneeId: fx.a.agentAccountId,
+      });
+      const theirGroup = await seedGroup(fx.b, 'Their Sales');
+
+      // "Validated before it joins the query" is the rule, and this is what it
+      // means concretely: a foreign id is answered by the group lookup alone
+      // and never handed to `chat_access`, which carries no license column of
+      // its own to be filtered by. Asserting the empty board is not enough —
+      // that stays true even with the gate removed.
+      const calls = await countQueries({ limit: 50, groupId: theirGroup });
+      expect(calls.map((call) => call.name)).toEqual(['group.findFirst']);
+    });
+
+    // --- Regression: no filter is still the old board.
+
+    it('restricts nothing when no filter is sent', async () => {
+      const chatting = await seedCustomer(fx.a, 'Chatting', { countryCode: 'DE' });
+      await seedActiveChat(fx.a, chatting, { assigneeId: fx.a.agentAccountId });
+      const invited = await seedCustomer(fx.a, 'Invited');
+      await seedInvite(fx.a, invited);
+      const browsing = await seedCustomer(fx.a, 'Browsing', { isLead: true });
+      await seedVisit(fx.a, browsing, minutesAgo(2));
+
+      const ids = (await listTraffic()).map((v) => v.customer_id);
+      expect(ids).toEqual(expect.arrayContaining([chatting, invited, browsing]));
+    });
+
+    // --- Each condition, on its own, narrows the board.
+
+    it('narrows to a single funnel state', async () => {
+      const chatting = await seedCustomer(fx.a, 'Chatting');
+      await seedActiveChat(fx.a, chatting, { assigneeId: fx.a.agentAccountId });
+      const browsing = await seedCustomer(fx.a, 'Browsing');
+      await seedVisit(fx.a, browsing, minutesAgo(2));
+
+      const items = await listTraffic('?activity=browsing');
+      expect(items.map((v) => v.customer_id)).toEqual([browsing]);
+    });
+
+    it('keeps a state that is still filling the page behind the conversations', async () => {
+      // The trap a naive "filter the finished page" would fall into: the
+      // conversations come first, so asking for `browsing` alone must not hand
+      // back a page of chats with everything removed from it.
+      for (let i = 0; i < 3; i += 1) {
+        const id = await seedCustomer(fx.a, `Chatting ${i}`);
+        await seedActiveChat(fx.a, id, {
+          assigneeId: fx.a.agentAccountId,
+          createdAt: minutesAgo(i + 1),
+        });
+      }
+      const browsing = await seedCustomer(fx.a, 'Browsing');
+      await seedVisit(fx.a, browsing, minutesAgo(9));
+
+      const items = await listTraffic('?limit=2&activity=browsing');
+      expect(items.map((v) => v.customer_id)).toEqual([browsing]);
+    });
+
+    it('removes a filtered-out visitor rather than relabelling them', async () => {
+      // Both of these are in two sources at once. Their bucket is decided by
+      // precedence (a conversation beats an invitation beats a visit), so
+      // filtering that bucket out has to remove them from the board — not move
+      // them down to the bucket they were excluded from.
+      const chatting = await seedCustomer(fx.a, 'Chatting, Also Seen Browsing');
+      await seedActiveChat(fx.a, chatting, { assigneeId: fx.a.agentAccountId });
+      await seedVisit(fx.a, chatting, minutesAgo(2));
+
+      const invited = await seedCustomer(fx.a, 'Invited, Also Seen Browsing');
+      await seedInvite(fx.a, invited);
+      await seedVisit(fx.a, invited, minutesAgo(3));
+
+      const reallyBrowsing = await seedCustomer(fx.a, 'Only Browsing');
+      await seedVisit(fx.a, reallyBrowsing, minutesAgo(4));
+
+      const ids = (await listTraffic('?activity=browsing')).map((v) => v.customer_id);
+      expect(ids).toEqual([reallyBrowsing]);
+    });
+
+    it('unions the states when activity is repeated', async () => {
+      const queued = await seedCustomer(fx.a, 'Queued');
+      await seedActiveChat(fx.a, queued, { queuePosition: 0, lastAuthor: 'customer' });
+      const browsing = await seedCustomer(fx.a, 'Browsing');
+      await seedVisit(fx.a, browsing, minutesAgo(2));
+      const invited = await seedCustomer(fx.a, 'Invited');
+      await seedInvite(fx.a, invited);
+
+      const ids = (await listTraffic('?activity=queued&activity=browsing')).map(
+        (v) => v.customer_id,
+      );
+      expect(ids).toEqual(expect.arrayContaining([queued, browsing]));
+      expect(ids).not.toContain(invited);
+    });
+
+    it('narrows by page url — including a visitor mid-conversation', async () => {
+      const chattingOnPricing = await seedCustomer(fx.a, 'Chatting On Pricing');
+      await seedActiveChat(fx.a, chattingOnPricing, { assigneeId: fx.a.agentAccountId });
+      await seedVisit(fx.a, chattingOnPricing, minutesAgo(2), {
+        urls: ['https://shop.example/PRICING'],
+      });
+
+      const browsingOnPricing = await seedCustomer(fx.a, 'Browsing On Pricing');
+      await seedVisit(fx.a, browsingOnPricing, minutesAgo(3), {
+        urls: ['https://shop.example/blog', 'https://shop.example/pricing'],
+      });
+
+      const browsingElsewhere = await seedCustomer(fx.a, 'Browsing On Blog');
+      await seedVisit(fx.a, browsingElsewhere, minutesAgo(4), {
+        urls: ['https://shop.example/blog'],
+      });
+
+      const ids = (await listTraffic('?page_url_contains=/pricing')).map((v) => v.customer_id);
+      // A page condition is not a browsing-only condition: filtering only the
+      // visits bucket would make `activity=chatting&page_url_contains=…` a
+      // combination nobody can ever match. Case-insensitive, like the campaign
+      // trigger that reads the same JSON.
+      expect(ids).toEqual(expect.arrayContaining([chattingOnPricing, browsingOnPricing]));
+      expect(ids).not.toContain(browsingElsewhere);
+    });
+
+    it('drops a visitor with no live visit from a page-url filter', async () => {
+      const invitedNoVisit = await seedCustomer(fx.a, 'Invited, Never Seen Browsing');
+      await seedInvite(fx.a, invitedNoVisit);
+
+      // Nothing about this row can answer "which page are they on", and a
+      // condition a row cannot answer is a condition it fails. Waving it
+      // through would turn AND into "AND, except where I did not look".
+      const ids = (await listTraffic('?page_url_contains=/pricing')).map((v) => v.customer_id);
+      expect(ids).not.toContain(invitedNoVisit);
+    });
+
+    it('narrows by referrer', async () => {
+      const fromGoogle = await seedCustomer(fx.a, 'From Google');
+      await seedVisit(fx.a, fromGoogle, minutesAgo(2), { cameFrom: 'https://www.google.com/' });
+      const fromNewsletter = await seedCustomer(fx.a, 'From Newsletter');
+      await seedVisit(fx.a, fromNewsletter, minutesAgo(3), { cameFrom: 'https://mail.example/' });
+
+      const ids = (await listTraffic('?came_from_contains=google')).map((v) => v.customer_id);
+      expect(ids).toEqual([fromGoogle]);
+      expect(ids).not.toContain(fromNewsletter);
+    });
+
+    it('narrows by country, case-insensitively', async () => {
+      const turkish = await seedCustomer(fx.a, 'In Turkey', { countryCode: 'TR' });
+      await seedVisit(fx.a, turkish, minutesAgo(2));
+      const german = await seedCustomer(fx.a, 'In Germany', { countryCode: 'DE' });
+      await seedVisit(fx.a, german, minutesAgo(3));
+
+      const ids = (await listTraffic('?country_code=tr')).map((v) => v.customer_id);
+      expect(ids).toEqual([turkish]);
+      expect(ids).not.toContain(german);
+    });
+
+    it('narrows by the lead flag in both directions', async () => {
+      const lead = await seedCustomer(fx.a, 'A Lead', { isLead: true });
+      await seedVisit(fx.a, lead, minutesAgo(2));
+      const notALead = await seedCustomer(fx.a, 'Not A Lead', { isLead: false });
+      await seedVisit(fx.a, notALead, minutesAgo(3));
+
+      expect((await listTraffic('?is_lead=true')).map((v) => v.customer_id)).toEqual([lead]);
+      const others = (await listTraffic('?is_lead=false')).map((v) => v.customer_id);
+      expect(others).toContain(notALead);
+      expect(others).not.toContain(lead);
+    });
+
+    it('narrows to the team a conversation is routed to', async () => {
+      const sales = await seedGroup(fx.a, 'Sales');
+      const support = await seedGroup(fx.a, 'Support');
+
+      const withSales = await seedCustomer(fx.a, 'Talking To Sales');
+      const salesChat = await seedActiveChat(fx.a, withSales, { assigneeId: fx.a.agentAccountId });
+      await routeToGroup(salesChat, sales);
+
+      const withSupport = await seedCustomer(fx.a, 'Talking To Support');
+      const supportChat = await seedActiveChat(fx.a, withSupport, {
+        assigneeId: fx.a.agentAccountId,
+      });
+      await routeToGroup(supportChat, support);
+
+      const browsing = await seedCustomer(fx.a, 'Browsing, In No Team');
+      await seedVisit(fx.a, browsing, minutesAgo(2));
+
+      const ids = (await listTraffic(`?group_id=${sales}`)).map((v) => v.customer_id);
+      expect(ids).toEqual([withSales]);
+      // A team is a fact a conversation carries. Someone merely browsing has
+      // no team, so they fail the condition rather than passing it by default.
+      expect(ids).not.toContain(withSupport);
+      expect(ids).not.toContain(browsing);
+    });
+
+    // --- Match all: two conditions are AND'ed.
+
+    it('drops a visitor that satisfies only one of two conditions', async () => {
+      const both = await seedCustomer(fx.a, 'Turkish Lead', { countryCode: 'TR', isLead: true });
+      await seedVisit(fx.a, both, minutesAgo(2));
+      const onlyCountry = await seedCustomer(fx.a, 'Turkish, Not A Lead', {
+        countryCode: 'TR',
+        isLead: false,
+      });
+      await seedVisit(fx.a, onlyCountry, minutesAgo(3));
+      const onlyLead = await seedCustomer(fx.a, 'German Lead', {
+        countryCode: 'DE',
+        isLead: true,
+      });
+      await seedVisit(fx.a, onlyLead, minutesAgo(4));
+
+      const ids = (await listTraffic('?country_code=TR&is_lead=true')).map((v) => v.customer_id);
+      expect(ids).toEqual([both]);
+    });
+
+    it("AND's a funnel state with a page url", async () => {
+      const chattingOnPricing = await seedCustomer(fx.a, 'Chatting On Pricing');
+      await seedActiveChat(fx.a, chattingOnPricing, { assigneeId: fx.a.agentAccountId });
+      await seedVisit(fx.a, chattingOnPricing, minutesAgo(2), {
+        urls: ['https://shop.example/pricing'],
+      });
+
+      const browsingOnPricing = await seedCustomer(fx.a, 'Browsing On Pricing');
+      await seedVisit(fx.a, browsingOnPricing, minutesAgo(3), {
+        urls: ['https://shop.example/pricing'],
+      });
+
+      const chattingElsewhere = await seedCustomer(fx.a, 'Chatting On Blog');
+      await seedActiveChat(fx.a, chattingElsewhere, { assigneeId: fx.a.agentAccountId });
+      await seedVisit(fx.a, chattingElsewhere, minutesAgo(4), {
+        urls: ['https://shop.example/blog'],
+      });
+
+      const ids = (await listTraffic('?activity=chatting&page_url_contains=/pricing')).map(
+        (v) => v.customer_id,
+      );
+      expect(ids).toEqual([chattingOnPricing]);
+    });
+
+    // --- NFR-P2: filtering must not cost another round trip.
+
+    it('asks the database no more times when filtered, inside a bounded take', async () => {
+      const chatting = await seedCustomer(fx.a, 'Chatting On Pricing');
+      await seedActiveChat(fx.a, chatting, { assigneeId: fx.a.agentAccountId });
+      await seedVisit(fx.a, chatting, minutesAgo(2), { urls: ['https://shop.example/pricing'] });
+      const invited = await seedCustomer(fx.a, 'Invited');
+      await seedInvite(fx.a, invited);
+      const browsing = await seedCustomer(fx.a, 'Browsing On Pricing');
+      await seedVisit(fx.a, browsing, minutesAgo(3), { urls: ['https://shop.example/pricing'] });
+
+      const unfiltered = await countQueries({ limit: 50 });
+      const filtered = await countQueries({ limit: 50, pageUrlContains: '/pricing' });
+
+      // A page condition needs visit rows for *every* bucket, so the naive fix
+      // is a fourth read. Reusing the read the board already does for its third
+      // source is what keeps this equal — a per-visitor lookup or an extra
+      // source would show up here immediately.
+      expect(filtered.map((call) => call.name).sort()).toEqual(
+        unfiltered.map((call) => call.name).sort(),
+      );
+      expect(filtered.filter((call) => call.name === 'visit.findMany')).toHaveLength(1);
+
+      // And every read that scans a source carries a take, so no filter turns
+      // one page into an unbounded scan. (The three that do not — the group
+      // check, the assignees and the watchers — are bounded by their own shape:
+      // one row, or an `IN` list built from the page.)
+      const scans = filtered.filter((call) =>
+        ['chat.findMany', 'campaignSend.findMany', 'visit.findMany'].includes(call.name),
+      );
+      expect(scans).toHaveLength(3);
+      for (const scan of scans) {
+        expect(scan.take).toBeGreaterThan(0);
+        expect(scan.take).toBeLessThanOrEqual(500);
+      }
+    });
+  });
+
+  /**
+   * Every query `listLive` issues, with the `take` it issued it with.
+   *
+   * The service is called directly through a counting stand-in for the tenant
+   * client, because "how many round trips did that cost" is not a fact any HTTP
+   * response carries.
+   */
+  interface CountedQuery {
+    name: string;
+    take: number | undefined;
+  }
+
+  async function countQueries(
+    options: Parameters<TrafficService['listLive']>[2],
+  ): Promise<CountedQuery[]> {
+    const calls: CountedQuery[] = [];
+    const models = [
+      'chat',
+      'account',
+      'aiAgent',
+      'chatSupervision',
+      'campaignSend',
+      'visit',
+      'group',
+    ] as const;
+
+    await withTenant(
+      owner,
+      { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+      async (tx) => {
+        const counting: Record<string, unknown> = Object.create(tx);
+        for (const model of models) {
+          const delegate = tx[model] as unknown as Record<string, unknown>;
+          counting[model] = new Proxy(delegate, {
+            get(target, property) {
+              const value = Reflect.get(target, property, target);
+              if (typeof value !== 'function' || typeof property !== 'string') return value;
+              return (...args: unknown[]) => {
+                const take = (args[0] as { take?: number } | undefined)?.take;
+                calls.push({ name: `${model}.${property}`, take });
+                return (value as (...a: unknown[]) => unknown).apply(target, args);
+              };
+            },
+          });
+        }
+
+        await new TrafficService().listLive(
+          counting as TenantClient,
+          { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+          options,
+        );
+      },
+    );
+
+    return calls;
+  }
 
   // --- Shape -----------------------------------------------------------------
 

@@ -13,6 +13,47 @@
 
 ## Task log (newest-first)
 
+### tm 73.6 — 13.2-f: "Match all filters + Add filter" — GET /traffic çoklu-koşul filtre çekirdeği — done — 2026-08-10 UTC
+
+- **Yapıldı:** `GET /traffic`'e altı AND'lenen query parametresi (`activity` çoklu ·
+  `page_url_contains` · `came_from_contains` · `country_code` · `is_lead` · `group_id`); zod
+  `.strict()` → bilinmeyen anahtar 400, `is_lead` enum'la ayrıştırılır (`z.coerce.boolean()`
+  `Boolean('false')`=true üretirdi). `group_id` sorguya girmeden önce kiracının grupları içinde
+  doğrulanır; yabancı id **boş board** döndürür (404 değil — NFR-S5). Cevaplanamayan koşul
+  başarısız koşuldur: takım yalnız sohbette, sayfa/referrer yalnız canlı ziyarette vardır.
+  Kova sahiplenmesi (`seen.add`) filtreden ÖNCE — filtrelenen bir sohbet/davet `browsing`
+  olarak yeniden ETİKETLENMEZ, board'dan düşer. Kontrat + re-bundle (155 path), migration yok.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test`
+  **0** (`@nexa/api` 2264/2264, 2244→+20) · `pnpm -w test:integration` **0** (1727/1727, 68
+  dosya; contract-parity yeşil) · `pnpm -w build` **0** (7/7) · e2e `traffic.spec.ts` **1/1**
+  (regresyon; `.env` source'lanarak). **NFR-P2 ölçümü:** filtreli ve filtresiz koşu aynı sorgu
+  kümesini üretiyor (testte sayılıyor) — ziyaret koşulu istendiğinde board'ın üçüncü kaynağı
+  için zaten yapılan `visits` okuması öne alınır ve üç kovaya birden hizmet eder, dördüncü
+  round-trip açılmaz; `visit.findMany` tam **1**; üç kaynak taramasının üçü de `take` sınırlı
+  (≤500). JSONB `pages` üzerinde SQL LIKE yok. **Mutasyonla kanıtlandı (9 mutasyon → 9 kırmızı):**
+  `.strict()` düşür 1 · `wants()` hep true 5 · ziyaretsiz satır koşulu sağlar 1 · sayfa filtresi
+  sohbetlere uygulanmaz 1 · üçüncü kaynak ziyareti yeniden okur 1 · kova sahiplenmesi filtreden
+  sonra 1 · davet kaynağı `browsing`'te atlanır 1 · grup kapısı kaldırılır 1 · `browsing` takım
+  filtresinden sağ çıkar 1. Hepsi geri alınınca 43/43 yeşil.
+- **Varsayımlar:** Koşul kataloğu + kodlaması §C varsayımı (PRD yapıyı ismen veriyor).
+  `activity` çoklu değeri **tekrar eden anahtar** olarak kodlandı (`?activity=a&activity=b`),
+  virgül DEĞİL. **Dürüst sınır:** grup kapısının kaldırılması fiilen sızıntı üretmiyor —
+  `chat_access`'e yalnız lisans-kapsamlı `chats` üzerinden erişilir, yani yabancı bir grup id'si
+  zaten boş döner. Kapı bu yüzden "sonuç" testiyle ölçülemez; onun yerine **doğrulanmamış id'nin
+  ziyaretçi sorgusuna hiç ULAŞMADIĞI** ölçülüyor (yabancı id → tek `group.findFirst`, `chats`'e
+  dokunulmaz). Ayrıca JS-tarafı filtre varken kaynaklar ×4 over-fetch yapar: çok seçici bir
+  filtrede sayfa `limit`'ten kısa dönebilir (indekssiz JSONB taramasından kaçınmanın bedeli).
+- **Sonraki pencereye not:**
+  - **13.2-g** (sekmeler) ve **13.2-h** (filtre paneli) artık backend'i hazır buluyor: sekme =
+    `?activity=<state>`, panel = kalan beş parametre. Sekme sayaçları için ayrı bir uç YOK —
+    her sekme kendi isteğini atar ya da 13.2-k'de sayaç işi ayrıca açılır.
+  - Filtre paneli `group_id` için takım listesini `GET /groups`'tan almalı; yabancı/silinmiş id
+    boş board döndürdüğü için UI "sonuç yok" ile "geçersiz takım"ı ayırt edemez (bilinçli).
+  - tm 105 WIP hâlâ commit'siz (`apps/api/scripts/with-test-datastores.ts` + `test-datastores.ts`
+    + `test/integration/test-datastores.test.ts` untracked; `package.json`×3 · `turbo.json` ·
+    `README.md` · `.gitignore` · iki `fixtures.ts`) ve `apps/e2e/kanit/*.png` (~50) hâlâ
+    `modified`. Bu pencere de dokunmadı (kapsam disiplini, §5) — **yedinci** tur.
+
 ### tm 73.5 — 13.2-e: `supervised` durumunun Traffic funnel'ına bağlanması + öncelik — done — 2026-08-10 UTC
 
 - **Yapıldı:** `TrafficService.listLive` artık `chat_supervisions`'ı okuyor —

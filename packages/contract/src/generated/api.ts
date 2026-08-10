@@ -1083,6 +1083,19 @@ export interface paths {
      *     `chatting_with` is who is answering: a human assignee wins over the AI
      *     persona, exactly as the widget header resolves it (FR-MOD-11.3). Null while
      *     nobody is (a browsing or freshly queued visitor).
+     *
+     *     **Filtering (FR-MOD-13.2 "Match all filters" / "Add filter").** Every
+     *     parameter below is optional and independent: adding one is "Add filter",
+     *     and a visitor has to satisfy *all* the ones you sent to stay on the board
+     *     ("Match all filters"). Omitting a parameter places no restriction, so
+     *     sending none returns the whole board. There is no OR mode.
+     *
+     *     A condition a row cannot answer is a condition it fails. `group_id` is
+     *     carried by a conversation, so browsing and invited visitors never match
+     *     it; `page_url_contains` / `came_from_contains` are carried by a visit
+     *     inside the live window, so a visitor with no such visit never matches
+     *     them. An unknown key is rejected (400) rather than ignored — a silently
+     *     dropped filter would show more people than the caller asked for.
      */
     get: operations['listTraffic'];
     put?: never;
@@ -9044,6 +9057,28 @@ export interface operations {
   listTraffic: {
     parameters: {
       query?: {
+        /**
+         * @description Funnel states to keep, repeated once per state
+         *     (`?activity=queued&activity=waiting`). Omitted means every state.
+         */
+        activity?: ('browsing' | 'queued' | 'waiting' | 'chatting' | 'supervised' | 'invited')[];
+        /**
+         * @description Case-insensitive substring of any page URL recorded on the visitor's
+         *     most recent visit inside the live window.
+         */
+        page_url_contains?: string;
+        /** @description Case-insensitive substring of the referrer on that same visit. */
+        came_from_contains?: string;
+        /** @description ISO 3166-1 alpha-2, matched case-insensitively. */
+        country_code?: string;
+        /** @description Keep only leads (`true`) or only non-leads (`false`). */
+        is_lead?: boolean;
+        /**
+         * @description Keep only visitors whose conversation is routed to this team. A group
+         *     id that is not one of the caller's own returns an empty board rather
+         *     than a 404, so group ids stay un-enumerable across licenses (NFR-S5).
+         */
+        group_id?: number;
         limit?: components['parameters']['Limit'];
       };
       header?: never;

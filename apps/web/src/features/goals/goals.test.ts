@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Goal } from '@nexa/types';
-import { GOAL_TABS, filterGoals, goalCounts, isGoalFilter } from './goals.js';
+import type { Goal, GoalFunnel } from '@nexa/types';
+import { GOAL_TABS, filterGoals, funnelStages, goalCounts, isGoalFilter } from './goals.js';
 
 function goal(active: boolean, over: Partial<Goal> = {}): Goal {
   return {
@@ -62,5 +62,34 @@ describe('goalCounts', () => {
 
   it('is all-zero for an empty list', () => {
     expect(goalCounts([])).toEqual({ all: 0, active: 0, inactive: 0 });
+  });
+});
+
+function goalFunnel(over: Partial<GoalFunnel> = {}): GoalFunnel {
+  return { visitors: 0, chats: 0, conversions: 0, conversion_rate: null, ...over };
+}
+
+describe('funnelStages', () => {
+  it('returns the three stages in order, with their counts', () => {
+    const stages = funnelStages(
+      goalFunnel({ visitors: 100, chats: 40, conversions: 10, conversion_rate: 0.25 }),
+    );
+    expect(stages).toEqual([
+      { label: 'Visitors', value: 100, rate: null },
+      { label: 'Chats', value: 40, rate: null },
+      { label: 'Conversions', value: 10, rate: 0.25 },
+    ]);
+  });
+
+  it('only the Conversions stage carries a rate', () => {
+    const [visitors, chats, conversions] = funnelStages(goalFunnel({ conversion_rate: 0.5 }));
+    expect(visitors?.rate).toBeNull();
+    expect(chats?.rate).toBeNull();
+    expect(conversions?.rate).toBe(0.5);
+  });
+
+  it('keeps the rate null (never NaN/Infinity) when there is nothing to divide by', () => {
+    const stages = funnelStages(goalFunnel({ visitors: 0, chats: 0, conversions: 0 }));
+    expect(stages[2]?.rate).toBeNull();
   });
 });

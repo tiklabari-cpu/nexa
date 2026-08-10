@@ -45,6 +45,7 @@ interface Period {
   manual: number;
   assisted: number;
   automated: number;
+  achieved_goals: number;
   avg_first_response_seconds: number | null;
   avg_duration_seconds: number | null;
   satisfaction_score: number | null;
@@ -65,6 +66,7 @@ interface ReportsOverview {
     assisted_rate: number | null;
     automated_rate: number | null;
     queued_now: number;
+    achieved_goals: number;
   };
   chats: {
     automated_per_hour: number;
@@ -543,6 +545,11 @@ function OverviewTab(props: TabProps): ReactElement {
             value={formatCount(data.totals.queued_now)}
             tone={data.totals.queued_now > 0 ? 'warn' : 'neutral'}
             hint={data.totals.queued_now > 0 ? 'Waiting for an agent' : 'Nobody waiting'}
+          />
+          <Kpi
+            label="Achieved goals"
+            value={formatCount(data.totals.achieved_goals)}
+            delta={<CountDelta current={data.totals.achieved_goals} previous={prev.achieved_goals} />}
           />
         </KpiGrid>
       </Section>

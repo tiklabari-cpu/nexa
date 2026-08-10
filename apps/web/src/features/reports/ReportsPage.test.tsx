@@ -50,6 +50,7 @@ const OVERVIEW = {
     manual: 0,
     assisted: 0,
     automated: 0,
+    achieved_goals: 0,
     avg_first_response_seconds: null,
     avg_duration_seconds: null,
     satisfaction_score: null,
@@ -66,6 +67,7 @@ const OVERVIEW = {
     assisted_rate: null,
     automated_rate: null,
     queued_now: 0,
+    achieved_goals: 0,
   },
   chats: { automated_per_hour: 0, automated_avg_duration_seconds: null, total_duration_seconds: 0 },
   response_times: { avg_first_response_seconds: null, avg_duration_seconds: null },
@@ -171,6 +173,35 @@ describe('ReportsPage — AI Agent report (07.4)', () => {
     expect(screen.getByText('Nothing closed in this window')).toBeInTheDocument();
     expect(within(kpi('Transfer rate')).getByText('—')).toBeInTheDocument();
     expect(screen.getByText('The AI finished nothing in this window')).toBeInTheDocument();
+  });
+});
+
+describe('ReportsPage — Overview "Achieved goals" KPI card (13.3-h)', () => {
+  it('shows the achieved goals count and its vs-previous delta', async () => {
+    api.get.mockImplementation((path: string) => {
+      if (path.startsWith('/reports/overview')) {
+        return Promise.resolve({
+          ...OVERVIEW,
+          totals: { ...OVERVIEW.totals, achieved_goals: 12 },
+          previous_period: { ...OVERVIEW.previous_period, achieved_goals: 4 },
+        });
+      }
+      return Promise.reject(new Error(`unexpected ${path}`));
+    });
+    renderReports(<ReportsPage />);
+
+    expect(await screen.findByText('Achieved goals')).toBeInTheDocument();
+    expect(within(kpi('Achieved goals')).getByText('12')).toBeInTheDocument();
+    expect(within(kpi('Achieved goals')).getByText(/↑ 8 vs previous/)).toBeInTheDocument();
+  });
+
+  it('reads zero achieved goals plainly, not as an error', async () => {
+    mockReports({});
+    renderReports(<ReportsPage />);
+
+    expect(await screen.findByText('Achieved goals')).toBeInTheDocument();
+    expect(within(kpi('Achieved goals')).getByText('0')).toBeInTheDocument();
+    expect(within(kpi('Achieved goals')).getByText('No change vs previous')).toBeInTheDocument();
   });
 });
 

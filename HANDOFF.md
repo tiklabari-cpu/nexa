@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+## tm 74.8 — 13.3-h: 3 aşamalı huni gösterimi + Reports Overview "Achieved goals" KPI kartı — done — 2026-08-10 UTC
+
+- **Yapıldı:** `goals.ts`'e saf `funnelStages(funnel)` (Visitors/Chats/Conversions üçlüsü, yalnız
+  son aşama `GoalFunnel.conversion_rate`'i olduğu gibi aktarır — null-safe, ikinci bölme yok).
+  `GoalsFunnel.tsx` (yeni) — kendi verisini `GET /reports/goals`'tan çeker, 3 sütunlu stat grid
+  (CampaignsPage deseni), boş durumu `by_goal.length === 0`'a bağlar (ziyaretçi 0 ≠ hedef yok:
+  ilki 0/0/0 + '—' render eder, ikincisi "No conversions yet" empty state). `ReportsPage.tsx`
+  Volume bölümüne `Achieved goals` Kpi + `CountDelta` (13.3-e'nin döndürdüğü `achieved_goals`
+  bu tura kadar hiçbir yanıt tipine bağlanmamıştı).
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` `@nexa/web` 919/919 ·
+  `@nexa/api` 2348/2348 (dokunulmadı) · `pnpm -w test:integration` 1799/1799 (dokunulmadı) ·
+  build 0 (7/7). Yeni testler: `goals.test.ts` (11, +3) · `GoalsFunnel.test.tsx` (yeni, 4) ·
+  `ReportsPage.test.tsx` (74, +2).
+- **Varsayımlar:** DOSYALAR listesi `GoalsPage.tsx`'i içermiyordu → `GoalsFunnel.tsx` hiçbir
+  ekrana BAĞLANMADI, yalnız bileşen + saf fonksiyon + testleri teslim edildi. E2E koşulmadı
+  (KAPSAM DIŞI, 13.3-i).
+- **Sonraki pencereye not:** 13.3-i (uçtan uca doğrulama) ya da sonraki bir tur `GoalsFunnel`'i
+  bir ekrana (muhtemelen `GoalsPage.tsx`) monte etmeli — bileşen hazır ve test edilmiş durumda,
+  yalnız hiçbir route onu render etmiyor. PLAN.md `13.3` satırı `◐` kaldı (K13.3'e madde eklendi).
+
+---
+
 ## tm 74.7 — 13.3-g: Goals ekranı — liste + Create goal formu (Customers 4. sekme) — done — 2026-08-10 UTC
 
 - **Yapıldı:** `apps/web/src/features/goals/{goals.ts, GoalBuilder.tsx, GoalsPage.tsx}` (yeni) —

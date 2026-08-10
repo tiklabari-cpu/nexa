@@ -104,6 +104,7 @@ model License {
   presenceEvents         AgentPresenceEvent[]
   scheduledReports       ScheduledReport[]
   scheduledReportRuns    ScheduledReportRun[]
+  chatSupervisions       ChatSupervision[]
 
   invitations Invitation[]
 
@@ -132,6 +133,7 @@ model Account {
   ticketFollows      TicketFollower[]
   workSchedules      WorkSchedule[]
   presenceEvents     AgentPresenceEvent[]
+  supervisions       ChatSupervision[]
 
   @@map("accounts")
 }
@@ -437,14 +439,15 @@ model Chat {
   active     Boolean  @default(true)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  license   License      @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  customer  Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  threads   Thread[]
-  users     ChatUser[]
-  access    ChatAccess[]
-  ratings   Rating[]
-  tickets   Ticket[]
-  skillRuns SkillRun[]
+  license      License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer     Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  threads      Thread[]
+  users        ChatUser[]
+  access       ChatAccess[]
+  supervisions ChatSupervision[]
+  ratings      Rating[]
+  tickets      Ticket[]
+  skillRuns    SkillRun[]
 
   @@index([licenseId, createdAt(sort: Desc)])
   @@index([customerId])
@@ -542,6 +545,38 @@ model ChatAccess {
   @@id([chatId, groupId])
   @@index([groupId])
   @@map("chat_access")
+}
+
+/// Which agent is watching a chat right now (FR-MOD-13.2 "Supervise").
+///
+/// Supervising is not assignment: the supervisor reads the conversation without
+/// taking it over, so nothing in `threads` records it. Without this table the
+/// Traffic board has no source at all for its `supervised` state — the button
+/// today only navigates to the inbox and writes nowhere.
+///
+/// One row per (chat, agent): two supervisors on the same chat are two rows,
+/// and the same agent re-opening the same chat updates a row instead of
+/// duplicating it. `last_seen_at` is the heartbeat 13.2-d refreshes while the
+/// panel is open — a row that has gone stale is a closed tab, not a watcher, so
+/// the read side filters on it rather than trusting the row's existence.
+///
+/// Stored in Postgres rather than Redis presence on purpose (§C): the tenant
+/// boundary then rests on an RLS policy the database enforces, and the row is
+/// deterministic evidence the DoD gate can assert on.
+model ChatSupervision {
+  chatId     String   @map("chat_id") @db.VarChar(12)
+  agentId    String   @map("agent_id") @db.Uuid
+  licenseId  BigInt   @map("license_id")
+  startedAt  DateTime @default(now()) @map("started_at") @db.Timestamptz(6)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+
+  chat    Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  agent   Account @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@id([chatId, agentId])
+  @@index([licenseId, lastSeenAt(sort: Desc)])
+  @@map("chat_supervisions")
 }
 
 /// Tags applied to a thread, not a chat: what a conversation was *about* can

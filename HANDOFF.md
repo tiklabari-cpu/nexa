@@ -13,6 +13,45 @@
 
 ## Task log (newest-first)
 
+### tm 73.3 — 13.2-c: `chat_supervisions` tablosu + RLS politikası + Prisma modeli — done — 2026-08-10 UTC
+
+- **Yapıldı:** Yeni `ChatSupervision` modeli (`schema.prisma`, ChatAccess'in hemen ardında) +
+  `20260810090000_chat_supervisions/migration.sql`: `chat_id` VARCHAR(12)→chats, `agent_id`
+  UUID→accounts, `license_id` BIGINT→licenses (üçü de ON DELETE CASCADE), `started_at` +
+  heartbeat `last_seen_at`; PK `(chat_id, agent_id)`, indeks `(license_id, last_seen_at DESC)`;
+  `chat_supervisions_tenant` RLS politikası `campaign_sends_tenant`'ın birebir eşi. GRANT
+  YOK — 20260722090000 varsayılan ayrıcalıkları nexa_app'e dört fiili de veriyor ve bu tablo
+  canlı durum (kısıtlanacak kanıt yok). ROUTE/OpenAPI YOK (bilinçli; contract-parity çift
+  yönlü). Prisma client regenerate + `migrate deploy` dev DB'ye uygulandı.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `pnpm -w test` **0** (`@nexa/api` 2208/2208) · `pnpm -w test:integration` **0**
+  (`@nexa/api` 1671/1671, 67 dosya — `data-model` +6, `tenant-isolation` +5) ·
+  `pnpm -w build` **0** (7/7) · e2e `traffic.spec.ts` **1/1** (regresyon; `.env` source'lanarak) ·
+  drift: `migrate diff` yalnız bilinen pgvector ivfflat satırını döndürüyor (= temiz).
+  **KK kanıtı ölçüldü:** politika geçici olarak migration'dan çıkarılıp süit koşuldu → 5 test
+  kırmızı (okuma sızıntısı, IDOR, WITH CHECK, cross-tenant delete+update, politika varlığı);
+  politika geri konunca 150/150 yeşil. Yani negatif testler gerçekten RLS'i ölçüyor.
+- **Varsayımlar:** Supervise kalıcı tablo olarak tutuldu, Redis/RTM presence reddedildi (§C
+  varsayımı, task kapsamında yazılı) — sınır böylece veritabanı garantisi ve DoD kapısı için
+  deterministik kanıt. `last_seen_at` heartbeat'i okuma tarafının filtresi; bayat satır
+  "kapatılmış sekme" sayılır, silinmesi 13.2-d'nin işi.
+- **Sonraki pencereye not:**
+  - **13.2-d için kritik:** FK'ler tablo sahibi tarafından uygulanır ve sahip RLS'ten muaftır,
+    yani `license_id` çağıranınkiyle eşleştiği sürece **başka lisansa ait bir `chat_id`
+    referans olarak kabul edilir**. Politika satırın cross-tenant *okunmasını* engeller, işaretin
+    kurulmasını değil. Register endpoint'i sohbeti önce kiracı oturumunda çözmeli (`chats` RLS
+    yabancı sohbeti görünmez yapar) ve bulunamazsa reddetmeli. `ratings`/`campaign_sends` aynı
+    `chat_id`+`license_id` şeklinde ve aynı şekilde korunuyor; not migration'ın sonunda da yazılı.
+  - Sıradaki: 13.2-d (register/release API, `OPUS-MAX`, artık bağımlılığı çözüldü) → 13.2-e.
+    13.2-i (`visits_count`+`groups[]`) hâlâ bağımsız.
+  - **`reports-billing.test.ts` yük altında yine düştü** (bu turun İLK `pnpm -w test` koşusu:
+    2206/2208, ikisi de `report groups + CSV export (07.7)` altında — `exports reviews CSAT
+    bucketed by day`). Dosya izole koşuldu → **250/250 yeşil**, ardından tam `pnpm -w test`
+    → **2208/2208 yeşil**. tm 72.6/72.7'de kayıtlı kusurun üçüncü gözlemi; hâlâ ayrı görev
+    olarak açılmadı — açılmalı (rapor penceresi `to = new Date()` çapası, zaman/yük duyarlı).
+  - tm 105 WIP hâlâ commit'siz ve `apps/e2e/kanit/*.png` (60 dosya) hâlâ `modified`; bu pencere
+    de ikisine dokunmadı (kapsam disiplini). Kanıt görselleri artık dördüncü turdur bekliyor.
+
 ### tm 73.2 — 13.2-b: `invited` durumu campaign_sends'ten türetme + funnel önceliği — done — 2026-08-10 UTC
 
 - **Yapıldı:** `TrafficService.listLive` üçüncü kaynağı okuyor: `tx.campaignSend.findMany`

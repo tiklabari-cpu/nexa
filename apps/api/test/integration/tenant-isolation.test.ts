@@ -550,6 +550,127 @@ describe('tenant isolation (RLS)', () => {
     });
   });
 
+  describe('chat supervisions (FR-MOD-13.2) — who is watching whom', () => {
+    // chat_supervisions carries a license_id, so the policy is the plain
+    // license match. What is behind it is which of a workspace's agents is
+    // watching which conversation: a cross-tenant read names another
+    // workspace's staff and the chats they have open, and a cross-tenant write
+    // plants a supervisor nobody there appointed — and, once 13.2-e lands,
+    // paints a row on their Traffic board that no action of theirs produced.
+    let aChatId: string;
+    let bChatId: string;
+
+    beforeAll(async () => {
+      // Seeded as the owner, which is not subject to RLS.
+      aChatId = generateShortId();
+      bChatId = generateShortId();
+      await owner.chat.create({
+        data: { id: aChatId, licenseId: fixtures.a.licenseId, customerId: fixtures.a.customerId },
+      });
+      await owner.chat.create({
+        data: { id: bChatId, licenseId: fixtures.b.licenseId, customerId: fixtures.b.customerId },
+      });
+      await owner.chatSupervision.create({
+        data: {
+          chatId: aChatId,
+          agentId: fixtures.a.agentAccountId,
+          licenseId: fixtures.a.licenseId,
+        },
+      });
+      await owner.chatSupervision.create({
+        data: {
+          chatId: bChatId,
+          agentId: fixtures.b.agentAccountId,
+          licenseId: fixtures.b.licenseId,
+        },
+      });
+    });
+
+    afterAll(async () => {
+      await owner.chat.deleteMany({ where: { id: { in: [aChatId, bChatId] } } });
+    });
+
+    it("reads only its own license's supervisions — the KK for 13.2-c", async () => {
+      // Drop the policy from the migration and this is the test that goes red:
+      // both rows come back, and A learns who in B is watching what.
+      const visible = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.chatSupervision.findMany({ select: { chatId: true, agentId: true } }),
+      );
+      expect(visible).toEqual([{ chatId: aChatId, agentId: fixtures.a.agentAccountId }]);
+    });
+
+    it('cannot fetch a tenant B supervision by its exact key', async () => {
+      // Correct SQL and the row exists — RLS is what makes it invisible (IDOR).
+      const found = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) =>
+          tx.chatSupervision.findUnique({
+            where: { chatId_agentId: { chatId: bChatId, agentId: fixtures.b.agentAccountId } },
+          }),
+      );
+      expect(found).toBeNull();
+    });
+
+    it('cannot plant a supervisor in tenant B (WITH CHECK)', async () => {
+      await expect(
+        withTenant(
+          app,
+          { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+          (tx) =>
+            tx.chatSupervision.create({
+              data: {
+                chatId: bChatId,
+                agentId: fixtures.a.agentAccountId,
+                licenseId: fixtures.b.licenseId,
+              },
+            }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it('cannot end or falsify a tenant B supervision', async () => {
+      // Release is a delete and the heartbeat is an update; both are handed the
+      // other tenant's exact key and must touch nothing. A silent success here
+      // would let one workspace drop another's supervisor — or keep a released
+      // one alive forever by refreshing last_seen_at.
+      const result = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        async (tx) => ({
+          beat: await tx.chatSupervision.updateMany({
+            where: { chatId: bChatId },
+            data: { lastSeenAt: new Date('2030-01-01T00:00:00.000Z') },
+          }),
+          released: await tx.chatSupervision.deleteMany({ where: { chatId: bChatId } }),
+        }),
+      );
+      expect(result.beat.count).toBe(0);
+      expect(result.released.count).toBe(0);
+
+      const survivor = await owner.chatSupervision.findUnique({
+        where: { chatId_agentId: { chatId: bChatId, agentId: fixtures.b.agentAccountId } },
+      });
+      expect(survivor).not.toBeNull();
+      expect(survivor?.lastSeenAt.getFullYear()).not.toBe(2030);
+    });
+
+    it('cannot reach a tenant B supervision through raw SQL that asks for it', async () => {
+      // Prisma's filters are not the boundary — the policy is. The same query
+      // the board read (13.2-e) will run, aimed deliberately across the line.
+      const rows = await withTenant(
+        app,
+        { licenseId: fixtures.a.licenseId, organizationId: fixtures.a.organizationId },
+        (tx) => tx.$queryRaw<Array<{ chat_id: string }>>`
+          SELECT chat_id FROM chat_supervisions WHERE license_id = ${fixtures.b.licenseId}
+        `,
+      );
+      expect(rows).toEqual([]);
+    });
+  });
+
   describe('work scheduler (PRD §5.3-Vardiya) — roster and presence isolation', () => {
     // work_schedules and agent_presence_events both carry a license_id, so the
     // policy is the plain license match. What is behind it is a workspace's

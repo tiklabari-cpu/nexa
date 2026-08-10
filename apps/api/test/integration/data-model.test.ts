@@ -507,6 +507,141 @@ describe('data model invariants', () => {
   });
 
   // =========================================================================
+  // Chat supervisions (Traffic "Supervise" — FR-MOD-13.2 / FR-MOD-03.1.1)
+  // =========================================================================
+
+  describe('chat supervisions', () => {
+    it('has RLS enabled and a tenant policy — the KK for 13.2-c', async () => {
+      // The whole point of the slice: the table exists, is protected, and
+      // carries a policy. Named here rather than left to the bulk sweep above,
+      // so a regression points straight at this table.
+      const [security] = await owner.$queryRaw<Array<{ relname: string; enabled: boolean }>>`
+        SELECT relname, relrowsecurity AS enabled FROM pg_class
+        WHERE relname = 'chat_supervisions'
+      `;
+      expect(security).toEqual({ relname: 'chat_supervisions', enabled: true });
+
+      const policies = await owner.$queryRaw<
+        Array<{ policyname: string; qual: string; withCheck: string | null }>
+      >`
+        SELECT policyname, qual, with_check AS "withCheck" FROM pg_policies
+        WHERE tablename = 'chat_supervisions'
+      `;
+      // Both halves matter and fail independently: `qual` is what hides another
+      // tenant's rows on read, `with_check` is what refuses to plant one.
+      expect(policies).toHaveLength(1);
+      expect(policies[0]?.policyname).toBe('chat_supervisions_tenant');
+      expect(policies[0]?.qual).toMatch(/nexa_current_license/);
+      expect(policies[0]?.withCheck).toMatch(/nexa_current_license/);
+    });
+
+    it('keys a supervision by (chat, agent) and indexes the board read', async () => {
+      const indexes = await owner.$queryRaw<Array<{ indexname: string; indexdef: string }>>`
+        SELECT indexname, indexdef FROM pg_indexes
+        WHERE tablename = 'chat_supervisions' ORDER BY indexname
+      `;
+      const byName = new Map(indexes.map((i) => [i.indexname, i.indexdef]));
+
+      // One row per watcher per chat: the primary key is what makes re-opening
+      // the same panel an update instead of a second supervisor.
+      expect(byName.get('chat_supervisions_pkey')).toMatch(/\(chat_id, agent_id\)/);
+      // 13.2-e reads "recently seen, in this license" every board refresh; the
+      // DESC order is what lets that come out of the index.
+      expect(byName.get('chat_supervisions_license_id_last_seen_at_idx')).toMatch(
+        /\(license_id, last_seen_at DESC\)/,
+      );
+    });
+
+    it('cascades from all three ends — a row can never outlive what it names', async () => {
+      // A supervision is meaningful only while chat, agent and license all
+      // exist; an orphan names a watcher of nothing.
+      const constraints = await owner.$queryRaw<
+        Array<{ column: string; foreignTable: string; deleteRule: string }>
+      >`
+        SELECT kcu.column_name AS "column",
+               ccu.table_name  AS "foreignTable",
+               rc.delete_rule  AS "deleteRule"
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON kcu.constraint_name = tc.constraint_name
+        JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = tc.constraint_name
+        JOIN information_schema.referential_constraints rc
+          ON rc.constraint_name = tc.constraint_name
+        WHERE tc.table_name = 'chat_supervisions' AND tc.constraint_type = 'FOREIGN KEY'
+        ORDER BY kcu.column_name
+      `;
+      expect(constraints).toEqual([
+        { column: 'agent_id', foreignTable: 'accounts', deleteRule: 'CASCADE' },
+        { column: 'chat_id', foreignTable: 'chats', deleteRule: 'CASCADE' },
+        { column: 'license_id', foreignTable: 'licenses', deleteRule: 'CASCADE' },
+      ]);
+    });
+
+    it('drops a supervision with the chat it watches', async () => {
+      const { chatId } = await openChat();
+      await owner.chatSupervision.create({
+        data: { chatId, agentId: fx.a.agentAccountId, licenseId: fx.a.licenseId },
+      });
+
+      await owner.chat.delete({ where: { id: chatId } });
+
+      expect(await owner.chatSupervision.count({ where: { chatId } })).toBe(0);
+    });
+
+    it('refuses a second row for the same watcher, and allows a second watcher', async () => {
+      const { chatId } = await openChat();
+      await owner.chatSupervision.create({
+        data: { chatId, agentId: fx.a.agentAccountId, licenseId: fx.a.licenseId },
+      });
+
+      await expect(
+        owner.chatSupervision.create({
+          data: { chatId, agentId: fx.a.agentAccountId, licenseId: fx.a.licenseId },
+        }),
+      ).rejects.toThrow(/unique|duplicate/i);
+
+      // A chat may be watched by more than one person — the key is the pair.
+      await expect(
+        owner.chatSupervision.create({
+          data: { chatId, agentId: fx.a.ownerAccountId, licenseId: fx.a.licenseId },
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('lets the runtime role register, heartbeat and release its own row', async () => {
+      // Live state, not a record of something that happened: unlike audit_log
+      // there is nothing to withhold, and 13.2-d needs all four verbs.
+      const { chatId } = await openChat();
+      const heartbeat = new Date('2026-08-10T09:00:00.000Z');
+
+      const released = await withTenant(
+        app,
+        { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+        async (tx) => {
+          const registered = await tx.chatSupervision.create({
+            data: { chatId, agentId: fx.a.agentAccountId, licenseId: fx.a.licenseId },
+          });
+          const beat = await tx.chatSupervision.update({
+            where: { chatId_agentId: { chatId, agentId: fx.a.agentAccountId } },
+            data: { lastSeenAt: heartbeat },
+          });
+          expect(beat.lastSeenAt).toEqual(heartbeat);
+          // started_at survives the heartbeat — how long someone has been
+          // watching is a different fact from whether they still are.
+          expect(beat.startedAt).toEqual(registered.startedAt);
+
+          await tx.chatSupervision.delete({
+            where: { chatId_agentId: { chatId, agentId: fx.a.agentAccountId } },
+          });
+          return tx.chatSupervision.count({});
+        },
+      );
+      expect(released).toBe(0);
+    });
+  });
+
+  // =========================================================================
   // Agent expertise (skill-based routing — FR-MOD-08.6.3)
   // =========================================================================
 

@@ -70,7 +70,12 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
     <div>
       <dt className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">{label}</dt>
       <dd className="tabular text-lg font-semibold">
-        {value}
+        {/* The count is its own element so a browser-level test can read it apart
+            from the rate sharing the cell: `dd`'s text content runs the two
+            together ("1" + "12.5%" = "112.5%") and no selector can split that
+            back. jsdom is not affected — RTL matches on direct text nodes — so
+            this exists for the e2e (13.3-i), which is where it is read. */}
+        <span data-testid={`goal-funnel-${label.toLowerCase()}`}>{value}</span>
         {hint && <span className="ml-1 text-2xs font-normal text-content-tertiary">{hint}</span>}
       </dd>
     </div>

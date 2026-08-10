@@ -214,12 +214,29 @@ export function widgetFrame(page: Page) {
   return page.frameLocator('#nexa-widget-frame');
 }
 
+/**
+ * A host origin of this run's own, under the seeded tenant's trusted domain.
+ *
+ * `acme-bikes.localhost` is registered with `include_subdomains`, so any label
+ * in front of it mints a widget token exactly as the demo page does — and the
+ * page URL the widget reports then carries a string no other spec's visitor can
+ * be on. That is what makes a goal trigger (FR-MOD-13.3) addressable: a goal on
+ * `/demo.html` would convert every visitor the suite creates.
+ *
+ * Lowercase letters, digits and hyphens only — `originHost` rejects anything
+ * else before the allowlist is ever consulted.
+ */
+export function tenantSubdomain(label: string): { origin: string; hostname: string } {
+  const hostname = `${label}.acme-bikes.localhost`;
+  return { hostname, origin: `http://${hostname}:5174` };
+}
+
 export async function openWidget(
   page: Page,
   organizationId: string,
-  options: { from?: string } = {},
+  options: { from?: string; host?: string } = {},
 ): Promise<void> {
-  const target = `${HOST_PAGE}/demo.html?organization_id=${organizationId}`;
+  const target = `${options.host ?? HOST_PAGE}/demo.html?organization_id=${organizationId}`;
 
   if (options.from) {
     // Arrive by clicking a link on another site, because that is the only thing

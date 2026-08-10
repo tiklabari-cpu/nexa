@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+## tm 74.9 — 13.3-i: uçtan uca doğrulama (ziyaret→sohbet→hedef) — done — 2026-08-10 UTC
+
+- **Yapıldı:** `apps/e2e/tests/goals.spec.ts` (yeni, 2 test) — hedef tanımla → ziyaretçi widget'tan
+  yaz → Goals huni Conversions 1 → tekrar yaz, 1'de kalır → Reports Overview 'Achieved goals' 1;
+  ikinci test emekli (`active:false`) hedefin kimseyi dönüştürmediğini kanıtlar. İzolasyon **host**
+  ile: `fixtures.ts`'e `tenantSubdomain()` + `openWidget({ host })` — her test seed'lenmiş güvenilir
+  alanın alt alanını alır (`include_subdomains`), yoksa `/demo.html`'e bağlı bir hedef süitteki her
+  ziyaretçiyi dönüştürürdü. 13.3-h'nin bıraktığı bağlantı kuruldu: `GoalsFunnel` → `GoalsPage`'e
+  monte + `invalidate()` huni sorgusunu da tazeliyor; huni sayısı kendi `data-testid`'li span'ine
+  alındı (`dd` metni sayı+oranı bitişik veriyor: "1"+"12.5%"="112.5%").
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/web` 920/920) ·
+  `pnpm -w test:integration` 0 (1799/1799 — 13.3-c/-d/-e/-f çapraz-tenant iddiaları toplu yeşil) ·
+  build 0 (7/7) · **`pnpm -w test:e2e` 96/96** (94+2, tam regresyon). Kanıt: `apps/e2e/kanit/13.3-*.png`.
+- **Varsayımlar:** e2e için `.env` kabuğa `source` edilmeli (`set -a && source .env && set +a`) —
+  `playwright.config.ts` onu kendisi yüklemiyor, aksi halde rtm `Invalid environment` ile düşüyor.
+- **Sonraki pencereye not:** PLAN `13.3` satırı `✅` (K13.3'e -i maddesi) ve Faz-2 sayaçları
+  (satır 22 · §5.0) `0 ◐ · 25 ✅`'e eşitlendi. Pencere açılışında duran kirli ağaç (`.gitignore` +
+  ~49 `kanit/*.png`) bu turda sahiplenilip commit'lendi: e2e koşusu o PNG'leri zaten yeniden
+  üretiyor, kanıt dosyaları olarak repoda tutuluyorlar.
+
+---
+
 ## tm 74.8 — 13.3-h: 3 aşamalı huni gösterimi + Reports Overview "Achieved goals" KPI kartı — done — 2026-08-10 UTC
 
 - **Yapıldı:** `goals.ts`'e saf `funnelStages(funnel)` (Visitors/Chats/Conversions üçlüsü, yalnız

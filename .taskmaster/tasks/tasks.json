@@ -2844,7 +2844,7 @@
             "description": "(1) `apps/e2e/tests/goals.spec.ts`: owner ile Goals sekmesine git → 'New goal' (isim + url_contains) → kaydet; widget'tan hedef sayfasında mesaj gönder (widget.spec.ts kalıbı) → Goals ekranında huninin Conversions değeri 1 olur; Reports → Overview'da 'Achieved goals' 1 gösterir. (2) Tekrarlı tetikte sayının 1'de kalması (idempotency uçtan uca). (3) Tam DoD kapısı koşumu: typecheck + lint + unit + ",
             "details": "13.3-i — Uçtan uca doğrulama — ziyaret→sohbet→hedef E2E + çapraz-tenant regresyon kapanışı  [OPUS-XHIGH]\n\nPRD: FR-MOD-13.3 (+ NFR-S4/S5 çapraz-tenant, NFR-A11Y4)\nETİKET GEREKÇESİ: OPUS-XHIGH: çok yüzeyli bağlama — widget (ziyaretçi yazma yolu) + API (achievement) + web (Goals ekranı) + Reports aynı senaryoda doğrulanıyor; hangi katmanın kırıldığını teşhis etmek yorum gerektiriyor. Ayrıca e2e temiz-DB gereksinimi (truncate+reseed, sourced .env, serbest portlar) ve DB süitlerinin serial koşumu mekanik değil (bellek: nexa-e2e-clean-db, nexa-test-gate-parallel-db). Güvenlik çekirdeği/eşzamanlılık tasarımı yok → OPUS-MAX değil; 'dosyalar+referans_desen' verilebilse de belirsizlik nedeniyle SONNET yapılmadı.\nNEDEN AÇIK: `apps/e2e/tests/` altında 20 spec var, goals yok — huninin uçtan uca (ziyaretçi→sohbet→dönüşüm) çalıştığını kanıtlayan tek bir akış testi mevcut değil. 13.3-a…-h'nin her biri kendi katmanını test ediyor; katmanların birbirine bağlandığı tek kanıt bu spec.\nKAPSAM: (1) `apps/e2e/tests/goals.spec.ts`: owner ile Goals sekmesine git → 'New goal' (isim + url_contains) → kaydet; widget'tan hedef sayfasında mesaj gönder (widget.spec.ts kalıbı) → Goals ekranında huninin Conversions değeri 1 olur; Reports → Overview'da 'Achieved goals' 1 gösterir. (2) Tekrarlı tetikte sayının 1'de kalması (idempotency uçtan uca). (3) Tam DoD kapısı koşumu: typecheck + lint + unit + integration + build + e2e; DB süitleri paket bazında SERIAL (paylaşılan Postgres yarışı), e2e öncesi truncate+reseed. (4) Kalan çapraz-tenant iddialarının (13.3-c/-d/-e/-f) toplu yeşil olduğunun kanıtlanması ve HANDOFF'a kanıt satırı.\nDOSYALAR: apps/e2e/tests/goals.spec.ts · apps/e2e/tests/fixtures.ts\nREFERANS DESEN (kopyalanacak): apps/e2e/tests/campaigns.spec.ts (kampanya oluştur → performans sayısını doğrula akışı) · apps/e2e/tests/widget.spec.ts (widget'tan ziyaretçi mesajı gönderme) · apps/e2e/tests/reports.spec.ts (Reports sekmesi + KPI doğrulama)\nKK (birebir): \"3 aşamalı huni\" | \"hedef tanımı\" | \"rapor entegrasyonu\"\nKK DOĞRULAMA: E2E `goals.spec.ts` tek akışta üç KK'yı da kanıtlar: hedef oluşturulur (\"hedef tanımı\"), ziyaretçi→sohbet→dönüşüm sayıları huni kartlarında görünür (\"3 aşamalı huni\"), Reports Overview 'Achieved goals' aynı sayıyı gösterir (\"rapor entegrasyonu\"). Ayrıca ikinci kez tetiklendiğinde sayı artmaz.\nKAPSAM DIŞI: yeni ürün davranışı eklemek — bu alt-görev yalnız doğrular · performans/yük ölçümü (NFR-P4 sanal liste kapsamı değil) · RTM `new_goal` bildirimi\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "e2e: hedef oluştur → widget ziyaret+mesaj → Goals huni Conversions=1 → Reports 'Achieved goals'=1 · e2e negatif: pasif hedef tetiklenmez (sayı 0 kalır) · e2e idempotency: ikinci tetik sonrası sayı 1'de kalır · regresyon: mevcut 20 e2e spec yeşil (özellikle campaigns.spec.ts — conversion semantiği değişti) · tam DoD kapısı: typecheck + lint + unit + integration + build + e2e (DB süitleri serial)",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "74.4",
               "74.5",
@@ -2853,10 +2853,10 @@
               "74.8"
             ],
             "parentId": "74",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T17:30:16.267Z"
           }
         ],
-        "updatedAt": "2026-08-10T17:28:04.291Z",
+        "updatedAt": "2026-08-10T17:30:16.267Z",
         "complexity": 8,
         "recommendedSubtasks": 9,
         "expansionPrompt": "\"13.3 — Goals (ziyaretçi→sohbet→dönüşüm hunisi)  ·  dilim V2-8\" görevini 9 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5122,7 +5122,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T17:28:04.291Z",
+      "lastModified": "2026-08-10T17:30:16.268Z",
       "taskCount": 112,
       "completedCount": 103,
       "tags": [

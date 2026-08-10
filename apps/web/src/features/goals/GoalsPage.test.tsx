@@ -45,6 +45,23 @@ const LIST = {
   total: 2,
 };
 
+const FUNNEL = {
+  range: { from: '2026-07-01T00:00:00.000Z', to: '2026-07-31T00:00:00.000Z' },
+  funnel: { visitors: 100, chats: 40, conversions: 10, conversion_rate: 0.25 },
+  by_goal: [{ goal_id: 'g-Signed up', name: 'Signed up', conversions: 10 }],
+};
+
+/**
+ * The page now issues two reads — its own `/goals` list and the funnel's
+ * `/reports/goals` — so the mock has to answer by path. A single
+ * `mockResolvedValue` would hand the funnel a goal list and crash on `by_goal`.
+ */
+function mockGets(list: unknown = LIST, funnel: unknown = FUNNEL): void {
+  api.get.mockImplementation((path: string) =>
+    Promise.resolve(path === '/reports/goals' ? funnel : list),
+  );
+}
+
 function renderPage(): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
@@ -60,7 +77,7 @@ beforeEach(() => {
   api.get.mockReset();
   api.post.mockReset();
   api.patch.mockReset();
-  api.get.mockResolvedValue(LIST);
+  mockGets();
   auth.scopes = ['customers:rw'];
 });
 
@@ -95,12 +112,29 @@ describe('GoalsPage', () => {
   });
 
   it('shows a meaningful empty state, not a blank rectangle', async () => {
-    api.get.mockResolvedValue({ items: [], total: 0 });
+    mockGets({ items: [], total: 0 }, { ...FUNNEL, by_goal: [] });
     renderPage();
     expect(await screen.findByText('No goals yet')).toBeInTheDocument();
     expect(
       screen.getByText('Create a goal to track when a visitor reaches a page that counts as a conversion.'),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * 13.3-h built the funnel but wired it to nothing, so the screen that owns
+   * the goals never showed what they produced. This pins the mount: the
+   * definitions and their result are read together or the slice is only half
+   * delivered (13.3-i).
+   */
+  it('shows the goal funnel above the list', async () => {
+    renderPage();
+
+    const funnel = await screen.findByRole('region', { name: 'Goal funnel' });
+    expect(await within(funnel).findByText('Visitors')).toBeInTheDocument();
+    expect(within(funnel).getByText('Chats')).toBeInTheDocument();
+    expect(within(funnel).getByText('Conversions')).toBeInTheDocument();
+    expect(within(funnel).getByTestId('goal-funnel-conversions')).toHaveTextContent('10');
+    expect(api.get).toHaveBeenCalledWith('/reports/goals');
   });
 
   describe('Create goal', () => {

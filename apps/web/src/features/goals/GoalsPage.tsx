@@ -2,9 +2,10 @@
  * Goals — tracked conversion targets (FR-MOD-13.3).
  *
  * The Customers area's fourth face, beside Contacts, Real-time and Campaigns:
- * define what counts as a conversion ("the visitor reached /thank-you") and
- * see which goals are tracking. The funnel behind each goal and the Reports
- * Overview KPI card are 13.3-h; this screen is the definition + on/off half.
+ * define what counts as a conversion ("the visitor reached /thank-you"), see
+ * which goals are tracking, and read the visitor → chat → conversion funnel
+ * they feed ({@link GoalsFunnel}, 13.3-h) above the list — the definitions and
+ * the result they produce belong on the same screen.
  *
  * Creating and toggling are `customers:rw`; an agent with only `customers:ro`
  * sees the list but not the controls that change it.
@@ -19,6 +20,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { GoalBuilder } from './GoalBuilder.js';
+import { GoalsFunnel } from './GoalsFunnel.js';
 import { GOAL_TABS, filterGoals, goalCounts } from './goals.js';
 import type { Goal, GoalFilter } from '@nexa/types';
 
@@ -41,6 +43,10 @@ export function GoalsPage(): ReactElement {
 
   const invalidate = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['goals'] });
+    // The funnel is driven by `by_goal`, so defining the workspace's first goal
+    // is what takes it out of its empty state — leave it stale and the screen
+    // shows "No conversions yet" beside the goal that was just created.
+    void queryClient.invalidateQueries({ queryKey: ['reports', 'goals-funnel'] });
   };
 
   const toggle = useMutation({
@@ -55,6 +61,8 @@ export function GoalsPage(): ReactElement {
       description="Define the pages a visitor reaching them counts as a conversion."
       actions={<CustomersTabs />}
     >
+      <GoalsFunnel />
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <nav aria-label="Goal status" className="flex flex-wrap gap-1">
           {GOAL_TABS.map((tab) => {

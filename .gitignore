@@ -31,6 +31,10 @@ coverage/
 .taskmaster/**/*.log
 .taskmaster/reports/
 .taskmaster/config.local.json
+# Pencerelerin görev ağacını incelerken yazdığı tek seferlik analiz script'leri/dökümleri.
+# `package-lock.json` ile aynı gerekçe: kimse silmediği için çalışma alanı kirli kalıyor ve
+# sağlık taraması her turda bunu yeni bir bulgu olarak geri getiriyordu.
+.taskmaster/tmp-*
 
 # --- Test / e2e artefaktları ---
 playwright-report/

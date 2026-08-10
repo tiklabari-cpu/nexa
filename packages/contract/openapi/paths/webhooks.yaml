@@ -101,3 +101,30 @@ webhook:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+integrationManifest:
+  get:
+    tags: [Webhooks]
+    operationId: getIntegrationManifest
+    summary: Trigger + action catalogue for building a Zapier/Make app
+    description: |
+      A static, machine-readable description of this webhook surface (FR-MOD-09.4):
+      every event a subscriber can register for (`triggers`, one per
+      `WebhookAction`, each with a sample delivery body) and a hand-picked
+      subset of existing write endpoints an automation platform's "action" step
+      may call (`actions`), plus where to `subscribe`/`unsubscribe` — the
+      existing `POST /webhooks` / `DELETE /webhooks/{webhookId}` pair (Zapier's
+      REST Hooks model).
+
+      Identical for every caller: the response carries no tenant data, reads
+      nothing from storage and calls nothing. Gated on the same scope as
+      `GET /webhooks` — no new scope is introduced.
+    responses:
+      "200":
+        description: The trigger + action catalogue
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/IntegrationManifest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

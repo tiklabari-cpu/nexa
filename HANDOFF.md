@@ -13,6 +13,15 @@
 
 ## Task log (newest-first)
 
+### tm 72.2 — 09.4-b: Entegrasyon manifesti (trigger + action kataloğu): kontrat + statik endpoint — done — 2026-08-10 UTC
+
+- **Yapıldı:** `GET /integrations/manifest` (`apps/api/src/routes/webhooks.ts`) — MCP manifest deseniyle kayıt anında bir kez inşa edilen statik yanıt, `GET /webhooks` ile AYNI scope (`webhooks--all:ro`/`:rw`, yeni scope yok). `packages/types/src/integrations.ts` (yeni): `INTEGRATION_TRIGGERS` (WEBHOOK_ACTIONS'ın 5 aksiyonu, her biri `sample_payload` ile) + `INTEGRATION_ACTIONS` (3 mevcut yaz uç noktası — mesaj gönder/ticket oluştur/etiket ekle — `required_scopes` ilgili rotanın `config.scopes`'unu birebir kopyalar). Kontrat: `paths/webhooks.yaml` + `openapi.yaml` (`IntegrationManifest`/`IntegrationTrigger`/`IntegrationAction`), re-bundle 150→151 path.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0** (`@nexa/types` 80/80 (+4 yeni `integrations.test.ts`) · `@nexa/api` 2140/2140 (+6, `webhooks.test.ts` 12→18)) · `pnpm -w test:integration` **0** (1603/1603, +6) · `pnpm -w build` **0** (7/7). E2E koşulmadı — task'ın kendi test stratejisi e2e istemiyor (UI yok, yalnız kontrat+backend).
+- **Varsayımlar:** `packages/types` `apps/api`'ye bağımlı olamadığından WEBHOOK_ACTIONS↔INTEGRATION_TRIGGERS senkronu tip sistemiyle değil `webhooks.test.ts`'teki set-eşitliği testiyle korunuyor (aksiyon eklenip manifeste yazılmazsa test kırılır).
+- **Sonraki pencereye not:**
+  - PLAN.md `09.4` satırı `◐ → K09.4` kaldı — 5 alt-görev açık: 09.4-c…g (partner app kaydı, secret rotate+audit, developer portal, Zapier REST Hooks yüzeyi, uçtan uca doğrulama).
+  - **tm 105 WIP hâlâ commit'siz, bu tur da dokunulmadı** (kapsam disiplini): `README.md`, `package.json` (kök), `apps/api|rtm/package.json`, `apps/api/tsconfig.json`, iki `test/helpers/fixtures.ts`, `turbo.json`, `apps/api/scripts/*test-datastores.ts`, `test-datastores.test.ts`, `.taskmaster/tmp-*`.
+
 ### tm 72.1 — 09.4-a: Zapier + Make marketplace kartları ve katalog sınır güncellemesi — done — 2026-08-10 UTC
 
 - **Yapıldı:** `packages/types/src/apps.ts` APP_CATALOG'a iki DATA app — `zapier` (productivity/oauth,

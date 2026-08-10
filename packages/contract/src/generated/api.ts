@@ -2709,6 +2709,36 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/integrations/manifest': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Trigger + action catalogue for building a Zapier/Make app
+     * @description A static, machine-readable description of this webhook surface (FR-MOD-09.4):
+     *     every event a subscriber can register for (`triggers`, one per
+     *     `WebhookAction`, each with a sample delivery body) and a hand-picked
+     *     subset of existing write endpoints an automation platform's "action" step
+     *     may call (`actions`), plus where to `subscribe`/`unsubscribe` — the
+     *     existing `POST /webhooks` / `DELETE /webhooks/{webhookId}` pair (Zapier's
+     *     REST Hooks model).
+     *
+     *     Identical for every caller: the response carries no tenant data, reads
+     *     nothing from storage and calls nothing. Gated on the same scope as
+     *     `GET /webhooks` — no new scope is introduced.
+     */
+    get: operations['getIntegrationManifest'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/mcp/manifest': {
     parameters: {
       query?: never;
@@ -4756,6 +4786,56 @@ export interface components {
        *     `HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")`.
        */
       secret: string;
+    };
+    /**
+     * @description One workspace event a webhook (and so a Zapier/Make trigger) can
+     *     subscribe to (FR-MOD-09.4) — the `action` is a `WebhookAction` value,
+     *     the same one `POST /webhooks` accepts.
+     */
+    IntegrationTrigger: {
+      action: components['schemas']['WebhookAction'];
+      label: string;
+      description: string;
+      /** @description An example delivery body, shaped `{action, data}`. */
+      sample_payload: {
+        [key: string]: unknown;
+      };
+    };
+    /**
+     * @description One existing write endpoint an automation platform's "action" step may
+     *     call (FR-MOD-09.4). No new endpoint or scope — `required_scopes`
+     *     mirrors that route's own `config.scopes`.
+     */
+    IntegrationAction: {
+      id: string;
+      /** @enum {string} */
+      method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+      /** @description Contract-style path, e.g. `/chats/{chatId}/events`. */
+      path: string;
+      label: string;
+      /** @description At least one of these scopes must be granted. */
+      required_scopes: string[];
+    };
+    /**
+     * @description What `GET /integrations/manifest` returns (FR-MOD-09.4): the trigger +
+     *     action catalogue a Zapier/Make app definition is built from, plus where
+     *     to subscribe/unsubscribe. Identical for every caller — no tenant data.
+     */
+    IntegrationManifest: {
+      triggers: components['schemas']['IntegrationTrigger'][];
+      actions: components['schemas']['IntegrationAction'][];
+      /** @description Where a trigger subscription is registered — `POST /webhooks`. */
+      subscribe: {
+        /** @enum {string} */
+        method: 'POST';
+        path: string;
+      };
+      /** @description Where a trigger subscription is removed — `DELETE /webhooks/{webhookId}`. */
+      unsubscribe: {
+        /** @enum {string} */
+        method: 'DELETE';
+        path: string;
+      };
     };
     /**
      * @description One MCP tool as advertised by the manifest (FR-MOD-08.8.3) — enough for a
@@ -11704,6 +11784,29 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getIntegrationManifest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The trigger + action catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['IntegrationManifest'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

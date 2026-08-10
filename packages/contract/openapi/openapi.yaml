@@ -307,6 +307,8 @@ paths:
     $ref: "./paths/webhooks.yaml#/webhooks"
   /webhooks/{webhookId}:
     $ref: "./paths/webhooks.yaml#/webhook"
+  /integrations/manifest:
+    $ref: "./paths/webhooks.yaml#/integrationManifest"
 
   /mcp/manifest:
     $ref: "./paths/mcp.yaml#/manifest"
@@ -1061,6 +1063,72 @@ components:
                 The HMAC signing key. Store it now; it is never shown again.
                 Deliveries are signed
                 `HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")`.
+
+    IntegrationTrigger:
+      type: object
+      description: |
+        One workspace event a webhook (and so a Zapier/Make trigger) can
+        subscribe to (FR-MOD-09.4) — the `action` is a `WebhookAction` value,
+        the same one `POST /webhooks` accepts.
+      required: [action, label, description, sample_payload]
+      properties:
+        action: { $ref: "#/components/schemas/WebhookAction" }
+        label: { type: string }
+        description: { type: string }
+        sample_payload:
+          type: object
+          additionalProperties: true
+          description: An example delivery body, shaped `{action, data}`.
+
+    IntegrationAction:
+      type: object
+      description: |
+        One existing write endpoint an automation platform's "action" step may
+        call (FR-MOD-09.4). No new endpoint or scope — `required_scopes`
+        mirrors that route's own `config.scopes`.
+      required: [id, method, path, label, required_scopes]
+      properties:
+        id: { type: string }
+        method:
+          type: string
+          enum: [GET, POST, PUT, PATCH, DELETE]
+        path:
+          type: string
+          description: Contract-style path, e.g. `/chats/{chatId}/events`.
+        label: { type: string }
+        required_scopes:
+          type: array
+          items: { type: string }
+          description: At least one of these scopes must be granted.
+
+    IntegrationManifest:
+      type: object
+      description: |
+        What `GET /integrations/manifest` returns (FR-MOD-09.4): the trigger +
+        action catalogue a Zapier/Make app definition is built from, plus where
+        to subscribe/unsubscribe. Identical for every caller — no tenant data.
+      required: [triggers, actions, subscribe, unsubscribe]
+      properties:
+        triggers:
+          type: array
+          items: { $ref: "#/components/schemas/IntegrationTrigger" }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/IntegrationAction" }
+        subscribe:
+          type: object
+          required: [method, path]
+          properties:
+            method: { type: string, enum: [POST] }
+            path: { type: string }
+          description: Where a trigger subscription is registered — `POST /webhooks`.
+        unsubscribe:
+          type: object
+          required: [method, path]
+          properties:
+            method: { type: string, enum: [DELETE] }
+            path: { type: string }
+          description: Where a trigger subscription is removed — `DELETE /webhooks/{webhookId}`.
 
     McpToolDescriptor:
       type: object

@@ -14,6 +14,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { INTEGRATION_ACTIONS, INTEGRATION_TRIGGERS } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -24,6 +25,17 @@ import {
   type WebhookAction,
   type WebhookType,
 } from '../services/webhooks/webhook-service.js';
+
+// Built once, not per-request: the manifest is a static document — the same
+// one for every caller — so there is nothing per-request to compute (mirrors
+// the MCP manifest, `routes/mcp.ts`). `INTEGRATION_TRIGGERS`'s coverage of
+// every `WEBHOOK_ACTION` is asserted by a sync test, not by this file.
+const INTEGRATION_MANIFEST = {
+  triggers: INTEGRATION_TRIGGERS,
+  actions: INTEGRATION_ACTIONS,
+  subscribe: { method: 'POST', path: '/webhooks' },
+  unsubscribe: { method: 'DELETE', path: '/webhooks/{webhookId}' },
+} as const;
 
 const registerBody = z.object({
   url: z.string().trim().min(1).max(2048),
@@ -69,6 +81,14 @@ export default async function webhookRoutes(app: FastifyInstance): Promise<void>
       const items = await request.withTenant((tx) => webhooks.list(tx));
       return reply.send({ items });
     },
+  );
+
+  // Same scope as the list above — a caller who may see this workspace's
+  // webhooks may also see what could subscribe. Reads no tenant data.
+  app.get(
+    '/integrations/manifest',
+    { config: { scopes: ['webhooks--all:ro', 'webhooks--all:rw'] } },
+    async (_request, reply) => reply.send(INTEGRATION_MANIFEST),
   );
 
   app.post('/webhooks', { config: { scopes: ['webhooks--all:rw'] } }, async (request, reply) => {

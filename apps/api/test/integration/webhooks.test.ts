@@ -17,12 +17,14 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { isScope, type IntegrationAction, type IntegrationTrigger } from '@nexa/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import {
   WebhookDispatcher,
   type DeliverableWebhook,
   type WebhookSender,
 } from '../../src/services/webhooks/webhook-dispatcher.js';
+import { WEBHOOK_ACTIONS } from '../../src/services/webhooks/webhook-service.js';
 import { verifyWebhook } from '../../src/services/webhooks/signature.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
@@ -211,6 +213,90 @@ describe('webhooks (FR-MOD-08.8.4)', () => {
     // Untouched by the failed cross-tenant delete.
     const stillMine = await server.get('/webhooks', auth(readToken));
     expect((stillMine.json() as { items: Webhook[] }).items).toHaveLength(1);
+  });
+
+  // --- Integration manifest (FR-MOD-09.4) -------------------------------------
+
+  describe('GET /integrations/manifest', () => {
+    interface Manifest {
+      triggers: IntegrationTrigger[];
+      actions: IntegrationAction[];
+      subscribe: { method: string; path: string };
+      unsubscribe: { method: string; path: string };
+    }
+
+    it('refuses an unauthenticated caller with 401', async () => {
+      const res = await server.get('/integrations/manifest');
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('refuses a caller without a webhooks scope with 403', async () => {
+      const noScope = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: [],
+      });
+      const res = await server.get('/integrations/manifest', auth(noScope));
+      expect(res.statusCode).toBe(403);
+    });
+
+    // The sync test: an action added to WEBHOOK_ACTIONS without a matching
+    // INTEGRATION_TRIGGERS entry (or vice versa) fails right here.
+    it('lists exactly the same triggers as WEBHOOK_ACTIONS, each with a sample payload', async () => {
+      const res = await server.get('/integrations/manifest', auth(readToken));
+      expect(res.statusCode).toBe(200);
+
+      const body = res.json() as Manifest;
+      const triggerActions = body.triggers.map((t) => t.action).sort();
+      expect(triggerActions).toEqual([...WEBHOOK_ACTIONS].sort());
+
+      for (const trigger of body.triggers) {
+        expect(trigger.label).toBeTruthy();
+        expect(trigger.description).toBeTruthy();
+        expect(trigger.sample_payload).toBeTruthy();
+      }
+    });
+
+    it('lists a non-empty actions catalogue whose required_scopes are all real scopes', async () => {
+      const res = await server.get('/integrations/manifest', auth(readToken));
+      const body = res.json() as Manifest;
+
+      expect(body.actions.length).toBeGreaterThan(0);
+      for (const action of body.actions) {
+        expect(action.label).toBeTruthy();
+        expect(action.required_scopes.length).toBeGreaterThan(0);
+        for (const scope of action.required_scopes) {
+          expect(isScope(scope)).toBe(true);
+        }
+      }
+    });
+
+    it('advertises subscribe/unsubscribe as the existing webhook endpoints', async () => {
+      const res = await server.get('/integrations/manifest', auth(readToken));
+      const body = res.json() as Manifest;
+
+      expect(body.subscribe).toEqual({ method: 'POST', path: '/webhooks' });
+      expect(body.unsubscribe).toEqual({ method: 'DELETE', path: '/webhooks/{webhookId}' });
+    });
+
+    it('returns the same document to two licenses, with no tenant identifier', async () => {
+      const resA = await server.get('/integrations/manifest', auth(readToken));
+      const resB = await server.get('/integrations/manifest', auth(adminTokenB));
+      expect(resA.statusCode).toBe(200);
+      expect(resB.statusCode).toBe(200);
+      // Byte-for-byte identical — the catalogue is static, not derived from who asked.
+      expect(resA.json()).toEqual(resB.json());
+
+      for (const raw of [resA.payload, resB.payload]) {
+        expect(raw).not.toContain('license_id');
+        expect(raw).not.toContain('organization_id');
+        expect(raw).not.toContain(fx.a.organizationId);
+        expect(raw).not.toContain(fx.b.organizationId);
+        expect(raw).not.toContain(String(fx.a.licenseId));
+        expect(raw).not.toContain(String(fx.b.licenseId));
+      }
+    });
   });
 
   // --- Delivery: signing + retry + logging (34.4, NFR-M5) --------------------

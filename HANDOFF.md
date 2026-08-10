@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+### tm 74.3 — 13.3-c: Goals CRUD — kontrat path + route + servis (license-scoped) — done — 2026-08-10 UTC
+
+- **Yapıldı:** Yeni `paths/goals.yaml` (`listGoals`/`createGoal`/`updateGoal`) + `openapi.yaml`'a
+  `/goals` ve `/goals/{goalId}` girişleri + re-bundle (155→157 path, `generated/api.ts` yenilendi);
+  `apps/api/src/routes/goals.ts` (`campaigns.ts` deseni: `.strict()` definition → typo 400, scope GET
+  `customers:ro|rw` / yazma `customers:rw`) + `services/goals/goal-service.ts` (her sorgu `licenseId`
+  filtreli + `withTenant`; miss → **404, 403 değil**); `server.ts`'e register. Yeni test dosyası
+  `apps/api/test/integration/goals.test.ts` (14).
+- **Doğrulama:** `pnpm -w typecheck` 0 (11/11) · `lint` 0 (8/8) · `test` 0 (`@nexa/api` 2304/2304,
+  önceki 2290 + 14) · `test:integration` 0 (1767/1767, önceki 1753 + 14; `contract-parity.test.ts`
+  çift yönlü yeşil — path ve route aynı pencerede eklendi) · `build` 0 (7/7). **E2E koşulmadı:** bu iş
+  UI eklemiyor, `/goals`'ı çağıran hiçbir e2e yok ve `apps/e2e/tests` içinde rota listesine/OpenAPI'ye
+  bağlı bir assert yok (grep 0) — yeni rotanın mevcut bir spec'i kırma yolu yok; Goals'ın e2e'si 13.3-i.
+- **Varsayımlar:** (1) Boş `definition` de 400 — task detayındaki "sessizce kimseyi eşleştirmeyen hedef
+  oluşmasın" gerekçesi `hasTrigger`'ın eşi; ama kural yalnız AKTİF hedefe uygulanır, emekli hedefin
+  tanımı temizlenebilir. (2) `status` filtresi `active` boolean'ına eşlenir (`goals`'ta campaigns'teki
+  gibi türetilmiş status kolonu yok). (3) DELETE açılmadı (task'ın açık kapsam-dışısı).
+- **Sonraki pencereye not:** 13.3-d (eşleşme çekirdeği, `OPUS-MAX`) artık iki bağımlılığı da karşılı —
+  `GoalService.hasDefinition()` matcher'ın yeniden kullanabileceği saf yordam. 13.3-g (UI) de açıldı.
+  `check-drift.ts` Windows'ta hâlâ koşmuyor (74.2 notu); bu turda migration yok, gerekmedi. Çalışma
+  alanındaki `.gitignore` + `kanit/*.png` kirliliğine yine dokunulmadı.
+
 ### tm 74.2 — 13.3-b: `goal_achievements` tablosu + RLS + idempotency kısıtı — done — 2026-08-10 UTC
 
 - **Yapıldı:** `GoalAchievement` modeli + `20260810100000_goal_achievements` migration'ı.

@@ -182,6 +182,11 @@ paths:
   /campaigns/{campaignId}:
     $ref: "./paths/campaigns.yaml#/campaign"
 
+  /goals:
+    $ref: "./paths/goals.yaml#/goals"
+  /goals/{goalId}:
+    $ref: "./paths/goals.yaml#/goal"
+
   /agents:
     $ref: "./paths/agents.yaml#/agents"
   /agents/{agentId}/suspension:

@@ -1161,6 +1161,58 @@ export interface paths {
     patch: operations['updateCampaign'];
     trace?: never;
   };
+  '/goals': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List goals
+     * @description Newest first. `status` filters on the on/off flag: `active`, `inactive`,
+     *     or `all`.
+     */
+    get: operations['listGoals'];
+    put?: never;
+    /**
+     * Create a goal
+     * @description A goal needs a name and a definition that can actually match something.
+     *     An empty definition, or one whose only key is misspelled, is rejected
+     *     rather than saved as a target nobody will ever reach.
+     */
+    post: operations['createGoal'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/goals/{goalId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        goalId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Edit a goal or toggle it active
+     * @description Only the fields present in the body change. Turning a goal off with
+     *     `active: false` retires it while keeping the conversions it has already
+     *     recorded — there is no delete. An edit cannot leave a still-active goal
+     *     without a definition that can match.
+     */
+    patch: operations['updateGoal'];
+    trace?: never;
+  };
   '/agents': {
     parameters: {
       query?: never;
@@ -9278,6 +9330,105 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['Campaign'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listGoals: {
+    parameters: {
+      query?: {
+        /** @description Which goals to return. */
+        status?: 'all' | 'active' | 'inactive';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The goals */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Goal'][];
+            total: number;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createGoal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          /** @description On/off intent; defaults to true — a new goal is meant to track. */
+          active?: boolean;
+          definition: components['schemas']['GoalDefinition'];
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Goal'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateGoal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        goalId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          /** @description Toggle the goal on or off. */
+          active?: boolean;
+          definition?: components['schemas']['GoalDefinition'];
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Goal'];
         };
       };
       400: components['responses']['BadRequest'];

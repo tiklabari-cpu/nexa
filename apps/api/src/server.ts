@@ -21,6 +21,7 @@ import customerRoutes from './routes/customer.js';
 import customerDirectoryRoutes from './routes/customers.js';
 import trafficRoutes from './routes/traffic.js';
 import campaignRoutes from './routes/campaigns.js';
+import goalRoutes from './routes/goals.js';
 import ticketRoutes from './routes/tickets.js';
 import ticketRuleRoutes from './routes/ticket-rules.js';
 import ticketEmailTemplateRoutes from './routes/ticket-email-templates.js';
@@ -167,6 +168,7 @@ export async function buildServer({
       await api.register(customerDirectoryRoutes);
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);
+      await api.register(goalRoutes);
       await api.register(ticketRoutes);
       await api.register(ticketRuleRoutes);
       await api.register(ticketEmailTemplateRoutes);

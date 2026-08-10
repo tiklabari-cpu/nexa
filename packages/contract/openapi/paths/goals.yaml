@@ -1,0 +1,118 @@
+# Goals — tracked conversion targets (FR-MOD-13.3).
+#
+# A goal is a name plus a predicate: "someone reached /thank-you" is a
+# conversion. The definition is all this file covers — the matcher that records
+# an achievement (13.3-d) and the funnel report (13.3-f) read what is created
+# here.
+#
+# Reads take `customers:ro`, writes `customers:rw`, the same split campaigns
+# use: goals describe the visitors the CRM and the live board already cover, so
+# they ride the customer scopes rather than a scope the source platform never
+# had. An ordinary agent can see the goals; owners and admins define them.
+
+goals:
+  get:
+    tags: [Customers]
+    operationId: listGoals
+    summary: List goals
+    description: |
+      Newest first. `status` filters on the on/off flag: `active`, `inactive`,
+      or `all`.
+    parameters:
+      - name: status
+        in: query
+        description: Which goals to return.
+        schema:
+          type: string
+          enum: [all, active, inactive]
+          default: all
+    responses:
+      "200":
+        description: The goals
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/Goal" }
+                total: { type: integer }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Customers]
+    operationId: createGoal
+    summary: Create a goal
+    description: |
+      A goal needs a name and a definition that can actually match something.
+      An empty definition, or one whose only key is misspelled, is rejected
+      rather than saved as a target nobody will ever reach.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, definition]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              active:
+                type: boolean
+                description: On/off intent; defaults to true — a new goal is meant to track.
+              definition: { $ref: "../openapi.yaml#/components/schemas/GoalDefinition" }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Goal" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+goal:
+  parameters:
+    - name: goalId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Customers]
+    operationId: updateGoal
+    summary: Edit a goal or toggle it active
+    description: |
+      Only the fields present in the body change. Turning a goal off with
+      `active: false` retires it while keeping the conversions it has already
+      recorded — there is no delete. An edit cannot leave a still-active goal
+      without a definition that can match.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              active:
+                type: boolean
+                description: Toggle the goal on or off.
+              definition: { $ref: "../openapi.yaml#/components/schemas/GoalDefinition" }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Goal" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

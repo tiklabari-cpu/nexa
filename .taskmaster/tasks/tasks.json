@@ -2618,13 +2618,13 @@
             "description": "`listLive`, canlı supervision satırlarını (`lastSeenAt >= canlılık penceresi`, `licenseId = tenant.licenseId`) chatId bazında TOPLU okur (N+1 yok — mevcut `assigneeIds` toplu okuma deseni). Öncelik: `queued` > `supervised` > `waiting` > `chatting`. Mevcut 'her ziyaretçi tam bir kovada' kuralı korunur; `chatting_with` alanı DEĞİŞMEZ (kimin izlediği bu alt-görevde yanıta eklenmez).",
             "details": "13.2-e — `supervised` durumunun Traffic funnel'ına bağlanması + öncelik sırası  [OPUS-XHIGH]\n\nPRD: FR-MOD-13.2 (+ FR-MOD-03.1.1; NFR-S4, NFR-P2)\nETİKET GEREKÇESİ: OPUS-XHIGH: funnel öncelik tasarımı (supervised'ın queued/waiting/chatting karşısındaki yeri) KK'da yazmıyor, yorum gerektiriyor (koşul 6 ihlali) ve mevcut 'most-specific first' dallanmasını değiştiriyor (koşul 4 — kopyalanacak hazır desen değil, karar). Ayrıca canlı-supervision sorgusu tenant filtresi taşır (hafif güvenlik dokunuşu). Yeni yetki sınırı yazılmadığı için MAX değil — o iş 13.2-d'de bitti.\nNEDEN AÇIK: traffic-service.ts'teki activity hesabı üç dallı bir üçlü operatör: `thread?.queuePosition != null ? 'queued' : lastEvent?.authorType === 'customer' ? 'waiting' : 'chatting'` — supervised için dal yok. 13.2-d'nin yazdığı `chat_supervisions` satırlarını okuyan hiçbir kod yok (yeni tablo, sıfır tüketici).\nKAPSAM: `listLive`, canlı supervision satırlarını (`lastSeenAt >= canlılık penceresi`, `licenseId = tenant.licenseId`) chatId bazında TOPLU okur (N+1 yok — mevcut `assigneeIds` toplu okuma deseni). Öncelik: `queued` > `supervised` > `waiting` > `chatting`. Mevcut 'her ziyaretçi tam bir kovada' kuralı korunur; `chatting_with` alanı DEĞİŞMEZ (kimin izlediği bu alt-görevde yanıta eklenmez).\nDOSYALAR: apps/api/src/services/traffic/traffic-service.ts · apps/api/test/integration/traffic.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/traffic/traffic-service.ts (assignees/persona toplu okuma + Map ile eşleme deseni; activity üçlü dallanması)\nKK (birebir): \"Gelişmiş filtre\" | \"KK-türetilmiş: izlenen bir sohbet Traffic listesinde 'Supervised' görünür ve kuyrukta bekleyen sohbet bunun önünde gelir. Türetme kaynağı rapor-1 §644 öğe listesi; öncelik sırası PRD'de YOK, §C varsayımı olarak kaydedildi (kuyruktaki sohbet henüz kimseye ait değildir).\"\nKK DOĞRULAMA: integration `traffic.test.ts`: canlı supervision satırı olan sohbet → `activity === 'supervised'` · bayat (pencere dışı) supervision → supervised ÜRETMEZ · kuyruktaki izlenen sohbet `queued` KALIR (öncelik testi) · cross-tenant: B'nin supervision satırı A'nın listesinde supervised üretmez.\nKAPSAM DIŞI: Kimin izlediğini yanıta ekleme (`supervised_by`) — ayrı iş · Supervise butonunun sunucuya POST etmesi (13.2-g'de UI tarafı) · RTM canlı push\nSÖZLEŞME: yok (enum 13.2-a'da eklendi; yanıt alanları değişmiyor).\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "CROSS-TENANT (önce): B'nin supervision satırı A'nın yanıtını etkilemez (NFR-S4) · NEGATİF (önce): bayat (pencere dışı) supervision satırı supervised üretmez · integration (pozitif): canlı supervision → `activity='supervised'` · integration (öncelik tablosu): queued > supervised > waiting > chatting · integration (regresyon): mevcut 4 + invited durumları kırılmaz · perf: supervision okuması tek toplu sorgu — N+1 yok (NFR-P2)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "73.1",
               "73.4"
             ],
             "parentId": "73",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T07:39:53.146Z"
           },
           {
             "id": 6,
@@ -2715,7 +2715,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T07:14:27.577Z",
+        "updatedAt": "2026-08-10T07:39:53.146Z",
         "complexity": 9,
         "recommendedSubtasks": 11,
         "expansionPrompt": "\"13.2 — Engage/Traffic (gelişmiş filtre + 360° ziyaretçi)  ·  dilim V2-8\" görevini 11 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5096,7 +5096,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T07:14:27.577Z",
+      "lastModified": "2026-08-10T07:39:53.147Z",
       "taskCount": 110,
       "completedCount": 99,
       "tags": [

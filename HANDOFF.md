@@ -13,6 +13,39 @@
 
 ## Task log (newest-first)
 
+### tm 73.2 — 13.2-b: `invited` durumu campaign_sends'ten türetme + funnel önceliği — done — 2026-08-10 UTC
+
+- **Yapıldı:** `TrafficService.listLive` üçüncü kaynağı okuyor: `tx.campaignSend.findMany`
+  (`licenseId` + `engaged:false` + `createdAt >= liveSince` + `customer.organizationId` +
+  `id notIn seen`) — tenant filtresi aynı dosyadaki visits bloğundan birebir (NFR-S4;
+  `campaign_sends` RLS `license_id` üzerinde zaten var). Funnel önceliği **chats → invited →
+  browsing**: aktif sohbet daveti ezer (`seen` müşteriyi zaten aldı), davet browsing'i ezer,
+  ikisi de yoksa satır yok. Over-fetch (`remaining * 4`) + limit + "her ziyaretçi tam bir
+  kovada" kuralı korundu. Sözleşme/migration YOK — enum 13.2-a'da girmişti, `engaged` mevcut
+  kolon. `traffic.test.ts` 9→15.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) ·
+  `pnpm -w test` **0** (`@nexa/api` 2197/2197) · `pnpm -w test:integration` **0**
+  (`@nexa/api` 1660/1660, 67 dosya — `traffic.test.ts` 15/15, `contract-parity` dahil) ·
+  `pnpm -w build` **0** (7/7) · e2e `apps/e2e/tests/traffic.spec.ts` **1/1** (regresyon;
+  `.env` kabuğa source edilerek — RTM `.env` yükleyici kusuru tm 72.5'ten hâlâ açık).
+- **Varsayımlar:** `invited` satırının `last_activity_at`'i **send'in `createdAt`'i** (ziyaretin
+  değil): davet, o ziyaretçi hakkındaki en son bilinen olay. Tetikleyici canlı ziyaretten
+  ateşlendiği için pratikte `send.createdAt >= visit.startedAt`.
+- **Sonraki pencereye not:**
+  - Sıradaki bağımsız adımlar: 13.2-c (`chat_supervisions` tablosu) ve 13.2-i
+    (`visits_count`+`groups[]`). 13.2-e `supervised` için 13.2-d'yi bekliyor.
+  - `engaged` bayrağını **hiçbir yazıcı `true`'ya çevirmiyor** (tek yazıcı hâlâ
+    `campaign-service.ts#fireIfRunning` `createMany`). Yani bugün bir ziyaretçi daveti
+    yanıtlasa bile 30 dk boyunca `invited` görünmeye devam eder — aktif sohbet açılırsa
+    chats kaynağı onu ezdiği için board doğru kalır, ama davet-yanıtı sayacı (FR-MOD-03.3.3
+    "Chats") ayrı bir kalem olarak hâlâ açık. Bu turun kapsamı dışıydı.
+  - tm 105 WIP hâlâ commit'siz (bu turda da dokunulmadı, kapsam dışı).
+  - `apps/e2e/kanit/*.png` (60 dosya) tm 73.1'in bulduğu gibi hâlâ `modified`; bu pencere de
+    commit'e ALMADI — bunlar önceki bir pencerenin tam e2e koşusundan kalan, traffic'le
+    ilgisiz kanıt görselleri (campaigns/channels/reports/…) ve bir traffic commit'ine
+    girmeleri yanıltıcı olur. Üçüncü kez ertelenmemesi için: bunları kendi
+    `chore(e2e): refresh kanit screenshots` commit'iyle kapatacak bir tur gerekiyor.
+
 ### tm 73.1 — 13.2-a: TrafficActivity sözlüğünün supervised + invited ile genişletilmesi — done — 2026-08-10 UTC
 
 - **Yapıldı:** `TrafficActivity` 4→6 (`supervised`, `invited`), üç katman senkron: `openapi.yaml`

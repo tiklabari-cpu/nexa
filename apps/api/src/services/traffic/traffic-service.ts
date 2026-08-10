@@ -3,9 +3,9 @@
  *
  * This answers a different question from the customer directory. `GET /customers`
  * is the CRM: everyone who has ever written in. Traffic is the live board: people
- * with an open conversation, plus people whose most recent visit falls inside a
- * short window, merged into one row per person and sorted by how recently they
- * did anything.
+ * with an open conversation, people a campaign has just invited and who have not
+ * answered yet, plus people whose most recent visit falls inside a short window,
+ * merged into one row per person and sorted by how recently they did anything.
  *
  * The column that carries the feature is **Chatting with** (FR-MOD-03.1.3): the
  * human agent or the AI persona the visitor is currently talking to. It is
@@ -160,9 +160,58 @@ export class TrafficService {
       });
     }
 
-    // 2. Browsing visitors: a recent visit but no active conversation. Newest
+    // 2. Invited visitors: a campaign fired at them inside the live window and
+    //    they have not answered yet (FR-MOD-03.3.2 writes the row; `engaged`
+    //    flips the moment they reply). This sits above browsing on purpose —
+    //    a pending invitation is the more specific thing to know about someone
+    //    who is not in a conversation. An active chat still wins: the loop
+    //    above already claimed those customers, so `seen` keeps them out.
+    let remaining = options.limit - rows.length;
+    if (remaining > 0) {
+      const sends = await tx.campaignSend.findMany({
+        where: {
+          licenseId: tenant.licenseId,
+          engaged: false,
+          createdAt: { gte: liveSince },
+          customer: {
+            organizationId: tenant.organizationId,
+            ...(seen.size > 0 ? { id: { notIn: [...seen] } } : {}),
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        // Over-fetch for the same reason as visits below: two campaigns can
+        // invite the same visitor, and those collapse to a single row.
+        take: remaining * 4,
+        select: {
+          customerId: true,
+          createdAt: true,
+          customer: { select: { name: true, email: true } },
+        },
+      });
+
+      for (const send of sends) {
+        if (rows.length >= options.limit) break;
+        if (seen.has(send.customerId)) continue;
+        seen.add(send.customerId);
+
+        rows.push({
+          sortAt: send.createdAt,
+          visitor: {
+            customer_id: send.customerId,
+            name: send.customer.name,
+            email: send.customer.email,
+            activity: 'invited',
+            chat_id: null,
+            chatting_with: null,
+            last_activity_at: send.createdAt.toISOString(),
+          },
+        });
+      }
+    }
+
+    // 3. Browsing visitors: a recent visit but no active conversation. Newest
     //    visit first so the JS de-dup keeps the current one per customer.
-    const remaining = options.limit - rows.length;
+    remaining = options.limit - rows.length;
     if (remaining > 0) {
       const visits = await tx.visit.findMany({
         where: {

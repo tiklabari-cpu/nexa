@@ -17,7 +17,7 @@ interface TrafficVisitor {
   customer_id: string;
   name: string | null;
   email: string | null;
-  activity: 'browsing' | 'queued' | 'waiting' | 'chatting';
+  activity: 'browsing' | 'queued' | 'waiting' | 'chatting' | 'supervised' | 'invited';
   chat_id: string | null;
   chatting_with: { kind: 'human' | 'ai'; name: string; avatar_url: string | null } | null;
   last_activity_at: string | null;
@@ -107,6 +107,31 @@ describe('traffic', () => {
     return chatId;
   }
 
+  /**
+   * A proactive invitation: one running campaign plus the send row the trigger
+   * engine writes for a matched visitor. `engaged` false is "invited but has
+   * not answered yet" — the state the board reports as `invited`.
+   */
+  async function seedInvite(
+    t: TenantFixture,
+    customerId: string,
+    opts: { engaged?: boolean; createdAt?: Date } = {},
+  ): Promise<void> {
+    const campaign = await owner.campaign.create({
+      data: { licenseId: t.licenseId, name: 'Need a hand?', status: 'ongoing' },
+      select: { id: true },
+    });
+    await owner.campaignSend.create({
+      data: {
+        licenseId: t.licenseId,
+        campaignId: campaign.id,
+        customerId,
+        engaged: opts.engaged ?? false,
+        createdAt: opts.createdAt ?? minutesAgo(1),
+      },
+    });
+  }
+
   async function seedPersona(t: TenantFixture, name: string): Promise<void> {
     await owner.aiAgent.create({
       data: { licenseId: t.licenseId, kind: 'ai_agent', name, active: true },
@@ -160,6 +185,21 @@ describe('traffic', () => {
       expect(ids).not.toContain(theirsChatting);
       expect(ids).not.toContain(theirsBrowsing);
     });
+
+    it("never surfaces another tenant's campaign invitations", async () => {
+      const mineInvited = await seedCustomer(fx.a, 'Mine Invited');
+      await seedInvite(fx.a, mineInvited);
+
+      // Tenant B: an invitation with nothing else attached to it. The send row
+      // is the only thing that could put this customer on a board, so if the
+      // third source leaks the license filter, this is where it shows.
+      const theirsInvited = await seedCustomer(fx.b, 'Theirs Invited');
+      await seedInvite(fx.b, theirsInvited);
+
+      const ids = (await listTraffic()).map((v) => v.customer_id);
+      expect(ids).toContain(mineInvited);
+      expect(ids).not.toContain(theirsInvited);
+    });
   });
 
   // --- Scope enforcement -----------------------------------------------------
@@ -197,6 +237,67 @@ describe('traffic', () => {
 
     const ids = (await listTraffic()).map((v) => v.customer_id);
     expect(ids).not.toContain(stale);
+  });
+
+  // --- Invited (FR-MOD-03.3.2 → the funnel) ----------------------------------
+
+  describe('invited', () => {
+    it('ignores a send the visitor has already answered', async () => {
+      const answered = await seedCustomer(fx.a, 'Already Replied');
+      await seedInvite(fx.a, answered, { engaged: true });
+
+      // Nothing else puts them on the board, so an engaged send must leave the
+      // row out entirely rather than reporting a pending invitation.
+      const ids = (await listTraffic()).map((v) => v.customer_id);
+      expect(ids).not.toContain(answered);
+    });
+
+    it('ignores a send older than the live window', async () => {
+      const stale = await seedCustomer(fx.a, 'Invited An Hour Ago');
+      await seedInvite(fx.a, stale, { createdAt: minutesAgo(45) });
+
+      const ids = (await listTraffic()).map((v) => v.customer_id);
+      expect(ids).not.toContain(stale);
+    });
+
+    it('lists an invited visitor who has not answered yet', async () => {
+      const id = await seedCustomer(fx.a, 'Invited', 'invited@example.test');
+      await seedInvite(fx.a, id);
+
+      const row = (await listTraffic()).find((v) => v.customer_id === id);
+      expect(row).toMatchObject({
+        activity: 'invited',
+        chat_id: null,
+        chatting_with: null,
+        name: 'Invited',
+        email: 'invited@example.test',
+      });
+    });
+
+    it('shows a pending invitation ahead of plain browsing', async () => {
+      const id = await seedCustomer(fx.a, 'Browsing And Invited');
+      await seedVisit(fx.a, id, minutesAgo(3));
+      await seedInvite(fx.a, id, { createdAt: minutesAgo(2) });
+
+      const rows = (await listTraffic()).filter((v) => v.customer_id === id);
+      // Still exactly one row per visitor — the invitation replaces the
+      // browsing bucket, it does not add a second one.
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.activity).toBe('invited');
+    });
+
+    it('lets an active conversation win over a pending invitation', async () => {
+      await seedPersona(fx.a, 'Hazal');
+      const id = await seedCustomer(fx.a, 'Invited Then Chatted');
+      await seedActiveChat(fx.a, id, { assigneeId: fx.a.agentAccountId, lastAuthor: 'customer' });
+      await seedInvite(fx.a, id);
+
+      const rows = (await listTraffic()).filter((v) => v.customer_id === id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.activity).toBe('waiting');
+      expect(rows[0]?.chatting_with).toMatchObject({ kind: 'human' });
+      expect(rows[0]?.chat_id).not.toBeNull();
+    });
   });
 
   // --- Chatting with ---------------------------------------------------------

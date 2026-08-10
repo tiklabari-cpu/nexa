@@ -13,6 +13,30 @@
 
 ## Task log (newest-first)
 
+### tm 73.7 — 13.2-g: Traffic durum sekmeleri (All/Chatting/Supervised/Queued/Waiting/Invited/Browsing) + sayaç + empty state — done — 2026-08-10 UTC
+
+- **Yapıldı:** `traffic-tabs.ts` (pure: `TRAFFIC_TABS` rapor-1 §644 sırasıyla · `tabToActivity` ·
+  `countByTab` · `isTrafficTab`) + `TrafficPage.tsx`'e `role=tablist` şerit, seçim
+  `useSearchParams` (`?tab=`) üzerinden kalıcı (`AuditLogPage.tsx`'in `setFilter` deseni).
+  Sekme değişimi 13.2-f'nin `activity` parametresini dolduran YENİ bir istek açar — istemci
+  tarafı yeniden filtreleme yok; sayaç yalnız bilinen kova için gösterilir (aktif sekme, veya
+  `all` aktifken hepsi). 7 ayrı empty state (FR-EK-B.1). Ek: Supervise satır aksiyonu artık
+  13.2-d'nin `POST /chats/{id}/supervise`'ını da çağırıyor (navigate korunarak).
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test`
+  **0** (`@nexa/web` 849/849, +41: `traffic-tabs.test.ts` 13 yeni · `TrafficPage.test.tsx` 7
+  yeni) · `pnpm -w test:integration` **0** (api 1727/1727, regresyon — backend'e dokunulmadı) ·
+  `pnpm -w build` **0** (7/7) · e2e `traffic.spec.ts` **1/1** (regresyon, varsayılan `all`
+  sekmesi tüm board'u gösteriyor).
+- **Sonraki pencereye not:**
+  - **13.2-h** (filtre paneli) artık sekme şeridini hazır buluyor; panel kalan beş parametreyi
+    (`page_url_contains`/`came_from_contains`/`country_code`/`is_lead`/`group_id`) sekmeyle
+    AND'lemeli, `?tab=` parametresini bozmamalı.
+  - Sayaçlar yalnız filtresiz (`all`) yanıtta tam güvenilir; filtreli bir sekmedeyken diğer
+    sekmelerde rakam gösterilmiyor (bilinçli — sahte `0` yazmamak için). Canlı sayaç için ayrı
+    bir uç hâlâ yok; gerekirse 13.2-k'de değerlendirilebilir.
+  - tm 105 WIP hâlâ commit'siz (bkz. önceki bloklar) — bu pencere de dokunmadı (kapsam
+    disiplini, §5).
+
 ### tm 73.6 — 13.2-f: "Match all filters + Add filter" — GET /traffic çoklu-koşul filtre çekirdeği — done — 2026-08-10 UTC
 
 - **Yapıldı:** `GET /traffic`'e altı AND'lenen query parametresi (`activity` çoklu ·

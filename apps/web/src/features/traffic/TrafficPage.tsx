@@ -13,7 +13,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, type ReactElement } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
@@ -23,7 +23,42 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { visitorRowActions, type RowActionId } from './rowActions.js';
+import { countByTab, isTrafficTab, tabToActivity, TRAFFIC_TABS, type TrafficTab } from './traffic-tabs.js';
 import type { TrafficActivity, TrafficVisitor } from './types.js';
+
+const TAB_PARAM = 'tab';
+
+const EMPTY_STATE: Record<TrafficTab, { title: string; description: string }> = {
+  all: {
+    title: 'No live visitors right now',
+    description:
+      'People browsing your site or in a live conversation appear here. Install the widget to start seeing traffic.',
+  },
+  chatting: {
+    title: 'No one is chatting right now',
+    description: 'Visitors currently answered by an agent or the AI appear here.',
+  },
+  supervised: {
+    title: 'No supervised conversations',
+    description: 'Conversations an agent is watching without answering yet appear here.',
+  },
+  queued: {
+    title: 'The queue is empty',
+    description: 'Visitors waiting for an agent to pick up their conversation appear here.',
+  },
+  waiting: {
+    title: 'Nobody is waiting for a reply',
+    description: "Conversations where the visitor's last message has not been answered yet appear here.",
+  },
+  invited: {
+    title: 'No pending invitations',
+    description: 'Visitors proactively invited to chat who have not replied yet appear here.',
+  },
+  browsing: {
+    title: 'No one is just browsing',
+    description: 'Visitors on your site with no conversation yet appear here.',
+  },
+};
 
 export const ACTIVITY: Record<TrafficActivity, { tone: StatusTone; label: string }> = {
   browsing: { tone: 'info', label: 'Browsing' },
@@ -51,14 +86,36 @@ export function TrafficPage(): ReactElement {
     canEditCustomer: scopes.includes('customers:rw'),
   };
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get(TAB_PARAM);
+  const tab: TrafficTab = isTrafficTab(tabParam) ? tabParam : 'all';
+
+  function selectTab(next: TrafficTab): void {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'all') params.delete(TAB_PARAM);
+    else params.set(TAB_PARAM, next);
+    setSearchParams(params, { replace: true });
+  }
+
   const live = useQuery({
-    queryKey: ['traffic'],
-    queryFn: () => api.get<{ items: TrafficVisitor[]; total: number }>('/traffic?limit=100'),
+    queryKey: ['traffic', tab],
+    queryFn: () => {
+      // The selected tab fills 13.2-f's `activity` filter — the server is the
+      // one and only place that decides who is on the board, so a tab switch
+      // is a new request rather than a client-side re-slice of the last one.
+      const params = new URLSearchParams({ limit: '100' });
+      for (const activity of tabToActivity(tab) ?? []) params.append('activity', activity);
+      return api.get<{ items: TrafficVisitor[]; total: number }>(`/traffic?${params.toString()}`);
+    },
     // Poll: the board must feel live without an RTM socket of its own yet.
     refetchInterval: 8_000,
   });
 
   const items = useMemo(() => live.data?.items ?? [], [live.data]);
+  // Trustworthy only for the tabs the current response actually covers: the
+  // active tab itself (it is exactly what came back) and, when that response
+  // is the unfiltered board, every tab at once.
+  const counts = useMemo(() => countByTab(items), [items]);
 
   const invalidate = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['traffic'] });
@@ -84,7 +141,15 @@ export function TrafficPage(): ReactElement {
     },
   });
 
-  const busy = startChat.isPending || assignToMe.isPending;
+  // Registers the caller as a watcher (13.2-d) so the board can show
+  // `supervised` for this chat; opening the transcript is what actually lets
+  // them watch, so it navigates regardless of how the registration lands.
+  const registerSupervision = useMutation({
+    mutationFn: (chatId: string) => api.post(`/chats/${chatId}/supervise`),
+    onSuccess: invalidate,
+  });
+
+  const busy = startChat.isPending || assignToMe.isPending || registerSupervision.isPending;
 
   const run = (id: RowActionId, visitor: TrafficVisitor): void => {
     switch (id) {
@@ -95,8 +160,10 @@ export function TrafficPage(): ReactElement {
         if (visitor.chat_id) assignToMe.mutate(visitor.chat_id);
         break;
       case 'supervise':
-        // Watching is just opening the conversation in the inbox.
-        if (visitor.chat_id) navigate(`/app/inbox?chat=${visitor.chat_id}`);
+        if (visitor.chat_id) {
+          registerSupervision.mutate(visitor.chat_id);
+          navigate(`/app/inbox?chat=${visitor.chat_id}`);
+        }
         break;
       case 'edit':
         navigate(`/app/customers?customer=${visitor.customer_id}`);
@@ -114,6 +181,34 @@ export function TrafficPage(): ReactElement {
       }
       actions={<CustomersTabs />}
     >
+      <div role="tablist" aria-label="Traffic status" className="flex flex-wrap gap-1 border-b border-border pb-2">
+        {TRAFFIC_TABS.map((t) => {
+          const active = t.id === tab;
+          // Only ever shown for a bucket the current response actually
+          // covers — the active tab, or every tab while viewing the
+          // unfiltered board — so a badge never states a count the client
+          // does not truly know.
+          const count = active || tab === 'all' ? counts[t.id] : undefined;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => selectTab(t.id)}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                  : 'text-content-secondary hover:bg-surface-2'
+              }`}
+            >
+              <span>{t.label}</span>
+              {count !== undefined && <span className="text-2xs text-content-tertiary">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
       {live.error ? (
         <ErrorNotice message="Could not load live traffic. Check that the API is reachable and try again." />
       ) : (
@@ -121,10 +216,7 @@ export function TrafficPage(): ReactElement {
           {live.isPending ? (
             <ListSkeleton />
           ) : items.length === 0 ? (
-            <EmptyState
-              title="No live visitors right now"
-              description="People browsing your site or in a live conversation appear here. Install the widget to start seeing traffic."
-            />
+            <EmptyState title={EMPTY_STATE[tab].title} description={EMPTY_STATE[tab].description} />
           ) : (
             <VirtualTable
               items={items}

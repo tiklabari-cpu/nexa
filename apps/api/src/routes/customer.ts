@@ -11,8 +11,16 @@
  * disjoint means the widget surface can be reasoned about on its own.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { REFERRER_MAX_LENGTH, SNEAK_PEEK_MAX_LENGTH, typingStateKey } from '@nexa/types';
+import {
+  REFERRER_MAX_LENGTH,
+  SALES_TRACKER_EXTERNAL_ORDER_ID_MAX_LENGTH,
+  SALES_TRACKER_EXTERNAL_ORDER_ID_RE,
+  SALES_TRACKER_MAX_AMOUNT_CENTS,
+  SNEAK_PEEK_MAX_LENGTH,
+  typingStateKey,
+} from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { maskCardNumbers, maskOptional } from '../lib/cc-mask.js';
 import { isIpBanned } from '../lib/banned-ip.js';
@@ -29,6 +37,8 @@ import { LocalStore } from '../services/storage/local-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { shouldEmailAssignee } from '../services/notifications/assignee-email.js';
+import { resolveAttribution } from '../services/sales/attribution.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 
 const startSchema = z
   .object({
@@ -76,6 +86,84 @@ const typingSchema = z.object({
   // as at the fan-out, so an oversized body is rejected before any work.
   text: z.string().max(SNEAK_PEEK_MAX_LENGTH).optional(),
 });
+
+/**
+ * One completed order, as the shop's confirmation page reports it (FR-MOD-13.5).
+ *
+ * Note what is *not* here: no `license_id`, no `chat_id`, no `customer_id`. The
+ * party filling this in is a page in the visitor's browser, so every field that
+ * decides whose revenue this is comes from the token instead (NFR-S5).
+ *
+ * Deliberately not `.strict()`, unlike `startSchema` above. The requirement is
+ * that a forged `license_id` be *ignored* — a hostile page must get a plain,
+ * uninteresting 201 written to its own workspace, not a 400 that tells it the
+ * field is recognised and worth probing. Stripping unknown keys is safe here
+ * only because all three real fields are required: a typo in one of them still
+ * leaves a required field missing and fails as a 400.
+ */
+const trackSaleSchema = z.object({
+  external_order_id: z
+    .string()
+    .trim()
+    .min(1)
+    .max(SALES_TRACKER_EXTERNAL_ORDER_ID_MAX_LENGTH)
+    .regex(SALES_TRACKER_EXTERNAL_ORDER_ID_RE, 'must be a plain order reference'),
+  // `z.number().int()` rejects `49.9` and `"4990"` alike: the shop sends minor
+  // units, and a float here would be a units mistake worth failing loudly on
+  // rather than rounding into the revenue figure.
+  amount_cents: z.number().int().min(0).max(SALES_TRACKER_MAX_AMOUNT_CENTS),
+  // Compared against the workspace's configured currency in the handler; the
+  // shape check is here so a 30 KB string never reaches the comparison.
+  currency: z.string().trim().length(3),
+});
+
+/**
+ * How many of the visitor's conversations are considered for attribution.
+ *
+ * Attribution only ever credits one, and the newest chats are the candidates —
+ * a visitor with more than this many conversations has plenty inside any sane
+ * window. The cap is what stops a long-lived visitor's history from being
+ * loaded in full on a path a page can call at will.
+ */
+const ATTRIBUTION_CANDIDATE_LIMIT = 20;
+
+/** The tracked-sale fields the widget is answered with. */
+const SALE_FIELDS = {
+  id: true,
+  externalOrderId: true,
+  amountCents: true,
+  currency: true,
+  attributed: true,
+  chatId: true,
+  createdAt: true,
+} as const;
+
+interface TrackedSaleRow {
+  id: string;
+  externalOrderId: string;
+  amountCents: number;
+  currency: string;
+  attributed: boolean;
+  chatId: string | null;
+  createdAt: Date;
+}
+
+function serialiseSale(sale: TrackedSaleRow) {
+  return {
+    id: sale.id,
+    external_order_id: sale.externalOrderId,
+    amount_cents: sale.amountCents,
+    currency: sale.currency,
+    attributed: sale.attributed,
+    chat_id: sale.chatId,
+    created_at: sale.createdAt.toISOString(),
+  };
+}
+
+/** Two reports of the same order racing: `UNIQUE(license_id, external_order_id)` decides. */
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -537,4 +625,151 @@ export default async function customerRoutes(
       });
     },
   );
+
+  /**
+   * Report a completed order (FR-MOD-13.5) — the write the Ecommerce report is
+   * built from.
+   *
+   * The only endpoint where a visitor's browser states a number the workspace
+   * then reports as its own revenue, which sets the shape of everything below:
+   * the body may say what was sold and for how much, and nothing about *whose*
+   * sale it is. The workspace comes from the token and the conversation from the
+   * attribution rule, so a `license_id` or `chat_id` in the body is stripped
+   * before the handler ever sees it (NFR-S5) rather than trusted or refused.
+   *
+   * The customer rate limit already applies — it is keyed on the principal in
+   * the shared plugin, so this route is inside the same 60/min bucket as the
+   * rest of the widget surface — and the license gate refuses new sales in
+   * read-only mode along with every other POST.
+   */
+  app.post('/customer/chat/sale', { config: { principals: ['customer'] } }, async (request, reply) => {
+    const principal = request.requirePrincipal();
+    if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+
+    const body = parse(trackSaleSchema, request.body);
+    const tenant = request.tenant();
+    const externalOrderId = body.external_order_id;
+    const orderKey = {
+      licenseId_externalOrderId: { licenseId: tenant.licenseId, externalOrderId },
+    };
+
+    // Tracking is off until a workspace turns it on, and no row means it has
+    // never been configured — both are "we do not collect this", so neither may
+    // write. Checked before anything is stored: a disabled workspace that
+    // quietly accumulated rows would start reporting revenue for a period it
+    // believed it was not tracking, the moment somebody flipped the switch.
+    const config = await request.withTenant((tx) =>
+      tx.salesTrackerSettings.findFirst({
+        select: { enabled: true, currency: true, attributionWindowDays: true },
+      }),
+    );
+    if (!config?.enabled) {
+      throw new ApiError('not_allowed', 'Sales tracking is not enabled for this workspace.');
+    }
+
+    // One workspace, one currency (13.5-b). Amounts in a second currency cannot
+    // be added to the first, and a tracker that accepted them would produce a
+    // total that is not money in any currency — so a mismatch is refused at the
+    // edge instead of being summed. The configured code is named in the message
+    // because the caller is an integrator wiring up a snippet, and it is already
+    // on every price the shop displays.
+    const currency = body.currency.toUpperCase();
+    if (currency !== config.currency.toUpperCase()) {
+      throw ApiError.validation(
+        `currency: this workspace tracks sales in ${config.currency}.`,
+        { expected: config.currency },
+      );
+    }
+
+    // Idempotency, first half. The same order arrives more than once in normal
+    // operation — a merchant's at-least-once retry, a snippet firing twice, a
+    // visitor refreshing the confirmation page — and a second row would be a
+    // second sale in every report built on this table. Answered as a replay
+    // (200, the existing record) rather than a conflict: the caller did nothing
+    // wrong and has nothing to fix.
+    const existing = await request.withTenant((tx) =>
+      tx.trackedSale.findUnique({ where: orderKey, select: SALE_FIELDS }),
+    );
+    if (existing) return reply.status(200).send(serialiseSale(existing));
+
+    const now = new Date();
+
+    try {
+      const sale = await request.withTenant(async (tx) => {
+        // The visitor's recent conversations, newest first, each with the last
+        // time they were in it. RLS scopes this to the license, and the
+        // `customerId` filter to this visitor — so the chat a sale is credited
+        // to can only ever be one the caller's own token could already read.
+        const chats = await tx.chat.findMany({
+          where: { customerId: principal.customerId },
+          orderBy: { createdAt: 'desc' },
+          take: ATTRIBUTION_CANDIDATE_LIMIT,
+          select: {
+            id: true,
+            createdAt: true,
+            threads: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+          },
+        });
+
+        const attribution = resolveAttribution({
+          chats: chats.map((chat) => {
+            const lastThreadAt = chat.threads[0]?.createdAt;
+            return {
+              chatId: chat.id,
+              // The later of the two: a returning visitor reopens a thread on an
+              // existing chat, so `createdAt` alone would date a conversation
+              // held this morning to whenever it first started.
+              at: lastThreadAt && lastThreadAt > chat.createdAt ? lastThreadAt : chat.createdAt,
+            };
+          }),
+          now,
+          windowDays: config.attributionWindowDays,
+        });
+
+        const created = await tx.trackedSale.create({
+          data: {
+            // From the tenant, never the body — this is the line the whole
+            // shape of this route exists to protect.
+            licenseId: tenant.licenseId,
+            customerId: principal.customerId,
+            chatId: attribution.chatId,
+            externalOrderId,
+            amountCents: body.amount_cents,
+            currency,
+            attributed: attribution.attributed,
+          },
+          select: SALE_FIELDS,
+        });
+
+        // Written inside the same transaction as the sale, so the trail and the
+        // revenue cannot disagree, and only for a sale that is actually new —
+        // an entry per retry would count orders differently from the report.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'sale.tracked',
+          target: `sale:${created.id}`,
+          metadata: {
+            amount_cents: created.amountCents,
+            currency: created.currency,
+            attributed: created.attributed,
+          },
+        });
+
+        return created;
+      });
+
+      return reply.status(201).send(serialiseSale(sale));
+    } catch (error) {
+      // Idempotency, second half: two reports of the same order in flight at
+      // once. The check above passed for both, and the unique index let exactly
+      // one insert win — the loser reads the winner's row and answers as a
+      // replay, so concurrency produces one sale and one lot of revenue, not two.
+      if (!isUniqueViolation(error)) throw error;
+
+      const winner = await request.withTenant((tx) =>
+        tx.trackedSale.findUnique({ where: orderKey, select: SALE_FIELDS }),
+      );
+      if (!winner) throw error;
+      return reply.status(200).send(serialiseSale(winner));
+    }
+  });
 }

@@ -64,6 +64,35 @@ export const SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS = 1;
  */
 export const SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS = 90;
 
+/**
+ * The largest single order the ingest endpoint will record, in minor units —
+ * ten million in the configured currency.
+ *
+ * Two reasons, and the lower of them is the hard one. `tracked_sales.amount_cents`
+ * is an `int4`, so 2,147,483,647 is the most the column can physically hold; a
+ * larger value would fail at the database with a 500 rather than a 400. Well
+ * before that, though, an order this size is far likelier to be a units mistake
+ * (a snippet sending 49.90 as `4990000` or passing whole units as cents) or a
+ * visitor inflating the revenue report than a genuine sale — and the party
+ * reporting the number is the visitor's browser, not a trusted backend.
+ */
+export const SALES_TRACKER_MAX_AMOUNT_CENTS = 1_000_000_000;
+
+/**
+ * The merchant's own order identifier, which is what makes ingest idempotent —
+ * `UNIQUE(license_id, external_order_id)` is the constraint that stops one order
+ * being counted twice.
+ *
+ * Bounded and restricted to the characters real order references use, because
+ * this value arrives from the page: unbounded it is a cheap way to inflate the
+ * table's index, and a permissive charset would let arbitrary visitor text
+ * (newlines, markup) become a key that later shows up in a report export.
+ */
+export const SALES_TRACKER_EXTERNAL_ORDER_ID_MAX_LENGTH = 128;
+
+/** Letters, digits and the separators order numbers actually use. No spaces. */
+export const SALES_TRACKER_EXTERNAL_ORDER_ID_RE = /^[A-Za-z0-9._:#/-]+$/;
+
 /** The whole configurable surface of the sales tracker. `snake_case`: it travels over the API. */
 export interface SalesTrackerConfig {
   /** Tracking is off until a workspace turns it on; nothing is ingested while false. */

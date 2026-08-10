@@ -167,6 +167,68 @@ close:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+sale:
+  post:
+    tags: [Customer]
+    operationId: trackCustomerSale
+    summary: Report a completed order for revenue attribution
+    description: |
+      The write side of the sales tracker (FR-MOD-13.5): the merchant's
+      confirmation page calls this — through the widget snippet — once an order
+      completes, and the Ecommerce report is built from what lands here.
+
+      The caller is a visitor's browser, so nothing about *whose* sale this is
+      may come from the body. The workspace is taken from the customer token;
+      a `license_id`, `chat_id` or `customer_id` sent in the body is ignored,
+      never honoured (NFR-S5).
+
+      Refused with 403 unless the workspace has turned tracking on, and with
+      400 unless `currency` matches the configured one exactly — revenue in a
+      second currency cannot be added to the first, so it is rejected at the
+      edge rather than silently summed into a meaningless total.
+
+      Idempotent on `external_order_id`: a merchant's retry, a double-fired
+      snippet or a visitor refreshing the confirmation page all report the same
+      order, and counting it twice would overstate revenue. The first call
+      returns 201; every repeat returns 200 with the row already recorded, and
+      writes nothing.
+
+      A sale is recorded whether or not it can be attributed. `attributed` is
+      true only when the visitor had a conversation within the workspace's
+      attribution window, in which case `chat_id` names the most recent one;
+      otherwise the order is stored with `attributed: false`, which is how the
+      report can show total revenue alongside the part chat is credited for.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrackSaleRequest" }
+    responses:
+      "200":
+        description: This order was already reported — the existing record, nothing written
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrackedSale" }
+      "201":
+        description: Sale recorded
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrackedSale" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402":
+        description: The license is read-only (expired trial); no new sales are recorded.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "403":
+        description: Sales tracking is not enabled for this workspace
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 rating:
   post:
     tags: [Customer]

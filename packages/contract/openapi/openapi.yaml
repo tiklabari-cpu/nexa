@@ -152,6 +152,8 @@ paths:
     $ref: "./paths/customer-chat.yaml#/close"
   /customer/chat/rating:
     $ref: "./paths/customer-chat.yaml#/rating"
+  /customer/chat/sale:
+    $ref: "./paths/customer-chat.yaml#/sale"
 
   /customers:
     $ref: "./paths/customers.yaml#/customers"
@@ -3882,6 +3884,66 @@ components:
           type: array
           description: Customer-visible events only. Internal notes never appear.
           items: { $ref: "#/components/schemas/Event" }
+
+    TrackSaleRequest:
+      type: object
+      description: |
+        One completed order, as the widget snippet reports it (FR-MOD-13.5).
+
+        Deliberately three fields. Everything else the record needs — which
+        workspace, which visitor, which conversation — is derived server-side
+        from the customer token, because the caller is a page in the visitor's
+        browser and anything it can name it can also forge.
+
+        Unknown properties are ignored rather than rejected, which is what makes
+        a `license_id` sent by a hostile page a no-op instead of an error worth
+        probing. A typo in one of the three fields below is still a 400: all
+        three are required, so a mistyped name leaves a required field missing.
+      required: [external_order_id, amount_cents, currency]
+      properties:
+        external_order_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[A-Za-z0-9._:#/-]+$"
+          description: >-
+            The merchant's own order reference. The idempotency key: reporting
+            the same one twice records one sale, not two.
+        amount_cents:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 1000000000
+          description: >-
+            Order total in minor units (cents). An integer so no rounding
+            happens between the shop and the report. Zero is allowed — a fully
+            discounted order is still a conversion.
+        currency:
+          $ref: "#/components/schemas/SalesTrackerCurrency"
+
+    TrackedSale:
+      type: object
+      description: |
+        A recorded order (`tracked_sales`). `attributed` is the field the report
+        divides on: an unattributed sale still counts toward total revenue, but
+        only an attributed one is revenue chat can be credited for.
+      required: [id, external_order_id, amount_cents, currency, attributed, chat_id, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        external_order_id: { type: string }
+        amount_cents: { type: integer, format: int32 }
+        currency:
+          $ref: "#/components/schemas/SalesTrackerCurrency"
+        attributed:
+          type: boolean
+          description: >-
+            Whether the visitor had a conversation inside the workspace's
+            attribution window before this order.
+        chat_id:
+          type: string
+          nullable: true
+          description: The conversation credited with the sale, or null when there is none.
+        created_at: { type: string, format: date-time }
 
     CustomerMessageResult:
       type: object

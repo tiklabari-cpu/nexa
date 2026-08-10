@@ -67,6 +67,14 @@ export const AUDIT_ACTIONS = [
   // revenue is recorded in, or widening the attribution window all move the
   // revenue figures a workspace reports. The entry names the changed fields only.
   'settings.sales_tracker_updated',
+  // A sale was reported through the widget's tracking snippet (FR-MOD-13.5).
+  // The only write in the platform where a *visitor's browser* states a figure
+  // the workspace then reports as revenue, so who reported what, and when, has
+  // to be reconstructable — a disputed Ecommerce total is otherwise unanswerable.
+  // Written once per sale, never on an idempotent repeat, so the trail counts
+  // orders the same way the report does. Metadata carries the amount, currency
+  // and whether it was attributed; the actor is the customer token.
+  'sale.tracked',
   'settings.trusted_domain_added',
   'settings.trusted_domain_removed',
   'settings.ip_allowlist_added',

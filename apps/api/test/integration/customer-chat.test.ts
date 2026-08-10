@@ -1105,4 +1105,342 @@ describe('customer chat api', () => {
       expect(toB.json().error.type).toBe('message_rejected');
     });
   });
+
+  // =========================================================================
+
+  /**
+   * Tracked-sale ingest (FR-MOD-13.5).
+   *
+   * The one endpoint where a visitor's browser states a figure the workspace
+   * then reports as revenue, so these tests are written from the hostile page's
+   * side: what happens when it reports a sale to a workspace that never turned
+   * tracking on, in a currency nobody configured, twice, or on somebody else's
+   * licence.
+   */
+  describe('tracked sales (FR-MOD-13.5)', () => {
+    /** Turn tracking on for a tenant, as the settings screen would. */
+    async function enableTracking(
+      tenant = fx.a,
+      overrides: { currency?: string; attributionWindowDays?: number } = {},
+    ) {
+      await owner.salesTrackerSettings.create({
+        data: {
+          licenseId: tenant.licenseId,
+          enabled: true,
+          currency: overrides.currency ?? 'USD',
+          attributionWindowDays: overrides.attributionWindowDays ?? 7,
+        },
+      });
+    }
+
+    const ORDER = { external_order_id: 'ORD-1001', amount_cents: 4990, currency: 'USD' };
+
+    /** Total revenue recorded for a licence — what the Ecommerce report will sum. */
+    async function revenueOf(licenseId: bigint): Promise<number> {
+      const rows = await owner.trackedSale.findMany({
+        where: { licenseId },
+        select: { amountCents: true },
+      });
+      return rows.reduce((total, row) => total + row.amountCents, 0);
+    }
+
+    it('records a sale and credits the conversation the visitor had', async () => {
+      await enableTracking();
+      const { token } = await widgetToken();
+      const chat = await server.post('/customer/chat/events', { text: 'Is it in stock?' }, auth(token));
+
+      const sale = await server.post('/customer/chat/sale', ORDER, auth(token));
+
+      expect(sale.statusCode).toBe(201);
+      expect(sale.json()).toMatchObject({
+        external_order_id: 'ORD-1001',
+        amount_cents: 4990,
+        currency: 'USD',
+        attributed: true,
+        chat_id: chat.json().chat_id,
+      });
+    });
+
+    it('records a sale from a visitor who never chatted, unattributed', async () => {
+      // The row is still written: total revenue is a fact whether or not chat
+      // had anything to do with it, and dropping these would make the
+      // attributed share look like 100%.
+      await enableTracking();
+      const { token } = await widgetToken();
+
+      const sale = await server.post('/customer/chat/sale', ORDER, auth(token));
+
+      expect(sale.statusCode).toBe(201);
+      expect(sale.json()).toMatchObject({ attributed: false, chat_id: null });
+      expect(await owner.trackedSale.count({ where: { licenseId: fx.a.licenseId } })).toBe(1);
+    });
+
+    it('does not credit a conversation older than the attribution window', async () => {
+      await enableTracking(fx.a, { attributionWindowDays: 7 });
+      const { token } = await widgetToken();
+      const started = await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+      const chatId = started.json().chat_id as string;
+
+      // Age the conversation past the window — both the chat and the thread,
+      // since attribution dates a chat by whichever is later.
+      const longAgo = new Date(Date.now() - 30 * 86_400_000);
+      await owner.chat.update({ where: { id: chatId }, data: { createdAt: longAgo } });
+      await owner.thread.updateMany({ where: { chatId }, data: { createdAt: longAgo } });
+
+      const sale = await server.post('/customer/chat/sale', ORDER, auth(token));
+
+      expect(sale.statusCode).toBe(201);
+      expect(sale.json()).toMatchObject({ attributed: false, chat_id: null });
+      // Recorded all the same — unattributed revenue is still revenue.
+      expect(await revenueOf(fx.a.licenseId)).toBe(4990);
+    });
+
+    it('credits a conversation the visitor returned to inside the window', async () => {
+      // The chat itself is ancient; the visitor came back yesterday, which opens
+      // a new thread on it. Dating the chat by its creation alone would fail to
+      // credit exactly the visitors who chat most.
+      await enableTracking(fx.a, { attributionWindowDays: 7 });
+      const { token } = await widgetToken();
+      const started = await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+      const chatId = started.json().chat_id as string;
+
+      await owner.chat.update({
+        where: { id: chatId },
+        data: { createdAt: new Date(Date.now() - 60 * 86_400_000) },
+      });
+      await owner.thread.updateMany({
+        where: { chatId },
+        data: { createdAt: new Date(Date.now() - 86_400_000) },
+      });
+
+      const sale = await server.post('/customer/chat/sale', ORDER, auth(token));
+      expect(sale.json()).toMatchObject({ attributed: true, chat_id: chatId });
+    });
+
+    // --- refusals ----------------------------------------------------------
+
+    it('refuses to record anything while tracking is off', async () => {
+      await owner.salesTrackerSettings.create({
+        data: { licenseId: fx.a.licenseId, enabled: false, currency: 'USD' },
+      });
+      const { token } = await widgetToken();
+
+      const sale = await server.post('/customer/chat/sale', ORDER, auth(token));
+
+      expect(sale.statusCode).toBe(403);
+      expect(sale.json().error.type).toBe('not_allowed');
+      expect(await owner.trackedSale.count()).toBe(0);
+    });
+
+    it('refuses a workspace that has never configured tracking', async () => {
+      // No row at all — the state every workspace starts in. Accepting these
+      // would mean a workspace that believed it was not tracking suddenly has
+      // months of revenue the moment somebody flips the switch.
+      const { token } = await widgetToken();
+
+      const sale = await server.post('/customer/chat/sale', ORDER, auth(token));
+
+      expect(sale.statusCode).toBe(403);
+      expect(await owner.trackedSale.count()).toBe(0);
+    });
+
+    it('refuses a currency other than the one the workspace configured', async () => {
+      // Revenue in a second currency cannot be added to the first; a tracker
+      // that accepted both would report a total that is not money.
+      await enableTracking(fx.a, { currency: 'USD' });
+      const { token } = await widgetToken();
+
+      const sale = await server.post('/customer/chat/sale', { ...ORDER, currency: 'EUR' }, auth(token));
+
+      expect(sale.statusCode).toBe(400);
+      expect(sale.json().error.type).toBe('validation');
+      expect(await owner.trackedSale.count()).toBe(0);
+    });
+
+    it('refuses a currency that is not a three-letter code', async () => {
+      await enableTracking();
+      const { token } = await widgetToken();
+
+      for (const currency of ['US', 'USDD', '', 'dollars']) {
+        const sale = await server.post('/customer/chat/sale', { ...ORDER, currency }, auth(token));
+        expect(sale.statusCode).toBe(400);
+      }
+      expect(await owner.trackedSale.count()).toBe(0);
+    });
+
+    it('refuses an amount that is negative, fractional or absurd', async () => {
+      // A fraction is a units mistake (49.90 where cents were meant); the
+      // ceiling catches the same mistake scaled up, and anything a hostile page
+      // sends to inflate the report.
+      await enableTracking();
+      const { token } = await widgetToken();
+
+      for (const amount_cents of [-1, 49.9, 2_000_000_000, '4990']) {
+        const sale = await server.post(
+          '/customer/chat/sale',
+          { ...ORDER, amount_cents },
+          auth(token),
+        );
+        expect(sale.statusCode).toBe(400);
+      }
+      expect(await owner.trackedSale.count()).toBe(0);
+    });
+
+    it('accepts a zero-value order', async () => {
+      // A fully discounted order is still a conversion, and zero is a real
+      // total — the floor is below it, not at it.
+      await enableTracking();
+      const { token } = await widgetToken();
+
+      const sale = await server.post('/customer/chat/sale', { ...ORDER, amount_cents: 0 }, auth(token));
+      expect(sale.statusCode).toBe(201);
+      expect(sale.json().amount_cents).toBe(0);
+    });
+
+    it('refuses an order reference that is empty, oversized or not a reference', async () => {
+      await enableTracking();
+      const { token } = await widgetToken();
+
+      for (const external_order_id of ['', '   ', 'x'.repeat(129), 'ORD 1001', 'ORD<script>']) {
+        const sale = await server.post(
+          '/customer/chat/sale',
+          { ...ORDER, external_order_id },
+          auth(token),
+        );
+        expect(sale.statusCode).toBe(400);
+      }
+      expect(await owner.trackedSale.count()).toBe(0);
+    });
+
+    it('refuses an unauthenticated caller and an agent token', async () => {
+      await enableTracking();
+      expect((await server.post('/customer/chat/sale', ORDER)).statusCode).toBe(401);
+      // The customer surface is invisible to an agent token — 404, not 403, so
+      // it cannot be probed.
+      expect((await server.post('/customer/chat/sale', ORDER, auth(agentToken))).statusCode).toBe(
+        404,
+      );
+      expect(await owner.trackedSale.count()).toBe(0);
+    });
+
+    // --- idempotency -------------------------------------------------------
+
+    it('counts one order once however many times it is reported', async () => {
+      // The merchant's retry, a double-fired snippet, a visitor refreshing the
+      // confirmation page. A second row would be a second sale in every report.
+      await enableTracking();
+      const { token } = await widgetToken();
+
+      const first = await server.post('/customer/chat/sale', ORDER, auth(token));
+      const second = await server.post('/customer/chat/sale', ORDER, auth(token));
+      const third = await server.post('/customer/chat/sale', { ...ORDER, amount_cents: 999_999 }, auth(token));
+
+      expect(first.statusCode).toBe(201);
+      expect(second.statusCode).toBe(200);
+      // Even a repeat claiming a different amount does not restate the sale:
+      // the first report of an order is the one that stands.
+      expect(third.statusCode).toBe(200);
+      expect(third.json().amount_cents).toBe(4990);
+
+      expect(second.json().id).toBe(first.json().id);
+      expect(await owner.trackedSale.count({ where: { licenseId: fx.a.licenseId } })).toBe(1);
+      expect(await revenueOf(fx.a.licenseId)).toBe(4990);
+    });
+
+    it('counts one order once when two reports race', async () => {
+      await enableTracking();
+      const { token } = await widgetToken();
+
+      const [one, two] = await Promise.all([
+        server.post('/customer/chat/sale', ORDER, auth(token)),
+        server.post('/customer/chat/sale', ORDER, auth(token)),
+      ]);
+
+      // Whichever insert the unique index let through, exactly one sale exists
+      // and the revenue is single — the loser answers as a replay, not a 500.
+      expect([one.statusCode, two.statusCode].sort()).toEqual([200, 201]);
+      expect(await owner.trackedSale.count({ where: { licenseId: fx.a.licenseId } })).toBe(1);
+      expect(await revenueOf(fx.a.licenseId)).toBe(4990);
+    });
+
+    it('writes one audit entry per sale and none for a repeat', async () => {
+      await enableTracking();
+      const { token } = await widgetToken();
+
+      await server.post('/customer/chat/sale', ORDER, auth(token));
+      await server.post('/customer/chat/sale', ORDER, auth(token));
+
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'sale.tracked' },
+      });
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.actorType).toBe('customer');
+      expect(entries[0]?.metadata).toMatchObject({ amount_cents: 4990, currency: 'USD' });
+    });
+
+    // --- what the body may not decide (NFR-S5) -----------------------------
+
+    it('ignores a licence, customer or chat forged in the body', async () => {
+      // A hostile page naming another workspace gets an ordinary 201 written to
+      // its own — not an error that would confirm the field is recognised.
+      await enableTracking();
+      await enableTracking(fx.b);
+      const { token, customer_id } = await widgetToken();
+      const started = await server.post('/customer/chat/events', { text: 'Hi' }, auth(token));
+
+      // A real chat belonging to tenant B, offered as this sale's attribution.
+      const b = await widgetToken(fx.b);
+      const foreign = await server.post('/customer/chat/events', { text: 'Hi' }, auth(b.token));
+
+      const sale = await server.post(
+        '/customer/chat/sale',
+        {
+          ...ORDER,
+          license_id: fx.b.licenseId.toString(),
+          chat_id: foreign.json().chat_id,
+          customer_id: b.customer_id,
+          attributed: true,
+        },
+        auth(token),
+      );
+
+      expect(sale.statusCode).toBe(201);
+      // Attributed to the caller's OWN conversation, never the one named.
+      expect(sale.json().chat_id).toBe(started.json().chat_id);
+
+      const row = await owner.trackedSale.findFirstOrThrow({
+        where: { externalOrderId: 'ORD-1001' },
+      });
+      expect(row.licenseId).toBe(fx.a.licenseId);
+      expect(row.customerId).toBe(customer_id);
+      expect(await owner.trackedSale.count({ where: { licenseId: fx.b.licenseId } })).toBe(0);
+    });
+
+    it("keeps one tenant's sales out of another's", async () => {
+      await enableTracking(fx.a);
+      await enableTracking(fx.b);
+      const a = await widgetToken(fx.a);
+      const b = await widgetToken(fx.b);
+
+      expect((await server.post('/customer/chat/sale', ORDER, auth(a.token))).statusCode).toBe(201);
+
+      // The same order reference on another licence is a different sale: the
+      // uniqueness that makes ingest idempotent is per-licence, so B is neither
+      // blocked by A's order nor able to see it.
+      const forB = await server.post('/customer/chat/sale', { ...ORDER, amount_cents: 100 }, auth(b.token));
+      expect(forB.statusCode).toBe(201);
+
+      expect(await revenueOf(fx.a.licenseId)).toBe(4990);
+      expect(await revenueOf(fx.b.licenseId)).toBe(100);
+    });
+
+    it("does not let one tenant's tracking switch enable another's", async () => {
+      // A is on, B never configured anything. The setting is per-licence.
+      await enableTracking(fx.a);
+      const b = await widgetToken(fx.b);
+
+      expect((await server.post('/customer/chat/sale', ORDER, auth(b.token))).statusCode).toBe(403);
+      expect(await owner.trackedSale.count()).toBe(0);
+    });
+  });
 });

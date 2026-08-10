@@ -84,6 +84,7 @@ const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }
       'settings.ip_allowlist_removed',
     ],
   },
+  { label: 'Sales tracking', actions: ['sale.tracked'] },
   { label: 'Billing', actions: ['billing.subscription_updated', 'billing.payment_method_updated'] },
   { label: 'Webhooks', actions: ['webhook.created', 'webhook.deleted'] },
   {

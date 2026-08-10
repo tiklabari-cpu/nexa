@@ -771,6 +771,50 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/chat/sale': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Report a completed order for revenue attribution
+     * @description The write side of the sales tracker (FR-MOD-13.5): the merchant's
+     *     confirmation page calls this — through the widget snippet — once an order
+     *     completes, and the Ecommerce report is built from what lands here.
+     *
+     *     The caller is a visitor's browser, so nothing about *whose* sale this is
+     *     may come from the body. The workspace is taken from the customer token;
+     *     a `license_id`, `chat_id` or `customer_id` sent in the body is ignored,
+     *     never honoured (NFR-S5).
+     *
+     *     Refused with 403 unless the workspace has turned tracking on, and with
+     *     400 unless `currency` matches the configured one exactly — revenue in a
+     *     second currency cannot be added to the first, so it is rejected at the
+     *     edge rather than silently summed into a meaningless total.
+     *
+     *     Idempotent on `external_order_id`: a merchant's retry, a double-fired
+     *     snippet or a visitor refreshing the confirmation page all report the same
+     *     order, and counting it twice would overstate revenue. The first call
+     *     returns 201; every repeat returns 200 with the row already recorded, and
+     *     writes nothing.
+     *
+     *     A sale is recorded whether or not it can be attributed. `attributed` is
+     *     true only when the visitor had a conversation within the workspace's
+     *     attribution window, in which case `chat_id` names the most recent one;
+     *     otherwise the order is stored with `attributed: false`, which is how the
+     *     report can show total revenue alongside the part chat is credited for.
+     */
+    post: operations['trackCustomerSale'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customers': {
     parameters: {
       query?: never;
@@ -7335,6 +7379,48 @@ export interface components {
       /** @description Customer-visible events only. Internal notes never appear. */
       events: components['schemas']['Event'][];
     };
+    /**
+     * @description One completed order, as the widget snippet reports it (FR-MOD-13.5).
+     *
+     *     Deliberately three fields. Everything else the record needs — which
+     *     workspace, which visitor, which conversation — is derived server-side
+     *     from the customer token, because the caller is a page in the visitor's
+     *     browser and anything it can name it can also forge.
+     *
+     *     Unknown properties are ignored rather than rejected, which is what makes
+     *     a `license_id` sent by a hostile page a no-op instead of an error worth
+     *     probing. A typo in one of the three fields below is still a 400: all
+     *     three are required, so a mistyped name leaves a required field missing.
+     */
+    TrackSaleRequest: {
+      /** @description The merchant's own order reference. The idempotency key: reporting the same one twice records one sale, not two. */
+      external_order_id: string;
+      /**
+       * Format: int32
+       * @description Order total in minor units (cents). An integer so no rounding happens between the shop and the report. Zero is allowed — a fully discounted order is still a conversion.
+       */
+      amount_cents: number;
+      currency: components['schemas']['SalesTrackerCurrency'];
+    };
+    /**
+     * @description A recorded order (`tracked_sales`). `attributed` is the field the report
+     *     divides on: an unattributed sale still counts toward total revenue, but
+     *     only an attributed one is revenue chat can be credited for.
+     */
+    TrackedSale: {
+      /** Format: uuid */
+      id: string;
+      external_order_id: string;
+      /** Format: int32 */
+      amount_cents: number;
+      currency: components['schemas']['SalesTrackerCurrency'];
+      /** @description Whether the visitor had a conversation inside the workspace's attribution window before this order. */
+      attributed: boolean;
+      /** @description The conversation credited with the sale, or null when there is none. */
+      chat_id: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
     CustomerMessageResult: {
       chat_id: string;
       queue_position?: number | null;
@@ -8858,6 +8944,61 @@ export interface operations {
       };
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  trackCustomerSale: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TrackSaleRequest'];
+      };
+    };
+    responses: {
+      /** @description This order was already reported — the existing record, nothing written */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrackedSale'];
+        };
+      };
+      /** @description Sale recorded */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TrackedSale'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      /** @description The license is read-only (expired trial); no new sales are recorded. */
+      402: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /** @description Sales tracking is not enabled for this workspace */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };

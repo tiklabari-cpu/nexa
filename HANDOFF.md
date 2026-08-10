@@ -13,6 +13,34 @@
 
 ## Task log (newest-first)
 
+## tm 75.3 — 13.5-c: tracked-sale ingest + atıf çekirdeği (POST /customer/chat/sale) — done — 2026-08-10 UTC
+
+- **Yapıldı:** Contract-first `POST /customer/chat/sale` (`paths/customer-chat.yaml#sale` +
+  `TrackSaleRequest`/`TrackedSale`, re-bundle + tip regen), saf atıf modülü
+  `apps/api/src/services/sales/attribution.ts` (pencere içindeki EN SON sohbet; yoksa
+  `attributed:false` ama satır yine yazılır), route `customer.ts` (`principals:['customer']`),
+  audit `sale.tracked` (yeni aksiyon + `AuditLogPage.tsx` aynası). Idempotency çift katmanlı:
+  ön okuma + P2002'yi **transaction dışında** yakalayıp kazananın satırını okuma — eşzamanlı
+  iki POST'ta tek satır, tek ciro. +28 test (10 unit, 18 integration).
+- **Varsayımlar:** (1) Gövde zod'u **`.strict()` değil** (13.5-b'nin tersi, bilinçli): KK
+  "gövdedeki `license_id` YOK SAYILIR" diyor — 400 verirsek düşman sayfa alanın tanındığını
+  öğrenir. Üç alanın üçü de required olduğu için yazım hatası yine 400. (2) Bir sohbetin atıf
+  tarihi `max(chat.createdAt, son thread.createdAt)`: dönen ziyaretçi var olan sohbete yeni
+  thread açtığı için yalnız `createdAt` en çok konuşan ziyaretçiyi atıf dışı bırakırdı.
+  (3) `enabled=false`/satır yok → `not_allowed` 403 (yeni ApiError tipi AÇILMADI).
+  (4) Atıf adayları en yeni 20 sohbetle sınırlı (sayfanın istediği zaman çağırabildiği bir yol).
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2404/2404,
+  +28) · `pnpm -w test:integration` 0 (api 1845/1845 · rtm 51/51) · build 0 (7/7) ·
+  `pnpm -w test:e2e` **96/96**.
+- **Sonraki pencereye not:** 13.5-d artık gerçek besleyiciye sahip — `tracked_sales` satırları
+  `attributed` alanına göre ikiye ayrılır (toplam ciro vs. chat'e atfedilen). ⚠ İki şey:
+  (a) `pnpm -w test:e2e` bu makinede **`.env` kabuğa export edilmeden düşer** — `apps/api`
+  kendi `.env`'ini `loadEnvFile()` ile okur ama `apps/rtm` okumaz, RTM "Invalid environment"
+  ile ölür ve Playwright 60 sn timeout verir. Çalıştırma:
+  `set -a && . ./.env && set +a && pnpm -w test:e2e` (bash). (b) İlk `pnpm -w test` koşusu 1
+  ile döndü; aynı komut tekrar + `@nexa/api` tek başına (2404/2404) tam yeşil verdi, kırmızı
+  tekrar üretilemedi — tm 75.2'nin kaydettiği `reports-billing.test.ts` flake'i ile aynı desen.
+
 ## tm 75.2 — 13.5-b: sales tracker konfigürasyon endpoint'i (GET/PUT /settings/sales-tracker) — done — 2026-08-10 UTC
 
 - **Yapıldı:** Contract-first `GET/PUT /settings/sales-tracker` — kontrat (`paths/settings.yaml#salesTracker`

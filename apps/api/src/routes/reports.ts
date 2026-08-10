@@ -32,6 +32,7 @@ import {
   visibleReportGroups,
 } from './reports-export.js';
 import {
+  achievedGoalCount,
   aiAgentBenchmark,
   breakdownByChannel,
   breakdownByDay,
@@ -431,6 +432,10 @@ export async function buildOverviewReport(
   // a ticket need not have come from a conversation at all.
   const tickets = await ticketCount(tx, licenseId, from, to);
 
+  // The funnel's converted stage (FR-MOD-13.3), counted the same way as
+  // tickets above — a license- and time-scoped count on its own table.
+  const achievedGoals = await achievedGoalCount(tx, licenseId, from, to);
+
   const good = satisfaction.good;
   const bad = satisfaction.bad;
   const rated = good + bad;
@@ -470,6 +475,7 @@ export async function buildOverviewReport(
         assisted_rate: resolutionRate(assisted, closed),
         automated_rate: resolutionRate(automated, closed),
         queued_now: queued,
+        achieved_goals: achievedGoals,
       },
       // The Chats section cards (PRD §7.3.3): how fast the AI is clearing chats
       // and how long conversations run. `automated_per_hour` averages over the

@@ -2760,7 +2760,8 @@ components:
           allOf:
             - $ref: "#/components/schemas/BenchmarkWindow"
             - type: object
-              required: [chats, tickets, total_cases, closed, manual, assisted, automated]
+              required:
+                [chats, tickets, total_cases, closed, manual, assisted, automated, achieved_goals]
               properties:
                 chats: { type: integer }
                 tickets: { type: integer }
@@ -2775,9 +2776,23 @@ components:
                   type: number
                   nullable: true
                   description: Null when nobody rated the baseline window.
+                achieved_goals:
+                  type: integer
+                  description: Goals reached in the baseline window (FR-MOD-13.3).
         totals:
           type: object
-          required: [chats, tickets, total_cases, closed, manual, assisted, automated, queued_now]
+          required:
+            [
+              chats,
+              tickets,
+              total_cases,
+              closed,
+              manual,
+              assisted,
+              automated,
+              queued_now,
+              achieved_goals,
+            ]
           properties:
             chats: { type: integer }
             tickets:
@@ -2814,6 +2829,9 @@ components:
               nullable: true
               description: Share of *closed* chats. Null when nothing closed.
             queued_now: { type: integer }
+            achieved_goals:
+              type: integer
+              description: Goals reached in the range (FR-MOD-13.3) — the funnel's converted stage.
         chats:
           type: object
           description: |

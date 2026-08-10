@@ -4,6 +4,7 @@ import {
   benchmarkWindow,
   channelLabel,
   DEFAULT_BENCHMARK_BASELINE,
+  goalConversionRate,
   isBenchmarkBaseline,
   resolutionRate,
   round,
@@ -40,6 +41,28 @@ describe('resolutionRate', () => {
       (resolutionRate(2, closed) ?? 0) +
       (resolutionRate(3, closed) ?? 0);
     expect(total).toBe(1);
+  });
+});
+
+describe('goalConversionRate', () => {
+  it('is null, not zero, when the window had no chats', () => {
+    // No chats to convert is unknown, not a 0% failure — and it guards the
+    // divide, same as resolutionRate's empty-window case.
+    expect(goalConversionRate(0, 0)).toBeNull();
+    expect(goalConversionRate(3, 0)).toBeNull();
+  });
+
+  it('is the share of chats that reached a goal, rounded to three decimals', () => {
+    expect(goalConversionRate(1, 3)).toBe(0.333);
+    expect(goalConversionRate(2, 3)).toBe(0.667);
+  });
+
+  it('is 0 when chats happened but none converted', () => {
+    expect(goalConversionRate(0, 4)).toBe(0);
+  });
+
+  it('is 1 when every chat converted', () => {
+    expect(goalConversionRate(5, 5)).toBe(1);
   });
 });
 

@@ -26,6 +26,15 @@ export function resolutionRate(count: number, closed: number): number | null {
 }
 
 /**
+ * Share of chats in a window that reached a goal (FR-MOD-13.3) — null, not
+ * zero, when the window held no chats to convert. Same "unknown, not a 0%
+ * failure" rule as {@link resolutionRate}.
+ */
+export function goalConversionRate(conversions: number, chats: number): number | null {
+  return chats === 0 ? null : round(conversions / chats);
+}
+
+/**
  * The channel breakdown's dimension label for a `channel_messages.channel_type`
  * value. Known adapter types (CHANNEL_TYPES — the single source of truth,
  * `channel-adapter.ts`) keep their own name; `null` or anything else falls

@@ -13,6 +13,29 @@
 
 ## Task log (newest-first)
 
+### tm 74.5 — 13.3-e: /reports/overview "Achieved goals" sayacı (pencere + önceki pencere) — done — 2026-08-10 UTC
+
+- **Yapıldı:** `report-csv.ts`'e `achievedGoalCount(tx, licenseId, from, to)` (`ticketCount`'un eşi) —
+  hem `buildOverviewReport` hem `overviewBenchmark` aynı yardımcıyı sırayla çağırıyor (Promise.all
+  yok). Yanıta `totals.achieved_goals` + `previous_period.achieved_goals` (integer, katkısal,
+  `openapi.yaml` re-bundle edildi). `reports-metrics.ts`'e saf `goalConversionRate(conversions,
+  chats)` (`resolutionRate` deseni, payda 0 → null) — bu turda hiçbir yanıta bağlanmadı, yalnız
+  fonksiyon + unit test (13.3-f huniyi tüketecek).
+- **Doğrulama:** `pnpm -w typecheck` 0 (11/11) · `lint` 0 (8/8) · `test` 0 (`@nexa/api` 2331/2331,
+  bu turda +4) · `test:integration` 0 (1783/1783, bu turda +3) · `build` 0 (7/7) · e2e
+  `command-palette.spec.ts`+`copilot-bi.spec.ts` **6/6** (`get_report` MCP aracı `buildOverviewReport`'u
+  paylaşıyor, bu turda değişti). İlk `pnpm -w test` koşusunda tüm workspace paketleri eşzamanlı
+  koşarken 12 kırmızı çıktı (Team performance CSAT, Leads CSV, transfers — hiçbiri bu dilimin
+  dokunduğu dosyalarda değil); izole `pnpm --filter @nexa/api test` ve ikinci tam koşu **ikisi de
+  temiz** (2331/2331) — kaynak çekişmesinden kaynaklı tekil bir flake, regresyon değil.
+- **Varsayımlar:** DOSYALAR listesindeki `apps/api/test/integration/reports.test.ts` artık mevcut
+  değil (repo `reports-billing.test.ts`'e taşınmış) — testler oraya eklendi. `ticketCount` deseni
+  gerçekte `report-csv.ts`'de yaşıyor (task açıklamasının "reports.ts" referansı eski); aynı desen
+  izlenerek `achievedGoalCount` de oraya kondu, `reports.ts`'e yalnız import edildi.
+- **Sonraki pencereye not:** 13.3-f (huni raporu, `GET /reports/goals`) artık `achievedGoalCount` +
+  `goalConversionRate`'i hazır bulacak — ikisi de export edilmiş durumda. Çalışma alanındaki
+  `.gitignore` + `kanit/*.png` kirliliğine yine dokunulmadı (bu dilimin kapsamı dışı).
+
 ### tm 74.4 — 13.3-d: Hedef eşleşme + achievement kaydı çekirdeği — done — 2026-08-10 UTC
 
 - **Yapıldı:** Saf `services/goals/goal-matching.ts` (`hasGoalTrigger`/`matchesGoal`, ikisi de

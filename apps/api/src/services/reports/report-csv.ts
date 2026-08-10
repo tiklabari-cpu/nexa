@@ -136,6 +136,22 @@ export function ticketCount(
   return tx.ticket.count({ where: { licenseId, createdAt: { gte: from, lte: to } } });
 }
 
+/**
+ * Goals reached in a window (FR-MOD-13.3) — the funnel's converted stage,
+ * counted the same way {@link ticketCount} counts tickets: one license- and
+ * time-scoped count, no join. `goal_achievements` is written once per
+ * (goal, customer) pair (13.3-b's idempotency constraint), so this is a count
+ * of distinct conversions, never inflated by a visitor re-triggering a goal.
+ */
+export function achievedGoalCount(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<number> {
+  return tx.goalAchievement.count({ where: { licenseId, achievedAt: { gte: from, lte: to } } });
+}
+
 interface CaseDaySplit {
   date: string;
   open: number;
@@ -1414,6 +1430,7 @@ export async function overviewBenchmark(
   const totals = await windowTotals(tx, licenseId, window.from, window.to);
   const satisfaction = await satisfactionCounts(tx, licenseId, window.from, window.to);
   const tickets = await ticketCount(tx, licenseId, window.from, window.to);
+  const achievedGoals = await achievedGoalCount(tx, licenseId, window.from, window.to);
   const chats = Number(totals.total_chats);
 
   return {
@@ -1427,6 +1444,7 @@ export async function overviewBenchmark(
     avg_first_response_seconds: roundOrNull(totals.avg_first_response_seconds),
     avg_duration_seconds: roundOrNull(totals.avg_duration_seconds),
     satisfaction_score: satisfactionScore(satisfaction),
+    achieved_goals: achievedGoals,
   };
 }
 

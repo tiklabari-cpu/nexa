@@ -6382,6 +6382,8 @@ export interface components {
         avg_duration_seconds?: number | null;
         /** @description Null when nobody rated the baseline window. */
         satisfaction_score?: number | null;
+        /** @description Goals reached in the baseline window (FR-MOD-13.3). */
+        achieved_goals: number;
       };
       totals: {
         chats: number;
@@ -6404,6 +6406,8 @@ export interface components {
         /** @description Share of *closed* chats. Null when nothing closed. */
         automated_rate?: number | null;
         queued_now: number;
+        /** @description Goals reached in the range (FR-MOD-13.3) — the funnel's converted stage. */
+        achieved_goals: number;
       };
       /**
        * @description Operational chat metrics for the Chats section cards (FR-MOD-07.3.3):

@@ -196,6 +196,37 @@ describe('reports and billing', () => {
     });
   }
 
+  /**
+   * Record that a visitor reached a goal — the funnel's converted stage
+   * (FR-MOD-13.3). Written directly (like {@link runSkillOn}), so a report
+   * test controls `achieved_at` and the tenant precisely rather than driving
+   * the whole page-view → match → achievement flow (13.3-d already covers
+   * that end to end).
+   */
+  async function recordGoalAchievement(
+    options: { licenseId?: bigint; achievedAt?: Date } = {},
+  ): Promise<void> {
+    const licenseId = options.licenseId ?? fx.a.licenseId;
+    const organizationId =
+      licenseId === fx.a.licenseId ? fx.a.organizationId : fx.b.organizationId;
+    const goal = await owner.goal.create({
+      data: { licenseId, name: 'Signed up' },
+      select: { id: true },
+    });
+    const customer = await owner.customer.create({
+      data: { organizationId, name: 'Converted visitor' },
+      select: { id: true },
+    });
+    await owner.goalAchievement.create({
+      data: {
+        licenseId,
+        goalId: goal.id,
+        customerId: customer.id,
+        ...(options.achievedAt ? { achievedAt: options.achievedAt } : {}),
+      },
+    });
+  }
+
   /** Move a chat's thread back in time, to land it in an earlier report window. */
   async function backdateChat(chatId: string, createdAt: Date): Promise<void> {
     await owner.thread.updateMany({ where: { chatId }, data: { createdAt } });
@@ -542,6 +573,22 @@ describe('reports and billing', () => {
       expect(theirs.json().totals.chats).toBe(0);
     });
 
+    it('counts goals reached in the range (FR-MOD-13.3)', async () => {
+      await recordGoalAchievement();
+      await recordGoalAchievement();
+
+      const report = await server.get('/reports/overview', auth);
+      expect(report.json().totals.achieved_goals).toBe(2);
+    });
+
+    it("never counts another tenant's achieved goals", async () => {
+      await recordGoalAchievement();
+      await recordGoalAchievement({ licenseId: fx.b.licenseId });
+
+      const report = await server.get('/reports/overview', auth);
+      expect(report.json().totals.achieved_goals).toBe(1);
+    });
+
     it('rejects a backwards date range', async () => {
       const response = await server.get('/reports/overview?from=2026-08-01&to=2026-07-01', auth);
       expect(response.statusCode).toBe(400);
@@ -613,6 +660,23 @@ describe('reports and billing', () => {
       // One chat opened and closed within the run → a positive total duration.
       expect(report.chats.total_duration_seconds).toBeGreaterThanOrEqual(0);
       expect(report.chats).toHaveProperty('automated_avg_duration_seconds');
+    });
+
+    it('drops a goal reached before the window into the previous period, not the current one', async () => {
+      await recordGoalAchievement(); // inside the current window (now)
+      await recordGoalAchievement({ achievedAt: new Date(Date.now() - 15 * 86_400_000) }); // earlier
+
+      const to = new Date();
+      const from = new Date(to.getTime() - 10 * 86_400_000);
+      const report = (
+        await server.get(
+          `/reports/overview?from=${from.toISOString()}&to=${to.toISOString()}`,
+          auth,
+        )
+      ).json();
+
+      expect(report.totals.achieved_goals).toBe(1);
+      expect(report.previous_period.achieved_goals).toBe(1);
     });
   });
 

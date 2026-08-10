@@ -13,6 +13,33 @@
 
 ## Task log (newest-first)
 
+### tm 74.4 — 13.3-d: Hedef eşleşme + achievement kaydı çekirdeği — done — 2026-08-10 UTC
+
+- **Yapıldı:** Saf `services/goals/goal-matching.ts` (`hasGoalTrigger`/`matchesGoal`, ikisi de
+  `definition: unknown` — jsonb; okunamayan tanım "ulaşılamaz hedef", throw değil, yoksa tek bozuk
+  satır aynı ziyaretçideki diğer hedefleri düşürürdü); `goal-service.ts`'teki `hasDefinition`
+  kaldırıldı, yazma kapısı da artık `hasGoalTrigger` kullanıyor. `GoalService.evaluate(...)` —
+  `licenseId`+`active` filtreli okuma → `createMany(skipDuplicates)` (idempotency kararı
+  `UNIQUE(goal_id, customer_id)`'de) → yeni satır varsa AYNI transaction'da
+  `campaignSend.updateMany({ licenseId, customerId }, converted: true)`. Rota `customer.ts`:
+  `recordPageView`'ın hemen ardından, aynı try/catch, **ayrı `withTenant`**. Yeni testler
+  `goal-matching.test.ts` (7) + `goals-achievement.test.ts` (13).
+- **Doğrulama:** `pnpm -w typecheck` 0 (11/11) · `lint` 0 (8/8) · `test` 0 (`@nexa/api` 2324/2324,
+  önceki 2304 + 20) · `test:integration` 0 (1780/1780, önceki 1767 + 13) · `build` 0 (7/7) ·
+  e2e `widget.spec.ts`+`demo-flow.spec.ts` **16/16** (ziyaretçinin yazma yolu değişti, koşuldu).
+- **Varsayımlar:** (1) Değerlendirme o isteğin tek URL'i değil **ziyaretin tamamı** üzerinde
+  (`visitorPageUrls(visit.pages)`, campaign motorunun deseni) — /thank-you'dan geçip widget'ı
+  başka sayfada açan ziyaretçi de dönüşmüş sayılır. (2) Achievement satırına `chat_id` yazılır
+  (13.3-b'nin orta-aşama kolonu); ilk mesajda sohbet henüz yoktur → null, mevcut sohbette set.
+  (3) `evaluate` ile `recordPageView` ayrı transaction — hedef değerlendirmesi düşerse sayfa
+  görüntülemesi geri sarılmasın.
+- **Sonraki pencereye not:** 13.3-e (overview sayacı) ve 13.3-f (huni raporu) artık okunacak
+  veriye sahip. `campaign_sends.converted` bu turdan itibaren Goals tarafından yazılıyor —
+  13.3-f `goal_achievements`'ı kaynak alsın, `campaign_sends`'i değil. Windows'ta e2e için
+  `.env`'i shell'e yüklemek gerekiyor (`set -a; . ./.env; set +a`), yoksa `@nexa/rtm` dev
+  sunucusu env eksikliğinden düşüyor. Çalışma alanındaki `.gitignore` + `kanit/*.png`
+  kirliliğine yine dokunulmadı.
+
 ### tm 74.3 — 13.3-c: Goals CRUD — kontrat path + route + servis (license-scoped) — done — 2026-08-10 UTC
 
 - **Yapıldı:** Yeni `paths/goals.yaml` (`listGoals`/`createGoal`/`updateGoal`) + `openapi.yaml`'a

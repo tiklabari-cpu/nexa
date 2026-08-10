@@ -22,6 +22,8 @@ import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
+import { visitorPageUrls } from '../services/campaigns/campaign-matching.js';
+import { GoalService } from '../services/goals/goal-service.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { LocalStore } from '../services/storage/local-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
@@ -94,6 +96,7 @@ export default async function customerRoutes(
   const chats = new ChatService(app.db, app.redis, publisher);
   const customerDirectory = new CustomerService();
   const customFields = new CustomFieldService();
+  const goals = new GoalService();
   const ai = new AiResponder(chats, publisher);
   const store = new LocalStore(env.STORAGE_LOCAL_DIR);
 
@@ -354,8 +357,33 @@ export default async function customerRoutes(
               ip: request.ip,
             }),
           );
+
+          // Did that page take the visitor to a goal (FR-MOD-13.3)? Evaluated
+          // over the whole visit rather than this one page, matching how the
+          // campaign engine reads a visitor: someone who passed /thank-you and
+          // then opened the widget on /support has still converted.
+          //
+          // A second transaction on purpose. Both are best-effort, but rolling
+          // a failed goal evaluation back over the page view would lose the
+          // browsing context that 13.2 records — and the achievement is written
+          // with its own campaign-send update inside `evaluate`, which is the
+          // pair that must be all-or-nothing.
+          await request.withTenant(async (tx) => {
+            const visit = await tx.visit.findFirst({
+              where: { customerId: principal.customerId, licenseId: tenant.licenseId },
+              orderBy: { startedAt: 'desc' },
+              select: { pages: true },
+            });
+            return goals.evaluate(
+              tx,
+              tenant,
+              principal.customerId,
+              visitorPageUrls(visit?.pages),
+              new Date(),
+            );
+          });
         } catch (error) {
-          request.log.warn({ err: error }, 'could not record page view');
+          request.log.warn({ err: error }, 'could not record page view or evaluate goals');
         }
       }
 

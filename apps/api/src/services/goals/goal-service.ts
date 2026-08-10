@@ -2,10 +2,10 @@
  * Goals — tracked conversion targets (FR-MOD-13.3).
  *
  * A goal is a name plus a predicate that says what counts as a conversion
- * ("the visitor reached /thank-you"). This service owns only the definition:
- * creating one, listing them, and turning one off. The matcher that writes a
- * `goal_achievement` when someone reaches a goal (13.3-d) and the funnel report
- * (13.3-f) both read what is defined here.
+ * ("the visitor reached /thank-you"). This service owns both halves: the
+ * definition — creating one, listing them, turning one off — and `evaluate`,
+ * which records a `goal_achievement` when a visitor reaches one. The funnel
+ * report (13.3-f) reads what both write.
  *
  * Every query is filtered on `licenseId` and runs inside the caller's
  * `withTenant` transaction, so the `goals_tenant` RLS policy and the explicit
@@ -21,6 +21,7 @@ import type { Prisma } from '@prisma/client';
 import type { Goal, GoalDefinition, GoalFilter } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { hasGoalTrigger, matchesGoal } from './goal-matching.js';
 
 /** The columns a DTO needs. */
 const GOAL_SELECT = {
@@ -46,15 +47,6 @@ export interface GoalPatch {
   definition?: GoalDefinition;
 }
 
-/**
- * True when the definition has at least one usable predicate. A definition with
- * nothing set does not mean "everyone converts" — it means the goal can never
- * be reached, so it is rejected rather than saved as a target nobody hits.
- */
-export function hasDefinition(definition: GoalDefinition): boolean {
-  return Boolean(definition.url_contains && definition.url_contains.trim());
-}
-
 export class GoalService {
   /** Every goal in the tenant, newest first, optionally narrowed by on/off. */
   async list(
@@ -78,7 +70,10 @@ export class GoalService {
   async create(tx: TenantClient, tenant: TenantContext, input: GoalInput): Promise<Goal> {
     const name = input.name.trim();
     if (!name) throw ApiError.validation('name: a goal needs a name.');
-    if (!hasDefinition(input.definition)) {
+    // The same predicate the matcher will apply, so a goal the engine could
+    // never reach cannot be saved as one that tracks — a definition with
+    // nothing set is not "everyone converts", it is a target nobody hits.
+    if (!hasGoalTrigger(input.definition)) {
       throw ApiError.validation('definition: a goal needs something to match on.');
     }
 
@@ -115,7 +110,7 @@ export class GoalService {
     const resultingDefinition = (patch.definition ??
       (existing.definition as GoalDefinition | null) ??
       {}) as GoalDefinition;
-    if (resultingActive && !hasDefinition(resultingDefinition)) {
+    if (resultingActive && !hasGoalTrigger(resultingDefinition)) {
       throw ApiError.validation('definition: an active goal needs something to match on.');
     }
 
@@ -130,6 +125,72 @@ export class GoalService {
 
     const updated = await tx.goal.update({ where: { id }, data, select: GOAL_SELECT });
     return this.#toDto(updated);
+  }
+
+  /**
+   * Record every goal this visitor has now reached, and return how many of them
+   * are new (FR-MOD-13.3 — the funnel's conversion stage).
+   *
+   * Called on the visitor's own write path, so three things decide it:
+   *
+   * - **Tenant.** Goals are read with an explicit `licenseId` filter on top of
+   *   RLS, and the achievement carries the same id. A visitor browsing one
+   *   workspace's site can never trip another workspace's goal, and no row can
+   *   land under a license the caller is not in.
+   * - **Idempotency.** A person converts on a goal once. `UNIQUE(goal_id,
+   *   customer_id)` plus `skipDuplicates` makes the second, tenth and hundredth
+   *   page view a no-op instead of a row that inflates the funnel — decided by
+   *   the database rather than by a read-then-write that two concurrent page
+   *   views could both pass.
+   * - **The campaign link.** A visitor who was invited by a campaign and then
+   *   converted is that campaign's Conversion (FR-MOD-03.3.3). Written in this
+   *   same transaction and only when something genuinely new was recorded, so
+   *   the two numbers cannot disagree and a repeat view cannot re-flag sends.
+   */
+  async evaluate(
+    tx: TenantClient,
+    tenant: TenantContext,
+    customerId: string,
+    pageUrls: readonly string[],
+    now: Date,
+  ): Promise<number> {
+    if (pageUrls.length === 0) return 0;
+
+    const goals = await tx.goal.findMany({
+      where: { licenseId: tenant.licenseId, active: true },
+      select: { id: true, definition: true },
+    });
+
+    const matched = goals.filter((goal) => matchesGoal(goal.definition, pageUrls));
+    if (matched.length === 0) return 0;
+
+    // The conversation the visitor is in, if there is one — the funnel's middle
+    // stage, captured on the row rather than re-derived later, since the chat
+    // they converted during is not the chat they may be in a week from now.
+    const chat = await tx.chat.findFirst({
+      where: { customerId, active: true },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+
+    const written = await tx.goalAchievement.createMany({
+      data: matched.map((goal) => ({
+        licenseId: tenant.licenseId,
+        goalId: goal.id,
+        customerId,
+        chatId: chat?.id ?? null,
+        achievedAt: now,
+      })),
+      skipDuplicates: true,
+    });
+    if (written.count === 0) return 0;
+
+    await tx.campaignSend.updateMany({
+      where: { licenseId: tenant.licenseId, customerId },
+      data: { converted: true },
+    });
+
+    return written.count;
   }
 
   #toDto(row: GoalRow): Goal {

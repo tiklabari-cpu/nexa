@@ -2933,12 +2933,12 @@
             "description": "(1) Yeni `apps/web/src/features/settings/SalesTracker.tsx`: `Section`+`Card` içinde `useQuery('/settings/sales-tracker')` + `useMutation` PUT; alanlar — `enabled` toggle, `currency` seçici (sunucudaki ISO 4217 whitelist ile aynı liste), `attribution_window_days` sayı girdisi. `useForm`/`required`/`FieldError` primitifi (`apps/web/src/lib/form.ts`) kullanılır: geçersizken submit pasif + alan-altı h",
             "details": "13.5-e — Settings ekranı — 'Sales tracker' bölümü (enabled / currency / atıf penceresi formu)  [SONNET-XHIGH]\n\nPRD: FR-MOD-13.5 (+ FR-EK-A.1 tek form/validasyon primitifi)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. 3 dosya (koşul 1); yalnız mevcut endpoint'i çağıran salt-form UI, hiçbir yetki kararı burada verilmiyor — `canEdit` görünürlük kapısı `SettingsPage.tsx:101-105`teki mevcut `scopes.includes('access_rules:rw')` deseninin kopyası ve gerçek kapı sunucuda (13.5-b) (koşul 2); eşzamanlılık yok (koşul 3); kopyalanacak desen ismen verildi — `WidgetCustomization.tsx` (koşul 4); kontrat değişmiyor (koşul 5); KK mekanik doğrulanabilir (koşul 6).\nNEDEN AÇIK: `apps/web/src/features/settings/` içinde sales tracker'a dair hiçbir bileşen yok (dizin listesi: BannedCustomerIps, Channels, Integrations, SettingsForms, WebsiteWidgets, WidgetCustomization — sales YOK) ve `SettingsPage.tsx`in render listesi (satır 108-122) 15 bölüm sayıyor, Sales tracker bunların arasında değil. PRD KK'sı birebir 'İzleme yapılandırması' ve gözlem sütunu 'Gözlem (Settings/Sales tracker)' diyor — ekran mevcut değil.\nKAPSAM: (1) Yeni `apps/web/src/features/settings/SalesTracker.tsx`: `Section`+`Card` içinde `useQuery('/settings/sales-tracker')` + `useMutation` PUT; alanlar — `enabled` toggle, `currency` seçici (sunucudaki ISO 4217 whitelist ile aynı liste), `attribution_window_days` sayı girdisi. `useForm`/`required`/`FieldError` primitifi (`apps/web/src/lib/form.tsx`) kullanılır: geçersizken submit pasif + alan-altı hata. `canEdit=false` iken salt-okunur. (2) `SettingsPage.tsx`e `<SalesTracker canEdit={canManageAccess} />` mount'u (WidgetCustomization'ın hemen ardına). (3) Kaydedince Reports/Ecommerce'e giden bir bağlam metni.\nDOSYALAR: apps/web/src/features/settings/SalesTracker.tsx · apps/web/src/features/settings/SalesTracker.test.tsx · apps/web/src/features/settings/SettingsPage.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/settings/WidgetCustomization.tsx (canEdit'li ayar formu + useQuery/useMutation + Section/Card) · apps/web/src/features/settings/WidgetCustomization.test.tsx (ayar formu test deseni) · apps/web/src/lib/form.tsx (useForm/required/compose/FieldError — FR-EK-A.1 primitifi) · apps/web/src/features/settings/SettingsPage.tsx:100-123 (scope→canEdit türetimi + bölüm mount listesi)\nKK (birebir): \"İzleme yapılandırması\"\nKK DOĞRULAMA: `SalesTracker.test.tsx` — (a) sunucudan gelen değerler forma basılır ve kaydet → PUT gövdesi doğru (= 'yapılandırma' kullanıcı tarafından yönetilebilir, KK'nın birebir karşılığı); (b) `attribution_window_days = 0` girildiğinde alan-altı hata + submit pasif (FR-EK-A.1); (c) `canEdit=false` iken girdiler devre dışı ve PUT çağrılmaz.\nKAPSAM DIŞI: Rapor ekranı (13.5-f) · Widget izleme kodu snippet'i (13.5-g) · Yeni bir Settings navigasyon/sekme yapısı — mevcut tek sayfa Section listesi korunur · Harici platform bağlama kartı (MOD-09.2, ertelendi)\nSÖZLEŞME: yok (13.5-b'de eklenen path tüketilir)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: değerler yüklenir + kaydet doğru gövdeyi gönderir · unit (negatif): 0/negatif atıf penceresi → alan-altı hata, submit pasif · unit (negatif): canEdit=false → salt-okunur, mutation tetiklenmez · unit: PUT hatasında hata mesajı gösterilir ve form değerleri kaybolmaz",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "75.2"
             ],
             "parentId": "75",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T21:23:57.659Z"
           },
           {
             "id": 6,
@@ -2983,7 +2983,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T20:45:35.519Z",
+        "updatedAt": "2026-08-10T21:23:57.659Z",
         "complexity": 8,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"13.5 — Sales tracker (Ecommerce/Tracked sales)  ·  dilim V2-8\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5133,7 +5133,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T20:45:35.519Z",
+      "lastModified": "2026-08-10T21:23:57.660Z",
       "taskCount": 113,
       "completedCount": 104,
       "tags": [

@@ -2685,12 +2685,12 @@
             "description": "(1) dl özet bloğuna `Visits` satırı (`visits_count`) + `visits_count > 1` iken 'Returning visitor' rozeti (StatusDot). (2) Her ziyaret satırında `came_from` gösterimi ('Came from …'); ziyaretçi girdisi olduğu için LİNK DEĞİL düz metin — dosyanın mevcut kararı korunur ('a link would be a one-click path to whatever a stranger put in the address bar'). (3) `Groups` kartı; boşsa anlamlı empty state (F",
             "details": "13.2-j — Ziyaretçi 360° panel: N visits özeti + Came from + Groups kartları (UI)  [SONNET-XHIGH]\n\nPRD: FR-MOD-13.2 (+ NFR-S9, FR-EK-B.1)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı — 2-3 dosya; güvenlik sınırı YOK (salt-okunur render, yeni istek yok, yeni yetki dalı yok); eşzamanlılık yok; kopyalanacak desen AYNI DOSYADA (CustomerDetailPanel.tsx'teki 'Visited pages' kartı, dl özet bloğu ve 'Conversations' kartı); kontrat değişikliği yok (alanlar 13.2-i'de geldi); KK mekanik doğrulanır (alan görünür mü, empty state var mı, IP render edilmiyor mu).\nNEDEN AÇIK: CustomerDetailPanel.tsx 'Visited pages' kartında yalnız `visit.started_at`, `visit.browser`, `visit.os` ve `visit.pages` render ediliyor; `visit.came_from` yanıt tipinde VAR (`features/customers/types.ts` → `Visit.came_from`) ve API döndürüyor (customer-service.ts `came_from: visit.cameFrom`) ama dosyada HİÇ geçmiyor — yarım teslim. 'N visits' özeti ve 'Groups' kartı hiç yok; dl bloğu yalnız Conversations/Tickets/Country/Last active satırlarını taşıyor.\nKAPSAM: (1) dl özet bloğuna `Visits` satırı (`visits_count`) + `visits_count > 1` iken 'Returning visitor' rozeti (StatusDot). (2) Her ziyaret satırında `came_from` gösterimi ('Came from …'); ziyaretçi girdisi olduğu için LİNK DEĞİL düz metin — dosyanın mevcut kararı korunur ('a link would be a one-click path to whatever a stranger put in the address bar'). (3) `Groups` kartı; boşsa anlamlı empty state (FR-EK-B.1). (4) PII sınırı korunur: `Visit.ip` panelde GÖSTERİLMEZ (schema.prisma:833-835 + NFR-S9) ve bu negatif iddia testle çivilenir.\nDOSYALAR: apps/web/src/features/customers/CustomerDetailPanel.tsx · apps/web/src/features/customers/CustomerDetailPanel.test.tsx (yeni) · apps/web/src/features/customers/types.ts\nREFERANS DESEN (kopyalanacak): apps/web/src/features/customers/CustomerDetailPanel.tsx (aynı dosyadaki 'Visited pages' kartı, dl özet bloğu, 'Conversations' kartı — kart iskeleti birebir kopyalanır) · apps/web/src/components/EmptyState.tsx · apps/web/src/components/StatusDot.tsx\nKK (birebir): \"ziyaretçi geçmişi\" | \"KK-türetilmiş: 360° panel 'returning visitor N visits', 'came from' ve 'groups' alanlarını gösterir; 'pre-chat form' payı ZATEN teslim. Türetme gerekçesi: PRD 13.2 satırı alan listesini parantez içinde veriyor ama render kuralını (link değil düz metin; IP gösterilmez) söylemiyor; bu kurallar mevcut dosyanın kararından ve NFR-S9'dan alındı.\"\nKK DOĞRULAMA: unit `CustomerDetailPanel.test.tsx`: `visits_count > 1` → 'Returning visitor' rozeti görünür · `visits_count` değeri dl'de görünür ve kırpılmış `visits.length`'ten farklı olabilir · `came_from` dolu ziyarette metin görünür, null'da satır sessizce yok · `groups` boş → anlamlı empty state, dolu → grup adları · NEGATİF: hiçbir IP değeri DOM'a render edilmiyor.\nKAPSAM DIŞI: Pre-chat form yanıtları — ZATEN TESLİM: widget start endpoint'i `custom_fields` yazıyor (routes/customer.ts startSchema, FR-MOD-08.7.7) ve panel bunları 'Custom fields' kartında gösteriyor; yeniden yapılmaz · IP / coğrafi konum gösterimi (NFR-S9) · Ziyaret haritası veya oturum kaydı (session replay) · Filtre/sekme yüzeyi (13.2-f/-g/-h) · Ziyaret listesinin sayfalanması (MAX_VISITS=10 kırpması olduğu gibi kalır)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF (önce): hiçbir IP değeri DOM'a render edilmiyor (NFR-S9) · unit: `visits_count > 1` → 'Returning visitor' rozeti; `visits_count` dl'de görünür · unit: `came_from` dolu ziyarette metin görünür; null'da satır sessizce yok · unit: `came_from` link olarak DEĞİL düz metin olarak render edilir · unit: `groups` boş → anlamlı empty state; dolu → grup adları (FR-EK-B.1) · unit (regresyon): mevcut panel kartları (Custom fields, Visited pages, Conversations) kırılmaz",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "73.9"
             ],
             "parentId": "73",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T10:29:16.247Z"
           },
           {
             "id": 11,
@@ -2715,7 +2715,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T10:03:51.039Z",
+        "updatedAt": "2026-08-10T10:29:16.247Z",
         "complexity": 9,
         "recommendedSubtasks": 11,
         "expansionPrompt": "\"13.2 — Engage/Traffic (gelişmiş filtre + 360° ziyaretçi)  ·  dilim V2-8\" görevini 11 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5096,7 +5096,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T10:03:51.040Z",
+      "lastModified": "2026-08-10T10:29:16.248Z",
       "taskCount": 110,
       "completedCount": 99,
       "tags": [

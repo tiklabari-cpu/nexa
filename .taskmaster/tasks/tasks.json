@@ -2787,13 +2787,13 @@
             "description": "(1) `apps/api/src/routes/reports.ts`'e `achievedGoalCount(tx, licenseId, from, to)` yardımcısı (mevcut `ticketCount` deseni — `goal_achievements` üzerinde `license_id` + `achieved_at` aralığı sayımı). (2) `/reports/overview` `withTenant` bloğunda **sıralı** iki çağrı (pencere + önceki pencere) — Promise.all YOK (reports.ts:521-523 yorumu: Prisma interactive transaction'da eşzamanlı sorgu yasak). (",
             "details": "13.3-e — /reports/overview \"Achieved goals\" sayacı (pencere + önceki pencere karşılaştırması)  [SONNET-XHIGH]\n\nPRD: FR-MOD-13.3 (+ NFR-P2 rapor gecikmesi)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 4 dosya + testleri. (2) Güvenlik sınırı yok — MEVCUT `reports_read` kapılı endpoint'e katkısal alan; yeni yetki yüzeyi, yeni scope, yeni route yok. (3) Eşzamanlılık akıl yürütmesi yok — 'sıralı çağır, Promise.all kullanma' kuralı reports.ts:521-523 yorumunda yazılı ve mekanik. (4) Kopyalanacak desen ismen var: reports.ts `ticketCount`/`windowTotals` + reports-metrics.ts `resolutionRate`. (5) Kontrat katkısal (ReportsOverview'a iki alan). (6) KK mekanik doğrulanabilir (sayı eşitliği).\nNEDEN AÇIK: `grep -i \"achieved\\|conversion\" apps/api/src/routes/reports*.ts` 0 sonuç. `GET /reports/overview` (reports.ts:510) `totals` ve `previous_period` bloklarında goal ile ilgili hiçbir alan yok; tek 'conversion' kullanımı Campaigns özelliğinde ve Goals'la ilişkisiz.\nKAPSAM: (1) `apps/api/src/routes/reports.ts`'e `achievedGoalCount(tx, licenseId, from, to)` yardımcısı (mevcut `ticketCount` deseni — `goal_achievements` üzerinde `license_id` + `achieved_at` aralığı sayımı). (2) `/reports/overview` `withTenant` bloğunda **sıralı** iki çağrı (pencere + önceki pencere) — Promise.all YOK (reports.ts:521-523 yorumu: Prisma interactive transaction'da eşzamanlı sorgu yasak). (3) Yanıta `totals.achieved_goals` ve `previous_period.achieved_goals`. (4) `reports-metrics.ts`'e `goalConversionRate(conversions, chats)` saf fonksiyonu — `resolutionRate` deseni, payda 0 iken **null** döner (0 değil). (5) `openapi.yaml` ReportsOverview şemasına iki katkısal alan + re-bundle.\nDOSYALAR: apps/api/src/routes/reports.ts · apps/api/src/routes/reports-metrics.ts · apps/api/src/routes/reports-metrics.test.ts · packages/contract/openapi/openapi.yaml · apps/api/test/integration/reports.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/reports.ts (ticketCount + windowTotals + satisfactionCounts; satır 521-580 sıralı sorgu bloğu ve previous_period kalıbı) · apps/api/src/routes/reports-metrics.ts (round + resolutionRate — 'null when empty' kuralı)\nKK (birebir): \"rapor entegrasyonu\"\nKK DOĞRULAMA: integration `reports.test.ts`: (a) 2 achievement yazıldıktan sonra `/reports/overview` → `totals.achieved_goals === 2` (\"rapor entegrasyonu\" kanıtı); (b) pencere dışına yazılan achievement sayıya girmez, `previous_period.achieved_goals`'a düşer; (c) **cross-tenant:** B lisansının achievement'ı A'nın sayısına girmez. unit `reports-metrics.test.ts`: `goalConversionRate(0, 0) === null`.\nKAPSAM DIŞI: hedef bazında kırılım ve huni denominatörleri (13.3-f) · CSV export ve rapor grubu (13.3-f) · UI KPI kartı (13.3-h) · Tracked sales / e-ticaret geliri (13.5 — `ecommerce.configured=false` iskeleti 07.8'de zaten var)\nSÖZLEŞME: `openapi.yaml` `ReportsOverview` şemasına `totals.achieved_goals` (integer) ve `previous_period.achieved_goals` (integer) — KATKISAL, yeni path yok. Re-bundle + regen zorunlu (`pnpm --filter @nexa/contract generate`).\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: goalConversionRate payda 0 → null (0 değil) · integration: pencere içi sayım doğru · integration: pencere sınırı — önceki pencereye düşen kayıt previous_period'da · cross-tenant negatif: başka lisansın achievement'ı sayıya girmez · regresyon: mevcut reports integration süiti yeşil (yanıt katkısal büyüdü, alan kaybı yok)",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "74.2",
               "74.4"
             ],
             "parentId": "74",
-            "updatedAt": "2026-08-10T14:20:03.265Z"
+            "updatedAt": "2026-08-10T14:58:04.375Z"
           },
           {
             "id": 6,
@@ -2856,7 +2856,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T14:20:03.265Z",
+        "updatedAt": "2026-08-10T14:58:04.375Z",
         "complexity": 8,
         "recommendedSubtasks": 9,
         "expansionPrompt": "\"13.3 — Goals (ziyaretçi→sohbet→dönüşüm hunisi)  ·  dilim V2-8\" görevini 9 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5110,7 +5110,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T14:20:03.266Z",
+      "lastModified": "2026-08-10T14:58:04.376Z",
       "taskCount": 111,
       "completedCount": 102,
       "tags": [

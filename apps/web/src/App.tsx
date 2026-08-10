@@ -16,6 +16,7 @@ import { PlaybookPage } from './features/playbook/PlaybookPage.js';
 import { SettingsPage } from './features/settings/SettingsPage.js';
 import { AuditLogPage } from './features/audit/AuditLogPage.js';
 import { AppsMarketplacePage } from './features/apps/AppsMarketplace.js';
+import { DeveloperPortalPage } from './features/developers/DeveloperPortal.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
 import { HomePage } from './features/home/HomePage.js';
 import { ReportsPage } from './features/reports/ReportsPage.js';
@@ -92,6 +93,7 @@ export function App(): ReactElement {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="settings/audit-log" element={<AuditLogPage />} />
         <Route path="apps" element={<AppsMarketplacePage />} />
+        <Route path="developers" element={<DeveloperPortalPage />} />
       </Route>
       {/* Anything else, including the OAuth callback path, lands in the inbox. */}
       <Route path="*" element={<Navigate to="/app/inbox" replace />} />

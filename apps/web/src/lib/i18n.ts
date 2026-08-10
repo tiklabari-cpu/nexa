@@ -62,6 +62,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     'nav.reports': 'Reports',
     'nav.billing': 'Billing',
     'nav.settings': 'Settings',
+    'nav.developers': 'Developers',
 
     // Command palette
     'palette.label': 'Command palette',
@@ -216,6 +217,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     'nav.reports': 'Raporlar',
     'nav.billing': 'Faturalandırma',
     'nav.settings': 'Ayarlar',
+    'nav.developers': 'Geliştiriciler',
 
     // Command palette
     'palette.label': 'Komut paleti',

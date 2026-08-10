@@ -21,6 +21,18 @@ export interface NavDestination {
    * that.
    */
   keywords?: string[];
+  /**
+   * Scope required to see this destination; omitted means everyone. A
+   * courtesy hide — the same one `CommandPalette` already applies to actions
+   * — so a teammate without the scope is not shown a door that only 403s. The
+   * route itself carries the real gate.
+   */
+  scope?: string;
+}
+
+/** Whether `dest` should be offered to a caller holding `scopes`. */
+export function isNavVisible(dest: NavDestination, scopes: readonly string[]): boolean {
+  return !dest.scope || scopes.includes(dest.scope);
 }
 
 export const MODULES: NavDestination[] = [
@@ -44,6 +56,13 @@ export const FOOTER: NavDestination[] = [
     labelKey: 'nav.settings',
     icon: '⚙',
     keywords: ['channels', 'tags', 'notifications', 'preferences'],
+  },
+  {
+    to: '/app/developers',
+    labelKey: 'nav.developers',
+    icon: '{}',
+    keywords: ['api', 'oauth', 'partner', 'apps', 'zapier', 'make', 'build your own app'],
+    scope: 'access_rules:rw',
   },
 ];
 

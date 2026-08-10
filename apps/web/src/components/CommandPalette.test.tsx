@@ -300,6 +300,24 @@ describe('command palette — action results', () => {
     await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'report');
     expect(screen.getByRole('option', { name: /Reports/ })).toBeInTheDocument();
   });
+
+  it('never offers Developers as a destination for a caller without access_rules:rw', async () => {
+    const user = userEvent.setup();
+    renderPalette([]);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'developers');
+    expect(screen.queryByRole('option', { name: /Developers/ })).toBeNull();
+  });
+
+  it('offers Developers as a destination for a caller with access_rules:rw', async () => {
+    const user = userEvent.setup();
+    renderPalette(['access_rules:rw']);
+    await openPalette(user);
+
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'developers');
+    expect(screen.getByRole('option', { name: /Developers/ })).toBeInTheDocument();
+  });
 });
 
 /**

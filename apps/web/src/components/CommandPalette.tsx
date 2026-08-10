@@ -53,7 +53,7 @@ import { EmptyState } from './EmptyState.js';
 import { Skeleton } from './Skeleton.js';
 import type { CustomerSummary } from '../features/customers/types.js';
 import type { ChatSummary, Ticket } from '../features/inbox/types.js';
-import { NAV_DESTINATIONS } from './navigation.js';
+import { NAV_DESTINATIONS, isNavVisible } from './navigation.js';
 import { ACTIONS, type ActionDeps, type PaletteResult } from './actions.js';
 
 const CUSTOMER_READ = ['customers:ro', 'customers:rw'];
@@ -264,6 +264,9 @@ export function CommandPalette(): ReactElement | null {
     }
 
     for (const dest of NAV_DESTINATIONS) {
+      // Same courtesy as the actions loop above: a destination that only 403s
+      // for this caller is not offered as a result.
+      if (!isNavVisible(dest, scopes)) continue;
       const label = t(dest.labelKey);
       const matches =
         !routeNeedle ||
@@ -360,6 +363,7 @@ export function CommandPalette(): ReactElement | null {
     close,
     t,
     has,
+    scopes,
     actionDeps,
     aiAnswer.mutate,
   ]);

@@ -135,6 +135,19 @@ describe('module navigation', () => {
     }
     expect(screen.queryByRole('button', { name: /not available yet/ })).toBeNull();
   });
+
+  it('hides Developers from the rail for a caller without access_rules:rw', () => {
+    renderShell();
+    expect(screen.queryByRole('link', { name: 'Developers' })).toBeNull();
+  });
+
+  it('shows Developers in the rail for a caller with access_rules:rw', () => {
+    useAuth.setState((state) => ({
+      agent: state.agent && { ...state.agent, scopes: ['access_rules:rw'] },
+    }));
+    renderShell();
+    expect(screen.getByRole('link', { name: 'Developers' })).toBeInTheDocument();
+  });
 });
 
 describe('account menu', () => {

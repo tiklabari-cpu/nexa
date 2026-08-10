@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+### tm 72.5 — 09.4-e: Developer portal kabuğu (partner app listesi + kayıt + secret bir kez) — done — 2026-08-10 UTC
+
+- **Yapıldı:** `DeveloperPortal.tsx` (yeni) — `/partner/apps` listesi (anlamlı empty state) + register
+  modalı (display_name zorunlu, client_type, redirect URI'lar satır-satır, çağıranın kendi
+  scope'larından çoklu seçim) + `SecretOncePanel` (kayıt yanıtındaki secret yalnız burada, panel
+  kapanınca state'ten silinir, liste hiç taşımaz) + sil (onay modalı) + sunucu 400'ünün alan-altı/form
+  hatası olarak yansıması. `App.tsx` `/app/developers` rotası + `navigation.ts` FOOTER girdisi
+  (`access_rules:rw` kapılı) + yeni `isNavVisible` yardımcı fonksiyonu, hem `AppShell.tsx` (ray) hem
+  `CommandPalette.tsx` (arama sonuçları) içinde tüketilecek şekilde bağlandı. Pencere içinde bulunan
+  iki kusur düzeltildi: (1) register mutation'ı listeyi invalidate etmiyordu — `DeleteAppModal` ile
+  aynı `invalidateQueries` deseni eklendi; (2) redirect-URI ipucu metni `<label>` içindeydi ve alanın
+  erişilebilir adını kirletiyordu — `InviteTeammates.tsx` deseniyle dışarı taşındı. Testler:
+  `DeveloperPortal.test.tsx` (yeni, 7) · `AppShell.test.tsx` (+2) · `CommandPalette.test.tsx` (+2).
+  E2E YAZILMADI: bu görevin KK'sındaki basit "kayıt → client_id + secret görünür" akışı unit süitinde
+  DOM seviyesinde zaten kanıtlanıyor; gerçek tarayıcı kanıtı 09.4-f'nin `developers.spec.ts`'i
+  (rotate düğmesini test etmek için zaten "önce bir app kaydet" adımını setup olarak gerektirecek) ile
+  gelecek.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0**
+  (`@nexa/web` 813/813, 802'den +11 · `@nexa/api` 2181/2181 · `@nexa/rtm` 90/90) · `pnpm -w test:integration`
+  **0** (`@nexa/api` 1644/1644 · `@nexa/rtm` 51/51 — bu tur backend'e dokunmadı) · `pnpm -w build` **0**
+  (7/7).
+- **Varsayımlar:** yok.
+- **Sonraki pencereye not:**
+  - 09.4-f (webhook aboneliği + manifest sekmesi + rotate düğmesi + `developers.spec.ts`) artık açık;
+    `DeveloperPortal.tsx`'e ikinci/üçüncü sekme ekleyecek.
+  - PLAN.md `09.4` satırı `◐ → K09.4` kaldı — 2 alt-görev açık (09.4-f/-g).
+  - `.taskmaster/tasks/tasks.json`'ı bu tur commit'e dahil ettim: 72.1-72.4'ün önceki pencerelerde
+    Task Master'da done işaretlenip commit'e girmemiş durum değişiklikleri + bu turun 72.5 değişikliği
+    aynı dosyada birikmişti (git diff'te doğrulandı — hepsi 72.x zinciri, tm 105 ile karışmıyordu).
+  - **tm 105 WIP hâlâ commit'siz, bu tur da dokunulmadı** (kapsam disiplini): `README.md`,
+    `package.json` (kök), `apps/api|rtm/package.json`, `apps/api/tsconfig.json`, iki
+    `test/helpers/fixtures.ts`, `turbo.json`, `apps/api/scripts/*test-datastores.ts`,
+    `test-datastores.test.ts`. `.gitignore`'a bu turda kimin/ne zaman eklediği belirsiz bir
+    `.taskmaster/tmp-*` ignore satırı vardı (bu tm'nin dosya kapsamıyla ilgisiz) — commit'e dahil
+    edilmedi, çalışma alanında kirli bırakıldı.
+
 ### tm 72.4 — 09.4-d: Partner app secret rotate + denetim izi — done — 2026-08-10 UTC
 
 - **Yapıldı:** `POST /partner/apps/{clientId}/rotate-secret` + `PartnerAppService.rotateSecret` —

@@ -16,7 +16,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { CommandPalette } from './CommandPalette.js';
-import { FOOTER, MODULES, type NavDestination } from './navigation.js';
+import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
 import { Dropdown } from './ui/index.js';
 
 export function AppShell(): ReactElement {
@@ -91,6 +91,7 @@ function TrialBanner(): ReactElement | null {
 
 function IconRail(): ReactElement {
   const t = useTranslate();
+  const scopes = useAuth((s) => s.agent?.scopes ?? []);
   return (
     <nav
       aria-label={t('shell.modules')}
@@ -110,7 +111,7 @@ function IconRail(): ReactElement {
       ))}
 
       <div className="mt-auto flex flex-col items-center gap-1">
-        {FOOTER.map((item) => (
+        {FOOTER.filter((item) => isNavVisible(item, scopes)).map((item) => (
           <RailButton key={item.to} item={item} />
         ))}
         <AccountMenu />

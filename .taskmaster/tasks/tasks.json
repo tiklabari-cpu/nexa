@@ -2581,12 +2581,12 @@
             "description": "Backend-only (sözlük 13.2-a'da eklendi). `TrafficService.listLive` üçüncü kaynağı okur: `tx.campaignSend.findMany({ where: { licenseId: tenant.licenseId, engaged: false, createdAt: { gte: liveSince }, customer: { organizationId: tenant.organizationId } } })` — tenant filtresi aynı dosyadaki visits bloğundan BİREBİR kopyalanır (NFR-S4). Funnel öncelik: aktif sohbeti olan ziyaretçi sohbet durumunu k",
             "details": "13.2-b — `invited` durumu: campaign_sends'ten türetme + funnel öncelik kararı (backend)  [OPUS-XHIGH]\n\nPRD: FR-MOD-13.2 (+ FR-MOD-03.1.1, FR-MOD-03.3.2; NFR-S4)\nETİKET GEREKÇESİ: OPUS-XHIGH: yeni veri şekli/sorgu tasarımı — hangi CampaignSend satırının 'invited' sayılacağı ve invited'ın browsing/chatting karşısında nerede duracağı KK'da yazmıyor, yorum gerektiriyor (koşul 4 ve 6 ihlali). Ayrıca çok-kiracılı bir okuma servisine ÜÇÜNCÜ bir kaynak bağlanıyor; tenant filtresi taşındığı için hafif güvenlik dokunuşu var → kullanıcı kuralı gereği SONNET'e verilmez. Çekirdek güvenlik sınırı (yetki kararı) olmadığı için MAX değil.\nNEDEN AÇIK: traffic-service.ts `listLive` yalnız iki kaynağı birleştiriyor: `tx.chat.findMany` (aktif sohbetler) ve `tx.visit.findMany` (son 30 dk ziyaretler); `campaignSend` bu dosyada hiç geçmiyor. CampaignSend modeli (schema.prisma:789-809) `engaged`/`converted` boolean'larını tutuyor ve tek yazıcısı campaign-service.ts:238 `#fireIfRunning` — yani 'davet gönderildi ama ziyaretçi henüz yanıtlamadı' hâli VERİDE VAR (`engaged=false`) ama hiçbir okuyucu onu Traffic listesine yansıtmıyor.\nKAPSAM: Backend-only (sözlük 13.2-a'da eklendi). `TrafficService.listLive` üçüncü kaynağı okur: `tx.campaignSend.findMany({ where: { licenseId: tenant.licenseId, engaged: false, createdAt: { gte: liveSince }, customer: { organizationId: tenant.organizationId } } })` — tenant filtresi aynı dosyadaki visits bloğundan BİREBİR kopyalanır (NFR-S4). Funnel öncelik: aktif sohbeti olan ziyaretçi sohbet durumunu korur (invited'a düşmez); aktif sohbeti olmayan ama canlı pencerede açık daveti olan ziyaretçi `browsing` yerine `invited` görünür; davet + ziyaret ikisi de yoksa satır üretilmez. Mevcut 'her ziyaretçi tam bir kovada' kuralı ve limit/over-fetch mantığı korunur.\nDOSYALAR: apps/api/src/services/traffic/traffic-service.ts · apps/api/test/integration/traffic.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/services/traffic/traffic-service.ts (aynı dosyadaki visits bloğu: tenant filtre + over-fetch + JS de-dup) · apps/api/src/services/campaigns/campaign-service.ts (#fireIfRunning — aynı liveSince/organizationId kapısı)\nKK (birebir): \"proaktif aksiyon\" | \"KK-türetilmiş: 'Invited' = aktif kampanya daveti gönderilmiş ama ziyaretçi henüz yanıtlamamış (`campaign_sends.engaged = false`). Türetme gerekçesi: PRD 13.2 KK'sı yalnız 'proaktif aksiyon' diyor, durumun veri kaynağını söylemiyor; kaynak seçimi §C varsayımı olarak kaydedildi (yeni kolon açmadan mevcut CampaignSend bayrağı).\"\nKK DOĞRULAMA: integration `traffic.test.ts`: (a) `engaged=false` CampaignSend'i olan ve aktif sohbeti olmayan müşteri → `activity === 'invited'`; (b) `engaged=true` olan send invited üretmez; (c) aktif sohbeti olan ziyaretçide invited, sohbet durumunu EZMEZ; (d) cross-tenant: B lisansının campaign_sends satırı A'nın yanıtında hiç görünmez (NFR-S4).\nKAPSAM DIŞI: supervised durumu (13.2-c/-d/-e) · kampanya tetikleyicisinin kendisi (FR-MOD-03.3.2 teslim — campaign-service.ts'e dokunulmaz) · Sekme/filtre UI (13.2-g/-h) · Davet mesajının içeriği veya gönderimi\nSÖZLEŞME: yok (enum 13.2-a'da eklendi; yanıt şekli değişmiyor, yalnız mevcut alanın alabileceği değer artıyor).\nMIGRATION: yok — `campaign_sends.engaged` mevcut kolon (schema.prisma:797), yeni kolon gerekmiyor.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "NEGATİF (önce): `engaged=true` olan send invited üretmez · NEGATİF (önce): canlı pencere dışındaki send invited üretmez · CROSS-TENANT (önce): başka lisansın campaign_sends satırı listeye sızmaz (NFR-S4) · integration (pozitif): davet edilmiş ziyaretçi `activity='invited'` satırıyla listede · integration (öncelik): aktif sohbeti olan ziyaretçide invited, sohbet durumunu ezmez · integration (regresyon): mevcut browsing/queued/waiting/chatting davranışı kırılmaz",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "73.1"
             ],
             "parentId": "73",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-10T04:30:15.263Z"
           },
           {
             "id": 3,
@@ -2715,7 +2715,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-10T04:10:47.651Z",
+        "updatedAt": "2026-08-10T04:30:15.263Z",
         "complexity": 9,
         "recommendedSubtasks": 11,
         "expansionPrompt": "\"13.2 — Engage/Traffic (gelişmiş filtre + 360° ziyaretçi)  ·  dilim V2-8\" görevini 11 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5084,7 +5084,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T04:10:47.652Z",
+      "lastModified": "2026-08-10T04:30:15.264Z",
       "taskCount": 109,
       "completedCount": 98,
       "tags": [

@@ -42,6 +42,17 @@
     `test-datastores.test.ts`. Kapı bu WIP açıkken koşuldu (izolasyon devrede) ve tamamı yeşil.
   - RTM `.env` yükleyici kusuru (tm 72.5) hâlâ açık: `apps/rtm/src/index.ts` `loadEnvFile()`
     çağırmıyor, e2e için `.env` kabuğa `source` edilmesi gerekti. Ayrı düzeltme görevi.
+  - **YENİ — aralıklı kırmızı gözlendi (`reports-billing.test.ts`, bu dilimin dosyası DEĞİL):** bu
+    turun İLK `pnpm -w test` koşusunda 5 test kırmızıydı (2186/2191); hepsi
+    `reports and billing > report groups + CSV export (07.7)` altında, en belirgini
+    `exports leads bucketed by day` → `rows[1]` **undefined**, yani rapor penceresi hiç satır
+    döndürmemiş (`by_day` boş). Aynı dosya tek başına koşulunca **250/250 yeşil**, ardından tam
+    `@nexa/api` süiti **2191/2191 yeşil**, sonra `pnpm -w test` **exit 0** — yani üç ardışık koşuda
+    tekrarlanmadı. `fileParallelism: false` olduğu için paket İÇİ yarış değil; kırmızı yalnız turbo
+    birden çok paketi paralel koştururken (yük altında) çıktı. Veri deposu izolasyonu açıktı, yani
+    CONVENTIONS §1.1'in "başka pencere yazıyordur" açıklaması geçerli değil — zamana/yüke duyarlı
+    gerçek bir kusur olma ihtimali yüksek (rapor penceresi sınırının saat/timezone hesabı). Kapı
+    yeşil kapandığı için bu tur düzeltilmedi (kapsam disiplini); **ayrı görev olarak açılmalı**.
   - Dilim 72 (09.4) tamamlandı; alt-görev kalmadı.
 
 ### tm 72.6 — 09.4-f: Portal'da Zapier REST Hooks yüzeyi (webhook abonelik + manifest sekmesi + rotate düğmesi) — done — 2026-08-10 UTC

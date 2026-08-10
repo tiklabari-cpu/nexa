@@ -13,6 +13,26 @@
 
 ## Task log (newest-first)
 
+## tm 75.5 — 13.5-e: Settings ekranı 'Sales tracker' bölümü — done — 2026-08-10 UTC
+
+- **Yapıldı:** `apps/web/src/features/settings/SalesTracker.tsx` (yeni) — enabled/currency/atıf
+  penceresi formu, sunucu değerleri yüklendikten SONRA mount edilen alt bileşene prop'lanır
+  (T4-a `useForm`'un `initial`'ı yalnız mount'ta sabitlendiği için); `canEdit=false` → üç girdi
+  disabled + Save düğmesi hiç yok; kayıt başarısında Reports → Reviews → Ecommerce'e link.
+  `SettingsPage.tsx`e WidgetCustomization'ın hemen ardına mount edildi (`canManageAccess`,
+  yeni scope yok).
+- **Varsayımlar:** Save tüm 3 alanı tek gövdede gönderir (WidgetCustomization'ın kısmi-diff
+  PUT'unun tersi, bilinçli — tek formda 3 alan için diff takibi gereksiz). Label'lar ipucu
+  metnini SARMAZ (yalnız etiket) — `getByLabelText` exact-match'in ipucuyla birleşik
+  erişilebilir ada takılmaması için; checkbox WidgetCustomization'ın `ToggleControl` deseniyle
+  aynı (ipuçlu implicit label), testte regex ile eşleniyor.
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/web` 926/926, +6)
+  · `pnpm -w test:integration` 0 (`@nexa/api` 1851/1851) · build 0 (7/7) · `pnpm -w test:e2e`
+  **96/96** (sayı sabit).
+- **Sonraki pencereye not:** `Section id="section-sales-tracker"` eklendi — 13.5-f'nin
+  "Configure sales platforms" CTA'sı bu çapayı (`/app/settings#section-sales-tracker`)
+  hedefleyebilir. -f/-g/-h hâlâ açık.
+
 ## tm 75.4 — 13.5-d: /reports/reviews ecommerce bloğu gerçek veriyle — done — 2026-08-10 UTC
 
 - **Yapıldı:** `trackedSalesSummary` (`report-csv.ts`) — `tracked_sales` üzerinde `attributed=true`

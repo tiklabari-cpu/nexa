@@ -29,6 +29,7 @@ import { Brands } from './Brands.js';
 import { McpConnection } from './McpConnection.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { WidgetCustomization } from './WidgetCustomization.js';
+import { SalesTracker } from './SalesTracker.js';
 import { ChannelsGrid } from './Channels.js';
 import { IpAllowlist } from './IpAllowlist.js';
 import { ScheduledExports } from './ScheduledExports.js';
@@ -145,6 +146,7 @@ export function SettingsPage(): ReactElement {
       <Brands canEdit={canManageBrands} />
       <WebsiteWidgets canEdit={canManageAccess} />
       <WidgetCustomization canEdit={canManageAccess} />
+      <SalesTracker canEdit={canManageAccess} />
       <TrustedDomains canEdit={canManageAccess} />
       <BannedCustomerIps canEdit={canManageAccess} />
       <IpAllowlist canEdit={canManageAccess} />

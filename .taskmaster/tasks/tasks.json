@@ -5106,13 +5106,25 @@
         "priority": "medium",
         "subtasks": [],
         "updatedAt": "2026-08-10T11:58:53.781Z"
+      },
+      {
+        "id": "112",
+        "title": "PLAN §5 Faz-2 özet sayaçları yine bayat — satır 22 + satır 1100 tabloyla eşitlensin (§D84'ün tekrarı)",
+        "description": "Panel sağlık taraması bulgusu: PLAN.md:22 Faz-2 özet satırı `3 ⬜ · 1 ◐ · 23 ✅ · 3 ⛔` diyor, §5.0 envanter tablosu (PLAN.md:1108–1137) sayıldığında `2 ⬜ · 1 ◐ · 24 ✅ · 3 ⛔` çıkıyor (✅ 23→24, ⬜ 3→2). §5.0'ın kendi sayaç satırı (PLAN.md:1100) da aynı bayat değeri taşıyor. §F.00 faz kapanış kararı bu tabloya bakılarak verildiği için bayat özet, bitmemiş fazı bitmiş gösterebilir.",
+        "details": "KÖKEN: Panel sağlık taraması bulgusu (Faz-2 özet sayacı çelişkisi) — bu yüzden `critical` (CONVENTIONS §4.1).\n\nKAPSAM: YALNIZ iki özet sayaç satırı (22 + 1100) + §D kaydı + HANDOFF notu. Gereksinim satırlarının damgalarına DOKUNULMAZ — onlar kanıta dayalı (§1.2). Kod DEĞİŞMEZ.\n\nTEŞHİS (git ile kanıtlandı, tahmin değil): satır 22 en son `7680328` (tm 110 · §D84) commit'inde yazıldı ve O AN DOĞRUYDU (`3 ⬜ · 1 ◐ · 23 ✅ · 3 ⛔`). O commit'ten bu yana §5.0 tablosuna satır EKLENMEDİ/SİLİNMEDİ — `git diff 7680328 HEAD -- PLAN.md` §5.0 bloğunda yalnız 2 değişen satır, 0 ekleme/silme; iki tarafta da 30 veri satırı, aynı PRD kodları, aynı sıra. Yalnız 2 damga çevrildi ve hiçbir çeviren commit özeti güncellemedi:\n- 13.2 ◐→✅  `6c6c971` (13.2-l · tm 111)\n- 13.3 ⬜→◐  `5f1d215` (13.3-a · tm 74.1)\nAritmetik: 3⬜/1◐/23✅ üzerine bu 2 çevrim → 2⬜/1◐/24✅. Yani sebep = BAYAT ÖZET, damga hatası veya satır ekleme DEĞİL.\n\nNEDEN ◐ SAYACI DOĞRU GÖRÜNDÜ: iki çevrim `◐` ekseninde birbirini götürdü (13.2 çıktı, 13.3 girdi) — sayı 1'de sabit kaldı ama KİMLİĞİ değişti. Panelin yalnız ✅/⬜ uyuşmazlığı bildirmesi sayacın kısmen sağlam olduğu anlamına gelmiyor.\n\nİKİNCİ SAYAÇ: §5.0'ın kendi sayaç satırı (1100) da aynı bayat değeri taşıyor. §D78 (tm 102) ve §D84 (tm 110) birebir aynı sınıfta emsaldir ve ikisinde de satır 22 + satır 1100 BİRLİKTE düzeltilmişti; §5.0 sayaç satırı gereksinim satırı değil türetilmiş sayımdır, bayat bırakılırsa bir sonraki taramada aynı bulgu geri gelir ve kuyruğu kendi kendine besler.\n\nDOKUNULMAYACAK: `23 açık kalem` kapanış paydası (satır 22 col5 · satır 1102 · §5.2 başlığı · satır 2318) — o, PLANLAMA ANINDAKİ açık kalem kümesidir, canlı sayaç değil. `📋 PLANLANDI, kod SÜRÜYOR` anlatısı da aynen kalır.\n\nTEKRAR SAYISI: bu §D78 → §D84 → bu tur = ÜÇÜNCÜ tekrar ve aralık kısalıyor (§D84 ile arasında yalnız 2 damga çevrimi var). §D84 kalıcı çözümü doğru teşhis etti (damgayı çeviren pencere sayacı AYNI commit'te günceller; emsal `5d2c096`/WORKSCHED-j) ama mekanizmaya bağlamadı. Kalıcı çözüm = CONVENTIONS §1'e DoD kutusu eklemek veya sayım script'ini kapıya bağlamak — AYRI İŞ, bu pencerede açılmadı (CONVENTIONS §5).\n\nBAĞIMLILIK: yok (boş) — düzeltme hemen çalışabilir, hiçbir işin bitmesini beklemiyor.\n\nNOT (araç kusuru, §D84'ten devralındı): MCP `add_task` `priority`'yi high/medium/low'a zorluyor, `critical` yazılamıyor; ayrıca yazma yolu üst-görev `id`'lerini string→sayı normalize edip ~220 satır ilgisiz churn üretiyor. Bu görev bu yüzden tasks.json'a birebir mevcut kayıt şeklinde elle eklendi (tm 110 emsali). `set_task_status` bu kusuru taşımıyor.",
+        "testStrategy": "1) Sayım körlemesine yazılmaz — awk script'i §5.0 başlığı → §5.1 arasındaki `^| ` satırlarını tarar, damgayı 6. alanın öncü karakterinden okur, 30 veri satırı + 0 geçersiz damga doğrular, exit 0. Beklenen: `2 ⬜ · 1 ◐ · 24 ✅ · 3 ⛔`. Aynı script `7680328`'e karşı da koşulur ve `3/1/23/3` vermelidir — taban ölçülür, varsayılmaz.\n2) Çapraz doğrulama: Task Master'da done olmayan v2 kalemleri = tm 73 (13.2 · done → ✅) · tm 74 (13.3 · in-progress, 9 alt-görevin 3'ü pending → ◐) · tm 75 (13.5 · pending) · tm 99 (09.2 · pending) → 1 ◐ + 2 ⬜ ile birebir örtüşür.\n3) İki özet birbiriyle tutarlı: satır 22 ve satır 1100 aynı sayaç dizgesini taşır.\n4) Damga regresyonu yok: `git diff`'te §5.0 bloğunun gereksinim satırlarında 0 değişiklik.\n5) Kod değişmediği için DoD'un derleme kapıları bu görevde KAPSAM DIŞIDIR — yalnız .md + tasks.json dokunuldu ve `tasks.json` ürün kodunda hiçbir yerde import edilmiyor (grep ile doğrulandı) (§D78/§D83/§D84 emsali). `git status` temiz bırakılır.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "critical",
+        "subtasks": [],
+        "updatedAt": "2026-08-10T16:20:00.000Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-10T15:58:55.138Z",
-      "taskCount": 111,
-      "completedCount": 102,
+      "lastModified": "2026-08-10T16:20:00.000Z",
+      "taskCount": 112,
+      "completedCount": 103,
       "tags": [
         "master"
       ]

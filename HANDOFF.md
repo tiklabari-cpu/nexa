@@ -13,6 +13,48 @@
 
 ## Task log (newest-first)
 
+## tm 112 — PLAN Faz-2 özet sayaçları tabloyla eşitlendi (panel bulgusu · §D84'ün tekrarı) — done — 2026-08-10 UTC
+
+- **Yapıldı:** PLAN.md satır **22** (faz özet tablosu) + satır **1100** (§5.0 kendi sayacı) →
+  `2 ⬜ açık · 1 ◐ kısmi · 24 ✅ teslim · 3 ⛔ kapsam dışı` (ikisi de önce `3/1/23/3`). Sebep §D86'ya
+  tek kayıt olarak düşüldü. **Gereksinim satır damgalarına ve koda dokunulmadı** — PLAN diffi yalnız
+  3 satır (22 · 1100 · yeni D86).
+- **Teşhis (git ile kanıtlandı):** satır 22 en son `7680328`'de (tm 110 · §D84) yazıldı ve o an
+  DOĞRUYDU; sonrasında §5.0 tablosuna satır eklenmedi/silinmedi (`git diff 7680328 HEAD -- PLAN.md`
+  §5.0 bloğunda 2 değişen satır, 0 ekleme/silme; iki tarafta da 30 veri satırı, aynı PRD kodları,
+  aynı sıra) — yalnız 2 damga çevrildi ve hiçbir çeviren commit özeti güncellemedi:
+  `13.2` ◐→✅ (`6c6c971`/tm 111) · `13.3` ⬜→◐ (`5f1d215`/tm 74.1). `3⬜/1◐/23✅` + 2 çevrim =
+  `2⬜/1◐/24✅`. Yani **bayat özet**, damga hatası değil.
+- **Neden `◐` doğru görünüyordu:** iki çevrim `◐` ekseninde birbirini götürdü (13.2 çıktı, 13.3
+  girdi) — sayı `1`'de kaldı, **kimliği** değişti. Panel yalnız ✅/⬜ uyuşmazlığı bildirdi; bu,
+  sayacın kısmen sağlam olduğu anlamına GELMİYORDU. Bir sonraki tarama bu tuzağa düşmesin.
+- **Doğrulama:** (1) sayım script'i (§5.0→§5.1 arası `^| ` satırları, damga = 6. alanın öncü
+  karakteri) **exit 0** → `30 veri satırı · 0 geçersiz damga · 2 ⬜ · 1 ◐ · 24 ✅ · 3 ⛔`; aynı
+  script `7680328`'e karşı `3/1/23/3` verdi, yani **taban da ölçüldü, varsayılmadı**; (2) Task
+  Master çapraz kontrolü örtüşüyor — tm 73 (13.2) `done`→✅ · tm 74 (13.3) `in-progress`, 9
+  alt-görevin 3'ü pending →◐ · tm 75 (13.5) + tm 99 (09.2) `pending` → 2 ⬜; (3) iki özet birbiriyle
+  birebir; (4) `git diff`'te §5.0 gereksinim satırlarında (1106–1137) **0 değişiklik**.
+  **Derleme kapıları koşulmadı ve kapsam dışıdır** — bu turda ürün kodu değişmedi, yalnız `.md` +
+  `tasks.json`, ve `tasks.json` ürün kodunda hiçbir yerde import edilmiyor (grep ile doğrulandı)
+  (§D78/§D83/§D84 emsali).
+- **Varsayımlar:** satır 1100 görev metninde ismen istenmedi ama §D78/§D84 emsaliyle **birlikte**
+  düzeltildi: gereksinim satırı değil türetilmiş sayımdır ve bayat bırakılsaydı bir sonraki
+  taramada aynı bulguyu geri açardı. `23 açık kalem` kapanış paydasına (satır 22-col5 · 1102 ·
+  §5.2 başlığı · 2318) dokunulmadı — planlama anındaki açık küme, canlı sayaç değil.
+- **Sonraki pencereye not:** **Kaynak yine kapanmadı, yalnız sonuç düzeltildi.** Bu §D78 → §D84 →
+  §D86 zincirinin **üçüncü** halkası ve aralık kısalıyor: §D84 ile bu tur arasında yalnız 2 damga
+  çevrimi var. §D84'ün tahmini (_"sayaç bir sonraki ⬜→✅'da yeniden bayatlar"_) aynen gerçekleşti,
+  çünkü doğru teşhis bir mekanizmaya bağlanmadı. **Kalıcı çözüm ayrı bir iş olarak açılmalı:**
+  CONVENTIONS §1'e "damga çevirdiysen satır 22 + 1100'ü de aynı commit'te güncelle" kutusu, ya da
+  sayım script'ini repoya alıp DoD kapısına bağlamak (ikincisi iyi niyete bırakmaz). Bu pencere
+  kapsam disiplini (CONVENTIONS §5) gereği onu açmadı. **Ayrıca:** 13.3 (Goals) `◐` ve tm 74'ün
+  3 alt-görevi pending — o kapandığında sayaç `1 ⬜ · 0 ◐ · 25 ✅` olmalı; kapatan pencere satır 22
+  + 1100'ü **aynı commit'te** güncellerse bu zincir orada kırılır. **Araç kusuru (§D84'ten
+  devralındı, hâlâ geçerli):** MCP `add_task` `critical` yazamıyor + ~220 satır churn üretiyor;
+  tm 112 bu yüzden tasks.json'a elle, mevcut kayıt şekliyle eklendi.
+
+---
+
 ### tm 74.6 — 13.3-f: GET /reports/goals — 3 aşamalı huni + rapor grubu + CSV export — done — 2026-08-10 UTC
 
 - **Yapıldı:** Kontrat `paths/reports.yaml#goals` (`getReportsGoals`) + `openapi.yaml` `/reports/goals`

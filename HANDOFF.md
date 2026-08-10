@@ -13,6 +13,25 @@
 
 ## Task log (newest-first)
 
+### tm 72.1 — 09.4-a: Zapier + Make marketplace kartları ve katalog sınır güncellemesi — done — 2026-08-10 UTC
+
+- **Yapıldı:** `packages/types/src/apps.ts` APP_CATALOG'a iki DATA app — `zapier` (productivity/oauth,
+  "Active zaps"/"Last zap run") ve `make` (productivity/api_key, "Active scenarios"/"Last run"), desen
+  mevcut `slack`/`jira` girdilerinden kopyalandı. Katalog üst sınırı 20 → 22 (`apps.test.ts` +
+  `apps/api/test/integration/apps.test.ts`), her ikisine de yeni id'lerin varlığını/alanlarını doğrulayan
+  ayrı iddialar eklendi.
+- **Doğrulama:** `pnpm -w typecheck` **0** (11/11) · `pnpm -w lint` **0** (8/8) · `pnpm -w test` **0**
+  (`@nexa/types` apps.test.ts 6→7, `@nexa/api` 2134/2134 değişmedi) · `pnpm -w test:integration` **0**
+  (1597/1597) · `pnpm -w build` **0** (7/7). E2E koşulmadı — Apps marketplace'in hiç e2e spec'i yok ve
+  task'ın kendi test stratejisi e2e istemiyor (kontrat/route değişmedi, contract-parity etkilenmez).
+- **Varsayımlar:** yok.
+- **Sonraki pencereye not:**
+  - PLAN.md `09.4` satırı `◐ → K09.4` (kalem açık — 6 alt-görev kaldı: 09.4-b…g).
+  - **tm 105 WIP hâlâ commit'siz, bu tur da dokunulmadı** (kapsam disiplini): `README.md`,
+    `package.json` (kök), `apps/api|rtm/package.json`, `apps/api/tsconfig.json`, iki
+    `test/helpers/fixtures.ts`, `turbo.json`, `apps/api/scripts/*test-datastores.ts`,
+    `test-datastores.test.ts`, `.taskmaster/tmp-*`.
+
 ### tm 71.8 — 09.3-h: Uçtan uca doğrulama (satın alma → kota → geçmiş → fatura) — done — 2026-08-10 UTC
 
 - **Yapıldı:** `apps/e2e/tests/billing.spec.ts`'e tek senaryo — ekrandan Essential satın alınır, sonra

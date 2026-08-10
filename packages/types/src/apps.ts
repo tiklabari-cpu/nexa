@@ -83,10 +83,12 @@ export interface AppCatalogEntry {
 /**
  * The marketplace directory. 09.1 shipped the first five (one representative data
  * app per section) so the grid and the OAuth flow were real end to end; 09.2
- * grows it to the full 15–20-card list, a mix of OAuth and API-key providers,
- * and adds the channel-typed cards (`channel` set) that are also managed in
- * Settings → Channels. Data apps carry `dataLabel`/`dataFields` (what they show
- * in-chat); channel apps do not (they carry no marketplace connection at all).
+ * grew it to the full 15–20-card list, a mix of OAuth and API-key providers,
+ * and added the channel-typed cards (`channel` set) that are also managed in
+ * Settings → Channels. 09.4 adds two automation-platform cards (Zapier, Make),
+ * pushing the upper bound to 22 — v1's directory plus 09.4's automation cards.
+ * Data apps carry `dataLabel`/`dataFields` (what they show in-chat); channel
+ * apps do not (they carry no marketplace connection at all).
  */
 export const APP_CATALOG: readonly AppCatalogEntry[] = [
   {
@@ -289,6 +291,34 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     dataFields: [
       { label: 'Open issues', options: ['0', '1', '2', '4'] },
       { label: 'Highest priority', options: ['—', 'Low', 'Medium', 'High'] },
+    ],
+  },
+  {
+    id: 'zapier',
+    name: 'Zapier',
+    category: 'productivity',
+    provider: 'oauth',
+    icon: '⚡',
+    description: 'Trigger zaps from workspace events — register a Zapier app through the Nexa partner portal.',
+    scopes: ['zaps.trigger', 'zaps.read'],
+    dataLabel: 'Zapier',
+    dataFields: [
+      { label: 'Active zaps', options: ['0', '1', '3', '7'] },
+      { label: 'Last zap run', options: ['—', 'Today', 'Yesterday', 'Last week'] },
+    ],
+  },
+  {
+    id: 'make',
+    name: 'Make',
+    category: 'productivity',
+    provider: 'api_key',
+    icon: '🔗',
+    description: 'Run Make scenarios against this workspace — register a Make app through the Nexa partner portal.',
+    scopes: ['scenarios.trigger', 'scenarios.read'],
+    dataLabel: 'Make',
+    dataFields: [
+      { label: 'Active scenarios', options: ['0', '2', '5', '9'] },
+      { label: 'Last run', options: ['—', 'Success', 'Failed', 'Never run'] },
     ],
   },
   {

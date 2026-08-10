@@ -35,9 +35,11 @@ describe('app catalogue', () => {
   });
 
   // KK 09.2: "Her biri OAuth/API key" — the full directory, both provider kinds.
-  it('is the full directory (15–20 cards) across both provider kinds', () => {
+  // Upper bound is 22, not 20: 09.2's v1 list (20) + 09.4's two automation cards
+  // (Zapier, Make).
+  it('is the full directory (15–22 cards) across both provider kinds', () => {
     expect(APP_CATALOG.length).toBeGreaterThanOrEqual(15);
-    expect(APP_CATALOG.length).toBeLessThanOrEqual(20);
+    expect(APP_CATALOG.length).toBeLessThanOrEqual(22);
     const providers = new Set(APP_CATALOG.map((entry) => entry.provider));
     expect(providers.has('oauth')).toBe(true);
     expect(providers.has('api_key')).toBe(true);
@@ -59,6 +61,21 @@ describe('app catalogue', () => {
     }
     // A data app carries no channel — it is connected in the marketplace.
     for (const entry of data) expect(entry.channel).toBeUndefined();
+  });
+
+  // 09.4-a: Zapier + Make marketplace cards, one OAuth and one API-key, both
+  // connectable data apps (not channel-typed) that surface in-chat fields.
+  it('lists Zapier and Make as connectable productivity apps', () => {
+    const zapier = findApp('zapier');
+    const make = findApp('make');
+    expect(zapier).toBeDefined();
+    expect(make).toBeDefined();
+    expect(zapier!.category).toBe('productivity');
+    expect(make!.category).toBe('productivity');
+    expect(zapier!.provider).toBe('oauth');
+    expect(make!.provider).toBe('api_key');
+    expect(isChannelApp(zapier!)).toBe(false);
+    expect(isChannelApp(make!)).toBe(false);
   });
 
   it('resolves ids and rejects unknown ones', () => {

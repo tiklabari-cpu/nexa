@@ -4914,12 +4914,12 @@
             "description": "Arama input'u (250ms debounce → `?query=`), kategori çip satırı (\"Tümü\" + 8 kategori, seçili çip `aria-pressed`, `?category=` ekler); react-query `queryKey` filtre state'ini içerir (aksi halde önbellek yanlış sonucu gösterir). `apps.isPending` → `Skeleton`, boş sonuç → `EmptyState` (\"Hiçbir uygulama eşleşmiyor\" + \"Daha kısa bir arama deneyin\") — filtre varken/yokken farklı metin (CustomersPage sat",
             "details": "09.2-v2-f — Marketplace arama kutusu + tıklanabilir kategori filtresi + empty/skeleton durumları  [SONNET-XHIGH]\n\nPRD: FR-MOD-09.2 (+ FR-MOD-09.1 filtre/arama payı, FR-EK-B.1 empty state, NFR-A11Y6)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 dosya. (2) Güvenlik sınırı yok — salt-okunur liste ekranı; hiçbir yetki/scope kararı yok, mevcut `useApiClient` çağrısı aynen kalıyor. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: `CustomersPage.tsx` satır 60-75 (250ms debounce → `?query=`) + satır 40-41 (filtre state) + satır 150-162 (isPending → Skeleton, boş → EmptyState dallanması). (5) Kontrat değişikliği yok (09.2-v2-a'da yapıldı). (6) KK mekanik doğrulanabilir (mock `api.get` hangi URL ile çağrıldı).\nNEDEN AÇIK: `apps/web/src/features/apps/AppsMarketplace.tsx` satır 42-45: `api.get('/settings/apps')` PARAMETRESİZ çağrılıyor; dosyada arama input'u yok (grep 0). Kategori `CATEGORY_LABEL` (satır 29-38) yalnız kart üstünde salt görsel çip olarak render ediliyor (ChannelAppCard satır 92-94, DataAppCard satır 151-153) — tıklanabilir/filtrelenebilir DEĞİL. Boş sonuç için `EmptyState` kullanımı yok; yükleme için `Skeleton` kullanımı yok (dosyada ikisinin de importu yok).\nKAPSAM: Arama input'u (250ms debounce → `?query=`), kategori çip satırı (\"Tümü\" + 8 kategori, seçili çip `aria-pressed`, `?category=` ekler); react-query `queryKey` filtre state'ini içerir (aksi halde önbellek yanlış sonucu gösterir). `apps.isPending` → `Skeleton`, boş sonuç → `EmptyState` (\"Hiçbir uygulama eşleşmiyor\" + \"Daha kısa bir arama deneyin\") — filtre varken/yokken farklı metin (CustomersPage satır 154-161 deseni). KRİTİK KISIT: mevcut `data-testid=\"app-${id}\"` seçicileri, `ChannelAppCard`/`DataAppCard` ayrımı ve `ConsentDialog` davranışı DEĞİŞMEZ; mevcut 4 web testi yeşil kalır.\nDOSYALAR: apps/web/src/features/apps/AppsMarketplace.tsx · apps/web/src/features/apps/AppsMarketplace.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/features/customers/CustomersPage.tsx · apps/web/src/components/EmptyState.tsx · apps/web/src/components/Skeleton.tsx · apps/web/src/features/playbook/PlaybookPage.tsx\nKK (birebir): \"kategori/ödeme/yerleşim filtreleri + arama\" | \"virtualized grids (Contacts/Teammates/Skills/Tickets/Knowledge/Apps/Campaigns), infinite scroll, skeleton, anlamlı empty state | ... 10.000+ satırda 60fps\"\nKK DOĞRULAMA: `AppsMarketplace.test.tsx`: arama kutusuna yazınca debounce sonrası `api.get` `query=` içeren URL ile çağrılır; kategori çipine tıklayınca `category=` eklenir ve çip `aria-pressed=\"true\"` olur; API boş `items` dönerse EmptyState görünür (boş dikdörtgen değil); `isPending` iken Skeleton görünür. Mevcut 4 test (kart durumu, consent→OAuth, disconnect, kanal kartı link) yeşil kalır.\nKAPSAM DIŞI: virtualization ve sayfa zinciri UI'ı (09.2-v2-g) · kategori enum'unun genişletilmesi · kart görsel tasarımının değişmesi / ConsentDialog akışı · e2e spec (09.2-v2-h)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: debounce sonrası arama query parametresiyle istek atılır (keystroke başına istek atılmaz) · unit: kategori çipi filtreyi uygular + aria-pressed durumu (NFR-A11Y6) · unit: boş sonuç → anlamlı EmptyState (filtre varken/yokken farklı metin); yükleme → Skeleton · unit regresyon: mevcut 4 AppsMarketplace testi (özellikle `data-testid=\"app-${id}\"` seçicileri) değişmeden geçer",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "99.3"
             ],
             "parentId": "99",
-            "updatedAt": "2026-08-11T03:44:10.002Z"
+            "updatedAt": "2026-08-11T03:57:39.614Z"
           },
           {
             "id": 7,
@@ -4951,7 +4951,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-11T03:44:10.002Z",
+        "updatedAt": "2026-08-11T03:57:39.614Z",
         "complexity": 5,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.2 — 100+ entegrasyon (marketplace katalog genişlemesi)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5134,7 +5134,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-11T03:44:10.003Z",
+      "lastModified": "2026-08-11T03:57:39.615Z",
       "taskCount": 113,
       "completedCount": 106,
       "tags": [

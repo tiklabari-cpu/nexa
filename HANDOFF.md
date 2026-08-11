@@ -13,6 +13,102 @@
 
 ## Task log (newest-first)
 
+## GRAF-ONARIM — döngü BEŞİNCİ kez durdu: graf yine sağlam, backlog yine tükenmişti; bir bulgu ölçüldü, bir hipotez ÇÜRÜTÜLDÜ (tm 122 · tm 123) — 2026-08-11 UTC
+
+- **Panel bulgusu:** `run-loop.sh` seçilebilir görev bulamıyor → otonom döngü duracak. 6 açık görev,
+  **0 seçilebilir** (seçilebilir = `pending` **ve** bağımlılıkları kapalı).
+- **TEŞHİS — dört olasılık tek tek elendi, sebep (a): STATÜLER, graf değil.** (önceki pencerenin
+  notuna güvenilmedi, hepsi bu turda yeniden ölçüldü)
+  · **(a) hepsi `deferred`** ✅ DOĞRU — 121 görevin **115'i `done`, 6'sı `deferred`, 0'ı `pending`**.
+  Altısı da Faz-3: tm 79 · 81 · 82 · 83 · 84 · 90.
+  · **(b) bağımlılık döngüsü** ❌ YOK — `validate_dependencies` → "validated successfully".
+  · **(c) var olmayan id'ye bağımlılık** ❌ YOK — **60 kenarın** hepsi mevcut id'ye çözülüyor.
+  · **(d) aktarılmamış bağımlılık** ❌ YOK — id uzayı `1…121` **boşluksuz**.
+  Tek bağımlılık taşıyan açık görev tm 79 → **tm 35**, o da **`done`**. tm 79'u tutan tek şey kendi
+  `deferred` statüsü.
+- **ENGEL HÂLÂ GEÇERLİ Mİ? → EVET, altısı için de. STATÜ ÇEVİRMEDİM.** §D64 (2026-08-01 kullanıcı
+  kararı) Faz-3'ü ismen erteliyor; §D89/tm 114 altısının kodda karşılığı olmadığını doğruladı.
+  `pending`'e çekmek **Faz 3'ü başlatmak**tır ve §F.3'e göre **kullanıcı kararıdır** — §F.1/2'nin
+  yasakladığı faz sızıntısı olurdu.
+- **GRAF MUTASYONU: yok.** Onarılacak kenar yoktu; hiçbir bağımlılık eklenmedi/silinmedi, hiçbir
+  statü değişmedi. **§G'den toplu aktarım da yapılmadı:** §G'de kalan tek dilimsiz gövde
+  **Faz-3'ün ~28–37 kalemlik orta-derinlik kırılımı (§6.1)** — onu aktarmak §D64'ü delerdi.
+- **ASIL İŞ — backlog yine tükenmişti; PLAN'ın TÜM açık damgaları süpürüldü, bir bulgu çıktı:**
+  1. **tm 122 · PRD §5.5 — §2 Modül→Faz Matrisi kapalı fazlarla çelişiyor (4 satır).** §1'in kapı
+     tablosu (`PLAN.md:20-22`) üç fazı da **"0 ◐ · 0 ⬜"** ile KAPALI ilan ediyor; dört satır aşağıda
+     §2'nin matrisi hâlâ ◐/⬜ taşıyor ve §F.00 "**◐ kaldıramaz**" der. **Üçü kanıtla yanlış:**
+     `PLAN.md:125` MOD-02 hücresi "02.4 ziyaret bilgisi ⬜" diyor ama `PLAN.md:186` `02.4.1–.6
+     ✅ → K02.4.1-.6` + `DetailsPanel.tsx` "Visited pages"/"Visit info" render ediyor; `PLAN.md:129`
+     Engage/Goals+Sales `⬜` ("kod yok") ama 13.2/13.3/13.5 üçü de `✅ → K…` + `features/goals/` ·
+     `goal-service.ts` · `sales/attribution.ts` var; `PLAN.md:140` MOD-09 `⬜` ama 09.1/09.2/09.2-b/
+     09.3/09.4 beşi de `✅ → K…` + `AppsMarketplace.tsx` · `app-grid.ts` var. Dördüncüsü
+     (`PLAN.md:124` MOD-01 `◐ … Copilot v1`) **gerekçesi bayat ama damgası tartışmalı** — Copilot v1'de
+     teslim (MOD-12 `✅`, `routes/copilot.ts`), ama `PLAN.md:172`'nin `01.1.1/.4/.5, 01.4, 01.5`
+     `🔒 Should/Could` artığı duruyor; göreve "kendin ölç, körlemesine çevirme" diye yazıldı.
+     **KÖK NEDEN yazılı ve tarihli:** §D19 (`PLAN.md:3339`, 2026-07-25) 02.4'ü kapatırken _"Bu satır
+     dışına dokunulmadı; §2/§8'deki … referansları **kendi denetim turlarında** güncellenir"_ demiş —
+     o tur hiç gelmedi, GL-3/GL-4/GL-8'in §F.1/8 maddesi üçü de §2'yi kaçırdı (~17 gün).
+     **İKİ KONTROL SATIRI HAK EDİLMİŞ ve göreve ⛔ ile yazıldı:** `PLAN.md:144` `Mobil app ⬜`
+     (13.7, tm 90 Faz-3) · `PLAN.md:133` `Görsel Workflow builder ⛔` (ADR-14). Bu bir toplu süpürme
+     DEĞİL — dördü ölçüldü, ikisi korundu.
+  2. **tm 123 · A11Y1–6 — `:focus-visible`/`:hover` HİÇ taranmıyor (KA11Y `⬜` kanadı).** Ölçüm:
+     `a11y.spec.ts` + `a11y.ts` içinde `focus|hover` → **her ikisi de 0**; `tokens.test.ts`'in 90
+     testinde `--focus-ring` için **tek çift yok** (oradaki `ring`/`focus` eşleşmeleri yalnız
+     `relativeLuminance`/`contrastRatio` adları). tm 120 bu kör nokta sınıfının GERÇEK bir serious
+     ihlal sakladığını kanıtlamıştı (16 temiz tarama, hiç açılmayan sekmede 1.47:1).
+- **⚠️ BİR HİPOTEZ ÇÜRÜTÜLDÜ — sonraki pencere yeniden kovalamasın (göreve de yazıldı):** bu pencere
+  elle şöyle akıl yürüttü: _"`tokens.css:49` açık temada `--focus-ring: var(--brand-500)`, yani
+  `bg-brand-500` dolgulu birincil CTA'da halka 1.00:1, görünmez"_ — **YANLIŞ**. `tokens.css:180-183`
+  `:focus-visible`e **`outline-offset: 2px`** veriyor; halka öğenin DIŞINA, arkasındaki yüzeye
+  çiziliyor. Ölçülen gerçek oranlar (WCAG 1.4.11 non-text eşiği 3:1): açık #2d67fa → canvas **4.46** ·
+  surface **4.74** · surface-2 **4.27** · inset **4.00**; koyu #7aa2ff → **6.42–7.61**. **Sekizi de
+  geçiyor — bilinen odak-halkası defekti YOK.** tm 123 bu yüzden bir düzeltme değil, **ölçüm
+  boşluğunu** kapatan iş olarak açıldı. (Çürütmenin kendisi görevin gerekçesi: elle akıl yürütme
+  `outline-offset`i modelden kaçırdı; bir tarama saniyeler içinde cevaplardı.) Kalan gerçek risk
+  göreve yazıldı: `bg-brand-500` **kapsayıcı** içindeki odaklanabilir öğede komşu renk brand olur →
+  1.00 (açık) / 1.90 (koyu).
+- **ÖNCELİK — ikisi de `critical`, `dependencies: []`** (panelin "düzeltmeye gönder" akışından
+  doğdular — CONVENTIONS §4.1). Damga işin nereden geldiğinin izidir, kapanışta değiştirilmeyecek.
+- **`add_task` KULLANILMADI — önceki pencerenin kaydettiği iki sessiz yan etki bu turda hiç oluşmadı.**
+  Görevler `tasks.json`'a doğrudan yazıldı (tek seferlik betik, sonra silindi). Sonuç doğrulandı:
+  `priority` **`critical` olarak durdu** (araç `medium`e düşürüyordu) ve **id/dependencies tiplerinin
+  hepsi `string` kaldı** (araç 121 id'yi number'a çeviriyordu). Sonraki pencereye tavsiye: görev
+  eklemeyi bu yoldan yap.
+- **Doğrulama:** `validate_dependencies` **ekleme sonrası** koşuldu → temiz. `metadata.taskCount`
+  121 → **123**, `completedCount` 115 doğrulandı. Statü dağılımı **115 done · 6 deferred · 2 pending**.
+  id uzayı `1…123` **boşluksuz**, tip karışımı yok. Seçilebilir küme: **tm 122 (critical) ·
+  tm 123 (critical)**. `git diff --stat` = **1 dosya, +27/−3** (`tasks.json`) — iki görev nesnesi +
+  `metadata`, başka hiçbir satır değişmedi.
+- **KOD YAZILMADI** (pencere sınırı). **DOKUNULMADI:** ürün kodu · testler · `PLAN.md` (damgalar ve
+  kanıt blokları dahil — tm 122 onları kendi turunda düzeltecek) · Faz-3 statüleri · tm 1-26 (K1) ·
+  mevcut bağımlılık kenarları. **Kapı:** `tasks.json`-only değişiklik → build kapıları koşulmadı
+  (§D80/§D81/§D82/§D87 doküman-only emsali); doğrulama `validate_dependencies` + statü/tip sayımı +
+  diff denetimi.
+
+**SONRAKİ PENCEREYE:**
+
+1. **Döngü `tm 122` (§2 matris damgaları, doküman-only) ile devam eder**, ardından `tm 123`
+   (odak/hover taraması, TAM DoD kapısı). İkisi de bağımsız — aralarında kenar yok, ikisi de
+   `critical` olduğu için `pick_next`'in 2. kuralıyla normal backlog'un önünde.
+2. **tm 123'ten sonra backlog YİNE boşalır ve bu ALTINCI kez olacak.** Bunu ertelemenin anlamı
+   kalmadı: son iki tur (tm 120/121 · tm 122/123) doküman ve ölçüm boşluklarından toplandı, PLAN'ın
+   açık damga envanteri artık **tükenmiş durumda** (bu turda TÜM tablo satırları süpürüldü — geriye
+   yalnız hak edilmiş `⬜ Mobil app` + `⛔ Workflow builder` kaldı). **Bu bir KULLANICI KARARI
+   noktasıdır (§F.3), pencere kendi başına çeviremez:** ya **Faz 3 açılır** (tm 79/81/82/83/84/90
+   `deferred`→`pending` + §6.1'in ~28–37 kaleminin atomik kırılımı §G'ye ve Task Master'a —
+   **normal K7 önceliğiyle, `critical` DEĞİL**), ya da proje planlanan kapsamda **kapalı** ilan edilir.
+3. **Karara bağlanmamış, ismen taşınan borç (ÜÇÜNCÜ kez düşmeden aktarılıyor):** tm 118 notu (1) —
+   `format:check` artık gerçekten yeşil, yani CONVENTIONS §1 DoD kapısına eklenebilir; ama bu **kapı
+   sözleşmesini değiştirir**, tm 118 bilerek kullanıcıya bıraktı. Bu turda da görev AÇILMADI, aynı
+   gerekçeyle. (KM-FMT bloğunun `⬜` maddesi bunu kayıt altında tutuyor.)
+4. **Graf teşhis kısayolu (dördüncü kez işe yaradı):** `tasks.json` statü sayımı →
+   `validate_dependencies` → id-uzayı boşluk taraması → bağımlılık hedeflerinin statüsü. Dördü de
+   temizse sorun **graf değil backlog**tur; cevap **yeni iş açmak**, statü çevirmek değil.
+5. **Bu turun metodolojik dersi:** bir a11y/kontrast iddiasını **elle akıl yürüterek** kurma —
+   yukarıdaki çürütülen hipotez CSS'in bir satırını (`outline-offset`) modelden kaçırdığı için
+   yanlış pozitif üretti. Damga doğrulamada olduğu gibi burada da kural aynı: **ölç, tahmin etme**
+   (§F.1/3).
+
 ## 121 — 09.2 · 13.3 · 13.5 kanıt bloklarındaki bayat "Satır ◐ kalıyor" cümleleri — done — 2026-08-11 UTC
 
 - **Yapıldı (metin-only, ürün kodu/test/migration/sözleşme DEĞİŞMEDİ):** 14 madde / 3 blok çevrildi —

@@ -13,6 +13,23 @@
 
 ## Task log (newest-first)
 
+## tm 99.1 — 09.2-v2-a: Marketplace liste kontratı — arama/kategori/sayfalama — done — 2026-08-11 UTC
+
+- **Yapıldı:** Pencere bir önceki oturumdan yarım kalmış (kota/çökme, HANDOFF'ta izi yoktu) çalışan
+  kodu buldu — `paths/apps.yaml` `apps.get`'e `query`/`category`/`$ref PageId`/`$ref Limit` parametreleri
+  + yanıt şemasına `total` (zorunlu) + `next_page_id` (opsiyonel) + `400 BadRequest`, `customers.yaml`
+  deseninin birebir kopyası; `@nexa/types`'a `AppListResponse` DTO'su. Bu pencere işi doğruladı (bundle+
+  client regen idempotent), DoD kapısını koştu ve kapanışı tamamladı. **Backend implementasyonu YOK**
+  (kasıtlı — 09.2-v2-c'nin kapsamı).
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2410/2410 ·
+  `@nexa/web` 929/929) · `pnpm -w test:integration` 0 (1851/1851, `contract-parity` 5/5 dahil) ·
+  build 0 (7/7) · `pnpm -w test:e2e` 100/100 (davranış değişmedi, dokunulmadan yeşil).
+- **Varsayımlar:** Yok.
+- **Sonraki pencereye not:** 09.2-v2 epic'i 8 alt-görevden yalnız 1'i (-a) kapandı; PLAN K09.2-b `◐`
+  kalıyor. Sıradaki `09.2-v2-b` (saf filtre/sayfalama fonksiyonları) ve `-c` (route bağlama, -a/-b'ye
+  bağımlı). Faz-2 özet sayaçları (satır 22 + 1100) çevirim sırasında BİRBİRİYLE UYUMSUZ bulundu
+  (§D86'nın dördüncü tekrarı) — ikisi de bu turda tabloya karşı yeniden sayılıp eşitlendi.
+
 ## tm 113 — `reports-billing.test.ts` saat kayması flake'ini kapat — done — 2026-08-11 UTC
 
 - **Yapıldı:** Dosyaya tek ortak `justNow()` = `new Date(Date.now() - 60_000)` yardımcısı (gerekçe

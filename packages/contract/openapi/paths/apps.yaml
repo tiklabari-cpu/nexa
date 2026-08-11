@@ -13,18 +13,36 @@ apps:
     operationId: listApps
     summary: List marketplace apps and their connection status
     description: Every catalogue card, each flagged with whether this workspace has connected it.
+    parameters:
+      - name: query
+        in: query
+        description: Case-insensitive match against the card's name and description.
+        schema: { type: string, maxLength: 320 }
+      - name: category
+        in: query
+        description: One of the marketplace's category sections.
+        schema:
+          type: string
+          enum: [crm, support, ecommerce, payments, marketing, productivity, analytics, channels]
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
     responses:
       "200":
-        description: The marketplace catalogue
+        description: A page of the marketplace catalogue
         content:
           application/json:
             schema:
               type: object
-              required: [items]
+              required: [items, total]
               properties:
                 items:
                   type: array
                   items: { $ref: "../openapi.yaml#/components/schemas/AppListItem" }
+                total:
+                  type: integer
+                  description: Matching the current filter, across all pages.
+                next_page_id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

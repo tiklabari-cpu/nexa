@@ -19,7 +19,7 @@
 | ------------------ | ---- | ------------------------------------ | ------------------------------ | :-----: |
 | **Faz 0 — MVP**    | §5.1 | 54 ✅ · 0 ◐ (§3) · gruplu-🔒 v1'e    | **51 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
 | Faz 1 — v1         | §5.2 | v1 payı teslim (Playbook+AI+omnichannel-MOCK+webhooks §1.3); Should çoğu ✅ · mobil 🔒 · 06.3.2-bulk→v2 | **20 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
-| **Faz 2 — v2**     | §5.3 | **📋 PLANLANDI, kod SÜRÜYOR** (plan 2026-08-01; sayım 2026-08-11, tm 75.8). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: **1 ⬜ açık · 0 ◐ kısmi · 26 ✅ teslim · 3 ⛔ kapsam dışı** (7 faz çelişkisi PRD'den çözüldü). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: **23 açık kalemin hepsi ✅** | ⬜ AÇIK |
+| **Faz 2 — v2**     | §5.3 | **📋 PLANLANDI, kod SÜRÜYOR** (plan 2026-08-01; sayım 2026-08-11, tm 99.1). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: **0 ⬜ açık · 1 ◐ kısmi · 26 ✅ teslim · 3 ⛔ kapsam dışı** (7 faz çelişkisi PRD'den çözüldü). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: **23 açık kalemin hepsi ✅** | ⬜ AÇIK |
 | Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı · orta derinlik (§6.1). 2026-08-01'de **13.7 mobil** buraya taşındı (§D60) · **08.9.6 IP allowlist** buradan v2'ye çıktı (§D61) | —                              |    —    |
 
 **Faz-0 kapandı (2026-07-31 · GL-3 · tm 87).** Kapanışı bloklayan 6 `Must ◐` kapatıldı: 01.3, 02.4,
@@ -1097,7 +1097,7 @@ gereği bu depodan yapılmaz.
 
 ### 5.0 v2 kalem envanteri (30 kalem — PRD'ye karşı sayıldı)
 
-**1 ⬜ açık · 1 ◐ kısmi · 25 ✅ teslim · 3 ⛔ kapsam dışı** — tablodan **sayılarak** (§1.2: bu sayılar elle yazılmaz; son sayım 2026-08-10, tm 75.1 turunda — `13.5` ⬜→◐ ile birlikte satır 22 de eşitlendi; sales tracker'ın veri modeli (13.5-a) teslim oldu, kalan yedi alt-görev (-b…-h) açık. Bir önceki eşitleme tm 74.9 turuydu → §D86).
+**0 ⬜ açık · 1 ◐ kısmi · 26 ✅ teslim · 3 ⛔ kapsam dışı** — tablodan **sayılarak** (§1.2: bu sayılar elle yazılmaz; son sayım 2026-08-11, tm 99.1 turunda — `09.2` ⬜→◐ ile birlikte satır 22 de eşitlendi (bu ikisi zaten senkron DEĞİLDİ: satır 22 `1⬜/0◐/26✅`, burası `1⬜/1◐/25✅` taşıyordu — hangi damganın en son çevrildiği izlenemediği için hangisinin bayat olduğu belirsizdi, ikisi de bu turda tabloya karşı yeniden sayıldı). Bir önceki eşitleme tm 75.1 turuydu → §D86).
 7 kalem faz çelişkisi taşıyordu → hepsi bu turda PRD'den çözüldü (§D61/§D62).
 Açık 23 kalemin tamamı §5.2'de atomik bölündü.
 
@@ -1119,7 +1119,7 @@ Açık 23 kalemin tamamı §5.2'de atomik bölündü.
 | 08.9.5 | CC masking (Luhn, yazma anında) | Should (v2) | | ✅ **TESLİM** — GL-5 · tm 70 · `lib/cc-mask.ts` · §D57 |
 | 08.9.6 | **IP allowlist / oturum güvenliği** | Could (Ent.) → **v2** | ★ | ✅ → K08.9.6 |
 | 08.9.7 | **Temel audit log — TÜM PLANLARDA** + kullanıcıya görünür ekran | v2 (§5.3 Güvenlik) · NFR-S12 | ★ | ✅ → K08.9.7 |
-| 09.2 | **100+ entegrasyon** (marketplace katalog genişlemesi) | v2 (§5.5 MOD-09) | ★ | ⬜ §5.5 matrisi: v1 `○ (15–20)` → v2 `○ (100+)`. v1'de 20 kart **teslim** (tm 51/52). İş = katalog + kataloğun **ölçeklendiğinin kanıtı** (arama/kategori/sayfalama). Hepsi MOCK. → §5.2 |
+| 09.2 | **100+ entegrasyon** (marketplace katalog genişlemesi) | v2 (§5.5 MOD-09) | ★ | ◐ → K09.2-b |
 | 09.3 | **API istek paketleri** (Essential/Pro/Pro+) | Could (v2) |  | ✅ → K09.3 |
 | 09.4 | **Zapier/Make + Build-your-app** (partner/creator) | Could (v2) | | ✅ → K09.4 |
 | 01.1.3 | **⌘K command palette — AI komutları** | v2 (§5.5 MOD-01) | ★ | ✅ → K01.1.3 |
@@ -3843,6 +3843,10 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 #### K09.2 — 09.2 · Entegrasyon listesi (15–20)
 
 ✅ tam entegrasyon dizini (20 kart) — KK birebir _"her biri OAuth/API key; kanal-tipli olanlar Channels'ta da yönetilir"_: katalog `@nexa/types/apps.ts` `APP_CATALOG` 09.1'in 5 kartını 20'ye büyüttü — 10 veri app'i (OAuth+API-key karışık: Salesforce/Intercom/Zendesk/WooCommerce/Magento/PayPal/Klaviyo/Slack/Jira/Segment) + 5 kanal-tipli kart (WhatsApp/Messenger/Instagram/Telegram/SMS-Twilio, `channel` set) · yeni `channel?: ChannelType` alanı + `dataLabel`/`dataFields` opsiyonel (kanal app'i in-chat veri taşımaz) + `isChannelApp`/`channelApps`/`connectableApps` bölücüleri + `AppListItem.channel` · servis `app-service.ts` `requireConnectableApp` kapısı: kanal app'inin marketplace OAuth-start/callback/disconnect'ini 400 ile reddeder (bir kanalın durumunu tek yüzey Settings→Channels yönetir) + `chatData` yalnız veri app'lerini yüzeye çıkarır · web `AppsMarketplace.tsx` `ChannelAppCard` = "In Channels" rozeti + "Manage in Channels" linki (`/app/settings#section-channels`), Connect yok · OpenAPI `AppListItem` kategori enum (+support/analytics/channels) + `channel` alanı (CHANNEL_TYPES ile birebir) → client yeniden üretildi (contract-parity 5/5) · unit `@nexa/types apps.test.ts`(+2: 15–20 kart & iki provider · kanal-çapraz partition) + web `AppsMarketplace.test.tsx`(+1: kanal kartı Channels'a linkler) + integration `apps.test.ts`(8, +1: tam liste 15–20 · kanal app channel/category · OAuth+disconnect 400) · tm 53.2 · §D50
+
+#### K09.2-b — 09.2 · 100+ entegrasyon (marketplace katalog genişlemesi, v2)
+
+◐ **09.2-v2-a teslim (birinci adım, 8 alt-görevden 1'i):** marketplace liste kontratına arama/kategori/sayfalama. `paths/apps.yaml` `apps.get`'e `parameters` bloğu — `query` (string, maxLength 320, kart adı+açıklaması üzerinde büyük/küçük harf duyarsız eşleşme) · `category` (APP_CATEGORIES'in 8 değeriyle birebir enum) · `$ref PageId`/`$ref Limit` (customers.yaml ile paylaşılan bileşenler, satır 23-38 deseni birebir kopyalandı) — yanıt şeması `required:[items,total]` + opsiyonel `next_page_id` + `400 BadRequest` yanıtı eklendi. `@nexa/types`'a `AppListResponse` DTO'su (`AppListItem[]` + `total` + opsiyonel `next_page_id`). Bundle + client re-generate edildi (idempotent doğrulandı — ikinci `pnpm --filter @nexa/contract generate` aynı diff'i üretti). **Backend implementasyonu YOK** (route hâlâ eski `{items}` döner, parametreler henüz okunmuyor) — bu 09.2-v2-c'nin işi; kalan 7 alt-görev (b/c/d/e/f/g/h: saf filtre fonksiyonları, route bağlama, katalog 20→100+ kart, arama kutusu+filtre UI'ı, virtualized grid, uçtan uca doğrulama) açık. — `packages/contract/openapi/paths/apps.yaml` · `packages/contract/src/generated/api.ts` · `packages/types/src/apps.ts`. Doğrulama: `contract-parity.test.ts` 5/5 (route hâlâ tek taraflı belgeleniyor, yeni path yok) · typecheck 11/11 (client tipi query parametrelerini taşıyor) · mevcut `apps.test.ts`/`partner-apps.test.ts` süiti parametrelerin opsiyonel olması sayesinde değişmeden yeşil · `pnpm -w test` 0 (`@nexa/api` 2410/2410 · `@nexa/web` 929/929) · `pnpm -w test:integration` 0 (1851/1851) · build 0 (7/7) · `pnpm -w test:e2e` 100/100 (davranış değişmedi, mevcut süit dokunulmadan yeşil). tm 99.1
 
 #### K10.1.4 — 10.1.4 · AI resolutions meter + stepper
 

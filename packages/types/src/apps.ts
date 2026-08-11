@@ -447,6 +447,18 @@ export interface AppListItem {
   installation: AppInstallation | null;
 }
 
+/**
+ * A page of the marketplace catalogue (09.2 v2): `listApps` narrowed by
+ * `query`/`category` and paginated the same way `customers.get` is —
+ * `total` is the match count across all pages, `next_page_id` is the opaque
+ * keyset cursor for the next one, absent on the last page.
+ */
+export interface AppListResponse {
+  items: AppListItem[];
+  total: number;
+  next_page_id?: string;
+}
+
 /** What starting the (mock) OAuth flow hands back — where to send the user. */
 export interface AppOAuthStart {
   authorize_url: string;

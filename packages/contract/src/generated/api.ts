@@ -12104,14 +12104,30 @@ export interface operations {
   };
   listApps: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Case-insensitive match against the card's name and description. */
+        query?: string;
+        /** @description One of the marketplace's category sections. */
+        category?:
+          | 'crm'
+          | 'support'
+          | 'ecommerce'
+          | 'payments'
+          | 'marketing'
+          | 'productivity'
+          | 'analytics'
+          | 'channels';
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+        limit?: components['parameters']['Limit'];
+      };
       header?: never;
       path?: never;
       cookie?: never;
     };
     requestBody?: never;
     responses: {
-      /** @description The marketplace catalogue */
+      /** @description A page of the marketplace catalogue */
       200: {
         headers: {
           [name: string]: unknown;
@@ -12119,9 +12135,13 @@ export interface operations {
         content: {
           'application/json': {
             items: components['schemas']['AppListItem'][];
+            /** @description Matching the current filter, across all pages. */
+            total: number;
+            next_page_id?: string;
           };
         };
       };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];

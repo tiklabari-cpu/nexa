@@ -13,6 +13,53 @@
 
 ## Task log (newest-first)
 
+## GRAF-ONARIM — run-loop'un "seçilebilir görev yok" kilidi çözüldü (tm 114 açıldı) — done — 2026-08-11 UTC
+
+- **Bulgu (panel):** `run-loop.sh` seçilebilir görev bulamıyor → "Hazır task kalmadı" deyip çıkacak,
+  otonom döngü DURACAK. Seçilebilir = `pending` **ve** tüm bağımlılıkları kapalı.
+- **TEŞHİS (kanıtla, 4 hipotez tek tek elendi):** 114 görev · **107 `done` · 6 `deferred` · 0
+  `pending`** → seçilebilir küme boş. **Kilit statülerde, grafta DEĞİL:**
+  · (a) hepsi deferred → **EVET, kök neden bu.** Açık 6 görevin (tm 79/81/82/83/84/90) statü kümesi
+    tam olarak `{deferred}`.
+  · (b) bağımlılık döngüsü → **YOK** (tüm graf üzerinde DFS renklendirme, 0 geri-kenar).
+  · (c) var olmayan id'ye bağımlılık → **YOK.**
+  · (d) bağımlı olunan görev aktarılmamış / açık → **YOK** — açık görevlerin tek bağımlılığı
+    tm 79 → tm 35, o da `done`. `validate_dependencies` **temiz**.
+  Yani tm 79 bugün `pending` yapılsa hemen koşabilirdi; graf onu engellemiyordu.
+- **ENGEL HÂLÂ GEÇERLİ Mİ? → EVET, 6 görev de `deferred` KALDI (graf mutasyonu YAPILMADI).**
+  §D64 (2026-08-01 kullanıcı kararı) bu altısını ismen ayırıyor: _"Faz-3 kalemleri (tm 79–84, 90)
+  `deferred` kalır — onlar gerçekten sonraki fazdır."_ Açık faz **Faz 2**'dir; bunlar Faz 3
+  (Enterprise). `pending`'e çekmek §F.1/2'nin yasakladığı **faz sızıntısı** olurdu — aynı kararı
+  daha önce iki GRAF-ONARIM penceresi (`15f9ce7`, `a8e2fe1`) de vermişti. Bağımlılık grafında
+  düzeltilecek bir şey olmadığı için **hiçbir bağımlılık eklenmedi/silinmedi**.
+- **GERÇEK BOŞLUK (kilidin sebebi):** Faz-2'nin kalem envanteri sayıca kapandı (**0 ⬜ · 0 ◐ ·
+  27 ✅ · 3 ⛔**) ama **§F.00 kapanış turu hiç koşulmadı** — PLAN satır 22 `Kapanış` hücresi hâlâ
+  `⬜ AÇIK`, §5.3.2 dilim 9 kapısı _"→ **Faz-2 §F.00 kapanır**"_ diyor ve tm 99.8'in notu bunu
+  açıkça borç bırakmış. GL-3 (tm 87, Faz-0) ve GL-4 (tm 88, v1) turlarının **v2 karşılığı Task
+  Master'da YOKTU**. Yani statüler doğruydu, sırada duran iş **kaydedilmemişti**.
+- **Yapıldı:** **tm 114** açıldı — `GL-8 — V2-KAPAT — Faz-2 §F.00 kapanış turu (§F.1 tam 10 madde)
+  [MAX]` · `status: pending` · `priority: critical` · `dependencies: []` · tag `master`.
+  `metadata.taskCount` 113 → **114**. Detay alanı bir sonraki temiz pencerenin BAŞKA HİÇBİR ŞEY
+  OKUMADAN çalışabileceği şekilde yazıldı: gerekçe+kanıt zinciri · dokunulacak dosyalar · 5 adımlı
+  denetim sırası · 6 bilinen tuzak · kapsam sınırı.
+- **`critical` gerekçesi (iz):** bu pencere panelin "düzeltmeye gönder" akışından doğdu ve tm 114
+  o bulgunun düzeltmesidir — CONVENTIONS §4.1'in `critical` için ayırdığı tek yol. Toplu §G/backlog
+  aktarımı DEĞİLDİR (tek görev, döngünün kilidini açan işin kendisi), o yüzden ⛔ istisnası
+  kapsamıyor. Görev bitince priority **değiştirilmeyecek** — nereden geldiğinin izidir.
+- **Doğrulama:** `validate_dependencies` **temiz** (ekleme sonrası tekrar koşuldu) · `tasks.json`
+  JSON olarak geçerli · 114 görev, id tipleri tutarlı (hepsi `int`) · `pending` kümesi = `[114]`.
+  `run-loop.sh` `pick_next` kural 2 (_"priority='critical' olan bir 'pending' görev varsa ONU seç"_)
+  tam olarak bu görevi seçer. **KOD YAZILMADI** — kapsam yalnız görev grafıydı.
+- **Sonraki pencereye not:** Döngü **tm 114** ile devam eder. O tur bir DENETİM turudur, ürün kodu
+  yazmaz ("verify+close, don't rebuild"); kapısı tam DoD + §F.1/9 temiz kurulum provası, referans
+  taban tm 99.8'in sayıları (unit api 2414/web 957/widget 69/types 96 · integration 1855 ·
+  e2e **103**). **Dikkat:** (1) e2e çıplak kabukta koşmaz — `set -a; . ./.env; set +a;
+  pnpm -w test:e2e` (rtm kök `.env`'i okumaz); (2) PLAN sayaçları **öncü damga** ile sayılır, naif
+  glif sayımı §D68–§D77'nin beş turluk yanlış-pozitif tarihçesidir; (3) `apps/e2e/kanit/*.png` bu
+  pencere açıldığında zaten kirliydi (önceki turların e2e koşusundan), bu turda **dokunulmadı**.
+  tm 114 kapanınca açık iş yalnız Faz-3 (tm 79/81/82/83/84/90) kalır — o faz kullanıcı kararıyla
+  açılır (§F.3).
+
 ## tm 99.8 — 09.2-v2-h: 100+ katalogla uçtan uca doğrulama + NFR-P4 ölçümü — done — 2026-08-11 UTC
 
 - **Yapıldı:** Apps'in ilk browser e2e spec'i — `apps/e2e/tests/apps.spec.ts` (3 test, süit 100→**103**). Katalog sabit yazılmadı: test önce API'yi `?limit=100` + cursor zinciriyle gezip kart id'lerini oracle olarak alıyor (integration `walk()`'ün e2e ikizi). (1) Settings → "Open marketplace" kapısı, `total>=100`, "Load more" zinciri tükenene kadar sürülüyor, sonra scroller dibe kaydırılıp kataloğun SON kartı görünür / İLK kartı DOM'da yok. (2) `shopify` araması tek kart, eşleşmeyen arama `EmptyState`, `Payments` çipi `aria-pressed` + o kategoriyi taşımayan kart 0. (3) `Channels` çipi → `app-whatsapp`'ta `Connect` yok, "Manage in Channels" linki `/app/settings#section-channels`'ı açıyor. Ürün kodu ve integration testi DEĞİŞMEDİ (bu alt-görev yalnız doğrular). PLAN satır 1122 `◐`→`✅`; v2 envanteri artık **0 ⬜ · 0 ◐ · 27 ✅ · 3 ⛔** (satır 22 + §5.0 sayaçları eşitlendi).

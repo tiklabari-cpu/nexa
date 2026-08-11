@@ -13,6 +13,33 @@
 
 ## Task log (newest-first)
 
+## tm 99.3 — 09.2-v2-c: GET /settings/apps sorgu bağlama (zod + sayfalama + tenant join) — done — 2026-08-11 UTC
+
+- **Yapıldı:** Route'a `listQuery` zod şeması (`query` trim/max 320 · `category` `z.enum(APP_CATEGORIES)` ·
+  `limit` coerce int 1-100 default **25** = kontrattaki paylaşılan `Limit` bileşeninin default'u · `page_id`
+  max 512), mevcut `parse()` üzerinden → geçersiz girdi ADR-06 zarfıyla 400. `AppService.list(tx, tenant,
+  options)` üç adımlı, sıra kasıtlı: statik katalog `filterAppCatalog` ile daraltılır (TENANT-BAĞIMSIZ —
+  kullanıcı girdisi tenant predicate'ine hiç ulaşmaz) → `paginateApps` sayfayı keser (`null` = bilinmeyen/
+  filtre-dışı cursor → 400, sessiz boş sayfa değil) → YALNIZ o sayfanın id'leri için `appInstallation`
+  join'i, hâlâ `withTenant` RLS transaction'ında ve `licenseId`'ye bağlı. Yanıt `{items, total,
+  next_page_id?}`. Scope kapısı, `requireConnectableApp` kanal invariant'ı ve `/chats/:chatId/apps`
+  DEĞİŞMEDİ; web arayüzü bilerek dokunulmadı (09.2-v2-f/-g).
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` **2414**/2414 ·
+  `@nexa/web` 929/929 · `@nexa/widget` 69/69 · `@nexa/types` 96/96) · `pnpm -w test:integration` 0
+  (**1855**/1855, `contract-parity` 5/5) · build 0 (7/7) · `pnpm -w test:e2e` **100/100**.
+  `apps.test.ts` 8→12 test: negatifler önce (321 karakter query, limit 0/101/NaN, geçersiz category,
+  bilinmeyen + filtre-dışı page_id), sonra arama/kategori/kesişim, `limit=10` ve `limit=1` zincirleriyle
+  tekrarsız+eksiksiz katalog gezimi, cross-tenant (B'nin hiçbir sayfasında A'nın bağlantısı yok).
+- **Varsayımlar:** Yok.
+- **Sonraki pencereye not:** `pnpm -w test:e2e` PowerShell'de **kök `.env` yüklenmeden koşmaz** (rtm
+  `DATABASE_URL`/`REDIS_URL`/`JWT_SIGNING_KEY`/`CUSTOMER_TOKEN_SECRET` isteyip düşer, Playwright 60 sn
+  webServer timeout'una girer). Bash aracıyla `set -a && . ./.env && set +a && pnpm -w test:e2e` çalışıyor.
+  **Dikkat (09.2-v2-d/-e için):** katalog şu an 22 kart, default `limit=25` ile parametresiz çağrı hepsini
+  döndürüyor; katalog 25'i geçince `AppsMarketplace.tsx`'in parametresiz `api.get('/settings/apps')`
+  çağrısı grid'i sessizce kırpar — arama/sayfalama UI'ı (-f/-g) o kartlardan ÖNCE ya da onlarla birlikte
+  gelmeli. `apps/e2e/kanit/*.png` yine bu turun e2e koşusundan yeniden üretildi, başka task'lara ait,
+  commit'e alınmadı (tm 99.1/99.2/113 emsali).
+
 ## tm 99.2 — 09.2-v2-b: Saf katalog filtre + sayfalama fonksiyonları (@nexa/types) — done — 2026-08-11 UTC
 
 - **Yapıldı:** `packages/types/src/apps.ts`e iki saf fonksiyon — `filterAppCatalog(entries, {query?, category?})`

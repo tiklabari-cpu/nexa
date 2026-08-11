@@ -18,9 +18,12 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   APP_CATALOG,
   appChatData,
+  filterAppCatalog,
   findApp,
   isChannelApp,
+  paginateApps,
   type AppCatalogEntry,
+  type AppCategory,
   type AppChatData,
   type AppListItem,
   type AppOAuthStart,
@@ -43,6 +46,23 @@ interface InstallationRow {
   appId: string;
   externalAccount: string;
   connectedAt: Date;
+}
+
+/** How {@link AppService.list} narrows the catalogue — the query contract, parsed. */
+export interface AppListOptions {
+  limit: number;
+  query?: string;
+  category?: AppCategory;
+  /** Keyset cursor: the `id` of the last card on the previous page. */
+  pageId?: string;
+}
+
+/** One page of the catalogue joined with this workspace's connections. */
+export interface AppListPage {
+  items: AppListItem[];
+  /** Matching the current filter, across all pages — not this page's length. */
+  total: number;
+  nextPageId?: string;
 }
 
 /** The catalogue entry for an id, or a 404 — an unknown app cannot be enumerated. */
@@ -96,11 +116,48 @@ export class AppService {
     this.#secret = secret;
   }
 
-  /** Every catalogue card, each flagged with whether this workspace connected it. */
-  async list(tx: TenantClient, tenant: TenantContext): Promise<AppListItem[]> {
-    const rows = await tx.appInstallation.findMany({ where: { licenseId: tenant.licenseId } });
+  /**
+   * One page of catalogue cards, each flagged with whether this workspace
+   * connected it.
+   *
+   * Order matters, and it is: narrow the *catalogue* first, then cut the page,
+   * and only then join the installations for the ids on that page. The
+   * narrowing step is deliberately tenant-independent — which integrations
+   * exist is the same for every workspace, so no caller-supplied `query` or
+   * `category` ever reaches a tenant-scoped predicate. What stays scoped is the
+   * only thing that is per-tenant, the `app_installation` read: still filtered
+   * on `tenant.licenseId` under the same RLS transaction, so a page can carry
+   * another licence's `installed: true` no more than the unpaginated list could
+   * (NFR-S5).
+   *
+   * Joining after the cut also keeps the read proportional to `limit` rather
+   * than to the workspace's whole connection set (NFR-P2).
+   */
+  async list(tx: TenantClient, tenant: TenantContext, options: AppListOptions): Promise<AppListPage> {
+    const matches = filterAppCatalog(APP_CATALOG, {
+      ...(options.query !== undefined ? { query: options.query } : {}),
+      ...(options.category !== undefined ? { category: options.category } : {}),
+    });
+
+    const page = paginateApps(matches, {
+      limit: options.limit,
+      ...(options.pageId !== undefined ? { pageId: options.pageId } : {}),
+    });
+    // A cursor that names no card in the current result set is a bad request,
+    // not an empty page: silently restarting (or returning nothing) would hide
+    // a caller pairing last page's cursor with a different filter.
+    if (!page) throw ApiError.validation('page_id: unknown cursor.');
+
+    const rows = await tx.appInstallation.findMany({
+      where: { licenseId: tenant.licenseId, appId: { in: page.page.map((entry) => entry.id) } },
+    });
     const byApp = new Map(rows.map((row) => [row.appId, row]));
-    return APP_CATALOG.map((entry) => toListItem(entry, byApp.get(entry.id) ?? null));
+
+    return {
+      items: page.page.map((entry) => toListItem(entry, byApp.get(entry.id) ?? null)),
+      total: page.total,
+      ...(page.nextPageId !== undefined ? { nextPageId: page.nextPageId } : {}),
+    };
   }
 
   /**

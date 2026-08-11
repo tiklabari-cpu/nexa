@@ -24,6 +24,7 @@ interface AppInstallation {
 interface AppListItem {
   id: string;
   name: string;
+  description: string;
   category: string;
   channel: string | null;
   installed: boolean;
@@ -51,10 +52,41 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
 
   const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
-  const list = async (token: string): Promise<AppListItem[]> => {
-    const response = await server.get('/settings/apps', auth(token));
+  interface AppListPage {
+    items: AppListItem[];
+    total: number;
+    next_page_id?: string;
+  }
+
+  /** A successful read of the list, envelope and all (`?…` appended verbatim). */
+  const page = async (token: string, params = ''): Promise<AppListPage> => {
+    const response = await server.get(`/settings/apps${params}`, auth(token));
     expect(response.statusCode).toBe(200);
-    return (response.json() as { items: AppListItem[] }).items;
+    return response.json() as AppListPage;
+  };
+
+  const list = async (token: string): Promise<AppListItem[]> => (await page(token)).items;
+
+  /** A rejected read — the status and the error type the envelope carries (ADR-06). */
+  const rejected = async (token: string, params: string): Promise<{ status: number; type: string }> => {
+    const response = await server.get(`/settings/apps${params}`, auth(token));
+    return { status: response.statusCode, type: (response.json() as { error: { type: string } }).error.type };
+  };
+
+  /** Walks the whole result set through `next_page_id`, returning the ids in order. */
+  const walk = async (token: string, params: string): Promise<{ ids: string[]; totals: number[] }> => {
+    const ids: string[] = [];
+    const totals: number[] = [];
+    let cursor: string | undefined;
+    // Bounded so a cursor that fails to advance fails the test instead of hanging.
+    for (let request = 0; request < 50; request += 1) {
+      const result = await page(token, `${params}${cursor ? `&page_id=${encodeURIComponent(cursor)}` : ''}`);
+      ids.push(...result.items.map((item) => item.id));
+      totals.push(result.total);
+      if (!result.next_page_id) return { ids, totals };
+      cursor = result.next_page_id;
+    }
+    throw new Error('pagination did not terminate');
   };
 
   const findItem = (items: AppListItem[], id: string): AppListItem =>
@@ -224,6 +256,122 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     expect(removed.statusCode).toBe(400);
   });
 
+  // --- Search / category / pagination: rejected input first (09.2-v2-c) ------
+
+  it('rejects a search, category, limit or cursor it cannot honour', async () => {
+    // Over the length cap: an unbounded search string is an unbounded read.
+    expect(await rejected(adminToken, `?query=${'x'.repeat(321)}`)).toEqual({
+      status: 400,
+      type: 'validation',
+    });
+    // …and exactly at the cap it is a normal read, so the bound is the bound.
+    expect((await page(adminToken, `?query=${'x'.repeat(320)}`)).total).toBe(0);
+
+    // Page size outside [1, 100], on both ends.
+    expect((await rejected(adminToken, '?limit=0')).status).toBe(400);
+    expect((await rejected(adminToken, '?limit=101')).status).toBe(400);
+    expect((await rejected(adminToken, '?limit=notanumber')).status).toBe(400);
+
+    // A category that names no section of the directory.
+    expect(await rejected(adminToken, '?category=not-a-category')).toEqual({
+      status: 400,
+      type: 'validation',
+    });
+
+    // A cursor naming no card in the result set is a bad request, not an empty
+    // page — otherwise pairing last page's cursor with a new filter would look
+    // like "no more results" rather than the mistake it is.
+    expect(await rejected(adminToken, '?page_id=not-a-card')).toEqual({
+      status: 400,
+      type: 'validation',
+    });
+    expect((await rejected(adminToken, '?category=channels&page_id=hubspot')).status).toBe(400);
+  });
+
+  // --- …then the narrowing it does honour ------------------------------------
+
+  it('narrows the directory by search text and by category', async () => {
+    const all = await page(adminToken, '?limit=100');
+
+    // Free text matches the card's name or its description, case-insensitively.
+    const orders = await page(adminToken, '?query=ORDERS&limit=100');
+    expect(orders.items.length).toBeGreaterThan(0);
+    expect(orders.items.length).toBeLessThan(all.items.length);
+    for (const item of orders.items) {
+      expect(`${item.name} ${item.description}`.toLowerCase()).toContain('orders');
+    }
+    // `total` counts the matches, not the catalogue.
+    expect(orders.total).toBe(orders.items.length);
+
+    // A whitespace-only search is no search at all.
+    expect((await page(adminToken, '?query=%20%20&limit=100')).total).toBe(all.total);
+
+    // Category narrows to one section — here the channel-typed cards, which is
+    // also how the Channels cross-link is browsed (KK 09.2).
+    const channels = await page(adminToken, '?category=channels&limit=100');
+    expect(channels.items.length).toBeGreaterThan(0);
+    for (const item of channels.items) {
+      expect(item.category).toBe('channels');
+      expect(item.channel).not.toBeNull();
+    }
+    expect(channels.items.map((item) => item.id)).toContain('whatsapp');
+    expect(channels.items.map((item) => item.id)).not.toContain(APP);
+
+    // The two narrow together (intersection), never apart.
+    const both = await page(adminToken, '?category=channels&query=whatsapp&limit=100');
+    expect(both.items.map((item) => item.id)).toEqual(['whatsapp']);
+    expect(both.total).toBe(1);
+
+    // A search that matches nothing is an empty page, not an error.
+    const none = await page(adminToken, '?query=no-such-integration&limit=100');
+    expect(none.items).toHaveLength(0);
+    expect(none.total).toBe(0);
+    expect(none.next_page_id).toBeUndefined();
+  });
+
+  it('pages the directory with next_page_id, covering it exactly once', async () => {
+    const all = await page(adminToken, '?limit=100');
+    expect(all.next_page_id).toBeUndefined();
+
+    const walked = await walk(adminToken, '?limit=10');
+    // Every card, once, in the catalogue's order — no gaps, no repeats.
+    expect(walked.ids).toEqual(all.items.map((item) => item.id));
+    expect(new Set(walked.ids).size).toBe(walked.ids.length);
+    // `total` is the match count across all pages, the same on every page.
+    expect(walked.totals.every((total) => total === all.total)).toBe(true);
+
+    // One card at a time reaches the same place.
+    expect((await walk(adminToken, '?limit=1')).ids).toEqual(walked.ids);
+
+    // Filter and pagination compose: paging a category covers that category and
+    // nothing else, while `total` stays the filter's count, not the page's.
+    const channels = await page(adminToken, '?category=channels&limit=100');
+    const pagedChannels = await walk(adminToken, '?category=channels&limit=2');
+    expect(pagedChannels.ids).toEqual(channels.items.map((item) => item.id));
+    expect(pagedChannels.totals.every((total) => total === channels.total)).toBe(true);
+    expect(channels.total).toBeGreaterThan(2);
+  });
+
+  it('keeps a connection visible through the filtered and paged read', async () => {
+    await connect(adminToken);
+
+    // The card the workspace connected reports it under a search…
+    const searched = await page(adminToken, `?query=${APP}&limit=100`);
+    expect(findItem(searched.items, APP).installed).toBe(true);
+
+    // …and on whichever page it lands on when paged one at a time.
+    const oneByOne: AppListItem[] = [];
+    let cursor: string | undefined;
+    for (let request = 0; request < 50; request += 1) {
+      const result = await page(adminToken, `?limit=1${cursor ? `&page_id=${cursor}` : ''}`);
+      oneByOne.push(...result.items);
+      if (!result.next_page_id) break;
+      cursor = result.next_page_id;
+    }
+    expect(findItem(oneByOne, APP).installed).toBe(true);
+    expect(oneByOne.filter((item) => item.installed)).toHaveLength(1);
+  });
+
   // --- Scope split -----------------------------------------------------------
 
   it('lets a read-only admin list but not connect', async () => {
@@ -234,6 +382,11 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
       scopes: ['access_rules:ro'],
     });
     expect((await server.get('/settings/apps', auth(readToken))).statusCode).toBe(200);
+    // The narrowing parameters are part of the same read — they do not need,
+    // and do not grant, anything beyond `access_rules:ro`.
+    expect(
+      (await server.get('/settings/apps?query=hub&category=crm&limit=5', auth(readToken))).statusCode,
+    ).toBe(200);
     expect(
       (await server.post(`/settings/apps/${APP}/oauth/start`, {}, auth(readToken))).statusCode,
     ).toBe(403);
@@ -252,6 +405,25 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
 
     // B's catalogue shows the same card as not connected.
     expect(findItem(await list(bToken), APP).installed).toBe(false);
+
+    // And no narrowing of that read changes it: not a search that names A's
+    // app, not a category, and not any page of a one-card-at-a-time walk. The
+    // filter runs against the static catalogue, the installation join stays
+    // licence-scoped, so B's every page reports nothing installed (NFR-S5).
+    expect(findItem((await page(bToken, `?query=${APP}&limit=100`)).items, APP).installed).toBe(false);
+    expect((await page(bToken, '?category=crm&limit=100')).items.some((item) => item.installed)).toBe(
+      false,
+    );
+    for (const pageSize of ['?limit=1', '?limit=3', '?limit=100']) {
+      let cursor: string | undefined;
+      for (let request = 0; request < 50; request += 1) {
+        const result = await page(bToken, `${pageSize}${cursor ? `&page_id=${cursor}` : ''}`);
+        expect(result.items.some((item) => item.installed)).toBe(false);
+        expect(result.items.every((item) => item.installation === null)).toBe(true);
+        if (!result.next_page_id) break;
+        cursor = result.next_page_id;
+      }
+    }
 
     // B cannot disconnect A's app — indistinguishable from it not existing.
     expect((await server.del(`/settings/apps/${APP}`, auth(bToken))).statusCode).toBe(404);

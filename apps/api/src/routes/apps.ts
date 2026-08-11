@@ -11,11 +11,25 @@
  * pane, so it sits on the chat scope they already hold, not the admin one.
  */
 import type { FastifyInstance } from 'fastify';
+import { APP_CATEGORIES } from '@nexa/types';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { AppService } from '../services/apps/app-service.js';
+
+/**
+ * The marketplace list's narrowing controls (09.2) — the customer directory's
+ * schema adapted, so the two list surfaces validate the same way. The bounds
+ * are the point: `query` is capped at 320 characters and `limit` at 100, so no
+ * caller can turn a read into an unbounded scan of the catalogue or the page.
+ */
+const listQuery = z.object({
+  query: z.string().trim().max(320).optional(),
+  category: z.enum(APP_CATEGORIES).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  page_id: z.string().max(512).optional(),
+});
 
 const callbackBody = z.object({
   state: z.string().trim().min(1).max(4096),
@@ -45,9 +59,23 @@ export default async function appRoutes(
     '/settings/apps',
     { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
     async (request, reply) => {
+      const query = parse(listQuery, request.query);
       const tenant = request.tenant();
-      const items = await request.withTenant((tx) => apps.list(tx, tenant));
-      return reply.send({ items });
+
+      const result = await request.withTenant((tx) =>
+        apps.list(tx, tenant, {
+          limit: query.limit,
+          ...(query.query ? { query: query.query } : {}),
+          ...(query.category ? { category: query.category } : {}),
+          ...(query.page_id ? { pageId: query.page_id } : {}),
+        }),
+      );
+
+      return reply.send({
+        items: result.items,
+        total: result.total,
+        ...(result.nextPageId ? { next_page_id: result.nextPageId } : {}),
+      });
     },
   );
 

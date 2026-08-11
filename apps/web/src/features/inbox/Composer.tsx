@@ -288,10 +288,20 @@ export function Composer({
                   setSuggestions(null);
                 }
               }}
+              // The selected note tab is the one place `--note` is a *fill*;
+              // everywhere else it is a foreground (`text-note`, `border-note`),
+              // so it inverts with the theme — dark olive on light, pale amber on
+              // dark. Literal white can only sit on one of those: it measured
+              // 1.47:1 against the dark `#ffce73`, where this 12px label needs
+              // 4.5:1. `text-content-inverse` is the ink that flips with the
+              // surface, clearing AA in both themes (5.60:1 light, 12.92:1 dark —
+              // `tokens.test.ts` re-derives both from `tokens.css`). The brand
+              // fill beside it keeps literal white: `--brand-500` is one colour in
+              // both themes and the ramp is chosen to carry white.
               className={`rounded-sm px-2 py-1 text-2xs font-medium transition-colors ${
                 mode === option.id
                   ? option.id === 'agents'
-                    ? 'bg-note text-white'
+                    ? 'bg-note text-content-inverse'
                     : 'bg-brand-500 text-white'
                   : 'text-content-secondary hover:bg-surface-2'
               }`}

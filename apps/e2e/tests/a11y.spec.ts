@@ -109,11 +109,50 @@ async function ensurePublishedArticle(api: APIRequestContext, token: string): Pr
   );
 }
 
+/**
+ * An *active* conversation for the composer scan, and its id.
+ *
+ * The composer only renders its mode tabs on an active chat — an archived one
+ * replaces the whole control with "This conversation is archived. Reopen it to
+ * reply." — and the seeded inbox is mostly archive: on the run that first
+ * exposed this it was 27 of 28, and the All view opened on an archived one. A
+ * scan that clicked "the first conversation" would therefore have measured the
+ * archived notice and reported it green, which is the same class of blind spot
+ * this test exists to close.
+ *
+ * Started through the Agent Chat API rather than the browser, and returned by
+ * id so the scan can deep-link to it (`?chat=`) instead of depending on where
+ * some view happens to sort it. Idempotent by the one-active-chat invariant:
+ * `POST /chats` hands back the customer's existing active chat with a 200
+ * rather than failing, so re-runs neither accumulate chats nor race the specs
+ * that create their own.
+ */
+async function ensureActiveChat(api: APIRequestContext, token: string): Promise<string> {
+  const customers = await api.get(`${API_BASE}/customers?segment=all&limit=1`, auth(token));
+  expect(customers.ok(), `list customers failed: ${customers.status()}`).toBe(true);
+  const { items } = (await customers.json()) as { items: Array<{ id: string }> };
+  expect(items[0], 'seeded tenant has no customers to open a chat with').toBeDefined();
+
+  const started = await api.post(`${API_BASE}/chats`, {
+    ...auth(token),
+    data: { customer_id: items[0]!.id, assign_to_me: true },
+  });
+  expect(started.ok(), `start chat failed: ${started.status()} ${await started.text()}`).toBe(true);
+  const chat = (await started.json()) as { id: string; active: boolean };
+  expect(chat.active, 'the chat the composer scan opens must be active').toBe(true);
+  return chat.id;
+}
+
+/** The active chat the composer scan deep-links to (`ensureActiveChat`). */
+let activeChatId: string;
+
 test.beforeAll(async () => {
   apiCtx = await newApiContext.newContext({
     extraHTTPHeaders: { 'user-agent': 'nexa-e2e-a11y' },
   });
-  await ensurePublishedArticle(apiCtx, await ownerAccessTokenFor(apiCtx, ACME_OWNER));
+  const token = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
+  await ensurePublishedArticle(apiCtx, token);
+  activeChatId = await ensureActiveChat(apiCtx, token);
 });
 
 test.afterAll(async () => {
@@ -190,6 +229,38 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         await agentPage.goto('/app/inbox');
         await scanPanel(agentPage, 'Inbox', theme, testInfo, async () => {
           await expect(agentPage.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+        });
+      });
+
+      /**
+       * The composer's "Internal note" tab, *selected*.
+       *
+       * Not reachable from the inbox scan above, and that is the whole point:
+       * the inbox loads with no conversation open, and the composer — once one
+       * is — defaults to `mode='all'`, where the note tab is plain
+       * `text-content-secondary`. Its selected colours were therefore never in
+       * the DOM when axe looked, so sixteen scans across tm 115 and tm 117
+       * reported the inbox green while `bg-note` + literal `text-white`
+       * measured 1.47:1 on the dark theme (tm 120). A scan is only evidence for
+       * the states it actually renders; this one renders the state.
+       */
+      test('the selected internal-note tab has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        // Deep-linked rather than clicked out of the list: `?chat=` opens this
+        // exact conversation, so the scan cannot drift onto whichever one the
+        // seed or an earlier spec left at the top (`ensureActiveChat`).
+        await agentPage.goto(`/app/inbox?chat=${activeChatId}`);
+        await scanPanel(agentPage, 'Inbox internal note', theme, testInfo, async () => {
+          const noteTab = agentPage.getByRole('radio', { name: 'Internal note' });
+          await expect(noteTab).toBeVisible();
+          await noteTab.click();
+          // Assert the selection took before scanning. An unselected tab is the
+          // exact state that hid the defect, and a scan of it would read as a
+          // clean pass for a pair that was never rendered.
+          await expect(noteTab).toHaveAttribute('aria-checked', 'true');
+          await expect(agentPage.getByText('Only your team will see this.')).toBeVisible();
         });
       });
 

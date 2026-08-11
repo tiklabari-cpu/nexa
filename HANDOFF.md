@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+## 120 — A11Y1–6 · "Internal note" koyu temada 1.47:1 — done — 2026-08-11 UTC
+
+- **Yapıldı:** `Composer.tsx:294` seçili not sekmesi `bg-note text-white` → `bg-note
+  text-content-inverse` (mürekkep dolguyla birlikte terse dönüyor: açık #ffffff, koyu #0b1020).
+  Ölçülen çift **koyu 12.92:1 · açık 5.60:1** (önce koyu 1.47:1). Token'a DOKUNULMADI —
+  `--note`'un üç ön-plan kullanımı (`Transcript.tsx:100/138`, `Composer.tsx:304`) ve tm 115/117'nin
+  kilitleri aynen duruyor.
+- **Asıl iş — kör nokta:** `a11y.spec.ts`e "Inbox internal note" taraması eklendi (iki temada;
+  16 → **18** tarama). Sahne kurmak gerekti: seed'li "All" görünümünün ilki ARŞİVLİ (28'in 27'si),
+  orada composer hiç render edilmiyor — spec artık kendi aktif sohbetini `POST /chats` +
+  `assign_to_me` ile açıp (tek-aktif-sohbet değişmezi → idempotent) `?chat=<id>` ile derin
+  bağlanıyor. Kilitler: `tokens.test.ts` 88 → **90**, yeni `Composer.test.tsx` (4).
+- **Doğrulama:** kapı-probe önce koşuldu — düzeltme ÖNCESİ koyu **KIRMIZI** (axe: `color-contrast`
+  serious, `.bg-note`, "1.46, #ffffff on #ffce73"), açık YEŞİL; SONRASI ikisi de
+  `blocking 0 · excused 0 · advisory 0`, `A11Y_EXCEPTIONS` hâlâ boş. Tam kapı yeşil: typecheck ·
+  lint · format:check · build · unit **3870** · integration **1906** · e2e **124** (6,1 dk).
+- **Sonraki pencereye not:** `--note`'un tek DOLGU kullanımı bu sekmedir; `tokens.test.ts` artık
+  onu `--text-inverse` çifti olarak kilitliyor, ön-plan kilitleri ayrı. Genel ders bu turun asıl
+  bulgusu: **bir tarama yalnız fiilen render ettiği durumların kanıtıdır** — 16 temiz tarama, hiç
+  açılmayan bir sekmedeki serious ihlali on altı kez "yeşil" saymıştı. Kalan borç KA11Y'nin ⬜
+  maddesinde (yalnız chromium · `:hover`/`:focus` durumları taranmıyor · odak sırası elle).
+
 ## GRAF-ONARIM — döngü DÖRDÜNCÜ kez durdu: graf yine sağlam, backlog yine tükenmişti; iki ÖLÇÜLMÜŞ bulgu görev oldu (tm 120 · tm 121) — 2026-08-11 UTC
 
 - **Panel bulgusu:** `run-loop.sh` seçilebilir görev bulamıyor → otonom döngü duracak. 6 açık görev,

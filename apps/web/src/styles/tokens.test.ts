@@ -131,6 +131,20 @@ const PAIRINGS: readonly Pairing[] = [
       because: 'status text — badges, KPIs, validation messages',
     }),
   ),
+  /**
+   * `--note` as a *fill*, which is the opposite problem from `--note` as text.
+   *
+   * Its one fill site is the selected "Internal note" tab (`bg-note`,
+   * `Composer.tsx`), and the token inverts across the themes — a dark olive on
+   * light, a pale amber on dark — so the ink laid on it has to invert too.
+   * Literal white satisfied only the light half: on dark it was 1.47:1, and no
+   * scan had ever seen it because axe never opened that tab (tm 120).
+   */
+  {
+    foreground: '--text-inverse',
+    backgrounds: ['--note'],
+    because: 'the selected "Internal note" tab — there `--note` is a fill, not text',
+  },
   {
     foreground: '--bubble-agent-text',
     backgrounds: ['--bubble-agent-bg'],

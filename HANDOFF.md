@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+## PLAN-TUTARLILIK — `07.6 Chat topics` (PLAN.md:1110) "kendi kendisiyle çelişiyor" bulgusu: damga DOĞRU, metin düzeltildi — done — 2026-08-11 UTC
+
+- **Bulgu (panel):** `✅ → K07.6` damgalı satırın kanıt bloğu "**Kalan:** 07.6-h e2e" ile BİTİYORDU → erken damga şüphesi.
+- **TEŞHİS: yalancı bulgu, kusur KONUMDA (§D88'in zaman-kipi kusuruyla aynı sınıf, farklı mekanizma).**
+  O kuyruk `07.6-g` turunda (tm 64.7) bloğun sonuna yazıldı ve **o an doğruydu**. `07.6-h` bir sonraki
+  turda teslim edildi (tm 64.8), ama K blokları **append-only** olduğu için yeni madde kuyruğun
+  **ÖNÜNE** girdi — kuyruk sonda kaldı. Sonuç: blok kapanışını iki kez konuşuyor ve **son sözü eski**.
+- **KODA KARŞI DOĞRULANDI — damga hak edilmiş.** KK'nın üçü de karşılanıyor:
+  · _"AI kümeleme"_ → `packages/ai-mock/src/topics.ts:136` (`clusterTopics`) → `apps/api/src/routes/reports.ts:1414`
+    (`GET /reports/topics`) + UI metni `apps/web/src/features/reports/ReportsPage.tsx:1394`
+  · _"hacim/trend"_ → `ReportsPage.tsx:1422,1428,1439` (`Volume`/`Trend` sütunları + `TopicTrend`) + `reports.ts:1437`
+  · _"yeterli veri yoksa empty"_ → `topics.ts:108` (`TOPIC_MIN_CONVERSATIONS`=20) → `reports.ts:1436`
+    (`sufficient_data`) → `ReportsPage.tsx:1397-1399` ("Not enough conversations yet")
+  Sekiz alt-görevin (tm 64.1–64.8, **hepsi `done`**) dosyası da yerinde: kontrat
+  `packages/contract/src/generated/api.ts:3536` · seed `apps/api/prisma/seed.ts:144,940` · promo bandı
+  `ReportsPage.tsx:310` · grup+CSV `reports-export.ts:45` + `services/reports/report-csv.ts:1347,1473` ·
+  e2e `apps/e2e/tests/reports.spec.ts:374` (dolu + empty + promo bandı = 3 test).
+- **ÖLÇÜLDÜ (dosya varlığı yetmez):** `@nexa/ai-mock` `src/topics.test.ts` → **16/16 yeşil** ·
+  `@nexa/web` `src/features/reports` → **88/88 yeşil** (ReportsPage 75 + report-views 13).
+- **Yapılan (YALNIZ metin, tek yerde):** K07.6'nın son cümlesi geçmiş kipine çevrildi + arkasına
+  bloğun **güncel durumunu** ("07.6 KAPALI, kalan iş yok") ilan eden denetim cümlesi · gerekçe **§D91**.
+- **DOKUNULMADI:** tablo hücresi (`✅ → K07.6` aynen — CONVENTIONS §1.2) · hiçbir kanıt maddesi
+  silinmedi · ürün kodu ve testler · diğer 2 açık bulgu (2 medium — kapsam dışı) · tm 117/118.
+- **Yeni Task Master görevi AÇILMADI** — kapatılacak eksik yok, kod tam (bu yüzden `critical`
+  öncelikli düzeltme görevi de gerekmedi).
+- **Kapı:** kod değişmediği için tam typecheck/lint/build/e2e koşulmadı (değişen tek şey PLAN.md +
+  HANDOFF.md metni; §D80/§D81/§D82/§D87/§D88 emsali — doküman-only tur). Doğrulama olarak yukarıdaki
+  hedefli 16/16 + 88/88 vitest koşusu ve sekiz alt-görevin dosya:satır taraması yapıldı.
+- **Ders:** "kalan iş" notu append-only bloğun KUYRUĞUNA yazılmamalı — sonraki teslim maddesi onun
+  önüne eklenir ve not kalıcı yalancı "güncel durum" olur. Not, o turun maddesinin İÇİNE yazılır.
+
 ## tm 119 — IZLENEBILIRLIK — izlenemeyen 4 görevin plan bağı denetlendi (107 · 108 · 115 · 118) — done — 2026-08-11 UTC
 
 - **Yapıldı (kod YAZILMADI — izlenebilirlik denetimi):**

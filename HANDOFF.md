@@ -13,6 +13,43 @@
 
 ## Task log (newest-first)
 
+## PLAN-TUTARLILIK — `§5.3-KB Public KB` (PLAN.md:1132) "kendi kendisiyle çelişiyor" bulgusu: damga DOĞRU, metin düzeltildi — done — 2026-08-11 UTC
+
+- **Bulgu (panel):** `✅ → K5.3-KB` damgalı satırın kanıt bloğu "**Kalan (h→i):** admin makale editörü
+  (içerik + SEO alanları + publish/unpublish + public link), uçtan uca doğrulama — henüz yapılmadı"
+  cümlesiyle BİTİYORDU → erken damga şüphesi.
+- **TEŞHİS: yalancı bulgu, kusur KONUMDA — bir önceki turun §D91'inin (07.6) BİREBİR TEKRARI.**
+  Kuyruk `PUBKB-g` turunda (tm 76.7, `67b3a82` — `git log -S'Kalan (h→i)' -- PLAN.md` ile doğrulandı)
+  bloğun sonuna yazıldı ve **o an doğruydu**. `-h` (tm 76.8, `97b746f`) ve `-i` (tm 76.9, `09944d3`)
+  sonraki iki turda teslim edildi; K blokları **append-only** olduğu için maddeleri kuyruğun **ÖNÜNE**
+  girdi → blok kapanışını iki kez konuşuyor ve **son sözü eski**.
+- **KODA KARŞI DOĞRULANDI — damga hak edilmiş.** Gereksinimin üç payı da yerinde:
+  · _"Public"_ (kimlik doğrulamasız) → `apps/api/src/routes/public-kb.ts:157,187,209` (JSON okuma) +
+    `apps/api/src/routes/public-kb-html.ts:92,147` (sunucu-render sayfalar)
+  · _"SEO'lu"_ → `apps/api/src/lib/kb-page.ts:131-135` (`robots`/`<title>`/`description`/`canonical`/`og:title`)
+    + `kb-page.ts:109` (`application/ld+json`) + `apps/api/src/routes/public-kb-sitemap.ts:90,129`
+    (`sitemap.xml` + `robots.txt`)
+  · _"self-servis"_ → ana sayfa→kategori→makale gezinmesi, oturumsuz okuyucuyla uçtan uca
+    `apps/e2e/tests/public-kb.spec.ts:179` (+ cross-tenant izolasyon `:309`)
+  Kuyruğun "yapılmadı" dediği iki iş de yerinde: editör `apps/web/src/features/playbook/KbArticleEditor.tsx:391,412`
+  (SEO title/description + 60/155 sayacı) · `:443` (Publish/Unpublish) · `:468` (public link kopyala);
+  e2e 2 test. tm 76.1–76.9 **dokuzu da `done`**.
+- **ÖLÇÜLDÜ (dosya varlığı yetmez):** `@nexa/web` playbook KB → **41/41 yeşil** (`kb-tabs` 11 ·
+  `KbArticleList` 10 · `KbArticleEditor` 11 · `kb-slug` 9) · `@nexa/api` `src/lib/kb-render.test.ts`
+  → **24/24** + `src/lib/kb-slug.test.ts` → **8/8** yeşil.
+- **Yapılan (YALNIZ metin, tek yerde):** K5.3-KB'nin son cümlesi geçmiş kipine çevrildi + arkasına
+  bloğun **güncel durumunu** ("§5.3-KB KAPALI, kalan iş yok") ilan eden denetim cümlesi · gerekçe **§D92**.
+- **DOKUNULMADI:** tablo hücresi (`✅ → K5.3-KB` aynen — CONVENTIONS §1.2) · hiçbir kanıt maddesi
+  silinmedi · ürün kodu ve testler · özet sayaçları · diğer 2 açık bulgu (2 medium — kapsam dışı) ·
+  tm 117/118.
+- **Yeni Task Master görevi AÇILMADI** — kapatılacak eksik yok, kod tam (bu yüzden `critical`
+  öncelikli düzeltme görevi de gerekmedi).
+- **DESEN ARTIK İKİ ÖRNEKLİ (§D91 + §D92):** append-only K bloğunun KUYRUĞUNA yazılan her
+  "henüz yapılmadı" notu, bir sonraki teslimde kalıcı yalancı bulguya dönüşüyor. Kalan-iş notu
+  **o turun maddesinin İÇİNE** yazılmalı. Bu bloklarda aynı kuyruk deseni başka satırlarda da
+  olabilir — bir sonraki tarama aynı sınıfı yine açarsa önce `git log -S` ile kuyruğun ne zaman
+  yazıldığına bak.
+
 ## PLAN-TUTARLILIK — `07.6 Chat topics` (PLAN.md:1110) "kendi kendisiyle çelişiyor" bulgusu: damga DOĞRU, metin düzeltildi — done — 2026-08-11 UTC
 
 - **Bulgu (panel):** `✅ → K07.6` damgalı satırın kanıt bloğu "**Kalan:** 07.6-h e2e" ile BİTİYORDU → erken damga şüphesi.

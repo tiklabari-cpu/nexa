@@ -166,13 +166,13 @@ export function SignInPage(): ReactElement {
         )}
 
         <p className="mt-4 text-center text-xs text-content-secondary">
-          <Link to="/forgot-password" className="text-brand-600 underline">
+          <Link to="/forgot-password" className="text-content-brand underline">
             Forgot your password?
           </Link>
         </p>
         <p className="mt-2 text-center text-xs text-content-secondary">
           New here?{' '}
-          <Link to="/signup" className="text-brand-600 underline">
+          <Link to="/signup" className="text-content-brand underline">
             Create a workspace
           </Link>
         </p>

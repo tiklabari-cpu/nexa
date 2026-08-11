@@ -93,7 +93,7 @@ export function CreateTicketButton({
               setOpen(false);
               onOpenTicket(existingId);
             }}
-            className="font-medium text-brand-600 underline"
+            className="font-medium text-content-brand underline"
           >
             Open it
           </button>

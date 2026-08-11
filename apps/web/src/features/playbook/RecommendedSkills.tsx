@@ -79,7 +79,7 @@ function RecommendedCard({
     >
       {category && (
         <span className="flex items-center gap-1 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-          <span aria-hidden="true" className="text-brand-500">
+          <span aria-hidden="true" className="text-content-brand">
             {category.icon}
           </span>
           {category.label}

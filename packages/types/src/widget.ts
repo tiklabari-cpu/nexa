@@ -44,7 +44,7 @@ export interface WidgetAppearance {
  * database column defaults match value-for-value.
  */
 export const DEFAULT_WIDGET_APPEARANCE: WidgetAppearance = {
-  primary_color: '#2f6bff',
+  primary_color: '#2d67fa',
   position: 'bottom-right',
   theme: 'auto',
   mobile_fullscreen: true,

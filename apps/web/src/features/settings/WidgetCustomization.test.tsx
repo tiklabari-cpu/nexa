@@ -11,7 +11,7 @@ import { WidgetCustomization } from './WidgetCustomization.js';
 import { useAuth, useBrandStore } from '../../lib/auth-store.js';
 
 const DEFAULTS = {
-  primary_color: '#2f6bff',
+  primary_color: '#2d67fa',
   position: 'bottom-right',
   theme: 'auto',
   mobile_fullscreen: true,

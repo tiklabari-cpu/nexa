@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+## A11Y-OLC (tm 115) — WCAG 2.1 AA artık **ölçülüyor** (axe), ilk tur 62 ihlal buldu ve kapattı — done — 2026-08-11 UTC
+
+- **Yapıldı:** `apps/e2e/tests/a11y.ts` + `a11y.spec.ts` — axe-core (`wcag2a/2aa/21a/21aa`) **9 yüzeyde**
+  (Sign in · Inbox · Customers · Reports · Team · Settings · Apps · customer widget · public KB);
+  `serious`/`critical` = KAPI, `moderate`/`minor` sayıyla raporlanır. İstisna listesi
+  (`A11Y_EXCEPTIONS`) **BOŞ** — hiçbir kural bastırılmadı. Kapının kendisi de test ediliyor
+  (gerçek sayfaya adsız `<button>` enjekte → `button-name` critical yakalanıyor). Ayrıca
+  `apps/web/src/styles/tokens.test.ts` (40 test, 4 ms) token kontrastını iki temada birim
+  seviyede kilitliyor.
+- **ÖLÇÜM — ekran başına, ilk tur → düzeltme sonrası** (hepsi `color-contrast`, serious):
+  Sign in 2→0 · Inbox 2→0 · Customers 2→0 · Reports 2→0 · Team 3→0 · Settings 14→0 (sonra 4→0) ·
+  Apps 37→0 · Widget 0 · Public KB 0. Toplam **62 düğüm → 0**. Kök neden token katmanıydı:
+  koyu tema marka rampasını hiç yeniden ayarlamamış, `dark:text-brand-400`/`-200` sınıfları ise
+  Tailwind ölçeğinde **hiç yok** (sessizce etkisiz). Düzeltmeler: `--brand-500` #2f6bff→**#2d67fa**
+  (beyaz metin 4.49→4.74) · yeni `--brand-text` → `text-content-brand` (21 çağrı yeri) ·
+  `--text-tertiary` açık #6b7488→**#606878**, koyu #7c879e→**#868fa6** · eksik `dark:bg-brand-950`.
+  Widget'ın varsayılanı da aynıydı → migration `20260811100000_widget_brand_default_aa_contrast`
+  (kolon varsayılanı + eski varsayılanı tutan satırların backfill'i), `db:check-drift` **no drift**.
+- **Doğrulama — tam DoD kapısı, hepsi exit 0:** typecheck **11/11** · lint **8/8** ·
+  `pnpm -w test` **3802** (api 2414 · web **997** ·ai-mock 136 · rtm 90 · widget 69 · types 96) ·
+  `pnpm -w test:integration` **1906** (api 1855 · rtm 51) · build **7/7** ·
+  `pnpm -w test:e2e` **113/113** (5.4 dk). Toplam 5771 → **5821**.
+- **Sonraki pencereye not:** (1) `kanit/*.png`'lerin çoğu marka rengi değiştiği için yeniden
+  üretildi — bu tur **beklenen** bir churn, commit'te. (2) `pnpm format:check` repo genelinde
+  349 dosyada kırmızı; **tm 115 öncesinden** böyle ve DoD kapısında değil — kendi dokunduğum
+  dosyaları formatladım, gerisine karışmadım (ayrı task'lık). (3) `apps/web/index.html`
+  `data-theme="dark"`'ı **sabit** yazıyor; açık tema hiçbir kullanıcıya ulaşmıyor, bu yüzden axe
+  yalnız koyuyu tarıyor — açık temayı `tokens.test.ts` kapsıyor. (4) axe otomatik olarak AA'nın
+  ~%57'sini görür; odak sırası / ekran okuyucu duyurusu elle kalıyor ve tek tarayıcı (chromium)
+  taranıyor — §K KA11Y'nin `⬜` maddesinde ismen yazılı.
+
 ## GL-8 (tm 114) — V2-KAPAT: Faz-2 §F.00 kapanış turu koşuldu, **faz KAPANDI** — done — 2026-08-11 UTC
 
 - **Yapıldı:** §F.1'in **10 maddesi tam sürüm** koda karşı koşuldu → PLAN satır 22 `Kapanış` hücresi

@@ -217,7 +217,7 @@ function SalesTrackerForm({
           {justSaved && (
             <p className="text-2xs text-content-tertiary">
               Saved. Tracked sales show up in{' '}
-              <Link to="/app/reports" className="text-brand-500 hover:underline">
+              <Link to="/app/reports" className="text-content-brand hover:underline">
                 Reports → Reviews → Ecommerce
               </Link>
               .

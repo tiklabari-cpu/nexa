@@ -227,13 +227,13 @@ function ColorControl({
           spellCheck={false}
           aria-invalid={valid ? undefined : true}
           aria-describedby={valid ? undefined : 'widget-color-error'}
-          placeholder="#2f6bff"
+          placeholder="#2d67fa"
           className="w-28 rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none"
         />
       </div>
       {!valid && (
         <p id="widget-color-error" role="alert" className="text-2xs text-danger">
-          Enter a hex colour such as #2f6bff.
+          Enter a hex colour such as #2d67fa.
         </p>
       )}
     </div>
@@ -266,7 +266,7 @@ function ChoiceControl<T extends string>({
             key={option.value}
             className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors ${
               value === option.value
-                ? 'border-brand-500 bg-brand-100 text-content'
+                ? 'border-brand-500 bg-brand-100 text-content dark:bg-brand-950'
                 : 'border-border text-content-secondary hover:bg-surface-2'
             }`}
           >

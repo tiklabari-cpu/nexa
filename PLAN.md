@@ -2192,7 +2192,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | **S10**  | **File sharing güvenliği**                          |                                                                                                                                                                 ✅ Dilim 13 (fail-closed virüs tarama, tm 4)                                                                                                                                                                 |
 | S12      | Audit log (append-only)                             |                                                                                                                           ✅ yazıcı bağlandı (tm 23): 12 güvenlik olayı INSERT ediliyor · UPDATE/DELETE DB'de reddi · cross-tenant izole · PII yok                                                                                                                           |
 | **C5/S9** | **CC masking (PCI SAQ A) + PII yazım maskesi** | ✅ → KC5-S9 |
-| A11Y1–6  | WCAG 2.1 AA · klavye · ⌘K                           |                                                                                                                                                                       ✅ 01.1.3 (⌘K) Dilim 14 (tm 18)                                                                                                                                                                        |
+| A11Y1–6  | WCAG 2.1 AA · klavye · ⌘K                           | ✅ → KA11Y |
 | I18N1/2 | Widget + panel i18n | ✅ → KI18N1-2 |
 | C1/C2/C8 | GDPR · KVKK · retention | ✅ → KC1-C2-C8 |
 | M4       | Test piramidi (unit + integration + contract + E2E) |                                                                                                                                                    ✅ → KM4 (web 445·api 179+779·rtm 29+42·types 56·ai-mock 56·widget 52)                                                                                                                                                     |
@@ -3612,7 +3612,7 @@ görüneceği en son yerdir.
 
 ## E. Bitti Tanımı Takibi — Faz-0 kritik yol kesiti
 
-- [x] Tüm testler yeşil — **5771** (3762 unit + 1906 integration + 103 E2E) — 2026-08-11 GL-8 sayımı
+- [x] Tüm testler yeşil — **5821** (3802 unit + 1906 integration + 113 E2E) — 2026-08-11 tm 115 sayımı
       · unit: api 2414 · web 957 · ai-mock 136 · rtm 90 · widget 69 · types 96
       · integration: api 1855 · rtm 51 · e2e 103 (Playwright, chromium)
       _(önceki: 1697 = 817+821+59 — 2026-07-31 GL-3 sayımı)_
@@ -4155,9 +4155,22 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 - ✅ SSRF koruması (private/loopback/link-local reddi, yalnız http(s), redirect kapalı) — `apps/api/src/lib/ssrf.ts` · test `ssrf.test.ts` (15) · **beş tüketici**: `routes/webhooks.ts` · `routes/copilot.ts` · `routes/playbook.ts` · `services/ai/knowledge-bulk-crawl.ts` · `services/webhooks/webhook-dispatcher.ts` (06.3.2-a ile paylaşılan ortak guard — §4.4.3'ün öngördüğü gibi) · tm 34 · 08.8.4-c
 - ✅ Bayat `⬜` damgası koda karşı doğrulanıp `✅ → KS7`'ye çevrildi; ürün kodu DEĞİŞMEDİ — tm 114 · §D89
 
+#### KA11Y — A11Y1–6 · WCAG 2.1 AA · klavye · ⌘K
+
+> Damga Dilim 14'ten beri `✅` idi ama dayanağı yalnız **elle** klavye/⌘K kanıtıydı. GL-8 (tm 114 · §F.1/3) ölçtü: kod tabanında `axe`/`AxeBuilder`/`toHaveNoViolations` için **0 eşleşme** — yani AA iddiası hiç otomatik doğrulanmamıştı, §D89'a "kabul edilen borç" yazıldı. tm 115 o borcu kapattı.
+
+- ✅ Klavye erişimi + ⌘K komut paleti — Dilim 14 · tm 18 (elle kanıt; ölçüm değil)
+- ✅ **Otomatik axe taraması, 9 yüzey, `serious`/`critical` = KAPI** — `apps/e2e/tests/a11y.ts` (axe-core 4.12.1 + `@axe-core/playwright`, `wcag2a`/`wcag2aa`/`wcag21a`/`wcag21aa`) · test `apps/e2e/tests/a11y.spec.ts` (10) · tm 115. Yüzeyler: Sign in · Inbox · Customers · Reports · Team · Settings · Apps · **customer widget (cross-origin iframe)** · public KB (API'nin `text/html` yüzeyi). Kapının kendisi de test ediliyor: gerçek sayfaya adsız `<button>` enjekte edilip `button-name` (critical) yakalandığı doğrulanıyor — sessizce hiç koşmayan bir tarama temiz geçişten ayırt edilemezdi.
+- ✅ **İlk ölçüm KIRMIZI: 7/8 ekran düştü, hepsi `color-contrast` (serious)** — 62 düğüm. Ölçülen oranlar: `--brand-600` (#1f52d8) koyu yüzeylerde metin olarak **2.48–2.94:1** · beyaz metin `--brand-500` (#2f6bff) üzerinde **4.49:1** · koyu `--text-tertiary` (#7c879e) `--bg-surface-2` üzerinde **4.42:1** · `text-content` `bg-brand-100` üzerinde **1.03:1** (eksik `dark:bg-brand-950`). Kök neden token katmanındaydı: koyu tema marka rampasını hiç yeniden ayarlamamıştı ve `dark:text-brand-400`/`dark:text-brand-200` sınıfları Tailwind ölçeğinde **yok** (sessizce etkisiz).
+- ✅ **Düzeltme — istisna listesi BOŞ, hiçbir kural bastırılmadı** (`A11Y_EXCEPTIONS = []`): `--brand-500` #2f6bff → **#2d67fa** (beyaz metin 4.74:1) · yeni semantik `--brand-text` token'ı (açık #1f52d8 · koyu #7aa2ff, en kötü yüzeyde 6.42:1) → Tailwind `text-content-brand`, 21 çağrı yeri `text-brand-500/600`'den taşındı · `--text-tertiary` açık #6b7488 → **#606878** (4.73:1), koyu #7c879e → **#868fa6** (4.94:1) · `WidgetCustomization` tema seçicisine eksik `dark:bg-brand-950`. Widget'ın kendi varsayılanı da aynı kusuru taşıyordu (`@nexa/types` · `--nx-brand` · Prisma `@default`) → migration `20260811100000_widget_brand_default_aa_contrast` (kolon varsayılanı + eski varsayılanı tutan satırların backfill'i), `db:check-drift` **no drift**.
+- ✅ **İkinci ölçüm YEŞİL: 9/9 yüzeyde blocking 0** (`blocking 0 · excused 0 · advisory 0`, her ekran) — tam e2e 113/113 (5.4 dk) · tm 115
+- ✅ Token kontrastı ayrıca **birim seviyede** kilitlendi: `apps/web/src/styles/tokens.test.ts` (40) `tokens.css`'i okuyup WCAG 2.x bağıl parlaklıkla 21 çifti iki temada da doğruluyor — axe'ın 4.49/2.74 ölçümlerini yeniden üretiyor. e2e 5 dk, bu 4 ms; token'ı yanlış yöne iten değişiklik artık `pnpm -w test`'te düşer · tm 115
+- ⬜ **Ölçülmeyen kalan:** yalnız `chromium` taranıyor (Playwright tek proje) · axe otomatik olarak AA'nın ~%57'sini kapsar — odak sırası, ekran okuyucu duyurusu, anlamlı sıralama elle kalır · `moderate`/`minor` raporlanıyor ama kapı değil (ilk turda ikisi de 0) · `:hover`/`:focus` durum renkleri taranmıyor (axe duran DOM'u okur)
+
 #### KM4 — M4 · Test piramidi (unit + integration + contract + E2E)
 
 > Bu blok bir **sayım tarihçesidir**: her kapanış turu kendi ölçümünü ekler, öncekiler silinmez. Güncel sayı **en alttaki** maddedir.
 
 - ✅ **1697** test (817 unit + 821 integration + 59 E2E) · `contract-parity` 5/5 — 2026-07-31 GL-3 sayımı (web 445 · api 179+779 · rtm 29+42 · types 56 · ai-mock 56 · widget 52) · tm 87
 - ✅ **5771** test (3762 unit + 1906 integration + 103 E2E) · `contract-parity` **5/5** — 2026-08-11 GL-8 sayımı, tam kapı koşularından **ölçülerek**: unit `@nexa/api` 2414 (107 dosya) · `@nexa/web` 957 (105) · `@nexa/ai-mock` 136 (7) · `@nexa/rtm` 90 (6) · `@nexa/widget` 69 (10) · `@nexa/types` 96 (10); integration `@nexa/api` 1855 (71 dosya) · `@nexa/rtm` 51 (1); e2e 103 (Playwright/chromium, 4.9 dk) · tm 114 · §D89
+- ✅ **5821** test (3802 unit + 1906 integration + 113 E2E) · `contract-parity` **5/5** — 2026-08-11 tm 115 sayımı: unit `@nexa/web` 957 → **997** (`tokens.test.ts` +40), e2e 103 → **113** (`a11y.spec.ts` +10, 5.4 dk); diğer paketler değişmedi

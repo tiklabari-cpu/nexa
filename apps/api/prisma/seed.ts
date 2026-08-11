@@ -468,7 +468,7 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
     // An explicit colour on the default brand too, so the contrast is concrete
     // rather than resting on the shipped fallback.
     await prisma.widgetSettings.create({
-      data: { licenseId, brandId: defaultBrand.id, primaryColor: '#2f6bff' },
+      data: { licenseId, brandId: defaultBrand.id, primaryColor: '#2d67fa' },
     });
 
     const secondBrand = await prisma.brand.create({

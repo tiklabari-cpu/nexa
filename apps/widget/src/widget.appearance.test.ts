@@ -40,7 +40,7 @@ describe('widget appearance', () => {
   it('applies the shipped defaults when the snippet customised nothing', () => {
     const root = mountWith('?organization_id=org-1');
 
-    expect(brandVar()).toBe('#2f6bff');
+    expect(brandVar()).toBe('#2d67fa');
     // `auto` leaves no override, so the prefers-color-scheme media query governs.
     expect(document.documentElement.hasAttribute('data-nx-theme')).toBe(false);
     // Default corner is bottom-right, so no left mirror.
@@ -61,7 +61,7 @@ describe('widget appearance', () => {
 
   it('ignores a colour that is not a hex, falling back to the default', () => {
     mountWith('?organization_id=org-1&color=red');
-    expect(brandVar()).toBe('#2f6bff');
+    expect(brandVar()).toBe('#2d67fa');
   });
 
   it.each([

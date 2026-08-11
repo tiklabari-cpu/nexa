@@ -27,7 +27,7 @@ const NORTHWIND = {
   password: 'nexa-demo-password',
   defaultBrand: 'Default',
   secondBrand: 'Northwind Europe',
-  defaultColor: '#2f6bff',
+  defaultColor: '#2d67fa',
   secondColor: '#e11d48',
   defaultSite: 'northwind-supply.localhost',
   secondSite: 'northwind-eu.localhost',

@@ -169,7 +169,7 @@ export function TemplateGallery({
                       : 'border-transparent text-content-secondary hover:text-content'
                   }`}
                 >
-                  <span aria-hidden="true" className="text-brand-500">
+                  <span aria-hidden="true" className="text-content-brand">
                     {meta.icon}
                   </span>
                   <span>{meta.label}</span>
@@ -253,7 +253,7 @@ function TemplateRow({
       className="flex items-center gap-3 overflow-hidden border-b border-border px-1 py-2 last:border-0"
     >
       {category && (
-        <span aria-hidden="true" className="shrink-0 text-sm text-brand-500">
+        <span aria-hidden="true" className="shrink-0 text-sm text-content-brand">
           {category.icon}
         </span>
       )}

@@ -82,10 +82,7 @@ export function TeamAiPerformance(): ReactElement {
                       {formatCount(agent.skills_count)}
                     </td>
                     <td className="px-4 py-2.5 text-right">
-                      <Link
-                        to="/app/playbook"
-                        className="text-xs text-brand-600 underline dark:text-brand-400"
-                      >
+                      <Link to="/app/playbook" className="text-xs text-content-brand underline">
                         Open performance
                       </Link>
                     </td>

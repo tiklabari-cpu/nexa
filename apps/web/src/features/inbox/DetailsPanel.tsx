@@ -222,7 +222,7 @@ export function DetailsPanel({
                     target="_blank"
                     rel="noreferrer"
                     title={page.url}
-                    className="block truncate text-xs text-brand-600 hover:underline"
+                    className="block truncate text-xs text-content-brand hover:underline"
                   >
                     {prettyPath(page.url)}
                   </a>

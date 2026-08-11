@@ -178,7 +178,7 @@ export function SignUpPage(): ReactElement {
       subtitle="14 days free. No card."
       footer={
         <>
-          Already have an account? <Link to="/signin" className="text-brand-600 underline">Sign in</Link>
+          Already have an account? <Link to="/signin" className="text-content-brand underline">Sign in</Link>
         </>
       }
     >
@@ -253,7 +253,7 @@ export function ForgotPasswordPage(): ReactElement {
     <AuthCard
       title="Reset your password"
       subtitle="We will send you a link."
-      footer={<Link to="/signin" className="text-brand-600 underline">Back to sign in</Link>}
+      footer={<Link to="/signin" className="text-content-brand underline">Back to sign in</Link>}
     >
       {sent ? (
         <p role="status" className="text-sm text-content-secondary">
@@ -301,7 +301,7 @@ export function ResetPasswordPage(): ReactElement {
     <AuthCard
       title="Choose a new password"
       subtitle="The link works once."
-      footer={<Link to="/signin" className="text-brand-600 underline">Back to sign in</Link>}
+      footer={<Link to="/signin" className="text-content-brand underline">Back to sign in</Link>}
     >
       {done ? (
         <p role="status" className="text-sm text-content-secondary">

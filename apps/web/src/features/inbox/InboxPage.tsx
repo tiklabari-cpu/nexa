@@ -683,7 +683,7 @@ function ViewsGroup({
             </p>
             <Link
               to="/app/settings"
-              className="mt-1.5 inline-block text-2xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+              className="mt-1.5 inline-block text-2xs font-medium text-content-brand hover:underline"
             >
               Connect a channel →
             </Link>

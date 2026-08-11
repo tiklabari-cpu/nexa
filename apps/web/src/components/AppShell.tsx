@@ -81,7 +81,7 @@ function TrialBanner(): ReactElement | null {
       </span>
       <NavLink
         to="/app/billing"
-        className="font-semibold text-brand-600 underline-offset-2 hover:underline"
+        className="font-semibold text-content-brand underline-offset-2 hover:underline"
       >
         {t('shell.subscribe')}
       </NavLink>

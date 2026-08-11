@@ -153,7 +153,7 @@ export function ProfileForm({
                     onClick={() => toggleLanguage(code)}
                     className={`rounded-full border px-3 py-1 text-2xs transition-colors disabled:opacity-60 ${
                       on
-                        ? 'border-brand-500 bg-brand-100 text-brand-700 dark:bg-brand-950 dark:text-brand-200'
+                        ? 'border-brand-500 bg-brand-100 text-brand-700 dark:bg-brand-950 dark:text-content'
                         : 'border-border text-content-secondary hover:bg-surface-2'
                     }`}
                   >

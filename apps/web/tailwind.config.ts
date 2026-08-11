@@ -27,6 +27,9 @@ export default {
           secondary: 'var(--text-secondary)',
           tertiary: 'var(--text-tertiary)',
           inverse: 'var(--text-inverse)',
+          // Accent text. The numbered `brand` steps below are fill colours and
+          // are unreadable as text on the dark theme — see tokens.css.
+          brand: 'var(--brand-text)',
         },
         brand: {
           100: 'var(--brand-100)',

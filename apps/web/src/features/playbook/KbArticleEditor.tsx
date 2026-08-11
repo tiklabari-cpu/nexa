@@ -459,7 +459,7 @@ export function KbArticleEditor({
               href={publicUrl}
               target="_blank"
               rel="noreferrer"
-              className="min-w-0 flex-1 truncate text-2xs text-brand-600 hover:underline"
+              className="min-w-0 flex-1 truncate text-2xs text-content-brand hover:underline"
             >
               {publicUrl}
             </a>

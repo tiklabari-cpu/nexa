@@ -34,7 +34,7 @@ interface Appearance {
 }
 
 const DEFAULT_APPEARANCE: Appearance = {
-  primaryColor: '#2f6bff',
+  primaryColor: '#2d67fa',
   theme: 'auto',
   position: 'bottom-right',
   mobileFullscreen: true,
@@ -1213,7 +1213,7 @@ const WIDGET_CSS = `
    UA [hidden] rule and leave a "hidden" card or panel on screen. */
 [hidden] { display: none !important; }
 :root {
-  --nx-brand: #2f6bff;
+  --nx-brand: #2d67fa;
   --nx-surface: #ffffff;
   --nx-text: #111726;
   --nx-muted: #4a5468;

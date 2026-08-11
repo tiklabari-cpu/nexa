@@ -21,16 +21,32 @@
   /* Text */
   --text-primary: #111726;
   --text-secondary: #4a5468;
-  --text-tertiary: #6b7488;
+  /* 4.73:1 on the lightest surface it lands on (`--bg-inset`). The previous
+     #6b7488 was 3.96:1 there — under AA (tm 115). */
+  --text-tertiary: #606878;
   --text-inverse: #ffffff;
 
-  /* Brand */
+  /* Brand — a *fill* ramp: every step is chosen to carry white text. */
   --brand-100: #e4ecff;
-  --brand-500: #2f6bff;
+  /* White on this measured 4.49:1 at #2f6bff — a hair under AA, on all 95
+     `bg-brand-500` buttons at once. #2d67fa is 4.74:1 (tm 115). */
+  --brand-500: #2d67fa;
   --brand-600: #1f52d8;
   --brand-700: #1740ac;
   --brand-950: #0f1e42;
-  --focus-ring: #2f6bff;
+  /**
+   * Brand as *text*, which is a different problem from brand as fill.
+   *
+   * The ramp above gets darker so white text stays readable on it; text has to
+   * go the other way and contrast against the *surface*. On the dark theme those
+   * requirements are opposites — `--brand-600` reads 2.48:1 on `--bg-surface-2`
+   * — so accent text gets its own token, tuned per theme. Consumed as
+   * `text-content-brand`, never as a numbered brand step.
+   */
+  --brand-text: #1f52d8;
+  /* Follows the fill so the two never drift; 1.4.11 wants 3:1 for a non-text
+     boundary and this is 4.74:1 on white. */
+  --focus-ring: var(--brand-500);
 
   /* Status — always paired with an icon or text, never colour alone */
   --success: #12855a;
@@ -78,9 +94,14 @@
 
   --text-primary: #edf0f6;
   --text-secondary: #a6b0c4;
-  --text-tertiary: #7c879e;
+  /* 4.94:1 on `--bg-surface-2`, the lightest dark surface. #7c879e was 4.42:1
+     there — axe flagged it on the customers table (tm 115). */
+  --text-tertiary: #868fa6;
   --text-inverse: #0b1020;
 
+  /* 6.42:1 at worst (on `--bg-surface-2`); the light `--brand-text` is 2.48:1
+     there. Same hue as the focus ring, deliberately. */
+  --brand-text: #7aa2ff;
   --focus-ring: #7aa2ff;
 
   --success: #3dd68c;

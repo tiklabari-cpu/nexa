@@ -380,7 +380,7 @@ export function TeamPage(): ReactElement {
                                   suspension.mutate({ id: agent.id, suspended: false })
                                 }
                                 disabled={suspension.isPending}
-                                className="text-xs text-brand-600 underline disabled:opacity-40 dark:text-brand-400"
+                                className="text-xs text-content-brand underline disabled:opacity-40"
                               >
                                 Reinstate
                               </button>

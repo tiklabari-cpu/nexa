@@ -1457,7 +1457,7 @@ model WidgetSettings {
   /// Brand colour — a `#rrggbb` hex, checked by the settings endpoint and the
   /// `widget_settings_color_check` DB invariant so nothing but a colour is ever
   /// stored (it is embedded in the install snippet and applied to CSS).
-  primaryColor     String   @default("#2f6bff") @map("primary_color")
+  primaryColor     String   @default("#2d67fa") @map("primary_color")
   /// `bottom-right` | `bottom-left` — the `widget_settings_position_check`.
   position         String   @default("bottom-right")
   /// `auto` | `light` | `dark` — the `widget_settings_theme_check`.

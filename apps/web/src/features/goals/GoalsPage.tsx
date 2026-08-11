@@ -194,7 +194,7 @@ function GoalCard({
             className={`shrink-0 rounded-md border px-2 py-1 text-2xs font-medium transition-colors disabled:opacity-40 ${
               goal.active
                 ? 'border-border text-content-secondary hover:bg-surface-2'
-                : 'border-brand-500 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950'
+                : 'border-brand-500 text-content-brand hover:bg-brand-50 dark:hover:bg-brand-950'
             }`}
           >
             {goal.active ? 'Turn off' : 'Turn on'}

@@ -376,7 +376,7 @@ export function PlaybookPage(): ReactElement {
                               }`}
                             >
                               {t.glyph && (
-                                <span aria-hidden="true" className="text-brand-500">
+                                <span aria-hidden="true" className="text-content-brand">
                                   {t.glyph}
                                 </span>
                               )}

@@ -146,7 +146,7 @@ function ActivationChecklist({
                 {!step.done && (
                   <NavLink
                     to={copy.to}
-                    className="shrink-0 text-xs font-medium text-brand-600 hover:underline"
+                    className="shrink-0 text-xs font-medium text-content-brand hover:underline"
                   >
                     Set up
                   </NavLink>

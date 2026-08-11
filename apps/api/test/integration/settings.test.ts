@@ -1148,7 +1148,7 @@ describe('settings', () => {
       const response = await server.get('/settings/widget', auth(readToken));
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
-        primary_color: '#2f6bff',
+        primary_color: '#2d67fa',
         position: 'bottom-right',
         theme: 'auto',
         mobile_fullscreen: true,
@@ -1265,7 +1265,7 @@ describe('settings', () => {
 
       // Their row must not leak into our read…
       const read = await server.get('/settings/widget', auth(readToken));
-      expect((read.json() as { primary_color: string }).primary_color).toBe('#2f6bff');
+      expect((read.json() as { primary_color: string }).primary_color).toBe('#2d67fa');
 
       // …and our write must not reach it.
       const written = await server.put('/settings/widget', { primary_color: '#111111' }, auth(adminToken));
@@ -1511,7 +1511,7 @@ describe('settings', () => {
       // The default brand still reads the shipped default — the write did not reach it.
       const def = await server.get('/settings/widget', auth(readToken));
       expect((def.json() as { primary_color: string; brand_id: string }).primary_color).toBe(
-        '#2f6bff',
+        '#2d67fa',
       );
       expect((def.json() as { brand_id: string }).brand_id).toBe(brandA);
 

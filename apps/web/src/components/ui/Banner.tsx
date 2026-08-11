@@ -56,7 +56,7 @@ const TONES: Record<BannerTone, ToneStyle> = {
   },
   brand: {
     container: 'border-brand-500/30 bg-brand-500/10',
-    icon: 'text-brand-600',
+    icon: 'text-content-brand',
     glyph: '◈',
     defaultRole: 'status',
   },

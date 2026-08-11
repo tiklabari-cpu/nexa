@@ -173,7 +173,7 @@ const updateWidgetBody = z
       .string()
       .trim()
       .toLowerCase()
-      .regex(WIDGET_COLOR_PATTERN, 'must be a hex colour such as #2f6bff')
+      .regex(WIDGET_COLOR_PATTERN, 'must be a hex colour such as #2d67fa')
       .optional(),
     position: z.enum(WIDGET_POSITIONS as unknown as [string, ...string[]]).optional(),
     theme: z.enum(WIDGET_THEMES as unknown as [string, ...string[]]).optional(),

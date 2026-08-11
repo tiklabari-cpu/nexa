@@ -6,7 +6,85 @@
  * shared with the invoice, so the two never drift. This proves the cards render
  * for a signed-in agent and captures the evidence screenshot.
  */
-import { expect, test } from './fixtures.js';
+import type { APIRequestContext, Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  API_BASE,
+  NORTHWIND_OWNER,
+  openWidget,
+  ownerAccessToken,
+  ownerAccessTokenFor,
+  tenantSubdomain,
+  visitorSends,
+} from './fixtures.js';
+
+/** The Reviews report's tracked-sales block (FR-MOD-13.5), as the API returns it. */
+interface EcommerceBlock {
+  configured: boolean;
+  tracked_sales: number | null;
+  attributed_revenue_cents: number | null;
+  currency: string | null;
+}
+
+/**
+ * The Ecommerce block for a given owner, read straight from the API.
+ *
+ * The screen renders exactly this, so reading it here lets a test wait for the
+ * server to have processed a sale — and then assert the two agree — without the
+ * UI's own caching sitting between the assertion and the fact.
+ */
+async function ecommerceBlock(
+  request: APIRequestContext,
+  token: string,
+): Promise<EcommerceBlock> {
+  const response = await request.get(`${API_BASE}/reports/reviews`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(
+    response.ok(),
+    `reviews report failed: ${response.status()} ${await response.text()}`,
+  ).toBe(true);
+  return ((await response.json()) as { ecommerce: EcommerceBlock }).ecommerce;
+}
+
+/** The Goals funnel's converted stage and the Overview's counter (FR-MOD-13.3). */
+async function goalCounters(
+  request: APIRequestContext,
+  token: string,
+): Promise<{ conversions: number; achievedGoals: number }> {
+  const headers = { authorization: `Bearer ${token}` };
+  const goals = await request.get(`${API_BASE}/reports/goals`, { headers });
+  const overview = await request.get(`${API_BASE}/reports/overview`, { headers });
+  expect(goals.ok(), `goals report failed: ${goals.status()}`).toBe(true);
+  expect(overview.ok(), `overview report failed: ${overview.status()}`).toBe(true);
+
+  const funnel = ((await goals.json()) as { funnel: { conversions: number } }).funnel;
+  const totals = ((await overview.json()) as { totals: { achieved_goals: number } }).totals;
+  return { conversions: funnel.conversions, achievedGoals: totals.achieved_goals };
+}
+
+/**
+ * The value cell of a KPI card. Addressed from the label span outwards rather
+ * than by filtering divs on their text: the first card in a grid shares the
+ * grid's leading text, so a `hasText: /^Tracked sales/` filter matches the
+ * wrapper as well as the card. Inside the card, spans are label, value, hint.
+ */
+function kpiValue(page: Page, region: string, label: string) {
+  return page
+    .getByRole('region', { name: region })
+    .getByText(label, { exact: true })
+    .locator('xpath=..')
+    .locator('span')
+    .nth(1);
+}
+
+/** Open Reports on a fresh navigation (never a cached SPA view) and select a tab. */
+async function openReportsTab(page: Page, tab: string): Promise<void> {
+  await page.goto('/app/reports');
+  await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+  await page.getByRole('tab', { name: tab }).click();
+}
 
 test.describe('reports overview', () => {
   test('shows the manual / assisted / automated resolution split', async ({ agentPage }) => {
@@ -51,25 +129,39 @@ test.describe('reports overview', () => {
     await agentPage.screenshot({ path: 'kanit/21-reports-breakdown.png', fullPage: true });
   });
 
-  test('opens the Reviews tab with CSAT, the daily bar and the sales skeleton (07.8)', async ({
+  test('opens the Reviews tab with CSAT, the daily bar and the seeded tracked sales (07.8, 13.5)', async ({
     agentPage,
+    request,
   }) => {
-    await agentPage.goto('/app/reports');
-    await agentPage.getByRole('tab', { name: 'Reviews' }).click();
+    await openReportsTab(agentPage, 'Reviews');
 
     // The three sections of the Reviews report (FR-MOD-07.8): the CSAT donut, the
-    // daily rating bar, and the tracked-sales skeleton — each its own region.
+    // daily rating bar, and the tracked-sales block — each its own region.
     await expect(agentPage.getByRole('region', { name: 'Satisfaction (CSAT)' })).toBeVisible();
     await expect(agentPage.getByRole('region', { name: 'Ratings by day' })).toBeVisible();
     const ecommerce = agentPage.getByRole('region', { name: 'Ecommerce' });
     await expect(ecommerce).toBeVisible();
 
-    // The seeded demo license never configures sales tracking (13.5-e), so this
-    // is the honest "not set up" state — a CTA to Settings, not the "later
-    // release" placeholder 13.5-f replaced.
-    const cta = ecommerce.getByRole('link', { name: 'Configure sales platforms' });
-    await expect(cta).toBeVisible();
-    await expect(cta).toHaveAttribute('href', '/app/settings#section-sales-tracker');
+    // The demo tenant ships with sales tracking configured (13.5-h's seed), so
+    // this is the figures state, not the "not set up" CTA — which the Settings
+    // spec proves by turning tracking off.
+    const block = await ecommerceBlock(request, await ownerAccessToken(request));
+    expect(block.configured).toBe(true);
+    expect(block.currency).toBe('USD');
+    expect(block.tracked_sales).toBeGreaterThan(0);
+
+    // The screen quotes the server rather than a figure of its own: the count
+    // matches exactly, and the money card carries the same major units and the
+    // ISO code as a hint. Compared against the response instead of against a
+    // hard-coded seed constant, so this stays true when the fixture is retuned.
+    await expect(kpiValue(agentPage, 'Ecommerce', 'Tracked sales')).toHaveText(
+      String(block.tracked_sales),
+    );
+    const major = Math.floor((block.attributed_revenue_cents ?? 0) / 100);
+    await expect(kpiValue(agentPage, 'Ecommerce', 'Attributed revenue')).toContainText(
+      String(major),
+    );
+    await expect(ecommerce.getByText('USD', { exact: true })).toBeVisible();
 
     await agentPage.screenshot({ path: 'kanit/22-reports-reviews.png', fullPage: true });
   });
@@ -357,5 +449,147 @@ test.describe('reports — chat topics (FR-MOD-07.6)', () => {
     await agentPage.reload();
     await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
     await expect(agentPage.getByText('Top chat topics in one place')).toHaveCount(0);
+  });
+});
+
+/**
+ * Sales tracking end to end (FR-MOD-13.5) — the one proof the eight slices of
+ * 13.5 are joined to each other.
+ *
+ * Each piece is tested where it lives: the attribution rule in a unit test, the
+ * ingest endpoint and the `ecommerce` aggregate in the integration suite, the
+ * settings form and the KPI cards in jsdom, the command queue in the widget's
+ * own suite. None of that fails if the *seams* are broken — a snippet whose call
+ * never reaches the API, an order recorded but never aggregated, a report the
+ * screen does not bind. This drives the whole chain in a browser: a visitor on a
+ * real shop page chats, their checkout reports an order through
+ * `nexa('trackSale', …)`, and the number that comes back is read off the agent's
+ * Reports screen.
+ *
+ * Isolation is by host, for the same reason `goals.spec.ts` needs it: the goal
+ * triggers other specs define are keyed to their own subdomains, so a visitor on
+ * a subdomain of this file's own matches none of them — which is what makes the
+ * "a sale is not a goal conversion" assertion below mean something.
+ */
+test.describe('reports — tracked sales (FR-MOD-13.5)', () => {
+  test('a sale reported by the tracking code shows up in Reports → Reviews → Ecommerce', async ({
+    agentPage,
+    browser,
+    request,
+    organizationId,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const site = tenantSubdomain(`sale-${stamp}`);
+    const token = await ownerAccessToken(request);
+    const AMOUNT_CENTS = 6_400;
+
+    const before = await ecommerceBlock(request, token);
+    const goalsBefore = await goalCounters(request, token);
+    expect(before.configured, 'the seeded demo tracks sales').toBe(true);
+
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    try {
+      // A conversation first: attribution credits the sale to a chat this
+      // visitor held inside the license's window, and without one the order is
+      // recorded but not counted as attributed revenue.
+      await openWidget(visitor, organizationId, { host: site.origin });
+      await visitorSends(visitor, `Adding this to my basket — ${stamp}`);
+
+      // The shop's own checkout code, called exactly as the setup snippet
+      // documents it: a global on the host page, not anything inside the
+      // widget's iframe, and no return value to wait on.
+      await visitor.evaluate(
+        ({ orderId, amountCents }) => {
+          (window as unknown as { nexa: (command: string, payload: unknown) => void }).nexa(
+            'trackSale',
+            { external_order_id: orderId, amount_cents: amountCents, currency: 'USD' },
+          );
+        },
+        { orderId: `E2E-${stamp}`, amountCents: AMOUNT_CENTS },
+      );
+
+      // Wait on the server, not on the page: `nexa(…)` is fire-and-forget by
+      // contract (a checkout must not block on it), so nothing in the browser
+      // signals that the order landed.
+      await expect
+        .poll(async () => (await ecommerceBlock(request, token)).tracked_sales, {
+          timeout: 20_000,
+        })
+        .toBe((before.tracked_sales ?? 0) + 1);
+
+      const after = await ecommerceBlock(request, token);
+      expect(after.attributed_revenue_cents).toBe(
+        (before.attributed_revenue_cents ?? 0) + AMOUNT_CENTS,
+      );
+      expect(after.currency).toBe('USD');
+
+      // --- The agent's screen quotes it ------------------------------------
+      await openReportsTab(agentPage, 'Reviews');
+      await expect(kpiValue(agentPage, 'Ecommerce', 'Tracked sales')).toHaveText(
+        String(after.tracked_sales),
+      );
+      await expect(kpiValue(agentPage, 'Ecommerce', 'Attributed revenue')).toContainText(
+        String(Math.floor((after.attributed_revenue_cents ?? 0) / 100)),
+      );
+      await agentPage.screenshot({ path: 'kanit/13.5-reports-ecommerce.png', fullPage: true });
+
+      // --- Idempotency: the same order reported twice ------------------------
+      // A checkout page reloaded, or a merchant's at-least-once retry. The
+      // second report is a replay, so the revenue figure must not move.
+      await visitor.evaluate(
+        ({ orderId, amountCents }) => {
+          (window as unknown as { nexa: (command: string, payload: unknown) => void }).nexa(
+            'trackSale',
+            { external_order_id: orderId, amount_cents: amountCents, currency: 'USD' },
+          );
+        },
+        { orderId: `E2E-${stamp}`, amountCents: AMOUNT_CENTS },
+      );
+      // The visitor's next round trip is the fence: once the widget has polled
+      // again, the replay it sent first has been answered.
+      await visitorSends(visitor, `Order placed — ${stamp}`);
+      const replayed = await ecommerceBlock(request, token);
+      expect(replayed.tracked_sales).toBe(after.tracked_sales);
+      expect(replayed.attributed_revenue_cents).toBe(after.attributed_revenue_cents);
+    } finally {
+      await visitorContext.close();
+    }
+
+    // --- Consistency with the Goals funnel (FR-MOD-13.3) --------------------
+    // A sale is not a goal conversion and must never be counted as one: this
+    // visitor was on no goal's trigger page, so both of 13.3's counters have to
+    // be exactly where they were. The two measure different events on purpose —
+    // the reasoning is pinned in `trackedSalesBlock` (`routes/reports.ts`).
+    const goalsAfter = await goalCounters(request, token);
+    expect(goalsAfter.conversions).toBe(goalsBefore.conversions);
+    expect(goalsAfter.achievedGoals).toBe(goalsBefore.achievedGoals);
+  });
+
+  test('never reports one tenant’s sales to another (13.5)', async ({ agentPage, request }) => {
+    // Both seeded tenants track sales, in different currencies and with
+    // different figures, so a leak shows up as a wrong number rather than as
+    // nothing at all. Northwind has no conversations, so it has nothing
+    // attributed — any figure there came from somewhere it should not have.
+    const acme = await ecommerceBlock(request, await ownerAccessToken(request));
+    const northwind = await ecommerceBlock(
+      request,
+      await ownerAccessTokenFor(request, NORTHWIND_OWNER),
+    );
+
+    expect(acme.currency).toBe('USD');
+    expect(acme.tracked_sales).toBeGreaterThan(0);
+
+    expect(northwind.configured).toBe(true);
+    expect(northwind.currency).toBe('GBP');
+    expect(northwind.tracked_sales).toBe(0);
+    expect(northwind.attributed_revenue_cents).toBe(0);
+
+    // And the screen the Acme agent is looking at shows Acme's code, not the
+    // sibling's — the leak would be as visible in the currency as in the sum.
+    await openReportsTab(agentPage, 'Reviews');
+    const ecommerce = agentPage.getByRole('region', { name: 'Ecommerce' });
+    await expect(ecommerce.getByText('USD', { exact: true })).toBeVisible();
+    await expect(ecommerce.getByText('GBP', { exact: true })).toHaveCount(0);
   });
 });

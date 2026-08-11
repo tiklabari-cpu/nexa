@@ -30,6 +30,37 @@ interface AgentSpec {
   priority: 'primary' | 'first' | 'normal' | 'last';
 }
 
+/**
+ * The sales tracker fixture for one tenant (FR-MOD-13.5).
+ *
+ * Both tenants get one, with *different* currencies and different figures, for
+ * the same reason there are two tenants at all: an isolation failure then shows
+ * up as a wrong number (or a report denominated in someone else's currency)
+ * rather than as nothing at all.
+ */
+interface SalesTrackerSpec {
+  /** ISO 4217, and one of `SALES_TRACKER_CURRENCIES` — the ingest endpoint refuses anything else. */
+  currency: string;
+  attributionWindowDays: number;
+  /**
+   * Orders credited to a seeded conversation, in minor units. These are the
+   * only ones the Reviews report's Ecommerce block counts (`trackedSalesSummary`
+   * filters on `attributed`), so this list *is* the demo's tracked-sales figure.
+   * Empty for a tenant with no seeded conversations — there is nothing to
+   * attribute to, and inventing a credit would be the one dishonest number in
+   * an otherwise measured fixture.
+   */
+  attributedCents: number[];
+  /**
+   * Orders no conversation can be credited with: recorded, reported back to the
+   * widget, and deliberately absent from attributed revenue. Their presence is
+   * what makes the report's `attributed = true` filter visible in the demo —
+   * without them, "count every row" and "count the credited rows" would give
+   * the same answer and neither could be wrong.
+   */
+  unattributedCents: number[];
+}
+
 interface TenantSpec {
   slug: string;
   organizationName: string;
@@ -39,6 +70,7 @@ interface TenantSpec {
   teams: string[];
   /** Whether to build a full sample conversation. */
   richDemo: boolean;
+  salesTracker: SalesTrackerSpec;
   /**
    * A second brand, turning this into a Multibrand license (PRD §5.3). The
    * fixture the cross-brand e2e (78.8) switches between — a distinct widget
@@ -66,6 +98,15 @@ const TENANTS: TenantSpec[] = [
     widgetDomain: 'acme-bikes.localhost',
     teams: ['Support', 'Sales'],
     richDemo: true,
+    // Three credited orders (USD 252.50 together) plus one the window could not
+    // tie to a chat, so the demo's Ecommerce block reads 3 / $252.50 and not 4 /
+    // $285.50.
+    salesTracker: {
+      currency: 'USD',
+      attributionWindowDays: 7,
+      attributedCents: [12_900, 4_550, 7_800],
+      unattributedCents: [3_300],
+    },
   },
   {
     // Exists so isolation failures are visible, not to be logged into.
@@ -76,6 +117,17 @@ const TENANTS: TenantSpec[] = [
     widgetDomain: 'northwind-supply.localhost',
     teams: ['Support'],
     richDemo: false,
+    // Tracking on, in a currency Acme does not use, and with nothing credited —
+    // this tenant has no conversations for a sale to be attributed to. Its
+    // report is therefore "configured, and the answer is zero", which is both a
+    // demo state worth having and the sharpest cross-tenant tripwire available:
+    // any figure at all here, or a `GBP` in Acme's block, is a leak.
+    salesTracker: {
+      currency: 'GBP',
+      attributionWindowDays: 14,
+      attributedCents: [],
+      unattributedCents: [8_100, 2_400],
+    },
     // Northwind carries the two-brand fixture: it is never logged into by the
     // Acme-based specs, so making it Multibrand keeps the single-brand demo
     // (Acme) unchanged while giving the cross-brand e2e a license to switch in.
@@ -665,8 +717,9 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
 
   // --- Sample conversations -------------------------------------------------
 
+  let conversations: Conversation[] = [];
   if (spec.richDemo) {
-    await seedConversations({
+    conversations = await seedConversations({
       licenseId,
       customers,
       agentId: agents[0]!.id,
@@ -681,6 +734,18 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       groupId: supportTeam.id,
     });
   }
+
+  // --- Sales tracker (FR-MOD-13.5) ------------------------------------------
+
+  await seedSalesTracker({
+    licenseId,
+    slug: spec.slug,
+    spec: spec.salesTracker,
+    conversations,
+    // The last seeded customer, who has no conversation — the buyer behind the
+    // orders nothing can be credited with.
+    walkInCustomerId: customers.at(-1)!.id,
+  });
 
   const demoToken = `nexa_pat_demo_${spec.slug}`;
   await prisma.apiToken.create({
@@ -720,9 +785,20 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
   console.log(`    demo token   ${demoToken}`);
 }
 
+/** A seeded conversation and the visitor who held it — what a sale can be credited to. */
+interface Conversation {
+  chatId: string;
+  customerId: string;
+}
+
 /**
  * One archived conversation and one live one, so the inbox has something to
  * show and the archive view is not empty on first run.
+ *
+ * Returns both, newest last, because the sales tracker fixture below has to
+ * credit its orders to a real chat — and a fixture that re-derived the chat ids
+ * with its own query could silently attribute to a conversation this function
+ * did not create.
  */
 async function seedConversations(input: {
   licenseId: bigint;
@@ -730,7 +806,7 @@ async function seedConversations(input: {
   agentId: string;
   groupId: bigint;
   shippingTagId: string;
-}): Promise<void> {
+}): Promise<Conversation[]> {
   const { licenseId, customers, agentId, groupId, shippingTagId } = input;
 
   const closed = await createConversation({
@@ -756,7 +832,7 @@ async function seedConversations(input: {
   });
 
   // A live conversation waiting for a reply, so the inbox is not empty either.
-  await createConversation({
+  const live = await createConversation({
     licenseId,
     customerId: customers[1]!.id,
     groupId,
@@ -766,6 +842,97 @@ async function seedConversations(input: {
       { authorType: 'customer', text: 'Do you ship to France?' },
       { authorType: 'customer', text: 'And how long does it take?' },
     ],
+  });
+
+  return [
+    { chatId: closed.chatId, customerId: customers[0]!.id },
+    { chatId: live.chatId, customerId: customers[1]!.id },
+  ];
+}
+
+/**
+ * The sales tracker fixture (FR-MOD-13.5): the configuration row plus the
+ * orders the Reviews report's Ecommerce block is built from.
+ *
+ * Written the way the ingest endpoint writes them — `attributed` true only
+ * alongside a real `chat_id`, every amount in the license's configured
+ * currency — so the demo data and the data a live snippet produces are the same
+ * shape. A row here that claimed attribution with no chat behind it would make
+ * the demo prove something the product does not do.
+ *
+ * Idempotent on its own, not only via `seedTenant`'s already-present guard:
+ * the settings row is upserted and the orders lean on
+ * `UNIQUE(license_id, external_order_id)` — the same constraint that stops the
+ * live endpoint recording one order twice. Re-running the seed therefore cannot
+ * double the revenue figure even if it reaches this function again.
+ */
+async function seedSalesTracker(input: {
+  licenseId: bigint;
+  slug: string;
+  spec: SalesTrackerSpec;
+  conversations: Conversation[];
+  walkInCustomerId: string;
+}): Promise<void> {
+  const { licenseId, slug, spec, conversations, walkInCustomerId } = input;
+
+  await prisma.salesTrackerSettings.upsert({
+    where: { licenseId },
+    create: {
+      licenseId,
+      enabled: true,
+      currency: spec.currency,
+      attributionWindowDays: spec.attributionWindowDays,
+    },
+    update: {
+      enabled: true,
+      currency: spec.currency,
+      attributionWindowDays: spec.attributionWindowDays,
+    },
+  });
+
+  // Attributed orders are only possible where a conversation exists; a spec that
+  // asks for them without one is a fixture bug, not something to paper over.
+  if (spec.attributedCents.length > 0 && conversations.length === 0) {
+    throw new Error(`${slug}: attributed sales were requested but no conversation was seeded`);
+  }
+
+  const orders = [
+    ...spec.attributedCents.map((amountCents, index) => {
+      const conversation = conversations[index % conversations.length]!;
+      return {
+        chatId: conversation.chatId,
+        customerId: conversation.customerId,
+        amountCents,
+        attributed: true,
+      };
+    }),
+    ...spec.unattributedCents.map((amountCents) => ({
+      chatId: null,
+      customerId: walkInCustomerId,
+      amountCents,
+      attributed: false,
+    })),
+  ];
+
+  await prisma.trackedSale.createMany({
+    data: orders.map((order, index) => ({
+      licenseId,
+      chatId: order.chatId,
+      customerId: order.customerId,
+      // Shaped like a shop's own order reference and stable across reseeds, so
+      // the uniqueness above is what makes this idempotent. Matches
+      // `SALES_TRACKER_EXTERNAL_ORDER_ID_RE`, which the live endpoint enforces.
+      externalOrderId: `${slug.toUpperCase()}-DEMO-${1001 + index}`,
+      amountCents: order.amountCents,
+      currency: spec.currency,
+      attributed: order.attributed,
+      // Spread over the last few hours: comfortably inside the reports' default
+      // 30-day window, and after the conversations above (minutes old), so an
+      // attributed order sits within its license's attribution window rather
+      // than predating the chat it is credited to.
+      createdAt: new Date(Date.now() - (index + 1) * 1_800_000),
+    })),
+    skipDuplicates: true,
   });
 }
 

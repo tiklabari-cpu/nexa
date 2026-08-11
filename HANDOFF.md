@@ -13,6 +13,32 @@
 
 ## Task log (newest-first)
 
+## tm 75.8 — 13.5-h: Uçtan uca doğrulama — seed/demo + e2e + 13.3 tutarlılığı — done — 2026-08-11 UTC
+
+- **Yapıldı:** `seed.ts`e `seedSalesTracker` — Acme `enabled/USD/7g` + 3 atıflı ($252.50) + 1 atıfsız,
+  Northwind `enabled/GBP/14g` + 2 atıfsız (farklı currency + farklı rakam = sızıntı yanlış sayı olarak
+  görünür; Northwind'in hiç sohbeti yok, o yüzden atıflı satış yok). `seedConversations` artık kurduğu
+  sohbetleri döndürüyor. E2E: `reports.spec.ts` Reviews testi seed'lenmiş rakamları + ekranın sunucuyu
+  alıntıladığını doğruluyor; yeni describe'da trackSale→KPI artışı, replay idempotency, cross-tenant
+  (Northwind GBP/0) · `settings.spec.ts` kapat→dürüst empty state→geri aç · `widget.spec.ts` panel hiç
+  açılmadan sipariş bildirimi. `routes/reports.ts`te yalnız yorum: 13.3 farkının gerekçesi.
+- **13.3 tutarlılık bulgusu (KK maddesi 4):** Çelişki YOK, fark KASITLI ve artık kodda sabit.
+  `goal_achievements` bizim yazdığımız, sayfa-URL tetikleyicili, (goal, customer) başına tekil bir olay;
+  `tracked_sales` tüccarın sayfasının bildirdiği, external order id başına tekil sipariş. Biri diğerinden
+  türetilmez ve hiçbir ekran ikisini aynı büyüklük gibi sunmaz. E2E bunu iddia olarak da tutuyor: bir satış
+  13.3'ün iki sayacını da kıpırdatmıyor. **Kayda geçen ikinci fark:** 07.7 `sales` rapor grubu hâlâ sabit
+  `configured:false` — artık Reviews→Ecommerce rakam gösterirken Sales sekmesi "not set up" diyor ve metni
+  "13.5 not available yet" iddiasında. Kapsam dışı bırakıldı (yeni ürün davranışı); 07.7-d'nin kendi kalemi.
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2410/2410 ·
+  `@nexa/web` 929/929 · `@nexa/widget` 69/69) · `pnpm -w test:integration` 0 (1851/1851 + rtm 51/51) ·
+  build 0 (7/7) · `pnpm -w test:e2e` **100/100** (96→100). Seed idempotency elle ölçüldü: reset'li koşudan
+  sonra ikinci `pnpm db:seed` → `tracked_sales` 6, `sales_tracker_settings` 2 (çiftlenme yok).
+- **Sonraki pencereye not:** (1) `test:integration` ilk koşuda 1 kırmızı verdi, kimliği yakalanamadan
+  bitti; ardışık **üç** koşu 1851/1851 yeşil — muhtemelen tm 113'te izli `reports-billing` saat-kayması
+  flake'i. (2) e2e `.env` source'lanmadan koşulmaz (rtm env ister): `set -a; . ./.env; set +a`.
+  (3) Seed artık demo'da satış izlemeyi AÇIK bırakıyor — "yapılandırılmamış" durumu görmek isteyen test
+  onu kendisi kapatmalı (`settings.spec.ts` deseni: kapat, doğrula, `finally` ile geri aç).
+
 ## tm 75.7 — 13.5-g: Widget izleme kodu — nexa('trackSale', …) JS API + kurulum snippet'i — done — 2026-08-11 UTC
 
 - **Yapıldı:** `apps/widget/src/api.ts`e `WidgetApi#trackSale()` (`POST /customer/chat/sale`). `apps/widget/src/loader.ts`ta `window.nexa(command, payload)` genel komut yüzeyi — boot'tan bağımsız hemen atanır, `nexa:ready` öncesi çağrılar kuyruklanıp ready sonrası tam bir kez flush edilir. `widget.ts`te `trackSale` relay'i: payload şekil daraltması, gerekirse önce `connect()`, hata her zaman `console.warn`'a yutulur (asla throw). `WebsiteWidgets.tsx` kurulum snippet paneline salt-metin örnek satır eklendi.

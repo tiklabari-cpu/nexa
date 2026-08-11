@@ -508,6 +508,85 @@ test.describe('settings', () => {
 
     await section.screenshot({ path: 'kanit/67.7-mcp-connection.png' });
   });
+
+  /**
+   * The Sales tracker switch actually governs the report (FR-MOD-13.5, KK
+   * "İzleme yapılandırması" ↔ "Reports Ecommerce ile ilişki").
+   *
+   * The positive direction — an order reported by the tracking code reaching the
+   * Ecommerce KPIs — is `reports.spec.ts`'s job. This is the half that proves
+   * the figures are *governed* rather than merely present: turned off, the same
+   * screen must fall back to the honest "not set up" state with its CTA, not
+   * keep quoting numbers nothing is feeding any more, and not show a fabricated
+   * zero either.
+   *
+   * The workspace is left tracking again at the end, through the same form, so
+   * the assertion is symmetric and later spec files see the seeded fixture they
+   * expect. The `finally` restores it through the API as well, because a failure
+   * halfway through would otherwise leave every later file looking at a
+   * workspace this test switched off.
+   */
+  test('turning the sales tracker off returns Reports to the honest empty state (13.5)', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    const setTracking = (enabled: boolean) =>
+      request.put(`${API_BASE}/settings/sales-tracker`, {
+        headers: { authorization: `Bearer ${token}` },
+        data: { enabled },
+      });
+
+    try {
+      // Reached through the CTA's own anchor (13.5-e/-f), so this is the link
+      // the empty state below points at, not a URL the test invented.
+      await agentPage.goto('/app/settings#section-sales-tracker');
+      const section = agentPage.getByRole('region', { name: 'Sales tracker' });
+      await expect(section).toBeVisible();
+
+      const toggle = section.getByRole('checkbox', { name: /Track sales/ });
+      await expect(toggle).toBeChecked();
+      await toggle.uncheck();
+      await section.getByRole('button', { name: 'Save' }).click();
+      await expect(section.getByText(/^Saved\./)).toBeVisible();
+
+      // A real navigation, so the report is fetched again rather than served
+      // from the query cache the settings screen never invalidated.
+      await agentPage.goto('/app/reports');
+      await agentPage.getByRole('tab', { name: 'Reviews' }).click();
+      const ecommerce = agentPage.getByRole('region', { name: 'Ecommerce' });
+      await expect(ecommerce.getByText('Sales tracking not set up')).toBeVisible();
+
+      // Genuinely the empty state — not the KPI grid left showing zeros, which
+      // is the failure mode "honest" is guarding against (FR-EK-B.1).
+      await expect(ecommerce.getByText('Tracked sales', { exact: true })).toHaveCount(0);
+      const cta = ecommerce.getByRole('link', { name: 'Configure sales platforms' });
+      await expect(cta).toHaveAttribute('href', '/app/settings#section-sales-tracker');
+      await agentPage.screenshot({ path: 'kanit/13.5-reports-not-configured.png', fullPage: true });
+
+      // --- And back on again, through the same form -------------------------
+      await agentPage.goto('/app/settings#section-sales-tracker');
+      await agentPage.getByRole('checkbox', { name: /Track sales/ }).check();
+      await agentPage
+        .getByRole('region', { name: 'Sales tracker' })
+        .getByRole('button', { name: 'Save' })
+        .click();
+
+      await agentPage.goto('/app/reports');
+      await agentPage.getByRole('tab', { name: 'Reviews' }).click();
+      // `exact`, because the section's own description ends "…(PRD §7.8,
+      // tracked sales §13.5)" and the default substring match is
+      // case-insensitive — it would resolve to the paragraph as well as the KPI.
+      await expect(
+        agentPage
+          .getByRole('region', { name: 'Ecommerce' })
+          .getByText('Tracked sales', { exact: true }),
+      ).toBeVisible();
+    } finally {
+      const restored = await setTracking(true);
+      expect(restored.ok(), `could not restore sales tracking: ${restored.status()}`).toBe(true);
+    }
+  });
 });
 
 test.describe('audit log', () => {

@@ -20,7 +20,9 @@ import {
   API_BASE,
   WIDGET_ORIGIN,
   openWidget,
+  ownerAccessToken,
   signIn,
+  tenantSubdomain,
   visitorSends,
   widgetFrame,
 } from './fixtures.js';
@@ -125,6 +127,67 @@ test.describe('widget embedding', () => {
     await page.reload();
     await widgetFrame(page).getByRole('button', { name: 'Open chat' }).click();
     await expect(widgetFrame(page).getByRole('log', { name: 'Conversation' })).toContainText(text);
+  });
+
+  /**
+   * The tracking code (FR-MOD-13.5, 13.5-g) as a shop actually installs it: a
+   * global the host page's own script calls, on a page where the visitor never
+   * touches the chat.
+   *
+   * That last part is the whole point of the loader's command queue. A checkout
+   * confirmation page fires this on load — the panel is closed, may never be
+   * opened, and the frame is very likely still booting — so a call that was
+   * dropped for arriving early, or that needed the panel open to mint a token,
+   * would look exactly like a working integration and record nothing. The
+   * conversation is held first so there is something for the order to be
+   * credited to; attribution is what the report counts.
+   */
+  test('reports a sale from the host page with the chat panel never opened (13.5)', async ({
+    page,
+    request,
+    organizationId,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const site = tenantSubdomain(`checkout-${stamp}`);
+    const token = await ownerAccessToken(request);
+    const AMOUNT_CENTS = 9_900;
+
+    const trackedSales = async (): Promise<number> => {
+      const response = await request.get(`${API_BASE}/reports/reviews`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.ok(), `reviews report failed: ${response.status()}`).toBe(true);
+      return ((await response.json()) as { ecommerce: { tracked_sales: number | null } }).ecommerce
+        .tracked_sales!;
+    };
+
+    await openWidget(page, organizationId, { host: site.origin });
+    await visitorSends(page, `Checking out now — ${stamp}`);
+    const before = await trackedSales();
+
+    // A fresh load of the shop's page: the panel is closed again and the loader
+    // is booting from scratch, exactly as it would be on a confirmation page.
+    await page.reload();
+
+    // The global is exposed by the loader itself, independently of the widget
+    // having booted — so a host page can call it as soon as the script has run.
+    await page.waitForFunction(
+      () => typeof (window as unknown as { nexa?: unknown }).nexa === 'function',
+    );
+    await page.evaluate(
+      ({ orderId, amountCents }) => {
+        (window as unknown as { nexa: (command: string, payload: unknown) => void }).nexa(
+          'trackSale',
+          { external_order_id: orderId, amount_cents: amountCents, currency: 'USD' },
+        );
+      },
+      { orderId: `E2E-CHECKOUT-${stamp}`, amountCents: AMOUNT_CENTS },
+    );
+
+    // The order lands, credited to the conversation above — with the panel
+    // still closed the whole time, which is the claim this test exists to make.
+    await expect.poll(trackedSales, { timeout: 20_000 }).toBe(before + 1);
+    await expect(widgetFrame(page).getByRole('textbox', { name: 'Message' })).not.toBeVisible();
   });
 });
 

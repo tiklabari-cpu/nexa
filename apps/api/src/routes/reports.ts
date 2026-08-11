@@ -712,6 +712,39 @@ interface EcommerceBlock {
  * that switched tracking on and saw no attributed order has a known answer, and
  * it is zero. Null there would send the screen back to "not set up" for a
  * workspace that plainly did set it up.
+ *
+ * ## Why this is not the Goals funnel's `conversions` (FR-MOD-13.3)
+ *
+ * Two numbers on two report tabs both answer to the word "conversion", and the
+ * 13.5 e2e asserts they may disagree — so the reason is pinned here rather than
+ * left to be rediscovered as a suspected bug.
+ *
+ * They count different events, from different reporters:
+ *
+ * - `goal_achievements` ({@link achievedGoalCount}, {@link goalFunnelCounts}) is
+ *   written by *us*, when a visitor lands on a page whose URL matches a goal the
+ *   workspace defined. It needs no money to change hands. It is deduplicated per
+ *   (goal, customer), so a visitor who buys twice converts once.
+ * - `tracked_sales` is written by the *merchant's own page*, once per order it
+ *   reports through `nexa('trackSale', …)`, deduplicated per external order id.
+ *   A second order from the same visitor is a second sale.
+ *
+ * Neither is derived from the other and neither should be: a sale writes no
+ * achievement (a workspace with no goal defined still has revenue to report),
+ * and a goal is reached by workspaces that sell nothing at all. Reading one from
+ * the other would mean inventing the missing half.
+ *
+ * What would be dishonest is presenting them as the same quantity, so nothing
+ * does: the funnel's stage is labelled "Conversions" on the Goals screen and
+ * "Achieved goals" on the Overview, while this block's figures are "Tracked
+ * sales" and "Attributed revenue" under Reviews → Ecommerce. No screen adds,
+ * compares or substitutes one for the other.
+ *
+ * Related and deliberately still unwired: the v2 `sales` report group
+ * ({@link buildSalesReport}) is a fixed `configured: false` skeleton, so it can
+ * read "not set up" while this block shows figures for the same window. That is
+ * 07.7-d's own dependency on 13.5, not a disagreement about the data — both
+ * would read from `tracked_sales` once it is connected.
  */
 async function trackedSalesBlock(
   tx: TenantClient,

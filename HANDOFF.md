@@ -13,6 +13,36 @@
 
 ## Task log (newest-first)
 
+## KANIT-AD (tm 116) — `16-notifications-settings.png` artık **bildirim ayarlarını** çekiyor — done — 2026-08-11 UTC
+
+- **Yapıldı:** Kök neden `fullPage: true`'ydu, testin akışı değil: `html,body,#root{height:100%}`
+  olduğu için **belge kaymıyor** — kayan şey `Page` kabı (`overflow-y-auto`). Tam-sayfa çekim bu
+  yüzden kutuyu 1280×2278'e büyütüp altını boş kanvas bırakıyor, Notifications 4. bölüm olduğu
+  için kadraja **hiç girmiyordu**. Düzeltme: `section.scrollIntoViewIfNeeded()` + viewport çekimi
+  (`notifications.spec.ts`). Aynı sınıftan ikinci kusur: `08.5.7-instagram-disconnected.png` aynı
+  rotanın tam-sayfa çekimi olduğu için `8-channels-grid.png` ile birebir aynı bayttı → artık
+  kartın kendisini kadrajlıyor (`cardAgain.screenshot()`, `instagram.spec.ts`). `8-channels-grid`
+  dokunulmadı — adı zaten çektiği şeyi söylüyor.
+- **Kabul kriteri, dördü de:** (i) md5 **üç ayrı** özet (`e1192e4a` / `cf647f46` / `66fe1fe2`);
+  (ii) gözle doğrulandı — yeni PNG'de Enable notifications (On) · Play a sound · Desktop
+  notifications ("Blocked in your browser…", Enable düğmesi pasif) · Email notifications (On),
+  Instagram kartında "Not connected" rozeti + Connect; (iii) e2e **113/113**, test sayısı düşmedi
+  (tm 99.8 tabanı 103, tm 115 = 113); (iv) **ürün kodu diff'i boş** — `git diff apps/api apps/web
+  apps/rtm apps/widget packages` hiçbir şey döndürmedi.
+- **Doğrulama — tam DoD kapısı, hepsi exit 0:** typecheck **11/11** · lint **8/8** ·
+  `pnpm -w test` **3802** (api 2414 · web 997 · ai-mock 136 · rtm 90 · widget 69 · types 96) ·
+  `pnpm -w test:integration` **1906** (api 1855 · rtm 51) · build **7/7** ·
+  `pnpm -w test:e2e` **113/113** (5.4 dk), `.last-run.json` = `passed`. Hepsi tm 115 tabanıyla
+  birebir aynı — beklendiği gibi, çünkü ürün kodu değişmedi.
+- **Sonraki pencereye not:** (1) `kanit/*.png` churn'ü **yine tekrarladı** — tam koşu 9 ek PNG'yi
+  tazeledi (seed UUID'leri e-posta adresi/chat linki olarak kadraja giriyor, `8-channels-grid`
+  iki koşuda iki farklı md5 verdi). Ayrı `chore(e2e)` commit'ine konuldu (AGAC-TEMIZ dersi).
+  (2) Aynı kusur sınıfı başka `fullPage: true` kanıtlarında da olabilir: bu rotada tam-sayfa
+  çekim **hiçbir zaman** ilk ekrandan fazlasını göstermez; `/app/settings` altındaki bir bölümü
+  kanıtlayacak yeni test yazan pencere doğrudan `scrollIntoViewIfNeeded()` + viewport (veya
+  element) çekimi kullansın. (3) `pnpm format:check` hâlâ repo genelinde kırmızı (tm 115 notu 2),
+  DoD kapısında değil, dokunulmadı.
+
 ## A11Y-OLC (tm 115) — WCAG 2.1 AA artık **ölçülüyor** (axe), ilk tur 62 ihlal buldu ve kapattı — done — 2026-08-11 UTC
 
 - **Yapıldı:** `apps/e2e/tests/a11y.ts` + `a11y.spec.ts` — axe-core (`wcag2a/2aa/21a/21aa`) **9 yüzeyde**

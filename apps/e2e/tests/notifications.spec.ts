@@ -24,7 +24,16 @@ test.describe('notification settings', () => {
     await expect(master).toBeChecked();
     await expect(sound).toBeEnabled();
 
-    await agentPage.screenshot({ path: 'kanit/16-notifications-settings.png', fullPage: true });
+    // `fullPage: true` is useless on this route and was actively misleading:
+    // `html, body, #root` are all `height: 100%`, so the document never scrolls
+    // — the `Page` container does. A full-page capture therefore grows the
+    // capture box without revealing anything below the fold, and Notifications
+    // is the fourth section down. The file this line wrote was byte-identical to
+    // `8-channels-grid.png` and `08.5.7-instagram-disconnected.png`: three names,
+    // one picture of Settings → Channels, none of them notifications (tm 116).
+    // Scroll the section into view and capture the viewport instead.
+    await section.scrollIntoViewIfNeeded();
+    await agentPage.screenshot({ path: 'kanit/16-notifications-settings.png' });
 
     // Turning the master off disables the channels under it — the negative path
     // an agent takes to go quiet.

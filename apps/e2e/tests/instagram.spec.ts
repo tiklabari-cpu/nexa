@@ -172,7 +172,12 @@ test.describe('Instagram DMs (FR-MOD-08.5.7)', () => {
 
     await expect(cardAgain.getByText('Not connected')).toBeVisible();
     await expect(cardAgain.getByRole('button', { name: 'Connect' })).toBeVisible();
-    await agentPage.screenshot({ path: 'kanit/08.5.7-instagram-disconnected.png', fullPage: true });
+    // Frame the card, not the page. What this file has to evidence is one card's
+    // state, and a whole-page shot of /app/settings cannot carry that: it was
+    // byte-identical to `8-channels-grid.png`, which photographs the same grid on
+    // purpose. Two names, one picture, and neither of them pointing at Instagram
+    // (tm 116).
+    await cardAgain.screenshot({ path: 'kanit/08.5.7-instagram-disconnected.png' });
 
     // The rail follows the same live state rather than latching: the row goes,
     // and the promo an unconnected workspace should see comes back.

@@ -13,6 +13,29 @@
 
 ## Task log (newest-first)
 
+## tm 122 — PRD §5.5 · §2 Modül→Faz matrisinin bayat damgaları koda karşı hizalandı — done — 2026-08-11 UTC
+
+- **Yapıldı (YALNIZ doküman — ürün kodu, test, migration, sözleşme, `## K.` blokları DEĞİŞMEDİ):**
+  dört satır **tek tek** gereksinim satırı + kanıt bloğu + KOD ile doğrulandı, üçü de uyuşunca damga
+  çevrildi: **MOD-02** (`02.4` ziyaret bilgisi ⬜ iddiası yanlıştı — satır 186 `✅`, `DetailsPanel.tsx:213/240`
+  + `chat-service.ts:163`) · **Engage/Goals + Sales tracker** (⬜ = "kod yok" yanlıştı — 13.2/13.3/13.5 `✅`,
+  `features/goals/` + `services/sales/attribution.ts`) · **MOD-09** (⬜ yanlıştı — 09.1/09.2/09.2-b/09.3/09.4
+  `✅`, `APP_CATALOG` **102 girdi** bu turda sayıldı) · **MOD-01** (`◐`ın gerekçesi "Copilot v1" geçersiz;
+  kalan `01.1.1/.4/.5, 01.4, 01.5` = `Should/Could` + `🔒`, MOD-02 ile yapısal olarak aynı → `✅` + kalan notu).
+  §D100 açıldı (§D95 Faz-3 kırılımınca alınmıştı) + kalıcı kural §2'nin altına da yazıldı.
+- **Doğrulama (kabul ölçütleri komutla):** §2'de `⬜` **3 → 1** (kalan tek satır `Mobil app`) · `◐` **2 → 0** ·
+  `02.4 · ziyaret bilgisi` ibaresi **0 isabet** · §2'de `Copilot v1` **0 isabet** · kontrol satırları
+  (133 `⛔ ADR-14` · 144 `⬜`) damgaca DEĞİŞMEDİ · §1 kapı tablosu (20-22) `git diff`'te **hiç yok** ·
+  `pnpm -w format:check` **exit 0** · en uzun §2 satırı **207 karakter**. Build kapıları KOŞULMADI —
+  doküman-only tur (§D80/§D81/§D82/§D87 emsali), `git diff --name-only` yalnız PLAN.md + HANDOFF.md + tasks.json.
+- **Varsayımlar:** MOD-01 için `◐` korunmadı — kalan kalemler `Should/Could` + `🔒` ve §F.00 gereği kapanışı
+  bloklamıyor; MOD-02/MOD-05/MOD-06 hücreleri de aynı deyimi kullanıyor, ikisini farklı damgalamak
+  tablonun dilini bozardı. Satır 144'e `Ent.` işareti **konulmadı**: ●/○ sütunları PRD §5.5'in (PRD:458)
+  birebir aynası, 13.7'nin Faz-3'e taşınması ise **bizim sapmamız** (§D60) → `Durum` hücresine yazıldı.
+- **Sonraki pencereye not:** §D99'un **K1-8** bulgusu bununla kapandı; `tm 123` de kapanınca Faz 3 fiilen
+  `tm 81 → 81.1 (S11-a)` ile başlar. Kalıcı kural: bir gereksinim damgası kapandığında **aynı turda** §2
+  matrisi de taranır — §D19'un "kendi denetim turunda güncellenir" notu 17 gün ve üç GL turu boyunca gelmedi.
+
 ## FAZ-3 PLANLAMA — Enterprise orta derinlikten TAM ATOMİĞE indirildi + düşman denetiminden geçirildi (6 kalem · 50 alt-görev · ~69 pencere) — done — 2026-08-11 UTC
 
 - **Yapıldı (YALNIZ planlama — ürün kodu, test, migration, sözleşme DEĞİŞMEDİ):**

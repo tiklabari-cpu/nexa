@@ -67,9 +67,24 @@ export function Section({
   );
 }
 
-export function Card({ children }: { children: ReactNode }): ReactElement {
+/**
+ * The standard surface. `className` is appended, not replaced — it exists for
+ * callers that have to control the card's *box* (a fixed-height grid cell needs
+ * `h-full`, 09.2-v2-g) without restating the chrome and letting it drift.
+ */
+export function Card({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}): ReactElement {
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-xs">
+    <div
+      className={`overflow-hidden rounded-lg border border-border bg-surface shadow-xs${
+        className ? ` ${className}` : ''
+      }`}
+    >
       {children}
     </div>
   );

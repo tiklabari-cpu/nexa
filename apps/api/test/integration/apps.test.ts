@@ -78,8 +78,9 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     const ids: string[] = [];
     const totals: number[] = [];
     let cursor: string | undefined;
-    // Bounded so a cursor that fails to advance fails the test instead of hanging.
-    for (let request = 0; request < 50; request += 1) {
+    // Bounded (comfortably above the mock catalogue's size) so a cursor that
+    // fails to advance fails the test instead of hanging.
+    for (let request = 0; request < 100; request += 1) {
       const result = await page(token, `${params}${cursor ? `&page_id=${encodeURIComponent(cursor)}` : ''}`);
       ids.push(...result.items.map((item) => item.id));
       totals.push(result.total);
@@ -223,11 +224,12 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
   // --- Channel-typed apps: managed in Channels, not connected here (09.2) -----
 
   it('lists the full directory and flags channel-typed apps, refusing to connect them here', async () => {
-    const items = await list(adminToken);
-    // The directory is 15–22 cards: 09.2's v1 list (20) + 09.4's two
-    // automation-platform cards (Zapier, Make).
-    expect(items.length).toBeGreaterThanOrEqual(15);
-    expect(items.length).toBeLessThanOrEqual(22);
+    // limit=100 fits the whole (sub-100-card) mock catalogue in one page, so
+    // `items` below is the full directory, not just its default-size first page.
+    const { items, total } = await page(adminToken, '?limit=100');
+    // 09.2-v2-d grew the mock catalogue to 60+ cards; no upper bound is asserted.
+    expect(total).toBeGreaterThanOrEqual(60);
+    expect(items.length).toBe(total);
 
     // 09.4-a: the two automation-platform cards are in the directory, uninstalled.
     const zapier = findItem(items, 'zapier');

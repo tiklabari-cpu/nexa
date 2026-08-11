@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+## tm 99.4 — 09.2-v2-d: Katalog verisi 20 → 60 kart (mock, mevcut 8 kategori) — done — 2026-08-11 UTC
+
+- **Yapıldı:** `APP_CATALOG` 22 → 62 karta büyüdü: 40 yeni VERİ app'i (kanal-tipli kart yok), mevcut
+  7 veri kategorisine dağıtıldı (crm/support/ecommerce/payments/marketing/productivity/analytics:
+  +6/+6/+6/+6/+6/+4/+6), oauth/api_key dengeli (yeni 40'ta 20/20). Her kart mevcut invariant'ları
+  sağlıyor (tekil id, boş olmayan name, scopes>0, dataLabel+≥1 dataField ile options>0); mevcut 22
+  kartın id/name/category/sırası değişmedi. Üst-sınır testleri kaldırıldı: `apps.test.ts` artık
+  yalnız `APP_CATALOG.length>=60`; `apps/api/test/integration/apps.test.ts`'in "tam liste" testi
+  parametresiz `list()` (default `limit=25`, artık 62 kartın tamamını dönmüyor) yerine `?limit=100`
+  ile tam kataloğu okuyup `total>=60` iddia ediyor. İki yan-etki bulundu ve düzeltildi: (1) aynı
+  dosyadaki `walk()` yardımcısının sabit "50 istekte throw" sınırı `limit=1` ile 62 kartı gezmek
+  için yetersizdi → 100'e çekildi; (2) ilk yazılan `freshsales` açıklaması "lifecycle stage"
+  diyordu ve `hubspot`la aynı `crm` kategorisindeydi, mevcut bir testin "yalnız HubSpot'ta
+  'lifecycle stage' geçer" varsayımını kırdı → "funnel stage"e çevrildi.
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2414/2414 ·
+  `@nexa/web` 929/929 · `@nexa/widget` 69/69 · `@nexa/types` 96/96) · `pnpm -w test:integration` 0
+  (1855/1855, `contract-parity` 5/5 dahil) · build 0 (7/7) · `pnpm -w test:e2e` **100/100**.
+- **Varsayımlar:** Yok.
+- **Sonraki pencereye not:** 09.2-v2 epic'i 8 alt-görevden 4'ü (-a,-b,-c,-d) kapandı; PLAN K09.2-b
+  `◐` kalmaya devam ediyor. Sıradaki `09.2-v2-e` (katalog 62→100+, -d'ye bağımlı). **Dikkat:** web
+  `AppsMarketplace.tsx` hâlâ parametresiz `api.get('/settings/apps')` çağırıyor (default
+  `limit=25`) — 62 kartlık katalogda artık yalnız ilk 25'i (22 orijinal + ilk 3 yeni kart)
+  gösteriyor, kanal-tipli kartlar (WhatsApp vb.) dahil geri kalanı grid'de görünmüyor; bu -f/-g'nin
+  (arama+sayfalama UI'ı) kapsamı, bilerek düzeltilmedi (tm 99.3'ün notunda öngörülmüştü). `09.2-v2-e`
+  katalog 100+'a çıkardığında `apps/api/test/integration/apps.test.ts` içindeki `?limit=100`
+  temelli "tam liste" okumaları (bu turda eklenen + `narrows`/`pages` testlerindeki mevcut
+  `?limit=100` çağrıları) tekrar yetersiz kalır — kontrattaki `limit` üst sınırı zaten 100, o
+  noktada tam liste okumak için `walk()`/cursor zinciri gerekir. `apps/e2e/kanit/*.png` yine bu
+  turun `pnpm -w test:e2e` koşusundan yeniden üretildi, başka task'lara ait, commit'e alınmadı
+  (tm 99.1/99.2/99.3/113 emsali).
+
 ## tm 99.3 — 09.2-v2-c: GET /settings/apps sorgu bağlama (zod + sayfalama + tenant join) — done — 2026-08-11 UTC
 
 - **Yapıldı:** Route'a `listQuery` zod şeması (`query` trim/max 320 · `category` `z.enum(APP_CATEGORIES)` ·

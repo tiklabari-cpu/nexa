@@ -37,11 +37,9 @@ describe('app catalogue', () => {
   });
 
   // KK 09.2: "Her biri OAuth/API key" — the full directory, both provider kinds.
-  // Upper bound is 22, not 20: 09.2's v1 list (20) + 09.4's two automation cards
-  // (Zapier, Make).
-  it('is the full directory (15–22 cards) across both provider kinds', () => {
-    expect(APP_CATALOG.length).toBeGreaterThanOrEqual(15);
-    expect(APP_CATALOG.length).toBeLessThanOrEqual(22);
+  // 09.2-v2-d grew the mock catalogue to 60+ cards; no upper bound is asserted.
+  it('is the full mock directory (60+ cards) across both provider kinds', () => {
+    expect(APP_CATALOG.length).toBeGreaterThanOrEqual(60);
     const providers = new Set(APP_CATALOG.map((entry) => entry.provider));
     expect(providers.has('oauth')).toBe(true);
     expect(providers.has('api_key')).toBe(true);

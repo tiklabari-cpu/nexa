@@ -3637,10 +3637,10 @@
             "description": "sso_connections tablosu + RLS politikası + kontrat okuma yüzeyi",
             "details": "S11-a — sso_connections tablosu + RLS politikası + kontrat okuma yüzeyi  [OPUS-XHIGH]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: depoda SAML/SCIM'e ait hiçbir kod yok (`grep -rn \"saml\\|scim\" apps/api/src/routes/` → 0 eşleşme). Federasyon yapılandırmasının duracağı yer yok.\n\n**AMA MODEL KISMEN HAZIR (denetim bulgusu — bilmezsen gereksiz şema işi açarsın):** parolasız (SSO-only) hesap zaten modellenmiş — `apps/api/prisma/schema.prisma:124` `password_hash` yorumu _\"Null for accounts that only sign in via SSO\"_ ve `apps/api/src/lib/crypto.ts:66` parolasız hesapta sabit-zaman dalını yazıyor (_\"No password set (SSO-only account). Burn comparable time anyway\"_). Yani `S11-d`'nin JIT provizyonu ve `S11-h`'nin parola kapatma kararı bu var olan alanın üstüne oturur; yeni bir \"parolasız hesap\" kavramı İCAT EDİLMEZ.\n\nKAPSAM: `sso_connections` tablosu (licenseId, name, idpEntityId, idpSsoUrl, idpCertificatePem, attributeMapping Json, allowIdpInitiated Bool @default(false), enabled) + RLS politikası + salt-okuma kontrat yüzeyi (`GET /settings/sso`). DAVRANIŞSIZ iskelet — doğrulama S11-b'de, uçlar S11-d'de.\n\nDOSYALAR: `apps/api/prisma/schema.prisma` · yeni migration `apps/api/prisma/migrations/<ts>_sso_connections/migration.sql` · `packages/contract/openapi/paths/settings.yaml` · `packages/types/src/domain.ts` · `apps/api/src/routes/settings.ts`\n\nREFERANS DESEN (birebir kopyalanacak): tm 80 alt-görev `08.9.6-b` — `ip_allowlist_entries` tablosu + RLS. Migration'daki policy kalıbı: `USING (license_id = nexa_current_license())`. Sertifika PEM'i bir SIR DEĞİLDİR (IdP'nin public sertifikası) — hash'lenmez, olduğu gibi saklanır; SCIM token'ı ise S11-e'de hash'lenir.\n\nKAPSAM DIŞI: assertion doğrulama (S11-b), SP uçları (S11-d), SCIM (S11-e), ekran (S11-g).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm --filter @nexa/api test (yeni: sso_connections RLS cross-tenant negatifi — başka lisansın satırı okunamaz/yazılamaz) && pnpm -w build && pnpm --filter @nexa/api test:integration",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "81",
-            "updatedAt": "2026-08-11T22:42:34.913Z"
+            "updatedAt": "2026-08-11T23:28:03.051Z"
           },
           {
             "id": 2,
@@ -3765,7 +3765,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-11T22:42:34.913Z"
+        "updatedAt": "2026-08-11T23:28:03.051Z"
       },
       {
         "id": "82",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-11T22:42:34.915Z",
+      "lastModified": "2026-08-11T23:28:03.051Z",
       "taskCount": 123,
       "completedCount": 117,
       "tags": [

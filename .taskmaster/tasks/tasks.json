@@ -3397,17 +3397,97 @@
       },
       {
         "id": "79",
-        "title": "08.5.8 — Telegram (TR pazarı önceliği, MOCK)",
-        "description": "FR-MOD-08.5.8 · Should (Ent.).",
-        "details": "FR-MOD-08.5.8 · Should (Ent.).\nKAPSAM: Get notified → tam entegrasyon (mock adaptör, 08.5-adapter-a üstüne). TR pazarında öncelik.\nKK (birebir): \"Get notified → tam entegrasyon (TR pazarında öncelik)\". BAĞLAM: PLAN §6.1. Bağımlılık: tm 35.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
-        "testStrategy": "integration: mock inbound→chat + CROSS-TENANT. DoD tam.",
-        "status": "deferred",
+        "title": "08.5.8 — Telegram kanalı (MOCK adaptör, uçtan uca) · dilim V3-4",
+        "description": "FR-MOD-08.5.8 · Should (Ent.). Adres sahiplenme çekirdeği ZATEN GENEL (tm 65 08.5.7-d) — Telegram için OPUS-MAX gerekmez.",
+        "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `08.5.8` · dilim V3-4\n\n6 atomik alt-görev · ~7 pencere · etiket dağılımı: SONNET-XHIGH x4 · OPUS-XHIGH x2\n\nKK: \"Get notified → tam entegrasyon (TR pazarında öncelik)\" — FR-MOD-08.5.8 birebir.\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  08.5.8-a [SONNET-XHIGH] Telegram connect/webhook kontratı + generated tip yenilemesi  (bağ: —)\n  08.5.8-b [SONNET-XHIGH] TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri  (bağ: 08.5.8-a)\n  08.5.8-c [OPUS-XHIGH] Telegram'ın adapter kanalı olarak devreye alınması — CHANNEL_TYPES + registry + pinlenmiş test  (bağ: 08.5.8-a, 08.5.8-b)\n  08.5.8-d [SONNET-XHIGH] Settings → Channels: Telegram kartı \"Coming soon\"dan canlı connect/disconnect'e  (bağ: 08.5.8-c)\n  08.5.8-e [SONNET-XHIGH] Inbox Views grubunda Telegram kanal görünümü  (bağ: 08.5.8-c)\n  08.5.8-f [OPUS-XHIGH] Uçtan uca doğrulama — bağla→mesaj→inbox→yanıt + cross-tenant + adres sahiplenme regresyonu  (bağ: 08.5.8-d, 08.5.8-e)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.1 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
+        "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (08.5.8-f) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
+        "status": "pending",
         "dependencies": [
-          "35"
+          "35",
+          "82"
         ],
-        "priority": "low",
-        "subtasks": [],
-        "updatedAt": "2026-07-25T13:09:32.269Z"
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "08.5.8-a [SONNET-XHIGH] Telegram connect/webhook kontratı + generated tip yenilemesi",
+            "description": "Telegram connect/webhook kontratı + generated tip yenilemesi",
+            "details": "08.5.8-a — Telegram connect/webhook kontratı + generated tip yenilemesi  [SONNET-XHIGH]\n\nPRD: 08.5.8 (PLAN §6.1 · dilim V3-4 · tm 79)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: `telegram` domain kanal listesinde VAR (`packages/types/src/domain.ts:98-106`) ama ADAPTER listesinde YOK (`apps/api/src/services/channels/channel-adapter.ts:40` → `['messenger','twilio','whatsapp','instagram']`). Settings'te statik \"Coming soon\" kartı duruyor (`apps/web/src/features/settings/Channels.tsx:133`).\n\nKAPSAM: `packages/contract/openapi/paths/channels.yaml` — telegram connect gövdesi (`bot_token` mock + `bot_username` = kanal adresi) ve webhook gövdesi. Sonra `pnpm contract:generate`.\n\nKRİTİK: bu adımda `channel-adapter.ts`'deki `CHANNEL_TYPES` DEĞİŞMEZ. Sözleşme önce, devreye alma `08.5.8-c`'de. Aksi hâlde adaptörü olmayan bir tip route yüzeyine girer ve aradaki sürümde 500 üretir.\n\nDOSYALAR: `packages/contract/openapi/paths/channels.yaml` · `packages/contract/src/generated/api.ts` (üretilir, commit'lenir)\n\nREFERANS DESEN (birebir): tm 65 `08.5.7-a` (Instagram kontratı) — aynı dosya, aynı kalıp.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**`bot_token` `config`'e YAZILMAZ (denetim bulgusu — PLAN §6.1.1'in açık sorusu BU KARARLA KAPANDI):** `apps/api/src/services/channels/channel-adapter.ts` `ConnectResult.config` dokümanı birebir _\"Never contains a raw secret\"_ diyor. Instagram emsali (`ig_access_token`) sunucunun kendi bastığı bir mock değerdir; Telegram'da `bot_token` İSTEMCİDEN gelir, yani emsali körü körüne kopyalamak bu invaryantı kullanıcı-sağlamalı bir sırla ihlal eder. `parseConnect` yalnız `{address: bot_username, config: {address, bot_username}}` döner. Token gerekiyorsa mock bir türev saklanır. Ayrıca `bot_token` pino redaction listesine ve `sanitizeAuditMetadata`'ya eklenir. (Hafifletici: `channel-service.ts` `serialise()` zaten yalnız `address` döner, yani `config` `GET /channels` yanıtına girmiyor — ama DB'de düz metin ve loglar açık yüzey kalırdı.)",
+            "testStrategy": "pnpm --filter @nexa/contract build && pnpm contract:generate (generated tip spec ile SENKRON — CI bunu doğruluyor) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:integration (contract-parity 5/5 yeşil)",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "79",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 2,
+            "title": "08.5.8-b [SONNET-XHIGH] TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri",
+            "description": "TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri",
+            "details": "08.5.8-b — TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri  [SONNET-XHIGH]\n\nPRD: 08.5.8 (PLAN §6.1 · dilim V3-4 · tm 79)\nTAHMİN: ~1 pencere\n\nKAPSAM: `apps/api/src/services/channels/telegram.ts` — `ChannelAdapter` arayüzünü uygular: `parseConnect` (bot_token + bot_username → {address, config}), `parseInbound` (düzleştirilmiş {recipient, sender, message}), `send` (mock outbound, provider message id öneki `tg.`).\n\nDOSYALAR: `apps/api/src/services/channels/telegram.ts` (yeni) · `apps/api/src/services/channels/adapters.test.ts`\n\nREFERANS DESEN (birebir): `apps/api/src/services/channels/instagram.ts` (80 satır) — yapı, isimlendirme, hata davranışı bire bir kopyalanır.\n\nVARSAYIM: Telegram'ın gerçek `update` sarmalayıcısı TAKLİT EDİLMEZ; depodaki düzleştirilmiş gövde kalıbı korunur (mevcut dört adaptörle tutarlılık).\n\nKAPSAM DIŞI: registry kaydı ve CHANNEL_TYPES (08.5.8-c).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**`bot_token` `config`'e YAZILMAZ (denetim bulgusu — PLAN §6.1.1'in açık sorusu BU KARARLA KAPANDI):** `apps/api/src/services/channels/channel-adapter.ts` `ConnectResult.config` dokümanı birebir _\"Never contains a raw secret\"_ diyor. Instagram emsali (`ig_access_token`) sunucunun kendi bastığı bir mock değerdir; Telegram'da `bot_token` İSTEMCİDEN gelir, yani emsali körü körüne kopyalamak bu invaryantı kullanıcı-sağlamalı bir sırla ihlal eder. `parseConnect` yalnız `{address: bot_username, config: {address, bot_username}}` döner. Token gerekiyorsa mock bir türev saklanır. Ayrıca `bot_token` pino redaction listesine ve `sanitizeAuditMetadata`'ya eklenir. (Hafifletici: `channel-service.ts` `serialise()` zaten yalnız `address` döner, yani `config` `GET /channels` yanıtına girmiyor — ama DB'de düz metin ve loglar açık yüzey kalırdı.)",
+            "testStrategy": "pnpm --filter @nexa/api test:unit (adapters.test.ts: parseConnect adresi doğru çıkarır; parseInbound gövdeyi çözer; send tg. önekli id döner; bozuk gövde reddedilir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "79.1"
+            ],
+            "parentId": "79",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 3,
+            "title": "08.5.8-c [OPUS-XHIGH] Telegram'ın adapter kanalı olarak devreye alınması — CHANNEL_TYPES + registry + pinlenmiş test",
+            "description": "Telegram'ın adapter kanalı olarak devreye alınması — CHANNEL_TYPES + registry + pinlenmiş test",
+            "details": "08.5.8-c — Telegram'ın adapter kanalı olarak devreye alınması — CHANNEL_TYPES + registry + pinlenmiş test  [OPUS-XHIGH]\n\nPRD: 08.5.8 (PLAN §6.1 · dilim V3-4 · tm 79)\nTAHMİN: ~1 pencere\n\nKAPSAM: `channel-adapter.ts:40` `CHANNEL_TYPES`'a `'telegram'` + `registry.ts` `ADAPTERS` kaydı. `registry.ts` `Record<ChannelType, ChannelAdapter>` olduğu için tip eklemek kaydı zorunlu kılar (derleme hatası — dosya yorumunun kendi ifadesiyle \"adding a channel type without an adapter here is a compile error, not a 500 at runtime\").\n\nDİKKAT — PİNLENMİŞ TEST GÜNCELLENECEK: `apps/api/src/services/channels/adapters.test.ts:24-32` listeyi BİLEREK pinliyor ve `:31`'de `expect(isChannelType('telegram')).toBe(false)` diyor (\"Telegram is Enterprise, out of scope\"). Bu satır bu turda değişir; testin başındaki yorum da güncellenir — pin bir hata değil, route yüzeyi kararının bilinçli kaydıdır.\n\nAyrıca: inbound→chat ve outbound uçtan uca kanıtı (adapter kanalı olarak ilk gerçek akış).\n\nDOSYALAR: `apps/api/src/services/channels/channel-adapter.ts:40` · `apps/api/src/services/channels/registry.ts` · `apps/api/src/services/channels/adapters.test.ts:24-32`\n\nREFERANS DESEN (birebir): tm 65 `08.5.7-c`.\n\nKAPSAM DIŞI: UI (08.5.8-d/-e), e2e (08.5.8-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**MIGRATION GEREKMEZ (denetim doğrulaması):** `channels_type_check CHECK (type IN (… 'telegram', 'chat_page'))` kısıtı `20260722154008_domain_model/migration.sql:824-826`'da telegram'ı ZATEN kabul ediyor. Bu kalemin hiçbir alt-görevinde migration olmaması doğrudur.",
+            "testStrategy": "pnpm --filter @nexa/api test (adapters.test.ts pinlenmiş liste telegram ile güncel; getAdapter('telegram') doğru tipi döner) && pnpm --filter @nexa/api test:integration (telegram connect → kanal satırı; webhook inbound → chat + event; outbound gönderim; CROSS-TENANT) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "79.1",
+              "79.2"
+            ],
+            "parentId": "79",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 4,
+            "title": "08.5.8-d [SONNET-XHIGH] Settings → Channels: Telegram kartı \"Coming soon\"dan canlı connect/disconnect'e",
+            "description": "Settings → Channels: Telegram kartı \"Coming soon\"dan canlı connect/disconnect'e",
+            "details": "08.5.8-d — Settings → Channels: Telegram kartı \"Coming soon\"dan canlı connect/disconnect'e  [SONNET-XHIGH]\n\nPRD: 08.5.8 (PLAN §6.1 · dilim V3-4 · tm 79)\nTAHMİN: ~1 pencere\n\nKAPSAM: `Channels.tsx:133` → `comingSoon('telegram', 'Telegram', '✈️', ...)` satırı canlı karta çevrilir; durum bağlı kanallardan türetilir.\n\nDOSYALAR: `apps/web/src/features/settings/Channels.tsx:129-160` · `apps/web/src/features/settings/Channels.test.tsx` · `apps/web/src/features/settings/channels.test.ts`\n\nREFERANS DESEN (BİREBİR, aynı dosyada): `instagramChannel(connectedChannels)` (`Channels.tsx:147-160`) — durum türetme, adres gösterimi, yükleme durumu (`:308-314`). Telegram için aynı fonksiyon kalıbı yazılır.\n\n**'GET NOTIFIED' PAYININ AKIBETİ BU ALT-GÖREVE AİTTİR (denetim bulgusu K1-11):** KK \"Get notified → tam entegrasyon\" iki adımlıdır. Instagram turunda (tm 65 · `08.5.7-f`) 'Get notified' kaydı localStorage'a yazılmıştı. Telegram kartı canlıya geçince o kayıt **sessizce düşer** (kart artık connect/disconnect gösterdiği için 'Get notified' CTA'sı yoktur) ve localStorage anahtarı bir sonraki okumada temizlenir. Bu karar burada verilmiştir; açık soru olarak BIRAKILMAZ.\n\nKAPSAM DIŞI: Views (08.5.8-e), e2e (08.5.8-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/web test (Telegram kartı bağlı değilken not_connected, bağlıyken connected + adres; connect/disconnect çağrıları doğru; yükleme durumunda \"Coming soon\" GÖSTERİLMEZ) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "79.3"
+            ],
+            "parentId": "79",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 5,
+            "title": "08.5.8-e [SONNET-XHIGH] Inbox Views grubunda Telegram kanal görünümü",
+            "description": "Inbox Views grubunda Telegram kanal görünümü",
+            "details": "08.5.8-e — Inbox Views grubunda Telegram kanal görünümü  [SONNET-XHIGH]\n\nPRD: 08.5.8 (PLAN §6.1.1 · dilim V3-4 · tm 79)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: Inbox sol kolonundaki \"Views\" grubu kanal bazlı görünümler taşır. Instagram v2 turunda (tm 65 `08.5.7-g`) kendi görünümünü aldı; Telegram adapter kanalı olduğu anda (`08.5.8-c`) aynı grupta yerini almalı, yoksa bağlanmış bir kanalın sohbetleri filtrelenemez ve kanal ajan için görünmez kalır.\n\nKAPSAM (denetim sonrası GERÇEK YÜZEYE İNDİRİLDİ — ilk hâli var olmayan bir filtre/sayaç kalıbı tarif ediyordu): `apps/web/src/features/inbox/views.ts` üç noktada genişler —\n- `:33` `ChannelViewType` birliği (`'messenger'|'twilio'|'whatsapp'|'instagram'`) → `'telegram'` eklenir\n- `:46` `CHANNEL_VIEW_META` kaydı (yalnız `label` + `icon` — başka alan YOK)\n- `:59` `isChannelViewType` tip guard'ı otomatik olarak genişler (birlikten türüyor)\nModülün yüzeyi bundan ibarettir: `connectedChannelViews()` (`:71`) bağlı kanallardan görünüm listesi üretir, `showChannelPromo()` (`:85`) liste boşsa `true` döner. **Filtre parametresi, sayaç/badge kaynağı ve \"boş durum metni\" bu modülde YOKTUR** — ilk kırılım bunları \"kopyalanacak desen\" diye saymıştı, denetimde çürütüldü.\n\n**DİKKAT — PİNLENMİŞ TEST GÜNCELLENECEK (denetim bulgusu — ilk hâli \"kırma\" diyordu, bu İMKÂNSIZ bir kısıttı):** `apps/web/src/features/inbox/views.test.ts:68-72` `it('ignores an unknown channel type')` testi telegram'ı **bilinmeyen tipin temsilcisi** olarak kullanıyor (`connectedChannelViews([{type:'telegram',connected:true}])` → `[]` ve `showChannelPromo` → `true`). Bu alt-görevin işi tam olarak o davranışı değiştirmektir. Test **bilinmeyen bir başka tiple** (`'chat_page'` veya `'email'`) yeniden yazılır; Telegram için yeni beklenti eklenir: bağlıyken görünüm üretilir ve `showChannelPromo` `false` döner. `08.5.8-c`'nin `adapters.test.ts` pini için yazdığı gerekçe burada da geçerlidir — pin bir hata değil, bilinçli bir kararın kaydıdır; kararı değiştirirken pini de güncellersin.\n\nDOSYALAR: `apps/web/src/features/inbox/views.ts:33,46,59` · `apps/web/src/features/inbox/views.test.ts:68-72`\n\nREFERANS DESEN (BİREBİR, aynı dosyada): Instagram görünümü (tm 65 `08.5.7-g`) — birliğe eklenen değer + `CHANNEL_VIEW_META` girdisi.\n\nKAPSAM DIŞI: kanal kartı (`08.5.8-d`), e2e (`08.5.8-f`).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir; HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/web test (views.test.ts: Telegram bağlıyken görünüm üretilir ve showChannelPromo false döner; 'ignores an unknown channel type' testi başka bir tiple yeniden yazılmış ve hâlâ yeşil; CHANNEL_VIEW_META girdisi label+icon taşır) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "79.3"
+            ],
+            "parentId": "79",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 6,
+            "title": "08.5.8-f [OPUS-XHIGH] Uçtan uca doğrulama — bağla→mesaj→inbox→yanıt + cross-tenant + adres sahiplenme regresyonu",
+            "description": "Uçtan uca doğrulama — bağla→mesaj→inbox→yanıt + cross-tenant + adres sahiplenme regresyonu",
+            "details": "08.5.8-f — Uçtan uca doğrulama — bağla→mesaj→inbox→yanıt + cross-tenant + adres sahiplenme regresyonu  [OPUS-XHIGH]\n\nPRD: 08.5.8 (PLAN §6.1 · dilim V3-4 · tm 79)\nTAHMİN: ~2 pencere\n\nKAPSAM: (1) e2e: Telegram bağla → mock inbound mesaj → inbox'ta chat → yanıt (kanıt PNG `apps/e2e/kanit/08.5.8-telegram.png`). (2) cross-tenant negatifi. (3) ADRES SAHİPLENME REGRESYONU — bu kalemin en önemli testi: iki lisans AYNI Telegram adresini bağlamayı denediğinde İKİNCİSİ REDDEDİLİR.\n\nNEDEN (3) kritik: bu kırılım Instagram'ın `08.5.7-d` OPUS-MAX çekirdeğini Telegram için TEKRARLAMADI, çünkü koruma kanal-agnostik: `20260809090000_channel_address_uniqueness` migration'ı `channel_address_owner(p_type, p_address)` SECURITY DEFINER fonksiyonunu tip PARAMETRESİYLE kurar ve `channel-service.ts:94-163` (`assertAddressFree` + P2002 yarış dalı) kanal tipini hiçbir yerde özel-durumlamaz. Bu alt-görev o iddiayı VARSAYMAZ, TESTLE KANITLAR. Test kırmızı gelirse iddia yanlıştır ve kalem OPUS-MAX bir çekirdek alt-görevle genişletilmelidir (§D kaydı ile).\n\nDOSYALAR: `apps/e2e/tests/telegram.spec.ts` (yeni) · `apps/api/test/integration/channels-adapters.test.ts` (denetim düzeltmesi: `channels.test.ts` YOKTUR) · `apps/e2e/kanit/`\n\nREFERANS DESEN: `apps/e2e/tests/instagram.spec.ts` birebir.\n\nKAPI: bu alt-görev yeşile dönmeden kalem ✅ olmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm -w test:e2e (telegram.spec.ts dahil TÜM süit yeşil; adres sahiplenme regresyon testi integration'da yeşil)",
+            "status": "pending",
+            "dependencies": [
+              "79.4",
+              "79.5"
+            ],
+            "parentId": "79",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          }
+        ],
+        "updatedAt": "2026-08-11T20:47:57.075Z"
       },
       {
         "id": "80",
@@ -3543,51 +3623,499 @@
       },
       {
         "id": "81",
-        "title": "SAML 2.0 SSO + SCIM provisioning [MAX]",
-        "description": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-S11 · KK-türetilmiş.",
-        "details": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-S11 · KK-türetilmiş.\n↑ GEREKÇE: kimlik sınırı (SAML federasyon + SCIM otomatik provizyon).\nKAPSAM: SAML 2.0 SSO (IdP entegrasyonu) + SCIM kullanıcı provizyon/deprovizyon.\nKK-TÜRETİLMİŞ: \"SAML IdP ile SSO girişi; SCIM ile kullanıcı yaşam döngüsü\" (NFR-S11'den türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §6.1, NFR-S11. ~4-5 subtask (başında böl).\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
-        "testStrategy": "integration: SAML login + SCIM provision/deprovision; CROSS-TENANT. NEGATİF: geçersiz assertion reddi. DoD tam.",
-        "status": "deferred",
+        "title": "S11 — SAML 2.0 SSO + SCIM provisioning · dilim V3-1",
+        "description": "PRD §5.4 (Ent.) · NFR-S11 · KK-türetilmiş. Kimlik sınırı: federasyon + otomatik provizyon.",
+        "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `S11` · dilim V3-1\n\n9 atomik alt-görev · ~14 pencere · etiket dağılımı: OPUS-XHIGH x3 · OPUS-MAX x4 · SONNET-XHIGH x2\n\nKK: \"SAML IdP ile SSO girişi; SCIM ile kullanıcı yaşam döngüsü (provizyon/deprovizyon)\" — NFR-S11'den türetildi (§C-A17).\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  S11-a [OPUS-XHIGH] sso_connections tablosu + RLS politikası + kontrat okuma yüzeyi  (bağ: —)\n  S11-b [OPUS-MAX] SAML assertion doğrulama çekirdeği (BÖLÜNMEZ) — imza + koşullar + replay + XSW  (bağ: —)\n  S11-c [SONNET-XHIGH] Mock IdP harness — imzalı assertion üreteci + anahtar çifti fixture'ı  (bağ: S11-b)\n  S11-d [OPUS-MAX] SP uçları (BÖLÜNMEZ) — /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, audit  (bağ: S11-a, S11-b, S11-c)\n  S11-e [OPUS-MAX] SCIM 2.0 sunucu çekirdeği (BÖLÜNMEZ) — /scim/v2/Users + bearer auth + lisans kapsamı  (bağ: S11-a)\n  S11-f [OPUS-XHIGH] SCIM yaşam döngüsü semantiği — create/suspend/deprovizyon + koltuk etkisi + audit  (bağ: S11-e)\n  S11-g [SONNET-XHIGH] Settings → Security: SSO bağlantı ekranı + SCIM token üretimi (bir kez gösterilir)  (bağ: S11-a, S11-d, S11-e)\n  S11-h [OPUS-MAX] SSO zorunlu kılma (BÖLÜNMEZ) — parola girişinin kapatılması + break-glass kilitlenme koruması  (bağ: S11-d, S11-g)\n  S11-i [OPUS-XHIGH] Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant  (bağ: S11-d, S11-f, S11-g, S11-h)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.2 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
+        "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (S11-i) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
+        "status": "pending",
         "dependencies": [],
-        "priority": "low",
-        "subtasks": [],
-        "updatedAt": "2026-07-25T13:09:32.273Z"
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "S11-a [OPUS-XHIGH] sso_connections tablosu + RLS politikası + kontrat okuma yüzeyi",
+            "description": "sso_connections tablosu + RLS politikası + kontrat okuma yüzeyi",
+            "details": "S11-a — sso_connections tablosu + RLS politikası + kontrat okuma yüzeyi  [OPUS-XHIGH]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: depoda SAML/SCIM'e ait hiçbir kod yok (`grep -rn \"saml\\|scim\" apps/api/src/routes/` → 0 eşleşme). Federasyon yapılandırmasının duracağı yer yok.\n\n**AMA MODEL KISMEN HAZIR (denetim bulgusu — bilmezsen gereksiz şema işi açarsın):** parolasız (SSO-only) hesap zaten modellenmiş — `apps/api/prisma/schema.prisma:124` `password_hash` yorumu _\"Null for accounts that only sign in via SSO\"_ ve `apps/api/src/lib/crypto.ts:66` parolasız hesapta sabit-zaman dalını yazıyor (_\"No password set (SSO-only account). Burn comparable time anyway\"_). Yani `S11-d`'nin JIT provizyonu ve `S11-h`'nin parola kapatma kararı bu var olan alanın üstüne oturur; yeni bir \"parolasız hesap\" kavramı İCAT EDİLMEZ.\n\nKAPSAM: `sso_connections` tablosu (licenseId, name, idpEntityId, idpSsoUrl, idpCertificatePem, attributeMapping Json, allowIdpInitiated Bool @default(false), enabled) + RLS politikası + salt-okuma kontrat yüzeyi (`GET /settings/sso`). DAVRANIŞSIZ iskelet — doğrulama S11-b'de, uçlar S11-d'de.\n\nDOSYALAR: `apps/api/prisma/schema.prisma` · yeni migration `apps/api/prisma/migrations/<ts>_sso_connections/migration.sql` · `packages/contract/openapi/paths/settings.yaml` · `packages/types/src/domain.ts` · `apps/api/src/routes/settings.ts`\n\nREFERANS DESEN (birebir kopyalanacak): tm 80 alt-görev `08.9.6-b` — `ip_allowlist_entries` tablosu + RLS. Migration'daki policy kalıbı: `USING (license_id = nexa_current_license())`. Sertifika PEM'i bir SIR DEĞİLDİR (IdP'nin public sertifikası) — hash'lenmez, olduğu gibi saklanır; SCIM token'ı ise S11-e'de hash'lenir.\n\nKAPSAM DIŞI: assertion doğrulama (S11-b), SP uçları (S11-d), SCIM (S11-e), ekran (S11-g).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm --filter @nexa/api test (yeni: sso_connections RLS cross-tenant negatifi — başka lisansın satırı okunamaz/yazılamaz) && pnpm -w build && pnpm --filter @nexa/api test:integration",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "81",
+            "updatedAt": "2026-08-11T21:02:59.172Z"
+          },
+          {
+            "id": 2,
+            "title": "S11-a2 [OPUS-MAX] SSO bağlantısı YAZMA ucu (BÖLÜNMEZ) — sertifika/entityId yazımı + owner rol kapısı + rotasyon",
+            "description": "SSO bağlantısı YAZMA ucu (BÖLÜNMEZ) — sertifika/entityId yazımı + owner rol kapısı + rotasyon",
+            "details": "S11-a2 — SSO bağlantısı YAZMA ucu (BÖLÜNMEZ) — sertifika/entityId yazımı + owner rol kapısı + rotasyon  [OPUS-MAX]\n\nPRD: S11 (PLAN §6.1.2 · dilim V3-1 · tm 81)\nTAHMİN: ~2 pencere\n\nBU ALT-GÖREV DENETİM BULGUSUYLA AÇILDI (PLAN §D99). Kırılımın ilk hâlinde `sso_connections` tablosunun YAZMA ucu hiçbir alt-görevin kapsamında değildi: `S11-a` \"DAVRANIŞSIZ iskelet + salt-okuma\", `S11-d` yalnız `/login`+`/acs`, `S11-h` yalnız `enforced` bayrağı. Ucu isteyen tek alt-görev `S11-g` idi — bir SONNET web ekranı. Yani dört OPUS-MAX çekirdeğin tamamının güvendiği IdP SERTİFİKASINI kimin, hangi rolle, hangi doğrulamayla yazdığı boşta kalmıştı.\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: IdP sertifikasını yazabilen aktör, o lisansta İSTEDİĞİ KİŞİ ADINA imzalı assertion üretebilir — yani tam hesap devralma. Sertifika yazımı, rol kapısı ve rotasyon semantiği tek bir güven-çapası akıl yürütmesidir; ayrılırsa \"sertifika yazıldı ama rol kapısı sonraki turda\" gibi bir ara sürüm doğar ve o sürümde bir `agent` federasyonu ele geçirebilir.\n\nKAPSAM: `POST /settings/sso` + `PATCH /settings/sso/{id}` + `DELETE /settings/sso/{id}`.\n- **Rol kapısı: yalnız `owner`** (admin YETMEZ — sertifika değişimi hesap devralmaya eşdeğerdir). `roleAtLeast` yerine kesin eşitlik.\n- Sertifika doğrulaması: PEM ayrıştırılabilir, X.509, süresi geçmemiş; ayrıştırılamayan sertifika 4xx.\n- **Rotasyon semantiği (yazılı olmalı):** yeni sertifika yazıldığında eski sertifika hemen geçersiz mi, yoksa bir geçiş penceresi boyunca ikisi de kabul mü edilir? Kırılım \"iki sertifika listesi + geçiş penceresi\" ÖNERİR (IdP rotasyonu sırasında kesinti olmasın diye); karar bu pencerede verilir ve §C'ye yazılır.\n- `allowIdpInitiated` bayrağını yalnız `owner` açabilir.\n- Audit: `settings.security_updated` (mevcut eylem, yeni eylem uydurma) + değişen alan adları metadata'da (SERTİFİKA İÇERİĞİ metadata'ya YAZILMAZ).\n\nDOSYALAR: `apps/api/src/routes/settings.ts` · `packages/contract/openapi/paths/settings.yaml` · `apps/api/src/services/auth/principal.ts:77` (`roleAtLeast`) · `apps/api/src/services/audit/audit-log.ts`\n\nREFERANS DESEN: tm 80 `08.9.6-d` (`/settings/ip-allowlist` CRUD + rol kapısı + audit + kontrat) — birebir aynı şekil, yalnız yazılan şey daha tehlikeli.\n\nKAPSAM DIŞI: doğrulayıcı (S11-b), SP uçları (S11-d), SCIM (S11-e), ekran (S11-g — o SALT TÜKETİCİDİR, yeni uç açmaz).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (owner sertifika yazabilir; ADMIN REDDEDİLİR — negatif; agent REDDEDİLİR; ayrıştırılamayan/süresi geçmiş PEM 4xx; rotasyonda eski sertifikanın davranışı seçilen karara göre test edilir; settings.security_updated audit satırı yazılır ve SERTİFİKA İÇERİĞİ metadata'da YOKTUR; CROSS-TENANT: başka lisansın sso_connections satırı yazılamaz) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "81.1"
+            ],
+            "parentId": "81",
+            "updatedAt": "2026-08-11T21:02:59.172Z"
+          },
+          {
+            "id": 3,
+            "title": "S11-b [OPUS-MAX] SAML assertion doğrulama çekirdeği (BÖLÜNMEZ) — imza + koşullar + replay + XSW",
+            "description": "SAML assertion doğrulama çekirdeği (BÖLÜNMEZ) — imza + koşullar + replay + XSW",
+            "details": "S11-b — SAML assertion doğrulama çekirdeği (BÖLÜNMEZ) — imza + koşullar + replay + XSW  [OPUS-MAX]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~3 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2 istisnası). Gerekçe: XML imza doğrulama, Conditions kontrolleri (Destination / Audience / NotOnOrAfter / NotBefore / InResponseTo) ve assertion-id replay reddi TEK bir güvenlik akıl yürütmesinin uçlarıdır. Ayrılırsa aradaki sürümde \"imzası doğru ama Audience'ı başka kiracıya ait\" veya \"imzası doğru, aynı assertion ikinci kez\" kabul edilir. XSW (XML Signature Wrapping) savunması hiç bölünemez: HANGİ düğümün imzalandığı ile HANGİ düğümün okunduğu AYNI kod yolunda kararlaştırılmalıdır — bu ikisini ayırmak XSW açığının tanımıdır.\n\nKAPSAM: `apps/api/src/lib/saml.ts` — saf, DB'siz, ağsız doğrulayıcı. **SALDIRGAN TEST VARYANTLARI DA BU ALT-GÖREVE AİTTİR** (denetim bulgusu): imzasız · imzası bozuk · yanlış Audience/Destination · süresi geçmiş · replay · **ve özellikle XSW varyantları** (imzalı Assertion'ı `Extensions`'a taşıma · sarmalayıcı Response ekleme · `ID` referansı kaydırma — en az üç ayrı XSW şekli). Gerekçe: XSW bir saldırı modelleme işidir; varyantı üreten pencere ile savunmayı yazan pencere ayrılırsa naif bir varyant üretilir, test YEŞİL YANAR ve savunma hiç sınanmamış olur. `S11-c` yalnız İYİ-HUYLU fixture'ı (anahtar çifti + mutlu yol `issueAssertion`) sağlar ve BU alt-görevi BEKLEMEZ. Girdi: base64 SAMLResponse + beklenen (entityId, acsUrl, sertifika, inResponseTo?). Çıktı: doğrulanmış nitelikler VEYA tipli ret. Replay için tüketilen assertion id'lerinin kısa TTL'li kaydı (Redis, `lib/banned-ip.ts`'in Redis kullanım deseni).\n\nKARAR (bu pencerenin İLK işi, §C'ye yazılacak): XML-DSig ELDE YAZILMAZ. Olgun bir kütüphane seçilir (`xml-crypto` + `@xmldom/xmldom` ya da eşdeğeri); imza doğrulamayı elden yazmak bu projenin kabul edebileceği bir risk değil. Kütüphane seçimi ve sürümü §C'ye assumption olarak yazılır.\n\nDOSYALAR: `apps/api/src/lib/saml.ts` (yeni) + `apps/api/src/lib/saml.test.ts` · `apps/api/package.json`\n\nREFERANS DESEN: tm 80 `08.9.6-c` (`lib/ip-allowlist.ts`) — saf algoritma + izin/ret semantiği, DB'siz, yoğun unit testli. Hata tipleri `packages/types/src/errors.ts` taksonomisinden seçilir; yeni tip eklenirse ADR-06'nın dört yerini birden güncelle (kontrat, types, api-error, test).\n\nKAPSAM DIŞI: HTTP uçları, hesap eşleme, oturum verme (hepsi S11-d).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:unit (yeni saml.test.ts: geçerli assertion kabulü + RET MATRİSİ — imzasız · imzası bozuk · yanlış Audience · yanlış Destination · NotOnOrAfter geçmiş · NotBefore gelecek · InResponseTo uyuşmazlığı · aynı assertion ikinci kez (replay) · XSW: imzalı düğüm ile okunan düğüm farklı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "81",
+            "updatedAt": "2026-08-11T21:02:59.172Z"
+          },
+          {
+            "id": 4,
+            "title": "S11-c [SONNET-XHIGH] Mock IdP harness — imzalı assertion üreteci + anahtar çifti fixture'ı",
+            "description": "Mock IdP harness — imzalı assertion üreteci + anahtar çifti fixture'ı",
+            "details": "S11-c — Mock IdP harness — imzalı assertion üreteci + anahtar çifti fixture'ı  [SONNET-XHIGH]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~1 pencere\n\nNEDEN: dış IdP (Okta/Auth0/Azure AD) MOCK'tur (CLAUDE.md sınırı: dış servisler mock'lanır, gerçek secret yok). S11-d'nin ve S11-i'nin test edilebilmesi için imzalı assertion üretebilen bir harness gerekir.\n\nKAPSAM (denetim sonrası DARALTILDI): `apps/api/test/helpers/mock-idp.ts` — sabit bir test anahtar çifti (repoya commit'lenir, ÜRETİM SIRRI DEĞİLDİR, dosya başında bu açıkça yazılır) + `issueAssertion({subject, attributes, audience, destination, inResponseTo, notOnOrAfter})` **MUTLU YOL** + `fixtures.ts` export'u.\n\n**BOZUK/XSW VARYANTLARI BU ALT-GÖREVDE ÜRETİLMEZ** — onlar `S11-b`'nin (bölünmez OPUS-MAX çekirdek) parçasıdır. Gerekçe: saldırgan varyant üretmek bir saldırı modelleme işidir ve savunmanın testini çekirdekten ayırmak, çekirdeğin bölünmezlik gerekçesini fiilen deler. Bu yüzden **bağımlılık da kaldırıldı**: `S11-c` `S11-b`'yi BEKLEMEZ, ikisi paralel koşabilir.\n\nDOSYALAR: `apps/api/test/helpers/mock-idp.ts` (yeni) · `apps/api/test/helpers/fixtures.ts` (export)\n\nREFERANS DESEN: `apps/api/test/helpers/fixtures.ts` mevcut fixture kalıbı · `packages/ai-mock` deterministik mock felsefesi (aynı girdi → aynı çıktı, test flake yok).\n\nKAPSAM DIŞI: gerçek IdP bağlantısı — YAPILMAZ.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:unit (mock-idp'nin ürettiği geçerli assertion ayrıştırılabilir ve imzası doğrulanabilir; issueAssertion verilen audience/destination/inResponseTo değerlerini gövdeye doğru yazar — bozuk varyant testi BU alt-görevde YOKTUR, S11-b'ye aittir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "81",
+            "updatedAt": "2026-08-11T21:02:59.172Z"
+          },
+          {
+            "id": 5,
+            "title": "S11-d [OPUS-MAX] SP uçları (BÖLÜNMEZ) — /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, audit",
+            "description": "SP uçları (BÖLÜNMEZ) — /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, audit",
+            "details": "S11-d — SP uçları (BÖLÜNMEZ) — /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, audit  [OPUS-MAX]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: \"assertion geçerli\" ile \"bu assertion ŞU hesaba karşılık gelir ve ona oturum verilir\" arasındaki adım bir YETKİLENDİRME kararıdır. JIT provizyon (görülmemiş e-posta → yeni üyelik) aynı pencerede olmalıdır; ayrılırsa \"doğrulanmış ama eşlenmemiş\" bir ara durum doğar ve o durumun güvenli davranışı (reddet mi, aç mı) hiçbir yerde yazılı olmaz.\n\nKAPSAM: `POST|GET /auth/saml/{connectionId}/login` (AuthnRequest üret + RelayState + InResponseTo saklama) · `POST /auth/saml/{connectionId}/acs` (S11-b ile doğrula → e-posta niteliğinden hesap eşle → yoksa JIT üyelik aç → oturum/token ver) · audit: `auth.sso_login` ve `auth.sso_login_failed` eylemlerinin `AUDIT_ACTIONS`'a eklenmesi.\n\nDOSYALAR: `apps/api/src/routes/auth.ts` · `apps/api/src/services/auth/oauth-service.ts` (token verme yolu) · `apps/api/src/services/auth/token-service.ts` · `apps/api/src/services/audit/audit-log.ts` (AUDIT_ACTIONS:34) · `packages/contract/openapi/paths/auth.yaml`\n\nREFERANS DESEN: `oauth-service.ts:343` `#issueGrant` — oturum verme yolu AYNEN yeniden kullanılır, ikinci bir token verme yolu AÇILMAZ. Audit çağrısı `writeAuditEntry` üzerinden ve `withTenant` içinde (audit-log.ts başlık yorumu).\n\nKARARLAR: JIT provizyonda açılan üyeliğin rolü `agent` (en az yetki). IdP-initiated akış (InResponseTo YOK) yalnız `allowIdpInitiated=true` ise kabul edilir, varsayılan kapalı.\n\nKAPSAM DIŞI: SCIM (S11-e/-f), SSO zorunlu kılma (S11-h), ekran (S11-g).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (SAML login uçtan uca: mock IdP assertion → oturum + auth.sso_login audit satırı; JIT provizyon yeni üyelik açar, rolü agent; geçersiz assertion → 4xx + auth.sso_login_failed; CROSS-TENANT: A lisansının bağlantısıyla B lisansına oturum açılamaz) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "81.1",
+              "81.3",
+              "81.4"
+            ],
+            "parentId": "81",
+            "updatedAt": "2026-08-11T20:47:57.075Z"
+          },
+          {
+            "id": 6,
+            "title": "S11-e [OPUS-MAX] SCIM 2.0 sunucu çekirdeği (BÖLÜNMEZ) — /scim/v2/Users + bearer auth + lisans kapsamı",
+            "description": "SCIM 2.0 sunucu çekirdeği (BÖLÜNMEZ) — /scim/v2/Users + bearer auth + lisans kapsamı",
+            "details": "S11-e — SCIM 2.0 sunucu çekirdeği (BÖLÜNMEZ) — /scim/v2/Users + bearer auth + lisans kapsamı  [OPUS-MAX]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: SCIM'in kimlik doğrulaması ile kiracı kapsamı TEK bir kapıdır. Bir SCIM token'ı bütün bir kuruluşun kullanıcı yaşam döngüsünü yönetir; \"token doğru mu\" ile \"hangi lisans için doğru\" kararları ayrı pencerelere bölünürse çapraz-kiracı bir YAZMA yolu açık kalır — bu, okuma sızıntısından daha ağırdır.\n\nKAPSAM: `/scim/v2/Users` (GET liste+filtre, GET tek, POST, PATCH, DELETE) + `/scim/v2/Groups` (GET, üyelik okuma) · bearer token kimlik doğrulama (token HASH'li saklanır) · her istek tek bir lisansa kapsamlanır · **SCIM TOKEN'INI BASAN VE İPTAL EDEN YÖNETİCİ UCU DA BU ALT-GÖREVE AİTTİR** (denetim bulgusu — sahipsiz kalmıştı): `POST /settings/scim-tokens` + `DELETE /settings/scim-tokens/{id}`, `owner|admin` rol kapısı, token bir kez döner ve bir daha okunamaz, audit (`pat.created`/`pat.revoked` muadili eylemler). Gerekçe: bir kuruluşun tüm kullanıcı yaşam döngüsünü yöneten kimlik bilgisini BASAN uç, onu DOĞRULAYAN uçla aynı güvenlik sınıfındadır; ekrana (`S11-g`, SONNET) bırakılamaz · SCIM'in kendi hata zarfı (RFC 7644 `urn:ietf:params:scim:api:messages:2.0:Error`) — ADR-06 zarfı SCIM yolunda KULLANILMAZ, bu bilinçli bir istisnadır ve §D'ye yazılır.\n\nDOSYALAR: `apps/api/src/routes/scim.ts` (yeni) · `apps/api/src/services/auth/token-service.ts` (SCIM token türü) · `apps/api/prisma/schema.prisma` (`api_tokens.kind` CHECK genişlemesi: `pat|oauth|bot|scim`) + migration · `packages/contract/openapi/paths/scim.yaml` (yeni)\n\nREFERANS DESEN: `api_tokens` token hash'leme (token-service.ts) · `plugins/auth.ts` onRequest kimlik çözümleme kalıbı · rate limit: SCIM ucu `plugins/rate-limit.ts` kapsamına alınır (ADR-07).\n\nKAPSAM DIŞI: yaşam döngüsü semantiği (S11-f), token üretim ekranı (S11-g).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (SCIM Users CRUD; token yoksa 401; BAŞKA lisansın token'ıyla bu lisansın kullanıcıları OKUNAMAZ ve YAZILAMAZ — cross-tenant negatif matrisi; iptal edilmiş token 401) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "81.1"
+            ],
+            "parentId": "81",
+            "updatedAt": "2026-08-11T21:02:59.172Z"
+          },
+          {
+            "id": 7,
+            "title": "S11-f [OPUS-MAX] SCIM yaşam döngüsü semantiği — create/suspend/deprovizyon + koltuk etkisi + audit",
+            "description": "SCIM yaşam döngüsü semantiği — create/suspend/deprovizyon + koltuk etkisi + audit",
+            "details": "S11-f — SCIM yaşam döngüsü semantiği — create/suspend/deprovizyon + koltuk etkisi + audit  [OPUS-MAX]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~1 pencere\n\nKAPSAM: SCIM işlemlerinin ürün anlamına bağlanması. create → `agent_memberships` satırı (rol `agent`); PATCH `active=false` → `suspended=true`; PATCH `active=true` → geri al; DELETE → deprovizyon (suspend, SİLME DEĞİL — §C varsayımı). Koltuk sayımının/faturanın etkilenmesi. Audit: mevcut `member.invited` / `member.suspended` / `member.unsuspended` eylemleri yeniden kullanılır (yeni eylem uydurulmaz).\n\nDOSYALAR: `apps/api/src/routes/scim.ts` · `apps/api/src/services/billing/subscription-service.ts` (koltuk sayımı) · `apps/api/src/services/audit/audit-log.ts`\n\nREFERANS DESEN: `apps/api/src/routes/agents.ts` — mevcut davet/suspend yolları; SCIM bunları YENİDEN YAZMAZ, aynı servis fonksiyonlarını çağırır. Aksi hâlde iki farklı \"kullanıcı askıya al\" yolu doğar ve biri audit yazmayı unutur.\n\nKARAR: DELETE deprovizyonu SİLMEZ, suspend eder — atanmış sohbetlerin sahipliği ve audit izi korunsun diye (§C-A18, açık soru olarak da işaretli).\n\nKAPSAM DIŞI: grup→rol otomatik eşlemesi (ayrı kalem, §D kaydı gerektirir).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\nETİKET YÜKSELTME GEREKÇESİ (denetim bulgusu, OPUS-XHIGH → OPUS-MAX): bu alt-görev DIŞ BİR IdP'NİN KOMUTUYLA lisansa yeni üyelik açıyor (`create → agent_memberships`, rol `agent`) ve üyelik askıya alıyor. `S11-e`'nin kapısından geçtikten SONRA verilen bu karar bir yetkilendirme kararıdır (§5.1.1 OPUS-MAX: erişim kontrolü). Ayrıca \"suspend edilmiş kullanıcı giriş yapamaz\" iddiasının ZORLAMASININ NEREDE olduğu yazılmalı: mevcut `suspended` kontrolü `oauth-service.ts` giriş yolunda mı, yoksa yeni mi eklenecek — bu pencerede tespit edilir ve testle kanıtlanır.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (SCIM create → üyelik + member.invited audit; PATCH active=false → suspended + member.suspended audit; suspend edilmiş kullanıcı giriş yapamaz; DELETE → suspend, satır SİLİNMEZ; koltuk sayımı güncellenir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "81.6"
+            ],
+            "parentId": "81",
+            "updatedAt": "2026-08-11T21:02:59.172Z"
+          },
+          {
+            "id": 8,
+            "title": "S11-g [SONNET-XHIGH] Settings → Security: SSO bağlantı ekranı + SCIM token üretimi (bir kez gösterilir)",
+            "description": "Settings → Security: SSO bağlantı ekranı + SCIM token üretimi (bir kez gösterilir)",
+            "details": "S11-g — Settings → Security: SSO bağlantı ekranı + SCIM token üretimi (bir kez gösterilir)  [SONNET-XHIGH]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~1 pencere\n\nKAPSAM (denetim sonrası KESİNLEŞTİRİLDİ — bu alt-görev SALT TÜKETİCİDİR): Settings → Security altında SSO bölümü — IdP metadata girişi (entityId, SSO URL, sertifika PEM, attribute mapping) formu, \"bağlantıyı doğrula\" butonu, SCIM token üret/iptal et. Token ÜRETİLDİĞİ ANDA BİR KEZ gösterilir, sonra bir daha gösterilmez.\n\n**YENİ SUNUCU UCU AÇMA — üçü de başka alt-görevlerin malıdır:**\n- SSO bağlantısı YAZMA ucu → `S11-a2` (OPUS-MAX). Bu ekran onu ÇAĞIRIR.\n- SCIM token basma/iptal ucu → `S11-e` (OPUS-MAX). Bu ekran onu ÇAĞIRIR.\n- **\"Bağlantıyı doğrula\" butonu SUNUCUDAN IdP'YE AĞ İSTEĞİ ATMAZ** (denetim bulgusu: kullanıcı kontrolündeki URL'e sunucudan istek = SSRF). Doğrulama YERELDİR: sertifika PEM'i ayrıştırılabiliyor mu, entityId/SSO URL biçimsel olarak geçerli mi, attribute mapping zorunlu alanları taşıyor mu. Ağ testi isteniyorsa ayrı bir OPUS-MAX alt-görev + SSRF savunması gerekir; bu turda KAPSAM DIŞI.\n\nDOSYALAR: `apps/web/src/features/settings/SsoConnection.tsx` (yeni) + test · `apps/web/src/features/settings/SettingsPage.tsx` (bölüm bağlama)\n\nREFERANS DESEN (birebir): `apps/web/src/features/settings/IpAllowlist.tsx` (tm 80 `08.9.6-h`) — bölüm yerleşimi, form, liste, silme onayı. \"Bir kez göster\" kalıbı: `apps/web/src/features/developers/DeveloperPortal.tsx:480-484` `SecretOncePanel` (tm 72 · `09.4-e`) — partner app `client_secret`'ı için yazılmış, birebir aynı sözleşme. (Web tarafında PAT üretim ekranı YOKTUR; sunucu tarafı hash emsali `services/auth/token-service.ts`.) Form primitifi `lib/form.tsx` (EK-A.1), kirli form koruması `lib/dirty-guard.tsx` (EK-A.2) — yeni form kütüphanesi EKLENMEZ.\n\nKAPSAM DIŞI: enforcement (S11-h), e2e (S11-i), her türlü yeni sunucu ucu (S11-a2 / S11-e).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/web test (SsoConnection: metadata formu doğrulaması, sertifika alanı zorunlu, SCIM token üretildikten sonra bir daha gösterilmez, iptal onayı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "81.1",
+              "81.2",
+              "81.5",
+              "81.6"
+            ],
+            "parentId": "81",
+            "updatedAt": "2026-08-11T21:02:59.172Z"
+          },
+          {
+            "id": 9,
+            "title": "S11-h [OPUS-MAX] SSO zorunlu kılma (BÖLÜNMEZ) — parola girişinin kapatılması + break-glass kilitlenme koruması",
+            "description": "SSO zorunlu kılma (BÖLÜNMEZ) — parola girişinin kapatılması + break-glass kilitlenme koruması",
+            "details": "S11-h — SSO zorunlu kılma (BÖLÜNMEZ) — parola girişinin kapatılması + break-glass kilitlenme koruması  [OPUS-MAX]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: parola yolunu KAPATAN karar ile kilitlenme KAÇIŞ yolu birlikte tasarlanmalıdır. Ayrılırsa aradaki sürümde IdP'si bozulan bir kuruluş kendi hesabından tamamen dışarıda kalır ve bunu düzeltebilecek hiç kimse kalmaz. Bu hata bu depoda BİR KEZ önlendi: tm 80 `08.9.6-d` self-lockout guard'ı tam olarak bunun için yazıldı — emsal odur.\n\nKAPSAM: `sso_connections.enforced` bayrağı; açıkken o lisanstaki parola girişi (`POST /auth/login`) reddedilir. BREAK-GLASS: en az bir `owner` her zaman parolayla girebilir VEYA enforcement açılırken doğrulanmış bir kaçış yolu (kurtarma kodu) üretilir — hangisi seçilirse §C'ye yazılır. Enforcement açma işlemi `settings.security_updated` audit'i yazar.\n\nDOSYALAR: `apps/api/src/routes/auth.ts` · `apps/api/src/services/auth/oauth-service.ts:92` (`authenticateAccount`) · `apps/api/src/routes/settings.ts` · `apps/web/src/features/settings/SsoConnection.tsx`\n\nREFERANS DESEN: tm 80 `08.9.6-d` self-lockout guard — \"kendini dışarıda bırakacak yapılandırmayı reddet\" kalıbı.\n\nKAPSAM DIŞI: e2e (S11-i).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (enforced=true iken parola girişi reddedilir; SSO girişi çalışır; BREAK-GLASS yolu çalışır; enforcement kendini kilitleyecek şekilde açılamaz — NEGATİF; settings.security_updated audit satırı yazılır; CROSS-TENANT: A lisansının enforcement'ı B lisansının girişini etkilemez) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "81.5",
+              "81.8"
+            ],
+            "parentId": "81",
+            "updatedAt": "2026-08-11T20:47:57.075Z"
+          },
+          {
+            "id": 10,
+            "title": "S11-i [OPUS-XHIGH] Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant",
+            "description": "Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant",
+            "details": "S11-i — Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant  [OPUS-XHIGH]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~1 pencere\n\nKAPSAM: kalemin KK'sının uçtan uca kanıtı. (1) e2e: SSO yapılandır → mock IdP ile giriş → panele düş (kanıt PNG `apps/e2e/kanit/S11-sso-login.png`). (2) SCIM yaşam döngüsü integration: provizyon → giriş → deprovizyon → giriş reddi. (3) RET MATRİSİ integration seviyesinde tekrar: imzasız · yanlış Audience · süresi geçmiş · replay · XSW. (4) cross-tenant negatif matrisi.\n\nDOSYALAR: `apps/e2e/tests/sso.spec.ts` (yeni) · `apps/api/test/integration/sso.test.ts` · `apps/e2e/kanit/`\n\nREFERANS DESEN: `apps/e2e/tests/settings.spec.ts` + `apps/e2e/tests/team.spec.ts`; kanıt PNG adlandırması `<kod>-<isim>.png` (mevcut 71 PNG'nin kalıbı). e2e sabit portlarda seed'lenmiş `nexa` veritabanını sürer — iki pencere aynı anda e2e koşamaz.\n\nKAPI: bu alt-görev yeşile dönmeden kalem ✅ olmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**YETKİ REDDİ NEGATİFİ (denetim bulgusu K1-2 · ZORUNLU):** SSO/SCIM uçlarının `sso` yetkisi olmadan (`growth` planı) ilgili uçlar **REDDEDİLMELİDİR**. Bu test bu alt-görevin süitindedir; kapı `11.5-b`'de kurulur (tm 84). `tm 84` bu kalemden SONRA koşacaksa test önce `skip` değil, **kapı kurulana kadar kırmızı bırakılmaz** — sıralama gereği `11.5-b` daha önce bitmiş olmalıdır (bkz. §6.2 bağımlılık notu).",
+            "testStrategy": "yetkisiz plan (growth) reddi negatifi dahil && pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm -w test:e2e (sso.spec.ts dahil TÜM süit yeşil)",
+            "status": "pending",
+            "dependencies": [
+              "81.5",
+              "81.7",
+              "81.8",
+              "81.9"
+            ],
+            "parentId": "81",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          }
+        ],
+        "updatedAt": "2026-08-11T20:47:57.075Z"
       },
       {
         "id": "82",
-        "title": "HIPAA BAA + bölgesel barındırma [MAX]",
-        "description": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C4 · KK-türetilmiş.",
-        "details": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C4 · KK-türetilmiş.\n↑ GEREKÇE: uyumluluk + bölge sınırı (ADR-12 tek bölge yeniden açılır).\nKAPSAM: imzalı BAA akışı + bölgesel barındırma (US/EU); region immutable kuralının genişletilmesi.\nKK-TÜRETİLMİŞ: \"BAA imzalı hesapta HIPAA kapsamı; region seçimi (US/EU); yanlış bölge → misdirected_request\" (NFR-C4/C9'dan türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §6.1, ADR-12, NFR-C4/C9. ~3-4 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
-        "testStrategy": "integration: bölge zorlaması (token+RTM); NEGATİF: yanlış bölge → misdirected_request. DoD tam.",
-        "status": "deferred",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": [],
-        "updatedAt": "2026-07-25T13:09:32.275Z"
+        "title": "C4 — HIPAA BAA + bölgesel barındırma (US/EU) · dilim V3-1",
+        "description": "PRD §5.4 (Ent.) · NFR-C4/C9 · KK-türetilmiş. ADR-12 tek bölge (eu) burada GENİŞLETİLİR (iptal edilmez).",
+        "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `C4` · dilim V3-1\n\n7 atomik alt-görev · ~10 pencere · etiket dağılımı: OPUS-XHIGH x3 · OPUS-MAX x2 · SONNET-XHIGH x2\n\nKK: \"BAA imzalı hesapta HIPAA kapsamı; region seçimi (US/EU); yanlış bölge → misdirected_request\" — NFR-C4/C9'dan türetildi (§C-A19).\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  C4-a [OPUS-XHIGH] REGIONS genişlemesi (eu + us) + licenses.region kayıt anında seçilebilir + kontrat  (bağ: —)\n  C4-b [OPUS-MAX] Bölge zorlaması çekirdeği (BÖLÜNMEZ) — API + RTM + customer token üçünde misdirected_request (421)  (bağ: C4-a)\n  C4-c [SONNET-XHIGH] Onboarding/kayıt akışında bölge seçimi + \"sonradan değiştirilemez\" uyarısı  (bağ: C4-a)\n  C4-d [OPUS-XHIGH] BAA durumu — licenses.hipaa_baa_signed_at + kabul akışı (MOCK) + compliance.baa_signed audit  (bağ: C4-a)\n  C4-e [OPUS-MAX] HIPAA kapsam kısıtları (BÖLÜNMEZ) — retention tavanı + PII maskesi sertleşmesi + AI bölge sınırı  (bağ: C4-b, C4-d)\n  C4-f [SONNET-XHIGH] Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi (salt-okunur)  (bağ: C4-d)\n  C4-g [OPUS-XHIGH] Uçtan uca doğrulama — 421 üç yüzeyde + immutability + BAA'sız hesapta kısıt yok + cross-tenant  (bağ: C4-b, C4-e, C4-f)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.3 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
+        "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (C4-g) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
+        "status": "pending",
+        "dependencies": [
+          "81"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "C4-a [OPUS-MAX] REGIONS genişlemesi (eu + us) + licenses.region kayıt anında seçilebilir + kontrat",
+            "description": "REGIONS genişlemesi (eu + us) + licenses.region kayıt anında seçilebilir + kontrat",
+            "details": "C4-a — REGIONS genişlemesi (eu + us) + licenses.region kayıt anında seçilebilir + kontrat  [OPUS-MAX]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: `packages/types/src/domain.ts:147-149` → `REGIONS = ['eu']`, tek değer. ADR-12 bunu MVP kararı olarak kilitlemişti; PRD §5.4 Enterprise'da US/EU ister.\n\nKAPSAM: `REGIONS` → `['eu','us']`; `licenses.region` KAYIT ANINDA seçilir, sonrasında IMMUTABLE kalır (ADR-12'nin korunan yarısı); kontrat + onboarding gövdesi. Mevcut lisanslar `eu`'da KALIR — geriye dönük göç YOK (immutability'nin doğal sonucu).\n\nADR GÜNCELLEMESİ (bu pencerenin işi): PLAN §0 ADR-12 satırı \"değer kümesi {eu, us}, immutability korunur\" olarak güncellenir + §D'ye sapma kaydı yazılır. ADR iptal EDİLMEZ, genişletilir.\n\nDOSYALAR: `packages/types/src/domain.ts:149` (`export const REGIONS`) · **`apps/api/src/config/env.ts:16` ve `apps/rtm/src/config/env.ts:5` — İKİSİ DE `NEXA_REGION: z.literal('eu')` (denetim bulgusu: RTM env dosyası ilk listede YOKTU; `us` iki Zod şemasından da geçemez, ikisi de `z.enum(REGIONS)`'a genişletilir)` · `apps/api/prisma/schema.prisma` + migration (CHECK genişlemesi) · `packages/contract/openapi/paths/auth.yaml` (signup gövdesi) · `apps/api/src/routes/auth.ts` · `PLAN.md` §0 + §D\n\nREFERANS DESEN: `CHANNEL_TYPES`/`SUBSCRIPTION_STATUSES` gibi `as const` birlik listeleri + Prisma CHECK kısıtı ikilisi; `packages/contract` → `openapi-typescript` → generated tip zinciri (ADR-05, contract-parity testi iki yönlüdür).\n\nKAPSAM DIŞI: zorlama (C4-b), BAA (C4-d), UI (C4-c).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**IMMUTABILITY NEREDE ZORLANIR — bu pencerede karara bağlanır ve testle kanıtlanır** (denetim bulgusu; etiket bu yüzden `OPUS-MAX`'a yükseltildi): `region` bir çapraz-kesen veri modeli invaryantıdır. Uygulama katmanında bir `if` olarak kalırsa `C4-b`/`C4-e`'nin tüm bölge zorlaması aşındırılabilir bir temele oturur. Kırılım **DB düzeyinde** zorlamayı önerir (UPDATE'i reddeden trigger ya da kolon izni); karar §C'ye yazılır ve testi \"SQL'den doğrudan UPDATE denemesi reddedilir\" olarak koşulur.\n\n**BÖLGE KODLARI:** PRD NFR-C9 bölgeleri `dal` (US) / `fra` (EU) diye isimlendiriyor; bu depo ADR-12 gereği `eu`/`us` kullanıyor. Fark bilinçlidir ve §D'ye tek satırlık sapma olarak yazılır (denetim bulgusu K1-9).",
+            "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm --filter @nexa/api test && pnpm -w build && pnpm --filter @nexa/api test:integration (contract-parity yeşil; us bölgeli lisans açılabilir; region değiştirme denemesi REDDEDİLİR — immutability negatifi; mevcut lisanslar eu kalır)",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "82",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 2,
+            "title": "C4-b [OPUS-MAX] Bölge zorlaması çekirdeği (BÖLÜNMEZ) — API + RTM + customer token üçünde misdirected_request (421)",
+            "description": "Bölge zorlaması çekirdeği (BÖLÜNMEZ) — API + RTM + customer token üçünde misdirected_request (421)",
+            "details": "C4-b — Bölge zorlaması çekirdeği (BÖLÜNMEZ) — API + RTM + customer token üçünde misdirected_request (421)  [OPUS-MAX]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~3 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: bölge kararı ÜÇ ayrı giriş yüzeyinde (REST `onRequest`, RTM `login`, customer/widget token verme) AYNI olmak zorundadır. Üçünü ayrı pencerelere bölmek \"REST reddediyor ama WebSocket kabul ediyor\" durumunu üretir — ve veri ikametinin fiilen ihlal edildiği yer tam olarak orasıdır.\n\n**MEVCUT DURUM (denetim düzeltmesi — \"karar noktası yok\" iddiası YANLIŞTI):** REST tarafında kapı ZATEN VAR — `apps/api/src/plugins/auth.ts:268-274` `X-Region` başlığını okuyup `misdirected_request` fırlatıyor. Eksik olan iki şey: (1) karşılaştırmanın SAĞ TARAFI süreç env'i (`env.NEXA_REGION`) — **lisansın bölgesi olmalı**; (2) RTM ve customer-token yüzeylerinde kapı **hiç yok**. Yani iş \"sıfırdan kapı kurmak\" değil, \"var olan kapıyı doğru şeye bağlamak + iki yüzeye taşımak\". İkinci bir kontrol EKLEME — var olanı düzelt. Hata tipi hazır: `packages/types/src/errors.ts:42,94` (`misdirected_request` → 421).\n\nKAPSAM: isteğin hedef bölgesi (env `NEXA_REGION` / `X-Region`) ile lisansın bölgesi uyuşmuyorsa `misdirected_request`. Üç yüzey: (1) `apps/api/src/plugins/auth.ts` onRequest zinciri, (2) `apps/rtm/src/auth.ts` + `dispatcher.ts` login yolu, (3) `apps/api/src/services/auth/customer-token.ts`.\n\nDOSYALAR: `apps/api/src/plugins/auth.ts:268-274` · `apps/api/src/config/env.ts:16` · **`apps/rtm/src/config/env.ts:5`** · `apps/rtm/src/auth.ts` · **`apps/rtm/src/dispatcher.ts:20,64,86`** (login yolu — denetim düzeltmesi: `connection.ts` içinde `login` HİÇ geçmiyor) · `apps/api/src/services/auth/customer-token.ts` · `apps/api/src/lib/api-error.ts`\n\nREFERANS DESEN: tm 80 `08.9.6-e` — IP allowlist enforcement'ın auth onRequest kapısı; aynı yere, aynı sırayla takılır. Mevcut `X-Region` doğrulaması (§C-A6: \"başlık doğrulanır ama tek değer kabul eder\") bu turda GERÇEK karara dönüşür.\n\nDİKKAT: RTM ve API ayrı süreçlerdir; ikisinin de aynı env'i okuduğundan ve aynı kararı verdiğinden emin ol. Test ikisini AYRI AYRI kanıtlamalı.\n\nKAPSAM DIŞI: HIPAA kısıtları (C4-e), UI (C4-c/-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**BÖLGE REDDİ AUDIT EYLEMİ BU ALT-GÖREVE AİTTİR** (denetim bulgusu K5-4): §6.2.1 dilim sırasını _\"`auth.sso_login`, `auth.sso_login_failed` ve bölge reddi olayları `AUDIT_ACTIONS`'a V3-1'de girer\"_ gerekçesine dayandırıyor; ama ilk kırılımda bölge reddi için hiçbir alt-görevde eylem yoktu. `security.region_rejected` eylemi `AUDIT_ACTIONS`'a burada eklenir ve reddedilen istekte yazılır (adres/token DEĞİL, yalnız lisans + istenen bölge). Emsal: `auth.ip_denied` (tm 80 · `08.9.6-e`) — aynı sınıf, aynı minimizasyon.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration && pnpm --filter @nexa/rtm test:integration (yanlış bölgeli lisans → API 421; RTM login 421/ret; customer token verme 421 — ÜÇÜ AYRI AYRI; doğru bölgede üçü de çalışır; CROSS-TENANT korunur) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm -w test",
+            "status": "pending",
+            "dependencies": [
+              "82.1"
+            ],
+            "parentId": "82",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 3,
+            "title": "C4-c [SONNET-XHIGH] Onboarding/kayıt akışında bölge seçimi + \"sonradan değiştirilemez\" uyarısı",
+            "description": "Onboarding/kayıt akışında bölge seçimi + \"sonradan değiştirilemez\" uyarısı",
+            "details": "C4-c — Onboarding/kayıt akışında bölge seçimi + \"sonradan değiştirilemez\" uyarısı  [SONNET-XHIGH]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~1 pencere\n\nKAPSAM: signup/onboarding adımına bölge seçimi (EU / US) + seçimin KALICI olduğunu söyleyen açık uyarı. Varsayılan `eu`.\n\nDOSYALAR (denetim sonrası TESPİT EDİLDİ, artık ismen): `apps/web/src/features/auth/PublicPages.tsx:141` (`SignUpPage`, `/auth/signup` POST'u `:155`) · `apps/web/src/features/auth/PublicPages.test.tsx`. **Onboarding sihirbazı DEĞİL** — `OnboardingWizard.tsx`'in adımları `welcome|website|team|sample` (`:23-25`), bölge oraya ait değil. Bölge alanı `C4-a`'nın signup gövdesine eklediği `region` alanına gider.\n\nREFERANS DESEN: mevcut onboarding sihirbazı adım kalıbı (`lib/stepper.ts`) + `lib/form.tsx` validasyon primitifi. Uyarı için `components/ui/Banner.tsx`.\n\nKAPSAM DIŞI: zorlama (C4-b), BAA kartı (C4-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/web test (bölge seçimi görünür, varsayılan eu, kalıcılık uyarısı gösterilir, seçim gövdeye geçer) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "82.1"
+            ],
+            "parentId": "82",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 4,
+            "title": "C4-d [OPUS-XHIGH] BAA durumu — licenses.hipaa_baa_signed_at + kabul akışı (MOCK) + compliance.baa_signed audit",
+            "description": "BAA durumu — licenses.hipaa_baa_signed_at + kabul akışı (MOCK) + compliance.baa_signed audit",
+            "details": "C4-d — BAA durumu — licenses.hipaa_baa_signed_at + kabul akışı (MOCK) + compliance.baa_signed audit  [OPUS-XHIGH]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~1 pencere\n\nKAPSAM: `licenses.hipaaBaaSignedAt DateTime?` + kabul ucu (`POST /settings/compliance/baa`) + `compliance.baa_signed` audit eylemi. İmza MOCK'tur: gerçek sözleşme metni, imza sağlayıcı veya hukuki akış YOKTUR — yalnız \"bu lisans için BAA kabul edildi\" kaydı (CLAUDE.md: dış servisler mock).\n\nKISIT: BAA yalnız `region='us'` lisansta kabul edilebilir (PRD NFR-C4: \"HIPAA yalnız US hosting + BAA\"). `eu` lisansta uç 4xx döner.\n\nYETKİ: yalnız `owner` (admin YETMEZ) — §C-A20.\n\nDOSYALAR: `apps/api/prisma/schema.prisma` + migration · `apps/api/src/routes/settings.ts` · `apps/api/src/services/audit/audit-log.ts` (AUDIT_ACTIONS) · `packages/contract/openapi/paths/settings.yaml`\n\nREFERANS DESEN: `routes/settings.ts` mevcut `settings.*` audit'li mutasyon kalıbı; rol kapısı `services/auth/principal.ts:70` `roleAtLeast`.\n\nKAPSAM DIŞI: HIPAA kısıtlarının fiilen uygulanması (C4-e).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (us lisansta owner BAA kabul edebilir → hipaaBaaSignedAt dolar + compliance.baa_signed audit; admin REDDEDİLİR; eu lisansta uç REDDEDİLİR; CROSS-TENANT) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "82.1"
+            ],
+            "parentId": "82",
+            "updatedAt": "2026-08-11T20:47:57.075Z"
+          },
+          {
+            "id": 5,
+            "title": "C4-e [OPUS-MAX] HIPAA kapsam kısıtları (BÖLÜNMEZ) — retention tavanı + PII maskesi sertleşmesi + AI bölge sınırı",
+            "description": "HIPAA kapsam kısıtları (BÖLÜNMEZ) — retention tavanı + PII maskesi sertleşmesi + AI bölge sınırı",
+            "details": "C4-e — HIPAA kapsam kısıtları (BÖLÜNMEZ) — retention tavanı + PII maskesi sertleşmesi + AI bölge sınırı  [OPUS-MAX]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: \"bu lisans HIPAA kapsamındadır\" bir YETKİ değil bir KISIT anahtarıdır ve üç sonucu vardır: (1) zorunlu retention tavanı, (2) log/telemetri PII maskesinin sertleşmesi, (3) AI çıkarımının bölge dışına çıkmasının reddi. Ayrılırsa \"BAA imzalı ama transcript'i başka bölgeye giden\" bir hesap doğar — ürünün verdiği uyum sözünün fiilen boş olması budur.\n\nKAPSAM: BAA imzalı lisansta — retention politikasının üst sınırı zorlanır (sınırsız seçilemez), `plugins/telemetry.ts` + pino redaction sertleşir, AI çağrısı bölge dışına çıkamaz (mock sağlayıcıda bile karar YAZILIR ki gerçek sağlayıcıya geçişte kapı hazır olsun).\n\nDOSYALAR: `apps/api/src/services/retention/policy.ts` · `apps/api/src/server.ts` (pino redact) · `apps/api/src/telemetry/telemetry.ts` · `apps/api/src/services/ai/` (sağlayıcı seçim noktası) · `apps/api/src/lib/cc-mask.ts` (emsal)\n\nREFERANS DESEN: `lib/cc-mask.ts` (GL-5 · tm 70) — \"yazma anında maskele, yalnız UI'da değil\" ilkesi buraya birebir taşınır. `services/retention/policy.ts` mevcut plan bazlı saklama kalıbı.\n\nKAPSAM DIŞI: gerçek çok-bölgeli barındırma (§D97 — süreç/altyapı payı, bu depoda yapılamaz).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (BAA imzalı lisansta sınırsız retention REDDEDİLİR; BAA imzasız lisansta kısıt UYGULANMAZ — negatif kanıt; AI çağrısı bölge dışına çıkarsa reddedilir; log çıktısında PII yok) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm -w test",
+            "status": "pending",
+            "dependencies": [
+              "82.2",
+              "82.4"
+            ],
+            "parentId": "82",
+            "updatedAt": "2026-08-11T20:47:57.075Z"
+          },
+          {
+            "id": 6,
+            "title": "C4-f [SONNET-XHIGH] Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi",
+            "description": "Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi",
+            "details": "C4-f — Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi (salt-okunur)  [SONNET-XHIGH]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~1 pencere\n\nKAPSAM: Settings → Security altında \"Veri bölgesi ve uyumluluk\" kartı — bölge (**salt-okunur**, \"kayıtta sabitlendi\" notu), BAA durumu (imzalı/imzasız + tarih), `us` lisansta owner için **BAA kabul butonu** (bu bir mutasyondur; başlıktaki \"salt-okunur\" ibaresi denetimde kaldırıldı, yalnız BÖLGE gösterimi salt-okunurdur).\n\n**ROL KAPISI (denetim bulgusu):** butonu yalnız `owner` GÖRÜR — `admin` de GÖRMEZ. Sunucu kapısı `C4-d`'dedir (`owner`, `roleAtLeast` değil kesin eşitlik); bu ekran onu YANSITIR, kendi kararını vermez.\n\nDOSYALAR: `apps/web/src/features/settings/Compliance.tsx` (yeni) + test · `apps/web/src/features/settings/SettingsPage.tsx`\n\nREFERANS DESEN (birebir): `apps/web/src/features/settings/IpAllowlist.tsx` bölüm yerleşimi · rol kapılı buton kalıbı `TeamPage` rol menüsü · boş/yükleme durumları `apps/web/src/components/Skeleton.tsx` + `apps/web/src/components/EmptyState.tsx` (EK-B.1 — denetim düzeltmesi: bunlar `components/ui/` altında DEĞİL, bir üst dizinde).\n\nKAPSAM DIŞI: e2e (C4-g).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/web test (kart bölgeyi salt-okunur gösterir; eu lisansta BAA butonu YOK; us lisansta owner görür, ADMIN GÖRMEZ, agent GÖRMEZ; imzalı durumda tarih gösterilir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "82.4"
+            ],
+            "parentId": "82",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 7,
+            "title": "C4-g [OPUS-XHIGH] Uçtan uca doğrulama — 421 üç yüzeyde + immutability + BAA'sız hesapta kısıt yok + cross-tenant",
+            "description": "Uçtan uca doğrulama — 421 üç yüzeyde + immutability + BAA'sız hesapta kısıt yok + cross-tenant",
+            "details": "C4-g — Uçtan uca doğrulama — 421 üç yüzeyde + immutability + BAA'sız hesapta kısıt yok + cross-tenant  [OPUS-XHIGH]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~1 pencere\n\nKAPSAM: (1) yanlış bölge → 421: API, RTM ve widget/customer token yollarının ÜÇÜ AYRI AYRI kanıtlanır. (2) region immutability negatifi. (3) BAA imzasız hesapta HIPAA kısıtının UYGULANMADIĞININ kanıtı (yanlış-pozitif kısıt yok). (4) cross-tenant. (5) e2e: bölge seçimiyle kayıt → uyumluluk kartı (kanıt PNG `apps/e2e/kanit/C4-region-compliance.png`).\n\nDOSYALAR: `apps/e2e/tests/compliance.spec.ts` (yeni) · `apps/api/test/integration/region.test.ts` · `apps/rtm/test/integration/rtm.test.ts` · `apps/e2e/kanit/`\n\nKAPI: bu alt-görev yeşile dönmeden kalem ✅ olmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**YETKİ REDDİ NEGATİFİ (denetim bulgusu K1-2 · ZORUNLU):** BAA kabul ucunun `hipaa` yetkisi olmadan (`growth` planı) ilgili uçlar **REDDEDİLMELİDİR**. Bu test bu alt-görevin süitindedir; kapı `11.5-b`'de kurulur (tm 84). `tm 84` bu kalemden SONRA koşacaksa test önce `skip` değil, **kapı kurulana kadar kırmızı bırakılmaz** — sıralama gereği `11.5-b` daha önce bitmiş olmalıdır (bkz. §6.2 bağımlılık notu).",
+            "testStrategy": "yetkisiz plan (growth) reddi negatifi dahil && pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm -w test:e2e (compliance.spec.ts dahil TÜM süit yeşil)",
+            "status": "pending",
+            "dependencies": [
+              "82.2",
+              "82.5",
+              "82.6"
+            ],
+            "parentId": "82",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          }
+        ],
+        "updatedAt": "2026-08-11T20:47:57.075Z"
       },
       {
         "id": "83",
-        "title": "SOC2 Type II · ISO 27001 · tam audit+SIEM [MAX]",
-        "description": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C6/C7/S12 · KK-türetilmiş.",
-        "details": "PRD §5.4 (Ent.) · [MAX] ↑ · NFR-C6/C7/S12 · KK-türetilmiş.\n↑ GEREKÇE: uyumluluk (çoğu SÜREÇ işi; kod payı: genişletilmiş audit + SIEM export). audit yazıcı ✅ (tm 23) temeli var.\nKAPSAM: genişletilmiş audit log + SIEM export; SOC2/ISO kontrol kanıtları (kod payı). Sertifikasyon = dış denetim süreci (takvim-belirleyici, PRD §10.2).\nKK-TÜRETİLMİŞ: \"Genişletilmiş audit + SIEM'e export; kontrol kanıtları\" (NFR-C6/C7/S12'den türetildi, §C'ye varsayım).\nBAĞLAM: PLAN §6.1, §7.2 S12 (✅ temel). SÜREÇ + ~2-3 kod subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
-        "testStrategy": "integration: audit → SIEM export; append-only korunur; CROSS-TENANT. DoD tam (kod payı).",
-        "status": "deferred",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": [],
-        "updatedAt": "2026-07-25T13:09:32.276Z"
+        "title": "C6 — SOC 2 Type II · ISO 27001 · tam audit log + SIEM · dilim V3-2",
+        "description": "PRD §5.4 (Ent.) · NFR-C6/C7/S12 · KK-türetilmiş. KOD PAYI görevleşir; sertifikasyon süreci §F.00'ı BLOKLAMAZ (§D97).",
+        "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `C6` · dilim V3-2\n\n7 atomik alt-görev · ~9 pencere · etiket dağılımı: SONNET-XHIGH x3 · OPUS-XHIGH x3 · OPUS-MAX x1\n\nKK: \"Genişletilmiş audit + SIEM'e export; kontrol kanıtları\" — NFR-C6/C7/S12'den türetildi (§C-A21). Sertifikasyon = dış denetim süreci, bu depodan üretilemez.\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  C6-a [SONNET-XHIGH] Audit kapsamı denetimi + genişletme — hangi güvenlik-hassas mutasyon yazmıyor  (bağ: —)\n  C6-b [OPUS-XHIGH] SIEM export kontratı + siem_export_cursors (keyset, tekrar-teslime dayanıklı) + NDJSON akışı  (bağ: —)\n  C6-c [OPUS-MAX] Export bütünlüğü çekirdeği (BÖLÜNMEZ) — kayıt zinciri (HMAC) + export imzası + boşluk tespiti  (bağ: C6-b)\n  C6-d [SONNET-XHIGH] MOCK SIEM hedefi (.data/siem dosya sink) + zamanlanmış gönderim  (bağ: C6-b, C6-c)\n  C6-e [OPUS-XHIGH] Erişim gözden geçirme raporu (SOC 2 CC6.1 kanıtı) — kim/hangi rol/son giriş/PAT envanteri  (bağ: C6-a)\n  C6-f [SONNET-XHIGH] Settings → Security: SIEM export ekranı (hedef, son export, boşluk uyarısı)  (bağ: C6-d)\n  C6-g [OPUS-XHIGH] Uçtan uca doğrulama — eylem→audit→export→zincir; append-only; boşluk negatifi; cross-tenant  (bağ: C6-c, C6-d, C6-e, C6-f)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.4 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
+        "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (C6-g) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
+        "status": "pending",
+        "dependencies": [
+          "81",
+          "82"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "C6-a1 [OPUS-XHIGH] Audit kapsam boşluğu ENVANTERİ — 37 route taranır, çıktı ada bağlı sabit liste",
+            "description": "Audit kapsam boşluğu envanteri — 37 route taranır, çıktı ada bağlı sabit liste",
+            "details": "C6-a1 — Audit kapsam boşluğu ENVANTERİ — 37 route taranır, çıktı ada bağlı sabit liste  [OPUS-XHIGH]\n\nPRD: C6 (PLAN §6.1.4 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nBU BÖLÜNME DENETİM BULGUSUYLA YAPILDI (PLAN §D99). İlk kırılımda tek bir `SONNET-XHIGH` alt-görev hem \"hangi mutasyon güvenlik-hassastır\" kararını hem de kodu istiyordu. Bu bir GÜVENLİK DENETİMİDİR: `apps/api/src/routes/` altında **37 route dosyası** var, mevcut sözlük **44 eylem** taşıyor ve her eylemin bir METADATA MİNİMİZASYON kararı var (`member.role_changed` yalnız from/to rolleri; `auth.ip_denied` adresi KASTEN saklamıyor). §5.1.1'in `SONNET-XHIGH` ölçütü \"~3-5 dosya + kopyalanacak desen\" der; burada 37 dosya taranıp muhakeme isteniyor.\n\nKAPSAM (KOD DEĞİŞİKLİĞİ YOK — çıktı bir listedir):\n- `apps/api/src/routes/*.ts` içindeki TÜM mutasyon uçları taranır ve mevcut `AUDIT_ACTIONS` (`apps/api/src/services/audit/audit-log.ts:33`) ile karşılaştırılır.\n- Çıktı: (a) EKLENECEK eylem adlarının sabit listesi, (b) her biri için yazılacak/yazılmayacak metadata alanları, (c) kapsam dışı bırakılan uçların gerekçesi.\n- Liste PLAN §D'ye kayıt olarak yazılır ve `C6-a2`'nin girdisi olur.\n\nDOSYALAR: `apps/api/src/routes/*.ts` (yalnız okuma) · `apps/api/src/services/audit/audit-log.ts:33` · `PLAN.md` §D\n\nREFERANS DESEN: tm 92 `08.9.7-c/-d/-e` — hangi uçların audit'e bağlandığının önceki turu; onların KAPSAM DIŞI bıraktıkları bu envanterin başlangıç noktasıdır.\n\nKAPSAM DIŞI: kod değişikliği (C6-a2), export (C6-b/-c/-d).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build — hepsi exit 0 (kod değişmediği için regresyonsuz yeşil kalmalı); envanter §D'ye yazılır; HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build (kod değişmediği için tümü REGRESYONSUZ yeşil). Kabul ölçütü kod değil ÇIKTI: PLAN §D'ye eklenen envanter listesi her satırda \"route:satır → eylem adı → yazılacak metadata alanları\" taşır ve kapsam dışı bırakılan her uç gerekçelidir.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "83",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 2,
+            "title": "C6-a2 [SONNET-XHIGH] Envanterdeki eylemlerin AUDIT_ACTIONS'a eklenmesi + çağrıların bağlanması",
+            "description": "Envanterdeki eylemlerin AUDIT_ACTIONS'a eklenmesi + çağrıların bağlanması",
+            "details": "C6-a2 — Envanterdeki eylemlerin `AUDIT_ACTIONS`'a eklenmesi + çağrıların bağlanması  [SONNET-XHIGH]\n\nPRD: C6 (PLAN §6.1.4 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: `C6-a1` bir envanter üretti (PLAN §D'de, ada bağlı sabit liste). Bu alt-görev o listeyi UYGULAR — karar vermez, kod yazar. Liste dışına ÇIKMA; yeni eylem icat etme.\n\nKAPSAM: `C6-a1`'in listesindeki her eylem `AUDIT_ACTIONS`'a eklenir ve ilgili route handler'ında `writeAuditEntry` çağrısı bağlanır. Metadata alanları listede yazılı olanlarla SINIRLIDIR.\n\nDOSYALAR: `apps/api/src/services/audit/audit-log.ts:33` (`AUDIT_ACTIONS` birliği) · `C6-a1` listesinde adı geçen route dosyaları\n\nREFERANS DESEN (birebir): tm 92 `08.9.7-c` (webhook.created/deleted) ve `08.9.7-d`/`-e` (data.deleted) — eylem ekleme + çağrı bağlama kalıbı. `AUDIT_ACTIONS` KAPALI bir birliktir: eylem eklemek bir derleme hatasını çözmek demektir, serbest string değil.\n\nKURAL: PII minimizasyonu korunur (`sanitizeAuditMetadata`); parola/token/sır ASLA yazılmaz. Şüphede kalırsan alanı YAZMA — `C6-a1` listesi neyin yazılacağını zaten söylüyor.\n\nKAPSAM DIŞI: yeni eylem seçimi (C6-a1'in işi), export (C6-b/-c/-d).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir; HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (C6-a1 listesindeki HER eylem için: mutasyon → audit satırı yazılır; append-only korunur — UPDATE/DELETE reddi; CROSS-TENANT; audit metadata'sında sır YOK) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "83.1"
+            ],
+            "parentId": "83",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 3,
+            "title": "C6-b [OPUS-MAX] SIEM export kontratı + siem_export_cursors (keyset, tekrar-teslime dayanıklı) + NDJSON akışı",
+            "description": "SIEM export kontratı + siem_export_cursors (keyset, tekrar-teslime dayanıklı) + NDJSON akışı",
+            "details": "C6-b — SIEM export kontratı + siem_export_cursors (keyset, tekrar-teslime dayanıklı) + NDJSON akışı  [OPUS-MAX]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nKAPSAM: `GET /audit-log/export` (NDJSON akışı, keyset imleç) + `siem_export_cursors` tablosu (licenseId, target, lastExportedId, lastExportedAt) + RLS. İmleç TEKRAR-TESLİME DAYANIKLI olmalı: aynı imleçten iki kez okumak aynı satırları verir, satır ATLAMAZ.\n\n**HEDEF YÖNETİM UÇLARI DA BU ALT-GÖREVE AİTTİR** (denetim bulgusu: `C6-f` ekranı hiçbir uca sahip değildi, contract-first sırası kırıktı): `GET|PATCH /settings/siem` (hedef okuma/yazma, `admin+` rol kapısı, `settings.security_updated` audit'i) + `GET /settings/siem/status` (son export zamanı, satır sayısı, zincir boşluğu bayrağı) + `packages/contract/openapi/paths/settings.yaml`.\n\n**SCOPE KARARI ERTELENMİYOR** (denetim bulgusu — \"bu pencerede karara bağlanır\" bir SONNET-belirsizliğiydi, artık OPUS-MAX): export **ayrı bir scope ister** — `audit_log--all:ro` (tm 92) tek bir ekranın sayfalı okumasıdır; toplu dışa akış farklı bir yetkidir. Yeni scope `audit_log--export:ro` olarak eklenir ve `packages/types/src/scopes.ts` + kontrat + route config dörtlüsünde birden tanımlanır.\n\nDOSYALAR: `apps/api/prisma/schema.prisma` + migration · `apps/api/src/routes/audit-log.ts` · `apps/api/src/services/audit/audit-log-reader.ts` · `packages/contract/openapi/paths/audit-log.yaml`\n\nREFERANS DESEN: `audit-log-reader.ts` mevcut keyset okuma (tm 92 · `08.9.7-a`) · `apps/api/src/services/reports/report-csv.ts` (satır akışı/CSV üretimi) + `apps/api/src/services/reports/scheduled-report-sweeper.ts` (periyodik iş) — **`reports-export.ts` diye bir dosya YOKTUR** (denetim düzeltmesi) · rol/scope kapısı emsali tm 92 `08.9.7-a`.\n\nKAPSAM DIŞI: bütünlük zinciri (C6-c), hedef (C6-d).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (export NDJSON döner; imleç ilerler; AYNI imleçten iki okuma aynı sonucu verir; satır ATLAMAZ; CROSS-TENANT: başka lisansın satırları export'a girmez; scope'suz istek reddedilir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "83",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 4,
+            "title": "C6-c [OPUS-MAX] Export bütünlüğü çekirdeği (BÖLÜNMEZ) — kayıt zinciri (HMAC) + export imzası + boşluk tespiti",
+            "description": "Export bütünlüğü çekirdeği (BÖLÜNMEZ) — kayıt zinciri (HMAC) + export imzası + boşluk tespiti",
+            "details": "C6-c — Export bütünlüğü çekirdeği (BÖLÜNMEZ) — kayıt zinciri (HMAC) + export imzası + boşluk tespiti  [OPUS-MAX]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~3 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: bir denetim izinin değeri SİLİNEMEZ olmasında değil, SİLİNDİĞİNİN GÖRÜLEBİLMESİNDEDİR. Zincir (her satır bir öncekinin HMAC'ini taşır), export imzası ve boşluk tespiti üçü birlikte TEK bir iddiayı taşır: \"bu export eksiksizdir ve değiştirilmemiştir\". Herhangi biri ayrı pencereye alınırsa aradaki sürümde imzalı ama EKSİK bir export üretilir; denetçiye verilen kanıt sessizce değersizleşir — üstelik testler yeşilken.\n\nKAPSAM: `audit_log` satırlarına zincir alanı (prevHash/hash) + INSERT yolunda hesaplama + export imzası + `verifyChain()` + boşluk tespiti. Anahtar lisans başına türetilir ve EXPORT'A GİRMEZ (§C-A22).\n\nKRİTİK INVARYANT (test edilecek): `RETENTION_AUDIT_DAYS=30` budaması (tm 92 `08.9.7-h`, `audit_prune_expired` SECURITY DEFINER) HENÜZ EXPORT EDİLMEMİŞ satırı SİLMEZ. Aksi hâlde kayıt kalıcı olarak kaybolur ve zincirde onarılamaz boşluk kalır.\n\nDOSYALAR: `apps/api/src/services/audit/audit-log.ts` · `apps/api/src/services/audit/audit-log-reader.ts` · `apps/api/src/lib/crypto.ts` · yeni migration (zincir kolonları + budama fonksiyonunun güncellenmesi)\n\nREFERANS DESEN: `lib/crypto.ts` HMAC kullanımı (webhook HMAC-SHA256, **tm 34 · `08.8.4-b`** — denetim düzeltmesi: tm 33 = \"06 AI Agent + Knowledge\", ilgisiz) · `audit_prune_expired` SECURITY DEFINER kalıbı (tm 92).\n\nKAPSAM DIŞI: hedef/zamanlama (C6-d), ekran (C6-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**EXPORT FORMATI BU PENCEREDE KİLİTLENİR** (denetim bulgusu): NDJSON'un zincir/imza alanlarını nasıl taşıdığı — her satırda `prev_hash`/`hash` alanı mı, yoksa dosya sonunda imza satırı mı, yoksa yan `.sig` dosyası mı — burada karara bağlanır ve §C'ye yazılır. `C6-d` (sink) ve `C6-g` (e2e) bu formatı VARSAYACAK; format kilitlenmezse ikisi de uyumsuz yazılır.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (zincir doğrulanır; ARADAN BİR SATIR SİLİNİRSE doğrulama BAŞARISIZ olur — boşluk tespiti pozitifi; export imzası doğrulanır; budama export edilmemiş satırı SİLMEZ — invaryant testi; append-only korunur; CROSS-TENANT) && pnpm --filter @nexa/api test:unit && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "83.3"
+            ],
+            "parentId": "83",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 5,
+            "title": "C6-d [SONNET-XHIGH] MOCK SIEM hedefi (.data/siem dosya sink) + zamanlanmış gönderim",
+            "description": "MOCK SIEM hedefi (.data/siem dosya sink) + zamanlanmış gönderim",
+            "details": "C6-d — MOCK SIEM hedefi (.data/siem dosya sink) + zamanlanmış gönderim  [SONNET-XHIGH]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nKAPSAM: SIEM hedefi yapılandırması (tip + hedef) + gönderim işi. Hedef MOCK'tur: `.data/siem/<licenseId>/<timestamp>.ndjson` dosyasına yazılır. Gerçek Splunk/Sentinel/Datadog bağlantısı YAPILMAZ (CLAUDE.md sınırı).\n\nDOSYALAR: `apps/api/src/services/audit/siem-sink.ts` (yeni) · `apps/api/src/services/reports/` (sweeper emsali) · `apps/api/package.json` (`siem:run` script)\n\nREFERANS DESEN (birebir): `apps/api/src/services/reports/scheduled-report-sweeper.ts` (**tm 94 · `07.9-sched-e`** — denetim düzeltmesi: tm 93 = \"07.7 Rapor grupları\", sweeper tm 94'ündür) — periyodik iş, imleç ilerletme, hata dayanıklılığı, lisans başına kilit.\n\n**ZORUNLU SIRA İNVARYANTI (denetim bulgusu — kalıcı denetim kaydı kaybı riski):** dosya YAZILIR ve KAPATILIR → **SONRA** imleç ilerletilir; asla tersi. Sweeper lisans başına kilit alır (emsalin kilit kalıbı). Çökme hâlinde TEKRAR YAZIM kabul edilir, **ATLAMA kabul EDİLMEZ** — çünkü `C6-c`'nin invaryantı gereği budama yalnız \"export edildi\" damgalı satırı silebilir; imleç dosyadan önce ilerlerse budama gönderilmemiş satırları siler ve zincirde ONARILAMAZ boşluk kalır. Format `C6-c`'de kilitlendi; sink onu DEĞİŞTİRMEZ. Dosya sink deseni: `services/mail/mailer.ts` FileMailer (`.data/mail`) ve `services/storage` (`.data/uploads`).\n\nKAPSAM DIŞI: bütünlük (C6-c'de), ekran (C6-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (sweeper koşar → .data/siem altına NDJSON yazılır; imleç ilerler; ikinci koşu aynı satırları TEKRAR yazmaz; YAZMA ORTASINDA ÇÖKME benzetiminde imleç İLERLEMEMİŞ olur (atlama negatifi); iki sweeper eşzamanlı koşarsa satır ATLANMAZ; budama imleçten ileri satırı SİLMEZ; hedefi olmayan lisans atlanır; CROSS-TENANT: her lisansın dosyası ayrı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "83.3",
+              "83.4"
+            ],
+            "parentId": "83",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 6,
+            "title": "C6-e [OPUS-XHIGH] Erişim gözden geçirme raporu (SOC 2 CC6.1 kanıtı) — kim/hangi rol/son giriş/PAT envanteri",
+            "description": "Erişim gözden geçirme raporu (SOC 2 CC6.1 kanıtı) — kim/hangi rol/son giriş/PAT envanteri",
+            "details": "C6-e — Erişim gözden geçirme raporu (SOC 2 CC6.1 kanıtı) — kim/hangi rol/son giriş/PAT envanteri  [OPUS-XHIGH]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nKAPSAM: `GET /reports/access-review` — lisanstaki her üyelik: hesap, rol, durum (suspended/awaiting), son giriş, 2FA durumu; artı aktif PAT/OAuth/SCIM token envanteri (token DEĞERİ değil: id, sahip, scope'lar, son kullanım, oluşturma). Export edilebilir.\n\nNEDEN: SOC 2 CC6.1 (\"mantıksal erişim\") kanıtı kod tarafından ÜRETİLEBİLİR bir kanıttır; sertifikasyonun kendisi değildir. Rapor KANIT ÜRETİR, KARAR VERMEZ — \"bu erişim uygun mu\" sorusu insan denetimidir (§C-A23).\n\nDOSYALAR: `apps/api/src/routes/reports.ts` · `apps/api/src/services/reports/` · `apps/api/src/services/reports/report-csv.ts` · `packages/contract/openapi/paths/reports.yaml`\n\nREFERANS DESEN: `routes/reports.ts` mevcut rapor ucu + `apps/api/src/services/reports/report-csv.ts` (**tm 94 · `07.9-sched-d2`** — denetim düzeltmesi: `07.7-v2` tm 93'ün PLAN kalem kodudur, alt-görev değil). Rol kapısı: yalnız `admin` ve üstü.\n\nKAPSAM DIŞI: ekran — rapor bu turda API + export olarak teslim edilir; ayrı bir sayfa açılmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (rapor üyelikleri + token envanterini döner; TOKEN DEĞERİ dönmez — sızıntı negatifi; agent rolü REDDEDİLİR; CROSS-TENANT: başka lisansın üyeleri görünmez; CSV export yeşil) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "83.1"
+            ],
+            "parentId": "83",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 7,
+            "title": "C6-f [SONNET-XHIGH] Settings → Security: SIEM export ekranı (hedef, son export, boşluk uyarısı)",
+            "description": "Settings → Security: SIEM export ekranı (hedef, son export, boşluk uyarısı)",
+            "details": "C6-f — Settings → Security: SIEM export ekranı (hedef, son export, boşluk uyarısı)  [SONNET-XHIGH]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nKAPSAM: SIEM bölümü — hedef yapılandırma formu, son export zamanı ve satır sayısı, zincir boşluğu tespit edilmişse UYARI bandı.\n\nDOSYALAR: `apps/web/src/features/settings/SiemExport.tsx` (yeni) + test · `apps/web/src/features/settings/SettingsPage.tsx`\n\n**YENİ SUNUCU UCU AÇILMAZ** (denetim bulgusu): hedef okuma/yazma ve durum uçları `C6-b`'nin malıdır (`GET|PATCH /settings/siem`, `GET /settings/siem/status`); bu ekran onları TÜKETİR.\n\nREFERANS DESEN (birebir): `apps/web/src/features/settings/ScheduledExports.tsx` (**tm 94 · `07.9-sched-h`** — denetim düzeltmesi) — zamanlanmış iş yapılandırma ekranının kalıbı; uyarı için `components/ui/Banner.tsx` (segmentli + kalıcı dismiss, tm 62).\n\nKAPSAM DIŞI: e2e (C6-g).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/web test (hedef formu doğrulaması; son export bilgisi gösterilir; boşluk uyarısı yalnız boşluk varken görünür; boş durum anlamlı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "83.3",
+              "83.4",
+              "83.5"
+            ],
+            "parentId": "83",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 8,
+            "title": "C6-g [OPUS-XHIGH] Uçtan uca doğrulama — eylem→audit→export→zincir; append-only; boşluk negatifi; cross-tenant",
+            "description": "Uçtan uca doğrulama — eylem→audit→export→zincir; append-only; boşluk negatifi; cross-tenant",
+            "details": "C6-g — Uçtan uca doğrulama — eylem→audit→export→zincir; append-only; boşluk negatifi; cross-tenant  [OPUS-XHIGH]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nKAPSAM: (1) güvenlik-hassas eylem → audit satırı → export → zincir doğrulaması uçtan uca. (2) append-only korunur (UPDATE/DELETE DB'de reddedilir). (3) boşluk tespiti NEGATİFİ: elle silinen satır yakalanır. (4) cross-tenant izolasyonu. (5) e2e: SIEM ekranı + erişim raporu (kanıt PNG `apps/e2e/kanit/C6-siem-export.png`).\n\nDOSYALAR: `apps/e2e/tests/siem.spec.ts` (yeni) · `apps/api/test/integration/siem-export.test.ts` · `apps/e2e/kanit/`\n\nKAPI: bu alt-görev yeşile dönmeden kalem ✅ olmaz. Kalemin ✅'i YALNIZ KOD PAYINI kapsar — sertifikasyon süreci §F.00'ı bloklamaz (§D97).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**YETKİ REDDİ NEGATİFİ (denetim bulgusu K1-2 · ZORUNLU):** SIEM export/hedef uçlarının `siem_export` yetkisi olmadan (`growth` planı) ilgili uçlar **REDDEDİLMELİDİR**. Bu test bu alt-görevin süitindedir; kapı `11.5-b`'de kurulur (tm 84). `tm 84` bu kalemden SONRA koşacaksa test önce `skip` değil, **kapı kurulana kadar kırmızı bırakılmaz** — sıralama gereği `11.5-b` daha önce bitmiş olmalıdır (bkz. §6.2 bağımlılık notu).",
+            "testStrategy": "yetkisiz plan (growth) reddi negatifi dahil && pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm -w test:e2e (siem.spec.ts dahil TÜM süit yeşil)",
+            "status": "pending",
+            "dependencies": [
+              "83.4",
+              "83.5",
+              "83.6",
+              "83.7"
+            ],
+            "parentId": "83",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          }
+        ],
+        "updatedAt": "2026-08-11T20:47:57.075Z"
       },
       {
         "id": "84",
-        "title": "White-label widget · SLA yönetimi · sandbox",
-        "description": "PRD §5.4 (Ent.) · FR-MOD-11.5 (white-label) · KK-türetilmiş.",
-        "details": "PRD §5.4 (Ent.) · FR-MOD-11.5 (white-label) · KK-türetilmiş.\nKAPSAM: white-label widget ('Powered by' kaldırma — 11.5); SLA yönetimi; sandbox ortamı.\nKK (birebir, 11.5): \"Marka linki; Enterprise'da white-label\" + KK-türetilmiş (SLA/sandbox §5.4).\nBAĞLAM: PLAN §6.1, widget ✅. 11.5 'Powered by' footer kaldırma bu kapsamda. ~3-4 subtask.\nNOT (v2/v3 derinlik): kod tabanı bu faz başına değişmiş olabilir; başlamadan PLAN §F.0 mini denetimle gözden geçir ve gerekiyorsa subtask'lara böl (PLAN §5.1 bayatlama politikası).",
-        "testStrategy": "unit: white-label bayrağı → 'Powered by' gizlenir. DoD tam.",
-        "status": "deferred",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": [],
-        "updatedAt": "2026-07-25T13:09:32.278Z"
+        "title": "11.5 — White-label widget · SLA yönetimi · sandbox · dilim V3-3",
+        "description": "PRD §5.4 (Ent.) · FR-MOD-11.5. BULGU: powered_by bugün HİÇBİR plan kapısı taşımıyor — Enterprise özelliği her planda açık.",
+        "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `11.5` · dilim V3-3\n\n8 atomik alt-görev · ~11 pencere · etiket dağılımı: OPUS-XHIGH x3 · OPUS-MAX x2 · SONNET-XHIGH x3\n\nKK: \"Marka linki; Enterprise'da white-label\" (FR-MOD-11.5 birebir) + \"SLA yönetimi\" · \"sandbox\" (§5.4'ten türetilmiş, §C-A24).\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  11.5-a [OPUS-XHIGH] PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla)  (bağ: —)\n  11.5-b [OPUS-MAX] Entitlement zorlama çekirdeği (BÖLÜNMEZ) — yazma kapısı + downgrade'de okuma yolunda geri alma  (bağ: 11.5-a)\n  11.5-c [SONNET-XHIGH] Widget tarafı — yetki yokken powered_by=0 URL parametresinin yok sayılması  (bağ: 11.5-b)\n  11.5-d [OPUS-XHIGH] SLA yönetimi — hedef tanımı (ilk yanıt / çözüm, iş saatleri) + ölçüm + ihlal işareti  (bağ: 11.5-a)\n  11.5-e [SONNET-XHIGH] SLA ekranı + Reports'ta ihlal KPI'ı  (bağ: 11.5-d)\n  11.5-f [OPUS-MAX] Sandbox lisansı (BÖLÜNMEZ) — ikinci kiracı: izolasyon + faturaya girmeme + kotaya sayılmama  (bağ: 11.5-a, 11.5-b)\n  11.5-g [SONNET-XHIGH] Sandbox ekranı — oluştur/sıfırla + \"bu bir sandbox\" göstergesi  (bağ: 11.5-f)\n  11.5-h [OPUS-XHIGH] Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e  (bağ: 11.5-c, 11.5-e, 11.5-g)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.5 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
+        "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (11.5-h) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
+        "status": "pending",
+        "dependencies": [
+          "81",
+          "82"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "11.5-a [OPUS-XHIGH] PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla)",
+            "description": "PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla)",
+            "details": "11.5-a — PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla)  [OPUS-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: `apps/api/src/services/billing/subscription-service.ts:21` → `PLANS = { growth: {...} }`, TEK kademe. Kodda \"Enterprise planı\" kavramı YOK. Yetki sözlüğü de yok; `powered_by` (`routes/settings.ts:181,827`) hiçbir kontrol olmadan kabul ediliyor.\n\nKAPSAM: `PLANS`'a `enterprise` kademesi + kademe→yetki sözlüğü + kontrat yüzeyi (`GET /billing/entitlements`).\n\n**YETKİ SÖZLÜĞÜ — ALTI ANAHTAR** (denetim bulgusu K1-2 ile üçten altıya çıkarıldı): `white_label` · `sandbox` · `sla` · **`sso`** · **`hipaa`** · **`siem_export`**. Son üçü PRD'nin **açıkça \"Enterprise\"** dediği yeteneklerdir — NFR-S11 _\"SAML 2.0/OIDC + SCIM (Enterprise)\"_, NFR-C4 _\"Şartlı (imzalı BAA + yalnız US hosting) — Enterprise\"_, NFR-S12 _\"genişletilmiş + SIEM Enterprise\"_. İlk kırılımda sözlükte yoktular; sonuç, `11.5`'in var oluş gerekçesi olan kaçağın (`powered_by` her planda açık) ÜÇ YENİ ÖRNEĞİ olurdu: Faz 3 bittiğinde `growth` planındaki her kiracı SAML SSO'ya, SCIM'e, HIPAA/BAA akışına ve SIEM export'una erişirdi.\n\nKARAR: yetki PLANDAN TÜRETİLİR, ayrı bayrak tablosu AÇILMAZ (§C-A25). İki kaynak (plan + bayrak) uyuşmazlığa düşer ve hangisinin kazandığı yazılı olmaz. Enterprise fiyatı SAYISAL OLARAK UYDURULMAZ — PRD'de Enterprise fiyatı yoktur; \"görüşmeye bağlı\" modellenir, ADR-13'ün rakamları bozulmaz.\n\nDOSYALAR: `apps/api/src/services/billing/subscription-service.ts:21` · `packages/types/src/domain.ts` · `packages/contract/openapi/paths/settings.yaml` veya `billing` · `apps/api/src/routes/settings.ts`\n\nREFERANS DESEN: `PLANS` map'in kendi yorumu — \"A map rather than inlined constants so a future tier is a data change\". Downgrade guard (`subscription-service.ts:118-124`; :113 yorum satırı) yeni kademeyle tutarlı kalmalı.\n\nKAPSAM DIŞI: zorlama (11.5-b), SLA (11.5-d), sandbox (11.5-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (enterprise kademesi seçilebilir; entitlements ucu doğru yetkileri döner; growth'ta white_label=false, enterprise'da true; downgrade guard bozulmadı; contract-parity yeşil) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "84",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 2,
+            "title": "11.5-b [OPUS-MAX] Entitlement zorlama çekirdeği (BÖLÜNMEZ) — yazma kapısı + downgrade'de okuma yolunda geri alma",
+            "description": "Entitlement zorlama çekirdeği (BÖLÜNMEZ) — yazma kapısı + downgrade'de okuma yolunda geri alma",
+            "details": "11.5-b — Entitlement zorlama çekirdeği (BÖLÜNMEZ) — yazma kapısı + downgrade'de okuma yolunda geri alma  [OPUS-MAX]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: yetki kararı bir GELİR SINIRIDIR ve tek yerde verilmelidir. Kritik olan yarısı yazma kapısı DEĞİL, DOWNGRADE YOLU: plan düşünce daha önce kaydedilmiş `poweredBy=false` satırı yerinde kalır ve widget markasız yayınlanmaya DEVAM EDER. \"Yazarken kontrol et\" ile \"okurken uygula\" ayrı pencerelere bölünürse tam olarak bu sessiz kaçak açık kalır. Çekirdek HER İKİ UCU birden kapsar.\n\nKAPSAM: (1) YAZMA: `PATCH /settings/widget` `powered_by=false` yalnız `white_label` yetkisi varken kabul edilir (`routes/settings.ts:827` — bugün kapısız). (1b) **ALTI ANAHTARIN TAMAMI AYNI KAPIDAN GEÇER** (denetim bulgusu K1-2): `sso` → `S11`'in SSO/SCIM uçları · `hipaa` → `C4`'ün BAA kabul ucu · `siem_export` → `C6`'nın export/hedef uçları · `sandbox` → `11.5-f` · `sla` → `11.5-d`. Bu alt-görev kapıyı KURAR ve altısını birden bağlar; ilgili kalemlerin son doğrulama alt-görevleri (`S11-i`, `C4-g`, `C6-g`, `11.5-h`) yetkisiz planda **red negatifini** kendi süitlerinde kanıtlar. (2) OKUMA: widget görünümünü SUNAN her yol (`routes/auth.ts:657`, `services/websites/website-service.ts:128`, `routes/settings.ts:1342`) yetki yoksa `powered_by`yi `true`ya zorlar. Mevcut `poweredBy=false` satırları SİLİNMEZ — okurken yok sayılır (§C-A26, veri kaybı yok).\n\nDOSYALAR: `apps/api/src/routes/settings.ts:181,827,1331-1342` · `apps/api/src/routes/auth.ts:657` · `apps/api/src/services/websites/website-service.ts:128,210` · yeni `apps/api/src/lib/entitlements.ts`\n\nREFERANS DESEN: `apps/api/src/plugins/license-gate.ts` — \"route başına değil hook olarak zorla, çünkü 'şu ucu gatelemeyi unuttuk' bedava katmanın sessizce sınırsızlaşma yoludur\" ilkesi birebir geçerli.\n\nKAPSAM DIŞI: widget istemci tarafı (11.5-c), SLA/sandbox.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (growth planında powered_by=false YAZILAMAZ; enterprise'da yazılır; DOWNGRADE sonrası okuma yolunun ÜÇÜ de powered_by=true döner — satır silinmeden; CROSS-TENANT) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "84.1"
+            ],
+            "parentId": "84",
+            "updatedAt": "2026-08-11T21:06:36.612Z"
+          },
+          {
+            "id": 3,
+            "title": "11.5-c [SONNET-XHIGH] Widget tarafı — yetki yokken powered_by=0 URL parametresinin yok sayılması",
+            "description": "Widget tarafı — yetki yokken powered_by=0 URL parametresinin yok sayılması",
+            "details": "11.5-c — Widget tarafı — yetki yokken powered_by=0 URL parametresinin yok sayılması  [SONNET-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nNEDEN: `apps/widget/src/widget.ts:1154` → `poweredBy: params.get('powered_by') !== '0'`. Yani markayı kaldırmak için URL parametresi YETİYOR; sunucu yetkisi okunmuyor. 11.5-b sunucu tarafını kapatır, bu alt-görev istemci tarafını hizalar.\n\nKAPSAM (denetim sonrası KESİNLEŞTİRİLDİ — \"yalnız yetki varsa etkili olsun\" bir KARAR BOŞLUĞUYDU): **`powered_by` URL parametresi TAMAMEN KALDIRILIR.** `appearanceFromParams` bu alanı artık ÜRETMEZ; `DEFAULT_APPEARANCE.poweredBy = true` ve tek kaynak `appearanceFromApi`'dir (`widget.ts:1167` → `a.powered_by`).\n\nGerekçe: istemci, API yanıtı gelmeden yetkiyi BİLEMEZ; \"yetki varsa etkili olsun\" talimatı ilk boyamada zorunlu olarak ya markayı gizler (kaçak) ya da talimatı ihlal eder. Yetki kararı istemcide HİÇ verilmez — sunucu (`11.5-b`) doğru değeri döner. Bu, işi gerçekten mekanikleştirir ve `SONNET-XHIGH` etiketini haklı kılar.\n\nBundle bütçesi KORUNUR (NFR-P3: loader < 50 KB, `apps/widget/vite.config.ts:16`'da testle zorlanıyor).\n\nDOSYALAR: `apps/widget/src/widget.ts:33,41,149,899-912,1154,1167` · `apps/widget/src/widget.appearance.test.ts`\n\nREFERANS DESEN: aynı dosyadaki diğer görünüm alanlarının (theme/position/primaryColor) sunucudan gelme yolu — `:1167` `poweredBy: a.powered_by`.\n\nKAPSAM DIŞI: e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/widget test (powered_by URL parametresi ARTIK HİÇ OKUNMAZ (appearanceFromParams onu üretmez); yetkisiz çalışma alanında marka görünür; yetkili çalışma alanında gizlenir; loader bundle bütçe testi hâlâ yeşil) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "84.2"
+            ],
+            "parentId": "84",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 4,
+            "title": "11.5-d [OPUS-XHIGH] SLA yönetimi — hedef tanımı (ilk yanıt / çözüm, iş saatleri) + ölçüm + ihlal işareti",
+            "description": "SLA yönetimi — hedef tanımı (ilk yanıt / çözüm, iş saatleri) + ölçüm + ihlal işareti",
+            "details": "11.5-d — SLA yönetimi — hedef tanımı (ilk yanıt / çözüm, iş saatleri) + ölçüm + ihlal işareti  [OPUS-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~2 pencere\n\nKAPSAM: `sla_policies` tablosu (licenseId, firstResponseMinutes, resolutionMinutes, businessHoursOnly) + RLS + CRUD + ölçüm. Sohbet/ticket üzerinde ilk yanıt ve çözüm süresi ölçülür; hedef aşılırsa İHLAL işaretlenir.\n\nKARAR: SLA ÖLÇER ve İŞARETLER; ZORLAMAZ (§C-A27). İhlal bir bildirim ve rapor satırı üretir, sohbeti yeniden yönlendirmez — routing'e dokunmak ayrı bir kalemdir.\n\nİŞ SAATLERİ: mevcut `work_schedules` tablosu (`apps/api/prisma/schema.prisma:1733`, **tm 77 · `WORKSCHED-b`** tablo+RLS / `WORKSCHED-c` okuma ucu — denetim düzeltmesi: tm 96 = \"12.4 Copilot BI komut\", ilgisiz) iş saatleri kaynağı olarak YENİDEN KULLANILIR; ikinci bir takvim modeli açılmaz.\n\nDOSYALAR: `apps/api/prisma/schema.prisma` + migration · `apps/api/src/services/tickets/` + `apps/api/src/services/chat/` (ölçüm noktaları) · `apps/api/src/routes/settings.ts` · `packages/contract/openapi/paths/settings.yaml`\n\nREFERANS DESEN: `services/staffing/` (work_schedule okuma) · `routes/ticket-rules.ts` (politika CRUD kalıbı) · ölçüm için `services/reports/` mevcut süre hesapları.\n\nKAPSAM DIŞI: ekran (11.5-e), e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**SLA KAPSAM SINIRI (denetim bulgusu K1-4):** PRD'nin tek somut SLA tanımı NFR-U5'tir — _\"Sözleşmeli uptime taahhüdü + kredi mekanizması\"_. Bu kalem SLA'yı **yanıt/çözüm SLA'sı** olarak uygular; **uptime taahhüdü ve fatura kredisi payı KAPSAM DIŞIDIR** ve `⛔-süreç` sayılır (uptime taahhüdü bir sözleşme kalemidir, bu depodan üretilemez — §D97'nin kod/süreç ayrımı). §5.5'in `MOD-10 Billing | Ent. ○ (SLA/white-label)` hücresinin SLA payı bu yüzden faturaya DOKUNMAZ. Bu daraltma §6.1.5'te ve §D99'da yazılıdır; `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (politika CRUD; ilk yanıt hedefi aşılınca ihlal işaretlenir, aşılmayınca işaretlenmez; businessHoursOnly açıkken mesai dışı süre SAYILMAZ; CROSS-TENANT) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "84.1"
+            ],
+            "parentId": "84",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 5,
+            "title": "11.5-e [SONNET-XHIGH] SLA ekranı + Reports'ta ihlal KPI'ı",
+            "description": "SLA ekranı + Reports'ta ihlal KPI'ı",
+            "details": "11.5-e — SLA ekranı + Reports'ta ihlal KPI'ı  [SONNET-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nKAPSAM: Settings → SLA bölümü (hedef formu, iş saatleri anahtarı) + Reports'ta \"SLA ihlalleri\" KPI kartı.\n\nDOSYALAR: `apps/web/src/features/settings/SlaPolicy.tsx` (yeni) + test · `apps/web/src/features/reports/ReportsPage.tsx`\n\nREFERANS DESEN (birebir): `apps/web/src/features/reports/ReportsPage.tsx:555-561` \"Achieved goals\" KPI kartı (tm 74 · 13.3; :549-554 \"In queue now\" kartıdır — denetim düzeltmesi) — kart yerleşimi + düşük-baz uyarısı (FR-MOD-07.3.2: low-N uyarısı ZORUNLU). Form için `lib/form.tsx`.\n\nKAPSAM DIŞI: e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/web test (SLA formu doğrulaması; ihlal KPI kartı sayıyı gösterir; düşük-baz uyarısı eşiğin altında görünür; boş durum anlamlı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "84.4"
+            ],
+            "parentId": "84",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 6,
+            "title": "11.5-f [OPUS-MAX] Sandbox lisansı (BÖLÜNMEZ) — ikinci kiracı: izolasyon + faturaya girmeme + kotaya sayılmama",
+            "description": "Sandbox lisansı (BÖLÜNMEZ) — ikinci kiracı: izolasyon + faturaya girmeme + kotaya sayılmama",
+            "details": "11.5-f — Sandbox lisansı (BÖLÜNMEZ) — ikinci kiracı: izolasyon + faturaya girmeme + kotaya sayılmama  [OPUS-MAX]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: sandbox İKİNCİ BİR KİRACIDIR. Yeni lisans üretmek, onu bir üretim lisansına bağlamak, ama RLS/ölçüm/faturalama açısından ondan TAMAMEN ayırmak tek bir izolasyon akıl yürütmesidir. Parçalanırsa \"sandbox verisi üretim raporunda\", \"sandbox koltuğu faturada\" ya da en kötüsü \"sandbox token'ı üretim verisini okuyor\" sınıfı sızıntı kalır.\n\nKAPSAM: `licenses.sandboxOfLicenseId` (nullable self-FK) + sandbox oluşturma/sıfırlama uçları + ölçüm/faturalama dışında tutma (`usage_records`, `subscriptions`, koltuk sayımı) + raporların sandbox verisini üretim lisansına KARIŞTIRMAMASI. Sandbox aynı bölgeyi miras alır (C4 immutability'si ile tutarlı).\n\nDOSYALAR: `apps/api/prisma/schema.prisma` + migration · `apps/api/src/routes/settings.ts` veya yeni `routes/sandbox.ts` · `apps/api/src/services/billing/metering.ts` · `apps/api/src/services/billing/subscription-service.ts`\n\nREFERANS DESEN (birebir): Multibrand (tm 78 · MULTIBRAND) marka izolasyonu — \"yeni bir izolasyon boyutu eklerken her okuma yolunu tek tek gözden geçir\" kalıbı; `lib/brand.ts` + `brand_context` migration'ları.\n\nKAPSAM DIŞI: ekran (11.5-g), e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (sandbox oluşturulur; sandbox verisi üretim raporlarında GÖRÜNMEZ; sandbox kullanımı usage_records'a SAYILMAZ; sandbox koltuğu faturaya GİRMEZ; sandbox token'ı üretim lisansını OKUYAMAZ — cross-tenant negatifi; sıfırlama yalnız sandbox verisini siler; **ÜRETİM lisansında sıfırlama ucu 4xx döner (sandbox olmayan lisansta sıfırlama REDDEDİLİR — zorunlu negatif)**) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "84.1",
+              "84.2"
+            ],
+            "parentId": "84",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 7,
+            "title": "11.5-g [SONNET-XHIGH] Sandbox ekranı — oluştur/sıfırla + \"bu bir sandbox\" göstergesi",
+            "description": "Sandbox ekranı — oluştur/sıfırla + \"bu bir sandbox\" göstergesi",
+            "details": "11.5-g — Sandbox ekranı — oluştur/sıfırla + \"bu bir sandbox\" göstergesi  [SONNET-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nKAPSAM: Settings → Sandbox bölümü (oluştur, sıfırla — YIKICI işlem onayı ile) + kabukta sandbox rozeti (\"bu bir sandbox çalışma alanı\").\n\n**ZORUNLU İNVARYANT (denetim bulgusu — rozet yanılırsa ÜRETİM verisi silinir):** sıfırlama butonu, aktif lisansın `sandboxOfLicenseId != null` olduğu **SUNUCU yanıtından** türetilir; istemci tarafı bir bayrak, localStorage ya da rota tahmininden TÜRETİLMEZ. Sunucu ayrıca bağımsız olarak sandbox olmayan lisansta sıfırlamayı reddeder (`11.5-f` testinde negatif olarak kanıtlı) — istemci kapısı tek savunma değildir.\n\nDOSYALAR: `apps/web/src/features/settings/Sandbox.tsx` (yeni) + test · `apps/web/src/components/AppShell.tsx` (rozet)\n\nREFERANS DESEN: yıkıcı işlem onayı — mevcut \"hesabı kapat\" akışı (`account-lifecycle`) · rozet için `apps/web/src/components/ui/Banner.tsx` segmentli kalıbı + `apps/web/src/components/StatusDot.tsx` (denetim düzeltmesi: `StatusDot` `components/ui/` altında DEĞİL).\n\nKAPSAM DIŞI: e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/web test (sandbox oluşturma butonu yalnız yetkiliyken görünür; sıfırlama onay ister; sandbox oturumunda rozet görünür, üretimde GÖRÜNMEZ) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "84.6"
+            ],
+            "parentId": "84",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 8,
+            "title": "11.5-h [OPUS-XHIGH] Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e",
+            "description": "Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e",
+            "details": "11.5-h — Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e  [OPUS-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nKAPSAM: (1) `growth` planında white-label REDDİ, `enterprise`'da kabulü, DOWNGRADE sonrası geri alma — tarayıcıda widget çıktısıyla kanıtlanır (kanıt PNG `apps/e2e/kanit/11.5-white-label.png`). (2) sandbox veri sızıntısı negatifi. (3) SLA ihlali e2e.\n\nDOSYALAR: `apps/e2e/tests/entitlements.spec.ts` (yeni) · `apps/api/test/integration/entitlements.test.ts` · `apps/e2e/kanit/`\n\nREFERANS DESEN: `apps/e2e/tests/widget.spec.ts` — widget'ın gerçek cross-origin iframe'de sürülmesi (`acme-bikes.localhost:5174`).\n\nKAPI: bu alt-görev yeşile dönmeden kalem ✅ olmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm -w test:e2e (entitlements.spec.ts dahil TÜM süit yeşil)",
+            "status": "pending",
+            "dependencies": [
+              "84.3",
+              "84.5",
+              "84.7"
+            ],
+            "parentId": "84",
+            "updatedAt": "2026-08-11T20:47:57.075Z"
+          }
+        ],
+        "updatedAt": "2026-08-11T20:47:57.075Z"
       },
       {
         "id": "85",
@@ -3806,15 +4334,166 @@
       },
       {
         "id": "90",
-        "title": "13.7 — Mobil uygulamalar (iOS/Android + push) [OPUS-MAX]",
-        "description": "PRD FR-MOD-13.7 · Should · Faz 3 (Enterprise). v1'den taşındı (2026-08-01 · PLAN §D60).",
-        "details": "FR-MOD-13.7 · [OPUS-MAX] ↑ · Faz 3 (Enterprise) · PLAN §6 · §6.1 · §D60.\n\nTAŞIMA GEREKÇESİ (2026-08-01, kullanıcı kararı + denetim bulgusu):\nBu kalem PLAN'da \"Should (v1) · 🔒 web-öncelikli (PRD §11.1/8 ile hizalı)\" damgasıyla kilitliydi.\nDenetimde YANLIŞ ATIF bulundu: PRD §11.1/8 maddesi \"Masaüstü native uygulama: web-öncelikli;\nopsiyonel/geç faz\" der — MOBİL hakkında DEĞİL. PRD'de mobil kapsam dışı değildir; FR-MOD-13.7\n\"Should (v1)\" ve KK'sında \"tam modül paritesi (Nexa farklılaşması)\" yazar. Yani kalem PLAN §F.00'ın\n\"gerekçesiz 🔒 bir kapanış engelidir (gizlenmiş ⬜ olabilir)\" kuralına takılıyordu.\nKullanıcı kararı: Faz 3'e ertelensin. Doğru gerekçe: native iOS/Android bu deponun stack'i dışında\n(ADR-01/02: TS monorepo, Fastify+React+Vite) — ayrı uygulama hattı, ayrı derleme zinciri, store süreci.\n\nKAPSAM: tüm modülleri kapsayan tek iOS/Android app (Inbox/AI/CRM/Reports) + mobil push bildirim.\n13.8'in mobil-push kanadı BU GÖREVE dahildir (13.8'in MVP payı — ses/masaüstü/tarayıcı/e-posta —\ntm 16 + tm 31'de teslim edildi).\n\nKK (birebir, FR-MOD-13.7): \"Inbox/AI/CRM/Reports mobilde; push; tam modül paritesi (Nexa farklılaşması)\"\nKK (birebir, FR-MOD-13.8): \"Bkz. FR-MOD-08.2; kanallar arası tutarlı\"\n\n↑ GEREKÇE ([OPUS-MAX]): (a) stack sınırı — yeni uygulama hattı + derleme zinciri + test piramidi;\n(b) kimlik sınırı — oturum/token modelinin mobil kanada genişlemesi; (c) push altyapısı (APNs/FCM)\nMOCK'lanacak ama cihaz-token yaşam döngüsü + kanal tutarlılığı (08.2) invariant taşır.\n\nNOT (derinlik): bu satır ORTA DERİNLİKTEDİR. Faz 3 başlarken PLAN §F.0 mini denetimiyle gözden\ngeçirilip ~8-12 atomik alt-göreve bölünecek (§5.1 bayatlama politikası: kod tabanı o güne kadar\ndeğişmiş olacak, bugün yazılan ince kırılım yanlış güven verir).\n\nBAĞIMLILIK: 13.8 web bildirim kanalları ✅ (tm 16/31) · auth/token modeli ✅ · reports/CRM API'leri ✅.",
-        "testStrategy": "Faz 3 başında atomik bölünecek. Kapı: her alt-görev tam DoD (typecheck+lint+unit+integration+build+e2e). Mobil için ek: cihaz-token yaşam döngüsü integration testi (kayıt/yenileme/iptal), push kanal tutarlılığı (08.2 tercihleri mobilde de geçerli — kanallar arası tutarlı KK'sı), CROSS-TENANT (başka lisansın cihazına push gitmez), NEGATİF (iptal edilmiş token'a gönderim reddi). Push sağlayıcı MOCK (APNs/FCM stub, .data/push).",
-        "status": "deferred",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": [],
-        "updatedAt": "2026-08-01T15:03:49.618Z"
+        "title": "13.7 — Mobil uygulamalar (iOS/Android + push) · dilim V3-5",
+        "description": "FR-MOD-13.7 · Should · v1'den taşındı (§D60). Barındırma kararı §D96: bu monorepo'da apps/mobile (Expo/RN), store payı kapsam dışı.",
+        "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `13.7` · dilim V3-5\n\n11 atomik alt-görev · ~15 pencere · etiket dağılımı: OPUS-XHIGH x4 · OPUS-MAX x2 · SONNET-XHIGH x5\n\nKK: \"Inbox/AI/CRM/Reports mobilde; push; tam modül paritesi (Nexa farklılaşması)\" (FR-MOD-13.7 birebir) + \"Bkz. FR-MOD-08.2; kanallar arası tutarlı\" (FR-MOD-13.8 birebir).\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  13.7-a [OPUS-XHIGH] apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları  (bağ: —)\n  13.7-b [OPUS-MAX] Mobil oturum/token modeli (BÖLÜNMEZ) — güvenli saklama + PKCE native yönlendirme + yenileme/iptal  (bağ: 13.7-a)\n  13.7-c [OPUS-XHIGH] device_tokens tablosu + RLS + kayıt/yenileme/iptal uçları  (bağ: 13.7-a)\n  13.7-d [OPUS-MAX] Push gönderim çekirdeği (BÖLÜNMEZ) — 08.2 tercihi + hedef seçimi + cross-tenant reddi (APNs/FCM MOCK)  (bağ: 13.7-c)\n  13.7-e [SONNET-XHIGH] Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı  (bağ: 13.7-b)\n  13.7-f [OPUS-XHIGH] Mobil Inbox — sohbet listesi + transcript + composer + RTM (reconnect/missed-event)  (bağ: 13.7-e)\n  13.7-g [SONNET-XHIGH] Mobil Customers (CRM) — liste + kişi detayı  (bağ: 13.7-e)\n  13.7-h [SONNET-XHIGH] Mobil Reports — salt-okunur KPI kartları  (bağ: 13.7-e)\n  13.7-i [SONNET-XHIGH] Mobil AI/Copilot yüzeyi — özet + yanıt önerisi (salt-tüketici)  (bağ: 13.7-f)\n  13.7-j [SONNET-XHIGH] Mobil bildirim tercihleri ekranı + cihaz kaydının bağlanması  (bağ: 13.7-c, 13.7-e)\n  13.7-k [OPUS-XHIGH] Uçtan uca doğrulama — modül paritesi matrisi + push yaşam döngüsü + cross-tenant + bundle kapısı  (bağ: 13.7-f, 13.7-g, 13.7-h, 13.7-i, 13.7-j)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.6 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
+        "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (13.7-k) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
+        "status": "pending",
+        "dependencies": [
+          "81",
+          "82",
+          "84"
+        ],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "13.7-a [OPUS-XHIGH] apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları",
+            "description": "apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları",
+            "details": "13.7-a — apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları  [OPUS-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~2 pencere\n\nBARINDIRMA KARARI (§D96 — bu turda verildi): mobil bu monorepo'da `apps/mobile` olarak yaşar (Expo + React Native + TypeScript). Ayrı repo ELENDİ (CLAUDE.md \"başka repoya dokunma YOK\" sınırı; kontrat tipleri kopyalanır → drift; DoD kapısı buradan koşamaz). Erteleme ELENDİ (§F.00: gerekçesiz erteleme gizlenmiş ⬜'dir; §D60 bu tuzağı bir kez düzeltti).\n\nKAPSAM DARALTMASI (kararın ayrılmaz parçası): DoD kapısı `expo export` (JS bundle) + RN test süiti + paylaşılan kontrat tipleri üzerinden koşar. `.ipa`/`.apk` üretimi ve store yüklemesi KAPSAM DIŞI (CLAUDE.md \"production deploy yok\" + bu makinede native araç zinciri yok). Sonuç: 13.7 satırı `◐` kalır, eksik §D96'ya kabul edilen borç olarak yazılır. Mobil `Should`'dur; §F.00 kapısını bloklamaz.\n\nKAPSAM: `apps/mobile` workspace'i (`pnpm-workspace.yaml`), `@nexa/types` + `@nexa/contract` generated tiplerinin tüketimi, `turbo.json` task'larına bağlanma (typecheck/lint/test/build), `expo export` bundle kapısı.\n\nDOSYALAR: `pnpm-workspace.yaml` · `turbo.json` · `apps/mobile/package.json` · `apps/mobile/tsconfig.json` · `apps/mobile/app.json` · `tsconfig.base.json`\n\nREFERANS DESEN: `apps/widget` — framework'süz, kendi build'i olan, `@nexa/types` tüketen workspace; `turbo.json` task bağlanma kalıbı.\n\nVARSAYIM: Expo MANAGED workflow; custom native modül YAZILMAZ (araç zinciri kısıtı).\n\nKAPSAM DIŞI: oturum (13.7-b), ekranlar (13.7-e…-j).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/mobile test (iskelet testi yeşil) && pnpm --filter @nexa/mobile exec expo export (bundle üretilir, exit 0)",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T20:47:57.075Z"
+          },
+          {
+            "id": 2,
+            "title": "13.7-b [OPUS-MAX] Mobil oturum/token modeli (BÖLÜNMEZ) — güvenli saklama + PKCE native yönlendirme + yenileme/iptal",
+            "description": "Mobil oturum/token modeli (BÖLÜNMEZ) — güvenli saklama + PKCE native yönlendirme + yenileme/iptal",
+            "details": "13.7-b — Mobil oturum/token modeli (BÖLÜNMEZ) — güvenli saklama + PKCE native yönlendirme + yenileme/iptal  [OPUS-MAX]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: oturumun NEREDE saklandığı, NASIL yenilendiği ve KAYBOLDUĞUNDA ne olduğu tek bir kimlik akıl yürütmesidir. Saklama yeri (secure enclave / keystore) ile yenileme politikası ayrı pencerelere bölünürse \"token güvenli yerde ama süresiz\" ya da \"yenileniyor ama düz metinde\" gibi yarım bir sonuç kalır; ikisi de kimlik sınırının ihlalidir.\n\nKAPSAM: OAuth 2.1 + PKCE akışının native yönlendirmeye uyarlanması (SİSTEM TARAYICISI — gömülü webview DEĞİL, §C-A29: gömülü webview kimlik bilgisi toplayabilir), token'ın cihazda güvenli saklanması (expo-secure-store), yenileme, iptal, oturum kaybında davranış.\n\nSSO ETKİLEŞİMİ: `S11-h` ile SSO zorunlu kılınmış bir lisansta mobil giriş de SSO'ya düşer — sistem tarayıcısı bunu doğal olarak destekler. Bu, V3-1'in V3-5'ten önce gelmesinin gerekçelerinden biridir.\n\n**MOBİL HTTP İSTEMCİSİ DE BU ALT-GÖREVE AİTTİR (denetim bulgusu — sahipsizdi):** `apps/mobile/src/api/client.ts` — `Authorization` başlığını iliştiren, `baseURL`'i çözen, **401'de yenilemeyi tetikleyen**, yenileme başarısızsa oturumu düşüren ve ADR-06 hata zarfını (`{error:{type,message,request_id}}`) çözen tek istemci. Token iliştiren + 401'de yenileyen kod oturum güvenliğinin parçasıdır; ilk kırılımda ilk ekran alt-görevine (`13.7-g`, SONNET) düşüyordu.\n\n**CİHAZ TOKEN'I YAŞAM DÖNGÜSÜ DE BURAYA TAŞINDI (denetim bulgusu):** kayıt/yenileme/**iptal** tetikleyicileri (açılış, çıkış, hesap değiştirme) oturum çekirdeğinin parçasıdır — `13.7-j` yalnız tercih ekranını gösterir. Zorunlu kural: **iptal çağrısı başarısız olsa bile yerel token SİLİNİR ve bir daha kullanılmaz; yeni oturum YENİ kayıt yapar. Hesap değiştirmede önceki hesabın token'ı iptal edilmeden yeni kayıt YAPILMAZ.** Aksi hâlde aynı fiziksel cihaz A kiracısının push'unu alırken B kiracısının kullanıcısının elinde olur ve `13.7-d`'nin sunucu tarafı savunması devreye giremez (sunucu açısından token hâlâ geçerlidir).\n\nDOSYALAR: `apps/mobile/src/auth/` · `apps/mobile/src/api/client.ts` · `apps/api/src/services/auth/oauth-service.ts:147,193` (redirect_uri kaydı — yeni istemci tipi) · `apps/api/src/services/auth/token-service.ts`\n\nREFERANS DESEN: `oauth-service.ts:147` `createAuthorizationCode` + `:193` `exchangeAuthorizationCode` — mevcut PKCE akışı DEĞİŞTİRİLMEZ, mobil ona bağlanır. İkinci bir token verme yolu AÇILMAZ.\n\nKAPSAM DIŞI: push (13.7-c/-d), ekranlar.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/mobile test (PKCE verifier/challenge üretimi; token güvenli depoya yazılır, düz depoya YAZILMAZ; yenileme akışı; iptal sonrası istek reddedilir; oturum kaybında giriş ekranına düşer; api/client 401'de yenilemeyi tetikler ve yenileme başarısızsa oturumu düşürür; İPTAL ÇAĞRISI BAŞARISIZ OLSA BİLE yerel cihaz token'ı silinir (negatif); hesap değiştirmede önceki token iptal edilmeden yeni kayıt yapılmaz (negatif)) && pnpm --filter @nexa/api test:integration (mobil istemci redirect_uri kaydı; PKCE zorunlu — verifier'sız değişim REDDEDİLİR) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "90.1"
+            ],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 3,
+            "title": "13.7-c [OPUS-XHIGH] device_tokens tablosu + RLS + kayıt/yenileme/iptal uçları",
+            "description": "device_tokens tablosu + RLS + kayıt/yenileme/iptal uçları",
+            "details": "13.7-c — device_tokens tablosu + RLS + kayıt/yenileme/iptal uçları  [OPUS-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: depoda cihaz token'ı / push altyapısı YOK (grep `device_token|APNs|FCM` → 0 eşleşme). Bildirim tercihleri bugün yalnız istemci tarafında ve üç alan: `{enabled, sound, desktop}` (`apps/web/src/features/notifications/notifications.ts:12-21`); e-posta tercihi sunucuda ayrı (`apps/api/src/routes/agents.ts:43`).\n\nKAPSAM: `device_tokens` tablosu (licenseId, accountId, platform ios|android, token, createdAt, lastSeenAt, revokedAt) + RLS + `POST /notifications/devices` (kayıt/yenileme) + `DELETE /notifications/devices/{id}` (iptal) + kontrat.\n\nDOSYALAR: `apps/api/prisma/schema.prisma` + migration · `apps/api/src/routes/agents.ts` veya yeni `routes/notifications.ts` · `packages/contract/openapi/paths/`\n\nREFERANS DESEN: `api_tokens` yaşam döngüsü (oluştur/son kullanım/iptal) · RLS policy kalıbı tm 80 `08.9.6-b`.\n\nKAPSAM DIŞI: gönderim (13.7-d), ekran (13.7-j).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**DÜZ METİN SIR NOTU (denetim bulgusu · §C'ye yazılacak):** `device_tokens.token` bir TESLİM KİMLİK BİLGİSİDİR ve push göndermek için düz metin gerektiğinden `api_tokens` gibi hash'lenemez. Bu yüzden: kolon hiçbir okuma yanıtında dönmez (yalnız id + platform + son görülme), pino redaction listesine eklenir, audit metadata'sına yazılmaz ve RLS politikası `api_tokens` kadar sıkı yazılır. Karar ve gerekçesi §C'ye assumption olarak eklenir.\n\n**BİLDİRİM TERCİHİNİN SUNUCUYA TAŞINMASI BU ALT-GÖREVE AİTTİR (denetim bulgusu K5-5):** bugün tercihler istemcide (`apps/web/src/features/notifications/notifications.ts:12-21` → `{enabled,sound,desktop}`, localStorage) ve sunucuda yalnız `notify_email` kolonu var (migration `20260725110000_notify_email_preference`). `13.7-d` push hedefini seçerken tercihi SUNUCUDAN okumak zorundadır. Şema + migration + kontrat + panelin mevcut yüzeyinin taşınması bu alt-görevin kapsamındadır (`13.7-d`'nin bölünmez çekirdeği bunu YUTMAZ). **DİKKAT:** bu değişiklik PLAN §3'teki `13.8` (`✅ → K13.8`) satırının kanıtını genişletir — damga yeniden mühürlenir ve `## K.` bloğuna madde eklenir.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (cihaz kaydı; aynı token tekrar kaydedilince ÇOĞALMAZ (upsert); iptal sonrası revokedAt dolar; CROSS-TENANT: başka lisansın cihazı okunamaz/silinemez) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "90.1"
+            ],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 4,
+            "title": "13.7-d [OPUS-MAX] Push gönderim çekirdeği (BÖLÜNMEZ) — 08.2 tercihi + hedef seçimi + cross-tenant reddi (APNs/FCM MOCK)",
+            "description": "Push gönderim çekirdeği (BÖLÜNMEZ) — 08.2 tercihi + hedef seçimi + cross-tenant reddi (APNs/FCM MOCK)",
+            "details": "13.7-d — Push gönderim çekirdeği (BÖLÜNMEZ) — 08.2 tercihi + hedef seçimi + cross-tenant reddi (APNs/FCM MOCK)  [OPUS-MAX]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: push HEDEFİNİ seçen kod KİRACI SINIRINI GEÇEN koddur — yanlış seçim başka bir çalışma alanının müşteri mesajını yabancı bir cihaza gönderir. Tercih kontrolü (FR-MOD-08.2), hedef seçimi ve iptal edilmiş token reddi AYNI pencerede olmalı; ayrılırsa aradaki sürümde \"tercihi kapalı kullanıcıya gönderim\" veya daha kötüsü çapraz-kiracı teslim mümkün olur.\n\nKAPSAM: yeni sohbet / atama / mention olayında ilgili ajanların CİHAZLARINA push. FR-MOD-13.8 KK'sı \"kanallar arası tutarlı\" diyor: aynı tercih kümesi (08.2) mobil kanatta da geçerli olmalı — ses/masaüstü/e-posta/tarayıcı yanına `mobile` eklenir ve tercih SUNUCUDA okunur (bugün istemci tarafında duruyor).\n\nSAĞLAYICI MOCK: gönderim `.data/push/<licenseId>/<timestamp>.json` altına yazılır; testler oradan okur. Gerçek APNs/FCM anahtarı YOKTUR (CLAUDE.md: gerçek secret yok).\n\nDOSYALAR: `apps/api/src/services/notifications/push.ts` (yeni) · **tetik noktası: `apps/api/src/routes/customer.ts:199,493,516` (`notifyAssignee` kalıbı) ve chat yazma yolları** — denetim düzeltmesi: `services/realtime/publisher.ts` bir bildirim kancası DEĞİL, RTM fan-out yayıncısıdır (\"Publishing never fails a request … after the transaction commits\"); emsalin (`assignee-email.ts`) tetiği route'tur · `apps/api/src/routes/agents.ts:43` (tercih gövdesi — model `13.7-c`'de sunucuya taşındı)\n\nREFERANS DESEN (birebir): `apps/api/src/services/notifications/assignee-email.ts` (tm 31 · 13.8) — tercih okuma + mock sink'e yazma zinciri; tetiği `routes/customer.ts:39,199` (`shouldEmailAssignee` → `notifyAssignee`). Mock sink kalıbı: `services/mail/mailer.ts` FileMailer.\n\nKAPSAM DIŞI: ekran (13.7-j), e2e (13.7-k).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/api test:integration (yeni sohbet → ilgili ajanın cihazına push yazılır; tercihi KAPALI kullanıcıya GÖNDERİLMEZ; iptal edilmiş token'a GÖNDERİLMEZ; CROSS-TENANT: başka lisansın cihazına ASLA gönderilmez — negatif matris; aynı olay iki kez push üretmez) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
+            "status": "pending",
+            "dependencies": [
+              "90.3"
+            ],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 5,
+            "title": "13.7-e [SONNET-XHIGH] Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı",
+            "description": "Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı",
+            "details": "13.7-e — Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı  [SONNET-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nKAPSAM: uygulama kabuğu, sekme/yığın navigasyonu (Inbox / Customers / Reports / Ayarlar), `apps/web/src/styles/tokens.css` token'larının RN karşılığı (renk, tipografi, spacing, radius, açık/koyu tema).\n\nDOSYALAR: `apps/mobile/src/app/` · `apps/mobile/src/theme/tokens.ts` (yeni) + test\n\nREFERANS DESEN: `apps/web/src/styles/tokens.css` + mevcut token testi. **MEKANİZMA (denetim sonrası SEÇİLDİ — ilk hâli \"tek kaynaktan türetilir\" deyip nasılını söylemiyordu):** `apps/mobile/src/theme/tokens.ts` elle yazılır AMA bir test `tokens.css`'i ayrıştırıp değerleri karşılaştırır (sapma testi). **Yeni bir workspace paketi (`packages/tokens`) AÇILMAZ** — `13.7-a`'nın kapsamında yok ve tek tüketici için paket açmak bu depoda emsalsiz. `design-brief.md` token sözlüğü referans.\n\nKAPSAM DIŞI: ekran içerikleri (13.7-f…-j).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/mobile test (navigasyon sekmeleri render olur; token değerleri web ile AYNI — sapma testi; koyu tema anahtarı çalışır) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "90.2"
+            ],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 6,
+            "title": "13.7-f [OPUS-XHIGH] Mobil Inbox — sohbet listesi + transcript + composer + RTM (reconnect/missed-event)",
+            "description": "Mobil Inbox — sohbet listesi + transcript + composer + RTM (reconnect/missed-event)",
+            "details": "13.7-f — Mobil Inbox — sohbet listesi + transcript + composer + RTM (reconnect/missed-event)  [OPUS-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~2 pencere\n\nKAPSAM: FR-MOD-13.7 KK'sının en ağır payı. Sohbet listesi, transcript (ters sonsuz kaydırma), composer (yanıt + internal note), RTM bağlantısı — reconnect ve missed-event sync DAHİL.\n\nKRİTİK: RTM protokolü ADR-15'te kilitli (`{request_id, action, payload}` → `{request_id, action, type, success, payload}`); mobil AYNI protokolü konuşur, ikinci bir protokol açılmaz. Missed-event sync event id'nin thread+sıra kodlamasına dayanır (`TJ1H8CFKRV_7`) — README'nin \"Notable engineering choices\" bölümü.\n\nDOSYALAR: `apps/mobile/src/features/inbox/` · `apps/mobile/src/rtm/` (istemci)\n\nREFERANS DESEN: `apps/web/src/features/inbox/` (46 dosya — en ağır feature) ve `apps/web/src/lib/realtime.ts`; iş mantığı KOPYALANMAZ, paylaşılabilen kısım `@nexa/types` üzerinden gelir, RN yalnız sunum katmanını yazar.\n\nKAPSAM DIŞI: AI yüzeyi (13.7-i), e2e (13.7-k).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm --filter @nexa/mobile test (liste render + boş durum; transcript sayfalama; composer gönderim; RTM push mesajı listeye düşer; BAĞLANTI KOPUP DÖNÜNCE kaçırılan event'ler senkronlanır — missed-event testi) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "90.5"
+            ],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 7,
+            "title": "13.7-g [SONNET-XHIGH] Mobil Customers (CRM) — liste + kişi detayı",
+            "description": "Mobil Customers (CRM) — liste + kişi detayı",
+            "details": "13.7-g — Mobil Customers (CRM) — liste + kişi detayı  [SONNET-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nKAPSAM: FR-MOD-13.7 KK'sındaki \"CRM\" payı — kişi listesi (arama + sayfalama) ve kişi detayı (salt-okunur + temel alanlar).\n\nDOSYALAR: `apps/mobile/src/features/customers/`\n\nREFERANS DESEN: `apps/web/src/features/customers/` — aynı API uçları, aynı sorgu anahtarları; sunum RN.\n\nKAPSAM DIŞI: kampanyalar, traffic (mobil kapsam dışı — §C-A28).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**HTTP İSTEMCİSİ (denetim bulgusu):** `13.7-b`'nin `apps/mobile/src/api/client.ts`'i kullanılır. **İkinci bir istemci veya elle `fetch` YAZILMAZ** — token iliştirme ve 401 yenileme oturum çekirdeğinin parçasıdır.",
+            "testStrategy": "pnpm --filter @nexa/mobile test (kişi listesi render + boş durum + arama; detay sayfası alanları gösterir; yükleme iskeleti) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "90.5"
+            ],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 8,
+            "title": "13.7-h [SONNET-XHIGH] Mobil Reports — salt-okunur KPI kartları",
+            "description": "Mobil Reports — salt-okunur KPI kartları",
+            "details": "13.7-h — Mobil Reports — salt-okunur KPI kartları  [SONNET-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nKAPSAM: FR-MOD-13.7 KK'sındaki \"Reports\" payı — Overview KPI kartları, salt-okunur. Düşük-baz (low-N) uyarısı KORUNUR (FR-MOD-07.3.2 zorunlu).\n\nDOSYALAR: `apps/mobile/src/features/reports/`\n\nREFERANS DESEN: `apps/web/src/features/reports/ReportsPage.tsx` KPI kartı kalıbı; aynı uç, aynı ADR-09 sayıları (Manual/Assisted/Automated tutarlılığı bozulmaz).\n\nKAPSAM DIŞI: rapor grupları, export, zamanlanmış raporlar (mobil kapsam dışı).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**HTTP İSTEMCİSİ (denetim bulgusu):** `13.7-b`'nin `apps/mobile/src/api/client.ts`'i kullanılır. **İkinci bir istemci veya elle `fetch` YAZILMAZ** — token iliştirme ve 401 yenileme oturum çekirdeğinin parçasıdır.",
+            "testStrategy": "pnpm --filter @nexa/mobile test (KPI kartları değerleri gösterir; düşük-baz uyarısı eşiğin altında görünür; boş/yükleme durumları anlamlı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "90.5"
+            ],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 9,
+            "title": "13.7-i [SONNET-XHIGH] Mobil AI/Copilot yüzeyi — özet + yanıt önerisi (salt-tüketici)",
+            "description": "Mobil AI/Copilot yüzeyi — özet + yanıt önerisi (salt-tüketici)",
+            "details": "13.7-i — Mobil AI/Copilot yüzeyi — özet + yanıt önerisi (salt-tüketici)  [SONNET-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nKAPSAM: FR-MOD-13.7 KK'sındaki \"AI\" payı — sohbet özeti ve yanıt önerileri. SALT TÜKETİCİ: yeni AI ucu AÇILMAZ, mevcut Copilot uçları çağrılır.\n\nDOSYALAR: `apps/mobile/src/features/copilot/`\n\nREFERANS DESEN: `apps/web/src/features/inbox/CopilotPanel.tsx` + reply suggestions bileşenleri (tm 12.x). LLM MOCK'tur (`packages/ai-mock`), deterministik — testler flake olmaz.\n\nKAPSAM DIŞI: skill/knowledge yönetimi (mobil kapsam dışı).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**HTTP İSTEMCİSİ (denetim bulgusu):** `13.7-b`'nin `apps/mobile/src/api/client.ts`'i kullanılır. **İkinci bir istemci veya elle `fetch` YAZILMAZ** — token iliştirme ve 401 yenileme oturum çekirdeğinin parçasıdır.",
+            "testStrategy": "pnpm --filter @nexa/mobile test (özet isteği yanıtı render eder; yanıt önerisi composer'a aktarılır; hata/boş durumları anlamlı; ai-mock deterministik çıktısıyla stabil) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "90.6"
+            ],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 10,
+            "title": "13.7-j [SONNET-XHIGH] Mobil bildirim tercihleri ekranı + cihaz kaydının bağlanması",
+            "description": "Mobil bildirim tercihleri ekranı + cihaz kaydının bağlanması",
+            "details": "13.7-j — Mobil bildirim tercihleri ekranı + cihaz kaydının bağlanması  [SONNET-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nKAPSAM (denetim sonrası DARALTILDI): bildirim tercihleri **ekranı** (FR-MOD-08.2 kümesi: yeni sohbet / atama / mention) — tercihleri okur, yazar, izin durumunu gösterir.\n\n**CİHAZ TOKEN'I KAYIT/İPTAL TETİKLEYİCİLERİ BU ALT-GÖREVDE DEĞİLDİR** — onlar `13.7-b`'nin (OPUS-MAX oturum çekirdeği) parçasıdır. Gerekçe: çıkışta/hesap değiştirmede iptalin başarısız olması çapraz-kiracı push teslimine kapı açar; bu bir izolasyon kararıdır, ekran işi değil. Bu ekran yalnız **tercihi** yönetir.\n\nDOSYALAR: `apps/mobile/src/features/notifications/`\n\nREFERANS DESEN: `apps/web/src/features/notifications/notifications.ts` tercih modeli · `apps/api/src/routes/agents.ts:43` sunucu tercih gövdesi. FR-MOD-13.8 KK'sı \"kanallar arası tutarlı\" — mobil tercihleri diğer kanallarla AYNI sözlüğü kullanır, paralel bir model açılmaz.\n\nKAPSAM DIŞI: gönderim mantığı (13.7-d), e2e (13.7-k).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**HTTP İSTEMCİSİ (denetim bulgusu):** `13.7-b`'nin `apps/mobile/src/api/client.ts`'i kullanılır. **İkinci bir istemci veya elle `fetch` YAZILMAZ** — token iliştirme ve 401 yenileme oturum çekirdeğinin parçasıdır.",
+            "testStrategy": "pnpm --filter @nexa/mobile test (tercih ekranı kaydeder ve geri okur; tercih değişikliği sunucuya yazılır ve geri okunur; izin reddedilmişse anlamlı durum gösterilir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
+            "status": "pending",
+            "dependencies": [
+              "90.3",
+              "90.5"
+            ],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T21:09:39.258Z"
+          },
+          {
+            "id": 11,
+            "title": "13.7-k [OPUS-XHIGH] Uçtan uca doğrulama — modül paritesi matrisi + push yaşam döngüsü + cross-tenant + bundle kapısı",
+            "description": "Uçtan uca doğrulama — modül paritesi matrisi + push yaşam döngüsü + cross-tenant + bundle kapısı",
+            "details": "13.7-k — Uçtan uca doğrulama — modül paritesi matrisi + push yaşam döngüsü + cross-tenant + bundle kapısı  [OPUS-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nKAPSAM: (1) MODÜL PARİTESİ MATRİSİ — FR-MOD-13.7 KK'sının dört yüzeyinin (Inbox/AI/CRM/Reports) mobilde çalıştığının tek yerde kanıtı; matris testi hangi yüzeyin karşılandığını ve neyin kapsam dışı olduğunu (Settings/Billing/Playbook/Team — §C-A28) açıkça sayar. (2) push yaşam döngüsü integration: kayıt → gönderim → yenileme → iptal → gönderim reddi. (3) cross-tenant negatifi. (4) `expo export` bundle kapısı.\n\nDÜRÜSTLÜK KAYDI (§D96): bu alt-görev yeşile döndüğünde 13.7 satırı `✅` DEĞİL `◐` olur — \"mağazada yayınlanmış uygulama\" payı karşılanmaz. Bu kapanış uğruna `✅` UYDURULMAZ (TASK-RUNNER-PROMPT §3: \"Gereksinimi yalnız kısmen karşıladıysan ◐ bırak\").\n\nDOSYALAR: `apps/mobile/src/__tests__/parity.test.ts` (yeni) · `apps/api/test/integration/push.test.ts` · `PLAN.md` (13.7 satırı → `◐ → K13.7`) + `## K.` bölümünde `#### K13.7` bloğu\n\nKAPI: bu alt-görev yeşile dönmeden kalem kapanmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
+            "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm --filter @nexa/mobile exec expo export && pnpm -w test:e2e (mevcut süit REGRESYONSUZ yeşil — mobil e2e Playwright'a girmez)",
+            "status": "pending",
+            "dependencies": [
+              "90.6",
+              "90.7",
+              "90.8",
+              "90.9",
+              "90.10"
+            ],
+            "parentId": "90",
+            "updatedAt": "2026-08-11T20:47:57.075Z"
+          }
+        ],
+        "updatedAt": "2026-08-11T21:09:39.258Z"
       },
       {
         "id": "91",
@@ -5254,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-11T20:24:42.542Z",
+      "lastModified": "2026-08-11T20:47:57.075Z",
       "taskCount": 123,
       "completedCount": 115,
       "tags": [

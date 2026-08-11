@@ -4901,12 +4901,12 @@
             "description": "`APP_CATALOG` 60'tan 100+'a çıkarılır (en az 40 yeni veri app'i daha), aynı invariant'larla ve aynı 8 kategoriyle. Test eşikleri `>= 100` yapılır (types + integration). `findApp` her yeni id'yi çözer. Bu pencere kapandığında \"100+\" hedefi KODDA gerçekleşmiş ve TESTLE kilitlenmiş olur.",
             "details": "09.2-v2-e — Katalog verisi 60 → 100+ kart + \"100+\" hedefinin testle sabitlenmesi  [SONNET-MAX]\n\nPRD: FR-MOD-09.2 (PRD §5.5 MOD-09 v2 hücresi: \"○ (100+)\")\nETİKET GEREKÇESİ: SONNET-MAX: 09.2-v2-d ile aynı sınıf — güvenlik/eşzamanlılık yok (koşul 2, 3 ✅) ama 40+ yeni katalog girdisinin mekanik üretimi geniş yüzeyli, tekrarlı veri dönüşümü. Ayrıca 100 kartlık dizide id tekilliğini elle korumak artan dikkat gerektiriyor.\nNEDEN AÇIK: 09.2-v2-d katalogu 60'a taşıyor; PRD §5.5 matrisinin MOD-09 v2 hücresi `○ (100+)` diyor ve FR-MOD-09.2 Öncelik sütunu \"Should (v1: 15–20; v2: 100+)\" — hedef sayı yalnız bu iki yerde geçiyor, kalemin KK cümlesinde geçmiyor. Bu alt-görev hedefi kodda ve testte sabitler.\nKAPSAM: `APP_CATALOG` 60'tan 100+'a çıkarılır (en az 40 yeni veri app'i daha), aynı invariant'larla ve aynı 8 kategoriyle. Test eşikleri `>= 100` yapılır (types + integration). `findApp` her yeni id'yi çözer. Bu pencere kapandığında \"100+\" hedefi KODDA gerçekleşmiş ve TESTLE kilitlenmiş olur.\nDOSYALAR: packages/types/src/apps.ts · packages/types/src/apps.test.ts · apps/api/test/integration/apps.test.ts\nREFERANS DESEN (kopyalanacak): packages/types/src/apps.ts · packages/types/src/apps.test.ts\nKK (birebir): \"Her biri OAuth/API key\" | \"KK-türetilmiş: \"Katalog en az 100 kart taşır.\" — TÜRETME GEREKÇESİ: 100+ sayısı FR-MOD-09.2'nin KK sütununda DEĞİL, Öncelik sütununda (\"v2: 100+\") ve PRD §5.5 MOD-09 v2 hücresinde (\"○ (100+)\") geçiyor; kalem kapanış ölçütü olarak KK'ya bu turda türetildi.\"\nKK DOĞRULAMA: `packages/types/src/apps.test.ts`: `APP_CATALOG.length >= 100` (üst sınır yok); id tekilliği 100+ kartta geçer; her veri app'inin dataFields'ı dolu; iki sağlayıcı türü mevcut; kanal/veri partisyon toplamı = katalog. `apps/api/test/integration/apps.test.ts` liste uzunluğu iddiası 100+ ve yeşil.\nKAPSAM DIŞI: kategori enum'unun genişletilmesi · yeni kanal-tipli kart · UI ve performans ölçümü (09.2-v2-g / -h) · kataloğun DB'ye taşınması (varsayım 2: statik TS kalır)\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: katalog eşiği (>= 100) + id tekilliği + kart bütünlüğü invariant'ı · unit: `findApp` katalogdaki her id'yi çözer, bilinmeyen id `undefined` (mevcut satır 64-70 testi genişletilmiş katalogda) · integration regresyon: 8 apps testi + (09.2-v2-c teslimse) sayfalama testleri 100+ katalogda yeşil",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "99.4"
             ],
             "parentId": "99",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-11T03:38:56.031Z"
           },
           {
             "id": 6,
@@ -4951,7 +4951,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-11T03:03:58.220Z",
+        "updatedAt": "2026-08-11T03:38:56.031Z",
         "complexity": 5,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.2 — 100+ entegrasyon (marketplace katalog genişlemesi)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5134,7 +5134,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-11T03:03:58.220Z",
+      "lastModified": "2026-08-11T03:38:56.032Z",
       "taskCount": 113,
       "completedCount": 106,
       "tags": [

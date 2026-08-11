@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 99.5 — 09.2-v2-e: Katalog verisi 60 → 100+ kart + "100+" hedefinin testle sabitlenmesi — done — 2026-08-11 UTC
+
+- **Yapıldı:** `APP_CATALOG` 62 → 102 karta büyüdü (40 yeni veri app'i, 7 kategoriye +6/+6/+6/+6/+6/+4/+6 dağıtıldı — crm/support/ecommerce/payments/marketing/productivity/analytics —, kanal-tipli kart eklenmedi); `packages/types/src/apps.test.ts` eşiği `>=60` → `>=100`. `apps/api/test/integration/apps.test.ts`'in `?limit=100`'e dayalı üç "tam liste" testi (kontratın `limit` üst sınırı zaten 100, katalog artık ondan büyük) `walk()` cursor-zincirine taşındı; `walk()` artık `items`'i de döndürüyor ve döngü sınırı 100→200 isteğe çıktı — iki elle yazılmış 50-istek sınırlı sayfalama döngüsü de aynı yardımcıya devredildi (cross-tenant izolasyon testi artık kataloğun tamamını tarıyor, yalnız ilk 50 kartı değil).
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2414/2414 · `@nexa/web` 929/929 · `@nexa/widget` 69/69 · `@nexa/types` 96/96) · `pnpm -w test:integration` 0 (1855/1855, `contract-parity` 5/5 dahil) · build 0 (7/7) · `pnpm -w test:e2e` **100/100**.
+- **Varsayımlar:** Yok.
+- **Sonraki pencereye not:** 09.2-v2 epic'i 8 alt-görevden 5'i (-a..-e) kapandı; PLAN K09.2-b `◐` kalmaya devam ediyor (satır 1122 damgası zaten `◐`, değişmedi — yalnız -f/-g/-h bekliyor). Sıradaki `09.2-v2-f` (arama kutusu + kategori filtresi, -c'ye bağımlı). **Dikkat:** web `AppsMarketplace.tsx` hâlâ parametresiz `api.get('/settings/apps')` çağırıyor (default `limit=25`) — 102 kartlık katalogda artık yalnız ilk 25'i gösteriyor; bilerek düzeltilmedi, -f/-g'nin kapsamı (tm 99.3/99.4'ün notunda öngörülmüştü). `apps/e2e/kanit/*.png` yine bu turun `pnpm -w test:e2e` koşusundan yeniden üretildi, başka task'lara ait, commit'e alınmadı (tm 99.1/99.2/99.3/99.4/113 emsali).
+
 ## tm 99.4 — 09.2-v2-d: Katalog verisi 20 → 60 kart (mock, mevcut 8 kategori) — done — 2026-08-11 UTC
 
 - **Yapıldı:** `APP_CATALOG` 22 → 62 karta büyüdü: 40 yeni VERİ app'i (kanal-tipli kart yok), mevcut

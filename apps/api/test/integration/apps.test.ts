@@ -73,18 +73,23 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     return { status: response.statusCode, type: (response.json() as { error: { type: string } }).error.type };
   };
 
-  /** Walks the whole result set through `next_page_id`, returning the ids in order. */
-  const walk = async (token: string, params: string): Promise<{ ids: string[]; totals: number[] }> => {
+  /** Walks the whole result set through `next_page_id`, returning items, ids and totals in order. */
+  const walk = async (
+    token: string,
+    params: string,
+  ): Promise<{ items: AppListItem[]; ids: string[]; totals: number[] }> => {
+    const items: AppListItem[] = [];
     const ids: string[] = [];
     const totals: number[] = [];
     let cursor: string | undefined;
     // Bounded (comfortably above the mock catalogue's size) so a cursor that
     // fails to advance fails the test instead of hanging.
-    for (let request = 0; request < 100; request += 1) {
+    for (let request = 0; request < 200; request += 1) {
       const result = await page(token, `${params}${cursor ? `&page_id=${encodeURIComponent(cursor)}` : ''}`);
+      items.push(...result.items);
       ids.push(...result.items.map((item) => item.id));
       totals.push(result.total);
-      if (!result.next_page_id) return { ids, totals };
+      if (!result.next_page_id) return { items, ids, totals };
       cursor = result.next_page_id;
     }
     throw new Error('pagination did not terminate');
@@ -224,11 +229,12 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
   // --- Channel-typed apps: managed in Channels, not connected here (09.2) -----
 
   it('lists the full directory and flags channel-typed apps, refusing to connect them here', async () => {
-    // limit=100 fits the whole (sub-100-card) mock catalogue in one page, so
-    // `items` below is the full directory, not just its default-size first page.
-    const { items, total } = await page(adminToken, '?limit=100');
-    // 09.2-v2-d grew the mock catalogue to 60+ cards; no upper bound is asserted.
-    expect(total).toBeGreaterThanOrEqual(60);
+    // The catalogue now exceeds the route's page-size cap (100), so reading
+    // the full directory takes a cursor walk rather than one limit=100 page.
+    const { items, totals } = await walk(adminToken, '?limit=100');
+    const total = totals[0]!;
+    // 09.2-v2-e grew the mock catalogue to 100+ cards; no upper bound is asserted.
+    expect(total).toBeGreaterThanOrEqual(100);
     expect(items.length).toBe(total);
 
     // 09.4-a: the two automation-platform cards are in the directory, uninstalled.
@@ -332,15 +338,16 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
   });
 
   it('pages the directory with next_page_id, covering it exactly once', async () => {
-    const all = await page(adminToken, '?limit=100');
-    expect(all.next_page_id).toBeUndefined();
+    // The catalogue now exceeds the route's page-size cap (100), so reading
+    // the full, unfiltered directory in order takes a walk, not one page.
+    const all = await walk(adminToken, '?limit=100');
 
     const walked = await walk(adminToken, '?limit=10');
     // Every card, once, in the catalogue's order — no gaps, no repeats.
-    expect(walked.ids).toEqual(all.items.map((item) => item.id));
+    expect(walked.ids).toEqual(all.ids);
     expect(new Set(walked.ids).size).toBe(walked.ids.length);
     // `total` is the match count across all pages, the same on every page.
-    expect(walked.totals.every((total) => total === all.total)).toBe(true);
+    expect(walked.totals.every((total) => total === all.totals[0])).toBe(true);
 
     // One card at a time reaches the same place.
     expect((await walk(adminToken, '?limit=1')).ids).toEqual(walked.ids);
@@ -362,14 +369,7 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     expect(findItem(searched.items, APP).installed).toBe(true);
 
     // …and on whichever page it lands on when paged one at a time.
-    const oneByOne: AppListItem[] = [];
-    let cursor: string | undefined;
-    for (let request = 0; request < 50; request += 1) {
-      const result = await page(adminToken, `?limit=1${cursor ? `&page_id=${cursor}` : ''}`);
-      oneByOne.push(...result.items);
-      if (!result.next_page_id) break;
-      cursor = result.next_page_id;
-    }
+    const { items: oneByOne } = await walk(adminToken, '?limit=1');
     expect(findItem(oneByOne, APP).installed).toBe(true);
     expect(oneByOne.filter((item) => item.installed)).toHaveLength(1);
   });
@@ -417,14 +417,9 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
       false,
     );
     for (const pageSize of ['?limit=1', '?limit=3', '?limit=100']) {
-      let cursor: string | undefined;
-      for (let request = 0; request < 50; request += 1) {
-        const result = await page(bToken, `${pageSize}${cursor ? `&page_id=${cursor}` : ''}`);
-        expect(result.items.some((item) => item.installed)).toBe(false);
-        expect(result.items.every((item) => item.installation === null)).toBe(true);
-        if (!result.next_page_id) break;
-        cursor = result.next_page_id;
-      }
+      const { items } = await walk(bToken, pageSize);
+      expect(items.some((item) => item.installed)).toBe(false);
+      expect(items.every((item) => item.installation === null)).toBe(true);
     }
 
     // B cannot disconnect A's app — indistinguishable from it not existing.

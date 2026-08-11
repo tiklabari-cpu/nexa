@@ -176,8 +176,36 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* A single, always-visible focus treatment (design-brief §7). */
-:focus-visible {
+/**
+ * A single, always-visible focus treatment (design-brief §7).
+ *
+ * The `:root` is not decoration — it is the fix for a defect this rule carried
+ * from the day it was written, measured in tm 123. A bare `:focus-visible` has
+ * the specificity of one class, which is a *tie* with Tailwind's `.outline-none`
+ * utility, and `index.css` pulls this file in before `@tailwind utilities` — so
+ * on a tie the utility, being later in the sheet, won. `.outline-none` is not
+ * "no outline": it is `outline: 2px solid transparent`. Every one of the 79
+ * controls that carries it — search boxes, selects, the composer's message
+ * input, the command palette — therefore focused with a 2px ring painted in
+ * nothing, and the browser's own default ring suppressed along with it.
+ *
+ * Measured, in a browser, on both themes: `#ffffff on #ffffff = 1.00:1` light
+ * and `#121829 on #121829` dark, with `:focus-visible` matching and the outline
+ * reported as `solid 2px` — a keyboard user had no focus indicator on any of
+ * them. That is WCAG 2.1 2.4.7 (Focus Visible) outright, and 1.4.11 for the
+ * contrast the ring never had. axe cannot see it: it grades text, and a focus
+ * ring is not text, so sixteen clean scans across tm 115/117 and two more in
+ * tm 120 all passed over it.
+ *
+ * Raising this to `:root :focus-visible` (two components) puts the design
+ * system back above a single utility class, which is where the "single,
+ * always-visible treatment" above was always claiming to be. It leaves a
+ * deliberate opt-out intact for the rare control that really must not show a
+ * ring: `focus-visible:outline-none` ties on specificity and still wins on
+ * source order, so an intentional suppression stays possible — but it now has
+ * to be written on purpose rather than arrive as a side effect of `outline-none`.
+ */
+:root :focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
   border-radius: var(--radius-sm);

@@ -26,7 +26,7 @@
  * its screen is a suppression.
  */
 import AxeBuilder from '@axe-core/playwright';
-import type { Page, TestInfo } from '@playwright/test';
+import type { Locator, Page, TestInfo } from '@playwright/test';
 import type { ImpactValue, Result as AxeViolation, SerialFrameSelector } from 'axe-core';
 
 /**
@@ -213,4 +213,230 @@ export async function scanScreen(
  */
 export function assertNoBlockingViolations(scan: ScreenScan): void {
   if (scan.blocking.length > 0) throw new Error(describeScan(scan));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The states axe structurally cannot reach: `:focus-visible` and `:hover`
+ * ---------------------------------------------------------------------------
+ *
+ * Everything above measures the DOM as it stands. That is the whole of what axe
+ * can do, and it leaves a hole the size of every interaction state: the focus
+ * ring and the hover colours are only in the computed style while the control is
+ * actually focused or actually under the pointer, and nothing in the suite had
+ * ever put a control into either. Measured before this module existed:
+ * `focus`/`hover` matched **zero** times across `a11y.spec.ts` and `a11y.ts`,
+ * and `tokens.test.ts`'s 90 assertions held no `--focus-ring` pair.
+ *
+ * That is not a theoretical gap. tm 120 measured what this class of blind spot
+ * hides: a `1.47:1` serious violation on a tab no scan ever opened, missed by
+ * all sixteen clean runs before it. The rule it wrote down — *a scan is evidence
+ * only for the states it actually renders* — is exactly what `:focus-visible`
+ * and `:hover` fail.
+ *
+ * `:hover` needs no new machinery, because axe reads `getComputedStyle` and the
+ * pseudo-class is live while Playwright's mouse rests on the element: hover
+ * first, scan second, and `color-contrast` grades the hovered pair. The focus
+ * ring does need it. axe ships **no** rule for focus-indicator contrast — the
+ * ring is not text, so `color-contrast` never looks at it — so a scan of a
+ * focused control returns clean no matter how invisible its ring is. The
+ * measurement below is therefore ours, and it is the reason the gate can fail on
+ * a broken ring at all.
+ */
+
+/**
+ * WCAG 2.1 §1.4.11 Non-text Contrast — 3:1, not the 4.5:1 the text rules use.
+ *
+ * A focus indicator is a non-text boundary, so it is graded against a lower
+ * threshold than the ink beside it. Getting this wrong in either direction is a
+ * defect of its own: 4.5:1 would fail rings that conform, and 3:1 applied to
+ * text would pass ink that does not.
+ */
+export const NON_TEXT_CONTRAST_MIN = 3;
+
+/** One control's focus indicator, as the browser actually painted it. */
+export interface FocusRing {
+  screen: string;
+  /** Which control, in words — this ends up in the failure message. */
+  target: string;
+  /**
+   * Did the element really match `:focus-visible` when this was read?
+   *
+   * Load-bearing rather than diagnostic. Chromium only paints the ring when it
+   * believes the user is on the keyboard, so a measurement taken after a mouse
+   * click would read `outline-style: none` and a ratio of 1 — indistinguishable
+   * from the defect this exists to find.
+   */
+  focusVisible: boolean;
+  /** `#rrggbb` of the outline, composited onto the backdrop if it carried alpha. */
+  ring: string;
+  /** `#rrggbb` actually painted where the ring lands. */
+  backdrop: string;
+  /** Outline width in CSS px. A 0px ring is invisible whatever its colour. */
+  width: number;
+  /** `outline-style` — `none` is the classic "the designer removed it" defect. */
+  style: string;
+  /** `outline-offset` in CSS px. Decides *what* the ring is drawn on; see below. */
+  offset: number;
+  ratio: number;
+}
+
+const srgbChannel = (byte: number): number => {
+  const srgb = byte / 255;
+  return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+};
+
+const relativeLuminance = (hex: string): number => {
+  const packed = Number.parseInt(hex.slice(1), 16);
+  return (
+    0.2126 * srgbChannel((packed >> 16) & 0xff) +
+    0.7152 * srgbChannel((packed >> 8) & 0xff) +
+    0.0722 * srgbChannel(packed & 0xff)
+  );
+};
+
+/**
+ * WCAG 2.x contrast for two opaque `#rrggbb` colours.
+ *
+ * Deliberately a second implementation of the one in
+ * `apps/web/src/styles/tokens.test.ts`: these are different packages with no
+ * dependency between them, and the point of a cross-check is lost if both sides
+ * read the same code. The two agree to a rounding step, and both agree with the
+ * ratios axe reports — that agreement is what makes either of them evidence.
+ */
+export function contrastRatio(a: string, b: string): number {
+  const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (lighter! + 0.05) / (darker! + 0.05);
+}
+
+/**
+ * Read the focus indicator the browser is painting on `locator` right now.
+ *
+ * The subtle half is *what the ring is drawn on*. `tokens.css` gives
+ * `:focus-visible` an `outline-offset: 2px`, which puts the ring outside the
+ * border box — so the colour beside it is whatever the **ancestors** paint
+ * there, not the control's own fill. That distinction decides the answer: the
+ * inbox composer's selected "Reply" tab is a solid `bg-brand-500`, and a ring
+ * measured against that fill would read 1.00:1 while the ring a user actually
+ * sees is drawn on the surface behind the tab and clears 1.4.11 comfortably. So
+ * the backdrop is resolved by walking outwards and compositing every translucent
+ * layer on the way, and only a zero-or-negative offset makes the control's own
+ * background the neighbour.
+ */
+export async function measureFocusRing(
+  screen: string,
+  target: string,
+  locator: Locator,
+): Promise<FocusRing> {
+  const painted = await locator.evaluate((element) => {
+    type Rgba = [number, number, number, number];
+
+    /** `rgb(…)`/`rgba(…)` → channels. Anything else (`transparent`, `none`) is see-through. */
+    const parse = (value: string): Rgba => {
+      const parts = value.match(/[\d.]+/g);
+      if (!parts || parts.length < 3) return [0, 0, 0, 0];
+      return [
+        Number(parts[0]),
+        Number(parts[1]),
+        Number(parts[2]),
+        parts[3] === undefined ? 1 : Number(parts[3]),
+      ];
+    };
+
+    /** Source-over: `top` painted onto an already opaque `bottom`. */
+    const over = (top: Rgba, bottom: Rgba): Rgba => [
+      top[0] * top[3] + bottom[0] * (1 - top[3]),
+      top[1] * top[3] + bottom[1] * (1 - top[3]),
+      top[2] * top[3] + bottom[2] * (1 - top[3]),
+      1,
+    ];
+
+    const hex = (colour: Rgba): string =>
+      `#${[colour[0], colour[1], colour[2]]
+        .map((value) => Math.round(value).toString(16).padStart(2, '0'))
+        .join('')}`;
+
+    const style = getComputedStyle(element);
+    const offset = Number.parseFloat(style.outlineOffset) || 0;
+
+    // Every painted layer from where the ring lands outwards, stopping at the
+    // first opaque one — translucent fills (`bg-brand-500/10`, `bg-white/5`) are
+    // real backdrops and have to be composited, not skipped.
+    const stack: Rgba[] = [];
+    for (
+      let node: Element | null = offset > 0 ? element.parentElement : element;
+      node;
+      node = node.parentElement
+    ) {
+      const layer = parse(getComputedStyle(node).backgroundColor);
+      if (layer[3] === 0) continue;
+      stack.push(layer);
+      if (layer[3] === 1) break;
+    }
+    // Whatever the document leaves unpainted, the viewport paints white.
+    stack.push([255, 255, 255, 1]);
+
+    let backdrop = stack[stack.length - 1]!;
+    for (let index = stack.length - 2; index >= 0; index -= 1) {
+      backdrop = over(stack[index]!, backdrop);
+    }
+
+    return {
+      focusVisible: element.matches(':focus-visible'),
+      ring: hex(over(parse(style.outlineColor), backdrop)),
+      backdrop: hex(backdrop),
+      width: Number.parseFloat(style.outlineWidth) || 0,
+      style: style.outlineStyle,
+      offset,
+    };
+  });
+
+  return {
+    screen,
+    target,
+    ...painted,
+    ratio: contrastRatio(painted.ring, painted.backdrop),
+  };
+}
+
+/** One measurement as a run-log line, in the shape `summariseScan` uses. */
+export function describeFocusRing(ring: FocusRing): string {
+  return (
+    `focus ${ring.screen} — ${ring.target}: ${ring.ring} on ${ring.backdrop} = ` +
+    `${ring.ratio.toFixed(2)}:1 (1.4.11 wants ${NON_TEXT_CONTRAST_MIN}:1) · ` +
+    `${ring.style} ${ring.width}px @ ${ring.offset}px · :focus-visible ${ring.focusVisible}`
+  );
+}
+
+/**
+ * The focus half of the gate. Throws, for the same reasons
+ * `assertNoBlockingViolations` does.
+ *
+ * Three ways a focus indicator fails, and they are not the same failure: the
+ * state never rendered (so nothing was measured), the ring is not drawn at all,
+ * or it is drawn in a colour that cannot be told from what is behind it. Each
+ * gets its own message, because "focus ring failed" sends the next window back
+ * to the browser and these do not.
+ */
+export function assertFocusRingVisible(ring: FocusRing): void {
+  if (!ring.focusVisible) {
+    throw new Error(
+      `${ring.screen} — ${ring.target} never matched \`:focus-visible\`, so its focus ` +
+        `indicator was not measured at all. A ring can only be evidence for a state ` +
+        `that rendered.\n  ${describeFocusRing(ring)}`,
+    );
+  }
+  if (ring.style === 'none' || ring.width <= 0) {
+    throw new Error(
+      `${ring.screen} — ${ring.target} draws no focus indicator while focused ` +
+        `(outline-style: ${ring.style}, outline-width: ${ring.width}px).\n  ${describeFocusRing(ring)}`,
+    );
+  }
+  if (ring.ratio < NON_TEXT_CONTRAST_MIN) {
+    throw new Error(
+      `${ring.screen} — ${ring.target} has a focus indicator that cannot be seen: ` +
+        `${ring.ratio.toFixed(2)}:1 against what is painted behind it, and WCAG 2.1 ` +
+        `1.4.11 wants ${NON_TEXT_CONTRAST_MIN}:1.\n  ${describeFocusRing(ring)}`,
+    );
+  }
 }

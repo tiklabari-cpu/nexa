@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+## tm 123 — A11Y1–6 · `:focus-visible`/`:hover` kör noktası kapatıldı; 79 çağrı yerini yutan GERÇEK bir odak-halkası ihlali bulundu ve düzeltildi — done — 2026-08-12 UTC
+
+- **Yapıldı:** (1) `a11y.ts`'e tarayıcı-içi odak-halkası ölçümü (`measureFocusRing`/`assertFocusRingVisible`/
+  `contrastRatio`, eşik **3:1** = WCAG 1.4.11 non-text) — **axe'ta odak göstergesi kuralı YOK**, halka metin
+  değil, o yüzden bu ölçüm bizim olmak zorundaydı; zemin `outline-offset` pozitifken atalardan kompozitlenerek
+  bulunuyor. (2) `a11y.spec.ts`e üç yüzey × iki tema odak+hover taraması (Sign in · Inbox · Customers) — odak ve
+  hover **aynı taramada** canlı; 18 → **24 tarama**. (3) **GERÇEK İHLAL:** `outline-none` taşıyan **79** kontrol
+  (arama kutuları, composer mesaj alanı, komut paleti…) odaklandığında **1.00:1** ölçtü — `.outline-none`
+  = `outline: 2px solid transparent` ve bare `:focus-visible` onunla **berabere** (ikisi de tek sınıf), `index.css`
+  tokens'ı `@tailwind utilities`ten önce aldığı için yardımcı kazanıyordu → WCAG **2.4.7** ihlali. Düzeltme
+  kaskadda, renk token'ına dokunmadan: `:focus-visible` → **`:root :focus-visible`**. (4) `tokens.test.ts` 90 →
+  **108**: `--focus-ring` × 6 zemin × 2 tema (3:1), `:focus-visible` kuralının kendisi (solid ≥2px · offset > 0 ·
+  seçici tek yardımcı sınıfın üstünde), hover dolgusu çiftleri.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · format:check · build 7/7 · unit **3888** ·
+  integration **1906** · e2e **131** (6.2 dk) · 24 taramanın hepsi `blocking 0 · excused 0 · advisory 0` ·
+  `A11Y_EXCEPTIONS` **boş**. **KAPI-PROBE (öncesi/sonrası):** ÖNCE — `Composer input` açık `#ffffff on #ffffff
+  = 1.00:1`, koyu `#121829 on #121829 = 1.00:1` (`:focus-visible true`, `solid 2px`); SONRA — açık **4.74:1**,
+  koyu **7.10:1**, en dar kenar `--bg-rail` üstünde **3.77:1**. Ayrıca bilerek bozma iki biçimde: halka =
+  arka zemin → `1.00:1` KIRMIZI; `outline: none` → `none 3px` KIRMIZI **ama oran 17.67:1** (`currentcolor`'a
+  düşüyor) — yani yalnız orana bakan bir kapı bunu yeşil geçerdi, `style`/`width` kontrolü bu yüzden var.
+  Her ikisinden sonra yeniden yeşil ölçüldü.
+- **Varsayımlar:** 79 çağrı yeri tek tek silinmedi; kusur tekrarlanan bir çağrı-yeri hatası değil **kuralın
+  yardımcı sınıfın altında kalmasıydı**, ve silme 80'inci `outline-none` ile tuzağı yeniden kurardı. Bilinçli
+  kaçış yolu duruyor (`focus-visible:outline-none` hâlâ kazanır, ama kasten yazılmalı). Odak/hover üç yüzeyde:
+  halkanın inebileceği ZEMİN çeşitliliği (dört yüzey token'ı + rail + marka dolgusu) bu üçünde tükeniyor ve
+  altısı da birim seviyede kilitli. `apps/e2e/kanit/*.png` kanıt görselleri tam koşuda yeniden üretildi
+  (tm 117/118 emsali) — bu commit'te.
+- **Sonraki pencereye not:** (1) `pnpm -w test --force` (tam paralel, 10 paket birden) `PublicPages.test.tsx`
+  ve `DeveloperPortal.test.tsx`te ara sıra 5 sn zaman aşımı veriyor — art arda üç forced koşuda 3 → 1 → **0**
+  kırmızı, tek başına koştuklarında 1.4-1.5 sn (5 sn eşiğine karşı). **Kapı komutu `--force` DEĞİL**;
+  `pnpm -w test` 1083/1083 yeşil. Yük kaynaklı, bu değişiklikle ilgisiz, ama kayda geçti. (2) `hover:bg-brand-50`
+  **sessizce etkisiz**: `brand-50` `tailwind.config.ts`in brand rampasında YOK (100/500/600/700/950 var) —
+  `CampaignsPage.tsx:246` ve `GoalsPage.tsx:199`, ikisi de taranan yüzeylerin dışında. tm 115'in
+  `dark:text-brand-400` bulgusuyla aynı sınıf; kontrast ihlali değil, kayıp hover geri bildirimi → ayrı görev.
+
 ## tm 122 — PRD §5.5 · §2 Modül→Faz matrisinin bayat damgaları koda karşı hizalandı — done — 2026-08-11 UTC
 
 - **Yapıldı (YALNIZ doküman — ürün kodu, test, migration, sözleşme, `## K.` blokları DEĞİŞMEDİ):**

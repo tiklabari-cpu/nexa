@@ -35,6 +35,16 @@ const TOKENS_CSS = readFileSync(join(process.cwd(), 'src/styles/tokens.css'), 'u
 /** WCAG 2.1 AA for body text. Large text is 3:1, but none of these pairs are large-only. */
 const AA_NORMAL_TEXT = 4.5;
 
+/**
+ * WCAG 2.1 §1.4.11 Non-text Contrast — the threshold for things that are not
+ * ink: focus indicators, state boundaries, meaningful graphics.
+ *
+ * A separate constant rather than a looser reading of the one above, because
+ * confusing the two fails in both directions: 4.5:1 would reject focus rings
+ * that conform, and 3:1 applied to text would pass ink that does not.
+ */
+const AA_NON_TEXT = 3;
+
 type Theme = Record<string, string>;
 
 /** The `--name: value;` declarations of the first block after `selector`. */
@@ -164,6 +174,25 @@ const PAIRINGS: readonly Pairing[] = [
  */
 const WHITE_ON_FILL = ['--brand-500', '--brand-600'] as const;
 
+/**
+ * Everything the focus ring can be painted on (tm 123).
+ *
+ * Wider than `SURFACES`, and the two extras are the point. `--bg-rail` is the
+ * one surface that does not follow the theme — near-black in both — so a ring
+ * tuned against a light panel still has to clear it there; the rail carries the
+ * app's primary navigation, so every keyboard session starts on it.
+ * `--bubble-note-bg` is the composer's own background once an agent switches to
+ * an internal note, which is where the note tab and the message box are focused.
+ *
+ * Why the *surface* and not the control's own fill: `tokens.css` gives
+ * `:focus-visible` a positive `outline-offset`, so the ring is drawn outside the
+ * border box and the colour beside it belongs to whatever is behind the control.
+ * That is load-bearing — the composer's selected "Reply" tab is a solid
+ * `--brand-500`, and the ring on `--brand-500` would be 1.00:1 on light. The
+ * offset is asserted below so this reasoning cannot quietly stop being true.
+ */
+const RING_BACKDROPS = [...SURFACES, '--bg-rail', '--bubble-note-bg'] as const;
+
 describe.each([
   ['light', LIGHT],
   ['dark', DARK],
@@ -186,6 +215,115 @@ describe.each([
       expect(ratio, `#ffffff on ${resolve(theme, fill)}`).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
     });
   }
+
+  /**
+   * The focus ring, against every surface it lands on.
+   *
+   * Added by tm 123 to close a hole that was total rather than partial: before
+   * it, `--focus-ring` appeared in **no** assertion here and `focus` appeared in
+   * **no** line of the e2e a11y suite, so the one indicator a keyboard user
+   * depends on for the whole session had never been measured at any level. axe
+   * cannot supply this — it ships no focus-indicator rule, because the ring is
+   * not text — so this and the browser-side measurement in
+   * `apps/e2e/tests/a11y.ts` are the only two places it is checked.
+   */
+  for (const backdrop of RING_BACKDROPS) {
+    it(`--focus-ring on ${backdrop} meets 1.4.11 — the ring is drawn on the surface behind the control`, () => {
+      const ratio = contrastRatio(resolve(theme, '--focus-ring'), resolve(theme, backdrop));
+      expect(
+        ratio,
+        `${resolve(theme, '--focus-ring')} on ${resolve(theme, backdrop)}`,
+      ).toBeGreaterThanOrEqual(AA_NON_TEXT);
+    });
+  }
+});
+
+/**
+ * The `:focus-visible` rule itself, not just the colours it reaches for.
+ *
+ * Every ratio above is conditional on the ring being drawn *outside* the
+ * control. Drop the offset to zero and the ring lands on the control's own fill
+ * instead — on the composer's selected "Reply" tab that is `--brand-500`, which
+ * the ring follows exactly on the light theme, so the indicator would measure
+ * 1.00:1 and vanish. A width of zero or a style of `none` is the same failure by
+ * a shorter route. None of that is visible to a contrast check, so it is
+ * asserted here as the premise it is.
+ */
+describe('the :focus-visible rule', () => {
+  // The selector as well as the body: which one wins the cascade is as much a
+  // part of this rule's correctness as what it declares (see below).
+  const MATCH = /(?:^|\n)([^\n{}]*:focus-visible[^\n{}]*)\{([^}]*)\}/.exec(TOKENS_CSS);
+  const SELECTOR = MATCH?.[1]?.trim() ?? '';
+  const RULE = MATCH?.[2] ?? '';
+
+  const declaration = (property: string): string =>
+    new RegExp(`(?:^|;)\\s*${property}:\\s*([^;]+)`).exec(RULE)?.[1]?.trim() ?? '';
+
+  it('draws a solid ring at least 2px wide', () => {
+    expect(RULE, ':focus-visible has no rule in tokens.css at all').not.toBe('');
+    const outline = declaration('outline');
+    expect(outline).toMatch(/solid/);
+    expect(Number.parseFloat(outline)).toBeGreaterThanOrEqual(2);
+  });
+
+  /**
+   * The cascade, which is where this rule was actually broken (tm 123).
+   *
+   * A bare `:focus-visible` weighs one class, which *ties* with Tailwind's
+   * `.outline-none` — and `index.css` imports this file before
+   * `@tailwind utilities`, so on a tie the utility won. `.outline-none` is
+   * `outline: 2px solid transparent`, so all 79 controls carrying it focused
+   * with a ring painted in nothing: measured at 1.00:1 in both themes, with no
+   * fallback to the browser's own indicator either. Nothing above catches that
+   * — every ratio here would still be perfect — so the selector is asserted
+   * directly.
+   */
+  it('outranks a single utility class, or `outline-none` quietly wins the tie', () => {
+    const beyondTheState = SELECTOR.replace(':focus-visible', '').match(/[.#[]|:[a-z-]+/gi) ?? [];
+    expect(
+      beyondTheState.length,
+      `\`${SELECTOR}\` weighs no more than one class, so any \`outline-none\` on a control ` +
+        `overrides it on source order`,
+    ).toBeGreaterThan(0);
+  });
+
+  it('offsets the ring outwards, which is what puts it on the surface and not on the fill', () => {
+    expect(Number.parseFloat(declaration('outline-offset'))).toBeGreaterThan(0);
+  });
+
+  it('would be invisible on the one fill it sits closest to, without that offset', () => {
+    // Not a requirement — a measurement, kept next to the requirement it
+    // justifies. `--focus-ring` *is* `--brand-500` on light by definition, so a
+    // ring drawn on a brand-filled control would carry no boundary at all.
+    expect(
+      contrastRatio(resolve(LIGHT, '--focus-ring'), resolve(LIGHT, '--brand-500')),
+    ).toBeCloseTo(1, 2);
+  });
+});
+
+/**
+ * Hover fills, which are states no static scan renders.
+ *
+ * The reply-suggestion chips are the only place the app swaps in a brand tint on
+ * hover (`hover:bg-brand-100 dark:hover:bg-brand-950`, `Composer.tsx`), and the
+ * ink stays `--text-primary` across the swap. Split per theme rather than run
+ * through the `describe.each` above because only one of the two pairs is ever
+ * rendered: `--brand-100` is the light-theme hover and `--brand-950` the dark
+ * one, so asserting both in both themes would be measuring two combinations that
+ * do not exist.
+ */
+describe('hovered fills keep their ink readable', () => {
+  it('light: --text-primary on --brand-100 — a hovered reply suggestion', () => {
+    expect(
+      contrastRatio(resolve(LIGHT, '--text-primary'), resolve(LIGHT, '--brand-100')),
+    ).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+
+  it('dark: --text-primary on --brand-950 — the same chip, dark half', () => {
+    expect(
+      contrastRatio(resolve(DARK, '--text-primary'), resolve(DARK, '--brand-950')),
+    ).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
 });
 
 describe('contrastRatio', () => {

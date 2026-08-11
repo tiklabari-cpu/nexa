@@ -36,18 +36,38 @@
  * before it runs. A pin that silently failed would scan dark twice and report
  * "both themes green", which is the same failure mode the gate-probe test exists
  * to rule out.
+ *
+ * **Interaction states, since tm 123.** Every scan above reads a page nobody is
+ * touching, and until now that was the whole suite: `focus` and `hover` matched
+ * zero times in this file. So the focus ring and the hover colours — states a
+ * keyboard user is in for the entire session — had never been measured, at any
+ * level. The three `focus and hover` tests below put controls into those states
+ * and then measure, and because axe has no rule for focus-indicator contrast
+ * (the ring is not text) the ring itself is measured directly against what is
+ * painted behind it, to the 3:1 of WCAG 1.4.11. `a11y.ts` carries the reasoning.
  */
 import {
   request as newApiContext,
   type APIRequestContext,
+  type Locator,
   type Page,
   type TestInfo,
 } from '@playwright/test';
 import type { Result as AxeViolation } from 'axe-core';
-import { assertNoBlockingViolations, partitionViolations, scanScreen } from './a11y.js';
+import {
+  assertFocusRingVisible,
+  assertNoBlockingViolations,
+  contrastRatio,
+  describeFocusRing,
+  measureFocusRing,
+  NON_TEXT_CONTRAST_MIN,
+  partitionViolations,
+  scanScreen,
+} from './a11y.js';
 import {
   ACME_OWNER,
   API_BASE,
+  DEMO,
   expect,
   openWidget,
   ownerAccessTokenFor,
@@ -213,6 +233,88 @@ async function scanPanel(
   });
 }
 
+/** A control to put into an interaction state, named for the failure message. */
+interface StateTarget {
+  name: string;
+  find: (page: Page) => Locator;
+}
+
+/**
+ * Fill the sign-in form without submitting it.
+ *
+ * Needed because the submit button is `disabled` until both fields validate, and
+ * a disabled control cannot be focused at all — so the screen's primary button
+ * is unreachable to any state measurement while the form is empty. The
+ * credentials are the seeded demo ones and are never sent: nothing here clicks.
+ */
+async function fillSignInForm(page: Page): Promise<void> {
+  await page.getByLabel('Email').fill(DEMO.email);
+  await page.getByLabel('Password').fill(DEMO.password);
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+}
+
+/**
+ * Focus a control the way a keyboard user reaches it.
+ *
+ * The `Tab` is not decoration. Chromium decides `:focus-visible` from the
+ * document's "last interaction was a key" flag, which a click clears and a
+ * keypress sets — so focusing straight after the sign-in *click* that
+ * `agentPage` performs would land the control in plain `:focus`, paint no ring,
+ * and hand back a measurement of the wrong state. Pressing `Tab` first restores
+ * keyboard modality; `.focus()` then lands on the exact control instead of
+ * wherever the tab order happens to go, which keeps the target stable as screens
+ * gain and lose controls. `measureFocusRing` re-checks `:focus-visible` at read
+ * time, so if this heuristic ever stops holding the suite says so rather than
+ * quietly measuring nothing.
+ */
+async function focusWithKeyboard(page: Page, locator: Locator): Promise<void> {
+  await page.keyboard.press('Tab');
+  await locator.focus();
+  await expect(locator).toBeFocused();
+}
+
+/**
+ * Render the interaction states on one screen, then measure both halves.
+ *
+ * Focus and hover are asserted *together*, in one scan: the last focus target
+ * stays focused while the pointer rests on the hover target, so the axe pass
+ * grades a page carrying both states at once — which is what a real screen looks
+ * like mid-interaction and is strictly more than either state alone.
+ */
+async function scanInteractionStates(
+  page: Page,
+  screen: string,
+  theme: PanelTheme,
+  testInfo: TestInfo,
+  targets: { focus: readonly StateTarget[]; hover: StateTarget },
+): Promise<void> {
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+
+  for (const target of targets.focus) {
+    const control = target.find(page);
+    await expect(control).toBeVisible();
+    await focusWithKeyboard(page, control);
+
+    const ring = await measureFocusRing(`${screen} (${theme})`, target.name, control);
+    // The measurement is the deliverable, same as `summariseScan` — it has to
+    // reach the run log so the ratios can be read off a plain `test:e2e`.
+    console.log(describeFocusRing(ring));
+    assertFocusRingVisible(ring);
+  }
+
+  const hovered = targets.hover.find(page);
+  await expect(hovered).toBeVisible();
+  await hovered.hover();
+
+  // The pointer moving does not blur anything, so the page is now focused *and*
+  // hovered. Proved rather than assumed: a scan of a state that silently ended
+  // is the failure this whole file exists to rule out.
+  const stillFocused = targets.focus[targets.focus.length - 1]!.find(page);
+  await expect(stillFocused).toBeFocused();
+
+  assertNoBlockingViolations(await scanScreen(page, `${screen} focus+hover (${theme})`, testInfo));
+}
+
 test.describe('WCAG 2.1 AA (axe)', () => {
   for (const theme of PANEL_THEMES) {
     test.describe(`${theme} theme`, () => {
@@ -311,6 +413,105 @@ test.describe('WCAG 2.1 AA (axe)', () => {
           ).toBeVisible();
         });
       });
+
+      /**
+       * The door, focused and hovered.
+       *
+       * A signed-out stranger on a keyboard sees this screen before any other,
+       * and its submit button is the app's most-copied control shape — a solid
+       * `bg-brand-500` fill with `hover:bg-brand-600`. Both states are rendered
+       * here: the ring on the button and on the field, the hover on the button.
+       */
+      test('focus and hover states on the sign-in page have no serious or critical violations', async ({
+        page,
+      }, testInfo) => {
+        await pinTheme(page, theme);
+        await page.goto('/');
+        await fillSignInForm(page);
+
+        await scanInteractionStates(page, 'Sign in', theme, testInfo, {
+          focus: [
+            { name: 'Sign in button', find: (p) => p.getByRole('button', { name: 'Sign in' }) },
+            { name: 'Email field', find: (p) => p.getByLabel('Email') },
+          ],
+          hover: {
+            name: 'Sign in button',
+            find: (p) => p.getByRole('button', { name: 'Sign in' }),
+          },
+        });
+      });
+
+      /**
+       * The screen agents live in all day, with every backdrop a ring can land
+       * on in one page.
+       *
+       * The rail is the interesting one: it is the single surface that does not
+       * follow the theme (`--bg-rail` is near-black in both), so a ring tuned
+       * against the light panel has to clear it there too. The composer supplies
+       * the case that motivated the backdrop walk in `a11y.ts` — the selected
+       * "Reply" tab is a solid brand fill, and a ring measured against the fill
+       * rather than the surface behind it would read 1.00:1 and be wrong.
+       */
+      test('focus and hover states in the inbox have no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        // Same active chat the internal-note scan uses: the seeded All view opens
+        // on an archived conversation, which renders no composer at all.
+        await agentPage.goto(`/app/inbox?chat=${activeChatId}`);
+        await expect(agentPage.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+        await expect(agentPage.getByPlaceholder('Type your reply')).toBeVisible();
+
+        await scanInteractionStates(agentPage, 'Inbox', theme, testInfo, {
+          focus: [
+            { name: 'Rail link (Inbox)', find: (p) => p.getByRole('link', { name: 'Inbox' }) },
+            {
+              name: 'Composer "Reply" tab (brand fill)',
+              find: (p) => p.getByRole('radio', { name: 'Reply' }),
+            },
+            {
+              name: 'Composer "Internal note" tab',
+              find: (p) => p.getByRole('radio', { name: 'Internal note' }),
+            },
+            { name: 'Composer input', find: (p) => p.getByPlaceholder('Type your reply') },
+          ],
+          hover: {
+            name: 'Conversation row',
+            find: (p) =>
+              p.getByRole('region', { name: 'Conversations' }).getByRole('button').first(),
+          },
+        });
+      });
+
+      /**
+       * A dense table, where hover is load-bearing rather than cosmetic.
+       *
+       * Rows carry `hover:bg-surface-2` as their only affordance that they are
+       * clickable, and the search box is one of the app's `outline-none` inputs —
+       * between them this screen exercises both halves on colours the static
+       * scans never see.
+       */
+      test('focus and hover states in the customers table have no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/customers');
+        await expect(agentPage.getByRole('table', { name: 'Customers' })).toBeVisible();
+
+        const firstRowControl = (p: Page): Locator =>
+          p.getByRole('table', { name: 'Customers' }).getByRole('button').first();
+
+        await scanInteractionStates(agentPage, 'Customers', theme, testInfo, {
+          focus: [
+            { name: 'Customer row control', find: firstRowControl },
+            {
+              name: 'Search box',
+              find: (p) => p.getByRole('searchbox', { name: 'Search customers' }),
+            },
+          ],
+          hover: { name: 'Customer row control', find: firstRowControl },
+        });
+      });
     });
   }
 
@@ -391,5 +592,94 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       'an unnamed button is axe rule `button-name`, impact critical',
     ).toContain('button-name');
     expect(() => assertNoBlockingViolations(scan)).toThrow(/button-name/);
+  });
+
+  /**
+   * The focus-ring gate's own test — the same proof, for the half axe cannot do.
+   *
+   * A measurement nobody has ever seen fail is not a gate: `measureFocusRing`
+   * could read the wrong element, miss `:focus-visible`, or resolve a backdrop
+   * that is never painted, and every one of those returns a comfortable ratio
+   * that reads exactly like a conforming ring. So the ring is broken on purpose,
+   * in the two ways a real one breaks, and the gate is asserted to fire on both:
+   *
+   *   1. painted in the colour of what is behind it — the 1.4.11 failure, which
+   *      is what a designer produces by picking the ring off the palette
+   *      without checking it against the surface;
+   *   2. not painted at all (`outline: none`) — the older and commoner defect,
+   *      and the one 79 `outline-none` call sites in this app are one cascade
+   *      change away from.
+   *
+   * Both are injected into a real, rendered, focused control rather than
+   * simulated, and the ratio is re-measured green afterwards so a probe that
+   * simply broke the page for good cannot pass for a working gate.
+   */
+  test('the focus-ring gate fails on a ring that cannot be seen', async ({ page }) => {
+    // Pure half first: the classification is decidable without a browser.
+    expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 5);
+    expect(contrastRatio('#2d67fa', '#ffffff')).toBeGreaterThan(NON_TEXT_CONTRAST_MIN);
+    expect(() =>
+      assertFocusRingVisible({
+        screen: 'Fixture',
+        target: 'hand-built',
+        focusVisible: false,
+        ring: '#2d67fa',
+        backdrop: '#ffffff',
+        width: 2,
+        style: 'solid',
+        offset: 2,
+        ratio: 4.74,
+      }),
+    ).toThrow(/never matched/);
+
+    await page.goto('/');
+    await fillSignInForm(page);
+    const button = page.getByRole('button', { name: 'Sign in' });
+    await focusWithKeyboard(page, button);
+
+    const healthy = await measureFocusRing('Gate probe', 'Sign in button', button);
+    console.log(describeFocusRing(healthy));
+    assertFocusRingVisible(healthy);
+
+    // (1) Repaint the ring in exactly the colour the measurement found behind
+    // it. `!important` because `[data-theme]` outranks a plain `:root` and this
+    // has to hold on whichever theme the run picked up.
+    const sameAsBackdrop = await page.addStyleTag({
+      content: `:root { --focus-ring: ${healthy.backdrop} !important; }`,
+    });
+    const invisible = await measureFocusRing(
+      'Gate probe',
+      'Sign in button (ring = backdrop)',
+      button,
+    );
+    console.log(describeFocusRing(invisible));
+    expect(invisible.focusVisible, 'the probe must still be measuring a focused control').toBe(
+      true,
+    );
+    expect(invisible.ratio).toBeLessThan(NON_TEXT_CONTRAST_MIN);
+    expect(() => assertFocusRingVisible(invisible)).toThrow(/cannot be seen/);
+    await sameAsBackdrop.evaluate((tag) => tag.parentNode?.removeChild(tag));
+
+    // (2) Remove the indicator outright, the way `outline-none` does.
+    const removed = await page.addStyleTag({
+      content: ':focus-visible { outline: none !important; }',
+    });
+    const missing = await measureFocusRing('Gate probe', 'Sign in button (no outline)', button);
+    console.log(describeFocusRing(missing));
+    expect(missing.style, 'a removed indicator is `outline-style: none`').toBe('none');
+    // And its *colour* still measures comfortably — `outline-color` falls back to
+    // `currentcolor`, so the ratio alone reports a healthy ring on a control that
+    // draws none. That is exactly why the assertion looks at the style too, and
+    // why a gate built on the ratio by itself would have passed this.
+    expect(missing.ratio).toBeGreaterThan(NON_TEXT_CONTRAST_MIN);
+    expect(() => assertFocusRingVisible(missing)).toThrow(/draws no focus indicator/);
+    await removed.evaluate((tag) => tag.parentNode?.removeChild(tag));
+
+    // Green again — otherwise the two failures above prove only that the page
+    // is broken, not that the measurement tracks it.
+    const recovered = await measureFocusRing('Gate probe', 'Sign in button (restored)', button);
+    console.log(describeFocusRing(recovered));
+    assertFocusRingVisible(recovered);
+    expect(recovered.ratio).toBeCloseTo(healthy.ratio, 2);
   });
 });

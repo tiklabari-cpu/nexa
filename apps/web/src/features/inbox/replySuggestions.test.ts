@@ -25,9 +25,7 @@ describe('replySuggestions', () => {
   });
 
   it('leads with a look-into-it line for a question', () => {
-    const turns: SuggestionTurn[] = [
-      { role: 'customer', text: 'Do you ship to Germany?' },
-    ];
+    const turns: SuggestionTurn[] = [{ role: 'customer', text: 'Do you ship to Germany?' }];
     expect(replySuggestions(turns)[0]).toMatch(/look into that|find the answer/i);
   });
 

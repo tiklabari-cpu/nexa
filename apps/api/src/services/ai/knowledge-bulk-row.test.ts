@@ -37,7 +37,13 @@ describe('resolveKnowledgeBulkColumns', () => {
   });
 
   it('ignores an unrecognised extra column instead of rejecting the file', () => {
-    const columns = resolveKnowledgeBulkColumns(['name', 'type', 'content', 'source_url', 'internal note']);
+    const columns = resolveKnowledgeBulkColumns([
+      'name',
+      'type',
+      'content',
+      'source_url',
+      'internal note',
+    ]);
     expect(columns).toEqual({ name: 0, type: 1, content: 2, source_url: 3 });
   });
 
@@ -90,7 +96,12 @@ describe('mapKnowledgeBulkRow', () => {
   });
 
   it('accepts a website row and drops the unused content field', () => {
-    const result = mapKnowledgeBulkRow(COLUMNS, ['Pricing page', 'website', '', 'https://example.com/pricing']);
+    const result = mapKnowledgeBulkRow(COLUMNS, [
+      'Pricing page',
+      'website',
+      '',
+      'https://example.com/pricing',
+    ]);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value).toEqual({
@@ -102,10 +113,27 @@ describe('mapKnowledgeBulkRow', () => {
   });
 
   it('still maps the recognised columns when an unknown extra column is present', () => {
-    const columns = resolveKnowledgeBulkColumns(['name', 'type', 'content', 'source_url', 'internal note']);
-    const result = mapKnowledgeBulkRow(columns, ['FAQ item', 'faq', 'we reply within 24h', '', 'reviewed by CS']);
+    const columns = resolveKnowledgeBulkColumns([
+      'name',
+      'type',
+      'content',
+      'source_url',
+      'internal note',
+    ]);
+    const result = mapKnowledgeBulkRow(columns, [
+      'FAQ item',
+      'faq',
+      'we reply within 24h',
+      '',
+      'reviewed by CS',
+    ]);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual({ name: 'FAQ item', type: 'faq', content: 'we reply within 24h' });
+    if (result.ok)
+      expect(result.value).toEqual({
+        name: 'FAQ item',
+        type: 'faq',
+        content: 'we reply within 24h',
+      });
   });
 });
 
@@ -123,7 +151,9 @@ describe('mapKnowledgeBulkRows', () => {
 
     expect(results.map((r) => r.line)).toEqual([1, 2, 3, 4, 5]);
     expect(results.map((r) => r.ok)).toEqual([true, false, true, false, true]);
-    const failed = results.filter((r): r is Extract<(typeof results)[number], { ok: false }> => !r.ok);
+    const failed = results.filter(
+      (r): r is Extract<(typeof results)[number], { ok: false }> => !r.ok,
+    );
     expect(failed.map((r) => r.error.field)).toEqual(['type', 'source_url']);
   });
 

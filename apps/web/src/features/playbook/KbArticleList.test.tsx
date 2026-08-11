@@ -38,15 +38,27 @@ function article(over: Partial<KbArticle> & { id: string }): KbArticle {
 }
 
 const CATEGORIES: KbCategory[] = [
-  { id: 'cat-a', slug: 'billing', name: 'Billing', position: 0, created_at: '2026-01-01T00:00:00.000Z' },
+  {
+    id: 'cat-a',
+    slug: 'billing',
+    name: 'Billing',
+    position: 0,
+    created_at: '2026-01-01T00:00:00.000Z',
+  },
 ];
 
 function mockKb(articles: KbArticle[], categories: KbCategory[] = CATEGORIES): void {
   api.get.mockImplementation((path: string) => {
-    if (path === '/kb-articles') return Promise.resolve({ items: articles, total: articles.length });
+    if (path === '/kb-articles')
+      return Promise.resolve({ items: articles, total: articles.length });
     if (path === '/kb-categories') return Promise.resolve({ items: categories });
     if (path === '/kb-settings') {
-      return Promise.resolve({ enabled: true, public_slug: 'acme', site_title: null, updated_at: null });
+      return Promise.resolve({
+        enabled: true,
+        public_slug: 'acme',
+        site_title: null,
+        updated_at: null,
+      });
     }
     return Promise.reject(new Error(`unexpected ${path}`));
   });
@@ -180,7 +192,9 @@ describe('KbArticleList', () => {
     });
     renderList(<KbArticleList />);
 
-    expect(await screen.findByText(/Could not load the knowledge base articles/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Could not load the knowledge base articles/),
+    ).toBeInTheDocument();
   });
 
   it('hides "New article" and does not open an editor without edit permission', async () => {

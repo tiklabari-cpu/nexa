@@ -42,12 +42,7 @@ interface ResolvedTokenRow {
 }
 
 export type TokenRejection =
-  | 'unknown'
-  | 'revoked'
-  | 'expired'
-  | 'idle_expired'
-  | 'license_expired'
-  | 'membership_missing';
+  'unknown' | 'revoked' | 'expired' | 'idle_expired' | 'license_expired' | 'membership_missing';
 
 export type TokenResolution =
   | { ok: true; principal: Principal; licenseStatus: string; region: string }
@@ -102,7 +97,9 @@ export class TokenService {
     const check = await withTenant(
       this.db,
       context,
-      async (tx): Promise<{ ok: false; reason: TokenRejection } | { ok: true; role: AgentRole }> => {
+      async (
+        tx,
+      ): Promise<{ ok: false; reason: TokenRejection } | { ok: true; role: AgentRole }> => {
         const membership = await tx.agentMembership.findUnique({
           where: { licenseId_agentId: { licenseId: row.license_id, agentId: row.owner_id } },
           select: { role: true, suspended: true, awaitingApproval: true },

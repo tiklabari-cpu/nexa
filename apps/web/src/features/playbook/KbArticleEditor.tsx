@@ -27,7 +27,8 @@ import { FieldError, required, useForm } from '../../lib/form.js';
 import type { KbArticle, KbCategory } from './types.js';
 import { deriveKbSlug, kbSlugError } from './kb-slug.js';
 
-type FieldName = 'title' | 'slug' | 'body' | 'category' | 'excerpt' | 'seo_title' | 'seo_description';
+type FieldName =
+  'title' | 'slug' | 'body' | 'category' | 'excerpt' | 'seo_title' | 'seo_description';
 type FormValues = Record<FieldName, string>;
 
 /** Selecting this in the Category picker reveals the "new category" input. */
@@ -234,7 +235,8 @@ export function KbArticleEditor({
       <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
         {kbDisabled && (
           <Banner tone="warning" title="KB disabled">
-            KB kapalı — link çalışmaz. Turn it on in KB settings before sharing an article's address.
+            KB kapalı — link çalışmaz. Turn it on in KB settings before sharing an article's
+            address.
           </Banner>
         )}
 

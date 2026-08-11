@@ -83,7 +83,9 @@ describe('HomePage', () => {
     // …a to-do step offers a link to the module that completes it.
     const install = screen.getByText('Install the chat widget').closest('li');
     expect(install).not.toBeNull();
-    expect(within(install as HTMLElement).getByRole('link', { name: 'Set up' })).toBeInTheDocument();
+    expect(
+      within(install as HTMLElement).getByRole('link', { name: 'Set up' }),
+    ).toBeInTheDocument();
 
     // Four of five steps still show a "Set up" link.
     expect(screen.getAllByRole('link', { name: 'Set up' })).toHaveLength(4);

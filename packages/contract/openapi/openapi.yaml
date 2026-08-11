@@ -881,7 +881,8 @@ components:
       type: object
       required: [imported, failed, dry_run, results]
       properties:
-        imported: { type: integer, description: Rows written (or, in a dry run, rows that would be). }
+        imported:
+          { type: integer, description: Rows written (or, in a dry run, rows that would be). }
         failed: { type: integer }
         dry_run: { type: boolean, description: True when nothing was written. }
         results:
@@ -1551,7 +1552,29 @@ components:
         summed in the Ecommerce report, so a typo would produce a report
         denominated in a currency that does not exist.
       enum:
-        [AED, AUD, BRL, CAD, CHF, CNY, DKK, EUR, GBP, INR, JPY, MXN, NOK, NZD, PLN, SAR, SEK, SGD, TRY, USD, ZAR]
+        [
+          AED,
+          AUD,
+          BRL,
+          CAD,
+          CHF,
+          CNY,
+          DKK,
+          EUR,
+          GBP,
+          INR,
+          JPY,
+          MXN,
+          NOK,
+          NZD,
+          PLN,
+          SAR,
+          SEK,
+          SGD,
+          TRY,
+          USD,
+          ZAR,
+        ]
 
     UpdateSalesTrackerSettings:
       type: object

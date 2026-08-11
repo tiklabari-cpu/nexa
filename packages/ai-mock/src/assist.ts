@@ -104,14 +104,10 @@ export function enhanceText(text: string, mode: EnhanceMode): string {
     }
 
     case 'friendly':
-      return /^(hi|hey|thanks|happy to help)/i.test(base)
-        ? base
-        : `Happy to help! ${base}`;
+      return /^(hi|hey|thanks|happy to help)/i.test(base) ? base : `Happy to help! ${base}`;
 
     case 'rephrase':
-      return /^(to confirm|in other words)/i.test(base)
-        ? base
-        : `To confirm: ${lowerFirst(base)}`;
+      return /^(to confirm|in other words)/i.test(base) ? base : `To confirm: ${lowerFirst(base)}`;
 
     default:
       return base;

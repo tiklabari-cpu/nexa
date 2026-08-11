@@ -100,11 +100,7 @@ describe('agent conflict warning — transfer surface', () => {
   }
 
   /** Mark `agentId` as composing in `chatId`'s registry, scored to now. */
-  async function markComposing(
-    licenseId: bigint,
-    chatId: string,
-    agentId: string,
-  ): Promise<void> {
+  async function markComposing(licenseId: bigint, chatId: string, agentId: string): Promise<void> {
     await server.app.redis.zadd(composerStateKey(licenseId, chatId), Date.now(), agentId);
   }
 
@@ -255,9 +251,7 @@ describe('agent conflict warning — transfer surface', () => {
 
     const warning = conflict[0]!;
     // Both the agent handed the chat and the one still composing hear about it.
-    expect(audienceOf(warning)).toEqual(
-      expect.arrayContaining([composerAgent, incomingAgent]),
-    );
+    expect(audienceOf(warning)).toEqual(expect.arrayContaining([composerAgent, incomingAgent]));
 
     const payload = warning['payload'] as {
       chat_id: string;

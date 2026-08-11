@@ -67,10 +67,10 @@ describe('performanceKpis', () => {
   });
 
   it('judges CSAT low-base by rating responses, independently of chat volume', () => {
-    const kpis = performanceKpis(
-      report({ resolutions: 100, resolution_rate: 0.9, transfers: 5 }),
-      { score: 1, responses: 2 },
-    );
+    const kpis = performanceKpis(report({ resolutions: 100, resolution_rate: 0.9, transfers: 5 }), {
+      score: 1,
+      responses: 2,
+    });
     // Plenty of chats, but only 2 ratings — CSAT is the low-base one.
     expect(rate(kpis, 'csat').lowBase).toBe(true);
     expect(rate(kpis, 'resolution_rate').lowBase).toBe(false);

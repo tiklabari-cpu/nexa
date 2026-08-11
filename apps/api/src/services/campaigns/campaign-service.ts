@@ -175,7 +175,9 @@ export class CampaignService {
     }
     if (patch.conditions !== undefined) data.conditions = patch.conditions as Prisma.InputJsonValue;
     if (patch.content !== undefined) {
-      data.content = { message: resultingMessage } satisfies CampaignContent as Prisma.InputJsonValue;
+      data.content = {
+        message: resultingMessage,
+      } satisfies CampaignContent as Prisma.InputJsonValue;
     }
     if (patch.startsAt !== undefined) data.startsAt = patch.startsAt;
     if (patch.endsAt !== undefined) data.endsAt = patch.endsAt;

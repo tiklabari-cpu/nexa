@@ -83,7 +83,7 @@ describe('connect — the ownership pre-check (08.5.7-d)', () => {
 
   const tenant = { licenseId: LICENSE, organizationId: ORGANIZATION, brandId: BRAND };
 
-  it('refuses another workspace\'s address without attempting the write', async () => {
+  it("refuses another workspace's address without attempting the write", async () => {
     const { tx, wrote } = clientOwnedBy([{ license_id: 7n, brand_id: BRAND }]);
     const error = await caught(new ChannelService().connect(tx, tenant, 'instagram', CONNECT_BODY));
 
@@ -92,12 +92,15 @@ describe('connect — the ownership pre-check (08.5.7-d)', () => {
     expect(wrote()).toBe(false);
   });
 
-  it('refuses another brand of the same workspace, and allows re-connecting one\'s own', async () => {
+  it("refuses another brand of the same workspace, and allows re-connecting one's own", async () => {
     // Same licence, different brand: still two rows at one address, and the
     // resolver answers with a licence rather than a brand — so still ambiguous.
-    const other = clientOwnedBy([{ license_id: LICENSE, brand_id: '33333333-3333-4333-8333-333333333333' }]);
+    const other = clientOwnedBy([
+      { license_id: LICENSE, brand_id: '33333333-3333-4333-8333-333333333333' },
+    ]);
     expect(
-      (await caught(new ChannelService().connect(other.tx, tenant, 'instagram', CONNECT_BODY))).status,
+      (await caught(new ChannelService().connect(other.tx, tenant, 'instagram', CONNECT_BODY)))
+        .status,
     ).toBe(400);
     expect(other.wrote()).toBe(false);
 

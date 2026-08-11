@@ -644,7 +644,11 @@ describe('customer chat api', () => {
       const { token } = await widgetToken();
       const fileUrl = await customerUpload(token);
 
-      const sent = await server.post('/customer/chat/events', { attachment_url: fileUrl }, auth(token));
+      const sent = await server.post(
+        '/customer/chat/events',
+        { attachment_url: fileUrl },
+        auth(token),
+      );
       expect(sent.statusCode).toBe(201);
 
       const state = await server.get('/customer/chat', auth(token));
@@ -759,7 +763,7 @@ describe('customer chat api', () => {
       expect((state.json() as AgentState).agent).toBeNull();
     });
 
-    it('does not leak another license\'s AI persona', async () => {
+    it("does not leak another license's AI persona", async () => {
       // B has an active persona; A's visitor must never see it.
       await owner.aiAgent.create({
         data: { licenseId: fx.b.licenseId, name: 'Bea', active: true },
@@ -807,7 +811,11 @@ describe('customer chat api', () => {
       );
       const { token } = granted.json() as { token: string };
 
-      const sent = await server.post('/customer/chat/events', { text: 'From the link' }, auth(token));
+      const sent = await server.post(
+        '/customer/chat/events',
+        { text: 'From the link' },
+        auth(token),
+      );
       expect(sent.statusCode).toBe(201);
       expect((sent.json() as { chat_id: string }).chat_id).toBeTruthy();
     });
@@ -858,7 +866,12 @@ describe('customer chat api', () => {
         { origin: `https://${fx.a.trustedDomain}` },
       );
       const body = response.json() as {
-        pre_chat_form: Array<{ definition_id: string; label: string; type: string; required: boolean }>;
+        pre_chat_form: Array<{
+          definition_id: string;
+          label: string;
+          type: string;
+          required: boolean;
+        }>;
       };
       expect(body.pre_chat_form.map((field) => field.label)).toContain('Order number');
     });
@@ -898,7 +911,7 @@ describe('customer chat api', () => {
       expect(await owner.chat.count()).toBe(0);
     });
 
-    it('refuses to write another tenant\'s field id', async () => {
+    it("refuses to write another tenant's field id", async () => {
       // A field that belongs to tenant B, offered to a tenant-A visitor. RLS on
       // the definitions means A cannot see it, so it reads as an unknown field.
       const foreign = await owner.customFieldDefinition.create({
@@ -1041,7 +1054,11 @@ describe('customer chat api', () => {
 
     it('lets a normal first message open a chat', async () => {
       const { token } = await widgetToken();
-      const response = await server.post('/customer/chat/events', { text: 'hi there' }, auth(token));
+      const response = await server.post(
+        '/customer/chat/events',
+        { text: 'hi there' },
+        auth(token),
+      );
       expect(response.statusCode).toBe(201);
     });
 
@@ -1147,7 +1164,11 @@ describe('customer chat api', () => {
     it('records a sale and credits the conversation the visitor had', async () => {
       await enableTracking();
       const { token } = await widgetToken();
-      const chat = await server.post('/customer/chat/events', { text: 'Is it in stock?' }, auth(token));
+      const chat = await server.post(
+        '/customer/chat/events',
+        { text: 'Is it in stock?' },
+        auth(token),
+      );
 
       const sale = await server.post('/customer/chat/sale', ORDER, auth(token));
 
@@ -1250,7 +1271,11 @@ describe('customer chat api', () => {
       await enableTracking(fx.a, { currency: 'USD' });
       const { token } = await widgetToken();
 
-      const sale = await server.post('/customer/chat/sale', { ...ORDER, currency: 'EUR' }, auth(token));
+      const sale = await server.post(
+        '/customer/chat/sale',
+        { ...ORDER, currency: 'EUR' },
+        auth(token),
+      );
 
       expect(sale.statusCode).toBe(400);
       expect(sale.json().error.type).toBe('validation');
@@ -1292,7 +1317,11 @@ describe('customer chat api', () => {
       await enableTracking();
       const { token } = await widgetToken();
 
-      const sale = await server.post('/customer/chat/sale', { ...ORDER, amount_cents: 0 }, auth(token));
+      const sale = await server.post(
+        '/customer/chat/sale',
+        { ...ORDER, amount_cents: 0 },
+        auth(token),
+      );
       expect(sale.statusCode).toBe(201);
       expect(sale.json().amount_cents).toBe(0);
     });
@@ -1333,7 +1362,11 @@ describe('customer chat api', () => {
 
       const first = await server.post('/customer/chat/sale', ORDER, auth(token));
       const second = await server.post('/customer/chat/sale', ORDER, auth(token));
-      const third = await server.post('/customer/chat/sale', { ...ORDER, amount_cents: 999_999 }, auth(token));
+      const third = await server.post(
+        '/customer/chat/sale',
+        { ...ORDER, amount_cents: 999_999 },
+        auth(token),
+      );
 
       expect(first.statusCode).toBe(201);
       expect(second.statusCode).toBe(200);
@@ -1427,7 +1460,11 @@ describe('customer chat api', () => {
       // The same order reference on another licence is a different sale: the
       // uniqueness that makes ingest idempotent is per-licence, so B is neither
       // blocked by A's order nor able to see it.
-      const forB = await server.post('/customer/chat/sale', { ...ORDER, amount_cents: 100 }, auth(b.token));
+      const forB = await server.post(
+        '/customer/chat/sale',
+        { ...ORDER, amount_cents: 100 },
+        auth(b.token),
+      );
       expect(forB.statusCode).toBe(201);
 
       expect(await revenueOf(fx.a.licenseId)).toBe(4990);

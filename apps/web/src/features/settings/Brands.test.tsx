@@ -148,7 +148,12 @@ describe('Brands', () => {
 
   it('shows a rename conflict as an ErrorNotice, and reverts the draft', async () => {
     api.patch.mockRejectedValue(
-      new ApiClientError({ type: 'validation', status: 409, message: 'Another brand already uses this slug.', requestId: '-' }),
+      new ApiClientError({
+        type: 'validation',
+        status: 409,
+        message: 'Another brand already uses this slug.',
+        requestId: '-',
+      }),
     );
     renderComponent(<Brands canEdit />);
     const field = await screen.findByDisplayValue('Acme EU');
@@ -165,7 +170,12 @@ describe('Brands', () => {
 
   it('shows a delete rejection as an ErrorNotice on that row', async () => {
     api.delete.mockRejectedValue(
-      new ApiClientError({ type: 'validation', status: 403, message: 'This brand still has websites or channels attached.', requestId: '-' }),
+      new ApiClientError({
+        type: 'validation',
+        status: 403,
+        message: 'This brand still has websites or channels attached.',
+        requestId: '-',
+      }),
     );
     renderComponent(<Brands canEdit />);
     await screen.findByDisplayValue('Default');

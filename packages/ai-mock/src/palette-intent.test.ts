@@ -16,11 +16,15 @@ describe('matchPaletteTopic', () => {
   });
 
   it('matches a satisfaction question', () => {
-    expect(matchPaletteTopic('What is our customer satisfaction score?')?.topic.id).toBe('satisfaction');
+    expect(matchPaletteTopic('What is our customer satisfaction score?')?.topic.id).toBe(
+      'satisfaction',
+    );
   });
 
   it('matches a response-time question', () => {
-    expect(matchPaletteTopic('How fast do we respond to customers?')?.topic.id).toBe('response_time');
+    expect(matchPaletteTopic('How fast do we respond to customers?')?.topic.id).toBe(
+      'response_time',
+    );
   });
 
   it('matches a tickets question', () => {
@@ -28,7 +32,9 @@ describe('matchPaletteTopic', () => {
   });
 
   it('matches an automation question', () => {
-    expect(matchPaletteTopic('How many chats were resolved automatically?')?.topic.id).toBe('automated');
+    expect(matchPaletteTopic('How many chats were resolved automatically?')?.topic.id).toBe(
+      'automated',
+    );
   });
 
   it('returns null for a question with no matching topic', () => {

@@ -20,7 +20,12 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withTenant } from '../../src/lib/tenant.js';
-import { ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import {
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
 
@@ -190,7 +195,9 @@ describe('public KB schema (PUBKB-a)', () => {
     });
 
     it('refuses the same public_slug reused by a different license', async () => {
-      await owner.kbSettings.create({ data: { licenseId: fx.a.licenseId, publicSlug: 'shared-kb' } });
+      await owner.kbSettings.create({
+        data: { licenseId: fx.a.licenseId, publicSlug: 'shared-kb' },
+      });
       await expect(
         owner.kbSettings.create({ data: { licenseId: fx.b.licenseId, publicSlug: 'shared-kb' } }),
       ).rejects.toThrow(/unique constraint/i);
@@ -244,7 +251,9 @@ describe('public KB schema (PUBKB-a)', () => {
       const categoryB = await owner.kbCategory.create({
         data: { licenseId: fx.b.licenseId, slug: 'b-cat', name: 'B cat' },
       });
-      await owner.kbSettings.create({ data: { licenseId: fx.b.licenseId, publicSlug: 'b-public' } });
+      await owner.kbSettings.create({
+        data: { licenseId: fx.b.licenseId, publicSlug: 'b-public' },
+      });
 
       const categories = await withTenant(app, under(fx.a), (tx) =>
         tx.kbCategory.findMany({ where: { id: categoryB.id } }),

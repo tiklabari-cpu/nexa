@@ -41,7 +41,12 @@ describe('isCampaignFilter', () => {
 });
 
 describe('filterCampaigns', () => {
-  const list = [campaign('ongoing'), campaign('scheduled'), campaign('inactive'), campaign('ongoing')];
+  const list = [
+    campaign('ongoing'),
+    campaign('scheduled'),
+    campaign('inactive'),
+    campaign('ongoing'),
+  ];
 
   it('keeps everything for the "all" tab', () => {
     expect(filterCampaigns(list, 'all')).toHaveLength(4);

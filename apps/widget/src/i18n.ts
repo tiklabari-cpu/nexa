@@ -13,10 +13,7 @@
  */
 export type WidgetLocale = 'en' | 'tr';
 
-export type WidgetTranslate = (
-  key: string,
-  params?: Record<string, string | number>,
-) => string;
+export type WidgetTranslate = (key: string, params?: Record<string, string | number>) => string;
 
 const MESSAGES: Record<WidgetLocale, Record<string, string>> = {
   en: {

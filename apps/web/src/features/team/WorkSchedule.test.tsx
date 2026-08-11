@@ -92,7 +92,15 @@ describe('WorkSchedule — editor', () => {
     await openModal();
 
     expect(api.get).toHaveBeenCalledWith('/agents/agent-1/work-schedule');
-    for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']) {
+    for (const day of [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ]) {
       expect(await screen.findByRole('checkbox', { name: day })).toBeInTheDocument();
     }
     expect(screen.getByRole('checkbox', { name: 'Monday' })).toBeChecked();
@@ -165,7 +173,10 @@ describe('WorkSchedule — editor', () => {
     fireEvent.click(save);
 
     await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
-    const [path, body] = api.put.mock.calls[0] as [string, { timezone: string; schedule: unknown[] }];
+    const [path, body] = api.put.mock.calls[0] as [
+      string,
+      { timezone: string; schedule: unknown[] },
+    ];
     expect(path).toBe('/agents/agent-1/work-schedule');
     expect(body.timezone).toBe('UTC');
     expect(body.schedule).toContainEqual({

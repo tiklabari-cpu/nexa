@@ -123,10 +123,7 @@ function Stepper({ current }: { current: number }): ReactElement {
         return (
           <li key={s.id} className="flex flex-1 flex-col gap-1">
             <span
-              className={
-                'h-1 rounded-full ' +
-                (state === 'todo' ? 'bg-border' : 'bg-brand-500')
-              }
+              className={'h-1 rounded-full ' + (state === 'todo' ? 'bg-border' : 'bg-brand-500')}
             />
             <span
               className={
@@ -149,8 +146,8 @@ function WelcomeStep({ name }: { name: string | null }): ReactElement {
     <div className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">Welcome{first ? `, ${first}` : ''} 👋</h2>
       <p className="text-sm text-content-secondary">
-        Your workspace is ready. A few quick steps get the widget onto your site, your
-        teammates in, and a sample conversation in your inbox so it is not empty on day one.
+        Your workspace is ready. A few quick steps get the widget onto your site, your teammates in,
+        and a sample conversation in your inbox so it is not empty on day one.
       </p>
       <ul className="mt-1 flex flex-col gap-2 text-sm text-content-secondary">
         <li>• Connect your first website</li>
@@ -194,8 +191,8 @@ function WebsiteStep(): ReactElement {
     <div className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">Connect your first website</h2>
       <p className="text-sm text-content-secondary">
-        Add the site you want the chat widget on. This also trusts its domain, so the widget
-        can start conversations there right away.
+        Add the site you want the chat widget on. This also trusts its domain, so the widget can
+        start conversations there right away.
       </p>
       <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
         <label htmlFor="onboarding-domain" className="flex min-w-56 flex-1 flex-col gap-1">
@@ -260,8 +257,8 @@ function TeamStep(): ReactElement {
     <div className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">Invite your team</h2>
       <p className="text-sm text-content-secondary">
-        Add teammates by email — separate several with a space or comma. They join as agents;
-        you can change roles later. Skip this if you are flying solo for now.
+        Add teammates by email — separate several with a space or comma. They join as agents; you
+        can change roles later. Skip this if you are flying solo for now.
       </p>
       <form onSubmit={submit} className="flex flex-col gap-2">
         <label htmlFor="onboarding-emails" className="flex flex-col gap-1">
@@ -319,8 +316,8 @@ function SampleStep(): ReactElement {
     <div className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">Add sample data</h2>
       <p className="text-sm text-content-secondary">
-        Populate your workspace with a few saved replies, tags and one sample conversation so
-        you have something to explore straight away. You can archive or delete it any time.
+        Populate your workspace with a few saved replies, tags and one sample conversation so you
+        have something to explore straight away. You can archive or delete it any time.
       </p>
       <div>
         <button
@@ -341,9 +338,7 @@ function SampleStep(): ReactElement {
       )}
       {seed.isError && (
         <p role="alert" className="text-2xs text-danger">
-          {seed.error instanceof ApiClientError
-            ? seed.error.message
-            : 'Could not add sample data.'}
+          {seed.error instanceof ApiClientError ? seed.error.message : 'Could not add sample data.'}
         </p>
       )}
       <p className="text-2xs text-content-tertiary">
@@ -358,10 +353,7 @@ function SampleStep(): ReactElement {
  * Widgets screen. Adding a website only needs the domain on the allowlist, not
  * to have put it there itself.
  */
-async function trustDomain(
-  api: ReturnType<typeof useApiClient>,
-  domain: string,
-): Promise<void> {
+async function trustDomain(api: ReturnType<typeof useApiClient>, domain: string): Promise<void> {
   try {
     await api.post('/settings/trusted-domains', { domain, include_subdomains: false });
   } catch (error) {

@@ -56,7 +56,12 @@ describe('agent e-mail notifications', () => {
       },
     });
     await owner.routingRule.create({
-      data: { licenseId: fx.a.licenseId, kind: 'chat', isFallback: true, targetGroupId: support.id },
+      data: {
+        licenseId: fx.a.licenseId,
+        kind: 'chat',
+        isFallback: true,
+        targetGroupId: support.id,
+      },
     });
   });
 
@@ -102,18 +107,26 @@ describe('agent e-mail notifications', () => {
   it('does not e-mail a second time for a retried (idempotent) send', async () => {
     const token = await widgetToken();
 
-    const first = await server.post('/customer/chat/events', {
-      text: 'once',
-      idempotency_key: 'notify-dup-key',
-    }, auth(token));
+    const first = await server.post(
+      '/customer/chat/events',
+      {
+        text: 'once',
+        idempotency_key: 'notify-dup-key',
+      },
+      auth(token),
+    );
     expect(first.statusCode).toBe(201);
 
     // Same key, so the message is replayed rather than re-posted — and no
     // second e-mail goes out.
-    const replay = await server.post('/customer/chat/events', {
-      text: 'once',
-      idempotency_key: 'notify-dup-key',
-    }, auth(token));
+    const replay = await server.post(
+      '/customer/chat/events',
+      {
+        text: 'once',
+        idempotency_key: 'notify-dup-key',
+      },
+      auth(token),
+    );
     expect(replay.statusCode).toBe(200);
 
     const notifications = (await mailer.outbox()).filter((m) => m.kind === 'notification');

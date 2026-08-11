@@ -188,9 +188,7 @@ export async function goalFunnelCounts(
   from: Date,
   to: Date,
 ): Promise<GoalFunnelCounts> {
-  const [row] = await tx.$queryRaw<
-    Array<{ visitors: bigint; chats: bigint; conversions: bigint }>
-  >`
+  const [row] = await tx.$queryRaw<Array<{ visitors: bigint; chats: bigint; conversions: bigint }>>`
     WITH seen AS (
       SELECT DISTINCT v.customer_id
       FROM visits v

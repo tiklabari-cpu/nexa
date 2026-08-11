@@ -109,7 +109,12 @@ describe('appChatData (deterministic mock)', () => {
 
     // Across many seeds at least one produces a different field set, so the
     // stub is keyed off the customer rather than returning a constant.
-    const seeds = ['grace@example.com', 'linus@example.com', 'margaret@example.com', 'alan@example.com'];
+    const seeds = [
+      'grace@example.com',
+      'linus@example.com',
+      'margaret@example.com',
+      'alan@example.com',
+    ];
     const varies = seeds.some(
       (seed) => JSON.stringify(appChatData(app, seed).fields) !== JSON.stringify(a1.fields),
     );

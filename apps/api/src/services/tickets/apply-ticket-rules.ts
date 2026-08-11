@@ -44,7 +44,10 @@ export async function applyTicketRules(
       update.assigneeId = actions.assign_agent_id;
       touched = true;
     }
-    if (actions.assign_group_id != null && (await groupExists(tx, licenseId, actions.assign_group_id))) {
+    if (
+      actions.assign_group_id != null &&
+      (await groupExists(tx, licenseId, actions.assign_group_id))
+    ) {
       update.groupId = BigInt(actions.assign_group_id);
       touched = true;
     }
@@ -65,7 +68,11 @@ export async function applyTicketRules(
 }
 
 /** An agent who is a member of this licence and can still be assigned work. */
-async function isActiveAgent(tx: TenantClient, licenseId: bigint, agentId: string): Promise<boolean> {
+async function isActiveAgent(
+  tx: TenantClient,
+  licenseId: bigint,
+  agentId: string,
+): Promise<boolean> {
   const membership = await tx.agentMembership.findFirst({
     where: { agentId, licenseId, suspended: false },
     select: { agentId: true },
@@ -94,6 +101,7 @@ async function applyTag(
   name: string,
 ): Promise<void> {
   const existing = await tx.tag.findFirst({ where: { licenseId, name }, select: { id: true } });
-  const tag = existing ?? (await tx.tag.create({ data: { licenseId, name }, select: { id: true } }));
+  const tag =
+    existing ?? (await tx.tag.create({ data: { licenseId, name }, select: { id: true } }));
   await tx.ticketTag.createMany({ data: [{ ticketId, tagId: tag.id }], skipDuplicates: true });
 }

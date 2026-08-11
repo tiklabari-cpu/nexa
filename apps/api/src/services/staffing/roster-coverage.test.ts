@@ -29,11 +29,11 @@ const slot = (
   enabled = true,
 ): WorkScheduleSlot => ({ day, start, end, enabled });
 
-const plan = (
-  agentId: string,
-  schedule: WorkScheduleSlot[],
-  timezone = 'UTC',
-): RosterPlan => ({ agentId, timezone, schedule });
+const plan = (agentId: string, schedule: WorkScheduleSlot[], timezone = 'UTC'): RosterPlan => ({
+  agentId,
+  timezone,
+  schedule,
+});
 
 const cellAt = (cells: RosterCell[], dayOfWeek: number, hour: number): RosterCell => {
   const cell = cells[dayOfWeek * HOURS_PER_DAY + hour];
@@ -110,7 +110,12 @@ describe('rosterCoverage (PRD §5.3-Vardiya)', () => {
     // A row edited by hand in psql, or written before a rule tightened, can hold
     // any of these. Each is dropped; the well-formed Tuesday still lands.
     const broken = plan('a', [
-      { day: 'nonesuch', start: '09:00', end: '10:00', enabled: true } as unknown as WorkScheduleSlot,
+      {
+        day: 'nonesuch',
+        start: '09:00',
+        end: '10:00',
+        enabled: true,
+      } as unknown as WorkScheduleSlot,
       slot('monday', '9:00', '10:00'),
       slot('wednesday', '10:00', '10:00'),
       slot('thursday', '11:00', '10:00'),
@@ -217,9 +222,11 @@ describe('rosterCoverage (PRD §5.3-Vardiya)', () => {
     // pins which instant that is, and that it is not the wall clock.
     const shift = [slot('tuesday', '09:00', '10:00')];
     const winter =
-      rosterCoverage([plan('a', shift, 'America/New_York')], new Date('2026-01-14T12:00:00Z')) ?? [];
+      rosterCoverage([plan('a', shift, 'America/New_York')], new Date('2026-01-14T12:00:00Z')) ??
+      [];
     const summer =
-      rosterCoverage([plan('a', shift, 'America/New_York')], new Date('2026-07-14T12:00:00Z')) ?? [];
+      rosterCoverage([plan('a', shift, 'America/New_York')], new Date('2026-07-14T12:00:00Z')) ??
+      [];
 
     expect(rostered(winter)).toEqual([[TUESDAY, 14, 1]]);
     expect(rostered(summer)).toEqual([[TUESDAY, 13, 1]]);

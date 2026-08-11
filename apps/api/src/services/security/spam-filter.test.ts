@@ -41,7 +41,11 @@ describe('classifyText — spam is caught', () => {
     ['a dominating repeated token', 'FREE FREE FREE FREE FREE FREE FREE FREE money', 'repetition'],
     ['a hammered character run', `buy${'y'.repeat(25)} now`, 'repetition'],
     ['a blocklisted prize phrase', 'Congratulations! You have won a brand new iPhone', 'blocklist'],
-    ['a blocklisted claim phrase', 'Click here to claim your reward before it expires', 'blocklist'],
+    [
+      'a blocklisted claim phrase',
+      'Click here to claim your reward before it expires',
+      'blocklist',
+    ],
     ['a pharma spam token', 'cheap viagra shipped fast', 'blocklist'],
     ['a gibberish blob', 'qwertyuiopasdfghjklzxcvbnmqazwsxedcrfvtgby please', 'gibberish'],
   ];

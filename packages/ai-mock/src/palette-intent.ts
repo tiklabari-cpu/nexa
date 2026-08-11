@@ -43,7 +43,12 @@ export const PALETTE_TOPICS: readonly PaletteTopic[] = [
   {
     id: 'satisfaction',
     metricSource: 'satisfaction.score',
-    phrases: ['customer satisfaction', 'satisfaction score', 'csat score', 'how satisfied are customers'],
+    phrases: [
+      'customer satisfaction',
+      'satisfaction score',
+      'csat score',
+      'how satisfied are customers',
+    ],
   },
   {
     id: 'response_time',
@@ -53,7 +58,12 @@ export const PALETTE_TOPICS: readonly PaletteTopic[] = [
   {
     id: 'automated',
     metricSource: 'totals.automated',
-    phrases: ['automated resolutions', 'ai resolutions', 'chats resolved automatically', 'bot resolved chats'],
+    phrases: [
+      'automated resolutions',
+      'ai resolutions',
+      'chats resolved automatically',
+      'bot resolved chats',
+    ],
   },
 ] as const;
 

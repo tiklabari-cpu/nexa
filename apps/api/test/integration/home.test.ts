@@ -17,7 +17,14 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { HomeDashboard } from '@nexa/types';
-import { grantToken, ownerClient, seedDefaultBrand, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedDefaultBrand,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 describe('home dashboard', () => {
@@ -93,7 +100,9 @@ describe('home dashboard', () => {
     });
   }
 
-  const getHome = async (token = readToken): Promise<{ statusCode: number; body: HomeDashboard }> => {
+  const getHome = async (
+    token = readToken,
+  ): Promise<{ statusCode: number; body: HomeDashboard }> => {
     const response = await server.get('/home', auth(token));
     return { statusCode: response.statusCode, body: response.json() as HomeDashboard };
   };
@@ -256,7 +265,7 @@ describe('home dashboard', () => {
       expect(body.activation.completed).toBe(5);
     });
 
-    it("a pending invitation alone satisfies the teammate step", async () => {
+    it('a pending invitation alone satisfies the teammate step', async () => {
       // A workspace with only the owner but an outstanding invite still counts as
       // having invited someone. Isolate the signal by starting from a lone owner.
       await owner.agentMembership.deleteMany({

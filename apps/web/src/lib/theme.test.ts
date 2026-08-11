@@ -120,7 +120,9 @@ describe('the switcher catalogue', () => {
     // entry would silently fall back to English inside an otherwise Turkish menu.
     for (const theme of THEMES) {
       for (const locale of LOCALES) {
-        expect(hasMessage(locale, THEME_NAMES[theme]), `${locale}:${THEME_NAMES[theme]}`).toBe(true);
+        expect(hasMessage(locale, THEME_NAMES[theme]), `${locale}:${THEME_NAMES[theme]}`).toBe(
+          true,
+        );
       }
     }
   });

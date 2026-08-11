@@ -221,9 +221,9 @@ describe('toPdf (07.7-f)', () => {
     // nothing read from the environment.
     expect(toPdf('Overview', headers, rows).equals(toPdf('Overview', headers, rows))).toBe(true);
     const meta = { subtitle: '2026-07-20 — 2026-07-21', createdAt: new Date(0) };
-    expect(toPdf('Overview', headers, rows, meta).equals(toPdf('Overview', headers, rows, meta))).toBe(
-      true,
-    );
+    expect(
+      toPdf('Overview', headers, rows, meta).equals(toPdf('Overview', headers, rows, meta)),
+    ).toBe(true);
   });
 
   it('takes its creation date from meta, and omits it entirely when absent', () => {
@@ -319,9 +319,7 @@ describe('toPdf (07.7-f)', () => {
   });
 
   it('renders null, undefined and non-finite numbers as blank cells', () => {
-    const text = expectWellFormed(
-      toPdf('Edges', ['a', 'b', 'c'], [[null, undefined, Number.NaN]]),
-    );
+    const text = expectWellFormed(toPdf('Edges', ['a', 'b', 'c'], [[null, undefined, Number.NaN]]));
     expect(text).not.toContain('(null) Tj');
     expect(text).not.toContain('(undefined) Tj');
     expect(text).not.toContain('(NaN) Tj');

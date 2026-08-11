@@ -49,8 +49,7 @@ const NW_KB_SLUG = 'nw-help';
 const NW_ARTICLE_SLUG = 'nw-shipping';
 
 const kbHome = (workspace: string): string => `${PUBLIC_BASE}/public/kb/${workspace}`;
-const kbArticle = (workspace: string, article: string): string =>
-  `${kbHome(workspace)}/${article}`;
+const kbArticle = (workspace: string, article: string): string => `${kbHome(workspace)}/${article}`;
 const kbSitemap = (workspace: string): string => `${kbHome(workspace)}/sitemap.xml`;
 
 /** Number of `<loc>` entries in a sitemap — i.e. how many URLs it lists. */
@@ -78,7 +77,8 @@ async function listArticles(
 ): Promise<Array<{ id: string; slug: string; status: string }>> {
   const res = await api.get(`${API_BASE}/kb-articles`, auth(token));
   expect(res.ok(), `list articles failed: ${res.status()} ${await res.text()}`).toBe(true);
-  return ((await res.json()) as { items: Array<{ id: string; slug: string; status: string }> }).items;
+  return ((await res.json()) as { items: Array<{ id: string; slug: string; status: string }> })
+    .items;
 }
 
 async function deleteArticleBySlug(

@@ -97,9 +97,13 @@ describe('agent presence log (PRD §5.3-Vardiya)', () => {
   });
 
   const setStatus = (status: string, token = agentToken) =>
-    server.put('/agents/me/routing-status', { routing_status: status }, {
-      authorization: `Bearer ${token}`,
-    });
+    server.put(
+      '/agents/me/routing-status',
+      { routing_status: status },
+      {
+        authorization: `Bearer ${token}`,
+      },
+    );
 
   /** Put the agent in the Support team so routing can see them at all. */
   async function joinSupport(agentId: string): Promise<void> {
@@ -173,7 +177,10 @@ describe('agent presence log (PRD §5.3-Vardiya)', () => {
       const assigned = await drain();
 
       expect(assigned).toEqual([]);
-      const thread = await owner.thread.findFirst({ where: { chatId }, select: { assigneeId: true } });
+      const thread = await owner.thread.findFirst({
+        where: { chatId },
+        select: { assigneeId: true },
+      });
       expect(thread?.assigneeId).toBeNull();
     });
 
@@ -280,7 +287,7 @@ describe('agent presence log (PRD §5.3-Vardiya)', () => {
 
       // Same status again: the UI can send it as often as it likes.
       expect((await setStatus('offline')).statusCode).toBe(200);
-      expect((await eventsOf(fx.a.agentAccountId))).toHaveLength(1);
+      expect(await eventsOf(fx.a.agentAccountId)).toHaveLength(1);
 
       expect((await setStatus('accepting_chats')).statusCode).toBe(200);
       expect((await setStatus('not_accepting_chats')).statusCode).toBe(200);
@@ -306,9 +313,13 @@ describe('agent presence log (PRD §5.3-Vardiya)', () => {
       // suspension is the moment their coverage stops — and their own setting
       // is untouched, so lifting it returns them to it.
       const suspend = (suspended: boolean) =>
-        server.put(`/agents/${fx.a.agentAccountId}/suspension`, { suspended }, {
-          authorization: `Bearer ${adminToken}`,
-        });
+        server.put(
+          `/agents/${fx.a.agentAccountId}/suspension`,
+          { suspended },
+          {
+            authorization: `Bearer ${adminToken}`,
+          },
+        );
 
       expect((await suspend(true)).statusCode).toBe(200);
       expect((await suspend(false)).statusCode).toBe(200);
@@ -329,9 +340,13 @@ describe('agent presence log (PRD §5.3-Vardiya)', () => {
 
       expect(
         (
-          await server.put(`/agents/${fx.a.agentAccountId}/suspension`, { suspended: true }, {
-            authorization: `Bearer ${adminToken}`,
-          })
+          await server.put(
+            `/agents/${fx.a.agentAccountId}/suspension`,
+            { suspended: true },
+            {
+              authorization: `Bearer ${adminToken}`,
+            },
+          )
         ).statusCode,
       ).toBe(200);
 

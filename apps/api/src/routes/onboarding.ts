@@ -19,15 +19,11 @@ import { OnboardingService } from '../services/onboarding/onboarding-service.js'
 export default async function onboardingRoutes(app: FastifyInstance): Promise<void> {
   const onboarding = new OnboardingService();
 
-  app.get(
-    '/onboarding/state',
-    { config: { principals: ['agent'] } },
-    async (request, reply) => {
-      const tenant = request.tenant();
-      const state = await request.withTenant((tx) => onboarding.getState(tx, tenant.licenseId));
-      return reply.send(state);
-    },
-  );
+  app.get('/onboarding/state', { config: { principals: ['agent'] } }, async (request, reply) => {
+    const tenant = request.tenant();
+    const state = await request.withTenant((tx) => onboarding.getState(tx, tenant.licenseId));
+    return reply.send(state);
+  });
 
   app.post(
     '/onboarding/complete',

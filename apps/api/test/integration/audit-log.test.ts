@@ -643,10 +643,7 @@ describe('audit log writer (NFR-S12)', () => {
 
       // A repeat delete matches nothing (404) and must not write an entry.
       const beforeMiss = await count('data.deleted');
-      const miss = await server.del(
-        `/settings/canned-responses/${response.id}`,
-        auth(adminToken),
-      );
+      const miss = await server.del(`/settings/canned-responses/${response.id}`, auth(adminToken));
       expect(miss.statusCode).toBe(404);
       expect(await count('data.deleted')).toBe(beforeMiss);
     });
@@ -1165,7 +1162,11 @@ describe('audit log writer (NFR-S12)', () => {
     const WEBHOOK_URL = 'https://hooks.s12.example/receiver';
 
     /** An owner-role reader token with the audit read scope, per tenant. */
-    const readerToken = (t: { licenseId: bigint; organizationId: string; ownerAccountId: string }) =>
+    const readerToken = (t: {
+      licenseId: bigint;
+      organizationId: string;
+      ownerAccountId: string;
+    }) =>
       grantToken(owner, {
         licenseId: t.licenseId,
         organizationId: t.organizationId,
@@ -1213,7 +1214,11 @@ describe('audit log writer (NFR-S12)', () => {
     ): Promise<void> {
       expect((await signIn(t)).statusCode).toBe(200);
 
-      const role = await server.put(`/agents/${t.agentAccountId}/role`, { role: 'admin' }, auth(token));
+      const role = await server.put(
+        `/agents/${t.agentAccountId}/role`,
+        { role: 'admin' },
+        auth(token),
+      );
       expect(role.statusCode).toBe(200);
 
       const created = (

@@ -79,7 +79,10 @@ async function sendFirstMessage(search: string): Promise<Record<string, unknown>
   submit(root.querySelector('.nx-form')!);
 
   await waitFor(() => calls.some((c) => c.url.includes('/customer/chat/events')));
-  return calls.find((c) => c.url.includes('/customer/chat/events'))!.body as Record<string, unknown>;
+  return calls.find((c) => c.url.includes('/customer/chat/events'))!.body as Record<
+    string,
+    unknown
+  >;
 }
 
 beforeEach(() => {

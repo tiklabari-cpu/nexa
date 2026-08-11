@@ -331,7 +331,9 @@ export default async function kbRoutes(app: FastifyInstance): Promise<void> {
     { config: { scopes: WRITE } },
     async (request, reply) => {
       const id = parse(uuid, request.params.articleId);
-      const { count } = await request.withTenant((tx) => tx.kbArticle.deleteMany({ where: { id } }));
+      const { count } = await request.withTenant((tx) =>
+        tx.kbArticle.deleteMany({ where: { id } }),
+      );
       if (count === 0) throw ApiError.notFound('Article not found.');
       return reply.status(204).send();
     },

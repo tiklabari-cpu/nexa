@@ -145,7 +145,9 @@ describe('SalesTracker', () => {
     nextPutFails = true;
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save that configuration.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not save that configuration.',
+    );
     expect(screen.getByLabelText('Attribution window (days)')).toHaveValue(21);
   });
 

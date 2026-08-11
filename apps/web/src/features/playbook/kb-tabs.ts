@@ -53,12 +53,19 @@ export const DEFAULT_KB_CONTROLS: KbListControls = { query: '', category: 'all' 
 type ArticleControlFacet = Pick<KbArticle, 'title' | 'category_id'>;
 
 /** Whether one article passes the search + category controls (the tab is applied separately). */
-export function articleMatchesControls(article: ArticleControlFacet, controls: KbListControls): boolean {
+export function articleMatchesControls(
+  article: ArticleControlFacet,
+  controls: KbListControls,
+): boolean {
   const query = controls.query.trim().toLowerCase();
   if (query && !article.title.toLowerCase().includes(query)) return false;
 
   if (controls.category !== 'all') {
-    if (controls.category === 'none' ? article.category_id !== null : article.category_id !== controls.category)
+    if (
+      controls.category === 'none'
+        ? article.category_id !== null
+        : article.category_id !== controls.category
+    )
       return false;
   }
 

@@ -20,15 +20,18 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   return { ...actual, useApiClient: () => api };
 });
 
-const { WebhookSubscriptions, IntegrationManifestReference } = await import(
-  './WebhookSubscriptions.js'
-);
+const { WebhookSubscriptions, IntegrationManifestReference } =
+  await import('./WebhookSubscriptions.js');
 
 function renderComponent(ui: 'webhooks' | 'manifest', canEdit = true): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
-      {ui === 'webhooks' ? <WebhookSubscriptions canEdit={canEdit} /> : <IntegrationManifestReference />}
+      {ui === 'webhooks' ? (
+        <WebhookSubscriptions canEdit={canEdit} />
+      ) : (
+        <IntegrationManifestReference />
+      )}
     </QueryClientProvider>,
   );
 }
@@ -109,7 +112,9 @@ describe('WebhookSubscriptions', () => {
 
     // Present only because the mocked manifest response carries it — the
     // component has no other source for this label.
-    expect(await screen.findByRole('option', { name: 'Manifest-only trigger' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('option', { name: 'Manifest-only trigger' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Chat started' })).toBeInTheDocument();
   });
 
@@ -163,7 +168,9 @@ describe('WebhookSubscriptions', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('That address points at a private or internal host and cannot be fetched.'),
+        screen.getByText(
+          'That address points at a private or internal host and cannot be fetched.',
+        ),
       ).toBeInTheDocument(),
     );
     // The URL input carries the error — this is a field-under error, not a banner.

@@ -187,6 +187,8 @@ describe('ticket e-mail templates', () => {
       ownerId: fx.a.ownerAccountId,
       scopes: ['chats--all:ro'],
     });
-    expect((await server.get('/settings/ticket-email-templates', auth(token))).statusCode).toBe(403);
+    expect((await server.get('/settings/ticket-email-templates', auth(token))).statusCode).toBe(
+      403,
+    );
   });
 });

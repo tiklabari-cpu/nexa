@@ -26,15 +26,10 @@ export interface UploadGrant {
 }
 
 export type UploadRejection =
-  | 'malformed'
-  | 'bad_signature'
-  | 'expired'
-  | 'content_type_mismatch'
-  | 'size_mismatch';
+  'malformed' | 'bad_signature' | 'expired' | 'content_type_mismatch' | 'size_mismatch';
 
 export type UploadVerification =
-  | { ok: true; grant: UploadGrant }
-  | { ok: false; reason: UploadRejection };
+  { ok: true; grant: UploadGrant } | { ok: false; reason: UploadRejection };
 
 /**
  * `<licenseId>-<uuid><ext>` — no user-supplied path segment ever reaches it.

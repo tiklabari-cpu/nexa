@@ -34,8 +34,7 @@ export interface InboundEmail {
 }
 
 export type InboundResult =
-  | { status: 'created'; ticket_id: string }
-  | { status: 'ignored'; reason: 'spam' };
+  { status: 'created'; ticket_id: string } | { status: 'ignored'; reason: 'spam' };
 
 /**
  * A parsed sender, or `null` when the address is unusable.

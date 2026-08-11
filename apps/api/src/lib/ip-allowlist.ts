@@ -186,10 +186,7 @@ export function decideIpAccess(input: IpAccessDecisionInput): 'allow' | 'deny' {
  * would deny the caller, the save is a self-lockout. Clearing the list (empty
  * `nextEntries`) removes the restriction and so never locks anyone out.
  */
-export function wouldLockOut(
-  callerIp: string | null | undefined,
-  nextEntries: string[],
-): boolean {
+export function wouldLockOut(callerIp: string | null | undefined, nextEntries: string[]): boolean {
   return decideIpAccess({ clientIp: callerIp, entries: nextEntries }) === 'deny';
 }
 
@@ -327,7 +324,10 @@ function formatV6(bytes: Uint8Array): string {
   if (bestLen < 2) return groups.map(hex).join(':');
 
   const head = groups.slice(0, bestStart).map(hex).join(':');
-  const tail = groups.slice(bestStart + bestLen).map(hex).join(':');
+  const tail = groups
+    .slice(bestStart + bestLen)
+    .map(hex)
+    .join(':');
   return `${head}::${tail}`;
 }
 

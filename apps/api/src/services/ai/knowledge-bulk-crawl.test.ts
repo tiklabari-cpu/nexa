@@ -149,7 +149,8 @@ describe('bulk website rows — the amplification budget', () => {
     // Sequential is what makes the budget mean anything — a caller reaching for
     // Promise.all would turn one request into N simultaneous connections.
     const crawler = vi.fn<PageCrawler>(
-      () => new Promise<{ text: string }>((resolve) => setTimeout(() => resolve({ text: 'ok' }), 20)),
+      () =>
+        new Promise<{ text: string }>((resolve) => setTimeout(() => resolve({ text: 'ok' }), 20)),
     );
     const crawlers = new BulkWebsiteCrawler(LIMITS, crawler);
 

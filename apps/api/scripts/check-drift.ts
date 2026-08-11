@@ -45,7 +45,8 @@ const KNOWN_UNMODELLABLE = [
   {
     // Created as `ON brands(license_id) WHERE is_default` in 20260802100000_brands.
     pattern: /CREATE UNIQUE INDEX "brands_one_default_per_license" ON "public"\."brands"/,
-    reason: 'partial unique index (one default brand per license) — Prisma cannot express a WHERE predicate',
+    reason:
+      'partial unique index (one default brand per license) — Prisma cannot express a WHERE predicate',
   },
   {
     // Created as `ON channels(type, (config->>'address')) WHERE status = 'connected'

@@ -253,10 +253,9 @@ describe('staffing forecast (PRD §5.3-Vardiya)', () => {
   // ==========================================================================
 
   it('rejects a reversed range and an unparseable date', async () => {
-    const reversed = await server.get(
-      `/reports/staffing-forecast?from=${TO}&to=${FROM}`,
-      { ...auth },
-    );
+    const reversed = await server.get(`/reports/staffing-forecast?from=${TO}&to=${FROM}`, {
+      ...auth,
+    });
     expect(reversed.statusCode).toBe(400);
 
     const nonsense = await server.get('/reports/staffing-forecast?from=yesterday', { ...auth });

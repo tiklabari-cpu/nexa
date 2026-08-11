@@ -41,7 +41,9 @@ import { writeAuditEntry } from '../services/audit/audit-log.js';
 
 const routingStatusBody = z.object({ routing_status: z.enum(ROUTING_STATUSES) });
 const notificationPrefsBody = z.object({ email: z.boolean() });
-const listAgentsQuery = z.object({ status: z.enum(['active', 'suspended', 'all']).default('active') });
+const listAgentsQuery = z.object({
+  status: z.enum(['active', 'suspended', 'all']).default('active'),
+});
 const suspensionBody = z.object({ suspended: z.boolean() });
 const roleChangeBody = z.object({ role: z.enum(AGENT_ROLES) });
 // The complete expertise set to assign (FR-MOD-08.6.3). Coerced because JSON

@@ -34,10 +34,7 @@ interface EcommerceBlock {
  * server to have processed a sale — and then assert the two agree — without the
  * UI's own caching sitting between the assertion and the fact.
  */
-async function ecommerceBlock(
-  request: APIRequestContext,
-  token: string,
-): Promise<EcommerceBlock> {
+async function ecommerceBlock(request: APIRequestContext, token: string): Promise<EcommerceBlock> {
   const response = await request.get(`${API_BASE}/reports/reviews`, {
     headers: { authorization: `Bearer ${token}` },
   });

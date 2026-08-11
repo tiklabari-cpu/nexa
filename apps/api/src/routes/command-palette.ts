@@ -60,7 +60,8 @@ const TOPIC_READERS: Record<
   },
   tickets: {
     read: (overview) => overview.totals.tickets,
-    describe: (value) => `There ${value === 1 ? 'was' : 'were'} ${value} ticket${value === 1 ? '' : 's'} in this period.`,
+    describe: (value) =>
+      `There ${value === 1 ? 'was' : 'were'} ${value} ticket${value === 1 ? '' : 's'} in this period.`,
   },
   satisfaction: {
     read: (overview) => overview.satisfaction.score,
@@ -68,11 +69,13 @@ const TOPIC_READERS: Record<
   },
   response_time: {
     read: (overview) => overview.response_times.avg_first_response_seconds,
-    describe: (value) => `Average first response time is ${value} second${value === 1 ? '' : 's'} in this period.`,
+    describe: (value) =>
+      `Average first response time is ${value} second${value === 1 ? '' : 's'} in this period.`,
   },
   automated: {
     read: (overview) => overview.totals.automated,
-    describe: (value) => `${value} chat${value === 1 ? '' : 's'} were resolved automatically in this period.`,
+    describe: (value) =>
+      `${value} chat${value === 1 ? '' : 's'} were resolved automatically in this period.`,
   },
 };
 

@@ -74,15 +74,15 @@ describe('BulkImportResults', () => {
     expect(within(screen.getByRole('status')).getByText('Preview')).toBeInTheDocument();
     expect(screen.queryByText('Import complete')).not.toBeInTheDocument();
 
-    rerender(<BulkImportResults title="Import complete" imported={1} failed={0} results={results} />);
+    rerender(
+      <BulkImportResults title="Import complete" imported={1} failed={0} results={results} />,
+    );
     expect(within(screen.getByRole('status')).getByText('Import complete')).toBeInTheDocument();
     expect(screen.queryByText('Preview')).not.toBeInTheDocument();
   });
 
   it('keeps only a viewport worth of rows in the DOM near the 200-row server ceiling', () => {
-    const results = Array.from({ length: 200 }, (_, i) =>
-      row({ line: i + 2, name: `Row ${i}` }),
-    );
+    const results = Array.from({ length: 200 }, (_, i) => row({ line: i + 2, name: `Row ${i}` }));
     render(<BulkImportResults title="Preview" imported={200} failed={0} results={results} />);
 
     const rendered = screen.getAllByRole('row');

@@ -171,9 +171,9 @@ async function expectRealtimeLive(page: Page): Promise<void> {
   // Not an exact match: the badge's glyph and its label share one element, so
   // its text is "●Live". Scoping to the views rail keeps that loose match off
   // the conversation named "Live traffic …" that the traffic spec seeds.
-  await expect(
-    page.getByRole('navigation', { name: 'Inbox views' }).getByText('Live'),
-  ).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('navigation', { name: 'Inbox views' }).getByText('Live')).toBeVisible(
+    { timeout: 20_000 },
+  );
 }
 
 /** Open the conversation whose last message matches `text` — never "the first one". */

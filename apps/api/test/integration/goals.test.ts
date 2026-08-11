@@ -94,7 +94,11 @@ describe('goals', () => {
     const created = (
       await create(writeToken, { name: 'Checkout', definition: { url_contains: '/thank-you' } })
     ).json() as Goal;
-    const response = await server.patch(`/goals/${created.id}`, { definition: {} }, auth(writeToken));
+    const response = await server.patch(
+      `/goals/${created.id}`,
+      { definition: {} },
+      auth(writeToken),
+    );
     expect(response.statusCode).toBe(400);
   });
 
@@ -143,7 +147,11 @@ describe('goals', () => {
 
   it('lets an inactive goal keep a definition that cannot match', async () => {
     const goal = (
-      await create(writeToken, { name: 'Retired', definition: { url_contains: '/x' }, active: false })
+      await create(writeToken, {
+        name: 'Retired',
+        definition: { url_contains: '/x' },
+        active: false,
+      })
     ).json() as Goal;
     expect(goal.active).toBe(false);
 
@@ -167,12 +175,19 @@ describe('goals', () => {
       select: { id: true },
     });
 
-    const response = await server.patch(`/goals/${theirs.id}`, { name: 'Mine now' }, auth(writeToken));
+    const response = await server.patch(
+      `/goals/${theirs.id}`,
+      { name: 'Mine now' },
+      auth(writeToken),
+    );
     expect(response.statusCode).toBe(404);
 
     expect(await list(writeToken, '?status=all')).toEqual([]);
     // And the attempt changed nothing on their side.
-    const after = await owner.goal.findUniqueOrThrow({ where: { id: theirs.id }, select: { name: true } });
+    const after = await owner.goal.findUniqueOrThrow({
+      where: { id: theirs.id },
+      select: { name: true },
+    });
     expect(after.name).toBe('Theirs');
   });
 
@@ -207,7 +222,11 @@ describe('goals', () => {
     expect((await server.get('/goals', auth(readToken))).statusCode).toBe(200);
     const denied = await create(readToken, { name: 'Nope', definition: { url_contains: '/x' } });
     expect(denied.statusCode).toBe(403);
-    const deniedPatch = await server.patch(`/goals/${created.id}`, { name: 'Nope' }, auth(readToken));
+    const deniedPatch = await server.patch(
+      `/goals/${created.id}`,
+      { name: 'Nope' },
+      auth(readToken),
+    );
     expect(deniedPatch.statusCode).toBe(403);
   });
 

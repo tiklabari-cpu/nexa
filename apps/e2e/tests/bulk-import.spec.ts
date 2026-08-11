@@ -53,7 +53,8 @@ test.describe('knowledge — bulk CSV import (FR-MOD-06.3.2)', () => {
     const articleName = `Zephyr warranty ${run}`;
     const articleContent = `The ${marker} warranty covers cracked welds for ten years from purchase.`;
     const faqName = `Zephyr sizing ${run}`;
-    const faqContent = 'Frame sizes run from 48 to 62 centimetres. Measure inseam before choosing a size.';
+    const faqContent =
+      'Frame sizes run from 48 to 62 centimetres. Measure inseam before choosing a size.';
     const websiteName = `Zephyr recall ${run}`;
     const websiteUrl = `https://help.example.com/zephyr-recall-${run}`;
     const badTypeName = `Broken type ${run}`;
@@ -100,19 +101,22 @@ test.describe('knowledge — bulk CSV import (FR-MOD-06.3.2)', () => {
     // cannot accidentally match the completed-import table later on.
     const preview = agentPage.getByRole('table', { name: `Preview — ${fileName}` });
     await expect(preview).toBeVisible({ timeout: 30_000 });
-    await expect(preview.getByRole('row').filter({ hasText: articleName })).toContainText('Imported');
-    await expect(preview.getByRole('row').filter({ hasText: badTypeName })).toContainText('Skipped');
-    await expect(
-      preview.getByRole('row').filter({ hasText: metadataProbeName }),
-    ).toContainText('Skipped');
+    await expect(preview.getByRole('row').filter({ hasText: articleName })).toContainText(
+      'Imported',
+    );
+    await expect(preview.getByRole('row').filter({ hasText: badTypeName })).toContainText(
+      'Skipped',
+    );
+    await expect(preview.getByRole('row').filter({ hasText: metadataProbeName })).toContainText(
+      'Skipped',
+    );
     await expect(agentPage.getByText('3 imported · 2 skipped').first()).toBeVisible();
 
     // A dry run writes nothing: the three good rows are still absent from the
     // source list underneath. Proving this before Import is what makes the
     // preview a preview rather than a differently-worded import. Scoped to the
     // list — the preview table names these rows too, which is the point of it.
-    const sourceNamed = (name: string) =>
-      agentPage.getByRole('listitem').filter({ hasText: name });
+    const sourceNamed = (name: string) => agentPage.getByRole('listitem').filter({ hasText: name });
     await expect(sourceNamed(articleName)).toHaveCount(0);
 
     await agentPage.screenshot({ path: 'kanit/33-bulk-import-preview.png', fullPage: true });

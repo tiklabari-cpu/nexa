@@ -9,7 +9,13 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantToken, ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 describe('command palette AI query', () => {
@@ -19,7 +25,10 @@ describe('command palette AI query', () => {
 
   const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
-  const agentToken = (tenant: TenantFixture, scopes: string[] = ['reports_read', 'chats--all:rw']) =>
+  const agentToken = (
+    tenant: TenantFixture,
+    scopes: string[] = ['reports_read', 'chats--all:rw'],
+  ) =>
     grantToken(owner, {
       licenseId: tenant.licenseId,
       organizationId: tenant.organizationId,
@@ -42,7 +51,11 @@ describe('command palette AI query', () => {
       data: { organizationId: fx.a.organizationId, name: 'Visitor' },
       select: { id: true },
     });
-    const started = await server.post('/chats', { customer_id: customer.id, assign_to_me: true }, auth(token));
+    const started = await server.post(
+      '/chats',
+      { customer_id: customer.id, assign_to_me: true },
+      auth(token),
+    );
     expect([200, 201]).toContain(started.statusCode);
   }
 
@@ -61,12 +74,16 @@ describe('command palette AI query', () => {
     await clearRateLimits(server.app);
   });
 
-  it("answers a team-activity question with the same number GET /reports/overview reports (ADR-09)", async () => {
+  it('answers a team-activity question with the same number GET /reports/overview reports (ADR-09)', async () => {
     const token = await agentToken(fx.a);
     await startChat(token);
     await startChat(token);
 
-    const ai = await server.post('/palette/ai-query', { query: "Summarize my team's activity" }, auth(token));
+    const ai = await server.post(
+      '/palette/ai-query',
+      { query: "Summarize my team's activity" },
+      auth(token),
+    );
     expect(ai.statusCode).toBe(200);
     const body = ai.json() as { answer: string; kind: string; metric_source?: string };
     expect(body.kind).toBe('summary');
@@ -80,7 +97,11 @@ describe('command palette AI query', () => {
 
   it('returns kind: not_understood (200, not an error) for an unmatched query', async () => {
     const token = await agentToken(fx.a);
-    const res = await server.post('/palette/ai-query', { query: 'what is the meaning of life' }, auth(token));
+    const res = await server.post(
+      '/palette/ai-query',
+      { query: 'what is the meaning of life' },
+      auth(token),
+    );
     expect(res.statusCode).toBe(200);
     const body = res.json() as { kind: string; metric_source?: string };
     expect(body.kind).toBe('not_understood');

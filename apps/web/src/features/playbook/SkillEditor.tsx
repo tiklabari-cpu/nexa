@@ -193,7 +193,9 @@ export function SkillEditor({
 
       <Card>
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-content-tertiary">Steps</h3>
+          <h3 className="text-xs font-medium uppercase tracking-wide text-content-tertiary">
+            Steps
+          </h3>
           {canEdit && entries.length > 1 && (
             <span className="text-2xs text-content-tertiary">Drag, or use ↑ ↓ to reorder</span>
           )}

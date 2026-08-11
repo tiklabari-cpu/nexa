@@ -182,7 +182,9 @@ function GoalCard({
               {goal.definition.url_contains ?? '—'}
             </code>
           </p>
-          <p className="mt-0.5 text-2xs text-content-tertiary">Created {formatDate(goal.created_at)}</p>
+          <p className="mt-0.5 text-2xs text-content-tertiary">
+            Created {formatDate(goal.created_at)}
+          </p>
         </div>
 
         {canWrite && (

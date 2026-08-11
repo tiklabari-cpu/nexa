@@ -66,7 +66,11 @@ describe('MCP end-to-end client flow (FR-MOD-08.8.3-h)', () => {
 
   /** Call a tool with a JSON `arguments` body (omit `args` to send no body). */
   const callTool = (tool: string, token: string, args?: Record<string, unknown>) =>
-    server.post(`/mcp/tools/${tool}`, args === undefined ? undefined : { arguments: args }, auth(token));
+    server.post(
+      `/mcp/tools/${tool}`,
+      args === undefined ? undefined : { arguments: args },
+      auth(token),
+    );
 
   const grantAll = (t: Fixtures['a']) =>
     grantToken(owner, {
@@ -219,9 +223,9 @@ describe('MCP end-to-end client flow (FR-MOD-08.8.3-h)', () => {
     const { search, chats } = await runFullFlow(fullTokenA, CHAT_A);
 
     // The whole flow returns only licence A's rows.
-    const searchIds = (search.json() as { result: { items: Array<{ id: string }> } }).result.items.map(
-      (t) => t.id,
-    );
+    const searchIds = (
+      search.json() as { result: { items: Array<{ id: string }> } }
+    ).result.items.map((t) => t.id);
     expect(searchIds).toEqual([TICKET_A]);
 
     const chatIds = (chats.json() as { result: { items: Array<{ id: string }> } }).result.items.map(
@@ -291,10 +295,14 @@ describe('MCP end-to-end client flow (FR-MOD-08.8.3-h)', () => {
     await runFullFlow(fullTokenB, CHAT_B);
 
     expect(
-      await owner.auditLogEntry.count({ where: { licenseId: fx.a.licenseId, action: 'mcp.tool_called' } }),
+      await owner.auditLogEntry.count({
+        where: { licenseId: fx.a.licenseId, action: 'mcp.tool_called' },
+      }),
     ).toBe(4);
     expect(
-      await owner.auditLogEntry.count({ where: { licenseId: fx.b.licenseId, action: 'mcp.tool_called' } }),
+      await owner.auditLogEntry.count({
+        where: { licenseId: fx.b.licenseId, action: 'mcp.tool_called' },
+      }),
     ).toBe(4);
   });
 
@@ -337,7 +345,9 @@ describe('MCP end-to-end client flow (FR-MOD-08.8.3-h)', () => {
 
       const throttled = await call();
       expect(throttled.statusCode).toBe(429);
-      expect((throttled.json() as { error: { type: string } }).error.type).toBe('too_many_requests');
+      expect((throttled.json() as { error: { type: string } }).error.type).toBe(
+        'too_many_requests',
+      );
       // Every 429 carries a Retry-After the source platform omitted.
       expect(Number(throttled.headers['retry-after'])).toBeGreaterThan(0);
     } finally {

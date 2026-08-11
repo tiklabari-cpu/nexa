@@ -73,7 +73,8 @@ const BRAND_SCOPED_TABLES: ReadonlyArray<{
   },
   {
     table: 'widget_settings',
-    plant: (db, at) => db.widgetSettings.create({ data: { licenseId: at.licenseId, brandId: at.brandId } }),
+    plant: (db, at) =>
+      db.widgetSettings.create({ data: { licenseId: at.licenseId, brandId: at.brandId } }),
   },
   {
     table: 'security_settings',
@@ -82,13 +83,16 @@ const BRAND_SCOPED_TABLES: ReadonlyArray<{
   },
   {
     table: 'inbox_settings',
-    plant: (db, at) => db.inboxSettings.create({ data: { licenseId: at.licenseId, brandId: at.brandId } }),
+    plant: (db, at) =>
+      db.inboxSettings.create({ data: { licenseId: at.licenseId, brandId: at.brandId } }),
   },
 ];
 
 /** Every public table carrying a `brand_id` column, read straight from the
  *  catalogue — the authoritative set the matrix must match. */
-async function brandScopedTablesInSchema(db: Pick<PrismaClient, '$queryRaw'>): Promise<Set<string>> {
+async function brandScopedTablesInSchema(
+  db: Pick<PrismaClient, '$queryRaw'>,
+): Promise<Set<string>> {
   const rows = await db.$queryRaw<Array<{ table_name: string }>>`
     SELECT table_name FROM information_schema.columns
     WHERE table_schema = 'public' AND column_name = 'brand_id'
@@ -230,7 +234,7 @@ describe('brand isolation (Multibrand RLS · NFR-S4/S5)', () => {
 
   // === The resolver — a foreign or bad brand id is 404, never 403 =============
   describe('X-Nexa-Brand resolution (un-enumerable, NFR-S5)', () => {
-    it("404s a brand id that belongs to another license", async () => {
+    it('404s a brand id that belongs to another license', async () => {
       // brandB is a real brand — just not one of A's — so RLS makes it invisible
       // to A's lookup and it comes back as not-found, not forbidden.
       expect((await list(brandB)).statusCode).toBe(404);
@@ -306,7 +310,11 @@ describe('brand isolation (Multibrand RLS · NFR-S4/S5)', () => {
       const readUnder = (brandId?: string) =>
         withTenant(
           app,
-          { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId, ...(brandId ? { brandId } : {}) },
+          {
+            licenseId: fx.a.licenseId,
+            organizationId: fx.a.organizationId,
+            ...(brandId ? { brandId } : {}),
+          },
           (tx) => tx.channel.findMany({ select: { brandId: true } }),
         );
 
@@ -418,7 +426,9 @@ describe('brand isolation (Multibrand RLS · NFR-S4/S5)', () => {
         const entry = BRAND_SCOPED_TABLES.find((t) => t.table === table)!;
         await entry.plant(owner, { licenseId: fx.a.licenseId, brandId: brandA2 });
 
-        const underA = (brandId?: string): { licenseId: bigint; organizationId: string; brandId?: string } => ({
+        const underA = (
+          brandId?: string,
+        ): { licenseId: bigint; organizationId: string; brandId?: string } => ({
           licenseId: fx.a.licenseId,
           organizationId: fx.a.organizationId,
           ...(brandId ? { brandId } : {}),

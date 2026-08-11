@@ -59,7 +59,11 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
 
   /** Call a tool with a JSON `arguments` body (omit `args` to send no body). */
   const callTool = (tool: string, token: string, args?: Record<string, unknown>) =>
-    server.post(`/mcp/tools/${tool}`, args === undefined ? undefined : { arguments: args }, auth(token));
+    server.post(
+      `/mcp/tools/${tool}`,
+      args === undefined ? undefined : { arguments: args },
+      auth(token),
+    );
 
   /** A short-lived customer (widget) token for a license, minted the real way. */
   async function widgetToken(tenant = fx.a): Promise<string> {
@@ -120,7 +124,13 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
           active: true,
           createdAt: new Date(now.getTime() - 1000),
         },
-        { id: CHAT_B_1, licenseId: fx.b.licenseId, customerId: fx.b.customerId, active: true, createdAt: now },
+        {
+          id: CHAT_B_1,
+          licenseId: fx.b.licenseId,
+          customerId: fx.b.customerId,
+          active: true,
+          createdAt: now,
+        },
       ],
     });
 
@@ -338,9 +348,9 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
     expect(secondBody.result.items).toHaveLength(1);
 
     // Together the two pages cover both of A's chats, each exactly once.
-    expect(
-      [firstBody.result.items[0]?.id, secondBody.result.items[0]?.id].sort(),
-    ).toEqual([CHAT_A_1, CHAT_A_2].sort());
+    expect([firstBody.result.items[0]?.id, secondBody.result.items[0]?.id].sort()).toEqual(
+      [CHAT_A_1, CHAT_A_2].sort(),
+    );
   });
 
   it('returns only the caller license chats, never another license row', async () => {
@@ -367,9 +377,9 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
     expect(resA.statusCode).toBe(200);
     expect(resB.statusCode).toBe(200);
 
-    expect(
-      (resA.json() as ChatListResult).result.items.map((c) => c.id).sort(),
-    ).toEqual([CHAT_A_1, CHAT_A_2].sort());
+    expect((resA.json() as ChatListResult).result.items.map((c) => c.id).sort()).toEqual(
+      [CHAT_A_1, CHAT_A_2].sort(),
+    );
     expect((resB.json() as ChatListResult).result.items.map((c) => c.id)).toEqual([CHAT_B_1]);
   });
 
@@ -378,7 +388,11 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
     expect(res.statusCode).toBe(200);
 
     const entries = await owner.auditLogEntry.findMany({
-      where: { licenseId: fx.a.licenseId, action: 'mcp.tool_called', target: 'mcp_tool:list_chats' },
+      where: {
+        licenseId: fx.a.licenseId,
+        action: 'mcp.tool_called',
+        target: 'mcp_tool:list_chats',
+      },
     });
     expect(entries).toHaveLength(1);
 
@@ -495,7 +509,11 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
       expect(res.statusCode).toBe(200);
 
       const entries = await owner.auditLogEntry.findMany({
-        where: { licenseId: fx.a.licenseId, action: 'mcp.tool_called', target: 'mcp_tool:get_report' },
+        where: {
+          licenseId: fx.a.licenseId,
+          action: 'mcp.tool_called',
+          target: 'mcp_tool:get_report',
+        },
       });
       expect(entries).toHaveLength(1);
 
@@ -592,7 +610,9 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
       // No event added, and specifically no agents-only note (the write the
       // copilot summary route makes and this tool deliberately does not).
       expect(await owner.event.count({ where: { chatId: CHAT_A_1 } })).toBe(before);
-      expect(await owner.event.count({ where: { chatId: CHAT_A_1, recipients: 'agents' } })).toBe(0);
+      expect(await owner.event.count({ where: { chatId: CHAT_A_1, recipients: 'agents' } })).toBe(
+        0,
+      );
       // And no assist run either — summarize_chat feeds no Reports metric.
       expect(await owner.skillRun.count({ where: { chatId: CHAT_A_1 } })).toBe(0);
     });
@@ -611,7 +631,11 @@ describe('MCP tool call (FR-MOD-08.8.3-c)', () => {
       expect(res.statusCode).toBe(200);
 
       const entries = await owner.auditLogEntry.findMany({
-        where: { licenseId: fx.a.licenseId, action: 'mcp.tool_called', target: 'mcp_tool:summarize_chat' },
+        where: {
+          licenseId: fx.a.licenseId,
+          action: 'mcp.tool_called',
+          target: 'mcp_tool:summarize_chat',
+        },
       });
       expect(entries).toHaveLength(1);
 

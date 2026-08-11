@@ -23,7 +23,10 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
 import { ChatService } from '../../src/services/chat/chat-service.js';
-import { ChatTimeoutSweeper, type ChatTimeoutReport } from '../../src/services/chat/chat-timeout.js';
+import {
+  ChatTimeoutSweeper,
+  type ChatTimeoutReport,
+} from '../../src/services/chat/chat-timeout.js';
 import {
   ownerClient,
   seedDefaultBrand,

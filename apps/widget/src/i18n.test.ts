@@ -42,9 +42,7 @@ describe('createTranslator', () => {
   });
 
   it('interpolates named params', () => {
-    expect(createTranslator('en')('status.queue', { n: 3 })).toBe(
-      'You are number 3 in the queue',
-    );
+    expect(createTranslator('en')('status.queue', { n: 3 })).toBe('You are number 3 in the queue');
     expect(createTranslator('tr')('status.queue', { n: 2 })).toBe('Sırada 2. sıradasınız');
   });
 

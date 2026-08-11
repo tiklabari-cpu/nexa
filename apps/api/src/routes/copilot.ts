@@ -71,7 +71,11 @@ const createSourceBody = z
         });
       }
     } else if (!body.content) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['content'], message: 'content is required' });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['content'],
+        message: 'content is required',
+      });
     }
   });
 
@@ -106,10 +110,16 @@ export default async function copilotRoutes(
 ): Promise<void> {
   const knowledge = new KnowledgeService();
   const copilot = new CopilotService(knowledge);
-  const chats = new ChatService(app.db, app.redis, new RealtimePublisher(app.redis, app.log), undefined, {
-    aiOverageCents: env.AI_OVERAGE_CENTS,
-    aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
-  });
+  const chats = new ChatService(
+    app.db,
+    app.redis,
+    new RealtimePublisher(app.redis, app.log),
+    undefined,
+    {
+      aiOverageCents: env.AI_OVERAGE_CENTS,
+      aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
+    },
+  );
 
   // --- Knowledge (12.2) ------------------------------------------------------
 
@@ -136,7 +146,12 @@ export default async function copilotRoutes(
     }
 
     const source = await request.withTenant((tx) =>
-      copilot.createSource(tx, tenant, principal, { type: body.type, name: body.name, content, sourceUrl }),
+      copilot.createSource(tx, tenant, principal, {
+        type: body.type,
+        name: body.name,
+        content,
+        sourceUrl,
+      }),
     );
     return reply.status(201).send(source);
   });
@@ -187,7 +202,9 @@ export default async function copilotRoutes(
         recipients: 'agents',
       });
 
-      await request.withTenant((tx) => copilot.recordAssist(tx, tenant, chatId, 'summary', summary));
+      await request.withTenant((tx) =>
+        copilot.recordAssist(tx, tenant, chatId, 'summary', summary),
+      );
 
       return reply.status(201).send({ summary, note_event_id: event.id });
     },
@@ -229,7 +246,9 @@ export default async function copilotRoutes(
       await chats.get(tenant, principal, chatId);
       const text = enhanceText(body.text, body.mode);
 
-      await request.withTenant((tx) => copilot.recordAssist(tx, tenant, chatId, 'enhance', body.mode));
+      await request.withTenant((tx) =>
+        copilot.recordAssist(tx, tenant, chatId, 'enhance', body.mode),
+      );
 
       return reply.send({ text, mode: body.mode });
     },

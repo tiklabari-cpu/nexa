@@ -1239,7 +1239,8 @@ describe('agent chat api', () => {
       // the same transaction that closes each one.
       for (const id of [first, second, human.id]) {
         expect(
-          (await server.post(`/chats/${id}/deactivate`, undefined, auth(acmeAdminToken))).statusCode,
+          (await server.post(`/chats/${id}/deactivate`, undefined, auth(acmeAdminToken)))
+            .statusCode,
         ).toBe(200);
       }
 

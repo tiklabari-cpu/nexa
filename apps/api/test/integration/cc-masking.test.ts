@@ -18,7 +18,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { FileMailer } from '../../src/services/mail/mailer.js';
-import { grantToken, ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const PAN = '4111111111111111';
@@ -47,7 +53,12 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
       select: { id: true },
     });
     await owner.groupAgent.create({
-      data: { licenseId: t.licenseId, groupId: group.id, agentId: t.agentAccountId, priority: 'normal' },
+      data: {
+        licenseId: t.licenseId,
+        groupId: group.id,
+        agentId: t.agentAccountId,
+        priority: 'normal',
+      },
     });
     await owner.routingRule.create({
       data: { licenseId: t.licenseId, kind: 'chat', isFallback: true, targetGroupId: group.id },
@@ -188,9 +199,9 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
     expect(send.statusCode).toBe(201);
 
     const detail = await server.get(`/customers/${customerId}`, auth(adminToken));
-    const stored = (detail.json().custom_fields as Array<{ definition_id: string; value: string }>).find(
-      (f) => f.definition_id === fieldId,
-    );
+    const stored = (
+      detail.json().custom_fields as Array<{ definition_id: string; value: string }>
+    ).find((f) => f.definition_id === fieldId);
     expect(stored?.value).toBe(MASKED);
     // And nothing raw in the values table.
     expect(await owner.customFieldValue.count({ where: { value: { contains: PAN } } })).toBe(0);
@@ -222,7 +233,10 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
     expect(response.statusCode).toBe(200);
     const ticketId = response.json().ticket_id as string;
 
-    const ticket = await owner.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: { subject: true } });
+    const ticket = await owner.ticket.findUniqueOrThrow({
+      where: { id: ticketId },
+      select: { subject: true },
+    });
     expect(ticket.subject).toBe(`refund my card ${MASKED}`);
     expect(await owner.ticket.count({ where: { subject: { contains: PAN } } })).toBe(0);
   });
@@ -245,9 +259,9 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
     expect(archived.statusCode).toBe(200);
 
     const names = await readdir(mailDir);
-    const spool = (
-      await Promise.all(names.map((n) => readFile(join(mailDir, n), 'utf8')))
-    ).join('\n');
+    const spool = (await Promise.all(names.map((n) => readFile(join(mailDir, n), 'utf8')))).join(
+      '\n',
+    );
     // The transcript carries the conversation — masked — and no copy anywhere in
     // the spool carries the raw number.
     expect(spool).not.toContain(PAN);
@@ -279,7 +293,9 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
     await owner.chat.create({
       data: { id: chatId, licenseId: fx.a.licenseId, customerId: customer.id, active: true },
     });
-    await owner.thread.create({ data: { id: threadId, chatId, licenseId: fx.a.licenseId, active: true } });
+    await owner.thread.create({
+      data: { id: threadId, chatId, licenseId: fx.a.licenseId, active: true },
+    });
     await owner.event.create({
       data: {
         id: `${threadId}_10`,
@@ -294,7 +310,11 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
     });
 
     // agentToken carries chats--all:ro, the scope summarize_chat requires.
-    const res = await server.post('/mcp/tools/summarize_chat', { arguments: { chat_id: chatId } }, auth(agentToken));
+    const res = await server.post(
+      '/mcp/tools/summarize_chat',
+      { arguments: { chat_id: chatId } },
+      auth(agentToken),
+    );
     expect(res.statusCode).toBe(200);
 
     const summary = (res.json() as { result: { summary: string } }).result.summary;

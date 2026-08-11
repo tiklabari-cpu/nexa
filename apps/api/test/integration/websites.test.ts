@@ -138,16 +138,18 @@ describe('websites', () => {
   });
 
   it('gets a website by id', async () => {
-    const created = (await server.post('/websites', { domain: 'shop.example' }, auth(adminToken)))
-      .json() as Website;
+    const created = (
+      await server.post('/websites', { domain: 'shop.example' }, auth(adminToken))
+    ).json() as Website;
     const got = await server.get(`/websites/${created.id}`, auth(readToken));
     expect(got.statusCode).toBe(200);
     expect((got.json() as Website).domain).toBe('shop.example');
   });
 
   it('removes a website', async () => {
-    const created = (await server.post('/websites', { domain: 'shop.example' }, auth(adminToken)))
-      .json() as Website;
+    const created = (
+      await server.post('/websites', { domain: 'shop.example' }, auth(adminToken))
+    ).json() as Website;
 
     const removed = await server.del(`/websites/${created.id}`, auth(adminToken));
     expect(removed.statusCode).toBe(204);
@@ -157,8 +159,9 @@ describe('websites', () => {
   });
 
   it('carries an install snippet naming the tenant and widget origin', async () => {
-    const created = (await server.post('/websites', { domain: 'shop.example' }, auth(adminToken)))
-      .json() as Website;
+    const created = (
+      await server.post('/websites', { domain: 'shop.example' }, auth(adminToken))
+    ).json() as Website;
     expect(created.snippet).toContain(fx.a.organizationId);
     expect(created.snippet).toContain('window.__nexa');
     expect(created.snippet).toContain('/loader.js');
@@ -167,8 +170,9 @@ describe('websites', () => {
   it('keeps the snippet minimal for a default (un-customised) appearance', async () => {
     // A workspace that never touched the customisation screen gets exactly the
     // snippet it always had — no appearance keys (FR-MOD-11.7).
-    const created = (await server.post('/websites', { domain: 'plain.example' }, auth(adminToken)))
-      .json() as Website;
+    const created = (
+      await server.post('/websites', { domain: 'plain.example' }, auth(adminToken))
+    ).json() as Website;
     expect(created.snippet).not.toContain('primaryColor');
     expect(created.snippet).not.toContain('poweredBy');
     expect(created.snippet).not.toContain('theme');
@@ -182,8 +186,9 @@ describe('websites', () => {
       auth(adminToken),
     );
 
-    const created = (await server.post('/websites', { domain: 'brand.example' }, auth(adminToken)))
-      .json() as Website;
+    const created = (
+      await server.post('/websites', { domain: 'brand.example' }, auth(adminToken))
+    ).json() as Website;
     expect(created.snippet).toContain('primaryColor: "#e11d48"');
     expect(created.snippet).toContain('position: "bottom-left"');
     expect(created.snippet).toContain('poweredBy: false');
@@ -217,9 +222,10 @@ describe('websites', () => {
 
   // --- Cross-tenant isolation (NFR-S5) ---------------------------------------
 
-  it('hides another license\'s website behind a 404', async () => {
-    const mine = (await server.post('/websites', { domain: 'a-only.example' }, auth(adminToken)))
-      .json() as Website;
+  it("hides another license's website behind a 404", async () => {
+    const mine = (
+      await server.post('/websites', { domain: 'a-only.example' }, auth(adminToken))
+    ).json() as Website;
 
     const read = await server.get(`/websites/${mine.id}`, auth(adminTokenB));
     expect(read.statusCode).toBe(404);
@@ -232,7 +238,7 @@ describe('websites', () => {
     expect(stillMine.statusCode).toBe(200);
   });
 
-  it('does not leak another license\'s websites into the list', async () => {
+  it("does not leak another license's websites into the list", async () => {
     await server.post('/websites', { domain: 'a-site.example' }, auth(adminToken));
 
     const listB = await server.get('/websites', auth(adminTokenB));
@@ -249,7 +255,7 @@ describe('websites', () => {
 
   // --- Connected transition (the widget handshake) ---------------------------
 
-  it('flips a website to Connected on the widget\'s first handshake', async () => {
+  it("flips a website to Connected on the widget's first handshake", async () => {
     // The site is added for a domain that is also a seeded trusted domain, so
     // the widget can actually mint a token there.
     const created = (
@@ -304,7 +310,11 @@ describe('websites', () => {
     });
 
     it('adds a site under the named brand and stamps its brand_id', async () => {
-      const created = await server.post('/websites', { domain: 'eu.example' }, auth(adminToken, brandA2));
+      const created = await server.post(
+        '/websites',
+        { domain: 'eu.example' },
+        auth(adminToken, brandA2),
+      );
       expect(created.statusCode).toBe(201);
       expect((created.json() as Website).brand_id).toBe(brandA2);
     });
@@ -326,10 +336,18 @@ describe('websites', () => {
     });
 
     it('lets the same domain live under two brands of one license', async () => {
-      const first = await server.post('/websites', { domain: 'shared.example' }, auth(adminToken, brandA));
+      const first = await server.post(
+        '/websites',
+        { domain: 'shared.example' },
+        auth(adminToken, brandA),
+      );
       expect(first.statusCode).toBe(201);
       // The new [license, brand, domain] key allows the same domain in a second brand.
-      const second = await server.post('/websites', { domain: 'shared.example' }, auth(adminToken, brandA2));
+      const second = await server.post(
+        '/websites',
+        { domain: 'shared.example' },
+        auth(adminToken, brandA2),
+      );
       expect(second.statusCode).toBe(201);
       expect((second.json() as Website).brand_id).toBe(brandA2);
     });
@@ -341,11 +359,17 @@ describe('websites', () => {
 
       // Under the default brand the id is invisible → 404, the same answer a
       // stranger id gets; a delete there touches nothing.
-      expect((await server.get(`/websites/${mine.id}`, auth(readToken, brandA))).statusCode).toBe(404);
-      expect((await server.del(`/websites/${mine.id}`, auth(adminToken, brandA))).statusCode).toBe(404);
+      expect((await server.get(`/websites/${mine.id}`, auth(readToken, brandA))).statusCode).toBe(
+        404,
+      );
+      expect((await server.del(`/websites/${mine.id}`, auth(adminToken, brandA))).statusCode).toBe(
+        404,
+      );
 
       // Still there under its own brand.
-      expect((await server.get(`/websites/${mine.id}`, auth(readToken, brandA2))).statusCode).toBe(200);
+      expect((await server.get(`/websites/${mine.id}`, auth(readToken, brandA2))).statusCode).toBe(
+        200,
+      );
     });
   });
 });

@@ -54,7 +54,13 @@ const CSV_EXTENSION = '.csv';
  * some platforms report nothing at all). The extension is the reliable signal;
  * this list only rules out a type that is unambiguously not CSV-shaped.
  */
-const ACCEPTABLE_MIME_TYPES = new Set(['text/csv', 'application/csv', 'application/vnd.ms-excel', 'text/plain', '']);
+const ACCEPTABLE_MIME_TYPES = new Set([
+  'text/csv',
+  'application/csv',
+  'application/vnd.ms-excel',
+  'text/plain',
+  '',
+]);
 
 function hasCsvExtension(filename: string): boolean {
   return filename.toLowerCase().endsWith(CSV_EXTENSION);

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  renderTranscript,
-  transcriptRecipients,
-  type TranscriptLine,
-} from './chat-transcript.js';
+import { renderTranscript, transcriptRecipients, type TranscriptLine } from './chat-transcript.js';
 
 describe('transcriptRecipients', () => {
   const assignee = { email: 'agent@example.test', name: 'Ada', emailEnabled: true };
@@ -128,7 +124,12 @@ describe('renderTranscript', () => {
       },
     ];
     expect(
-      renderTranscript({ audience: 'customer', chatId: 'C', customerName: null, lines: systemOnly }),
+      renderTranscript({
+        audience: 'customer',
+        chatId: 'C',
+        customerName: null,
+        lines: systemOnly,
+      }),
     ).toBeNull();
     expect(
       renderTranscript({ audience: 'team', chatId: 'C', customerName: null, lines: systemOnly }),

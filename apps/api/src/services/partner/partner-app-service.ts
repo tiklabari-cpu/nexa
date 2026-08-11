@@ -305,10 +305,7 @@ export class PartnerAppService {
    * OAuth 2.1 both say so), and silently minting one would leave a credential
    * the token endpoint never asks for and nobody knows exists.
    */
-  async rotateSecret(
-    tx: TenantClient,
-    clientId: string,
-  ): Promise<PartnerAppSecretRotation | null> {
+  async rotateSecret(tx: TenantClient, clientId: string): Promise<PartnerAppSecretRotation | null> {
     const existing = await tx.oauthClient.findFirst({
       where: { id: clientId },
       select: SAFE_SELECT,

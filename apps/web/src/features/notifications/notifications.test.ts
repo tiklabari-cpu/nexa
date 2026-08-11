@@ -103,7 +103,9 @@ describe('preferences round-trip', () => {
   });
 
   it('fills missing keys from defaults for a partial stored shape', () => {
-    const store = new Map<string, string>([['nexa.notifications', JSON.stringify({ sound: false })]]);
+    const store = new Map<string, string>([
+      ['nexa.notifications', JSON.stringify({ sound: false })],
+    ]);
     expect(loadPrefs(memStore(store))).toEqual({ ...DEFAULT_PREFS, sound: false });
   });
 });

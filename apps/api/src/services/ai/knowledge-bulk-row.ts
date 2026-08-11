@@ -134,10 +134,18 @@ const knowledgeBulkRowSchema = z
   .superRefine((row, ctx) => {
     if (row.type === 'website') {
       if (!row.source_url) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['source_url'], message: 'a website source needs a URL to crawl' });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['source_url'],
+          message: 'a website source needs a URL to crawl',
+        });
       }
     } else if (!row.content) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['content'], message: 'content is required' });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['content'],
+        message: 'content is required',
+      });
     }
   });
 
@@ -161,7 +169,10 @@ export function mapKnowledgeBulkRow(
 
   if (!result.success) {
     const issue = result.error.issues[0];
-    return { ok: false, error: { field: issue?.path.join('.') || 'name', message: issue?.message ?? 'Invalid row.' } };
+    return {
+      ok: false,
+      error: { field: issue?.path.join('.') || 'name', message: issue?.message ?? 'Invalid row.' },
+    };
   }
   return { ok: true, value: result.data };
 }
@@ -181,5 +192,8 @@ export function mapKnowledgeBulkRows(document: {
   readonly rows: readonly string[][];
 }): KnowledgeBulkRowResult[] {
   const columns = resolveKnowledgeBulkColumns(document.header);
-  return document.rows.map((row, index) => ({ line: index + 1, ...mapKnowledgeBulkRow(columns, row) }));
+  return document.rows.map((row, index) => ({
+    line: index + 1,
+    ...mapKnowledgeBulkRow(columns, row),
+  }));
 }

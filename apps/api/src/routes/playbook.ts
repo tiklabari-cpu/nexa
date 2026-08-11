@@ -78,10 +78,18 @@ const createSourceBody = z
   .superRefine((body, ctx) => {
     if (body.type === 'website') {
       if (!body.source_url) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['source_url'], message: 'a website source needs a URL to crawl' });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['source_url'],
+          message: 'a website source needs a URL to crawl',
+        });
       }
     } else if (!body.content) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['content'], message: 'content is required' });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['content'],
+        message: 'content is required',
+      });
     }
   });
 
@@ -243,7 +251,9 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         let persona: Prisma.InputJsonValue | undefined;
         if (body.answer_length !== undefined) {
           const current =
-            existing.persona && typeof existing.persona === 'object' && !Array.isArray(existing.persona)
+            existing.persona &&
+            typeof existing.persona === 'object' &&
+            !Array.isArray(existing.persona)
               ? (existing.persona as Record<string, unknown>)
               : {};
           const next = { ...current };
@@ -595,7 +605,8 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       try {
         columns = resolveKnowledgeBulkColumns(document.header);
       } catch (error) {
-        if (isKnowledgeBulkHeaderError(error)) throw ApiError.validation(`csv header: ${error.message}`);
+        if (isKnowledgeBulkHeaderError(error))
+          throw ApiError.validation(`csv header: ${error.message}`);
         throw error;
       }
 
@@ -644,7 +655,12 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       let imported = 0;
       let failed = 0;
 
-      const skip = (line: number, name: string | null, type: string | null, error: string): void => {
+      const skip = (
+        line: number,
+        name: string | null,
+        type: string | null,
+        error: string,
+      ): void => {
         results.push({ line, name, type, status: 'skipped', id: null, chunk_count: null, error });
         failed += 1;
       };
@@ -708,7 +724,15 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         }
 
         if (body.dry_run) {
-          results.push({ line, name, type, status: 'imported', id: null, chunk_count: null, error: null });
+          results.push({
+            line,
+            name,
+            type,
+            status: 'imported',
+            id: null,
+            chunk_count: null,
+            error: null,
+          });
           imported += 1;
           continue;
         }

@@ -33,7 +33,10 @@ beforeEach(() => {
   // regression guard for "no behaviour change when no brand is selected".
   useBrandStore.setState({ brandId: null });
   // The list polls /websites; an empty list is enough to render the add form.
-  vi.stubGlobal('fetch', vi.fn(async () => okJson({ items: [] })));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => okJson({ items: [] })),
+  );
 });
 
 afterEach(() => {
@@ -88,16 +91,17 @@ describe('WebsiteWidgets trackSale documentation', () => {
   beforeEach(() => {
     useAuth.setState({ status: 'signed-in', accessToken: 'test-token', agent: null });
     useBrandStore.setState({ brandId: null });
-    vi.stubGlobal('fetch', vi.fn(async () => okJson({ items: [site] })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => okJson({ items: [site] })),
+    );
   });
 
   it('shows the trackSale example once the snippet panel is opened', async () => {
     renderWidgets();
     await userEvent.click(await screen.findByRole('button', { name: 'Get code' }));
 
-    expect(screen.getByTestId('website-snippet-track-sale')).toHaveTextContent(
-      "nexa('trackSale',",
-    );
+    expect(screen.getByTestId('website-snippet-track-sale')).toHaveTextContent("nexa('trackSale',");
   });
 
   it('hides the example until the snippet panel is opened', async () => {
@@ -165,8 +169,6 @@ describe('WebsiteWidgets brand scoping', () => {
 
     expect(await screen.findByText('b.example')).toBeInTheDocument();
     expect(screen.queryByText('a.example')).toBeNull();
-    expect(screen.getByRole('heading', { name: /Website widgets/ })).toHaveTextContent(
-      'Beta Line',
-    );
+    expect(screen.getByRole('heading', { name: /Website widgets/ })).toHaveTextContent('Beta Line');
   });
 });

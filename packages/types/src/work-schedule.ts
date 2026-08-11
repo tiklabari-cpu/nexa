@@ -82,7 +82,9 @@ export interface WorkScheduleProblem {
  * The single gate both the settings form and the eventual `PUT` route
  * (WORKSCHED-c) validate a submitted schedule against.
  */
-export function normalizeWorkSchedule(input: unknown): WorkSchedule | { problem: WorkScheduleProblem } {
+export function normalizeWorkSchedule(
+  input: unknown,
+): WorkSchedule | { problem: WorkScheduleProblem } {
   if (input == null || typeof input !== 'object') {
     return DEFAULT_WORK_SCHEDULE;
   }
@@ -104,10 +106,14 @@ export function normalizeWorkSchedule(input: unknown): WorkSchedule | { problem:
     const slot = (entry ?? {}) as Partial<WorkScheduleSlot>;
 
     if (typeof slot.day !== 'string' || !WORK_SCHEDULE_DAYS.includes(slot.day as WorkScheduleDay)) {
-      return { problem: { reason: 'unknown_day', message: `Unknown weekday "${String(slot.day)}".` } };
+      return {
+        problem: { reason: 'unknown_day', message: `Unknown weekday "${String(slot.day)}".` },
+      };
     }
     if (seenDays.has(slot.day)) {
-      return { problem: { reason: 'duplicate_day', message: `"${slot.day}" is listed more than once.` } };
+      return {
+        problem: { reason: 'duplicate_day', message: `"${slot.day}" is listed more than once.` },
+      };
     }
     seenDays.add(slot.day);
 
@@ -115,11 +121,16 @@ export function normalizeWorkSchedule(input: unknown): WorkSchedule | { problem:
     const endOk = typeof slot.end === 'string' && WORK_SCHEDULE_TIME_PATTERN.test(slot.end);
     if (!startOk || !endOk) {
       return {
-        problem: { reason: 'invalid_time', message: `"${slot.day}" needs a 24h HH:MM start and end.` },
+        problem: {
+          reason: 'invalid_time',
+          message: `"${slot.day}" needs a 24h HH:MM start and end.`,
+        },
       };
     }
     if ((slot.start as string) >= (slot.end as string)) {
-      return { problem: { reason: 'range', message: `"${slot.day}" start must be before its end.` } };
+      return {
+        problem: { reason: 'range', message: `"${slot.day}" start must be before its end.` },
+      };
     }
 
     schedule.push({

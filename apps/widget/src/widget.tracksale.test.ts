@@ -74,7 +74,9 @@ function mountWidget(search: string): void {
 
 /** Simulates the loader relaying a command across the message boundary. */
 function sendCommand(command: string, payload: unknown): void {
-  window.dispatchEvent(new MessageEvent('message', { data: { type: 'nexa:command', command, payload } }));
+  window.dispatchEvent(
+    new MessageEvent('message', { data: { type: 'nexa:command', command, payload } }),
+  );
 }
 
 async function waitFor(predicate: () => boolean, tries = 50): Promise<void> {

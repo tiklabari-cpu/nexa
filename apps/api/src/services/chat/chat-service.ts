@@ -717,7 +717,9 @@ export class ChatService {
               select: { email: true, name: true },
             }),
             tx.agentMembership.findUnique({
-              where: { licenseId_agentId: { licenseId: tenant.licenseId, agentId: thread.assigneeId } },
+              where: {
+                licenseId_agentId: { licenseId: tenant.licenseId, agentId: thread.assigneeId },
+              },
               select: { notifyEmail: true },
             }),
           ]);
@@ -1894,7 +1896,11 @@ function visitedPagesOf(pages: unknown): Array<{ url: string; at?: string }> {
   if (!Array.isArray(pages)) return [];
   const result: Array<{ url: string; at?: string }> = [];
   for (const entry of pages) {
-    if (entry && typeof entry === 'object' && typeof (entry as { url?: unknown }).url === 'string') {
+    if (
+      entry &&
+      typeof entry === 'object' &&
+      typeof (entry as { url?: unknown }).url === 'string'
+    ) {
       const { url, at } = entry as { url: string; at?: unknown };
       result.push(typeof at === 'string' ? { url, at } : { url });
     }

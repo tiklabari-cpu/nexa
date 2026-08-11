@@ -66,7 +66,9 @@ export function CampaignsPage(): ReactElement {
     onSuccess: (campaign, input) => {
       invalidate();
       if (input.active && campaign.performance.displayed > 0) {
-        setNotice(`“${campaign.name}” reached ${formatCount(campaign.performance.displayed)} on-site visitors.`);
+        setNotice(
+          `“${campaign.name}” reached ${formatCount(campaign.performance.displayed)} on-site visitors.`,
+        );
       }
     },
   });
@@ -156,7 +158,9 @@ export function CampaignsPage(): ReactElement {
                 canWrite={canWrite}
                 busy={toggle.isPending}
                 onEdit={() => setEditing(campaign)}
-                onToggle={() => toggle.mutate({ id: campaign.id, active: !isCampaignActive(campaign) })}
+                onToggle={() =>
+                  toggle.mutate({ id: campaign.id, active: !isCampaignActive(campaign) })
+                }
               />
             </li>
           ))}
@@ -203,7 +207,10 @@ function CampaignCard({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="truncate font-medium">{campaign.name}</h3>
-            <StatusDot tone={STATUS_TONE[campaign.status]} label={CAMPAIGN_STATUS_LABEL[campaign.status]} />
+            <StatusDot
+              tone={STATUS_TONE[campaign.status]}
+              label={CAMPAIGN_STATUS_LABEL[campaign.status]}
+            />
           </div>
           <p className="mt-1 truncate text-xs text-content-secondary">
             When URL contains{' '}
@@ -258,10 +265,20 @@ function CampaignCard({
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }): ReactElement {
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}): ReactElement {
   return (
     <div>
-      <dt className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">{label}</dt>
+      <dt className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+        {label}
+      </dt>
       <dd className="tabular text-lg font-semibold">
         {value}
         {hint && <span className="ml-1 text-2xs font-normal text-content-tertiary">{hint}</span>}

@@ -89,9 +89,12 @@ describe('agent suspension (FR-MOD-04.6)', () => {
 
       // …and visible in the combined view alongside the owner.
       const all = await server.get('/agents?status=all', auth);
-      expect(all.json().items.map((a: { id: string }) => a.id).sort()).toEqual(
-        [fx.a.ownerAccountId, fx.a.agentAccountId].sort(),
-      );
+      expect(
+        all
+          .json()
+          .items.map((a: { id: string }) => a.id)
+          .sort(),
+      ).toEqual([fx.a.ownerAccountId, fx.a.agentAccountId].sort());
     });
 
     it('reinstates an agent back to the active list', async () => {

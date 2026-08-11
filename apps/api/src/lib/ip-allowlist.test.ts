@@ -94,7 +94,13 @@ describe('formatAllowlistEntry', () => {
   });
 
   it('round-trips: parsing the canonical form yields the same range', () => {
-    for (const raw of ['10.0.0.55/24', '203.0.113.5', '2001:db8::1', '2001:db8:abcd::/48', '::/0']) {
+    for (const raw of [
+      '10.0.0.55/24',
+      '203.0.113.5',
+      '2001:db8::1',
+      '2001:db8:abcd::/48',
+      '::/0',
+    ]) {
       const once = entry(raw);
       const twice = entry(formatAllowlistEntry(once));
       expect(twice).toEqual(once);

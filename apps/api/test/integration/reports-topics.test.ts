@@ -69,10 +69,20 @@ describe('chat topics report (07.6)', () => {
   // conversations it wants to probe the threshold with.
 
   /** A closed chat whose thread carries an AI summary — clusterable via summary. */
-  async function seedSummaryThread(t: TenantFixture, summary: string, at = new Date()): Promise<void> {
+  async function seedSummaryThread(
+    t: TenantFixture,
+    summary: string,
+    at = new Date(),
+  ): Promise<void> {
     const chatId = generateShortId();
     await owner.chat.create({
-      data: { id: chatId, licenseId: t.licenseId, customerId: t.customerId, active: false, createdAt: at },
+      data: {
+        id: chatId,
+        licenseId: t.licenseId,
+        customerId: t.customerId,
+        active: false,
+        createdAt: at,
+      },
     });
     await owner.thread.create({
       data: {
@@ -88,7 +98,11 @@ describe('chat topics report (07.6)', () => {
   }
 
   /** `count` summary-clusterable threads, so a suite can straddle the threshold. */
-  async function seedSummaryThreads(t: TenantFixture, count: number, at = new Date()): Promise<void> {
+  async function seedSummaryThreads(
+    t: TenantFixture,
+    count: number,
+    at = new Date(),
+  ): Promise<void> {
     for (let i = 0; i < count; i++) await seedSummaryThread(t, `Topic summary ${i}`, at);
   }
 
@@ -96,10 +110,20 @@ describe('chat topics report (07.6)', () => {
    * A closed chat with **no** summary but a customer message — clusterable via
    * the message, proving the count's second branch.
    */
-  async function seedCustomerMessageThread(t: TenantFixture, text: string, at = new Date()): Promise<void> {
+  async function seedCustomerMessageThread(
+    t: TenantFixture,
+    text: string,
+    at = new Date(),
+  ): Promise<void> {
     const chatId = generateShortId();
     await owner.chat.create({
-      data: { id: chatId, licenseId: t.licenseId, customerId: t.customerId, active: false, createdAt: at },
+      data: {
+        id: chatId,
+        licenseId: t.licenseId,
+        customerId: t.customerId,
+        active: false,
+        createdAt: at,
+      },
     });
     const threadId = generateShortId();
     await owner.thread.create({
@@ -132,7 +156,13 @@ describe('chat topics report (07.6)', () => {
   async function seedBareThread(t: TenantFixture, at = new Date()): Promise<void> {
     const chatId = generateShortId();
     await owner.chat.create({
-      data: { id: chatId, licenseId: t.licenseId, customerId: t.customerId, active: false, createdAt: at },
+      data: {
+        id: chatId,
+        licenseId: t.licenseId,
+        customerId: t.customerId,
+        active: false,
+        createdAt: at,
+      },
     });
     await owner.thread.create({
       data: {
@@ -330,7 +360,9 @@ describe('chat topics report (07.6)', () => {
       ownerId: fx.b.ownerAccountId,
       scopes: ['reports_read'],
     });
-    const theirs = (await server.get('/reports/topics', { authorization: `Bearer ${theirToken}` })).json();
+    const theirs = (
+      await server.get('/reports/topics', { authorization: `Bearer ${theirToken}` })
+    ).json();
     expect(theirs.analyzed).toBe(0);
     expect(theirs.sufficient_data).toBe(false);
     expect(theirs.topics).toEqual([]);
@@ -385,8 +417,9 @@ describe('chat topics report (07.6)', () => {
         ownerId: fx.a.ownerAccountId,
         scopes: ['chats--all:ro'],
       });
-      const empty = (await server.get('/reports/groups', { authorization: `Bearer ${weak}` })).json()
-        .groups;
+      const empty = (
+        await server.get('/reports/groups', { authorization: `Bearer ${weak}` })
+      ).json().groups;
       expect(empty).toEqual([]);
     });
 

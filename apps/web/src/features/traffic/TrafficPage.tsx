@@ -32,7 +32,13 @@ import {
   TRAFFIC_FIELD_DEFS,
   type TrafficCondition,
 } from './traffic-filters.js';
-import { countByTab, isTrafficTab, tabToActivity, TRAFFIC_TABS, type TrafficTab } from './traffic-tabs.js';
+import {
+  countByTab,
+  isTrafficTab,
+  tabToActivity,
+  TRAFFIC_TABS,
+  type TrafficTab,
+} from './traffic-tabs.js';
 import type { TrafficActivity, TrafficVisitor } from './types.js';
 
 const TAB_PARAM = 'tab';
@@ -57,7 +63,8 @@ const EMPTY_STATE: Record<TrafficTab, { title: string; description: string }> = 
   },
   waiting: {
     title: 'Nobody is waiting for a reply',
-    description: "Conversations where the visitor's last message has not been answered yet appear here.",
+    description:
+      "Conversations where the visitor's last message has not been answered yet appear here.",
   },
   invited: {
     title: 'No pending invitations',
@@ -287,7 +294,9 @@ export function TrafficPage(): ReactElement {
               }`}
             >
               <span>{t.label}</span>
-              {count !== undefined && <span className="text-2xs text-content-tertiary">{count}</span>}
+              {count !== undefined && (
+                <span className="text-2xs text-content-tertiary">{count}</span>
+              )}
             </button>
           );
         })}

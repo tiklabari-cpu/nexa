@@ -66,7 +66,9 @@ interface PartnerAppSecretRotation extends PartnerApp {
 /** The textarea holds one redirect URI per line; at least one is required.
  *  The URI's own shape (absolute, https, canonical form…) is the server's
  *  call — `validateRedirectUri` — so this only checks something was entered. */
-function redirectUrisRequired(message = 'Enter at least one redirect URI, one per line.'): Validator {
+function redirectUrisRequired(
+  message = 'Enter at least one redirect URI, one per line.',
+): Validator {
   return (value) => (splitList(value).length > 0 ? null : message);
 }
 
@@ -121,7 +123,11 @@ function DeveloperPortalContent(): ReactElement {
       description="Register OAuth apps that can act on this workspace through the API."
       actions={tab === 'apps' ? registerButton : undefined}
     >
-      <div role="tablist" aria-label="Developer portal" className="flex gap-1 border-b border-border">
+      <div
+        role="tablist"
+        aria-label="Developer portal"
+        className="flex gap-1 border-b border-border"
+      >
         {TABS.map((tabDef) => {
           const selected = tab === tabDef.id;
           return (
@@ -501,7 +507,12 @@ function SecretOncePanel({
   }
 
   return (
-    <Modal onClose={onClose} title={title} description="Save these credentials now." className="w-[28rem]">
+    <Modal
+      onClose={onClose}
+      title={title}
+      description="Save these credentials now."
+      className="w-[28rem]"
+    >
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">

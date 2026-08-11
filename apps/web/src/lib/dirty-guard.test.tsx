@@ -30,9 +30,7 @@ describe('useCloseGuard', () => {
   it('closes straight through when the form is clean', () => {
     const onClose = vi.fn();
     const confirm = vi.fn(() => false);
-    const { result } = renderHook(() =>
-      useCloseGuard({ isDirty: false, onClose, confirm }),
-    );
+    const { result } = renderHook(() => useCloseGuard({ isDirty: false, onClose, confirm }));
     act(() => result.current());
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(confirm).not.toHaveBeenCalled();

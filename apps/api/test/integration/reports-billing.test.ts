@@ -235,8 +235,7 @@ describe('reports and billing', () => {
     options: { licenseId?: bigint; achievedAt?: Date } = {},
   ): Promise<void> {
     const licenseId = options.licenseId ?? fx.a.licenseId;
-    const organizationId =
-      licenseId === fx.a.licenseId ? fx.a.organizationId : fx.b.organizationId;
+    const organizationId = licenseId === fx.a.licenseId ? fx.a.organizationId : fx.b.organizationId;
     const goal = await owner.goal.create({
       data: { licenseId, name: 'Signed up' },
       select: { id: true },
@@ -1223,8 +1222,7 @@ describe('reports and billing', () => {
         );
         const raw = row?.['QUERY PLAN'];
         const plan = (typeof raw === 'string' ? JSON.parse(raw) : raw) as
-          | Array<{ 'Execution Time': number }>
-          | undefined;
+          Array<{ 'Execution Time': number }> | undefined;
         const executionMs = plan?.[0]?.['Execution Time'];
         expect(executionMs).toBeDefined();
         timings[name] = executionMs ?? Number.NaN;
@@ -1777,7 +1775,12 @@ describe('reports and billing', () => {
       // second touch has to come through a different table.)
       const early = await createLead({ touch: 'ticket', createdAt: dayA });
       await owner.chat.create({
-        data: { id: generateShortId(), licenseId: fx.a.licenseId, customerId: early, createdAt: dayB },
+        data: {
+          id: generateShortId(),
+          licenseId: fx.a.licenseId,
+          customerId: early,
+          createdAt: dayB,
+        },
       });
       // A second lead first seen on dayB.
       await createLead({ createdAt: dayB });
@@ -2110,7 +2113,10 @@ describe('reports and billing', () => {
       // right, and the response says so rather than quietly picking one.
       expect(report.funnel.conversions).toBe(1);
       expect(
-        report.by_goal.reduce((sum: number, row: { conversions: number }) => sum + row.conversions, 0),
+        report.by_goal.reduce(
+          (sum: number, row: { conversions: number }) => sum + row.conversions,
+          0,
+        ),
       ).toBe(2);
     });
 
@@ -2408,7 +2414,15 @@ describe('reports and billing', () => {
         // group — see beforeEach) and the 'website' channel (no inbound
         // adapter message recorded).
         expect(byDimension('team')).toEqual([
-          { dimension: 'team', key: 'Support', chats: 1, closed: 1, manual: 0, assisted: 0, automated: 1 },
+          {
+            dimension: 'team',
+            key: 'Support',
+            chats: 1,
+            closed: 1,
+            manual: 0,
+            assisted: 0,
+            automated: 1,
+          },
         ]);
         expect(byDimension('channel')).toEqual([
           {
@@ -2762,12 +2776,18 @@ describe('reports and billing', () => {
         // a reason that has nothing to do with tenant isolation.
         const window = 'from=2026-01-01&to=2026-12-31';
 
-        const before = await server.get(`/reports/export?group=breakdown&format=pdf&${window}`, authB);
+        const before = await server.get(
+          `/reports/export?group=breakdown&format=pdf&${window}`,
+          authB,
+        );
         expect(before.statusCode).toBe(200);
 
         await conversation({ agentReplies: false }); // one automated chat, closed today, in A
 
-        const after = await server.get(`/reports/export?group=breakdown&format=pdf&${window}`, authB);
+        const after = await server.get(
+          `/reports/export?group=breakdown&format=pdf&${window}`,
+          authB,
+        );
         expect(after.statusCode).toBe(200);
 
         // B's export is a pure function of B's own data (RLS-scoped). A gaining
@@ -2787,7 +2807,9 @@ describe('reports and billing', () => {
         expect(omitted.statusCode).toBe(200);
         expect(omitted.headers['content-type']).toContain('text/csv');
         expect(omitted.body).toBe(explicit.body);
-        expect(omitted.headers['content-disposition']).toBe(explicit.headers['content-disposition']);
+        expect(omitted.headers['content-disposition']).toBe(
+          explicit.headers['content-disposition'],
+        );
         expect(omitted.headers['x-content-type-options']).toBe('nosniff');
         expect(omitted.headers['cache-control']).toBe('no-store');
       });
@@ -3110,8 +3132,7 @@ describe('reports and billing', () => {
         );
         const raw = row?.['QUERY PLAN'];
         const plan = (typeof raw === 'string' ? JSON.parse(raw) : raw) as
-          | Array<{ 'Execution Time': number }>
-          | undefined;
+          Array<{ 'Execution Time': number }> | undefined;
         const executionMs = plan?.[0]?.['Execution Time'];
         expect(executionMs, name).toBeDefined();
         timings[name] = executionMs ?? Number.NaN;
@@ -3276,18 +3297,21 @@ describe('reports and billing', () => {
         );
       });
 
-      it.each(GROUP_PATHS)('%s defaults to previous_period when none is asked for', async (path) => {
-        const [implicit, explicit] = await Promise.all([
-          server.get(path, auth),
-          server.get(`${path}?baseline=previous_period`, auth),
-        ]);
-        expect(implicit.json().previous_period.baseline).toBe('previous_period');
-        // Windows resolve to "now" per request, so the ranges differ by
-        // milliseconds; the shape and the baseline are what must match.
-        expect(Object.keys(implicit.json().previous_period).sort()).toEqual(
-          Object.keys(explicit.json().previous_period).sort(),
-        );
-      });
+      it.each(GROUP_PATHS)(
+        '%s defaults to previous_period when none is asked for',
+        async (path) => {
+          const [implicit, explicit] = await Promise.all([
+            server.get(path, auth),
+            server.get(`${path}?baseline=previous_period`, auth),
+          ]);
+          expect(implicit.json().previous_period.baseline).toBe('previous_period');
+          // Windows resolve to "now" per request, so the ranges differ by
+          // milliseconds; the shape and the baseline are what must match.
+          expect(Object.keys(implicit.json().previous_period).sort()).toEqual(
+            Object.keys(explicit.json().previous_period).sort(),
+          );
+        },
+      );
 
       it('leaves the Overview and Reviews figures exactly as they were', async () => {
         // The regression this task most had to avoid: the two reports that
@@ -3459,7 +3483,9 @@ describe('reports and billing', () => {
         const from = new Date('2026-07-01T00:00:00.000Z');
         const range = `from=${from.toISOString()}&to=${to.toISOString()}`;
 
-        const body = (await server.get(`/reports/topics?${range}&baseline=previous_year`, auth)).json();
+        const body = (
+          await server.get(`/reports/topics?${range}&baseline=previous_year`, auth)
+        ).json();
         expect(body.previous_period.range.from).toBe('2025-07-01T00:00:00.000Z');
         // No window-level figure — a topic's baseline volume rides on its row.
         expect(body.previous_period).toEqual({
@@ -3955,7 +3981,11 @@ describe('reports and billing', () => {
 
       it('lists the purchase priced from the receipt, summed into the total', async () => {
         await activate();
-        const bought = await server.post('/billing/api-packages', { package_id: 'essential' }, auth);
+        const bought = await server.post(
+          '/billing/api-packages',
+          { package_id: 'essential' },
+          auth,
+        );
         expect(bought.statusCode).toBe(200);
 
         const open = await openInvoice();
@@ -3985,14 +4015,20 @@ describe('reports and billing', () => {
 
         const response = await server.get(`/billing/invoices/${period}/download`, auth);
         const rows = response.body.split('\r\n').filter((l: string) => l !== '');
-        expect(rows).toContain(`API package — Essential (${ESSENTIAL.api_calls} calls),${ESSENTIAL.price_cents}`);
+        expect(rows).toContain(
+          `API package — Essential (${ESSENTIAL.api_calls} calls),${ESSENTIAL.price_cents}`,
+        );
       });
 
       it('is a real charge even while the plan itself is free during the trial', async () => {
         // The fixture license is trialing — the trial gate never blocks
         // buying a package (api-package-service.ts), so the purchase still
         // happens and is a deliberate spend the plan-free line does not cover.
-        const bought = await server.post('/billing/api-packages', { package_id: 'essential' }, auth);
+        const bought = await server.post(
+          '/billing/api-packages',
+          { package_id: 'essential' },
+          auth,
+        );
         expect(bought.statusCode).toBe(200);
 
         const open = await openInvoice();
@@ -4516,11 +4552,7 @@ describe('reports and billing', () => {
     });
 
     it('answers with the receipt and the usage the purchase produced', async () => {
-      const response = await server.post(
-        '/billing/api-packages',
-        { package_id: 'pro-plus' },
-        auth,
-      );
+      const response = await server.post('/billing/api-packages', { package_id: 'pro-plus' }, auth);
       expect(response.statusCode).toBe(200);
 
       const { purchase: receipt, usage } = response.json();

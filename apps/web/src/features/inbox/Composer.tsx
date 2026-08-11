@@ -419,7 +419,9 @@ export function Composer({
           rows={3}
           maxLength={10_000}
           placeholder={
-            isNote ? 'Add a note for your team…' : "Type your reply, or press Space for suggestions…"
+            isNote
+              ? 'Add a note for your team…'
+              : 'Type your reply, or press Space for suggestions…'
           }
           className="w-full resize-none rounded-md border border-border bg-inset px-3 py-2 text-sm outline-none placeholder:text-content-tertiary"
         />

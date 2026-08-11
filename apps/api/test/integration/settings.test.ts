@@ -411,7 +411,11 @@ describe('settings', () => {
 
   describe('expertise catalogue', () => {
     it('creates an area, lists it, then deletes it', async () => {
-      const created = await server.post('/settings/expertise', { name: 'Billing' }, auth(adminToken));
+      const created = await server.post(
+        '/settings/expertise',
+        { name: 'Billing' },
+        auth(adminToken),
+      );
       expect(created.statusCode).toBe(201);
       const body = created.json() as { id: number; name: string; slug: string };
       expect(body).toMatchObject({ name: 'Billing', slug: 'billing' });
@@ -428,9 +432,9 @@ describe('settings', () => {
       expect(deleted.statusCode).toBe(204);
 
       const after = await server.get('/settings/expertise', auth(readToken));
-      expect((after.json() as { items: Array<{ id: number }> }).items.map((e) => e.id)).not.toContain(
-        body.id,
-      );
+      expect(
+        (after.json() as { items: Array<{ id: number }> }).items.map((e) => e.id),
+      ).not.toContain(body.id);
     });
 
     it('derives a slug and refuses a name that collides after normalisation', async () => {
@@ -482,9 +486,13 @@ describe('settings', () => {
         ownerId: fx.a.agentAccountId,
         scopes: ['access_rules:rw'],
       });
-      const response = await server.post('/settings/expertise', { name: 'nope' }, {
-        authorization: `Bearer ${agentToken}`,
-      });
+      const response = await server.post(
+        '/settings/expertise',
+        { name: 'nope' },
+        {
+          authorization: `Bearer ${agentToken}`,
+        },
+      );
       expect(response.statusCode).toBe(403);
     });
 
@@ -500,9 +508,13 @@ describe('settings', () => {
         scopes: ['access_rules:rw'],
         kind: 'bot',
       });
-      const response = await server.post('/settings/expertise', { name: 'nope' }, {
-        authorization: `Bearer ${botToken}`,
-      });
+      const response = await server.post(
+        '/settings/expertise',
+        { name: 'nope' },
+        {
+          authorization: `Bearer ${botToken}`,
+        },
+      );
       expect(response.statusCode).toBe(403);
     });
 
@@ -517,7 +529,10 @@ describe('settings', () => {
       expect(slugs).not.toContain('their-secret');
 
       // The id alone must not reach across tenants — RLS makes it a 404.
-      const attempt = await server.del(`/settings/expertise/${Number(theirs.id)}`, auth(adminToken));
+      const attempt = await server.del(
+        `/settings/expertise/${Number(theirs.id)}`,
+        auth(adminToken),
+      );
       expect(attempt.statusCode).toBe(404);
 
       const still = await owner.expertise.findUnique({
@@ -885,7 +900,10 @@ describe('settings', () => {
 
       // Their row must not leak into our read...
       const read = await server.get('/settings/security', auth(readToken));
-      expect(read.json()).toMatchObject({ file_sharing_enabled: true, max_file_size_bytes: 10_485_760 });
+      expect(read.json()).toMatchObject({
+        file_sharing_enabled: true,
+        max_file_size_bytes: 10_485_760,
+      });
 
       // ...and our write must not reach it.
       const written = await server.patch(
@@ -1005,7 +1023,10 @@ describe('settings', () => {
 
       // Their policy must not leak into our read...
       const read = await server.get('/settings/security', auth(readToken));
-      expect(read.json()).toMatchObject({ ip_allowlist_enforced: false, max_concurrent_sessions: null });
+      expect(read.json()).toMatchObject({
+        ip_allowlist_enforced: false,
+        max_concurrent_sessions: null,
+      });
 
       // ...and our write must not reach it.
       const written = await server.patch(
@@ -1069,7 +1090,9 @@ describe('settings', () => {
         auth(adminToken),
       );
       expect(disabled.statusCode).toBe(200);
-      expect((disabled.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds).toBeNull();
+      expect(
+        (disabled.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds,
+      ).toBeNull();
     });
 
     it.each([0, -1, -3600])('rejects the non-positive window %j', async (seconds) => {
@@ -1118,7 +1141,9 @@ describe('settings', () => {
 
       // Their row must not leak into our read…
       const read = await server.get('/settings/chat-timeout', auth(readToken));
-      expect((read.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds).toBeNull();
+      expect(
+        (read.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds,
+      ).toBeNull();
 
       // …and our write must not reach it.
       const written = await server.put(
@@ -1205,7 +1230,11 @@ describe('settings', () => {
     it.each(['red', '#12g', '#12345', 'rgb(0,0,0)'])(
       'rejects the non-hex colour %j and stores nothing',
       async (color) => {
-        const response = await server.put('/settings/widget', { primary_color: color }, auth(adminToken));
+        const response = await server.put(
+          '/settings/widget',
+          { primary_color: color },
+          auth(adminToken),
+        );
         expect(response.statusCode).toBe(400);
         expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
         expect(
@@ -1214,13 +1243,13 @@ describe('settings', () => {
       },
     );
 
-    it.each([
-      { position: 'top-left' },
-      { theme: 'neon' },
-    ])('rejects an out-of-range enum %j', async (body) => {
-      const response = await server.put('/settings/widget', body, auth(adminToken));
-      expect(response.statusCode).toBe(400);
-    });
+    it.each([{ position: 'top-left' }, { theme: 'neon' }])(
+      'rejects an out-of-range enum %j',
+      async (body) => {
+        const response = await server.put('/settings/widget', body, auth(adminToken));
+        expect(response.statusCode).toBe(400);
+      },
+    );
 
     it('rejects an empty body rather than treating it as a reset', async () => {
       const response = await server.put('/settings/widget', {}, auth(adminToken));
@@ -1228,18 +1257,18 @@ describe('settings', () => {
     });
 
     it('requires write scope to change the appearance', async () => {
-      const response = await server.put(
-        '/settings/widget',
-        { theme: 'dark' },
-        auth(readToken),
-      );
+      const response = await server.put('/settings/widget', { theme: 'dark' }, auth(readToken));
       expect(response.statusCode).toBe(403);
     });
 
     it('serves the appearance in the customer token response', async () => {
       // The hosted Chat page has no snippet to bake it into, so the server is
       // its only source; the token mint carries it (FR-MOD-11.7).
-      await server.put('/settings/widget', { primary_color: '#0a7f3f', theme: 'dark' }, auth(adminToken));
+      await server.put(
+        '/settings/widget',
+        { primary_color: '#0a7f3f', theme: 'dark' },
+        auth(adminToken),
+      );
 
       const minted = await server.post(
         '/customer/token',
@@ -1247,7 +1276,9 @@ describe('settings', () => {
         { origin: 'https://widget.nexa.example' },
       );
       expect(minted.statusCode).toBe(200);
-      expect((minted.json() as { widget: { primary_color: string; theme: string } }).widget).toMatchObject({
+      expect(
+        (minted.json() as { widget: { primary_color: string; theme: string } }).widget,
+      ).toMatchObject({
         primary_color: '#0a7f3f',
         theme: 'dark',
       });
@@ -1268,7 +1299,11 @@ describe('settings', () => {
       expect((read.json() as { primary_color: string }).primary_color).toBe('#2d67fa');
 
       // …and our write must not reach it.
-      const written = await server.put('/settings/widget', { primary_color: '#111111' }, auth(adminToken));
+      const written = await server.put(
+        '/settings/widget',
+        { primary_color: '#111111' },
+        auth(adminToken),
+      );
       expect(written.statusCode).toBe(200);
 
       const theirs = await owner.widgetSettings.findUnique({
@@ -1329,7 +1364,11 @@ describe('settings', () => {
     });
 
     it('saves a partial change and fills the rest from the defaults', async () => {
-      const saved = await server.put('/settings/sales-tracker', { enabled: true }, auth(adminToken));
+      const saved = await server.put(
+        '/settings/sales-tracker',
+        { enabled: true },
+        auth(adminToken),
+      );
       expect(saved.statusCode).toBe(200);
       expect(saved.json()).toMatchObject({
         enabled: true,
@@ -1346,11 +1385,17 @@ describe('settings', () => {
       );
       expect(again.statusCode).toBe(200);
       expect(again.json()).toMatchObject({ enabled: true, attribution_window_days: 14 });
-      expect(await owner.salesTrackerSettings.count({ where: { licenseId: fx.a.licenseId } })).toBe(1);
+      expect(await owner.salesTrackerSettings.count({ where: { licenseId: fx.a.licenseId } })).toBe(
+        1,
+      );
     });
 
     it('accepts a lower-case currency as the same configuration', async () => {
-      const saved = await server.put('/settings/sales-tracker', { currency: 'try' }, auth(adminToken));
+      const saved = await server.put(
+        '/settings/sales-tracker',
+        { currency: 'try' },
+        auth(adminToken),
+      );
       expect(saved.statusCode).toBe(200);
       expect((saved.json() as { currency: string }).currency).toBe('TRY');
     });
@@ -1551,7 +1596,9 @@ describe('settings', () => {
       );
 
       const def = await server.get('/settings/chat-timeout', auth(readToken));
-      expect((def.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds).toBeNull();
+      expect(
+        (def.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds,
+      ).toBeNull();
 
       const own = await server.get('/settings/chat-timeout', auth(readToken, brandA2));
       expect((own.json() as { chat_timeout_seconds: number | null }).chat_timeout_seconds).toBe(

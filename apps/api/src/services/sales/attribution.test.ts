@@ -57,7 +57,11 @@ describe('resolveAttribution', () => {
     // The boundary has to fall one way; this way "7 days" means what the
     // workspace typed instead of missing by a millisecond.
     expect(
-      resolveAttribution({ chats: [{ chatId: 'edge', at: daysBefore(7) }], now: SALE_AT, windowDays: 7 }),
+      resolveAttribution({
+        chats: [{ chatId: 'edge', at: daysBefore(7) }],
+        now: SALE_AT,
+        windowDays: 7,
+      }),
     ).toEqual({ chatId: 'edge', attributed: true });
 
     expect(

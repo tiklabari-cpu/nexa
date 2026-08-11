@@ -324,7 +324,13 @@ describe('bulk knowledge import', () => {
     const body = response.json() as BulkResult;
     expect(body).toMatchObject({ imported: 2, failed: 2 });
 
-    expect(body.results[1]).toMatchObject({ line: 2, name: 'Broken', type: 'workflow', status: 'skipped', id: null });
+    expect(body.results[1]).toMatchObject({
+      line: 2,
+      name: 'Broken',
+      type: 'workflow',
+      status: 'skipped',
+      id: null,
+    });
     expect(body.results[1]?.error).toMatch(/^type: /);
     expect(body.results[3]).toMatchObject({ line: 4, status: 'skipped' });
     expect(body.results[3]?.error).toMatch(/^content: /);
@@ -363,10 +369,7 @@ describe('bulk knowledge import', () => {
   it('reports the same verdicts on a dry run and writes nothing', async () => {
     const payload = {
       ai_agent_id: agentIdA,
-      csv: csv(
-        'Refunds,faq,We refund within 30 days.,',
-        'Broken,workflow,Not a known type.,',
-      ),
+      csv: csv('Refunds,faq,We refund within 30 days.,', 'Broken,workflow,Not a known type.,'),
     };
 
     const preview = await server.post(
@@ -378,7 +381,12 @@ describe('bulk knowledge import', () => {
     expect(preview.statusCode).toBe(200);
     const previewBody = preview.json() as BulkResult;
     expect(previewBody).toMatchObject({ imported: 1, failed: 1, dry_run: true });
-    expect(previewBody.results[0]).toMatchObject({ line: 1, status: 'imported', id: null, chunk_count: null });
+    expect(previewBody.results[0]).toMatchObject({
+      line: 1,
+      status: 'imported',
+      id: null,
+      chunk_count: null,
+    });
     expect(await sourceCount('a')).toBe(0);
 
     // The preview's verdicts are the import's verdicts — same rules, same code.

@@ -172,7 +172,11 @@ export class CopilotService {
     // Indexed in the same transaction: a source that exists but is not
     // searchable looks ready and answers nothing.
     const chunks = await this.knowledge.index(tx, tenant, source.id, input.content);
-    return { ...serialiseSource(source), status: chunks > 0 ? 'ready' : 'empty', chunk_count: chunks };
+    return {
+      ...serialiseSource(source),
+      status: chunks > 0 ? 'ready' : 'empty',
+      chunk_count: chunks,
+    };
   }
 
   /**
@@ -197,14 +201,16 @@ export class CopilotService {
       orderBy: { createdAt: 'asc' },
       select: { text: true, authorType: true, recipients: true },
     });
-    return rows
-      // An internal note is agent-to-agent chatter, not part of the customer
-      // conversation Copilot is summarising.
-      .filter((row) => row.recipients !== 'agents' && row.text)
-      .map((row) => ({
-        role: row.authorType === 'customer' ? ('customer' as const) : ('agent' as const),
-        text: row.text!,
-      }));
+    return (
+      rows
+        // An internal note is agent-to-agent chatter, not part of the customer
+        // conversation Copilot is summarising.
+        .filter((row) => row.recipients !== 'agents' && row.text)
+        .map((row) => ({
+          role: row.authorType === 'customer' ? ('customer' as const) : ('agent' as const),
+          text: row.text!,
+        }))
+    );
   }
 
   /**
@@ -213,11 +219,7 @@ export class CopilotService {
    * nothing to answer from, rather than inventing one — the same honesty the
    * customer-facing responder applies (RETRIEVAL_THRESHOLD).
    */
-  async draftReply(
-    tx: TenantClient,
-    tenant: TenantContext,
-    chatId: string,
-  ): Promise<CopilotDraft> {
+  async draftReply(tx: TenantClient, tenant: TenantContext, chatId: string): Promise<CopilotDraft> {
     const agentId = await this.findAgentId(tx);
     const turns = await this.conversationTurns(tx, chatId);
     const lastCustomer = [...turns].reverse().find((turn) => turn.role === 'customer');
@@ -273,7 +275,13 @@ export class CopilotService {
     // 200 with a negative result rather than a 4xx. No report is read: a
     // question this could not place has no window to read one over.
     if (!resolution.metric) {
-      return { answer: NOT_UNDERSTOOD_ANSWER, kind: 'not_understood', metric: null, value: null, range: null };
+      return {
+        answer: NOT_UNDERSTOOD_ANSWER,
+        kind: 'not_understood',
+        metric: null,
+        value: null,
+        range: null,
+      };
     }
 
     const { from, to } = biWindow(resolution.range, now);

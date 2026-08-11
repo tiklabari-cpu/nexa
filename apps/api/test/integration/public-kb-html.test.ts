@@ -34,7 +34,11 @@ describe('public KB server-rendered HTML (PUBKB-e)', () => {
   const home = (slug: string) => `/public/kb/${slug}`;
   const article = (slug: string, articleSlug: string) => `/public/kb/${slug}/${articleSlug}`;
 
-  const enableKb = (licenseId: bigint, publicSlug: string, opts: { enabled?: boolean; siteTitle?: string } = {}) =>
+  const enableKb = (
+    licenseId: bigint,
+    publicSlug: string,
+    opts: { enabled?: boolean; siteTitle?: string } = {},
+  ) =>
     owner.kbSettings.create({
       data: {
         licenseId,
@@ -314,7 +318,12 @@ describe('public KB server-rendered HTML (PUBKB-e)', () => {
   it('lists published articles on the home page and links to their pages', async () => {
     await enableKb(fx.a.licenseId, A_SLUG, { siteTitle: 'Acme Knowledge' });
     const cat = await addCategory(fx.a.licenseId, 'billing', 'Billing', 1);
-    await publish(fx.a.licenseId, { slug: 'invoices', title: 'About invoices', body: 'x', categoryId: cat.id });
+    await publish(fx.a.licenseId, {
+      slug: 'invoices',
+      title: 'About invoices',
+      body: 'x',
+      categoryId: cat.id,
+    });
     await publish(fx.a.licenseId, { slug: 'loose', title: 'Uncategorised one', body: 'y' });
 
     const res = await server.get(home(A_SLUG));

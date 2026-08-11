@@ -38,10 +38,9 @@ async function catalogueIds(api: APIRequestContext, token: string): Promise<stri
     const response = await api.get(`${API_BASE}/settings/apps${query}`, {
       headers: { authorization: `Bearer ${token}` },
     });
-    expect(
-      response.ok(),
-      `apps list failed: ${response.status()} ${await response.text()}`,
-    ).toBe(true);
+    expect(response.ok(), `apps list failed: ${response.status()} ${await response.text()}`).toBe(
+      true,
+    );
 
     const body = (await response.json()) as AppsPage;
     ids.push(...body.items.map((item) => item.id));

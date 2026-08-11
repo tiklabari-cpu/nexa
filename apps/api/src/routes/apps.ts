@@ -133,7 +133,9 @@ export default async function appRoutes(
     { config: { scopes: ['chats--all:ro', 'chats--access:ro'] } },
     async (request, reply) => {
       const tenant = request.tenant();
-      const items = await request.withTenant((tx) => apps.chatData(tx, tenant, request.params.chatId));
+      const items = await request.withTenant((tx) =>
+        apps.chatData(tx, tenant, request.params.chatId),
+      );
       return reply.send({ items });
     },
   );

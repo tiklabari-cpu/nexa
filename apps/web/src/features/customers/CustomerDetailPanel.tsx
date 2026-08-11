@@ -144,7 +144,11 @@ export function CustomerDetailPanel({
             Custom fields
           </h3>
           <div className="px-4 py-3">
-            <CustomFields fields={customer.custom_fields} canEdit={canEdit} save={saveCustomFields} />
+            <CustomFields
+              fields={customer.custom_fields}
+              canEdit={canEdit}
+              save={saveCustomFields}
+            />
           </div>
         </Card>
       )}
@@ -169,7 +173,10 @@ export function CustomerDetailPanel({
                 {visit.came_from && (
                   // Visitor-supplied, rendered as text, never as a link — same
                   // reasoning as the page URLs below.
-                  <p className="mt-0.5 truncate text-2xs text-content-tertiary" title={visit.came_from}>
+                  <p
+                    className="mt-0.5 truncate text-2xs text-content-tertiary"
+                    title={visit.came_from}
+                  >
                     Came from {visit.came_from}
                   </p>
                 )}

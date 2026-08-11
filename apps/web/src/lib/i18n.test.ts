@@ -43,9 +43,7 @@ describe('translate', () => {
   });
 
   it('leaves an unmatched placeholder untouched', () => {
-    expect(translate('en', 'shell.trial.remaining', {})).toBe(
-      '{days} day{s} left in your trial.',
-    );
+    expect(translate('en', 'shell.trial.remaining', {})).toBe('{days} day{s} left in your trial.');
   });
 });
 

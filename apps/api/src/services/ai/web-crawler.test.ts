@@ -3,16 +3,16 @@ import { crawl, htmlToText, mockFetcher } from './web-crawler.js';
 
 describe('htmlToText', () => {
   it('drops script and style bodies and strips tags', () => {
-    const text = htmlToText(
-      '<p>Hello <b>there</b></p><script>steal()</script><style>a{}</style>',
-    );
+    const text = htmlToText('<p>Hello <b>there</b></p><script>steal()</script><style>a{}</style>');
     expect(text).toBe('Hello there');
     expect(text).not.toContain('steal');
     expect(text).not.toContain('a{}');
   });
 
   it('decodes the common entities and collapses whitespace', () => {
-    expect(htmlToText('<p>Tom &amp; Jerry\n\n  say &quot;hi&quot;</p>')).toBe('Tom & Jerry say "hi"');
+    expect(htmlToText('<p>Tom &amp; Jerry\n\n  say &quot;hi&quot;</p>')).toBe(
+      'Tom & Jerry say "hi"',
+    );
   });
 });
 

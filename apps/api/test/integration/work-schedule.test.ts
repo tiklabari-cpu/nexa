@@ -224,23 +224,38 @@ describe('agent work schedule (PRD §5.3-Vardiya)', () => {
     const invalid: Array<[string, unknown]> = [
       [
         'a start at or after its end',
-        { timezone: 'UTC', schedule: [{ day: 'monday', start: '18:00', end: '09:00', enabled: true }] },
+        {
+          timezone: 'UTC',
+          schedule: [{ day: 'monday', start: '18:00', end: '09:00', enabled: true }],
+        },
       ],
       [
         'a start equal to its end',
-        { timezone: 'UTC', schedule: [{ day: 'monday', start: '09:00', end: '09:00', enabled: true }] },
+        {
+          timezone: 'UTC',
+          schedule: [{ day: 'monday', start: '09:00', end: '09:00', enabled: true }],
+        },
       ],
       [
         'an out-of-range hour',
-        { timezone: 'UTC', schedule: [{ day: 'monday', start: '24:00', end: '24:30', enabled: true }] },
+        {
+          timezone: 'UTC',
+          schedule: [{ day: 'monday', start: '24:00', end: '24:30', enabled: true }],
+        },
       ],
       [
         'an unpadded time',
-        { timezone: 'UTC', schedule: [{ day: 'monday', start: '9:00', end: '18:00', enabled: true }] },
+        {
+          timezone: 'UTC',
+          schedule: [{ day: 'monday', start: '9:00', end: '18:00', enabled: true }],
+        },
       ],
       [
         'an unknown weekday',
-        { timezone: 'UTC', schedule: [{ day: 'caturday', start: '09:00', end: '18:00', enabled: true }] },
+        {
+          timezone: 'UTC',
+          schedule: [{ day: 'caturday', start: '09:00', end: '18:00', enabled: true }],
+        },
       ],
       [
         'the same weekday twice',
@@ -334,7 +349,11 @@ describe('agent work schedule (PRD §5.3-Vardiya)', () => {
       // `normalizeWorkSchedule` treats "no slots" as "not configured", so this
       // is a reset rather than a rejection — the endpoint inherits that rule
       // instead of inventing a second one.
-      const put = await putSchedule(fx.a.agentAccountId, { timezone: 'UTC', schedule: [] }, selfToken);
+      const put = await putSchedule(
+        fx.a.agentAccountId,
+        { timezone: 'UTC', schedule: [] },
+        selfToken,
+      );
 
       expect(put.statusCode).toBe(200);
       expect(put.json()).toEqual({ timezone: 'UTC', schedule: DEFAULT_WORK_SCHEDULE.schedule });
@@ -373,7 +392,10 @@ describe('agent work schedule (PRD §5.3-Vardiya)', () => {
 
       const invalid = await putSchedule(
         fx.a.agentAccountId,
-        { timezone: 'UTC', schedule: [{ day: 'monday', start: '20:00', end: '08:00', enabled: true }] },
+        {
+          timezone: 'UTC',
+          schedule: [{ day: 'monday', start: '20:00', end: '08:00', enabled: true }],
+        },
         selfToken,
       );
       expect(invalid.statusCode).toBe(400);

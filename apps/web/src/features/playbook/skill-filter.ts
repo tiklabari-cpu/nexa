@@ -62,7 +62,9 @@ export function skillMatchesControls(skill: SkillFacet, controls: SkillControls)
   }
 
   if (controls.owner !== 'all') {
-    if (controls.owner === 'none' ? skill.ai_agent_id !== null : skill.ai_agent_id !== controls.owner)
+    if (
+      controls.owner === 'none' ? skill.ai_agent_id !== null : skill.ai_agent_id !== controls.owner
+    )
       return false;
   }
 
@@ -87,7 +89,9 @@ export function applySkillControls<T extends SkillFacet>(
   skills: readonly T[],
   controls: SkillControls,
 ): T[] {
-  return skills.filter((skill) => skillMatchesControls(skill, controls)).sort(SORTERS[controls.sort]);
+  return skills
+    .filter((skill) => skillMatchesControls(skill, controls))
+    .sort(SORTERS[controls.sort]);
 }
 
 /** True when any narrowing filter is set (sort is an ordering, not a filter). */
@@ -126,7 +130,10 @@ export function skillOwnerOptions(
     }
     if (seen.has(skill.ai_agent_id)) continue;
     seen.add(skill.ai_agent_id);
-    options.push({ value: skill.ai_agent_id, label: nameFor(skill.ai_agent_id) ?? 'Unknown agent' });
+    options.push({
+      value: skill.ai_agent_id,
+      label: nameFor(skill.ai_agent_id) ?? 'Unknown agent',
+    });
   }
 
   if (hasUnassigned) options.push({ value: 'none', label: 'Unassigned' });

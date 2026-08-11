@@ -117,10 +117,7 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
                   className="flex flex-col gap-1.5 px-4 py-3"
                 >
                   <div className="flex flex-wrap items-center gap-3">
-                    <span
-                      className="min-w-0 flex-1 truncate font-mono text-sm"
-                      title={webhook.url}
-                    >
+                    <span className="min-w-0 flex-1 truncate font-mono text-sm" title={webhook.url}>
                       {webhook.url}
                     </span>
                     <StatusDot
@@ -156,7 +153,10 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
       {/* Same one-render discipline as a partner app's secret: state only, no
           other copy, discarded the instant this closes. */}
       {newSubscription && (
-        <WebhookSecretPanel registration={newSubscription} onClose={() => setNewSubscription(null)} />
+        <WebhookSecretPanel
+          registration={newSubscription}
+          onClose={() => setNewSubscription(null)}
+        />
       )}
 
       {deleteTarget && (

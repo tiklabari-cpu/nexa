@@ -59,7 +59,11 @@ describe('ticket rules', () => {
     subject: string,
     customerId: string,
   ): Promise<{ status: number; ticket: TicketDetail }> => {
-    const response = await server.post('/tickets', { subject, customer_id: customerId }, auth(token));
+    const response = await server.post(
+      '/tickets',
+      { subject, customer_id: customerId },
+      auth(token),
+    );
     return { status: response.statusCode, ticket: response.json() as TicketDetail };
   };
 

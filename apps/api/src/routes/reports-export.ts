@@ -474,10 +474,14 @@ function renderPage(
 ): string {
   const ops: string[] = [];
   const text = (font: string, size: number, x: number, baseline: number, value: string): void => {
-    ops.push(`BT /${font} ${num(size)} Tf ${num(x)} ${num(baseline)} Td ${pdfLiteral(value)} Tj ET`);
+    ops.push(
+      `BT /${font} ${num(size)} Tf ${num(x)} ${num(baseline)} Td ${pdfLiteral(value)} Tj ET`,
+    );
   };
   const rule = (y: number, grey: number): void => {
-    ops.push(`${num(grey)} G 0.5 w ${num(MARGIN)} ${num(y)} m ${num(PAGE_WIDTH - MARGIN)} ${num(y)} l S`);
+    ops.push(
+      `${num(grey)} G 0.5 w ${num(MARGIN)} ${num(y)} m ${num(PAGE_WIDTH - MARGIN)} ${num(y)} l S`,
+    );
   };
 
   // Every page repeats the title so a page torn out of the stack still says what

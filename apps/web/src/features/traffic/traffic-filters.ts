@@ -17,12 +17,7 @@ import { TRAFFIC_TABS } from './traffic-tabs.js';
 import type { TrafficActivity } from './types.js';
 
 export type TrafficConditionField =
-  | 'activity'
-  | 'page_url_contains'
-  | 'came_from_contains'
-  | 'country_code'
-  | 'is_lead'
-  | 'group_id';
+  'activity' | 'page_url_contains' | 'came_from_contains' | 'country_code' | 'is_lead' | 'group_id';
 
 export interface TrafficCondition {
   field: TrafficConditionField;
@@ -171,7 +166,10 @@ export function buildTrafficParams(conditions: readonly TrafficCondition[]): URL
   for (const condition of conditions) {
     if (conditionError(condition)) continue;
     const value = condition.value.trim();
-    params.append(condition.field, condition.field === 'country_code' ? value.toUpperCase() : value);
+    params.append(
+      condition.field,
+      condition.field === 'country_code' ? value.toUpperCase() : value,
+    );
   }
   return params;
 }
@@ -198,9 +196,7 @@ export function resolveActivity(
  * how conditions are written back to the URL — so a reload or a shared link
  * restores the same filters, in the fields' catalogue order.
  */
-export function conditionsFromSearchParams(
-  searchParams: URLSearchParams,
-): TrafficCondition[] {
+export function conditionsFromSearchParams(searchParams: URLSearchParams): TrafficCondition[] {
   const conditions: TrafficCondition[] = [];
   for (const def of TRAFFIC_FIELD_DEFS) {
     const value = searchParams.get(def.field);

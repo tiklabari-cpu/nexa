@@ -27,7 +27,14 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
 const { IpAllowlist } = await import('./IpAllowlist.js');
 
 const ENTRIES = {
-  items: [{ id: 'entry-1', entry: '10.0.0.0/24', label: 'Office VPN', created_at: '2026-01-01T00:00:00.000Z' }],
+  items: [
+    {
+      id: 'entry-1',
+      entry: '10.0.0.0/24',
+      label: 'Office VPN',
+      created_at: '2026-01-01T00:00:00.000Z',
+    },
+  ],
 };
 
 const SECURITY = {
@@ -78,9 +85,7 @@ describe('IpAllowlist', () => {
     );
     renderComponent(<IpAllowlist canEdit />);
     expect(await screen.findByText('No allowlist entries')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Add the addresses your team connects from/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Add the addresses your team connects from/)).toBeInTheDocument();
   });
 
   it('adds an entry by POSTing the entry and label', async () => {
@@ -113,7 +118,8 @@ describe('IpAllowlist', () => {
       new ApiClientError({
         type: 'validation',
         status: 400,
-        message: 'That would lock you out: the list must still include the address you are connecting from.',
+        message:
+          'That would lock you out: the list must still include the address you are connecting from.',
         requestId: '-',
       }),
     );
@@ -156,7 +162,12 @@ describe('IpAllowlist', () => {
 
   it('shows a server rejection of the policy save as an alert', async () => {
     api.patch.mockRejectedValue(
-      new ApiClientError({ type: 'validation', status: 400, message: 'Enter a value of 1 or more.', requestId: '-' }),
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message: 'Enter a value of 1 or more.',
+        requestId: '-',
+      }),
     );
     renderComponent(<IpAllowlist canEdit />);
     await screen.findByText('10.0.0.0/24');

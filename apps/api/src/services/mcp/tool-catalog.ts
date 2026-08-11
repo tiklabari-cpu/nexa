@@ -78,9 +78,7 @@ export type SearchTicketsArgs = z.infer<typeof searchTicketsInputSchema>;
 // promoted to required.
 
 const listChatsInputSchema = z.object({
-  view: z
-    .enum(['all', 'my', 'queued', 'unassigned', 'archived', 'ai', 'ai_solved'])
-    .default('all'),
+  view: z.enum(['all', 'my', 'queued', 'unassigned', 'archived', 'ai', 'ai_solved']).default('all'),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   page_id: z.string().max(512).optional(),
 });
@@ -181,7 +179,8 @@ export const MCP_TOOL_CATALOG = [
   {
     name: 'get_report',
     title: 'Get report',
-    description: 'Fetch one of this workspace’s reports (overview, breakdown, ai-agent or reviews) for a date range.',
+    description:
+      'Fetch one of this workspace’s reports (overview, breakdown, ai-agent or reviews) for a date range.',
     inputSchema: getReportInputSchema,
     inputJsonSchema: getReportInputJsonSchema,
     requiredScopes: ['reports_read'],

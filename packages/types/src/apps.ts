@@ -103,7 +103,10 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     scopes: ['contacts.read', 'deals.read'],
     dataLabel: 'HubSpot CRM',
     dataFields: [
-      { label: 'Lifecycle stage', options: ['Lead', 'Marketing qualified', 'Sales qualified', 'Customer'] },
+      {
+        label: 'Lifecycle stage',
+        options: ['Lead', 'Marketing qualified', 'Sales qualified', 'Customer'],
+      },
       { label: 'Open deals', options: ['0', '1', '2', '3'] },
       { label: 'Owner', options: ['Alex Rivera', 'Sam Okafor', 'Jordan Lee'] },
     ],
@@ -161,7 +164,10 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     scopes: ['calendar.events.read'],
     dataLabel: 'Google Calendar',
     dataFields: [
-      { label: 'Next meeting', options: ['None scheduled', 'Tomorrow 10:00', 'Friday 15:00', 'Mon 09:30'] },
+      {
+        label: 'Next meeting',
+        options: ['None scheduled', 'Tomorrow 10:00', 'Friday 15:00', 'Mon 09:30'],
+      },
     ],
   },
   {
@@ -301,7 +307,8 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     category: 'productivity',
     provider: 'oauth',
     icon: '⚡',
-    description: 'Trigger zaps from workspace events — register a Zapier app through the Nexa partner portal.',
+    description:
+      'Trigger zaps from workspace events — register a Zapier app through the Nexa partner portal.',
     scopes: ['zaps.trigger', 'zaps.read'],
     dataLabel: 'Zapier',
     dataFields: [
@@ -315,7 +322,8 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     category: 'productivity',
     provider: 'api_key',
     icon: '🔗',
-    description: 'Run Make scenarios against this workspace — register a Make app through the Nexa partner portal.',
+    description:
+      'Run Make scenarios against this workspace — register a Make app through the Nexa partner portal.',
     scopes: ['scenarios.trigger', 'scenarios.read'],
     dataLabel: 'Make',
     dataFields: [
@@ -996,7 +1004,9 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     description: 'Bring a customer’s ticket status and department from Deskpro.',
     scopes: ['tickets.read'],
     dataLabel: 'Deskpro',
-    dataFields: [{ label: 'Status', options: ['New', 'Awaiting agent', 'Awaiting customer', 'Resolved'] }],
+    dataFields: [
+      { label: 'Status', options: ['New', 'Awaiting agent', 'Awaiting customer', 'Resolved'] },
+    ],
   },
   {
     id: 'teamsupport',
@@ -1197,7 +1207,9 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     description: 'Bring a customer’s Affirm loan status into the conversation.',
     scopes: ['loans.read'],
     dataLabel: 'Affirm',
-    dataFields: [{ label: 'Loan status', options: ['No loan', 'Active', 'Paid off', 'Delinquent'] }],
+    dataFields: [
+      { label: 'Loan status', options: ['No loan', 'Active', 'Paid off', 'Delinquent'] },
+    ],
   },
   {
     id: 'mailerlite',
@@ -1378,7 +1390,9 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     description: 'Show the customer’s last touchpoint and journey from Woopra.',
     scopes: ['events.read'],
     dataLabel: 'Woopra',
-    dataFields: [{ label: 'Last touchpoint', options: ['—', 'Viewed pricing', 'Signed up', 'Upgraded'] }],
+    dataFields: [
+      { label: 'Last touchpoint', options: ['—', 'Viewed pricing', 'Signed up', 'Upgraded'] },
+    ],
   },
   {
     id: 'crazyegg',
@@ -1400,7 +1414,9 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     description: 'Bring the customer’s conversion funnel step from Kissmetrics.',
     scopes: ['events.read'],
     dataLabel: 'Kissmetrics',
-    dataFields: [{ label: 'Funnel step', options: ['Visited', 'Signed up', 'Activated', 'Converted'] }],
+    dataFields: [
+      { label: 'Funnel step', options: ['Visited', 'Signed up', 'Activated', 'Converted'] },
+    ],
   },
   // --- Channel-typed apps: also managed in Settings → Channels (KK 09.2) ------
   {
@@ -1477,7 +1493,9 @@ export function filterAppCatalog(
   return entries.filter((entry) => {
     if (filter.category !== undefined && entry.category !== filter.category) return false;
     if (!query) return true;
-    return entry.name.toLowerCase().includes(query) || entry.description.toLowerCase().includes(query);
+    return (
+      entry.name.toLowerCase().includes(query) || entry.description.toLowerCase().includes(query)
+    );
   });
 }
 
@@ -1504,7 +1522,10 @@ export interface AppPage {
  * layer, 09.2-v2-c) can turn an unknown cursor into a 400 instead of masking
  * a bad request as an empty result.
  */
-export function paginateApps(entries: readonly AppCatalogEntry[], options: AppPaginationOptions): AppPage | null {
+export function paginateApps(
+  entries: readonly AppCatalogEntry[],
+  options: AppPaginationOptions,
+): AppPage | null {
   const { limit, pageId } = options;
   let start = 0;
   if (pageId !== undefined) {
@@ -1536,7 +1557,9 @@ export function isAppId(id: unknown): id is string {
  * (KK 09.2 "kanal-tipli olanlar Channels'ta da yönetilir"). A channel-typed app
  * is not connected through the marketplace OAuth flow — it points to Channels.
  */
-export function isChannelApp(entry: AppCatalogEntry): entry is AppCatalogEntry & { channel: ChannelType } {
+export function isChannelApp(
+  entry: AppCatalogEntry,
+): entry is AppCatalogEntry & { channel: ChannelType } {
   return entry.channel !== undefined;
 }
 

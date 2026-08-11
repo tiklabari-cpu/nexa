@@ -59,7 +59,8 @@ function round(value: number): number {
 
 function assertTime(value: Date, label: string): number {
   const time = value instanceof Date ? value.getTime() : Number.NaN;
-  if (!Number.isFinite(time)) throw new TypeError(`presenceCoverage: ${label} must be a valid Date.`);
+  if (!Number.isFinite(time))
+    throw new TypeError(`presenceCoverage: ${label} must be a valid Date.`);
   return time;
 }
 
@@ -127,9 +128,7 @@ export function presenceCoverage(
     // Sorted defensively: the reader orders by `changed_at`, but a grid built
     // from mis-ordered rows would produce negative intervals that silently
     // vanish rather than an error anyone would notice.
-    const ordered = [...agentEvents].sort(
-      (a, b) => a.changedAt.getTime() - b.changedAt.getTime(),
-    );
+    const ordered = [...agentEvents].sort((a, b) => a.changedAt.getTime() - b.changedAt.getTime());
     const onlineMinutes = new Array<number>(HOURS_PER_DAY).fill(0);
 
     for (const [index, event] of ordered.entries()) {

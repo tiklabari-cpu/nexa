@@ -12,7 +12,7 @@ import {
 } from './traffic-filters.js';
 
 describe('TRAFFIC_FIELD_DEFS', () => {
-  it('covers 13.2-f\'s six parameters, one definition each', () => {
+  it("covers 13.2-f's six parameters, one definition each", () => {
     expect(TRAFFIC_FIELD_DEFS.map((def) => def.field)).toEqual([
       'activity',
       'page_url_contains',

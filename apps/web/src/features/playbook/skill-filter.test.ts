@@ -88,12 +88,27 @@ describe('type / status / owner filters', () => {
 
 describe('sort', () => {
   it('orders by name A→Z and Z→A', () => {
-    expect(ids(applySkillControls(all, controls({ sort: 'name-asc' })))).toEqual(['c', 'd', 'a', 'b']);
-    expect(ids(applySkillControls(all, controls({ sort: 'name-desc' })))).toEqual(['b', 'a', 'd', 'c']);
+    expect(ids(applySkillControls(all, controls({ sort: 'name-asc' })))).toEqual([
+      'c',
+      'd',
+      'a',
+      'b',
+    ]);
+    expect(ids(applySkillControls(all, controls({ sort: 'name-desc' })))).toEqual([
+      'b',
+      'a',
+      'd',
+      'c',
+    ]);
   });
 
   it('orders by most recently updated and by most runs', () => {
-    expect(ids(applySkillControls(all, controls({ sort: 'recent' })))).toEqual(['b', 'd', 'a', 'c']);
+    expect(ids(applySkillControls(all, controls({ sort: 'recent' })))).toEqual([
+      'b',
+      'd',
+      'a',
+      'c',
+    ]);
     expect(ids(applySkillControls(all, controls({ sort: 'runs' })))).toEqual(['c', 'a', 'b', 'd']);
   });
 

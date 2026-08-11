@@ -59,8 +59,10 @@ async function assigneeOf(
 ): Promise<string | null | undefined> {
   const res = await request.get(`${API_BASE}/chats/${chatId}`, { headers: auth });
   if (!res.ok()) return undefined;
-  return ((await res.json()) as { thread: { assignee_id: string | null } | null }).thread
-    ?.assignee_id ?? null;
+  return (
+    ((await res.json()) as { thread: { assignee_id: string | null } | null }).thread?.assignee_id ??
+    null
+  );
 }
 
 /** Sign in as an arbitrary seeded account — `agentPage` only covers the owner. */
@@ -122,7 +124,8 @@ test.describe('skill-based routing + supervisor takeover (FR-MOD-08.6.3)', () =>
 
       const roster = await request.get(`${API_BASE}/agents`, { headers: auth });
       expect(roster.ok()).toBe(true);
-      const agentsList = ((await roster.json()) as { items: { id: string; email: string }[] }).items;
+      const agentsList = ((await roster.json()) as { items: { id: string; email: string }[] })
+        .items;
       const skilledId = agentsList.find((a) => a.email === SKILLED_AGENT.email)?.id;
       const supervisorId = agentsList.find((a) => a.email === DEMO.email)?.id;
       expect(skilledId, 'skilled agent not found').toBeTruthy();
@@ -135,7 +138,9 @@ test.describe('skill-based routing + supervisor takeover (FR-MOD-08.6.3)', () =>
       await agentPage
         .getByRole('button', { name: `Manage skills for ${SKILLED_AGENT.name}` })
         .click();
-      const skillsDialog = agentPage.getByRole('dialog', { name: `Skills — ${SKILLED_AGENT.name}` });
+      const skillsDialog = agentPage.getByRole('dialog', {
+        name: `Skills — ${SKILLED_AGENT.name}`,
+      });
       await expect(skillsDialog).toBeVisible();
       const box = skillsDialog.getByRole('checkbox', { name: skillName });
       await expect(box).not.toBeChecked();
@@ -152,9 +157,11 @@ test.describe('skill-based routing + supervisor takeover (FR-MOD-08.6.3)', () =>
       // agent belongs to, so the skill filter alone decides the assignee.
       const rulesRes = await request.get(`${API_BASE}/settings/routing-rules`, { headers: auth });
       expect(rulesRes.ok()).toBe(true);
-      const fallback = ((await rulesRes.json()) as {
-        items: { id: string; is_fallback: boolean; conditions: unknown }[];
-      }).items.find((r) => r.is_fallback);
+      const fallback = (
+        (await rulesRes.json()) as {
+          items: { id: string; is_fallback: boolean; conditions: unknown }[];
+        }
+      ).items.find((r) => r.is_fallback);
       expect(fallback, 'fallback rule not found').toBeTruthy();
       ruleId = fallback!.id;
       ruleConditions = fallback!.conditions;
@@ -234,10 +241,14 @@ test.describe('skill-based routing + supervisor takeover (FR-MOD-08.6.3)', () =>
           .catch(() => {});
       }
       if (chatId) {
-        await request.post(`${API_BASE}/chats/${chatId}/deactivate`, { headers: auth }).catch(() => {});
+        await request
+          .post(`${API_BASE}/chats/${chatId}/deactivate`, { headers: auth })
+          .catch(() => {});
       }
       if (skillId) {
-        await request.delete(`${API_BASE}/settings/expertise/${skillId}`, { headers: auth }).catch(() => {});
+        await request
+          .delete(`${API_BASE}/settings/expertise/${skillId}`, { headers: auth })
+          .catch(() => {});
       }
       await visitorContext.close();
     }
@@ -281,7 +292,9 @@ test.describe('skill-based routing + supervisor takeover (FR-MOD-08.6.3)', () =>
       chatId = (await chatByText(request, auth, question))?.id;
     } finally {
       if (chatId) {
-        await request.post(`${API_BASE}/chats/${chatId}/deactivate`, { headers: auth }).catch(() => {});
+        await request
+          .post(`${API_BASE}/chats/${chatId}/deactivate`, { headers: auth })
+          .catch(() => {});
       }
       await visitorContext.close();
       await agentContext.close();

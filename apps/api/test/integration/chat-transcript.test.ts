@@ -22,7 +22,12 @@ import { generateShortId } from '@nexa/types';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import { FileMailer } from '../../src/services/mail/mailer.js';
 import type { AgentPrincipal } from '../../src/services/auth/principal.js';
-import { ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import {
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
 const HOUR = 3_600_000;
@@ -86,7 +91,13 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
 
     const chatId = generateShortId();
     await owner.chat.create({
-      data: { id: chatId, licenseId: t.licenseId, customerId: customer.id, active: true, createdAt: at },
+      data: {
+        id: chatId,
+        licenseId: t.licenseId,
+        customerId: customer.id,
+        active: true,
+        createdAt: at,
+      },
     });
     const threadId = generateShortId();
     await owner.thread.create({

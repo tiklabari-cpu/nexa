@@ -88,7 +88,12 @@ function issuedAt(period: string): string {
  * the usage endpoint.
  */
 function overageCents(
-  record: { quantity: bigint; included: bigint; overageUnit: number; overageUnitPriceCents: number },
+  record: {
+    quantity: bigint;
+    included: bigint;
+    overageUnit: number;
+    overageUnitPriceCents: number;
+  },
   byBlock: boolean,
 ): { overage: number; cents: number } {
   const used = Number(record.quantity);

@@ -172,7 +172,9 @@ export function PlaybookPage(): ReactElement {
       // skill already in the cache, the selection sticks; the invalidate then
       // reconciles ordering with the server.
       queryClient.setQueryData<{ items: Skill[] }>(['playbook', 'skills'], (old) =>
-        old ? { items: [skill, ...old.items.filter((s) => s.id !== skill.id)] } : { items: [skill] },
+        old
+          ? { items: [skill, ...old.items.filter((s) => s.id !== skill.id)] }
+          : { items: [skill] },
       );
       setSelectedId(skill.id);
       setGalleryOpen(false);
@@ -332,7 +334,12 @@ export function PlaybookPage(): ReactElement {
 
             {view === 'profile' &&
               (aiAgent ? (
-                <ProfileForm key={aiAgent.id} agent={aiAgent} canEdit={canEdit} onSaved={invalidate} />
+                <ProfileForm
+                  key={aiAgent.id}
+                  agent={aiAgent}
+                  canEdit={canEdit}
+                  onSaved={invalidate}
+                />
               ) : (
                 <Card>
                   <EmptyState
@@ -349,7 +356,9 @@ export function PlaybookPage(): ReactElement {
                     onTry={(template) => createFromTemplate.mutate(template)}
                     onBrowseAll={() => setGalleryOpen(true)}
                     pendingId={
-                      createFromTemplate.isPending ? (createFromTemplate.variables?.id ?? null) : null
+                      createFromTemplate.isPending
+                        ? (createFromTemplate.variables?.id ?? null)
+                        : null
                     }
                   />
                 )}
@@ -357,7 +366,11 @@ export function PlaybookPage(): ReactElement {
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,360px)_1fr]">
                   <Section title="Skills">
                     {items.length > 0 && (
-                      <div role="tablist" aria-label="Skills" className="flex gap-1 border-b border-border">
+                      <div
+                        role="tablist"
+                        aria-label="Skills"
+                        className="flex gap-1 border-b border-border"
+                      >
                         {SKILL_TABS.map((t) => {
                           const active = tab === t.id;
                           return (
@@ -381,7 +394,9 @@ export function PlaybookPage(): ReactElement {
                                 </span>
                               )}
                               <span>{t.label}</span>
-                              <span className="text-2xs text-content-tertiary">{tabCounts[t.id]}</span>
+                              <span className="text-2xs text-content-tertiary">
+                                {tabCounts[t.id]}
+                              </span>
                             </button>
                           );
                         })}
@@ -425,7 +440,9 @@ export function PlaybookPage(): ReactElement {
                             label="Owner"
                             value={owner}
                             onChange={setOwner}
-                            options={ownerOptions.map((option) => [option.value, option.label] as const)}
+                            options={ownerOptions.map(
+                              (option) => [option.value, option.label] as const,
+                            )}
                           />
                           <FilterSelect
                             label="Sort"
@@ -452,7 +469,11 @@ export function PlaybookPage(): ReactElement {
                     )}
 
                     <Card>
-                      <div role="tabpanel" id="skills-tabpanel" aria-labelledby={`skills-tab-${tab}`}>
+                      <div
+                        role="tabpanel"
+                        id="skills-tabpanel"
+                        aria-labelledby={`skills-tab-${tab}`}
+                      >
                         {skills.isPending ? (
                           <p className="p-4 text-sm text-content-secondary">Loading…</p>
                         ) : items.length === 0 ? (
@@ -501,8 +522,8 @@ export function PlaybookPage(): ReactElement {
                                       {skill.name}
                                     </span>
                                     <span className="block text-2xs text-content-tertiary">
-                                      {skill.steps.length} step{skill.steps.length === 1 ? '' : 's'} ·{' '}
-                                      {skill.runs_count} run{skill.runs_count === 1 ? '' : 's'}
+                                      {skill.steps.length} step{skill.steps.length === 1 ? '' : 's'}{' '}
+                                      · {skill.runs_count} run{skill.runs_count === 1 ? '' : 's'}
                                     </span>
                                   </button>
 

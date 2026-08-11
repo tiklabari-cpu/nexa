@@ -42,7 +42,10 @@ export function CustomFields({ fields, canEdit, save }: Props): ReactElement | n
   const errorFor = useMemo(() => {
     const map = new Map<string, string | null>();
     for (const field of fields) {
-      map.set(field.definition_id, canEdit ? customFieldError(field, drafts[field.definition_id] ?? '') : null);
+      map.set(
+        field.definition_id,
+        canEdit ? customFieldError(field, drafts[field.definition_id] ?? '') : null,
+      );
     }
     return map;
   }, [fields, drafts, canEdit]);
@@ -101,7 +104,12 @@ export function CustomFields({ fields, canEdit, save }: Props): ReactElement | n
           <label key={field.definition_id} htmlFor={id} className="flex flex-col gap-1">
             <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
               {field.label}
-              {field.required && <span aria-hidden="true" className="text-danger"> *</span>}
+              {field.required && (
+                <span aria-hidden="true" className="text-danger">
+                  {' '}
+                  *
+                </span>
+              )}
             </span>
 
             {field.type === 'boolean' ? (

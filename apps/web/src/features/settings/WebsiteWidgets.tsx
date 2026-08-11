@@ -198,9 +198,14 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
                     <span className="flex-1 font-mono text-sm">{site.domain}</span>
 
                     <span className="flex flex-col items-end">
-                      <StatusDot tone={STATUS[site.status].tone} label={STATUS[site.status].label} />
+                      <StatusDot
+                        tone={STATUS[site.status].tone}
+                        label={STATUS[site.status].label}
+                      />
                       {site.status === 'connected' && (
-                        <span className="text-2xs text-content-tertiary">Test message received</span>
+                        <span className="text-2xs text-content-tertiary">
+                          Test message received
+                        </span>
                       )}
                     </span>
 
@@ -225,7 +230,9 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
                     )}
                   </div>
 
-                  {openSnippet === site.id && <SnippetPanel snippet={site.snippet} domain={site.domain} />}
+                  {openSnippet === site.id && (
+                    <SnippetPanel snippet={site.snippet} domain={site.domain} />
+                  )}
                 </li>
               ))}
             </ul>

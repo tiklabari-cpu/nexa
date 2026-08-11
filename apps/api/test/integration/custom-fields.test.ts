@@ -43,10 +43,7 @@ describe('custom fields (tickets/contacts)', () => {
   const define = (token: string, body: unknown) =>
     server.post('/settings/custom-fields', body, auth(token));
 
-  const createDefinition = async (
-    token: string,
-    body: unknown,
-  ): Promise<CustomFieldDefinition> => {
+  const createDefinition = async (token: string, body: unknown): Promise<CustomFieldDefinition> => {
     const response = await define(token, body);
     expect(response.statusCode).toBe(201);
     return response.json() as CustomFieldDefinition;

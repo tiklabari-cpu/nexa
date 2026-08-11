@@ -70,7 +70,13 @@ export interface RetentionReport {
    * see `#pruneAudit`. Zero in a dry-run, which only counts.
    */
   auditEntries: number;
-  totals: { tenants: number; threads: number; visits: number; mailFiles: number; auditEntries: number };
+  totals: {
+    tenants: number;
+    threads: number;
+    visits: number;
+    mailFiles: number;
+    auditEntries: number;
+  };
 }
 
 export interface RetentionRunnerOptions {

@@ -42,7 +42,13 @@ knowledge:
             properties:
               name: { type: string, minLength: 1, maxLength: 200 }
               content: { type: string, minLength: 1, maxLength: 100000 }
-              source_url: { type: string, minLength: 1, maxLength: 2048, description: "Required when type is website." }
+              source_url:
+                {
+                  type: string,
+                  minLength: 1,
+                  maxLength: 2048,
+                  description: "Required when type is website.",
+                }
               type: { type: string, enum: [website, file, article, faq], default: article }
     responses:
       "201":

@@ -125,7 +125,10 @@ export class ApiClient {
    * cannot read), and "Could not load attachment." would hide exactly the
    * reason the caller needs.
    */
-  async getFile(path: string, init: RequestInit = {}): Promise<{ blob: Blob; filename: string | null }> {
+  async getFile(
+    path: string,
+    init: RequestInit = {},
+  ): Promise<{ blob: Blob; filename: string | null }> {
     const headers = new Headers(init.headers);
     const token = this.#getAccessToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);

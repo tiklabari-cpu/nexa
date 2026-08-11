@@ -89,7 +89,15 @@ describe('saved report views store', () => {
 
   it('does not touch the Inbox saved-views key', () => {
     saveSavedReportViews([
-      { id: 'a', name: 'A', tab: 'overview', mode: 7, customFrom: '', customTo: '', baseline: null },
+      {
+        id: 'a',
+        name: 'A',
+        tab: 'overview',
+        mode: 7,
+        customFrom: '',
+        customTo: '',
+        baseline: null,
+      },
     ]);
     expect(localStorage.getItem('nexa.inbox.saved-views')).toBeNull();
   });
@@ -133,7 +141,15 @@ describe('addSavedReportView / removeSavedReportView', () => {
 
   it('rejects an empty (or whitespace-only) name and leaves the list unchanged', () => {
     const existing: SavedReportView[] = [
-      { id: 'a', name: 'A', tab: 'overview', mode: 30, customFrom: '', customTo: '', baseline: null },
+      {
+        id: 'a',
+        name: 'A',
+        tab: 'overview',
+        mode: 30,
+        customFrom: '',
+        customTo: '',
+        baseline: null,
+      },
     ];
     const { views, added } = addSavedReportView(existing, {
       name: '   ',
@@ -149,7 +165,15 @@ describe('addSavedReportView / removeSavedReportView', () => {
 
   it('removes a view by id and leaves the rest', () => {
     const list: SavedReportView[] = [
-      { id: 'a', name: 'A', tab: 'overview', mode: 30, customFrom: '', customTo: '', baseline: null },
+      {
+        id: 'a',
+        name: 'A',
+        tab: 'overview',
+        mode: 30,
+        customFrom: '',
+        customTo: '',
+        baseline: null,
+      },
       { id: 'b', name: 'B', tab: 'reviews', mode: 7, customFrom: '', customTo: '', baseline: null },
     ];
     expect(removeSavedReportView(list, 'a')).toEqual([list[1]]);

@@ -68,9 +68,15 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
   const list = async (token: string): Promise<AppListItem[]> => (await page(token)).items;
 
   /** A rejected read — the status and the error type the envelope carries (ADR-06). */
-  const rejected = async (token: string, params: string): Promise<{ status: number; type: string }> => {
+  const rejected = async (
+    token: string,
+    params: string,
+  ): Promise<{ status: number; type: string }> => {
     const response = await server.get(`/settings/apps${params}`, auth(token));
-    return { status: response.statusCode, type: (response.json() as { error: { type: string } }).error.type };
+    return {
+      status: response.statusCode,
+      type: (response.json() as { error: { type: string } }).error.type,
+    };
   };
 
   /** Walks the whole result set through `next_page_id`, returning items, ids and totals in order. */
@@ -85,7 +91,10 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     // Bounded (comfortably above the mock catalogue's size) so a cursor that
     // fails to advance fails the test instead of hanging.
     for (let request = 0; request < 200; request += 1) {
-      const result = await page(token, `${params}${cursor ? `&page_id=${encodeURIComponent(cursor)}` : ''}`);
+      const result = await page(
+        token,
+        `${params}${cursor ? `&page_id=${encodeURIComponent(cursor)}` : ''}`,
+      );
       items.push(...result.items);
       ids.push(...result.items.map((item) => item.id));
       totals.push(result.total);
@@ -222,7 +231,11 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
   });
 
   it('404s the OAuth flow for an app that does not exist', async () => {
-    const started = await server.post('/settings/apps/not-an-app/oauth/start', {}, auth(adminToken));
+    const started = await server.post(
+      '/settings/apps/not-an-app/oauth/start',
+      {},
+      auth(adminToken),
+    );
     expect(started.statusCode).toBe(404);
   });
 
@@ -387,7 +400,8 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     // The narrowing parameters are part of the same read — they do not need,
     // and do not grant, anything beyond `access_rules:ro`.
     expect(
-      (await server.get('/settings/apps?query=hub&category=crm&limit=5', auth(readToken))).statusCode,
+      (await server.get('/settings/apps?query=hub&category=crm&limit=5', auth(readToken)))
+        .statusCode,
     ).toBe(200);
     expect(
       (await server.post(`/settings/apps/${APP}/oauth/start`, {}, auth(readToken))).statusCode,
@@ -412,10 +426,12 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     // app, not a category, and not any page of a one-card-at-a-time walk. The
     // filter runs against the static catalogue, the installation join stays
     // licence-scoped, so B's every page reports nothing installed (NFR-S5).
-    expect(findItem((await page(bToken, `?query=${APP}&limit=100`)).items, APP).installed).toBe(false);
-    expect((await page(bToken, '?category=crm&limit=100')).items.some((item) => item.installed)).toBe(
+    expect(findItem((await page(bToken, `?query=${APP}&limit=100`)).items, APP).installed).toBe(
       false,
     );
+    expect(
+      (await page(bToken, '?category=crm&limit=100')).items.some((item) => item.installed),
+    ).toBe(false);
     for (const pageSize of ['?limit=1', '?limit=3', '?limit=100']) {
       const { items } = await walk(bToken, pageSize);
       expect(items.some((item) => item.installed)).toBe(false);

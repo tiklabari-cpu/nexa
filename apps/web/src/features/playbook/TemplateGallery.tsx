@@ -135,7 +135,11 @@ export function TemplateGallery({
         </header>
 
         <div className="flex flex-col gap-3 p-5">
-          <div role="tablist" aria-label="Template category" className="flex flex-wrap gap-1 border-b border-border">
+          <div
+            role="tablist"
+            aria-label="Template category"
+            className="flex flex-wrap gap-1 border-b border-border"
+          >
             <button
               type="button"
               role="tab"

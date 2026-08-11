@@ -28,9 +28,9 @@ describe('matchesGoal', () => {
     expect(matchesGoal({ url_contains: '/Thank-You' }, ['https://shop.example/thank-you'])).toBe(
       true,
     );
-    expect(matchesGoal({ url_contains: '/thank-you' }, ['https://shop.example/THANK-YOU?id=7'])).toBe(
-      true,
-    );
+    expect(
+      matchesGoal({ url_contains: '/thank-you' }, ['https://shop.example/THANK-YOU?id=7']),
+    ).toBe(true);
   });
 
   it('does not match when no page contains the needle', () => {
@@ -51,7 +51,9 @@ describe('matchesGoal', () => {
   it('treats an unreadable definition as unreachable rather than throwing', () => {
     // One bad row must not throw: `evaluate` runs every active goal in the
     // workspace over the same visitor, and a throw here would lose the others.
-    expect(() => matchesGoal({ url_contains: 42 }, ['https://shop.example/thank-you'])).not.toThrow();
+    expect(() =>
+      matchesGoal({ url_contains: 42 }, ['https://shop.example/thank-you']),
+    ).not.toThrow();
     expect(matchesGoal({ url_contains: 42 }, ['https://shop.example/thank-you'])).toBe(false);
     expect(matchesGoal(null, ['https://shop.example/thank-you'])).toBe(false);
     expect(matchesGoal('/thank-you', ['https://shop.example/thank-you'])).toBe(false);
@@ -65,6 +67,8 @@ describe('matchesGoal', () => {
     expect(matchesGoal({ url_contains: '/thank-you' }, pages)).toBe(true);
 
     expect(matchesGoal({ url_contains: '/thank-you' }, visitorPageUrls(null))).toBe(false);
-    expect(matchesGoal({ url_contains: '/thank-you' }, visitorPageUrls('not-an-array'))).toBe(false);
+    expect(matchesGoal({ url_contains: '/thank-you' }, visitorPageUrls('not-an-array'))).toBe(
+      false,
+    );
   });
 });

@@ -178,7 +178,8 @@ const CHAT_TOPIC_GROUPS: TopicGroup[] = [
     customerEmail: 'devon',
     countryCode: 'US',
     country: 'United States',
-    agentReply: "Thanks for flagging this — I'll check the courier tracking and update you shortly.",
+    agentReply:
+      "Thanks for flagging this — I'll check the courier tracking and update you shortly.",
     texts: [
       'My delivery tracking shows in transit and this delivery is running late.',
       'The delivery tracking still shows in transit, this delivery is very late.',
@@ -538,7 +539,12 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
   });
 
   await prisma.securitySettings.create({
-    data: { licenseId, brandId: defaultBrand.id, fileSharingEnabled: true, spamFilterEnabled: true },
+    data: {
+      licenseId,
+      brandId: defaultBrand.id,
+      fileSharingEnabled: true,
+      spamFilterEnabled: true,
+    },
   });
 
   // --- Billing --------------------------------------------------------------

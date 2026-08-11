@@ -68,8 +68,7 @@ export interface BulkCrawlRefusal {
 export type BulkUrlCheck = { readonly ok: true; readonly url: string } | BulkCrawlRefusal;
 
 export type BulkCrawlOutcome =
-  | { readonly ok: true; readonly url: string; readonly content: string }
-  | BulkCrawlRefusal;
+  { readonly ok: true; readonly url: string; readonly content: string } | BulkCrawlRefusal;
 
 /**
  * The three sentences a website row can be refused with, phrased so that
@@ -182,9 +181,7 @@ export class BulkWebsiteCrawler {
 }
 
 type Settled<T> =
-  | { state: 'fulfilled'; value: T }
-  | { state: 'rejected'; error: unknown }
-  | { state: 'expired' };
+  { state: 'fulfilled'; value: T } | { state: 'rejected'; error: unknown } | { state: 'expired' };
 
 /**
  * Await `work` for at most `ms`, reporting the outcome instead of throwing.

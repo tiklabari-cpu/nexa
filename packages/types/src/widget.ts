@@ -68,7 +68,9 @@ export function isValidWidgetColor(value: unknown): value is string {
  * embedded in a snippet or applied to the DOM: an out-of-range colour, an
  * unknown position or a non-boolean flag can never survive it.
  */
-export function normalizeWidgetAppearance(input: Partial<WidgetAppearance> | null | undefined): WidgetAppearance {
+export function normalizeWidgetAppearance(
+  input: Partial<WidgetAppearance> | null | undefined,
+): WidgetAppearance {
   const raw = input ?? {};
   return {
     primary_color: isValidWidgetColor(raw.primary_color)

@@ -66,9 +66,14 @@ test.describe('AI Agent (MOD-06)', () => {
     await agentPage.screenshot({ path: 'kanit/33-ai-agent-profile.png', fullPage: true });
   });
 
-  test('adds a website knowledge source by crawling a URL (FR-MOD-06.3.2)', async ({ agentPage }) => {
+  test('adds a website knowledge source by crawling a URL (FR-MOD-06.3.2)', async ({
+    agentPage,
+  }) => {
     await agentPage.goto('/app/playbook');
-    await agentPage.getByRole('tablist', { name: 'AI Agent' }).getByRole('tab', { name: 'Knowledge' }).click();
+    await agentPage
+      .getByRole('tablist', { name: 'AI Agent' })
+      .getByRole('tab', { name: 'Knowledge' })
+      .click();
 
     // Choosing Website swaps the content box for a URL to crawl. Exact match so
     // the "Type" select is not confused with the "Knowledge types" sub-tab strip.

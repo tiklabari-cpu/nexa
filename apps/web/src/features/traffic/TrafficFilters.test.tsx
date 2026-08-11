@@ -67,7 +67,9 @@ describe('TrafficFilters', () => {
     const input = screen.getByLabelText('Country');
     fireEvent.change(input, { target: { value: 'USA' } });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Use a 2-letter country code, like US.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Use a 2-letter country code, like US.',
+    );
     expect(onChange).not.toHaveBeenCalled();
   });
 

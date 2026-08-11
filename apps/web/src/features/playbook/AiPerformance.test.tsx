@@ -57,7 +57,14 @@ beforeEach(() => {
 
 describe('AiPerformance', () => {
   it('renders the four KPI cards from the reports', async () => {
-    mockReports({ resolutions: 40, resolution_rate: 0.8, transfers: 10, transfer_rate: 0.2, score: 0.9, responses: 60 });
+    mockReports({
+      resolutions: 40,
+      resolution_rate: 0.8,
+      transfers: 10,
+      transfer_rate: 0.2,
+      score: 0.9,
+      responses: 60,
+    });
     renderPerf(<AiPerformance agentActive canRead />);
 
     expect(await screen.findByText('Resolution rate')).toBeInTheDocument();

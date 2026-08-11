@@ -21,7 +21,13 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BI_METRICS } from '@nexa/ai-mock';
-import { grantToken, ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const DAY_MS = 86_400_000;
@@ -130,7 +136,9 @@ describe('copilot BI command', () => {
   it('rejects an empty question (400)', async () => {
     const token = await agentToken(fx.a);
     expect((await ask('   ', token)).statusCode).toBe(400);
-    expect((await server.post('/copilot/bi', {}, auth(await agentToken(fx.a)))).statusCode).toBe(400);
+    expect((await server.post('/copilot/bi', {}, auth(await agentToken(fx.a)))).statusCode).toBe(
+      400,
+    );
   });
 
   // =========================================================================

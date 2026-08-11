@@ -36,11 +36,7 @@ export function ConflictBanner({ chatId }: { chatId: string }): ReactElement | n
 
 function WarningIcon(): ReactElement {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="h-3.5 w-3.5 shrink-0 fill-current"
-    >
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 fill-current">
       <path d="M8 1.5a1 1 0 0 1 .878.52l6.25 11.5A1 1 0 0 1 14.25 15H1.75a1 1 0 0 1-.878-1.48l6.25-11.5A1 1 0 0 1 8 1.5Zm0 4.25a.75.75 0 0 0-.75.75v3a.75.75 0 0 0 1.5 0v-3A.75.75 0 0 0 8 5.75Zm0 6a.875.875 0 1 0 0 1.75.875.875 0 0 0 0-1.75Z" />
     </svg>
   );

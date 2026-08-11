@@ -108,7 +108,9 @@ describe('ApiClient', () => {
     );
     const client = new ApiClient({ fetchImpl });
 
-    const error = (await client.getFile('/reports/export?group=overview').catch((e: unknown) => e)) as ApiClientError;
+    const error = (await client
+      .getFile('/reports/export?group=overview')
+      .catch((e: unknown) => e)) as ApiClientError;
 
     expect(error).toBeInstanceOf(ApiClientError);
     expect(error.status).toBe(403);

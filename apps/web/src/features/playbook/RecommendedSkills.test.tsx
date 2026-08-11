@@ -53,9 +53,7 @@ describe('RecommendedSkills', () => {
   });
 
   it('shows only the pending card as busy, and leaves the rest usable', () => {
-    render(
-      <RecommendedSkills onTry={() => {}} onBrowseAll={() => {}} pendingId="order-status" />,
-    );
+    render(<RecommendedSkills onTry={() => {}} onBrowseAll={() => {}} pendingId="order-status" />);
 
     // The pending card reads "Opening…" and is disabled; the others still invite a try.
     const opening = screen.getByRole('button', { name: 'Opening…' });

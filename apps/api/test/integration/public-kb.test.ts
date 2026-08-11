@@ -350,7 +350,10 @@ describe('public KB rate limiting (PUBKB-c)', () => {
       // The anon bucket is a different key entirely: a sign-in is not swept up by
       // the exhausted pubkb bucket (never 429), and its limit is not the tiny
       // pubkb override — proving the two buckets neither share a key nor a limit.
-      const login = await limited.post('/auth/login', { email: 'nobody@example.test', password: 'nope' });
+      const login = await limited.post('/auth/login', {
+        email: 'nobody@example.test',
+        password: 'nope',
+      });
       expect(login.statusCode).not.toBe(429);
       expect(login.headers['x-ratelimit-limit']).not.toBe('2');
     } finally {

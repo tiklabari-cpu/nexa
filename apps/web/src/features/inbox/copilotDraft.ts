@@ -21,8 +21,7 @@ interface CopilotDraftState {
 
 export const useCopilotDraftStore = create<CopilotDraftState>((set) => ({
   byChat: {},
-  push: (chatId, text) =>
-    set((state) => ({ byChat: { ...state.byChat, [chatId]: text } })),
+  push: (chatId, text) => set((state) => ({ byChat: { ...state.byChat, [chatId]: text } })),
   clear: (chatId) =>
     set((state) => {
       if (!(chatId in state.byChat)) return state;

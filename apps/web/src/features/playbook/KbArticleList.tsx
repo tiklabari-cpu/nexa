@@ -97,11 +97,16 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
   };
 
   if (articles.error || categories.error) {
-    return <ErrorNotice message="Could not load the knowledge base articles. Check that the API is reachable." />;
+    return (
+      <ErrorNotice message="Could not load the knowledge base articles. Check that the API is reachable." />
+    );
   }
 
   return (
-    <Section title="Public KB" description="The self-service articles a visitor can read once published.">
+    <Section
+      title="Public KB"
+      description="The self-service articles a visitor can read once published."
+    >
       {canEdit && (
         <div className="flex justify-end">
           <button
@@ -127,7 +132,11 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
         </Card>
       ) : (
         <>
-          <div role="tablist" aria-label="KB article status" className="flex gap-1 border-b border-border">
+          <div
+            role="tablist"
+            aria-label="KB article status"
+            className="flex gap-1 border-b border-border"
+          >
             {KB_TABS.map((t) => {
               const active = tab === t;
               return (
@@ -216,7 +225,9 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
                   {visibleItems.map((article) => {
                     const meta = (
                       <p className="truncate text-2xs text-content-tertiary">
-                        {article.category_id ? (categoryNameById.get(article.category_id) ?? 'Unknown category') : 'Uncategorized'}
+                        {article.category_id
+                          ? (categoryNameById.get(article.category_id) ?? 'Unknown category')
+                          : 'Uncategorized'}
                         {' · '}
                         {formatDate(article.updated_at)}
                       </p>

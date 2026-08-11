@@ -192,9 +192,7 @@ describe('inbound email → ticket', () => {
     expect(response.json()).toEqual({ status: 'ignored', reason: 'spam' });
     expect(await owner.ticket.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
     // A dropped message leaves no trace — not even a customer.
-    expect(
-      await owner.customer.count({ where: { email: 'spammer@shady.example' } }),
-    ).toBe(0);
+    expect(await owner.customer.count({ where: { email: 'spammer@shady.example' } })).toBe(0);
   });
 
   it('lets a flagged message through when the workspace turned the filter off', async () => {

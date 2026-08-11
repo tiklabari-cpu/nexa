@@ -90,14 +90,22 @@ export function findTemplateProblems(field: TemplateField, text: string): Templa
   const leftover = text.replace(PLACEHOLDER, '');
   if (leftover.includes('{{') || leftover.includes('}}')) {
     const token = leftover.includes('{{') ? '{{' : '}}';
-    problems.push({ field, token, reason: 'malformed', message: `Unbalanced ${token} in ${field}.` });
+    problems.push({
+      field,
+      token,
+      reason: 'malformed',
+      message: `Unbalanced ${token} in ${field}.`,
+    });
   }
 
   return problems;
 }
 
 /** Problems across a template's subject and body together, subject first. */
-export function findTemplateProblemsIn(parts: { subject: string; body: string }): TemplateProblem[] {
+export function findTemplateProblemsIn(parts: {
+  subject: string;
+  body: string;
+}): TemplateProblem[] {
   return [
     ...findTemplateProblems('subject', parts.subject),
     ...findTemplateProblems('body', parts.body),

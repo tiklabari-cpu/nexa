@@ -16,7 +16,13 @@ import {
   SupervisionService,
 } from '../../src/services/traffic/supervision-service.js';
 import { TrafficService } from '../../src/services/traffic/traffic-service.js';
-import { grantToken, ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 interface TrafficVisitor {
@@ -596,7 +602,7 @@ describe('traffic', () => {
 
     // --- Cross-tenant, second (NFR-S4/S5).
 
-    it("returns nothing for a group id belonging to another tenant", async () => {
+    it('returns nothing for a group id belonging to another tenant', async () => {
       const mine = await seedCustomer(fx.a, 'Mine, In A Team');
       const chatId = await seedActiveChat(fx.a, mine, { assigneeId: fx.a.agentAccountId });
       await routeToGroup(chatId, await seedGroup(fx.a, 'Sales'));
@@ -772,8 +778,9 @@ describe('traffic', () => {
       );
       expect(sent.statusCode).toBe(201);
 
-      expect((await listTraffic('?came_from_contains=searchy.test')).map((v) => v.customer_id))
-        .toContain(visitor.customer_id);
+      expect(
+        (await listTraffic('?came_from_contains=searchy.test')).map((v) => v.customer_id),
+      ).toContain(visitor.customer_id);
       expect(
         (await listTraffic('?came_from_contains=no-such-referrer')).map((v) => v.customer_id),
       ).not.toContain(visitor.customer_id);

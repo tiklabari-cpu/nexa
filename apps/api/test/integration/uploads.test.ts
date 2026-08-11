@@ -139,11 +139,7 @@ describe('uploads', () => {
   it("follows the licence's own list rather than the shipped default", async () => {
     // text/csv is not in the schema default; an admin who adds it should be
     // able to send one immediately.
-    await server.patch(
-      '/settings/security',
-      { allowed_file_types: ['text/csv'] },
-      auth(tokenA),
-    );
+    await server.patch('/settings/security', { allowed_file_types: ['text/csv'] }, auth(tokenA));
 
     const csv = await server.post(
       '/uploads',
@@ -295,7 +291,7 @@ describe('uploads', () => {
         auth(token),
       );
 
-    it('(a) refuses a URL on someone else\'s host', async () => {
+    it("(a) refuses a URL on someone else's host", async () => {
       const chat = await startChat(tokenA, fx.a.customerId);
 
       const sent = await send(tokenA, chat.id, 'https://evil.example/tracker.png');

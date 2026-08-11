@@ -164,7 +164,9 @@ describe('ReportsPage — AI Agent report (07.4)', () => {
 
     // The same `/reports/ai-agent` query the AI Performance screen (06.5-a) reads,
     // scoped to the header's range control.
-    expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/ai-agent\?from=.*&to=/));
+    expect(api.get).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/reports\/ai-agent\?from=.*&to=/),
+    );
   });
 
   it('reads an empty window as unknown, not as 0%', async () => {
@@ -744,7 +746,9 @@ describe('ReportsPage — Staffing report (WORKSCHED-i)', () => {
     renderReports(<ReportsPage />);
     await userEvent.click(screen.getByRole('tab', { name: 'Staffing' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Could not load the staffing forecast/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /Could not load the staffing forecast/,
+    );
   });
 
   it('notes when presence data is unknown for the whole window', async () => {
@@ -1150,8 +1154,14 @@ describe('ReportsPage — Cases + Leads tabs, permission-gated visibility (07.7-
     mockGroupsCasesLeads({
       cases: {
         by_day: [{ date: '2026-07-20', open: 1, closed: 2, total: 3 }],
-        by_status: [{ status: 'open', count: 5 }, { status: 'closed', count: 9 }],
-        by_priority: [{ priority: 10, count: 2 }, { priority: -5, count: 1 }],
+        by_status: [
+          { status: 'open', count: 5 },
+          { status: 'closed', count: 9 },
+        ],
+        by_priority: [
+          { priority: 10, count: 2 },
+          { priority: -5, count: 1 },
+        ],
       },
     });
     renderReports(<ReportsPage />);
@@ -1479,7 +1489,10 @@ function mockGroupsExport({
 /** Stubs `URL.createObjectURL`/`revokeObjectURL` and `<a>`'s `click`, exactly
  * as `BillingPage.test.tsx` does for its invoice-CSV download — jsdom has
  * neither object-URL plumbing nor real navigation. */
-function stubDownload(): { createObjectURL: ReturnType<typeof vi.fn>; click: ReturnType<typeof vi.spyOn> } {
+function stubDownload(): {
+  createObjectURL: ReturnType<typeof vi.fn>;
+  click: ReturnType<typeof vi.spyOn>;
+} {
   const createObjectURL = vi.fn(() => 'blob:export');
   const revokeObjectURL = vi.fn();
   vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });

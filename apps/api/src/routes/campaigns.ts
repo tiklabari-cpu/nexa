@@ -11,7 +11,11 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
-import { CampaignService, type CampaignInput, type CampaignPatch } from '../services/campaigns/campaign-service.js';
+import {
+  CampaignService,
+  type CampaignInput,
+  type CampaignPatch,
+} from '../services/campaigns/campaign-service.js';
 
 const listQuery = z.object({
   status: z.enum(['all', 'ongoing', 'scheduled', 'inactive']).default('all'),
@@ -19,7 +23,9 @@ const listQuery = z.object({
 
 // `.strict()` so a typo in a condition key (`url_contain`) is a 400, not a
 // silently-ignored rule that quietly matches nobody.
-const conditionsSchema = z.object({ url_contains: z.string().trim().max(2048).optional() }).strict();
+const conditionsSchema = z
+  .object({ url_contains: z.string().trim().max(2048).optional() })
+  .strict();
 const contentSchema = z.object({ message: z.string().trim().min(1).max(2000).optional() }).strict();
 
 const createBody = z.object({
@@ -71,25 +77,21 @@ export default async function campaignRoutes(app: FastifyInstance): Promise<void
     },
   );
 
-  app.post(
-    '/campaigns',
-    { config: { scopes: ['customers:rw'] } },
-    async (request, reply) => {
-      const body = parse(createBody, request.body);
-      const tenant = request.tenant();
-      const input: CampaignInput = {
-        name: body.name,
-        active: body.active,
-        conditions: body.conditions,
-        content: body.content,
-        startsAt: body.starts_at ?? null,
-        endsAt: body.ends_at ?? null,
-        recurring: body.recurring,
-      };
-      const result = await request.withTenant((tx) => campaigns.create(tx, tenant, input));
-      return reply.status(201).send(result.campaign);
-    },
-  );
+  app.post('/campaigns', { config: { scopes: ['customers:rw'] } }, async (request, reply) => {
+    const body = parse(createBody, request.body);
+    const tenant = request.tenant();
+    const input: CampaignInput = {
+      name: body.name,
+      active: body.active,
+      conditions: body.conditions,
+      content: body.content,
+      startsAt: body.starts_at ?? null,
+      endsAt: body.ends_at ?? null,
+      recurring: body.recurring,
+    };
+    const result = await request.withTenant((tx) => campaigns.create(tx, tenant, input));
+    return reply.status(201).send(result.campaign);
+  });
 
   app.patch<{ Params: { campaignId: string } }>(
     '/campaigns/:campaignId',

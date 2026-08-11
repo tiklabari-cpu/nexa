@@ -124,7 +124,9 @@ export function TrafficFilters({ initialConditions, onChange }: TrafficFiltersPr
           >
             {({ close }) =>
               addable.length === 0 ? (
-                <p className="px-2 py-1.5 text-xs text-content-tertiary">Every filter is already applied.</p>
+                <p className="px-2 py-1.5 text-xs text-content-tertiary">
+                  Every filter is already applied.
+                </p>
               ) : (
                 <ul className="flex flex-col gap-0.5">
                   {addable.map((def) => (
@@ -149,7 +151,9 @@ export function TrafficFilters({ initialConditions, onChange }: TrafficFiltersPr
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-xs text-content-tertiary">No filters applied — every visitor is shown.</p>
+        <p className="text-xs text-content-tertiary">
+          No filters applied — every visitor is shown.
+        </p>
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((row) => {
@@ -159,7 +163,10 @@ export function TrafficFilters({ initialConditions, onChange }: TrafficFiltersPr
             const errorId = `${inputId}-error`;
             return (
               <li key={row.field} className="flex items-start gap-2">
-                <label htmlFor={inputId} className="w-40 shrink-0 pt-1.5 text-xs text-content-secondary">
+                <label
+                  htmlFor={inputId}
+                  className="w-40 shrink-0 pt-1.5 text-xs text-content-secondary"
+                >
                   {def.label}
                 </label>
                 <div className="flex-1">

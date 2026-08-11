@@ -392,8 +392,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     // when the answers ride the first message. An empty optional field is left
     // out rather than sent blank.
     const custom: Record<string, string> = {};
-    const inputs =
-      ui.prechatFields.querySelectorAll<HTMLInputElement>('input[data-def-id]');
+    const inputs = ui.prechatFields.querySelectorAll<HTMLInputElement>('input[data-def-id]');
     for (const el of inputs) {
       const id = el.dataset.defId ?? '';
       if (!id) continue;
@@ -1147,7 +1146,8 @@ function readAppearance(params: URLSearchParams): Appearance {
   const theme = params.get('theme');
   const position = params.get('position');
   return {
-    primaryColor: color && COLOR_RE.test(color) ? color.toLowerCase() : DEFAULT_APPEARANCE.primaryColor,
+    primaryColor:
+      color && COLOR_RE.test(color) ? color.toLowerCase() : DEFAULT_APPEARANCE.primaryColor,
     theme: theme === 'light' || theme === 'dark' ? theme : 'auto',
     position: position === 'bottom-left' ? 'bottom-left' : 'bottom-right',
     mobileFullscreen: params.get('mobile_full') !== '0',
@@ -1158,7 +1158,9 @@ function readAppearance(params: URLSearchParams): Appearance {
 /** The widget's camelCase appearance from the API's snake_case token payload. */
 function appearanceFromApi(a: WidgetAppearance): Appearance {
   return {
-    primaryColor: COLOR_RE.test(a.primary_color) ? a.primary_color.toLowerCase() : DEFAULT_APPEARANCE.primaryColor,
+    primaryColor: COLOR_RE.test(a.primary_color)
+      ? a.primary_color.toLowerCase()
+      : DEFAULT_APPEARANCE.primaryColor,
     theme: a.theme,
     position: a.position,
     mobileFullscreen: a.mobile_fullscreen,

@@ -92,8 +92,6 @@ describe('OnboardingWizard', () => {
     vi.stubGlobal('fetch', vi.fn());
     renderWizard();
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(
-      screen.getByRole('heading', { name: 'Connect your first website' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Connect your first website' })).toBeInTheDocument();
   });
 });

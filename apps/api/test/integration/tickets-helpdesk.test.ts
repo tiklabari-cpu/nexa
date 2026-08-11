@@ -64,7 +64,11 @@ describe('tickets — HelpDesk layer (merge/followers/priority)', () => {
 
   /** Create a standalone ticket (no chat, so no one-per-chat constraint). */
   async function makeTicket(token: string, subject: string, customerId = fx.a.customerId) {
-    const response = await server.post('/tickets', { subject, customer_id: customerId }, auth(token));
+    const response = await server.post(
+      '/tickets',
+      { subject, customer_id: customerId },
+      auth(token),
+    );
     expect(response.statusCode, response.body).toBe(201);
     return response.json() as { id: string };
   }
@@ -150,7 +154,11 @@ describe('tickets — HelpDesk layer (merge/followers/priority)', () => {
       await server.post(`/tickets/${b.id}/merge`, { into: a.id }, auth(adminToken));
 
       // b is now a secondary of a; merging c into b would make a chain.
-      const response = await server.post(`/tickets/${c.id}/merge`, { into: b.id }, auth(adminToken));
+      const response = await server.post(
+        `/tickets/${c.id}/merge`,
+        { into: b.id },
+        auth(adminToken),
+      );
       expect(response.statusCode).toBe(400);
     });
 
@@ -161,7 +169,11 @@ describe('tickets — HelpDesk layer (merge/followers/priority)', () => {
       await server.post(`/tickets/${b.id}/merge`, { into: a.id }, auth(adminToken));
 
       // a is a primary; it cannot itself become a secondary of c.
-      const response = await server.post(`/tickets/${a.id}/merge`, { into: c.id }, auth(adminToken));
+      const response = await server.post(
+        `/tickets/${a.id}/merge`,
+        { into: c.id },
+        auth(adminToken),
+      );
       expect(response.statusCode).toBe(400);
     });
 
@@ -171,7 +183,11 @@ describe('tickets — HelpDesk layer (merge/followers/priority)', () => {
       const c = await makeTicket(adminToken, 'C');
       await server.post(`/tickets/${b.id}/merge`, { into: a.id }, auth(adminToken));
 
-      const response = await server.post(`/tickets/${b.id}/merge`, { into: c.id }, auth(adminToken));
+      const response = await server.post(
+        `/tickets/${b.id}/merge`,
+        { into: c.id },
+        auth(adminToken),
+      );
       expect(response.statusCode).toBe(400);
     });
 

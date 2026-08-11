@@ -76,13 +76,17 @@ export default async function uploadRoutes(app: FastifyInstance, { env }: Option
   // Fastify parses JSON and text out of the box and rejects everything else.
   // Encapsulation keeps this catch-all inside this plugin: no other route
   // starts accepting arbitrary bytes because uploads needed to.
-  app.addContentTypeParser('*', { parseAs: 'buffer', bodyLimit: HARD_CEILING }, (_req, body, done) =>
-    done(null, body),
+  app.addContentTypeParser(
+    '*',
+    { parseAs: 'buffer', bodyLimit: HARD_CEILING },
+    (_req, body, done) => done(null, body),
   );
 
   app.post(
     '/uploads',
-    { config: { scopes: ['chats--all:rw', 'chats--access:rw'], principals: ['agent', 'customer'] } },
+    {
+      config: { scopes: ['chats--all:rw', 'chats--access:rw'], principals: ['agent', 'customer'] },
+    },
     async (request, reply) => {
       const principal = request.requirePrincipal();
       const body = parse(requestBody, request.body);
@@ -196,14 +200,16 @@ export default async function uploadRoutes(app: FastifyInstance, { env }: Option
       const file = await store.get(key);
       if (!file) throw ApiError.notFound('Resource not found.');
 
-      return reply
-        .header('content-type', file.contentType)
-        // Never inline: an allowed text/plain rendered in our own origin is a
-        // stored-XSS surface handed over for free.
-        .header('content-disposition', 'attachment')
-        .header('x-content-type-options', 'nosniff')
-        .header('cache-control', 'private, max-age=31536000, immutable')
-        .send(file.bytes);
+      return (
+        reply
+          .header('content-type', file.contentType)
+          // Never inline: an allowed text/plain rendered in our own origin is a
+          // stored-XSS surface handed over for free.
+          .header('content-disposition', 'attachment')
+          .header('x-content-type-options', 'nosniff')
+          .header('cache-control', 'private, max-age=31536000, immutable')
+          .send(file.bytes)
+      );
     },
   );
 }

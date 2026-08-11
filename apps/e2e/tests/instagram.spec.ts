@@ -62,7 +62,9 @@ test.describe('Instagram DMs (FR-MOD-08.5.7)', () => {
     await expect(views.getByRole('link', { name: 'Instagram' })).toHaveCount(0);
 
     await agentPage.goto('/app/settings');
-    const card = agentPage.getByRole('region', { name: 'Channels' }).getByTestId('channel-instagram');
+    const card = agentPage
+      .getByRole('region', { name: 'Channels' })
+      .getByTestId('channel-instagram');
 
     // Not "Coming soon" any more, and not pretending to be connected either.
     await expect(card.getByText('Not connected')).toBeVisible();

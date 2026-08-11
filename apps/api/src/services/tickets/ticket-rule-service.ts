@@ -102,8 +102,8 @@ export class TicketRuleService {
     const existing = await tx.ticketRule.findFirst({ where: { id, licenseId: tenant.licenseId } });
     if (!existing) throw ApiError.notFound('Ticket rule not found.');
 
-    const conditions = (patch.conditions ?? (existing.conditions ?? {})) as TicketRuleConditions;
-    const actions = (patch.actions ?? (existing.actions ?? {})) as TicketRuleActions;
+    const conditions = (patch.conditions ?? existing.conditions ?? {}) as TicketRuleConditions;
+    const actions = (patch.actions ?? existing.actions ?? {}) as TicketRuleActions;
     if (!hasCondition(conditions)) {
       throw ApiError.validation('conditions: a rule needs a condition.');
     }
@@ -134,7 +134,9 @@ export class TicketRuleService {
     audit: AuditContext,
     id: string,
   ): Promise<void> {
-    const { count } = await tx.ticketRule.deleteMany({ where: { id, licenseId: tenant.licenseId } });
+    const { count } = await tx.ticketRule.deleteMany({
+      where: { id, licenseId: tenant.licenseId },
+    });
     if (count === 0) throw ApiError.notFound('Ticket rule not found.');
     // Only a delete that actually happened is worth an entry.
     await writeAuditEntry(tx, audit, {

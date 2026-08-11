@@ -214,7 +214,9 @@ export function clusterTopics(
   }
 
   // Most voluminous first; ties broken by label so the order is total and stable.
-  topics.sort((a, b) => b.volume - a.volume || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+  topics.sort(
+    (a, b) => b.volume - a.volume || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0),
+  );
 
   // Assign ids after ordering: a keyword slug, deduped in the now-fixed order so
   // two same-named topics still get distinct, stable ids within this response.

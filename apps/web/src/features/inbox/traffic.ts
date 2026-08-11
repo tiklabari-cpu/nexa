@@ -38,15 +38,11 @@ export function matchesTrafficTab(chat: ChatSummary, tab: TrafficTab): boolean {
       return chat.queue_position !== null;
     case 'waiting':
       return (
-        chat.active &&
-        chat.queue_position === null &&
-        chat.last_event?.author_type === 'customer'
+        chat.active && chat.queue_position === null && chat.last_event?.author_type === 'customer'
       );
     case 'chatting':
       return (
-        chat.active &&
-        chat.queue_position === null &&
-        chat.last_event?.author_type !== 'customer'
+        chat.active && chat.queue_position === null && chat.last_event?.author_type !== 'customer'
       );
   }
 }

@@ -10,7 +10,13 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantToken, ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 describe('copilot (agent-assist)', () => {
@@ -33,7 +39,10 @@ describe('copilot (agent-assist)', () => {
   async function customerToken(tenant: TenantFixture, customerId?: string): Promise<string> {
     const response = await server.post(
       '/customer/token',
-      { organization_id: tenant.organizationId, ...(customerId ? { customer_id: customerId } : {}) },
+      {
+        organization_id: tenant.organizationId,
+        ...(customerId ? { customer_id: customerId } : {}),
+      },
       { origin: `https://${tenant.trustedDomain}` },
     );
     expect(response.statusCode).toBe(200);
@@ -46,7 +55,11 @@ describe('copilot (agent-assist)', () => {
       data: { organizationId: fx.a.organizationId, name: 'Visitor' },
       select: { id: true },
     });
-    const started = await server.post('/chats', { customer_id: customer.id, assign_to_me: true }, auth(token));
+    const started = await server.post(
+      '/chats',
+      { customer_id: customer.id, assign_to_me: true },
+      auth(token),
+    );
     expect([200, 201]).toContain(started.statusCode);
     const chatId = (started.json() as { id: string }).id;
 
@@ -90,11 +103,12 @@ describe('copilot (agent-assist)', () => {
       const token = await customerToken(fx.a);
       expect((await server.get('/copilot/knowledge', auth(token))).statusCode).toBe(404);
       expect(
-        (await server.post('/copilot/knowledge', { name: 'x', content: 'y' }, auth(token))).statusCode,
+        (await server.post('/copilot/knowledge', { name: 'x', content: 'y' }, auth(token)))
+          .statusCode,
       ).toBe(404);
-      expect(
-        (await server.del(`/copilot/knowledge/${randomUUID()}`, auth(token))).statusCode,
-      ).toBe(404);
+      expect((await server.del(`/copilot/knowledge/${randomUUID()}`, auth(token))).statusCode).toBe(
+        404,
+      );
     });
 
     it('keeps copilot sources out of the AI-agent knowledge list, and vice versa', async () => {
@@ -109,9 +123,9 @@ describe('copilot (agent-assist)', () => {
 
       // The AI-agent KB (12.2 counterpart) must not show the copilot source.
       const aiList = await server.get('/knowledge-sources', auth(token));
-      expect((aiList.json() as { items: Array<{ id: string }> }).items.map((s) => s.id)).not.toContain(
-        copilotSourceId,
-      );
+      expect(
+        (aiList.json() as { items: Array<{ id: string }> }).items.map((s) => s.id),
+      ).not.toContain(copilotSourceId);
 
       // And an AI-agent source must not show up in the copilot list.
       const aiAgent = await owner.aiAgent.create({
@@ -130,7 +144,9 @@ describe('copilot (agent-assist)', () => {
         select: { id: true },
       });
       const copilotList = await server.get('/copilot/knowledge', auth(token));
-      const copilotIds = (copilotList.json() as { items: Array<{ id: string }> }).items.map((s) => s.id);
+      const copilotIds = (copilotList.json() as { items: Array<{ id: string }> }).items.map(
+        (s) => s.id,
+      );
       expect(copilotIds).toContain(copilotSourceId);
       expect(copilotIds).not.toContain(aiSource.id);
     });
@@ -200,7 +216,11 @@ describe('copilot (agent-assist)', () => {
       const token = await agentToken(fx.a);
       const chatId = await chatWithMessage(token, 'My order has not arrived yet.');
 
-      const response = await server.post(`/copilot/chats/${chatId}/summary`, undefined, auth(token));
+      const response = await server.post(
+        `/copilot/chats/${chatId}/summary`,
+        undefined,
+        auth(token),
+      );
       expect(response.statusCode).toBe(201);
       const body = response.json() as { summary: string; note_event_id: string };
       expect(body.summary).toContain('order has not arrived');
@@ -221,9 +241,9 @@ describe('copilot (agent-assist)', () => {
       await server.post(`/chats/${chatId}/deactivate`, undefined, auth(token));
 
       const events = await server.get(`/chats/${chatId}/events?limit=200`, auth(token));
-      const notes = (events.json() as { items: Array<{ recipients: string; text: string }> }).items.filter(
-        (e) => e.recipients === 'agents',
-      );
+      const notes = (
+        events.json() as { items: Array<{ recipients: string; text: string }> }
+      ).items.filter((e) => e.recipients === 'agents');
       expect(notes.length).toBeGreaterThan(0);
     });
 
@@ -232,7 +252,11 @@ describe('copilot (agent-assist)', () => {
       const chatId = await chatWithMessage(token, 'Hello?');
       await server.post(`/chats/${chatId}/deactivate`, undefined, auth(token));
 
-      const response = await server.post(`/copilot/chats/${chatId}/summary`, undefined, auth(token));
+      const response = await server.post(
+        `/copilot/chats/${chatId}/summary`,
+        undefined,
+        auth(token),
+      );
       expect(response.statusCode).toBe(409);
     });
 
@@ -240,9 +264,9 @@ describe('copilot (agent-assist)', () => {
       const tokenA = await agentToken(fx.a);
       const chatId = await chatWithMessage(tokenA, 'Hi');
       const tokenB = await agentToken(fx.b);
-      expect((await server.post(`/copilot/chats/${chatId}/summary`, undefined, auth(tokenB))).statusCode).toBe(
-        404,
-      );
+      expect(
+        (await server.post(`/copilot/chats/${chatId}/summary`, undefined, auth(tokenB))).statusCode,
+      ).toBe(404);
     });
   });
 
@@ -251,10 +275,16 @@ describe('copilot (agent-assist)', () => {
       const token = await agentToken(fx.a);
       await server.post(
         '/copilot/knowledge',
-        { name: 'Refund policy', content: 'A refund over five hundred dollars must be escalated to the finance team.' },
+        {
+          name: 'Refund policy',
+          content: 'A refund over five hundred dollars must be escalated to the finance team.',
+        },
         auth(token),
       );
-      const chatId = await chatWithMessage(token, 'I want a refund over five hundred dollars please.');
+      const chatId = await chatWithMessage(
+        token,
+        'I want a refund over five hundred dollars please.',
+      );
 
       const response = await server.post(`/copilot/chats/${chatId}/reply`, undefined, auth(token));
       expect(response.statusCode).toBe(200);
@@ -265,7 +295,10 @@ describe('copilot (agent-assist)', () => {
 
     it('returns an empty draft rather than inventing one when nothing matches', async () => {
       const token = await agentToken(fx.a);
-      const chatId = await chatWithMessage(token, 'Completely unrelated question about xylophones.');
+      const chatId = await chatWithMessage(
+        token,
+        'Completely unrelated question about xylophones.',
+      );
       const response = await server.post(`/copilot/chats/${chatId}/reply`, undefined, auth(token));
       expect(response.statusCode).toBe(200);
       expect((response.json() as { draft: string }).draft).toBe('');
@@ -310,7 +343,11 @@ describe('copilot (agent-assist)', () => {
       const chatId = await chatWithMessage(token, 'My order has not arrived.');
 
       // The agent replies (human-handled) and uses Copilot to summarise.
-      await server.post(`/chats/${chatId}/events`, { type: 'message', text: 'On it — checking now.' }, auth(token));
+      await server.post(
+        `/chats/${chatId}/events`,
+        { type: 'message', text: 'On it — checking now.' },
+        auth(token),
+      );
       const summary = await server.post(`/copilot/chats/${chatId}/summary`, undefined, auth(token));
       expect(summary.statusCode).toBe(201);
       await server.post(`/chats/${chatId}/deactivate`, undefined, auth(token));
@@ -329,7 +366,11 @@ describe('copilot (agent-assist)', () => {
     it('does not record an assist for an empty reply draft', async () => {
       const token = await agentToken(fx.a);
       const chatId = await chatWithMessage(token, 'A question with no matching knowledge at all.');
-      await server.post(`/chats/${chatId}/events`, { type: 'message', text: 'Let me look.' }, auth(token));
+      await server.post(
+        `/chats/${chatId}/events`,
+        { type: 'message', text: 'Let me look.' },
+        auth(token),
+      );
       await server.post(`/copilot/chats/${chatId}/reply`, undefined, auth(token));
       await server.post(`/chats/${chatId}/deactivate`, undefined, auth(token));
 

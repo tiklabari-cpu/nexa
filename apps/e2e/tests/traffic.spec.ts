@@ -96,8 +96,9 @@ test.describe('real-time traffic', () => {
         headers: auth,
       });
       expect(newest.ok(), `customers read failed: ${newest.status()}`).toBe(true);
-      const arrival = ((await newest.json()) as { items: Array<{ id: string; name: string | null }> })
-        .items[0];
+      const arrival = (
+        (await newest.json()) as { items: Array<{ id: string; name: string | null }> }
+      ).items[0];
       expect(arrival?.name, 'newest contact is not the anonymous visitor just created').toBeNull();
       const customerId = arrival!.id;
 
@@ -117,8 +118,9 @@ test.describe('real-time traffic', () => {
       // agent does when a chat is finished and the visitor stays on the site.
       const detail = await request.get(`${API_BASE}/customers/${customerId}`, { headers: auth });
       expect(detail.ok()).toBe(true);
-      const openChat = ((await detail.json()) as { chats: Array<{ id: string; active: boolean }> })
-        .chats.find((chat) => chat.active);
+      const openChat = (
+        (await detail.json()) as { chats: Array<{ id: string; active: boolean }> }
+      ).chats.find((chat) => chat.active);
       expect(openChat, 'the widget message did not open a conversation').toBeDefined();
       const closed = await request.post(`${API_BASE}/chats/${openChat!.id}/deactivate`, {
         headers: auth,
@@ -130,7 +132,15 @@ test.describe('real-time traffic', () => {
       const tablist = agentPage.getByRole('tablist', { name: 'Traffic status' });
       await expect(tablist).toBeVisible();
       await expect(tablist.getByRole('tab')).toHaveCount(7);
-      for (const label of ['All', 'Chatting', 'Supervised', 'Queued', 'Waiting for reply', 'Invited', 'Browsing']) {
+      for (const label of [
+        'All',
+        'Chatting',
+        'Supervised',
+        'Queued',
+        'Waiting for reply',
+        'Invited',
+        'Browsing',
+      ]) {
         await expect(tablist.getByRole('tab', { name: new RegExp(label) })).toBeVisible();
       }
 
@@ -273,7 +283,8 @@ test.describe('real-time traffic', () => {
         expect(measured.ok()).toBe(true);
       }
       const sorted = [...samples].sort((a, b) => a - b);
-      const at = (q: number): number => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
+      const at = (q: number): number =>
+        sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
       const median = at(0.5);
       // The median is what is asserted, and the tail is recorded beside it
       // rather than gated on: this runs against a dev server (`tsx watch`, no

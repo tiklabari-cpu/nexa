@@ -21,16 +21,14 @@ describe('useConflictStore', () => {
   });
 
   it('records a conflict with the composing agents', () => {
-    useConflictStore
-      .getState()
-      .note(
-        CHAT,
-        [
-          { agentId: 'agent-1', since: '2026-08-02T10:00:00.000Z' },
-          { agentId: 'agent-2', since: '2026-08-02T10:00:01.000Z' },
-        ],
-        '2026-08-02T10:00:01.000Z',
-      );
+    useConflictStore.getState().note(
+      CHAT,
+      [
+        { agentId: 'agent-1', since: '2026-08-02T10:00:00.000Z' },
+        { agentId: 'agent-2', since: '2026-08-02T10:00:01.000Z' },
+      ],
+      '2026-08-02T10:00:01.000Z',
+    );
     expect(useConflictStore.getState().byChat[CHAT]).toEqual({
       agents: [
         { agentId: 'agent-1', since: '2026-08-02T10:00:00.000Z' },
@@ -43,36 +41,36 @@ describe('useConflictStore', () => {
   it('ignores a payload with fewer than two agents', () => {
     useConflictStore
       .getState()
-      .note(CHAT, [{ agentId: 'agent-1', since: '2026-08-02T10:00:00.000Z' }], '2026-08-02T10:00:00.000Z');
+      .note(
+        CHAT,
+        [{ agentId: 'agent-1', since: '2026-08-02T10:00:00.000Z' }],
+        '2026-08-02T10:00:00.000Z',
+      );
     expect(useConflictStore.getState().byChat[CHAT]).toBeUndefined();
   });
 
   it('clears the conflict directly', () => {
-    useConflictStore
-      .getState()
-      .note(
-        CHAT,
-        [
-          { agentId: 'agent-1', since: '2026-08-02T10:00:00.000Z' },
-          { agentId: 'agent-2', since: '2026-08-02T10:00:01.000Z' },
-        ],
-        '2026-08-02T10:00:01.000Z',
-      );
+    useConflictStore.getState().note(
+      CHAT,
+      [
+        { agentId: 'agent-1', since: '2026-08-02T10:00:00.000Z' },
+        { agentId: 'agent-2', since: '2026-08-02T10:00:01.000Z' },
+      ],
+      '2026-08-02T10:00:01.000Z',
+    );
     useConflictStore.getState().clear(CHAT);
     expect(useConflictStore.getState().byChat[CHAT]).toBeUndefined();
   });
 
   it('lapses on its own if no fresh warning refreshes it', () => {
-    useConflictStore
-      .getState()
-      .note(
-        CHAT,
-        [
-          { agentId: 'agent-1', since: '2026-08-02T10:00:00.000Z' },
-          { agentId: 'agent-2', since: '2026-08-02T10:00:01.000Z' },
-        ],
-        '2026-08-02T10:00:01.000Z',
-      );
+    useConflictStore.getState().note(
+      CHAT,
+      [
+        { agentId: 'agent-1', since: '2026-08-02T10:00:00.000Z' },
+        { agentId: 'agent-2', since: '2026-08-02T10:00:01.000Z' },
+      ],
+      '2026-08-02T10:00:01.000Z',
+    );
     expect(useConflictStore.getState().byChat[CHAT]).toBeDefined();
 
     vi.advanceTimersByTime(CONFLICT_IDLE_MS + 1);

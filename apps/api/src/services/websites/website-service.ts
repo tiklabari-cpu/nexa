@@ -168,7 +168,10 @@ export class WebsiteService {
    * the appearance is normalised — a colour is only ever `#rrggbb`, position and
    * theme only their enums — so nothing here can carry markup into the template.
    */
-  snippet(organizationId: string, appearance: WidgetAppearance = DEFAULT_WIDGET_APPEARANCE): string {
+  snippet(
+    organizationId: string,
+    appearance: WidgetAppearance = DEFAULT_WIDGET_APPEARANCE,
+  ): string {
     const origin = this.widgetBaseUrl.replace(/\/+$/, '');
     const fields = [
       `organizationId: "${organizationId}"`,

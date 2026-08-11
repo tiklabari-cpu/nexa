@@ -38,8 +38,7 @@ describe('onboarding (FR-MOD-00.4)', () => {
 
   const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
-  const cannedCount = (licenseId: bigint) =>
-    owner.cannedResponse.count({ where: { licenseId } });
+  const cannedCount = (licenseId: bigint) => owner.cannedResponse.count({ where: { licenseId } });
   const chatCount = (licenseId: bigint) => owner.chat.count({ where: { licenseId } });
   const demoVisitors = (organizationId: string) =>
     owner.customer.count({ where: { organizationId, name: 'Sample visitor' } });
@@ -107,13 +106,15 @@ describe('onboarding (FR-MOD-00.4)', () => {
     });
 
     it('completing is idempotent — a second call keeps the original timestamp', async () => {
-      const first = (await server.post('/onboarding/complete', undefined, auth(ownerTokenA)))
-        .json() as State;
+      const first = (
+        await server.post('/onboarding/complete', undefined, auth(ownerTokenA))
+      ).json() as State;
       expect(first.completed).toBe(true);
       expect(first.completed_at).not.toBeNull();
 
-      const second = (await server.post('/onboarding/complete', undefined, auth(ownerTokenA)))
-        .json() as State;
+      const second = (
+        await server.post('/onboarding/complete', undefined, auth(ownerTokenA))
+      ).json() as State;
       expect(second.completed_at).toBe(first.completed_at);
     });
   });

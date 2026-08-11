@@ -642,134 +642,137 @@ export default async function customerRoutes(
    * rest of the widget surface — and the license gate refuses new sales in
    * read-only mode along with every other POST.
    */
-  app.post('/customer/chat/sale', { config: { principals: ['customer'] } }, async (request, reply) => {
-    const principal = request.requirePrincipal();
-    if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+  app.post(
+    '/customer/chat/sale',
+    { config: { principals: ['customer'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
 
-    const body = parse(trackSaleSchema, request.body);
-    const tenant = request.tenant();
-    const externalOrderId = body.external_order_id;
-    const orderKey = {
-      licenseId_externalOrderId: { licenseId: tenant.licenseId, externalOrderId },
-    };
+      const body = parse(trackSaleSchema, request.body);
+      const tenant = request.tenant();
+      const externalOrderId = body.external_order_id;
+      const orderKey = {
+        licenseId_externalOrderId: { licenseId: tenant.licenseId, externalOrderId },
+      };
 
-    // Tracking is off until a workspace turns it on, and no row means it has
-    // never been configured — both are "we do not collect this", so neither may
-    // write. Checked before anything is stored: a disabled workspace that
-    // quietly accumulated rows would start reporting revenue for a period it
-    // believed it was not tracking, the moment somebody flipped the switch.
-    const config = await request.withTenant((tx) =>
-      tx.salesTrackerSettings.findFirst({
-        select: { enabled: true, currency: true, attributionWindowDays: true },
-      }),
-    );
-    if (!config?.enabled) {
-      throw new ApiError('not_allowed', 'Sales tracking is not enabled for this workspace.');
-    }
-
-    // One workspace, one currency (13.5-b). Amounts in a second currency cannot
-    // be added to the first, and a tracker that accepted them would produce a
-    // total that is not money in any currency — so a mismatch is refused at the
-    // edge instead of being summed. The configured code is named in the message
-    // because the caller is an integrator wiring up a snippet, and it is already
-    // on every price the shop displays.
-    const currency = body.currency.toUpperCase();
-    if (currency !== config.currency.toUpperCase()) {
-      throw ApiError.validation(
-        `currency: this workspace tracks sales in ${config.currency}.`,
-        { expected: config.currency },
+      // Tracking is off until a workspace turns it on, and no row means it has
+      // never been configured — both are "we do not collect this", so neither may
+      // write. Checked before anything is stored: a disabled workspace that
+      // quietly accumulated rows would start reporting revenue for a period it
+      // believed it was not tracking, the moment somebody flipped the switch.
+      const config = await request.withTenant((tx) =>
+        tx.salesTrackerSettings.findFirst({
+          select: { enabled: true, currency: true, attributionWindowDays: true },
+        }),
       );
-    }
+      if (!config?.enabled) {
+        throw new ApiError('not_allowed', 'Sales tracking is not enabled for this workspace.');
+      }
 
-    // Idempotency, first half. The same order arrives more than once in normal
-    // operation — a merchant's at-least-once retry, a snippet firing twice, a
-    // visitor refreshing the confirmation page — and a second row would be a
-    // second sale in every report built on this table. Answered as a replay
-    // (200, the existing record) rather than a conflict: the caller did nothing
-    // wrong and has nothing to fix.
-    const existing = await request.withTenant((tx) =>
-      tx.trackedSale.findUnique({ where: orderKey, select: SALE_FIELDS }),
-    );
-    if (existing) return reply.status(200).send(serialiseSale(existing));
-
-    const now = new Date();
-
-    try {
-      const sale = await request.withTenant(async (tx) => {
-        // The visitor's recent conversations, newest first, each with the last
-        // time they were in it. RLS scopes this to the license, and the
-        // `customerId` filter to this visitor — so the chat a sale is credited
-        // to can only ever be one the caller's own token could already read.
-        const chats = await tx.chat.findMany({
-          where: { customerId: principal.customerId },
-          orderBy: { createdAt: 'desc' },
-          take: ATTRIBUTION_CANDIDATE_LIMIT,
-          select: {
-            id: true,
-            createdAt: true,
-            threads: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
-          },
+      // One workspace, one currency (13.5-b). Amounts in a second currency cannot
+      // be added to the first, and a tracker that accepted them would produce a
+      // total that is not money in any currency — so a mismatch is refused at the
+      // edge instead of being summed. The configured code is named in the message
+      // because the caller is an integrator wiring up a snippet, and it is already
+      // on every price the shop displays.
+      const currency = body.currency.toUpperCase();
+      if (currency !== config.currency.toUpperCase()) {
+        throw ApiError.validation(`currency: this workspace tracks sales in ${config.currency}.`, {
+          expected: config.currency,
         });
+      }
 
-        const attribution = resolveAttribution({
-          chats: chats.map((chat) => {
-            const lastThreadAt = chat.threads[0]?.createdAt;
-            return {
-              chatId: chat.id,
-              // The later of the two: a returning visitor reopens a thread on an
-              // existing chat, so `createdAt` alone would date a conversation
-              // held this morning to whenever it first started.
-              at: lastThreadAt && lastThreadAt > chat.createdAt ? lastThreadAt : chat.createdAt,
-            };
-          }),
-          now,
-          windowDays: config.attributionWindowDays,
-        });
-
-        const created = await tx.trackedSale.create({
-          data: {
-            // From the tenant, never the body — this is the line the whole
-            // shape of this route exists to protect.
-            licenseId: tenant.licenseId,
-            customerId: principal.customerId,
-            chatId: attribution.chatId,
-            externalOrderId,
-            amountCents: body.amount_cents,
-            currency,
-            attributed: attribution.attributed,
-          },
-          select: SALE_FIELDS,
-        });
-
-        // Written inside the same transaction as the sale, so the trail and the
-        // revenue cannot disagree, and only for a sale that is actually new —
-        // an entry per retry would count orders differently from the report.
-        await writeAuditEntry(tx, request.auditContext(), {
-          action: 'sale.tracked',
-          target: `sale:${created.id}`,
-          metadata: {
-            amount_cents: created.amountCents,
-            currency: created.currency,
-            attributed: created.attributed,
-          },
-        });
-
-        return created;
-      });
-
-      return reply.status(201).send(serialiseSale(sale));
-    } catch (error) {
-      // Idempotency, second half: two reports of the same order in flight at
-      // once. The check above passed for both, and the unique index let exactly
-      // one insert win — the loser reads the winner's row and answers as a
-      // replay, so concurrency produces one sale and one lot of revenue, not two.
-      if (!isUniqueViolation(error)) throw error;
-
-      const winner = await request.withTenant((tx) =>
+      // Idempotency, first half. The same order arrives more than once in normal
+      // operation — a merchant's at-least-once retry, a snippet firing twice, a
+      // visitor refreshing the confirmation page — and a second row would be a
+      // second sale in every report built on this table. Answered as a replay
+      // (200, the existing record) rather than a conflict: the caller did nothing
+      // wrong and has nothing to fix.
+      const existing = await request.withTenant((tx) =>
         tx.trackedSale.findUnique({ where: orderKey, select: SALE_FIELDS }),
       );
-      if (!winner) throw error;
-      return reply.status(200).send(serialiseSale(winner));
-    }
-  });
+      if (existing) return reply.status(200).send(serialiseSale(existing));
+
+      const now = new Date();
+
+      try {
+        const sale = await request.withTenant(async (tx) => {
+          // The visitor's recent conversations, newest first, each with the last
+          // time they were in it. RLS scopes this to the license, and the
+          // `customerId` filter to this visitor — so the chat a sale is credited
+          // to can only ever be one the caller's own token could already read.
+          const chats = await tx.chat.findMany({
+            where: { customerId: principal.customerId },
+            orderBy: { createdAt: 'desc' },
+            take: ATTRIBUTION_CANDIDATE_LIMIT,
+            select: {
+              id: true,
+              createdAt: true,
+              threads: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+            },
+          });
+
+          const attribution = resolveAttribution({
+            chats: chats.map((chat) => {
+              const lastThreadAt = chat.threads[0]?.createdAt;
+              return {
+                chatId: chat.id,
+                // The later of the two: a returning visitor reopens a thread on an
+                // existing chat, so `createdAt` alone would date a conversation
+                // held this morning to whenever it first started.
+                at: lastThreadAt && lastThreadAt > chat.createdAt ? lastThreadAt : chat.createdAt,
+              };
+            }),
+            now,
+            windowDays: config.attributionWindowDays,
+          });
+
+          const created = await tx.trackedSale.create({
+            data: {
+              // From the tenant, never the body — this is the line the whole
+              // shape of this route exists to protect.
+              licenseId: tenant.licenseId,
+              customerId: principal.customerId,
+              chatId: attribution.chatId,
+              externalOrderId,
+              amountCents: body.amount_cents,
+              currency,
+              attributed: attribution.attributed,
+            },
+            select: SALE_FIELDS,
+          });
+
+          // Written inside the same transaction as the sale, so the trail and the
+          // revenue cannot disagree, and only for a sale that is actually new —
+          // an entry per retry would count orders differently from the report.
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'sale.tracked',
+            target: `sale:${created.id}`,
+            metadata: {
+              amount_cents: created.amountCents,
+              currency: created.currency,
+              attributed: created.attributed,
+            },
+          });
+
+          return created;
+        });
+
+        return reply.status(201).send(serialiseSale(sale));
+      } catch (error) {
+        // Idempotency, second half: two reports of the same order in flight at
+        // once. The check above passed for both, and the unique index let exactly
+        // one insert win — the loser reads the winner's row and answers as a
+        // replay, so concurrency produces one sale and one lot of revenue, not two.
+        if (!isUniqueViolation(error)) throw error;
+
+        const winner = await request.withTenant((tx) =>
+          tx.trackedSale.findUnique({ where: orderKey, select: SALE_FIELDS }),
+        );
+        if (!winner) throw error;
+        return reply.status(200).send(serialiseSale(winner));
+      }
+    },
+  );
 }

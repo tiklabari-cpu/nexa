@@ -125,7 +125,9 @@ export class CustomFieldService {
     // A form placement only makes sense on a contact field: the pre-chat form
     // runs before any ticket exists, so a ticket field has nothing to write to.
     if (input.formPlacement && input.entity !== 'contact') {
-      throw ApiError.validation('form_placement: only a contact field can be a pre-chat form field.');
+      throw ApiError.validation(
+        'form_placement: only a contact field can be a pre-chat form field.',
+      );
     }
 
     try {
@@ -274,7 +276,11 @@ export class CustomFieldService {
       }
 
       const result = checkCustomFieldValue(
-        { label: definition.label, type: definition.type as CustomFieldType, required: definition.required },
+        {
+          label: definition.label,
+          type: definition.type as CustomFieldType,
+          required: definition.required,
+        },
         raw,
       );
       if (isCustomFieldProblem(result)) throw ApiError.validation(result.problem.message);
@@ -292,7 +298,10 @@ export class CustomFieldService {
       }
 
       if (existing) {
-        await tx.customFieldValue.update({ where: { id: existing.id }, data: { value: result.value } });
+        await tx.customFieldValue.update({
+          where: { id: existing.id },
+          data: { value: result.value },
+        });
       } else {
         await tx.customFieldValue.create({
           data: {

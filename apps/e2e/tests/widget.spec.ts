@@ -50,19 +50,15 @@ async function imageRendered(image: Locator): Promise<void> {
  * live DOM through the Frame each poll avoids that — index picks which image
  * once there is more than one (the visitor's, then the agent's reply).
  */
-async function widgetImageRendered(
-  page: Page,
-  index = 0,
-): Promise<void> {
+async function widgetImageRendered(page: Page, index = 0): Promise<void> {
   await expect
     .poll(
       async () =>
-        (page.frame({ url: /widget\.html/ })?.evaluate((i) => {
+        page.frame({ url: /widget\.html/ })?.evaluate((i) => {
           const img = document.querySelectorAll('img.nx-attachment-img')[i] as
-            | HTMLImageElement
-            | undefined;
+            HTMLImageElement | undefined;
           return img?.naturalWidth ?? 0;
-        }, index)) ?? 0,
+        }, index) ?? 0,
       { timeout: 20_000 },
     )
     .toBeGreaterThan(0);

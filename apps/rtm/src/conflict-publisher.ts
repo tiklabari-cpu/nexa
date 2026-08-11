@@ -30,11 +30,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
-import {
-  licenseChannel,
-  type AgentConflictWarningPush,
-  type BusEnvelope,
-} from '@nexa/types';
+import { licenseChannel, type AgentConflictWarningPush, type BusEnvelope } from '@nexa/types';
 import type { SocketPrincipal } from './auth.js';
 import type { ComposingAgent } from './conflict.js';
 

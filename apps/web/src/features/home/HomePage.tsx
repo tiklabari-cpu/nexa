@@ -169,12 +169,7 @@ function LiveNow({ live }: { live: HomeDashboard['live'] }): ReactElement {
     <Section title="Right now" description="Live activity across your workspace">
       <KpiGrid>
         {liveCards(live).map((card) => (
-          <Kpi
-            key={card.key}
-            label={card.label}
-            value={formatCount(card.value)}
-            hint={card.hint}
-          />
+          <Kpi key={card.key} label={card.label} value={formatCount(card.value)} hint={card.hint} />
         ))}
       </KpiGrid>
     </Section>
@@ -196,12 +191,22 @@ function WeeklyPerformance({ weekly }: { weekly: HomeDashboard['weekly'] }): Rea
         <Kpi
           label="New chats"
           value={formatCount(weekly.chats)}
-          delta={<DeltaNote direction={chats.direction} text={`${formatCount(Math.abs(chats.change))} vs last week`} />}
+          delta={
+            <DeltaNote
+              direction={chats.direction}
+              text={`${formatCount(Math.abs(chats.change))} vs last week`}
+            />
+          }
         />
         <Kpi
           label="Resolved"
           value={formatCount(weekly.resolved)}
-          delta={<DeltaNote direction={resolved.direction} text={`${formatCount(Math.abs(resolved.change))} vs last week`} />}
+          delta={
+            <DeltaNote
+              direction={resolved.direction}
+              text={`${formatCount(Math.abs(resolved.change))} vs last week`}
+            />
+          }
         />
         <Kpi
           label="Satisfaction"
@@ -228,7 +233,13 @@ function WeeklyPerformance({ weekly }: { weekly: HomeDashboard['weekly'] }): Rea
  * the movement, and a red/green verdict would mislead where "more" is not
  * always "better".
  */
-function DeltaNote({ direction, text }: { direction: DeltaDirection; text: ReactNode }): ReactElement {
+function DeltaNote({
+  direction,
+  text,
+}: {
+  direction: DeltaDirection;
+  text: ReactNode;
+}): ReactElement {
   if (direction === 'flat') {
     return <span className="text-2xs text-content-tertiary">No change vs last week</span>;
   }

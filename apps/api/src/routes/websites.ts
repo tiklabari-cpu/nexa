@@ -57,41 +57,37 @@ export default async function websiteRoutes(
     },
   );
 
-  app.post(
-    '/websites',
-    { config: { scopes: ['access_rules:rw'] } },
-    async (request, reply) => {
-      const body = parse(addBody, request.body);
-      const tenant = request.tenant();
-      const principal = request.requirePrincipal();
+  app.post('/websites', { config: { scopes: ['access_rules:rw'] } }, async (request, reply) => {
+    const body = parse(addBody, request.body);
+    const tenant = request.tenant();
+    const principal = request.requirePrincipal();
 
-      // Normalised with the same rule the token endpoint applies to an Origin
-      // header, so the domain stored here is the exact string a widget handshake
-      // will later match when flipping this site to Connected.
-      const domain = normaliseTrustedDomain(body.domain);
-      if (!domain) {
-        throw ApiError.validation(
-          'Enter a hostname such as shop.example, or a URL to take one from.',
-        );
-      }
+    // Normalised with the same rule the token endpoint applies to an Origin
+    // header, so the domain stored here is the exact string a widget handshake
+    // will later match when flipping this site to Connected.
+    const domain = normaliseTrustedDomain(body.domain);
+    if (!domain) {
+      throw ApiError.validation(
+        'Enter a hostname such as shop.example, or a URL to take one from.',
+      );
+    }
 
-      try {
-        const created = await request.withTenant((tx) =>
-          websites.create(tx, tenant, {
-            domain,
-            setup: body.setup as (typeof WEBSITE_SETUPS)[number],
-            createdBy: principal.kind === 'agent' ? principal.accountId : null,
-          }),
-        );
-        return reply.status(201).send(created);
-      } catch (error) {
-        if (isUniqueViolation(error)) {
-          throw new ApiError('website_exists', `${domain} is already added.`);
-        }
-        throw error;
+    try {
+      const created = await request.withTenant((tx) =>
+        websites.create(tx, tenant, {
+          domain,
+          setup: body.setup as (typeof WEBSITE_SETUPS)[number],
+          createdBy: principal.kind === 'agent' ? principal.accountId : null,
+        }),
+      );
+      return reply.status(201).send(created);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ApiError('website_exists', `${domain} is already added.`);
       }
-    },
-  );
+      throw error;
+    }
+  });
 
   app.get<{ Params: { websiteId: string } }>(
     '/websites/:websiteId',

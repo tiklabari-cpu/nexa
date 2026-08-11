@@ -16,7 +16,11 @@ describe('Section', () => {
   it('gives the heading a different id than the caller-supplied anchor id', () => {
     // The real Channels case: anchor id equals the title slug.
     const { container } = render(
-      <Section id="section-channels" title="Channels" description="Everywhere your customers can reach you.">
+      <Section
+        id="section-channels"
+        title="Channels"
+        description="Everywhere your customers can reach you."
+      >
         <p>Reply to text messages over Twilio.</p>
       </Section>,
     );

@@ -131,7 +131,9 @@ describe('renderArticleBody — formatting (positive)', () => {
   });
 
   it('renders bold and inline code', () => {
-    expect(renderArticleBody('this is **bold** text')).toBe('<p>this is <strong>bold</strong> text</p>');
+    expect(renderArticleBody('this is **bold** text')).toBe(
+      '<p>this is <strong>bold</strong> text</p>',
+    );
     expect(renderArticleBody('run `npm test` now')).toBe('<p>run <code>npm test</code> now</p>');
   });
 

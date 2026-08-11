@@ -34,7 +34,12 @@ interface ChannelCase {
   addressB: string;
   sender: string;
   connect: (address: string) => Record<string, unknown>;
-  inbound: (address: string, sender: string, text: string, name?: string) => Record<string, unknown>;
+  inbound: (
+    address: string,
+    sender: string,
+    text: string,
+    name?: string,
+  ) => Record<string, unknown>;
 }
 
 const CASES: ChannelCase[] = [
@@ -258,7 +263,10 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
     it('turns an inbound webhook into a routed inbox chat', async () => {
       await connect(c.type, c.connect(c.addressA));
 
-      const res = await webhook(c.type, c.inbound(c.addressA, c.sender, 'hello from the channel', 'Dana'));
+      const res = await webhook(
+        c.type,
+        c.inbound(c.addressA, c.sender, 'hello from the channel', 'Dana'),
+      );
       expect(res.statusCode).toBe(200);
       const body = res.json() as { status: string; chat_id: string; customer_id: string };
       expect(body.status).toBe('accepted');
@@ -284,7 +292,9 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
         customerId: body.customer_id,
       });
       // …and the inbound was logged.
-      const inboundLog = (await messagesFor(fx.a.licenseId)).filter((m) => m.direction === 'inbound');
+      const inboundLog = (await messagesFor(fx.a.licenseId)).filter(
+        (m) => m.direction === 'inbound',
+      );
       expect(inboundLog).toHaveLength(1);
       expect(inboundLog[0]).toMatchObject({ externalId: c.sender, chatId: body.chat_id });
     });
@@ -329,9 +339,16 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
         chat_id: string;
       };
 
-      const byChat = await sendOut(c.type, { chat_id: inbound.chat_id, text: 'thanks for reaching out' });
+      const byChat = await sendOut(c.type, {
+        chat_id: inbound.chat_id,
+        text: 'thanks for reaching out',
+      });
       expect(byChat.statusCode).toBe(200);
-      const sent = byChat.json() as { provider_message_id: string; external_id: string; chat_id: string };
+      const sent = byChat.json() as {
+        provider_message_id: string;
+        external_id: string;
+        chat_id: string;
+      };
       expect(sent.external_id).toBe(c.sender);
       expect(sent.chat_id).toBe(inbound.chat_id);
       expect(sent.provider_message_id).toBeTruthy();
@@ -339,7 +356,9 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       const byExternal = await sendOut(c.type, { external_id: c.sender, text: 'direct reply' });
       expect(byExternal.statusCode).toBe(200);
 
-      const outbound = (await messagesFor(fx.a.licenseId)).filter((m) => m.direction === 'outbound');
+      const outbound = (await messagesFor(fx.a.licenseId)).filter(
+        (m) => m.direction === 'outbound',
+      );
       expect(outbound).toHaveLength(2);
       expect(outbound[0]).toMatchObject({
         externalId: c.sender,
@@ -347,7 +366,11 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
         text: 'thanks for reaching out',
       });
       expect(outbound[0]!.providerMessageId).toBeTruthy();
-      expect(outbound[1]).toMatchObject({ externalId: c.sender, chatId: null, text: 'direct reply' });
+      expect(outbound[1]).toMatchObject({
+        externalId: c.sender,
+        chatId: null,
+        text: 'direct reply',
+      });
     });
 
     it('refuses outbound without the write scope, to a disconnected channel, and with bad addressing', async () => {
@@ -356,7 +379,9 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
 
       await connect(c.type, c.connect(c.addressA));
       // Read scope cannot send.
-      expect((await sendOut(c.type, { external_id: c.sender, text: 'x' }, readA)).statusCode).toBe(403);
+      expect((await sendOut(c.type, { external_id: c.sender, text: 'x' }, readA)).statusCode).toBe(
+        403,
+      );
       // Exactly one of chat_id / external_id.
       expect(
         (await sendOut(c.type, { chat_id: 'X', external_id: c.sender, text: 'x' })).statusCode,
@@ -397,7 +422,9 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
 
     it('carries the sender username onto the customer it creates', async () => {
       await connect(c.type, c.connect(c.addressA));
-      const res = (await webhook(c.type, c.inbound(c.addressA, c.sender, 'hey', 'dana_h'))).json() as {
+      const res = (
+        await webhook(c.type, c.inbound(c.addressA, c.sender, 'hey', 'dana_h'))
+      ).json() as {
         customer_id: string;
       };
       const customer = await owner.customer.findUnique({ where: { id: res.customer_id } });
@@ -446,7 +473,7 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       expect(await identitiesFor(fx.b.licenseId)).toHaveLength(1);
     });
 
-    it('will not let one tenant reply into another tenant\'s chat', async () => {
+    it("will not let one tenant reply into another tenant's chat", async () => {
       await connect(c.type, c.connect(c.addressA), adminA);
       await connect(c.type, c.connect(c.addressB), adminB);
       const inbound = (await webhook(c.type, c.inbound(c.addressA, c.sender, 'hi'))).json() as {
@@ -458,7 +485,9 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       const res = await sendOut(c.type, { chat_id: inbound.chat_id, text: 'intrusion' }, adminB);
       expect(res.statusCode).toBe(404);
       // Nothing was recorded for B.
-      expect((await messagesFor(fx.b.licenseId)).filter((m) => m.direction === 'outbound')).toHaveLength(0);
+      expect(
+        (await messagesFor(fx.b.licenseId)).filter((m) => m.direction === 'outbound'),
+      ).toHaveLength(0);
     });
 
     it('routes an Instagram DM by the receiving account while both tenants hold instagram', async () => {
@@ -469,7 +498,9 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       await connect(ig.type, ig.connect(ig.addressA), adminA);
       await connect(ig.type, ig.connect(ig.addressB), adminB);
 
-      const dm = (await webhook(ig.type, ig.inbound(ig.addressA, ig.sender, 'DM for A'))).json() as {
+      const dm = (
+        await webhook(ig.type, ig.inbound(ig.addressA, ig.sender, 'DM for A'))
+      ).json() as {
         chat_id: string;
       };
 
@@ -488,7 +519,9 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       ).toBe(200);
       // …and that reply is B's own outbound to a sender B has never heard from,
       // logged under B — it never touches A's chat or message log.
-      const outboundB = (await messagesFor(fx.b.licenseId)).filter((m) => m.direction === 'outbound');
+      const outboundB = (await messagesFor(fx.b.licenseId)).filter(
+        (m) => m.direction === 'outbound',
+      );
       expect(outboundB).toHaveLength(1);
       expect(outboundB[0]).toMatchObject({ chatId: null });
       expect(
@@ -515,9 +548,11 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       (await owner.brand.findFirstOrThrow({ where: { licenseId }, select: { id: true } })).id;
 
     const connectedRows = (address: string) =>
-      owner.channel.findMany({ where: { status: 'connected', type: ig.type } }).then((rows) =>
-        rows.filter((row) => (row.config as { address?: string }).address === address),
-      );
+      owner.channel
+        .findMany({ where: { status: 'connected', type: ig.type } })
+        .then((rows) =>
+          rows.filter((row) => (row.config as { address?: string }).address === address),
+        );
 
     // --- Refusal ------------------------------------------------------------
 
@@ -580,11 +615,10 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       // Same licence, so nothing cross-tenant here — but the resolver answers
       // with a licence and no brand, so two rows would be ambiguous inside one
       // workspace as well.
-      const res = await server.post(
-        `/channels/${ig.type}/connect`,
-        ig.connect(ig.addressA),
-        { ...auth(adminA), 'x-nexa-brand': second.id },
-      );
+      const res = await server.post(`/channels/${ig.type}/connect`, ig.connect(ig.addressA), {
+        ...auth(adminA),
+        'x-nexa-brand': second.id,
+      });
       expect(res.statusCode).toBe(400);
       expect(await connectedRows(ig.addressA)).toHaveLength(1);
     });
@@ -624,10 +658,7 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       // And the inbound side agrees with whoever won: one chat, in one tenant.
       const dm = await webhook(ig.type, ig.inbound(ig.addressA, ig.sender, 'after the race'));
       expect(dm.statusCode).toBe(200);
-      const chats = [
-        ...(await chatsFor(fx.a.licenseId)),
-        ...(await chatsFor(fx.b.licenseId)),
-      ];
+      const chats = [...(await chatsFor(fx.a.licenseId)), ...(await chatsFor(fx.b.licenseId))];
       expect(chats).toHaveLength(1);
     });
 
@@ -672,7 +703,10 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       // one says nothing about the other. Over-broad uniqueness would lock a
       // workspace's number out of a channel it legitimately owns.
       const shared = '+441632000001';
-      expect((await connect('whatsapp', { waba_id: 'waba_mock', phone_number: shared }, adminA)).statusCode).toBe(200);
+      expect(
+        (await connect('whatsapp', { waba_id: 'waba_mock', phone_number: shared }, adminA))
+          .statusCode,
+      ).toBe(200);
       expect(
         (
           await connect(

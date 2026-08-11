@@ -57,7 +57,9 @@ describe('biWindow', () => {
   it('crosses a month boundary without a special case', () => {
     const firstOfMonth = new Date('2026-08-01T00:00:30.000Z');
     expect(biWindow('yesterday', firstOfMonth).from.toISOString()).toBe('2026-07-31T00:00:00.000Z');
-    expect(biWindow('this_month', firstOfMonth).from.toISOString()).toBe('2026-08-01T00:00:00.000Z');
+    expect(biWindow('this_month', firstOfMonth).from.toISOString()).toBe(
+      '2026-08-01T00:00:00.000Z',
+    );
   });
 
   it('crosses a year boundary without a special case', () => {

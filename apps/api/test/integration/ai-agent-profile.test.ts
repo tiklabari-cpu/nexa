@@ -102,21 +102,32 @@ describe('AI agent profile', () => {
     });
 
     // The reply is not a hand-assembled echo: a fresh read agrees with it.
-    const after = ((await server.get('/ai-agents', await write('a'))).json() as { items: AgentView[] })
-      .items.find((a) => a.id === agentId);
-    expect(after).toMatchObject({ name: 'Nova', languages: ['en', 'tr', 'de'], answer_length: 'long' });
+    const after = (
+      (await server.get('/ai-agents', await write('a'))).json() as { items: AgentView[] }
+    ).items.find((a) => a.id === agentId);
+    expect(after).toMatchObject({
+      name: 'Nova',
+      languages: ['en', 'tr', 'de'],
+      answer_length: 'long',
+    });
   });
 
   it('merges answer_length into the persona without dropping the signature', async () => {
     await server.patch(`/ai-agents/${agentId}`, { answer_length: 'medium' }, await write('a'));
-    const stored = await owner.aiAgent.findUnique({ where: { id: agentId }, select: { persona: true } });
+    const stored = await owner.aiAgent.findUnique({
+      where: { id: agentId },
+      select: { persona: true },
+    });
     // The unrelated key survives the merge.
     expect(stored?.persona).toMatchObject({ answerLength: 'medium', signature: '— Ada' });
   });
 
   it('clears answer_length with null but leaves the rest of the persona', async () => {
     await server.patch(`/ai-agents/${agentId}`, { answer_length: null }, await write('a'));
-    const stored = await owner.aiAgent.findUnique({ where: { id: agentId }, select: { persona: true } });
+    const stored = await owner.aiAgent.findUnique({
+      where: { id: agentId },
+      select: { persona: true },
+    });
     expect(stored?.persona).toMatchObject({ signature: '— Ada' });
     expect((stored?.persona as Record<string, unknown>)['answerLength']).toBeUndefined();
   });
@@ -127,9 +138,16 @@ describe('AI agent profile', () => {
   });
 
   it("never edits another tenant's agent — a 404, not a 403, so IDs stay opaque", async () => {
-    const response = await server.patch(`/ai-agents/${agentId}`, { name: 'Hijacked' }, await write('b'));
+    const response = await server.patch(
+      `/ai-agents/${agentId}`,
+      { name: 'Hijacked' },
+      await write('b'),
+    );
     expect(response.statusCode).toBe(404);
-    const unchanged = await owner.aiAgent.findUnique({ where: { id: agentId }, select: { name: true } });
+    const unchanged = await owner.aiAgent.findUnique({
+      where: { id: agentId },
+      select: { name: true },
+    });
     expect(unchanged?.name).toBe('Ada');
   });
 });

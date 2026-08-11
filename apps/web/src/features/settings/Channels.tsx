@@ -21,7 +21,8 @@ import { useConnectedChannels, type ConnectedChannel } from '../inbox/useInbox.j
 import { canReadChannels } from '../inbox/views.js';
 
 /** Origin serving the widget and its hosted Chat page. */
-const WIDGET_URL = (import.meta.env['VITE_WIDGET_URL'] as string | undefined) ?? 'http://localhost:5174';
+const WIDGET_URL =
+  (import.meta.env['VITE_WIDGET_URL'] as string | undefined) ?? 'http://localhost:5174';
 
 /**
  * Domain a workspace forwards its support mail to (FR-MOD-08.5.3). The address
@@ -230,7 +231,10 @@ function EmailForwardingAddress({ label }: { label: string }): ReactElement {
         {copied ? 'Copied' : label}
       </button>
       {address && (
-        <code data-testid="email-forwarding-address" className="truncate text-2xs text-content-tertiary">
+        <code
+          data-testid="email-forwarding-address"
+          className="truncate text-2xs text-content-tertiary"
+        >
           {address}
         </code>
       )}
@@ -306,7 +310,8 @@ function ChannelCardView({
   // /channels request is gated off (canReadChannels), so it never hides the
   // badge forever for an agent without the scope.
   const showStatus =
-    !(websitesLoading && channel.id === 'website') && !(channelsLoading && channel.id === 'instagram');
+    !(websitesLoading && channel.id === 'website') &&
+    !(channelsLoading && channel.id === 'instagram');
 
   return (
     <Card>

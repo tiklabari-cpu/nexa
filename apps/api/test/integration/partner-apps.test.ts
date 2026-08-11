@@ -27,7 +27,13 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { deriveCodeChallenge, generateToken, hashToken } from '../../src/lib/crypto.js';
-import { grantToken, ownerClient, seedFixtures, TEST_PASSWORD, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  TEST_PASSWORD,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 interface PartnerApp {
@@ -190,10 +196,7 @@ describe('partner apps (FR-MOD-09.4)', () => {
 
     it('rejects duplicates and an over-long list', async () => {
       expect((await register({ redirect_uris: [CALLBACK, CALLBACK] })).statusCode).toBe(400);
-      const many = Array.from(
-        { length: 11 },
-        (_, i) => `https://partner-a.example.test/cb-${i}`,
-      );
+      const many = Array.from({ length: 11 }, (_, i) => `https://partner-a.example.test/cb-${i}`);
       expect((await register({ redirect_uris: many })).statusCode).toBe(400);
       expect((await register({ redirect_uris: [] })).statusCode).toBe(400);
     });
@@ -264,9 +267,9 @@ describe('partner apps (FR-MOD-09.4)', () => {
           )
         ).statusCode,
       ).toBe(403);
-      expect(
-        (await server.del(`/partner/apps/${app.client_id}`, auth(readToken))).statusCode,
-      ).toBe(403);
+      expect((await server.del(`/partner/apps/${app.client_id}`, auth(readToken))).statusCode).toBe(
+        403,
+      );
     });
 
     it('refuses a token with no admin scope at all with 403', async () => {
@@ -477,15 +480,15 @@ describe('partner apps (FR-MOD-09.4)', () => {
 
     it('removes a client and answers 404 afterwards', async () => {
       const app = await registered();
-      expect((await server.del(`/partner/apps/${app.client_id}`, auth(adminToken))).statusCode).toBe(
-        204,
-      );
+      expect(
+        (await server.del(`/partner/apps/${app.client_id}`, auth(adminToken))).statusCode,
+      ).toBe(204);
       expect((await server.get(`/partner/apps/${app.client_id}`, auth(readToken))).statusCode).toBe(
         404,
       );
-      expect((await server.del(`/partner/apps/${app.client_id}`, auth(adminToken))).statusCode).toBe(
-        404,
-      );
+      expect(
+        (await server.del(`/partner/apps/${app.client_id}`, auth(adminToken))).statusCode,
+      ).toBe(404);
     });
   });
 
@@ -690,9 +693,9 @@ describe('partner apps (FR-MOD-09.4)', () => {
 
     it('is admin-gated: 401 unauthenticated, 403 read-only', async () => {
       const app = await registered();
-      expect(
-        (await server.post(`/partner/apps/${app.client_id}/rotate-secret`)).statusCode,
-      ).toBe(401);
+      expect((await server.post(`/partner/apps/${app.client_id}/rotate-secret`)).statusCode).toBe(
+        401,
+      );
       expect((await rotate(app.client_id, readToken)).statusCode).toBe(403);
     });
 

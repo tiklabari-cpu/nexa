@@ -138,7 +138,9 @@ export function checkCustomFieldValue(
       // A well-formed shape *and* a real day: `2026-13-40` matches the regex but
       // is not a date, so parse it too.
       if (!ISO_DATE.test(trimmed) || Number.isNaN(Date.parse(trimmed))) {
-        return { problem: { reason: 'type', message: `${field.label} must be a date (YYYY-MM-DD).` } };
+        return {
+          problem: { reason: 'type', message: `${field.label} must be a date (YYYY-MM-DD).` },
+        };
       }
       return { value: trimmed };
     }

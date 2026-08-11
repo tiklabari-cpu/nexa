@@ -106,7 +106,7 @@ describe('DeveloperPortal', () => {
     // Stateful, like the real endpoint: the list reflects the app once it has
     // been registered, so the "never in the list" assertion below is proving
     // something (a static empty mock would make it vacuously true).
-    let items: typeof registeredApp[] = [];
+    let items: (typeof registeredApp)[] = [];
     api.get.mockImplementation(() => Promise.resolve({ items }));
     api.post.mockImplementation(() => {
       items = [registeredApp];
@@ -247,7 +247,10 @@ describe('DeveloperPortal', () => {
 
     it('rotates a secret, shows it once, then discards it', async () => {
       api.get.mockResolvedValue({ items: [confidentialApp] });
-      api.post.mockResolvedValue({ ...confidentialApp, client_secret: 'nxcs_rotated-secret-value' });
+      api.post.mockResolvedValue({
+        ...confidentialApp,
+        client_secret: 'nxcs_rotated-secret-value',
+      });
       renderPortal();
 
       await userEvent.click(

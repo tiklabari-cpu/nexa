@@ -83,7 +83,12 @@ describe('Skills', () => {
     await waitFor(() => expect(screen.queryByText('Billing')).not.toBeInTheDocument());
 
     rejectDelete(
-      new ApiClientError({ type: 'validation', status: 500, message: 'Could not remove that skill.', requestId: '-' }),
+      new ApiClientError({
+        type: 'validation',
+        status: 500,
+        message: 'Could not remove that skill.',
+        requestId: '-',
+      }),
     );
 
     // Rolled back once the server refuses.

@@ -59,10 +59,12 @@ export function splitList(raw: string): string[] {
  * bad address is an error that names the offenders — so the person fixes the
  * typo rather than guessing which of ten lines the server will reject.
  */
-export function emailList(options: {
-  emptyMessage?: string;
-  invalidMessage?: (bad: string[]) => string;
-} = {}): Validator {
+export function emailList(
+  options: {
+    emptyMessage?: string;
+    invalidMessage?: (bad: string[]) => string;
+  } = {},
+): Validator {
   const emptyMessage = options.emptyMessage ?? 'Enter at least one email address.';
   const invalidMessage =
     options.invalidMessage ?? ((bad) => `Not a valid address: ${bad.join(', ')}`);
@@ -250,7 +252,13 @@ export function useForm<V extends Record<string, string>>(
  * same way — same colour, same `role="alert"`, same id an input's
  * `aria-describedby` can point at — instead of each screen inventing its own.
  */
-export function FieldError({ id, message }: { id?: string; message: string | null }): ReactElement | null {
+export function FieldError({
+  id,
+  message,
+}: {
+  id?: string;
+  message: string | null;
+}): ReactElement | null {
   if (!message) return null;
   return (
     <p id={id} role="alert" className="mt-1 text-xs text-danger">

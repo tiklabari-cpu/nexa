@@ -26,9 +26,24 @@ export interface TemplateCategoryMeta {
 }
 
 export const TEMPLATE_CATEGORIES: TemplateCategoryMeta[] = [
-  { id: 'prebuilt', label: 'Prebuilt', icon: '◆', description: 'Ready-made answers for the questions every helpdesk gets.' },
-  { id: 'ai', label: 'AI', icon: '✦', description: 'Detect the topic and reply in the assistant’s own words.' },
-  { id: 'trending', label: 'Trending', icon: '↗', description: 'What teams are wiring up this month.' },
+  {
+    id: 'prebuilt',
+    label: 'Prebuilt',
+    icon: '◆',
+    description: 'Ready-made answers for the questions every helpdesk gets.',
+  },
+  {
+    id: 'ai',
+    label: 'AI',
+    icon: '✦',
+    description: 'Detect the topic and reply in the assistant’s own words.',
+  },
+  {
+    id: 'trending',
+    label: 'Trending',
+    icon: '↗',
+    description: 'What teams are wiring up this month.',
+  },
 ];
 
 /**
@@ -304,7 +319,8 @@ export const SKILL_TEMPLATES: SkillTemplate[] = [
     id: 'troubleshoot-then-escalate',
     name: 'Troubleshoot, then escalate',
     category: 'ai',
-    summary: 'Try a knowledge-based answer first, then summarise and hand over if that is not enough.',
+    summary:
+      'Try a knowledge-based answer first, then summarise and hand over if that is not enough.',
     badge: 'essential',
     instruction:
       'When someone reports a problem with the product, answer from the knowledge base.\nWrite a summary for the agent who picks it up.\nHand over to the support team.',
@@ -345,7 +361,8 @@ export const SKILL_TEMPLATES: SkillTemplate[] = [
     id: 'product-recommendation',
     name: 'Recommend a product',
     category: 'ai',
-    summary: 'Ask what the customer needs, then answer with a recommendation from your knowledge base.',
+    summary:
+      'Ask what the customer needs, then answer with a recommendation from your knowledge base.',
     instruction:
       'When someone asks for a product recommendation, ask what they are trying to do.\nAnswer from the knowledge base.',
     steps: [
@@ -362,7 +379,8 @@ export const SKILL_TEMPLATES: SkillTemplate[] = [
     id: 'onboarding-walkthrough',
     name: 'Guide a new user',
     category: 'ai',
-    summary: 'Welcome a new user warmly, then answer their first questions from the knowledge base.',
+    summary:
+      'Welcome a new user warmly, then answer their first questions from the knowledge base.',
     instruction:
       'When someone says they are new or just signed up, reply "Welcome aboard! Happy to help you get started."\nAnswer from the knowledge base.',
     steps: [
@@ -371,7 +389,11 @@ export const SKILL_TEMPLATES: SkillTemplate[] = [
         intent: 'onboarding',
         phrases: ['just signed up', 'new here', 'getting started', 'how do i begin'],
       },
-      { type: 'send_message', source: 'text', text: 'Welcome aboard! Happy to help you get started.' },
+      {
+        type: 'send_message',
+        source: 'text',
+        text: 'Welcome aboard! Happy to help you get started.',
+      },
       { type: 'send_message', source: 'knowledge' },
     ],
   },
@@ -466,7 +488,11 @@ export const SKILL_TEMPLATES: SkillTemplate[] = [
         intent: 'post_purchase',
         phrases: ['just bought', 'recently purchased', 'got my order'],
       },
-      { type: 'request_info', field: 'experience', prompt: 'How has it been working out for you so far?' },
+      {
+        type: 'request_info',
+        field: 'experience',
+        prompt: 'How has it been working out for you so far?',
+      },
       { type: 'send_message', source: 'knowledge' },
     ],
   },

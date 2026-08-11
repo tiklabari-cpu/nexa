@@ -14,11 +14,7 @@ import { Card, ErrorNotice, Kpi, KpiGrid } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatCount, formatRate } from '../../lib/format.js';
-import {
-  performanceKpis,
-  type AiAgentReport,
-  type SatisfactionSummary,
-} from './performance.js';
+import { performanceKpis, type AiAgentReport, type SatisfactionSummary } from './performance.js';
 
 interface OverviewResponse {
   satisfaction: SatisfactionSummary;
@@ -56,7 +52,9 @@ export function AiPerformance({
   }
 
   if (report.error || overview.error) {
-    return <ErrorNotice message="Could not load AI performance. Check that the API is reachable." />;
+    return (
+      <ErrorNotice message="Could not load AI performance. Check that the API is reachable." />
+    );
   }
 
   if (report.isPending || overview.isPending) {

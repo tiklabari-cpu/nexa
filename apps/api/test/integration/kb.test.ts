@@ -118,14 +118,22 @@ describe('public KB management (PUBKB-b)', () => {
   it('publishes and unpublishes, stamping published_at and auditing each way', async () => {
     const { id } = (await createArticle(adminToken, validArticle)).json() as Article;
 
-    const published = await server.patch(`/kb-articles/${id}`, { status: 'published' }, auth(adminToken));
+    const published = await server.patch(
+      `/kb-articles/${id}`,
+      { status: 'published' },
+      auth(adminToken),
+    );
     expect(published.statusCode).toBe(200);
     const pub = published.json() as Article;
     expect(pub.status).toBe('published');
     expect(pub.published_at).not.toBeNull();
     expect(await auditEntries(fx.a.licenseId, 'kb.article_published')).toHaveLength(1);
 
-    const unpublished = await server.patch(`/kb-articles/${id}`, { status: 'draft' }, auth(adminToken));
+    const unpublished = await server.patch(
+      `/kb-articles/${id}`,
+      { status: 'draft' },
+      auth(adminToken),
+    );
     expect((unpublished.json() as Article).status).toBe('draft');
     expect((unpublished.json() as Article).published_at).toBeNull();
     expect(await auditEntries(fx.a.licenseId, 'kb.article_unpublished')).toHaveLength(1);
@@ -169,7 +177,9 @@ describe('public KB management (PUBKB-b)', () => {
   });
 
   it('refuses an empty or non-ASCII slug rather than transliterating it', async () => {
-    expect((await createArticle(adminToken, { ...validArticle, slug: '   ' })).statusCode).toBe(400);
+    expect((await createArticle(adminToken, { ...validArticle, slug: '   ' })).statusCode).toBe(
+      400,
+    );
     expect((await createArticle(adminToken, { ...validArticle, slug: 'Ürünler' })).statusCode).toBe(
       400,
     );
@@ -185,7 +195,11 @@ describe('public KB management (PUBKB-b)', () => {
     // A rename onto a reserved word is refused the same way.
     const created = await createArticle(adminToken, { ...validArticle, slug: 'renamable' });
     const { id } = created.json() as Article;
-    const renamed = await server.patch(`/kb-articles/${id}`, { slug: 'robots.txt' }, auth(adminToken));
+    const renamed = await server.patch(
+      `/kb-articles/${id}`,
+      { slug: 'robots.txt' },
+      auth(adminToken),
+    );
     expect(renamed.statusCode).toBe(400);
   });
 
@@ -206,16 +220,18 @@ describe('public KB management (PUBKB-b)', () => {
     expect(removed.statusCode).toBe(204);
 
     // The article survives; only its category link is cleared (FK SET NULL).
-    const after = (await server.get(`/kb-articles/${article.id}`, auth(adminToken))).json() as Article;
+    const after = (
+      await server.get(`/kb-articles/${article.id}`, auth(adminToken))
+    ).json() as Article;
     expect(after.category_id).toBeNull();
   });
 
   it('lists categories in position order and edits one', async () => {
     await server.post('/kb-categories', { name: 'Second', position: 2 }, auth(adminToken));
     await server.post('/kb-categories', { name: 'First', position: 1 }, auth(adminToken));
-    const listed = (
-      await server.get('/kb-categories', auth(adminToken))
-    ).json() as { items: Category[] };
+    const listed = (await server.get('/kb-categories', auth(adminToken))).json() as {
+      items: Category[];
+    };
     expect(listed.items.map((c) => c.name)).toEqual(['First', 'Second']);
 
     const edit = await server.patch(
@@ -252,9 +268,9 @@ describe('public KB management (PUBKB-b)', () => {
     expect((await server.del(`/kb-articles/${id}`, auth(bToken))).statusCode).toBe(404);
 
     // Still there for its owner, untouched.
-    expect(((await server.get(`/kb-articles/${id}`, auth(adminToken))).json() as Article).title).toBe(
-      validArticle.title,
-    );
+    expect(
+      ((await server.get(`/kb-articles/${id}`, auth(adminToken))).json() as Article).title,
+    ).toBe(validArticle.title);
   });
 
   // --- Scope split -----------------------------------------------------------

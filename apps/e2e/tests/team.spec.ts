@@ -70,9 +70,7 @@ test.describe('Team — per-agent skill assignment (FR-MOD-08.6.3)', () => {
 
     // Seeded owner (Dana Okonkwo) holds the "Billing" area — the seed's fixed
     // catalogue also has "Technical support" and "Onboarding" (seed.ts).
-    await agentPage
-      .getByRole('button', { name: `Manage skills for ${DEMO.agentName}` })
-      .click();
+    await agentPage.getByRole('button', { name: `Manage skills for ${DEMO.agentName}` }).click();
     const dialog = agentPage.getByRole('dialog', { name: `Skills — ${DEMO.agentName}` });
     await expect(dialog).toBeVisible();
 

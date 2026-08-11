@@ -41,11 +41,7 @@ interface WeeklyCounts {
 }
 
 export class HomeService {
-  async getDashboard(
-    tx: TenantClient,
-    tenant: TenantContext,
-    now: Date,
-  ): Promise<HomeDashboard> {
+  async getDashboard(tx: TenantClient, tenant: TenantContext, now: Date): Promise<HomeDashboard> {
     // Sequential, not Promise.all: withTenant runs in one interactive
     // transaction, and Prisma forbids concurrent queries on its client.
     const activation = await this.#activation(tx);
@@ -86,11 +82,7 @@ export class HomeService {
   }
 
   /** The live counters — who and what is active right now. */
-  async #live(
-    tx: TenantClient,
-    tenant: TenantContext,
-    now: Date,
-  ): Promise<HomeDashboard['live']> {
+  async #live(tx: TenantClient, tenant: TenantContext, now: Date): Promise<HomeDashboard['live']> {
     const liveSince = new Date(now.getTime() - LIVE_WINDOW_MINUTES * 60_000);
 
     // Distinct people on the site now: someone with an open chat, or someone

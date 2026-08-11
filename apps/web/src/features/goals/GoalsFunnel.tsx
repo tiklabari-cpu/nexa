@@ -65,10 +65,20 @@ export function GoalsFunnel(): ReactElement {
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }): ReactElement {
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}): ReactElement {
   return (
     <div>
-      <dt className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">{label}</dt>
+      <dt className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+        {label}
+      </dt>
       <dd className="tabular text-lg font-semibold">
         {/* The count is its own element so a browser-level test can read it apart
             from the rate sharing the cell: `dd`'s text content runs the two

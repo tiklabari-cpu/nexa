@@ -119,7 +119,12 @@ export class ConflictDetectionService {
 
   /** Runs the registry script, loading it once and reloading on a cache flush. */
   async #runRegistry(key: string, agentId: string, isComposing: boolean): Promise<unknown> {
-    const args = [String(Date.now()), String(this.windowMs), agentId, isComposing ? 'add' : 'remove'];
+    const args = [
+      String(Date.now()),
+      String(this.windowMs),
+      agentId,
+      isComposing ? 'add' : 'remove',
+    ];
     try {
       if (!this.#scriptSha) {
         this.#scriptSha = (await this.redis.script('LOAD', COMPOSER_REGISTRY_LUA)) as string;

@@ -156,7 +156,9 @@ describe('CustomerDetailPanel — Groups card (FR-EK-B.1)', () => {
 
     expect(await screen.findByText('Groups')).toBeInTheDocument();
     expect(
-      screen.getByText('Not routed to a team yet. Groups appear here once one of their conversations is assigned.'),
+      screen.getByText(
+        'Not routed to a team yet. Groups appear here once one of their conversations is assigned.',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -173,7 +175,9 @@ describe('CustomerDetailPanel — Groups card (FR-EK-B.1)', () => {
     expect(await screen.findByText('Sales')).toBeInTheDocument();
     expect(screen.getByText('Support')).toBeInTheDocument();
     expect(
-      screen.queryByText('Not routed to a team yet. Groups appear here once one of their conversations is assigned.'),
+      screen.queryByText(
+        'Not routed to a team yet. Groups appear here once one of their conversations is assigned.',
+      ),
     ).not.toBeInTheDocument();
   });
 });
@@ -210,7 +214,13 @@ describe('CustomerDetailPanel — regression: existing cards still render', () =
     renderPanel(
       baseCustomer({
         custom_fields: [
-          { definition_id: 'df1', label: 'Player ID', type: 'text', required: false, value: 'P-42' },
+          {
+            definition_id: 'df1',
+            label: 'Player ID',
+            type: 'text',
+            required: false,
+            value: 'P-42',
+          },
         ],
         visits: [
           {
@@ -224,7 +234,12 @@ describe('CustomerDetailPanel — regression: existing cards still render', () =
           },
         ],
         chats: [
-          { id: 'CHAT0000001', active: true, created_at: '2026-07-20T10:05:00.000Z', last_event_at: null },
+          {
+            id: 'CHAT0000001',
+            active: true,
+            created_at: '2026-07-20T10:05:00.000Z',
+            last_event_at: null,
+          },
         ],
       }),
     );

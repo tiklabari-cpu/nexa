@@ -142,7 +142,7 @@ describe('benchmarkWindow', () => {
       expect(window.to.getTime()).toBe(to.getTime() - 365 * DAY);
     });
 
-    it('keeps the requested window\'s exact length', () => {
+    it("keeps the requested window's exact length", () => {
       const window = benchmarkWindow(from, to, 'previous_year');
       expect(window.to.getTime() - window.from.getTime()).toBe(span);
     });

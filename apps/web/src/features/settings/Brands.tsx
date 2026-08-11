@@ -51,7 +51,9 @@ export function Brands({ canEdit }: { canEdit: boolean }): ReactElement {
         await add.mutateAsync({ name: values.name.trim() });
         reset();
       } catch (error) {
-        setSubmitError(error instanceof ApiClientError ? error.message : 'Could not add that brand.');
+        setSubmitError(
+          error instanceof ApiClientError ? error.message : 'Could not add that brand.',
+        );
       }
     },
   });

@@ -295,7 +295,13 @@ takeover:
           schema:
             type: object
             properties:
-              reason: { type: string, maxLength: 500, description: Optional supervisory justification, recorded in the audit trail. }
+              reason:
+                {
+                  type: string,
+                  maxLength: 500,
+                  description: Optional supervisory justification,
+                  recorded in the audit trail.,
+                }
     responses:
       "200":
         description: Taken over

@@ -64,7 +64,10 @@ const MS_PER_DAY = 86_400_000;
 export function resolveRetentionPolicy(
   env: Pick<
     Env,
-    'RETENTION_THREAD_DAYS' | 'RETENTION_VISIT_DAYS' | 'RETENTION_MAIL_DAYS' | 'RETENTION_AUDIT_DAYS'
+    | 'RETENTION_THREAD_DAYS'
+    | 'RETENTION_VISIT_DAYS'
+    | 'RETENTION_MAIL_DAYS'
+    | 'RETENTION_AUDIT_DAYS'
   >,
 ): RetentionPolicy {
   return {

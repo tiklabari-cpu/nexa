@@ -139,7 +139,13 @@ describe('retention sweep (NFR-C8)', () => {
   // valid action; the sweep prunes by age, not by what the entry records.
   async function seedAudit(t: TenantFixture, createdAt: Date): Promise<string> {
     const row = await owner.auditLogEntry.create({
-      data: { licenseId: t.licenseId, actorType: 'system', action: 'auth.login', metadata: {}, createdAt },
+      data: {
+        licenseId: t.licenseId,
+        actorType: 'system',
+        action: 'auth.login',
+        metadata: {},
+        createdAt,
+      },
       select: { id: true },
     });
     return row.id;

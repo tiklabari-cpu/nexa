@@ -215,7 +215,8 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
       ? String(Math.round(current.session_idle_timeout_seconds / 60))
       : '');
   const maxDraft =
-    maxSessions ?? (current?.max_concurrent_sessions != null ? String(current.max_concurrent_sessions) : '');
+    maxSessions ??
+    (current?.max_concurrent_sessions != null ? String(current.max_concurrent_sessions) : '');
 
   function submit(event: FormEvent): void {
     event.preventDefault();

@@ -35,7 +35,9 @@ function stubFetch(responses: Record<string, unknown>): { calls: Call[] } {
     vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
       const path = String(url).replace('/api/v1', '');
-      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined;
+      const body = init?.body
+        ? (JSON.parse(String(init.body)) as Record<string, unknown>)
+        : undefined;
       calls.push({ method, path, body });
       const key = Object.keys(responses).find((suffix) => path.endsWith(suffix));
       return okJson(key ? responses[key] : {});
@@ -95,7 +97,10 @@ describe('CopilotPanel', () => {
 
   it('drafts a reply and hands it to the composer rather than sending it (12.3)', async () => {
     stubFetch({
-      '/reply': { draft: 'Refunds over 500 go to finance.', sources: [{ name: 'Refund policy', score: 0.8 }] },
+      '/reply': {
+        draft: 'Refunds over 500 go to finance.',
+        sources: [{ name: 'Refund policy', score: 0.8 }],
+      },
     });
     renderPanel();
 
@@ -106,7 +111,9 @@ describe('CopilotPanel', () => {
     // Insert hands the draft to the composer through the shared store — it does
     // not send.
     await userEvent.click(screen.getByRole('button', { name: 'Insert into reply' }));
-    expect(useCopilotDraftStore.getState().byChat['CHAT123']).toBe('Refunds over 500 go to finance.');
+    expect(useCopilotDraftStore.getState().byChat['CHAT123']).toBe(
+      'Refunds over 500 go to finance.',
+    );
   });
 
   it('says so when the knowledge base has no suggestion', async () => {
@@ -119,7 +126,9 @@ describe('CopilotPanel', () => {
   });
 
   it('rewrites a draft in the chosen register (12.3)', async () => {
-    const { calls } = stubFetch({ '/enhance': { text: 'Hello, we cannot do that.', mode: 'formal' } });
+    const { calls } = stubFetch({
+      '/enhance': { text: 'Hello, we cannot do that.', mode: 'formal' },
+    });
     renderPanel();
 
     await userEvent.type(screen.getByLabelText('Draft to improve'), "we can't do that");
@@ -165,7 +174,9 @@ describe('CopilotPanel', () => {
       await userEvent.type(screen.getByLabelText('Ask about your reports'), QUESTION);
       await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
 
-      await waitFor(() => expect(screen.getByText('Your team closed 12 chats this week.')).toBeTruthy());
+      await waitFor(() =>
+        expect(screen.getByText('Your team closed 12 chats this week.')).toBeTruthy(),
+      );
       const call = calls.find((c) => c.path === '/copilot/bi');
       expect(call?.method).toBe('POST');
       expect(call?.body).toEqual({ question: QUESTION });
@@ -224,9 +235,7 @@ describe('CopilotPanel', () => {
           range: { from: '2026-08-03T00:00:00.000Z', to: '2026-08-08T23:59:59.999Z' },
         }),
       );
-      expect(
-        await screen.findByText('Your team closed 12 chats this week.'),
-      ).toBeTruthy();
+      expect(await screen.findByText('Your team closed 12 chats this week.')).toBeTruthy();
     });
 
     it('shows an error rather than swallowing a failed request', async () => {
@@ -238,7 +247,9 @@ describe('CopilotPanel', () => {
               ok: false,
               status: 500,
               headers: { get: () => null },
-              json: async () => ({ error: { type: 'internal', message: 'boom', request_id: 'r1' } }),
+              json: async () => ({
+                error: { type: 'internal', message: 'boom', request_id: 'r1' },
+              }),
             } as unknown as Response;
           }
           return okJson({});
@@ -298,7 +309,9 @@ describe('CopilotPanel', () => {
       await userEvent.type(input, QUESTION);
       await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
 
-      await userEvent.click(screen.getByRole('button', { name: 'How many chats closed this week?' }));
+      await userEvent.click(
+        screen.getByRole('button', { name: 'How many chats closed this week?' }),
+      );
 
       expect(input.value).toBe('How many chats closed this week?');
     });
@@ -321,7 +334,7 @@ describe('CopilotPanel', () => {
       expect(await screen.findByText('No data for this window')).toBeTruthy();
       expect(screen.getByText('No data for customer satisfaction this week.')).toBeTruthy();
       const widen = screen.getByRole('button', {
-        name: "Customer satisfaction score in the last 30 days?",
+        name: 'Customer satisfaction score in the last 30 days?',
       });
       expect(widen).toBeTruthy();
 

@@ -146,7 +146,9 @@ describe('McpConnection', () => {
   it('never renders any token or secret text', async () => {
     stubFetch();
     const { container } = renderMcp();
-    await waitFor(() => expect(screen.getByLabelText('MCP server URL')).toHaveValue(MANIFEST.server.url));
+    await waitFor(() =>
+      expect(screen.getByLabelText('MCP server URL')).toHaveValue(MANIFEST.server.url),
+    );
 
     const text = container.textContent ?? '';
     expect(text).not.toMatch(/token/i);

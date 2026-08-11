@@ -129,7 +129,12 @@ describe('knowledge website crawl', () => {
     const { headers, aiAgentId } = await write('a', agentIdA);
     const response = await server.post(
       '/knowledge-sources',
-      { ai_agent_id: aiAgentId, name: 'FAQ', type: 'faq', content: 'We are open 9 to 5, Monday to Friday.' },
+      {
+        ai_agent_id: aiAgentId,
+        name: 'FAQ',
+        type: 'faq',
+        content: 'We are open 9 to 5, Monday to Friday.',
+      },
       headers,
     );
     expect(response.statusCode).toBe(201);
@@ -138,11 +143,16 @@ describe('knowledge website crawl', () => {
 
   // --- Cross-tenant ----------------------------------------------------------
 
-  it("never lets another tenant see a crawled source", async () => {
+  it('never lets another tenant see a crawled source', async () => {
     const a = await write('a', agentIdA);
     await server.post(
       '/knowledge-sources',
-      { ai_agent_id: a.aiAgentId, name: 'A secret', type: 'website', source_url: 'https://a.example.com/' },
+      {
+        ai_agent_id: a.aiAgentId,
+        name: 'A secret',
+        type: 'website',
+        source_url: 'https://a.example.com/',
+      },
       a.headers,
     );
 
@@ -155,7 +165,9 @@ describe('knowledge website crawl', () => {
         scopes: ['agents-bot--all:rw'],
       })}`,
     };
-    const list = (await server.get('/knowledge-sources', bHeaders)).json() as { items: SourceView[] };
+    const list = (await server.get('/knowledge-sources', bHeaders)).json() as {
+      items: SourceView[];
+    };
     expect(list.items).toHaveLength(0);
   });
 });

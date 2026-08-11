@@ -254,9 +254,7 @@ export function TeamPage(): ReactElement {
                           {canSuspend(agent) && (
                             <button
                               type="button"
-                              onClick={() =>
-                                suspension.mutate({ id: agent.id, suspended: true })
-                              }
+                              onClick={() => suspension.mutate({ id: agent.id, suspended: true })}
                               disabled={suspension.isPending}
                               className="text-xs text-danger underline disabled:opacity-40"
                             >

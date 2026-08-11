@@ -45,10 +45,7 @@ export function useTicket(ticketId: string | null) {
  * The returned detail seeds the current ticket's cache so the pane updates
  * without a flash of stale data before the refetch lands.
  */
-async function settle(
-  client: QueryClient,
-  data: TicketDetail | undefined,
-): Promise<void> {
+async function settle(client: QueryClient, data: TicketDetail | undefined): Promise<void> {
   if (data) client.setQueryData(['ticket', data.id], data);
   await client.invalidateQueries({ queryKey: ['tickets'] });
   await client.invalidateQueries({ queryKey: ['ticket'] });

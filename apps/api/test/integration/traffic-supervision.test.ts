@@ -446,8 +446,10 @@ describe('chat supervision', () => {
      * the service's own WHERE clause.
      */
     const liveByChat = (tenant: TenantFixture, chatIds: string[]) =>
-      withTenant(app, { licenseId: tenant.licenseId, organizationId: tenant.organizationId }, (tx) =>
-        supervisions.liveByChat(tx, tenant.licenseId, chatIds),
+      withTenant(
+        app,
+        { licenseId: tenant.licenseId, organizationId: tenant.organizationId },
+        (tx) => supervisions.liveByChat(tx, tenant.licenseId, chatIds),
       );
 
     it('counts a fresh heartbeat as live', async () => {

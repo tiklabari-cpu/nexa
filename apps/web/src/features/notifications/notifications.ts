@@ -87,7 +87,9 @@ export function notificationTitle(base: string, unread: number): string {
  * Load preferences, tolerating an absent, malformed or partial stored value —
  * a shape written by an older build must not throw and blank the inbox.
  */
-export function loadPrefs(storage: Pick<Storage, 'getItem'> | undefined = safeStorage()): NotificationPrefs {
+export function loadPrefs(
+  storage: Pick<Storage, 'getItem'> | undefined = safeStorage(),
+): NotificationPrefs {
   if (!storage) return { ...DEFAULT_PREFS };
   try {
     const raw = storage.getItem(STORAGE_KEY);

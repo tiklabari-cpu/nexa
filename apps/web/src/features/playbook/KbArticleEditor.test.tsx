@@ -120,7 +120,10 @@ describe('KbArticleEditor', () => {
 
   it('reads back and edits the SEO title/description fields', async () => {
     const user = userEvent.setup();
-    const existing = article({ seo_title: 'Old SEO title', seo_description: 'Old SEO description' });
+    const existing = article({
+      seo_title: 'Old SEO title',
+      seo_description: 'Old SEO description',
+    });
     api.patch.mockResolvedValue({
       ...existing,
       seo_title: 'New SEO title',
@@ -175,7 +178,12 @@ describe('KbArticleEditor', () => {
   it('shows a warning banner when the KB is disabled', async () => {
     api.get.mockImplementation((path: string) => {
       if (path === '/kb-settings') {
-        return Promise.resolve({ enabled: false, public_slug: null, site_title: null, updated_at: null });
+        return Promise.resolve({
+          enabled: false,
+          public_slug: null,
+          site_title: null,
+          updated_at: null,
+        });
       }
       return Promise.reject(new Error(`unexpected GET ${path}`));
     });
@@ -249,7 +257,15 @@ describe('KbArticleEditor', () => {
   it('links every field to its label', () => {
     renderEditor({ article: null });
 
-    for (const label of ['Title', 'Slug', 'Category', 'Body', 'Excerpt', 'SEO title', 'SEO description']) {
+    for (const label of [
+      'Title',
+      'Slug',
+      'Category',
+      'Body',
+      'Excerpt',
+      'SEO title',
+      'SEO description',
+    ]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
   });

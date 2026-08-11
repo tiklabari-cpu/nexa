@@ -86,7 +86,8 @@ function Field({
   autoFocus?: boolean;
 }): ReactElement {
   const describedBy =
-    [error ? `${id}-error` : null, hint ? `${id}-hint` : null].filter(Boolean).join(' ') || undefined;
+    [error ? `${id}-error` : null, hint ? `${id}-hint` : null].filter(Boolean).join(' ') ||
+    undefined;
   return (
     <div className="mb-4">
       <label htmlFor={id} className="mb-1.5 block text-sm font-medium">
@@ -178,7 +179,10 @@ export function SignUpPage(): ReactElement {
       subtitle="14 days free. No card."
       footer={
         <>
-          Already have an account? <Link to="/signin" className="text-content-brand underline">Sign in</Link>
+          Already have an account?{' '}
+          <Link to="/signin" className="text-content-brand underline">
+            Sign in
+          </Link>
         </>
       }
     >
@@ -244,7 +248,9 @@ export function ForgotPasswordPage(): ReactElement {
     // that showed a failure for one address and not another would reopen the
     // enumeration channel the endpoint closes.
     onSubmit: async (values) => {
-      await anonymous.post('/auth/password-reset', { email: values.email.trim() }).catch(() => undefined);
+      await anonymous
+        .post('/auth/password-reset', { email: values.email.trim() })
+        .catch(() => undefined);
       setSent(true);
     },
   });
@@ -253,7 +259,11 @@ export function ForgotPasswordPage(): ReactElement {
     <AuthCard
       title="Reset your password"
       subtitle="We will send you a link."
-      footer={<Link to="/signin" className="text-content-brand underline">Back to sign in</Link>}
+      footer={
+        <Link to="/signin" className="text-content-brand underline">
+          Back to sign in
+        </Link>
+      }
     >
       {sent ? (
         <p role="status" className="text-sm text-content-secondary">
@@ -301,7 +311,11 @@ export function ResetPasswordPage(): ReactElement {
     <AuthCard
       title="Choose a new password"
       subtitle="The link works once."
-      footer={<Link to="/signin" className="text-content-brand underline">Back to sign in</Link>}
+      footer={
+        <Link to="/signin" className="text-content-brand underline">
+          Back to sign in
+        </Link>
+      }
     >
       {done ? (
         <p role="status" className="text-sm text-content-secondary">
@@ -321,7 +335,9 @@ export function ResetPasswordPage(): ReactElement {
             hint={`At least ${MIN_PASSWORD} characters.`}
             autoFocus
           />
-          <Submit disabled={!form.canSubmit}>{form.isSubmitting ? 'Saving…' : 'Set password'}</Submit>
+          <Submit disabled={!form.canSubmit}>
+            {form.isSubmitting ? 'Saving…' : 'Set password'}
+          </Submit>
         </form>
       )}
     </AuthCard>
@@ -397,7 +413,10 @@ export function JoinPage(): ReactElement {
 
   if (invalid) {
     return (
-      <AuthCard title="This invitation is not valid" subtitle="It may have expired or been revoked.">
+      <AuthCard
+        title="This invitation is not valid"
+        subtitle="It may have expired or been revoked."
+      >
         <p className="text-sm text-content-secondary">
           Ask whoever invited you to send a new one. Links work once and last seven days.
         </p>

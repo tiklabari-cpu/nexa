@@ -94,7 +94,10 @@ function stubFetch(detail: TicketDetail): { calls: Call[] } {
       if (method === 'POST' && /\/followers$/.test(path)) {
         current = {
           ...current,
-          followers: [...current.followers, { account_id: String(body?.['account_id']), name: null }],
+          followers: [
+            ...current.followers,
+            { account_id: String(body?.['account_id']), name: null },
+          ],
         };
         return okJson(current);
       }
@@ -156,9 +159,9 @@ describe('TicketDetailPane HelpDesk actions', () => {
     await userEvent.selectOptions(select, '100');
 
     await waitFor(() =>
-      expect(
-        handles.calls.some((c) => c.method === 'PATCH' && c.body?.['priority'] === 100),
-      ).toBe(true),
+      expect(handles.calls.some((c) => c.method === 'PATCH' && c.body?.['priority'] === 100)).toBe(
+        true,
+      ),
     );
   });
 

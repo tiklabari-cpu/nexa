@@ -50,7 +50,10 @@ describe('CannedResponses validation', () => {
     await userEvent.type(screen.getByPlaceholderText('shipping'), 'promo');
     expect(submit).toBeDisabled(); // the reply is still empty
 
-    await userEvent.type(screen.getByPlaceholderText(/Standard delivery/), 'Free shipping this week.');
+    await userEvent.type(
+      screen.getByPlaceholderText(/Standard delivery/),
+      'Free shipping this week.',
+    );
     expect(submit).toBeEnabled();
   });
 

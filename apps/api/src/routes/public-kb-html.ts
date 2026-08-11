@@ -137,7 +137,11 @@ export default async function publicKbHtmlRoutes(
       }
       if (uncategorised.length) sections.push({ categoryName: null, articles: uncategorised });
 
-      return sendHtml(request, reply, renderIndexPage({ workspaceSlug, siteTitle, sections }, links));
+      return sendHtml(
+        request,
+        reply,
+        renderIndexPage({ workspaceSlug, siteTitle, sections }, links),
+      );
     },
   );
 

@@ -116,7 +116,9 @@ describe('GoalsPage', () => {
     renderPage();
     expect(await screen.findByText('No goals yet')).toBeInTheDocument();
     expect(
-      screen.getByText('Create a goal to track when a visitor reaches a page that counts as a conversion.'),
+      screen.getByText(
+        'Create a goal to track when a visitor reaches a page that counts as a conversion.',
+      ),
     ).toBeInTheDocument();
   });
 

@@ -62,7 +62,9 @@ describe('toTemplateCsv', () => {
   });
 
   it('writes one data line per example row, in the header column order', () => {
-    const lines = toTemplateCsv().split('\r\n').filter((line) => line !== '');
+    const lines = toTemplateCsv()
+      .split('\r\n')
+      .filter((line) => line !== '');
     expect(lines).toHaveLength(1 + BULK_TEMPLATE_EXAMPLE_ROWS.length);
 
     const order = BULK_TEMPLATE_COLUMNS.map((spec) => spec.column);

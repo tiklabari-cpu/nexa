@@ -12,7 +12,13 @@ import { useApiClient } from '../../lib/auth-store.js';
  */
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i;
 
-export function AttachmentView({ url, filename }: { url: string; filename?: string }): ReactElement {
+export function AttachmentView({
+  url,
+  filename,
+}: {
+  url: string;
+  filename?: string;
+}): ReactElement {
   // `useApiClient` returns a fresh client every render, so it must not be an
   // effect dependency — the effect would re-run each render, revoke the object
   // URL it just made, and leave the `<img>` pointing at a freed blob. A ref
@@ -61,7 +67,10 @@ export function AttachmentView({ url, filename }: { url: string; filename?: stri
         />
       </a>
     ) : (
-      <div className="h-32 w-48 animate-pulse rounded-md bg-inset" aria-label="Loading attachment" />
+      <div
+        className="h-32 w-48 animate-pulse rounded-md bg-inset"
+        aria-label="Loading attachment"
+      />
     );
   }
 

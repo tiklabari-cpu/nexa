@@ -46,13 +46,7 @@ export type MetricKey = 'chats' | 'closed' | 'manual' | 'assisted' | 'automated'
  * visible to the reader rather than silent.
  */
 export type RelativeRange =
-  | 'today'
-  | 'yesterday'
-  | 'this_week'
-  | 'last_week'
-  | 'this_month'
-  | 'last_7_days'
-  | 'last_30_days';
+  'today' | 'yesterday' | 'this_week' | 'last_week' | 'this_month' | 'last_7_days' | 'last_30_days';
 
 export interface BiMetric {
   key: MetricKey;
@@ -276,7 +270,10 @@ export function biMetricSource(key: MetricKey): string {
  * does not say which. Both candidates have already cleared the threshold, so
  * this only ever chooses between plausible readings.
  */
-function isStronger(candidate: { score: number; hits: number }, best: { score: number; hits: number }): boolean {
+function isStronger(
+  candidate: { score: number; hits: number },
+  best: { score: number; hits: number },
+): boolean {
   if (candidate.hits !== best.hits) return candidate.hits > best.hits;
   return candidate.score > best.score;
 }

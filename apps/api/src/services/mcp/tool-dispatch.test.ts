@@ -13,9 +13,9 @@ describe('authorizingScope — the tool-call scope gate', () => {
   // implication rules, not exact-string membership.
 
   it('returns the held scope when it is exactly one of the required', () => {
-    expect(
-      authorizingScope(['tickets--all:ro'], ['tickets--all:ro', 'tickets--access:ro']),
-    ).toBe('tickets--all:ro');
+    expect(authorizingScope(['tickets--all:ro'], ['tickets--all:ro', 'tickets--access:ro'])).toBe(
+      'tickets--all:ro',
+    );
   });
 
   it('honours :rw ⇒ :ro implication', () => {
@@ -25,15 +25,17 @@ describe('authorizingScope — the tool-call scope gate', () => {
 
   it('honours --all ⇒ --access implication', () => {
     // The broad grant satisfies the narrower requirement of the same resource.
-    expect(authorizingScope(['tickets--all:rw'], ['tickets--access:ro'])).toBe('tickets--access:ro');
+    expect(authorizingScope(['tickets--all:rw'], ['tickets--access:ro'])).toBe(
+      'tickets--access:ro',
+    );
   });
 
   it('returns the first required scope the caller holds, not just any', () => {
     // `tickets--all:rw` effectively holds both required scopes; the *first* in
     // the required list is the one recorded, deterministically.
-    expect(
-      authorizingScope(['tickets--all:rw'], ['tickets--all:ro', 'tickets--access:ro']),
-    ).toBe('tickets--all:ro');
+    expect(authorizingScope(['tickets--all:rw'], ['tickets--all:ro', 'tickets--access:ro'])).toBe(
+      'tickets--all:ro',
+    );
   });
 
   it('is undefined for an empty grant', () => {

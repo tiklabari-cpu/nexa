@@ -12,12 +12,7 @@
 import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import {
-  composerStateKey,
-  licenseChannel,
-  type BusEnvelope,
-  type PushAudience,
-} from '@nexa/types';
+import { composerStateKey, licenseChannel, type BusEnvelope, type PushAudience } from '@nexa/types';
 import {
   createConversation,
   createCustomer,

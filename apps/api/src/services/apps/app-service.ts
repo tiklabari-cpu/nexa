@@ -133,7 +133,11 @@ export class AppService {
    * Joining after the cut also keeps the read proportional to `limit` rather
    * than to the workspace's whole connection set (NFR-P2).
    */
-  async list(tx: TenantClient, tenant: TenantContext, options: AppListOptions): Promise<AppListPage> {
+  async list(
+    tx: TenantClient,
+    tenant: TenantContext,
+    options: AppListOptions,
+  ): Promise<AppListPage> {
     const matches = filterAppCatalog(APP_CATALOG, {
       ...(options.query !== undefined ? { query: options.query } : {}),
       ...(options.category !== undefined ? { category: options.category } : {}),
@@ -208,7 +212,12 @@ export class AppService {
     const row = await tx.appInstallation.upsert({
       where: { licenseId_appId: { licenseId: tenant.licenseId, appId: entry.id } },
       update: { status: 'connected', externalAccount },
-      create: { licenseId: tenant.licenseId, appId: entry.id, status: 'connected', externalAccount },
+      create: {
+        licenseId: tenant.licenseId,
+        appId: entry.id,
+        status: 'connected',
+        externalAccount,
+      },
     });
     return toListItem(entry, row);
   }
@@ -238,12 +247,14 @@ export class AppService {
 
     const installed = await tx.appInstallation.findMany({ where: { licenseId: tenant.licenseId } });
     const seed = chat.customer.email ?? chat.customer.id;
-    return installed
-      .map((row) => findApp(row.appId))
-      // Only data apps surface in-chat; channel apps never reach here (they are
-      // not connectable in the marketplace), but keep the filter explicit.
-      .filter((entry): entry is AppCatalogEntry => entry !== undefined && !isChannelApp(entry))
-      .map((entry) => appChatData(entry, seed));
+    return (
+      installed
+        .map((row) => findApp(row.appId))
+        // Only data apps surface in-chat; channel apps never reach here (they are
+        // not connectable in the marketplace), but keep the filter explicit.
+        .filter((entry): entry is AppCatalogEntry => entry !== undefined && !isChannelApp(entry))
+        .map((entry) => appChatData(entry, seed))
+    );
   }
 
   // --- OAuth state signing ---------------------------------------------------

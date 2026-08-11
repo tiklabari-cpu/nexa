@@ -14,7 +14,13 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantToken, ownerClient, seedDefaultBrand, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedDefaultBrand,
+  seedFixtures,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 interface Brand {
@@ -105,7 +111,8 @@ describe('brands', () => {
     // Every verb the id could be probed through is a 404 for license B.
     expect((await server.get(`/brands/${mine.id}`, auth(adminTokenB))).statusCode).toBe(404);
     expect(
-      (await server.patch(`/brands/${mine.id}`, { name: 'Hijacked' }, auth(adminTokenB))).statusCode,
+      (await server.patch(`/brands/${mine.id}`, { name: 'Hijacked' }, auth(adminTokenB)))
+        .statusCode,
     ).toBe(404);
     expect((await server.del(`/brands/${mine.id}`, auth(adminTokenB))).statusCode).toBe(404);
 
@@ -144,7 +151,11 @@ describe('brands', () => {
   it('refuses to delete a brand that still has a website (not_allowed)', async () => {
     const brand = (await create('Acme EU')).json() as Brand;
     // Attach a website to that brand via the brand header.
-    const site = await server.post('/websites', { domain: 'eu.example' }, auth(adminToken, brand.id));
+    const site = await server.post(
+      '/websites',
+      { domain: 'eu.example' },
+      auth(adminToken, brand.id),
+    );
     expect(site.statusCode).toBe(201);
 
     const del = await server.del(`/brands/${brand.id}`, auth(adminToken));
@@ -207,7 +218,11 @@ describe('brands', () => {
     expect(items.map((b) => b.slug)).toContain('acme-eu');
 
     // Rename → name changes, id and slug stay.
-    const renamed = await server.patch(`/brands/${brand.id}`, { name: 'Acme Europe' }, auth(adminToken));
+    const renamed = await server.patch(
+      `/brands/${brand.id}`,
+      { name: 'Acme Europe' },
+      auth(adminToken),
+    );
     expect(renamed.statusCode).toBe(200);
     expect((renamed.json() as Brand).name).toBe('Acme Europe');
     expect((renamed.json() as Brand).slug).toBe('acme-eu');

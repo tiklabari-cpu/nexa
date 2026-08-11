@@ -124,13 +124,13 @@ const PAIRINGS: readonly Pairing[] = [
    * turned up `--success` at 3.92 and `--note` at 3.26 on the same surface. One
    * screen happened to render one of the three; this catches all six in 4ms.
    */
-  ...(
-    ['--success', '--warning', '--danger', '--info', '--ai', '--note'] as const
-  ).map((foreground) => ({
-    foreground,
-    backgrounds: SURFACES,
-    because: 'status text — badges, KPIs, validation messages',
-  })),
+  ...(['--success', '--warning', '--danger', '--info', '--ai', '--note'] as const).map(
+    (foreground) => ({
+      foreground,
+      backgrounds: SURFACES,
+      because: 'status text — badges, KPIs, validation messages',
+    }),
+  ),
   {
     foreground: '--bubble-agent-text',
     backgrounds: ['--bubble-agent-bg'],

@@ -1473,8 +1473,12 @@ describe('data model invariants', () => {
     });
 
     it("hides another tenant's sales tracker settings", async () => {
-      await owner.salesTrackerSettings.create({ data: { licenseId: fx.a.licenseId, enabled: true } });
-      await owner.salesTrackerSettings.create({ data: { licenseId: fx.b.licenseId, enabled: true } });
+      await owner.salesTrackerSettings.create({
+        data: { licenseId: fx.a.licenseId, enabled: true },
+      });
+      await owner.salesTrackerSettings.create({
+        data: { licenseId: fx.b.licenseId, enabled: true },
+      });
 
       const visible = await withTenant(
         app,
@@ -1560,9 +1564,9 @@ describe('data model invariants', () => {
       await owner.license.delete({ where: { id: fx.b.licenseId } });
 
       expect(await owner.trackedSale.count({ where: { licenseId: fx.b.licenseId } })).toBe(0);
-      expect(
-        await owner.salesTrackerSettings.count({ where: { licenseId: fx.b.licenseId } }),
-      ).toBe(0);
+      expect(await owner.salesTrackerSettings.count({ where: { licenseId: fx.b.licenseId } })).toBe(
+        0,
+      );
     });
 
     it('round-trips a tracked sale and settings row through Prisma with the defaults applied', async () => {

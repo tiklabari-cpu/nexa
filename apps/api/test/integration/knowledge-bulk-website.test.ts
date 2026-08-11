@@ -238,7 +238,12 @@ describe('bulk knowledge import — website rows', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json() as BulkResult;
     expect(body).toMatchObject({ imported: 2, failed: 1 });
-    expect(body.results[1]).toMatchObject({ line: 2, name: 'Metadata', status: 'skipped', id: null });
+    expect(body.results[1]).toMatchObject({
+      line: 2,
+      name: 'Metadata',
+      status: 'skipped',
+      id: null,
+    });
 
     // Crawled *and* indexed — the KK's "crawl/parse" and "RAG indeksleme" halves.
     expect(body.results[0]?.chunk_count).toBeGreaterThan(0);
@@ -310,7 +315,11 @@ describe('bulk knowledge import — website rows', () => {
     const previewBody = preview.json() as BulkResult;
     // The guard still runs, so the verdict a preview exists to give is real.
     expect(previewBody).toMatchObject({ imported: 1, failed: 1, dry_run: true });
-    expect(previewBody.results[0]).toMatchObject({ status: 'imported', id: null, chunk_count: null });
+    expect(previewBody.results[0]).toMatchObject({
+      status: 'imported',
+      id: null,
+      chunk_count: null,
+    });
     expect(previewBody.results[1]?.status).toBe('skipped');
     expect(await sourceCount('a')).toBe(0);
 

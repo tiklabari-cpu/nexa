@@ -213,7 +213,7 @@ export function renderArticleBody(markdown: string): string {
     // Otherwise a paragraph: consecutive plain lines, soft-wrapped with spaces
     // (standard markdown), until a blank line or the start of another block.
     const paragraph: string[] = [];
-    for (let cur = line; i < lines.length && !isBlank(cur) && !isBlockStart(cur); ) {
+    for (let cur = line; i < lines.length && !isBlank(cur) && !isBlockStart(cur);) {
       paragraph.push(cur.trim());
       i += 1;
       cur = lines[i] ?? '';
@@ -233,7 +233,10 @@ export function renderArticleBody(markdown: string): string {
  * on a word boundary with an ellipsis. Entities are never decoded, so nested
  * encodings do not re-materialise into markup.
  */
-export function renderPlainExcerpt(markdown: string, maxLength: number = DEFAULT_EXCERPT_LENGTH): string {
+export function renderPlainExcerpt(
+  markdown: string,
+  maxLength: number = DEFAULT_EXCERPT_LENGTH,
+): string {
   if (!markdown) return '';
 
   const plain = normaliseInput(markdown)

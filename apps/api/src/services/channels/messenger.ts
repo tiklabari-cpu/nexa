@@ -33,7 +33,10 @@ const connectSchema = z.object({
 
 const inboundSchema = z.object({
   recipient: z.object({ id: z.string().trim().min(1).max(64) }),
-  sender: z.object({ id: z.string().trim().min(1).max(64), name: z.string().trim().max(120).optional() }),
+  sender: z.object({
+    id: z.string().trim().min(1).max(64),
+    name: z.string().trim().max(120).optional(),
+  }),
   message: z.object({ text: z.string().min(1).max(10_000) }),
 });
 

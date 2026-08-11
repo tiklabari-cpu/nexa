@@ -10,7 +10,13 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantToken, ownerClient, seedFixtures, type Fixtures, type TenantFixture } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  type Fixtures,
+  type TenantFixture,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 interface Campaign {
@@ -36,7 +42,12 @@ describe('campaigns', () => {
   const minutesAgo = (n: number): Date => new Date(Date.now() - n * 60_000);
 
   /** A customer with a recent visit on a given page — a live visitor to target. */
-  async function seedVisitor(t: TenantFixture, name: string, url: string, startedAt = minutesAgo(2)): Promise<string> {
+  async function seedVisitor(
+    t: TenantFixture,
+    name: string,
+    url: string,
+    startedAt = minutesAgo(2),
+  ): Promise<string> {
     const customer = await owner.customer.create({
       data: { organizationId: t.organizationId, name },
       select: { id: true },
@@ -52,7 +63,8 @@ describe('campaigns', () => {
     return customer.id;
   }
 
-  const create = async (token: string, body: unknown) => server.post('/campaigns', body, auth(token));
+  const create = async (token: string, body: unknown) =>
+    server.post('/campaigns', body, auth(token));
   const list = async (token: string, query = ''): Promise<Campaign[]> => {
     const response = await server.get(`/campaigns${query}`, auth(token));
     expect(response.statusCode).toBe(200);
@@ -208,13 +220,21 @@ describe('campaigns', () => {
     expect(created.performance.displayed).toBe(0);
 
     // Toggle active → fires at the matching visitor.
-    const activated = await server.patch(`/campaigns/${created.id}`, { active: true }, auth(writeToken));
+    const activated = await server.patch(
+      `/campaigns/${created.id}`,
+      { active: true },
+      auth(writeToken),
+    );
     expect(activated.statusCode).toBe(200);
     expect((activated.json() as Campaign).performance.displayed).toBe(1);
     expect((await sendsFor(created.id)).map((s) => s.customerId)).toEqual([shopper]);
 
     // Saving an edit again must not send twice to someone already reached.
-    const edited = await server.patch(`/campaigns/${created.id}`, { name: 'Renamed' }, auth(writeToken));
+    const edited = await server.patch(
+      `/campaigns/${created.id}`,
+      { name: 'Renamed' },
+      auth(writeToken),
+    );
     expect((edited.json() as Campaign).name).toBe('Renamed');
     expect(await sendsFor(created.id)).toHaveLength(1);
   });
@@ -239,7 +259,13 @@ describe('campaigns', () => {
 
   it('returns 404 for a campaign in another tenant', async () => {
     const theirs = await owner.campaign.create({
-      data: { licenseId: fx.b.licenseId, name: 'Theirs', status: 'ongoing', conditions: {}, content: {} },
+      data: {
+        licenseId: fx.b.licenseId,
+        name: 'Theirs',
+        status: 'ongoing',
+        conditions: {},
+        content: {},
+      },
       select: { id: true },
     });
     const response = await server.patch(`/campaigns/${theirs.id}`, { name: 'x' }, auth(writeToken));

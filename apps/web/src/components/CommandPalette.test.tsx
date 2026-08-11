@@ -474,7 +474,9 @@ describe('command palette — AI query result', () => {
   function stubAiQuery(respond: (body: { query: string }) => Response) {
     const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
       if (input.includes('/palette/ai-query')) {
-        const body = init?.body ? (JSON.parse(String(init.body)) as { query: string }) : { query: '' };
+        const body = init?.body
+          ? (JSON.parse(String(init.body)) as { query: string })
+          : { query: '' };
         return respond(body);
       }
       return jsonResponse({ items: [] });
@@ -500,9 +502,7 @@ describe('command palette — AI query result', () => {
 
     await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), QUERY);
 
-    expect(
-      await screen.findByRole('option', { name: `Ask AI: "${QUERY}"` }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: `Ask AI: "${QUERY}"` })).toBeInTheDocument();
     expect(screen.getByText('Ask AI')).toBeInTheDocument();
   });
 
@@ -686,9 +686,9 @@ describe('command palette — mixed-kind keyboard navigation', () => {
     expect(options[10]).toHaveAttribute('aria-selected', 'true');
     expect(combobox).toHaveAttribute('aria-activedescendant', 'command-option-10');
     // Exactly one row is ever marked current.
-    expect(options.filter((option) => option.getAttribute('aria-selected') === 'true')).toHaveLength(
-      1,
-    );
+    expect(
+      options.filter((option) => option.getAttribute('aria-selected') === 'true'),
+    ).toHaveLength(1);
 
     // One more step wraps past the last row back to the first rather than
     // stopping dead — the list is a ring, not a wall.

@@ -221,7 +221,9 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         await pinTheme(agentPage, theme);
         await agentPage.goto('/app/settings');
         await scanPanel(agentPage, 'Settings', theme, testInfo, async () => {
-          await expect(agentPage.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+          await expect(
+            agentPage.getByRole('heading', { name: 'Settings', level: 1 }),
+          ).toBeVisible();
         });
       });
 

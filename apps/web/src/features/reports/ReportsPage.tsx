@@ -124,7 +124,12 @@ interface ReportsReviews {
   previous_period: CsatSummary & { range: { from: string; to: string } };
   by_day: Array<CsatSummary & { date: string }>;
   ecommerce:
-    | { configured: true; tracked_sales: number; attributed_revenue_cents: number; currency: string }
+    | {
+        configured: true;
+        tracked_sales: number;
+        attributed_revenue_cents: number;
+        currency: string;
+      }
     | {
         configured: false;
         tracked_sales: null;
@@ -397,9 +402,7 @@ export function ReportsPage(): ReactElement {
           <SavedViewsControl
             views={savedViews.views}
             onSelect={applySavedView}
-            onAdd={(name) =>
-              savedViews.add({ name, tab, mode, customFrom, customTo, baseline })
-            }
+            onAdd={(name) => savedViews.add({ name, tab, mode, customFrom, customTo, baseline })}
             onRemove={savedViews.remove}
           />
           <RangeControls
@@ -552,7 +555,9 @@ function OverviewTab(props: TabProps): ReactElement {
           <Kpi
             label="Achieved goals"
             value={formatCount(data.totals.achieved_goals)}
-            delta={<CountDelta current={data.totals.achieved_goals} previous={prev.achieved_goals} />}
+            delta={
+              <CountDelta current={data.totals.achieved_goals} previous={prev.achieved_goals} />
+            }
           />
         </KpiGrid>
       </Section>
@@ -635,7 +640,9 @@ function OverviewTab(props: TabProps): ReactElement {
           <Kpi
             label="Satisfaction"
             value={formatRate(data.satisfaction.score)}
-            delta={<RateDelta current={data.satisfaction.score} previous={prev.satisfaction_score} />}
+            delta={
+              <RateDelta current={data.satisfaction.score} previous={prev.satisfaction_score} />
+            }
             hint={
               data.satisfaction.responses === 0
                 ? 'No ratings yet'
@@ -882,7 +889,10 @@ function ReviewsTab(props: TabProps): ReactElement {
               <Kpi label="Tracked sales" value={formatCount(data.ecommerce.tracked_sales)} />
               <Kpi
                 label="Attributed revenue"
-                value={formatMoney(data.ecommerce.attributed_revenue_cents, data.ecommerce.currency)}
+                value={formatMoney(
+                  data.ecommerce.attributed_revenue_cents,
+                  data.ecommerce.currency,
+                )}
                 hint={data.ecommerce.currency}
               />
             </KpiGrid>
@@ -1317,7 +1327,10 @@ function StaffingGrid({ cells }: { cells: StaffingCell[] }): ReactElement {
         <tbody>
           {STAFFING_DAY_LABELS.map((label, dayOfWeek) => (
             <tr key={label} className="border-b border-border last:border-0">
-              <th scope="row" className="px-2 py-1.5 text-left text-2xs font-medium text-content-secondary">
+              <th
+                scope="row"
+                className="px-2 py-1.5 text-left text-2xs font-medium text-content-secondary"
+              >
                 {label}
               </th>
               {STAFFING_HOURS.map((hour) => (
@@ -1333,7 +1346,12 @@ function StaffingGrid({ cells }: { cells: StaffingCell[] }): ReactElement {
 
 /** One grid cell: the gap, or "—" when the cell (or an input it depends on) is unknown. */
 function StaffingCellView({ cell }: { cell: StaffingCell | undefined }): ReactElement {
-  if (!cell || cell.gap === null || cell.required_agents === null || cell.scheduled_agents === null) {
+  if (
+    !cell ||
+    cell.gap === null ||
+    cell.required_agents === null ||
+    cell.scheduled_agents === null
+  ) {
     return (
       <td title="Not enough data" className="tabular px-1 py-1.5 text-center text-content-tertiary">
         —
@@ -1527,7 +1545,10 @@ function CasesTab(props: TabProps): ReactElement {
         </Card>
       </Section>
 
-      <Section title="By status" description="Tickets in the window, grouped by their current status.">
+      <Section
+        title="By status"
+        description="Tickets in the window, grouped by their current status."
+      >
         <Card>
           {data.by_status.length === 0 ? (
             <EmptyState
@@ -1560,9 +1581,11 @@ function CasesTab(props: TabProps): ReactElement {
 }
 
 /** `by_day` summed into one open/closed/total figure — the window's own totals. */
-function sumCaseSplit(
-  rows: ReportsCases['by_day'],
-): { open: number; closed: number; total: number } {
+function sumCaseSplit(rows: ReportsCases['by_day']): {
+  open: number;
+  closed: number;
+  total: number;
+} {
   return rows.reduce(
     (acc, row) => ({
       open: acc.open + row.open,
@@ -1780,9 +1803,7 @@ function SalesTab(props: TabProps): ReactElement {
             <Kpi label="Tracked sales" value={formatCount(data.tracked_sales)} />
             <Kpi
               label="Attributed revenue"
-              value={
-                formatMoney(data.attributed_revenue_cents, data.currency ?? undefined) ?? '—'
-              }
+              value={formatMoney(data.attributed_revenue_cents, data.currency ?? undefined) ?? '—'}
             />
             <Kpi label="Conversions" value={formatCount(data.conversions)} />
           </KpiGrid>
@@ -1849,7 +1870,9 @@ function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }): ReactE
   const numeric = 'w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
     <table className="w-full text-sm">
-      <caption className="sr-only">Per-agent chats, resolution split, response time and CSAT</caption>
+      <caption className="sr-only">
+        Per-agent chats, resolution split, response time and CSAT
+      </caption>
       <thead>
         <tr className="border-b border-border text-left">
           <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
@@ -2218,7 +2241,10 @@ function Delta({
   );
 }
 
-function CountDelta(props: { current: number | null; previous: number | null }): ReactElement | null {
+function CountDelta(props: {
+  current: number | null;
+  previous: number | null;
+}): ReactElement | null {
   return <Delta {...props} format={formatCount} />;
 }
 
@@ -2229,7 +2255,10 @@ function DurationDelta(props: {
   return <Delta {...props} format={formatDuration} />;
 }
 
-function RateDelta(props: { current: number | null; previous: number | null }): ReactElement | null {
+function RateDelta(props: {
+  current: number | null;
+  previous: number | null;
+}): ReactElement | null {
   return <Delta {...props} format={formatRate} />;
 }
 

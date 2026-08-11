@@ -19,7 +19,9 @@ const listQuery = z.object({
 
 // `.strict()` so a typo in a definition key (`url_contain`) is a 400, not a
 // silently-ignored rule that leaves a goal nobody can ever reach.
-const definitionSchema = z.object({ url_contains: z.string().trim().max(2048).optional() }).strict();
+const definitionSchema = z
+  .object({ url_contains: z.string().trim().max(2048).optional() })
+  .strict();
 
 const createBody = z.object({
   name: z.string().trim().min(1).max(120),

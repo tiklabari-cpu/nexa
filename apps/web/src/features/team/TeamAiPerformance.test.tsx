@@ -30,10 +30,40 @@ const { TeamAiPerformance } = await import('./TeamAiPerformance.js');
 
 const AGENTS = {
   items: [
-    { id: 'a1', name: 'Nova', kind: 'ai_agent', tone: null, avatar_url: null, languages: [], answer_length: null, active: true, skills_count: 3 },
-    { id: 'a2', name: 'Echo', kind: 'ai_agent', tone: null, avatar_url: null, languages: [], answer_length: null, active: false, skills_count: 1 },
+    {
+      id: 'a1',
+      name: 'Nova',
+      kind: 'ai_agent',
+      tone: null,
+      avatar_url: null,
+      languages: [],
+      answer_length: null,
+      active: true,
+      skills_count: 3,
+    },
+    {
+      id: 'a2',
+      name: 'Echo',
+      kind: 'ai_agent',
+      tone: null,
+      avatar_url: null,
+      languages: [],
+      answer_length: null,
+      active: false,
+      skills_count: 1,
+    },
     // Copilot rides on a row of its own; it must not appear in this roster.
-    { id: 'c1', name: 'Copilot', kind: 'copilot', tone: null, avatar_url: null, languages: [], answer_length: null, active: true, skills_count: 0 },
+    {
+      id: 'c1',
+      name: 'Copilot',
+      kind: 'copilot',
+      tone: null,
+      avatar_url: null,
+      languages: [],
+      answer_length: null,
+      active: true,
+      skills_count: 0,
+    },
   ],
 };
 
@@ -120,7 +150,17 @@ describe('TeamAiPerformance', () => {
     mockApi({
       agents: {
         items: [
-          { id: 'a2', name: 'Echo', kind: 'ai_agent', tone: null, avatar_url: null, languages: [], answer_length: null, active: false, skills_count: 1 },
+          {
+            id: 'a2',
+            name: 'Echo',
+            kind: 'ai_agent',
+            tone: null,
+            avatar_url: null,
+            languages: [],
+            answer_length: null,
+            active: false,
+            skills_count: 1,
+          },
         ],
       },
     });

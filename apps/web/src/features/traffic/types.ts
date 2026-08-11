@@ -1,12 +1,7 @@
 /** Real-time traffic — the live-visitor board (FR-MOD-03.1.3). */
 
 export type TrafficActivity =
-  | 'browsing'
-  | 'queued'
-  | 'waiting'
-  | 'chatting'
-  | 'supervised'
-  | 'invited';
+  'browsing' | 'queued' | 'waiting' | 'chatting' | 'supervised' | 'invited';
 
 /** Who a visitor is currently talking to — the "Chatting with" column. */
 export interface TrafficRespondent {

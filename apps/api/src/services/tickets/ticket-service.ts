@@ -239,7 +239,10 @@ export class TicketService {
         subject: created.subject,
         source: input.source_chat_id ? 'chat' : 'manual',
       });
-      const fresh = await tx.ticket.findUnique({ where: { id: created.id }, include: TICKET_INCLUDE });
+      const fresh = await tx.ticket.findUnique({
+        where: { id: created.id },
+        include: TICKET_INCLUDE,
+      });
       return toDetail(tx, fresh ?? created);
     } catch (error) {
       // The check above loses to a request that inserted between it and here.

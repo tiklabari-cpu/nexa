@@ -259,9 +259,7 @@ describe('session policies', () => {
       // lock the count-then-prune is a critical section, so every round lands
       // back at exactly the cap.
       for (let round = 0; round < 4; round++) {
-        await Promise.all(
-          Array.from({ length: 8 }, () => issueOauth(fx.a, fx.a.ownerAccountId)),
-        );
+        await Promise.all(Array.from({ length: 8 }, () => issueOauth(fx.a, fx.a.ownerAccountId)));
         expect(await liveOauthCount(fx.a, fx.a.ownerAccountId)).toBe(cap);
       }
     });

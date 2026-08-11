@@ -67,10 +67,21 @@ describe('TrafficPage status tabs', () => {
     renderPage();
 
     const tablist = await screen.findByRole('tablist', { name: 'Traffic status' });
-    for (const name of ['All', 'Chatting', 'Supervised', 'Queued', 'Waiting for reply', 'Invited', 'Browsing']) {
+    for (const name of [
+      'All',
+      'Chatting',
+      'Supervised',
+      'Queued',
+      'Waiting for reply',
+      'Invited',
+      'Browsing',
+    ]) {
       expect(within(tablist).getByRole('tab', { name: new RegExp(name) })).toBeInTheDocument();
     }
-    expect(within(tablist).getByRole('tab', { name: /All/ })).toHaveAttribute('aria-selected', 'true');
+    expect(within(tablist).getByRole('tab', { name: /All/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(api.get).toHaveBeenCalledWith('/traffic?limit=100');
   });
 
@@ -123,13 +134,19 @@ describe('TrafficPage status tabs', () => {
 
     await screen.findByRole('tablist');
     await user.click(screen.getByRole('tab', { name: /Browsing/ }));
-    expect(await screen.findByRole('tab', { name: /Browsing/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: /Browsing/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     first.unmount();
 
     // "Reload" — mount a fresh instance with the URL the click above produced.
     api.get.mockClear();
     renderPage(['/?tab=browsing']);
-    expect(await screen.findByRole('tab', { name: /Browsing/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', { name: /Browsing/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(api.get).toHaveBeenCalledWith('/traffic?limit=100&activity=browsing');
   });
 
@@ -138,7 +155,10 @@ describe('TrafficPage status tabs', () => {
     renderPage(['/?tab=bogus']);
 
     const tablist = await screen.findByRole('tablist');
-    expect(within(tablist).getByRole('tab', { name: /^All/ })).toHaveAttribute('aria-selected', 'true');
+    expect(within(tablist).getByRole('tab', { name: /^All/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(api.get).toHaveBeenCalledWith('/traffic?limit=100');
   });
 

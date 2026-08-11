@@ -85,7 +85,9 @@ beforeEach(() => {
 describe('RoutingRules condition summary', () => {
   it("shows a rule's required skills by name rather than raw expertise ids", async () => {
     renderComponent(<RoutingRules canEdit={false} />);
-    expect(await screen.findByText('skill Billing, Technical support → Billing team')).toBeInTheDocument();
+    expect(
+      await screen.findByText('skill Billing, Technical support → Billing team'),
+    ).toBeInTheDocument();
   });
 
   it('still describes a non-skill condition as before (regression)', async () => {

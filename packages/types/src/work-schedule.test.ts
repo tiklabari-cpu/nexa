@@ -105,7 +105,8 @@ describe('normalizeWorkSchedule — empty input (KK-türetilmiş "boş girdi →
   it('falls back to the default timezone when none is given', () => {
     const result = normalizeWorkSchedule({ schedule: fullWeek });
     expect(isWorkScheduleProblem(result)).toBe(false);
-    if (!isWorkScheduleProblem(result)) expect(result.timezone).toBe(DEFAULT_WORK_SCHEDULE.timezone);
+    if (!isWorkScheduleProblem(result))
+      expect(result.timezone).toBe(DEFAULT_WORK_SCHEDULE.timezone);
   });
 });
 

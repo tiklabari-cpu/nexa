@@ -57,7 +57,9 @@ describe('clusterTopics — determinism ("AI kümeleme" repeatable)', () => {
     const reversed = clusterTopics([...docs].reverse(), { minConversations: 2 });
     // Interleave to shuffle harder than a simple reverse.
     const interleaved = clusterTopics(
-      docs.flatMap((_, i) => (i % 2 === 0 ? [docs[i]!] : [])).concat(docs.filter((_, i) => i % 2 === 1)),
+      docs
+        .flatMap((_, i) => (i % 2 === 0 ? [docs[i]!] : []))
+        .concat(docs.filter((_, i) => i % 2 === 1)),
       { minConversations: 2 },
     );
 

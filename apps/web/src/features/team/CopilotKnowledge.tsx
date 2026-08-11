@@ -140,7 +140,10 @@ export function CopilotKnowledge(): ReactElement {
                   <td className="px-4 py-2.5 font-medium">{source.name}</td>
                   <td className="px-4 py-2.5 capitalize text-content-secondary">{source.type}</td>
                   <td className="px-4 py-2.5">
-                    <StatusDot tone={STATUS_TONE[source.status] ?? 'neutral'} label={source.status} />
+                    <StatusDot
+                      tone={STATUS_TONE[source.status] ?? 'neutral'}
+                      label={source.status}
+                    />
                   </td>
                   <td className="tabular px-4 py-2.5 text-right text-content-secondary">
                     {formatCount(source.chunk_count)}

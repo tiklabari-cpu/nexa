@@ -96,7 +96,10 @@ function escapeCsvCell(value: string): string {
  */
 export function toTemplateCsv(): string {
   const order = BULK_TEMPLATE_COLUMNS.map((spec) => spec.column);
-  const lines = [order, ...BULK_TEMPLATE_EXAMPLE_ROWS.map((row) => order.map((column) => row[column]))];
+  const lines = [
+    order,
+    ...BULK_TEMPLATE_EXAMPLE_ROWS.map((row) => order.map((column) => row[column])),
+  ];
   return lines.map((cells) => cells.map(escapeCsvCell).join(',')).join('\r\n') + '\r\n';
 }
 

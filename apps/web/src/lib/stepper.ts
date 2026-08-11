@@ -26,8 +26,7 @@ export interface Stepper {
   reset: () => void;
 }
 
-const clamp = (value: number, count: number): number =>
-  Math.max(0, Math.min(value, count - 1));
+const clamp = (value: number, count: number): number => Math.max(0, Math.min(value, count - 1));
 
 /**
  * `count` is how many steps there are. `next`/`back` never leave the range, so

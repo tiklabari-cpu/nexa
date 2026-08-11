@@ -12,6 +12,7 @@
  * still an error.
  */
 import { execFile } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -21,6 +22,15 @@ loadEnvFile();
 
 const run = promisify(execFile);
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Run Prisma's JS entrypoint under the current Node binary instead of going
+ * through `pnpm exec`. On Windows the package managers are `.cmd` shims, which
+ * `execFile` cannot start without a shell (ENOENT, then EINVAL once Node
+ * hardened `.cmd` spawning). Resolving the module keeps the call shell-free —
+ * so there is no quoting or injection surface — and behaves the same on POSIX.
+ */
+const prismaBin = createRequire(import.meta.url).resolve('prisma/build/index.js');
 
 /**
  * Statements Prisma reports because it cannot model them, not because anything
@@ -48,10 +58,9 @@ const KNOWN_UNMODELLABLE = [
 
 async function main(): Promise<void> {
   const { stdout } = await run(
-    'pnpm',
+    process.execPath,
     [
-      'exec',
-      'prisma',
+      prismaBin,
       'migrate',
       'diff',
       '--from-schema-datamodel',

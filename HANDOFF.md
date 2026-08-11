@@ -13,6 +13,69 @@
 
 ## Task log (newest-first)
 
+## GL-8 (tm 114) — V2-KAPAT: Faz-2 §F.00 kapanış turu koşuldu, **faz KAPANDI** — done — 2026-08-11 UTC
+
+- **Yapıldı:** §F.1'in **10 maddesi tam sürüm** koda karşı koşuldu → PLAN satır 22 `Kapanış` hücresi
+  `⬜ AÇIK` → **`✅ KAPALI`**, §F.00'a **Faz-2 kapı satırı** eklendi (Faz-0/v1 kapılarının ardına,
+  aynı biçimde), sapma **§D89**. Kalem sayımı **sayılarak**: §5.0'ın 30 satırının öncü damgası
+  → **`27 ✅ · 3 ⛔ · 0 ◐ · 0 ⬜ = 30`** (v2'de `Must` yok → sayaç yerine **kalem** kuralı: 23 açık
+  kalemin hepsi ✅). Naif glif sayımı kullanılmadı (§D68–§D77 tarihçesi).
+- **Doğrulama — tam DoD kapısı, hepsi exit 0:** typecheck **11/11** · lint **8/8** ·
+  `pnpm -w test` **3762** (api 2414 · web 957 · ai-mock 136 · rtm 90 · widget 69 · types 96) ·
+  `pnpm -w test:integration` **1906** (api 1855 · rtm 51, `contract-parity` **5/5**) ·
+  build **7/7** · `pnpm -w test:e2e` **103/103** (4.9 dk). tm 99.8 referans tabanının hepsi ≥.
+  `check-drift.ts` değiştiği için typecheck/lint/build **yeniden** koşuldu (yine 0).
+
+**§F.2 RAPORU — 10 madde, her biri kanıtla (kanıtsız "geçti" yok):**
+
+| # | §F.1 maddesi | Sonuç | Kanıt (komut çıktısı / dosya:satır / ölçüm) |
+| - | ------------ | ----- | ------------------------------------------- |
+| 1 | Kapsam süpürmesi | ✅ | §5.0'da `◐`/`⬜` **0** — 30 satır tek tek sayıldı (`27 ✅ · 3 ⛔`) |
+| 2 | Faz sızıntısı | ✅ YOK | `saml`/`scim`/`hipaa`/`soc2`/`iso27001`/`white-label` → **0 dosya**. `telegram` 15 eşleşme ama hepsi **negatif iddia** (`expect(isChannelType('telegram')).toBe(false)` · `adapters.test.ts:31`), `comingSoon()` yer tutucusu (`Channels.tsx:132`), katalog/tip girdisi — **adaptör dosyası ve şema modeli yok** |
+| 3 | NFR kapıları (ÖLÇÜLDÜ) | ✅ | **NFR-P4:** `catalogue 102 cards · DOM 36 at first paint · 38 with every page loaded` · **NFR-P2:** `GET /traffic` medyan 30 ms · p95 92 ms (bütçe 150 ms), public article 26 ms / 2432 B · cross-tenant/IDOR negatifleri **57** test dosyasında · **a11y ÖLÇÜLEMEDİ → tm 115** |
+| 4 | Şema artıkları | ✅ | `goals` re-sayım **0 → 5 çağrı** (`goal-service.ts`) + `goal_achievements` 2 dosya → §8 satırı tazelendi. Tek 0-tüketicili tablo **`workflows`**, gerekçeli (⛔ ADR-14) |
+| 5 | Kontrat bütünlüğü | ✅ | `contract-parity.test.ts` **5/5** (integration koşusunda, 666 ms) |
+| 6 | Sessiz borç | ✅ **0** | 484 kaynak dosyada `TODO/FIXME/XXX/HACK/@ts-ignore/@ts-expect-error/eslint-disable/skip(/only(` → **sıfır eşleşme** |
+| 7 | Ölü kod / erişilemez ekran | ✅ | 18 feature dizininin hepsi bağlı: `App.tsx` 15 route + `ScheduledExports`→`SettingsPage`, `WorkSchedule`→`TeamPage`, `Brands`→`SettingsPage`, `useNotifications`→`InboxPage`/`SettingsPage` |
+| 8 | Doküman tazeliği | ✅ (3 düzeltme) | §7.2 **S7** bayat `⬜` → `✅ → KS7` · §7.2 **M4** bayat `1697` → `✅ → KM4` · §E test toplamı 1697 → **5771**. `README.md` sayısal iddia taşımıyor → dokunulmadı |
+| 9 | Temiz kurulum provası | ✅ | `db`+`redis` **healthy** → `migrate` (47 migration, pending yok) → `seed` → `db:check-drift` **"no drift (1 known-unmodellable statement(s) allowed)"** → demo-flow e2e yeşil |
+| 10 | Kapsam dışı (§9'un 10 maddesi) | ✅ | Stripe SDK **yok** (mock) · ClickHouse/BigQuery **yok** · electron/tauri **yok** · voice/IVR **yok** · marketing/blog app **yok** · telif marka adı **yok** |
+
+- **BAYAT DAMGA BULUNDU → koda karşı kanıtla çevrildi (kod YAZILMADI, "verify+close"):** §7.2 **S7**
+  `⬜ v1 — kırılım §4.4.3` duruyordu, oysa v1 2026-07-31'de kapandı ve iş teslim: `signature.ts`
+  HMAC-SHA256 + timestamp/nonce + `timingSafeEqual` (10 test) · `lib/ssrf.ts` (15 test) **beş
+  tüketiciyle** (`webhooks`/`copilot`/`playbook`/`knowledge-bulk-crawl`/`webhook-dispatcher`).
+- **TEK KOD DEĞİŞİKLİĞİ — ürün kodu DEĞİL, §F.1/9 kapısının kendisi bozuktu:**
+  `apps/api/scripts/check-drift.ts` Windows'ta düşüyordu — `execFile('pnpm', …)` shell'siz koştuğu
+  için `pnpm.cmd`'yi bulamıyor (`ENOENT`); `pnpm.cmd` verilince Node'un `.cmd` sertleştirmesi
+  (CVE-2024-27980) `EINVAL` veriyor. **Önce gerçek drift olmadığı kanıtlandı** (ham
+  `prisma migrate diff` tek satır: `idx_chunks_embedding` = betiğin zaten adıyla izin verdiği
+  pgvector istisnası) → kusur **mantıkta değil taşınabilirlikte**. Düzeltme: `pnpm exec prisma`
+  yerine Prisma'nın JS girişi (`createRequire(...).resolve('prisma/build/index.js')`) mevcut Node
+  ikilisiyle çalıştırılıyor — **shell yok**, dolayısıyla tırnak/enjeksiyon yüzeyi de yok; POSIX'te
+  davranış aynı. Sonuç: `no drift`, exit 0.
+- **Taşınan `Should` borcu ismen (§F.00: sessizce düşemez):** **tm 79** Telegram · **81** SAML/SCIM ·
+  **82** HIPAA · **83** SOC2/ISO · **84** white-label/SLA · **90** mobil → altısı da **Faz 3** ve
+  **`deferred` KALDI**. §D64'ün 2026-08-01 kullanıcı kararı yürürlükte; `pending`'e çekmek
+  §F.1/2'nin yasakladığı faz sızıntısı olurdu. **Graf mutasyonu YAPILMADI.**
+- **İki bulgu yeni görev oldu (`low` — CONVENTIONS §4.1, `critical` KULLANILMADI):**
+  **tm 115** otomatik a11y taraması yok (`axe`/`toHaveNoViolations` → 0 eşleşme; WCAG 2.1 AA
+  iddiası elle kanıta dayanıyor) · **tm 116** `16-notifications-settings.png` adının vaat ettiği
+  ekranı çekmiyor (md5 `1b9e2148…` ile `8-channels-grid.png` + `08.5.7-instagram-disconnected.png`
+  **birebir aynı**; önceden var olan kusur, tm 99.8 regresyonu değil — AGAC-TEMIZ'in §F.1/8'e
+  havale ettiği bulgu burada karara bağlandı).
+- **DOKUNULMADI:** ürün kodu · test mantığı · Faz-3 görev statüleri · §D68–§D88 (append-only) ·
+  tm 1-26 · §5.0 damgaları (sayım zaten doğruydu) · Faz-3 planı açılmadı.
+
+**SONRAKİ PENCEREYE:**
+1. **Faz 0 · v1 · v2 üçü de KAPALI.** Backlog'da `pending` yalnız **tm 115** ve **tm 116** (`low`);
+   Faz-3'ün altı kalemi bilerek `deferred`. Otonom döngü tm 115/116 ile devam eder.
+2. **Faz 3'e geçilecekse bu bir KULLANICI kararıdır** (§F.3): §D64 Faz-3'ü bilerek erteledi.
+   Kendi başına `deferred` → `pending` çevirme — faz sızıntısıdır.
+3. `kanit/*.png` churn'ü **yapısaldır** (AGAC-TEMIZ dersi): bu turda 47 dosya yeniden üretildi ve
+   ayrı bir `chore(e2e)` commit'ine kondu, kapanış commit'ine karıştırılmadı. Aynısını yap;
+   commit öncesi `apps/e2e/test-results/.last-run.json` **`passed`** olmalı.
+
 ## AGAC-TEMIZ — 50 commit'siz kanıt PNG'si sahibine bağlandı ve commit edildi — done — 2026-08-11 UTC
 
 - **Bulgu (panel):** çalışma ağacında 50 izlenen dosya commit'siz (+0 izlenmeyen), dal `main`.

@@ -13,6 +13,52 @@
 
 ## Task log (newest-first)
 
+## tm 119 — IZLENEBILIRLIK — izlenemeyen 4 görevin plan bağı denetlendi (107 · 108 · 115 · 118) — done — 2026-08-11 UTC
+
+- **Yapıldı (kod YAZILMADI — izlenebilirlik denetimi):**
+  1. Dört görev PRD + PLAN tam metnine karşı **tek tek** denetlendi; toplu "hepsi geçerli" kararı verilmedi.
+     **Üçü aslında bağlıymış, kusur BAŞLIKTAYDI** (kimlik `details` içinde kalmış, panel başlıktan tarıyor);
+     **biri gerçekten bağsızdı**. Sonuçlar:
+     · **tm 107 → `07.9-sched-f`** (üst kalem `07.9`, PLAN §5.0 `✅ → K07.9`; PRD §5.3 v2 "zamanlanmış export" —
+       FR-MOD tablosunda satırı bilerek yok, `#### K07.9` ilk cümlesi "KK-türetilmiş → ayrı kalem" diyor).
+       Kanıtı zaten K07.9'un son maddesindeydi ("tm 107 düzeltmesi"). Başlığa kimlik eklendi.
+     · **tm 108 → `§D82 (NFR-M4)`** — ürün kodu (`format.ts`) DEĞİŞMEDİ, yalnız test kurulumu pinlendi; bu yüzden
+       NFR-I18N2/I18N5 altına damga yazmak yanlış olurdu. İşin gerçek karşılığı PRD §7.8 **NFR-M4** ve §7.2 `M4`
+       kapısıdır (kapı objektifliği: `pnpm -w test` bu makinede ilk kez exit 0). **Yeni gereksinim satırı AÇILMADI** —
+       §D82 bu kararı gerekçesiyle vermişti; şimdi satır açmak o kaydı sessizce ters çevirir ve ürün kodu
+       değişmemişken `✅` uydurmak olurdu (CONVENTIONS §1.2).
+     · **tm 115 → `NFR-A11Y1–6`** (PRD §7.5; ölçümün bulduğu 62 ihlalin hepsi `color-contrast` = NFR-A11Y3).
+       §7.2 `A11Y1–6` satırı `✅ → KA11Y`, `#### KA11Y` bloğunun her maddesi `tm 115` etiketli. Kusur, başlıktaki
+       **`A11Y-OLC`'nin bu depoda uydurulmuş bir kısaltma olmasıydı** — PLAN'da hiç geçmiyor.
+     · **tm 118 → `M-FMT`, GERÇEK PRD SAPMASI.** PRD tam metninde `prettier` · `format:check` · `kod stili` · `lint`
+       için **0 eşleşme**; §7.8 NFR-M yalnız M1 monorepo · M2 domain · M3 SOLID · M4 test · M5 gözlemlenebilirlik
+       der, kod biçimlendirme maddesi yoktur. PLAN'da da 0 eşleşme.
+  2. **tm 118 iptal EDİLMEDİ, iş tutuldu.** Gerekçe: `package.json`'da var olup her koşuda kırmızı veren bir script
+     sinyal değil gürültüdür; borcu üç pencere (tm 115 · tm 116 · GRAF-ONARIM) adlandırdı, hiçbiri kapatmadı —
+     iptal borcu yok etmez, yalnız görünmez kılar (§D80/§D82 ile aynı sınıf kaygı). PLAN **§7.2 NFR kapıları**
+     tablosuna **türetilmiş** `M-FMT` gereksinim satırı `⬜` olarak eklendi (PRD §7.8 NFR-M kapsamından türetildi,
+     kendi PRD maddesi yok — `07.9`/`08.6.3-conflict` KK-türetilmiş emsali). İş bitince `✅ → KM-FMT` olur.
+  3. Sapma kaydı **PLAN §D90**. Dört başlık + dört `details` denetim bloğu `.taskmaster/tasks/tasks.json`'a yazıldı.
+     tm 118'in `priority` alanı **`critical` bırakıldı** (CONVENTIONS §4.1: işin panel taramasından geldiğinin izi).
+- **Doğrulama:**
+  · `pnpm -w typecheck` → **exit 0** (11/11 task) · `pnpm -w lint` → **exit 0** (8/8 task).
+  · `tasks.json` geçerli JSON, `git diff --numstat` = 26 ekleme / 14 silme (biçim korundu, dosya yeniden yazılmadı).
+  · Yeni `M-FMT` tablo satırı **158 karakter / 3 hücre** — CONVENTIONS §1.2 biçiminde (hücrede yalnız damga),
+    plan-row-length eşiğinin çok altında (dosyadaki en uzun tablo satırı hâlâ satır 22, 759).
+  · Başlık kimlikleri artık PLAN tam metninde eşleşiyor: `07.9-sched-f` · `D82` · `A11Y1–6` · `M-FMT` → hepsi > 0 isabet.
+  · **Koşulmayanlar ve nedeni:** `pnpm -w test` · `test:integration` · `test:e2e` · `build` **yeniden koşulmadı** —
+    bu tur hiçbir ürün/test dosyasına dokunmadı (`git diff --stat` yalnız `PLAN.md` · `HANDOFF.md` ·
+    `.taskmaster/tasks/tasks.json`). Sayı tabanı değişmedi: 5821 test (3802 unit + 1906 integration + 113 e2e).
+- **Varsayımlar:** (1) tm 108 için "PRD karşılığı NFR-M4'tür" yorumu benimdir — PRD'de tm 108'i adıyla anan bir
+  madde yok; NFR-M4 "test piramidi" işin hizmet ettiği kapıdır, ürün gereksinimi değil. Bu yüzden damga
+  çevrilmedi, yalnız izlenebilirlik kimliği verildi. (2) `M-FMT` kodu bu depoda **yeni**dir; PRD'den gelmez,
+  §D90'da türetilmiş olarak işaretlidir.
+- **Sonraki pencereye not:** `M-FMT` satırı `⬜` — kapatacak iş **tm 118** (`critical`, `dependencies: []`, seçilebilir).
+  tm 118'in asıl işi `--write` koşmak değil, `details` (d) maddesindeki **(A) `.prettierignore` / (B) ayrı `.md`
+  commit'i** kararını vermektir: 67 `.md`'nin içinde `PLAN.md` (770 KB) var ve prettier tabloları yeniden hizalar —
+  bu deponun tüm okuma düzeni (`grep -n`) o tablolara dayanıyor. Kararı verip HANDOFF'a yazmadan `--write` koşma.
+  Görev bitince `M-FMT` satırını `✅ → KM-FMT` yap ve `#### KM-FMT` bloğunu aç (CONVENTIONS §1.2).
+
 ## GRAF-ONARIM — döngü durması **teşhis edildi**: graf sağlam, backlog **tükenmişti**; iki doğrulanmış bulgu görev oldu (tm 117 · tm 118) — 2026-08-11 UTC
 
 - **Panel bulgusu:** `run-loop.sh` seçilebilir görev bulamıyor ("Hazır task kalmadı") → otonom döngü

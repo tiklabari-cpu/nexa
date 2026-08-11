@@ -93,6 +93,7 @@ model License {
   paymentMethod          PaymentMethod?
   auditEntries           AuditLogEntry[]
   ipAllowlistEntries     IpAllowlistEntry[]
+  ssoConnections         SsoConnection[]
   securitySettings       SecuritySettings[]
   inboxSettings          InboxSettings[]
   widgetSettings         WidgetSettings[]
@@ -317,6 +318,53 @@ model IpAllowlistEntry {
   @@unique([licenseId, entry])
   @@index([licenseId])
   @@map("ip_allowlist_entries")
+}
+
+/// A SAML 2.0 identity provider a license federates sign-in to (NFR-S11).
+///
+/// Storage only at this stage: nothing reads this to authenticate anyone. The
+/// write surface is S11-a2, assertion validation S11-b, the SP endpoints S11-d.
+/// Closed to its tenant by the RLS policy in the migration.
+///
+/// `idpCertificatePem` is the IdP's *public* signing certificate, so it is
+/// stored as it arrives — not hashed, not encrypted. Hashing it would make the
+/// one operation this feature actually performs on it (verifying an assertion
+/// signature) impossible, and there is nothing to protect: the same bytes are
+/// published in the IdP's own metadata. The secret in this feature is the SCIM
+/// bearer token (S11-e), which is hashed.
+model SsoConnection {
+  id                String   @id @default(uuid()) @db.Uuid
+  licenseId         BigInt   @map("license_id")
+  /// Human label for the connection, e.g. `Okta (corp)`.
+  name              String
+  /// The IdP's SAML EntityID — what an assertion's `Issuer` must equal.
+  idpEntityId       String   @map("idp_entity_id")
+  /// Absolute `http(s)` URL an AuthnRequest is sent to (HTTP-Redirect binding).
+  idpSsoUrl         String   @map("idp_sso_url")
+  /// PEM-encoded X.509 signing certificate published by the IdP.
+  idpCertificatePem String   @map("idp_certificate_pem")
+  /// Which assertion attribute fills which account field; see
+  /// `SSO_ATTRIBUTE_MAPPING_KEYS`. `{}` means the connection said nothing.
+  attributeMapping  Json     @default("{}") @map("attribute_mapping")
+  /// Accept an assertion sent with no AuthnRequest of ours to correlate it
+  /// against. Off by default — that flow gives up the `InResponseTo` binding
+  /// replay detection rests on, so it is chosen, never inherited.
+  allowIdpInitiated Boolean  @default(false) @map("allow_idp_initiated")
+  /// Whether sign-in through this connection is live. Off until configured, so
+  /// a half-written row can never become a way in.
+  enabled           Boolean  @default(false) @map("enabled")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  /// One connection per IdP within a license. Two rows for one EntityID would
+  /// make "which connection issued this assertion?" ambiguous exactly where the
+  /// answer decides whose certificate verifies it. Its index also serves every
+  /// read this table has — "the connections of this license" — so there is no
+  /// separate `@@index([licenseId])`.
+  @@unique([licenseId, idpEntityId])
+  @@map("sso_connections")
 }
 
 /// Bearer credentials: OAuth access tokens, personal access tokens and bot

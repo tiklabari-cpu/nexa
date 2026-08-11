@@ -171,6 +171,38 @@ ipAllowlistEntry:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+sso:
+  get:
+    tags: [Settings]
+    operationId: listSsoConnections
+    summary: SAML identity providers this workspace federates sign-in to
+    description: |
+      The federation configuration a workspace has saved (NFR-S11). Listing it
+      signs nobody in: no assertion is accepted and no session is minted from a
+      connection yet — the SP endpoints are a separate control.
+
+      Gated twice, like the audit log read. The scope says the *token* may read
+      access rules; `admin` says the *person* behind it may. What the rows name
+      is the workspace's identity provider, which is reconnaissance for a
+      targeted phish long before it is useful to an attacker in any other way.
+
+      Ordered by name.
+    responses:
+      "200":
+        description: The connections
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/SsoConnection" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 cannedResponses:
   get:
     tags: [Settings]

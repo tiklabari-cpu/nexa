@@ -17,10 +17,12 @@ import {
   SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS,
   SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS,
   SALES_TRACKER_CURRENCIES,
+  SSO_ATTRIBUTE_MAPPING_KEYS,
   WIDGET_COLOR_PATTERN,
   WIDGET_POSITIONS,
   WIDGET_THEMES,
 } from '@nexa/types';
+import type { SsoAttributeMapping, SsoConnection } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { resolveBrandId } from '../lib/brand.js';
@@ -542,6 +544,30 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
       if (deleted === 0) throw ApiError.notFound('Allowlist entry not found.');
 
       return reply.status(204).send();
+    },
+  );
+
+  // --- Single sign-on (NFR-S11) ----------------------------------------------
+  //
+  // The federation configuration a workspace has saved. Read-only: listing it
+  // signs nobody in — no assertion is accepted and no session is minted from a
+  // connection yet (S11-d). The write surface is S11-a2.
+  //
+  // Gated twice, like the audit-log read: the scope says the *token* may read
+  // access rules, `admin` says the *person* behind it may. A row names the
+  // workspace's identity provider, which is reconnaissance for a targeted phish
+  // well before it is useful to an attacker any other way — and once S11-h makes
+  // SSO the only way in, it names the single door too. A rank-and-file agent
+  // holding an over-broad PAT has no reason to read that.
+
+  app.get(
+    '/settings/sso',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const items = await request.withTenant((tx) =>
+        tx.ssoConnection.findMany({ orderBy: { name: 'asc' } }),
+      );
+      return reply.send({ items: items.map(serialiseSsoConnection) });
     },
   );
 
@@ -1363,6 +1389,64 @@ function serialiseSalesTracker(
     attribution_window_days:
       row?.attributionWindowDays ?? DEFAULT_SALES_TRACKER_CONFIG.attribution_window_days,
     updated_at: row ? row.updatedAt.toISOString() : null,
+  };
+}
+
+/**
+ * The attribute mapping, narrowed to the fields an assertion may fill.
+ *
+ * Projected rather than passed through. The column is JSON, so a row can hold
+ * keys nobody here declared — a hand-written INSERT, a future writer, an IdP
+ * export pasted whole — and returning those verbatim would put fields in the
+ * response that the contract says cannot appear (`additionalProperties: false`)
+ * and that a client would render as if they meant something. Anything outside
+ * {@link SSO_ATTRIBUTE_MAPPING_KEYS}, or any non-string value, is dropped.
+ *
+ * The non-object guard is narrowing, not a second opinion: a CHECK constraint
+ * already keeps a scalar or an array out of the column. It is here so a reader
+ * of one bad row would come back "not configured" rather than a 500 that hides
+ * every good row behind it.
+ */
+function readAttributeMapping(value: Prisma.JsonValue): SsoAttributeMapping {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+
+  const mapping: SsoAttributeMapping = {};
+  for (const key of SSO_ATTRIBUTE_MAPPING_KEYS) {
+    const attribute = (value as Record<string, unknown>)[key];
+    if (typeof attribute === 'string') mapping[key] = attribute;
+  }
+  return mapping;
+}
+
+/**
+ * One SAML connection on the wire (NFR-S11). The certificate is sent in full:
+ * it is the IdP's public signing certificate, the field an admin compares
+ * against their IdP console to confirm a rotation landed, so masking it would
+ * hide the one thing a misconfiguration is diagnosed from and protect nothing.
+ */
+function serialiseSsoConnection(row: {
+  id: string;
+  name: string;
+  idpEntityId: string;
+  idpSsoUrl: string;
+  idpCertificatePem: string;
+  attributeMapping: Prisma.JsonValue;
+  allowIdpInitiated: boolean;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}): SsoConnection {
+  return {
+    id: row.id,
+    name: row.name,
+    idp_entity_id: row.idpEntityId,
+    idp_sso_url: row.idpSsoUrl,
+    idp_certificate_pem: row.idpCertificatePem,
+    attribute_mapping: readAttributeMapping(row.attributeMapping),
+    allow_idp_initiated: row.allowIdpInitiated,
+    enabled: row.enabled,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
   };
 }
 

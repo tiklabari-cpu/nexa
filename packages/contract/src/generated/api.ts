@@ -2048,6 +2048,35 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/sso': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * SAML identity providers this workspace federates sign-in to
+     * @description The federation configuration a workspace has saved (NFR-S11). Listing it
+     *     signs nobody in: no assertion is accepted and no session is minted from a
+     *     connection yet — the SP endpoints are a separate control.
+     *
+     *     Gated twice, like the audit log read. The scope says the *token* may read
+     *     access rules; `admin` says the *person* behind it may. What the rows name
+     *     is the workspace's identity provider, which is reconnaissance for a
+     *     targeted phish long before it is useful to an attacker in any other way.
+     *
+     *     Ordered by name.
+     */
+    get: operations['listSsoConnections'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/canned-responses': {
     parameters: {
       query?: never;
@@ -5015,6 +5044,57 @@ export interface components {
       label: string | null;
       /** Format: date-time */
       created_at: string;
+    };
+    /**
+     * @description Which assertion attribute carries which account field, e.g.
+     *     `{"email": "urn:oid:0.9.2342.19200300.100.1.3"}`.
+     *
+     *     The set of account fields an assertion may fill is fixed — an assertion
+     *     is signed by a party outside this system, so the columns it can reach
+     *     are bounded here rather than inferred from whatever attribute names an
+     *     IdP sends. An unset key is not a default: it means the connection did
+     *     not say, and the resolver decides what to fall back to.
+     */
+    SsoAttributeMapping: {
+      email?: string;
+      name?: string;
+    };
+    /**
+     * @description One SAML 2.0 identity provider a workspace federates sign-in to
+     *     (NFR-S11). Tenant-scoped and closed by row level security.
+     *
+     *     Read-only at this stage: the row records who the IdP is and how to reach
+     *     it. Nothing consumes it yet — no assertion is accepted and no session is
+     *     minted from one.
+     *
+     *     `idp_certificate_pem` is returned in full on purpose. It is the IdP's
+     *     *public* signing certificate — what an admin compares against their IdP
+     *     console to confirm a rotation landed — so redacting it would hide the one
+     *     field a misconfiguration is diagnosed from while protecting nothing.
+     */
+    SsoConnection: {
+      /** Format: uuid */
+      id: string;
+      /** @description Human label for the connection, e.g. `Okta (corp)`. */
+      name: string;
+      /** @description The IdP's SAML EntityID — what an assertion's `Issuer` must equal. */
+      idp_entity_id: string;
+      /**
+       * Format: uri
+       * @description Absolute `http(s)` URL an AuthnRequest is sent to (HTTP-Redirect binding).
+       */
+      idp_sso_url: string;
+      /** @description The IdP's public signing certificate, PEM-encoded. Not a secret. */
+      idp_certificate_pem: string;
+      attribute_mapping: components['schemas']['SsoAttributeMapping'];
+      /** @description Whether an assertion the IdP sends unsolicited is accepted. False by default — an IdP-initiated flow gives up the `InResponseTo` binding that makes replay detectable, so it is a choice, never inherited. */
+      allow_idp_initiated: boolean;
+      /** @description Whether sign-in through this connection is live. */
+      enabled: boolean;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
     };
     /**
      * @description One brand of a license (Multibrand, PRD §5.3). A license may run several
@@ -11009,6 +11089,31 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listSsoConnections: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The connections */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['SsoConnection'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

@@ -13,6 +13,35 @@
 
 ## Task log (newest-first)
 
+## tm 81.1 — S11-a · `sso_connections` tablosu + RLS + salt-okuma kontrat yüzeyi (Faz 3 başladı) — done — 2026-08-12 UTC
+
+- **Yapıldı:** (1) `sso_connections` tablosu + `sso_connections_tenant` RLS politikası (`USING`+`WITH CHECK`)
+  — `20260812090000_sso_connections`; **license-scoped, brand-scoped DEĞİL** (kimlik sınırı workspace'e
+  aittir; kendi IdP'sini taşıyan bir marka aynı hesaplara ikinci kapı olurdu — `goals`/sales-tracker ile
+  aynı karar). (2) **5 CHECK** — boş `name`/`idp_entity_id`, `idp_sso_url ~ '^https?://'`, PEM sertifika
+  bloğu, `jsonb_typeof(attribute_mapping)='object'`. URL check'i **bilerek http OR https**: kolon tarayıcıya
+  yönlendirme hedefi olacak (`javascript:`/`data:`/`//evil` kapandı), ama https-only'ı tabloya gömmek
+  S11-c'nin loopback IdP harness'ını migration'a mahkûm ederdi — o politika S11-a2'nin ucunda.
+  (3) `GET /settings/sso` — `access_rules:ro|rw` **+ `minimumRole: admin`** (audit-log okumasının emsali:
+  kapsam token'ın, rol kişinin okuyabileceğini söyler). Sertifika maskelenmeden döner (IdP'nin *public*
+  sertifikası; bu özellikteki sır SCIM token'ı, o S11-e'de hash'lenecek). (4) Sözleşme + `@nexa/types`
+  (`SsoConnection`, `SsoAttributeMapping`, `SSO_ATTRIBUTE_MAPPING_KEYS`) + `contract:generate`.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · format:check · build 7/7 · unit `pnpm -w test`
+  10/10 (`@nexa/api` 2433) · integration **1925** (1906 → +19: `sso.test.ts` 8 · `data-model.test.ts` 11) ·
+  e2e **131** (6.1 dk) · `db:check-drift` temiz (1 bilinen pgvector ifadesi). `tenant-isolation.test.ts`in
+  RLS-açık tablo listesi 14 → **15**.
+- **Varsayımlar:** `attribute_mapping` anahtar kümesi `{email, name}` ile **sınırlı** — assertion tarayıcıdan
+  gelen, dışarıda imzalanmış girdi; ulaşabileceği kolonlar tipte sabitlendi (uydurma bir `role`/`suspended`
+  niteliği hiçbir zaman anlam kazanmasın diye) ve okuma yüzeyi bu anahtarlara **projekte ediyor**. Boş anahtar
+  bir varsayılan DEĞİL: "bu bağlantı söylemedi" demek, fallback'i S11-d seçer. `organization_id` kolonu
+  açılmadı (yeni tabloların `goals`/sales-tracker deseni; RLS zaten yalnız `license_id` okuyor).
+- **Sonraki pencereye not:** (1) `enabled`/`allow_idp_initiated` ikisi de `false` varsayılan — yarım yazılmış
+  satır bir giriş yolu olamaz; S11-a2 bunu açarken sertifika+entityId dolu mu diye bakmalı. (2) `@nexa/rtm`
+  ve `apps/api` dışında env yükleyen yok: **e2e'yi `.env` export etmeden koşma** (`set -a && . ./.env`),
+  yoksa RTM dev sunucusu `DATABASE_URL: Required` ile düşer ve Playwright 60 sn sonra zaman aşımına uğrar —
+  bu tur bir kez yaşandı, ürünle ilgisi yok. (3) Faz-3'ün ilk kodu indi; §6 kapsam tablosundaki `S11` satırı
+  durum hücresi taşımıyor (kalem kuralı, §D96), ilerleme `## K.` altındaki **KS11** bloğunda tutuluyor.
+
 ## tm 123 — A11Y1–6 · `:focus-visible`/`:hover` kör noktası kapatıldı; 79 çağrı yerini yutan GERÇEK bir odak-halkası ihlali bulundu ve düzeltildi — done — 2026-08-12 UTC
 
 - **Yapıldı:** (1) `a11y.ts`'e tarayıcı-içi odak-halkası ölçümü (`measureFocusRing`/`assertFocusRingVisible`/

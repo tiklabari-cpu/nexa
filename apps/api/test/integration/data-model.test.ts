@@ -1585,6 +1585,193 @@ describe('data model invariants', () => {
   });
 
   // =========================================================================
+  // SSO connections (NFR-S11)
+  // =========================================================================
+
+  describe('sso connections', () => {
+    /** A PEM block shaped like the certificate an IdP publishes. */
+    const PEM = '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n';
+
+    /** A connection as the write endpoint (S11-a2) will store one. */
+    const connection = (overrides: Record<string, unknown> = {}) => ({
+      licenseId: fx.a.licenseId,
+      name: 'Okta (corp)',
+      idpEntityId: 'https://idp.example.test/saml/metadata',
+      idpSsoUrl: 'https://idp.example.test/saml/sso',
+      idpCertificatePem: PEM,
+      ...overrides,
+    });
+
+    it('has RLS enabled and a tenant policy', async () => {
+      const [security] = await owner.$queryRaw<Array<{ enabled: boolean }>>`
+        SELECT relrowsecurity AS enabled FROM pg_class WHERE relname = 'sso_connections'
+      `;
+      expect(security?.enabled).toBe(true);
+
+      const policies = await owner.$queryRaw<Array<{ policyname: string }>>`
+        SELECT policyname FROM pg_policies WHERE tablename = 'sso_connections'
+      `;
+      expect(policies.map((p) => p.policyname)).toEqual(['sso_connections_tenant']);
+    });
+
+    it("hides another tenant's connections", async () => {
+      // A leak here names the workspace's identity provider — reconnaissance for
+      // a targeted phish, and the first half of impersonating their login.
+      const mine = await owner.ssoConnection.create({ data: connection(), select: { id: true } });
+      const theirs = await owner.ssoConnection.create({
+        data: connection({ licenseId: fx.b.licenseId }),
+        select: { id: true },
+      });
+
+      const visible = await withTenant(
+        app,
+        { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+        (tx) => tx.ssoConnection.findMany({ select: { id: true } }),
+      );
+      expect(visible.map((c) => c.id)).toEqual([mine.id]);
+
+      // Correct SQL, and the row exists — RLS is what makes it invisible.
+      const byId = await withTenant(
+        app,
+        { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+        (tx) => tx.ssoConnection.findUnique({ where: { id: theirs.id } }),
+      );
+      expect(byId).toBeNull();
+    });
+
+    it("refuses to plant an identity provider in another tenant's license (WITH CHECK)", async () => {
+      // The write side is the dangerous one: a connection planted in someone
+      // else's license is an attacker-controlled certificate against their
+      // accounts, which ends in a session rather than in a disclosure.
+      await expect(
+        withTenant(app, { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId }, (tx) =>
+          tx.ssoConnection.create({ data: connection({ licenseId: fx.b.licenseId }) }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it("cannot update or delete another tenant's connection", async () => {
+      const theirs = await owner.ssoConnection.create({
+        data: connection({ licenseId: fx.b.licenseId }),
+      });
+
+      const asA = { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId };
+      // Both are `*Many` on purpose: an id-targeted write under RLS matches no
+      // row rather than raising, so the proof is that nothing changed.
+      const updated = await withTenant(app, asA, (tx) =>
+        tx.ssoConnection.updateMany({
+          where: { id: theirs.id },
+          data: { idpCertificatePem: 'attacker', enabled: true },
+        }),
+      );
+      expect(updated.count).toBe(0);
+
+      const deleted = await withTenant(app, asA, (tx) =>
+        tx.ssoConnection.deleteMany({ where: { id: theirs.id } }),
+      );
+      expect(deleted.count).toBe(0);
+
+      const survivor = await owner.ssoConnection.findUniqueOrThrow({ where: { id: theirs.id } });
+      expect(survivor.idpCertificatePem).toBe(PEM);
+      expect(survivor.enabled).toBe(false);
+    });
+
+    it('refuses a second connection for the same IdP in one license', async () => {
+      await owner.ssoConnection.create({ data: connection() });
+      await expect(owner.ssoConnection.create({ data: connection() })).rejects.toThrow(
+        /unique constraint/i,
+      );
+
+      // The same IdP in a different license is not a conflict: two workspaces
+      // may well federate to the same Okta tenant.
+      await expect(
+        owner.ssoConnection.create({ data: connection({ licenseId: fx.b.licenseId }) }),
+      ).resolves.toBeDefined();
+    });
+
+    it('refuses a blank name or entity id', async () => {
+      await expect(
+        owner.ssoConnection.create({ data: connection({ name: '  ' }) }),
+      ).rejects.toThrow(/sso_connections_name_check/i);
+      await expect(
+        owner.ssoConnection.create({ data: connection({ idpEntityId: '' }) }),
+      ).rejects.toThrow(/sso_connections_idp_entity_id_check/i);
+    });
+
+    it('refuses an SSO URL that is not an absolute http(s) URL', async () => {
+      // The column is handed to a browser as a redirect target (S11-d), so the
+      // scheme surface is closed here rather than trusted to whatever endpoint
+      // writes it: a `javascript:` URL would be script execution on our origin.
+      for (const idpSsoUrl of [
+        'javascript:alert(1)',
+        'data:text/html,x',
+        '//evil.example/sso',
+        '/saml/sso',
+        'idp.example.test/sso',
+      ]) {
+        await expect(
+          owner.ssoConnection.create({ data: connection({ idpSsoUrl }) }),
+          idpSsoUrl,
+        ).rejects.toThrow(/sso_connections_idp_sso_url_check/i);
+      }
+
+      // http is allowed at this layer on purpose — requiring TLS is the write
+      // endpoint's policy, where a loopback IdP harness can be excepted.
+      await expect(
+        owner.ssoConnection.create({
+          data: connection({ idpSsoUrl: 'http://localhost:9999/sso' }),
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('refuses a certificate that is not a PEM certificate block', async () => {
+      // A fingerprint or a private key sitting in this column would look like a
+      // configured trust anchor while verifying nothing.
+      for (const idpCertificatePem of [
+        '',
+        'AA:BB:CC:DD',
+        '-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----',
+      ]) {
+        await expect(
+          owner.ssoConnection.create({ data: connection({ idpCertificatePem }) }),
+          idpCertificatePem,
+        ).rejects.toThrow(/sso_connections_idp_certificate_pem_check/i);
+      }
+    });
+
+    it('refuses an attribute mapping that is not a JSON object', async () => {
+      // Read by key. A scalar or an array there makes every lookup silently
+      // miss, which reads as "the IdP sent no e-mail" rather than as a mistake.
+      for (const attributeMapping of ['email', 42, ['email']]) {
+        await expect(
+          owner.ssoConnection.create({ data: connection({ attributeMapping }) }),
+          JSON.stringify(attributeMapping),
+        ).rejects.toThrow(/sso_connections_attribute_mapping_check/i);
+      }
+    });
+
+    it('is removed when its license is deleted (onDelete cascade)', async () => {
+      await owner.ssoConnection.create({ data: connection({ licenseId: fx.b.licenseId }) });
+      await owner.license.delete({ where: { id: fx.b.licenseId } });
+
+      expect(await owner.ssoConnection.count({ where: { licenseId: fx.b.licenseId } })).toBe(0);
+    });
+
+    it('round-trips a connection through Prisma with the safe defaults applied', async () => {
+      const saved = await owner.ssoConnection.create({ data: connection() });
+
+      // Both defaults are "off": a half-written row must never be a way in, and
+      // IdP-initiated sign-in gives up the `InResponseTo` binding replay
+      // detection rests on, so it is chosen rather than inherited.
+      expect(saved.enabled).toBe(false);
+      expect(saved.allowIdpInitiated).toBe(false);
+      expect(saved.attributeMapping).toEqual({});
+      // The certificate is stored as it arrives — public, so nothing is hashed.
+      expect(saved.idpCertificatePem).toBe(PEM);
+    });
+  });
+
+  // =========================================================================
   // Referential integrity
   // =========================================================================
 

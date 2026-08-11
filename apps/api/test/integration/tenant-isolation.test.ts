@@ -77,9 +77,9 @@ describe('tenant isolation (RLS)', () => {
           AND tablename IN ('organizations','licenses','accounts','agent_memberships',
                             'oauth_clients','oauth_authorization_codes','oauth_refresh_tokens',
                             'api_tokens','customers','trusted_domains','ip_allowlist_entries',
-                            'brands','work_schedules','agent_presence_events')
+                            'sso_connections','brands','work_schedules','agent_presence_events')
       `;
-      expect(rows.length).toBe(14);
+      expect(rows.length).toBe(15);
       for (const row of rows) {
         expect(row.rowsecurity, `${row.tablename} must have RLS enabled`).toBe(true);
       }
@@ -98,6 +98,7 @@ describe('tenant isolation (RLS)', () => {
         'customers',
         'trusted_domains',
         'ip_allowlist_entries',
+        'sso_connections',
         'oauth_clients',
       ]) {
         const [row] = await app.$queryRawUnsafe<Array<{ count: bigint }>>(

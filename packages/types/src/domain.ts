@@ -487,3 +487,65 @@ export interface ScheduledExportRun {
   /** When the period was claimed — i.e. when the attempt started. */
   created_at: string;
 }
+
+// --- Single sign-on (NFR-S11) -----------------------------------------------
+
+/**
+ * The account fields a SAML assertion may fill (NFR-S11). Bounded on purpose:
+ * an assertion is attacker-adjacent input — it arrives through the browser,
+ * signed by a party outside this system — so the set of columns it can reach is
+ * fixed here rather than inferred from whatever attribute names an IdP happens
+ * to send. Anything outside this list is ignored, which is what keeps a rogue
+ * `role` or `suspended` attribute from ever meaning anything.
+ */
+export const SSO_ATTRIBUTE_MAPPING_KEYS = ['email', 'name'] as const;
+export type SsoAttributeMappingKey = (typeof SSO_ATTRIBUTE_MAPPING_KEYS)[number];
+
+/**
+ * Which assertion attribute carries which account field, e.g.
+ * `{ email: 'urn:oid:0.9.2342.19200300.100.1.3' }`.
+ *
+ * Every key is optional and an unset key is not a default — it means "this
+ * connection did not say", and the resolver that consumes the assertion
+ * (S11-d) decides what to fall back to. No fallback is guessed here: the
+ * mapping is configuration, and a value invented in a type would silently
+ * become one.
+ */
+export type SsoAttributeMapping = Partial<Record<SsoAttributeMappingKey, string>>;
+
+/**
+ * One SAML 2.0 identity provider a workspace federates sign-in to (NFR-S11).
+ *
+ * Read-only configuration at this stage: the row records who the IdP is and how
+ * to reach it, nothing consumes it yet. The write surface is S11-a2, assertion
+ * validation S11-b, the SP endpoints S11-d.
+ *
+ * `idp_certificate_pem` is deliberately returned in full. It is the IdP's
+ * *public* signing certificate — the thing an admin compares against what their
+ * IdP console shows to confirm a rotation landed — so redacting it would hide
+ * the one field a misconfiguration is diagnosed from while protecting nothing.
+ * The SCIM bearer token (S11-e) is the secret in this feature, and it is hashed.
+ */
+export interface SsoConnection {
+  id: string;
+  /** Human label for the connection, e.g. `Okta (corp)`. */
+  name: string;
+  /** The IdP's SAML EntityID — what an assertion's `Issuer` must equal. */
+  idp_entity_id: string;
+  /** Absolute URL an AuthnRequest is sent to (HTTP-Redirect binding). */
+  idp_sso_url: string;
+  /** The IdP's public signing certificate, PEM-encoded. Not a secret. */
+  idp_certificate_pem: string;
+  attribute_mapping: SsoAttributeMapping;
+  /**
+   * Accept an assertion the IdP sends unsolicited, with no AuthnRequest of ours
+   * to correlate it against. Off by default: an IdP-initiated flow gives up the
+   * `InResponseTo` binding that makes assertion replay detectable, so it is a
+   * deliberate choice a workspace makes, never a default it inherits.
+   */
+  allow_idp_initiated: boolean;
+  /** Whether sign-in through this connection is live. Off until configured. */
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}

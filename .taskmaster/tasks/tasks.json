@@ -4876,13 +4876,13 @@
             "description": "Route'a `listQuery` zod şeması — `customers.ts` satır 16-18'in birebir uyarlaması: `query: z.string().trim().max(320).optional()`, `category: z.enum(APP_CATEGORIES).optional()`, `limit: z.coerce.number().int().min(1).max(100).default(...)`, `page_id` opsiyonel. Servis `list(tx, tenant, params)` sırası: (1) katalog `filterAppCatalog` ile daraltılır — TENANT-BAĞIMSIZ, (2) `paginateApps` ile sayfa ke",
             "details": "09.2-v2-c — GET /settings/apps sorgu bağlama — zod parse + sayfalama + tenant join korunumu  [OPUS-XHIGH]\n\nPRD: FR-MOD-09.2 (+ NFR-P2, NFR-S5 tenant izolasyonu korunumu)\nETİKET GEREKÇESİ: OPUS-XHIGH: tenant-scoped bir endpoint'in yanıt kesiti ve katalog⋈`app_installations` join sırası değişiyor (`app-service.ts` `list()`); filtre/sayfalama kesitinin `request.withTenant` join'inin ÖNÜNE mi ARKASINA mı düşeceği kararı + input uzunluk sınırı (aşırı büyük sorgu maliyeti) = hafif güvenlik dokunuşu. Kullanıcı kuralı: güvenlik hassasiyeti olan iş ASLA SONNET'e verilmez → en az OPUS-XHIGH (SONNET koşul 2 ihlali). Çekirdek güvenlik sınırı (authN/authZ modeli, scope kapısı, izolasyon mekanizması) DEĞİŞMİYOR — yalnız korunuyor — bu yüzden OPUS-MAX gerekmez.\nNEDEN AÇIK: `apps/api/src/routes/apps.ts` satır 43-51: `GET /settings/apps` handler'ı yalnız `request.tenant()` ve `apps.list(tx, tenant)` çağırıyor — `request.query` HİÇ okunmuyor (grep: dosyada `request.query` yok, tek `parse()` kullanımı OAuth callback body'sinde). `apps/api/src/services/apps/app-service.ts` `list()` katalog ⋈ workspace kurulumlarını TAM döndürüyor; filtreleme/sayfalama mantığı yok.\nKAPSAM: Route'a `listQuery` zod şeması — `customers.ts` satır 16-18'in birebir uyarlaması: `query: z.string().trim().max(320).optional()`, `category: z.enum(APP_CATEGORIES).optional()`, `limit: z.coerce.number().int().min(1).max(100).default(...)`, `page_id` opsiyonel. Servis `list(tx, tenant, params)` sırası: (1) katalog `filterAppCatalog` ile daraltılır — TENANT-BAĞIMSIZ, (2) `paginateApps` ile sayfa kesilir, (3) YALNIZ o sayfanın app id'leri için kurulum join'i `request.withTenant` içinde yapılır (mevcut `withTenant` sarmalayıcı aynen korunur). Yanıt `{items, total, next_page_id?}` (customers.ts satır 78-79 deseni). Bilinmeyen `page_id` → `ApiError.validation` (400). Scope kapısı (`access_rules:ro`, `access_rules:rw`) DEĞİŞMEZ; `requireConnectableApp` kanal invariant'ı DEĞİŞMEZ.\nDOSYALAR: apps/api/src/routes/apps.ts · apps/api/src/services/apps/app-service.ts · apps/api/test/integration/apps.test.ts\nREFERANS DESEN (kopyalanacak): apps/api/src/routes/customers.ts · apps/api/src/services/apps/app-service.ts\nKK (birebir): \"KK-türetilmiş: \"Liste uç noktası arama/kategori/sayfalama parametrelerini doğrular; geçersiz parametreyi 400 ile reddeder; filtre ve sayfalama tenant izolasyonunu değiştirmez — bir lisansın bağlantısı başka lisansın hiçbir sayfasında görünmez.\" — TÜRETME GEREKÇESİ: FR-MOD-09.2 KK'sı bu davranışı içermiyor; izolasyon şartı NFR-S5 ve mevcut kodun (app_installations license-scoped) korunması gereğinden geliyor.\" | \"kanal-tipli olanlar Channels'ta da yönetilir\"\nKK DOĞRULAMA: `apps/api/test/integration/apps.test.ts`: `?query=` daraltır; `?category=channels` yalnız kanal kartlarını verir; `?limit=10` + `next_page_id` zinciri kataloğun tamamını gezer; `total` filtreye göre. NEGATİF (önce): 321 karakterlik `query` → 400, `limit=0` ve `limit=101` → 400, geçersiz `category` → 400, bilinmeyen `page_id` → 400. CROSS-TENANT: mevcut satır 233 testi (\"never shows or lets one tenant touch another's connection\") sayfalanmış/filtrelenmiş yanıt altında da yeşil — B lisansının bağlantısı A'nın hiçbir sayfasında `installed=true` çıkmaz. Read-only admin testi (satır 218) parametrelerle de geçerli kalır.\nKAPSAM DIŞI: katalog verisinin büyütülmesi (09.2-v2-d / -e) · web arayüzü (09.2-v2-f / -g) · scope veya yetki modelinde herhangi bir değişiklik (mevcut access_rules kapısı aynen korunur) · `GET /chats/:chatId/apps` in-chat okuma yolu (dokunulmaz)\nSÖZLEŞME: yok (yeni path yok) — 09.2-v2-a'da eklenen parametrelerin implementasyonu. Yine de bu pencerede re-bundle sonrası `contract-parity.test.ts` yeşil doğrulanır; parametre adları kontratla birebir eşleşmezse (ör. `pageId` vs `page_id`) kontrat-koda sapması sessizce oluşur.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "integration NEGATİF (pozitiflerden ÖNCE yazılır): query>320, limit sınır dışı, geçersiz category, bilinmeyen page_id → hepsi 400 hata zarfıyla (ADR-06) · integration POZİTİF: arama/kategori daraltma, sayfa zinciri tam kapsama, total doğruluğu · integration CROSS-TENANT: sayfalanmış listede başka lisansın kurulumu sızmaz (mevcut testin sayfalama altında regresyonu) · integration regresyon: mevcut 8 apps testi (OAuth akışı, disconnect 404, kanal 400, read-only admin) yeşil kalır · NOT: süit `--concurrency=1` ile paket-paket seri koşulur ([[nexa-test-gate-parallel-db]] — paylaşılan Postgres deadlock 40P01 riski)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "99.1",
               "99.2"
             ],
             "parentId": "99",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-11T02:26:24.847Z"
           },
           {
             "id": 4,
@@ -4951,7 +4951,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-11T01:58:36.153Z",
+        "updatedAt": "2026-08-11T02:26:24.847Z",
         "complexity": 5,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.2 — 100+ entegrasyon (marketplace katalog genişlemesi)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5134,7 +5134,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-11T01:58:36.153Z",
+      "lastModified": "2026-08-11T02:26:24.848Z",
       "taskCount": 113,
       "completedCount": 106,
       "tags": [

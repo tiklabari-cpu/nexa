@@ -5,34 +5,38 @@ baştan sona tamamlamak, sonra çıkmak. Başka task'a GEÇME. Konuşma geçmiş
 aşağıdaki kalıcı kaynaklardan yeniden kur.
 
 ## 0) Bootstrap — bağlamı dosyalardan kur (hafızaya güvenme)
+
 Sırayla oku:
+
 1. `MASTER-PROMPT.md` — kilitli teknik kararlar, stack, contract-first akış, sınırlar.
 2. `CONVENTIONS.md` — Definition of Done (DoD) kapısı, git kuralları, handoff formatı.
 3. Task Master'dan HEDEF TASK'ı çek (get_task / show): başlık, detay, test stratejisi, kabul
    kriteri, bağımlılıklar, alt-görevler.
 4. `PLAN.md` — **baştan sona OKUMA** (≈770 KB / 3.700 satır, bağlamı boşa harcar). Şu iki adımı yap:
    a. Task başlığındaki iş kalemi kimliğini (ör. `11.7-a`) `### Düz tablo (aktarım kaynağı)`
-      bölümünde ara → `PRD` sütunu sana gereksinim kodunu verir (`11.7`). Eşleme burada
-      yazılıdır, tahmin etme.
+   bölümünde ara → `PRD` sütunu sana gereksinim kodunu verir (`11.7`). Eşleme burada
+   yazılıdır, tahmin etme.
    b. O kodun gereksinim satır(lar)ını bul: `grep -n '| 11\.7' PLAN.md | cut -c1-200`. Senin
-      hedefin **durum damgası (`⬜`/`◐`/`✅`) taşıyan** satırlar; Düz tablo / dilim tablosu
-      satırları değil. Bir task birden çok satır kapatabilir (ör. `02.9-a` → hem `02.9` hem `11.8`).
+   hedefin **durum damgası (`⬜`/`◐`/`✅`) taşıyan** satırlar; Düz tablo / dilim tablosu
+   satırları değil. Bir task birden çok satır kapatabilir (ör. `02.9-a` → hem `02.9` hem `11.8`).
    §3'te (kapanış) bu satırları güncelleyeceksin — şimdi yalnız yerlerini ve mevcut durumlarını not al.
 
    c. **Kanıt tabloda DEĞİL, `## K. Kanıt Geçmişi` bölümündedir.** Gereksinim satırı artık
-      yalnız damga + referans taşır: `| 07.7 | … | Should | ★ | ✅ → K07.7 |`. O kalemin
-      geçmişi lazımsa: `grep -n '^#### K07.7' PLAN.md` → bulduğun satırdan itibaren oku
-      (`Read` ile dar `offset`/`limit`). Kanıt gerekmiyorsa **hiç açma** — damga yeter.
+   yalnız damga + referans taşır: `| 07.7 | … | Should | ★ | ✅ → K07.7 |`. O kalemin
+   geçmişi lazımsa: `grep -n '^#### K07.7' PLAN.md` → bulduğun satırdan itibaren oku
+   (`Read` ile dar `offset`/`limit`). Kanıt gerekmiyorsa **hiç açma** — damga yeter.
 
    ⚠ Bu düzen 2026-08-09'da kuruldu, sebebi ölçümdür: kanıt hücrede birikince satır 32.480
    karaktere çıkmıştı (tek başına ~10k token) ve çıplak bir `grep` pencerenin tur bütçesini
    yakıyordu — tm 65.8 tek satırı okuyabilmek için `sed`, `awk`, `grep -o`, `substr` sırayla
    denedi, hepsi boşa tur. Taşıma sonrası en uzun tablo satırı 526 karakter. **Bu kazancı
    koru: tablo hücresine kanıt YAZMA** (§3'e bak).
+
 5. `git log --oneline -20` + `git status` — repo şu an nerede.
 6. Task'ın dokunacağı mevcut dosyalar.
 
 ## 1) Resume kontrolü + durum damgası (yeniden deneme olabilir)
+
 Bu task daha önce yarım kalmış olabilir. ÖNCE mevcut durumu tespit et: ilgili dosyalar/branch
 var mı, testler ne durumda, `git status` ne diyor, `HANDOFF.md`'de bu task için not var mı.
 **Sıfırdan yapma** — kaldığı yerden devam et veya hatayı düzelt.
@@ -93,12 +97,13 @@ döngüsü fark edersen, kararı erken ver: ya yeşile çevir ya da `blocked` il
 dalını çalıştırarak kapat — ama MUTLAKA kapat.
 
 ## 3) Kapanış
+
 - **Kapı YEŞİL ise:** (sıra önemli — 1–2 dosya değişikliği, 3 onları commit'ler)
   1. **`PLAN.md`'yi güncelle — iki ayrı yer, karıştırma:**
 
      **(i) Tablo satırı — yalnız damga.** §0'da bulduğun gereksinim satır(lar)ının damgasını
      `⬜`/`◐` → `✅` yap. Hücrenin tamamı şu iki biçimden biri olmalı, başka hiçbir şey değil:
-     `✅ → K<kod>`  ·  `◐ → K<kod>`
+     `✅ → K<kod>` · `◐ → K<kod>`
      **Hücreye kanıt, dosya adı, test sayısı, tarih, açıklama YAZMA.** Kanıt hücrede birikince
      satır 32.000 karakteri aşıyor ve sonraki her pencerenin `grep`'ini zehirliyor — bu düzen
      tam olarak onu önlemek için kuruldu. Referansı olmayan bir satır kapatıyorsan `K<kod>`
@@ -112,6 +117,7 @@ dalını çalıştırarak kapat — ama MUTLAKA kapat.
 
      Task'ın kapattığı **her** satırı güncelle. Gereksinimi yalnız kısmen karşıladıysan `◐`
      bırak ve eksiği (ii)'deki maddeye yaz — kapanış uğruna `✅` UYDURMA.
+
   2. `HANDOFF.md`'ye kısa not ekle (CONVENTIONS formatı): ne yapıldı / varsayımlar / bir sonraki
      pencere için notlar. Ekleme noktası **`## Task log (newest-first)` başlığının hemen altı**;
      `Edit`'in `old_string`'i o başlık + bir sonraki bloğun ilk satırı olsun. Dosyayı yeniden
@@ -131,6 +137,7 @@ dalını çalıştırarak kapat — ama MUTLAKA kapat.
   4. Son çıktı: `{"status":"blocked","task_id":"<id>","summary":"<neden bloke>"}`.
 
 ## Kurallar
+
 - **Asla** ikinci bir task'a başlama. **Asla** kapı yeşil değilken done işaretleme.
 - Tek orkestratör: subagent'a dağıtma; kendi araçlarınla çalış.
 - Sınırlar (MASTER-PROMPT): production deploy/DNS/secret/kart yok, force-push yok, DB drop yok,

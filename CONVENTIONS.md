@@ -3,6 +3,7 @@
 Bu dosya otonom döngünün "objektif kapısı"dır. Her task bunlara uymadan **done** sayılmaz.
 
 ## 1) Definition of Done (DoD) kapısı
+
 Bir task ancak AŞAĞIDAKİLERİN HEPSİ yeşilse "done" işaretlenir. Hepsi komutla + exit code ile
 doğrulanır; "gözle baktım oldu" geçersizdir.
 
@@ -25,6 +26,7 @@ doğrulanır; "gözle baktım oldu" geçersizdir.
 > önce onları ekle. Kapı komutları repo büyüdükçe bu dosyada güncellenir.
 
 ### 1.2 PLAN.md kanıt disiplini: hücrede damga, dipnotta geçmiş (2026-08-09)
+
 Gereksinim tablosunun durum hücresi **yalnız** şu biçimdedir — başka hiçbir şey değil:
 
 ```
@@ -50,6 +52,7 @@ kuralın dışındadır — oradaki hücre bir sayım kaynağıdır (`54 ✅ · 
 olarak okur. Ona dokunma.
 
 ### 1.1 Kapının objektifliği: test veri depoları koşu başına izole (tm 105)
+
 `@nexa/api` ve `@nexa/rtm` gerçek Postgres + Redis'e karşı koşar ve her süit TRUNCATE ile
 başlar. Eskiden aynı anda açık iki pencere aynı `nexa` veritabanını paylaştığı için birbirinin
 fixture'ını siliyordu; sonuç, o pencerenin HİÇ DOKUNMADIĞI dosyalarda yüzlerce kırmızıydı
@@ -62,6 +65,7 @@ veritabanını (1-15) alır. Koşu başına ~3 sn. Test/fixture tarafında deği
 harness yalnız `DATABASE_URL` / `DATABASE_APP_URL` / `REDIS_URL`'i yeniden yönlendirir.
 
 Pencere için iki sonuç:
+
 - `pnpm -w test` artık `--concurrency=1` istemez; turbo paralelliği güvenlidir.
 - **Bir kırmızıyı "başka pencere yazıyordur" diye açıklama.** İzolasyon açıkken kırmızı ya
   senin değişikliğindendir ya da HANDOFF/Task Master'da kayıtlı bilinen bir kusurdur; ikisi de
@@ -72,6 +76,7 @@ iki pencere aynı anda e2e koşamaz. Paylaşılan veritabanına karşı koşmak 
 veriyi elle incelemek) için: `NEXA_TEST_ISOLATION=off`.
 
 ## 2) Git kuralları
+
 - Branch: her task `feat/<kısa-slug>` (ör. `feat/rtm-websocket`) veya `fix/<slug>`.
 - Commit: Conventional Commits — `feat(rtm): add reconnect + missed-event sync`,
   `fix(auth): correct PKCE verifier length`. Küçük, anlamlı, atomik commit'ler.
@@ -80,6 +85,7 @@ veriyi elle incelemek) için: `NEXA_TEST_ISOLATION=off`.
 - `.env` / secret / anahtar ASLA commit'lenmez (`.gitignore` ilk commit'te hazır olmalı).
 
 ## 3) Handoff notu formatı (`HANDOFF.md`'ye eklenir)
+
 Her task kapanışında en üste (newest-first) şu blok eklenir:
 
 ```
@@ -94,12 +100,14 @@ Bu blok bir sonraki temiz pencerenin bağlamı doğru kurmasını sağlar — ba
 mekanizmanın kalbi budur.
 
 ## 4) Task Master durum akışı
+
 - Başlarken: task `in-progress`.
 - DoD yeşil + commit + push sonrası: `done`.
 - Geçemezse: `blocked` (veya `review`), asla `done` değil.
 - Alt-görevler (subtasks) kendi başına aynı kapıdan geçer; hepsi done olunca üst task done.
 
 ### 4.1 Öncelik seviyeleri — `critical` rezervedir
+
 Planlama sırasında açılan HER görev yalnız şu üçünden birini alır (BUILD-BLUEPRINT K7):
 `high` (Faz-0 · v1 Must) · `medium` (v1 Should) · `low` (v2/v3).
 
@@ -110,5 +118,6 @@ PRD aktarımı, `parse-prd`, PLAN §G aktarımı ve elle görev açma sırasınd
 dağıtılırsa gerçek düzeltmelerin önünü keser ve öncelik sırası anlamını yitirir.
 
 ## 5) Kapsam disiplini
+
 - Bir pencere yalnız kendi hedef task'ını yapar. "Bu arada şunu da düzelteyim" YOK — o ayrı
   task'tır, Task Master'a not/yeni task olarak eklenir.

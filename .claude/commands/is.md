@@ -1,6 +1,6 @@
 ---
 description: Sıradaki Task Master işini al ve plana sadık kalarak yürüt
-argument-hint: "[görev id — boş bırakılırsa next]"
+argument-hint: '[görev id — boş bırakılırsa next]'
 allowed-tools: Bash(task-master *), Read, Grep, Glob, Edit, Write, Bash(pnpm *), Bash(make *), Bash(git *)
 ---
 

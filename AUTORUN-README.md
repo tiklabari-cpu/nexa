@@ -5,6 +5,7 @@ bir Claude Code penceresinde** yaptırır. Bağlam Claude'nin kafasında değil,
 `HANDOFF.md`'de tutulduğu için pencereler arası kopmaz.
 
 ## Parçalar
+
 - `run-loop.sh` — döngü sürücüsü. Her tur: sıradaki task'ı seçer → temiz pencerede yaptırır →
   hata varsa 1 kez yeniden dener → yine olmazsa durur.
 - `TASK-RUNNER-PROMPT.md` — her pencerenin aldığı protokol (bootstrap → build → verify → fix → close).
@@ -15,17 +16,21 @@ bir Claude Code penceresinde** yaptırır. Bağlam Claude'nin kafasında değil,
 - Task Master — görev ağacı + durum (`.taskmaster/`).
 
 ## Çalıştırma — tek komut
+
 `run-loop.sh` **ilk çalıştırmada kendini kurar**: `.taskmaster` yoksa önce git + `parse-prd` +
 efor etiketleri + PLAN/HANDOFF'u yapar, sonra döngüye girer. Yani normalde tek komut yeter:
+
 ```bash
 chmod +x run-loop.sh
 ./run-loop.sh                                   # ilk kurulum + döngü
 # arka planda:  nohup ./run-loop.sh > .loop-logs/run.out 2>&1 &
 ```
+
 Ön koşul: Claude Code + Task Master kurulu ve Claude Code'a giriş yapılmış (Max aboneliği), git
 remote erişimin (repo-scope PAT) hazır.
 
 ## İşi nerede/nasıl izlersin (5 pencere)
+
 1. **Terminal (canlı):** runner artık her pencereyi `stream-json` ile canlı akıtır — açılan araç
    çağrıları (`→ Edit`, `→ Bash`...) ve metin satır satır görünür. Arka planda çalıştırdıysan:
    `tail -f .loop-logs/run.out`.
@@ -41,6 +46,7 @@ Script'in kendi satırları (`▶ Task ... başlıyor`, `✔ ... BİTTİ`, `✖ 
 sınırını gösterir; aradaki akış o task'ın gerçek çalışmasıdır.
 
 ## Tek seferlik kurulum (opsiyonel — script bunu otomatik yapar; elle yapmak istersen)
+
 ```bash
 # 1) Claude Code + Task Master kurulu olsun; Claude Code'a giriş yapılmış olsun (Max aboneliği)
 claude mcp add taskmaster-ai -- npx -y task-master-ai   # Task Master MCP'yi projeye ekle
@@ -59,6 +65,7 @@ chmod +x run-loop.sh
 ```
 
 ## Çalıştırma
+
 ```bash
 ./run-loop.sh            # döngüyü başlat (arka planda: nohup ./run-loop.sh & )
 tail -f .loop-logs/*.err # canlı log izleme
@@ -68,7 +75,9 @@ Durdurmak için: `Ctrl-C` (veya arka plandaysa `kill <pid>`). Kaldığı yerden 
 `./run-loop.sh` — durum Task Master'da olduğu için baştan başlamaz.
 
 ## İLK ÇALIŞTIRMADA MUTLAKA
+
 Unattended bırakmadan önce **ilk 1-2 task'ı izleyerek** çalıştır:
+
 - `claude --help` ile `--effort` değer adlarını ve `--permission-mode` seçeneklerini teyit et;
   farklıysa `run-loop.sh` başındaki değişkenleri düzelt. (`--effort max` bazı opus sürümlerinde
   yok — o zaman `EFFORT_MAX="high"` yap.)
@@ -76,9 +85,11 @@ Unattended bırakmadan önce **ilk 1-2 task'ı izleyerek** çalıştır:
 - `git remote`'un **nexa** olduğunu doğrula (yanlış repoya push riskini böyle keser).
 
 ## Güvenlik (tam otonom — bypassPermissions)
+
 Çalışma modu `--permission-mode bypassPermissions`: pencereler hiç izin sormaz (en yüksek
 otonomi, "duruyor" sorunu tümden biter). Bu güvenli, çünkü güvenlik izin-prompt'unda değil,
 şu 4 katmanda:
+
 1. **Claude Code araç-allowlist'in** — sen zaten yalnız ihtiyaç duyulan araçları açtın; pencere
    başka bir şey çağıramaz.
 2. **Repo-scope'lu fine-grained PAT** — yalnız `nexa` reposuna yazma yetkisi. Diğer projelerine
@@ -91,6 +102,7 @@ otonomi, "duruyor" sorunu tümden biter). Bu güvenli, çünkü güvenlik izin-p
 > otonom modu (dizin-scoped + yıkıcı/exfil bloklu). İkisi de "full otonom"; `auto` bir ağ daha ekler.
 
 ## Sınırlar (dürüst)
+
 - Gerçekten 7/24 durmaz: kullanım limiti gelince runner bekleyip yeniden dener (backoff), ama
   pencere sıfırlanana kadar ilerleme durur. Bu, abonelik planına bağlı.
 - Runner'ı senin makinende çalıştırırsın (bu Cowork bulut ortamında değil). Test edemediğim tek

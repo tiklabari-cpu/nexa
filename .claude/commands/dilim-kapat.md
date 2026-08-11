@@ -51,6 +51,7 @@ oradadır ve çoğu §C'ye aittir.
 
   `HTTP/1.1 200` görmeden dilim kapanmaz. (Entegrasyon paketi DB'yi truncate ettiği
   için bu adım her koşuda gerekli — bkz. `/is` §5.)
+
 - Dilimin PRD kabul kriterleri karşılandı
 
 Kapı geçilmeden push YOK. Kırmızı varsa önce düzelt; düzeltemiyorsan döngüyü

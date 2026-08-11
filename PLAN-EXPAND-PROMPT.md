@@ -94,16 +94,16 @@ Aşama B'ye geçme.
 
 Açık kalan (`◐`/`⬜`) her iş kalemi için zorluğu **ölç**, tahmin etme. Rubrik:
 
-| Boyut | Sorulacak soru | Ağırlık |
-| --- | --- | --- |
-| Güvenlik sınırı | Auth, scope, tenant izolasyonu, token, dosya, dış girdi sınırına dokunuyor mu? | Yüksek |
-| Veri bütünlüğü | Yeni migration / invariant / partition / unique kısıt gerekiyor mu? | Yüksek |
-| Eşzamanlılık | Yarış koşulu, kuyruk, atama, idempotency, soket durumu var mı? | Yüksek |
-| Para | Faturalama, metering, kota, plan/koltuk aritmetiği var mı? | Yüksek |
-| Kontrat yüzeyi | Yeni endpoint/şema mı, mevcut yüzeyi mi kullanıyor? | Orta |
-| Katman sayısı | Kontrat + backend + UI + widget'ın kaçına dokunuyor? | Orta |
-| Geri dönülemezlik | Yanlış yapılırsa veri kaybı / breaking change olur mu? | Yüksek |
-| Belirsizlik | PRD kabul kriteri net mi, karar gerektiriyor mu? | Orta |
+| Boyut             | Sorulacak soru                                                                 | Ağırlık |
+| ----------------- | ------------------------------------------------------------------------------ | ------- |
+| Güvenlik sınırı   | Auth, scope, tenant izolasyonu, token, dosya, dış girdi sınırına dokunuyor mu? | Yüksek  |
+| Veri bütünlüğü    | Yeni migration / invariant / partition / unique kısıt gerekiyor mu?            | Yüksek  |
+| Eşzamanlılık      | Yarış koşulu, kuyruk, atama, idempotency, soket durumu var mı?                 | Yüksek  |
+| Para              | Faturalama, metering, kota, plan/koltuk aritmetiği var mı?                     | Yüksek  |
+| Kontrat yüzeyi    | Yeni endpoint/şema mı, mevcut yüzeyi mi kullanıyor?                            | Orta    |
+| Katman sayısı     | Kontrat + backend + UI + widget'ın kaçına dokunuyor?                           | Orta    |
+| Geri dönülemezlik | Yanlış yapılırsa veri kaybı / breaking change olur mu?                         | Yüksek  |
+| Belirsizlik       | PRD kabul kriteri net mi, karar gerektiriyor mu?                               | Orta    |
 
 **Etiket kuralı (MASTER-PROMPT "Efor Kapıları" ile hizalı):**
 
@@ -179,20 +179,20 @@ Biten işlerdeki desen sürdürülür: `<FR-MOD kimliği>-<harf> — <kısa baş
 
 Aşağıdaki alanların **hepsi** doldurulur. Eksik alanlı alt-görev yazma:
 
-| Alan | İçerik |
-| --- | --- |
-| **ID** | `<FR-MOD>-<harf>` |
-| **Başlık** | Ne yapılacağı, tek satır |
-| **PRD kimliği** | `FR-MOD-xx.x` (+ ilgili NFR: `NFR-Sxx` vb.) |
-| **Etiket** | `[XHIGH]` / `[MAX]` (+ yukarı yuvarlandıysa `↑` ve gerekçe) |
-| **Neden açık** | Şu an kodda ne var, ne yok — **dosya yolu + satır çapasıyla** |
-| **Kapsam** | Dokunulacak dosyalar/katmanlar; contract-first sıra |
-| **KK (gereksinim kabul kriteri)** | PRD'nin kendi `KK` maddeleri, **birebir**, numaralarıyla |
-| **KK doğrulama yöntemi** | Her KK maddesi için: hangi test/komut/E2E akışı kanıtlayacak |
-| **Zorunlu testler** | Birim / integration / E2E + **cross-tenant** + varsa negatif testler |
-| **Bağımlılıklar** | Önce bitmesi gereken alt-görev ID'leri |
-| **Kapsam dışı** | Bu alt-görüşte YAPILMAYACAK bitişik işler (faz sızıntısı kalkanı) |
-| **Tahmin** | Kaç temiz pencere (1 = normal; 2+ ise muhtemelen daha bölünmeli) |
+| Alan                              | İçerik                                                               |
+| --------------------------------- | -------------------------------------------------------------------- |
+| **ID**                            | `<FR-MOD>-<harf>`                                                    |
+| **Başlık**                        | Ne yapılacağı, tek satır                                             |
+| **PRD kimliği**                   | `FR-MOD-xx.x` (+ ilgili NFR: `NFR-Sxx` vb.)                          |
+| **Etiket**                        | `[XHIGH]` / `[MAX]` (+ yukarı yuvarlandıysa `↑` ve gerekçe)          |
+| **Neden açık**                    | Şu an kodda ne var, ne yok — **dosya yolu + satır çapasıyla**        |
+| **Kapsam**                        | Dokunulacak dosyalar/katmanlar; contract-first sıra                  |
+| **KK (gereksinim kabul kriteri)** | PRD'nin kendi `KK` maddeleri, **birebir**, numaralarıyla             |
+| **KK doğrulama yöntemi**          | Her KK maddesi için: hangi test/komut/E2E akışı kanıtlayacak         |
+| **Zorunlu testler**               | Birim / integration / E2E + **cross-tenant** + varsa negatif testler |
+| **Bağımlılıklar**                 | Önce bitmesi gereken alt-görev ID'leri                               |
+| **Kapsam dışı**                   | Bu alt-görüşte YAPILMAYACAK bitişik işler (faz sızıntısı kalkanı)    |
+| **Tahmin**                        | Kaç temiz pencere (1 = normal; 2+ ise muhtemelen daha bölünmeli)     |
 
 ### Derinlik politikası (bilinçli — kör derinlik değil)
 
@@ -257,14 +257,14 @@ alt bölümü **ekle** ve şunları yaz:
 
 **Her tetiklemede çalışacak çekirdek (§F.1'den, hafif sürüm):**
 
-| # | §F.1 maddesi | Mini sürümde ne yapılır | Kanıt |
-| - | ------------ | ----------------------- | ----- |
-| 1 | Kapsam süpürmesi | Yalnız **o dilimin** `FR-MOD` satırları koda karşı denetlenir | Route/dosya listesi |
-| 2 | Faz sızıntısı | Dilimde başka fazdan iş var mı | Evet/Hayır + §D kaydı |
-| 3 | NFR kapıları | Dilimin dokunduğu NFR'ler ölçülür (tahmin değil) | Ölçüm çıktısı |
-| 5 | Kontrat bütünlüğü | `contract-parity` testi çalıştırılır | exit code |
-| 6 | Sessiz borç | Dilimde eklenen `TODO`/`skip`/`@ts-expect-error` taranır | grep çıktısı |
-| 8 | Doküman tazeliği | Test sayısı + sayaç + "sıradaki adım" gerçekle uyuşuyor mu | Güncellenmiş satırlar |
+| #   | §F.1 maddesi      | Mini sürümde ne yapılır                                       | Kanıt                 |
+| --- | ----------------- | ------------------------------------------------------------- | --------------------- |
+| 1   | Kapsam süpürmesi  | Yalnız **o dilimin** `FR-MOD` satırları koda karşı denetlenir | Route/dosya listesi   |
+| 2   | Faz sızıntısı     | Dilimde başka fazdan iş var mı                                | Evet/Hayır + §D kaydı |
+| 3   | NFR kapıları      | Dilimin dokunduğu NFR'ler ölçülür (tahmin değil)              | Ölçüm çıktısı         |
+| 5   | Kontrat bütünlüğü | `contract-parity` testi çalıştırılır                          | exit code             |
+| 6   | Sessiz borç       | Dilimde eklenen `TODO`/`skip`/`@ts-expect-error` taranır      | grep çıktısı          |
+| 8   | Doküman tazeliği  | Test sayısı + sayaç + "sıradaki adım" gerçekle uyuşuyor mu    | Güncellenmiş satırlar |
 
 **Tam sürüm (10 maddenin hepsi)** yalnız **faz kapanışında** ve projenin en sonunda çalışır.
 

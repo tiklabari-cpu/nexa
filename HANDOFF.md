@@ -13,6 +13,72 @@
 
 ## Task log (newest-first)
 
+## GRAF-ONARIM — döngü durması **teşhis edildi**: graf sağlam, backlog **tükenmişti**; iki doğrulanmış bulgu görev oldu (tm 117 · tm 118) — 2026-08-11 UTC
+
+- **Panel bulgusu:** `run-loop.sh` seçilebilir görev bulamıyor ("Hazır task kalmadı") → otonom döngü
+  duruyor. 6 açık görev var, **0 seçilebilir** (seçilebilir = `pending` **ve** bağımlılıkları kapalı).
+- **TEŞHİS — dört olasılıktan hangisi olduğu kanıtlandı: (a).** Sebep **statüler**, graf değil.
+  · **(a) hepsi `deferred`** ✅ DOĞRU — 118 görevin **110'u `done`, 6'sı `deferred`, 0'ı `pending`**
+    (`tasks.json` sayımı). Altısı da Faz-3: tm 79 · 81 · 82 · 83 · 84 · 90.
+  · **(b) bağımlılık döngüsü** ❌ YOK — `validate_dependencies` → "Dependencies validated successfully".
+  · **(c) var olmayan id'ye bağımlılık** ❌ YOK — tüm `dependencies` girdileri mevcut id'lere çözülüyor
+    (tam tarama; tek bağımlılık taşıyan görev tm 79 → **tm 35**, o da **`done`**).
+  · **(d) aktarılmamış bağımlılık** ❌ YOK — id uzayı `1…118` boşluksuz, `metadata.taskCount` = dosya sayımı.
+  Yani tm 79 **bağımlılığı çözülmüş** halde bekliyor; onu tutan tek şey kendi `deferred` statüsü.
+- **ENGEL HÂLÂ GEÇERLİ Mİ? → EVET, altısı için de. STATÜ ÇEVİRMEDİM.** Gerekçe kayıtlı ve taze:
+  **§D64** (2026-08-01 kullanıcı kararı) Faz-3'ü bilerek erteledi; **§D89**/tm 114 bunu yeniden onayladı
+  ve kapanış turunun **§F.1/2 faz-sızıntısı** taraması altısının da kodda karşılığı olmadığını doğruladı
+  (`saml`/`scim`/`hipaa`/`soc2`/`iso27001`/`white-label` → 0 dosya). Bu altısını `pending`'e çekmek
+  **Faz 3'ü başlatmak** demektir ve §F.3'e göre **kullanıcı kararıdır**. Önceki iki GRAF-ONARIM penceresi
+  (`15f9ce7`, `a8e2fe1`) de aynı sonuca varıp mutasyon yapmamıştı — **üçüncü kez aynısını yapmak** döngüyü
+  yine durdururdu, bu yüzden bu tur **eksik olan yeri** onardı: backlog'un kendisi.
+- **GRAF MUTASYONU: yok.** Onarılacak kenar yoktu — hiçbir bağımlılık eklenmedi/silinmedi, hiçbir statü
+  değişmedi. §G'den **toplu aktarım da yapılmadı**: §G'nin dilim tablosu Faz-0 + v1'i listeler ve ikisi de
+  teslim; v2'nin 196 alt-görevi aktarılıp kapandı; §G'de kalan tek dilimsiz gövde **Faz-3'ün ~28–37
+  kalemlik orta-derinlik kırılımı (§6.1)** — onu aktarmak §D64'ü delmek olurdu.
+- **ASIL BULGU — backlog tükenmişti, graf bozuk değildi.** Faz 0 · v1 · v2 **üçü de kapalı**; planlanan
+  kapsamda `pending` iş kalmamıştı. Döngünün durması bu yüzden bir **arıza değil, plan sonu**. Ama
+  "plan sonu" ≠ "iş sonu": iki pencere borcu ismen taşımış ve görev açmamıştı → bu turda **koda karşı
+  yeniden ölçüldü** ve görev oldu (ölçüm aşağıda, hafızadan değil):
+  1. **tm 117 · NFR-I18N2 — panel tema sağlayıcısı yok.** `apps/web/index.html:2` `data-theme="dark"`'ı
+     **sabit** yazıyor; `apps/web/src`'te bu özniteliği okuyan/yazan **hiçbir çalışma-zamanı kodu yok**
+     (tek eşleşme `styles/tokens.test.ts`, o da CSS'i metin olarak parse ediyor). Oysa `tokens.css`
+     üç yolu da destekliyor: `:root` (satır 9) **tam açık tema**, `[data-theme='dark']` (84),
+     `@media (prefers-color-scheme: dark) → :root:not([data-theme='light'])` (125-126). Sonuç: açık
+     temaya **hiçbir kullanıcı ulaşamıyor** ve tm 115'in 40 kontrast testinin açık-tema yarısı ölü
+     yüzeyi koruyor. PRD kimliği **NFR-I18N2** (`PRD:804` — "**tema**+i18n provider"): i18n yarısı
+     teslim (tm 26 · KI18N1-2), tema yarısı yok — yani §7.2'nin `✅ → KI18N1-2` damgası gereksinimin
+     yarısını fazla iddia ediyor (§F.1/8 bayat-damga deseni).
+  2. **tm 118 · FORMAT-BORC — `format:check` 346 dosyada kırmızı.** Bu turda ölçüldü:
+     `189 ts · 67 md · 59 tsx · 14 yml · 10 json · 7 yaml`. HANDOFF tm 115 notu (2) ve tm 116 notu (3)
+     iki turdur "ayrı task'lık" diyor, görev hiç açılmamıştı. DoD kapısında **değil** (CONVENTIONS §1'de
+     `format:check` yok) → hiçbir turu kırmadı, sessiz borç olarak birikti. Görevin asıl işi `--write`
+     koşmak değil **karar**: 67 `.md`'nin içinde `PLAN.md`/`HANDOFF.md`/`CONVENTIONS.md` var ve prettier
+     tabloları yeniden hizalar — ya `.prettierignore` (referans belgeler için **zaten var olan emsal**)
+     ya da ayrı commit; ikisi de details'te yazılı.
+- **ÖNCELİK — ikisi de `critical`, `dependencies: []`** (panelin "düzeltmeye gönder" akışından doğdukları
+  için; normal backlog aktarımı olsaydı K7 `high/medium/low` olurdu). Bu damga işin **nereden geldiğinin
+  izidir**, kapanışta değiştirilmeyecek.
+- **Doğrulama:** `validate_dependencies` ekleme **sonrası** yeniden koşuldu → temiz. `next_task` artık
+  **tm 117** döndürüyor (önce "no eligible tasks"). `git diff --stat` = **1 dosya, +27/−3** — yalnız iki
+  görev nesnesi ve `metadata` (`taskCount` 116→**118**).
+- **KOD YAZILMADI** (pencere sınırı). **DOKUNULMADI:** ürün kodu · testler · PLAN.md damgaları ·
+  Faz-3 statüleri · tm 1-26 (K1) · mevcut bağımlılık kenarları. **Kapı:** `tasks.json`-only değişiklik →
+  build kapıları koşulmadı (§D80/§D81/§D82/§D87'nin doküman-only emsali); doğrulama
+  `validate_dependencies` + `next_task` + diff denetimi.
+
+**SONRAKİ PENCEREYE:**
+1. **Döngü `tm 117` (NFR-I18N2 tema sağlayıcısı) ile devam eder**, ardından `tm 118` (format borcu).
+   İkisi de bağımsız — sıra id'den geliyor, aralarında kenar yok.
+2. **tm 118'den sonra backlog yine boşalır.** O nokta gerçek bir yol ayrımıdır ve **kullanıcı kararı
+   ister** (§F.3): ya **Faz 3 açılır** (tm 79/81/82/83/84/90 `deferred`→`pending` + §6.1'in ~28–37
+   kaleminin atomik kırılımı §G'ye ve Task Master'a — normal K7 önceliğiyle, `critical` DEĞİL), ya da
+   proje planlanan kapsamda **kapalı** ilan edilir. Bunu kendi başına çevirme — §F.1/2'nin yasakladığı
+   faz sızıntısıdır.
+3. Sonraki graf penceresi için kısayol: teşhis dizisi `tasks.json` statü sayımı → `validate_dependencies`
+   → id-uzayı boşluk taraması → bağımlılık hedeflerinin statüsü. Dördü de temizse sorun **graf değil
+   backlog**tur ve cevap yeni iş açmaktır, statü çevirmek değil.
+
 ## KANIT-AD (tm 116) — `16-notifications-settings.png` artık **bildirim ayarlarını** çekiyor — done — 2026-08-11 UTC
 
 - **Yapıldı:** Kök neden `fullPage: true`'ydu, testin akışı değil: `html,body,#root{height:100%}`

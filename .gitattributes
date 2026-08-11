@@ -1,0 +1,19 @@
+# Line endings — added by tm 118, and it is half of that task's fix.
+#
+# Prettier's `endOfLine` default is `lf`, so `format:check` calls any CRLF file
+# unformatted. This repo is developed on Windows with `core.autocrlf=true`, which
+# materialises CRLF at checkout. Result measured 2026-08-11: of the 354 files the
+# gate reported, 40 had no formatting problem at all — their whole difference was
+# the CR that checkout had inserted. Running `prettier --write` on those produces
+# an EMPTY git diff (the blob was already LF) and the gate goes red again after the
+# next clone or branch switch. So the debt would have come straight back.
+#
+# `eol=lf` makes checkout write LF, which is what prettier and the stored blobs
+# already agree on. Verified before committing: no blob in HEAD contains a CR
+# (`git grep -I -l -P '\r' HEAD` -> 0 files), so this normalises nothing and
+# produces no churn — it only stops the working tree from drifting away from the
+# repo. `text=auto` leaves binaries (the e2e evidence PNGs) alone.
+#
+# The repo has no `.bat`/`.cmd`/`.ps1` files, which are the usual reason to carve
+# out a CRLF exception. If one is ever added, give it `text eol=crlf` here.
+* text=auto eol=lf

@@ -14,3 +14,35 @@ rapor-2-teknik-mimari.md
 prd-yeterlilik-degerlendirmesi.md
 MASTER-PROMPT.md
 v2-derin-analiz/
+
+# --- tm 118: what the format gate deliberately does NOT cover, and why ---
+# Everything below is a file that a tool regenerates or a window rewrites by hand
+# on every turn. Formatting them once does not hold: the next `task-master generate`,
+# the next MCP browser capture, or the next closing note puts them back out of style
+# and `format:check` goes red again on a repo nobody broke. A gate that re-breaks by
+# construction is noise, which is the exact debt tm 118 was opened to remove.
+
+# The two state files every window edits by hand (TASK-RUNNER-PROMPT §3).
+# PLAN.md additionally loses a measured invariant to prettier: it realigns markdown
+# tables by padding every cell to the widest row, which grows the requirement rows
+# CONVENTIONS §1.2 exists to keep short. Measured 2026-08-11: total table-row bytes
+# 123.668 -> 213.866 (+73%), the `M-FMT` row alone 158 -> 394 chars, and rows over
+# the 526-char post-migration cap 3 -> 8. The §1.2 rule and prettier disagree; §1.2
+# is load-bearing for `grep` and wins.
+PLAN.md
+HANDOFF.md
+
+# Task Master owns this tree and rewrites it: `tasks.json` (the task DB), `state.json`,
+# `config.json`, and the 10 generated `.md` mirrors under `tasks/`. `BUILD-BLUEPRINT.md`
+# and `CLAUDE.md` are project-authored but live in the tool's directory and are read,
+# never diffed for style.
+.taskmaster/
+
+# 46 vendored Task Master slash-command definitions, installed by the tool and replaced
+# wholesale on reinstall. The two project-authored commands next to them
+# (`.claude/commands/is.md`, `.claude/commands/dilim-kapat.md`) are NOT ignored.
+.claude/commands/tm/
+
+# 14 Playwright-MCP page snapshots (accessibility-tree dumps captured during earlier
+# windows). Artefacts of a run, same class as `test-results/` above.
+.playwright-mcp/

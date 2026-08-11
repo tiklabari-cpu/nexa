@@ -29,6 +29,8 @@
   kalıyor. Sıradaki `09.2-v2-b` (saf filtre/sayfalama fonksiyonları) ve `-c` (route bağlama, -a/-b'ye
   bağımlı). Faz-2 özet sayaçları (satır 22 + 1100) çevirim sırasında BİRBİRİYLE UYUMSUZ bulundu
   (§D86'nın dördüncü tekrarı) — ikisi de bu turda tabloya karşı yeniden sayılıp eşitlendi.
+  `apps/e2e/kanit/*.png` bu turun `pnpm -w test:e2e` koşusundan yeniden üretildi, başka task'lara
+  ait, commit'e alınmadı — kirli bırakıldı (tm 113 emsali, kapsam disiplini).
 
 ## tm 113 — `reports-billing.test.ts` saat kayması flake'ini kapat — done — 2026-08-11 UTC
 

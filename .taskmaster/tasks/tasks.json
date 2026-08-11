@@ -4927,13 +4927,13 @@
             "description": "(1) Saf yardımcı `chunkIntoRows(items, columns)` — kartları satırlara böler; sütun sayısı responsive ölçümden (ResizeObserver / kırılım noktası) türetilir, tek doğruluk kaynağı bu fonksiyondur. (2) `VirtualList` sarmalayıcısı — sabit kart yüksekliği `rowHeight`, `role=\"list\"`/`role=\"listitem\"` a11y sözleşmesi korunur (VirtualList satır 157-160 yorumu). (3) Sayfa zinciri: `next_page_id` ile gelen s",
             "details": "09.2-v2-g — Virtualized kart grid'i + sayfa zinciri (NFR-P4 \"yalnız görünür satır DOM'da\")  [OPUS-XHIGH]\n\nPRD: FR-EK-B.1 + NFR-P4 (FR-MOD-09.2 ölçeklenme kanıtı)\nETİKET GEREKÇESİ: OPUS-XHIGH: SONNET koşul 4 İHLAL — depoda çok-sütunlu GRID virtualization deseni YOK. `apps/web/src/components/VirtualList.tsx` (satır 138-196) tek-sütun düz satır primitifi (sabit `rowHeight`, `renderRow` başına bir satır); Contacts/Teammates/Skills/Tickets/Traffic/Team kullanımlarının hepsi tek sütunlu liste/tablo. Kartları satırlara bölme (kaç sütun, responsive ölçüm) ve mevcut `grid-cols-[repeat(auto-fill,minmax(260px,1fr))]` düzenini bozmadan sarma bir UI KOMPOZİSYON KARARI. Güvenlik sınırı yok → OPUS-MAX gerekmez.\nNEDEN AÇIK: `apps/web/src/features/apps/AppsMarketplace.tsx` satır 55-59: düz CSS grid içinde `(apps.data?.items ?? []).map(...)` ile HER kart doğrudan DOM'a basılıyor; dosyada `VirtualList` importu YOK (grep 0). PRD satır 728 (FR-EK-B.1) \"Apps\"i virtualized-grid gerektiren listeler arasında ismen sayıyor; NFR-P4 (satır 745) \"10.000+ satırda 60 fps; yalnız görünür satır DOM'da\" diyor. 20 kartta bu ihlal ölçülemezdi; 100+ kartta somutlaşıyor.\nKAPSAM: (1) Saf yardımcı `chunkIntoRows(items, columns)` — kartları satırlara böler; sütun sayısı responsive ölçümden (ResizeObserver / kırılım noktası) türetilir, tek doğruluk kaynağı bu fonksiyondur. (2) `VirtualList` sarmalayıcısı — sabit kart yüksekliği `rowHeight`, `role=\"list\"`/`role=\"listitem\"` a11y sözleşmesi korunur (VirtualList satır 157-160 yorumu). (3) Sayfa zinciri: `next_page_id` ile gelen sayfalar biriktirilir; sonsuz kaydırma + görünür \"Daha fazla yükle\" düğmesi (varsayım 8, NFR-A11Y6). KRİTİK KISIT: `data-testid=\"app-${id}\"` seçicileri korunur — ancak artık yalnız görünür penceredeki kartlar DOM'dadır, bu yüzden mevcut testler ve (varsa) e2e seçicileri ilk pencerede kalan kartlara göre ayarlanır (sessiz kırılma riski).\nDOSYALAR: apps/web/src/features/apps/AppsMarketplace.tsx · apps/web/src/features/apps/app-grid.ts · apps/web/src/features/apps/app-grid.test.ts · apps/web/src/features/apps/AppsMarketplace.test.tsx\nREFERANS DESEN (kopyalanacak): apps/web/src/components/VirtualList.tsx · apps/web/src/components/VirtualList.test.tsx · apps/web/src/features/customers/CustomersPage.tsx\nKK (birebir): \"NFR-P4 | Liste render (virtualization) | 10.000+ satırda 60 fps; yalnız görünür satır DOM'da\" | \"virtualized grids (Contacts/Teammates/Skills/Tickets/Knowledge/Apps/Campaigns), infinite scroll, skeleton, anlamlı empty state | ... 10.000+ satırda 60fps\"\nKK DOĞRULAMA: `AppsMarketplace.test.tsx`: 100+ kartlık yanıtla render edildiğinde DOM'daki `role=\"listitem\"` sayısı toplam kart sayısından belirgin biçimde KÜÇÜK (yalnız görünür pencere + overscan) — NFR-P4'ün \"yalnız görünür satır DOM'da\" maddesinin birebir kanıtı. `app-grid.test.ts`: `chunkIntoRows` sütun sayısına göre doğru satırları üretir, son satır eksik olabilir, boş liste boş satır üretmez. Sayfa zinciri: `next_page_id` varken \"Daha fazla yükle\" düğmesi görünür ve ikinci sayfayı listeye ekler; yokken düğme yoktur.\nKAPSAM DIŞI: `VirtualList.tsx` primitifinin kendisini değiştirmek (mevcut hâliyle kullanılır — Contacts/Teammates/Tickets ona bağlı, regresyon riski) · arama/kategori filtresi (09.2-v2-f) · e2e spec ve performans ölçüm notu (09.2-v2-h) · kart görsel tasarımı\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: yalnız görünür satır DOM'da (100+ kart → DOM'daki listitem sayısı << toplam) — NFR-P4 kanıtı · unit: `chunkIntoRows` saf testleri (tam satır, eksik son satır, boş liste, sütun=1 sınırı) · unit: sayfa zinciri (next_page_id → ikinci sayfa eklenir; son sayfada düğme yok) · unit a11y: `role=\"list\"`/`role=\"listitem\"` sözleşmesi ve klavyeyle erişilebilir \"Daha fazla yükle\" düğmesi (NFR-A11Y6) · unit regresyon: mevcut kart/consent/disconnect/kanal-link testleri virtualization altında (ilk pencerede kalan kartlarla) yeşil",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "99.6",
               "99.5"
             ],
             "parentId": "99",
-            "updatedAt": "2026-08-11T03:59:10.571Z"
+            "updatedAt": "2026-08-11T04:32:15.558Z"
           },
           {
             "id": 8,
@@ -4951,7 +4951,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-11T03:59:10.571Z",
+        "updatedAt": "2026-08-11T04:32:15.558Z",
         "complexity": 5,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.2 — 100+ entegrasyon (marketplace katalog genişlemesi)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5134,7 +5134,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-11T03:59:10.572Z",
+      "lastModified": "2026-08-11T04:32:15.559Z",
       "taskCount": 113,
       "completedCount": 106,
       "tags": [

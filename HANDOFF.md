@@ -13,6 +13,80 @@
 
 ## Task log (newest-first)
 
+## GRAF-ONARIM — döngü DÖRDÜNCÜ kez durdu: graf yine sağlam, backlog yine tükenmişti; iki ÖLÇÜLMÜŞ bulgu görev oldu (tm 120 · tm 121) — 2026-08-11 UTC
+
+- **Panel bulgusu:** `run-loop.sh` seçilebilir görev bulamıyor → otonom döngü duracak. 6 açık görev,
+  **0 seçilebilir** (seçilebilir = `pending` **ve** bağımlılıkları kapalı).
+- **TEŞHİS — dört olasılık tek tek elendi, sebep (a): STATÜLER, graf değil.** (bu turda yeniden
+  ölçüldü — önceki pencerenin notuna güvenilmedi)
+  · **(a) hepsi `deferred`** ✅ DOĞRU — 119 görevin **113'ü `done`, 6'sı `deferred`, 0'ı `pending`**.
+    Altısı da Faz-3: tm 79 · 81 · 82 · 83 · 84 · 90.
+  · **(b) bağımlılık döngüsü** ❌ YOK — `validate_dependencies` → "validated successfully".
+  · **(c) var olmayan id'ye bağımlılık** ❌ YOK — 60 kenarın hepsi mevcut id'ye çözülüyor.
+  · **(d) aktarılmamış bağımlılık** ❌ YOK — id uzayı `1…119` **boşluksuz**.
+  Tek bağımlılık taşıyan açık görev tm 79 → **tm 35**, o da **`done`**. Yani tm 79 bağımlılığı
+  ÇÖZÜLMÜŞ halde bekliyor; onu tutan tek şey kendi `deferred` statüsü.
+- **ENGEL HÂLÂ GEÇERLİ Mİ? → EVET, altısı için de. STATÜ ÇEVİRMEDİM.** §D64 (2026-08-01 kullanıcı
+  kararı) Faz-3'ü ismen erteliyor; §D89/tm 114 kapanış turu altısının kodda karşılığı olmadığını
+  doğruladı. Bunları `pending`'e çekmek **Faz 3'ü başlatmak**tır ve §F.3'e göre **kullanıcı
+  kararıdır** — §F.1/2'nin yasakladığı faz sızıntısı olurdu.
+- **GRAF MUTASYONU: yok.** Onarılacak kenar yoktu; hiçbir bağımlılık eklenmedi/silinmedi, hiçbir
+  statü değişmedi. **§G'den toplu aktarım da yapılmadı:** §G'nin dilim tablosu Faz-0 + v1'i listeler
+  (ikisi de teslim), v2'nin 196 alt-görevi aktarılıp kapandı; §G'de kalan tek dilimsiz gövde
+  **Faz-3'ün ~28–37 kalemlik orta-derinlik kırılımı (§6.1)** — onu aktarmak §D64'ü delerdi.
+- **ASIL İŞ — backlog yine tükenmişti; iki bulgu KODA KARŞI ölçülüp görev oldu:**
+  1. **tm 120 · A11Y1–6 — "Internal note" koyu temada 1.47:1.** `Composer.tsx:294` seçili modda
+     `bg-note text-white`; `tailwind.config:46` `note: var(--note)`, `tokens.css:127` koyu tema
+     `--note: #ffce73` → beyaz üstünde **1.47:1** (AA 4.5:1). Ölü durum DEĞİL: `Composer.tsx:272-273`
+     iki sekme sunuyor, ajan iç not yazmak için bastığı anda kusur ekranda. **axe neden kaçırıyor:**
+     `a11y.spec.ts`te "Internal note" **0** eşleşme — hiçbir tarama o modu açmıyor, varsayılan
+     `mode='all'` iken ihlalli çift render bile edilmiyor. Bu yüzden tm 115'in ve tm 117'nin 16
+     taraması temiz döndü. HANDOFF tm 117 notu (2) kusuru ismen bırakmıştı, görev açılmamıştı.
+  2. **tm 121 · 09.2 · 13.3 · 13.5 — bayat kanıt cümleleri (14 madde).** `## K.` bölümünün **63
+     bloğu** tarandı. Panelin "satır kendi kendisiyle çelişiyor" sınıfı bugün ÜÇ pencere yaktı
+     (§D91 · §D92 · §D93); kalan yük ölçüldü: `**Satır \`◐\` kalıyor**` saf şimdiki zaman →
+     **13 madde** (`K09.2-b` 6 · `K13.5` 7), §D93 artığı (fiil geçmiş, nesne şimdiki) → **1 madde**
+     (`K13.3`). Üçünün de tablo damgası `✅`. **Yanlış pozitifler elendi** ve göreve yazıldı:
+     `K02.1.4` "bağlı değilse" · `K07.6` "bir arada kalıyor" · `K07.7-b` "sekme duruyor" ·
+     `KA11Y` "ya**kalıyor**" — hiçbiri açık iş cümlesi değil; `K07.6`/`K5.3-KB` zaten doğru onarılmış
+     (emsal biçim onlar).
+- **ÖNCELİK — ikisi de `critical`, `dependencies: []`** (panelin "düzeltmeye gönder" akışından
+  doğdular — CONVENTIONS §4.1). Damga işin nereden geldiğinin izidir, kapanışta değiştirilmeyecek.
+- **`add_task`'ın İKİ SESSİZ YAN ETKİSİ — ikisi de yakalandı ve geri alındı (sonraki pencere bilsin):**
+  (1) MCP `add_task` `priority: "critical"`'i sessizce **`"medium"`e düşürdü** → `tasks.json`'da elle
+  `critical`e çekildi (tm 117/118'de de değer dosyada `critical` olarak duruyor, yani şema kabul
+  ediyor — kısıtlama aracın giriş doğrulamasında). (2) `add_task` **121 görevin id'sini `"1"` →
+  `1`e** (string→number) çevirdi, `dependencies` string kaldı — karışık tip. tm 1-26 K1 ile
+  korunuyor, bu yüzden **hepsi string'e geri alındı**; sonuç diff **+28/−3**, yalnız iki yeni görev
+  nesnesi + `metadata`. `pick_next` LLM-tabanlı olduğu için tip kırılma yaratmazdı, ama istenmemiş
+  bir toplu mutasyondu.
+- **Doğrulama:** `validate_dependencies` **ekleme sonrası ve id onarımı sonrası iki kez** koşuldu →
+  temiz. `metadata.taskCount` 119 → **121** (add_task güncellememişti), `completedCount` 113 doğrulandı.
+  Seçilebilir küme: **tm 120 (critical) · tm 121 (critical)**. id uzayı `1…121` boşluksuz.
+  `git diff --stat` = **1 dosya, +28/−3** (`tasks.json`).
+- **KOD YAZILMADI** (pencere sınırı). **DOKUNULMADI:** ürün kodu · testler · PLAN.md (damgalar ve
+  kanıt blokları dahil — tm 121 onları kendi turunda düzeltecek) · Faz-3 statüleri · tm 1-26 (K1) ·
+  mevcut bağımlılık kenarları. **Kapı:** `tasks.json`-only değişiklik → build kapıları koşulmadı
+  (§D80/§D81/§D82/§D87 doküman-only emsali); doğrulama `validate_dependencies` + statü/tip sayımı +
+  diff denetimi.
+
+**SONRAKİ PENCEREYE:**
+1. **Döngü `tm 120` (A11Y kontrast) ile devam eder**, ardından `tm 121` (kanıt süpürmesi). İkisi de
+   bağımsız — aralarında kenar yok, ikisi de `critical` olduğu için `pick_next`'in 2. kuralıyla
+   normal backlog'un önünde.
+2. **tm 121'den sonra backlog YİNE boşalır ve bu DÖRDÜNCÜ kez olacak.** O nokta gerçek yol
+   ayrımıdır ve **kullanıcı kararı ister** (§F.3): ya **Faz 3 açılır** (tm 79/81/82/83/84/90
+   `deferred`→`pending` + §6.1'in ~28–37 kaleminin atomik kırılımı §G'ye ve Task Master'a —
+   **normal K7 önceliğiyle, `critical` DEĞİL**), ya da proje planlanan kapsamda **kapalı** ilan
+   edilir. Kendi başına çevirme.
+3. **Karara bağlanmamış, ismen taşınan borç (sessizce düşmesin):** tm 118 notu (1) — `format:check`
+   artık gerçekten yeşil, yani CONVENTIONS §1 DoD kapısına eklenebilir; ama bu **kapı sözleşmesini
+   değiştirir**, tm 118 bilerek kullanıcıya bıraktı. Bu turda da görev AÇILMADI, aynı gerekçeyle.
+4. **Graf teşhis kısayolu (üçüncü kez işe yaradı):** `tasks.json` statü sayımı →
+   `validate_dependencies` → id-uzayı boşluk taraması → bağımlılık hedeflerinin statüsü. Dördü de
+   temizse sorun **graf değil backlog**tur; cevap **yeni iş açmak**, statü çevirmek değil.
+   Ek olarak: `add_task`tan sonra **priority ve id tiplerini mutlaka doğrula** (yukarıdaki iki yan etki).
+
 ## tm 118 — M-FMT FORMAT-BORC: `format:check` yeşil — ama borç "346 dosya" değil, İKİ ayrı kusurmuş — done — 2026-08-11 UTC
 
 - **Teşhis (asıl iş burada):** `--list-different` **354** dosya döndü. Hepsi prettier API'siyle tek tek sınıflandırıldı: **314 gerçek biçim farkı + 40 YALNIZCA satır sonu**. O 40'ın biçimi zaten doğruydu; Windows `core.autocrlf=true` checkout'ta CRLF yazıyor, prettier'ın `endOfLine` varsayılanı `lf`. `--write` onlarda **boş git diff** üretir ve kapı sonraki checkout'ta yeniden kırmızıya döner — yani tek başına `pnpm format` bu görevi kapatmazdı, borcu ertelerdi.

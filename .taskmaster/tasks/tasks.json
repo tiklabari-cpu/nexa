@@ -4890,10 +4890,10 @@
             "description": "`APP_CATALOG`'a 40 yeni VERİ app'i eklenir (kanal-tipli kart eklenmez — varsayım 3). Mevcut 8 kategoriye dağıtılır; hem `oauth` hem `api_key` sağlayıcı türü temsil edilir (KK payı). Her yeni kart mevcut invariant'ları sağlar: tekil `id`, boş olmayan `name`, `scopes.length > 0`, `dataLabel` + en az 1 `dataField` (her `dataField.options.length > 0`) — apps.test.ts satır 16-35 testi bunları zaten zor",
             "details": "09.2-v2-d — Katalog verisi 20 → 60 kart (mock, mevcut 8 kategori) + üst-sınır iddialarının kaldırılması  [SONNET-MAX]\n\nPRD: FR-MOD-09.2 (PRD §5.5 MOD-09 v2 hücresi: \"○ (100+)\")\nETİKET GEREKÇESİ: SONNET-MAX: koşul 2 ve 3 sağlanıyor (güvenlik sınırı yok — salt statik veri; eşzamanlılık yok) AMA iş mekanik olarak GİRİFT: 40 yeni katalog girdisi × (id/name/category/provider/icon/description/scopes/dataLabel/en az 1 dataField × options) = çok sayıda benzer dönüşüm, yani matrisin \"büyük katalog/veri dönüşümü\" tanımı. SONNET yapabilir ama daha fazla düşünme bütçesi ister (id tekilliği + invariant testlerini elle korumak gerekiyor).\nNEDEN AÇIK: `grep -n 'id:' packages/types/src/apps.ts` = TAM 20 katalog girdisi (satır 93-350: 15 veri app'i + 5 kanal-tipli kart). `packages/types/src/apps.test.ts` satır 40 `expect(APP_CATALOG.length).toBeLessThanOrEqual(20)` ve `apps/api/test/integration/apps.test.ts` satır 196 aynı üst sınırı iddia ediyor — katalog büyürken bu İKİ satır aynı pencerede güncellenmezse DoD kapısı KIRILIR.\nKAPSAM: `APP_CATALOG`'a 40 yeni VERİ app'i eklenir (kanal-tipli kart eklenmez — varsayım 3). Mevcut 8 kategoriye dağıtılır; hem `oauth` hem `api_key` sağlayıcı türü temsil edilir (KK payı). Her yeni kart mevcut invariant'ları sağlar: tekil `id`, boş olmayan `name`, `scopes.length > 0`, `dataLabel` + en az 1 `dataField` (her `dataField.options.length > 0`) — apps.test.ts satır 16-35 testi bunları zaten zorluyor. Testlerde eşik `>= 60`'a çekilir, ÜST SINIR KALDIRILIR (hem types hem integration). Mevcut 20 kartın id/name/category alanları DEĞİŞMEZ (mevcut testler ve `data-testid=\"app-${id}\"` seçicileri buna bağlı).\nDOSYALAR: packages/types/src/apps.ts · packages/types/src/apps.test.ts · apps/api/test/integration/apps.test.ts\nREFERANS DESEN (kopyalanacak): packages/types/src/apps.ts · packages/types/src/apps.test.ts\nKK (birebir): \"Her biri OAuth/API key\" | \"kanal-tipli olanlar Channels'ta da yönetilir\"\nKK DOĞRULAMA: `packages/types/src/apps.test.ts`: `APP_CATALOG.length >= 60`; id tekilliği (satır 18 `new Set(ids).size === ids.length`) 60 kartta da geçer; her veri app'inin `dataFields` dolu (satır 31); iki sağlayıcı türü de mevcut (satır 41-43); kanal/veri partisyonu toplamı = katalog (satır 53). `apps/api/test/integration/apps.test.ts` liste sayısı iddiası güncel ve yeşil.\nKAPSAM DIŞI: 60 → 100+ genişletme (09.2-v2-e) · kategori enum'unun genişletilmesi (varsayım 1: 8'de sabit) · yeni kanal-tipli kart / CHANNEL_TYPES enum'una dokunma (varsayım 3) · arama/sayfalama mantığı (09.2-v2-b / -c)\nSÖZLEŞME: yok — kategori enum'u değişmediği için OpenAPI'ye dokunulmaz (varsayım 1). Kategori enum'u genişletilirse `openapi.yaml` satır 1345 enum + `CATEGORY_LABEL` + testler ×N senkron güncellenmek zorundadır.\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: katalog eşiği (>= 60) + id tekilliği + kart bütünlüğü invariant'ı (mevcut satır 16-35 testi genişletilmiş katalogda) · unit: her iki sağlayıcı türünün varlığı (KK \"Her biri OAuth/API key\" payı) · unit NEGATİF: aynı id'nin iki kez geçmemesi (kopyala-yapıştır riski — `findApp` duplicate kontrolü yapmıyor, ilk eşleşeni döner) · integration regresyon: mevcut 8 apps testi yeşil (özellikle `whatsapp` ve `hubspot` id'lerine bağlı olanlar)",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "99",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-11T03:03:58.220Z"
           },
           {
             "id": 5,
@@ -4951,7 +4951,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-11T02:26:24.847Z",
+        "updatedAt": "2026-08-11T03:03:58.220Z",
         "complexity": 5,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.2 — 100+ entegrasyon (marketplace katalog genişlemesi)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5134,7 +5134,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-11T02:26:24.848Z",
+      "lastModified": "2026-08-11T03:03:58.220Z",
       "taskCount": 113,
       "completedCount": 106,
       "tags": [

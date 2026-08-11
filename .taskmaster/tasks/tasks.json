@@ -5197,18 +5197,18 @@
         "description": "Panelin sağlık taraması 4 Task Master görevinin PLAN.md tam metninde hiçbir karşılığını bulamadı (tm 107 · 108 · 115 · 118). PLAN §1.1 \"PRD kimliği olmayan iş yapılmaz\" der; izlenemeyen görev ne faz kapanışında sayılır ne kapsam denetiminden geçer. Bu görev dördünü tek tek PRD/PLAN'a karşı denetler ve kararını kaydeder. KOD YAZILMAZ.",
         "details": "BULGU KAYNAĞI: panel sağlık taraması (izlenemeyen görev). Yalnız izlenebilirlik denetimi — ürün kodu değişmez.\n\nKARARLAR (her biri ayrı gerekçelendirildi, \"hepsi geçerli\" denmedi):\n- **tm 107 → BULUNDU** — kalem `07.9-sched-f` (üst kalem `07.9`, PLAN §5.0, `✅ → K07.9`); PRD §5.3 v2 kapsamı\n  (\"zamanlanmış export\"), FR-MOD tablosunda bilinçli olarak satırı yok (KK-türetilmiş, K07.9 ilk cümlesi).\n  Kanıt zaten `#### K07.9` sonunda (\"tm 107 düzeltmesi\"). Başlığa kimlik eklendi; damga değişmedi.\n- **tm 108 → FR-MOD YOK, PLAN KAYDI VAR (§D82)** — ürün kodu değişmedi, yalnız test kurulumu pinlendi;\n  NFR karşılığı PRD §7.8 **NFR-M4** ve PLAN §7.2 `M4` kapısı (kapı objektifliği: `pnpm -w test` ilk kez exit 0).\n  Yeni gereksinim satırı AÇILMADI — §D82 bu kararı gerekçesiyle vermiş; ürün kodu değişmemişken damga çevirmek\n  CONVENTIONS §1.2'nin yasakladığı \"✅ uydurma\" olurdu. Başlığa `§D82 (NFR-M4)` eklendi.\n- **tm 115 → BULUNDU** — PRD §7.5 `NFR-A11Y1–6` (bulunan 62 ihlalin hepsi `color-contrast` = NFR-A11Y3);\n  PLAN §7.2 `A11Y1–6` satırı `✅ → KA11Y`, kanıt `#### KA11Y` bloğunda tm 115 etiketli. Başlığa PRD kodu eklendi.\n- **tm 118 → BULUNAMADI, GERÇEK SAPMA** — PRD ve PLAN tam metninde `prettier`/`format:check`/`kod stili` için\n  0 eşleşme. İş gerekli (üç pencere borcu adlandırdı, hiçbiri kapatmadı; hep-kırmızı script sinyal değil gürültü)\n  → PLAN §7.2'ye türetilmiş `M-FMT` gereksinim satırı `⬜` eklendi + sapma kaydı §D90. İptal EDİLMEDİ.\n\nDOKUNULAN: `.taskmaster/tasks/tasks.json` (4 başlık + 4 details + bu görev) · `PLAN.md` (§7.2 `M-FMT` satırı,\n§D90 sapma kaydı) · `HANDOFF.md`. Ürün kodu, damga, sayaç DEĞİŞMEDİ.",
         "testStrategy": "Kabul kriteri (izlenebilirlik denetimi — kod kapısı değil):\n1. Dört görevin başlığındaki kimlik PLAN.md tam metninde eşleşiyor:\n   `grep -c \"07.9-sched-f\" PLAN.md` > 0 · `grep -c \"D82\" PLAN.md` > 0 · `grep -c \"A11Y1–6\" PLAN.md` > 0 ·\n   `grep -c \"M-FMT\" PLAN.md` > 0.\n2. `node -e \"JSON.parse(require('fs').readFileSync('.taskmaster/tasks/tasks.json','utf8'))\"` hatasız.\n3. Yeni/değişen PLAN tablo satırı CONVENTIONS §1.2 biçiminde (hücrede yalnız damga + referans) ve\n   plan-row-length eşiğinin altında.\n4. `git diff --stat` yalnız `.taskmaster/tasks/tasks.json` · `PLAN.md` · `HANDOFF.md` gösterir — ürün kodu 0 dosya.\nNOT: ürün kodu değişmediği için `pnpm -w test` / `test:integration` / `test:e2e` yeniden koşulmadı; koşulanlar\nHANDOFF'ta adıyla yazılıdır.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "critical",
         "subtasks": [],
-        "updatedAt": "2026-08-11T12:30:00.000Z"
+        "updatedAt": "2026-08-11T12:45:00.000Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-11T12:30:00.000Z",
+      "lastModified": "2026-08-11T12:45:00.000Z",
       "taskCount": 119,
-      "completedCount": 110,
+      "completedCount": 111,
       "tags": [
         "master"
       ]

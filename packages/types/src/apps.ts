@@ -388,6 +388,72 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
   },
 ] as const;
 
+/** Narrowing controls for {@link filterAppCatalog} — both are optional. */
+export interface AppCatalogFilter {
+  /** Case-insensitive substring match against a card's `name` + `description`. */
+  query?: string;
+  category?: AppCategory;
+}
+
+/**
+ * Narrows the catalogue by free-text search and/or category (09.2-v2-b, the
+ * pure core behind `GET /settings/apps?query=&category=`). `query` is trimmed
+ * first, so whitespace-only input behaves like no query at all; when a
+ * `category` is also given the two narrow together (intersection, not union).
+ * Order is preserved — callers that need pagination to make sense rely on it.
+ */
+export function filterAppCatalog(
+  entries: readonly AppCatalogEntry[],
+  filter: AppCatalogFilter = {},
+): AppCatalogEntry[] {
+  const query = filter.query?.trim().toLowerCase() ?? '';
+  return entries.filter((entry) => {
+    if (filter.category !== undefined && entry.category !== filter.category) return false;
+    if (!query) return true;
+    return entry.name.toLowerCase().includes(query) || entry.description.toLowerCase().includes(query);
+  });
+}
+
+export interface AppPaginationOptions {
+  limit: number;
+  /** The `id` of the last card on the previous page, or absent for page one. */
+  pageId?: string;
+}
+
+export interface AppPage {
+  page: AppCatalogEntry[];
+  /** The match count across all pages of `entries` — not this page's length. */
+  total: number;
+  /** The cursor for the next page. Absent on the last page. */
+  nextPageId?: string;
+}
+
+/**
+ * One page of `entries`, in their existing (stable) order — the keyset cursor
+ * is only meaningful because that order never changes between calls. `pageId`,
+ * when given, is the `id` of the last card the caller already saw; the page
+ * resumes right after it. A `pageId` that names no entry in `entries` returns
+ * `null` rather than silently restarting at page one, so the caller (route
+ * layer, 09.2-v2-c) can turn an unknown cursor into a 400 instead of masking
+ * a bad request as an empty result.
+ */
+export function paginateApps(entries: readonly AppCatalogEntry[], options: AppPaginationOptions): AppPage | null {
+  const { limit, pageId } = options;
+  let start = 0;
+  if (pageId !== undefined) {
+    const cursorIndex = entries.findIndex((entry) => entry.id === pageId);
+    if (cursorIndex === -1) return null;
+    start = cursorIndex + 1;
+  }
+  const page = entries.slice(start, start + limit);
+  const hasNext = start + limit < entries.length;
+  return {
+    page,
+    total: entries.length,
+    ...(hasNext ? { nextPageId: page[page.length - 1]!.id } : {}),
+  };
+}
+
 /** The catalogue entry for an id, or undefined if it names no app. */
 export function findApp(id: string): AppCatalogEntry | undefined {
   return APP_CATALOG.find((entry) => entry.id === id);

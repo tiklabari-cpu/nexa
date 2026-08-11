@@ -4865,10 +4865,10 @@
             "description": "@nexa/types içine iki saf fonksiyon: (1) `filterAppCatalog(entries, {query?, category?})` — `query` trim edilir, kart `name` + `description` üzerinde büyük/küçük harf duyarsız `includes`; boş/verilmemiş `query` tüm listeyi geçirir; `category` verilmişse kesişim alınır. (2) `paginateApps(entries, {limit, pageId?})` → `{page, total, nextPageId?}` — cursor = sayfanın son kartının `id`'si (determinist",
             "details": "09.2-v2-b — Saf katalog filtre + sayfalama fonksiyonları (@nexa/types) + determinizm testleri  [SONNET-XHIGH]\n\nPRD: FR-MOD-09.2 (+ NFR-P2)\nETİKET GEREKÇESİ: SONNET-XHIGH: koşul 1-6 sağlandı. (1) 2 dosya (apps.ts + apps.test.ts). (2) Güvenlik sınırı yok — fonksiyonlar saf, tenant/DB/istek görmüyor, yalnız statik dizi üzerinde çalışıyor. (3) Eşzamanlılık yok. (4) Kopyalanacak desen ismen var: aynı dosyadaki mevcut `channelApps()`/`connectableApps()` yardımcıları (apps.ts satır 362+) ve `apps/web/src/features/playbook/skill-filter.ts` saf filtre deseni (`skillMatchesControls`/`applySkillControls`). (5) Kontrat değişikliği yok. (6) KK mekanik doğrulanabilir (cursor zinciri tüm katalogu tekrarsız gezer — sayılabilir iddia).\nNEDEN AÇIK: `packages/types/src/apps.ts` yalnız `findApp`/`isAppId`/`isChannelApp`/`channelApps`/`connectableApps`/`appChatData` taşıyor (satır 362 ve sonrası); arama, kategori filtresi veya sayfalama için hiçbir fonksiyon YOK — `APP_CATALOG` (satır 91) düz `readonly AppCatalogEntry[]`, indeks veya arama alanı içermiyor.\nKAPSAM: @nexa/types içine iki saf fonksiyon: (1) `filterAppCatalog(entries, {query?, category?})` — `query` trim edilir, kart `name` + `description` üzerinde büyük/küçük harf duyarsız `includes`; boş/verilmemiş `query` tüm listeyi geçirir; `category` verilmişse kesişim alınır. (2) `paginateApps(entries, {limit, pageId?})` → `{page, total, nextPageId?}` — cursor = sayfanın son kartının `id`'si (deterministik, tenant-bağımsız); bilinmeyen cursor `null` döner (400'e çevirmek route'un işi, 09.2-v2-c). Sıralama katalog dizisinin doğal sırası (stabil — cursor'ın anlamlı olması için şart). Hiçbir tenant/DB kavramı bu katmana girmez.\nDOSYALAR: packages/types/src/apps.ts · packages/types/src/apps.test.ts\nREFERANS DESEN (kopyalanacak): packages/types/src/apps.ts · apps/web/src/features/playbook/skill-filter.ts · apps/web/src/features/playbook/skill-filter.test.ts\nKK (birebir): \"KK-türetilmiş: \"Arama ve kategori filtresi kataloğu daraltır; sayfa zinciri kataloğun tamamını tekrarsız ve eksiksiz gezer.\" — TÜRETME GEREKÇESİ: FR-MOD-09.2 KK'sı yalnız \"Her biri OAuth/API key\" + kanal çapraz-linkini söylüyor; sayfalama/arama davranışı PRD'de FR-MOD-09.1 (\"kategori/ödeme/yerleşim filtreleri + arama\") üzerinden destekleniyor, bu alt-görev o davranışın saf çekirdeğidir.\" | \"kategori/ödeme/yerleşim filtreleri + arama\"\nKK DOĞRULAMA: `packages/types/src/apps.test.ts`: arama büyük/küçük harf duyarsız daraltır; kategori daraltır; iki filtre birlikte kesişir; `limit=10` ile `nextPageId` zinciri izlendiğinde dönen kart id'lerinin birleşimi = `APP_CATALOG` (tekrarsız + eksiksiz kapsama); son sayfada `nextPageId` yok; bilinmeyen cursor → `null`; `total` filtreye göre hesaplanır (sayfa uzunluğuna değil).\nKAPSAM DIŞI: route zod parse ve HTTP hata çevirimi (09.2-v2-c) · tenant join / installed alanı (09.2-v2-c) · katalog verisinin büyütülmesi (09.2-v2-d / -e) · UI\nTAHMİN: 1 pencere\n\nBAĞLAM: PLAN.md §5.2 (özet) + PLAN-V2-KIRILIM.md (tam alan detayı). Etiket sistemi PLAN §5.1. DoD kapısı CONVENTIONS.md.",
             "testStrategy": "unit: arama daraltma (büyük/küçük harf duyarsız, trim, boş sorgu = tam liste) · unit: kategori daraltma + arama×kategori kesişimi · unit: sayfa zinciri tam kapsama (birleşim = katalog, kesişim = boş) + son sayfada nextPageId yok · unit NEGATİF (önce yazılır): bilinmeyen cursor → null; limit sınırlarında (1 ve max) davranış",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "99",
-            "updatedAt": "2026-08-01T10:00:00.000Z"
+            "updatedAt": "2026-08-11T01:35:44.475Z"
           },
           {
             "id": 3,
@@ -4951,7 +4951,7 @@
             "updatedAt": "2026-08-01T10:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-11T01:32:43.232Z",
+        "updatedAt": "2026-08-11T01:35:44.475Z",
         "complexity": 5,
         "recommendedSubtasks": 8,
         "expansionPrompt": "\"09.2 — 100+ entegrasyon (marketplace katalog genişlemesi)  ·  dilim V2-7\" görevini 8 atomik alt göreve böl. Sıra contract-first olmalı: sözleşme/tip → migration+RLS → backend+unit → frontend+typed client → uçtan uca doğrulama. Her alt görev tek bir temiz pencerede bitebilmeli ve kendi ölçülebilir kabul kriterini (hangi komutun exit 0 vereceği) taşımalı."
@@ -5134,7 +5134,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-11T01:32:43.232Z",
+      "lastModified": "2026-08-11T01:35:44.476Z",
       "taskCount": 113,
       "completedCount": 106,
       "tags": [

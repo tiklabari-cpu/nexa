@@ -7,9 +7,11 @@ import {
   appChatData,
   channelApps,
   connectableApps,
+  filterAppCatalog,
   findApp,
   isAppId,
   isChannelApp,
+  paginateApps,
 } from './apps.js';
 
 describe('app catalogue', () => {
@@ -114,5 +116,104 @@ describe('appChatData (deterministic mock)', () => {
       (seed) => JSON.stringify(appChatData(app, seed).fields) !== JSON.stringify(a1.fields),
     );
     expect(varies).toBe(true);
+  });
+});
+
+// 09.2-v2-b: pure filter + pagination over the catalogue.
+describe('filterAppCatalog', () => {
+  it('narrows by name, case-insensitively', () => {
+    const upper = filterAppCatalog(APP_CATALOG, { query: 'HUBSPOT' });
+    const lower = filterAppCatalog(APP_CATALOG, { query: 'hubspot' });
+    expect(upper.map((e) => e.id)).toEqual(['hubspot']);
+    expect(lower.map((e) => e.id)).toEqual(['hubspot']);
+  });
+
+  it('narrows by description as well as name', () => {
+    // Only HubSpot's description mentions "lifecycle stage".
+    const result = filterAppCatalog(APP_CATALOG, { query: 'lifecycle stage' });
+    expect(result.map((e) => e.id)).toEqual(['hubspot']);
+  });
+
+  it('treats an empty or missing query as "match everything"', () => {
+    expect(filterAppCatalog(APP_CATALOG)).toEqual(APP_CATALOG);
+    expect(filterAppCatalog(APP_CATALOG, { query: '' })).toEqual(APP_CATALOG);
+    expect(filterAppCatalog(APP_CATALOG, { query: '   ' })).toEqual(APP_CATALOG);
+  });
+
+  it('narrows by category', () => {
+    const result = filterAppCatalog(APP_CATALOG, { category: 'ecommerce' });
+    expect(result.length).toBeGreaterThan(0);
+    for (const entry of result) expect(entry.category).toBe('ecommerce');
+    // Every ecommerce card in the catalogue is present — no over-narrowing.
+    const expected = APP_CATALOG.filter((e) => e.category === 'ecommerce').map((e) => e.id);
+    expect(result.map((e) => e.id).sort()).toEqual(expected.sort());
+  });
+
+  it('intersects query and category rather than unioning them', () => {
+    // hubspot (crm) mentions "lifecycle"; salesforce (crm) does not.
+    const result = filterAppCatalog(APP_CATALOG, { category: 'crm', query: 'lifecycle' });
+    expect(result.map((e) => e.id)).toEqual(['hubspot']);
+
+    // A query that matches something outside the category yields nothing.
+    const empty = filterAppCatalog(APP_CATALOG, { category: 'payments', query: 'lifecycle' });
+    expect(empty).toEqual([]);
+  });
+});
+
+describe('paginateApps', () => {
+  it('walks the full catalogue exactly once per card (union = catalogue, no repeats)', () => {
+    const seen: string[] = [];
+    let pageId: string | undefined;
+    let pages = 0;
+    for (;;) {
+      const result = paginateApps(APP_CATALOG, { limit: 10, pageId });
+      expect(result).not.toBeNull();
+      const { page, total, nextPageId } = result!;
+      expect(total).toBe(APP_CATALOG.length);
+      seen.push(...page.map((e) => e.id));
+      pages += 1;
+      if (!nextPageId) break;
+      pageId = nextPageId;
+      expect(pages).toBeLessThan(APP_CATALOG.length); // guard against an infinite loop
+    }
+    expect(seen).toHaveLength(APP_CATALOG.length);
+    expect(new Set(seen).size).toBe(APP_CATALOG.length);
+    expect(seen).toEqual(APP_CATALOG.map((e) => e.id));
+    expect(pages).toBeGreaterThan(1);
+  });
+
+  it('omits nextPageId on the last page', () => {
+    const result = paginateApps(APP_CATALOG, { limit: APP_CATALOG.length })!;
+    expect(result.page).toHaveLength(APP_CATALOG.length);
+    expect(result.nextPageId).toBeUndefined();
+  });
+
+  it('returns one card per page for limit=1, in stable order', () => {
+    const first = paginateApps(APP_CATALOG, { limit: 1 })!;
+    expect(first.page).toHaveLength(1);
+    expect(first.page[0]!.id).toBe(APP_CATALOG[0]!.id);
+    expect(first.nextPageId).toBe(APP_CATALOG[0]!.id);
+
+    const second = paginateApps(APP_CATALOG, { limit: 1, pageId: first.nextPageId })!;
+    expect(second.page[0]!.id).toBe(APP_CATALOG[1]!.id);
+  });
+
+  it('returns null for a cursor that names no entry in the given list', () => {
+    expect(paginateApps(APP_CATALOG, { limit: 10, pageId: 'not-a-real-id' })).toBeNull();
+
+    // A cursor valid for the full catalogue but absent from a filtered subset
+    // is unknown *for that subset* — the caller always paginates the same
+    // (already-filtered) list it started with.
+    const payments = filterAppCatalog(APP_CATALOG, { category: 'payments' });
+    expect(paginateApps(payments, { limit: 1, pageId: 'hubspot' })).toBeNull();
+  });
+
+  it('computes total from the filtered set, not the page length', () => {
+    const payments = filterAppCatalog(APP_CATALOG, { category: 'payments' });
+    expect(payments.length).toBeGreaterThan(1);
+
+    const result = paginateApps(payments, { limit: 1 })!;
+    expect(result.page).toHaveLength(1);
+    expect(result.total).toBe(payments.length);
   });
 });

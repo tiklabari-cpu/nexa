@@ -13,6 +13,25 @@
 
 ## Task log (newest-first)
 
+## tm 99.2 — 09.2-v2-b: Saf katalog filtre + sayfalama fonksiyonları (@nexa/types) — done — 2026-08-11 UTC
+
+- **Yapıldı:** `packages/types/src/apps.ts`e iki saf fonksiyon — `filterAppCatalog(entries, {query?, category?})`
+  (trim+lowercase, `name`+`description` üzerinde case-insensitive `includes`, `category` ile kesişim) ve
+  `paginateApps(entries, {limit, pageId?})` → `{page, total, nextPageId?}` (cursor = sayfanın son kartının
+  `id`'si, `entries`'in stabil sırasına göre; bulunamayan `pageId` → `null`, `total` her zaman `entries.length`).
+  `apps.test.ts`e 10 yeni determinizm testi (7→17): case-insensitive arama, açıklama eşleşmesi, boş query,
+  kategori daraltma, query×category kesişim, `limit=10` zinciriyle tam katalog gezimi (tekrarsız+eksiksiz),
+  `limit=1` adım adım, bilinmeyen cursor → `null`, `total` filtreye göre. Route bağlama (09.2-v2-c) ve UI
+  BİLEREK YOK — kapsam yalnız saf fonksiyonlar.
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2410/2410 · `@nexa/web`
+  929/929 · `@nexa/widget` 69/69 · `@nexa/types` 96/96) · `pnpm -w test:integration` 0 (1851/1851) · build 0
+  (7/7) · `pnpm -w test:e2e` 100/100 (davranış değişmedi, dokunulmadan yeşil).
+- **Varsayımlar:** Yok.
+- **Sonraki pencereye not:** 09.2-v2 epic'i 8 alt-görevden 2'si (-a, -b) kapandı; PLAN K09.2-b `◐` kalmaya
+  devam ediyor. Sıradaki `09.2-v2-c` (route bağlama — zod parse + sayfalama + tenant join, -a/-b'ye bağımlı).
+  `apps/e2e/kanit/*.png` bu turun `pnpm -w test:e2e` koşusundan yeniden üretildi, başka task'lara ait,
+  commit'e alınmadı (tm 99.1/113 emsali, kapsam disiplini) — hâlâ önceki turdan beri kirli.
+
 ## tm 99.1 — 09.2-v2-a: Marketplace liste kontratı — arama/kategori/sayfalama — done — 2026-08-11 UTC
 
 - **Yapıldı:** Pencere bir önceki oturumdan yarım kalmış (kota/çökme, HANDOFF'ta izi yoktu) çalışan

@@ -13,6 +13,38 @@
 
 ## Task log (newest-first)
 
+## PLAN-TUTARLILIK — `13.3 Goals` (PLAN.md:1128) "kendi kendisiyle çelişiyor" bulgusu: damga DOĞRU, metin düzeltildi — done — 2026-08-11 UTC
+
+- **Bulgu (panel):** `✅ → K13.3` damgalı satırın kanıt metni eksiklik anlatıyordu → erken damga şüphesi.
+- **TEŞHİS: yalancı bulgu, kusur ZAMAN KİPİNDE.** Şikâyet edilen cümle `13.3-a`'nın (tm 74.1)
+  maddesi; K blokları **append-only tarihçedir** ve o madde zincirin İLK halkası — yazıldığı an
+  doğruydu. Ama şimdiki zamanda ("Satır `◐` kalıyor") yazıldığı için blok ortasından alınan
+  alıntı onu güncel iddia gibi okuyor. Bloğun SON maddesi (`13.3-i`, tm 74.9) zaten
+  "✅ — 13.3 KAPANDI" diyordu.
+- **KODA KARŞI DOĞRULANDI — damga hak edilmiş.** KK'nın üçü de karşılanıyor:
+  · _"hedef tanımı"_ → `apps/api/src/routes/goals.ts:22,55,65,78` (CRUD + `.strict()` definition) + `GoalBuilder.tsx`
+  · _"3 aşamalı huni"_ → `apps/web/src/features/goals/goals.ts:49-55` (`funnelStages`) + `GoalsFunnel.tsx`,
+    **`GoalsPage.tsx:64`'te mount edilmiş** (13.3-h'nin bıraktığı tek açık uç, 13.3-i'de kapanmış)
+  · _"rapor entegrasyonu"_ → `ReportsPage.tsx:553-555` (Achieved goals KPI) + `reports.ts:1515`
+    (`GET /reports/goals`) + `reports-export.ts:50` (`REPORT_GROUPS`)
+  K13.3'ün iddia ettiği **20 dosyanın hepsi mevcut** (migration+RLS testi, servis, matcher, web
+  bileşenleri, `apps/e2e/tests/goals.spec.ts`, iki kanıt PNG'si); tm 74.1–74.9 dokuzu da `done`.
+- **ÖLÇÜLDÜ (dosya varlığı yetmez):** `npx vitest run src/features/goals` → **22/22 yeşil**
+  (goals 11 · GoalsFunnel 4 · GoalsPage 7) — K13.3-i'nin yazdığı sayılarla birebir.
+- **Yapılan (YALNIZ metin):** `#### K13.3` başlığına "append-only, güncel durum en alttaki madde"
+  kutusu · `-a`…`-h`'deki 8 adet "Satır `◐` kalıyor" → "Satır **o turda** `◐` kaldı" (geçmiş kipi,
+  madde artık alıntılansa bile kendi kendine tutarlı) · `13.3-i`'nin kapanışına "bloğun güncel
+  durumu" + KK'nın dosya:satır dayanağı · gerekçe **§D88**.
+- **DOKUNULMADI:** tablo hücresi (`✅ → K13.3` aynen — CONVENTIONS §1.2) · hiçbir kanıt maddesi
+  silinmedi · ürün kodu ve testler · diğer K bloklarındaki aynı kalıp (14 örnek daha var; K13.5'te
+  satır gerçekten `◐`, çelişki yok) · diğer 4 açık bulgu.
+- **Yeni Task Master görevi AÇILMADI** — kapatılacak eksik yok, kod tam.
+- **Kapı:** kod değişmediği için typecheck/lint/build/e2e koşulmadı (değişen tek şey PLAN.md +
+  HANDOFF.md metni; §D80/§D81/§D82/§D87 emsali — doküman-only tur). Doğrulama olarak yukarıdaki
+  hedefli 22/22 vitest koşusu ve dosya varlık taraması yapıldı.
+- **Ders:** append-only kanıt bloğunda durum cümlesi şimdiki zamanda yazılırsa, blok kapandıktan
+  sonra yalancı bulgu üretir. Kapanış maddesi bloğun güncel durumunu açıkça ilan etmeli.
+
 ## GRAF-ONARIM — run-loop'un "seçilebilir görev yok" kilidi çözüldü (tm 114 açıldı) — done — 2026-08-11 UTC
 
 - **Bulgu (panel):** `run-loop.sh` seçilebilir görev bulamıyor → "Hazır task kalmadı" deyip çıkacak,

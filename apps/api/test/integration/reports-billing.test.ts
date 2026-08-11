@@ -75,6 +75,30 @@ describe('reports and billing', () => {
     },
   };
 
+  /**
+   * An instant that is unambiguously *inside* a report window anchored on "now".
+   *
+   * Every fixture below that has to be counted by a report stamps its timestamp
+   * with this rather than leaving the column default, and that is not cosmetic.
+   * The default is Postgres' clock; a report's `to` is the API process' own
+   * `new Date()`. The two are different clocks — the database runs in a
+   * container and was measured up to ~10ms ahead of the host (probe: a row
+   * written at `…37.140Z` against a request whose `to` came out `…37.139Z`). A
+   * row inserted microseconds before the request therefore lands *after* the
+   * window closes and disappears from a report that should show it.
+   *
+   * The signature was unmistakable once looked for: tests that set a date
+   * explicitly (5 days back, 45 days back) never failed, while every test that
+   * wrote "now" and read it straight back failed together in the same run —
+   * roughly one run in four. It is an environment artifact, not a product bug:
+   * `created_at <= to` is the correct predicate and stays as it is.
+   *
+   * A minute of slack is orders of magnitude past any skew ever measured and
+   * still deep inside every window these tests ask for — the narrowest is ten
+   * days.
+   */
+  const justNow = (): Date => new Date(Date.now() - 60_000);
+
   /** Run a conversation to completion, optionally with an agent replying. */
   async function conversation(options: { agentReplies: boolean; customerName?: string }) {
     const customer = await owner.customer.create({
@@ -154,6 +178,9 @@ describe('reports and billing', () => {
    * Agent report counts. Written directly (like {@link runSkillOn}) so the test
    * exercises the aggregation without dragging in the whole transfer flow; the
    * shape matches what `chat-service` emits: `system_event: chat_transferred`.
+   *
+   * Both hand-off counters window on the event's own `created_at`, so the row is
+   * stamped {@link justNow} rather than left to the column default.
    */
   async function recordTransfer(chatId: string): Promise<void> {
     const thread = await owner.thread.findFirstOrThrow({ where: { chatId } });
@@ -167,6 +194,7 @@ describe('reports and billing', () => {
         authorType: 'system',
         recipients: 'all',
         properties: { system_event: 'chat_transferred' },
+        createdAt: justNow(),
       },
     });
   }
@@ -222,7 +250,7 @@ describe('reports and billing', () => {
         licenseId,
         goalId: goal.id,
         customerId: customer.id,
-        ...(options.achievedAt ? { achievedAt: options.achievedAt } : {}),
+        achievedAt: options.achievedAt ?? justNow(),
       },
     });
   }
@@ -458,7 +486,7 @@ describe('reports and billing', () => {
     it('summarises volume, response time and satisfaction', async () => {
       const chatId = await conversation({ agentReplies: true });
       await owner.rating.create({
-        data: { chatId, licenseId: fx.a.licenseId, value: 'good' },
+        data: { chatId, licenseId: fx.a.licenseId, value: 'good', createdAt: justNow() },
       });
 
       const report = await server.get('/reports/overview', auth);
@@ -1268,14 +1296,19 @@ describe('reports and billing', () => {
   // =========================================================================
 
   describe('Reviews report (07.8)', () => {
-    /** Attach a rating to a chat, optionally landing it in an earlier day/window. */
+    /**
+     * Attach a rating to a chat, optionally landing it in an earlier day/window.
+     * Defaults to {@link justNow} rather than the column default: the CSAT
+     * figures window on `ratings.created_at`, and a rating written a moment
+     * before the request is exactly the row the clock skew swallows.
+     */
     async function rate(chatId: string, value: 'good' | 'bad', createdAt?: Date): Promise<void> {
       await owner.rating.create({
         data: {
           chatId,
           licenseId: fx.a.licenseId,
           value,
-          ...(createdAt ? { createdAt } : {}),
+          createdAt: createdAt ?? justNow(),
         },
       });
     }
@@ -1365,16 +1398,9 @@ describe('reports and billing', () => {
 
     /**
      * Record one order the way the ingest endpoint (13.5-c) would have left it.
-     *
-     * `created_at` is stamped a minute back rather than left to the column
-     * default, and that is not cosmetic. The default is Postgres' clock, the
-     * window's `to` is the API process' `new Date()`, and the two disagree here
-     * by up to ~10ms in bursts (measured: a row written at `…37.140Z` against a
-     * request whose `to` was `…37.139Z`). A row inserted microseconds before the
-     * request can therefore land *after* the window closes and vanish from a
-     * report that should show it — an environment artifact, not a product bug,
-     * but one that would make these assertions fail perhaps one run in five. A
-     * minute of slack is far inside the 30-day window and immune to the skew.
+     * `created_at` is stamped {@link justNow} rather than left to the column
+     * default — this was the first fixture here immunised against the clock
+     * skew, and the reasoning is written out at that helper.
      */
     async function sale(options: {
       licenseId: bigint;
@@ -1393,7 +1419,7 @@ describe('reports and billing', () => {
           amountCents: options.amountCents,
           currency: options.currency ?? 'USD',
           attributed: options.attributed ?? true,
-          createdAt: options.createdAt ?? new Date(Date.now() - 60_000),
+          createdAt: options.createdAt ?? justNow(),
         },
       });
     }
@@ -1557,7 +1583,12 @@ describe('reports and billing', () => {
   // =========================================================================
 
   describe('Cases report (07.7-a)', () => {
-    /** Create a ticket directly, with full control over the fields the report buckets on. */
+    /**
+     * Create a ticket directly, with full control over the fields the report
+     * buckets on. `created_at` defaults to {@link justNow}: every Cases figure
+     * windows on it, so the column default would leave the row at the mercy of
+     * the database/host clock skew.
+     */
     async function createTicket(
       options: {
         status?: string;
@@ -1574,7 +1605,7 @@ describe('reports and billing', () => {
           subject: 'Test ticket',
           status: options.status ?? 'open',
           priority: options.priority ?? 0,
-          ...(options.createdAt ? { createdAt: options.createdAt } : {}),
+          createdAt: options.createdAt ?? justNow(),
           ...(options.mergedIntoId ? { mergedIntoId: options.mergedIntoId } : {}),
         },
         select: { id: true },
@@ -1699,6 +1730,10 @@ describe('reports and billing', () => {
      * organization lead that never reached this license — the case the report
      * must *not* count, and the whole reason the count is a chat/ticket join
      * rather than a bare `customers.is_lead` tally.
+     *
+     * The touch row's `created_at` *is* the first touch the report windows and
+     * buckets on, so it defaults to {@link justNow} rather than to the column
+     * default.
      */
     async function createLead(
       options: { touch?: 'chat' | 'ticket' | 'none'; isLead?: boolean; createdAt?: Date } = {},
@@ -1707,7 +1742,7 @@ describe('reports and billing', () => {
         data: { organizationId: fx.a.organizationId, name: 'Lead', isLead: options.isLead ?? true },
         select: { id: true },
       });
-      const at = options.createdAt;
+      const at = options.createdAt ?? justNow();
       const touch = options.touch ?? 'chat';
       if (touch === 'chat') {
         await owner.chat.create({
@@ -1715,7 +1750,7 @@ describe('reports and billing', () => {
             id: generateShortId(),
             licenseId: fx.a.licenseId,
             customerId: customer.id,
-            ...(at ? { createdAt: at } : {}),
+            createdAt: at,
           },
         });
       } else if (touch === 'ticket') {
@@ -1726,7 +1761,7 @@ describe('reports and billing', () => {
             customerId: customer.id,
             subject: 'Lead ticket',
             status: 'open',
-            ...(at ? { createdAt: at } : {}),
+            createdAt: at,
           },
         });
       }
@@ -1825,7 +1860,13 @@ describe('reports and billing', () => {
       const chatId = await conversation({ agentReplies: true });
       const thread = await owner.thread.findFirstOrThrow({ where: { chatId } });
       await owner.rating.create({
-        data: { chatId, licenseId: fx.a.licenseId, threadId: thread.id, value: 'good' },
+        data: {
+          chatId,
+          licenseId: fx.a.licenseId,
+          threadId: thread.id,
+          value: 'good',
+          createdAt: justNow(),
+        },
       });
 
       const report = (await server.get('/reports/team-performance', auth)).json();
@@ -2061,7 +2102,7 @@ describe('reports and billing', () => {
       const second = await defineGoal('Booked a demo');
       const customerId = await visitor({ chatted: true, goalId: first, name: 'Reached two' });
       await owner.goalAchievement.create({
-        data: { licenseId: fx.a.licenseId, goalId: second, customerId },
+        data: { licenseId: fx.a.licenseId, goalId: second, customerId, achievedAt: justNow() },
       });
 
       const report = (await server.get('/reports/goals', auth)).json();
@@ -2424,7 +2465,9 @@ describe('reports and billing', () => {
 
       it('exports reviews CSAT bucketed by day', async () => {
         const chatId = await conversation({ agentReplies: true });
-        await owner.rating.create({ data: { chatId, licenseId: fx.a.licenseId, value: 'good' } });
+        await owner.rating.create({
+          data: { chatId, licenseId: fx.a.licenseId, value: 'good', createdAt: justNow() },
+        });
 
         const response = await server.get('/reports/export?group=reviews', auth);
         expect(response.statusCode).toBe(200);
@@ -2440,6 +2483,7 @@ describe('reports and billing', () => {
             licenseId: fx.a.licenseId,
             subject: 'Test ticket',
             status: 'solved',
+            createdAt: justNow(),
           },
         });
 
@@ -2470,7 +2514,12 @@ describe('reports and billing', () => {
           select: { id: true },
         });
         await owner.chat.create({
-          data: { id: generateShortId(), licenseId: fx.a.licenseId, customerId: lead.id },
+          data: {
+            id: generateShortId(),
+            licenseId: fx.a.licenseId,
+            customerId: lead.id,
+            createdAt: justNow(),
+          },
         });
 
         const [leads, response] = await Promise.all([
@@ -2498,7 +2547,13 @@ describe('reports and billing', () => {
         const chatId = await conversation({ agentReplies: true });
         const thread = await owner.thread.findFirstOrThrow({ where: { chatId } });
         await owner.rating.create({
-          data: { chatId, licenseId: fx.a.licenseId, threadId: thread.id, value: 'good' },
+          data: {
+            chatId,
+            licenseId: fx.a.licenseId,
+            threadId: thread.id,
+            value: 'good',
+            createdAt: justNow(),
+          },
         });
 
         const [report, response] = await Promise.all([
@@ -2934,7 +2989,13 @@ describe('reports and billing', () => {
       const rated = await conversation({ agentReplies: true, customerName: 'Perf rated' });
       const ratedThread = await owner.thread.findFirstOrThrow({ where: { chatId: rated } });
       await owner.rating.create({
-        data: { chatId: rated, licenseId: fx.a.licenseId, threadId: ratedThread.id, value: 'good' },
+        data: {
+          chatId: rated,
+          licenseId: fx.a.licenseId,
+          threadId: ratedThread.id,
+          value: 'good',
+          createdAt: justNow(),
+        },
       });
       await recordTransfer(rated);
       await conversation({ agentReplies: false, customerName: 'Perf automated' });
@@ -2944,7 +3005,12 @@ describe('reports and billing', () => {
         select: { id: true },
       });
       await owner.chat.create({
-        data: { id: generateShortId(), licenseId: fx.a.licenseId, customerId: chatLead.id },
+        data: {
+          id: generateShortId(),
+          licenseId: fx.a.licenseId,
+          customerId: chatLead.id,
+          createdAt: justNow(),
+        },
       });
       const ticketLead = await owner.customer.create({
         data: { organizationId: fx.a.organizationId, name: 'Perf lead ticket', isLead: true },
@@ -2957,6 +3023,7 @@ describe('reports and billing', () => {
           customerId: ticketLead.id,
           subject: 'Perf lead ticket',
           status: 'open',
+          createdAt: justNow(),
         },
       });
 

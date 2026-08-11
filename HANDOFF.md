@@ -13,6 +13,29 @@
 
 ## Task log (newest-first)
 
+## tm 113 — `reports-billing.test.ts` saat kayması flake'ini kapat — done — 2026-08-11 UTC
+
+- **Yapıldı:** Dosyaya tek ortak `justNow()` = `new Date(Date.now() - 60_000)` yardımcısı (gerekçe
+  docblock'ta, tm 75.4'ün `sale()` üzerindeki kopyası oraya taşındı) ve pencere İÇİNDE sayılması
+  gereken her fixture yazımı ona bağlandı: `rate()` · `createTicket()` · `createLead()` ·
+  `recordGoalAchievement()` · `recordTransfer()` (hand-off olayı `events.created_at` ile
+  pencereleniyor) · CSV export bloğunun dört çıplak `create`'i · Goals'un 2. achievement'ı ·
+  team-performance rating'leri · NFR-P2 probe fixture'ları. **Ürün kodu değişmedi.**
+- **Doğrulama:** Hedef ölçüm — `npx tsx scripts/with-test-datastores.ts vitest run --dir
+  test/integration reports-billing` **11 ardışık koşu, 11/11 exit 0** (her koşu 275/275; task 10
+  istiyordu). Kapı: typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2410/2410) ·
+  `pnpm -w test:integration` 0 (1851/1851) · build 0 (7/7) · `pnpm -w test:e2e` **100/100**.
+- **Varsayımlar:** Taranıp bilerek dokunulmayanlar — `visitor()` zaten Node saatinden damgalıyor ·
+  `recordInbound()`/`runSkillOn()`'ın tabloları pencerelenmiyor · `conversation()`'ın API üzerinden
+  açtığı chat/thread hâlâ DB saatinde (ölçülen ~10 ms kayma, o akışın istekten önceki 20-50 ms'inin
+  çok altında; tarihsel kırmızıların hiçbiri o yoldan gelmedi). PLAN gereksinim satırı yok — kayıt
+  §D87'ye düşüldü (§D80/§D82 emsali).
+- **Sonraki pencereye not:** (1) Bundan sonra `reports-billing.test.ts` kırmızısı gerçek regresyon
+  sayılmalı — "yük altında flake" gerekçesi artık geçerli değil. (2) Aynı kayma diğer pencere-tabanlı
+  süitlerde (goals, traffic, home) olabilir; bu turda kırmızı vermediler, tarama yapılmadı → çıkarsa
+  ayrı görev. (3) `apps/e2e/kanit/*.png` e2e koşusundan yeniden üretildi, başka task'lara ait,
+  kirli bırakıldı (kapsam disiplini).
+
 ## tm 75.8 — 13.5-h: Uçtan uca doğrulama — seed/demo + e2e + 13.3 tutarlılığı — done — 2026-08-11 UTC
 
 - **Yapıldı:** `seed.ts`e `seedSalesTracker` — Acme `enabled/USD/7g` + 3 atıflı ($252.50) + 1 atıfsız,

@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 99.6 — 09.2-v2-f: Marketplace arama kutusu + tıklanabilir kategori filtresi + empty/skeleton durumları — done — 2026-08-11 UTC
+
+- **Yapıldı:** `AppsMarketplace.tsx`'e arama kutusu (250ms debounce → `?query=`, CustomersPage deseni) + kategori çip satırı ("All" + `APP_CATEGORIES`'in 8 değeri, seçili çip `aria-pressed="true"` → `?category=`); `useQuery` `queryKey`'i artık `[...APPS_KEY, debounced, category]` (filtre state önbellek anahtarında). `apps.isPending` → 8× `CardSkeleton` (grid şeklinde tekrarlanmış); boş sonuç → `EmptyState`, filtre varken/yokken farklı metin. Yanıt tipi `AppListResponse`'a geçti (09.2-v2-a'nın kontratı ilk kez tüketiliyor).
+- **Doğrulama:** typecheck 0 (11/11) · lint 0 (8/8) · `pnpm -w test` 0 (`@nexa/api` 2414/2414 · `@nexa/web` 934/934 · `@nexa/widget` 69/69 · `@nexa/types` 96/96) · `pnpm -w test:integration` 0 (1855/1855, `contract-parity` 5/5) · build 0 (7/7) · `pnpm -w test:e2e` 100/100.
+- **Varsayımlar:** Yok.
+- **Sonraki pencereye not:** `data-testid="app-${id}"`, `ChannelAppCard`/`DataAppCard`, `ConsentDialog` DEĞİŞMEDİ — mevcut 4 test değiştirilmeden yeşil. Sayfalama/`limit` BİLEREK dokunulmadı (grid hâlâ default `limit=25`, ilk sayfa) — bu `09.2-v2-g`'nin (virtualized grid + sayfa zinciri) kapsamı, ondan sonra `-h` (uçtan uca doğrulama) kalıyor.
+
 ## tm 99.5 — 09.2-v2-e: Katalog verisi 60 → 100+ kart + "100+" hedefinin testle sabitlenmesi — done — 2026-08-11 UTC
 
 - **Yapıldı:** `APP_CATALOG` 62 → 102 karta büyüdü (40 yeni veri app'i, 7 kategoriye +6/+6/+6/+6/+6/+4/+6 dağıtıldı — crm/support/ecommerce/payments/marketing/productivity/analytics —, kanal-tipli kart eklenmedi); `packages/types/src/apps.test.ts` eşiği `>=60` → `>=100`. `apps/api/test/integration/apps.test.ts`'in `?limit=100`'e dayalı üç "tam liste" testi (kontratın `limit` üst sınırı zaten 100, katalog artık ondan büyük) `walk()` cursor-zincirine taşındı; `walk()` artık `items`'i de döndürüyor ve döngü sınırı 100→200 isteğe çıktı — iki elle yazılmış 50-istek sınırlı sayfalama döngüsü de aynı yardımcıya devredildi (cross-tenant izolasyon testi artık kataloğun tamamını tarıyor, yalnız ilk 50 kartı değil).

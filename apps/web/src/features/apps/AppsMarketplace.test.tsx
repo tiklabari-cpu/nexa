@@ -148,4 +148,76 @@ describe('AppsMarketplace', () => {
     expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull();
     expect(screen.getByText('In Channels')).toBeInTheDocument();
   });
+
+  // 09.2-v2-f: search + category filter, empty/skeleton states.
+  it('debounces the search box before querying the API', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue({ items: [notConnected], total: 1 });
+    renderComponent(<AppsMarketplace />);
+    await screen.findByText('HubSpot');
+
+    const callsBeforeTyping = api.get.mock.calls.length;
+    await user.type(screen.getByPlaceholderText('Search apps…'), 'hub');
+
+    // Four keystrokes, but the request only fires once typing settles — not
+    // once per keystroke (each one would count against the rate limit).
+    expect(api.get.mock.calls.length).toBe(callsBeforeTyping);
+
+    await waitFor(() => {
+      const lastUrl = api.get.mock.calls.at(-1)?.[0] as string;
+      expect(lastUrl).toContain('query=hub');
+    });
+  });
+
+  it('filters by category through the chip row and marks it aria-pressed', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue({ items: [notConnected], total: 1 });
+    renderComponent(<AppsMarketplace />);
+    await screen.findByText('HubSpot');
+
+    const allChip = screen.getByRole('button', { name: 'All' });
+    const crmChip = screen.getByRole('button', { name: 'CRM' });
+    expect(allChip).toHaveAttribute('aria-pressed', 'true');
+    expect(crmChip).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(crmChip);
+
+    expect(crmChip).toHaveAttribute('aria-pressed', 'true');
+    expect(allChip).toHaveAttribute('aria-pressed', 'false');
+    await waitFor(() => {
+      const lastUrl = api.get.mock.calls.at(-1)?.[0] as string;
+      expect(lastUrl).toContain('category=crm');
+    });
+  });
+
+  it('shows a skeleton while the first page is loading', () => {
+    api.get.mockReturnValue(new Promise(() => {}));
+    renderComponent(<AppsMarketplace />);
+
+    expect(document.querySelector('[aria-hidden="true"].animate-pulse')).not.toBeNull();
+  });
+
+  it('shows a meaningful empty state with no filter active', async () => {
+    api.get.mockResolvedValue({ items: [], total: 0 });
+    renderComponent(<AppsMarketplace />);
+
+    expect(await screen.findByText('No apps yet')).toBeInTheDocument();
+    expect(
+      screen.getByText('Connect the tools your team already uses from the marketplace.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a different empty state once a search is filtering the results', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue({ items: [], total: 0 });
+    renderComponent(<AppsMarketplace />);
+    await screen.findByText('No apps yet');
+
+    await user.type(screen.getByPlaceholderText('Search apps…'), 'zzz');
+
+    await waitFor(() => {
+      expect(screen.getByText('No apps match')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Try a shorter search, or a different category.')).toBeInTheDocument();
+  });
 });

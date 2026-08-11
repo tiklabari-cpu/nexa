@@ -11,11 +11,12 @@
  * The list drives itself entirely from `/settings/apps`: the status is read, not
  * decided here, so a card can never claim to be connected when it is not.
  */
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AppListItem, AppOAuthStart } from '@nexa/types';
-import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
+import { APP_CATEGORIES, type AppCategory, type AppListItem, type AppListResponse, type AppOAuthStart } from '@nexa/types';
+import { Card, CardSkeleton, ErrorNotice, Page, Section } from '../../components/Page.js';
+import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -37,23 +38,100 @@ const CATEGORY_LABEL: Record<AppListItem['category'], string> = {
   channels: 'Channels',
 };
 
+/** "All" plus the catalogue's categories, in the fixed order the chip row shows them. */
+type CategoryFilter = 'all' | AppCategory;
+const CATEGORY_FILTERS: readonly CategoryFilter[] = ['all', ...APP_CATEGORIES];
+
+const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3';
+
 export function AppsMarketplace(): ReactElement {
   const api = useApiClient();
+
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [category, setCategory] = useState<CategoryFilter>('all');
+
+  // Debounced so typing a name does not fire a request per keystroke, each one
+  // counting against the caller's rate limit (CustomersPage pattern).
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(search.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const hasActiveFilter = debounced !== '' || category !== 'all';
+
   const apps = useQuery({
-    queryKey: APPS_KEY,
-    queryFn: () => api.get<{ items: AppListItem[] }>('/settings/apps'),
+    // The filter state is part of the cache key — otherwise a category switch
+    // or a new search could show a stale, differently-filtered response.
+    queryKey: [...APPS_KEY, debounced, category],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (debounced) params.set('query', debounced);
+      if (category !== 'all') params.set('category', category);
+      const qs = params.toString();
+      return api.get<AppListResponse>(`/settings/apps${qs ? `?${qs}` : ''}`);
+    },
   });
+
+  const items = apps.data?.items ?? [];
 
   return (
     <Section
       title="Marketplace"
       description="Connect the tools your team already uses. Connected apps show their data right inside a conversation."
     >
+      <label className="flex items-center gap-2">
+        <span className="sr-only">Search apps</span>
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search apps…"
+          className="w-64 rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+        />
+      </label>
+
+      <div role="group" aria-label="Filter by category" className="flex flex-wrap gap-1">
+        {CATEGORY_FILTERS.map((filter) => {
+          const active = category === filter;
+          return (
+            <button
+              key={filter}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setCategory(filter)}
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                  : 'text-content-secondary hover:bg-surface-2'
+              }`}
+            >
+              {filter === 'all' ? 'All' : CATEGORY_LABEL[filter]}
+            </button>
+          );
+        })}
+      </div>
+
       {apps.error ? (
         <ErrorNotice message="Could not load the apps marketplace." />
+      ) : apps.isPending ? (
+        <div className={GRID_CLASS}>
+          {Array.from({ length: 8 }, (_, i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState
+          title={hasActiveFilter ? 'No apps match' : 'No apps yet'}
+          description={
+            hasActiveFilter
+              ? 'Try a shorter search, or a different category.'
+              : 'Connect the tools your team already uses from the marketplace.'
+          }
+        />
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
-          {(apps.data?.items ?? []).map((app) => (
+        <div className={GRID_CLASS}>
+          {items.map((app) => (
             <AppCard key={app.id} app={app} />
           ))}
         </div>

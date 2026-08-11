@@ -13,6 +13,64 @@
 
 ## Task log (newest-first)
 
+## AGAC-TEMIZ — 50 commit'siz kanıt PNG'si sahibine bağlandı ve commit edildi — done — 2026-08-11 UTC
+
+- **Bulgu (panel):** çalışma ağacında 50 izlenen dosya commit'siz (+0 izlenmeyen), dal `main`.
+  CONVENTIONS §2 her task sonunda commit + push şart koşuyor; kirli ağaç bir sonraki pencerenin
+  "hangi değişiklik kimin" sorusunu cevaplayamamasına yol açıyordu.
+- **SAHİPLİK KANITLA KURULDU (hafızadan değil, mtime'dan).** 50 dosyanın hepsi
+  `apps/e2e/kanit/*.png`, hiçbiri metin dosyası değil. Tek bir **tam süit koşusu** 71 kanıt
+  PNG'sinin tamamını **06:56:00–07:00:41** arasında yeniden yazmış; 50'si baytça değişmiş,
+  21'i birebir aynı çıkmış. O koşunun sahibi **`330525f` (tm 99.8, 07:03:28)** — DoD kapısı için
+  `pnpm -w test:e2e` koşan commit: kendi yeni dosyası `09.2-apps-marketplace.png` tam 07:03:28
+  mtime'ını taşıyor ve commit edilmiş, aynı süpürmenin değiştirdiği 50 tanesi bırakılmış.
+  Yani **tek pencerenin artığı**, birikmiş sürüklenme değil. tm 114'ün details'i semptomu zaten
+  yazmıştı ("pencere açılırken zaten kirliydiler") ama sahibini bağlamamıştı.
+- **YARIM DEĞİL — ölçüldü:** `apps/e2e/test-results/.last-run.json` →
+  `{"status": "passed", "failedTests": []}`. Yani bunlar kendilerini anan K bloklarının **güncel
+  ve doğru** kanıtı; yarım koşunun çıktısı değil. Commit öncesi üç kontrol:
+  · **boyut** 50'nin 49'unda birebir aynı (`95-palette-action.png` 1280x1392 → 1280x1389, üç
+    piksel sayfa yüksekliği) → hiçbir yerleşim çökmemiş;
+  · **beş render açılıp HEAD kopyasıyla karşılaştırıldı** — `9-chat-page` (en büyük göreli fark,
+    **-%14**), `13.2-k-visitor-360`, `13.2-l-came-from-filter`, `66.9-skill-routing-takeover`,
+    `16-notifications-settings`. Beşi de eskisiyle **aynı dolu ekranı** gösteriyor; bayt farkı
+    seed'li isim + saat + input focus-ring gürültüsü (`9-chat-page`: "Dana Okonkwo"/02:01 AM →
+    "Ada"/07:00 AM, focus halkası yok);
+  · **sızıntı taraması** — staged küme yalnız `apps/e2e/kanit/*.png` (50 dosya, ad-kalıbı
+    süzgeciyle doğrulandı). `.env`/anahtar/metin dosyası yok (`.env` zaten `.gitignore:2`).
+    Ekranlarda yalnız `localhost:5174` · `127.0.0.1` · seed'li demo kayıt var — commit'li
+    kanıtta hâlihazırda bulunan yerel test verisinin aynı sınıfı.
+- **Tek commit** (`chore(e2e)`), çünkü 50'sinin sebebi tek: bir süit koşusu. Özellik alanına göre
+  bölmek onlara **sahip olmadıkları bir köken uydurmak** olurdu.
+- **DOKUNULMADI:** ürün kodu · test mantığı · PLAN.md damgaları · diğer 4 açık bulgu.
+- **Yeni Task Master görevi AÇILMADI** — kapsamda kapatılacak açık uç kalmadı; iş commit'in
+  kendisiydi. (Aşağıdaki iki kalem kapsam dışı, bilerek görev açılmadı — gerekçe yanlarında.)
+- **Kapı:** ikili-artefakt-only commit olduğu için build kapıları yeniden koşulmadı (§D80/§D81/
+  §D82/§D87 doküman-only emsali). Doğrulama = süpürmenin kendi `passed` durumu + yukarıdaki
+  dosya bazlı üç kontrol.
+
+**SONRAKİ PENCEREYE (tm 114 — SENİ İLGİLENDİRİYOR):**
+1. **Bu kirlilik yapısaldır, tek seferlik değil.** `kanit/*.png` her tam e2e koşusunda yeniden
+   üretilir (seed'li isim/saat deterministik değil). tm 114'ün test stratejisi
+   `pnpm -w test:e2e` koşuyor → **bu 50 dosya sende yeniden kirlenecek.** Çözüm, tm 114'ün
+   details'indeki "commit'e ALINMAZ" notuyla CONVENTIONS §2'yi uzlaştıran şu kural:
+   süpürmenin tazelediği kanıtı **kendi özellik commit'ine tıkma, ayrı bir `chore(e2e)`
+   commit'ine koy.** Kapsam disiplini korunur (özellik commit'i temiz kalır), ağaç da temiz kalır.
+   Bunu yaparken `.last-run.json`'ın `passed` olduğunu doğrula — kırmızı koşunun ekran görüntüsü
+   commit edilmez.
+2. **KAPSAM DIŞI BULGU (bu turda düzeltilmedi, görev de açılmadı):** üç kanıt dosyası **birebir
+   aynı bayt** — `08.5.7-instagram-disconnected.png` = `16-notifications-settings.png` =
+   `8-channels-grid.png` (HEAD'de md5 `50b328d7…`, koşudan sonra `d32f2800…`; yani **bu koşunun
+   getirdiği bir kusur değil, önceden de öyleydi**). Üçü de Settings → Channels sayfasını
+   çekiyor. İkisi savunulabilir (kanal ızgarası; Instagram kartı "Not connected"), ama
+   **`16-notifications-settings.png` adının vaat ettiği bildirim ayarlarını göstermiyor** —
+   açılan görüntü "Widget installation, saved replies and routing" başlıklı Channels sayfası,
+   altı MCP server kartında kesiliyor. Görev açmadım: bu turun kapsamı kirli ağaçtı ve panel
+   bulgusundan doğan `critical` yolu (CONVENTIONS §4.1) yalnız pencereyi doğuran bulgu içindir —
+   buna `critical` vermek tm 114'ün önüne geçerdi. **tm 114'ün §F.1/8 (doküman tazeliği) maddesi
+   bunun doğal yeri**; orada kanıt-ad uyuşmazlığı olarak ele al ya da K7 önceliğiyle (`low`)
+   ayrı görev aç.
+
 ## PLAN-TUTARLILIK — `13.3 Goals` (PLAN.md:1128) "kendi kendisiyle çelişiyor" bulgusu: damga DOĞRU, metin düzeltildi — done — 2026-08-11 UTC
 
 - **Bulgu (panel):** `✅ → K13.3` damgalı satırın kanıt metni eksiklik anlatıyordu → erken damga şüphesi.

@@ -13,6 +13,46 @@
 
 ## Task log (newest-first)
 
+## PLAN-TUTARLILIK — `13.3 Goals` (PLAN.md:1128) "kendi kendisiyle çelişiyor" bulgusu **İKİNCİ KEZ**: damga DOĞRU, §D88'in düzeltmesi eksik kalmıştı — done — 2026-08-11 UTC
+
+- **Bulgu (panel):** `✅ → K13.3` damgalı satırın kanıt bloğunda "Goals'ın kalan 8 alt-görevi …
+  **henüz yapılmadı**" cümlesi → erken damga şüphesi.
+- **TEŞHİS: yalancı bulgu, ama kusur GERÇEK — §D88 aynı satırı bugün zaten düzeltmişti ve YETMEDİ.**
+  §D88 maddelerin damga FİİLİNİ geçmişe çekti ("Satır `◐` **kalıyor**" → "o turda `◐` **kaldı**"),
+  fakat cümlelerin **açık iş sayan NESNESİNE** dokunmadı: `-a`'da "… **henüz yapılmadı**",
+  `-b`…`-h`'de "… **duruyor**", `-h`'de "`GoalsFunnel.tsx` **henüz hiçbir ekrana bağlı değil**".
+  Blok ortasından alınan her alıntı hâlâ açık iş okuyordu. **"henüz yapılmadı" tüm §K bölümündeki
+  TEK açık-iş iddiasıydı** (K blokları içinde `grep -c` → 1, o da bu satır) — tarama onu buldu.
+- **KODA KARŞI YENİDEN DOĞRULANDI — damga hak edilmiş.** KK'nın üçü de yerinde:
+  · _"hedef tanımı"_ → `apps/api/src/routes/goals.ts:22` (`.strict()` definition şeması) + `GoalBuilder.tsx`
+  · _"3 aşamalı huni"_ → `apps/web/src/features/goals/goals.ts:49-55` (`funnelStages` →
+    Visitors/Chats/Conversions) + `GoalsFunnel.tsx`, **`GoalsPage.tsx:64`'te mount edilmiş** —
+    yani `-h`'nin "bağlı değil" cümlesi bugün fiilen YANLIŞ
+  · _"rapor entegrasyonu"_ → `apps/web/src/features/reports/ReportsPage.tsx:552-555` (Achieved goals
+    KPI) + `apps/api/src/routes/reports.ts:1515` (`GET /reports/goals`) + `reports-export.ts:50`
+  Depolama `prisma/migrations/20260810100000_goal_achievements/` · goals'a değen **5** integration
+  dosyası (`goals`, `goals-achievement`, `goal-achievements-rls`, `data-model`, `auth`) · e2e
+  `apps/e2e/tests/goals.spec.ts` **2 test** + 2 kanıt PNG'si. tm 74 ve **74.1–74.9 dokuzu da `done`**.
+- **ÖLÇÜLDÜ (dosya varlığı yetmez):** `@nexa/web` → `src/features/goals` **22/22 yeşil**
+  (goals 11 · GoalsFunnel 4 · GoalsPage 7) · `@nexa/api` → `src/services/goals` **7/7 yeşil**.
+- **Yapılan (YALNIZ metin, K13.3 bloğunda):** `-a`'nın "henüz yapılmadı"sı geçmişe + "sekizi de
+  `-b`…`-i`'de (tm 74.2–74.9) teslim edildi, açık iş YOK" · `-b`…`-g`'nin "duruyor"u → "**o turda
+  duruyordu, sonraki turlarda kapandı**" · `-h`'nin "bağlı değil"i geçmişe + "`GoalsPage.tsx:64`'te
+  mount edilmiştir, bu cümle 2026-08-10'dan beri GEÇERSİZDİR" · başlık kutusuna "bu bloktaki hiçbir
+  madde bugün açık iş tarif etmez" ilanı. Gerekçe **§D93**.
+- **DOKUNULMADI:** tablo hücresi (`✅ → K13.3` aynen — CONVENTIONS §1.2) · hiçbir kanıt maddesi
+  silinmedi · ürün kodu ve testler · faz özet sayaçları · diğer 2 açık bulgu (2 medium — kapsam
+  dışı) · tm 117/118.
+- **Yeni Task Master görevi AÇILMADI** — kapatılacak eksik yok, kod tam (bu yüzden `critical`
+  öncelikli düzeltme görevi de gerekmedi).
+- **YENİ KURAL (§D88/§D91/§D92 üstüne dördüncü örnek):** bayat kanıt cümlesini düzeltirken **fiili
+  geçmişe çekmek YETMEZ** — cümlenin açık iş sayan NESNESİ de ("… duruyor", "… henüz yapılmadı",
+  "… bağlı değil") çevrilmeli. Aksi halde satır ikinci kez bulgu üretir; bu turun kanıtı budur.
+- **BİLİNEN KALAN RİSK (kapsamda DEĞİL, bilerek bırakıldı):** `K13.5` bloğu (satır 1131) aynı deseni
+  **şimdiki zamanda** taşıyor — 7 madde "Satır `◐` **kalıyor** … duruyor" derken kalem `✅ → K13.5`.
+  Aynı bulgu orada da doğabilir; kapsam yalnız bu satır olduğu için dokunulmadı. Doğarsa §D93'teki
+  çözüm birebir uygulanır.
+
 ## PLAN-TUTARLILIK — `§5.3-KB Public KB` (PLAN.md:1132) "kendi kendisiyle çelişiyor" bulgusu: damga DOĞRU, metin düzeltildi — done — 2026-08-11 UTC
 
 - **Bulgu (panel):** `✅ → K5.3-KB` damgalı satırın kanıt bloğu "**Kalan (h→i):** admin makale editörü

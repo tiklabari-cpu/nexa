@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+## 121 — 09.2 · 13.3 · 13.5 kanıt bloklarındaki bayat "Satır ◐ kalıyor" cümleleri — done — 2026-08-11 UTC
+
+- **Yapıldı (metin-only, ürün kodu/test/migration/sözleşme DEĞİŞMEDİ):** 14 madde / 3 blok çevrildi —
+  `K09.2-b` 6 · `K13.5` 7 · `K13.3` 1 (§D93'ün artığı: fiil geçmişteydi, nesnesi "duruyor" olarak
+  şimdiki zamanda kalmıştı). Kalıp: "Satır `◐` kalıyor … duruyor" → "Satır **o turda** `◐` kaldı …
+  **o turda duruyordu, sonraki turlarda kapandı**" (fiil VE nesne). `K09.2-b` + `K13.5` başlıklarına
+  K13.3'ün emsal kutusu eklendi ("bu blokta açık iş YOK" + geçerli olan en alttaki maddedir + blok
+  denetimi); `K13.3`'ün kutusuna bu turun ölçümü işlendi. §D94 açıldı, kalıcı kural oraya yazıldı.
+- **Damga önce koda karşı doğrulandı** (metin körlemesine çevrilmedi) — üçü de HAK EDİLMİŞ, hiçbiri
+  `◐`'ye düşürülmedi: `09.2` types `apps` **17/17** · web `app-grid`+`AppsMarketplace` **32/32** ·
+  integration `apps` **12/12**; `13.3` web `features/goals` **22/22** · `goal-matching` **7/7** ·
+  integration `goals` 14 + `goals-achievement` 13 + `goal-achievements-rls` 12 = **39/39**;
+  `13.5` `attribution` **10/10** · `SalesTracker` **6/6** · `widget.tracksale` **6/6** · integration
+  `settings`+`customer-chat`+`reports-billing`+`apps` **471/471**.
+- **Doğrulama:** kabul ölçümü yeşil — canlı-iddia kalıbı `PLAN.md` genelinde **14 → 0**, §D93 artığı
+  **1 → 0**, üç blokta da "açık iş YOK" ilanı var, üç tablo hücresi (`✅ → K09.2-b`/`K13.3`/`K13.5`)
+  DEĞİŞMEDİ, kanıt maddesi sayısı korundu (8/9/8 → 8/9/8, silme yok). `pnpm -w format:check` exit 0.
+  Doküman-only olduğu için diğer build kapıları koşulmadı (§D80/§D87 emsali); `git diff --name-only`
+  yalnız `PLAN.md` + `HANDOFF.md` + Task Master durum dosyası.
+- **Sonraki pencereye not:** görev metni kalıbı **13** sayıyordu, gerçek **14**'tü — 14.'sü §D88'in
+  KALDIRILAN cümleyi alıntılayan satırıydı (sapma kaydının kendisi aramaya takılıyordu). Alıntının
+  sözleri korundu, yalnız `**` vurgusu düşürüldü + "kaldırılan metnin alıntısı" ibaresi eklendi.
+  **Ders § D94'te kalıcı:** kalan-iş notu o turun maddesinin İÇİNE geçmiş kipinde yazılır, bloğun
+  kuyruğuna ASLA; teslimde hem fiil hem nesne çevrilir. Bu, kalıbın dördüncü ve son süpürmesiydi.
+
 ## 120 — A11Y1–6 · "Internal note" koyu temada 1.47:1 — done — 2026-08-11 UTC
 
 - **Yapıldı:** `Composer.tsx:294` seçili not sekmesi `bg-note text-white` → `bg-note

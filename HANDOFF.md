@@ -13,6 +13,53 @@
 
 ## Task log (newest-first)
 
+## FAZ-3 PLANLAMA — Enterprise orta derinlikten TAM ATOMİĞE indirildi + düşman denetiminden geçirildi (6 kalem · 50 alt-görev · ~69 pencere) — done — 2026-08-11 UTC
+
+- **Yapıldı (YALNIZ planlama — ürün kodu, test, migration, sözleşme DEĞİŞMEDİ):**
+  1. **Kapsam PRD §5.4'e karşı süpürüldü** → **15 satır**: 6 ⬜ açık kalem · 2 ✅ v2'de karşılandı
+     (skills-based routing tm 91 · marketplace `APP_CATALOG` **102 kalem** ≥ "100+") · 4 ⛔ · 2 ⛔-süreç
+     (dedicated onboarding/AM · SLA uptime+kredi) · 1 faz değişikliği. Süpürme §6.1'de **olmayan beş**
+     kalem buldu; hiçbiri kırılım açmadı, hepsi gerekçesiyle satırlandı (§D95 · §D99).
+  2. **§6.1 tam atomik kırılım:** `08.5.8` (6) · `S11` (10) · `C4` (7) · `C6` (8) · `11.5` (8) ·
+     `13.7` (11) = **50 alt-görev**, `SONNET-XHIGH` 19 · `OPUS-XHIGH` 16 · `OPUS-MAX` 15 (%38 Sonnet).
+     §6.2 dilim gruplaması + kritik yol; §G Faz-3 düz tablosu (50 satır). PRD kimliği olmayan dört
+     kaleme `M-FMT` emsaliyle (§D90) **türetilmiş kod** verildi: `S11` · `C4` · `C6` · `11.5`.
+  3. **Task Master:** 6 görev `deferred` → **`pending` + `medium`** (zorunluydu: `run-loop.sh:150-155`
+     `deferred` görevi HİÇBİR koşulda seçmez — plan yazılı, iş ölü kalırdı). 50 alt-görev **tam
+     kimlikli** bağımlılıklarla (`"81.3"`, çıplak sayı değil) açıldı; `validate_dependencies` temiz.
+  4. **Üç karar bu turda bağlandı:** mobil barındırma → bu monorepo'da `apps/mobile` (Expo/RN),
+     store payı kapsam dışı, kalem **`◐` bitecek** (§D96) · uyumlulukta **kod/süreç ayrımı**,
+     sertifikasyon §F.00'ı **bloklamaz** (§D97) · Faz-3'ün companion dosyası **açılmadı**, detay
+     Task Master `details`'inde (§D98).
+- **Doğrulama:** `validate_dependencies` **temiz** · PLAN §6.1 ↔ §G ↔ Task Master **50/50/50 birebir**
+  (script'le karşılaştırıldı) · 800+ karakterlik tablo satırı **0** · alt-görev bağımlılıklarının
+  50/50'si tam kimlik, döngü yok, kardeş-olmayan bağımlılık yok · `next` (kural 3) = **tm 81 → 81.1
+  `S11-a`**. **DoD kapı komutları KOŞULMADI** — bu tur kod değiştirmedi (PLAN.md + tasks.json).
+- **Düşman denetimi (§D99) — kırılım ÇÜRÜTÜLDÜ ve düzeltildi.** Üç bağımsız denetçi 6 koşula karşı
+  sınadı. **İki yapısal bulgu yeni alt-görev doğurdu:** `S11-a2` [OPUS-MAX] — `sso_connections`'ın
+  YAZMA ucu (IdP sertifikası) hiçbir alt-göreve ait değildi ve fiilen bir Sonnet ekranına düşüyordu;
+  `C6-a` → `C6-a1`/`C6-a2` — audit kapsam kararı bir güvenlik denetimiyken Sonnet'e verilmişti.
+  **Üç etiket yükseltildi** (`S11-f` · `C4-a` · `C6-b` → `OPUS-MAX`). **En ağır üçüncü bulgu:** PRD'nin
+  "Enterprise" dediği üç yetenek (SSO/SCIM · HIPAA · SIEM) **hiçbir yetki kapısına bağlanmıyordu** —
+  yetki sözlüğü 3 → **6 anahtar**, üç kalemin e2e süitine "yetkisiz planda red" negatifi eklendi.
+  Ayrıca: SSRF'e açılan "test bağlantısı" butonu yerele indirildi · XSW saldırı varyantları Sonnet
+  penceresinden `S11-b` çekirdeğine taşındı · `08.5.8-e` kendi işini yasaklıyordu (yeniden yazıldı) ·
+  **beş yanlış emsal referansı** düzeltildi (tm 93→94 ×2 · tm 96→77 · tm 33→34 · `DeveloperPortalPage`)
+  · `tm 90 → +84` bağımlılığı eklendi · "dilim sırası graftır" **yalan iddiası geri çekildi** ·
+  kapı kuralı üç kopyada **"5 ✅ + `13.7` ◐"** olarak senkronlandı. 48 → 50 alt-görev.
+- **Varsayımlar:** §C **A17–A31** (15 madde) — SAML KK'sı §5.4'ten türetildi ve **OIDC payı kabul
+  edilen borç**; bölge bir **yapılandırma değeri**, fiziksel ayrı barındırma değil; `C4-e`'nin
+  retention tavanı PRD'de yok, **ürün kararı** olarak kayıtlı; SLA = yanıt/çözüm, uptime+kredi
+  ⛔-süreç; mobil parite = **ekran paritesi** (Billing/Playbook/Team kapsam dışı).
+- **Sonraki pencereye not:** ⚠ **Faz 3 fiilen ÜÇÜNCÜ pencerede başlar.** Kuyrukta `tm 122` ve
+  `tm 123` var (`critical`, bağımlılıksız); `pick_next` adım 2 onları normal backlog'un önüne alır.
+  **`tm 122` bu kırılımın ön koşuludur** — §2 Modül→Faz matrisinin bayat damgalarını düzeltir
+  (`Mobil app` satırında Ent. payı yok · `MOD-09` hâlâ ⬜ oysa §6 onu "v2'de karşılandı, 102 kalem"
+  sayıyor). Bu tur onun işini **YAPMADI** (CONVENTIONS §5 kapsam disiplini). İkisi kapanınca sıra
+  `81.1 S11-a`'dadır. Dilim 1 (`S11` + `C4`) zorunlu olarak ilktir; V3-2/3/4 paraleldir, V3-5 yalnız
+  V3-3'ü bekler. **`tm 82 → 81` ve `tm 84 → 82` bağımlılıkları teknik bağ değil SIRA KISITIDIR**
+  (§6.2.1'de yazılı) — `S11-b` gibi 3 pencerelik bir çekirdek takılırsa `C4` gereksiz bekler.
+
 ## GRAF-ONARIM — döngü BEŞİNCİ kez durdu: graf yine sağlam, backlog yine tükenmişti; bir bulgu ölçüldü, bir hipotez ÇÜRÜTÜLDÜ (tm 122 · tm 123) — 2026-08-11 UTC
 
 - **Panel bulgusu:** `run-loop.sh` seçilebilir görev bulamıyor → otonom döngü duracak. 6 açık görev,

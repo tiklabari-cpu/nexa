@@ -20,7 +20,7 @@
 | **Faz 0 — MVP**    | §5.1 | 54 ✅ · 0 ◐ (§3) · gruplu-🔒 v1'e    | **51 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
 | Faz 1 — v1         | §5.2 | v1 payı teslim (Playbook+AI+omnichannel-MOCK+webhooks §1.3); Should çoğu ✅ · mobil 🔒 · 06.3.2-bulk→v2 | **20 ✅ · 0 ◐ · 0 ⬜**          | ✅ KAPALI |
 | **Faz 2 — v2**     | §5.3 | **✅ TESLİM + KAPANDI** (plan 2026-08-01; kapanış turu 2026-08-11, GL-8 · tm 114 · §D89). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: **0 ⬜ açık · 0 ◐ kısmi · 27 ✅ teslim · 3 ⛔ kapsam dışı** (7 faz çelişkisi PRD'den çözüldü). Kapanış ölçütü (**23 açık kalemin hepsi ✅**) sayı olarak KARŞILANDI ve §F.1'in 10 maddesi **tam sürüm** koşuldu (kanıt HANDOFF §F.2). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: **23 açık kalemin hepsi ✅** | ✅ KAPALI |
-| Faz 3 — Enterprise | §5.4 | ⬜ başlanmadı · orta derinlik (§6.1). 2026-08-01'de **13.7 mobil** buraya taşındı (§D60) · **08.9.6 IP allowlist** buradan v2'ye çıktı (§D61) | —                              |    —    |
+| **Faz 3 — Enterprise** | §5.4 | ⬜ **planlandı, başlanmadı** — kırılım **tam atomik** (2026-08-11 · §D95; düşman denetimi §D99). Kapsam PRD §5.4'e karşı süpürüldü → **15 satır**, **sayılarak**: **6 ⬜ açık kalem** (50 alt-görev · ~69 pencere) · **2 ✅ v2'de karşılandı** · **4 ⛔** · **2 ⛔-süreç** · **1 faz değişikliği** (08.9.6 → Faz 2 ✅). Kırılım §6.1 · dilimler §6.2 · düz tablo §G. **13.7 mobil** buraya taşındı (§D60 · barındırma §D96) · **08.9.6** v2'ye çıktı (§D61) | Faz-3'te `Must` yok — §F.00'ın sayaç kuralı yerine **kalem** kuralı: **5 ✅ + `13.7` ◐** (§D96) | ⬜ AÇIK |
 
 **Faz-0 kapandı (2026-07-31 · GL-3 · tm 87).** Kapanışı bloklayan 6 `Must ◐` kapatıldı: 01.3, 02.4,
 13.8 (modül tablolarında D23/D24/D26'da `◐`→`✅`) + EK-A.1 / EK-A.2 / EK-B.1 (bu turda §7.1'de
@@ -59,7 +59,7 @@ bağımlılığı **çözüldü**. _Tarihçe: kapanış öncesi sayaç "denetlen
 | ADR-09 | AI resolution       | thread kapanışında `author_type='agent'` event YOKSA +1 → `usage_records(metric='ai_resolutions')`. Reports "Automated" aynı sorgudan |
 | ADR-10 | Trial               | 14 gün; bitince **salt-okuma** (veri silinmez, yeni chat/ticket yok, widget offline)                                                  |
 | ADR-11 | Kuyruk              | Kafka/RabbitMQ YOK. Redis Streams (fan-out) + pub/sub (presence)                                                                      |
-| ADR-12 | Bölge               | MVP tek bölge; `region` immutable, tek değer `eu`                                                                                     |
+| ADR-12 | Bölge               | MVP tek bölge; `region` immutable, tek değer `eu`. **Faz 3'te GENİŞLETİLİR** (iptal değil): değer kümesi `{eu, us}`, immutability korunur — §6.1.3 `C4-a` · §D95                                                                                     |
 | ADR-13 | Fiyat               | `unit_price_cents=9900`, `ai_resolutions_included=200`, aşım `AI_OVERAGE_CENTS` (varsayılan 50). Stripe MOCK                          |
 | ADR-14 | Skill vs Workflow   | Tek paradigma = **Skill** (adım listesi). `workflows` tablosu şemada kalır, UI YOK                                                    |
 | ADR-15 | RTM zarfı           | Orijinalle uyumlu: `{request_id, action, payload}` → `{request_id, action, type:'response'\|'push', success, payload}`                |
@@ -2119,46 +2119,491 @@ gerekçesi bir tavsiye değil, grafın şekli hâline gelir. Doğrulama: panel `
 
 **Çıkış kriteri (PRD):** Enterprise ARR ≥%25 · SOC2 Type II + ISO 27001 · churn <%5/yıl.
 
+**Kapsam süpürmesi (2026-08-11 · §D95).** Bu tablo PRD §5.4'ün **yedi alan satırının tamamına**
+karşı süpürüldü ve §5.5 matrisinin `Ent.` sütunu ayrıca tarandı. Süpürme §6.1'de olmayan **üç**
+kalem buldu: _dedicated onboarding/account manager_ · _IVR routing_ · _kalan marketplace app'leri_.
+Üçü de aşağıda gerekçesiyle satırlandı; hiçbiri kırılım açmadı. Kırılım açan **altı** kalem §6.1'dedir.
+
 | PRD    | Gereksinim                                       | Not                                                       |
 | ------ | ------------------------------------------------ | --------------------------------------------------------- |
-| 08.5.8 | Telegram                                         | PRD §11.1/7: "Instagram/Telegram tam kanal: v2/Enterprise" → Instagram v2 (§5), Telegram burada |
-| **13.7** | **Mobil uygulamalar** (iOS/Android + push) — **13.8-mobil-push** dahil | **v1 `Should`'undan bu turda taşındı (2026-08-01 · §D60).** PRD KK: _"Inbox/AI/CRM/Reports mobilde; push; **tam modül paritesi** (Nexa farklılaşması)"_. Taşıma gerekçesi: native iOS/Android **bu deponun stack'i dışında** (ADR-01/02 TS monorepo) — ayrı uygulama hattı + derleme zinciri + store süreci. Eski `🔒` gerekçesi ("PRD §11.1/8") **yanlış atıftı**: o madde _"Masaüstü native uygulama"_ hakkındadır. → §6.1 · tm 90 |
-| 08.9.6 | ~~IP allowlist / oturum güvenliği~~              | **→ Faz 2'ye taşındı (§5, 2026-08-01 · §D61).** PRD §5.3 "Güvenlik" satırı bu kalemi CC-masking/banned-customers/spam ile **aynı v2 hücresinde** listeliyor; o üç kardeş zaten v2 (ve GL-5/6/7 ile öne bile çekildi). FR-MOD-08.9.6'nın `Could (Ent.)` etiketi **önceliği** bildirir; **fazı PRD §5 belirler** (§1.1 omurga kuralı: _"Çalışma sırası PRD §5'in faz sırasıdır"_). Güvenlik erken gelir. |
-| —      | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11                                                   |
-| —      | HIPAA BAA + bölgesel barındırma (US/EU)          | ⚠️ ADR-12 tek bölge (`eu`) — Enterprise'da yeniden açılır |
-| —      | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12                                             |
-| —      | White-label widget · SLA yönetimi · sandbox      |                                                           |
-| —      | Sesli/telefon (voice/IVR)                        | ⛔ MVP–v2 kapsam dışı (PRD §11.1/3)                       |
+| 08.5.8 | Telegram                                         | PRD §11.1/7 "Instagram/Telegram tam kanal: v2/Enterprise" → Instagram v2 (§5), Telegram burada. → §6.1 · tm 79 |
+| **13.7** | **Mobil uygulamalar** (iOS/Android + push) — **13.8-mobil-push** dahil | **v1 `Should`'undan taşındı (2026-08-01 · §D60).** PRD KK: _"Inbox/AI/CRM/Reports mobilde; push; tam modül paritesi"_. Taşıma gerekçesi: native iOS/Android bu deponun stack'i dışında (ADR-01/02). Barındırma kararı **§D96'da verildi** (bu monorepo'da Expo/RN workspace). → §6.1 · tm 90 |
+| 08.9.6 | ~~IP allowlist / oturum güvenliği~~              | **→ Faz 2'ye taşındı (§5, 2026-08-01 · §D61).** Fazı PRD §5 belirler (§1.1 omurga kuralı); güvenlik erken gelir. Teslim: tm 80 ✅ |
+| S11    | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11 (türetilmiş kod `S11`); kimlik sınırı. → §6.1 · tm 81 |
+| C4     | HIPAA BAA + bölgesel barındırma (US/EU)          | NFR-C4 (türetilmiş kod `C4`); ADR-12 tek bölge (`eu`) burada genişletilir. → §6.1 · tm 82 |
+| C6     | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12 (türetilmiş kod `C6`). **Kod payı** görevleşir, **sertifikasyon süreci** §F.00'ı bloklamaz (§D97). → §6.1 · tm 83 |
+| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. → §6.1 · tm 84 |
+| —      | SLA: uptime taahhüdü + fatura kredisi (NFR-U5)   | ⛔-**süreç** · Denetim bulgusu K1-4: PRD'nin tek somut SLA tanımı NFR-U5'tir (_"Sözleşmeli uptime taahhüdü + kredi mekanizması"_). Uptime taahhüdü bir **sözleşme** kalemidir, bu depodan üretilemez (§D97 kod/süreç ayrımı). `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder |
+| —      | Dedicated onboarding / account manager           | ⛔-**süreç** · PRD §5.4 "Kurumsal" satırının üçüncü payı. **Kod payı YOK** — insan hizmeti taahhüdü (özel onboarding + atanmış müşteri yöneticisi); depoda karşılığı olan hiçbir yüzey üretmez. Süpürmede bulundu, §F.00'ı bloklamaz (§D95) |
+| —      | Skills-based routing (Ent. payı)                 | ✅ **v2'de teslim** — `08.6.3` (tm 91). PRD §5.4 "Kanal" satırı bunu IVR ile birlikte anıyor; skill payı v2'de kapandı, IVR payı ⛔ (voice'a bağlı) |
+| —      | Kalan marketplace app'leri                       | ✅ **v2'de karşılandı** — `APP_CATALOG` **102 kalem** (`packages/types/src/apps.ts:95`), PRD'nin "100+" eşiğinin üstünde (tm 09.2). Süpürmede bulundu, ayrı kalem açılmadı (§D95) |
+| —      | Sesli/telefon (voice/IVR) + IVR routing          | ⛔ MVP–v2 kapsam dışı (PRD §11.1/3)                       |
 | —      | Gerçek zamanlı canlı çeviri · sesli sentiment    | ⛔ MVP–v2 kapsam dışı (PRD §11.1/4)                       |
-| —      | Veri ambarı export (Snowflake/BigQuery)          | ⛔ P3 (PRD §11.1/5)                                       |
+| —      | Ayrı kolon-tabanlı analitik depo (ClickHouse)    | ⛔ P3 — PRD §11.1/5 birebir bunu dışlar ("Ayrı kolon-tabanlı analitik ambar … soğuk arşiv: P3") |
+| —      | Veri ambarı export (Snowflake/BigQuery)          | ⛔ — **gerekçe §11.1/5 DEĞİL** (denetim düzeltmesi K1-1: o madde yalnız analitik DEPOYU dışlar, export'u değil). §5.5 matrisi bunu `MOD-07 · Ent. ○` olarak işaretliyor, yani PRD'de kapsam dışı sayılmamış. **Kendi gerekçemizle ⛔:** dış veri ambarı (Snowflake/BigQuery) gerçek bir dış servis hesabı ister; CLAUDE.md dış servisleri mock'lamayı emreder ve mock bir DWH export'u hiçbir şey kanıtlamaz (§D99) |
 
-### 6.1 Enterprise orta-derinlik kırılımı
+**Faz-3 §F.00 kapısı (henüz açık).** PRD §5.4'ün kalemleri `Should`/`Could`'dur — v2'de olduğu gibi
+`Must` yoktur, bu yüzden kapı **kalem** kuralıyla okunur: **beş kalem ✅ + `13.7` `◐`**
+(`08.5.8` · `S11` · `C4` · `C6` · `11.5` ✅ · `13.7` ◐). `13.7`'nin `◐` ile kapanacağı
+**önceden ilan edilmiştir** ve iki paylıdır — (a) mağaza payı, (b) modül paritesi daraltması;
+ikisi de §D96'da kabul edilen borç olarak yazılıdır. Denetim bulgusu K1-6: kural önceki hâlinde
+"altı kalemin hepsi ✅" diyordu ve tanım gereği sağlanamazdı — kapanış penceresi ya kapatamaz
+ya uydurulmuş bir ✅ yazardı.
+`⛔` ve `⛔-süreç` satırları sayaca girmez; gerekçeleri yukarıda satırındadır (§F.00: gerekçesiz
+`🔒`/`⛔` bir kapanış engelidir).
 
-> Orta derinlik (bayatlama gerekçesi §5.1 ile aynı). Uyumluluk kalemleri kod değil **süreç/denetim**
-> ağırlıklı (takvim uzun — dış denetim 6–12 ay, PRD §10.2).
+### 6.1 Enterprise atomik kırılımı (6 kalem · 50 alt-görev)
 
-| PRD    | İş kalemi                                | Etiket   | ~Alt-görev | Not                                        |
-| ------ | ---------------------------------------- | -------- | :--------: | ------------------------------------------ |
-| 08.5.8 | Telegram (TR pazarı önceliği)            | `[OPUS-XHIGH]`|   2        | 08.5-adapter-a (tm 35 ✅)                  |
-| **13.7** | **Mobil uygulamalar** (iOS/Android + push) | `[OPUS-MAX]` ↑ | **8–12** | **v1'den taşındı (§D60).** ↑ gerekçe: **stack sınırı** — bu monorepo TS/web (ADR-01/02); native app ayrı derleme zinciri + store süreci + ayrı test piramidi ister; ayrıca push altyapısı (APNs/FCM MOCK) + oturum/token modelinin mobil kanada genişlemesi = kimlik sınırı. Faz başında atomik bölünür (§5.1 bayatlama politikası). Bağımlılık: 13.8 web bildirim ✅ (tm 31) · auth/token ✅. tm 90 |
-| ~~08.9.6~~ | ~~IP allowlist / oturum güvenliği~~  | —        |   —        | **→ Faz 2'ye taşındı** (§5 · §5.2 · §D61). PRD §5.3 Güvenlik satırı v2 diyor; §1.1'e göre fazı §5 belirler. |
-| —      | SAML 2.0 SSO + SCIM provisioning         | `[MAX]` ↑|   4–5      | NFR-S11; kimlik sınırı                     |
-| —      | HIPAA BAA + bölgesel barındırma          | `[MAX]` ↑|   3–4      | ADR-12 tek bölge (`eu`) yeniden açılır     |
-| —      | SOC2 Type II · ISO 27001 · audit+SIEM    | `[MAX]` ↑|   süreç    | NFR-C6/C7/S12; audit yazıcı ✅ temeli var  |
-| —      | White-label widget · SLA · sandbox       | `[XHIGH]`|   3–4      | 11.5 · widget ✅                           |
-| —      | Sesli/telefon (voice/IVR)                | ⛔        |     0      | PRD §11.1/3 kapsam dışı                     |
-| —      | Gerçek zamanlı çeviri · sesli sentiment  | ⛔        |     0      | PRD §11.1/4 kapsam dışı                     |
-| —      | Veri ambarı export                       | ⛔        |     0      | P3 (§11.1/5)                                |
+> **Bu bölüm 2026-08-11'de orta derinlikten TAM ATOMİĞE indirildi (§D95).** Önceki hâli
+> "orta derinlik — atomik kırılım faz başında yapılır (§5.1 bayatlama politikası)" idi. O gerekçe
+> **artık geçerli değil**: Faz 3 şimdi başlıyor, Faz 0/v1/v2 kapandı (§F.00) ve kod tabanı bu
+> kırılımın koda karşı doğrulandığı andaki hâliyle aynı. **Bayatlama politikası artık hiçbir faza
+> uygulanmıyor** — planın tamamı atomik.
+>
+> Her alt-görev tek temiz pencerede DoD kapısından geçebilecek boyuttadır. Etiket = model × efor
+> (§5.1.1); bölme politikası §5.1.2. Alt-görev ID'leri PLAN §6.1, §G düz tablosu ve Task Master'da
+> **birebir aynıdır**.
+>
+> **Tam alan detayı Task Master'ın `details` alanındadır — Faz 3'ün companion dosyası YOKTUR**
+> (v2'nin `PLAN-V2-KIRILIM.md`'sinin muadili açılmadı, gerekçe §D98). Sıfır-bağlamla açılan pencere
+> zaten Task Master'dan okur (TASK-RUNNER-PROMPT §0/3); ikinci bir 900 KB'lık dosya o pencereye
+> hiçbir şey eklemez, yalnız senkron tutulacak ikinci bir kaynak yaratırdı.
+>
+> **Etiket dağılımı (50 alt-görev):** `SONNET-XHIGH` **19** · `SONNET-MAX` **0** · `OPUS-XHIGH` **16** ·
+> `OPUS-MAX` **15** → **%38 Sonnet**. v2'nin %51'inden düşük olması kasıtlıdır: Faz 3'ün kalemleri
+> kimlik federasyonu, bölge zorlaması, denetim izi bütünlüğü ve yetkilendirme (entitlement) sınırıdır;
+> bu işlerin çekirdeği §5.1.1 gereği `sonnet`'e verilmez.
+>
+> **Bu dağılım düşman denetiminden SONRAKİ hâldir (§D99).** İlk kırılım 48 alt-görev / 11 `OPUS-MAX`
+> / %40 Sonnet idi; denetim iki güvenlik boşluğu buldu ve ikisi de yapısal düzeltme gerektirdi:
+> `S11-a2` (SSO bağlantısının YAZMA ucu hiçbir alt-göreve ait değildi ve fiilen bir Sonnet ekranına
+> düşüyordu) ve `C6-a1`/`C6-a2` (audit kapsam kararı bir güvenlik denetimiyken tek bir Sonnet
+> penceresine verilmişti). Ayrıca üç etiket `OPUS-XHIGH` → `OPUS-MAX`'a yükseltildi
+> (`S11-f` · `C4-a` · `C6-b`). Sonnet payının %40'tan %38'e düşmesi bu turun bedeli değil,
+> **kazancıdır**.
 
-**Enterprise:** çoğu `[OPUS-MAX]` (güvenlik/uyumluluk/kimlik sınırları). Kod ~alt-görev **28–37**
-(2026-08-01: mobil 13.7 `+8–12` girdi, 08.9.6 `−2` Faz-2'ye çıktı) + sertifikasyon **süreç** işi
-(takvim-belirleyici).
+#### 6.1.1 · 08.5.8 — Telegram kanalı (MOCK adaptör, uçtan uca) · dilim V3-4
 
-> **Etiket notu (2026-08-01):** Faz-3 tablosu hâlâ **orta derinliktedir** — atomik kırılım faz başında
-> yapılır (§5.1 bayatlama politikası). Etiketler yeni **model+efor matrisine** çevrildi
-> (`[SONNET-XHIGH]` · `[SONNET-MAX]` · `[OPUS-XHIGH]` · `[OPUS-MAX]` — bkz. §5.2 giriş). Eski
-> `[XHIGH]`/`[MAX]` yazımı Faz-0/v1 tarihçe bölümlerinde (§3/§4/§A/§B) **olduğu gibi bırakıldı**:
-> o işler bitti, etiketleri artık yalnız kayıt değeri taşıyor.
+**6 atomik alt-görev · ~7 pencere** — `OPUS-XHIGH` ×2 · `SONNET-XHIGH` ×4 — tm 79
+
+**KK (PRD birebir):** _"Get notified → tam entegrasyon (TR pazarında öncelik — Nexa)"_ (denetim düzeltmesi K1-9: "— Nexa" eki ilk alıntıda düşürülmüştü)
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `08.5.8-a` | Telegram connect/webhook kontratı + generated tip yenilemesi | `SONNET-XHIGH` | yok | 1 |
+| `08.5.8-b` | TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri | `SONNET-XHIGH` | 08.5.8-a | 1 |
+| `08.5.8-c` | Telegram'ın adapter kanalı olarak devreye alınması — CHANNEL_TYPES + registry + pinlenmiş test | `OPUS-XHIGH` | 08.5.8-a, 08.5.8-b | 1 |
+| `08.5.8-d` | Settings → Channels: Telegram kartı "Coming soon"dan canlı connect/disconnect'e | `SONNET-XHIGH` | 08.5.8-c | 1 |
+| `08.5.8-e` | Inbox Views grubunda Telegram kanal görünümü | `SONNET-XHIGH` | 08.5.8-c | 1 |
+| `08.5.8-f` | Uçtan uca doğrulama — bağla→mesaj→inbox→yanıt + cross-tenant + adres sahiplenme regresyonu | `OPUS-XHIGH` | 08.5.8-d, 08.5.8-e | 2 |
+
+> **BÖLÜNMEZ ÇEKİRDEK YOK — ve bu kırılımın en pahalı satırını sildi.** Emsal kalem 08.5.7
+> (Instagram, tm 65) sekiz alt-görevdi ve içinde bir `OPUS-MAX` vardı: `08.5.7-d`, "kanal adresinin
+> lisanslar arası tekilliği". **O çekirdek Telegram için yeniden yazılmaz, çünkü kanal-agnostiktir
+> ve zaten teslim edilmiştir.** Koda karşı doğrulandı: `20260809090000_channel_address_uniqueness`
+> migration'ı `channel_address_owner(p_type, p_address)` SECURITY DEFINER fonksiyonunu + kısmi unique
+> index'i **tip parametresiyle** kurar; `channel-service.ts:94-163` (`assertAddressFree` + P2002 yarış
+> dalı) hiçbir yerde kanal tipini özel-durumlamaz. Telegram `CHANNEL_TYPES`'a girdiği anda aynı
+> koruma altına girer. `08.5.8-f` bunu **regresyon testiyle kanıtlar** (varsaymaz): iki lisans aynı
+> Telegram adresini bağlamayı denediğinde ikincisi reddedilmeli. Sonuç: Instagram'ın 8 alt-görev /
+> 1 `OPUS-MAX`'ı yerine 6 alt-görev / 0 `OPUS-MAX`.
+
+**Varsayımlar (§C'ye yazılacak):**
+- Telegram MOCK connect alan seti: `bot_token` (mock) + `bot_username` (kanal adresi). Adres alanı
+  `ig_user_id`/`page_id` deseniyle aynı yerde (`config->>'address'`) saklanır — resolver'ın bulabilmesi için.
+- Mock outbound provider message id öneki `tg.` (Messenger `mid.`, WhatsApp `wamid.`, Twilio `SM`,
+  Instagram `aigid.` muadili).
+- Inbound gövde şekli depodaki düzleştirilmiş `{recipient, sender, message}` kalıbını izler;
+  Telegram'ın gerçek `update` sarmalayıcısı taklit edilmez (mevcut dört adaptörle tutarlılık).
+- "TR pazarında öncelik" bir **pazar** kararıdır, kod gereksinimi değil: panel/widget TR yerelleştirmesi
+  zaten teslim (tm 26, NFR-I18N). Bu kalem ek bir dil işi açmaz.
+- `08.5.8-a`'da `CHANNEL_TYPES` (adapter listesi) **değişmez** — sözleşme önce, devreye alma `-c`'de.
+  Aksi hâlde adaptörü olmayan bir tip route yüzeyine girer ve `-a` ile `-c` arasındaki sürümde 500 üretir.
+
+**Açık sorular:**
+_(Bu kalemin iki açık sorusu düşman denetiminde **karara bağlandı ve kapatıldı** — §D99.)_
+
+- ~~Telegram `bot_token` nerede saklanacak?~~ **KAPANDI:** `config`'e YAZILMAZ.
+  `channel-adapter.ts` `ConnectResult.config` dokümanı birebir _"Never contains a raw secret"_
+  diyor; Instagram emsalinin `ig_access_token`'ı sunucunun kendi bastığı mock değerdir, Telegram'da
+  ise token **istemciden gelir**. `parseConnect` yalnız `{address: bot_username, config: {address,
+  bot_username}}` döner; `bot_token` pino redaction + `sanitizeAuditMetadata`'ya eklenir.
+- ~~'Get notified' kaydının akıbeti?~~ **KAPANDI:** kart canlıya geçince kayıt **sessizce düşer**
+  (CTA artık yok) ve localStorage anahtarı bir sonraki okumada temizlenir → `08.5.8-d` kapsamında.
+
+#### 6.1.2 · S11 — SAML 2.0 SSO + SCIM provisioning · dilim V3-1
+
+**10 atomik alt-görev · ~16 pencere** — `OPUS-MAX` ×6 · `OPUS-XHIGH` ×2 · `SONNET-XHIGH` ×2 — tm 81
+
+**KK (PRD §5.4 "Kimlik" satırından — birebir):** _"SAML 2.0 SSO (Okta/OneLogin/Auth0/Azure AD),
+SCIM provisioning"_ → türetilen kabul cümlesi: _"SAML IdP ile SSO girişi; SCIM ile kullanıcı yaşam
+döngüsü (provizyon/deprovizyon)"_ (§C-A17)
+
+> **OIDC payı kapsam dışıdır — kabul edilen borç (denetim bulgusu K1-3 · §D99).** NFR-S11 satırı
+> _"SAML 2.0 / OIDC + SCIM (Enterprise)"_ der; KK bilerek §5.4'ün "Kimlik" satırından türetildi,
+> çünkü orada OIDC geçmez ve dokuz alt-görevin hiçbiri OIDC federasyonuna dokunmaz. Gerekçe: OIDC
+> federasyonu ayrı bir protokol yüzeyidir (discovery + JWKS + id_token doğrulama) ve SAML'ın
+> yanına ikinci bir bölünmez güvenlik çekirdeği ekler. Enterprise IdP'lerinin tamamı SAML konuşur,
+> dolayısıyla kalem KK'sını karşılar. OIDC istenirse ayrı kalem açılır.
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `S11-a` | sso_connections tablosu + RLS politikası + kontrat okuma yüzeyi | `OPUS-XHIGH` | yok | 1 |
+| `S11-a2` | SSO bağlantısı YAZMA ucu (BÖLÜNMEZ) — sertifika/entityId yazımı + owner rol kapısı + rotasyon | `OPUS-MAX` | S11-a | 2 |
+| `S11-b` | SAML assertion doğrulama çekirdeği (BÖLÜNMEZ) — imza + koşullar + replay + XSW | `OPUS-MAX` | yok | 3 |
+| `S11-c` | Mock IdP harness — imzalı assertion üreteci + anahtar çifti fixture'ı | `SONNET-XHIGH` | yok | 1 |
+| `S11-d` | SP uçları (BÖLÜNMEZ) — /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, audit | `OPUS-MAX` | S11-a, S11-b, S11-c | 2 |
+| `S11-e` | SCIM 2.0 sunucu çekirdeği (BÖLÜNMEZ) — /scim/v2/Users + bearer auth + lisans kapsamı | `OPUS-MAX` | S11-a | 2 |
+| `S11-f` | SCIM yaşam döngüsü semantiği — create/suspend/deprovizyon + koltuk etkisi + audit | `OPUS-MAX` | S11-e | 1 |
+| `S11-g` | Settings → Security: SSO bağlantı ekranı + SCIM token üretimi (bir kez gösterilir) | `SONNET-XHIGH` | S11-a, S11-a2, S11-d, S11-e | 1 |
+| `S11-h` | SSO zorunlu kılma (BÖLÜNMEZ) — parola girişinin kapatılması + break-glass kilitlenme koruması | `OPUS-MAX` | S11-d, S11-g | 2 |
+| `S11-i` | Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant | `OPUS-XHIGH` | S11-d, S11-f, S11-g, S11-h | 1 |
+
+> **Bölünmeyen çekirdekler (§5.1.2 istisnası) — dördü de kimlik sınırında.**
+> **(1) `S11-b`:** imza doğrulama, koşul (Conditions) kontrolleri ve replay reddi **tek bir
+> güvenlik akıl yürütmesinin üç ucudur**. Ayrı pencerelere bölünürse aradaki sürümde "imzası doğru
+> ama Audience'ı başka kiracıya ait" ya da "imzası doğru, aynı assertion ikinci kez" kabul edilir.
+> XSW savunması ayrıca bölünemez: hangi düğümün imzalandığı ile hangi düğümün okunduğu **aynı kod
+> yolunda** kararlaştırılmalıdır — bu ikisi ayrılınca ortaya çıkan açık tam olarak XSW'nin kendisidir.
+> **(2) `S11-d`:** "assertion geçerli" ile "bu assertion şu hesaba karşılık gelir ve ona oturum
+> verilir" arasındaki adım yetkilendirme kararıdır; JIT provizyon (görülmemiş e-posta → yeni üyelik)
+> aynı pencerede olmalı, yoksa "doğrulanmış ama eşlenmemiş" bir ara durum yaratılır ve o durumun
+> güvenli davranışı (reddet mi, aç mı) yazılı olmaz.
+> **(3) `S11-e`:** SCIM'in kimlik doğrulaması + kiracı kapsamı bir kapıdır; SCIM token'ı bütün
+> bir kuruluşun kullanıcı yaşam döngüsünü yönetir, kapsam kararını ayrı pencereye bırakmak
+> "token doğru, lisans yanlış" sınıfı bir çapraz-kiracı yazma yolu bırakır.
+> **(4) `S11-h`:** parola yolunu kapatan karar ile kilitlenme kaçış yolu **birlikte** tasarlanmalı.
+> Ayrılırsa arada geçen sürümde IdP'si bozuk bir kuruluş kendi hesabından tamamen dışarıda kalır —
+> tm 80'in `08.9.6-d` turunda aynı hata self-lockout guard'la önlenmişti, emsali odur.
+> Çekirdeklerin **etrafındaki** her şey ucuza çıkarıldı: tablo/RLS (-a), mock IdP (-c), SCIM
+> semantiği (-f), ekran (-g), doğrulama (-i).
+
+**Varsayımlar (§C'ye yazılacak):**
+- **SP-initiated + IdP-initiated akışın ikisi de desteklenir**, ama IdP-initiated'da `InResponseTo`
+  yokluğu **yalnız** bağlantı ayarında açıkça izin verilmişse kabul edilir (varsayılan: kapalı).
+- SAML kütüphanesi yerine **kendi doğrulayıcımız** yazılmaz; olgun bir XML-DSig kütüphanesi kullanılır.
+  Gerekçe: imza doğrulamayı elde yazmak bu projenin kabul edebileceği bir risk değil. Kütüphane seçimi
+  `S11-b` penceresinin ilk kararıdır ve §C'ye yazılır.
+- SCIM `Groups` kaynağı **okuma + üyelik** düzeyinde desteklenir; grup→rol otomatik eşlemesi bu
+  kalemin kapsamı dışıdır (ayrı §D kaydı gerektirir).
+- SSO/SCIM **Enterprise yetkisidir** — `11.5-a`'daki entitlement sözlüğüne bağlanır. Bağlanma
+  V3-3'te yapılır; V3-1'de yalnız yetenek kurulur (sıra tersine olamaz: yetki sözlüğü plan
+  kademesine, plan kademesi de kimlik sınırına yaslanır).
+- Dış IdP (Okta/Auth0/Azure AD) **MOCK**'tur — gerçek kiracıya bağlanılmaz (CLAUDE.md sınırı).
+
+**Açık sorular:**
+- Bir hesap hem parolayla hem SSO ile var olabilir mi (aynı e-posta), yoksa SSO bağlandığı anda o
+  lisanstaki parola kimliği kapanmalı mı? Kırılımda "ikisi bir arada, `S11-h` ile kapatılabilir"
+  varsayıldı.
+- SCIM deprovizyonu üyeliği **suspend** mi etsin yoksa **sil** mi? Kırılımda suspend varsayıldı
+  (audit izi ve atanmış sohbetlerin sahipliği korunsun diye) — ürün kararı gerekli.
+- SCIM token'ı lisans başına tek mi olmalı, yoksa birden çok (rotasyon için) mu? Kırılımda çoklu
+  varsayıldı (`api_tokens` deseni zaten çoklu).
+
+#### 6.1.3 · C4 — HIPAA BAA + bölgesel barındırma (US/EU) · dilim V3-1
+
+**7 atomik alt-görev · ~10 pencere** — `OPUS-MAX` ×3 · `OPUS-XHIGH` ×2 · `SONNET-XHIGH` ×2 — tm 82
+
+**KK (NFR-C4/C9'dan türetilmiş — §C'ye varsayım):** _"BAA imzalı hesapta HIPAA kapsamı; region seçimi
+(US/EU); yanlış bölge → `misdirected_request`"_
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `C4-a` | REGIONS genişlemesi (eu + us) + licenses.region kayıt anında seçilebilir + kontrat | `OPUS-MAX` | yok | 1 |
+| `C4-b` | Bölge zorlaması çekirdeği (BÖLÜNMEZ) — API + RTM + customer token üçünde misdirected_request (421) | `OPUS-MAX` | C4-a | 3 |
+| `C4-c` | Onboarding/kayıt akışında bölge seçimi + "sonradan değiştirilemez" uyarısı | `SONNET-XHIGH` | C4-a | 1 |
+| `C4-d` | BAA durumu — licenses.hipaa_baa_signed_at + kabul akışı (MOCK) + compliance.baa_signed audit | `OPUS-XHIGH` | C4-a | 1 |
+| `C4-e` | HIPAA kapsam kısıtları (BÖLÜNMEZ) — retention tavanı + PII maskesi sertleşmesi + AI bölge sınırı | `OPUS-MAX` | C4-b, C4-d | 2 |
+| `C4-f` | Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi | `SONNET-XHIGH` | C4-d | 1 |
+| `C4-g` | Uçtan uca doğrulama — 421 üç yüzeyde + immutability + BAA'sız hesapta kısıt yok + cross-tenant | `OPUS-XHIGH` | C4-b, C4-e, C4-f | 1 |
+
+> **Bölünmeyen çekirdekler (§5.1.2 istisnası).**
+> **(1) `C4-b`:** bölge kararı üç ayrı giriş yüzeyinde (REST `onRequest`, RTM `login`,
+> customer token verme) **aynı** olmak zorundadır. Üçünü ayrı pencerelere bölmek, aradaki sürümde
+> "REST reddediyor ama WebSocket kabul ediyor" durumunu üretir — ve bu tam olarak veri ikametinin
+> ihlal edildiği yerdir. Hata tipi zaten kayıtlı: `misdirected_request` → 421
+> (`packages/types/src/errors.ts:42,94`), yani sözleşme tarafı hazır; eksik olan **karar noktası**.
+> **(2) `C4-e`:** "bu lisans HIPAA kapsamındadır" bir yetki değil bir **kısıt** anahtarıdır;
+> retention tavanı, log maskesi ve AI çıkarım sınırı aynı anahtarın üç sonucudur. Ayrılırsa
+> "BAA imzalı ama transcript'i üçüncü bölgeye giden" bir hesap yaratılır ve bu, ürünün verdiği
+> uyum sözünün fiilen boş olması demektir.
+
+**Varsayımlar (§C'ye yazılacak):**
+- **Bölge bir yapılandırma değeridir, bir dağıtım değil.** Bu depoda tek Postgres/Redis vardır ve
+  CLAUDE.md production deploy'u yasaklar; dolayısıyla `us` bölgesi **fiziksel olarak ayrı bir
+  barındırma değil**, isteğin doğru bölgeye gidip gitmediğini karara bağlayan bir **etikettir**.
+  Gerçek çok-bölgeli barındırma §F.00'ı bloklamayan bir süreç/altyapı payıdır (§D97).
+- ADR-12 (_"MVP tek bölge; `region` immutable, tek değer `eu`"_) bu kalemde **genişletilir**, iptal
+  edilmez: immutability korunur, değer kümesi `{eu, us}` olur. ADR metni §0'da güncellenir + §D kaydı.
+- Var olan lisansların bölgesi `eu`'da kalır; geriye dönük göç yoktur (immutable kuralının doğal sonucu).
+- HIPAA yalnız `us` bölgesinde açılabilir (PRD NFR-C4: _"HIPAA yalnız US hosting + BAA"_); `eu`
+  lisansında BAA akışı hiç gösterilmez.
+
+**Açık sorular:**
+- Yanlış bölgeye düşen istek 421 mi dönmeli yoksa doğru bölgeye **yönlendirme** mi vermeli
+  (`Location` başlığı)? Kırılımda saf 421 varsayıldı — yönlendirme, bölge adreslerinin dışa açılması
+  demek ve bu ayrı bir karar.
+- BAA "imzalandı" kaydı hangi aktörün yetkisi? Kırılımda `owner` varsayıldı (admin yetmez).
+
+#### 6.1.4 · C6 — SOC 2 Type II · ISO 27001 · tam audit log + SIEM · dilim V3-2
+
+**8 atomik alt-görev · ~10 pencere** — `OPUS-MAX` ×2 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×3 — tm 83
+
+**KK (NFR-C6/C7/S12'den türetilmiş — §C'ye varsayım):** _"Genişletilmiş audit + SIEM'e export;
+kontrol kanıtları"_
+
+**Kod / süreç ayrımı (§D97 — bu turda karara bağlandı).** Bu kalemin **"done" tanımı bu depoda
+yalnız kod payıdır**: aşağıdaki yedi alt-görev DoD kapısından geçtiğinde kalem ✅ olur.
+_Sertifikasyon süreci_ (SOC 2 Type II'nin gözlem penceresi, dış denetçi seçimi, ISO 27001 belgesi)
+**görevleşmez ve §F.00'ı bloklamaz** — takvimi dışsaldır (PRD §10.2: 6–12 ay) ve bu depodan
+üretilemez. §6 tablosunda `⛔-süreç` olarak işaretlidir.
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `C6-a1` | Audit kapsam boşluğu ENVANTERİ — 37 route taranır, çıktı ada bağlı sabit liste | `OPUS-XHIGH` | yok | 1 |
+| `C6-a2` | Envanterdeki eylemlerin AUDIT_ACTIONS'a eklenmesi + çağrıların bağlanması | `SONNET-XHIGH` | C6-a1 | 1 |
+| `C6-b` | SIEM export kontratı + siem_export_cursors (keyset, tekrar-teslime dayanıklı) + NDJSON akışı | `OPUS-MAX` | yok | 1 |
+| `C6-c` | Export bütünlüğü çekirdeği (BÖLÜNMEZ) — kayıt zinciri (HMAC) + export imzası + boşluk tespiti | `OPUS-MAX` | C6-b | 3 |
+| `C6-d` | MOCK SIEM hedefi (.data/siem dosya sink) + zamanlanmış gönderim | `SONNET-XHIGH` | C6-b, C6-c | 1 |
+| `C6-e` | Erişim gözden geçirme raporu (SOC 2 CC6.1 kanıtı) — kim/hangi rol/son giriş/PAT envanteri | `OPUS-XHIGH` | C6-a1 | 1 |
+| `C6-f` | Settings → Security: SIEM export ekranı (hedef, son export, boşluk uyarısı) | `SONNET-XHIGH` | C6-b, C6-c, C6-d | 1 |
+| `C6-g` | Uçtan uca doğrulama — eylem→audit→export→zincir; append-only; boşluk negatifi; cross-tenant | `OPUS-XHIGH` | C6-c, C6-d, C6-e, C6-f | 1 |
+
+> **Bölünmeyen çekirdek (§5.1.2 istisnası) — `C6-c`.** Bir denetim izinin değeri
+> **silinemez olmasında değil, silindiğinin görülebilmesindedir**. Zincir (satır → önceki satırın
+> HMAC'i), export imzası ve boşluk tespiti üçü birlikte bir tek iddiayı taşır: "bu export eksiksizdir
+> ve değiştirilmemiştir". Herhangi biri ayrı pencereye alınırsa aradaki sürümde imzalı ama **eksik**
+> bir export üretilir ve denetçiye verilen kanıt sessizce değersizleşir — üstelik bu, testlerin yeşil
+> olduğu bir durumdur. Mevcut temel doğru yerde: `audit_log` INSERT/SELECT'e kapalı değil ama
+> UPDATE/DELETE **veritabanı düzeyinde** reddediliyor (tm 23) ve budama yalnız
+> `audit_prune_expired` SECURITY DEFINER yolundan geçiyor (tm 92 `08.9.7-h`) — zincir bu tabanın
+> üstüne kurulur, onu değiştirmez.
+
+**Varsayımlar (§C'ye yazılacak):**
+- SIEM hedefi **MOCK**'tur (dosya sink). Gerçek Splunk/Sentinel/Datadog bağlantısı yapılmaz
+  (CLAUDE.md: dış servisler mock'lanır).
+- Zincir HMAC anahtarı lisans başına türetilir ve export'ta **yer almaz** — doğrulama, anahtarı bilen
+  tarafın işidir. Aksi hâlde imza kendi kendini doğrulayan bir süs olur.
+- Erişim gözden geçirme raporu **kanıt üretir, karar vermez**: "bu erişim uygun mu" sorusu insan
+  denetimidir; rapor yalnız envanteri ve son kullanım zamanını verir.
+- ISO 27001/SOC 2 kontrol matrisinin tamamı bu depoya yazılmaz; yalnız **kod tarafından üretilebilen**
+  kanıtlar (erişim envanteri, audit bütünlüğü, retention uygulaması) görevleşir.
+
+**Açık sorular:**
+- Export penceresi ne olmalı — `RETENTION_AUDIT_DAYS=30` (tm 92 `08.9.7-g`) budamayı 30 günde
+  yapıyor; SIEM'e gönderim bundan **önce** koşmazsa kayıt kalıcı olarak kaybolur. Kırılımda
+  "gönderim budamadan önce, budama gönderilmemiş satırı silmez" varsayıldı — bu bir invaryant ve
+  `C6-c`'de test edilmeli.
+- Zincir bozulduğunda davranış ne olmalı: export'u durdur mu, işaretle ve devam mı? Kırılımda
+  "işaretle + uyar, durdurma" varsayıldı (durdurmak sessiz veri kaybına döner).
+
+#### 6.1.5 · 11.5 — White-label widget · SLA yönetimi · sandbox · dilim V3-3
+
+**8 atomik alt-görev · ~11 pencere** — `OPUS-MAX` ×2 · `OPUS-XHIGH` ×3 · `SONNET-XHIGH` ×3 — tm 84
+
+**KK (FR-MOD-11.5 birebir):** _"Marka linki; Enterprise'da white-label"_ · **KK (§5.4'ten türetilmiş):**
+_"SLA yönetimi"_ · _"sandbox"_
+
+**Bu kalemin gerçek işi inşa değil, KAPI.** Koda karşı doğrulandı: `powered_by` **zaten** bir widget
+görünüm alanıdır (`widget.ts:33,41,899-912`; URL parametresi `:1154`) ve `PATCH /settings/widget`
+onu **hiçbir plan kontrolü olmadan** kabul eder (`routes/settings.ts:181,827`). Yani bugün
+**herhangi bir plandaki herhangi bir çalışma alanı markayı kaldırabiliyor** — Enterprise'a satılan
+özellik ücretsiz katmanda açık. Bu kalem o kapıyı kurar. `PLANS` kataloğu da tek kademelidir
+(`subscription-service.ts:21` → yalnız `growth`), yani "Enterprise planı" kavramı kodda **yoktur**;
+yetki sözlüğü onunla birlikte gelir.
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `11.5-a` | PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla) | `OPUS-XHIGH` | yok | 1 |
+| `11.5-b` | Entitlement zorlama çekirdeği (BÖLÜNMEZ) — yazma kapısı + downgrade'de okuma yolunda geri alma | `OPUS-MAX` | 11.5-a | 2 |
+| `11.5-c` | Widget tarafı — yetki yokken powered_by=0 URL parametresinin yok sayılması | `SONNET-XHIGH` | 11.5-b | 1 |
+| `11.5-d` | SLA yönetimi — hedef tanımı (ilk yanıt / çözüm, iş saatleri) + ölçüm + ihlal işareti | `OPUS-XHIGH` | 11.5-a | 2 |
+| `11.5-e` | SLA ekranı + Reports'ta ihlal KPI'ı | `SONNET-XHIGH` | 11.5-d | 1 |
+| `11.5-f` | Sandbox lisansı (BÖLÜNMEZ) — ikinci kiracı: izolasyon + faturaya girmeme + kotaya sayılmama | `OPUS-MAX` | 11.5-a, 11.5-b | 2 |
+| `11.5-g` | Sandbox ekranı — oluştur/sıfırla + "bu bir sandbox" göstergesi | `SONNET-XHIGH` | 11.5-f | 1 |
+| `11.5-h` | Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e | `OPUS-XHIGH` | 11.5-c, 11.5-e, 11.5-g | 1 |
+
+> **Bölünmeyen çekirdekler (§5.1.2 istisnası).**
+> **(1) `11.5-b`:** yetki kararı bir **gelir sınırıdır** ve tek bir yerde verilmelidir. Kritik
+> olan yarısı yazma kapısı değil, **downgrade yolu**: plan düşünce daha önce kaydedilmiş
+> `powered_by=false` satırı yerinde kalır ve widget markasız yayınlanmaya devam eder. "Yazarken
+> kontrol et" ile "okurken uygula" ayrı pencerelere bölünürse tam olarak bu sessiz kaçak açık kalır.
+> Bu yüzden çekirdek her iki ucu birden kapsar.
+> **(2) `11.5-f`:** sandbox **ikinci bir kiracıdır**. Yeni lisans üretmek, onu bir üretim lisansına
+> bağlamak, ama RLS/ölçüm/faturalama açısından ondan tamamen ayırmak tek bir izolasyon akıl
+> yürütmesidir — parçalanırsa "sandbox verisi üretim raporunda", "sandbox koltuğu faturada" ya da
+> daha kötüsü "sandbox token'ı üretim verisini okuyor" sınıfı bir sızıntı bırakır. Multibrand
+> (tm 78) turunun marka izolasyonu deseni buradaki emsaldir.
+
+**Varsayımlar (§C'ye yazılacak):**
+- **Fiyat yüzeyi değişmez.** `enterprise` kademesi ADR-13'ün rakamlarını bozmaz; fiyatı
+  "görüşmeye bağlı" olarak modellenir (sayısal fiyat uydurulmaz — PRD'de Enterprise fiyatı yoktur).
+- Entitlement **plandan türetilir**, ayrı bir bayrak tablosu açılmaz. Gerekçe: iki kaynak
+  (plan + bayrak) uyuşmazlığa düşer ve hangisinin kazandığı yazılı olmaz.
+- Sandbox lisansı **ayrı bir veritabanı değil**, ayrı bir `license_id`'dir; izolasyonu mevcut RLS
+  sağlar. Bu, "sandbox = ikinci kiracı" varsayımının doğal sonucudur.
+- SLA **ölçer ve işaretler; zorlamaz** — ihlal bir bildirim ve rapor satırı üretir, sohbeti
+  yeniden yönlendirmez (routing'e dokunmak ayrı bir kalemdir).
+- Multibrand ile ilişki: white-label yetkisi **lisans** düzeyindedir, marka düzeyinde değil; bir
+  lisansın markalarının hepsi aynı yetkiyi paylaşır.
+
+**Açık sorular:**
+- `powered_by` bugün kapısız kabul ediliyor — mevcut verideki `poweredBy=false` satırlarına ne
+  yapılacak? Kırılımda "yetkisi olmayan lisansta okurken yok sayılır, satır silinmez" varsayıldı
+  (veri kaybı yok, davranış doğru).
+- Sandbox'ın kendi widget'ı/kanalları gerçek trafiğe açılmalı mı? Kırılımda "açılır ama kanal adresi
+  tekilliği aynı kurala tabi" varsayıldı.
+- SLA hedefleri lisans başına tek küme mi, grup/marka başına mı? Kırılımda lisans başına tek varsayıldı.
+
+#### 6.1.6 · 13.7 — Mobil uygulamalar (iOS/Android + push) · dilim V3-5
+
+**11 atomik alt-görev · ~15 pencere** — `OPUS-MAX` ×2 · `OPUS-XHIGH` ×4 · `SONNET-XHIGH` ×5 — tm 90
+
+**KK (FR-MOD-13.7 birebir):** _"Inbox/AI/CRM/Reports mobilde; push; tam modül paritesi (Nexa
+farklılaşması)"_ · **KK (FR-MOD-13.8 birebir):** _"Bkz. FR-MOD-08.2; kanallar arası tutarlı"_
+
+**Barındırma kararı: bu monorepo'da `apps/mobile` (Expo + React Native + TypeScript) — §D96.**
+Üç seçenek tartıldı:
+
+| Seçenek | Artı | Eksi | Karar |
+| --- | --- | --- | --- |
+| **(A) Bu monorepo'da Expo/RN workspace** | `@nexa/types` + generated kontrat tipleri **doğrudan** paylaşılır (contract-first korunur, ADR-05) · tek pnpm/turbo kapısı, DoD aynı komutlarla koşar · ADR-01 (TS her yerde) korunur · otonom döngü çalışabilir | Metro + Vite yan yana · native derleme zinciri (Xcode/Android SDK) bu makinede yok | **SEÇİLDİ** (kapsam daraltmasıyla) |
+| (B) Ayrı repo | native derleme izole | **CLAUDE.md sınırı: "başka repoya dokunma YOK"** → otonom döngü oraya iş yapamaz · kontrat tipleri kopyalanır → drift · DoD kapısı buradan koşamaz | **ELENDİ** — sınır ihlali |
+| (C) `deferred` kalır | maliyet yok | §F.00: gerekçesiz erteleme "gizlenmiş ⬜"dir. §D60 bu tuzağı bir kez düzeltti; ikinci kez ertelemek kalemi süresiz bloke eder | **ELENDİ** |
+
+**(A)'nın kapsam daraltması (kararın ayrılmaz parçası):** DoD kapısı `expo export` (JS bundle) +
+RN test süiti + paylaşılan kontrat tipleri üzerinden koşar. **`.ipa`/`.apk` üretimi ve store
+yüklemesi kapsam dışıdır** — CLAUDE.md "production deploy yok" sınırı ve bu makinede native
+araç zinciri bulunmaması.
+
+**`◐`nin gerekçesi İKİ PAYLIDIR (denetim bulgusu K1-5 · §D99 — ilk hâli yalnız mağaza payını
+sayıyor, ikinciyi "yeniden tanımlayarak" gizliyordu):**
+1. **Mağaza payı:** `.ipa`/`.apk` + store yüklemesi yapılmaz.
+2. **Modül paritesi daraltması:** PRD FR-MOD-13.7 satırının açıklaması _"**tüm modülleri kapsayan**
+   tek iOS/Android app"_ der; bu kırılım KK'nın ismen saydığı **dört yüzeyi** (Inbox/AI/CRM/Reports)
+   teslim eder, **Billing/Playbook/Team'i etmez** (Settings'ten yalnız bildirim tercihleri payı
+   gelir — `13.7-j`). Yani parite payı da tam karşılanmaz.
+
+İkisi de §D96'da **kabul edilen borç** olarak yazılıdır. Mobil `Should`'dur; §F.00 kapısını
+bloklamaz — ama `✅` UYDURULMAZ (TASK-RUNNER-PROMPT §3).
+
+| ID | Alt-görev | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `13.7-a` | apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları | `OPUS-XHIGH` | yok | 2 |
+| `13.7-b` | Mobil oturum/token modeli (BÖLÜNMEZ) — güvenli saklama + PKCE native yönlendirme + yenileme/iptal | `OPUS-MAX` | 13.7-a | 2 |
+| `13.7-c` | device_tokens tablosu + RLS + kayıt/yenileme/iptal uçları | `OPUS-XHIGH` | 13.7-a | 1 |
+| `13.7-d` | Push gönderim çekirdeği (BÖLÜNMEZ) — 08.2 tercihi + hedef seçimi + cross-tenant reddi (APNs/FCM MOCK) | `OPUS-MAX` | 13.7-c | 2 |
+| `13.7-e` | Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı | `SONNET-XHIGH` | 13.7-b | 1 |
+| `13.7-f` | Mobil Inbox — sohbet listesi + transcript + composer + RTM (reconnect/missed-event) | `OPUS-XHIGH` | 13.7-e | 2 |
+| `13.7-g` | Mobil Customers (CRM) — liste + kişi detayı | `SONNET-XHIGH` | 13.7-e | 1 |
+| `13.7-h` | Mobil Reports — salt-okunur KPI kartları | `SONNET-XHIGH` | 13.7-e | 1 |
+| `13.7-i` | Mobil AI/Copilot yüzeyi — özet + yanıt önerisi (salt-tüketici) | `SONNET-XHIGH` | 13.7-f | 1 |
+| `13.7-j` | Mobil bildirim tercihleri ekranı + cihaz kaydının bağlanması | `SONNET-XHIGH` | 13.7-c, 13.7-e | 1 |
+| `13.7-k` | Uçtan uca doğrulama — modül paritesi matrisi + push yaşam döngüsü + cross-tenant + bundle kapısı | `OPUS-XHIGH` | 13.7-f, 13.7-g, 13.7-h, 13.7-i, 13.7-j | 1 |
+
+> **Bölünmeyen çekirdekler (§5.1.2 istisnası).**
+> **(1) `13.7-b`:** oturumun nerede saklandığı, nasıl yenilendiği ve kaybolduğunda ne olduğu tek bir
+> kimlik akıl yürütmesidir. Mobilde saklama yeri (secure enclave/keystore) ile yenileme politikası
+> ayrı pencerelere bölünürse "token güvenli yerde ama süresiz" ya da "yenileniyor ama düz metinde"
+> gibi yarım bir sonuç kalır — ikisi de kimlik sınırının ihlalidir.
+> **(2) `13.7-d`:** push hedefini seçen kod **kiracı sınırını geçen** koddur: yanlış seçim başka bir
+> çalışma alanının müşteri mesajını yabancı bir cihaza gönderir. Tercih kontrolü (08.2), hedef seçimi
+> ve iptal edilmiş token reddi aynı pencerede olmalı; ayrılırsa aradaki sürümde "tercihi kapalı
+> kullanıcıya gönderim" veya daha kötüsü çapraz-kiracı teslim mümkün olur.
+
+**Varsayımlar (§C'ye yazılacak):**
+- Expo **managed workflow** kullanılır; custom native modül yazılmaz (araç zinciri kısıtı).
+- Mobil **kendi API'sini açmaz**: mevcut `/api/v1` + RTM yüzeyini tüketir. Tek yeni sunucu yüzeyi
+  `device_tokens` uçları ve push gönderimidir.
+- "Tam modül paritesi" **ekran paritesi** olarak yorumlanır (Inbox/AI/CRM/Reports dördü mobilde
+  çalışır), **özellik paritesi** değil. Kapsam dışı: **Billing · Playbook · Team**; Settings'ten
+  yalnız **bildirim tercihleri** payı gelir (`13.7-j`) — denetim bulgusu K1-12, ilk beyan
+  "Settings kapsam dışı" diyordu ama `13.7-e`'nin navigasyonu ve `13.7-j` onu çürütüyordu.
+  Bu daraltma `◐`nin ikinci payıdır ve §D96'ya yazılır. Gerekçe: PRD KK'sı dört yüzeyi ismen
+  sayar; satırın açıklaması ise "tüm modüller" der — fark kabul edilen borçtur.
+- Push sağlayıcı MOCK: gönderim `.data/push` altına yazılır ve testler oradan okur. Gerçek APNs/FCM
+  anahtarı **yoktur** (CLAUDE.md: gerçek secret yok).
+- Mobil e2e Playwright ile koşmaz; RN test süiti + integration testleri kapıdır. Bu, `apps/e2e`nin
+  kapsamını değiştirmez.
+
+**Açık sorular:**
+- Mobil oturum, panelin oturumundan **bağımsız** mı olmalı (ayrı cihaz oturumu listesi) yoksa aynı
+  token ailesini mi paylaşmalı? Kırılımda bağımsız varsayıldı (cihaz kaybında yalnız o oturum iptal).
+- SSO zorunlu (`S11-h`) bir lisansta mobil giriş nasıl olacak — gömülü tarayıcı mı, sistem
+  tarayıcısı mı? Kırılımda sistem tarayıcısı varsayıldı (gömülü webview kimlik bilgisi toplayabilir).
+- Sandbox lisansı mobilde görünmeli mi? Kırılımda "görünür, rozetle işaretli" varsayıldı.
+
+### 6.2 Faz-3 dilim gruplaması + kritik yol
+
+Çalışma sırası bu tablodur. Sıralamanın gerekçesi §6.2.1'dedir. Her dilim bir §F.00 kapanış kapısı taşır.
+
+| # | Dilim | Tema | Kalemler | Alt-gör. | ~Pen | Kapanış kapısı |
+| :-: | --- | --- | --- | :-: | :-: | --- |
+| 1 | **Kimlik + bölge sınırı** | Federasyon, provizyon, veri ikameti — **Faz 3 buradan başlar (tek zorunlu ilk dilim)** | `S11` (tm 81) · `C4` (tm 82) | 17 | 26 | İkisi de ✅ · assertion ret matrisi + 421 üç yüzeyde (API/RTM/widget) yeşil |
+| 2 | **Denetim izi** | Genişletilmiş audit + SIEM export + kontrol kanıtı | `C6` (tm 83) | 8 | 10 | ✅ · zincir doğrulaması + boşluk tespiti + append-only korunur |
+| 3 | **Kurumsal yetki** | Entitlement sınırı: white-label · SLA · sandbox + **altı yetki anahtarı** | `11.5` (tm 84) | 8 | 11 | ✅ · downgrade geri alma + sandbox sızıntı negatifi + yetkisiz plan reddi yeşil |
+| 4 | **Kanal** | Telegram (MOCK), TR pazarı payı | `08.5.8` (tm 79) | 6 | 7 | ✅ · adres sahiplenme regresyonu yeşil |
+| 5 | **Mobil** | Expo/RN app + push (MOCK) — **V3-3'ü bekler** | `13.7` (tm 90) | 11 | 15 | ◐ kabul (store + parite payı §D96) → **Faz-3 §F.00 kapanır** |
+| | | | **5 dilim · 6 kalem** | **50** | **69** | |
+
+#### 6.2.1 Sıralamanın üç kilit kararı
+
+**1) Kimlik ve bölge önce — çünkü ikisi de `onRequest` zincirini değiştirir.** SAML/SSO oturum
+verme yolunu, bölge zorlaması ise her isteğin kabul kararını değiştirir. Sonraki dilimlerin
+tamamı (audit eylemleri, entitlement kapısı, kanal webhook'u, mobil oturumu) bu iki sınırın
+**içinde** yazılır. Ters sırada yapılsaydı her biri sonradan retrofit edilirdi — v2'nin
+§5.3.1'de aynı gerekçeyle güvenliği başa aldığı yer burasıdır.
+
+**2) Denetim izi kimlikten sonra — çünkü export sözleşmesi eylem sözlüğünü dondurur.**
+`auth.sso_login`, `auth.sso_login_failed` ve bölge reddi olayları `AUDIT_ACTIONS`'a V3-1'de girer.
+SIEM export'u bunlardan **önce** donarsa, ya sözleşme kısa süre sonra kırılır ya da Enterprise'ın
+en çok denetlenen iki olayı ilk export'ların dışında kalır.
+
+**3) Kanal ve mobil en sonda — ikisi de yeni yüzey açar.** Telegram **kimlik doğrulamasız bir
+public webhook** ekler; bölge kararı yerine oturmadan yazılırsa o webhook'un kiracıyı nasıl
+çözdüğü bölgeden habersiz olur. Mobil ise yeni bir istemci sınıfı ve yeni bir bildirim kanalıdır;
+SSO zorunluluğu (`S11-h`) ve entitlement kapısı (`11.5-b`) kararlaşmadan mobil oturum
+modeli yazılamaz.
+
+**Grafın gerçekte zorladığı şey (denetim bulgusu K5-2 ile DÜZELTİLDİ).** Önceki metin
+"çalışma sırası bu tablodur … sıra grafın şekli olur" diyordu; bu **yanlıştı**. `pick_next`
+bağımlılığı kapalı adaylar arasında önceliğe, eşitlikte **en küçük id**'ye bakar
+(`run-loop.sh:157-183`) — altısı da `medium` olduğu için `tm 82` biter bitmez `tm 79` (dilim 4)
+`tm 83`/`tm 84`'ten (dilim 2/3) **önce** koşardı.
+
+Grafın fiilen zorladığı, v2'nin (§5.3.1) yaptığıyla aynı şeydir: **bir zorunlu ilk dilim, sonra
+paralel tema grupları.** Kodlanmış bağımlılıklar: `tm 82` → `tm 81` · `tm 83`/`tm 84` →
+`tm 81`+`tm 82` · `tm 79` → `tm 82` (+ mevcut `tm 35`) · **`tm 90` → `tm 81`+`tm 82`+`tm 84`**
+(sonuncusu denetim bulgusu K5-1 ile eklendi: §6.2.1/3 zaten _"entitlement kapısı (`11.5-b`)
+kararlaşmadan mobil oturum modeli yazılamaz"_ diyordu, ama graf bunu yakalamıyordu).
+
+Yani **V3-1 zorunlu olarak ilktir; V3-2/V3-3/V3-4 birbirine paraleldir; V3-5 yalnız V3-3'ü bekler.**
+Tablodaki 1-5 numaraları bir **tema sırası**dır, zorunlu bir yürütme sırası değil — dilim başına
+§F.00 kapısı yine geçerlidir, ama kapılar bu paralel akışta sırayla değil bittikçe kapanır.
+
+**İki bağımlılık kasıtlı olarak SIRA KISITIDIR, teknik bağ değil** (denetim bulgusu K5-3):
+`tm 82` → `tm 81` ve `tm 84` → `tm 82`. `C4` ile `S11`'in teknik bağı yok; ikisi de aynı
+`onRequest` zincirine dokunduğu için **çakışma** riski taşır ve bu yüzden seri bırakıldı.
+Bedeli kayıtlıdır: `S11-b` gibi 3 pencerelik bölünmez bir çekirdek takılırsa `C4` gereksiz
+yere bekler.
+
+**Faz 3 fiilen üçüncü pencerede başlar (denetim bulgusu K5-6).** Kuyrukta `tm 122` ve `tm 123`
+var — ikisi de `critical`, `pending`, bağımlılıksız; `pick_next` adım 2 onları normal
+backlog'un **önüne** alır. `tm 122` ayrıca §2 Modül→Faz matrisinin bayat damgalarını düzeltir ve
+bu kırılımın §2'ye yaptığı atıflar onunla hizalanır — yani **`tm 122` bu kırılımın ön koşuludur**
+(denetim bulgusu K1-8: §2'nin `Mobil app` satırında Ent. payı yok, `MOD-09` hâlâ ⬜ görünüyor
+oysa §6 onu "v2'de karşılandı, 102 kalem" sayıyor). Bu tur `tm 122`'nin işini **YAPMADI** —
+kapsam disiplini (CONVENTIONS §5).
+
+**Öncelik ataması (CONVENTIONS §4.1).** Altı kalemin altısı da PRD'de `Should`/`Could`'dur; hiçbiri
+Faz-0/v1 `Must`'ı değildir. Bu yüzden hepsi `medium`'a alındı (`deferred`'den) — `low` bırakılsaydı
+`pick_next` adım 3'te sürekli en sona düşerdi; `high` PRD'nin öncelik dilini bozardı. `critical`
+kullanılmadı: o seviye panelin "düzeltmeye gönder" akışına rezervedir.
+
+**Durum değişikliği — `deferred` → `pending` (zorunluydu).** `run-loop.sh:153` seçim kapısı
+`deferred` bir görevi **hiçbir koşulda seçmez**. Altı kalem `deferred` kaldığı sürece Faz 3'ün
+kırılımı yazılsa bile döngü tek pencere açmazdı; plan yazılı, iş ölü olurdu. Bu turda altısı da
+`pending`'e alındı (§D95).
 
 ---
 
@@ -2282,8 +2727,12 @@ denetim** noktası olur. **Faz-0 önce kapanır** (§1.3 — v1 dilimine geçmed
 
 ### Toplamlar
 
-- **Atomik alt-görev:** **~255** — Faz-0 **9** (✅ teslim) + v1 **~50** (✅ teslim) + **v2 196**
-  (2026-08-01'de atomik bölündü). v3 hâlâ orta derinlik: **~28–37** + sertifikasyon süreç işi (§6.1).
+- **Atomik alt-görev:** **~305** — Faz-0 **9** (✅ teslim) + v1 **~50** (✅ teslim) + **v2 196**
+  (2026-08-01'de atomik bölündü, ✅ teslim) + **Faz-3 50** (2026-08-11'de atomik bölündü — §D95,
+  düşman denetimiyle 48 → 50 — §D99).
+  _Tarihçe: Faz-3 satırı 2026-08-11'e kadar "orta derinlik: ~28–37" diyordu; atomik kırılım önce 48,
+  denetim sonrası 50 çıkardı. Fark kapsam büyümesi değil ÇÖZÜNÜRLÜK: orta derinlik tahminî, bu sayı
+  sayılmıştır._
 - **Etiket dağılımı — Faz-0+v1 (eski tek boyutlu şema, tarihçe):** `[MAX]` **8** (06.2.4-a, 06.3.2-a,
   08.8.4-b, 08.8.4-c, 12.2-a, 03.3.2-a, 08.7.7-a, 13.6-a — hepsi ↑ güvenlik/eşzamanlılık/izolasyon)
   · `[XHIGH]` **~51**.
@@ -2291,10 +2740,16 @@ denetim** noktası olur. **Faz-0 önce kapanır** (§1.3 — v1 dilimine geçmed
   `SONNET-MAX` **5** · `OPUS-XHIGH` **65** · `OPUS-MAX` **31** → **%51 Sonnet**.
   31 `OPUS-MAX`'ın hepsi gerekçeli: erişim kontrolü, tenant/marka izolasyonu, eşzamanlılık/yarış,
   algoritma tasarımı veya ADR-09 bütünlüğü. Her biri §5.2'de "bölünmeyen çekirdek" gerekçesi taşır.
+- **Etiket dağılımı — Faz-3 (aynı matris, §5.1.1):** `SONNET-XHIGH` **19** · `SONNET-MAX` **0** ·
+  `OPUS-XHIGH` **16** · `OPUS-MAX` **15** → **%38 Sonnet**. v2'nin %51'inden düşük olması
+  KASITLIDIR: Faz-3'ün kalemleri kimlik federasyonu, bölge zorlaması, denetim izi bütünlüğü ve
+  yetkilendirme sınırıdır; bu çekirdekler §5.1.1 gereği `sonnet`'e verilmez. 11 `OPUS-MAX`'ın
+  hepsi §6.1'de "bölünmeyen çekirdek" gerekçesi taşır.
 - **Faz dağılımı:** Faz-0 = 9 (hepsi Must ◐ kapatıcı) · v1 = ~50 (Must ~18, Should ~32) ·
-  **v2 = 196** (9 dilim; v2'de `Must` yok — PRD'de tüm v2 kalemleri `Should`/`Could`).
-- **Tahmini pencere:** Faz-0 **~10** (fiili) · v1 **~55–65** (fiili) · **v2 ~228** (kaba; `OPUS-MAX`
-  ve 2–3 pencerelik bölünmez çekirdekler dahil).
+  **v2 = 196** (9 dilim; v2'de `Must` yok — PRD'de tüm v2 kalemleri `Should`/`Could`) ·
+  **Faz-3 = 50** (5 dilim; Faz-3'te de `Must` yok — PRD §5.4 kalemleri `Should`/`Could`).
+- **Tahmini pencere:** Faz-0 **~10** (fiili) · v1 **~55–65** (fiili) · **v2 ~228** (fiili) ·
+  **Faz-3 ~69** (kaba; `OPUS-MAX` ve 2–3 pencerelik bölünmez çekirdekler dahil).
 
 ### Kritik yol (en uzun bağımlılık zinciri)
 
@@ -2315,6 +2770,19 @@ Paralel uzun hat: `12.2-a → 12.1-a → 12.3-a → 02.3.2-a`. En uzun tekil kal
   + Save view). Ardından `13.2` (11) ve `08.9.7-audit` (11).
 - **Kalem-içi en uzun zincir:** `06.3.2-bulk` — CSV çekirdeği → ingest → website/SSRF → UI → e2e.
 
+**Faz 3 (Enterprise):** kritik yol yine **dilimler arasıdır**. Zincir:
+
+`V3-1 kimlik+bölge` **→** (V3-2 denetim izi · V3-3 kurumsal yetki · V3-4 kanal · V3-5 mobil —
+dördü birbirine **paralel**) **→ Faz-3 kapanır**.
+
+- **Neden ilk dilim seri:** `S11` (SSO) oturum verme yolunu, `C4-b` (bölge) her isteğin kabul
+  kararını değiştirir; ikisi de `onRequest` zincirine dokunur. Sonraki her şey bu sınırın
+  **içinde** yazılır — ters sırada her biri retrofit edilirdi (§6.2.1).
+- **En uzun tekil kalem:** `13.7` (11 alt-görev, ~15 pencere — Expo workspace + oturum + push +
+  dört yüzey + parite). Ardından `S11` (9, ~14) ve `11.5` (8, ~11).
+- **Kalem-içi en uzun zincir:** `S11` — `S11-b` (assertion çekirdeği) → `S11-c` (mock IdP) →
+  `S11-d` (SP uçları) → `S11-h` (enforcement) → `S11-i` (doğrulama), 5 halka.
+
 ### Faz kapanışını bloklayanlar (`Must` — §F.00 girdisi)
 
 - **Faz-0:** T1-a · T3-a · T3-b · T4-a · T4-b · T5-a · T6-a · T6-b · T7-a (9 — hepsi). `Should`:
@@ -2325,6 +2793,13 @@ Paralel uzun hat: `12.2-a → 12.1-a → 12.3-a → 02.3.2-a`. En uzun tekil kal
   *sayaç* kuralı v2'de uygulanamaz. Yerine **kalem kuralı** geçerlidir: **23 açık kalemin hepsi ✅**
   olduğunda Faz-2 kapanır. Dilim bazlı ara kapılar §5.3.2'de. `13.4` ⛔ (ADR-14) ve `08.9.2/.3/.5`
   ✅ (GL-5/6/7) sayıma girmez.
+- **Faz-3:** PRD §5.4 kalemlerinin de **hiçbiri `Must` değildir** → v2'deki gibi **kalem kuralı**:
+  **beş kalem ✅ + `13.7` `◐`** olduğunda Faz-3 kapanır — `S11` (SAML/SCIM) · `C4` (HIPAA/bölge) ·
+  `C6` (SOC2/ISO/SIEM, **yalnız kod payı** — §D97) · `11.5` (white-label/SLA/sandbox) · `08.5.8`
+  (Telegram) ✅ · `13.7` (mobil) **`◐`** — iki paylı kabul edilen borç: mağaza payı + modül
+  paritesi daraltması (§D96). Dilim bazlı ara kapılar §6.2'de. 4 `⛔` (voice/IVR ·
+  çeviri/sentiment · analitik depo · DWH export) ve 2 `⛔-süreç` (dedicated onboarding/AM ·
+  SLA uptime+kredi) sayıma girmez; hepsi §6'da gerekçeli.
 
 ### Düz tablo (aktarım kaynağı)
 
@@ -2636,6 +3111,66 @@ Bu tablo Task Master'a **aktarıldı** (2026-08-01) — üst görev başına alt
 | `WORKSCHED-i` | Reports → Staffing sekmesi (salt-okunur gün × saat ızgarası + düşük-baz uyarısı) | Work scheduler | `SONNET-XHIGH` | WORKSCHED-g | V2-9 | 1 |
 | `WORKSCHED-j` | Uçtan uca doğrulama: staffing e2e akışı + izolasyon iddiaları + ADR-09 sayı tuta | Work scheduler | `OPUS-XHIGH` | WORKSCHED-c, WORKSCHED-d, WORKSCHED-g, WORKSCHED-h, WORKSCHED-i | V2-9 | 1 |
 
+
+
+### Faz 3 (Enterprise) — düz tablo (Task Master aktarım kaynağı)
+
+50 atomik alt-görev. Etiket = model × efor (§5.1.1). _(48 → 50: düşman denetimi iki yeni alt-görev doğurdu — `S11-a2` ve `C6-a2`; §D99.)_ Tam alan detayı **Task Master `details`
+alanındadır** (Faz 3'ün companion dosyası yoktur — §D98). Bu tablo Task Master'a **aktarıldı**
+(2026-08-11) — üst görev başına alt-görevler, başlıklarda etiket, bağımlılıklar **tam kimlikle**.
+
+| ID | Başlık | PRD | Etiket | Bağımlılık | Dilim | Pen |
+| --- | --- | --- | --- | --- | :-: | :-: |
+| `08.5.8-a` | Telegram connect/webhook kontratı + generated tip yenilemesi | 08.5.8 | `SONNET-XHIGH` | yok | V3-4 | 1 |
+| `08.5.8-b` | TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri | 08.5.8 | `SONNET-XHIGH` | 08.5.8-a | V3-4 | 1 |
+| `08.5.8-c` | Telegram'ın adapter kanalı olarak devreye alınması — CHANNEL_TYPES + registry + pinlenmiş … | 08.5.8 | `OPUS-XHIGH` | 08.5.8-a, 08.5.8-b | V3-4 | 1 |
+| `08.5.8-d` | Settings → Channels: Telegram kartı "Coming soon"dan canlı connect/disconnect'e | 08.5.8 | `SONNET-XHIGH` | 08.5.8-c | V3-4 | 1 |
+| `08.5.8-e` | Inbox Views grubunda Telegram kanal görünümü | 08.5.8 | `SONNET-XHIGH` | 08.5.8-c | V3-4 | 1 |
+| `08.5.8-f` | Uçtan uca doğrulama — bağla→mesaj→inbox→yanıt + cross-tenant + adres sahiplenme regresyonu | 08.5.8 | `OPUS-XHIGH` | 08.5.8-d, 08.5.8-e | V3-4 | 2 |
+| `S11-a` | sso_connections tablosu + RLS politikası + kontrat okuma yüzeyi | S11 | `OPUS-XHIGH` | yok | V3-1 | 1 |
+| `S11-a2` | SSO bağlantısı YAZMA ucu (BÖLÜNMEZ) — sertifika/entityId yazımı + owner rol kapısı + rotas… | S11 | `OPUS-MAX` | S11-a | V3-1 | 2 |
+| `S11-b` | SAML assertion doğrulama çekirdeği (BÖLÜNMEZ) — imza + koşullar + replay + XSW | S11 | `OPUS-MAX` | yok | V3-1 | 3 |
+| `S11-c` | Mock IdP harness — imzalı assertion üreteci + anahtar çifti fixture'ı | S11 | `SONNET-XHIGH` | yok | V3-1 | 1 |
+| `S11-d` | SP uçları (BÖLÜNMEZ) — /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, … | S11 | `OPUS-MAX` | S11-a, S11-b, S11-c | V3-1 | 2 |
+| `S11-e` | SCIM 2.0 sunucu çekirdeği (BÖLÜNMEZ) — /scim/v2/Users + bearer auth + lisans kapsamı | S11 | `OPUS-MAX` | S11-a | V3-1 | 2 |
+| `S11-f` | SCIM yaşam döngüsü semantiği — create/suspend/deprovizyon + koltuk etkisi + audit | S11 | `OPUS-MAX` | S11-e | V3-1 | 1 |
+| `S11-g` | Settings → Security: SSO bağlantı ekranı + SCIM token üretimi (bir kez gösterilir) | S11 | `SONNET-XHIGH` | S11-a, S11-a2, S11-d, S11-e | V3-1 | 1 |
+| `S11-h` | SSO zorunlu kılma (BÖLÜNMEZ) — parola girişinin kapatılması + break-glass kilitlenme korum… | S11 | `OPUS-MAX` | S11-d, S11-g | V3-1 | 2 |
+| `S11-i` | Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant | S11 | `OPUS-XHIGH` | S11-d, S11-f, S11-g, S11-h | V3-1 | 1 |
+| `C4-a` | REGIONS genişlemesi (eu + us) + licenses.region kayıt anında seçilebilir + kontrat | C4 | `OPUS-MAX` | yok | V3-1 | 1 |
+| `C4-b` | Bölge zorlaması çekirdeği (BÖLÜNMEZ) — API + RTM + customer token üçünde misdirected_reque… | C4 | `OPUS-MAX` | C4-a | V3-1 | 3 |
+| `C4-c` | Onboarding/kayıt akışında bölge seçimi + "sonradan değiştirilemez" uyarısı | C4 | `SONNET-XHIGH` | C4-a | V3-1 | 1 |
+| `C4-d` | BAA durumu — licenses.hipaa_baa_signed_at + kabul akışı (MOCK) + compliance.baa_signed audit | C4 | `OPUS-XHIGH` | C4-a | V3-1 | 1 |
+| `C4-e` | HIPAA kapsam kısıtları (BÖLÜNMEZ) — retention tavanı + PII maskesi sertleşmesi + AI bölge … | C4 | `OPUS-MAX` | C4-b, C4-d | V3-1 | 2 |
+| `C4-f` | Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi | C4 | `SONNET-XHIGH` | C4-d | V3-1 | 1 |
+| `C4-g` | Uçtan uca doğrulama — 421 üç yüzeyde + immutability + BAA'sız hesapta kısıt yok + cross-te… | C4 | `OPUS-XHIGH` | C4-b, C4-e, C4-f | V3-1 | 1 |
+| `C6-a1` | Audit kapsam boşluğu ENVANTERİ — 37 route taranır, çıktı ada bağlı sabit liste | C6 | `OPUS-XHIGH` | yok | V3-2 | 1 |
+| `C6-a2` | Envanterdeki eylemlerin AUDIT_ACTIONS'a eklenmesi + çağrıların bağlanması | C6 | `SONNET-XHIGH` | C6-a1 | V3-2 | 1 |
+| `C6-b` | SIEM export kontratı + siem_export_cursors (keyset, tekrar-teslime dayanıklı) + NDJSON akışı | C6 | `OPUS-MAX` | yok | V3-2 | 1 |
+| `C6-c` | Export bütünlüğü çekirdeği (BÖLÜNMEZ) — kayıt zinciri (HMAC) + export imzası + boşluk tesp… | C6 | `OPUS-MAX` | C6-b | V3-2 | 3 |
+| `C6-d` | MOCK SIEM hedefi (.data/siem dosya sink) + zamanlanmış gönderim | C6 | `SONNET-XHIGH` | C6-b, C6-c | V3-2 | 1 |
+| `C6-e` | Erişim gözden geçirme raporu (SOC 2 CC6.1 kanıtı) — kim/hangi rol/son giriş/PAT envanteri | C6 | `OPUS-XHIGH` | C6-a1 | V3-2 | 1 |
+| `C6-f` | Settings → Security: SIEM export ekranı (hedef, son export, boşluk uyarısı) | C6 | `SONNET-XHIGH` | C6-b, C6-c, C6-d | V3-2 | 1 |
+| `C6-g` | Uçtan uca doğrulama — eylem→audit→export→zincir; append-only; boşluk negatifi; cross-tenant | C6 | `OPUS-XHIGH` | C6-c, C6-d, C6-e, C6-f | V3-2 | 1 |
+| `11.5-a` | PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla) | 11.5 | `OPUS-XHIGH` | yok | V3-3 | 1 |
+| `11.5-b` | Entitlement zorlama çekirdeği (BÖLÜNMEZ) — yazma kapısı + downgrade'de okuma yolunda geri … | 11.5 | `OPUS-MAX` | 11.5-a | V3-3 | 2 |
+| `11.5-c` | Widget tarafı — yetki yokken powered_by=0 URL parametresinin yok sayılması | 11.5 | `SONNET-XHIGH` | 11.5-b | V3-3 | 1 |
+| `11.5-d` | SLA yönetimi — hedef tanımı (ilk yanıt / çözüm, iş saatleri) + ölçüm + ihlal işareti | 11.5 | `OPUS-XHIGH` | 11.5-a | V3-3 | 2 |
+| `11.5-e` | SLA ekranı + Reports'ta ihlal KPI'ı | 11.5 | `SONNET-XHIGH` | 11.5-d | V3-3 | 1 |
+| `11.5-f` | Sandbox lisansı (BÖLÜNMEZ) — ikinci kiracı: izolasyon + faturaya girmeme + kotaya sayılmama | 11.5 | `OPUS-MAX` | 11.5-a, 11.5-b | V3-3 | 2 |
+| `11.5-g` | Sandbox ekranı — oluştur/sıfırla + "bu bir sandbox" göstergesi | 11.5 | `SONNET-XHIGH` | 11.5-f | V3-3 | 1 |
+| `11.5-h` | Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negat… | 11.5 | `OPUS-XHIGH` | 11.5-c, 11.5-e, 11.5-g | V3-3 | 1 |
+| `13.7-a` | apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları | 13.7 | `OPUS-XHIGH` | yok | V3-5 | 2 |
+| `13.7-b` | Mobil oturum/token modeli (BÖLÜNMEZ) — güvenli saklama + PKCE native yönlendirme + yenilem… | 13.7 | `OPUS-MAX` | 13.7-a | V3-5 | 2 |
+| `13.7-c` | device_tokens tablosu + RLS + kayıt/yenileme/iptal uçları | 13.7 | `OPUS-XHIGH` | 13.7-a | V3-5 | 1 |
+| `13.7-d` | Push gönderim çekirdeği (BÖLÜNMEZ) — 08.2 tercihi + hedef seçimi + cross-tenant reddi (APN… | 13.7 | `OPUS-MAX` | 13.7-c | V3-5 | 2 |
+| `13.7-e` | Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı | 13.7 | `SONNET-XHIGH` | 13.7-b | V3-5 | 1 |
+| `13.7-f` | Mobil Inbox — sohbet listesi + transcript + composer + RTM (reconnect/missed-event) | 13.7 | `OPUS-XHIGH` | 13.7-e | V3-5 | 2 |
+| `13.7-g` | Mobil Customers (CRM) — liste + kişi detayı | 13.7 | `SONNET-XHIGH` | 13.7-e | V3-5 | 1 |
+| `13.7-h` | Mobil Reports — salt-okunur KPI kartları | 13.7 | `SONNET-XHIGH` | 13.7-e | V3-5 | 1 |
+| `13.7-i` | Mobil AI/Copilot yüzeyi — özet + yanıt önerisi (salt-tüketici) | 13.7 | `SONNET-XHIGH` | 13.7-f | V3-5 | 1 |
+| `13.7-j` | Mobil bildirim tercihleri ekranı + cihaz kaydının bağlanması | 13.7 | `SONNET-XHIGH` | 13.7-c, 13.7-e | V3-5 | 1 |
+| `13.7-k` | Uçtan uca doğrulama — modül paritesi matrisi + push yaşam döngüsü + cross-tenant + bundle … | 13.7 | `OPUS-XHIGH` | 13.7-f, 13.7-g, 13.7-h, 13.7-i, 13.7-j | V3-5 | 1 |
 
 ---
 
@@ -3214,6 +3749,86 @@ görüneceği en son yerdir.
   maliyeti: kampanya/attribution için UTM parametreleri saklanmaz; istenirse ayrı bir iş
   kalemidir (13.2-l KAPSAM DIŞI).
 
+**Faz 3 (Enterprise) kırılım turu — 2026-08-11 (§D95).** PRD dışında verilen kararlar:
+
+- **A17 (S11):** KK **PRD §5.4 "Kimlik" satırından** türetildi — _"SAML 2.0 SSO (Okta/OneLogin/
+  Auth0/Azure AD), SCIM provisioning"_ → _"SAML IdP ile SSO girişi; SCIM ile kullanıcı yaşam
+  döngüsü"_. **NFR-S11'in "OIDC" payı KAPSAM DIŞIDIR** (denetim bulgusu K1-3, kabul edilen borç):
+  OIDC ayrı bir protokol yüzeyidir (discovery + JWKS + id_token doğrulama) ve SAML'ın yanına
+  ikinci bir bölünmez güvenlik çekirdeği ekler; Enterprise IdP'lerinin tamamı SAML konuşur. XML-DSig **elde yazılmaz** — olgun bir kütüphane kullanılır (seçim `S11-b`
+  penceresinin ilk işi). SP-initiated varsayılan; IdP-initiated yalnız bağlantıda açıkça izin
+  verilmişse. Dış IdP (Okta/Auth0/Azure AD) **MOCK**.
+- **A18 (S11-f):** SCIM `DELETE` deprovizyonu üyeliği **suspend eder, SİLMEZ** — atanmış
+  sohbetlerin sahipliği ve audit izi korunsun diye. Açık soru olarak da işaretli (ürün kararı).
+- **A19 (C4):** HIPAA/bölge KK'sı NFR-C4/C9'dan türetildi. **Bölge bir yapılandırma değeridir,
+  bir dağıtım değil**: bu depoda tek Postgres/Redis var ve CLAUDE.md production deploy'u yasaklar,
+  dolayısıyla `us` fiziksel ayrı barındırma değil, isteğin doğru bölgeye gidip gitmediğini karara
+  bağlayan bir **etikettir**. Gerçek çok-bölgeli barındırma §F.00'ı bloklamayan altyapı payıdır (§D97).
+- **A20 (C4-d):** BAA kabulü yalnız `owner` yetkisidir (admin yetmez) ve yalnız `region='us'`
+  lisansta açılır (PRD NFR-C4 birebir: _"Şartlı (imzalı BAA + yalnız US hosting) — Enterprise"_).
+- **A20.1 (C4-e · denetim bulgusu K1-7):** `C4-e`'nin "HIPAA lisansında zorunlu retention **tavanı**"
+  kısıtı **PRD'de yoktur** — NFR-C8 retention'ı yapılandırılabilir tanımlar (30/60/365/sınırsız) ve
+  uyum tipik olarak **asgari** saklama dayatır, azami değil. Bu bir **ürün kararıdır**: PHI riski
+  taşıyan bir çalışma alanında "sınırsız" saklama, veri minimizasyonu ilkesiyle çelişir ve ihlal
+  yüzeyini süresiz büyütür. Karar bu satırla kayıt altına alınmıştır; PRD'den türetilmiş
+  gibi sunulmaz. İstenmezse `C4-e`'den çıkarılabilir — diğer iki kısıt (log maskesi, AI bölge
+  sınırı) NFR-C4/C9'dan doğrudan türer.
+- **A20.2 (C4-a · denetim bulgusu K1-9):** PRD NFR-C9 bölge kodlarını `dal` (US) / `fra` (EU) diye
+  isimlendirir; bu depo ADR-12 gereği `eu`/`us` kullanır. Fark bilinçlidir (ADR-12 zaten `eu`
+  diyor) ve burada kayıtlıdır.
+- **A21 (C6):** SOC2/ISO KK'sı NFR-C6/C7/S12'den türetildi. Bu kalemin bu depodaki "done" tanımı
+  **yalnız kod payıdır**; sertifikasyon dış denetim süreci olarak ayrıldı (§D97).
+- **A22 (C6-c):** Audit zincir HMAC anahtarı lisans başına türetilir ve **export'ta yer almaz** —
+  doğrulama, anahtarı bilen tarafın işidir. Aksi hâlde imza kendi kendini doğrulayan bir süs olur.
+- **A23 (C6-e):** Erişim gözden geçirme raporu **kanıt üretir, karar vermez**; "bu erişim uygun mu"
+  sorusu insan denetimidir. SIEM hedefi **MOCK** (dosya sink `.data/siem`).
+- **A24 (11.5):** SLA ve sandbox KK'ları PRD §5.4 "Kurumsal" satırından türetildi (birebir cümle yok).
+  White-label KK'sı FR-MOD-11.5'ten **birebir**: "Marka linki; Enterprise'da white-label".
+- **A25 (11.5-a):** Yetki (entitlement) **plandan türetilir**, ayrı bayrak tablosu açılmaz — iki
+  kaynak uyuşmazlığa düşer ve hangisinin kazandığı yazılı olmaz. Enterprise fiyatı **sayısal olarak
+  uydurulmaz** (PRD'de yok): "görüşmeye bağlı" modellenir, ADR-13'ün rakamları bozulmaz.
+- **A26 (11.5-b):** Yetkisi olmayan lisanstaki mevcut `poweredBy=false` satırları **silinmez**,
+  okurken yok sayılır — veri kaybı yok, davranış doğru.
+- **A27 (11.5-d):** SLA **ölçer ve işaretler; zorlamaz** — ihlal bildirim ve rapor satırı üretir,
+  sohbeti yeniden yönlendirmez. İş saatleri kaynağı mevcut `work_schedule` (tm 96); ikinci takvim
+  modeli açılmaz. Sandbox **ayrı veritabanı değil, ayrı `license_id`'dir**; izolasyonu mevcut RLS sağlar.
+- **A28 (13.7):** "Tam modül paritesi" **ekran paritesi** olarak yorumlandı — FR-MOD-13.7 KK'sı dört
+  yüzeyi ismen sayar (Inbox/AI/CRM/Reports), diğerlerini saymaz. Settings/Billing/Playbook/Team
+  mobil **kapsam dışıdır**. Expo **managed** workflow; custom native modül yazılmaz. Push sağlayıcı
+  **MOCK** (`.data/push`). Mobil e2e Playwright'a girmez — RN test süiti + integration kapıdır.
+- **A29 (13.7-b):** Mobil giriş **sistem tarayıcısıyla** yapılır, gömülü webview ile değil —
+  gömülü webview kimlik bilgisi toplayabilir. Mobil oturum panel oturumundan **bağımsızdır**
+  (cihaz kaybında yalnız o oturum iptal edilir).
+- **A30 (08.5.8):** Telegram MOCK connect alan seti `bot_token` + `bot_username` (adres);
+  gerçek Telegram `update` sarmalayıcısı taklit edilmez, depodaki düzleştirilmiş gövde korunur.
+  "TR pazarında öncelik" bir **pazar** kararıdır, kod gereksinimi değil — ek dil işi açmaz.
+- **A31 (düşman denetimi turu · §D99 · 2026-08-11):** denetimde verilen ek kararlar:
+  · `S11-a2` — SSO bağlantısının yazma ucu **yalnız `owner`** (admin yetmez; sertifika değişimi
+    hesap devralmaya eşdeğerdir). Sertifika rotasyonunda "iki sertifika + geçiş penceresi" ÖNERİLİR;
+    kesin karar o pencerede verilir ve buraya eklenir.
+  · `S11-g` — "bağlantıyı doğrula" butonu **ağa çıkmaz**, yalnız yerel biçim doğrulaması yapar
+    (sunucudan kullanıcı-kontrollü URL'e istek = SSRF).
+  · `S11-b` — XML-DSig **elde yazılmaz**, olgun bir kütüphane kullanılır; saldırgan test
+    varyantları (XSW dahil) çekirdeğin parçasıdır, `S11-c` yalnız iyi-huylu fixture verir.
+  · `C6-b` — toplu export için **ayrı scope**: `audit_log--export:ro`. Gerekçe: tm 92'nin
+    `audit_log--all:ro`'su tek ekranın sayfalı okumasıdır; tüm log'un dışa akışı farklı bir yetkidir.
+  · `C6-c` — export formatı (zincir/imza alanlarının NDJSON'da nerede durduğu) o pencerede
+    **kilitlenir**; `C6-d` ve `C6-g` onu varsayar.
+  · `C6-d` — **sıra invaryantı**: dosya yazılır + kapatılır → SONRA imleç ilerler. Tekrar yazım
+    kabul, **atlama kabul DEĞİL** (aksi hâlde budama gönderilmemiş satırı siler ve zincirde
+    onarılamaz boşluk kalır).
+  · `11.5-a` — yetki sözlüğü **altı anahtar**: `white_label` · `sandbox` · `sla` · `sso` ·
+    `hipaa` · `siem_export`. PRD'nin "Enterprise" dediği her yetenek kapıya bağlanır (K1-2).
+  · `11.5-c` — `powered_by` URL parametresi **tamamen kaldırılır**; tek kaynak sunucu yanıtıdır
+    (istemci yetkiyi ilk boyamada bilemez, "yetki varsa etkili olsun" bir karar boşluğuydu).
+  · `11.5-g` — sıfırlama butonu **sunucu yanıtından** türetilir (`sandboxOfLicenseId != null`),
+    istemci bayrağından değil; sunucu ayrıca bağımsız olarak reddeder.
+  · `13.7-b` — mobil HTTP istemcisi (`apps/mobile/src/api/client.ts`) ve cihaz token'ı yaşam
+    döngüsü oturum çekirdeğinin parçasıdır. İptal çağrısı başarısız olsa bile yerel token SİLİNİR;
+    hesap değiştirmede önceki token iptal edilmeden yeni kayıt yapılmaz.
+  · `13.7-e` — RN token'ları elle yazılır, bir test `tokens.css`'i ayrıştırıp karşılaştırır
+    (sapma testi); yeni workspace paketi (`packages/tokens`) **açılmaz**.
+
 ## D. Deviations (sapmalar)
 
 - **D1 (dilim 2):** Redirect URI eşleşmesi **tam eşitlik** (OAuth 2.1). Kaynak platformun
@@ -3610,6 +4225,11 @@ görüneceği en son yerdir.
 - **D92 (PLAN.md:1132 `§5.3-KB Public KB` "satır kendi kendisiyle çelişiyor" bulgusu — damga DOĞRU, kusur K5.3-KB'nin SONUNDA unutulmuş bir `**Kalan (h→i):**` kuyruğunda; §D91'in KONUM kusurunun ikinci örneği, ürün kodu değişmedi · 2026-08-11):** Panel, `✅ → K5.3-KB` damgalı satırın kanıt bloğunun **son cümlesini** ("admin makale editörü …, uçtan uca doğrulama — henüz yapılmadı") bloğun güncel durumu sanıp erken damga şüphesi açtı. **Gerçek: yalancı bulgu, kusur KONUMDA — §D91'de (07.6) teşhis edilen desenin birebir tekrarı.** Kuyruk `PUBKB-g` turunda (tm 76.7, commit `67b3a82`; `git log -S'Kalan (h→i)'` ile doğrulandı) bloğun sonuna yazıldı ve **o an doğruydu**; `-h` (tm 76.8, `97b746f`) ve `-i` (tm 76.9, `09944d3`) sonraki iki turda teslim edildi, ama K blokları **append-only** olduğu için yeni maddeler kuyruğun **ÖNÜNE** girdi ve blok kapanışını iki kez konuşur oldu, **son sözü eski**. **KODA KARŞI DOĞRULANDI — damga hak edilmiş:** _"Public"_ (anonim) `apps/api/src/routes/public-kb.ts:157,187,209` + `public-kb-html.ts:92,147` · _"SEO'lu"_ `apps/api/src/lib/kb-page.ts:131-135` (`robots`/`<title>`/`description`/`canonical`/`og:title`) + `:109` (JSON-LD) + `public-kb-sitemap.ts:90,129` · _"self-servis"_ oturumsuz okuyucu e2e `apps/e2e/tests/public-kb.spec.ts:179` (+ cross-tenant `:309`); kuyruğun "yapılmadı" dediği iki iş de yerinde: editör `apps/web/src/features/playbook/KbArticleEditor.tsx:391,412` (SEO alanları) · `:443` (Publish/Unpublish) · `:468` (public link) ve e2e'nin 2 testi. tm 76.1–76.9 **dokuzu da `done`**. **Ölçüldü:** `@nexa/web` playbook KB **41/41** · `@nexa/api` `kb-render` **24/24** + `kb-slug` **8/8** — yeşil. **Yapılan (YALNIZ metin, tek yerde):** K5.3-KB'nin son cümlesi geçmiş kipine çevrildi + arkasına bloğun güncel durumunu ("§5.3-KB KAPALI, kalan iş yok") ilan eden denetim cümlesi yazıldı. **Yeni Task Master görevi AÇILMADI** — kapatılacak eksik yok (bu yüzden `critical` düzeltme görevi de gerekmedi). **DOKUNULMADI:** tablo hücresi (`✅ → K5.3-KB` aynen, CONVENTIONS §1.2) · hiçbir kanıt maddesi silinmedi · ürün kodu/testler · özet sayaçları · diğer 2 açık bulgu (2 medium, kapsam dışı) · tm 117/118. **DERS (§D91 ile aynı, artık İKİ örnek):** kalan-iş notu append-only bloğun kuyruğuna DEĞİL, **o turun maddesinin içine** yazılır; kuyruğa yazılan her "henüz yapılmadı" bir sonraki teslimde kalıcı yalancı bulguya dönüşür. → §D88 · §D91 · CONVENTIONS §1.2
 - **D93 (PLAN.md:1128 `13.3 Goals` "satır kendi kendisiyle çelişiyor" bulgusu İKİNCİ KEZ açıldı — damga yine DOĞRU, §D88'in düzeltmesi EKSİK kalmıştı; ürün kodu değişmedi · 2026-08-11):** §D88 (aynı gün) bu satırı zaten doğrulamış ve K13.3'ün 8 maddesindeki damga fiilini geçmiş kipine çevirmişti ("Satır `◐` **kalıyor**" → "o turda `◐` **kaldı**"), ama **yalnız fiili** çevirdiği için maddelerin NESNE cümleleri şimdiki zamanda kaldı: `-a`'da "kalan 8 alt-görev … **henüz yapılmadı**", `-b`…`-h`'de "… **duruyor**", `-h`'de "`GoalsFunnel.tsx` **henüz hiçbir ekrana bağlı değil**". Panel bloğun ortasından alıntıladığı için aynı çelişkiyi tekrar gördü — **"henüz yapılmadı" tüm §K bölümündeki TEK açık-iş iddiasıydı** (`grep -c` → K blokları içinde 1, o da bu satır). **KODA KARŞI YENİDEN DOĞRULANDI, damga hak edilmiş:** KK'nın üçü de yerinde — _"hedef tanımı"_ `apps/api/src/routes/goals.ts:22` (`.strict()` definition şeması) + `GoalBuilder.tsx` · _"3 aşamalı huni"_ `apps/web/src/features/goals/goals.ts:49-55` (`funnelStages` → Visitors/Chats/Conversions) + `GoalsFunnel.tsx`, `GoalsPage.tsx:64`'te **mount edilmiş** (yani `-h`'nin "bağlı değil" cümlesi artık YANLIŞ) · _"rapor entegrasyonu"_ `apps/web/src/features/reports/ReportsPage.tsx:552-555` (Achieved goals KPI) + `apps/api/src/routes/reports.ts:1515` (`GET /reports/goals`, `reports_read`) + `apps/api/src/routes/reports-export.ts:50` (`REPORT_GROUPS` `goals`); depolama `prisma/migrations/20260810100000_goal_achievements/` · 5 integration dosyası (`goals.test.ts`, `goals-achievement.test.ts`, `goal-achievements-rls.test.ts`, `data-model`, `auth`) · e2e `apps/e2e/tests/goals.spec.ts` (**2 test**) + 2 kanıt PNG'si (`13.3-goals-funnel.png`, `13.3-reports-achieved-goals.png`). tm 74 ve **74.1–74.9'un dokuzu da `done`**. **ÖLÇÜLDÜ (dosya varlığı yetmez):** `@nexa/web` → `src/features/goals` **22/22** (goals 11 · GoalsFunnel 4 · GoalsPage 7) · `@nexa/api` → `src/services/goals` **7/7** — ikisi de yeşil, K13.3-i'nin yazdığı sayılarla birebir. **Yapılan (YALNIZ metin, K13.3 bloğunda):** (1) `-a`'nın "henüz yapılmadı"sı geçmişe çevrildi + "sekizi de -b…-i'de teslim edildi, açık iş YOK" cümlesi eklendi; (2) `-b`…`-g`'nin "duruyor"u → "**o turda duruyordu, sonraki turlarda kapandı**"; (3) `-h`'nin "bağlı değil" cümlesi geçmişe çevrildi + "`GoalsPage.tsx:64`'te mount edilmiştir, bu cümle 2026-08-10'dan beri GEÇERSİZDİR" denetim notu; (4) başlık kutusuna "bu bloktaki hiçbir madde bugün açık iş tarif etmez" ilanı. **DOKUNULMADI:** tablo hücresi (`✅ → K13.3` aynen — CONVENTIONS §1.2: hücre yalnız damga+referans) · hiçbir madde/kanıt silinmedi (tarihçe ekleyerek büyür) · ürün kodu ve testler · faz özet sayaçları · diğer 2 açık bulgu (2 medium, kapsam dışı) · tm 117/118. **Yeni Task Master görevi AÇILMADI** — kapatılacak eksik yok, kod tam (bu yüzden `critical` düzeltme görevi de gerekmedi). **DERS (§D88/§D91/§D92'nin üstüne dördüncü örnek, yeni kural):** bayat bir kanıt cümlesini düzeltirken **fiili geçmişe çekmek YETMEZ** — cümlenin açık iş sayan NESNESİ ("… duruyor", "… henüz yapılmadı", "… bağlı değil") de çevrilmeli, yoksa satır ikinci kez bulgu üretir. **Bilinen kalan risk (kapsamda DEĞİL, bilerek bırakıldı):** K13.5 bloğu (satır 1131) aynı deseni **şimdiki zamanda** taşıyor (7 madde "Satır `◐` **kalıyor** … duruyor") ve kalemi `✅ → K13.5`; aynı bulgu orada da doğabilir — kapsam yalnız bu satır olduğu için dokunulmadı, doğarsa bu madde çözümü hazır veriyor. → §D88 · §D91 · §D92 · CONVENTIONS §1.2
 - **D94 (bayat "Satır `◐` kalıyor" kalıbı SÜPÜRÜLEREK kapatıldı — 3 blok / 14 madde; kalıbın DÖRDÜNCÜ ve SON turu, kural kalıcı yazıldı; ürün kodu değişmedi · tm 121 · 2026-08-11):** §D-öncesi durum: §D88/§D91/§D92/§D93 aynı sınıf bulguyu **tek tek** kapatmıştı (`13.3` · `07.6` · `§5.3-KB` · `13.3` yine) ve dördü de bir pencereyi bütünüyle harcamıştı; kalan yük bu turda ÖLÇÜLDÜ (`## K.` bölümünün 63 bloğu tarandı): `✅` damgalı üç satırın kanıt bloğu hâlâ ŞİMDİKİ ZAMANDA açık iş sayıyordu — **K09.2-b** (satır 1122 · 6 madde) · **K13.5** (satır 1131 · 7 madde) · **K13.3** (satır 1128 · 1 madde, §D93'ün ARTIĞI: fiil geçmişe çekilmişti ama nesne "duruyor" olarak şimdiki zamanda kalmıştı) = **14 madde / 3 blok**. Tek tek beklemek yerine sınıf topluca kapatıldı. **ÖNCE DAMGA DOĞRULANDI, sonra metin çevrildi** (§D91/§D92/§D93'ün kuralı — dosya varlığı YETMEZ): `09.2` → `APP_CATALOG` **102 kart** (`packages/types/src/apps.ts:95`) · `routes/apps.ts:27` (`listQuery`) → `app-service.ts:141,146` · `AppsMarketplace.tsx:35,46,49` (`useInfiniteQuery`+`VirtualList`) · `apps/e2e/tests/apps.spec.ts`; koşuldu `apps.test.ts` (types) 17/17 · web `app-grid`+`AppsMarketplace` 32/32 · integration `apps.test.ts` 12/12. `13.3` → §D88'in ölçümü tekrarlandı: web `src/features/goals` 22/22 · `goal-matching.test.ts` 7/7 · integration `goals` 14/14 + `goals-achievement` 13/13 + `goal-achievements-rls` 12/12. `13.5` → `schema.prisma:996,1013` (`SalesTrackerSettings`+`TrackedSale`) · `routes/customer.ts:646` (`POST /customer/chat/sale`) → `services/sales/attribution.ts:80` · `report-csv.ts:562` (`trackedSalesSummary`) → `ReportsPage.tsx:887` · `routes/settings.ts:867,880` → `SettingsPage.tsx:149` · `widget.ts:493` (`nexa('trackSale', …)`); koşuldu `attribution.test.ts` 10/10 · `SalesTracker.test.tsx` 6/6 · `widget.tracksale.test.ts` 6/6 · integration `settings`+`customer-chat`+`reports-billing`+`apps` 471/471. **Üçünün de damgası HAK EDİLMİŞ çıktı** — hiçbiri `◐`'ye düşürülmedi. **Yapılan (YALNIZ metin):** (1) 14 maddenin hepsinde "Satır `◐` kalıyor … duruyor" → "Satır **o turda** `◐` kaldı … **o turda duruyordu, sonraki turlarda kapandı**" (fiil VE nesne, §D93'ün dersi); (2) `K09.2-b` ve `K13.5` başlıklarının altına K13.3'ün emsal kutusu — "bu bloktaki hiçbir madde bugün açık bir iş tarif etmez" + geçerli olan **en alttaki** maddedir + blok denetimi (yukarıdaki dosya:satır dayanakları + bu turda koşulan test sayıları); (3) `K13.3`'ün kutusuna bu turun denetimi eklendi. **ÖLÇÜM DÜZELTMESİ:** görev metni kalıbı **13** isabet sayıyordu, gerçek **14**'tü — 14.'sü §D88'in kendi içindeki, KALDIRILAN cümlenin **alıntısıydı** (bu satır, yani sapma kaydının kendisi aramaya takılıyordu). Alıntının SÖZLERİ aynen korundu, yalnız içindeki `**` vurgu işaretleri düşürüldü + "kaldırılan metnin alıntısı" ibaresi eklendi; böylece ölçüm `PLAN.md` genelinde **0** döner ve tarihçe hiçbir şey kaybetmez. **DOKUNULMADI:** üç tablo hücresi (`✅ → K09.2-b` / `✅ → K13.3` / `✅ → K13.5` aynen — CONVENTIONS §1.2) · hiçbir kanıt maddesi silinmedi (append-only) · ürün kodu, testler, migration, sözleşme · faz özet sayaçları · yanlış pozitifler (`K02.1.4` "kanal bağlı değilse" · `K07.6` "bir arada kalıyor" · `K07.7-b` "altı gated-olmayan sekme duruyor" · `KA11Y` "yakalıyor") · zaten onarılmış `K07.6`/`K5.3-KB`. **Yeni Task Master görevi AÇILMADI** — kapatılacak eksik yok. **KALICI KURAL (bu kalıbın beşinci turu olmasın diye):** append-only kanıt bloğunda **kalan-iş notu o turun maddesinin İÇİNE, geçmiş kipinde yazılır — bloğun KUYRUĞUNA asla**; teslim edildiğinde hem **FİİL** hem **NESNE** geçmişe çevrilir; ve çok-dilimli bir kalem kapanınca bloğun başına "geçerli olan en alttaki maddedir, burada açık iş yok" kutusu konur. → §D88 · §D91 · §D92 · §D93 · CONVENTIONS §1.2
+- **D95 (Faz-3 (Enterprise) TAM ATOMİK kırılıma indirildi + kapsam PRD §5.4'e karşı süpürüldü; ürün kodu DEĞİŞMEDİ · 2026-08-11):** §D-öncesi durum: §6.1 **orta derinlikteydi** ("~28–37 alt-görev" tahminî) ve gerekçesi §5.1'in **bayatlama politikasıydı** — _"v3 başlarken kod tabanı değişmiş olacak; bugün yazılan ince kırılım yanlış güven verir."_ O gerekçe bu turda **düştü**: Faz-3 şimdi başlıyor, Faz-0/v1/v2 kapandı (§F.00) ve kırılım **koda karşı** doğrulandı. Bayatlama politikası artık **hiçbir faza** uygulanmıyor. **KAPSAM SÜPÜRMESİ (PRD §5.4'ün yedi alan satırı + §5.5 matrisinin `Ent.` sütunu):** §6.1'de olmayan **üç** kalem bulundu — (1) _dedicated onboarding/account manager_ → `⛔-süreç`, kod payı yok (insan hizmeti taahhüdü); (2) _IVR routing_ → skills-based payı **v2'de teslim** (`08.6.3`, tm 91), IVR payı `⛔` (voice'a bağlı); (3) _kalan marketplace app'leri_ → **v2'de karşılandı**, `APP_CATALOG` **102 kalem** (`packages/types/src/apps.ts:95`) PRD'nin "100+" eşiğinin üstünde. Üçü de §6 tablosuna gerekçesiyle satırlandı, hiçbiri kırılım açmadı. **KIRILIM (bu turda): 6 kalem · 48 alt-görev · ~66 pencere · 5 dilim** (§6.1 · §6.2 · §G düz tablosu). _(Bu üç sayı O TURUN sayılarıdır ve **bugün geçerli değildir**: hemen ardından koşan düşman denetimi iki yapısal boşluk buldu ve kırılımı **50 alt-görev · ~69 pencere**'ye çıkardı — §D99. Bu maddede açık iş tarif EDİLMEZ.)_ Etiket dağılımı `SONNET-XHIGH` 19 · `OPUS-XHIGH` 18 · `OPUS-MAX` 11 → %40 Sonnet (v2'nin %51'inden düşük, KASITLI: Faz-3 kalemleri kimlik/bölge/denetim/yetki sınırıdır). **KODA KARŞI DOĞRULANAN ÜÇ BULGU kırılımı fiilen değiştirdi:** (a) _Telegram `OPUS-MAX` gerektirmiyor_ — emsal 08.5.7'nin (tm 65) bir `OPUS-MAX` çekirdeği vardı (`08.5.7-d`, kanal adresi tekilliği), ama koruma **kanal-agnostik** çıktı: `20260809090000_channel_address_uniqueness` `channel_address_owner(p_type, p_address)`'i tip PARAMETRESİYLE kurar ve `channel-service.ts:94-163` kanal tipini özel-durumlamaz → 8 alt-görev/1 OPUS-MAX yerine **6/0**; iddia varsayılmadı, `08.5.8-f`'de **regresyon testine** bağlandı. (b) _`powered_by` hiçbir plan kapısı taşımıyor_ — `routes/settings.ts:181,827` herhangi bir plandaki herhangi bir çalışma alanının markayı kaldırmasına izin veriyor; yani Enterprise'a satılan özellik bugün ücretsiz katmanda açık. Kalem 11.5'in gerçek işi inşa değil **kapı**; ve kritik yarısı yazma değil **downgrade yolu** (`11.5-b` çekirdeğinin bölünmezlik gerekçesi budur). (c) _kodda "Enterprise planı" kavramı yok_ — `subscription-service.ts:21` `PLANS` tek kademeli (`growth`), yetki sözlüğü onunla birlikte gelir. **DURUM DEĞİŞİKLİĞİ (zorunluydu):** altı kalem `deferred`'di; `run-loop.sh:150-155` seçim kapısı `deferred` bir görevi **hiçbir koşulda seçmez** ve `deferred` bir göreve bağımlı her iş de kalıcı olarak seçilemez hâle gelir. Kırılım yazılsa bile döngü tek pencere açmazdı — plan yazılı, iş ölü olurdu. Altısı da `pending` + `medium`'a alındı (`low` sürekli sona düşerdi; `high` PRD'nin öncelik dilini bozardı; `critical` panelin düzeltme akışına rezerve — CONVENTIONS §4.1). **ADR-12 GENİŞLETİLDİ, iptal edilmedi:** değer kümesi `{eu, us}`, immutability korunur (§0 satırı güncellendi). **DOKUNULMADI:** ürün kodu · testler · migration · sözleşme · Faz-0/v1/v2 tabloları ve damgaları · tm 117/118. **Yeni PRD kimliği UYDURULMADI:** kırılım açan altı kalemin dördü PRD kodu taşımıyordu (`—`); §7.2'nin `M-FMT` emsaliyle (§D90) **türetilmiş kod** verildi — `S11` (NFR-S11) · `C4` (NFR-C4) · `C6` (NFR-C6/C7/S12) · `11.5` (FR-MOD-11.5, zaten vardı). Gerekçe: panel izlenebilirliği başlığın ilk parçasını PRD kimliği olarak okur; kimliksiz görev `orphan-task` bulgusu üretir.
+- **D96 (mobil (13.7) BARINDIRMA KARARI: bu monorepo'da `apps/mobile` (Expo/RN) — kapsam daraltmasıyla; kalem `◐` bitecek · 2026-08-11):** §D60 bu kalemi v1'den Faz-3'e taşımış ama **nerede yaşayacağını karara bağlamamıştı**; kırılım o karar olmadan yazılamazdı. Üç seçenek tartıldı. **(A) bu monorepo'da Expo/RN workspace:** `@nexa/types` + generated kontrat tipleri doğrudan paylaşılır (contract-first korunur, ADR-05) · tek pnpm/turbo kapısı, DoD aynı komutlarla koşar · ADR-01 (TS her yerde) korunur · otonom döngü çalışabilir. **(B) ayrı repo: ELENDİ — sınır ihlali.** CLAUDE.md _"başka repoya dokunma YOK"_ diyor; döngü oraya iş yapamaz, kontrat tipleri kopyalanır (drift), DoD kapısı buradan koşamaz. **(C) `deferred` kalsın: ELENDİ.** §F.00 _"gerekçesiz `🔒` bir kapanış engelidir (gizlenmiş `⬜` olabilir)"_ diyor ve §D60 tam bu tuzağı bir kez düzeltti; ikinci kez ertelemek kalemi süresiz bloke eder. **SEÇİLDİ: (A), KAPSAM DARALTMASIYLA** — DoD kapısı `expo export` (JS bundle) + RN test süiti + paylaşılan kontrat tipleri üzerinden koşar; **`.ipa`/`.apk` üretimi ve store yüklemesi KAPSAM DIŞI** (CLAUDE.md "production deploy yok" + bu makinede native araç zinciri yok). **DÜRÜST SONUÇ:** FR-MOD-13.7'nin _"tam modül paritesi"_ payı karşılanır, _"mağazada yayınlanmış uygulama"_ payı **karşılanmaz** → satır `✅` değil **`◐`** bitecek ve eksik burada **kabul edilen borç** olarak kayıtlıdır. Kapanış uğruna `✅` uydurulmayacak (TASK-RUNNER-PROMPT §3). Mobil `Should`'dur; §F.00 kapısını **bloklamaz**. Ayrıca "tam modül paritesi" **ekran paritesi** olarak yorumlandı (§C-A28): KK dört yüzeyi ismen sayar (Inbox/AI/CRM/Reports), Settings/Billing/Playbook/Team mobil kapsam dışıdır.
+- **D97 (uyumluluk kalemlerinde KOD/SÜREÇ ayrımı: "done" bu depoda YALNIZ kod payıdır; sertifikasyon §F.00'ı BLOKLAMAZ · 2026-08-11):** Sorun: `C6` (SOC 2 Type II · ISO 27001) ve `C4` (HIPAA) takvimi **dışsal** kalemlerdir — PRD §10.2 dış denetimi 6–12 ay sayar — ve bu depodan üretilemezler. Ayrım yazılı olmasaydı iki kötü sonuçtan biri kaçınılmazdı: ya kalem sonsuza kadar açık kalıp Faz-3'ü kilitlerdi, ya da "SOC2 ✅" diye **yalan bir damga** yazılırdı. **KARAR (§F.00'a not düşüldü):** (1) **KOD PAYI görevleşir** ve tam DoD kapısından geçer — `C6`: audit kapsamının genişletilmesi, SIEM export (bütünlük zinciri + boşluk tespiti), erişim gözden geçirme raporu (SOC 2 CC6.1 kanıtı); `C4`: bölge zorlaması (421, üç yüzeyde), BAA kaydı, HIPAA kapsam kısıtları. Kalemin ✅'i **yalnız bunu** iddia eder. (2) **SÜREÇ PAYI görevleşmez ve kapanışı bloklamaz** — Type II gözlem penceresi, dış denetçi, ISO belgesi, gerçek BAA imzası, gerçek çok-bölgeli barındırma. §6 tablosunda `⛔-süreç`. (3) Aynı ayrım _dedicated onboarding/account manager_ kalemine de uygulandı (kod payı sıfır). **NEDEN AYRI BİR SAPMA KAYDI:** bu, PLAN'ın "bir kalem ya ✅ ya ⬜" ikiliğine getirilen üçüncü bir hâldir; yazılı olmasaydı sonraki bir denetim "SOC2 ✅ ama sertifika yok" çelişkisini bulgu olarak açardı — §D88/§D91/§D92/§D93/§D94'ün dört tur harcadığı sınıfın aynısı.
+- **D98 (Faz-3'ün companion dosyası AÇILMADI — `PLAN-V2-KIRILIM.md` muadili yok; detay Task Master'da · 2026-08-11):** §D66 v2 için ayrı bir kırılım dosyası açmıştı (196 alt-görevin alan detayı ~900 KB). Faz-3 için aynı şey **yapılmadı**. Gerekçe: sıfır-bağlamla açılan pencere detayı zaten **Task Master'ın `details` alanından** okur (TASK-RUNNER-PROMPT §0/3: _"Task Master'daki hedef alt-görevin `details` alanı zaten bu dosyadaki girdinin tamamını taşır — normalde buraya bakmana gerek yok"_). İkinci bir dosya o pencereye hiçbir şey eklemez; yalnız **senkron tutulacak ikinci bir kaynak** yaratır ve bu depoda bayat ikinci kaynak sınıfı (§D68–§D94) zaten en pahalı hata ailesidir. Bunun sonucu: **Faz-3'te `details` alanı bir özet değil, sözleşmedir** — her alt-görevin `details`'i "neden açık · kapsam · dosyalar · referans desen · kapsam dışı" alanlarını taşır ve `testStrategy` exit-0 veren gerçek komutlardır. 48 alt-görevin 48'i bu biçimde yazıldı.
+- **D99 (Faz-3 kırılımı DÜŞMAN DENETİMİNDEN geçirildi — 2 yapısal düzeltme + 3 etiket yükseltmesi + ~30 metin bulgusu geri işlendi; ürün kodu DEĞİŞMEDİ · 2026-08-11):** §D95'in kırılımı (48 alt-görev) yazıldıktan sonra, v2'nin (§5.1.1) emrettiği gibi **üç bağımsız düşman denetçisi** 6 koşula karşı sınadı: (1) KK birebir mi · (2) kod iddiası doğru mu · (3) dosyalar/referans desen gerçekten var mı · (4) güvenlik sızmış mı · (5) bağımlılık grafı sağlam mı · (6) Sonnet için yeterince belirli mi. **Kırılım çürütüldü ve düzeltildi.** **İKİ YAPISAL BULGU (yeni alt-görev gerektirdi):** (a) **`S11-a2` açıldı [OPUS-MAX]** — `sso_connections`'ın YAZMA ucu (IdP sertifikası, entityId, SSO URL) **hiçbir alt-görevin kapsamında değildi**; `S11-a` "davranışsız iskelet + salt-okuma", `S11-d` yalnız `/login`+`/acs`, `S11-h` yalnız `enforced` bayrağı diyordu. Ucu isteyen tek alt-görev `S11-g` idi — bir SONNET web ekranı. Yani dört OPUS-MAX çekirdeğin tamamının güvendiği sertifikayı kimin, hangi rolle, hangi doğrulamayla yazdığı boştaydı; sertifikayı yazabilen aktör o lisansta istediği kişi adına imzalı assertion üretebilir (tam hesap devralma). (b) **`C6-a` → `C6-a1` [OPUS-XHIGH] + `C6-a2` [SONNET-XHIGH] bölündü** — "hangi mutasyon güvenlik-hassastır" kararı 37 route dosyasını tarayıp metadata minimizasyonuna karar vermeyi gerektiriyordu; alt-görev kendini "DENETİM" diye adlandırırken `SONNET-XHIGH` etiketliydi ve §5.1.1'in "~3-5 dosya + kopyalanacak desen" ölçütünü ihlal ediyordu. **ÜÇ ETİKET YÜKSELTMESİ (OPUS-XHIGH → OPUS-MAX):** `S11-f` (dış IdP komutuyla lisansa üyelik açıyor = yetkilendirme kararı) · `C4-a` (`region` immutability'si çapraz-kesen veri modeli invaryantı; zorlamanın DB'de mi uygulamada mı olduğu belirsiz bırakılmıştı) · `C6-b` (tüm audit log'un toplu NDJSON dışa akışı + ertelenmiş scope kararı). **EN AĞIR ÜÇÜNCÜ BULGU — K1-2:** PRD'nin **açıkça "Enterprise"** dediği üç yetenek (SAML/SCIM NFR-S11 · HIPAA NFR-C4 · genişletilmiş audit+SIEM NFR-S12) **hiçbir yetki kapısına bağlanmıyordu**; `11.5-a`'nın sözlüğü yalnız `white_label`/`sandbox`/`sla` taşıyordu. Faz 3 bittiğinde `growth` planındaki her kiracı SSO'ya, SCIM'e, BAA akışına ve SIEM export'una erişecekti — yani `11.5` kalemi, **var oluş gerekçesi olan kaçağın (`powered_by` her planda açık) üç yeni örneğini üretecekti**. Düzeltme: sözlük **3 → 6 anahtar** (`sso` · `hipaa` · `siem_export` eklendi), `11.5-b` çekirdeği altısını birden bağlıyor, `S11-i`/`C4-g`/`C6-g` süitlerine **yetkisiz planda red negatifi** zorunlu test olarak yazıldı. **GÜVENLİK METNİ DÜZELTMELERİ:** `S11-g`'nin "bağlantıyı test et" butonu SUNUCUDAN IdP'ye istek atacaktı (SSRF) → **yerel doğrulamaya** indirildi · SCIM token'ını BASAN uç sahipsizdi → `S11-e`'ye verildi · `S11-c` (SONNET) **XSW saldırı varyantlarını** üretiyordu, yani `S11-b`'nin bölünmez çekirdeğinin testini bir Sonnet penceresi yazacaktı → saldırgan varyantlar `S11-b`'ye taşındı, `S11-c` yalnız iyi-huylu fixture'a indi ve bağımlılığı kalktı · `C6-d`'ye **sıra invaryantı** yazıldı (dosya yazılır → SONRA imleç ilerler; tersi budamanın gönderilmemiş satırı silmesine ve zincirde onarılamaz boşluğa yol açar) · `13.7-j`'nin cihaz token'ı iptal tetikleyicileri (çıkış/hesap değiştirme = çapraz-kiracı push riski) `13.7-b`'nin OPUS-MAX oturum çekirdeğine taşındı · `11.5-g`'nin sıfırlama butonu **sunucu yanıtından** türetilecek şekilde bağlandı + `11.5-f`'e "üretim lisansında sıfırlama reddedilir" negatifi eklendi · `11.5-c`'de `powered_by` URL parametresi **tamamen kaldırıldı** (istemci yetkiyi bilemez; "yetki varsa etkili olsun" bir karar boşluğuydu) · `08.5.8-a/-b`'ye "`bot_token` `config`'e YAZILMAZ" kuralı (`channel-adapter.ts` `ConnectResult.config` dokümanı birebir _"Never contains a raw secret"_ diyor; Instagram emsalini kopyalamak bu invaryantı kullanıcı-sağlamalı bir sırla ihlal ederdi) · `13.7-c`'ye düz metin cihaz token'ı notu. **SAHİPSİZ YÜZEYLER SAHİPLENDİRİLDİ:** `C6-f` ekranının konuşacağı hiçbir uç tanımlı değildi (contract-first sırası kırıktı) → `GET|PATCH /settings/siem` + `/status` `C6-b`'ye verildi · dört mobil Sonnet ekranının HTTP istemcisi (token iliştirme + 401 yenileme) sahipsizdi → `apps/mobile/src/api/client.ts` `13.7-b`'ye verildi · bildirim tercihinin sunucuya taşınması `13.7-d`'nin bölünmez çekirdeğine gizlenmişti → `13.7-c`'ye çıkarıldı · **bölge reddi audit eylemi** (`security.region_rejected`) hiçbir alt-görevde yoktu oysa §6.2.1'in dilim sırası gerekçesi ona dayanıyordu → `C4-b`'ye eklendi. **KENDİ İŞİNİ YASAKLAYAN TALİMAT:** `08.5.8-e` _"`views.test.ts` … mevcut beklentiyi oku, **kırma**"_ diyordu; ama o test (`views.test.ts:68-72`, `it('ignores an unknown channel type')`) telegram'ı **bilinmeyen tipin temsilcisi** olarak pinliyor ve alt-görevin işi tam olarak onu değiştirmek. İmkânsız kısıt + var olmayan bir "filtre/sayaç" kalıbını "birebir kopyala" talimatı → alt-görev **tamamen yeniden yazıldı** (gerçek yüzey: `views.ts:33` birlik + `:46` META + `:59` guard; pin `08.5.8-c`'nin diliyle güncellenecek). **BEŞ YANLIŞ EMSAL REFERANSI** (sıfır-bağlam penceresini doğrudan yanlış göreve yönlendirirdi): tm 93 → **tm 94** (`07.9-sched-e` sweeper · `07.9-sched-h` ekran) ×2 · `07.7-v2` → **`07.9-sched-d2`** (`report-csv.ts`) · tm 96 → **tm 77** (`work_schedule`) · tm 33 → **tm 34** (`08.8.4-b` HMAC) · `DeveloperPortalPage` → **`DeveloperPortal.tsx` `SecretOncePanel`** (tm 72 · `09.4-e`) · `reports-export.ts` (YOK) → `report-csv.ts`+`scheduled-report-sweeper.ts` · `channels.test.ts` (YOK) → `channels-adapters.test.ts` · `Skeleton/EmptyState/StatusDot` `components/ui/` değil `components/`. **YANLIŞ KOD İDDİASI:** `C4-b` _"eksik olan KARAR NOKTASI"_ diyordu; oysa REST kapısı **zaten var** (`plugins/auth.ts:268-274`) ama karşılaştırmanın sağ tarafı süreç env'i (`env.NEXA_REGION`), lisansın bölgesi değil — iş "kapı kurmak" değil "var olanı doğru şeye bağlamak + RTM/customer-token'a taşımak". Ayrıca `apps/rtm/src/config/env.ts:5` de `z.literal('eu')` ve hiçbir DOSYALAR listesinde yoktu; login yolu `connection.ts` değil `dispatcher.ts:20,64,86`. **GRAF DÜZELTMESİ (K5-1):** §6.2.1 _"entitlement kapısı (`11.5-b`) kararlaşmadan mobil oturum modeli yazılamaz"_ diyordu ama `tm 90`'ın bağımlılığı `[81,82]` idi → **`84` eklendi**. **YALAN İDDİA GERİ ÇEKİLDİ (K5-2):** "çalışma sırası bu tablodur … sıra grafın şekli olur" **yanlıştı** — `pick_next` eşit öncelikte en küçük id'yi seçtiği için `tm 82` biter bitmez `tm 79` (dilim 4) dilim 2/3'ten önce koşardı. Metin gerçeğe çevrildi: **bir zorunlu ilk dilim (V3-1), sonra paralel tema grupları**; `tm 82→81` ve `tm 84→82` bağımlılıklarının **sıra kısıtı** olduğu (teknik bağ değil) ve bedeli açıkça yazıldı. **KAPI KURALI DÜZELTİLDİ (K1-6):** üç yerde "6 kalemin hepsi ✅" yazıyordu ama `13.7` `◐` bitecek — kural tanım gereği sağlanamazdı ve kapanış penceresi ya kapatamaz ya uydurulmuş bir ✅ yazardı. Üç kopya **"beş kalem ✅ + `13.7` ◐"** olarak senkronlandı. **KAPSAM SÜPÜRMESİ DÜZELTMESİ (K1-1):** PRD §5.4 "Veri" satırı **iki paylıdır** (DWH export + ayrı kolon-tabanlı depo) ve §11.1/5 yalnız ikincisini dışlar; ilk süpürme ikisini tek satır sayıp yanlış maddeye atıf yapmıştı → iki satıra ayrıldı, DWH export **kendi gerekçesiyle** ⛔ (gerçek dış hesap ister, mock bir DWH export'u hiçbir şey kanıtlamaz). **K1-4:** PRD'nin tek somut SLA tanımı NFR-U5'tir (uptime + kredi); kırılım SLA'yı yanıt/çözüm süresi olarak yorumluyordu → uptime/kredi payı `⛔-süreç` satırı olarak eklendi. **K1-3:** NFR-S11 "SAML 2.0/**OIDC** + SCIM" der; dokuz alt-görevin hiçbiri OIDC'ye dokunmuyordu → KK §5.4'ün "Kimlik" satırından türetildi (orada OIDC yok) ve OIDC payı **kabul edilen borç** olarak ilan edildi. **K1-5/K1-12:** `13.7`'nin `◐` gerekçesi tek paylı yazılmıştı (yalnız mağaza); parite daraltması "yeniden tanımlanarak" gizleniyordu → `◐` **iki paylı** yazıldı ve kapsam beyanı (Settings'ten yalnız bildirim tercihleri gelir) alt-görevlerle tutarlı hâle getirildi. **K1-7:** `C4-e`'nin "zorunlu retention tavanı" kısıtı PRD'de YOK (NFR-C8 retention'ı yapılandırılabilir tanımlar) → §C-A20.1'e **ürün kararı** olarak yazıldı, PRD'den türetilmiş gibi sunulmuyor. **K1-9:** üç alıntı sadakati düzeltildi ("— Nexa" eki · NFR-C4 birebir · `dal`/`fra` bölge kodu sapması §C-A20.2'ye). **K1-11:** Telegram'ın iki açık sorusu (bot_token nerede · 'Get notified' akıbeti) **karara bağlandı ve kapatıldı** — açık soru bırakmak pencerenin onu keyfi çözmesi demekti. **K5-6 + K1-8 (KAYIT, kapsam DIŞI):** Faz 3 fiilen **üçüncü pencerede** başlar — kuyrukta `tm 122` ve `tm 123` (`critical`, bağımlılıksız) var ve `pick_next` adım 2 onları öne alır. `tm 122` ayrıca §2 Modül→Faz matrisinin bayat damgalarını düzeltir (`Mobil app` satırında Ent. payı yok · `MOD-09` hâlâ ⬜ oysa §6 onu "v2'de karşılandı, 102 kalem" sayıyor) — yani **`tm 122` bu kırılımın ön koşuludur**. Bu tur onun işini **YAPMADI** (CONVENTIONS §5 kapsam disiplini). **DOĞRULANIP KORUNANLAR:** Telegram'ın `OPUS-MAX` indirimi denetimde **çürütülemedi** — `20260809090000_channel_address_uniqueness` `channel_address_owner(p_type,p_address)`'i tip parametresiyle kurar (`migration.sql:44-46,53`), `channel-service.ts:115,157-163` kanal tipini özel-durumlamaz ve `channels_type_check` telegram'ı zaten kabul eder (`20260722154008_domain_model/migration.sql:824-826`, yani migration da gerekmez); iddia `08.5.8-f`'de regresyon testine bağlıydı ve öyle kaldı. Alt-görev bağımlılıklarının **50/50'si tam kimlik** biçiminde, döngü yok, kardeş-olmayan bağımlılık yok, PLAN §6.1 ↔ §G ↔ Task Master üçlüsü birebir. **SONUÇ: 48 → 50 alt-görev · ~66 → ~69 pencere · Sonnet payı %40 → %38.** Sonnet payındaki düşüş bu turun bedeli değil kazancıdır: iki güvenlik sınırı küçük modelden alındı.
 - v2-03 §8.5 başlığı "~63 scope" diyor, tablosu **58** sayıyor. Tablo esas alındı.
 - v2-03 §1.8 tablosu **24** hata tipi listeliyor (master prompt 23 diyor). Tablo esas alındı.
 - **Faz-0 özet satırı (satır 20) bayatlamıştı** (denetim 2026-07-26): "Genel durum" sütunu `51 ✅ · 3 ◐` gösteriyordu; §3.0–§3.10 gereksinim tabloları elle sayıldığında `54 ✅ · 0 ◐` çıkıyor. Sebep: üç `◐` kalemi (01.3, 02.4, 13.8) D23/D24/D26 çelişki denetimlerinde koda karşı doğrulanıp sırasıyla `◐`→`✅` çevrildi (satır işaretleri güncel), ancak özet satırı güncellenmedi — satır eklenmedi/silinmedi, `✅`+`◐` toplamı 54 sabit kaldı, yalnız 3 satır `◐`'den `✅`'e geçti. Özet gerçek sayıma göre düzeltildi (yalnız "Genel durum" sütunu; gereksinim işaretlerine dokunulmadı).
@@ -3692,6 +4312,27 @@ e2e **103/103** · `db:check-drift` "no drift" (kanıt HANDOFF §F.2 · §D89). 
 **tm 79 (Telegram) · 81 (SAML/SCIM) · 82 (HIPAA) · 83 (SOC2/ISO) · 84 (white-label/SLA) · 90 (mobil)** —
 altısı da Faz 3, `deferred` (§D64); faz sızıntısı taraması bunların hiçbirinin kodda karşılığı
 olmadığını doğruladı.
+
+**Faz-3 (Enterprise) kapısı (2026-08-11 itibarıyla AÇIK — planlandı, başlanmadı):** Faz-3'te de
+`Must` **yoktur** (PRD §5.4 kalemlerinin hepsi `Should`/`Could`), bu yüzden v2'deki gibi **kalem
+kuralı** geçerlidir: **beş kalem ✅ + `13.7` `◐` olduğunda Faz-3 kapanır** — `S11` · `C4` · `C6` ·
+`11.5` · `08.5.8` · `13.7`. Kapsam PRD §5.4'e karşı süpürüldü (§D95): 4 `⛔` + 1 `⛔-süreç`
+sayıma girmez, beşinin de gerekçesi §6 tablosunda satırındadır. Kırılım §6.1, dilim kapıları §6.2.
+
+> **KOD / SÜREÇ AYRIMI (§D97) — bu kapının okunuşunu değiştirir.** Uyumluluk kalemlerinde
+> (`C6` SOC2/ISO, `C4` HIPAA) bir kalemin ✅'i **yalnız kod payını** iddia eder: audit kapsamı,
+> SIEM export ve bütünlük zinciri, erişim gözden geçirme raporu, bölge zorlaması, BAA kaydı,
+> HIPAA kısıtları. **Sertifikasyon ve dış denetim süreci** (Type II gözlem penceresi, denetçi,
+> ISO belgesi, gerçek BAA imzası, gerçek çok-bölgeli barındırma) **görevleşmez ve bu kapıyı
+> BLOKLAMAZ** — takvimi dışsaldır (PRD §10.2: 6–12 ay) ve bu depodan üretilemez. Aynı ayrım
+> _dedicated onboarding/account manager_ kalemine de uygulanır (kod payı sıfır → `⛔-süreç`).
+> Gerekçe §D97: bu ayrım yazılı olmasaydı ya kalem Faz-3'ü süresiz kilitlerdi ya da "SOC2 ✅"
+> diye yalan bir damga yazılırdı.
+
+> **`13.7` (mobil) `◐` ile kapanacaktır — bilerek (§D96).** Barındırma kararı bu monorepo'da
+> Expo/RN workspace'tir; `.ipa`/`.apk` üretimi ve store yüklemesi CLAUDE.md sınırı gereği
+> kapsam dışıdır. "Tam modül paritesi" payı karşılanır, "mağazada yayınlanmış uygulama" payı
+> karşılanmaz. `Should` olduğu için kapıyı bloklamaz; kapanış uğruna `✅` **uydurulmayacaktır**.
 
 ### F.0 — Periyodik Denetim (mini kapanış turu)
 

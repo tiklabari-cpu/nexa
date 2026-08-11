@@ -1,10 +1,29 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>Nexa</title>
+    <!--
+      Theme boot (NFR-I18N2). Inline and synchronous because `data-theme` has to
+      be on <html> before the first paint and the bundle that owns the theme
+      store is a deferred module — set it there and a light-theme agent gets a
+      dark frame first. This attribute used to be hard-coded `dark`, which made
+      the light ramp in `tokens.css` unreachable for everyone; it is now the
+      agent's remembered choice, defaulting to dark.
+
+      Kept in step with `src/lib/theme.ts` (same key, same default) by
+      `src/lib/theme.test.ts`, which reads this file.
+    -->
+    <script>
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem('nexa.theme') === 'light' ? 'light' : 'dark';
+      } catch {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

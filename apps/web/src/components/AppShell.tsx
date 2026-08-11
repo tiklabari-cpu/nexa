@@ -15,6 +15,7 @@ import { useEffect, type ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
+import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
 import { CommandPalette } from './CommandPalette.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
 import { Dropdown } from './ui/index.js';
@@ -251,6 +252,7 @@ function AccountMenu(): ReactElement {
   const signOut = useAuth((s) => s.signOut);
   const t = useTranslate();
   const { locale, setLocale } = useLocale();
+  const { theme, setTheme } = useTheme();
 
   const initials = (agent?.name ?? agent?.email ?? '?')
     .split(/[\s@.]+/)
@@ -291,6 +293,25 @@ function AccountMenu(): ReactElement {
               {LOCALES.map((code) => (
                 <option key={code} value={code}>
                   {LOCALE_NAMES[code]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* Theme switcher (NFR-I18N2), beside the language it is paired with in
+              the requirement. The attribute it drives is on `<html>`, so the
+              whole panel — and the widget preview inside Settings — repaints at
+              once; nothing here has to re-render for the change to land. */}
+          <label className="mt-3 block text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('shell.account.theme')}
+            <select
+              value={theme}
+              onChange={(event) => setTheme(event.target.value as Theme)}
+              className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm normal-case tracking-normal text-content"
+            >
+              {THEMES.map((code) => (
+                <option key={code} value={code}>
+                  {t(THEME_NAMES[code])}
                 </option>
               ))}
             </select>

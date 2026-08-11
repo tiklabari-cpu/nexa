@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 117 — NFR-I18N2 panel tema sağlayıcısı: açık tema artık ulaşılabilir (ve ölçülüyor) — done — 2026-08-11 UTC
+
+- **Yapıldı:** `apps/web/src/lib/theme.ts` (zustand + `localStorage` `nexa.theme`, varsayılan **dark**, OS tercihi bilerek okunmuyor) · `index.html`'in sabit `data-theme="dark"`'ı yerine `<head>`'de satır-içi FOUC'suz boot betiği · `AppShell` hesap menüsünde dil seçicinin yanına tema `<select>`'i (adlar katalogdan, tr+en) · `a11y.spec.ts` yedi panel yüzeyini **iki temada** tarıyor · yeni `theme.spec.ts`.
+- **Doğrulama (hepsi exit 0):** typecheck · lint · `test` **3864** (baseline 3802) · `test:integration` **1906** · `build` · `test:e2e` **122/122** (baseline 113). Toplam 5892 — düşüş yok. axe: 16 taramanın hepsi `blocking 0 · excused 0 · advisory 0`, `A11Y_EXCEPTIONS` boş, kapı-probe hâlâ yakalıyor.
+- **Kapsam genişlemesi (gerekçeli):** ilk açık tema taraması GERÇEK bir ihlal buldu — `bg-inset`+`text-warning` 4.06:1. Token katmanı düzeltildi: `--success` #12855a→#10744f · `--warning` #a66200→#945800 · `--note` #b4740a→#806413 (üçü de yalnız **açık** tema; koyu tema ve tm 115'in kilitlediği `--brand-*`/`--text-tertiary` DEĞİŞMEDİ). `tokens.test.ts` 40→88: altı durum rengi × dört yüzey × iki tema artık birim seviyede kilitli.
+- **Sonraki pencereye not:** (1) 46 kanıt PNG'si bu turda tazelendi, ayrı `chore(e2e)` commit'inde. (2) **Bilinen, kapsam dışı kusur:** `Composer.tsx:294` `bg-note text-white` **koyu** temada beyaz metni #ffce73 üstüne koyuyor (~1.5:1) — iç-not modu a11y taramasının gördüğü durumlarda açık değil, o yüzden axe yakalamıyor; açık temada aynı çift bu turda 3.86→5.60'a çıktı. (3) `reports.spec.ts:215` tam koşuda **bir kez** düştü (reload sonrası oturum kaybı → sign-in ekranı); izole koşuda 12/12 ve sonraki tam koşuda 122/122 yeşil — HANDOFF'ta tm 74.5/75.2/113 olarak kayıtlı "yük altında flake" deseni, e2e rate-limit'i zaten 2000/dk. Tekrarlarsa şüpheli `auth-store.restore()`'un geçici bir hatayı "aile iptal edildi" sayması.
+
 ## PLAN-TUTARLILIK — `13.3 Goals` (PLAN.md:1128) "kendi kendisiyle çelişiyor" bulgusu **İKİNCİ KEZ**: damga DOĞRU, §D88'in düzeltmesi eksik kalmıştı — done — 2026-08-11 UTC
 
 - **Bulgu (panel):** `✅ → K13.3` damgalı satırın kanıt bloğunda "Goals'ın kalan 8 alt-görevi …

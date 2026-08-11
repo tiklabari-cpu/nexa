@@ -113,6 +113,24 @@ const PAIRINGS: readonly Pairing[] = [
     backgrounds: ['--bg-canvas', '--bg-surface', '--bg-surface-2'],
     because: 'accent links (`text-content-brand`)',
   },
+  /**
+   * Status colours are text before they are anything else — `text-warning` on a
+   * queue badge, `text-success` on a KPI, `text-danger` on a validation message
+   * — and they land on all four surfaces, badges being inset by convention.
+   *
+   * Added by tm 117, and not speculatively: the first axe scan of the light
+   * theme (unreachable until that task shipped a theme switcher) failed on
+   * `bg-inset` + `text-warning` at 4.06:1, and re-deriving the whole family here
+   * turned up `--success` at 3.92 and `--note` at 3.26 on the same surface. One
+   * screen happened to render one of the three; this catches all six in 4ms.
+   */
+  ...(
+    ['--success', '--warning', '--danger', '--info', '--ai', '--note'] as const
+  ).map((foreground) => ({
+    foreground,
+    backgrounds: SURFACES,
+    because: 'status text — badges, KPIs, validation messages',
+  })),
   {
     foreground: '--bubble-agent-text',
     backgrounds: ['--bubble-agent-bg'],

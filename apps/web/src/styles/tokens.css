@@ -48,13 +48,28 @@
      boundary and this is 4.74:1 on white. */
   --focus-ring: var(--brand-500);
 
-  /* Status — always paired with an icon or text, never colour alone */
-  --success: #12855a;
-  --warning: #a66200;
+  /**
+   * Status — always paired with an icon or text, never colour alone.
+   *
+   * These are *text* colours first (`text-warning`, `text-success`), so each has
+   * to clear AA on `--bg-inset`, the darkest light surface. Three did not, and
+   * nobody could see it: the light theme was unreachable until tm 117 made it
+   * selectable, so axe had only ever scanned dark. The first light scan failed
+   * on the inbox's queue badge — `bg-inset` + `text-warning`, 4.06:1 — and the
+   * token test then found the other two by the same measurement.
+   *   --success #12855a → 3.92:1 · --warning #a66200 → 4.06:1 · --note #b4740a → 3.26:1
+   * Darkened along their own hue, so the palette reads the same. `--note` is
+   * pulled slightly olive as well: matching `--warning`'s lightness would have
+   * collapsed two semantically distinct amber tokens into the same swatch.
+   * `--danger`, `--info` and `--ai` already cleared it (4.78 · 4.79 · 4.82) and
+   * are untouched.
+   */
+  --success: #10744f;
+  --warning: #945800;
   --danger: #c42a2a;
   --info: #0b6e99;
   --ai: #7c3aed;
-  --note: #b4740a;
+  --note: #806413;
 
   /* Chat bubbles */
   --bubble-agent-bg: var(--brand-500);

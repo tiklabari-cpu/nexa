@@ -19,6 +19,23 @@
  * a real page and the gate is asserted to fire on it. Without that, a scan
  * silently returning nothing — a bad selector, an axe that never injected —
  * would read exactly like a clean pass.
+ *
+ * **Both themes, since tm 117.** The seven panel surfaces are scanned once dark
+ * and once light. Until tm 117 the light ramp was unreachable — `index.html`
+ * hard-coded `data-theme="dark"` — so half of `tokens.css` and half of
+ * `tokens.test.ts`'s 40 contrast assertions guarded a surface axe had never
+ * looked at. Now that an agent can choose it, it is measured: contrast is a
+ * property of the rendered pair, and a token ramp that satisfies AA on its own
+ * says nothing about a component that reaches for the wrong one. The remaining
+ * two surfaces are scanned once each and are not in the loop — the public KB is
+ * served as `text/html` by the API and has no panel stylesheet, and the widget's
+ * theme is a separate axis (`data-nx-theme`, tm 57) that belongs to the
+ * customer, not the agent.
+ *
+ * Each themed scan asserts the attribute it asked for is really on `<html>`
+ * before it runs. A pin that silently failed would scan dark twice and report
+ * "both themes green", which is the same failure mode the gate-probe test exists
+ * to rule out.
  */
 import {
   request as newApiContext,
@@ -120,61 +137,109 @@ async function scanReadyScreen(
   assertNoBlockingViolations(await scanScreen(page, screen, testInfo));
 }
 
+/** The panel themes an agent can choose between (`apps/web/src/lib/theme.ts`). */
+const PANEL_THEMES = ['dark', 'light'] as const;
+type PanelTheme = (typeof PANEL_THEMES)[number];
+
+/**
+ * Pin the panel theme for every navigation this page makes from here on.
+ *
+ * Through `localStorage` rather than a click, because the sign-in screen has no
+ * switcher and half these scans happen before any menu is reachable — and
+ * because it is the same key the boot script reads, so the pin exercises the
+ * real path rather than a test-only one.
+ */
+async function pinTheme(page: Page, theme: PanelTheme): Promise<void> {
+  await page.addInitScript((value) => {
+    window.localStorage.setItem('nexa.theme', value);
+  }, theme);
+}
+
+/**
+ * Scan a panel surface in one theme, having first proved the theme took.
+ *
+ * The attribute check is the load-bearing part: without it, a pin that silently
+ * did nothing would scan dark twice and report both themes clean.
+ */
+async function scanPanel(
+  page: Page,
+  screen: string,
+  theme: PanelTheme,
+  testInfo: TestInfo,
+  ready: () => Promise<void>,
+): Promise<void> {
+  await scanReadyScreen(page, `${screen} (${theme})`, testInfo, async () => {
+    await ready();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  });
+}
+
 test.describe('WCAG 2.1 AA (axe)', () => {
-  test('sign-in page has no serious or critical violations', async ({ page }, testInfo) => {
-    await page.goto('/');
-    await scanReadyScreen(page, 'Sign in', testInfo, async () => {
-      await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
-    });
-  });
+  for (const theme of PANEL_THEMES) {
+    test.describe(`${theme} theme`, () => {
+      test('sign-in page has no serious or critical violations', async ({ page }, testInfo) => {
+        await pinTheme(page, theme);
+        await page.goto('/');
+        await scanPanel(page, 'Sign in', theme, testInfo, async () => {
+          await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+        });
+      });
 
-  test('inbox has no serious or critical violations', async ({ agentPage }, testInfo) => {
-    await agentPage.goto('/app/inbox');
-    await scanReadyScreen(agentPage, 'Inbox', testInfo, async () => {
-      await expect(agentPage.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
-    });
-  });
+      test('inbox has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/inbox');
+        await scanPanel(agentPage, 'Inbox', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+        });
+      });
 
-  test('customers has no serious or critical violations', async ({ agentPage }, testInfo) => {
-    await agentPage.goto('/app/customers');
-    await scanReadyScreen(agentPage, 'Customers', testInfo, async () => {
-      await expect(agentPage.getByRole('table', { name: 'Customers' })).toBeVisible();
-    });
-  });
+      test('customers has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/customers');
+        await scanPanel(agentPage, 'Customers', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('table', { name: 'Customers' })).toBeVisible();
+        });
+      });
 
-  test('reports has no serious or critical violations', async ({ agentPage }, testInfo) => {
-    await agentPage.goto('/app/reports');
-    await scanReadyScreen(agentPage, 'Reports', testInfo, async () => {
-      await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
-    });
-  });
+      test('reports has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/reports');
+        await scanPanel(agentPage, 'Reports', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+        });
+      });
 
-  test('team has no serious or critical violations', async ({ agentPage }, testInfo) => {
-    await agentPage.goto('/app/team');
-    await scanReadyScreen(agentPage, 'Team', testInfo, async () => {
-      await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
-    });
-  });
+      test('team has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/team');
+        await scanPanel(agentPage, 'Team', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
+        });
+      });
 
-  test('settings has no serious or critical violations', async ({ agentPage }, testInfo) => {
-    await agentPage.goto('/app/settings');
-    await scanReadyScreen(agentPage, 'Settings', testInfo, async () => {
-      await expect(agentPage.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-    });
-  });
+      test('settings has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/settings');
+        await scanPanel(agentPage, 'Settings', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+        });
+      });
 
-  test('apps marketplace has no serious or critical violations', async ({
-    agentPage,
-  }, testInfo) => {
-    await agentPage.goto('/app/apps');
-    await scanReadyScreen(agentPage, 'Apps', testInfo, async () => {
-      await expect(agentPage.getByRole('heading', { name: 'Apps', level: 1 })).toBeVisible();
-      // Cards arrive after the catalogue fetch; an empty grid is not the screen.
-      await expect(
-        agentPage.getByRole('list', { name: 'Apps' }).getByRole('listitem').first(),
-      ).toBeVisible();
+      test('apps marketplace has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/apps');
+        await scanPanel(agentPage, 'Apps', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('heading', { name: 'Apps', level: 1 })).toBeVisible();
+          // Cards arrive after the catalogue fetch; an empty grid is not the screen.
+          await expect(
+            agentPage.getByRole('list', { name: 'Apps' }).getByRole('listitem').first(),
+          ).toBeVisible();
+        });
+      });
     });
-  });
+  }
 
   /**
    * The visitor's surface, scanned inside its own cross-origin iframe.

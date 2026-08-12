@@ -2070,11 +2070,82 @@ export interface paths {
      */
     get: operations['listSsoConnections'];
     put?: never;
-    post?: never;
+    /**
+     * Federate sign-in to a SAML identity provider
+     * @description **Owner only** — an admin is not enough, and that is the point. Whoever
+     *     writes `idp_certificate_pem` chooses the key assertions are verified
+     *     against, and can therefore mint a signed assertion for any colleague in the
+     *     workspace and sign in as them. That is a strictly larger power than an
+     *     admin otherwise holds, so it sits one rank above every other setting here.
+     *
+     *     The certificate is parsed, not pattern-matched: it must be a single X.509
+     *     certificate (a chain is refused — see the rotation controls on `PATCH` for
+     *     trusting two at once), currently within its validity window, and carrying
+     *     an RSA/DSA key of at least 2048 bits.
+     *
+     *     The sign-on URL must be https. It becomes a redirect target for a browser,
+     *     so the scheme is a security boundary; plain http is accepted only for a
+     *     loopback address, which is how a local identity-provider harness is tested.
+     *
+     *     `enabled` defaults to off. Saving the configuration and opening the door
+     *     are two decisions.
+     */
+    post: operations['createSsoConnection'];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  '/settings/sso/{connectionId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        connectionId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Stop federating sign-in to an identity provider
+     * @description **Owner only**, for the reason given on `POST`. Removing a connection
+     *     closes a door rather than opening one, but it is recorded the same way —
+     *     a federation that quietly disappears is as much an incident as one that
+     *     quietly appears.
+     */
+    delete: operations['deleteSsoConnection'];
+    options?: never;
+    head?: never;
+    /**
+     * Change a SAML connection, or rotate its certificate
+     * @description **Owner only**, for the reason given on `POST`.
+     *
+     *     **Certificate rotation.** Writing a new `idp_certificate_pem` revokes the
+     *     old one the moment the change commits. That is the default because the
+     *     rotation that matters most is the one answering a compromised IdP key, and
+     *     an overlap there would keep the attacker's certificate valid for exactly as
+     *     long as it is convenient.
+     *
+     *     A planned key roll is the other case: an IdP signs with either key for a
+     *     period, and refusing to bridge that turns every scheduled rotation into a
+     *     sign-in outage. So an overlap is available, but only by asking —
+     *     `retain_previous_certificate_hours` keeps the outgoing certificate trusted
+     *     for up to 7 days. It requires a new certificate to rotate to, refuses to
+     *     "retain" the certificate already in use, and refuses to bridge one that is
+     *     not itself usable.
+     *
+     *     `revoke_previous_certificate` closes an open overlap early — the "we have
+     *     since learned the old key was compromised" case. It cannot be combined with
+     *     a new certificate, where the rotation already decides the old one's fate.
+     *
+     *     A connection cannot be switched on behind an unusable certificate:
+     *     `enabled: true` is refused unless the stored certificate (or the one being
+     *     written in the same request) is currently valid.
+     */
+    patch: operations['updateSsoConnection'];
     trace?: never;
   };
   '/settings/canned-responses': {
@@ -5063,9 +5134,9 @@ export interface components {
      * @description One SAML 2.0 identity provider a workspace federates sign-in to
      *     (NFR-S11). Tenant-scoped and closed by row level security.
      *
-     *     Read-only at this stage: the row records who the IdP is and how to reach
-     *     it. Nothing consumes it yet — no assertion is accepted and no session is
-     *     minted from one.
+     *     Configuration only at this stage: the row records who the IdP is and how
+     *     to reach it. Nothing consumes it to authenticate anyone yet — no
+     *     assertion is accepted and no session is minted from one.
      *
      *     `idp_certificate_pem` is returned in full on purpose. It is the IdP's
      *     *public* signing certificate — what an admin compares against their IdP
@@ -5086,6 +5157,13 @@ export interface components {
       idp_sso_url: string;
       /** @description The IdP's public signing certificate, PEM-encoded. Not a secret. */
       idp_certificate_pem: string;
+      /** @description The certificate this connection was rotated away from, still trusted until `previous_certificate_expires_at`. Null unless the rotation asked to bridge an IdP key roll — replacing a certificate revokes the old one at once by default, because the rotation that matters most is the one answering a compromise. Reported only while the window is open: a lapsed overlap reads as no overlap. */
+      previous_certificate_pem: string | null;
+      /**
+       * Format: date-time
+       * @description When the overlap stops being trusted. Null when there is none.
+       */
+      previous_certificate_expires_at: string | null;
       attribute_mapping: components['schemas']['SsoAttributeMapping'];
       /** @description Whether an assertion the IdP sends unsolicited is accepted. False by default — an IdP-initiated flow gives up the `InResponseTo` binding that makes replay detectable, so it is a choice, never inherited. */
       allow_idp_initiated: boolean;
@@ -11114,6 +11192,126 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createSsoConnection: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Human label for the connection, e.g. `Okta (corp)`. */
+          name: string;
+          /** @description The IdP's SAML EntityID — what an assertion's `Issuer` must equal. */
+          idp_entity_id: string;
+          /** @description The IdP's sign-on endpoint (HTTP-Redirect binding). Stored normalised. */
+          idp_sso_url: string;
+          /** @description The IdP's public signing certificate, PEM-encoded. */
+          idp_certificate_pem: string;
+          attribute_mapping?: components['schemas']['SsoAttributeMapping'];
+          /** @default false */
+          allow_idp_initiated?: boolean;
+          /** @default false */
+          enabled?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SsoConnection'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      /** @description The caller is not the owner, the token lacks `access_rules:rw`, or a connection for that EntityID already exists. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteSsoConnection: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        connectionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateSsoConnection: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        connectionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          idp_entity_id?: string;
+          idp_sso_url?: string;
+          idp_certificate_pem?: string;
+          attribute_mapping?: components['schemas']['SsoAttributeMapping'];
+          allow_idp_initiated?: boolean;
+          enabled?: boolean;
+          /** @description Keep the certificate being replaced trusted for this many hours. Only valid alongside a new `idp_certificate_pem`. Omit it and the old certificate stops being trusted immediately. */
+          retain_previous_certificate_hours?: number;
+          /**
+           * @description Close an open rotation overlap now. Cannot be sent with a new `idp_certificate_pem`.
+           * @enum {boolean}
+           */
+          revoke_previous_certificate?: true;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SsoConnection'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

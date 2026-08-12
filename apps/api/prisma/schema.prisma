@@ -343,6 +343,15 @@ model SsoConnection {
   idpSsoUrl         String   @map("idp_sso_url")
   /// PEM-encoded X.509 signing certificate published by the IdP.
   idpCertificatePem String   @map("idp_certificate_pem")
+  /// The certificate this connection was rotated away from, kept trusted until
+  /// `previousCertificateExpiresAt` so an IdP key roll does not black out
+  /// sign-in while the IdP is still signing with the old key. Null unless the
+  /// rotation asked for an overlap — replacing a certificate revokes the old one
+  /// at commit by default, because the rotation that matters most is the one
+  /// answering a compromise. Read through `activePreviousCertificate`, never
+  /// directly: a lapsed overlap must read as no overlap.
+  previousCertificatePem       String?   @map("previous_certificate_pem")
+  previousCertificateExpiresAt DateTime? @map("previous_certificate_expires_at") @db.Timestamptz(6)
   /// Which assertion attribute fills which account field; see
   /// `SSO_ATTRIBUTE_MAPPING_KEYS`. `{}` means the connection said nothing.
   attributeMapping  Json     @default("{}") @map("attribute_mapping")

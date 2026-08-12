@@ -22,13 +22,25 @@ import {
   WIDGET_POSITIONS,
   WIDGET_THEMES,
 } from '@nexa/types';
-import type { SsoAttributeMapping, SsoConnection } from '@nexa/types';
+import type { SsoAttributeMapping, SsoAttributeMappingKey, SsoConnection } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { resolveBrandId } from '../lib/brand.js';
 import { formatAllowlistEntry, parseAllowlistEntry, wouldLockOut } from '../lib/ip-allowlist.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
-import { writeAuditEntry } from '../services/audit/audit-log.js';
+import {
+  activePreviousCertificate,
+  checkFederationUrl,
+  inspectIdpCertificate,
+  MAX_CERTIFICATE_OVERLAP_HOURS,
+  MIN_RSA_MODULUS_BITS,
+  SSO_CERTIFICATE_MAX_LENGTH,
+  SSO_ENTITY_ID_MAX_LENGTH,
+  SSO_NAME_MAX_LENGTH,
+  SSO_URL_MAX_LENGTH,
+  type CertificateFacts,
+} from '../lib/sso-connection.js';
+import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
 import { MAX_ACTIVE_TOKENS_PER_OWNER } from '../services/auth/token-service.js';
 
 const SHORTCUT = /^[A-Za-z0-9_-]{1,40}$/;
@@ -49,6 +61,93 @@ const addIpAllowlistBody = z.object({
   entry: z.string().trim().min(1).max(49),
   label: z.string().trim().min(1).max(100).nullable().optional(),
 });
+
+/**
+ * The assertion attribute names a connection may map (NFR-S11 · S11-a2).
+ *
+ * `satisfies` rather than a hand-kept list: adding a key to
+ * `SSO_ATTRIBUTE_MAPPING_KEYS` without adding it here stops the build, so the
+ * write surface can never accept less than the type promises — or, with
+ * `.strict()` below, more. Rejecting an unknown key rather than dropping it is
+ * the point: a silently discarded mapping reads to an admin as a saved one.
+ */
+const SSO_ATTRIBUTE_BODY_SHAPE = {
+  email: z.string().trim().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
+} satisfies Record<SsoAttributeMappingKey, z.ZodTypeAny>;
+
+const ssoAttributeMappingBody = z.object(SSO_ATTRIBUTE_BODY_SHAPE).strict();
+
+/**
+ * A pasted certificate, stored in the conventional PEM form: surrounding
+ * whitespace gone, one trailing newline. Canonicalised rather than kept
+ * verbatim so that what the API hands back can be written straight to a file,
+ * and so re-saving a form does not rewrite the row with bytes that differ only
+ * in whitespace. (Whether a save is a *rotation* is decided by fingerprint, not
+ * by these bytes, so this normalisation cannot change that answer.)
+ */
+const ssoCertificate = z
+  .string()
+  .trim()
+  .min(1)
+  .max(SSO_CERTIFICATE_MAX_LENGTH)
+  .transform((pem) => `${pem}\n`);
+
+/**
+ * A new SAML connection. Every field that decides whether an assertion is
+ * believed is required — there is no half-configured trust anchor to save and
+ * finish later, because a row missing one of these would sit in the list looking
+ * like a federation. `enabled` still defaults to off: writing the configuration
+ * and opening the door are two decisions.
+ */
+const createSsoBody = z.object({
+  name: z.string().trim().min(1).max(SSO_NAME_MAX_LENGTH),
+  idp_entity_id: z.string().trim().min(1).max(SSO_ENTITY_ID_MAX_LENGTH),
+  idp_sso_url: z.string().trim().min(1).max(SSO_URL_MAX_LENGTH),
+  idp_certificate_pem: ssoCertificate,
+  attribute_mapping: ssoAttributeMappingBody.optional(),
+  allow_idp_initiated: z.boolean().default(false),
+  enabled: z.boolean().default(false),
+});
+
+/**
+ * A change to an existing connection, including the two rotation controls.
+ *
+ * `retain_previous_certificate_hours` is the *only* way both certificates are
+ * ever trusted at once, and it is meaningless without a new certificate to
+ * rotate to — so it is refused on its own rather than quietly ignored.
+ * `revoke_previous_certificate` closes an overlap early (the "we now know the
+ * old key was compromised" case) and is refused alongside a new certificate,
+ * where a plain rotation already decides the overlap's fate.
+ */
+const updateSsoBody = z
+  .object({
+    name: z.string().trim().min(1).max(SSO_NAME_MAX_LENGTH).optional(),
+    idp_entity_id: z.string().trim().min(1).max(SSO_ENTITY_ID_MAX_LENGTH).optional(),
+    idp_sso_url: z.string().trim().min(1).max(SSO_URL_MAX_LENGTH).optional(),
+    idp_certificate_pem: ssoCertificate.optional(),
+    attribute_mapping: ssoAttributeMappingBody.optional(),
+    allow_idp_initiated: z.boolean().optional(),
+    enabled: z.boolean().optional(),
+    retain_previous_certificate_hours: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_CERTIFICATE_OVERLAP_HOURS)
+      .optional(),
+    revoke_previous_certificate: z.literal(true).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required')
+  .refine(
+    (body) =>
+      body.retain_previous_certificate_hours === undefined ||
+      body.idp_certificate_pem !== undefined,
+    'retain_previous_certificate_hours only applies alongside a new idp_certificate_pem',
+  )
+  .refine(
+    (body) => !(body.revoke_previous_certificate && body.idp_certificate_pem !== undefined),
+    'revoke_previous_certificate cannot be combined with a new idp_certificate_pem — a rotation already decides what happens to the old one',
+  );
 
 const cannedListQuery = z.object({ scope: z.enum(['chat', 'ticket']).optional() });
 
@@ -549,25 +648,230 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
 
   // --- Single sign-on (NFR-S11) ----------------------------------------------
   //
-  // The federation configuration a workspace has saved. Read-only: listing it
-  // signs nobody in — no assertion is accepted and no session is minted from a
-  // connection yet (S11-d). The write surface is S11-a2.
+  // The federation configuration a workspace has saved, and — since S11-a2 — the
+  // surface that writes it. Listing still signs nobody in: no assertion is
+  // accepted and no session is minted from a connection yet (S11-d).
   //
-  // Gated twice, like the audit-log read: the scope says the *token* may read
-  // access rules, `admin` says the *person* behind it may. A row names the
+  // Read is gated twice, like the audit-log read: the scope says the *token* may
+  // read access rules, `admin` says the *person* behind it may. A row names the
   // workspace's identity provider, which is reconnaissance for a targeted phish
   // well before it is useful to an attacker any other way — and once S11-h makes
   // SSO the only way in, it names the single door too. A rank-and-file agent
   // holding an over-broad PAT has no reason to read that.
+  //
+  // WRITE IS OWNER ONLY — `exactRole`, and admin is deliberately not enough.
+  // This is the sharpest privilege line in the product: whoever sets
+  // `idp_certificate_pem` chooses the key assertions are checked against, so
+  // they can mint a signed assertion for any colleague in the workspace and sign
+  // in as them. That is not "administering settings", it is taking over every
+  // account at once, and it is a strictly larger power than an admin otherwise
+  // holds — an admin can suspend a teammate but cannot become one. Everything
+  // else here is gated at `admin`; this one step up is the whole point.
 
   app.get(
     '/settings/sso',
     { config: { scopes: ['access_rules:ro', 'access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
+      const now = new Date();
       const items = await request.withTenant((tx) =>
         tx.ssoConnection.findMany({ orderBy: { name: 'asc' } }),
       );
-      return reply.send({ items: items.map(serialiseSsoConnection) });
+      return reply.send({ items: items.map((row) => serialiseSsoConnection(row, now)) });
+    },
+  );
+
+  app.post(
+    '/settings/sso',
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner' } },
+    async (request, reply) => {
+      const body = parse(createSsoBody, request.body);
+      const tenant = request.tenant();
+
+      // Both validated before the transaction opens: neither touches the
+      // database, and a rejection here is the common case for a hand-typed
+      // metadata form.
+      const ssoUrl = readFederationUrl(body.idp_sso_url);
+      const facts = readIdpCertificate(body.idp_certificate_pem, new Date());
+
+      try {
+        const created = await request.withTenant(async (tx) => {
+          const row = await tx.ssoConnection.create({
+            data: {
+              licenseId: tenant.licenseId,
+              name: body.name,
+              idpEntityId: body.idp_entity_id,
+              // Stored as parsed rather than as typed — host case and a missing
+              // trailing slash are the same endpoint, and the redirect S11-d
+              // builds uses this string, so what is stored is what is used.
+              idpSsoUrl: ssoUrl,
+              idpCertificatePem: body.idp_certificate_pem,
+              attributeMapping: body.attribute_mapping ?? {},
+              allowIdpInitiated: body.allow_idp_initiated,
+              enabled: body.enabled,
+            },
+          });
+          await writeAuditEntry(
+            tx,
+            request.auditContext(),
+            ssoAuditEntry(row.id, 'created', body, facts),
+          );
+          return row;
+        });
+
+        return reply.status(201).send(serialiseSsoConnection(created, new Date()));
+      } catch (error) {
+        // The `(license_id, idp_entity_id)` index. Two connections claiming one
+        // EntityID would make "whose certificate verifies this assertion?"
+        // ambiguous exactly where the answer is the security decision.
+        if (isUniqueViolation(error)) {
+          throw new ApiError(
+            'not_allowed',
+            'A connection for that identity provider already exists.',
+          );
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.patch<{ Params: { connectionId: string } }>(
+    '/settings/sso/:connectionId',
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner' } },
+    async (request, reply) => {
+      const connectionId = parse(uuid, request.params.connectionId);
+      const body = parse(updateSsoBody, request.body);
+      const now = new Date();
+
+      const ssoUrl =
+        body.idp_sso_url === undefined ? undefined : readFederationUrl(body.idp_sso_url);
+      const facts =
+        body.idp_certificate_pem === undefined
+          ? undefined
+          : readIdpCertificate(body.idp_certificate_pem, now);
+
+      try {
+        const updated = await request.withTenant(async (tx) => {
+          // Read first: the rotation decision needs the certificate being
+          // replaced, and it has to be the one this same transaction writes over.
+          // RLS scopes the read to the caller's license, so another workspace's
+          // id simply matches nothing — a 404 that keeps ids un-enumerable
+          // (NFR-S5) and, here, keeps a foreign connection un-editable.
+          const existing = await tx.ssoConnection.findFirst({ where: { id: connectionId } });
+          if (!existing) return null;
+
+          const current = inspectIdpCertificate(existing.idpCertificatePem, now);
+          // Compared by fingerprint, not by text: re-saving a form that resends
+          // the same certificate with different line wrapping is not a rotation,
+          // and treating it as one would silently drop a live overlap.
+          const rotating =
+            facts !== undefined && !(current.ok && current.facts.fingerprint === facts.fingerprint);
+
+          if (body.retain_previous_certificate_hours !== undefined) {
+            if (!rotating) {
+              throw ApiError.validation(
+                'That is the certificate already in use, so there is nothing to keep during a rotation.',
+              );
+            }
+            if (!current.ok) {
+              throw ApiError.validation(
+                'The certificate being replaced is not usable, so keeping it would extend nothing. Rotate without an overlap.',
+              );
+            }
+          }
+
+          // A connection may only be switched on behind a certificate that can
+          // actually verify something today — otherwise `enabled` advertises a
+          // door that refuses everyone, and the failure surfaces as "SSO is
+          // broken" long after the change that caused it.
+          if (body.enabled === true && !(facts !== undefined || current.ok)) {
+            throw ApiError.validation(
+              'This connection cannot be enabled while its certificate is unusable. Upload the current one from your identity provider first.',
+            );
+          }
+
+          const overlap = rotating
+            ? body.retain_previous_certificate_hours !== undefined
+              ? {
+                  previousCertificatePem: existing.idpCertificatePem,
+                  previousCertificateExpiresAt: new Date(
+                    now.getTime() + body.retain_previous_certificate_hours * 3_600_000,
+                  ),
+                }
+              : // The default, and the reason it is the default: a rotation is
+                // how a workspace answers a compromised IdP key, and an overlap
+                // there keeps the attacker's certificate valid for exactly as
+                // long as it is convenient.
+                { previousCertificatePem: null, previousCertificateExpiresAt: null }
+            : body.revoke_previous_certificate
+              ? { previousCertificatePem: null, previousCertificateExpiresAt: null }
+              : {};
+
+          const row = await tx.ssoConnection.update({
+            where: { id: existing.id },
+            data: {
+              ...(body.name !== undefined ? { name: body.name } : {}),
+              ...(body.idp_entity_id !== undefined ? { idpEntityId: body.idp_entity_id } : {}),
+              ...(ssoUrl !== undefined ? { idpSsoUrl: ssoUrl } : {}),
+              ...(body.idp_certificate_pem !== undefined
+                ? { idpCertificatePem: body.idp_certificate_pem }
+                : {}),
+              ...(body.attribute_mapping !== undefined
+                ? { attributeMapping: body.attribute_mapping }
+                : {}),
+              ...(body.allow_idp_initiated !== undefined
+                ? { allowIdpInitiated: body.allow_idp_initiated }
+                : {}),
+              ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
+              ...overlap,
+            },
+          });
+
+          await writeAuditEntry(
+            tx,
+            request.auditContext(),
+            ssoAuditEntry(row.id, 'updated', body, rotating ? facts : undefined),
+          );
+          return row;
+        });
+
+        if (!updated) throw ApiError.notFound('SSO connection not found.');
+        return reply.send(serialiseSsoConnection(updated, now));
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new ApiError(
+            'not_allowed',
+            'A connection for that identity provider already exists.',
+          );
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.delete<{ Params: { connectionId: string } }>(
+    '/settings/sso/:connectionId',
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner' } },
+    async (request, reply) => {
+      const connectionId = parse(uuid, request.params.connectionId);
+
+      const deleted = await request.withTenant(async (tx) => {
+        // Tenant-scoped delete rather than delete-by-id: the id alone would let a
+        // caller remove another workspace's federation if RLS were ever
+        // misconfigured. Removing a connection is a way to *close* a door, so it
+        // is recorded like the changes that open one.
+        const { count } = await tx.ssoConnection.deleteMany({ where: { id: connectionId } });
+        if (count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'settings.security_updated',
+            target: `sso_connection:${connectionId}`,
+            metadata: { resource: 'sso_connection', operation: 'deleted' },
+          });
+        }
+        return count;
+      });
+      if (deleted === 0) throw ApiError.notFound('SSO connection not found.');
+
+      return reply.status(204).send();
     },
   );
 
@@ -1423,30 +1727,143 @@ function readAttributeMapping(value: Prisma.JsonValue): SsoAttributeMapping {
  * it is the IdP's public signing certificate, the field an admin compares
  * against their IdP console to confirm a rotation landed, so masking it would
  * hide the one thing a misconfiguration is diagnosed from and protect nothing.
+ *
+ * The rotation overlap is reported only while it is live. A lapsed one is not
+ * shown as an expired-but-present certificate, because that is a screen an
+ * operator reads as "two certificates are configured" when in fact one of them
+ * stopped counting — and `activePreviousCertificate` is the single place that
+ * distinction is made, shared with the verifier (S11-b/S11-d).
  */
-function serialiseSsoConnection(row: {
-  id: string;
-  name: string;
-  idpEntityId: string;
-  idpSsoUrl: string;
-  idpCertificatePem: string;
-  attributeMapping: Prisma.JsonValue;
-  allowIdpInitiated: boolean;
-  enabled: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}): SsoConnection {
+function serialiseSsoConnection(
+  row: {
+    id: string;
+    name: string;
+    idpEntityId: string;
+    idpSsoUrl: string;
+    idpCertificatePem: string;
+    previousCertificatePem: string | null;
+    previousCertificateExpiresAt: Date | null;
+    attributeMapping: Prisma.JsonValue;
+    allowIdpInitiated: boolean;
+    enabled: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  now: Date,
+): SsoConnection {
+  const previous = activePreviousCertificate(row, now);
   return {
     id: row.id,
     name: row.name,
     idp_entity_id: row.idpEntityId,
     idp_sso_url: row.idpSsoUrl,
     idp_certificate_pem: row.idpCertificatePem,
+    previous_certificate_pem: previous?.pem ?? null,
+    previous_certificate_expires_at: previous?.expiresAt.toISOString() ?? null,
     attribute_mapping: readAttributeMapping(row.attributeMapping),
     allow_idp_initiated: row.allowIdpInitiated,
     enabled: row.enabled,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Validate an IdP sign-on URL, or refuse it by name (NFR-S11 · S11-a2).
+ *
+ * The rules live in `lib/sso-connection.ts`; this only turns a refusal into a
+ * message an admin can act on. Each reason gets its own: "invalid URL" for a
+ * `javascript:` paste teaches nothing, and the person reading it is configuring
+ * a security boundary from an IdP console in another tab.
+ */
+function readFederationUrl(raw: string): string {
+  const checked = checkFederationUrl(raw);
+  if (checked.ok) return checked.url.toString();
+
+  switch (checked.reason) {
+    case 'scheme':
+      throw ApiError.validation(
+        'The sign-on URL must be an https address, like https://idp.example.com/sso.',
+      );
+    case 'credentials':
+      throw ApiError.validation('Remove the username and password from the sign-on URL.');
+    case 'fragment':
+      throw ApiError.validation(
+        'Remove the # fragment from the sign-on URL — an identity provider never sees it.',
+      );
+    case 'insecure':
+      throw ApiError.validation('The sign-on URL must use https.');
+    default:
+      throw ApiError.validation(
+        'Enter the sign-on URL from your identity provider, like https://idp.example.com/sso.',
+      );
+  }
+}
+
+/**
+ * Validate an IdP signing certificate, or refuse it by name (NFR-S11 · S11-a2).
+ *
+ * Returns the facts worth recording — notably the SHA-256 fingerprint, which is
+ * the only certificate-derived value that goes into the audit trail.
+ */
+function readIdpCertificate(pem: string, now: Date): CertificateFacts {
+  const inspected = inspectIdpCertificate(pem, now);
+  if (inspected.ok) return inspected.facts;
+
+  switch (inspected.reason) {
+    case 'multiple':
+      throw ApiError.validation(
+        'Paste one certificate, not a chain. To trust two at once during a key roll, rotate with retain_previous_certificate_hours instead.',
+      );
+    case 'expired':
+      throw ApiError.validation(
+        'That certificate has expired, so it can no longer verify anything. Copy the current one from your identity provider.',
+      );
+    case 'not_yet_valid':
+      throw ApiError.validation(
+        'That certificate is not valid yet, so it cannot verify a sign-in today.',
+      );
+    case 'weak_key':
+      throw ApiError.validation(
+        `That certificate's key is below ${MIN_RSA_MODULUS_BITS} bits and is not strong enough to be trusted with sign-in.`,
+      );
+    default:
+      throw ApiError.validation(
+        'That is not a certificate we can read. Paste the PEM block your identity provider publishes, BEGIN and END lines included.',
+      );
+  }
+}
+
+/**
+ * The audit entry for an SSO connection change (NFR-S12).
+ *
+ * `settings.security_updated` — the existing action for workspace security
+ * configuration — with the operation in metadata rather than a new action per
+ * verb, so the trail stays queryable by one closed vocabulary.
+ *
+ * What goes in: which connection, what happened, and *which fields* were
+ * touched. What never goes in: the certificate itself. The SHA-256 fingerprint
+ * does, and only on a rotation — it is a digest of a public certificate, it is
+ * what an IdP console shows next to that certificate, and "which trust anchor
+ * did this person install" is precisely the question this entry has to answer
+ * later. Storing the PEM instead would put a multi-kilobyte blob in an
+ * append-only table to answer the same question worse.
+ */
+function ssoAuditEntry(
+  connectionId: string,
+  operation: 'created' | 'updated',
+  body: Record<string, unknown>,
+  rotated: CertificateFacts | undefined,
+): AuditEntry {
+  return {
+    action: 'settings.security_updated',
+    target: `sso_connection:${connectionId}`,
+    metadata: {
+      resource: 'sso_connection',
+      operation,
+      fields: Object.keys(body),
+      ...(rotated ? { certificate_fingerprint: rotated.fingerprint } : {}),
+    },
   };
 }
 

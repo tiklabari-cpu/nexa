@@ -203,6 +203,174 @@ sso:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+  post:
+    tags: [Settings]
+    operationId: createSsoConnection
+    summary: Federate sign-in to a SAML identity provider
+    description: |
+      **Owner only** — an admin is not enough, and that is the point. Whoever
+      writes `idp_certificate_pem` chooses the key assertions are verified
+      against, and can therefore mint a signed assertion for any colleague in the
+      workspace and sign in as them. That is a strictly larger power than an
+      admin otherwise holds, so it sits one rank above every other setting here.
+
+      The certificate is parsed, not pattern-matched: it must be a single X.509
+      certificate (a chain is refused — see the rotation controls on `PATCH` for
+      trusting two at once), currently within its validity window, and carrying
+      an RSA/DSA key of at least 2048 bits.
+
+      The sign-on URL must be https. It becomes a redirect target for a browser,
+      so the scheme is a security boundary; plain http is accepted only for a
+      loopback address, which is how a local identity-provider harness is tested.
+
+      `enabled` defaults to off. Saving the configuration and opening the door
+      are two decisions.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, idp_entity_id, idp_sso_url, idp_certificate_pem]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                minLength: 1
+                maxLength: 100
+                description: Human label for the connection, e.g. `Okta (corp)`.
+              idp_entity_id:
+                type: string
+                minLength: 1
+                maxLength: 1024
+                description: The IdP's SAML EntityID — what an assertion's `Issuer` must equal.
+              idp_sso_url:
+                type: string
+                minLength: 1
+                maxLength: 2048
+                description: The IdP's sign-on endpoint (HTTP-Redirect binding). Stored normalised.
+              idp_certificate_pem:
+                type: string
+                minLength: 1
+                maxLength: 16384
+                description: The IdP's public signing certificate, PEM-encoded.
+              attribute_mapping: { $ref: "../openapi.yaml#/components/schemas/SsoAttributeMapping" }
+              allow_idp_initiated:
+                type: boolean
+                default: false
+              enabled:
+                type: boolean
+                default: false
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SsoConnection" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403":
+        description: >-
+          The caller is not the owner, the token lacks `access_rules:rw`, or a
+          connection for that EntityID already exists.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ssoConnection:
+  parameters:
+    - name: connectionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Settings]
+    operationId: updateSsoConnection
+    summary: Change a SAML connection, or rotate its certificate
+    description: |
+      **Owner only**, for the reason given on `POST`.
+
+      **Certificate rotation.** Writing a new `idp_certificate_pem` revokes the
+      old one the moment the change commits. That is the default because the
+      rotation that matters most is the one answering a compromised IdP key, and
+      an overlap there would keep the attacker's certificate valid for exactly as
+      long as it is convenient.
+
+      A planned key roll is the other case: an IdP signs with either key for a
+      period, and refusing to bridge that turns every scheduled rotation into a
+      sign-in outage. So an overlap is available, but only by asking —
+      `retain_previous_certificate_hours` keeps the outgoing certificate trusted
+      for up to 7 days. It requires a new certificate to rotate to, refuses to
+      "retain" the certificate already in use, and refuses to bridge one that is
+      not itself usable.
+
+      `revoke_previous_certificate` closes an open overlap early — the "we have
+      since learned the old key was compromised" case. It cannot be combined with
+      a new certificate, where the rotation already decides the old one's fate.
+
+      A connection cannot be switched on behind an unusable certificate:
+      `enabled: true` is refused unless the stored certificate (or the one being
+      written in the same request) is currently valid.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties: false
+            properties:
+              name: { type: string, minLength: 1, maxLength: 100 }
+              idp_entity_id: { type: string, minLength: 1, maxLength: 1024 }
+              idp_sso_url: { type: string, minLength: 1, maxLength: 2048 }
+              idp_certificate_pem: { type: string, minLength: 1, maxLength: 16384 }
+              attribute_mapping: { $ref: "../openapi.yaml#/components/schemas/SsoAttributeMapping" }
+              allow_idp_initiated: { type: boolean }
+              enabled: { type: boolean }
+              retain_previous_certificate_hours:
+                type: integer
+                minimum: 1
+                maximum: 168
+                description: >-
+                  Keep the certificate being replaced trusted for this many hours.
+                  Only valid alongside a new `idp_certificate_pem`. Omit it and
+                  the old certificate stops being trusted immediately.
+              revoke_previous_certificate:
+                type: boolean
+                enum: [true]
+                description: >-
+                  Close an open rotation overlap now. Cannot be sent with a new
+                  `idp_certificate_pem`.
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SsoConnection" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Settings]
+    operationId: deleteSsoConnection
+    summary: Stop federating sign-in to an identity provider
+    description: |
+      **Owner only**, for the reason given on `POST`. Removing a connection
+      closes a door rather than opening one, but it is recorded the same way —
+      a federation that quietly disappears is as much an incident as one that
+      quietly appears.
+    responses:
+      "204": { description: Removed }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 cannedResponses:
   get:
     tags: [Settings]

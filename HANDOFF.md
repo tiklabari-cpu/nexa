@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+## tm 81.2 — S11-a2 · SSO bağlantısı YAZMA ucu: `owner` kilidi + sertifika doğrulaması + rotasyon — done — 2026-08-12 UTC
+
+- **Yapıldı:** (1) `POST`/`PATCH`/`DELETE /settings/sso`, `access_rules:rw` + **`exactRole: 'owner'`** —
+  **admin REDDEDİLİR**: `idp_certificate_pem`'i yazan aktör o lisansta istediği kişi adına imzalı
+  assertion üretebilir (admin bir meslektaşı askıya alabilir, *o kişi olamaz*). `exactRole` bu tur
+  `plugins/auth.ts`'e eklendi — `minimumRole: 'owner'` bugün aynı sonucu verir ama owner'ın üstüne
+  bir rütbe eklendiği gün sessizce genişlerdi. (2) **ROTASYON KARARI (§C-A17.1):** varsayılan
+  **anında iptal**, örtüşme yalnız açıkça istenirse (`retain_previous_certificate_hours`, ≤168 sa) +
+  erken kapatma (`revoke_previous_certificate`). Planlı anahtar değişimi köprülenir, ele geçirme
+  senaryosunda saldırganın sertifikası uzatılmaz. Yeni kolonlar + birlikte-veya-hiç CHECK'i:
+  `20260812130000_sso_certificate_rotation`. Pencere **tek yerde** yorumlanır
+  (`activePreviousCertificate`) — süresi dolmuş örtüşme, o fonksiyonun üstünde **hiç örtüşme
+  yokmuş gibi** okunur. (3) Sertifika **ayrıştırılır** (`node:crypto` `X509Certificate`, yeni
+  bağımlılık yok): zincir · süresi geçmiş · henüz geçerli olmayan (5 dk kayma toleransı) ·
+  **RSA/DSA < 2048 bit** reddedilir; SSO URL'i **https zorunlu, loopback istisnalı** (S11-c'nin
+  harness'ı için — migration'ın kolona bilerek koymadığı politika). Saf modül
+  `lib/sso-connection.ts` (`ip-allowlist.ts` emsali). (4) Audit `settings.security_updated` +
+  `operation`/`fields`/rotasyonda **SHA-256 parmak izi**; sertifika içeriği metadata'ya YAZILMAZ.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · format:check · build 7/7 ·
+  unit `pnpm -w test` 10/10 (`@nexa/api` 2433 → **2485**, +52 = 22 birim + 30 entegrasyon) ·
+  integration **1955** (api 1904 + rtm 51; 1925 → +30) · e2e **131** (6.3 dk) · `db:check-drift`
+  temiz (1 bilinen pgvector ifadesi).
+- **Varsayımlar:** (a) Sertifika **kanonik PEM** olarak saklanır (trim + tek `\n`) — API'den kopyalanan
+  değer doğrudan dosyaya yazılabilsin ve form yeniden gönderimi satırı boşluk farkıyla yeniden
+  yazmasın diye; "bu bir rotasyon mu" sorusu **parmak iziyle** karara bağlandığı için bu normalizasyon
+  o cevabı değiştiremez. (b) `attribute_mapping` bilinmeyen anahtarı **reddeder**, sessizce düşürmez.
+  (c) `enabled` yalnız bugün kullanılabilir bir sertifikanın arkasında açılabilir.
+- **Sonraki pencereye not:** (1) **S11-b, `previousCertificatePem`'i kendi başına okumasın** —
+  `activePreviousCertificate(row, now)` üzerinden geçsin; pencerenin kapanmasını yorumlayan tek yer
+  orasıdır ve ikinci bir yorum "süresi dolmuş sertifika hâlâ doğruluyor" demektir. (2) S11-b
+  sertifikanın **kullanım anındaki** geçerliliğini de kontrol edecek mi, karar onun; bu uç yalnız
+  **yazma anında** kullanılabilirliği garanti eder (7 günlük örtüşme içinde bir sertifika süresi
+  dolabilir). (3) S11-g **yeni uç açmaz**, bu üçünü çağırır; "bağlantıyı doğrula" butonu yereldir
+  (SSRF — §D99). (4) Docker Desktop bu makinede otomatik başlamıyor: kapı komutlarından önce
+  `docker compose up -d` gerekiyor, yoksa testler bağlanamayıp sessizce asılı kalır.
+
 ## tm 81.1 — S11-a · `sso_connections` tablosu + RLS + salt-okuma kontrat yüzeyi (Faz 3 başladı) — done — 2026-08-12 UTC
 
 - **Yapıldı:** (1) `sso_connections` tablosu + `sso_connections_tenant` RLS politikası (`USING`+`WITH CHECK`)

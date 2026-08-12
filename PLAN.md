@@ -3765,6 +3765,27 @@ görüneceği en son yerdir.
   ikinci bir bölünmez güvenlik çekirdeği ekler; Enterprise IdP'lerinin tamamı SAML konuşur. XML-DSig **elde yazılmaz** — olgun bir kütüphane kullanılır (seçim `S11-b`
   penceresinin ilk işi). SP-initiated varsayılan; IdP-initiated yalnız bağlantıda açıkça izin
   verilmişse. Dış IdP (Okta/Auth0/Azure AD) **MOCK**.
+- **A17.1 (S11-a2 · SERTİFİKA ROTASYON SEMANTİĞİ · tm 81.2 · 2026-08-12):** Kırılımın açık
+  bıraktığı karar — yeni sertifika yazıldığında eski hemen geçersiz mi, yoksa bir geçiş
+  penceresi boyunca ikisi de kabul mü edilir. **KARAR: varsayılan ANINDA iptal; geçiş penceresi
+  yalnız AÇIKÇA istenirse, üst sınır 7 gün.** Gerekçe iki rotasyonun ayrımıdır: (a) _planlı
+  anahtar değişimi_ — IdP bir süre iki anahtardan biriyle imzalar, köprü kurulmazsa her planlı
+  rotasyon bir giriş kesintisine dönüşür; (b) _ele geçirme_ — rotasyon saldırganın anahtarını
+  kapatmak içindir ve orada bir örtüşme, saldırganın sertifikasını tam da işine geldiği kadar
+  süre geçerli tutar. İkisi de karşılanır, tehlikeli olan **miras alınmaz** (`allow_idp_initiated`
+  varsayılanının mantığı). Uygulama: `previous_certificate_pem` + `previous_certificate_expires_at`
+  (birlikte-veya-hiç CHECK'i) · `PATCH` üzerinde `retain_previous_certificate_hours` (1-168) ve
+  erken kapatma için `revoke_previous_certificate`. Pencere **tek bir yerde** yorumlanır —
+  `lib/sso-connection.ts#activePreviousCertificate`; süresi dolmuş örtüşme, o fonksiyonun üstünde
+  **hiç örtüşme yokmuş gibi** okunur (satır baytları bir sonraki yazmaya kadar durur ama kimse
+  göremez), böylece S11-b/S11-d ile okuma yüzeyi aynı cevabı vermek zorunda kalır.
+- **A17.2 (S11-a2 · sertifika kabul ölçütü · tm 81.2 · 2026-08-12):** Sertifika **ayrıştırılır,
+  desenle eşleştirilmez** (`node:crypto` `X509Certificate` — yeni bağımlılık yok). Reddedilenler:
+  ayrıştırılamayan · **zincir** (birden çok PEM bloğu — ilkini sessizce güvenmek "rotasyon indi"
+  sanılan bir boşluktur; iki sertifika istemenin yolu A17.1'in örtüşmesidir) · süresi geçmiş ·
+  **henüz geçerli olmayan** (5 dk saat kayması toleransıyla — ikisi de "sıradaki assertion'ı
+  doğrulayamaz") · **RSA/DSA < 2048 bit**. `enabled` yalnız bugün kullanılabilir bir sertifikanın
+  arkasında açılabilir. Sertifika PEM'i **kanonik** saklanır (trim + tek `\n`).
 - **A18 (S11-f):** SCIM `DELETE` deprovizyonu üyeliği **suspend eder, SİLMEZ** — atanmış
   sohbetlerin sahipliği ve audit izi korunsun diye. Açık soru olarak da işaretli (ürün kararı).
 - **A19 (C4):** HIPAA/bölge KK'sı NFR-C4/C9'dan türetildi. **Bölge bir yapılandırma değeridir,
@@ -4919,13 +4940,17 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 
 #### KS11 — S11 · SAML 2.0 SSO + SCIM provisioning
 
-> Kalem **AÇIK** — 10 alt-görevin 1'i teslim (`S11-a`). §6'nın Faz-3 kapsam tablosundaki `S11` satırı
-> durum hücresi taşımaz; Faz-3 kapanışı satır damgasıyla değil **kalem** kuralıyla okunur (§F.00 · §D96).
-> Bu blok o kalemin ilerlemesini madde madde tutar.
+> Kalem **AÇIK** — 10 alt-görevin 2'si teslim (`S11-a`, `S11-a2`). §6'nın Faz-3 kapsam tablosundaki
+> `S11` satırı durum hücresi taşımaz; Faz-3 kapanışı satır damgasıyla değil **kalem** kuralıyla
+> okunur (§F.00 · §D96). Bu blok o kalemin ilerlemesini madde madde tutar.
 
 - ✅ **S11-a — `sso_connections` tablosu + RLS politikası + salt-okuma kontrat yüzeyi.** Depoda SAML/SCIM'e ait hiçbir kod yoktu; federasyon yapılandırmasının duracağı yer açıldı. Tablo license-scoped (Multibrand'e genişletilmedi: kimlik sınırı **workspace**'e aittir, kendi IdP'sini taşıyabilen bir marka aynı hesaplara ikinci bir kapı olurdu) — `apps/api/prisma/migrations/20260812090000_sso_connections/migration.sql` · model `apps/api/prisma/schema.prisma` (`model SsoConnection`, `@@unique([licenseId, idpEntityId])`) · tm 81.1
 - ✅ **RLS `USING` + `WITH CHECK`, ikisi de negatif testle kanıtlandı.** `sso_connections_tenant` politikası `license_id = nexa_current_license()`; yazma tarafı okuma tarafından daha kritik olduğu için ayrıca pinlendi — başka lisansın satırına `updateMany`/`deleteMany` **0 satır** eşler (sertifika ve `enabled` değişmeden kalır), `create` `row-level security` ile reddedilir. `tenant-isolation.test.ts`in RLS-açık tablo listesi 14 → **15**, bağlamsız okuma listesine de eklendi — test `apps/api/test/integration/data-model.test.ts` (11) · `tenant-isolation.test.ts` · tm 81.1
 - ✅ **Depolama değişmezleri 5 CHECK ile kapatıldı (girdi doğrulaması DEĞİL — o S11-a2'de).** Boş `name`/`idp_entity_id`; `idp_sso_url ~ '^https?://'` (kolon tarayıcıya **yönlendirme hedefi** olarak verilecek — `javascript:`/`data:`/protokol-göreli `//evil` yüzeyi şema katmanında kapandı, https-only politikası uca bırakıldı ki S11-c'nin loopback IdP harness'ı migration istemesin); PEM sertifika bloğu zorunlu (parmak izi/özel anahtar "yapılandırılmış güven çıpası" gibi duramaz); `jsonb_typeof(attribute_mapping) = 'object'`. Beşi de tek tek reddedildiği testle pinli · tm 81.1
 - ✅ **`GET /settings/sso` — iki kapı, audit-log okumasının emsali.** `access_rules:ro|rw` **+ `minimumRole: admin`**: kapsam *token*un, rol *kişi*nin okuyabileceğini söyler. Satır workspace'in IdP'sini adlandırıyor (hedefli phish için keşif; S11-h sonrası tek kapının haritası), o yüzden geniş bir PAT taşıyan düz `agent` reddedilir. Sertifika **maskelenmeden** döner (IdP'nin *public* sertifikası; rotasyonun indiğini admin bununla doğrular — bu özellikteki sır SCIM token'ıdır, o S11-e'de hash'lenir). `attribute_mapping` bildirilen anahtarlara **projekte edilir**, olduğu gibi geçirilmez (`additionalProperties: false` ile uyum) — `apps/api/src/routes/settings.ts` · sözleşme `packages/contract/openapi/paths/settings.yaml` + `SsoConnection`/`SsoAttributeMapping` · tip `packages/types/src/domain.ts` · test `apps/api/test/integration/sso.test.ts` (8) · tm 81.1
 - ✅ **Var olan parolasız-hesap modeli KORUNDU, yenisi icat edilmedi.** `accounts.password_hash` zaten nullable ("Null for accounts that only sign in via SSO") ve `crypto.ts` parolasız hesapta sabit-zaman dalını yazıyor; S11-d'nin JIT provizyonu ile S11-h'nin parola kapatma kararı bu alanın üstüne oturacak · tm 81.1
-- ⬜ **Kalan (9 alt-görev):** `S11-a2` yazma ucu · `S11-b` assertion doğrulama çekirdeği · `S11-c` mock IdP harness · `S11-d` SP uçları · `S11-e`/`S11-f` SCIM · `S11-g` ekran · `S11-h` SSO zorunlu kılma · `S11-i` uçtan uca doğrulama.
+- ✅ **S11-a2 — yazma ucu SAHİPLİ ve `owner`a kilitli (denetim bulgusu §D99'un kapattığı boşluk).** `POST`/`PATCH`/`DELETE /settings/sso`, `access_rules:rw` + **`exactRole: 'owner'`** — `admin` REDDEDİLİR ve bu ucun merkezî iddiasıdır: `idp_certificate_pem`'i yazabilen aktör, o lisansta istediği kişi adına imzalı assertion üretebilir, yani admin'in başka hiçbir yetkisinde olmayan bir güç (admin bir meslektaşı askıya alabilir, **o kişi olamaz**). `exactRole` bu tur eklendi (`plugins/auth.ts`) — `minimumRole: 'owner'` bugün aynı sonucu verir ama owner'ın üstüne bir rütbe eklendiği gün sessizce genişlerdi — `apps/api/src/routes/settings.ts` · `apps/api/src/plugins/auth.ts` · tm 81.2
+- ✅ **Rotasyon semantiği KARARA BAĞLANDI: varsayılan anında iptal, örtüşme yalnız istenirse (≤7 gün).** Gerekçe ve mekanizma §C-A17.1'de; `previous_certificate_pem` + `previous_certificate_expires_at` (birlikte-veya-hiç CHECK) — `apps/api/prisma/migrations/20260812130000_sso_certificate_rotation/migration.sql`. Pencere **tek yerde** yorumlanır (`activePreviousCertificate`): süresi dolmuş örtüşme okuma yüzeyinde ve doğrulayıcıda (S11-b/S11-d) **hiç yokmuş gibi** okunur, satır baytları dursa bile. Erken kapatma (`revoke_previous_certificate`) ele geçirme senaryosu için var · tm 81.2
+- ✅ **Sertifika ayrıştırılır, desenle eşleştirilmez** (`node:crypto` `X509Certificate`, yeni bağımlılık yok). Ret matrisi: ayrıştırılamayan · **zincir** · süresi geçmiş · henüz geçerli olmayan (5 dk saat kayması toleransı) · **RSA/DSA < 2048 bit**. SSO URL'i **https zorunlu, loopback istisnalı** (S11-c'nin 127.0.0.1 harness'ı için; migration'ın kolona bilerek koymadığı politika) + gömülü kimlik bilgisi ve `#fragment` reddedilir; `javascript:`/`data:`/`//evil` yüzeyi kapalı. Saf modül `apps/api/src/lib/sso-connection.ts` (`ip-allowlist.ts` emsali: DB'siz, Fastify'sız) · test `apps/api/src/lib/sso-connection.test.ts` (22) · gerçek X.509 fixture'ları `apps/api/test/helpers/certificates.ts` (sır değil, openssl ile üretilmiş kullan-at public sertifikalar) · §C-A17.2 · tm 81.2
+- ✅ **Audit: mevcut eylem, uydurma yok — `settings.security_updated` + `operation` metadata'da.** Hedef `sso_connection:<id>`; metadata değişen **alan adlarını** ve rotasyonda **SHA-256 parmak izini** taşır ("hangi güven çıpası kuruldu" sorusunun tek cevabı), **sertifika içeriği ASLA** — reddedilen bir yazma hiç satır yazmaz. `attribute_mapping` bilinmeyen anahtarı **reddeder** (sessizce düşürmez: düşürülen eşleme admin'e kaydedilmiş gibi görünür) — test `apps/api/test/integration/sso.test.ts` 8 → **38** · tm 81.2
+- ⬜ **Kalan (8 alt-görev):** `S11-b` assertion doğrulama çekirdeği · `S11-c` mock IdP harness · `S11-d` SP uçları · `S11-e`/`S11-f` SCIM · `S11-g` ekran · `S11-h` SSO zorunlu kılma · `S11-i` uçtan uca doğrulama.

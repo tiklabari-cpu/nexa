@@ -253,6 +253,8 @@ paths:
     $ref: "./paths/settings.yaml#/ipAllowlistEntry"
   /settings/sso:
     $ref: "./paths/settings.yaml#/sso"
+  /settings/sso/{connectionId}:
+    $ref: "./paths/settings.yaml#/ssoConnection"
   /settings/canned-responses:
     $ref: "./paths/settings.yaml#/cannedResponses"
   /settings/canned-responses/{cannedResponseId}:
@@ -951,9 +953,9 @@ components:
         One SAML 2.0 identity provider a workspace federates sign-in to
         (NFR-S11). Tenant-scoped and closed by row level security.
 
-        Read-only at this stage: the row records who the IdP is and how to reach
-        it. Nothing consumes it yet — no assertion is accepted and no session is
-        minted from one.
+        Configuration only at this stage: the row records who the IdP is and how
+        to reach it. Nothing consumes it to authenticate anyone yet — no
+        assertion is accepted and no session is minted from one.
 
         `idp_certificate_pem` is returned in full on purpose. It is the IdP's
         *public* signing certificate — what an admin compares against their IdP
@@ -966,6 +968,8 @@ components:
           idp_entity_id,
           idp_sso_url,
           idp_certificate_pem,
+          previous_certificate_pem,
+          previous_certificate_expires_at,
           attribute_mapping,
           allow_idp_initiated,
           enabled,
@@ -987,6 +991,21 @@ components:
         idp_certificate_pem:
           type: string
           description: The IdP's public signing certificate, PEM-encoded. Not a secret.
+        previous_certificate_pem:
+          type: string
+          nullable: true
+          description: >-
+            The certificate this connection was rotated away from, still trusted
+            until `previous_certificate_expires_at`. Null unless the rotation
+            asked to bridge an IdP key roll — replacing a certificate revokes the
+            old one at once by default, because the rotation that matters most is
+            the one answering a compromise. Reported only while the window is
+            open: a lapsed overlap reads as no overlap.
+        previous_certificate_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the overlap stops being trusted. Null when there is none.
         attribute_mapping: { $ref: "#/components/schemas/SsoAttributeMapping" }
         allow_idp_initiated:
           type: boolean

@@ -516,9 +516,9 @@ export type SsoAttributeMapping = Partial<Record<SsoAttributeMappingKey, string>
 /**
  * One SAML 2.0 identity provider a workspace federates sign-in to (NFR-S11).
  *
- * Read-only configuration at this stage: the row records who the IdP is and how
- * to reach it, nothing consumes it yet. The write surface is S11-a2, assertion
- * validation S11-b, the SP endpoints S11-d.
+ * Configuration only: the row records who the IdP is and how to reach it.
+ * Nothing consumes it to authenticate anyone yet — assertion validation is
+ * S11-b, the SP endpoints S11-d. Written by the owner-only surface (S11-a2).
  *
  * `idp_certificate_pem` is deliberately returned in full. It is the IdP's
  * *public* signing certificate — the thing an admin compares against what their
@@ -536,6 +536,17 @@ export interface SsoConnection {
   idp_sso_url: string;
   /** The IdP's public signing certificate, PEM-encoded. Not a secret. */
   idp_certificate_pem: string;
+  /**
+   * The certificate this connection was rotated away from, still trusted until
+   * {@link previous_certificate_expires_at}. `null` unless a rotation asked to
+   * bridge an IdP key roll: replacing a certificate revokes the old one at once
+   * by default, because the rotation that matters most is the one answering a
+   * compromise. Reported only while the window is open — a lapsed overlap reads
+   * as no overlap, here and in the verifier.
+   */
+  previous_certificate_pem: string | null;
+  /** When the overlap above stops being trusted. `null` when there is none. */
+  previous_certificate_expires_at: string | null;
   attribute_mapping: SsoAttributeMapping;
   /**
    * Accept an assertion the IdP sends unsolicited, with no AuthnRequest of ours

@@ -51,6 +51,14 @@ declare module 'fastify' {
     scopes?: string[];
     /** Caller's membership role must be at least this. */
     minimumRole?: AgentRole;
+    /**
+     * Caller's membership role must be *exactly* this — a rank ladder does not
+     * apply. For an owner-only route the two spellings happen to coincide today
+     * (owner is the top rank), and that coincidence is the reason to say which
+     * one is meant: a route that only the owner may reach should keep refusing
+     * everyone else on the day a rank above owner is added, not silently widen.
+     */
+    exactRole?: AgentRole;
     /** Which principal kinds may call this route. Defaults to agent + bot. */
     principals?: Array<Principal['kind']>;
   }
@@ -150,12 +158,17 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
    * rather than let that combination exist.
    */
   app.addHook('onRoute', (route) => {
-    const config = route.config as { public?: boolean; scopes?: string[]; minimumRole?: string };
+    const config = route.config as {
+      public?: boolean;
+      scopes?: string[];
+      minimumRole?: string;
+      exactRole?: string;
+    };
     if (!config?.public) return;
-    if (config.scopes?.length || config.minimumRole) {
+    if (config.scopes?.length || config.minimumRole || config.exactRole) {
       throw new Error(
         `Route ${route.method} ${route.url} is marked public but declares authorization ` +
-          `requirements (scopes/minimumRole). A public route cannot enforce them.`,
+          `requirements (scopes/minimumRole/exactRole). A public route cannot enforce them.`,
       );
     }
   });
@@ -290,6 +303,12 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     if (config.minimumRole) {
       if (principal.kind !== 'agent' || !roleAtLeast(principal.role, config.minimumRole)) {
         throw ApiError.authorization(`This action requires the ${config.minimumRole} role.`);
+      }
+    }
+
+    if (config.exactRole) {
+      if (principal.kind !== 'agent' || principal.role !== config.exactRole) {
+        throw ApiError.authorization(`This action requires the ${config.exactRole} role.`);
       }
     }
 

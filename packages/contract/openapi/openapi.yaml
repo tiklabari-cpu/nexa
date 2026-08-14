@@ -98,6 +98,8 @@ paths:
     $ref: "./paths/auth.yaml#/revoke"
   /auth/me:
     $ref: "./paths/auth.yaml#/me"
+  /auth/sso/{connectionId}:
+    $ref: "./paths/saml.yaml#/publicConnection"
   /auth/saml/{connectionId}/login:
     $ref: "./paths/saml.yaml#/login"
   /auth/saml/{connectionId}/acs:
@@ -966,6 +968,28 @@ components:
       properties:
         email: { type: string }
         name: { type: string }
+
+    PublicSsoConnection:
+      type: object
+      description: |
+        The anonymous face of an SSO connection (NFR-S11 · S11-i) — the two
+        things a browser needs to start a login it did not choose, and nothing
+        else. No certificate, no IdP URL, no entity id: those describe the trust
+        anchor and belong to the authenticated admin view (`SsoConnection`).
+      required: [id, organization_name, client_id]
+      properties:
+        id: { type: string, format: uuid }
+        organization_name:
+          type: string
+          nullable: true
+          description: The workspace this connection signs in to, so a screen can name it.
+        client_id:
+          type: string
+          nullable: true
+          description: |
+            The OAuth client to start the login with. `null` when the workspace
+            registers none or more than one — the caller must then be told which
+            to use rather than have one guessed for it.
 
     SsoConnection:
       type: object

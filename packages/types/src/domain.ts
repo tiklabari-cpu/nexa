@@ -526,6 +526,28 @@ export type SsoAttributeMapping = Partial<Record<SsoAttributeMappingKey, string>
  * the one field a misconfiguration is diagnosed from while protecting nothing.
  * The SCIM bearer token (S11-e) is the secret in this feature, and it is hashed.
  */
+/**
+ * The anonymous face of an SSO connection (NFR-S11 · S11-i).
+ *
+ * An identity-provider-initiated sign-in ends with the browser back at the app
+ * holding only a connection id, and no password to spend at `/auth/login` —
+ * which is where every other entry learns which OAuth client its workspace
+ * uses. This is that one missing fact, and nothing else: the certificate, the
+ * IdP URL and the entity id describe the trust anchor and stay in the
+ * authenticated admin view ({@link SsoConnection}).
+ */
+export interface PublicSsoConnection {
+  id: string;
+  /** The workspace this connection signs in to, so a screen can name it. */
+  organization_name: string | null;
+  /**
+   * The OAuth client to start the login with. `null` when the workspace
+   * registers none or more than one — which client a session is capped by is
+   * not a question to answer with a guess.
+   */
+  client_id: string | null;
+}
+
 export interface SsoConnection {
   id: string;
   /** Human label for the connection, e.g. `Okta (corp)`. */

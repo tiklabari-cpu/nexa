@@ -13,6 +13,7 @@
     "test": "tsx scripts/with-test-datastores.ts vitest run --passWithNoTests",
     "test:unit": "tsx scripts/with-test-datastores.ts vitest run --passWithNoTests --dir src",
     "test:integration": "tsx scripts/with-test-datastores.ts vitest run --passWithNoTests --dir test/integration",
+    "mock-idp": "tsx scripts/mock-idp-server.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",

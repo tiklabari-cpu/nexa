@@ -3754,7 +3754,7 @@
             "description": "Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant",
             "details": "S11-i — Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant  [OPUS-XHIGH]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~1 pencere\n\nKAPSAM: kalemin KK'sının uçtan uca kanıtı. (1) e2e: SSO yapılandır → mock IdP ile giriş → panele düş (kanıt PNG `apps/e2e/kanit/S11-sso-login.png`). (2) SCIM yaşam döngüsü integration: provizyon → giriş → deprovizyon → giriş reddi. (3) RET MATRİSİ integration seviyesinde tekrar: imzasız · yanlış Audience · süresi geçmiş · replay · XSW. (4) cross-tenant negatif matrisi.\n\nDOSYALAR: `apps/e2e/tests/sso.spec.ts` (yeni) · `apps/api/test/integration/sso.test.ts` · `apps/e2e/kanit/`\n\nREFERANS DESEN: `apps/e2e/tests/settings.spec.ts` + `apps/e2e/tests/team.spec.ts`; kanıt PNG adlandırması `<kod>-<isim>.png` (mevcut 71 PNG'nin kalıbı). e2e sabit portlarda seed'lenmiş `nexa` veritabanını sürer — iki pencere aynı anda e2e koşamaz.\n\nKAPI: bu alt-görev yeşile dönmeden kalem ✅ olmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**YETKİ REDDİ NEGATİFİ (denetim bulgusu K1-2 · ZORUNLU):** SSO/SCIM uçlarının `sso` yetkisi olmadan (`growth` planı) ilgili uçlar **REDDEDİLMELİDİR**. Bu test bu alt-görevin süitindedir; kapı `11.5-b`'de kurulur (tm 84). `tm 84` bu kalemden SONRA koşacaksa test önce `skip` değil, **kapı kurulana kadar kırmızı bırakılmaz** — sıralama gereği `11.5-b` daha önce bitmiş olmalıdır (bkz. §6.2 bağımlılık notu).",
             "testStrategy": "yetkisiz plan (growth) reddi negatifi dahil && pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm -w test:e2e (sso.spec.ts dahil TÜM süit yeşil)",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "81.5",
               "81.7",
@@ -3762,10 +3762,10 @@
               "81.9"
             ],
             "parentId": "81",
-            "updatedAt": "2026-08-11T21:06:36.612Z"
+            "updatedAt": "2026-08-14T18:14:25.904Z"
           }
         ],
-        "updatedAt": "2026-08-14T18:10:54.553Z"
+        "updatedAt": "2026-08-14T18:14:25.904Z"
       },
       {
         "id": "82",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-14T18:10:54.554Z",
+      "lastModified": "2026-08-14T18:14:25.905Z",
       "taskCount": 123,
       "completedCount": 117,
       "tags": [

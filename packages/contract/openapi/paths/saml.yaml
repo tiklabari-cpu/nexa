@@ -23,6 +23,42 @@
 # No token is ever issued by these endpoints. Step 5 is the only place a session
 # is minted, for either kind of sign-in.
 
+publicConnection:
+  get:
+    tags: [Auth]
+    operationId: readPublicSsoConnection
+    summary: What a browser needs to start a login at this connection
+    description: |
+      Anonymous, and deliberately thin. An identity-provider-initiated sign-in
+      ends with the browser at `/login?sso={connectionId}` holding nothing else:
+      it authenticated at the identity provider, so it has no password to spend
+      at `/auth/login`, which is where every other entry into this app learns
+      which OAuth client its workspace uses.
+
+      The client id is not a credential — these are public clients with no
+      secret, PKCE is mandatory, and the redirect URI set is registered and
+      checked before the browser leaves. `client_id` is `null` when the
+      workspace registers none or more than one, in which case the caller has to
+      be told which to use rather than have one guessed for it.
+
+      Responds `404` for a connection that does not exist, is disabled, or
+      belongs to a canceled workspace — the same reading `/login` and `/acs`
+      give a connection id.
+    security: []
+    parameters:
+      - name: connectionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: The connection's public face
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PublicSsoConnection" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 login:
   get:
     tags: [Auth]
@@ -53,7 +89,10 @@ login:
         in: query
         required: true
         schema: { type: string, maxLength: 128 }
-        description: Must be registered to the connection's organization.
+        description: |
+          Must be registered to the connection's organization. A browser that
+          arrived holding only a connection id reads it from
+          `GET /auth/sso/{connectionId}` first.
       - name: redirect_uri
         in: query
         required: true

@@ -1,6 +1,7 @@
 import { useEffect, type ReactElement } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
+import { AuthCallbackPage } from './features/auth/AuthCallbackPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
 import {
   ForgotPasswordPage,
@@ -48,10 +49,11 @@ export function App(): ReactElement {
   // dead token, so the whole tree collapses to the signed-out routes rather
   // than redirecting.
   //
-  // Those routes are a real router rather than a single page because three of
-  // them are reached from a link in an email: `/join` and `/reset-password`
-  // carry a token in the URL, and landing on a sign-in form instead would
-  // discard it.
+  // Those routes are a real router rather than a single page because four of
+  // them arrive carrying something in the URL that a sign-in form would throw
+  // away: `/join` and `/reset-password` a token from an email, and
+  // `/auth/callback` the authorization code a federated sign-in just earned
+  // (NFR-S11 · S11-i).
   if (status !== 'signed-in') {
     return (
       <Routes>
@@ -59,6 +61,7 @@ export function App(): ReactElement {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/join" element={<JoinPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="*" element={<SignInPage />} />
       </Routes>
     );

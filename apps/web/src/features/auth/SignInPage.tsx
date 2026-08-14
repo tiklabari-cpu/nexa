@@ -1,5 +1,5 @@
-import { useState, type ReactElement } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth, type Membership } from '../../lib/auth-store.js';
 import { FieldError, compose, email as emailRule, required, useForm } from '../../lib/form.js';
 
@@ -17,12 +17,21 @@ import { FieldError, compose, email as emailRule, required, useForm } from '../.
  * email is well formed.
  *
  * A workspace that requires single sign-on (NFR-S11 · S11-h) reports
- * `password_login_available: false`, and this stops before spending the
- * password on a call the server will refuse. It says so instead of showing
- * "Invalid email or password", which would be a lie — the password was right.
- * Starting the SAML leg from here needs a browser redirect and a PKCE verifier
- * that survives it; that is not built yet and belongs with the rest of the
- * end-to-end sign-in work (S11-i), so this tells the truth and stops.
+ * `password_login_available: false`, and this never spends the password on a
+ * call the server will refuse. It hands the browser to that workspace's
+ * identity provider instead (S11-i) — the membership carries the connection and
+ * the client id, so pressing Sign in leads somewhere rather than to a refusal
+ * dressed as "Invalid email or password", which would be a lie: the password
+ * was right.
+ *
+ * `?sso=<connectionId>` is the other way in, and the one an SSO-only person
+ * uses — they have no password to type. The ACS sends an accepted unsolicited
+ * assertion back here rather than completing it, because no browser proved it
+ * asked for that login; arriving with that parameter, this page immediately
+ * starts an ordinary SP-initiated one of its own. It redirects without asking
+ * because the person already clicked something — their identity provider's Nexa
+ * tile — and their session there makes the second leg silent. Nothing in the
+ * URL decides where they go: the destination comes from the connection row.
  */
 const SSO_REQUIRED =
   'This workspace requires single sign-on. Continue from your identity provider’s Nexa tile.';
@@ -44,6 +53,48 @@ export function SignInPage(): ReactElement {
   const busy = useAuth((s) => s.busy);
   const listWorkspaces = useAuth((s) => s.listWorkspaces);
   const signIn = useAuth((s) => s.signIn);
+  const startSsoLogin = useAuth((s) => s.startSsoLogin);
+
+  const [params] = useSearchParams();
+  const ssoParam = params.get('sso');
+  const [ssoError, setSsoError] = useState<string | null>(null);
+  // One attempt per arrival: StrictMode mounts effects twice in development,
+  // and a second `location.assign` to the same URL would leave a stale pending
+  // record behind whichever navigation won.
+  const ssoStarted = useRef(false);
+
+  useEffect(() => {
+    if (!ssoParam || ssoStarted.current) return;
+    ssoStarted.current = true;
+    startSsoLogin(ssoParam).catch((cause: unknown) => {
+      setSsoError(
+        cause instanceof Error ? cause.message : 'Could not start single sign-on for that link.',
+      );
+    });
+  }, [ssoParam, startSsoLogin]);
+
+  /**
+   * Hand a workspace's sign-in to its identity provider.
+   *
+   * Falls back to saying so when the membership names no connection — an older
+   * server reports `password_login_available: false` without one, and silently
+   * doing nothing would read as a broken button.
+   */
+  const continueWithSso = async (
+    workspace: Membership,
+    report: (message: string) => void,
+  ): Promise<void> => {
+    const connectionId = workspace.sso_enforced_connection_id;
+    if (!connectionId) {
+      report(SSO_REQUIRED);
+      return;
+    }
+    try {
+      await startSsoLogin(connectionId, workspace.client_id);
+    } catch (cause) {
+      report(cause instanceof Error ? cause.message : 'Could not start single sign-on.');
+    }
+  };
 
   const form = useForm({
     initial: { email: '', password: '' },
@@ -61,7 +112,10 @@ export function SignInPage(): ReactElement {
         if (memberships.length === 1) {
           const only = memberships[0]!;
           if (!passwordWorks(only)) {
-            setSubmitError(SSO_REQUIRED);
+            // Pressing Sign in is the click that authorises the redirect, so
+            // this leaves for the identity provider rather than stopping to ask
+            // again with a second button.
+            await continueWithSso(only, setSubmitError);
             return;
           }
           await signIn(values.email, values.password, only.license_id);
@@ -82,7 +136,7 @@ export function SignInPage(): ReactElement {
     // Checked before the call rather than after its 403, so the reason survives:
     // the catch below cannot tell "SSO required" from "the network went away".
     if (workspace && !passwordWorks(workspace)) {
-      setChooseError(SSO_REQUIRED);
+      await continueWithSso(workspace, setChooseError);
       return;
     }
     try {
@@ -111,7 +165,19 @@ export function SignInPage(): ReactElement {
           </div>
         </header>
 
-        {workspaces ? (
+        {ssoError && (
+          <p role="alert" className="mb-3 text-xs text-danger">
+            {ssoError}
+          </p>
+        )}
+
+        {ssoParam && !ssoError ? (
+          // The redirect is already in flight; a form underneath it would only
+          // invite somebody to start typing a password they will lose.
+          <p role="status" className="text-sm text-content-secondary">
+            Taking you to your identity provider…
+          </p>
+        ) : workspaces ? (
           <section
             aria-label="Choose a workspace"
             className="rounded-lg border border-border bg-surface p-4 shadow-xs"

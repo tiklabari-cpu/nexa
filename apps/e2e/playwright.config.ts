@@ -19,6 +19,8 @@ import { defineConfig, devices } from '@playwright/test';
 const API = 'http://localhost:4000';
 const WEB = 'http://localhost:5173';
 const WIDGET = 'http://localhost:5174';
+/** The stand-in identity provider a federated sign-in is redirected to (S11-i). */
+const MOCK_IDP = 'http://127.0.0.1:4599';
 /** Same server as WIDGET, different origin — this is the "customer's website". */
 export const HOST_PAGE = 'http://acme-bikes.localhost:5174';
 
@@ -79,6 +81,17 @@ export default defineConfig({
     {
       command: 'pnpm --filter @nexa/widget dev',
       url: `${WIDGET}/demo.html`,
+      reuseExistingServer: !process.env['CI'],
+      timeout: 60_000,
+      cwd: '../..',
+    },
+    {
+      // A SAML identity provider the browser can actually be redirected to
+      // (NFR-S11 · S11-i). Loopback only, and the one address the SSO URL
+      // validation lets a connection use without TLS — see
+      // `apps/api/scripts/mock-idp-server.ts`.
+      command: 'pnpm --filter @nexa/api mock-idp',
+      url: `${MOCK_IDP}/health`,
       reuseExistingServer: !process.env['CI'],
       timeout: 60_000,
       cwd: '../..',

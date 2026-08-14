@@ -75,6 +75,12 @@ const connectionParams = z.object({ connectionId: z.string().uuid() });
  * The same three fields `POST /auth/authorize` takes, for the same reasons —
  * see the file header. `state` is stored rather than forwarded to the IdP: the
  * client gets its own value back untouched, and the IdP never sees it.
+ *
+ * A browser that has no `client_id` — an identity-provider-initiated arrival
+ * holds nothing but a connection id — gets one from `GET /auth/sso/{id}` first.
+ * It stays required here: the same value has to be presented again at
+ * `/auth/token`, so a caller that could not name it now could not redeem the
+ * code later either, and resolving it in two places is two places to drift.
  */
 const loginQuery = z.object({
   client_id: z.string().min(1).max(128),
@@ -283,6 +289,64 @@ export default async function samlRoutes(
       return null;
     }
   }
+
+  // --- GET /auth/sso/:connectionId -------------------------------------------
+
+  /**
+   * What a browser needs to start a login it did not choose.
+   *
+   * The ACS converts an accepted unsolicited assertion by sending the person to
+   * `${WEB_APP_URL}/login?sso=<connectionId>`, and that arrival is anonymous by
+   * construction: they authenticated at the identity provider, not here, so
+   * there is no password to spend at `/auth/login` — which is where every other
+   * entry into this app learns which OAuth client its workspace uses. Without
+   * this read the conversion would land on a sign-in form with nothing it could
+   * do, which is the same dead end as not supporting IdP-initiated login at all.
+   *
+   * The client id is not a credential. These are public OAuth clients: they hold
+   * no secret, PKCE is mandatory, and the redirect URI set is fixed and checked
+   * before the browser leaves. What a caller learns from a connection id is the
+   * client id of the workspace that connection belongs to — the same thing a
+   * registered `.well-known` document would publish, and strictly less than
+   * `/auth/login` already returns to anybody with a password.
+   *
+   * The organization *name* rides along so the sign-in screen can say where it
+   * is about to send somebody. Missing, disabled and canceled are one "not
+   * found", the same reading `/login` and `/acs` give a connection id.
+   */
+  app.get<{ Params: { connectionId: string } }>(
+    '/auth/sso/:connectionId',
+    { config: { public: true } },
+    async (request, reply) => {
+      const { connectionId } = parse(connectionParams, request.params);
+      const connection = await findConnection(connectionId);
+
+      // Under the connection's own tenant, so RLS scopes both reads to the
+      // workspace the row named and nothing the caller sent can widen them.
+      const found = await withTenant(
+        app.db,
+        { licenseId: connection.license_id, organizationId: connection.organization_id },
+        async (tx) => ({
+          organization: await tx.organization.findUnique({
+            where: { id: connection.organization_id },
+            select: { name: true },
+          }),
+          // Exactly one client, or none: a workspace with two would make "which
+          // client does this connection sign in through" a question with no
+          // answer, and picking one would silently decide which scope ceiling
+          // the session is capped by. `take: 2` is enough to tell the difference.
+          clients: await tx.oauthClient.findMany({ select: { id: true }, take: 2 }),
+        }),
+      );
+
+      reply.header('Cache-Control', 'no-store');
+      return {
+        id: connection.id,
+        organization_name: found.organization?.name ?? null,
+        client_id: found.clients.length === 1 ? found.clients[0]!.id : null,
+      };
+    },
+  );
 
   // --- GET /auth/saml/:connectionId/login ------------------------------------
 

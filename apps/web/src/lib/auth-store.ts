@@ -62,6 +62,16 @@ interface AuthState {
   restore: () => Promise<void>;
   listWorkspaces: (email: string, password: string) => Promise<Membership[]>;
   signIn: (email: string, password: string, licenseId: string) => Promise<void>;
+  /**
+   * Hand the browser to the workspace's identity provider (NFR-S11 · S11-i).
+   *
+   * Never returns on the happy path — it navigates away. `clientId` may be
+   * omitted when the caller does not know it (an IdP-initiated arrival holds
+   * only a connection id); it is then read from `GET /auth/sso/{id}`.
+   */
+  startSsoLogin: (connectionId: string, clientId?: string | null) => Promise<void>;
+  /** Finish the leg above from `/auth/callback` — see {@link SSO_PENDING_KEY}. */
+  completeSsoLogin: (code: string, state: string | null) => Promise<void>;
   signOut: () => Promise<void>;
   setRoutingStatus: (status: CurrentAgent['routing_status']) => Promise<void>;
   /** Turn the e-mail notification channel on or off for the caller (FR-MOD-13.8). */
@@ -74,6 +84,27 @@ const REFRESH_KEY = 'nexa.refresh_token';
 const CLIENT_ID_KEY = 'nexa.client_id';
 const BRAND_KEY = 'nexa.brand_id';
 const REDIRECT_URI = `${window.location.origin}/auth/callback`;
+
+/**
+ * Where a federated sign-in parks the half of itself that must survive leaving
+ * the page (NFR-S11 · S11-i).
+ *
+ * `sessionStorage`, not `localStorage`: this is one tab's in-flight login, and
+ * it must not be readable by a second tab starting its own, nor outlive the tab
+ * that began it. The PKCE verifier inside is the reason the exchange is safe —
+ * it stays with the browser that started the login, so a code intercepted
+ * anywhere along the way (a proxy log, a shared machine) cannot be redeemed.
+ * Storing it at all is unavoidable: the browser leaves for the identity
+ * provider and comes back to a fresh page with no memory.
+ */
+const SSO_PENDING_KEY = 'nexa.sso_login';
+
+interface PendingSsoLogin {
+  verifier: string;
+  clientId: string;
+  /** Echoed back by the server untouched; a callback that does not match is not ours. */
+  state: string;
+}
 
 /** PKCE verifier: 43–128 unreserved characters (RFC 7636 §4.1). */
 function createVerifier(): string {
@@ -108,6 +139,25 @@ function writeStored(key: string, value: string | null): void {
     else localStorage.setItem(key, value);
   } catch {
     // Storage blocked — the session simply will not survive a reload.
+  }
+}
+
+/** Same round-trip as {@link readStored}, against the per-tab store. */
+function readSession(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSession(key: string, value: string | null): void {
+  try {
+    if (value === null) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, value);
+  } catch {
+    // Storage blocked — a federated sign-in cannot complete, and says so at the
+    // callback rather than silently half-working.
   }
 }
 
@@ -243,6 +293,94 @@ export const useAuth = create<AuthState>((set, get) => {
         writeStored(REFRESH_KEY, grant.refresh_token);
         writeStored(CLIENT_ID_KEY, clientId);
 
+        set({
+          accessToken: grant.access_token,
+          agent: await loadAgent(grant.access_token),
+          status: 'signed-in',
+          error: null,
+        });
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'Sign-in failed.' });
+        throw error;
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    async startSsoLogin(connectionId, clientId) {
+      set({ busy: true, error: null });
+      try {
+        // An IdP-initiated arrival knows the connection and nothing else. The
+        // password path already holds the client id from `/auth/login`, so it
+        // passes it and spends no extra round trip.
+        const resolved =
+          clientId ??
+          (
+            await anonymous.get<{ client_id: string | null }>(
+              `/auth/sso/${encodeURIComponent(connectionId)}`,
+            )
+          ).client_id;
+        if (!resolved) throw new Error('This workspace has no app to sign in to.');
+
+        const verifier = createVerifier();
+        const pending: PendingSsoLogin = {
+          verifier,
+          clientId: resolved,
+          state: createVerifier(),
+        };
+        // Written before navigating, not after: once `assign` runs this page is
+        // gone, and a verifier saved "on the way out" would not exist.
+        writeSession(SSO_PENDING_KEY, JSON.stringify(pending));
+
+        const query = new URLSearchParams({
+          client_id: resolved,
+          redirect_uri: REDIRECT_URI,
+          code_challenge: await deriveChallenge(verifier),
+          code_challenge_method: 'S256',
+          state: pending.state,
+        });
+        // A full navigation, not fetch: the identity provider needs the browser
+        // itself — its session cookie there is what makes the second leg silent.
+        window.location.assign(
+          `/api/v1/auth/saml/${encodeURIComponent(connectionId)}/login?${query.toString()}`,
+        );
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'Could not start single sign-on.' });
+        throw error;
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    async completeSsoLogin(code, state) {
+      set({ busy: true, error: null });
+      try {
+        const raw = readSession(SSO_PENDING_KEY);
+        // Spent on sight, whatever happens next. A verifier that survives its
+        // own callback is one a second visit to this URL could try to reuse.
+        writeSession(SSO_PENDING_KEY, null);
+        if (!raw) throw new Error('This sign-in did not start in this browser.');
+
+        const pending = JSON.parse(raw) as PendingSsoLogin;
+        // The state is ours and the server returns it untouched, so a callback
+        // carrying somebody else's — or none — is not the login we started.
+        if (!pending.state || pending.state !== state) {
+          throw new Error('This sign-in did not start in this browser.');
+        }
+
+        const grant = await anonymous.post<{ access_token: string; refresh_token: string }>(
+          '/auth/token',
+          {
+            grant_type: 'authorization_code',
+            code,
+            code_verifier: pending.verifier,
+            client_id: pending.clientId,
+            redirect_uri: REDIRECT_URI,
+          },
+        );
+
+        writeStored(REFRESH_KEY, grant.refresh_token);
+        writeStored(CLIENT_ID_KEY, pending.clientId);
         set({
           accessToken: grant.access_token,
           agent: await loadAgent(grant.access_token),

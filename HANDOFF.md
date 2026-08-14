@@ -13,6 +13,38 @@
 
 ## Task log (newest-first)
 
+## tm 81.10 — S11-i · uçtan uca doğrulama: SAML login e2e + SCIM yaşam döngüsü + ret matrisi — done — 2026-08-14 UTC
+
+- **Yapıldı:** (1) **81.9'un borcu kapandı** — giriş ekranının SAML bacağı: `startSsoLogin`/
+  `completeSsoLogin` + yeni `/auth/callback` rotası; PKCE doğrulayıcısı `sessionStorage`'ta
+  (tek sekmenin uçuştaki girişi) ve callback'te **görüldüğü anda harcanır**, `state`
+  eşleşmezse çağrı yok. (2) `?sso=<id>` artık okunuyor → S11-d'nin IdP-initiated dönüşümü
+  tamamlandı; gereken tek eksik bilgi client id'ydi, onu **yeni anonim `GET /auth/sso/{id}`**
+  verir (`id`+`organization_name`+`client_id`; sertifika/URL/entity id **vermez**, testte
+  pinli; birden çok client varsa `client_id: null` — tahmin yok). Migration GEREKMEDİ.
+  (3) e2e `apps/e2e/tests/sso.spec.ts`: Settings'ten bağlantı kurulur, **temiz bağlam**
+  `/login?sso=` ile hiçbir tıklama olmadan panele düşer (uygulama → IdP → cross-origin form
+  POST → ACS → `/auth/callback`); IdP `apps/api/scripts/mock-idp-server.ts` (yeni, Playwright
+  webServer, yalnız loopback, deponun tek mock anahtarı, kendini `/metadata`'dan yayınlar).
+  (4) `apps/api/test/integration/sso-verification.test.ts` (10): SCIM işe al → SAML gir →
+  deprovizyon → **aynı giriş reddedilir** + canlı token ölür; ret matrisi uçtan (unsigned ·
+  audience · expired · **replay gerçek Redis** · **XSW → imzanın kapsadığı kişi girer**);
+  cross-tenant (A'nın çıkardığı kişi B'nin aynı IdP'sinden A'ya geri giremez).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 2722 → **2732**
+  (`@nexa/web` 1107 → 1113) · `pnpm -w test:integration` 2026 → **2036** · `pnpm -w build` 7/7 ·
+  `pnpm -w test:e2e` **132/132 TÜM süit** · `db:check-drift` temiz · `contract:generate` koşuldu.
+- **Varsayımlar:** (a) e2e'ye giren kişi **seed'li** üye (`agent2@acme.localhost`) — JIT
+  provizyon entegrasyonda kanıtlı, yeni adres sonraki spec'lerin okuduğu kadroyu değiştirirdi.
+  (b) `?sso=` gelişinde yönlendirme **sormadan** başlar: kişi zaten IdP karo'suna tıkladı ve
+  hedef URL'den değil bağlantı satırından türer. (c) `GET /auth/sso/{id}` client id'yi
+  açar — public client, PKCE zorunlu, `/auth/login` zaten parolası olan herkese aynı değeri
+  veriyor.
+- **Sonraki pencereye not:** **`11.5-b` (tm 84) için borç:** `sso` yetkisi olmayan planda
+  (`growth`) SSO/SCIM uçlarının reddi bu süite YAZILMADI — kapı henüz yok (tm 84, tm 81'e
+  bağımlı, zorunlu olarak sonra koşar). Kırmızı/`skip` test bırakmak yerine negatif kapıyı
+  kuran alt-görevin süitine bırakıldı; PLAN §K KS11'in son maddesi bunu tutuyor.
+  `11.5-a`/`-b` yazılırken `GET /auth/sso/{id}` de kapı listesine girmeli (bugün anonim).
+
 ## tm 81.9 — S11-h · SSO zorunlu kılma + break-glass kilitlenme koruması — done — 2026-08-14 UTC
 
 - **Yapıldı:** (1) `sso_connections.enforced` (`20260814210000_sso_enforcement`); zorlama

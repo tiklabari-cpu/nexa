@@ -14,9 +14,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignInPage } from './SignInPage.js';
 import { useAuth, type Membership } from '../../lib/auth-store.js';
 
-function renderSignIn(): void {
+function renderSignIn(initialEntry = '/'): void {
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <SignInPage />
     </MemoryRouter>,
   );
@@ -33,15 +33,17 @@ const WORKSPACE: Membership = {
   password_login_available: true,
 };
 
-/** Answer `/auth/login` with these workspaces and record whether sign-in ran. */
+/** Answer `/auth/login` with these workspaces and record what the screen did. */
 function stubStore(memberships: Membership[]) {
   const signIn = vi.fn(async () => undefined);
+  const startSsoLogin = vi.fn(async () => undefined);
   useAuth.setState({
     busy: false,
     listWorkspaces: async () => memberships,
     signIn,
+    startSsoLogin,
   });
-  return signIn;
+  return { signIn, startSsoLogin };
 }
 
 async function submitCredentials(): Promise<void> {
@@ -58,7 +60,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  useAuth.setState({ listWorkspaces: original.listWorkspaces, signIn: original.signIn });
+  useAuth.setState({
+    listWorkspaces: original.listWorkspaces,
+    signIn: original.signIn,
+    startSsoLogin: original.startSsoLogin,
+  });
 });
 
 describe('SignInPage validation', () => {
@@ -85,12 +91,14 @@ describe('SignInPage validation', () => {
   });
 });
 
+const CONNECTION = '00000000-0000-4000-8000-0000000000aa';
+
 describe('SignInPage under SSO enforcement', () => {
-  it('says the workspace requires SSO instead of spending the password on a refusal', async () => {
-    const signIn = stubStore([
+  it('hands the sign-in to the identity provider instead of spending the password on a refusal', async () => {
+    const { signIn, startSsoLogin } = stubStore([
       {
         ...WORKSPACE,
-        sso_enforced_connection_id: '00000000-0000-4000-8000-0000000000aa',
+        sso_enforced_connection_id: CONNECTION,
         password_login_available: false,
       },
     ]);
@@ -98,20 +106,38 @@ describe('SignInPage under SSO enforcement', () => {
 
     await submitCredentials();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/requires single sign-on/);
-    // The password was correct; "invalid email or password" would be a lie, and
-    // the request that produces it is one the server would refuse anyway.
+    // Pressing Sign in is what authorises the redirect, so there is no second
+    // button to find — the leg starts, with the connection and client the
+    // membership named rather than anything guessed here.
+    await waitFor(() =>
+      expect(startSsoLogin).toHaveBeenCalledWith(CONNECTION, 'nexa-agent-app-acme'),
+    );
+    // And the password is never spent on a call the server would refuse.
     expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it('says so, rather than doing nothing, when the workspace names no connection', async () => {
+    // An older server reports the closed door without saying which provider
+    // opens it. A silent no-op would read as a broken button.
+    const { startSsoLogin } = stubStore([
+      { ...WORKSPACE, sso_enforced_connection_id: null, password_login_available: false },
+    ]);
+    renderSignIn();
+
+    await submitCredentials();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/requires single sign-on/);
+    expect(startSsoLogin).not.toHaveBeenCalled();
   });
 
   it('still signs the owner in — the break-glass door is the server’s answer, not a guess here', async () => {
     // `password_login_available` is server-derived, so the screen never has to
     // know that owners are exempt: it reads one field.
-    const signIn = stubStore([
+    const { signIn } = stubStore([
       {
         ...WORKSPACE,
         role: 'owner',
-        sso_enforced_connection_id: '00000000-0000-4000-8000-0000000000aa',
+        sso_enforced_connection_id: CONNECTION,
         password_login_available: true,
       },
     ]);
@@ -124,14 +150,14 @@ describe('SignInPage under SSO enforcement', () => {
     );
   });
 
-  it('marks the SSO-only workspace in the chooser and refuses to open it', async () => {
-    const signIn = stubStore([
+  it('marks the SSO-only workspace in the chooser and opens it through its provider', async () => {
+    const { signIn, startSsoLogin } = stubStore([
       { ...WORKSPACE, license_id: '1', organization_name: 'Acme' },
       {
         ...WORKSPACE,
         license_id: '2',
         organization_name: 'Globex',
-        sso_enforced_connection_id: '00000000-0000-4000-8000-0000000000aa',
+        sso_enforced_connection_id: CONNECTION,
         password_login_available: false,
       },
     ]);
@@ -142,7 +168,7 @@ describe('SignInPage under SSO enforcement', () => {
     const globex = await screen.findByRole('button', { name: /Globex/ });
     expect(globex).toHaveTextContent('SSO required');
     await userEvent.click(globex);
-    expect(await screen.findByRole('alert')).toHaveTextContent(/requires single sign-on/);
+    await waitFor(() => expect(startSsoLogin).toHaveBeenCalledWith(CONNECTION, expect.anything()));
     expect(signIn).not.toHaveBeenCalled();
 
     // And the other workspace is unaffected — enforcement is per license.
@@ -157,11 +183,38 @@ describe('SignInPage under SSO enforcement', () => {
     // would turn every sign-in into a refusal on an older API.
     const legacy = { ...WORKSPACE };
     delete legacy.password_login_available;
-    const signIn = stubStore([legacy]);
+    const { signIn } = stubStore([legacy]);
     renderSignIn();
 
     await submitCredentials();
 
     await waitFor(() => expect(signIn).toHaveBeenCalled());
+  });
+});
+
+describe('SignInPage arriving from an identity provider', () => {
+  it('starts the leg straight away and offers no password field to lose', async () => {
+    const { startSsoLogin } = stubStore([WORKSPACE]);
+    renderSignIn(`/login?sso=${CONNECTION}`);
+
+    // No client id: the person arrived with a connection id and nothing else,
+    // so the store reads one from the server.
+    await waitFor(() => expect(startSsoLogin).toHaveBeenCalledWith(CONNECTION));
+    expect(screen.getByRole('status')).toHaveTextContent(/identity provider/);
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the form when that link cannot start a login', async () => {
+    useAuth.setState({
+      busy: false,
+      startSsoLogin: vi.fn(async () => {
+        throw new Error('Single sign-on is not available for this connection.');
+      }),
+    });
+    renderSignIn(`/login?sso=${CONNECTION}`);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/not available/);
+    // Somewhere to go next, rather than a dead status line.
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
   });
 });

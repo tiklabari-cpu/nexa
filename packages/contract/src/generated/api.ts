@@ -149,6 +149,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/sso/{connectionId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What a browser needs to start a login at this connection
+     * @description Anonymous, and deliberately thin. An identity-provider-initiated sign-in
+     *     ends with the browser at `/login?sso={connectionId}` holding nothing else:
+     *     it authenticated at the identity provider, so it has no password to spend
+     *     at `/auth/login`, which is where every other entry into this app learns
+     *     which OAuth client its workspace uses.
+     *
+     *     The client id is not a credential — these are public clients with no
+     *     secret, PKCE is mandatory, and the redirect URI set is registered and
+     *     checked before the browser leaves. `client_id` is `null` when the
+     *     workspace registers none or more than one, in which case the caller has to
+     *     be told which to use rather than have one guessed for it.
+     *
+     *     Responds `404` for a connection that does not exist, is disabled, or
+     *     belongs to a canceled workspace — the same reading `/login` and `/acs`
+     *     give a connection id.
+     */
+    get: operations['readPublicSsoConnection'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/saml/{connectionId}/login': {
     parameters: {
       query?: never;
@@ -5497,6 +5531,24 @@ export interface components {
       name?: string;
     };
     /**
+     * @description The anonymous face of an SSO connection (NFR-S11 · S11-i) — the two
+     *     things a browser needs to start a login it did not choose, and nothing
+     *     else. No certificate, no IdP URL, no entity id: those describe the trust
+     *     anchor and belong to the authenticated admin view (`SsoConnection`).
+     */
+    PublicSsoConnection: {
+      /** Format: uuid */
+      id: string;
+      /** @description The workspace this connection signs in to, so a screen can name it. */
+      organization_name: string | null;
+      /**
+       * @description The OAuth client to start the login with. `null` when the workspace
+       *     registers none or more than one — the caller must then be told which
+       *     to use rather than have one guessed for it.
+       */
+      client_id: string | null;
+    };
+    /**
      * @description One SAML 2.0 identity provider a workspace federates sign-in to
      *     (NFR-S11). Tenant-scoped and closed by row level security.
      *
@@ -8672,10 +8724,38 @@ export interface operations {
       401: components['responses']['Unauthorized'];
     };
   };
+  readPublicSsoConnection: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        connectionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The connection's public face */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PublicSsoConnection'];
+        };
+      };
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   startSamlLogin: {
     parameters: {
       query: {
-        /** @description Must be registered to the connection's organization. */
+        /**
+         * @description Must be registered to the connection's organization. A browser that
+         *     arrived holding only a connection id reads it from
+         *     `GET /auth/sso/{connectionId}` first.
+         */
         client_id: string;
         /** @description Must match a URI registered for the client exactly. */
         redirect_uri: string;

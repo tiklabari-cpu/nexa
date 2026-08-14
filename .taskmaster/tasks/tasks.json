@@ -3740,13 +3740,13 @@
             "description": "SSO zorunlu kılma (BÖLÜNMEZ) — parola girişinin kapatılması + break-glass kilitlenme koruması",
             "details": "S11-h — SSO zorunlu kılma (BÖLÜNMEZ) — parola girişinin kapatılması + break-glass kilitlenme koruması  [OPUS-MAX]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: parola yolunu KAPATAN karar ile kilitlenme KAÇIŞ yolu birlikte tasarlanmalıdır. Ayrılırsa aradaki sürümde IdP'si bozulan bir kuruluş kendi hesabından tamamen dışarıda kalır ve bunu düzeltebilecek hiç kimse kalmaz. Bu hata bu depoda BİR KEZ önlendi: tm 80 `08.9.6-d` self-lockout guard'ı tam olarak bunun için yazıldı — emsal odur.\n\nKAPSAM: `sso_connections.enforced` bayrağı; açıkken o lisanstaki parola girişi (`POST /auth/login`) reddedilir. BREAK-GLASS: en az bir `owner` her zaman parolayla girebilir VEYA enforcement açılırken doğrulanmış bir kaçış yolu (kurtarma kodu) üretilir — hangisi seçilirse §C'ye yazılır. Enforcement açma işlemi `settings.security_updated` audit'i yazar.\n\nDOSYALAR: `apps/api/src/routes/auth.ts` · `apps/api/src/services/auth/oauth-service.ts:92` (`authenticateAccount`) · `apps/api/src/routes/settings.ts` · `apps/web/src/features/settings/SsoConnection.tsx`\n\nREFERANS DESEN: tm 80 `08.9.6-d` self-lockout guard — \"kendini dışarıda bırakacak yapılandırmayı reddet\" kalıbı.\n\nKAPSAM DIŞI: e2e (S11-i).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (enforced=true iken parola girişi reddedilir; SSO girişi çalışır; BREAK-GLASS yolu çalışır; enforcement kendini kilitleyecek şekilde açılamaz — NEGATİF; settings.security_updated audit satırı yazılır; CROSS-TENANT: A lisansının enforcement'ı B lisansının girişini etkilemez) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "81.5",
               "81.8"
             ],
             "parentId": "81",
-            "updatedAt": "2026-08-14T17:17:22.649Z"
+            "updatedAt": "2026-08-14T18:10:54.553Z"
           },
           {
             "id": 10,
@@ -3765,7 +3765,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-14T17:17:22.649Z"
+        "updatedAt": "2026-08-14T18:10:54.553Z"
       },
       {
         "id": "82",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-14T17:17:22.649Z",
+      "lastModified": "2026-08-14T18:10:54.554Z",
       "taskCount": 123,
       "completedCount": 117,
       "tags": [

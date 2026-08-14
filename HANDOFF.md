@@ -13,6 +13,26 @@
 
 ## Task log (newest-first)
 
+## tm 79.4 — 08.5.8-d · Settings → Channels: Telegram kartı "Coming soon"dan canlı connect/disconnect'e — done — 2026-08-15 UTC
+
+- **Yapıldı:** `Channels.tsx:133`'teki `comingSoon('telegram', …)` silindi, `telegramChannel(connectedChannels)`
+  ile değiştirildi — Instagram'ın (`instagramChannel`) birebir deseni: durum/adres `/channels`
+  listesinden türetilir. `TelegramChannelAction` bağlı değilken `bot_token`+`bot_username` isteyen bir
+  connect formu (`/channels/telegram/connect`), bağlıyken adres + onaylı disconnect
+  (`/channels/telegram/disconnect`) sunar. `showStatus` Website/Instagram'la aynı gerekçeyle Telegram'ı
+  da kapsıyor — `/channels` yüklenirken yanlış rozet flaşlamaz. 'Get notified' payı (K1-11, §6.1.1 açık
+  soru) burada kapandı: kart artık `coming_soon` dalına hiç girmediği için localStorage kaydı bir sonraki
+  okumada sessizce terk ediliyor, ek kod gerekmedi.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm --filter @nexa/web test` 111/111 dosya
+  1121/1121 test · `pnpm -w test:integration` 2063/2063 (değişmedi, UI-only) · `pnpm -w build` 7/7 ·
+  `apps/e2e/tests/settings.spec.ts` 19/19 (channels describe dahil).
+- **Varsayımlar:** Yok — kapsam ve alan adları (`bot_token`/`bot_username`) `08.5.8-a/b`'nin sözleşme
+  ve adaptöründen birebir alındı.
+- **Sonraki pencereye not:** `Channels.test.tsx`'teki "does not let one channel's click acknowledge
+  another" testi artık `channel-telegram` yerine `channel-sms` kullanıyor (telegram artık coming_soon
+  değil). `channels.test.ts`'e `channelsFor — telegram` bloğu eklendi. Kalan: `08.5.8-e` Inbox Views,
+  `08.5.8-f` uçtan uca doğrulama (K08.5.8'deki not aynı).
+
 ## tm 79.3 — 08.5.8-c · Telegram'ın adapter kanalı olarak devreye alınması — done — 2026-08-15 UTC
 
 - **Yapıldı:** `CHANNEL_TYPES` 4 → 5 (`telegram`) + `registry.ts` `ADAPTERS` kaydı; `TelegramAdapter`

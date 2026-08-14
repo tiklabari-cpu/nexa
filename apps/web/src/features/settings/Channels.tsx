@@ -130,7 +130,7 @@ export function channelsFor(
     comingSoon('whatsapp', 'WhatsApp', '📱', 'Answer WhatsApp messages.'),
     comingSoon('sms', 'SMS', '💬', 'Reply to text messages over Twilio.'),
     instagramChannel(connectedChannels),
-    comingSoon('telegram', 'Telegram', '✈️', 'Answer Telegram chats.'),
+    telegramChannel(connectedChannels),
   ];
 }
 
@@ -152,6 +152,24 @@ function instagramChannel(connectedChannels: ConnectedChannel[]): Channel {
     name: 'Instagram',
     icon: '📷',
     description: 'Answer Instagram direct messages.',
+    status: isConnected ? 'connected' : 'not_connected',
+    cta: isConnected ? 'Disconnect' : 'Connect',
+    address: isConnected ? (row?.address ?? null) : undefined,
+  };
+}
+
+/**
+ * Same derivation as `instagramChannel`, for the same reason (FR-MOD-08.5.8):
+ * the card's status comes from the live `/channels` list, not a fixed label.
+ */
+function telegramChannel(connectedChannels: ConnectedChannel[]): Channel {
+  const row = connectedChannels.find((c) => c.type === 'telegram');
+  const isConnected = row?.connected === true;
+  return {
+    id: 'telegram',
+    name: 'Telegram',
+    icon: '✈️',
+    description: 'Answer Telegram chats.',
     status: isConnected ? 'connected' : 'not_connected',
     cta: isConnected ? 'Disconnect' : 'Connect',
     address: isConnected ? (row?.address ?? null) : undefined,
@@ -305,13 +323,13 @@ function ChannelCardView({
   // channel.id (see ChannelsGrid), so a remount always re-derives the same id.
   const [notified, setNotified] = useState<boolean>(() => readNotified(channel.id));
   const meta = STATUS_META[channel.status];
-  // The Website/Instagram status is unknown until its query resolves; do not
-  // flash a wrong badge in the meantime. `channelsLoading` is false while the
-  // /channels request is gated off (canReadChannels), so it never hides the
-  // badge forever for an agent without the scope.
+  // The Website/Instagram/Telegram status is unknown until its query
+  // resolves; do not flash a wrong badge in the meantime. `channelsLoading`
+  // is false while the /channels request is gated off (canReadChannels), so
+  // it never hides the badge forever for an agent without the scope.
   const showStatus =
     !(websitesLoading && channel.id === 'website') &&
-    !(channelsLoading && channel.id === 'instagram');
+    !(channelsLoading && (channel.id === 'instagram' || channel.id === 'telegram'));
 
   return (
     <Card>
@@ -347,6 +365,8 @@ function ChannelCardView({
           <EmailForwardingAddress label={channel.cta} />
         ) : channel.id === 'instagram' ? (
           <InstagramChannelAction channel={channel} />
+        ) : channel.id === 'telegram' ? (
+          <TelegramChannelAction channel={channel} />
         ) : (
           <a
             href={channel.href}
@@ -493,6 +513,167 @@ function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement
           className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
         />
         <FieldError id="instagram-ig-user-id-error" message={form.errorFor('ig_user_id')} />
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={close}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!form.canSubmit}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {form.isSubmitting ? 'Connecting…' : 'Connect'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Telegram connect/disconnect (FR-MOD-08.5.8), same shape as
+ * `InstagramChannelAction`. Connect stands in for registering a bot: the
+ * admin supplies the bot's token (minted by @BotFather, out of band) and its
+ * `@username` — exactly what the API's mock `TelegramAdapter.parseConnect`
+ * expects. Unlike Instagram's mock OAuth exchange, the token is a
+ * real-shaped credential the caller provides; the server verifies and
+ * discards it (never echoed back), so nothing here shows it again once
+ * connected. Disconnect asks first, same as Instagram: it stops inbound
+ * messages at once and is not undoable from this button.
+ */
+function TelegramChannelAction({ channel }: { channel: Channel }): ReactElement {
+  const api = useApiClient();
+  const client = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const connect = useMutation({
+    mutationFn: (body: { bot_token: string; bot_username: string }) =>
+      api.post('/channels/telegram/connect', body),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['channels'] }),
+  });
+
+  const disconnect = useMutation({
+    mutationFn: () => api.post('/channels/telegram/disconnect'),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['channels'] }),
+  });
+
+  const form = useForm({
+    initial: { bot_token: '', bot_username: '' },
+    validators: {
+      bot_token: required('Enter the bot token.'),
+      bot_username: required('Enter the bot username.'),
+    },
+    onSubmit: async (values, { setSubmitError }) => {
+      try {
+        await connect.mutateAsync(values);
+        setOpen(false);
+      } catch (failure) {
+        // A 4xx (e.g. that address already belongs to another workspace) is
+        // shown as a form-level notice; the query cache is untouched, so the
+        // card cannot flip to Connected on a failed attempt.
+        setSubmitError(
+          failure instanceof ApiClientError ? failure.message : 'Could not connect Telegram.',
+        );
+      }
+    },
+  });
+
+  const close = useCloseGuard({
+    isDirty: form.isDirty,
+    message: 'Discard this connection attempt?',
+    onClose: () => {
+      setOpen(false);
+      form.reset();
+      connect.reset();
+    },
+  });
+
+  if (channel.status === 'connected') {
+    return (
+      <div className="flex flex-col gap-1">
+        {channel.address && (
+          <code className="truncate text-2xs text-content-tertiary">{channel.address}</code>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (
+              window.confirm(
+                'Disconnect Telegram? Messages will stop arriving until you reconnect.',
+              )
+            ) {
+              disconnect.mutate();
+            }
+          }}
+          disabled={disconnect.isPending}
+          className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+        >
+          {disconnect.isPending ? 'Disconnecting…' : channel.cta}
+        </button>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
+      >
+        {channel.cta}
+      </button>
+    );
+  }
+
+  return (
+    <Modal
+      onClose={close}
+      title="Connect Telegram"
+      description="Enter the bot token from @BotFather and its username to receive Telegram messages here."
+    >
+      <form onSubmit={form.handleSubmit} noValidate>
+        {form.submitError && (
+          <p role="alert" className="mb-3 text-sm text-danger">
+            {form.submitError}
+          </p>
+        )}
+
+        <label htmlFor="telegram-bot-token" className="mb-1.5 block text-sm font-medium">
+          Bot token
+        </label>
+        <input
+          id="telegram-bot-token"
+          value={form.values.bot_token}
+          autoFocus
+          onChange={(event) => form.setValue('bot_token', event.target.value)}
+          onBlur={() => form.blur('bot_token')}
+          aria-invalid={form.errorFor('bot_token') ? true : undefined}
+          aria-describedby={form.errorFor('bot_token') ? 'telegram-bot-token-error' : undefined}
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <FieldError id="telegram-bot-token-error" message={form.errorFor('bot_token')} />
+
+        <label htmlFor="telegram-bot-username" className="mb-1.5 mt-3 block text-sm font-medium">
+          Bot username
+        </label>
+        <input
+          id="telegram-bot-username"
+          value={form.values.bot_username}
+          onChange={(event) => form.setValue('bot_username', event.target.value)}
+          onBlur={() => form.blur('bot_username')}
+          aria-invalid={form.errorFor('bot_username') ? true : undefined}
+          aria-describedby={
+            form.errorFor('bot_username') ? 'telegram-bot-username-error' : undefined
+          }
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <FieldError id="telegram-bot-username-error" message={form.errorFor('bot_username')} />
 
         <div className="mt-4 flex justify-end gap-2">
           <button

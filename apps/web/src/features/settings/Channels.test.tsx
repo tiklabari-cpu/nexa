@@ -144,6 +144,85 @@ describe('Instagram card — connected', () => {
   });
 });
 
+describe('Telegram card — not connected', () => {
+  beforeEach(() => stubFetch({}));
+
+  // Scoped to the Telegram card's own testid, same reason as Instagram's.
+  async function openConnectForm() {
+    const card = await screen.findByTestId('channel-telegram');
+    await userEvent.click(within(card).getByRole('button', { name: 'Connect' }));
+    return screen.getByRole('dialog', { name: 'Connect Telegram' });
+  }
+
+  it('opens a connect form that keeps Submit disabled until both fields are filled', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+    const submit = within(dialog).getByRole('button', { name: 'Connect' });
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText('Bot token'), 'bot-token-1');
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText('Bot username'), 'nexa_support_bot');
+    expect(submit).toBeEnabled();
+  });
+
+  it('shows a field-under error for a missing bot username and keeps Submit disabled', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+
+    await userEvent.type(within(dialog).getByLabelText('Bot token'), 'bot-token-1');
+    await userEvent.click(within(dialog).getByLabelText('Bot username'));
+    await userEvent.tab(); // blur without typing reveals the message
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter the bot username.');
+    expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
+  });
+});
+
+describe('Telegram card — connected', () => {
+  beforeEach(() =>
+    stubFetch({
+      channels: {
+        items: [
+          {
+            type: 'telegram',
+            status: 'connected',
+            address: 'nexa_support_bot',
+            connected: true,
+            created_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    }),
+  );
+
+  it('shows the connected address and a Disconnect action', async () => {
+    renderChannels();
+
+    const card = await screen.findByTestId('channel-telegram');
+    // The card renders Not-connected/Connect first, synchronously — the
+    // switch to Connected only happens once /channels resolves.
+    expect(await within(card).findByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+    expect(within(card).getByText('nexa_support_bot')).toBeInTheDocument();
+  });
+
+  it('does not disconnect without confirmation', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderChannels();
+
+    const card = await screen.findByTestId('channel-telegram');
+    const disconnectButton = await within(card).findByRole('button', { name: 'Disconnect' });
+    await userEvent.click(disconnectButton);
+
+    expect(window.confirm).toHaveBeenCalled();
+    // Still showing Disconnect (not "Disconnecting…") — nothing was sent.
+    expect(within(card).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+  });
+});
+
 /**
  * "Get notified" persistence (FR-MOD-08.5.7-f). Coming-soon cards used to hold
  * this in plain component state — a reload lost the click. This mirrors
@@ -172,9 +251,9 @@ describe('Get notified — persistence', () => {
     const whatsapp = await screen.findByTestId('channel-whatsapp');
     await userEvent.click(within(whatsapp).getByRole('button', { name: 'Get notified' }));
 
-    const telegram = await screen.findByTestId('channel-telegram');
-    expect(within(telegram).getByRole('button', { name: 'Get notified' })).toBeInTheDocument();
-    expect(localStorage.getItem(channelNotifiedKey('telegram'))).toBeNull();
+    const sms = await screen.findByTestId('channel-sms');
+    expect(within(sms).getByRole('button', { name: 'Get notified' })).toBeInTheDocument();
+    expect(localStorage.getItem(channelNotifiedKey('sms'))).toBeNull();
   });
 
   it('does not throw when localStorage.getItem fails, defaulting to not notified', async () => {

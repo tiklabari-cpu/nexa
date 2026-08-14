@@ -95,6 +95,10 @@ export async function buildServer({
           'req.body.client_secret',
           'req.body.code_verifier',
           'req.body.token',
+          // Telegram's connect body carries a caller-supplied bot token
+          // (`08.5.8-b`) — a real credential, unlike the other channels' mock
+          // OAuth `code`.
+          'req.body.bot_token',
           'res.headers["set-cookie"]',
         ],
         censor: '[redacted]',

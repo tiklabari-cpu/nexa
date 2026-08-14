@@ -13,6 +13,7 @@ import { isChannelType, CHANNEL_TYPES } from './channel-adapter.js';
 import { getAdapter } from './registry.js';
 import { InstagramAdapter } from './instagram.js';
 import { MessengerAdapter } from './messenger.js';
+import { TelegramAdapter } from './telegram.js';
 import { TwilioAdapter } from './twilio.js';
 import { WhatsAppAdapter } from './whatsapp.js';
 
@@ -243,5 +244,77 @@ describe('Instagram adapter (08.5.7)', () => {
       text: 'hi',
     });
     expect(providerMessageId).toMatch(/^aigid\./);
+  });
+});
+
+describe('Telegram adapter (08.5.8)', () => {
+  const adapter = new TelegramAdapter();
+
+  it('connects with the bot username as the address and never stores the bot token', () => {
+    const { address, config } = adapter.parseConnect({
+      bot_token: '123456789:AAmockBotTokenString-Value',
+      bot_username: 'acme_support_bot',
+    });
+    expect(address).toBe('acme_support_bot');
+    expect(config['bot_username']).toBe('acme_support_bot');
+    // `bot_token` is a real, caller-supplied credential — unlike the other
+    // adapters' mock OAuth token, it must never be persisted (§6.1.1).
+    expect(config).not.toHaveProperty('bot_token');
+  });
+
+  it('rejects a connect body missing the bot token', () => {
+    try {
+      adapter.parseConnect({ bot_username: 'acme_support_bot' });
+      throw new Error('should have thrown');
+    } catch (error) {
+      expect(isApiError(error) && error.status).toBe(400);
+    }
+  });
+
+  it('rejects a connect body missing the bot username', () => {
+    try {
+      adapter.parseConnect({ bot_token: 'x' });
+      throw new Error('should have thrown');
+    } catch (error) {
+      expect(isApiError(error) && error.status).toBe(400);
+    }
+  });
+
+  it('normalizes an inbound update to sender id + text', () => {
+    const inbound = adapter.parseInbound({
+      recipient: { id: 'acme_support_bot' },
+      sender: { id: '88421999', username: 'dana_h' },
+      message: { text: 'hello there' },
+    });
+    expect(inbound).toEqual({
+      address: 'acme_support_bot',
+      externalId: '88421999',
+      senderName: 'dana_h',
+      text: 'hello there',
+    });
+  });
+
+  it('normalizes an inbound update with no sender username', () => {
+    const inbound = adapter.parseInbound({
+      recipient: { id: 'acme_support_bot' },
+      sender: { id: '88421999' },
+      message: { text: 'hello there' },
+    });
+    expect(inbound.senderName).toBeNull();
+  });
+
+  it('rejects an inbound with no message text', () => {
+    expect(() =>
+      adapter.parseInbound({ recipient: { id: 'p' }, sender: { id: 's' }, message: {} }),
+    ).toThrow();
+  });
+
+  it('sends and returns a Telegram-style message id', async () => {
+    const { providerMessageId } = await adapter.send({
+      config: { bot_username: 'acme_support_bot' },
+      externalId: '88421999',
+      text: 'hi',
+    });
+    expect(providerMessageId).toMatch(/^tg\./);
   });
 });

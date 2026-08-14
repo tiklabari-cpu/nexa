@@ -15,6 +15,9 @@ describe('sanitizeAuditMetadata', () => {
       code_verifier: 'v',
       authorization: 'Bearer x',
       cookie: 'sid=1',
+      // Telegram's connect body (`08.5.8-b`) — caught by the same generic
+      // `token` match, no adapter-specific rule needed.
+      bot_token: 'nxc1.telegram-secret',
     });
     expect(clean).toEqual({ role: 'admin' });
   });

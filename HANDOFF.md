@@ -13,6 +13,33 @@
 
 ## Task log (newest-first)
 
+## tm 79.2 — 08.5.8-b · TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri — done — 2026-08-14 UTC
+
+- **Yapıldı:** `apps/api/src/services/channels/telegram.ts` (yeni), Instagram deseniyle birebir.
+  `parseConnect`: `bot_token`+`bot_username` zod ile doğrulanır, adres=`bot_username`, `config`
+  yalnız `{bot_username}` — `bot_token` hiçbir zaman `config`'e yazılmaz (§6.1.1 kararı, istemci
+  kaynaklı gerçek sır). `parseInbound`/`send` diğer dört adaptörle aynı düzleştirilmiş şekil ve
+  `tg.` mock id öneki. Savunma-derinliği: `server.ts` pino `redact.paths`'e `req.body.bot_token`
+  eklendi (mevcut `req.body.token` tam-eşleşme, `bot_token`'ı yakalamaz); `sanitizeAuditMetadata`
+  genel `/token/i` deseni zaten yakalıyordu — kod değişmedi, yalnız pinleyen bir test eklendi.
+  `CHANNEL_TYPES`/registry'e **dokunulmadı** (görev kapsamı `08.5.8-c`) — sınıf
+  `implements Omit<ChannelAdapter, 'type'>`, çünkü `type: 'telegram'` şu an 4 üyeli `ChannelType`
+  birleşiminde değil; `08.5.8-c` `CHANNEL_TYPES` genişleyince `implements ChannelAdapter`'a
+  geçmek derleme hatası vermeyecek.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 2751→**2758**
+  (`adapters.test.ts` 20→28, 7 yeni Telegram testi) · `pnpm -w test:integration` **2052/2052**
+  (değişim yok) · `pnpm -w build` 7/7 · `test:e2e` koşulmadı — görevin testStrategy'si kapsam dışı
+  bırakıyor (Telegram henüz route/registry'e bağlı değil, tm 79.1'deki gerekçeyle aynı).
+- **Varsayımlar:** "Token gerekiyorsa mock bir türev saklanır" (§6.1.1) uygulanmadı — hiçbir
+  adaptörün `send()`'i `config`'i fiilen okumuyor (`_input` parametresi kullanılmıyor), yani
+  saklanacak bir türevin tüketicisi yok; eklemek kullanılmayan alan olurdu.
+- **Sonraki pencereye not:** `08.5.8-c` (CHANNEL_TYPES + registry + pinlenmiş adres-tekilliği
+  testi) bu adaptöre bağımlı — `CHANNEL_TYPES` dizisine `telegram` eklenince `TelegramAdapter`
+  `implements ChannelAdapter`'a geçebilir (artık `type: 'telegram'` birleşimin üyesi olacak) ve
+  `registry.ts`'in `ADAPTERS` map'ine eklenebilir. Mevcut pinlenmiş test
+  (`adapters.test.ts:31` — `isChannelType('telegram')` → `false`) o pencerede kasıtlı olarak
+  `true`'ya çevrilecek.
+
 ## tm 79.1 — 08.5.8-a · Telegram connect/webhook kontratı + generated tip yenilemesi — done — 2026-08-14 UTC
 
 - **Yapıldı:** `ChannelType` enum'una `telegram` eklendi (Instagram deseniyle birebir, tm 65.1

@@ -34,6 +34,16 @@ export const AUDIT_ACTIONS = [
   // Authentication
   'auth.login',
   'auth.login_failed',
+  // Federated sign-in through a SAML identity provider (NFR-S11 · S11-d).
+  // Recorded separately from `auth.login` because the two answer different
+  // questions after an incident: a password sign-in says the person knew a
+  // secret we hold, an SSO sign-in says an *external* system vouched for them,
+  // and the workspace's response to a compromise differs accordingly. The
+  // failure entry carries the refusal reason — expired, wrong audience, replay,
+  // signature-wrapped — which is the only place that reason is legible, since
+  // the endpoint deliberately tells the caller nothing beyond "failed".
+  'auth.sso_login',
+  'auth.sso_login_failed',
   'auth.password_reset',
   // An authenticated request was refused at the edge because the workspace's IP
   // allow-list did not admit its source address (FR-MOD-08.9.6). Recorded so a

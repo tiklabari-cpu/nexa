@@ -17,12 +17,11 @@ import {
   SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS,
   SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS,
   SALES_TRACKER_CURRENCIES,
-  SSO_ATTRIBUTE_MAPPING_KEYS,
   WIDGET_COLOR_PATTERN,
   WIDGET_POSITIONS,
   WIDGET_THEMES,
 } from '@nexa/types';
-import type { SsoAttributeMapping, SsoAttributeMappingKey, SsoConnection } from '@nexa/types';
+import type { SsoAttributeMappingKey, SsoConnection } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { resolveBrandId } from '../lib/brand.js';
@@ -34,6 +33,7 @@ import {
   inspectIdpCertificate,
   MAX_CERTIFICATE_OVERLAP_HOURS,
   MIN_RSA_MODULUS_BITS,
+  readSsoAttributeMapping,
   SSO_CERTIFICATE_MAX_LENGTH,
   SSO_ENTITY_ID_MAX_LENGTH,
   SSO_NAME_MAX_LENGTH,
@@ -1697,32 +1697,6 @@ function serialiseSalesTracker(
 }
 
 /**
- * The attribute mapping, narrowed to the fields an assertion may fill.
- *
- * Projected rather than passed through. The column is JSON, so a row can hold
- * keys nobody here declared — a hand-written INSERT, a future writer, an IdP
- * export pasted whole — and returning those verbatim would put fields in the
- * response that the contract says cannot appear (`additionalProperties: false`)
- * and that a client would render as if they meant something. Anything outside
- * {@link SSO_ATTRIBUTE_MAPPING_KEYS}, or any non-string value, is dropped.
- *
- * The non-object guard is narrowing, not a second opinion: a CHECK constraint
- * already keeps a scalar or an array out of the column. It is here so a reader
- * of one bad row would come back "not configured" rather than a 500 that hides
- * every good row behind it.
- */
-function readAttributeMapping(value: Prisma.JsonValue): SsoAttributeMapping {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
-
-  const mapping: SsoAttributeMapping = {};
-  for (const key of SSO_ATTRIBUTE_MAPPING_KEYS) {
-    const attribute = (value as Record<string, unknown>)[key];
-    if (typeof attribute === 'string') mapping[key] = attribute;
-  }
-  return mapping;
-}
-
-/**
  * One SAML connection on the wire (NFR-S11). The certificate is sent in full:
  * it is the IdP's public signing certificate, the field an admin compares
  * against their IdP console to confirm a rotation landed, so masking it would
@@ -1760,7 +1734,7 @@ function serialiseSsoConnection(
     idp_certificate_pem: row.idpCertificatePem,
     previous_certificate_pem: previous?.pem ?? null,
     previous_certificate_expires_at: previous?.expiresAt.toISOString() ?? null,
-    attribute_mapping: readAttributeMapping(row.attributeMapping),
+    attribute_mapping: readSsoAttributeMapping(row.attributeMapping),
     allow_idp_initiated: row.allowIdpInitiated,
     enabled: row.enabled,
     created_at: row.createdAt.toISOString(),

@@ -1,0 +1,150 @@
+# SAML 2.0 service-provider endpoints (NFR-S11 · S11-d).
+#
+# Unlike the rest of this API these two are *browser* endpoints: neither is
+# called with a token, neither answers with JSON on the happy path, and both end
+# in a 302. They are documented all the same, because the query a client has to
+# build to start a login is a contract like any other — and because a workspace
+# pasting URLs into an identity provider console needs to read the exact shapes
+# somewhere.
+#
+# The flow is the ordinary OAuth 2.1 one with the identity provider spliced into
+# the middle:
+#
+#   1. the app sends the browser to `/auth/saml/{connectionId}/login` with the
+#      same `client_id` / `redirect_uri` / `code_challenge` it would post to
+#      `/auth/authorize`;
+#   2. we hold those server-side and redirect to the identity provider;
+#   3. the identity provider posts a signed assertion to
+#      `/auth/saml/{connectionId}/acs`;
+#   4. we redirect back to `redirect_uri` with `?code=…&state=…`;
+#   5. the app exchanges that code at `/auth/token` with its PKCE verifier,
+#      exactly as it would after a password sign-in.
+#
+# No token is ever issued by these endpoints. Step 5 is the only place a session
+# is minted, for either kind of sign-in.
+
+login:
+  get:
+    tags: [Auth]
+    operationId: startSamlLogin
+    summary: Begin a federated sign-in at the workspace's identity provider
+    description: |
+      Redirects the browser to the identity provider configured on this
+      connection, carrying a SAML `AuthnRequest` over the HTTP-Redirect binding.
+
+      The OAuth parameters are validated *here*, before the browser leaves, and
+      then held server-side under an opaque relay handle. Nothing of value
+      travels through the identity provider, and the `redirect_uri` the
+      authorization code is eventually delivered to is the one checked at this
+      step — it cannot be influenced by anything that happens in between.
+
+      Responds `404` for a connection that does not exist, is disabled, or
+      belongs to a canceled workspace: a connection id appears in URLs, and the
+      difference between those cases is not something an anonymous caller should
+      be able to measure.
+    security: []
+    parameters:
+      - name: connectionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+        description: The `sso_connections` row to sign in through.
+      - name: client_id
+        in: query
+        required: true
+        schema: { type: string, maxLength: 128 }
+        description: Must be registered to the connection's organization.
+      - name: redirect_uri
+        in: query
+        required: true
+        schema: { type: string, maxLength: 2048 }
+        description: Must match a URI registered for the client exactly.
+      - name: code_challenge
+        in: query
+        required: true
+        schema: { type: string, minLength: 43, maxLength: 128 }
+        description: BASE64URL(SHA256(code_verifier)) — PKCE is mandatory here too.
+      - name: code_challenge_method
+        in: query
+        schema: { type: string, enum: [S256], default: S256 }
+      - name: state
+        in: query
+        schema: { type: string, maxLength: 512 }
+        description: |
+          Returned untouched on the final redirect. Kept server-side, so the
+          identity provider never sees it.
+    responses:
+      "302":
+        description: Redirect to the identity provider's SSO endpoint
+        headers:
+          Location:
+            schema: { type: string }
+            description: The IdP SSO URL with `SAMLRequest` and `RelayState` appended.
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+acs:
+  post:
+    tags: [Auth]
+    operationId: samlAssertionConsumer
+    summary: Consume a SAML assertion and complete the sign-in
+    description: |
+      The Assertion Consumer Service. Called by the *identity provider*, not by
+      an application: the body is `application/x-www-form-urlencoded`, as the
+      SAML HTTP-POST binding specifies.
+
+      On success the browser is redirected to the `redirect_uri` recorded when
+      the login started, carrying a single-use authorization code — the same
+      response `POST /auth/authorize` produces. The code is redeemed at
+      `/auth/token` with the PKCE verifier the app kept.
+
+      A person the assertion names who has no account yet is provisioned on the
+      spot with the `agent` role. An existing account is never modified by a
+      sign-in, and an existing membership is left exactly as it stands, so a
+      suspension is not lifted and a promotion is not reset.
+
+      Every refusal is the same `401` with the same message. The reason —
+      expired, wrong audience, replayed, signature-wrapped, suspended
+      membership — is written to the workspace's audit log as
+      `auth.sso_login_failed`, where the reader is already trusted.
+
+      Without `RelayState` the response is unsolicited (IdP-initiated). Those are
+      refused unless the connection sets `allow_idp_initiated`, and even then
+      they are not completed here: there is no PKCE verifier behind them, so the
+      browser is redirected to the app to start an ordinary SP-initiated login,
+      which succeeds silently against the session the person already has.
+    security: []
+    parameters:
+      - name: connectionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    requestBody:
+      required: true
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            required: [SAMLResponse]
+            properties:
+              SAMLResponse:
+                type: string
+                maxLength: 1048576
+                description: base64-encoded `samlp:Response`.
+              RelayState:
+                type: string
+                maxLength: 256
+                description: The handle issued by `/auth/saml/{connectionId}/login`.
+    responses:
+      "302":
+        description: |
+          Redirect to the client's `redirect_uri` with `code` and `state`, or —
+          for an accepted unsolicited response — to the app to restart the login.
+        headers:
+          Location:
+            schema: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

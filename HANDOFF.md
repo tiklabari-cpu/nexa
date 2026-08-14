@@ -13,6 +13,40 @@
 
 ## Task log (newest-first)
 
+## tm 81.5 — S11-d · SP uçları: /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, audit — done — 2026-08-14 UTC
+
+- **Yapıldı:** (1) `apps/api/src/routes/saml.ts` (yeni plugin, `server.ts`'e kayıtlı) — `GET
+  /auth/saml/{id}/login` AuthnRequest üretip IdP'ye 302 atar, `POST /auth/saml/{id}/acs` dönüşü
+  S11-b ile doğrular. Form gövdesi parser'ı (SAML HTTP-POST binding) bu plugin'e kapsüllendi,
+  auth yüzeyinin tamamına gevşetilmedi. (2) **İkinci token yolu YOK** (§C-A17.6): ACS tek
+  kullanımlık authorization code ile biter, tarayıcı `/auth/token`'da bozdurur → `#issueGrant`
+  tek yol; PKCE doğrulayıcısı girişi başlatan tarayıcıda kalır. `/login` bu yüzden `client_id` +
+  `redirect_uri` + `code_challenge` alır ve Redis'te relay anahtarı altında park eder
+  (`GET`+`DEL` atomik → tek AuthnRequest iki oturum yetkilendiremez). (3) `apps/api/src/lib/saml-sp.ts`
+  (saf): AuthnRequest üretimi + `resolveSsoIdentity` (mapping yazılıysa YALNIZ o nitelik — NameID'ye
+  bile düşmez; iki değer ret; NameID yalnız emailAddress/unspecified formatta). (4) Migration
+  `20260814090000_sso_sp_endpoints` — iki SECURITY DEFINER çözücü (`auth_find_sso_connection`,
+  `auth_provision_sso_account`); şema değişmedi. JIT var olan hesabı/üyeliği DEĞİŞTİRMEZ.
+  (5) `auth.sso_login` + `auth.sso_login_failed` `AUDIT_ACTIONS`'a eklendi; ret sebebi yalnız
+  audit'e yazılır, çağırana hep aynı 401. (6) `readAttributeMapping` `lib/sso-connection.ts`'e
+  taşındı (settings.ts + saml.ts tek okuyucuyu paylaşsın).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `format:check` (dokunulan dosyalar) ·
+  build 7/7 · `pnpm -w test` (`@nexa/api` 2542 → **2575**: +14 birim `saml-sp.test.ts`,
+  +19 entegrasyon `sso-login.test.ts`) · `pnpm -w test:integration` 1904 → **1923** ·
+  `pnpm -w test:e2e` **131/131** (6.2 dk) · `db:check-drift` temiz.
+- **Varsayımlar:** §C-A17.6 — (a) tek oturum yolu, (b) IdP-initiated TAMAMLANMAZ, dönüştürülür
+  (`${WEB_APP_URL}/login?sso=<id>` → uygulama kendi PKCE'siyle SP-initiated başlatır; kod basmak
+  implicit akışı geri getirmek olurdu), (c) bekleyen AuthnRequest Redis'te (10 dk, kimlik bilgisi
+  değil).
+- **Sonraki pencereye not:** (1) **S11-g yeni uç AÇMAZ**; ekranın göstermesi gereken iki dize
+  `SP EntityID = {API_BASE_URL}/api/v1/auth/saml/{id}` ve `ACS URL = .../acs` — sunucu tarafında
+  `lib/saml-sp.ts#ssoEntityId/ssoAcsUrl`, web tarafı aynı biçimi kurar (bunlar kontrat alanı
+  DEĞİL, bilinçli: S11-a'nın okuma yüzeyi değiştirilmedi). (2) **S11-h** parola kapatmayı
+  `oauth-service.ts#authenticateAccount` / `/auth/login` tarafında yapacak — SSO yolu buna
+  dokunmuyor. (3) **S11-i** e2e'de gerçek IdP yok; `test/helpers/mock-idp.ts` + `startLogin`
+  akışını `test/integration/sso-login.test.ts`'ten kopyala. (4) `auth_provision_sso_account`
+  rolü `agent` sabitler; grup→rol eşlemesi hâlâ kapsam dışı (§6.1.2).
+
 ## tm 81.4 — S11-c · Mock IdP harness — imzalı assertion üreteci + anahtar çifti fixture'ı — done — 2026-08-14 UTC
 
 - **Yapıldı:** (1) `apps/api/test/helpers/mock-idp.ts` (yeni) — `saml.test.ts`'in (S11-b) kendi

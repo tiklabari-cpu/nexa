@@ -19,6 +19,7 @@
  * must be able to allow: the mock IdP harness (S11-c) runs on 127.0.0.1.
  */
 import { X509Certificate } from 'node:crypto';
+import { SSO_ATTRIBUTE_MAPPING_KEYS, type SsoAttributeMapping } from '@nexa/types';
 
 /**
  * Below this an RSA modulus is within reach of a well-resourced attacker, and a
@@ -139,6 +140,34 @@ export function inspectIdpCertificate(pem: string, now: Date): CertificateInspec
       validTo,
     },
   };
+}
+
+/**
+ * The attribute mapping, narrowed to the fields an assertion may fill.
+ *
+ * Projected rather than passed through. The column is JSON, so a row can hold
+ * keys nobody here declared — a hand-written INSERT, a future writer, an IdP
+ * export pasted whole — and honouring those would put fields in the read
+ * surface that the contract says cannot appear (`additionalProperties: false`),
+ * and would let the SP endpoints (S11-d) read an identity out of a key no
+ * validated write ever produced. Anything outside {@link
+ * SSO_ATTRIBUTE_MAPPING_KEYS}, or any non-string value, is dropped.
+ *
+ * The non-object guard is narrowing, not a second opinion: a CHECK constraint
+ * already keeps a scalar or an array out of the column. It is here so one bad
+ * row reads as "not configured" rather than throwing — a 500 on the list
+ * endpoint would hide every good row behind it, and a 500 on a login would be
+ * indistinguishable from the IdP being down.
+ */
+export function readSsoAttributeMapping(value: unknown): SsoAttributeMapping {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+
+  const mapping: SsoAttributeMapping = {};
+  for (const key of SSO_ATTRIBUTE_MAPPING_KEYS) {
+    const attribute = (value as Record<string, unknown>)[key];
+    if (typeof attribute === 'string') mapping[key] = attribute;
+  }
+  return mapping;
 }
 
 export type FederationUrlRejection =

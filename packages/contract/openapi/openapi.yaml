@@ -98,6 +98,10 @@ paths:
     $ref: "./paths/auth.yaml#/revoke"
   /auth/me:
     $ref: "./paths/auth.yaml#/me"
+  /auth/saml/{connectionId}/login:
+    $ref: "./paths/saml.yaml#/login"
+  /auth/saml/{connectionId}/acs:
+    $ref: "./paths/saml.yaml#/acs"
   /auth/signup:
     $ref: "./paths/account-lifecycle.yaml#/signup"
   /auth/password-reset:

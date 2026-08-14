@@ -128,6 +128,81 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/saml/{connectionId}/login': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Begin a federated sign-in at the workspace's identity provider
+     * @description Redirects the browser to the identity provider configured on this
+     *     connection, carrying a SAML `AuthnRequest` over the HTTP-Redirect binding.
+     *
+     *     The OAuth parameters are validated *here*, before the browser leaves, and
+     *     then held server-side under an opaque relay handle. Nothing of value
+     *     travels through the identity provider, and the `redirect_uri` the
+     *     authorization code is eventually delivered to is the one checked at this
+     *     step — it cannot be influenced by anything that happens in between.
+     *
+     *     Responds `404` for a connection that does not exist, is disabled, or
+     *     belongs to a canceled workspace: a connection id appears in URLs, and the
+     *     difference between those cases is not something an anonymous caller should
+     *     be able to measure.
+     */
+    get: operations['startSamlLogin'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/saml/{connectionId}/acs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Consume a SAML assertion and complete the sign-in
+     * @description The Assertion Consumer Service. Called by the *identity provider*, not by
+     *     an application: the body is `application/x-www-form-urlencoded`, as the
+     *     SAML HTTP-POST binding specifies.
+     *
+     *     On success the browser is redirected to the `redirect_uri` recorded when
+     *     the login started, carrying a single-use authorization code — the same
+     *     response `POST /auth/authorize` produces. The code is redeemed at
+     *     `/auth/token` with the PKCE verifier the app kept.
+     *
+     *     A person the assertion names who has no account yet is provisioned on the
+     *     spot with the `agent` role. An existing account is never modified by a
+     *     sign-in, and an existing membership is left exactly as it stands, so a
+     *     suspension is not lifted and a promotion is not reset.
+     *
+     *     Every refusal is the same `401` with the same message. The reason —
+     *     expired, wrong audience, replayed, signature-wrapped, suspended
+     *     membership — is written to the workspace's audit log as
+     *     `auth.sso_login_failed`, where the reader is already trusted.
+     *
+     *     Without `RelayState` the response is unsolicited (IdP-initiated). Those are
+     *     refused unless the connection sets `allow_idp_initiated`, and even then
+     *     they are not completed here: there is no PKCE verifier behind them, so the
+     *     browser is redirected to the app to start an ordinary SP-initiated login,
+     *     which succeeds silently against the session the person already has.
+     */
+    post: operations['samlAssertionConsumer'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/signup': {
     parameters: {
       query?: never;
@@ -8041,6 +8116,82 @@ export interface operations {
         };
       };
       401: components['responses']['Unauthorized'];
+    };
+  };
+  startSamlLogin: {
+    parameters: {
+      query: {
+        /** @description Must be registered to the connection's organization. */
+        client_id: string;
+        /** @description Must match a URI registered for the client exactly. */
+        redirect_uri: string;
+        /** @description BASE64URL(SHA256(code_verifier)) — PKCE is mandatory here too. */
+        code_challenge: string;
+        code_challenge_method?: 'S256';
+        /**
+         * @description Returned untouched on the final redirect. Kept server-side, so the
+         *     identity provider never sees it.
+         */
+        state?: string;
+      };
+      header?: never;
+      path: {
+        /** @description The `sso_connections` row to sign in through. */
+        connectionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Redirect to the identity provider's SSO endpoint */
+      302: {
+        headers: {
+          /** @description The IdP SSO URL with `SAMLRequest` and `RelayState` appended. */
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  samlAssertionConsumer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        connectionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/x-www-form-urlencoded': {
+          /** @description base64-encoded `samlp:Response`. */
+          SAMLResponse: string;
+          /** @description The handle issued by `/auth/saml/{connectionId}/login`. */
+          RelayState?: string;
+        };
+      };
+    };
+    responses: {
+      /**
+       * @description Redirect to the client's `redirect_uri` with `code` and `state`, or —
+       *     for an accepted unsolicited response — to the app to restart the login.
+       */
+      302: {
+        headers: {
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   signup: {

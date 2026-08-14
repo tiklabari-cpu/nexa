@@ -15,6 +15,7 @@ import metering from './plugins/metering.js';
 import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
 import authRoutes from './routes/auth.js';
+import samlRoutes from './routes/saml.js';
 import agentRoutes from './routes/agents.js';
 import chatRoutes from './routes/chats.js';
 import customerRoutes from './routes/customer.js';
@@ -161,6 +162,10 @@ export async function buildServer({
     async (api) => {
       await api.register(healthRoutes, { env, version: VERSION });
       await api.register(authRoutes, { env });
+      // Its own plugin scope, not part of `authRoutes`: the SAML response
+      // arrives as a form post, and the content-type parser that reads it is
+      // encapsulated here rather than loosened across the whole auth surface.
+      await api.register(samlRoutes, { env, apiBase: `${env.API_BASE_URL}${API_PREFIX}` });
       await api.register(accountLifecycleRoutes, { env, mailer });
       await api.register(chatRoutes, { env, mailer });
       await api.register(agentRoutes);

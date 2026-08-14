@@ -683,7 +683,14 @@ async function readPreChatForm(
   }
 }
 
-function defaultScopesForRole(role: string): Scope[] {
+/**
+ * The scopes a session gets when the caller asks for none.
+ *
+ * Exported because the SAML ACS (`routes/saml.ts`, S11-d) has to answer the
+ * same question for a federated sign-in. Restating it there would let the two
+ * doors into the product drift apart on what an `admin` is allowed to do.
+ */
+export function defaultScopesForRole(role: string): Scope[] {
   return roleAtLeast(role as never, 'admin')
     ? [...DEFAULT_AGENT_SCOPES, ...ADMIN_SCOPES]
     : [...DEFAULT_AGENT_SCOPES];

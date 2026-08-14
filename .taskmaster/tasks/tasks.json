@@ -3683,14 +3683,14 @@
             "description": "SP uçları (BÖLÜNMEZ) — /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, audit",
             "details": "S11-d — SP uçları (BÖLÜNMEZ) — /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, audit  [OPUS-MAX]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: \"assertion geçerli\" ile \"bu assertion ŞU hesaba karşılık gelir ve ona oturum verilir\" arasındaki adım bir YETKİLENDİRME kararıdır. JIT provizyon (görülmemiş e-posta → yeni üyelik) aynı pencerede olmalıdır; ayrılırsa \"doğrulanmış ama eşlenmemiş\" bir ara durum doğar ve o durumun güvenli davranışı (reddet mi, aç mı) hiçbir yerde yazılı olmaz.\n\nKAPSAM: `POST|GET /auth/saml/{connectionId}/login` (AuthnRequest üret + RelayState + InResponseTo saklama) · `POST /auth/saml/{connectionId}/acs` (S11-b ile doğrula → e-posta niteliğinden hesap eşle → yoksa JIT üyelik aç → oturum/token ver) · audit: `auth.sso_login` ve `auth.sso_login_failed` eylemlerinin `AUDIT_ACTIONS`'a eklenmesi.\n\nDOSYALAR: `apps/api/src/routes/auth.ts` · `apps/api/src/services/auth/oauth-service.ts` (token verme yolu) · `apps/api/src/services/auth/token-service.ts` · `apps/api/src/services/audit/audit-log.ts` (AUDIT_ACTIONS:34) · `packages/contract/openapi/paths/auth.yaml`\n\nREFERANS DESEN: `oauth-service.ts:343` `#issueGrant` — oturum verme yolu AYNEN yeniden kullanılır, ikinci bir token verme yolu AÇILMAZ. Audit çağrısı `writeAuditEntry` üzerinden ve `withTenant` içinde (audit-log.ts başlık yorumu).\n\nKARARLAR: JIT provizyonda açılan üyeliğin rolü `agent` (en az yetki). IdP-initiated akış (InResponseTo YOK) yalnız `allowIdpInitiated=true` ise kabul edilir, varsayılan kapalı.\n\nKAPSAM DIŞI: SCIM (S11-e/-f), SSO zorunlu kılma (S11-h), ekran (S11-g).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (SAML login uçtan uca: mock IdP assertion → oturum + auth.sso_login audit satırı; JIT provizyon yeni üyelik açar, rolü agent; geçersiz assertion → 4xx + auth.sso_login_failed; CROSS-TENANT: A lisansının bağlantısıyla B lisansına oturum açılamaz) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "81.1",
               "81.3",
               "81.4"
             ],
             "parentId": "81",
-            "updatedAt": "2026-08-11T20:47:57.075Z"
+            "updatedAt": "2026-08-14T12:30:47.003Z"
           },
           {
             "id": 6,
@@ -3765,7 +3765,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-14T12:28:50.340Z"
+        "updatedAt": "2026-08-14T12:30:47.003Z"
       },
       {
         "id": "82",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-14T12:28:50.343Z",
+      "lastModified": "2026-08-14T12:30:47.003Z",
       "taskCount": 123,
       "completedCount": 117,
       "tags": [

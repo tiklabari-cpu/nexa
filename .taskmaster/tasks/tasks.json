@@ -3627,7 +3627,7 @@
         "description": "PRD §5.4 (Ent.) · NFR-S11 · KK-türetilmiş. Kimlik sınırı: federasyon + otomatik provizyon.",
         "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `S11` · dilim V3-1\n\n9 atomik alt-görev · ~14 pencere · etiket dağılımı: OPUS-XHIGH x3 · OPUS-MAX x4 · SONNET-XHIGH x2\n\nKK: \"SAML IdP ile SSO girişi; SCIM ile kullanıcı yaşam döngüsü (provizyon/deprovizyon)\" — NFR-S11'den türetildi (§C-A17).\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  S11-a [OPUS-XHIGH] sso_connections tablosu + RLS politikası + kontrat okuma yüzeyi  (bağ: —)\n  S11-b [OPUS-MAX] SAML assertion doğrulama çekirdeği (BÖLÜNMEZ) — imza + koşullar + replay + XSW  (bağ: —)\n  S11-c [SONNET-XHIGH] Mock IdP harness — imzalı assertion üreteci + anahtar çifti fixture'ı  (bağ: S11-b)\n  S11-d [OPUS-MAX] SP uçları (BÖLÜNMEZ) — /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, audit  (bağ: S11-a, S11-b, S11-c)\n  S11-e [OPUS-MAX] SCIM 2.0 sunucu çekirdeği (BÖLÜNMEZ) — /scim/v2/Users + bearer auth + lisans kapsamı  (bağ: S11-a)\n  S11-f [OPUS-XHIGH] SCIM yaşam döngüsü semantiği — create/suspend/deprovizyon + koltuk etkisi + audit  (bağ: S11-e)\n  S11-g [SONNET-XHIGH] Settings → Security: SSO bağlantı ekranı + SCIM token üretimi (bir kez gösterilir)  (bağ: S11-a, S11-d, S11-e)\n  S11-h [OPUS-MAX] SSO zorunlu kılma (BÖLÜNMEZ) — parola girişinin kapatılması + break-glass kilitlenme koruması  (bağ: S11-d, S11-g)\n  S11-i [OPUS-XHIGH] Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant  (bağ: S11-d, S11-f, S11-g, S11-h)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.2 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
         "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (S11-i) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -3754,7 +3754,7 @@
             "description": "Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant",
             "details": "S11-i — Uçtan uca doğrulama — SAML login e2e + SCIM yaşam döngüsü + ret matrisi + cross-tenant  [OPUS-XHIGH]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~1 pencere\n\nKAPSAM: kalemin KK'sının uçtan uca kanıtı. (1) e2e: SSO yapılandır → mock IdP ile giriş → panele düş (kanıt PNG `apps/e2e/kanit/S11-sso-login.png`). (2) SCIM yaşam döngüsü integration: provizyon → giriş → deprovizyon → giriş reddi. (3) RET MATRİSİ integration seviyesinde tekrar: imzasız · yanlış Audience · süresi geçmiş · replay · XSW. (4) cross-tenant negatif matrisi.\n\nDOSYALAR: `apps/e2e/tests/sso.spec.ts` (yeni) · `apps/api/test/integration/sso.test.ts` · `apps/e2e/kanit/`\n\nREFERANS DESEN: `apps/e2e/tests/settings.spec.ts` + `apps/e2e/tests/team.spec.ts`; kanıt PNG adlandırması `<kod>-<isim>.png` (mevcut 71 PNG'nin kalıbı). e2e sabit portlarda seed'lenmiş `nexa` veritabanını sürer — iki pencere aynı anda e2e koşamaz.\n\nKAPI: bu alt-görev yeşile dönmeden kalem ✅ olmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**YETKİ REDDİ NEGATİFİ (denetim bulgusu K1-2 · ZORUNLU):** SSO/SCIM uçlarının `sso` yetkisi olmadan (`growth` planı) ilgili uçlar **REDDEDİLMELİDİR**. Bu test bu alt-görevin süitindedir; kapı `11.5-b`'de kurulur (tm 84). `tm 84` bu kalemden SONRA koşacaksa test önce `skip` değil, **kapı kurulana kadar kırmızı bırakılmaz** — sıralama gereği `11.5-b` daha önce bitmiş olmalıdır (bkz. §6.2 bağımlılık notu).",
             "testStrategy": "yetkisiz plan (growth) reddi negatifi dahil && pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm -w test:e2e (sso.spec.ts dahil TÜM süit yeşil)",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "81.5",
               "81.7",
@@ -3762,10 +3762,10 @@
               "81.9"
             ],
             "parentId": "81",
-            "updatedAt": "2026-08-14T18:14:25.904Z"
+            "updatedAt": "2026-08-14T19:03:03.036Z"
           }
         ],
-        "updatedAt": "2026-08-14T18:14:25.904Z"
+        "updatedAt": "2026-08-14T19:03:03.036Z"
       },
       {
         "id": "82",
@@ -5933,9 +5933,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-14T18:14:25.905Z",
+      "lastModified": "2026-08-14T19:03:03.037Z",
       "taskCount": 123,
-      "completedCount": 117,
+      "completedCount": 118,
       "tags": [
         "master"
       ]

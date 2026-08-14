@@ -3773,7 +3773,7 @@
         "description": "PRD §5.4 (Ent.) · NFR-C4/C9 · KK-türetilmiş. ADR-12 tek bölge (eu) burada GENİŞLETİLİR (iptal edilmez).",
         "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `C4` · dilim V3-1\n\n7 atomik alt-görev · ~10 pencere · etiket dağılımı: OPUS-XHIGH x3 · OPUS-MAX x2 · SONNET-XHIGH x2\n\nKK: \"BAA imzalı hesapta HIPAA kapsamı; region seçimi (US/EU); yanlış bölge → misdirected_request\" — NFR-C4/C9'dan türetildi (§C-A19).\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  C4-a [OPUS-XHIGH] REGIONS genişlemesi (eu + us) + licenses.region kayıt anında seçilebilir + kontrat  (bağ: —)\n  C4-b [OPUS-MAX] Bölge zorlaması çekirdeği (BÖLÜNMEZ) — API + RTM + customer token üçünde misdirected_request (421)  (bağ: C4-a)\n  C4-c [SONNET-XHIGH] Onboarding/kayıt akışında bölge seçimi + \"sonradan değiştirilemez\" uyarısı  (bağ: C4-a)\n  C4-d [OPUS-XHIGH] BAA durumu — licenses.hipaa_baa_signed_at + kabul akışı (MOCK) + compliance.baa_signed audit  (bağ: C4-a)\n  C4-e [OPUS-MAX] HIPAA kapsam kısıtları (BÖLÜNMEZ) — retention tavanı + PII maskesi sertleşmesi + AI bölge sınırı  (bağ: C4-b, C4-d)\n  C4-f [SONNET-XHIGH] Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi (salt-okunur)  (bağ: C4-d)\n  C4-g [OPUS-XHIGH] Uçtan uca doğrulama — 421 üç yüzeyde + immutability + BAA'sız hesapta kısıt yok + cross-tenant  (bağ: C4-b, C4-e, C4-f)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.3 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
         "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (C4-g) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "81"
         ],
@@ -3785,10 +3785,10 @@
             "description": "REGIONS genişlemesi (eu + us) + licenses.region kayıt anında seçilebilir + kontrat",
             "details": "C4-a — REGIONS genişlemesi (eu + us) + licenses.region kayıt anında seçilebilir + kontrat  [OPUS-MAX]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: `packages/types/src/domain.ts:147-149` → `REGIONS = ['eu']`, tek değer. ADR-12 bunu MVP kararı olarak kilitlemişti; PRD §5.4 Enterprise'da US/EU ister.\n\nKAPSAM: `REGIONS` → `['eu','us']`; `licenses.region` KAYIT ANINDA seçilir, sonrasında IMMUTABLE kalır (ADR-12'nin korunan yarısı); kontrat + onboarding gövdesi. Mevcut lisanslar `eu`'da KALIR — geriye dönük göç YOK (immutability'nin doğal sonucu).\n\nADR GÜNCELLEMESİ (bu pencerenin işi): PLAN §0 ADR-12 satırı \"değer kümesi {eu, us}, immutability korunur\" olarak güncellenir + §D'ye sapma kaydı yazılır. ADR iptal EDİLMEZ, genişletilir.\n\nDOSYALAR: `packages/types/src/domain.ts:149` (`export const REGIONS`) · **`apps/api/src/config/env.ts:16` ve `apps/rtm/src/config/env.ts:5` — İKİSİ DE `NEXA_REGION: z.literal('eu')` (denetim bulgusu: RTM env dosyası ilk listede YOKTU; `us` iki Zod şemasından da geçemez, ikisi de `z.enum(REGIONS)`'a genişletilir)` · `apps/api/prisma/schema.prisma` + migration (CHECK genişlemesi) · `packages/contract/openapi/paths/auth.yaml` (signup gövdesi) · `apps/api/src/routes/auth.ts` · `PLAN.md` §0 + §D\n\nREFERANS DESEN: `CHANNEL_TYPES`/`SUBSCRIPTION_STATUSES` gibi `as const` birlik listeleri + Prisma CHECK kısıtı ikilisi; `packages/contract` → `openapi-typescript` → generated tip zinciri (ADR-05, contract-parity testi iki yönlüdür).\n\nKAPSAM DIŞI: zorlama (C4-b), BAA (C4-d), UI (C4-c).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**IMMUTABILITY NEREDE ZORLANIR — bu pencerede karara bağlanır ve testle kanıtlanır** (denetim bulgusu; etiket bu yüzden `OPUS-MAX`'a yükseltildi): `region` bir çapraz-kesen veri modeli invaryantıdır. Uygulama katmanında bir `if` olarak kalırsa `C4-b`/`C4-e`'nin tüm bölge zorlaması aşındırılabilir bir temele oturur. Kırılım **DB düzeyinde** zorlamayı önerir (UPDATE'i reddeden trigger ya da kolon izni); karar §C'ye yazılır ve testi \"SQL'den doğrudan UPDATE denemesi reddedilir\" olarak koşulur.\n\n**BÖLGE KODLARI:** PRD NFR-C9 bölgeleri `dal` (US) / `fra` (EU) diye isimlendiriyor; bu depo ADR-12 gereği `eu`/`us` kullanıyor. Fark bilinçlidir ve §D'ye tek satırlık sapma olarak yazılır (denetim bulgusu K1-9).",
             "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm --filter @nexa/api test && pnpm -w build && pnpm --filter @nexa/api test:integration (contract-parity yeşil; us bölgeli lisans açılabilir; region değiştirme denemesi REDDEDİLİR — immutability negatifi; mevcut lisanslar eu kalır)",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "82",
-            "updatedAt": "2026-08-11T21:06:36.612Z"
+            "updatedAt": "2026-08-14T19:09:14.636Z"
           },
           {
             "id": 2,
@@ -3872,7 +3872,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-11T20:47:57.075Z"
+        "updatedAt": "2026-08-14T19:09:14.636Z"
       },
       {
         "id": "83",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-14T19:03:03.037Z",
+      "lastModified": "2026-08-14T19:09:14.637Z",
       "taskCount": 123,
       "completedCount": 118,
       "tags": [

@@ -8701,8 +8701,15 @@ export interface operations {
             /** Format: uuid */
             organization_id: string;
             license_id: string;
-            /** @enum {string} */
-            region?: 'eu';
+            /**
+             * @description The region **this deployment** serves, not necessarily the
+             *     one the caller's workspace declared at signup — the two
+             *     are the same on every deployment that exists today, and
+             *     reconciling them (refusing a request that reached the wrong
+             *     region with 421) is C4-b's work.
+             * @enum {string}
+             */
+            region?: 'eu' | 'us';
             scopes: string[];
             /** @enum {string} */
             routing_status?: 'accepting_chats' | 'not_accepting_chats' | 'offline';
@@ -8844,6 +8851,20 @@ export interface operations {
           password: string;
           name: string;
           organization_name: string;
+          /**
+           * @description Where this workspace's data will live (NFR-C4/C9). **This is
+           *     the only moment it can be set**: a workspace cannot be moved
+           *     afterwards, because moving one means copying every
+           *     conversation across the border the choice exists to draw. The
+           *     database refuses the change rather than trusting callers to
+           *     not attempt it.
+           *
+           *     Omitted means `eu`, which is where every workspace created
+           *     before this existed still is.
+           * @default eu
+           * @enum {string}
+           */
+          region?: 'eu' | 'us';
         };
       };
     };

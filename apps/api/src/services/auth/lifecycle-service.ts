@@ -17,7 +17,7 @@ import type { PrismaClient } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import { hashPassword } from '../../lib/crypto.js';
-import type { AgentRole } from '@nexa/types';
+import { DEFAULT_REGION, type AgentRole, type Region } from '@nexa/types';
 import { ROLE_RANK } from './principal.js';
 
 export const TRIAL_DAYS = 14;
@@ -82,15 +82,20 @@ export class LifecycleService {
     password: string;
     name: string;
     organizationName: string;
+    /** Immutable from here on (C4-a); `eu` when the caller expresses no wish. */
+    region?: Region;
   }): Promise<Session> {
     const passwordHash = await hashPassword(input.password);
 
     let created: Array<{ created_account: string; created_license: bigint }>;
     try {
+      // The default is resolved here rather than left to the function's own, so
+      // there is one answer to "where does an unspecified workspace land" and
+      // it is in TypeScript where the route can be read against it.
       created = await this.#db.$queryRaw`
         SELECT * FROM auth_signup(
           ${input.email}::citext, ${input.name}, ${passwordHash},
-          ${input.organizationName}, ${TRIAL_DAYS}::int
+          ${input.organizationName}, ${TRIAL_DAYS}::int, ${input.region ?? DEFAULT_REGION}
         )`;
     } catch (error) {
       if (isAccountExists(error)) {

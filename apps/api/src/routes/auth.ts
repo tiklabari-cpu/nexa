@@ -402,6 +402,15 @@ export default async function authRoutes(
   });
 
   // --- GET /auth/me ----------------------------------------------------------
+  //
+  // `region` below is the region *this process* serves, for all three principal
+  // kinds. Since C4-a a workspace carries its own on `organizations.region` and
+  // the two can differ, so this is stated in the contract rather than left to be
+  // assumed — and it stays this way until C4-b, which is where the request path
+  // starts reading the workspace's region (and refusing the mismatch with 421).
+  // Answering with the workspace's region here first would mean building half of
+  // that plumbing for one field, and only for the principal kind that already
+  // makes a tenant read.
 
   app.get(
     '/auth/me',

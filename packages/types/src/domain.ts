@@ -144,10 +144,25 @@ export type UsageMetric = (typeof USAGE_METRICS)[number];
 export const RATING_VALUES = ['good', 'bad'] as const;
 export type RatingValue = (typeof RATING_VALUES)[number];
 
-// --- Region (ADR-12: single region for MVP, field kept immutable) -----------
-
-export const REGIONS = ['eu'] as const;
+// --- Region (ADR-12: chosen at signup, immutable afterwards) ----------------
+//
+// Two values since C4 (NFR-C4/C9): an enterprise buying HIPAA cover needs its
+// data to sit in the United States, and the single-region MVP could not answer
+// that. The half of ADR-12 that survives — and matters more — is immutability:
+// a workspace picks its region when it is created and cannot move afterwards,
+// because "move" would mean copying every conversation across the border the
+// choice exists to draw. The database enforces it (a trigger on
+// `organizations`), not this list.
+//
+// The PRD names these regions `fra` and `dal` after their datacentres; this
+// repository has said `eu`/`us` since ADR-12 and keeps saying so (PLAN §D
+// A20.2). Existing workspaces stay in `eu` — there is no backfill, for the
+// same reason there is no move.
+export const REGIONS = ['eu', 'us'] as const;
 export type Region = (typeof REGIONS)[number];
+
+/** Where a workspace lands when its creator expresses no preference. */
+export const DEFAULT_REGION: Region = 'eu';
 
 // --- Shared shapes ----------------------------------------------------------
 

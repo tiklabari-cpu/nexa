@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+## tm 82.1 — C4-a · REGIONS genişlemesi (eu + us) + region kayıt anında seçilir + immutable — done — 2026-08-15 UTC
+
+- **Yapıldı:** (1) `REGIONS = ['eu','us']` + yeni `DEFAULT_REGION` (`packages/types/src/domain.ts`);
+  `NEXA_REGION` **hem** `apps/api` **hem** `apps/rtm` env şemasında `z.literal('eu')` → `z.enum(REGIONS)`
+  (RTM'i atlamak API'si açılan ama RTM'i açılmayan bir US kurulumu üretirdi — §D99 bulgusu).
+  (2) **Immutability artık gerçekten zorlanıyor**: `organizations_region_immutable` BEFORE UPDATE OF
+  region trigger'ı (`20260815090000_region_us`) — servis içi `if` ve `REVOKE UPDATE (region)`
+  adayları elendi, gerekçe §C-A20.3. `IS DISTINCT FROM` (aynı değeri yeniden yazmak taşıma değil),
+  DELETE serbest. CHECK `IN ('eu','us')`. (3) `auth_signup` altıncı parametre `p_region` aldı
+  (DROP+CREATE — `CREATE OR REPLACE` overload üretip eski beş parametreliye sessiz düşüş yaratırdı);
+  sözleşme `paths/account-lifecycle.yaml` signup gövdesi + `paths/auth.yaml` `/auth/me` enum;
+  `routes/account-lifecycle.ts` + `lifecycle-service.ts`. (4) Test: `region.test.ts` (16, immutability
+  **DB'ye karşı**: uygulama rolü · sahip rolü · çıplak SQL · WHERE'siz süpürme) + `env.test.ts` ×2 (3+3).
+  (5) PLAN: ADR-12 satırı · §C-A20.3 · §D102 · §K yeni `#### KC4` bloğu.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` (`@nexa/api` 2732 → **2751**) ·
+  `pnpm -w test:integration` 2036 → **2052** · `pnpm -w build` 7/7 · `pnpm -w test:e2e` **132/132 tüm süit** ·
+  `db:migrate` + `db:check-drift` temiz · `contract:generate` koşuldu.
+  _Not:_ ilk e2e turunda `reports.spec.ts:472` (tracked sales) 20 sn poll'da düştü; tek başına ve
+  ikinci tam turda geçti (132/132) — yük altında flake, bölgeyle ilgisi yok, koda dokunulmadı.
+- **Varsayımlar:** (a) `region` kolonu `licenses`'ta değil **`organizations`**'ta (görev metni
+  "licenses.region" diyor); depoda kiracı kökü orasıdır, `auth_resolve_token` `organization_region`
+  döndürür, lisans org üzerinden miras alır — ikinci bir kolon iki doğruluk kaynağı olurdu.
+  (b) `p_region` DB'de doğrulanmaz; tek yasal küme `organizations_region_check`'tir ve aynı
+  transaction içinde patlar. (c) Geriye dönük göç YOK — backfill zaten trigger'ın reddettiği şey.
+- **Sonraki pencereye not:** **`C4-b` (tm 82.2) için devredilen borç:** `/auth/me`'nin `region` alanı
+  hâlâ `env.NEXA_REGION` döndürüyor (süreç bölgesi), çalışma alanınınkini değil — sözleşmede ve
+  `routes/auth.ts`'te açıkça yazılı. `C4-b`'nin tanımı zaten "karşılaştırmanın sağ tarafı lisansın
+  bölgesi olmalı" + üç yüzey; `plugins/auth.ts:292-298`'deki `x-region` kapısını oraya bağlarken
+  `/auth/me` de aynı kaynaktan beslenmeli. `TokenResolution.region` (`token-service.ts`) zaten
+  lisansın bölgesini taşıyor ama **hiçbir yerde okunmuyor** — hazır giriş noktası odur.
+
 ## tm 81.10 — S11-i · uçtan uca doğrulama: SAML login e2e + SCIM yaşam döngüsü + ret matrisi — done — 2026-08-14 UTC
 
 - **Yapıldı:** (1) **81.9'un borcu kapandı** — giriş ekranının SAML bacağı: `startSsoLogin`/

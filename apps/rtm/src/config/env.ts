@@ -1,8 +1,14 @@
 import { z } from 'zod';
+import { DEFAULT_REGION, REGIONS } from '@nexa/types';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  NEXA_REGION: z.literal('eu').default('eu'),
+  /**
+   * Kept identical to the API's (`apps/api/src/config/env.ts`) on purpose. These
+   * are separate processes reading the same variable, and a gateway that
+   * refuses a value the API accepts is a US deployment with no realtime.
+   */
+  NEXA_REGION: z.enum(REGIONS).default(DEFAULT_REGION),
 
   DATABASE_URL: z.string().url(),
   DATABASE_APP_URL: z.string().url().optional(),

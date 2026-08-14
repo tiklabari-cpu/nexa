@@ -254,7 +254,15 @@ me:
                 role: { type: string, enum: [owner, viceowner, admin, agent] }
                 organization_id: { type: string, format: uuid }
                 license_id: { type: string }
-                region: { type: string, enum: [eu] }
+                region:
+                  type: string
+                  enum: [eu, us]
+                  description: |
+                    The region **this deployment** serves, not necessarily the
+                    one the caller's workspace declared at signup — the two
+                    are the same on every deployment that exists today, and
+                    reconciling them (refusing a request that reached the wrong
+                    region with 421) is C4-b's work.
                 scopes:
                   type: array
                   items: { type: string }

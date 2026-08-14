@@ -29,7 +29,10 @@ datasource db {
 model Organization {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
-  /// ADR-12: single region for the MVP; immutable once written.
+  /// Where this workspace's data lives: `eu` or `us` (ADR-12, widened by C4-a).
+  /// Chosen at signup and immutable afterwards — the CHECK constraint and the
+  /// `organizations_region_immutable` trigger enforce both halves, neither of
+  /// which Prisma models, so this comment is the only place the schema says so.
   region    String   @default("eu")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 

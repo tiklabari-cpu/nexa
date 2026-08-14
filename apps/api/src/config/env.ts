@@ -4,6 +4,7 @@
  * that happens to touch the missing value.
  */
 import { z } from 'zod';
+import { DEFAULT_REGION, REGIONS } from '@nexa/types';
 
 const secret = (minLength: number) =>
   z
@@ -13,7 +14,14 @@ const secret = (minLength: number) =>
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  NEXA_REGION: z.literal('eu').default('eu'),
+  /**
+   * Which region *this process* serves (C4-a). Not the region of any workspace
+   * it happens to hold — a workspace carries its own on `organizations.region`,
+   * and reconciling the two is C4-b's job, where a mismatch becomes a 421.
+   * Widened from `z.literal('eu')`: `us` has to pass here and in the RTM
+   * gateway's identical schema, or a US deployment cannot boot at all.
+   */
+  NEXA_REGION: z.enum(REGIONS).default(DEFAULT_REGION),
 
   DATABASE_URL: z.string().url(),
   /**

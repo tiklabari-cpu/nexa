@@ -43,6 +43,20 @@ signup:
                 description: Minimum length is the only rule; composition rules push people towards predictable substitutions.
               name: { type: string, minLength: 1, maxLength: 120 }
               organization_name: { type: string, minLength: 1, maxLength: 120 }
+              region:
+                type: string
+                enum: [eu, us]
+                default: eu
+                description: |
+                  Where this workspace's data will live (NFR-C4/C9). **This is
+                  the only moment it can be set**: a workspace cannot be moved
+                  afterwards, because moving one means copying every
+                  conversation across the border the choice exists to draw. The
+                  database refuses the change rather than trusting callers to
+                  not attempt it.
+
+                  Omitted means `eu`, which is where every workspace created
+                  before this existed still is.
     responses:
       "201":
         description: Workspace created

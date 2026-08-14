@@ -15,7 +15,7 @@ import { ApiError } from '../lib/api-error.js';
 import { withTenant } from '../lib/tenant.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { LifecycleService } from '../services/auth/lifecycle-service.js';
-import type { AgentRole } from '@nexa/types';
+import { REGIONS, type AgentRole } from '@nexa/types';
 import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
 
@@ -28,6 +28,10 @@ const signupBody = z.object({
   password: z.string().min(12).max(200),
   name: z.string().trim().min(1).max(120),
   organization_name: z.string().trim().min(1).max(120),
+  // Optional, and the only request that may carry it: the database refuses to
+  // change a region afterwards (C4-a). Omitted means `eu` — the region every
+  // workspace created before this field existed is in.
+  region: z.enum(REGIONS).optional(),
 });
 
 const resetRequestBody = z.object({ email: z.string().trim().max(320) });
@@ -72,6 +76,7 @@ export default async function accountLifecycleRoutes(
       password: body.password,
       name: body.name,
       organizationName: body.organization_name,
+      region: body.region,
     });
     return reply.code(201).send(session);
   });

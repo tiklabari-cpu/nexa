@@ -2338,6 +2338,17 @@ export interface paths {
      *     their address. A duplicate is `409` with `scimType: uniqueness`, which is
      *     what tells a connector to look the existing resource up and patch it
      *     instead.
+     *
+     *     **Seats follow the directory upwards.** A create that takes the workspace
+     *     past its purchased seat count raises that count to match, so the bill
+     *     reflects the people who can actually sign in. It is never lowered here —
+     *     reducing a plan is a commercial decision the workspace makes at checkout,
+     *     not one a directory makes unattended (`PATCH /billing/subscription`). A
+     *     workspace still on trial has no purchased count and is unaffected.
+     *
+     *     The provisioning is recorded as `member.invited` in the audit trail —
+     *     the existing action for "somebody joined this workspace", with metadata
+     *     naming the credential that did it.
      */
     post: operations['createScimUser'];
     delete?: never;
@@ -2373,7 +2384,16 @@ export interface paths {
      *     loses access the moment this returns.
      *
      *     Repeating it is not an error: a connector retrying after a timeout must
-     *     converge, not alarm.
+     *     converge, not alarm — and a repeat writes no second audit entry, because
+     *     nothing changed the second time.
+     *
+     *     Everything the suspension does, it does here too: the member disappears
+     *     from routing, their live access tokens stop resolving on their next
+     *     request (the membership is re-read every time, so there is no window in
+     *     which a leaver keeps a working session), and the transition is recorded as
+     *     `member.suspended`. The seat count is **not** reduced — see the create.
+     *
+     *     **The owner cannot be deprovisioned** — `403`. See the patch.
      */
     delete: operations['deleteScimUser'];
     options?: never;
@@ -2397,6 +2417,20 @@ export interface paths {
      *     moved when it did not is a divergence with consequences. Repeating the
      *     current address — what a nightly full-profile sync does — is not a change
      *     and passes.
+     *
+     *     **`active: false` suspends, `active: true` reinstates**, and each real
+     *     transition is recorded as `member.suspended` / `member.unsuspended` — the
+     *     same actions and the same effects an admin's suspension produces, because
+     *     it is the same code. A patch that restates the state already stored writes
+     *     nothing: a nightly reconciliation must not fill the trail with entries for
+     *     changes that did not happen. Reinstating raises the purchased seat count if
+     *     the workspace is now past it (see the create).
+     *
+     *     **The owner cannot be deactivated** — `403`. Suspending them is how a
+     *     workspace would be locked out of its own administration, and a directory
+     *     that has dropped the owner (or has been told to) must not be able to do
+     *     that unattended. Every other role, including `admin`, is deactivatable:
+     *     that is exactly the reach of the admin who minted the credential.
      */
     patch: operations['patchScimUser'];
     trace?: never;
@@ -8247,6 +8281,21 @@ export interface components {
         'application/scim+json': components['schemas']['ScimError'];
       };
     };
+    /**
+     * @description The member exists in this workspace and the operation is refused anyway —
+     *     today, only deactivating the owner. Deliberately a 403 and not the 404 the
+     *     cross-tenant cases get: the resource is one this token may legitimately see,
+     *     so hiding it would tell a connector to keep retrying against something it
+     *     can read.
+     */
+    scimForbidden: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/scim+json': components['schemas']['ScimError'];
+      };
+    };
   };
   parameters: {
     /** @description Opaque keyset cursor from the previous page. */
@@ -12121,6 +12170,7 @@ export interface operations {
       };
       401: components['responses']['scimUnauthorized'];
       402: components['responses']['scimPaymentRequired'];
+      403: components['responses']['scimForbidden'];
       404: components['responses']['scimNotFound'];
       429: components['responses']['scimTooManyRequests'];
     };
@@ -12165,6 +12215,7 @@ export interface operations {
       400: components['responses']['scimBadRequest'];
       401: components['responses']['scimUnauthorized'];
       402: components['responses']['scimPaymentRequired'];
+      403: components['responses']['scimForbidden'];
       404: components['responses']['scimNotFound'];
       409: components['responses']['scimConflict'];
       429: components['responses']['scimTooManyRequests'];

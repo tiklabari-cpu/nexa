@@ -1,9 +1,9 @@
 /**
- * SCIM 2.0 server core (S11-e) — the boundary, end to end.
+ * SCIM 2.0 — the boundary (S11-e) and what crossing it means (S11-f).
  *
  * The claim this file exists to hold is one sentence: **a SCIM token reaches
- * exactly one workspace's members and nothing else.** Everything below is a way
- * of trying to break it.
+ * exactly one workspace's members and nothing else.** Everything down to the
+ * Groups section is a way of trying to break it.
  *
  *   - **Rejections first**, because this is a security surface: no token,
  *     unknown token, revoked token, expired token, and — the one that matters
@@ -24,11 +24,18 @@
  *     on the ones the shared hooks raise.
  *   - **Minting the credential is gated**, revoking it works immediately, and
  *     both leave an audit entry.
+ *
+ * The `lifecycle semantics` block is the second claim, and it is a different
+ * kind of thing: not "can this credential reach further than it should" but
+ * "when it does what it is allowed to do, does the product agree that it
+ * happened". A provisioning run that leaves no trail, or that grows a workspace
+ * without growing its bill, is inside the boundary and still wrong.
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { hashToken } from '../../src/lib/crypto.js';
 import { MAX_ACTIVE_SCIM_TOKENS } from '../../src/routes/settings.js';
+import { AUDIT_ACTIONS } from '../../src/services/audit/audit-log.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -626,6 +633,358 @@ describe('scim server core', () => {
       const body = res.json() as { memberships?: Array<{ license_id: string }> };
       const licences = (body.memberships ?? []).map((m) => m.license_id);
       expect(licences).not.toContain(fx.a.licenseId.toString());
+    });
+  });
+
+  // --- Lifecycle semantics (S11-f) -------------------------------------------
+  //
+  // S11-e proved the boundary: a SCIM token reaches one workspace's members and
+  // nothing else. This is the other half — what those operations *mean* once
+  // they are allowed through. Three claims:
+  //
+  //   1. every real transition leaves a line in the audit trail, in the existing
+  //      membership vocabulary, naming the credential that caused it — and a
+  //      sync that changes nothing leaves none;
+  //   2. the bill follows the headcount upwards and is never shrunk by a
+  //      directory;
+  //   3. the owner is out of reach, and a deprovisioned member's access ends on
+  //      their very next request rather than at their next sign-in.
+
+  describe('lifecycle semantics', () => {
+    /** The `api_tokens` row behind `scimA` — what the entries below point at. */
+    let scimTokenIdA: string;
+
+    const deactivate = { Operations: [{ op: 'replace', path: 'active', value: false }] };
+    const reactivate = { Operations: [{ op: 'replace', path: 'active', value: true }] };
+
+    const entriesFor = (action: string) =>
+      owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action },
+        orderBy: { createdAt: 'asc' },
+      });
+
+    /** Buy `seats` for workspace A, so there is a purchased number to move. */
+    const subscribe = (seats: number) =>
+      owner.subscription.create({
+        data: { licenseId: fx.a.licenseId, seats, status: 'active' },
+      });
+
+    const seatsOf = async (licenseId: bigint) =>
+      (await owner.subscription.findFirst({ where: { licenseId } }))?.seats ?? null;
+
+    beforeEach(async () => {
+      const row = await owner.apiToken.findFirst({ where: { tokenHash: hashToken(scimA) } });
+      scimTokenIdA = row!.id;
+    });
+
+    // --- The trail -----------------------------------------------------------
+
+    describe('audit', () => {
+      it('records a provisioning as member.invited, naming the credential', async () => {
+        const user = asUser(
+          await server.post('/scim/v2/Users', { userName: 'ada@example.test' }, scimBody(scimA)),
+        );
+
+        const [entry, ...rest] = await entriesFor('member.invited');
+        expect(rest).toHaveLength(0);
+        expect(entry!.target).toBe(`account:${user.id}`);
+        // Not a person and not one of the workspace's bots: the connector is an
+        // external system acting on the workspace's own instruction.
+        expect(entry!.actorType).toBe('system');
+        expect(entry!.actorId).toBeNull();
+        // …which is why the credential has to be in the metadata. Several may be
+        // live at once, and "the system did it" names none of them.
+        expect(entry!.metadata).toMatchObject({
+          via: 'scim',
+          scim_token_id: scimTokenIdA,
+          role: 'agent',
+          active: true,
+        });
+      });
+
+      it('records a deactivation as member.suspended and a reactivation as member.unsuspended', async () => {
+        await server.patch(`/scim/v2/Users/${fx.a.agentAccountId}`, deactivate, scimBody(scimA));
+        await server.patch(`/scim/v2/Users/${fx.a.agentAccountId}`, reactivate, scimBody(scimA));
+
+        const suspended = await entriesFor('member.suspended');
+        const unsuspended = await entriesFor('member.unsuspended');
+        expect(suspended).toHaveLength(1);
+        expect(unsuspended).toHaveLength(1);
+        expect(suspended[0]!.target).toBe(`account:${fx.a.agentAccountId}`);
+        expect(suspended[0]!.metadata).toMatchObject({
+          via: 'scim',
+          scim_token_id: scimTokenIdA,
+          role: 'agent',
+        });
+        expect(unsuspended[0]!.target).toBe(`account:${fx.a.agentAccountId}`);
+      });
+
+      it('records a deprovision as member.suspended — the same action an admin produces', async () => {
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+        const [entry] = await entriesFor('member.suspended');
+        expect(entry!.target).toBe(`account:${fx.a.agentAccountId}`);
+        expect(entry!.metadata).toMatchObject({ via: 'scim' });
+      });
+
+      it('invents no action of its own — every entry is one the vocabulary already had', async () => {
+        await server.post('/scim/v2/Users', { userName: 'ada@example.test' }, scimBody(scimA));
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+
+        const actions = new Set(
+          (
+            await owner.auditLogEntry.findMany({
+              where: { licenseId: fx.a.licenseId },
+              select: { action: true },
+            })
+          ).map((e) => e.action),
+        );
+        expect([...actions].every((a) => AUDIT_ACTIONS.includes(a as never))).toBe(true);
+        expect(actions).toContain('member.invited');
+        expect(actions).toContain('member.suspended');
+      });
+
+      it('writes nothing when a sync restates the state already stored', async () => {
+        // What a nightly full-profile reconciliation does to every member who
+        // did not change. An entry per member per night would bury the real
+        // events under the ones that never happened.
+        await server.patch(`/scim/v2/Users/${fx.a.agentAccountId}`, reactivate, scimBody(scimA));
+        expect(await entriesFor('member.unsuspended')).toHaveLength(0);
+
+        const membership = await owner.agentMembership.findUnique({
+          where: { licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId } },
+        });
+        expect(membership!.suspended).toBe(false);
+      });
+
+      it('writes one entry when a connector retries a deprovision', async () => {
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+        await server.patch(`/scim/v2/Users/${fx.a.agentAccountId}`, deactivate, scimBody(scimA));
+        expect(await entriesFor('member.suspended')).toHaveLength(1);
+      });
+
+      it('records the suspension as a presence change too, like the admin path', async () => {
+        // Routing skips a suspended agent whatever their routing_status says, so
+        // the hours after this are hours they covered nothing — invisible to a
+        // forecast that reads only routing_status.
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+        const events = await owner.agentPresenceEvent.findMany({
+          where: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId },
+          orderBy: { changedAt: 'desc' },
+        });
+        expect(events[0]!.status).toBe('offline');
+      });
+
+      it('leaves no trace in the other workspace', async () => {
+        await server.post('/scim/v2/Users', { userName: 'ada@example.test' }, scimBody(scimA));
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+        expect(
+          await owner.auditLogEntry.count({
+            where: { licenseId: fx.b.licenseId, action: { startsWith: 'member.' } },
+          }),
+        ).toBe(0);
+      });
+    });
+
+    // --- The bill ------------------------------------------------------------
+
+    describe('seats', () => {
+      it('raises the purchased count when provisioning takes the workspace past it', async () => {
+        // Two members are seeded, and two seats were bought for them.
+        await subscribe(2);
+
+        await server.post('/scim/v2/Users', { userName: 'ada@example.test' }, scimBody(scimA));
+
+        expect(await seatsOf(fx.a.licenseId)).toBe(3);
+        const [entry] = await entriesFor('billing.subscription_updated');
+        expect(entry!.metadata).toMatchObject({
+          via: 'scim',
+          scim_token_id: scimTokenIdA,
+          fields: ['seats'],
+          from: 2,
+          to: 3,
+        });
+      });
+
+      it('leaves the count alone when there is already room', async () => {
+        await subscribe(10);
+        await server.post('/scim/v2/Users', { userName: 'ada@example.test' }, scimBody(scimA));
+        expect(await seatsOf(fx.a.licenseId)).toBe(10);
+        expect(await entriesFor('billing.subscription_updated')).toHaveLength(0);
+      });
+
+      it('does not charge for a member provisioned deactivated', async () => {
+        await subscribe(2);
+        const user = asUser(
+          await server.post(
+            '/scim/v2/Users',
+            { userName: 'ada@example.test', active: false },
+            scimBody(scimA),
+          ),
+        );
+        expect(user.active).toBe(false);
+        expect(await seatsOf(fx.a.licenseId)).toBe(2);
+      });
+
+      it('raises the count when a deactivated member is reinstated', async () => {
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+        // One person can sign in now, and the workspace has bought one seat.
+        await subscribe(1);
+
+        await server.patch(`/scim/v2/Users/${fx.a.agentAccountId}`, reactivate, scimBody(scimA));
+        expect(await seatsOf(fx.a.licenseId)).toBe(2);
+      });
+
+      it("never lowers it: shrinking a plan is the workspace's call, not a directory's", async () => {
+        await subscribe(5);
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+        expect(await seatsOf(fx.a.licenseId)).toBe(5);
+        expect(await entriesFor('billing.subscription_updated')).toHaveLength(0);
+      });
+
+      it('does not turn a trial into a subscription', async () => {
+        // No subscription row means nothing has been bought; both the billing
+        // view and the invoice already fall back to live headcount. Creating one
+        // here would make a provisioning call the moment a trial looked paid.
+        await server.post('/scim/v2/Users', { userName: 'ada@example.test' }, scimBody(scimA));
+        expect(await owner.subscription.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+      });
+
+      it("cannot move the other workspace's seats", async () => {
+        await owner.subscription.create({
+          data: { licenseId: fx.b.licenseId, seats: 2, status: 'active' },
+        });
+        await subscribe(2);
+        await server.post('/scim/v2/Users', { userName: 'ada@example.test' }, scimBody(scimA));
+        expect(await seatsOf(fx.b.licenseId)).toBe(2);
+      });
+    });
+
+    // --- The owner -----------------------------------------------------------
+
+    describe('the owner', () => {
+      it('cannot be deactivated by a patch — 403, and nothing changes', async () => {
+        const res = await server.patch(
+          `/scim/v2/Users/${fx.a.ownerAccountId}`,
+          deactivate,
+          scimBody(scimA),
+        );
+        expect(res.statusCode).toBe(403);
+        // Still SCIM's envelope: a connector parses this, not our documentation.
+        expect(asError(res).schemas).toEqual(['urn:ietf:params:scim:api:messages:2.0:Error']);
+        expect(asError(res).status).toBe('403');
+
+        const membership = await owner.agentMembership.findUnique({
+          where: { licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.ownerAccountId } },
+        });
+        expect(membership!.suspended).toBe(false);
+        expect(await entriesFor('member.suspended')).toHaveLength(0);
+      });
+
+      it('cannot be deprovisioned either', async () => {
+        const res = await server.del(`/scim/v2/Users/${fx.a.ownerAccountId}`, auth(scimA));
+        expect(res.statusCode).toBe(403);
+        const membership = await owner.agentMembership.findUnique({
+          where: { licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.ownerAccountId } },
+        });
+        expect(membership!.suspended).toBe(false);
+      });
+
+      it('is refused with 403 and not the 404 a foreign member gets', async () => {
+        // The distinction is deliberate: this member is one the token may
+        // legitimately read — they are in its own /Users listing — so answering
+        // 404 would leave the connector retrying against something it can see.
+        const listed = asList(await server.get('/scim/v2/Users', auth(scimA)));
+        expect(listed.Resources.some((u) => u.id === fx.a.ownerAccountId)).toBe(true);
+      });
+
+      it('is still readable and still patchable in every other way', async () => {
+        // The guard is about deactivation, not about the owner being off limits.
+        const res = await server.patch(
+          `/scim/v2/Users/${fx.a.ownerAccountId}`,
+          { Operations: [{ op: 'add', path: 'externalId', value: 'idp-owner' }] },
+          scimBody(scimA),
+        );
+        expect(res.statusCode).toBe(200);
+        expect(asUser(res).externalId).toBe('idp-owner');
+      });
+
+      it('accepts a sync that restates the owner as active', async () => {
+        // A nightly full-profile push sends `active: true` for everybody. Only a
+        // deactivation is refused.
+        const res = await server.patch(
+          `/scim/v2/Users/${fx.a.ownerAccountId}`,
+          reactivate,
+          scimBody(scimA),
+        );
+        expect(res.statusCode).toBe(200);
+        expect(asUser(res).active).toBe(true);
+      });
+
+      it("protects the owner only: an admin is within a directory's reach", async () => {
+        // Which is the reach of the admin who minted the credential: they can
+        // suspend a peer, and they cannot suspend the owner either.
+        const account = await owner.account.create({
+          data: { email: 'admin-lifecycle@example.test', name: 'Admin' },
+          select: { id: true },
+        });
+        await owner.agentMembership.create({
+          data: { licenseId: fx.a.licenseId, agentId: account.id, role: 'admin' },
+        });
+
+        expect((await server.del(`/scim/v2/Users/${account.id}`, auth(scimA))).statusCode).toBe(
+          204,
+        );
+        const membership = await owner.agentMembership.findUnique({
+          where: { licenseId_agentId: { licenseId: fx.a.licenseId, agentId: account.id } },
+        });
+        expect(membership!.suspended).toBe(true);
+      });
+    });
+
+    // --- Access ends now, not at the next sign-in ----------------------------
+
+    describe('a deprovisioned member', () => {
+      it('loses a live session on their very next request', async () => {
+        // The reason a deprovision does not hunt down tokens one by one: every
+        // request re-resolves its bearer token against the membership, so there
+        // is no sweep to get wrong and no window to be caught in.
+        const agentPat = await grantToken(owner, {
+          licenseId: fx.a.licenseId,
+          organizationId: fx.a.organizationId,
+          ownerId: fx.a.agentAccountId,
+          scopes: ['agents--all:ro'],
+        });
+        expect((await server.get('/agents', auth(agentPat))).statusCode).toBe(200);
+
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+
+        expect((await server.get('/agents', auth(agentPat))).statusCode).toBe(401);
+      });
+
+      it('gets their session back when the directory reinstates them', async () => {
+        const agentPat = await grantToken(owner, {
+          licenseId: fx.a.licenseId,
+          organizationId: fx.a.organizationId,
+          ownerId: fx.a.agentAccountId,
+          scopes: ['agents--all:ro'],
+        });
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+        await server.patch(`/scim/v2/Users/${fx.a.agentAccountId}`, reactivate, scimBody(scimA));
+
+        expect((await server.get('/agents', auth(agentPat))).statusCode).toBe(200);
+      });
+
+      it('takes no work from the queue while suspended', async () => {
+        // Suspension is already the product's phrase for "may not be routed
+        // work" — this is the assertion that SCIM inherits it rather than only
+        // flipping a column the routing query happens to read.
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+        const routable = await owner.agentMembership.count({
+          where: { licenseId: fx.a.licenseId, suspended: false, routingStatus: 'accepting_chats' },
+        });
+        expect(routable).toBe(1); // the owner, who is not the one deprovisioned
+      });
     });
   });
 

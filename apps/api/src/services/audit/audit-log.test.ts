@@ -23,6 +23,29 @@ describe('sanitizeAuditMetadata', () => {
     expect(sanitizeAuditMetadata({ request_id: 'req-1' })).toEqual({ request_id: 'req-1' });
   });
 
+  it('keeps the SCIM credential id — the only way a connector entry names an actor', () => {
+    // A provisioning connector is recorded as `system` with a null actor_id
+    // (plugins/audit.ts), so without this the trail cannot say which of a
+    // workspace's several live credentials suspended somebody.
+    expect(sanitizeAuditMetadata({ scim_token_id: 'tok-1', role: 'agent' })).toEqual({
+      scim_token_id: 'tok-1',
+      role: 'agent',
+    });
+  });
+
+  it('exempts those two names only, not everything that looks like an id', () => {
+    // The allow-list is a list of names, not a loosening of the pattern: a key
+    // nobody has thought about is still dropped.
+    expect(
+      sanitizeAuditMetadata({
+        scim_token: 'nxc1.secret',
+        token_id: 'guessed',
+        oauth_token_id: 'guessed',
+        password_id: 'guessed',
+      }),
+    ).toEqual({});
+  });
+
   it('omits undefined values rather than storing null holes', () => {
     expect(sanitizeAuditMetadata({ present: 1, absent: undefined })).toEqual({ present: 1 });
   });

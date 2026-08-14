@@ -13,6 +13,43 @@
 
 ## Task log (newest-first)
 
+## tm 81.7 — S11-f · SCIM yaşam döngüsü semantiği: create/suspend/deprovizyon + koltuk + audit — done — 2026-08-14 UTC
+
+- **Yapıldı:** (1) **Askıya alma etkisi tek yere çıkarıldı** —
+  `apps/api/src/services/auth/membership-service.ts` (yeni) `setMembershipSuspension`: bayrak +
+  `agent_presence_events` + `member.suspended`/`member.unsuspended` + "zaten o durumda ise hiçbir
+  şey yazma". `routes/agents.ts` (satır içi gövdesi kaldırıldı) ve `routes/scim.ts` (PATCH `active`
+  + DELETE) **aynı** fonksiyonu çağırıyor; yetkilendirme paylaşılmadı (agent ucunun rütbe tavanı
+  kişiye, SCIM'in owner kapısı kimlik bilgisine ait). (2) **Owner deaktive edilemez → 403**
+  (`refuseOwnerDeactivation`, PATCH `active=false` + DELETE); `admin` edilebilir — token'ı basan
+  admin'in zaten yapabildiği şey. Çapraz-kiracı 404'ünden ayrı 403, çünkü üye token'ın kendi
+  listesinde görünüyor. (3) **Koltuk mandalı yalnız yukarı** — `ensureSeatsCoverHeadcount`
+  (`services/billing/subscription-service.ts`): create/reaktivasyon satın alınan koltuğu aşarsa
+  `subscriptions.seats` baş sayısına çıkar, deprovizyon **düşürmez**, trial'da (abonelik satırı yok)
+  hiçbir şey yazılmaz. Hareket `billing.subscription_updated` ile kaydediliyor. (4) **Audit: yeni
+  eylem yok** — `member.invited` (create) / `member.suspended` / `member.unsuspended`, metadata'da
+  `via: 'scim'` + `scim_token_id`. Token kimliğini yazabilmek için `sanitizeAuditMetadata`'nın
+  deseni gevşetilmedi, `request_id`'nin yanına ada göre ikinci istisna eklendi
+  (`METADATA_KEY_ALLOWLIST`). (5) Sözleşme: `paths/scim.yaml` 403 + `scimForbidden`, koltuk/audit
+  semantiği açıklamalara yazıldı, `contract:generate` yeniden koşuldu.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `format:check` (dokunulan dosyalar) ·
+  build 7/7 · `pnpm -w test` (`@nexa/api` 2672 → **2698**) · `pnpm -w test:integration`
+  1980 → **2004** (`scim.test.ts` 57 → 81) · `pnpm -w test:e2e` **131/131** (6.4 dk) ·
+  `db:check-drift` temiz (bu turda migration YOK — şema değişmedi).
+- **Varsayımlar:** (a) SCIM `agent` + `admin` askıya alabilir, `owner` alamaz — sınır, token'ı basan
+  admin'in elle yapabildiği şey. (b) Koltuk asla düşürülmez; indirim checkout'un işi
+  (`PATCH /billing/subscription`, FR-MOD-10.1.3 tabanı zaten var). (c) Açık sohbetlerin devri
+  **kapsam dışı bırakıldı** — askıya alma zaten routing'den çıkarıyor, devir süpervizör takdiridir
+  (`chat.taken_over`). (d) Grup→rol eşlemesi hâlâ kapsam dışı (§D kaydı gerektirir).
+- **Sonraki pencereye not:** (1) **Canlı token iptali GEREKSİZ, o iş kapandı** — `TokenService#resolve`
+  her istekte üyeliği yeniden okuyor, giriş yolunda `auth_list_memberships` eliyor; ikisi de testle
+  pinli (deprovizyon sonrası İLK istek 401). S11-i bunu yeniden yazmasın, üstüne e2e koysun.
+  (2) `S11-g` ekranı için yeni uç yok (S11-e notu geçerli); koltuk sayısı SCIM'le değişebildiği için
+  Reports→Billing'deki `seats` artık kullanıcı dokunmadan da artabilir — ekranda sürpriz sayılmasın.
+  (3) `setMembershipSuspension` artık iki çağıranlı: üçüncü bir "askıya al" yolu açan olursa oraya
+  bağlansın, kopyalanmasın. (4) e2e'yi PowerShell'den koşarken `set -a; . ./.env; set +a` şart
+  (`apps/rtm` kök `.env`'i okumaz).
+
 ## tm 81.6 — S11-e · SCIM 2.0 sunucu çekirdeği: /scim/v2/Users + bearer auth + lisans kapsamı — done — 2026-08-14 UTC
 
 - **Yapıldı:** (1) `apps/api/src/routes/scim.ts` (yeni, `server.ts`'e kendi plugin kapsamında kayıtlı)

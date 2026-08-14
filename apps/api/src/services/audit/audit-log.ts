@@ -50,7 +50,15 @@ export const AUDIT_ACTIONS = [
   // locked-out admin — or a stolen token being used from outside the office —
   // is visible in the trail; the address itself is deliberately not stored here.
   'auth.ip_denied',
-  // Team membership
+  // Team membership.
+  //
+  // Shared with SCIM provisioning (NFR-S11 · S11-f) rather than duplicated: a
+  // directory connector creating a member, deactivating one and reactivating
+  // one are the same three facts an admin's invitation and suspension record,
+  // and an owner asking "who was cut off from this workspace, and when" wants
+  // one answer, not two vocabularies to remember to union. What differs is
+  // recorded where it belongs — in the entry's own metadata (`via: 'scim'` and
+  // the credential's id), not in a parallel set of action names.
   'member.invited',
   'member.invitation_revoked',
   'member.suspended',
@@ -196,13 +204,31 @@ export interface AuditEntry {
 const FORBIDDEN_METADATA_KEY = /pass|secret|token|verifier|credential|hash|authorization|cookie/i;
 
 /**
+ * The keys whose *name* trips the rule above while their *value* is a
+ * reference, not a secret.
+ *
+ * Both are identifiers of something the log is meant to point at, and both are
+ * already stored in plain sight elsewhere — `request_id` in every log line and
+ * the `X-Request-Id` header, `scim_token_id` as the primary key of an
+ * `api_tokens` row whose secret half is only ever held as a digest. Naming them
+ * one at a time, rather than loosening the pattern, keeps the default answer
+ * "dropped": a key nobody thought about is still removed.
+ *
+ * `scim_token_id` earns its place because a SCIM entry has nowhere else to say
+ * who acted. A provisioning connector is not a person, so `actor_id` is null and
+ * `actor_type` is `system` (`plugins/audit.ts`) — and a workspace may hold
+ * several live connectors at once, so without this the trail can say a member
+ * was deprovisioned by "the system" and not which credential did it.
+ */
+const METADATA_KEY_ALLOWLIST = new Set(['request_id', 'scim_token_id']);
+
+/**
  * Drop any metadata key that looks like a credential.
  *
  * The callers in this codebase never pass a secret; this exists so that if one
  * ever starts to — a refactor that spreads a whole request body into metadata,
  * say — the secret is removed here rather than persisted forever in an
- * append-only table nobody can scrub. `request_id` is exempt: it is a
- * correlation id, not a credential, despite containing the substring.
+ * append-only table nobody can scrub.
  */
 export function sanitizeAuditMetadata(
   metadata: Record<string, unknown> | undefined,
@@ -210,7 +236,7 @@ export function sanitizeAuditMetadata(
   if (!metadata) return {};
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
-    if (key !== 'request_id' && FORBIDDEN_METADATA_KEY.test(key)) continue;
+    if (!METADATA_KEY_ALLOWLIST.has(key) && FORBIDDEN_METADATA_KEY.test(key)) continue;
     if (value === undefined) continue;
     clean[key] = value;
   }

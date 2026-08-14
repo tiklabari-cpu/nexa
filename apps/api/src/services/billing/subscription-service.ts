@@ -145,3 +145,57 @@ export async function updateSubscription(
     aiResolutionsIncluded: row.aiResolutionsIncluded,
   };
 }
+
+/**
+ * Raise the purchased seat count to cover the people who can actually sign in,
+ * and return the move if there was one (NFR-S11 · S11-f).
+ *
+ * `updateSubscription` above states the rule for a human at the checkout: you
+ * cannot buy fewer seats than you have non-suspended agents (FR-MOD-10.1.3).
+ * Directory provisioning approaches the same rule from the other side — it adds
+ * the agent first — and something has to give. Three ways out, and only one of
+ * them is defensible:
+ *
+ *   - **Refuse the create.** Commercially tidy, operationally awful: the
+ *     directory is the source of truth, its connector would retry the same call
+ *     forever, and a new hire would silently have no account until somebody
+ *     noticed. It also fails in the direction that costs the customer, not us.
+ *   - **Let headcount exceed seats.** Under-bills, and — worse — leaves the
+ *     workspace in a state its *own* checkout refuses to save: the next admin to
+ *     change the billing cycle gets a validation error about a seat count they
+ *     never chose, caused by a sync they cannot see.
+ *   - **Raise the count.** The bill follows the people, which is what "$99 per
+ *     user per month" (ADR-13) already promises, and the workspace can see the
+ *     new figure in Reports → Billing the moment it changes.
+ *
+ * It only ever goes **up**. Lowering is a downgrade, and a downgrade is a
+ * commercial decision the workspace makes — an admin at `PATCH
+ * /billing/subscription`, once headcount has actually dropped and the floor
+ * rule allows it. A directory that deprovisions thirty people overnight must not
+ * be able to shrink a customer's committed plan mid-cycle on its own.
+ *
+ * A workspace with no subscription row is on trial: it has bought nothing, so
+ * there is nothing to raise, and both the billing view and the invoice already
+ * fall back to live headcount for it. Creating a row here would turn a
+ * provisioning call into the moment a trial started looking subscribed.
+ */
+export async function ensureSeatsCoverHeadcount(
+  tx: TenantClient,
+  tenant: TenantContext,
+): Promise<{ from: number; to: number } | null> {
+  const [subscription, headcount] = await Promise.all([
+    tx.subscription.findFirst({
+      where: { licenseId: tenant.licenseId },
+      orderBy: { createdAt: 'desc' },
+    }),
+    tx.agentMembership.count({ where: { suspended: false } }),
+  ]);
+
+  if (!subscription || subscription.seats >= headcount) return null;
+
+  // Keyed by id, so two provisioning calls racing to grow the same subscription
+  // both land on the row the read found rather than one of them creating a
+  // second one.
+  await tx.subscription.update({ where: { id: subscription.id }, data: { seats: headcount } });
+  return { from: subscription.seats, to: headcount };
+}

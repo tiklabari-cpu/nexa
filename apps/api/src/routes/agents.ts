@@ -37,6 +37,7 @@ import { ApiError } from '../lib/api-error.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { RoutingService } from '../services/routing/routing-service.js';
 import { roleAtLeast, scopesOf, type Principal } from '../services/auth/principal.js';
+import { setMembershipSuspension } from '../services/auth/membership-service.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 
 const routingStatusBody = z.object({ routing_status: z.enum(ROUTING_STATUSES) });
@@ -336,46 +337,22 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
           throw ApiError.authorization('You cannot change an agent above your own role.');
         }
 
-        // No-op when already in the requested state: return the current agent
-        // without writing a second, misleading audit entry.
-        if (target.suspended === suspended) return target;
+        // The effect — the flag, the presence event, the audit entry, and the
+        // no-op rule that keeps a repeat from writing a second misleading entry
+        // — is shared with SCIM deprovisioning (`membership-service.ts`). Only
+        // the ceiling above this line is specific to a person asking.
+        const changed = await setMembershipSuspension(
+          tx,
+          request.auditContext(),
+          target,
+          suspended,
+        );
+        if (!changed) return target;
 
-        const next = await tx.agentMembership.update({
-          where: { licenseId_agentId: { licenseId: target.licenseId, agentId } },
-          data: { suspended },
+        return tx.agentMembership.findFirstOrThrow({
+          where: { agentId },
           include: { agent: { select: agentSelect } },
         });
-
-        // Suspension is a presence change too. Routing skips a suspended agent
-        // whatever their `routing_status` says (`routing-service.ts`: `AND NOT
-        // m.suspended`), so the hours between suspension and reinstatement are
-        // hours that agent covered nothing — and a forecast reading only
-        // `routing_status` would count every one of them as covered.
-        //
-        // `routing_status` itself is deliberately left alone: it is the agent's
-        // own setting, and coming back should return them to the status they
-        // chose rather than to one suspension imposed. That is why the event's
-        // status is computed rather than copied — suspending records `offline`,
-        // reinstating records whatever they still hold. An agent who was
-        // already `offline` sees no event either way: nothing about their
-        // availability changed.
-        if (target.routingStatus !== 'offline') {
-          await tx.agentPresenceEvent.create({
-            data: {
-              licenseId: target.licenseId,
-              agentId,
-              status: suspended ? 'offline' : target.routingStatus,
-            },
-          });
-        }
-
-        await writeAuditEntry(tx, request.auditContext(), {
-          action: suspended ? 'member.suspended' : 'member.unsuspended',
-          target: `account:${agentId}`,
-          metadata: { role: targetRole },
-        });
-
-        return next;
       });
 
       return reply.send(serialiseAgent(updated));

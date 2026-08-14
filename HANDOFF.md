@@ -13,6 +13,27 @@
 
 ## Task log (newest-first)
 
+## tm 79.6 — 08.5.8-f · Telegram uçtan uca doğrulama + adres sahiplenme regresyonu — done — 2026-08-15 UTC
+
+- **Yapıldı:** `apps/e2e/tests/telegram.spec.ts` (yeni, `instagram.spec.ts` deseni) — bağla (Settings
+  kartı, `bot_token`+`bot_username`) → kimliksiz public webhook'tan mesaj → inbox'ta metin + gönderen
+  handle'ı → composer'dan yanıt → Views'ta Telegram satırı + promo yok → onaylı disconnect sonrası her
+  yüzey yeniden dürüst. Kanıt PNG `apps/e2e/kanit/08.5.8-telegram.png`.
+- **Adres sahiplenme iddiası ölçüldü, varsayılmadı:** `channels-adapters.test.ts`'e Telegram için 3
+  test (58 → 61): kısmi unique index servis atlansa da reddediyor · eşzamanlı iki connect tam bir
+  kazananla kapanıyor (P2002) ve inbound taraf kazananla hemfikir · disconnect adresi serbest
+  bırakıyor, yönlendirme devrediyor, eski sahip geri alamıyor. **Üçü de ilk koşuda yeşil** → koruma
+  gerçekten kanal-agnostik, kalem `OPUS-MAX` çekirdek alt-göreve genişletilmedi.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 2772/2772 · `pnpm -w
+  test:integration` 2063 → **2066** · `pnpm -w build` 7/7 · `pnpm -w test:e2e` **TÜM süit 134/134**
+  (132 → 134).
+- **Sonraki pencereye not (borç):** composer'dan gönderilen yanıt adaptörü **çağırmıyor** — chat
+  event'i yazılır, ama Telegram'a (ya da Instagram/WhatsApp/SMS'e) giden tek yol hâlâ elle
+  `/channels/:type/messages`. Bu yüzden e2e yanıtı iki bacakta ayrı ayrı iddia ediyor. Kanal-agnostik
+  bir "ajan yanıtı → bağlı kanala outbound" köprüsü hiçbir kalemde yok; ayrı task olarak açılmalı
+  (kapsam disiplini, CONVENTIONS §5 — bu pencerede yapılmadı). `08.5.8` kalemi 6/6 ile KAPALI;
+  §6.2 dilim 4 (Kanal) kapanış kapısı karşılandı. Faz-3'te kalan tek kalem `13.7` (mobil, tm 90).
+
 ## tm 79.5 — 08.5.8-e · Inbox Views grubunda Telegram kanal görünümü — done — 2026-08-15 UTC
 
 - **Yapıldı:** `apps/web/src/features/inbox/views.ts` — Instagram'ın (tm 65 `08.5.7-g`) birebir

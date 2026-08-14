@@ -831,5 +831,88 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
         ).statusCode,
       ).toBe(200);
     });
+
+    // --- The same guarantee, for Telegram (08.5.8-f) ------------------------
+    //
+    // The plain refusal is already covered for every channel by the `it.each`
+    // above. What is not, until here, is *why* it is expected to hold for a
+    // channel nobody wrote a line of ownership code for: the migration installs
+    // `channel_address_owner(p_type, p_address)` with the type as a parameter,
+    // and `channel-service.ts` never special-cases a type in either half of the
+    // guard. That is an argument, not evidence — and a bot `@username` is the
+    // most takeable address of the five (public, short, typed by humans, and
+    // handed out by @BotFather to whoever asks). So the two halves the argument
+    // rests on are re-run against Telegram rather than inferred from Instagram.
+
+    describe('telegram (FR-MOD-08.5.8)', () => {
+      const tg = TELEGRAM;
+
+      const connectedTelegramRows = (address: string) =>
+        owner.channel
+          .findMany({ where: { status: 'connected', type: tg.type } })
+          .then((rows) =>
+            rows.filter((row) => (row.config as { address?: string }).address === address),
+          );
+
+      it('refuses a duplicate bot username at the database, not only in the service', async () => {
+        await connect(tg.type, tg.connect(tg.addressA), adminA);
+
+        // Written as the owner: no RLS, no service, no pre-check — the way a
+        // script, a fixture or a future code path could smuggle a second row
+        // in. The partial unique index is what has to stop it, and it indexes
+        // `(type, address)`, so a type it has never seen is not a special case.
+        await expect(
+          owner.channel.create({
+            data: {
+              licenseId: fx.b.licenseId,
+              brandId: await brandOf(fx.b.licenseId),
+              type: tg.type,
+              status: 'connected',
+              config: { address: tg.addressA, bot_username: tg.addressA },
+            },
+          }),
+        ).rejects.toThrow(/unique constraint|channels_connected_address_key/i);
+      });
+
+      it('settles concurrent connects on one bot username with exactly one winner', async () => {
+        // Check-then-write: both requests can pass `assertAddressFree`, so the
+        // index decides and the loser lands in the P2002 branch. Which tenant
+        // wins is arbitrary; that exactly one does is not.
+        const [first, second] = await Promise.all([
+          connect(tg.type, tg.connect(tg.addressA), adminA),
+          connect(tg.type, tg.connect(tg.addressA), adminB),
+        ]);
+
+        expect([first.statusCode, second.statusCode].sort()).toEqual([200, 400]);
+        expect(await connectedTelegramRows(tg.addressA)).toHaveLength(1);
+
+        // And the inbound side agrees with whoever won: one chat, in one tenant.
+        // Anything else is a stranger's message in someone's inbox (NFR-S4/S5).
+        const msg = await webhook(tg.type, tg.inbound(tg.addressA, tg.sender, 'yarisin ardindan'));
+        expect(msg.statusCode).toBe(200);
+        const chats = [...(await chatsFor(fx.a.licenseId)), ...(await chatsFor(fx.b.licenseId))];
+        expect(chats).toHaveLength(1);
+      });
+
+      it('frees the bot username when its owner disconnects, and hands routing over', async () => {
+        await connect(tg.type, tg.connect(tg.addressA), adminA);
+        await server.post(`/channels/${tg.type}/disconnect`, undefined, auth(adminA));
+
+        // A bot can genuinely change hands — @BotFather lets an owner delete a
+        // bot and the name become claimable again — so the index being partial
+        // on `status = 'connected'` matters here rather than being theoretical.
+        expect((await connect(tg.type, tg.connect(tg.addressA), adminB)).statusCode).toBe(200);
+
+        const msg = (
+          await webhook(tg.type, tg.inbound(tg.addressA, tg.sender, 'artik B'))
+        ).json() as { chat_id: string };
+        expect(msg.chat_id).toBeTruthy();
+        expect(await chatsFor(fx.b.licenseId)).toHaveLength(1);
+        expect(await chatsFor(fx.a.licenseId)).toHaveLength(0);
+
+        // …and A cannot simply take it back while B holds it.
+        expect((await connect(tg.type, tg.connect(tg.addressA), adminA)).statusCode).toBe(400);
+      });
+    });
   });
 });

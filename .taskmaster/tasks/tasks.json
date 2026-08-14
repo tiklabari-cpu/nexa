@@ -3724,7 +3724,7 @@
             "description": "Settings → Security: SSO bağlantı ekranı + SCIM token üretimi (bir kez gösterilir)",
             "details": "S11-g — Settings → Security: SSO bağlantı ekranı + SCIM token üretimi (bir kez gösterilir)  [SONNET-XHIGH]\n\nPRD: S11 (PLAN §6.1 · dilim V3-1 · tm 81)\nTAHMİN: ~1 pencere\n\nKAPSAM (denetim sonrası KESİNLEŞTİRİLDİ — bu alt-görev SALT TÜKETİCİDİR): Settings → Security altında SSO bölümü — IdP metadata girişi (entityId, SSO URL, sertifika PEM, attribute mapping) formu, \"bağlantıyı doğrula\" butonu, SCIM token üret/iptal et. Token ÜRETİLDİĞİ ANDA BİR KEZ gösterilir, sonra bir daha gösterilmez.\n\n**YENİ SUNUCU UCU AÇMA — üçü de başka alt-görevlerin malıdır:**\n- SSO bağlantısı YAZMA ucu → `S11-a2` (OPUS-MAX). Bu ekran onu ÇAĞIRIR.\n- SCIM token basma/iptal ucu → `S11-e` (OPUS-MAX). Bu ekran onu ÇAĞIRIR.\n- **\"Bağlantıyı doğrula\" butonu SUNUCUDAN IdP'YE AĞ İSTEĞİ ATMAZ** (denetim bulgusu: kullanıcı kontrolündeki URL'e sunucudan istek = SSRF). Doğrulama YERELDİR: sertifika PEM'i ayrıştırılabiliyor mu, entityId/SSO URL biçimsel olarak geçerli mi, attribute mapping zorunlu alanları taşıyor mu. Ağ testi isteniyorsa ayrı bir OPUS-MAX alt-görev + SSRF savunması gerekir; bu turda KAPSAM DIŞI.\n\nDOSYALAR: `apps/web/src/features/settings/SsoConnection.tsx` (yeni) + test · `apps/web/src/features/settings/SettingsPage.tsx` (bölüm bağlama)\n\nREFERANS DESEN (birebir): `apps/web/src/features/settings/IpAllowlist.tsx` (tm 80 `08.9.6-h`) — bölüm yerleşimi, form, liste, silme onayı. \"Bir kez göster\" kalıbı: `apps/web/src/features/developers/DeveloperPortal.tsx:480-484` `SecretOncePanel` (tm 72 · `09.4-e`) — partner app `client_secret`'ı için yazılmış, birebir aynı sözleşme. (Web tarafında PAT üretim ekranı YOKTUR; sunucu tarafı hash emsali `services/auth/token-service.ts`.) Form primitifi `lib/form.tsx` (EK-A.1), kirli form koruması `lib/dirty-guard.tsx` (EK-A.2) — yeni form kütüphanesi EKLENMEZ.\n\nKAPSAM DIŞI: enforcement (S11-h), e2e (S11-i), her türlü yeni sunucu ucu (S11-a2 / S11-e).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/web test (SsoConnection: metadata formu doğrulaması, sertifika alanı zorunlu, SCIM token üretildikten sonra bir daha gösterilmez, iptal onayı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "81.1",
               "81.2",
@@ -3732,7 +3732,7 @@
               "81.6"
             ],
             "parentId": "81",
-            "updatedAt": "2026-08-11T21:02:59.172Z"
+            "updatedAt": "2026-08-14T17:15:35.600Z"
           },
           {
             "id": 9,
@@ -3765,7 +3765,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-14T16:42:07.271Z"
+        "updatedAt": "2026-08-14T17:15:35.600Z"
       },
       {
         "id": "82",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-14T16:42:07.271Z",
+      "lastModified": "2026-08-14T17:15:35.601Z",
       "taskCount": 123,
       "completedCount": 117,
       "tags": [

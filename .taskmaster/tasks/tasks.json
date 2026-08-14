@@ -3425,12 +3425,12 @@
             "description": "TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri",
             "details": "08.5.8-b — TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri  [SONNET-XHIGH]\n\nPRD: 08.5.8 (PLAN §6.1 · dilim V3-4 · tm 79)\nTAHMİN: ~1 pencere\n\nKAPSAM: `apps/api/src/services/channels/telegram.ts` — `ChannelAdapter` arayüzünü uygular: `parseConnect` (bot_token + bot_username → {address, config}), `parseInbound` (düzleştirilmiş {recipient, sender, message}), `send` (mock outbound, provider message id öneki `tg.`).\n\nDOSYALAR: `apps/api/src/services/channels/telegram.ts` (yeni) · `apps/api/src/services/channels/adapters.test.ts`\n\nREFERANS DESEN (birebir): `apps/api/src/services/channels/instagram.ts` (80 satır) — yapı, isimlendirme, hata davranışı bire bir kopyalanır.\n\nVARSAYIM: Telegram'ın gerçek `update` sarmalayıcısı TAKLİT EDİLMEZ; depodaki düzleştirilmiş gövde kalıbı korunur (mevcut dört adaptörle tutarlılık).\n\nKAPSAM DIŞI: registry kaydı ve CHANNEL_TYPES (08.5.8-c).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**`bot_token` `config`'e YAZILMAZ (denetim bulgusu — PLAN §6.1.1'in açık sorusu BU KARARLA KAPANDI):** `apps/api/src/services/channels/channel-adapter.ts` `ConnectResult.config` dokümanı birebir _\"Never contains a raw secret\"_ diyor. Instagram emsali (`ig_access_token`) sunucunun kendi bastığı bir mock değerdir; Telegram'da `bot_token` İSTEMCİDEN gelir, yani emsali körü körüne kopyalamak bu invaryantı kullanıcı-sağlamalı bir sırla ihlal eder. `parseConnect` yalnız `{address: bot_username, config: {address, bot_username}}` döner. Token gerekiyorsa mock bir türev saklanır. Ayrıca `bot_token` pino redaction listesine ve `sanitizeAuditMetadata`'ya eklenir. (Hafifletici: `channel-service.ts` `serialise()` zaten yalnız `address` döner, yani `config` `GET /channels` yanıtına girmiyor — ama DB'de düz metin ve loglar açık yüzey kalırdı.)",
             "testStrategy": "pnpm --filter @nexa/api test:unit (adapters.test.ts: parseConnect adresi doğru çıkarır; parseInbound gövdeyi çözer; send tg. önekli id döner; bozuk gövde reddedilir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "79.1"
             ],
             "parentId": "79",
-            "updatedAt": "2026-08-14T21:35:37.572Z"
+            "updatedAt": "2026-08-14T21:56:46.599Z"
           },
           {
             "id": 3,
@@ -3487,7 +3487,7 @@
             "updatedAt": "2026-08-11T21:09:39.258Z"
           }
         ],
-        "updatedAt": "2026-08-14T21:35:37.572Z"
+        "updatedAt": "2026-08-14T21:56:46.599Z"
       },
       {
         "id": "80",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-14T21:35:37.572Z",
+      "lastModified": "2026-08-14T21:56:46.599Z",
       "taskCount": 123,
       "completedCount": 118,
       "tags": [

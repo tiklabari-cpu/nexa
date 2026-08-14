@@ -3786,6 +3786,36 @@ görüneceği en son yerdir.
   **henüz geçerli olmayan** (5 dk saat kayması toleransıyla — ikisi de "sıradaki assertion'ı
   doğrulayamaz") · **RSA/DSA < 2048 bit**. `enabled` yalnız bugün kullanılabilir bir sertifikanın
   arkasında açılabilir. Sertifika PEM'i **kanonik** saklanır (trim + tek `\n`).
+- **A17.3 (S11-b · XML-DSig KÜTÜPHANE SEÇİMİ · tm 81.3 · 2026-08-14):** Kırılımın "bu pencerenin
+  ilk kararı" dediği seçim. **KARAR: `xml-crypto@^6.1.2` (node-saml) + `@xmldom/xmldom@^0.9.8`**,
+  ikisi de `@nexa/api` bağımlılığı. İmza matematiği ve kanonikleştirme ELDE YAZILMAZ: c14n herkesin
+  yanlış yaptığı parçadır ve kendi yazdığımız sürüm depodaki en az incelenmiş güvenlik kodu olurdu.
+  Modülün kendi katkısı SAML profili, algoritma allow-list'i ve XSW kuralıdır — karar orada.
+  `xpath` paketi bilerek DOĞRUDAN kullanılmadı: sorgular derleme zamanında sabit DOM gezintisiyle
+  yazıldı, böylece belgenin etkileyebileceği bir ifade yok.
+- **A17.4 (S11-b · ALGORİTMA ALLOW-LIST'İ + XSW KURALI · tm 81.3 · 2026-08-14):** (a) İmza ve özet
+  tarafında **yalnız SHA-256/SHA-512**; `xml-crypto`'nun açık bıraktığı `rsa-sha1` ve `#sha1`
+  KAPATILDI (SHA-1 seçili-önek çakışması satın alınabilir bir hizmettir ve `DigestValue`'da bir
+  çakışma "aynı imzayla ikinci belge" demektir). `#WithComments` kanonikleştirmeleri de kapalı —
+  CVE-2017-11427 sınıfının mekanizması odur. Reddedilenler **isimle**, doğrulamadan ÖNCE
+  (`weak_algorithm`), böylece downgrade "geçersiz imza" diye görünmez. (b) **XSW kuralı yapısaldır,
+  şekil listesi değil:** iddialar ayrıştırılmış belgeden HİÇ okunmaz, yalnız özetin fiilen kapsadığı
+  kanonik baytlardan (`getSignedReferences()`, yeniden ayrıştırılarak). İmzasız bir düğüm bu modül
+  için YOKTUR. `getValidatedNode()` v6'da "deprecated ve güvensiz" — orijinal belgeyi yeniden
+  sorguladığı için, ki XSW deliğinin tanımı budur. Tek istisna **yalnız-ret okumaları**
+  (`Status`, `Destination`): imzasız bayt üzerinden ek bir VE koşulu; saldırgan onlarla yalnız ret
+  ürettirebilir, kabul ettiremez. Değişmez: **hiçbir kabul kararı imzasız bir bayta dayanmaz.**
+- **A17.5 (S11-b · sertifika KULLANIM ANINDA da doğrulanır · tm 81.3 · 2026-08-14):** S11-a2'nin
+  sonraki pencereye bıraktığı açık soru. **KARAR: evet.** Doğrulayıcı her yapılandırılmış
+  sertifikayı `inspectIdpCertificate` ile (A17.2'nin aynı kuralı) o anki saate karşı yeniden
+  geçirir; hiçbiri kullanılabilir değilse `no_usable_certificate`. Gerekçe: A17.1'in rotasyon
+  örtüşmesi bir sertifikayı 7 güne kadar güvenilir tutabilir ve sertifika o pencerenin İÇİNDE
+  süresi dolabilir — yazma anındaki geçerlilik kullanım anındaki geçerlilik değildir. Ayrıca
+  assertion ömrüne tavan kondu (**24 sa**, `lifetime_too_long`): tavan olmadan yanlış yapılandırılmış
+  bir IdP on yıl geçerli assertion basabilir ve replay kaydının da on yıl tutulması gerekirdi —
+  kimlik bilgisini sınırlamak doğru düzeltme, yalnız kaydı sınırlamak kaydın bittiği an açılan bir
+  pencere bırakır. Saat kayması toleransı **3 dk** (sertifikanın 5 dk'sından bilerek dar: sertifika
+  yıllarca yaşar, assertion dakikalarca).
 - **A18 (S11-f):** SCIM `DELETE` deprovizyonu üyeliği **suspend eder, SİLMEZ** — atanmış
   sohbetlerin sahipliği ve audit izi korunsun diye. Açık soru olarak da işaretli (ürün kararı).
 - **A19 (C4):** HIPAA/bölge KK'sı NFR-C4/C9'dan türetildi. **Bölge bir yapılandırma değeridir,
@@ -4953,4 +4983,9 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 - ✅ **Rotasyon semantiği KARARA BAĞLANDI: varsayılan anında iptal, örtüşme yalnız istenirse (≤7 gün).** Gerekçe ve mekanizma §C-A17.1'de; `previous_certificate_pem` + `previous_certificate_expires_at` (birlikte-veya-hiç CHECK) — `apps/api/prisma/migrations/20260812130000_sso_certificate_rotation/migration.sql`. Pencere **tek yerde** yorumlanır (`activePreviousCertificate`): süresi dolmuş örtüşme okuma yüzeyinde ve doğrulayıcıda (S11-b/S11-d) **hiç yokmuş gibi** okunur, satır baytları dursa bile. Erken kapatma (`revoke_previous_certificate`) ele geçirme senaryosu için var · tm 81.2
 - ✅ **Sertifika ayrıştırılır, desenle eşleştirilmez** (`node:crypto` `X509Certificate`, yeni bağımlılık yok). Ret matrisi: ayrıştırılamayan · **zincir** · süresi geçmiş · henüz geçerli olmayan (5 dk saat kayması toleransı) · **RSA/DSA < 2048 bit**. SSO URL'i **https zorunlu, loopback istisnalı** (S11-c'nin 127.0.0.1 harness'ı için; migration'ın kolona bilerek koymadığı politika) + gömülü kimlik bilgisi ve `#fragment` reddedilir; `javascript:`/`data:`/`//evil` yüzeyi kapalı. Saf modül `apps/api/src/lib/sso-connection.ts` (`ip-allowlist.ts` emsali: DB'siz, Fastify'sız) · test `apps/api/src/lib/sso-connection.test.ts` (22) · gerçek X.509 fixture'ları `apps/api/test/helpers/certificates.ts` (sır değil, openssl ile üretilmiş kullan-at public sertifikalar) · §C-A17.2 · tm 81.2
 - ✅ **Audit: mevcut eylem, uydurma yok — `settings.security_updated` + `operation` metadata'da.** Hedef `sso_connection:<id>`; metadata değişen **alan adlarını** ve rotasyonda **SHA-256 parmak izini** taşır ("hangi güven çıpası kuruldu" sorusunun tek cevabı), **sertifika içeriği ASLA** — reddedilen bir yazma hiç satır yazmaz. `attribute_mapping` bilinmeyen anahtarı **reddeder** (sessizce düşürmez: düşürülen eşleme admin'e kaydedilmiş gibi görünür) — test `apps/api/test/integration/sso.test.ts` 8 → **38** · tm 81.2
-- ⬜ **Kalan (8 alt-görev):** `S11-b` assertion doğrulama çekirdeği · `S11-c` mock IdP harness · `S11-d` SP uçları · `S11-e`/`S11-f` SCIM · `S11-g` ekran · `S11-h` SSO zorunlu kılma · `S11-i` uçtan uca doğrulama.
+- ✅ **S11-b — assertion doğrulama çekirdeği: imza + koşullar + replay tek modülde.** Saf, DB'siz, ağsız doğrulayıcı `apps/api/src/lib/saml.ts`; tek durum ihtiyacı (`bu assertion kullanıldı mı`) `AssertionReplayGuard` olarak ENJEKTE edilir, böylece 23 kalemlik ret matrisi Redis'siz sınanır. Bölünmezliğin kanıtı ret matrisinin kendisidir: yalnız imza "başka SP için basılmış" assertion'ı kabul eder, yalnız koşullar saldırgan metnidir, ikisi birlikte aynı assertion'ı İKİ KEZ kabul eder. Kütüphane §C-A17.3, algoritma allow-list'i §C-A17.4 · test `apps/api/src/lib/saml.test.ts` (51) · tm 81.3
+- ✅ **XSW savunması YAPISAL — şekil listesi değil.** İddialar ayrıştırılmış belgeden HİÇ okunmaz; yalnız özetin fiilen kapsadığı kanonik baytlardan (`getSignedReferences()` → yeniden ayrıştırma). İmzasız düğüm bu modül için yoktur, nerede durursa dursun. **Altı saldırı şekli gerçek imzalarla kuruldu** ve hiçbiri kurbanın kimliğini döndürmedi: imzalının önüne sahte assertion · imzalıyı `Extensions`'a taşıma · imzanın bir tuzağı kapsaması (gerçek anahtarla, geçerli imza → `assertion_missing`) · aynı `ID`'yi iki düğüme verme · imzayı başka yanıttan nakletme · imzalı yanıtı sahte bir yanıtın içine sarma. **Mutasyon testiyle kanıtlandı:** `collectSignedAssertions(signedPayloads)` → `([xml])` yapılınca tam 4 XSW testi kırmızıya döndü, yani testler ısırıyor · §C-A17.4 · tm 81.3
+- ✅ **KeyInfo anahtar ikamesi ve algoritma downgrade'i kapalı.** Doğrulama anahtarı YALNIZ bizim sakladığımız sertifikadan gelir: `publicCert` açıkça verilir ve `getCertFromKeyInfo` `null`'a sabitlenir (v6 varsayılanı zaten öyle; sabitleme gelecekteki bir varsayılanın "IdP'miz imzaladı"yı "sertifika gömen kim olursa" hâline sessizce çevirmesini engeller) — saldırganın kendi anahtarıyla imzalayıp kendi sertifikasını gömdüğü belge REDDEDİLİR. SHA-1 imza/özet ve `#WithComments` kanonikleştirme isimle reddedilir; CVE-2017-11427 yorum-enjeksiyonu iki taraftan kapalı (imzalı baytlarda yorum yok + okuyucu TÜM alt metin düğümlerini birleştirir, ilkini değil) · tm 81.3
+- ✅ **Replay: `SET NX PX` tek gidiş-dönüş, bağlantı başına kapsamlı, SON adımda.** `createRedisReplayGuard` — oku-sonra-yaz iki eşzamanlı gönderime de "kullanılmamış" gösterirdi; yarış Redis'te karara bağlanır. Kayıt **yalnız her açıdan geçerli** bir assertion için harcanır, yoksa yakınından geçen bir istek akışı uçuştaki assertion'ların id'lerini yakabilirdi (gerçek girişlere DoS). Redis düşerse hata YUKARI ÇIKAR — rate limiter'ın "fail open"ı burada başlangıç saati bilinen bir kimlik doğrulama atlatmasıdır. `ReplayStore` yapısaldır (`ioredis` importu yok); gerçek `Redis`'in arayüze uyduğu **tip düzeyinde** testte pinli, S11-d bağlarken değil burada kırılır · tm 81.3
+- ✅ **S11-a2'nin açık sorusu kapatıldı: sertifika KULLANIM anında da doğrulanır** (§C-A17.5) — rotasyon örtüşmesi bir sertifikayı 7 güne kadar tutabilir ve o pencerenin içinde süresi dolabilir; `inspectIdpCertificate` (A17.2'nin aynı kuralı) her doğrulamada yeniden koşar, hiçbiri kullanılabilir değilse `no_usable_certificate`. Ayrıca assertion ömrüne 24 sa tavan, saat kayması 3 dk, DTD reddi (entity expansion), 512 KiB gövde tavanı, en çok 2 imza · tm 81.3
+- ⬜ **Kalan (7 alt-görev):** `S11-c` mock IdP harness · `S11-d` SP uçları · `S11-e`/`S11-f` SCIM · `S11-g` ekran · `S11-h` SSO zorunlu kılma · `S11-i` uçtan uca doğrulama.

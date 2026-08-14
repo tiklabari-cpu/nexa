@@ -13,6 +13,43 @@
 
 ## Task log (newest-first)
 
+## tm 81.3 — S11-b · SAML assertion doğrulama çekirdeği: imza + koşullar + replay + XSW — done — 2026-08-14 UTC
+
+- **Yapıldı:** (1) `apps/api/src/lib/saml.ts` — saf (DB'siz/ağsız/Fastify'sız) doğrulayıcı,
+  23 kalemlik tipli ret matrisi; tek durum ihtiyacı `AssertionReplayGuard` olarak enjekte edilir.
+  **KÜTÜPHANE KARARI (§C-A17.3):** `xml-crypto@^6.1.2` + `@xmldom/xmldom@^0.9.8` — XML-DSig elde
+  yazılmadı; modülün katkısı SAML profili + algoritma allow-list'i + XSW kuralı. (2) **XSW savunması
+  yapısaldır:** iddialar ayrıştırılmış belgeden HİÇ okunmaz, yalnız `getSignedReferences()`'in
+  döndürdüğü kanonik imzalı baytlardan (yeniden ayrıştırılarak). `getValidatedNode()` v6'da
+  deprecated+güvensiz — orijinal belgeyi yeniden sorgular, XSW deliğinin tanımı budur. Altı saldırı
+  şekli gerçek imzalarla kuruldu; **mutasyon testi** (`signedPayloads` → `[xml]`) tam 4 XSW testini
+  kırmızıya çevirdi. (3) Algoritma allow-list'i (§C-A17.4): SHA-1 imza/özet ve `#WithComments`
+  kapalı, ret **isimle** ve doğrulamadan ÖNCE (`weak_algorithm`); `getCertFromKeyInfo` `null`'a
+  sabit → KeyInfo'ya gömülü sertifika anahtar olamaz. (4) Replay `SET NX PX` tek gidiş-dönüş,
+  bağlantı başına kapsamlı, **son adımda** (yakın-ıskalayan istekler uçuştaki id'leri yakamasın);
+  Redis hatası yukarı çıkar — burada fail-open kimlik doğrulama atlatmasıdır. (5) **S11-a2'nin açık
+  sorusu kapatıldı** (§C-A17.5): sertifika kullanım anında da `inspectIdpCertificate`'ten geçer.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `format:check` (dokunulan dosyalar) ·
+  build 7/7 · `pnpm -w test` 10/10 (`@nexa/api` 2485 → **2536**, +51 birim) ·
+  `pnpm -w test:integration` **1904** (api; taban ile aynı — bu alt-görev saf modül, uç açmaz) ·
+  `pnpm -w test:e2e` **131/131** (6.3 dk). Migration yok, şema değişmedi (drift kontrolü gereksiz).
+- **Varsayımlar:** (a) Assertion ömrü tavanı **24 sa**, saat kayması **3 dk** (sertifikanın 5 dk'sından
+  bilerek dar). (b) `Conditions/@NotOnOrAfter` ve bearer `SubjectConfirmationData/@NotOnOrAfter`
+  ZORUNLU — süresiz assertion süresiz kimlik bilgisidir. (c) `Status`/`Destination` imzasız belgeden
+  okunur ama **yalnız-ret**: ek bir VE koşulu, kabul ettiremez. (d) `EncryptedAssertion` desteklenmez,
+  ama sessizce "imzasız" denmez — kendi ret nedeni var.
+- **Sonraki pencereye not:** (1) **S11-c mutlu yol fixture'ını yazarken `saml.test.ts`'teki
+  `IDP_PRIVATE_KEY`/`IDP_CERTIFICATE` çiftini `test/helpers/mock-idp.ts`'e TERFİ ETTİR** — çift
+  bilerek test dosyasında duruyor (S11-b, S11-c'yi beklemiyor); iki ayrı çift üretme. Saldırgan
+  varyantları S11-c'ye TAŞINMAZ, S11-b'nin malıdır. (2) **S11-d `verifySamlResponse`'a sertifika
+  listesini `activePreviousCertificate`'ten geçirerek versin** (güncel önce, örtüşen sonra);
+  doğrulayıcı süresi dolmuş örtüşmeyi kendi başına ayıklamaz, o pencere §C-A17.1'in tek yorum
+  yeridir. (3) S11-d ret nedenini HTTP'ye çevirirken taksonomiyi genişletmesin: 23 neden de
+  `authentication` (401) altına düşer, ayrıntı yalnız sunucu log'una — ret nedenini istemciye
+  ayırt edilebilir biçimde vermek IdP yapılandırmasını uzaktan haritalamaya yarar.
+  (4) Docker Desktop bu makinede otomatik başlamıyor ve e2e için **`set -a; . ./.env; set +a`**
+  gerekiyor (yoksa `@nexa/rtm` "Invalid environment" ile düşer ve süit kurulumda ölür).
+
 ## tm 81.2 — S11-a2 · SSO bağlantısı YAZMA ucu: `owner` kilidi + sertifika doğrulaması + rotasyon — done — 2026-08-12 UTC
 
 - **Yapıldı:** (1) `POST`/`PATCH`/`DELETE /settings/sso`, `access_rules:rw` + **`exactRole: 'owner'`** —

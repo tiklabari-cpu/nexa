@@ -66,7 +66,7 @@ describe('channel views', () => {
   });
 
   it('ignores an unknown channel type', () => {
-    const channels: ConnectedChannelLike[] = [{ type: 'telegram', connected: true }];
+    const channels: ConnectedChannelLike[] = [{ type: 'chat_page', connected: true }];
     expect(connectedChannelViews(channels)).toEqual([]);
     expect(showChannelPromo(channels)).toBe(true);
   });
@@ -82,6 +82,21 @@ describe('channel views', () => {
 
   it('treats a disconnected Instagram channel as not connected', () => {
     const channels: ConnectedChannelLike[] = [{ type: 'instagram', connected: false }];
+    expect(connectedChannelViews(channels)).toEqual([]);
+    expect(showChannelPromo(channels)).toBe(true);
+  });
+
+  it('lists a connected Telegram channel and hides the promo', () => {
+    // KK: bağlı telegram → satır görünür; yalnız telegram bağlıyken promo GÖSTERİLMEZ.
+    const channels: ConnectedChannelLike[] = [{ type: 'telegram', connected: true }];
+    expect(connectedChannelViews(channels)).toEqual([
+      { type: 'telegram', label: 'Telegram', icon: '✈️' },
+    ]);
+    expect(showChannelPromo(channels)).toBe(false);
+  });
+
+  it('treats a disconnected Telegram channel as not connected', () => {
+    const channels: ConnectedChannelLike[] = [{ type: 'telegram', connected: false }];
     expect(connectedChannelViews(channels)).toEqual([]);
     expect(showChannelPromo(channels)).toBe(true);
   });

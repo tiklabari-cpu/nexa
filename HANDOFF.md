@@ -13,6 +13,22 @@
 
 ## Task log (newest-first)
 
+## tm 79.5 — 08.5.8-e · Inbox Views grubunda Telegram kanal görünümü — done — 2026-08-15 UTC
+
+- **Yapıldı:** `apps/web/src/features/inbox/views.ts` — Instagram'ın (tm 65 `08.5.7-g`) birebir
+  deseni: `ChannelViewType` birliğine `'telegram'`, `CHANNEL_VIEW_META`'ya Settings kartıyla
+  (`08.5.8-d`) aynı ikon/etiket (`✈️` Telegram) eklendi, `isChannelViewType` guard'ı elle genişledi.
+  `InboxPage.tsx:693` tüketimi jenerik `.map()` olduğu için dokunulmadı.
+- **Pinlenmiş test güncellendi:** `views.test.ts:68` `ignores an unknown channel type` artık
+  Telegram yerine `'chat_page'` kullanıyor (Telegram artık bilinen tip); Instagram'la simetrik iki
+  yeni test eklendi (bağlıyken görünüm + promo gizli, bağlı değilken tersi).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm --filter @nexa/web test`
+  111/111 dosya, 1123/1123 test (1121→1123) · `pnpm -w test:integration` 2063/2063 (değişmedi,
+  UI-only) · `pnpm -w build` 7/7 · e2e bu dilimde koşulmadı (görevin KAPSAM DIŞI notu — `08.5.8-f`'te).
+- **Sonraki pencereye not:** Kalan tek alt-görev `08.5.8-f` uçtan uca doğrulama (bağla→mesaj→
+  inbox→yanıt + cross-tenant + adres sahiplenme regresyonu) — bağımlılıkları (`-d`, `-e`) artık ikisi
+  de done.
+
 ## tm 79.4 — 08.5.8-d · Settings → Channels: Telegram kartı "Coming soon"dan canlı connect/disconnect'e — done — 2026-08-15 UTC
 
 - **Yapıldı:** `Channels.tsx:133`'teki `comingSoon('telegram', …)` silindi, `telegramChannel(connectedChannels)`

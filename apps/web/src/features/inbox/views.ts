@@ -30,7 +30,7 @@ import type { InboxView, TrafficTab } from './types.js';
  * the agent as "SMS". Email and the Website widget resolve tenants their own
  * way and are not adapter channels, so they are not listed here.
  */
-export type ChannelViewType = 'messenger' | 'twilio' | 'whatsapp' | 'instagram';
+export type ChannelViewType = 'messenger' | 'twilio' | 'whatsapp' | 'instagram' | 'telegram';
 
 export interface ChannelView {
   type: ChannelViewType;
@@ -48,6 +48,7 @@ const CHANNEL_VIEW_META: Record<ChannelViewType, { label: string; icon: string }
   whatsapp: { label: 'WhatsApp', icon: '📱' },
   twilio: { label: 'SMS', icon: '💬' },
   instagram: { label: 'Instagram', icon: '📷' },
+  telegram: { label: 'Telegram', icon: '✈️' },
 };
 
 /** The `/channels` row shape, narrowed to what the Views group reads. */
@@ -58,7 +59,11 @@ export interface ConnectedChannelLike {
 
 function isChannelViewType(value: string): value is ChannelViewType {
   return (
-    value === 'messenger' || value === 'twilio' || value === 'whatsapp' || value === 'instagram'
+    value === 'messenger' ||
+    value === 'twilio' ||
+    value === 'whatsapp' ||
+    value === 'instagram' ||
+    value === 'telegram'
   );
 }
 

@@ -199,6 +199,29 @@ export default async function authRoutes(
         // it from the organisation name; a workspace created through signup has
         // no client matching that guess.
         client_id: m.client_id,
+        // Which workspaces have closed the password door (NFR-S11 · S11-h), and
+        // where to knock instead.
+        //
+        // Annotated rather than refused, and this endpoint is deliberately not
+        // the enforcement point. It selects no workspace — the comment on
+        // `/auth/authorize` already says as much — so it is a directory lookup,
+        // not a sign-in, and a gate here would be one a client could simply not
+        // call: `/auth/authorize` takes the same email and password and is
+        // reached without it. Enforcement lives where the session is minted;
+        // what belongs here is the fact that lets the screen offer the right
+        // door instead of a password box that will be rejected.
+        //
+        // Filtering the workspace out of the list was the other option and is
+        // worse: to the person it reads as "you have been removed", and it
+        // leaves them nothing to click. They have just proved this account's
+        // password and this membership, so naming the connection tells them
+        // nothing they are not entitled to know.
+        sso_enforced_connection_id: m.sso_enforced_connection_id,
+        // Derived here, not left to the client, because the break-glass rule is
+        // a server rule (§C-A17.7) and a copy of it in the UI is a copy that
+        // goes stale — showing a password box the API refuses, or hiding one it
+        // would have accepted.
+        password_login_available: passwordLoginAvailable(m),
       })),
     });
   });
@@ -238,6 +261,50 @@ export default async function authRoutes(
       throw new ApiError('license_expired', 'This workspace is no longer active.');
     }
 
+    // --- SSO enforcement (NFR-S11 · S11-h) ----------------------------------
+    //
+    // The password was right. This is where it stops being enough: the
+    // workspace has said its identity provider is the way in, and a password
+    // that still worked would route around the MFA, conditional access and
+    // device posture that live there — which is the entire reason the workspace
+    // bought SAML.
+    //
+    // Here rather than at `/auth/login` because this is the sign-in: it is the
+    // call that binds a credential to a workspace and mints the code a session
+    // comes from. A gate on the listing endpoint would be one this call does
+    // not need anybody to have passed.
+    //
+    // Owners are let through, and every such entry is marked. See §C-A17.7:
+    // an enterprise that federates sign-in must still be able to get in when
+    // the identity provider cannot answer, and the account able to undo the
+    // federation is the one that has to be able to. `admin` is not enough —
+    // enforcement is set by `exactRole: 'owner'`, so the door out is held to
+    // the same rank as the door in.
+    const enforcedConnection = membership.sso_enforced_connection_id;
+    if (enforcedConnection !== null && !passwordLoginAvailable(membership)) {
+      // The workspace's own trail, under the membership's tenant — trusted,
+      // unlike the `license_id` in the body. A refused password against an
+      // SSO-only workspace is exactly the signal an admin wants to see: either
+      // somebody has not migrated, or a credential that should be inert is
+      // being tried.
+      await audit(
+        request,
+        { licenseId, organizationId: membership.organization_id },
+        { actorId: account.id, actorType: 'agent' },
+        { action: 'auth.login_failed', metadata: { reason: 'sso_enforced' } },
+      );
+      throw new ApiError(
+        'not_allowed',
+        'This workspace requires single sign-on. Continue with your identity provider.',
+        // Named so a client that came straight here — a saved workspace, a
+        // deep link — can still send the person somewhere. Withholding it
+        // protects nothing from a caller who has already proved the password
+        // and the membership, and costs them the only actionable thing in the
+        // refusal.
+        { details: { sso_connection_id: enforcedConnection } },
+      );
+    }
+
     const requested = body.scope
       ? body.scope
           .split(',')
@@ -266,11 +333,24 @@ export default async function authRoutes(
     // A password was verified and bound to this workspace — the audit-meaningful
     // "signed in". `/auth/login` lists a person's workspaces but selects none,
     // so it is not the sign-in event and is not recorded here.
+    //
+    // A break-glass sign-in is marked. It is the one password that still opens
+    // an SSO-only workspace, so it is the one an incident review has to be able
+    // to find — and the residual risk the owner exemption accepts (a phished
+    // owner password is still a way in) is bounded by exactly this: it is loud.
+    // Ordinary sign-ins keep no metadata at all rather than gaining a `false`
+    // that every future query would have to remember to ignore.
     await audit(
       request,
       { licenseId, organizationId: membership.organization_id },
       { actorId: account.id, actorType: 'agent' },
-      { action: 'auth.login', target: `client:${client.id}` },
+      {
+        action: 'auth.login',
+        target: `client:${client.id}`,
+        ...(enforcedConnection === null
+          ? {}
+          : { metadata: { break_glass: true, sso_connection_id: enforcedConnection } }),
+      },
     );
 
     return reply.send({
@@ -688,6 +768,30 @@ async function readPreChatForm(
     request.log.warn({ err: error }, 'failed to read pre-chat form');
     return [];
   }
+}
+
+/**
+ * May this membership still be entered with a password (NFR-S11 · S11-h)?
+ *
+ * The break-glass rule, in one function, used by both the listing endpoint and
+ * the sign-in it precedes — so what the screen offers and what the API accepts
+ * cannot come apart.
+ *
+ * A workspace with no enforced connection is simply open. One that has closed
+ * the door keeps it open for its `owner`s and nobody else, which is the
+ * narrowest exemption that still leaves the workspace recoverable: the owner is
+ * the only role that can undo the enforcement (`exactRole: 'owner'` on the
+ * write surface), so exempting anyone less would hand a way in to someone who
+ * could not fix the outage anyway, and exempting no one would make a broken
+ * identity provider terminal.
+ *
+ * Not a second credential — see §C-A17.7 for why a recovery code lost to this.
+ */
+function passwordLoginAvailable(membership: {
+  role: string;
+  sso_enforced_connection_id: string | null;
+}): boolean {
+  return membership.sso_enforced_connection_id === null || membership.role === 'owner';
 }
 
 /**

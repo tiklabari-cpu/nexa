@@ -13,6 +13,40 @@
 
 ## Task log (newest-first)
 
+## tm 81.9 — S11-h · SSO zorunlu kılma + break-glass kilitlenme koruması — done — 2026-08-14 UTC
+
+- **Yapıldı:** (1) `sso_connections.enforced` (`20260814210000_sso_enforcement`); zorlama
+  **`enabled && enforced` çiftidir** (`isEnforcingSso`, `activePreviousCertificate` emsali) —
+  kapalı bağlantı hiçbir şey zorlamaz, IdP'si bozulan çalışma alanının kurtarma yolu odur, o
+  yüzden DB'ye CHECK konmadı. (2) **Kapı `/auth/authorize`'da**, `/auth/login`'de değil: o uç
+  workspace SEÇMEZ ve atlanabilir; onun yerine üyelikleri etiketliyor
+  (`sso_enforced_connection_id` + `password_login_available`, `auth_list_memberships`'ten tek
+  satırda). Ret 403 `not_allowed` + `details.sso_connection_id`, audit `auth.login_failed`
+  (`reason: 'sso_enforced'`, aktör kişi). (3) **Break-glass = sahibin parolası, kurtarma kodu
+  DEĞİL** (§C-A17.7); `admin` muaf değil; her kullanımı `auth.login` metadata'sına
+  `break_glass: true` düşer. (4) **Self-lockout kapısı** `auth_has_break_glass_owner`:
+  `enforced && enabled`'a geçiş, parolası olan aktif owner yoksa 400. Gövdeyi değil **yazmadan
+  sonraki durumu** okur; çıkış yolu (kapatma) kapıya takılmaz. (5) Ekran: "Require SSO" anahtarı
+  + açarken onay diyaloğu, sunucu mesajı birebir; `SignInPage` artık parolayı reddedilecek
+  çağrıya harcamıyor.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` (`@nexa/api`
+  2698 → 2722 · `@nexa/web` 1098 → 1107) · `pnpm -w test:integration` 2004 → **2026**
+  (yeni `sso-enforcement.test.ts` 22) · `pnpm -w build` 7/7 · e2e `settings.spec.ts` +
+  `a11y.spec.ts` **45/45** · `db:check-drift` temiz.
+- **Varsayımlar:** (a) Lisansta **tam bir** owner vardır (`uq_license_single_owner`) — kapının
+  saydığı hesap ile isteği yapan hesap aynı kişidir, bu yüzden guard tm 80'in `wouldLockOut`'una
+  neredeyse birebir oturuyor. (b) Askıya alınmış owner'ı saymama kuralı API'den **erişilemez**
+  (askıdaki üyenin token'ı zaten çözülmüyor); SQL'de tutuldu ve resolver'a karşı doğrudan test
+  edildi, çünkü bu fonksiyon ile giriş yolu aynı soruya aynı cevabı vermeli. (c) Etiketleme
+  yaklaşımı: SSO-zorunlu workspace listeden DÜŞÜRÜLMEDİ (kişiye "çıkarıldın" gibi okunurdu).
+- **Sonraki pencereye not:** **`S11-i` için kalan borç:** giriş ekranından SAML bacağını
+  BAŞLATMAK yazılmadı — tarayıcı yönlendirmesi + yönlendirmeden sağ çıkan PKCE doğrulayıcısı
+  (sessionStorage) + `/auth/callback` rotası gerekiyor. Bugün `SignInPage` yalnız doğruyu söyleyip
+  duruyor ("This workspace requires single sign-on…"). `apps/web/src/lib/auth-store.ts`
+  `REDIRECT_URI` sabiti var ama hiçbir yönlendirme akışı yok — `signIn` tüm değişimi tek
+  fonksiyonda yapıyor. S11-d'nin IdP-initiated dönüşümü de `${WEB_APP_URL}/login?sso=<id>`'ye
+  yolluyor ve o parametreyi okuyan kod henüz yok.
+
 ## tm 81.8 — S11-g · Settings → Security: SSO bağlantı ekranı + SCIM token üretimi — done — 2026-08-14 UTC
 
 - **Yapıldı:** `apps/web/src/features/settings/SsoConnection.tsx` (yeni) — salt tüketici, yeni

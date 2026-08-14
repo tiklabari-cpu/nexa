@@ -18,6 +18,14 @@ login:
       Responds identically whether the email is unknown or the password is
       wrong, and always spends the same time, so registered addresses cannot be
       enumerated.
+
+      A workspace that requires single sign-on (NFR-S11) still appears in the
+      list, annotated rather than hidden: `password_login_available` is false and
+      `sso_enforced_connection_id` names the connection to continue with.
+      Removing it would read to the person as "you have been removed" and leave
+      them nothing to click. Enforcement itself is applied by `/auth/authorize`,
+      which is where a credential becomes a session — this call selects no
+      workspace and is not a gate.
     security: []
     requestBody:
       required: true
@@ -57,6 +65,24 @@ login:
                       role: { type: string, enum: [owner, viceowner, admin, agent] }
                       license_status: { type: string }
                       client_id: { type: string, nullable: true }
+                      sso_enforced_connection_id:
+                        type: string
+                        format: uuid
+                        nullable: true
+                        description: >-
+                          The SAML connection that has closed this workspace's
+                          password door, or null while passwords still work.
+                          Present so the sign-in screen can offer the right door;
+                          the caller has already proved this account's password
+                          and this membership.
+                      password_login_available:
+                        type: boolean
+                        description: >-
+                          Whether `/auth/authorize` will accept a password for
+                          this workspace. False for a member of an SSO-enforced
+                          license; true for its owners, who keep a break-glass
+                          door so a broken identity provider is not terminal.
+                          Server-derived so the rule has one home.
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
@@ -66,6 +92,18 @@ authorize:
     tags: [Auth]
     operationId: authorize
     summary: Issue a single-use authorization code
+    description: |
+      Verifies the password against the named workspace and returns a single-use
+      code the caller redeems at `/auth/token`.
+
+      This is where single sign-on enforcement bites (NFR-S11): a correct
+      password against a workspace that requires SSO is refused with
+      `not_allowed`, carrying `details.sso_connection_id` so the client can send
+      the person to their identity provider instead. Owners are exempt — the
+      break-glass door that keeps a broken identity provider from locking a
+      workspace out of its own account — and their sign-in is marked in the
+      audit trail. Refusals are recorded as `auth.login_failed` with the reason
+      `sso_enforced`.
     security: []
     requestBody:
       required: true
@@ -111,7 +149,14 @@ authorize:
                 expires_in: { type: integer }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
-      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "403":
+        description: >-
+          The requested scopes are unavailable, or the workspace requires single
+          sign-on and the caller is not an owner. The latter carries
+          `details.sso_connection_id`.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 token:

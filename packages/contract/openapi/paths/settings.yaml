@@ -225,6 +225,13 @@ sso:
 
       `enabled` defaults to off. Saving the configuration and opening the door
       are two decisions.
+
+      `enforced` defaults to off too, and is accepted here only so the field has
+      one meaning on both verbs — a connection nobody has ever signed in through
+      is the worst moment to close the password door. Either way it is refused
+      unless the workspace still has an owner who holds a password: with SSO
+      required, that owner is the only way back in when the identity provider
+      cannot answer.
     requestBody:
       required: true
       content:
@@ -261,6 +268,13 @@ sso:
               enabled:
                 type: boolean
                 default: false
+              enforced:
+                type: boolean
+                default: false
+                description: >-
+                  Refuse password sign-in for this license while this connection
+                  is also enabled. Owners keep a password door regardless, and
+                  the request is refused if none of them holds a password.
     responses:
       "201":
         description: Created
@@ -313,6 +327,18 @@ ssoConnection:
       A connection cannot be switched on behind an unusable certificate:
       `enabled: true` is refused unless the stored certificate (or the one being
       written in the same request) is currently valid.
+
+      **Requiring SSO.** `enforced: true` closes the password door for the whole
+      license once the connection is also `enabled` — the two are read as a pair,
+      so switching the connection off reopens passwords without a second call,
+      which is how a workspace recovers from a broken identity provider.
+
+      The change is refused when it would leave nobody able to get back in: the
+      license must still have an active owner whose account holds a password.
+      That owner is the break-glass door — enforcement narrows password sign-in
+      from every member to the one role that can undo the enforcement, rather
+      than minting a recovery code that would live outside the identity provider
+      forever. Every break-glass sign-in is marked in the audit trail.
     requestBody:
       required: true
       content:
@@ -329,6 +355,7 @@ ssoConnection:
               attribute_mapping: { $ref: "../openapi.yaml#/components/schemas/SsoAttributeMapping" }
               allow_idp_initiated: { type: boolean }
               enabled: { type: boolean }
+              enforced: { type: boolean }
               retain_previous_certificate_hours:
                 type: integer
                 minimum: 1

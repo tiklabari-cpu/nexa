@@ -557,6 +557,19 @@ export interface SsoConnection {
   allow_idp_initiated: boolean;
   /** Whether sign-in through this connection is live. Off until configured. */
   enabled: boolean;
+  /**
+   * Make this connection the only way into the workspace: password sign-in is
+   * refused for the license while this and {@link enabled} are both set
+   * (S11-h). Reported and applied as that pair — a disabled connection enforces
+   * nothing, which is how a workspace whose IdP has broken gets its password
+   * door back without first having to sign in to turn enforcement off.
+   *
+   * The workspace's owners keep theirs regardless: an enterprise that federates
+   * sign-in still has to be able to get in when the identity provider cannot
+   * answer, and the account that can undo the federation is the one that has to
+   * be able to. Every such sign-in is marked in the audit trail.
+   */
+  enforced: boolean;
   created_at: string;
   updated_at: string;
 }

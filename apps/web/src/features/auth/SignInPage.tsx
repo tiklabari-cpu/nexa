@@ -15,7 +15,28 @@ import { FieldError, compose, email as emailRule, required, useForm } from '../.
  * Credentials go through the one form primitive (FR-EK-A.1): each field carries
  * its own error line and Submit stays disabled until both are filled and the
  * email is well formed.
+ *
+ * A workspace that requires single sign-on (NFR-S11 · S11-h) reports
+ * `password_login_available: false`, and this stops before spending the
+ * password on a call the server will refuse. It says so instead of showing
+ * "Invalid email or password", which would be a lie — the password was right.
+ * Starting the SAML leg from here needs a browser redirect and a PKCE verifier
+ * that survives it; that is not built yet and belongs with the rest of the
+ * end-to-end sign-in work (S11-i), so this tells the truth and stops.
  */
+const SSO_REQUIRED =
+  'This workspace requires single sign-on. Continue from your identity provider’s Nexa tile.';
+
+/**
+ * Whether a password still opens this workspace.
+ *
+ * Absent means "before enforcement existed", which was always yes — an older
+ * server must not turn every sign-in into a refusal.
+ */
+function passwordWorks(membership: Membership): boolean {
+  return membership.password_login_available !== false;
+}
+
 export function SignInPage(): ReactElement {
   const [workspaces, setWorkspaces] = useState<Membership[] | null>(null);
   const [chooseError, setChooseError] = useState<string | null>(null);
@@ -38,7 +59,12 @@ export function SignInPage(): ReactElement {
           return;
         }
         if (memberships.length === 1) {
-          await signIn(values.email, values.password, memberships[0]!.license_id);
+          const only = memberships[0]!;
+          if (!passwordWorks(only)) {
+            setSubmitError(SSO_REQUIRED);
+            return;
+          }
+          await signIn(values.email, values.password, only.license_id);
           return;
         }
         setWorkspaces(memberships);
@@ -52,6 +78,13 @@ export function SignInPage(): ReactElement {
 
   const choose = async (licenseId: string): Promise<void> => {
     setChooseError(null);
+    const workspace = workspaces?.find((w) => w.license_id === licenseId);
+    // Checked before the call rather than after its 403, so the reason survives:
+    // the catch below cannot tell "SSO required" from "the network went away".
+    if (workspace && !passwordWorks(workspace)) {
+      setChooseError(SSO_REQUIRED);
+      return;
+    }
     try {
       await signIn(form.values.email, form.values.password, licenseId);
     } catch {
@@ -100,7 +133,7 @@ export function SignInPage(): ReactElement {
                   >
                     <span>{workspace.organization_name}</span>
                     <span className="text-2xs capitalize text-content-tertiary">
-                      {workspace.role}
+                      {passwordWorks(workspace) ? workspace.role : 'SSO required'}
                     </span>
                   </button>
                 </li>

@@ -50,11 +50,17 @@ const CONNECTIONS = {
       attribute_mapping: {},
       allow_idp_initiated: false,
       enabled: true,
+      enforced: false,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
     },
   ],
 };
+
+/** The same connection with one or both switches moved. */
+function connections(overrides: { enabled?: boolean; enforced?: boolean }) {
+  return { items: [{ ...CONNECTIONS.items[0]!, ...overrides }] };
+}
 
 const TOKENS = {
   items: [
@@ -258,6 +264,101 @@ describe('SsoConnection', () => {
     await userEvent.click(within(dialogAgain).getByRole('button', { name: 'Remove connection' }));
 
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/settings/sso/conn-1'));
+  });
+
+  // --- Requiring SSO (S11-h) ---------------------------------------------------
+
+  it('asks before requiring SSO, because it closes the password door for everyone', async () => {
+    renderComponent(<SsoConnection canEdit />);
+    await screen.findByText('Okta (corp)');
+
+    await userEvent.click(screen.getByLabelText('Require SSO'));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Require Okta (corp) for sign-in?',
+    });
+    // Nothing is sent on the click itself — the same contract the remove
+    // dialog has, for a change of the same weight.
+    expect(api.patch).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(api.patch).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByLabelText('Require SSO'));
+    const again = await screen.findByRole('dialog', { name: 'Require Okta (corp) for sign-in?' });
+    await userEvent.click(within(again).getByRole('button', { name: 'Require single sign-on' }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/settings/sso/conn-1', { enforced: true }),
+    );
+  });
+
+  it('turns enforcement off without asking', async () => {
+    // Asymmetric on purpose: one closes the door on every member, the other
+    // reopens it. Only the first is a change somebody regrets.
+    api.get.mockImplementation((path: string) =>
+      path === '/settings/sso' ? Promise.resolve(connections({ enforced: true })) : mockGet(path),
+    );
+    renderComponent(<SsoConnection canEdit />);
+    await screen.findByText('Okta (corp)');
+
+    await userEvent.click(screen.getByLabelText('Require SSO'));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/settings/sso/conn-1', { enforced: false }),
+    );
+  });
+
+  it('shows the self-lockout refusal verbatim, and leaves the switch where it was', async () => {
+    // The server's message names what to fix ("set a password on the owner
+    // account"); replacing it with something vaguer would strand the one person
+    // who can act on it.
+    api.patch.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message:
+          'That would lock this workspace out: with single sign-on required, an owner with a password is the only way back in when the identity provider cannot answer. Set a password on the owner account before requiring SSO.',
+        requestId: '-',
+      }),
+    );
+    renderComponent(<SsoConnection canEdit />);
+    await screen.findByText('Okta (corp)');
+
+    await userEvent.click(screen.getByLabelText('Require SSO'));
+    const dialog = await screen.findByRole('dialog', { name: 'Require Okta (corp) for sign-in?' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Require single sign-on' }));
+
+    expect(await within(dialog).findByText(/would lock this workspace out/)).toBeInTheDocument();
+    // Rolled back by `optimisticCacheUpdate`, so the screen never keeps a change
+    // the server refused.
+    await waitFor(() => expect(screen.getByLabelText('Require SSO')).not.toBeChecked());
+  });
+
+  it('says the password door is closed when the connection is required and live', async () => {
+    api.get.mockImplementation((path: string) =>
+      path === '/settings/sso'
+        ? Promise.resolve(connections({ enabled: true, enforced: true }))
+        : mockGet(path),
+    );
+    renderComponent(<SsoConnection canEdit />);
+
+    expect(await screen.findByText(/members cannot sign in with a password/)).toBeInTheDocument();
+  });
+
+  it('says so when a connection is required but switched off', async () => {
+    // The pair the server reads. Rendering this as plain "Required" would tell
+    // an owner passwords are closed while they quietly still work — and that is
+    // the state a workspace sits in while it recovers from a broken IdP.
+    api.get.mockImplementation((path: string) =>
+      path === '/settings/sso'
+        ? Promise.resolve(connections({ enabled: false, enforced: true }))
+        : mockGet(path),
+    );
+    renderComponent(<SsoConnection canEdit />);
+
+    expect(await screen.findByText(/switched off, so passwords still work/)).toBeInTheDocument();
   });
 
   it('shows a restricted note instead of the write form for an admin who is not the owner', async () => {

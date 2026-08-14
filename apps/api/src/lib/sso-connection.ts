@@ -255,3 +255,23 @@ export function activePreviousCertificate(
   if (expiresAt.getTime() <= now.getTime()) return null;
   return { pem, expiresAt };
 }
+
+/**
+ * Is this connection actually closing the password door (NFR-S11 · S11-h)?
+ *
+ * The single place `enforced` is interpreted, for the same reason
+ * `activePreviousCertificate` is the single place the rotation overlap is: the
+ * flag is meaningless on its own. A connection that is switched off admits
+ * nobody through SAML, so honouring its `enforced` would leave a workspace with
+ * no door at all — and that state is not a bug to be prevented, it is the exact
+ * state a workspace lands in when it disables a broken federation, which is how
+ * it gets its password sign-in back.
+ *
+ * The login path applies the same pair in SQL (`auth_list_memberships`), where
+ * it has to run for an unauthenticated caller with no tenant context. This is
+ * the copy the write surface and the read surface share, so a screen can never
+ * show "enforced" for a connection the sign-in path treats as open.
+ */
+export function isEnforcingSso(row: { enabled: boolean; enforced: boolean }): boolean {
+  return row.enabled && row.enforced;
+}

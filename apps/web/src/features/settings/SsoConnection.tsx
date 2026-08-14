@@ -49,6 +49,12 @@ interface SsoConnectionRecord {
   attribute_mapping: SsoAttributeMapping;
   allow_idp_initiated: boolean;
   enabled: boolean;
+  /**
+   * Password sign-in is refused for this workspace while this and `enabled` are
+   * both true (S11-h). Reported as stored, so "required but switched off" is a
+   * state the screen can show rather than one it silently renders as open.
+   */
+  enforced: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -62,6 +68,11 @@ interface CreateSsoConnectionBody {
   allow_idp_initiated: boolean;
   enabled: boolean;
 }
+
+/** The two switches on an existing connection; either may be sent alone. */
+type SsoConnectionFlags = { id: string } & Partial<
+  Pick<SsoConnectionRecord, 'enabled' | 'enforced'>
+>;
 
 interface ScimTokenRecord {
   id: string;
@@ -210,6 +221,13 @@ function SsoConnections({
   const [enabledOnCreate, setEnabledOnCreate] = useState(false);
   const [verifyResult, setVerifyResult] = useState<SsoMetadataCheck | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SsoConnectionRecord | null>(null);
+  /**
+   * Turning enforcement *on* is confirmed; turning it off is not. Asymmetric on
+   * purpose — one closes the password door for every member of the workspace,
+   * the other reopens it, and only the first is a change somebody can regret at
+   * two in the morning. Same reasoning as the remove dialog next to it.
+   */
+  const [enforceTarget, setEnforceTarget] = useState<SsoConnectionRecord | null>(null);
 
   const list = useQuery({
     queryKey: ['settings', 'sso'],
@@ -225,13 +243,14 @@ function SsoConnections({
   });
 
   const toggle = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      api.patch<SsoConnectionRecord>(`/settings/sso/${id}`, { enabled }),
-    ...optimisticCacheUpdate<{ items: SsoConnectionRecord[] }, { id: string; enabled: boolean }>({
+    mutationFn: ({ id, ...flags }: SsoConnectionFlags) =>
+      api.patch<SsoConnectionRecord>(`/settings/sso/${id}`, flags),
+    onSuccess: () => setEnforceTarget(null),
+    ...optimisticCacheUpdate<{ items: SsoConnectionRecord[] }, SsoConnectionFlags>({
       queryClient,
       queryKey: ['settings', 'sso'],
-      update: (current, { id, enabled }) => ({
-        items: (current?.items ?? []).map((c) => (c.id === id ? { ...c, enabled } : c)),
+      update: (current, { id, ...flags }) => ({
+        items: (current?.items ?? []).map((c) => (c.id === id ? { ...c, ...flags } : c)),
       }),
     }),
   });
@@ -299,6 +318,22 @@ function SsoConnections({
             <p className="border-b border-border p-4 text-2xs text-content-tertiary">
               Only the workspace owner can add, rotate or remove a connection.
             </p>
+          )}
+
+          {/* A refused switch rolls the checkbox back (`optimisticCacheUpdate`),
+              which without this reads as the click not registering. Suppressed
+              while the confirmation dialog is open, since it shows the same
+              error where the person is looking. */}
+          {toggle.isError && !enforceTarget && (
+            <div className="border-b border-border p-4">
+              <ErrorNotice
+                message={
+                  toggle.error instanceof ApiClientError
+                    ? toggle.error.message
+                    : 'Could not change that connection.'
+                }
+              />
+            </div>
           )}
 
           {canEdit && (
@@ -379,7 +414,10 @@ function SsoConnections({
               </label>
 
               <div className="flex flex-wrap items-end gap-3">
-                <label htmlFor="sso-attribute-email" className="flex min-w-48 flex-1 flex-col gap-1">
+                <label
+                  htmlFor="sso-attribute-email"
+                  className="flex min-w-48 flex-1 flex-col gap-1"
+                >
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
                     Email attribute (optional)
                   </span>
@@ -454,8 +492,8 @@ function SsoConnections({
               </div>
 
               <p className="text-2xs text-content-tertiary">
-                Verify format checks the certificate, entity id and URL locally — it never
-                contacts the identity provider.
+                Verify format checks the certificate, entity id and URL locally — it never contacts
+                the identity provider.
               </p>
 
               {verifyResult && (
@@ -518,6 +556,19 @@ function SsoConnections({
                         {formatDate(connection.previous_certificate_expires_at)}
                       </p>
                     )}
+                    {/* Two sentences for two different states, because the
+                        difference decides whether anybody can sign in with a
+                        password right now. A connection that is required but
+                        switched off enforces nothing — the server reads the
+                        pair, and hiding that would leave an owner reading
+                        "Required" while passwords quietly still work. */}
+                    {connection.enforced && (
+                      <p className="text-2xs text-warning">
+                        {connection.enabled
+                          ? 'Required — members cannot sign in with a password. Owners keep theirs.'
+                          : 'Marked required, but the connection is switched off, so passwords still work.'}
+                      </p>
+                    )}
                   </div>
 
                   {canEdit && (
@@ -533,6 +584,18 @@ function SsoConnections({
                         />
                         Enabled
                       </label>
+                      <label className="flex items-center gap-1.5 text-2xs text-content-secondary">
+                        <input
+                          type="checkbox"
+                          checked={connection.enforced}
+                          disabled={toggle.isPending}
+                          onChange={(event) => {
+                            if (event.target.checked) setEnforceTarget(connection);
+                            else toggle.mutate({ id: connection.id, enforced: false });
+                          }}
+                        />
+                        Require SSO
+                      </label>
                       <button
                         type="button"
                         onClick={() => setDeleteTarget(connection)}
@@ -547,6 +610,44 @@ function SsoConnections({
             </ul>
           )}
         </Card>
+      )}
+
+      {enforceTarget && (
+        <Modal
+          onClose={() => setEnforceTarget(null)}
+          title={`Require ${enforceTarget.name} for sign-in?`}
+          description="Everyone in this workspace will have to sign in through your identity provider — their passwords stop working here. Owners keep a password door so a provider outage cannot lock the workspace out, and every one of those sign-ins is recorded in the audit log."
+        >
+          {/* The server refuses this when no owner holds a password — the
+              self-lockout guard. Its message names what to fix, so it is shown
+              verbatim rather than replaced with something vaguer. */}
+          {toggle.isError && (
+            <ErrorNotice
+              message={
+                toggle.error instanceof ApiClientError
+                  ? toggle.error.message
+                  : 'Could not require single sign-on.'
+              }
+            />
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setEnforceTarget(null)}
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => toggle.mutate({ id: enforceTarget.id, enforced: true })}
+              disabled={toggle.isPending}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+            >
+              {toggle.isPending ? 'Requiring…' : 'Require single sign-on'}
+            </button>
+          </div>
+        </Modal>
       )}
 
       {deleteTarget && (

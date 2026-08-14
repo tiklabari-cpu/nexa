@@ -18,6 +18,19 @@ export interface Membership {
   license_status: string;
   /** The workspace's OAuth client, from the server rather than guessed. */
   client_id?: string | null;
+  /**
+   * The SAML connection that has closed this workspace's password door, or null
+   * while passwords still work (NFR-S11 · S11-h).
+   */
+  sso_enforced_connection_id?: string | null;
+  /**
+   * Whether `/auth/authorize` will still accept a password here. Server-derived
+   * — the break-glass rule (owners keep a password door so a broken identity
+   * provider is not terminal) lives there, and a copy of it in the UI is a copy
+   * that goes stale. Absent on an older server: treat as available, which is
+   * what it was before enforcement existed.
+   */
+  password_login_available?: boolean;
 }
 
 export interface CurrentAgent {

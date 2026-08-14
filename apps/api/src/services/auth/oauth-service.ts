@@ -48,6 +48,18 @@ export interface Membership {
   license_status: string;
   organization_name: string;
   client_id: string | null;
+  /**
+   * The SSO connection that has closed this workspace's password door, or
+   * `null` while passwords still work (NFR-S11 · S11-h).
+   *
+   * Carried on the membership rather than looked up beside it, because both
+   * doors ask the same question: `/auth/login` to say which workspaces can
+   * still be entered this way, `/auth/authorize` to refuse the one that cannot.
+   * A second lookup is a second chance for the two to disagree, and the shape
+   * of that disagreement is a listing screen offering a sign-in the next call
+   * rejects.
+   */
+  sso_enforced_connection_id: string | null;
 }
 
 export interface TokenGrant {

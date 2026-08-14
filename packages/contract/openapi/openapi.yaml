@@ -993,6 +993,7 @@ components:
           attribute_mapping,
           allow_idp_initiated,
           enabled,
+          enforced,
           created_at,
           updated_at,
         ]
@@ -1036,6 +1037,16 @@ components:
         enabled:
           type: boolean
           description: Whether sign-in through this connection is live.
+        enforced:
+          type: boolean
+          description: >-
+            Whether this connection is the *only* way into the workspace:
+            password sign-in is refused for the license while this and `enabled`
+            are both true. Reported as stored, so a connection that is required
+            but switched off is visible as exactly that — and it enforces
+            nothing, which is how a workspace whose IdP has broken gets its
+            password door back. The workspace's owners keep theirs regardless,
+            and every such sign-in is marked in the audit trail.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 

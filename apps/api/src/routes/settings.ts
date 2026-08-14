@@ -31,6 +31,7 @@ import {
   activePreviousCertificate,
   checkFederationUrl,
   inspectIdpCertificate,
+  isEnforcingSso,
   MAX_CERTIFICATE_OVERLAP_HOURS,
   MIN_RSA_MODULUS_BITS,
   readSsoAttributeMapping,
@@ -108,6 +109,14 @@ const createSsoBody = z.object({
   attribute_mapping: ssoAttributeMappingBody.optional(),
   allow_idp_initiated: z.boolean().default(false),
   enabled: z.boolean().default(false),
+  /**
+   * Accepted on create so the field has one meaning everywhere, not because
+   * anybody should use it here: a connection nobody has ever signed in through
+   * is the worst possible moment to close the password door. The guard below
+   * applies identically either way, and the screen only offers the switch on a
+   * connection that already exists.
+   */
+  enforced: z.boolean().default(false),
 });
 
 /**
@@ -129,6 +138,7 @@ const updateSsoBody = z
     attribute_mapping: ssoAttributeMappingBody.optional(),
     allow_idp_initiated: z.boolean().optional(),
     enabled: z.boolean().optional(),
+    enforced: z.boolean().optional(),
     retain_previous_certificate_hours: z
       .number()
       .int()
@@ -722,6 +732,54 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
   // holds — an admin can suspend a teammate but cannot become one. Everything
   // else here is gated at `admin`; this one step up is the whole point.
 
+  /**
+   * Refuse an enforcement that nobody could undo (NFR-S11 · S11-h).
+   *
+   * The self-lockout guard, and the reason `S11-h` could not be split in two:
+   * the change that closes the password door and the escape hatch from a broken
+   * identity provider are one decision. Shipped apart, the release in between
+   * lets a workspace close its only other door and then find the IdP gone —
+   * with no support channel, no back office and no one left who can undo it.
+   * tm 80's IP allow-list met the same shape and answered it the same way
+   * (`wouldLockOut`): a configuration that would exclude the people saving it
+   * is refused at the write, not discovered at the next sign-in.
+   *
+   * The escape hatch itself is the owner's password (§C-A17.7) — deliberately
+   * not a recovery code. A code would be a second credential class outside the
+   * IdP: minted, displayed once, pasted into a wiki because it is used once a
+   * year, and indistinguishable in the trail from a legitimate use. The owner's
+   * password is a door that already exists, already rate-limited, already
+   * audited, already behind the highest role gate, and enforcement *narrows* it
+   * from every member to one person. So this only has to check that the door
+   * still has a key: an owner who can actually present a password.
+   *
+   * And it is one person, exactly: `uq_license_single_owner` allows one owner
+   * per license, and this route is `exactRole: 'owner'`, so the account being
+   * counted is the account making the request. That is what makes this the IP
+   * allow-list guard rather than something merely like it — "the list must
+   * still admit the address you are connecting from" becomes "you must still
+   * hold the credential this leaves you".
+   *
+   * The way a workspace has no key is ordinary rather than exotic: an owner
+   * provisioned by the identity provider has `password_hash` NULL — the SSO-only
+   * shape `auth_provision_sso_account` writes — which is simply what a workspace
+   * looks like after its owner first signs in through SAML. The check runs in
+   * the database, in the same transaction as the write, so it cannot race a
+   * concurrent change to the membership it is reading.
+   */
+  async function assertEnforcementHasAKey(
+    tx: Prisma.TransactionClient,
+    licenseId: bigint,
+  ): Promise<void> {
+    const [row] = await tx.$queryRaw<Array<{ has_key: boolean }>>`
+      SELECT auth_has_break_glass_owner(${licenseId}) AS has_key`;
+    if (row?.has_key === true) return;
+
+    throw ApiError.validation(
+      'That would lock this workspace out: with single sign-on required, an owner with a password is the only way back in when the identity provider cannot answer. Set a password on the owner account before requiring SSO.',
+    );
+  }
+
   app.get(
     '/settings/sso',
     { config: { scopes: ['access_rules:ro', 'access_rules:rw'], minimumRole: 'admin' } },
@@ -749,6 +807,11 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
 
       try {
         const created = await request.withTenant(async (tx) => {
+          // Before the row exists, so a refused enforcement leaves no connection
+          // behind at all: a half-applied create would be a row the caller did
+          // not ask for, in a state they were told they could not have.
+          if (isEnforcingSso(body)) await assertEnforcementHasAKey(tx, tenant.licenseId);
+
           const row = await tx.ssoConnection.create({
             data: {
               licenseId: tenant.licenseId,
@@ -762,6 +825,7 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
               attributeMapping: body.attribute_mapping ?? {},
               allowIdpInitiated: body.allow_idp_initiated,
               enabled: body.enabled,
+              enforced: body.enforced,
             },
           });
           await writeAuditEntry(
@@ -843,6 +907,18 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
             );
           }
 
+          // The state after this write, not the fields in it: `{enforced: true}`
+          // on an already-enabled connection and `{enabled: true}` on an already
+          // enforced one close the same door, and a guard reading only the body
+          // would let the second one through.
+          const next = {
+            enabled: body.enabled ?? existing.enabled,
+            enforced: body.enforced ?? existing.enforced,
+          };
+          if (isEnforcingSso(next) && !isEnforcingSso(existing)) {
+            await assertEnforcementHasAKey(tx, existing.licenseId);
+          }
+
           const overlap = rotating
             ? body.retain_previous_certificate_hours !== undefined
               ? {
@@ -876,6 +952,7 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
                 ? { allowIdpInitiated: body.allow_idp_initiated }
                 : {}),
               ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
+              ...(body.enforced !== undefined ? { enforced: body.enforced } : {}),
               ...overlap,
             },
           });
@@ -1916,6 +1993,7 @@ function serialiseSsoConnection(
     attributeMapping: Prisma.JsonValue;
     allowIdpInitiated: boolean;
     enabled: boolean;
+    enforced: boolean;
     createdAt: Date;
     updatedAt: Date;
   },
@@ -1933,6 +2011,11 @@ function serialiseSsoConnection(
     attribute_mapping: readSsoAttributeMapping(row.attributeMapping),
     allow_idp_initiated: row.allowIdpInitiated,
     enabled: row.enabled,
+    // The stored flag, not `isEnforcingSso`. The screen has to be able to show
+    // "required, but the connection is switched off" — collapsing the two here
+    // would render that state as "not required" and hide the reason the
+    // password door is open.
+    enforced: row.enforced,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };

@@ -42,6 +42,14 @@ export interface paths {
      *     Responds identically whether the email is unknown or the password is
      *     wrong, and always spends the same time, so registered addresses cannot be
      *     enumerated.
+     *
+     *     A workspace that requires single sign-on (NFR-S11) still appears in the
+     *     list, annotated rather than hidden: `password_login_available` is false and
+     *     `sso_enforced_connection_id` names the connection to continue with.
+     *     Removing it would read to the person as "you have been removed" and leave
+     *     them nothing to click. Enforcement itself is applied by `/auth/authorize`,
+     *     which is where a credential becomes a session — this call selects no
+     *     workspace and is not a gate.
      */
     post: operations['login'];
     delete?: never;
@@ -59,7 +67,20 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Issue a single-use authorization code */
+    /**
+     * Issue a single-use authorization code
+     * @description Verifies the password against the named workspace and returns a single-use
+     *     code the caller redeems at `/auth/token`.
+     *
+     *     This is where single sign-on enforcement bites (NFR-S11): a correct
+     *     password against a workspace that requires SSO is refused with
+     *     `not_allowed`, carrying `details.sso_connection_id` so the client can send
+     *     the person to their identity provider instead. Owners are exempt — the
+     *     break-glass door that keeps a broken identity provider from locking a
+     *     workspace out of its own account — and their sign-in is marked in the
+     *     audit trail. Refusals are recorded as `auth.login_failed` with the reason
+     *     `sso_enforced`.
+     */
     post: operations['authorize'];
     delete?: never;
     options?: never;
@@ -2164,6 +2185,13 @@ export interface paths {
      *
      *     `enabled` defaults to off. Saving the configuration and opening the door
      *     are two decisions.
+     *
+     *     `enforced` defaults to off too, and is accepted here only so the field has
+     *     one meaning on both verbs — a connection nobody has ever signed in through
+     *     is the worst moment to close the password door. Either way it is refused
+     *     unless the workspace still has an owner who holds a password: with SSO
+     *     required, that owner is the only way back in when the identity provider
+     *     cannot answer.
      */
     post: operations['createSsoConnection'];
     delete?: never;
@@ -2219,6 +2247,18 @@ export interface paths {
      *     A connection cannot be switched on behind an unusable certificate:
      *     `enabled: true` is refused unless the stored certificate (or the one being
      *     written in the same request) is currently valid.
+     *
+     *     **Requiring SSO.** `enforced: true` closes the password door for the whole
+     *     license once the connection is also `enabled` — the two are read as a pair,
+     *     so switching the connection off reopens passwords without a second call,
+     *     which is how a workspace recovers from a broken identity provider.
+     *
+     *     The change is refused when it would leave nobody able to get back in: the
+     *     license must still have an active owner whose account holds a password.
+     *     That owner is the break-glass door — enforcement narrows password sign-in
+     *     from every member to the one role that can undo the enforcement, rather
+     *     than minting a recovery code that would live outside the identity provider
+     *     forever. Every break-glass sign-in is marked in the audit trail.
      */
     patch: operations['updateSsoConnection'];
     trace?: never;
@@ -5495,6 +5535,8 @@ export interface components {
       allow_idp_initiated: boolean;
       /** @description Whether sign-in through this connection is live. */
       enabled: boolean;
+      /** @description Whether this connection is the *only* way into the workspace: password sign-in is refused for the license while this and `enabled` are both true. Reported as stored, so a connection that is required but switched off is visible as exactly that — and it enforces nothing, which is how a workspace whose IdP has broken gets its password door back. The workspace's owners keep theirs regardless, and every such sign-in is marked in the audit trail. */
+      enforced: boolean;
       /** Format: date-time */
       created_at: string;
       /** Format: date-time */
@@ -8431,6 +8473,13 @@ export interface operations {
               role: 'owner' | 'viceowner' | 'admin' | 'agent';
               license_status?: string;
               client_id?: string | null;
+              /**
+               * Format: uuid
+               * @description The SAML connection that has closed this workspace's password door, or null while passwords still work. Present so the sign-in screen can offer the right door; the caller has already proved this account's password and this membership.
+               */
+              sso_enforced_connection_id?: string | null;
+              /** @description Whether `/auth/authorize` will accept a password for this workspace. False for a member of an SSO-enforced license; true for its owners, who keep a break-glass door so a broken identity provider is not terminal. Server-derived so the rule has one home. */
+              password_login_available?: boolean;
             }[];
           };
         };
@@ -8488,7 +8537,15 @@ export interface operations {
       };
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
-      403: components['responses']['Forbidden'];
+      /** @description The requested scopes are unavailable, or the workspace requires single sign-on and the caller is not an owner. The latter carries `details.sso_connection_id`. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -11866,6 +11923,11 @@ export interface operations {
           allow_idp_initiated?: boolean;
           /** @default false */
           enabled?: boolean;
+          /**
+           * @description Refuse password sign-in for this license while this connection is also enabled. Owners keep a password door regardless, and the request is refused if none of them holds a password.
+           * @default false
+           */
+          enforced?: boolean;
         };
       };
     };
@@ -11936,6 +11998,7 @@ export interface operations {
           attribute_mapping?: components['schemas']['SsoAttributeMapping'];
           allow_idp_initiated?: boolean;
           enabled?: boolean;
+          enforced?: boolean;
           /** @description Keep the certificate being replaced trusted for this many hours. Only valid alongside a new `idp_certificate_pem`. Omit it and the old certificate stops being trusted immediately. */
           retain_previous_certificate_hours?: number;
           /**

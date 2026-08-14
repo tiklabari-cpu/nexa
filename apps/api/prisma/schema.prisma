@@ -370,6 +370,13 @@ model SsoConnection {
   /// Whether sign-in through this connection is live. Off until configured, so
   /// a half-written row can never become a way in.
   enabled           Boolean  @default(false) @map("enabled")
+  /// Make this connection the *only* way in: password sign-in is refused for
+  /// the license while this is set and `enabled` is too (NFR-S11 · S11-h). Read
+  /// as the pair, never alone — a disabled connection enforces nothing, which is
+  /// how a workspace recovers when its IdP stops answering. The owner keeps a
+  /// password door either way (§C-A17.7), and it cannot be switched on unless
+  /// somebody still holds a key to it.
+  enforced          Boolean  @default(false) @map("enforced")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

@@ -14,6 +14,7 @@ import {
   checkFederationUrl,
   CERTIFICATE_NOT_BEFORE_GRACE_MS,
   inspectIdpCertificate,
+  isEnforcingSso,
   isLoopbackHost,
 } from './sso-connection.js';
 
@@ -271,5 +272,22 @@ describe('activePreviousCertificate', () => {
         NOW,
       ),
     ).toBeNull();
+  });
+});
+
+describe('isEnforcingSso', () => {
+  it('closes the password door only when the connection is also live', () => {
+    expect(isEnforcingSso({ enabled: true, enforced: true })).toBe(true);
+    expect(isEnforcingSso({ enabled: false, enforced: false })).toBe(false);
+    expect(isEnforcingSso({ enabled: true, enforced: false })).toBe(false);
+  });
+
+  it('treats a required-but-disabled connection as enforcing nothing', () => {
+    // The state that makes this a function rather than a field read. It is not
+    // a corrupt row: it is where a workspace lands when it switches off a
+    // federation whose IdP has stopped answering, and reading `enforced` alone
+    // there would leave that workspace with no door at all — SAML refusing
+    // everyone and passwords refused on its behalf.
+    expect(isEnforcingSso({ enabled: false, enforced: true })).toBe(false);
   });
 });

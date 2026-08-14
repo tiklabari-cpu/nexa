@@ -8,10 +8,13 @@
  * that verifies, over content that is not what the reader would have read — and
  * asserts that the forged subject never comes back.
  *
- * The signing key pair below lives here rather than in `test/helpers`: the
- * reusable mock IdP harness is S11-c's file, and this subtask deliberately does
- * not wait for it (the attack variants belong with the defence). S11-c may
- * promote this pair when it lands.
+ * The signing key pair used throughout comes from `test/helpers/mock-idp.ts`
+ * (S11-c, imported below as `IDP_PRIVATE_KEY`/`IDP_CERTIFICATE`). This subtask
+ * did not wait for S11-c to exist — the pair was minted here first and later
+ * promoted rather than duplicated, so the codebase keeps exactly one mock IdP
+ * key. The *attacker's* pair (`FOREIGN_PRIVATE_KEY`/`FOREIGN_CERTIFICATE`,
+ * below) stays local: it is specific to the wrapping attacks this file builds
+ * and has no reuse outside them.
  */
 import { X509Certificate } from 'node:crypto';
 import { DOMParser, XMLSerializer, type Document, type Element, type Node } from '@xmldom/xmldom';
@@ -24,6 +27,10 @@ import {
   WEAK_CERTIFICATE_PEM,
 } from '../../test/helpers/certificates.js';
 import {
+  MOCK_IDP_CERTIFICATE as IDP_CERTIFICATE,
+  MOCK_IDP_PRIVATE_KEY as IDP_PRIVATE_KEY,
+} from '../../test/helpers/mock-idp.js';
+import {
   ASSERTION_CLOCK_SKEW_MS,
   createRedisReplayGuard,
   MAX_SAML_RESPONSE_BYTES,
@@ -32,65 +39,6 @@ import {
   type SamlExpectations,
   verifySamlResponse,
 } from './saml.js';
-
-/**
- * NOT A SECRET. A throwaway RSA-2048 pair generated for this repository with
- * `openssl req -x509`, standing in for the IdP's signing key. It exists so the
- * tests verify real signatures rather than a mock of a signature — an
- * "invalid signature" test that never runs the maths proves nothing. The
- * validity window is pinned (2025 → 2125) so the fixtures cannot rot.
- */
-const IDP_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
-MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCocZGUQNemmnVm
-+VTYIWCfWrtege16oOYkoYwMyTA2QnawHA8jdlDMYiDi9XFA0tgPxswj+Wd4asAc
-PGfE5MysylaR82lkLvyQvM22xwzJTmgEPTUuabOPHha9TMPG939mz7uTN0uCgYn/
-nh0admuInsfXuICJLO5CO03lQHOgG/n0PXp5Acqtetr5LH3wt6QDXfhDyBKttxsv
-D22hlrImdwadZO9Tfapf3IbQ49G/2FJoIY2b333k1LO4bRlICAWUvcCAE11GdqYu
-FX1THVchoUmGlKZgGcT6Z2matvfaWlpPk+ek8rp+5k8WEWBNelrmMSUnRNuNQ0N2
-gh0VwS1lAgMBAAECggEADEoY6n2enj+nsCchyxEIWSgIApmtJ2TE1chZjPdCxrqr
-qSaq7hXsSDUinBx3MlkPvXruGvPP2kfDk2vO0F03F6Y9kbF2L4KEF9VGlv7Hzooj
-aafDkQrSOG9kDlSi9gnJqEkgsNl4b2GfHWC+U9du+g1HnFQQQLHgAkIMaVz98qDp
-WHwNfN83kyzJtmBEMI2dJgRUjzfsaqmHh2292Z6ajMKKEWm2csUDvey0DS0UAAbN
-E3q53ZntFRvm+8ppQCcU6QWJe1c5wFYqzmLcuJIKej8xF0fnQ6heigEQzNOzg6FL
-aOIJ2XFMmaTzsX3jRLakf+UdqR7/H4CFJ2YPPngmkwKBgQDssklDHxKRgBjHLLTC
-AnsIE3iN1eVw/7BnaojVSuRNbnc7i7NAMhR87EjHA9FkKNdB2RXZ8gImwua6S0vz
-8m6Udvr9yZNlhV9ZEGZ0VtmHw+KOiaMNYaG8iQ11D4jxf9HDbu3jqSCyiS4lc9u4
-6wH7LCHuA5coM6kk0kp1WGH1ZwKBgQC2Lk9zBntdxwXH7Je4dc9MDIOl75zjjkew
-bHcbcCFz0wFUDY52YSAD098G/RA5OPIRbVpi/Qy2kK1frT+2/FS4ZhiBFGyU3PZ5
-SIiB72a9+ib0QA5YlR9Vfj+0WvecOGKuXzgWDeitFEmqWJaS0er21y3ImBC8ZfZH
-qD+LcUVbUwKBgHn9lVa7wAUvgRW+S9cmEiTibCKl2B/6F//k32sWsz3ZLiiJYrQ2
-W2rbGNNBe3zks7SjXui6GzPBBcuEHTw4eZeZDtkYOBh9uducYUGatXiMk8qk012F
-MSeLd10ayZi2KPVRydepBkod+6Of5+GRda7vWvlh7ljw7z8kBu4dxDcHAoGAIGmk
-4QYqNMkQEj3Z0IvFUfZ4BbHX6/SIdK8Xkd4lVYIZHmc7DXzCQWwUph2oIUYsa0VV
-a38yH9klv3wHdfr258fiXDTSDLozb+ijwNpjITG8dIBhDQmbBY7srp3wp+6wP+3Z
-ALOAzipp4NDaGU0XzMsD7kh/0cUiSCV7CMgiWtkCgYBUqwWQJo5pNi8aUNgV55BW
-eAmsWFpCXmoUHNQ7YK0H8gdfs/xkPBxCNxCGBMxCoBrbjXM6a5ilxyc1ZFfmaA1C
-CeLKyHTcmK3fnXacZl1+Q33unqz5kdgkclBvaxT/DzVSfFU8o/VyJaNFuBf7FQy3
-cgYCZln7/ruFRsBCcZ9AGA==
------END PRIVATE KEY-----
-`;
-
-/** The public half of {@link IDP_PRIVATE_KEY}, `CN=idp-signing.example.test`. */
-const IDP_CERTIFICATE = `-----BEGIN CERTIFICATE-----
-MIIDKTCCAhGgAwIBAgIUfOobKUggNrTnuMOd33JsVP/W61YwDQYJKoZIhvcNAQEL
-BQAwIzEhMB8GA1UEAwwYaWRwLXNpZ25pbmcuZXhhbXBsZS50ZXN0MCAXDTI1MDEw
-MTAwMDAwMFoYDzIxMjUwMTAxMDAwMDAwWjAjMSEwHwYDVQQDDBhpZHAtc2lnbmlu
-Zy5leGFtcGxlLnRlc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCo
-cZGUQNemmnVm+VTYIWCfWrtege16oOYkoYwMyTA2QnawHA8jdlDMYiDi9XFA0tgP
-xswj+Wd4asAcPGfE5MysylaR82lkLvyQvM22xwzJTmgEPTUuabOPHha9TMPG939m
-z7uTN0uCgYn/nh0admuInsfXuICJLO5CO03lQHOgG/n0PXp5Acqtetr5LH3wt6QD
-XfhDyBKttxsvD22hlrImdwadZO9Tfapf3IbQ49G/2FJoIY2b333k1LO4bRlICAWU
-vcCAE11GdqYuFX1THVchoUmGlKZgGcT6Z2matvfaWlpPk+ek8rp+5k8WEWBNelrm
-MSUnRNuNQ0N2gh0VwS1lAgMBAAGjUzBRMB0GA1UdDgQWBBTQbWUY2uhEsiaQvrSQ
-JIrgbCGXADAfBgNVHSMEGDAWgBTQbWUY2uhEsiaQvrSQJIrgbCGXADAPBgNVHRMB
-Af8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQCkDudT3tFkqZajVbJEyxVBoXTu
-qkbQEJrb91ekw4qW/+q1sPU2BeAa5HOYzUZ++gUoaDhNbSb70xOHfn/Me6yvD39J
-S75rUJ3wihD4aEcTr2sVIV/S8e1q3PMI17hDqyeM5jVkBintSijgIC8RvARjjoHs
-UF7NLfxoO3bnb5oUjSdtUrQsCDU9yIuFPahiWgCX1SQlf2G+Uc2gmQn83pyZE2oU
-MVdTwEP52xe53WQNasgPie1JcaktkSFPldELctvUXRVMu41rdshFH06RUvv/io1c
-F9K3pw3ol8gtt9OZcl2BezqA/f4VjZTITfBmFg+ep71Xmnt6NU/hnGg3b0cp
------END CERTIFICATE-----
-`;
 
 /**
  * A second, unrelated pair. NOT A SECRET either. This is the attacker's key:

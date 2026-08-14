@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+## tm 81.4 — S11-c · Mock IdP harness — imzalı assertion üreteci + anahtar çifti fixture'ı — done — 2026-08-14 UTC
+
+- **Yapıldı:** (1) `apps/api/test/helpers/mock-idp.ts` (yeni) — `saml.test.ts`'in (S11-b) kendi
+  anahtar çiftini (`IDP_PRIVATE_KEY`/`IDP_CERTIFICATE`) TERFİ ETTİRDİ, ikinci bir çift
+  üretmedi; `saml.test.ts` artık `MOCK_IDP_PRIVATE_KEY`/`MOCK_IDP_CERTIFICATE`'i alias'la
+  import ediyor. (2) `issueAssertion({subject, attributes, audience, destination,
+  inResponseTo, notOnOrAfter})` **yalnız mutlu yol** — gerçek `xml-crypto` imzası, `Assertion`
+  düğümü imzalanır (çoğu IdP'nin şekli); dönüş `samlResponseBase64` + ham `xml` + sayaçlı
+  `assertionId`. Bozuk/XSW varyantları BU alt-görevde YOK (S11-b'nin malı, kapsam denetimle
+  daraltılmıştı). (3) Süreler gerçek duvar saatine göre (S11-b'nin dondurulmuş `NOW`'ına göre
+  DEĞİL) — S11-d/S11-i'nin gerçek zamanlı entegrasyon/e2e akışı için. (4) `fixtures.ts`
+  `export * from './mock-idp.js'` ile re-export ediyor.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `format:check` (dokunulan
+  dosyalar) · build 7/7 · `pnpm -w test` (`@nexa/api` 2536 → **2542**, +6 birim,
+  `mock-idp.test.ts`) · `pnpm -w test:integration` **1904** (taban ile aynı — bu alt-görev
+  test-helper'dır, uç açmaz) · `pnpm -w test:e2e` **131/131** (6.2 dk).
+- **Varsayımlar:** yok — kapsam görev metninde zaten daraltılmıştı (yalnız mutlu yol).
+- **Sonraki pencereye not:** (1) **S11-d, `issueAssertion`'ı gerçek `sso_connections` satırının
+  `idp_entity_id`/ACS URL'iyle çağırsın** — `audience`/`destination` parametreleri tam bunun
+  için var, varsayılanlar (`MOCK_SP_ENTITY_ID`/`MOCK_ACS_URL`) yalnız bu dosyanın kendi testi
+  içindir. (2) `MOCK_IDP_CERTIFICATE`'i S11-d'nin test fixture'ındaki `sso_connections.
+  idp_certificate_pem`'e YAZ — aksi halde `verifySamlResponse` `no_usable_certificate`/
+  `invalid_signature` döner. (3) PLAN.md `KS11` bloğu: 10 alt-görevin 4'ü teslim (a, a2, b, c),
+  kalan 6.
+
 ## tm 81.3 — S11-b · SAML assertion doğrulama çekirdeği: imza + koşullar + replay + XSW — done — 2026-08-14 UTC
 
 - **Yapıldı:** (1) `apps/api/src/lib/saml.ts` — saf (DB'siz/ağsız/Fastify'sız) doğrulayıcı,

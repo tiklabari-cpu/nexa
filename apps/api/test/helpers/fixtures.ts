@@ -9,6 +9,10 @@ import { PrismaClient } from '@prisma/client';
 import { hashPassword, hashToken } from '../../src/lib/crypto.js';
 import { parseEnv, type Env } from '../../src/config/env.js';
 
+// The mock IdP harness (S11-c) is a fixture like any other; re-exported here so
+// SSO test suites can reach it alongside the rest of `helpers/fixtures.js`.
+export * from './mock-idp.js';
+
 export interface TenantFixture {
   organizationId: string;
   licenseId: bigint;

@@ -638,6 +638,12 @@ async function resolveVisibility(
   if (principal.kind === 'customer') {
     throw ApiError.authorization('Tickets are not available to customers.');
   }
+  // Same shape, same reason, for a SCIM provisioning token (NFR-S11): it reaches
+  // `/scim/v2` and nothing else, so an absent case here would be a directory
+  // credential silently taking the bot branch.
+  if (principal.kind === 'scim') {
+    throw ApiError.authorization('Provisioning credentials cannot access tickets.');
+  }
 
   const actorId = principal.kind === 'agent' ? principal.accountId : principal.botId;
 

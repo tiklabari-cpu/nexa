@@ -1600,6 +1600,12 @@ function authorTypeOf(principal: Principal): 'agent' | 'bot' | 'customer' {
       return 'bot';
     case 'customer':
       return 'customer';
+    // A SCIM provisioning token (NFR-S11) never reaches a chat write — the
+    // route's `principals` list stops it — and it authors nothing if it somehow
+    // did. Throwing keeps this switch exhaustive, which is the property that
+    // caught the customer bug described above.
+    case 'scim':
+      throw ApiError.authorization('Provisioning credentials cannot author events.');
   }
 }
 
@@ -1616,6 +1622,8 @@ function actorOf(principal: Principal): string {
       return principal.botId;
     case 'customer':
       return principal.customerId;
+    case 'scim':
+      throw ApiError.authorization('Provisioning credentials cannot act on conversations.');
   }
 }
 

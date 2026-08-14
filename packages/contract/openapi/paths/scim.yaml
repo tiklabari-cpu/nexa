@@ -1,0 +1,337 @@
+# SCIM 2.0 provisioning endpoints (NFR-S11 · S11-e).
+#
+# The surface an identity provider's provisioning connector calls to keep a
+# workspace's member list in step with its directory. Unlike the rest of this
+# API these endpoints follow somebody else's specification, and three things
+# follow from that — each a deliberate exception, each recorded here so a reader
+# does not have to work out whether it was an oversight:
+#
+#   1. **The error envelope is RFC 7644 §3.12, not ADR-06.** See `ScimError`.
+#   2. **The media type is `application/scim+json`** (RFC 7644 §3.1), on the way
+#      in and on the way out. `application/json` is accepted on the way in too,
+#      because several connectors send it.
+#   3. **Attribute names are camelCase** (`userName`, `externalId`,
+#      `startIndex`), not the snake_case the rest of this document uses. They are
+#      the specification's names; renaming them would produce a document that
+#      describes a different protocol.
+#
+# ## Authentication
+#
+# A SCIM bearer token, minted at `POST /settings/scim-tokens` and stored only as
+# a digest. It is not an agent credential: it reaches `/scim/v2` and nothing
+# else, and an agent/PAT/bot/customer token reaching `/scim/v2` gets 404 for the
+# same reason a widget token reaching the agent API does — a boundary violation
+# is not a permission shortfall (NFR-S5).
+#
+# Every request is scoped to the single workspace the token belongs to. The
+# licence is read off the token row, never from a path, header or body field, so
+# there is no request shape that reaches another workspace's members.
+
+users:
+  get:
+    tags: [Settings]
+    operationId: listScimUsers
+    summary: List the workspace's members (SCIM)
+    description: |
+      Paged with `startIndex`/`count` (RFC 7644 §3.4.2.4). `count=0` is a
+      legitimate "how many are there?" probe and answers `totalResults` without
+      reading anybody.
+
+      Ordering is stable across pages — a sync that pages through an unstable
+      order silently skips people.
+    parameters:
+      - name: filter
+        in: query
+        schema: { type: string }
+        description: |
+          `attribute eq "value"` on `userName`, `externalId`, `id`, or
+          `active eq true|false`. **Deliberately a small slice of the SCIM filter
+          grammar.** The full grammar (`and`/`or`/`not`, grouping, value paths,
+          nine operators) would mean translating arbitrary client input into SQL
+          for a caller that in practice sends two filters: `userName eq` before a
+          create, and `externalId eq` when a rename has broken the userName
+          match. Anything richer is refused with `invalidFilter` rather than
+          silently mis-answered — a refused filter is a bug report, a
+          mis-answered one is somebody else's user getting patched.
+      - name: startIndex
+        in: query
+        schema: { type: integer, minimum: 1, default: 1 }
+        description: 1-based. A value below 1 is read as 1, per RFC 7644.
+      - name: count
+        in: query
+        schema: { type: integer, minimum: 0, default: 100, maximum: 200 }
+        description: Capped at 200; a larger request gets 200 rather than an error.
+    responses:
+      "200":
+        description: The matching members
+        content:
+          application/scim+json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScimListResponse" }
+      "400": { $ref: "#/scimBadRequest" }
+      "401": { $ref: "#/scimUnauthorized" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: createScimUser
+    summary: Provision a member (SCIM)
+    description: |
+      Creates the membership, and the account behind it if this person has no
+      Nexa account anywhere yet.
+
+      **An account that already exists is adopted, never modified.** A person may
+      work for more than one workspace (PRD §8.4), so one workspace's directory
+      asserting their address must not rename them everywhere or clear the
+      password they sign in to the other workspace with. All this endpoint may
+      add is a membership in its own licence — which its admin could do by
+      sending an invitation anyway, so the integration grants no power the
+      workspace lacked.
+
+      The new member gets the `agent` role, always. A directory that could choose
+      the role could create an owner, which is a power the admin who minted the
+      token does not have themselves.
+
+      They are provisioned **offline**, not into chat rotation: a member created
+      by a nightly directory sync is not at their desk, and routing a waiting
+      customer to an empty chair is worse than making somebody click "available".
+
+      `userName` must be an e-mail address — this product identifies a person by
+      their address. A duplicate is `409` with `scimType: uniqueness`, which is
+      what tells a connector to look the existing resource up and patch it
+      instead.
+    requestBody:
+      required: true
+      content:
+        application/scim+json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ScimUser" }
+    responses:
+      "201":
+        description: The provisioned member
+        headers:
+          Location:
+            schema: { type: string, format: uri }
+        content:
+          application/scim+json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScimUser" }
+      "400": { $ref: "#/scimBadRequest" }
+      "401": { $ref: "#/scimUnauthorized" }
+      "402": { $ref: "#/scimPaymentRequired" }
+      "409": { $ref: "#/scimConflict" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
+user:
+  get:
+    tags: [Settings]
+    operationId: getScimUser
+    summary: Read one member (SCIM)
+    description: |
+      A member of another workspace is not "forbidden", it is invisible: row
+      level security means the row is simply not there, so a foreign id and an
+      id that never existed get the same 404 (NFR-S5).
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: The member
+        content:
+          application/scim+json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScimUser" }
+      "401": { $ref: "#/scimUnauthorized" }
+      "404": { $ref: "#/scimNotFound" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
+  patch:
+    tags: [Settings]
+    operationId: patchScimUser
+    summary: Update a member (SCIM PatchOp)
+    description: |
+      RFC 7644 §3.5.2. Three shapes are accepted, because all three are in the
+      wild: `{op, path, value}` (the specification's), `{op, value: {attr: …}}`
+      (path omitted), and differently-cased `op`/boolean values (`"Replace"`,
+      `"False"`). Refusing any of them would be defensible and would break
+      deprovisioning — the most important operation here — for one of the two
+      identity providers that matter most.
+
+      **`active` and `externalId` are the writable attributes.** Others are
+      accepted and not applied; the response shows what is actually stored, so a
+      client that compares sees the truth.
+
+      One exception: a `userName` that *differs* from the stored address is
+      refused with `scimType: mutability` rather than ignored. A stale display
+      name is cosmetic; an identity provider believing somebody's sign-in address
+      moved when it did not is a divergence with consequences. Repeating the
+      current address — what a nightly full-profile sync does — is not a change
+      and passes.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    requestBody:
+      required: true
+      content:
+        application/scim+json:
+          schema:
+            type: object
+            required: [Operations]
+            properties:
+              schemas:
+                type: array
+                items: { type: string }
+                example: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"]
+              Operations:
+                type: array
+                maxItems: 50
+                items:
+                  type: object
+                  required: [op]
+                  properties:
+                    op: { type: string, enum: [add, replace, remove] }
+                    path: { type: string }
+                    value: {}
+    responses:
+      "200":
+        description: The member as stored after the patch
+        content:
+          application/scim+json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScimUser" }
+      "400": { $ref: "#/scimBadRequest" }
+      "401": { $ref: "#/scimUnauthorized" }
+      "402": { $ref: "#/scimPaymentRequired" }
+      "404": { $ref: "#/scimNotFound" }
+      "409": { $ref: "#/scimConflict" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
+  delete:
+    tags: [Settings]
+    operationId: deleteScimUser
+    summary: Deprovision a member (SCIM)
+    description: |
+      **Suspends the membership; it does not delete the person.** Chats, tickets,
+      presence history and the audit trail all reference a membership, so
+      removing the row would either cascade a workspace's conversation history
+      away or fail on a foreign key — and a directory saying "this employee has
+      left" is not a request to erase what they did. Suspension is already this
+      product's phrase for "may no longer sign in or be routed work", so a leaver
+      loses access the moment this returns.
+
+      Repeating it is not an error: a connector retrying after a timeout must
+      converge, not alarm.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "204": { description: Deprovisioned }
+      "401": { $ref: "#/scimUnauthorized" }
+      "402": { $ref: "#/scimPaymentRequired" }
+      "404": { $ref: "#/scimNotFound" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
+groups:
+  get:
+    tags: [Settings]
+    operationId: listScimGroups
+    summary: List the workspace's teams (SCIM)
+    description: |
+      Read-only. Teams drive chat routing here, so letting an external directory
+      rewrite the topology is a much larger claim than "keep the user list in
+      step" and needs its own decision.
+    parameters:
+      - name: filter
+        in: query
+        schema: { type: string }
+        description: '`displayName eq "value"` or `id eq "value"`.'
+      - name: startIndex
+        in: query
+        schema: { type: integer, minimum: 1, default: 1 }
+      - name: count
+        in: query
+        schema: { type: integer, minimum: 0, default: 100, maximum: 200 }
+    responses:
+      "200":
+        description: The matching teams, with their members
+        content:
+          application/scim+json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScimListResponse" }
+      "400": { $ref: "#/scimBadRequest" }
+      "401": { $ref: "#/scimUnauthorized" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
+group:
+  get:
+    tags: [Settings]
+    operationId: getScimGroup
+    summary: Read one team with its members (SCIM)
+    parameters:
+      - name: groupId
+        in: path
+        required: true
+        schema: { type: string }
+        description: The team's per-license integer id, as text.
+    responses:
+      "200":
+        description: The team
+        content:
+          application/scim+json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScimGroup" }
+      "401": { $ref: "#/scimUnauthorized" }
+      "404": { $ref: "#/scimNotFound" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
+# --- Responses -------------------------------------------------------------
+# Local rather than shared: every failure on this path answers in RFC 7644's
+# envelope, so the document's own `#/components/responses/*` (which carry the
+# ADR-06 `Error`) would describe the wrong body.
+
+scimBadRequest:
+  description: Malformed request, unsupported filter, or an immutable attribute
+  content:
+    application/scim+json:
+      schema: { $ref: "../openapi.yaml#/components/schemas/ScimError" }
+
+scimUnauthorized:
+  description: Missing, unknown, revoked or expired SCIM token
+  content:
+    application/scim+json:
+      schema: { $ref: "../openapi.yaml#/components/schemas/ScimError" }
+
+scimNotFound:
+  description: |
+    No such resource for this token's workspace. A resource belonging to another
+    workspace answers identically, so ids stay un-enumerable (NFR-S5).
+  content:
+    application/scim+json:
+      schema: { $ref: "../openapi.yaml#/components/schemas/ScimError" }
+
+scimConflict:
+  description: |
+    The userName or externalId is already taken in this workspace
+    (`scimType: uniqueness`).
+  content:
+    application/scim+json:
+      schema: { $ref: "../openapi.yaml#/components/schemas/ScimError" }
+
+scimPaymentRequired:
+  description: |
+    The workspace is read-only (an expired trial, ADR-10). Reads still succeed;
+    provisioning writes resume on subscribing.
+  content:
+    application/scim+json:
+      schema: { $ref: "../openapi.yaml#/components/schemas/ScimError" }
+
+scimTooManyRequests:
+  description: |
+    The token's provisioning bucket is exhausted (ADR-07). SCIM has its own
+    per-token limit, so a full directory reconciliation cannot throttle anything
+    else.
+  headers:
+    Retry-After:
+      schema: { type: integer }
+  content:
+    application/scim+json:
+      schema: { $ref: "../openapi.yaml#/components/schemas/ScimError" }

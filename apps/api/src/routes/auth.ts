@@ -350,6 +350,13 @@ export default async function authRoutes(
         });
       }
 
+      // The route's `principals` list has already turned away everything else
+      // (a SCIM token, today). Stated here as well so the remaining case is a
+      // fact the compiler holds rather than one a reader has to reconstruct from
+      // a route config, and so adding a fifth kind fails closed instead of
+      // falling into the agent branch below.
+      if (principal.kind !== 'agent') throw ApiError.notFound('Resource not found.');
+
       const profile = await request.withTenant(async (tx) => {
         const [account, membership, license] = await Promise.all([
           tx.account.findUnique({

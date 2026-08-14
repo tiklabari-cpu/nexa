@@ -115,6 +115,15 @@ export const AUDIT_ACTIONS = [
   // Credentials
   'pat.created',
   'pat.revoked',
+  // SCIM provisioning credentials (NFR-S11 · S11-e). Its own pair rather than
+  // reusing `pat.*`, because the two answer different questions for whoever
+  // reads the trail: a PAT acts as one person within what that person may
+  // already do, while a SCIM token manages the *membership* of the whole
+  // workspace — creating, suspending and removing people. "Somebody minted a
+  // credential that can provision users" is the kind of line an owner should be
+  // able to find without first working out which PAT was special.
+  'scim_token.created',
+  'scim_token.revoked',
   // Partner apps (FR-MOD-09.4). Registering an OAuth client hands a third party
   // a credential that can later act on this workspace, and its scopes, redirect
   // allowlist and secret are the whole of what bounds it — the same class of

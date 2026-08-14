@@ -560,3 +560,38 @@ export interface SsoConnection {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * A SCIM provisioning credential a workspace has issued (NFR-S11 · S11-e).
+ *
+ * The bearer token an identity provider's connector presents at `/scim/v2` to
+ * keep the member list in step with its directory. This is the shape the
+ * management surface reads — it deliberately has no token field, because the
+ * plaintext is stored nowhere: only a SHA-256 digest is kept, and the credential
+ * itself appears exactly once, in {@link ScimTokenCreated}.
+ */
+export interface ScimToken {
+  id: string;
+  /** Human label, e.g. `Okta (corp) provisioning`. Required at creation. */
+  name: string | null;
+  created_at: string;
+  /**
+   * When the connector last presented this token, or null if it never has.
+   *
+   * The only operational signal a workspace has that a provisioning integration
+   * is still running — and the one that says a token nobody remembers is safe to
+   * revoke.
+   */
+  last_used_at: string | null;
+  /** Null when the token does not expire. */
+  expires_at: string | null;
+}
+
+/**
+ * The one response that carries the credential. Returned by
+ * `POST /settings/scim-tokens` and never obtainable again — the management
+ * surface has to show it once and say so.
+ */
+export interface ScimTokenCreated extends ScimToken {
+  token: string;
+}

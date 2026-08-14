@@ -2223,6 +2223,223 @@ export interface paths {
     patch: operations['updateSsoConnection'];
     trace?: never;
   };
+  '/settings/scim-tokens': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Provisioning credentials this workspace has issued
+     * @description The SCIM bearer tokens a workspace has pasted into its identity provider's
+     *     provisioning connector (NFR-S11). Live tokens only — a revoked one is gone,
+     *     not listed as revoked, because the question this answers is "what can still
+     *     reach my directory surface today".
+     *
+     *     The credential itself is never here. It is stored as a SHA-256 digest and
+     *     the plaintext existed once, in the response that created it.
+     */
+    get: operations['listScimTokens'];
+    put?: never;
+    /**
+     * Mint a SCIM provisioning credential
+     * @description **Owner or admin.** Deliberately not owner-only, unlike `POST
+     *     /settings/sso`, and the difference is what the credential can do: a SCIM
+     *     token creates members with the `agent` role, suspends them and
+     *     deprovisions them — every one of which an admin may already do by hand. It
+     *     therefore grants no power its minter lacks. Writing an IdP certificate
+     *     does: it lets the writer sign in *as* any colleague, which is why that one
+     *     sits a rank higher.
+     *
+     *     The token is returned **once**, in this response, and is unrecoverable
+     *     afterwards — only its digest is stored. Naming it is required: a workspace
+     *     running two connectors through a migration has to be able to tell which is
+     *     which, and "Token 2" is what an unnamed one becomes the moment a rotation
+     *     goes wrong.
+     *
+     *     A workspace may hold a small number of live tokens (enough for one
+     *     directory plus a rotation). Beyond that the request is refused rather than
+     *     the oldest being pruned — silently revoking one would be indistinguishable
+     *     from an outage to whichever connector was using it.
+     */
+    post: operations['createScimToken'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/scim-tokens/{tokenId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Revoke a SCIM provisioning credential
+     * @description Takes effect on the next request the connector makes — the token is
+     *     resolved from the database every time, never cached.
+     *
+     *     Only provisioning tokens. A personal access token id here is a 404, so this
+     *     cannot become a second way to revoke a colleague's credential that skips
+     *     the ownership check on `/auth/personal-access-tokens`.
+     */
+    delete: operations['revokeScimToken'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/scim/v2/Users': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List the workspace's members (SCIM)
+     * @description Paged with `startIndex`/`count` (RFC 7644 §3.4.2.4). `count=0` is a
+     *     legitimate "how many are there?" probe and answers `totalResults` without
+     *     reading anybody.
+     *
+     *     Ordering is stable across pages — a sync that pages through an unstable
+     *     order silently skips people.
+     */
+    get: operations['listScimUsers'];
+    put?: never;
+    /**
+     * Provision a member (SCIM)
+     * @description Creates the membership, and the account behind it if this person has no
+     *     Nexa account anywhere yet.
+     *
+     *     **An account that already exists is adopted, never modified.** A person may
+     *     work for more than one workspace (PRD §8.4), so one workspace's directory
+     *     asserting their address must not rename them everywhere or clear the
+     *     password they sign in to the other workspace with. All this endpoint may
+     *     add is a membership in its own licence — which its admin could do by
+     *     sending an invitation anyway, so the integration grants no power the
+     *     workspace lacked.
+     *
+     *     The new member gets the `agent` role, always. A directory that could choose
+     *     the role could create an owner, which is a power the admin who minted the
+     *     token does not have themselves.
+     *
+     *     They are provisioned **offline**, not into chat rotation: a member created
+     *     by a nightly directory sync is not at their desk, and routing a waiting
+     *     customer to an empty chair is worse than making somebody click "available".
+     *
+     *     `userName` must be an e-mail address — this product identifies a person by
+     *     their address. A duplicate is `409` with `scimType: uniqueness`, which is
+     *     what tells a connector to look the existing resource up and patch it
+     *     instead.
+     */
+    post: operations['createScimUser'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/scim/v2/Users/{userId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read one member (SCIM)
+     * @description A member of another workspace is not "forbidden", it is invisible: row
+     *     level security means the row is simply not there, so a foreign id and an
+     *     id that never existed get the same 404 (NFR-S5).
+     */
+    get: operations['getScimUser'];
+    put?: never;
+    post?: never;
+    /**
+     * Deprovision a member (SCIM)
+     * @description **Suspends the membership; it does not delete the person.** Chats, tickets,
+     *     presence history and the audit trail all reference a membership, so
+     *     removing the row would either cascade a workspace's conversation history
+     *     away or fail on a foreign key — and a directory saying "this employee has
+     *     left" is not a request to erase what they did. Suspension is already this
+     *     product's phrase for "may no longer sign in or be routed work", so a leaver
+     *     loses access the moment this returns.
+     *
+     *     Repeating it is not an error: a connector retrying after a timeout must
+     *     converge, not alarm.
+     */
+    delete: operations['deleteScimUser'];
+    options?: never;
+    head?: never;
+    /**
+     * Update a member (SCIM PatchOp)
+     * @description RFC 7644 §3.5.2. Three shapes are accepted, because all three are in the
+     *     wild: `{op, path, value}` (the specification's), `{op, value: {attr: …}}`
+     *     (path omitted), and differently-cased `op`/boolean values (`"Replace"`,
+     *     `"False"`). Refusing any of them would be defensible and would break
+     *     deprovisioning — the most important operation here — for one of the two
+     *     identity providers that matter most.
+     *
+     *     **`active` and `externalId` are the writable attributes.** Others are
+     *     accepted and not applied; the response shows what is actually stored, so a
+     *     client that compares sees the truth.
+     *
+     *     One exception: a `userName` that *differs* from the stored address is
+     *     refused with `scimType: mutability` rather than ignored. A stale display
+     *     name is cosmetic; an identity provider believing somebody's sign-in address
+     *     moved when it did not is a divergence with consequences. Repeating the
+     *     current address — what a nightly full-profile sync does — is not a change
+     *     and passes.
+     */
+    patch: operations['patchScimUser'];
+    trace?: never;
+  };
+  '/scim/v2/Groups': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List the workspace's teams (SCIM)
+     * @description Read-only. Teams drive chat routing here, so letting an external directory
+     *     rewrite the topology is a much larger claim than "keep the user list in
+     *     step" and needs its own decision.
+     */
+    get: operations['listScimGroups'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/scim/v2/Groups/{groupId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one team with its members (SCIM) */
+    get: operations['getScimGroup'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/canned-responses': {
     parameters: {
       query?: never;
@@ -5250,6 +5467,169 @@ export interface components {
       updated_at: string;
     };
     /**
+     * @description A bearer credential a workspace pastes into its identity provider's
+     *     SCIM provisioning connector (NFR-S11). Stored only as a SHA-256 digest;
+     *     the plaintext exists once, in the response that creates it.
+     */
+    ScimToken: {
+      /** Format: uuid */
+      id: string;
+      /** @description Human label, e.g. `Okta (corp) provisioning`. */
+      name: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: date-time
+       * @description When the connector last presented this token. The one operational signal that a provisioning integration is still running — and the one that says a token nobody remembers is safe to revoke.
+       */
+      last_used_at: string | null;
+      /**
+       * Format: date-time
+       * @description Null when the token does not expire.
+       */
+      expires_at: string | null;
+    };
+    ScimTokenCreated: components['schemas']['ScimToken'] & {
+      /** @description The plaintext credential. Returned exactly once and never recoverable — only its digest is stored. */
+      token: string;
+    };
+    /**
+     * @description RFC 7644 §3.12. **The `/scim/v2` endpoints do not use the ADR-06 error
+     *     envelope** — this is the one deliberate exception in the API, recorded in
+     *     PLAN §D. The callers of those endpoints are closed-source provisioning
+     *     connectors (Okta, Entra, OneLogin) that parse exactly this shape, and
+     *     `scimType` in particular is how a connector tells "this user already
+     *     exists, adopt it" from "your request was malformed, stop retrying".
+     *
+     *     The error *taxonomy* is unchanged: the same internal error types produce
+     *     the same HTTP statuses as everywhere else. Only the rendering differs.
+     */
+    ScimError: {
+      /**
+       * @example [
+       *       "urn:ietf:params:scim:api:messages:2.0:Error"
+       *     ]
+       */
+      schemas: string[];
+      /**
+       * @description The HTTP status, as a string — RFC 7644 specifies it that way.
+       * @example 409
+       */
+      status: string;
+      /** @enum {string} */
+      scimType?:
+        | 'invalidFilter'
+        | 'invalidPath'
+        | 'invalidSyntax'
+        | 'invalidValue'
+        | 'mutability'
+        | 'noTarget'
+        | 'tooMany'
+        | 'uniqueness';
+      detail: string;
+    };
+    /**
+     * @description A member of this workspace, as SCIM sees them (RFC 7643 §4.1).
+     *
+     *     `id` is the account's uuid. The writable surface is deliberately narrow:
+     *     **`active` and `externalId` only**. Everything else a SCIM User names —
+     *     the address, the display name — lives on the global `accounts` row, which
+     *     a person may share with another workspace, so one workspace's directory
+     *     must not be able to rewrite it. Attributes sent on a create are used only
+     *     when the account does not exist yet.
+     *
+     *     `meta.lastModified` and `meta.version` are omitted rather than invented:
+     *     the membership records when somebody joined, not when their row last
+     *     changed, and a `lastModified` that quietly answered `created` would make
+     *     a client's incremental sync skip real updates.
+     */
+    ScimUser: {
+      /**
+       * @example [
+       *       "urn:ietf:params:scim:schemas:core:2.0:User"
+       *     ]
+       */
+      schemas: string[];
+      /**
+       * Format: uuid
+       * @description The account uuid — stable for as long as the membership exists.
+       */
+      id: string;
+      /** @description The identity provider's own id for this member. Absent when unset. */
+      externalId?: string;
+      /** @description The member's e-mail address. Not writable over SCIM. */
+      userName: string;
+      name?: {
+        formatted?: string;
+      };
+      displayName?: string;
+      emails?: {
+        value?: string;
+        /** @example work */
+        type?: string;
+        primary?: boolean;
+      }[];
+      /** @description False means the membership is suspended: the person can neither sign in to this workspace nor be routed work. Setting it false is what a directory's "disable user" does, and `DELETE` does the same thing. */
+      active: boolean;
+      meta: {
+        /** @example User */
+        resourceType: string;
+        /** Format: date-time */
+        created: string;
+        /** Format: uri */
+        location: string;
+      };
+    };
+    /**
+     * @description A team of this workspace (RFC 7643 §4.2), read-only.
+     *
+     *     A directory may see which teams exist and who is in them, but team
+     *     membership drives chat routing here, so letting an external system
+     *     rewrite the routing topology is a much larger claim than "keep the user
+     *     list in step". Group-to-role mapping is out of scope for the same reason.
+     */
+    ScimGroup: {
+      /**
+       * @example [
+       *       "urn:ietf:params:scim:schemas:core:2.0:Group"
+       *     ]
+       */
+      schemas: string[];
+      /** @description The team's per-license integer id, as text (PRD §8.4). */
+      id: string;
+      displayName: string;
+      members: {
+        /** Format: uuid */
+        value?: string;
+        display?: string;
+        /** Format: uri */
+        $ref?: string;
+      }[];
+      meta: {
+        /** @example Group */
+        resourceType: string;
+        /** Format: date-time */
+        created: string;
+        /** Format: uri */
+        location: string;
+      };
+    };
+    /** @description RFC 7644 §3.4.2 — the envelope every SCIM query answers in. */
+    ScimListResponse: {
+      /**
+       * @example [
+       *       "urn:ietf:params:scim:api:messages:2.0:ListResponse"
+       *     ]
+       */
+      schemas: string[];
+      /** @description Matches across every page, not just this one. */
+      totalResults: number;
+      /** @description 1-based */
+      startIndex: number;
+      itemsPerPage: number;
+      Resources: (components['schemas']['ScimUser'] | components['schemas']['ScimGroup'])[];
+    };
+    /**
      * @description One brand of a license (Multibrand, PRD §5.3). A license may run several
      *     brands under a single subscription; each has its own channels, websites
      *     and widget/security/inbox settings, selected via the `X-Nexa-Brand`
@@ -7797,6 +8177,74 @@ export interface components {
       };
       content: {
         'application/json': components['schemas']['Error'];
+      };
+    };
+    /** @description Malformed request, unsupported filter, or an immutable attribute */
+    scimBadRequest: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/scim+json': components['schemas']['ScimError'];
+      };
+    };
+    /** @description Missing, unknown, revoked or expired SCIM token */
+    scimUnauthorized: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/scim+json': components['schemas']['ScimError'];
+      };
+    };
+    /**
+     * @description The token's provisioning bucket is exhausted (ADR-07). SCIM has its own
+     *     per-token limit, so a full directory reconciliation cannot throttle anything
+     *     else.
+     */
+    scimTooManyRequests: {
+      headers: {
+        'Retry-After'?: number;
+        [name: string]: unknown;
+      };
+      content: {
+        'application/scim+json': components['schemas']['ScimError'];
+      };
+    };
+    /**
+     * @description The workspace is read-only (an expired trial, ADR-10). Reads still succeed;
+     *     provisioning writes resume on subscribing.
+     */
+    scimPaymentRequired: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/scim+json': components['schemas']['ScimError'];
+      };
+    };
+    /**
+     * @description The userName or externalId is already taken in this workspace
+     *     (`scimType: uniqueness`).
+     */
+    scimConflict: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/scim+json': components['schemas']['ScimError'];
+      };
+    };
+    /**
+     * @description No such resource for this token's workspace. A resource belonging to another
+     *     workspace answers identically, so ids stay un-enumerable (NFR-S5).
+     */
+    scimNotFound: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/scim+json': components['schemas']['ScimError'];
       };
     };
   };
@@ -11464,6 +11912,316 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  listScimTokens: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The live provisioning tokens */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ScimToken'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createScimToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          /** @description Omit for a token that does not expire — a provisioning connector is meant to run unattended for years. Capped at a year so "unattended" cannot quietly mean "forever, unreviewed". */
+          expires_in_days?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description The credential, in the only response that carries it */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScimTokenCreated'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /**
+       * @description Either the per-workspace cap on live provisioning tokens
+       *     (`limit_reached`) or the ordinary rate limit.
+       */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  revokeScimToken: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tokenId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Revoked */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listScimUsers: {
+    parameters: {
+      query?: {
+        /**
+         * @description `attribute eq "value"` on `userName`, `externalId`, `id`, or
+         *     `active eq true|false`. **Deliberately a small slice of the SCIM filter
+         *     grammar.** The full grammar (`and`/`or`/`not`, grouping, value paths,
+         *     nine operators) would mean translating arbitrary client input into SQL
+         *     for a caller that in practice sends two filters: `userName eq` before a
+         *     create, and `externalId eq` when a rename has broken the userName
+         *     match. Anything richer is refused with `invalidFilter` rather than
+         *     silently mis-answered — a refused filter is a bug report, a
+         *     mis-answered one is somebody else's user getting patched.
+         */
+        filter?: string;
+        /** @description 1-based. A value below 1 is read as 1, per RFC 7644. */
+        startIndex?: number;
+        /** @description Capped at 200; a larger request gets 200 rather than an error. */
+        count?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The matching members */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/scim+json': components['schemas']['ScimListResponse'];
+        };
+      };
+      400: components['responses']['scimBadRequest'];
+      401: components['responses']['scimUnauthorized'];
+      429: components['responses']['scimTooManyRequests'];
+    };
+  };
+  createScimUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/scim+json': components['schemas']['ScimUser'];
+      };
+    };
+    responses: {
+      /** @description The provisioned member */
+      201: {
+        headers: {
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/scim+json': components['schemas']['ScimUser'];
+        };
+      };
+      400: components['responses']['scimBadRequest'];
+      401: components['responses']['scimUnauthorized'];
+      402: components['responses']['scimPaymentRequired'];
+      409: components['responses']['scimConflict'];
+      429: components['responses']['scimTooManyRequests'];
+    };
+  };
+  getScimUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        userId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The member */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/scim+json': components['schemas']['ScimUser'];
+        };
+      };
+      401: components['responses']['scimUnauthorized'];
+      404: components['responses']['scimNotFound'];
+      429: components['responses']['scimTooManyRequests'];
+    };
+  };
+  deleteScimUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        userId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deprovisioned */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['scimUnauthorized'];
+      402: components['responses']['scimPaymentRequired'];
+      404: components['responses']['scimNotFound'];
+      429: components['responses']['scimTooManyRequests'];
+    };
+  };
+  patchScimUser: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        userId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/scim+json': {
+          /**
+           * @example [
+           *       "urn:ietf:params:scim:api:messages:2.0:PatchOp"
+           *     ]
+           */
+          schemas?: string[];
+          Operations: {
+            /** @enum {string} */
+            op: 'add' | 'replace' | 'remove';
+            path?: string;
+            value?: unknown;
+          }[];
+        };
+      };
+    };
+    responses: {
+      /** @description The member as stored after the patch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/scim+json': components['schemas']['ScimUser'];
+        };
+      };
+      400: components['responses']['scimBadRequest'];
+      401: components['responses']['scimUnauthorized'];
+      402: components['responses']['scimPaymentRequired'];
+      404: components['responses']['scimNotFound'];
+      409: components['responses']['scimConflict'];
+      429: components['responses']['scimTooManyRequests'];
+    };
+  };
+  listScimGroups: {
+    parameters: {
+      query?: {
+        /** @description `displayName eq "value"` or `id eq "value"`. */
+        filter?: string;
+        startIndex?: number;
+        count?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The matching teams, with their members */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/scim+json': components['schemas']['ScimListResponse'];
+        };
+      };
+      400: components['responses']['scimBadRequest'];
+      401: components['responses']['scimUnauthorized'];
+      429: components['responses']['scimTooManyRequests'];
+    };
+  };
+  getScimGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The team's per-license integer id, as text. */
+        groupId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The team */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/scim+json': components['schemas']['ScimGroup'];
+        };
+      };
+      401: components['responses']['scimUnauthorized'];
+      404: components['responses']['scimNotFound'];
+      429: components['responses']['scimTooManyRequests'];
     };
   };
   listCannedResponses: {

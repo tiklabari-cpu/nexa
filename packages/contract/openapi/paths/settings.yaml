@@ -371,6 +371,116 @@ ssoConnection:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+scimTokens:
+  get:
+    tags: [Settings]
+    operationId: listScimTokens
+    summary: Provisioning credentials this workspace has issued
+    description: |
+      The SCIM bearer tokens a workspace has pasted into its identity provider's
+      provisioning connector (NFR-S11). Live tokens only — a revoked one is gone,
+      not listed as revoked, because the question this answers is "what can still
+      reach my directory surface today".
+
+      The credential itself is never here. It is stored as a SHA-256 digest and
+      the plaintext existed once, in the response that created it.
+    responses:
+      "200":
+        description: The live provisioning tokens
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/ScimToken" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: createScimToken
+    summary: Mint a SCIM provisioning credential
+    description: |
+      **Owner or admin.** Deliberately not owner-only, unlike `POST
+      /settings/sso`, and the difference is what the credential can do: a SCIM
+      token creates members with the `agent` role, suspends them and
+      deprovisions them — every one of which an admin may already do by hand. It
+      therefore grants no power its minter lacks. Writing an IdP certificate
+      does: it lets the writer sign in *as* any colleague, which is why that one
+      sits a rank higher.
+
+      The token is returned **once**, in this response, and is unrecoverable
+      afterwards — only its digest is stored. Naming it is required: a workspace
+      running two connectors through a migration has to be able to tell which is
+      which, and "Token 2" is what an unnamed one becomes the moment a rotation
+      goes wrong.
+
+      A workspace may hold a small number of live tokens (enough for one
+      directory plus a rotation). Beyond that the request is refused rather than
+      the oldest being pruned — silently revoking one would be indistinguishable
+      from an outage to whichever connector was using it.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              expires_in_days:
+                type: integer
+                minimum: 1
+                maximum: 365
+                description: >-
+                  Omit for a token that does not expire — a provisioning
+                  connector is meant to run unattended for years. Capped at a
+                  year so "unattended" cannot quietly mean "forever, unreviewed".
+    responses:
+      "201":
+        description: The credential, in the only response that carries it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScimTokenCreated" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429":
+        description: |
+          Either the per-workspace cap on live provisioning tokens
+          (`limit_reached`) or the ordinary rate limit.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
+scimToken:
+  delete:
+    tags: [Settings]
+    operationId: revokeScimToken
+    summary: Revoke a SCIM provisioning credential
+    description: |
+      Takes effect on the next request the connector makes — the token is
+      resolved from the database every time, never cached.
+
+      Only provisioning tokens. A personal access token id here is a 404, so this
+      cannot become a second way to revoke a colleague's credential that skips
+      the ownership check on `/auth/personal-access-tokens`.
+    parameters:
+      - name: tokenId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "204": { description: Revoked }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 cannedResponses:
   get:
     tags: [Settings]

@@ -16,6 +16,13 @@ function actorOf(request: FastifyRequest): { actorId: string | null; actorType: 
   if (!principal) return { actorId: null, actorType: 'system' };
   if (principal.kind === 'agent') return { actorId: principal.accountId, actorType: 'agent' };
   if (principal.kind === 'bot') return { actorId: principal.botId, actorType: 'bot' };
+  // A SCIM provisioning connector (NFR-S11) names no person and is not a bot in
+  // this product's sense — `bot` means an AI agent of the workspace. It is an
+  // external system acting on the workspace's own instruction, which is what
+  // `system` already means here. Which *credential* acted is recorded by the
+  // entry itself (S11-f writes the token into the target), not by pretending the
+  // token is an account id.
+  if (principal.kind === 'scim') return { actorId: null, actorType: 'system' };
   return { actorId: principal.customerId, actorType: 'customer' };
 }
 

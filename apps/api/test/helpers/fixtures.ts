@@ -8,6 +8,7 @@
 import { PrismaClient } from '@prisma/client';
 import { hashPassword, hashToken } from '../../src/lib/crypto.js';
 import { parseEnv, type Env } from '../../src/config/env.js';
+import type { TokenKind } from '../../src/services/auth/token-service.js';
 
 // The mock IdP harness (S11-c) is a fixture like any other; re-exported here so
 // SSO test suites can reach it alongside the rest of `helpers/fixtures.js`.
@@ -224,7 +225,7 @@ export async function grantToken(
     organizationId: string;
     ownerId: string;
     scopes: string[];
-    kind?: 'pat' | 'oauth' | 'bot';
+    kind?: TokenKind;
     expiresAt?: Date | null;
     revokedAt?: Date | null;
     /** Position the token in time — session-policy tests need a stale credential. */

@@ -130,6 +130,21 @@ function bucketFor(request: FastifyRequest, env: Env): Bucket {
     };
   }
 
+  // A SCIM provisioning connector (NFR-S11). Its own bucket rather than the
+  // agent one: the traffic shape is different (a nightly sync pages the whole
+  // directory in a burst, then goes quiet for a day) and folding it into the
+  // agent limit would mean a full reconciliation could exhaust the quota of a
+  // credential that has nothing to do with it. Keyed by token, like the agent
+  // bucket and for the same reason — rotating a leaked SCIM token also resets
+  // whatever it was doing to the limit.
+  if (principal?.kind === 'scim') {
+    return {
+      key: `rl:scim:${principal.licenseId}:${principal.tokenId}`,
+      limit: env.RATE_LIMIT_SCIM_PER_MIN,
+      windowMs: 60_000,
+    };
+  }
+
   // Unauthenticated callers share one bucket per IP. This covers sign-in,
   // token exchange and widget token minting, so it is the limit an end-to-end
   // suite runs into first — hence configurable like the others (ADR-07), rather

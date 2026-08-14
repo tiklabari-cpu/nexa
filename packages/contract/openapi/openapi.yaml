@@ -259,6 +259,22 @@ paths:
     $ref: "./paths/settings.yaml#/sso"
   /settings/sso/{connectionId}:
     $ref: "./paths/settings.yaml#/ssoConnection"
+  /settings/scim-tokens:
+    $ref: "./paths/settings.yaml#/scimTokens"
+  /settings/scim-tokens/{tokenId}:
+    $ref: "./paths/settings.yaml#/scimToken"
+  # SCIM 2.0 (NFR-S11). Its own document because it follows RFC 7643/7644 rather
+  # than this API's conventions — camelCase attributes, `application/scim+json`,
+  # and RFC 7644's error envelope in place of ADR-06's. All three exceptions are
+  # explained at the top of that file.
+  /scim/v2/Users:
+    $ref: "./paths/scim.yaml#/users"
+  /scim/v2/Users/{userId}:
+    $ref: "./paths/scim.yaml#/user"
+  /scim/v2/Groups:
+    $ref: "./paths/scim.yaml#/groups"
+  /scim/v2/Groups/{groupId}:
+    $ref: "./paths/scim.yaml#/group"
   /settings/canned-responses:
     $ref: "./paths/settings.yaml#/cannedResponses"
   /settings/canned-responses/{cannedResponseId}:
@@ -1022,6 +1038,198 @@ components:
           description: Whether sign-in through this connection is live.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    ScimToken:
+      type: object
+      description: |
+        A bearer credential a workspace pastes into its identity provider's
+        SCIM provisioning connector (NFR-S11). Stored only as a SHA-256 digest;
+        the plaintext exists once, in the response that creates it.
+      required: [id, name, created_at, last_used_at, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        name:
+          type: string
+          nullable: true
+          description: Human label, e.g. `Okta (corp) provisioning`.
+        created_at: { type: string, format: date-time }
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When the connector last presented this token. The one operational
+            signal that a provisioning integration is still running — and the one
+            that says a token nobody remembers is safe to revoke.
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null when the token does not expire.
+
+    ScimTokenCreated:
+      allOf:
+        - $ref: "#/components/schemas/ScimToken"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: >-
+                The plaintext credential. Returned exactly once and never
+                recoverable — only its digest is stored.
+
+    ScimError:
+      type: object
+      description: |
+        RFC 7644 §3.12. **The `/scim/v2` endpoints do not use the ADR-06 error
+        envelope** — this is the one deliberate exception in the API, recorded in
+        PLAN §D. The callers of those endpoints are closed-source provisioning
+        connectors (Okta, Entra, OneLogin) that parse exactly this shape, and
+        `scimType` in particular is how a connector tells "this user already
+        exists, adopt it" from "your request was malformed, stop retrying".
+
+        The error *taxonomy* is unchanged: the same internal error types produce
+        the same HTTP statuses as everywhere else. Only the rendering differs.
+      required: [schemas, status, detail]
+      properties:
+        schemas:
+          type: array
+          items: { type: string }
+          example: ["urn:ietf:params:scim:api:messages:2.0:Error"]
+        status:
+          type: string
+          description: The HTTP status, as a string — RFC 7644 specifies it that way.
+          example: "409"
+        scimType:
+          type: string
+          enum:
+            [
+              invalidFilter,
+              invalidPath,
+              invalidSyntax,
+              invalidValue,
+              mutability,
+              noTarget,
+              tooMany,
+              uniqueness,
+            ]
+        detail: { type: string }
+
+    ScimUser:
+      type: object
+      description: |
+        A member of this workspace, as SCIM sees them (RFC 7643 §4.1).
+
+        `id` is the account's uuid. The writable surface is deliberately narrow:
+        **`active` and `externalId` only**. Everything else a SCIM User names —
+        the address, the display name — lives on the global `accounts` row, which
+        a person may share with another workspace, so one workspace's directory
+        must not be able to rewrite it. Attributes sent on a create are used only
+        when the account does not exist yet.
+
+        `meta.lastModified` and `meta.version` are omitted rather than invented:
+        the membership records when somebody joined, not when their row last
+        changed, and a `lastModified` that quietly answered `created` would make
+        a client's incremental sync skip real updates.
+      required: [schemas, id, userName, active, meta]
+      properties:
+        schemas:
+          type: array
+          items: { type: string }
+          example: ["urn:ietf:params:scim:schemas:core:2.0:User"]
+        id:
+          type: string
+          format: uuid
+          description: The account uuid — stable for as long as the membership exists.
+        externalId:
+          type: string
+          description: The identity provider's own id for this member. Absent when unset.
+        userName:
+          type: string
+          description: The member's e-mail address. Not writable over SCIM.
+        name:
+          type: object
+          properties:
+            formatted: { type: string }
+        displayName: { type: string }
+        emails:
+          type: array
+          items:
+            type: object
+            properties:
+              value: { type: string }
+              type: { type: string, example: work }
+              primary: { type: boolean }
+        active:
+          type: boolean
+          description: >-
+            False means the membership is suspended: the person can neither sign
+            in to this workspace nor be routed work. Setting it false is what a
+            directory's "disable user" does, and `DELETE` does the same thing.
+        meta:
+          type: object
+          required: [resourceType, created, location]
+          properties:
+            resourceType: { type: string, example: User }
+            created: { type: string, format: date-time }
+            location: { type: string, format: uri }
+
+    ScimGroup:
+      type: object
+      description: |
+        A team of this workspace (RFC 7643 §4.2), read-only.
+
+        A directory may see which teams exist and who is in them, but team
+        membership drives chat routing here, so letting an external system
+        rewrite the routing topology is a much larger claim than "keep the user
+        list in step". Group-to-role mapping is out of scope for the same reason.
+      required: [schemas, id, displayName, members, meta]
+      properties:
+        schemas:
+          type: array
+          items: { type: string }
+          example: ["urn:ietf:params:scim:schemas:core:2.0:Group"]
+        id:
+          type: string
+          description: The team's per-license integer id, as text (PRD §8.4).
+        displayName: { type: string }
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              value: { type: string, format: uuid }
+              display: { type: string }
+              $ref: { type: string, format: uri }
+        meta:
+          type: object
+          required: [resourceType, created, location]
+          properties:
+            resourceType: { type: string, example: Group }
+            created: { type: string, format: date-time }
+            location: { type: string, format: uri }
+
+    ScimListResponse:
+      type: object
+      description: RFC 7644 §3.4.2 — the envelope every SCIM query answers in.
+      required: [schemas, totalResults, startIndex, itemsPerPage, Resources]
+      properties:
+        schemas:
+          type: array
+          items: { type: string }
+          example: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+        totalResults:
+          type: integer
+          description: Matches across every page, not just this one.
+        startIndex: { type: integer, description: 1-based, as SCIM counts. }
+        itemsPerPage: { type: integer }
+        Resources:
+          type: array
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/ScimUser"
+              - $ref: "#/components/schemas/ScimGroup"
 
     Brand:
       type: object

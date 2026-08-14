@@ -26,12 +26,15 @@ export interface IssuedToken {
   scopes: string[];
 }
 
+/** Every bearer credential this product mints, by what it is allowed to reach. */
+export type TokenKind = 'pat' | 'oauth' | 'bot' | 'scim';
+
 interface ResolvedTokenRow {
   id: string;
   license_id: bigint;
   organization_id: string;
   owner_id: string;
-  kind: 'pat' | 'oauth' | 'bot';
+  kind: TokenKind;
   scopes: string[];
   client_id: string | null;
   family_id: string | null;
@@ -84,6 +87,30 @@ export class TokenService {
           scopes: row.scopes,
           tokenId: row.id,
           tokenKind: 'bot',
+        },
+      };
+    }
+
+    // A SCIM token belongs to a workspace's directory connector, not to a
+    // person, so it resolves without a membership lookup — and, crucially,
+    // *before* the one below. `owner_id` on these rows records which admin
+    // minted the credential; falling through would resolve that admin's
+    // membership and hand a provisioning connector their role, which is
+    // precisely the escalation this branch exists to make impossible. What the
+    // token may then reach is decided by the route's `principals` list, in
+    // `plugins/auth.ts`, like every other principal kind.
+    if (row.kind === 'scim') {
+      return {
+        ok: true,
+        licenseStatus: row.license_status,
+        region: row.organization_region,
+        principal: {
+          kind: 'scim',
+          licenseId: row.license_id,
+          organizationId: row.organization_id,
+          tokenId: row.id,
+          tokenKind: 'scim',
+          scopes: [],
         },
       };
     }
@@ -187,7 +214,7 @@ export class TokenService {
     licenseId: bigint;
     organizationId: string;
     ownerId: string;
-    kind: 'pat' | 'oauth' | 'bot';
+    kind: TokenKind;
     scopes: string[];
     name?: string;
     clientId?: string;
@@ -258,7 +285,7 @@ export class TokenService {
     licenseId: bigint;
     organizationId: string;
     ownerId: string;
-    kind?: 'pat' | 'oauth' | 'bot';
+    kind?: TokenKind;
   }) {
     return withTenant(
       this.db,
@@ -285,6 +312,35 @@ export class TokenService {
   }
 
   /**
+   * Every live token of one kind in a workspace, regardless of who minted it.
+   *
+   * Its own method rather than an optional `ownerId` on `list()`: that one is
+   * the personal-access-token surface, where dropping the owner filter would
+   * turn "my tokens" into "everybody's" the first time a caller forgot an
+   * argument. A SCIM credential genuinely belongs to the workspace and not to a
+   * person, so the widening is stated here, once, on purpose.
+   */
+  async listWorkspaceTokens(input: { licenseId: bigint; organizationId: string; kind: TokenKind }) {
+    return withTenant(
+      this.db,
+      { licenseId: input.licenseId, organizationId: input.organizationId },
+      (tx) =>
+        tx.apiToken.findMany({
+          where: { kind: input.kind, revokedAt: null },
+          select: {
+            id: true,
+            name: true,
+            ownerId: true,
+            createdAt: true,
+            lastUsedAt: true,
+            expiresAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+    );
+  }
+
+  /**
    * Enforce the per-owner concurrent-session cap by revoking the oldest
    * surviving tokens.
    *
@@ -299,7 +355,7 @@ export class TokenService {
     tx: TenantClient,
     licenseId: bigint,
     ownerId: string,
-    kind: 'pat' | 'oauth' | 'bot',
+    kind: TokenKind,
   ): Promise<void> {
     if (kind !== 'oauth') return;
 

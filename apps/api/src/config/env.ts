@@ -67,6 +67,16 @@ const envSchema = z.object({
    * 30/min would throttle a legitimate crawl. Its own `rl:pubkb:<ip>` bucket.
    */
   RATE_LIMIT_PUBKB_PER_MIN: z.coerce.number().int().positive().default(300),
+  /**
+   * SCIM provisioning connectors, per token (NFR-S11 · ADR-07). Higher than the
+   * agent limit because a directory sync is bursty by nature — a full
+   * reconciliation pages the whole workspace and then patches everyone who
+   * changed — and one connector's burst must not be able to throttle another
+   * workspace's, which the per-token key already guarantees. Still bounded: a
+   * stolen SCIM token is the credential for an entire organisation's user
+   * lifecycle, so it gets a ceiling like everything else.
+   */
+  RATE_LIMIT_SCIM_PER_MIN: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_RTM_PER_SEC: z.coerce.number().int().positive().default(10),
 
   /**

@@ -157,12 +157,20 @@ model AgentMembership {
   suspended            Boolean   @default(false) @map("suspended")
   /// Tie-breaker for round-robin assignment (ADR-08 step 4).
   lastAssignedAt       DateTime? @map("last_assigned_at") @db.Timestamptz(6)
+  /// The identity provider's own id for this member, when the membership is
+  /// managed over SCIM (NFR-S11 · S11-e). On the membership rather than the
+  /// account because it is *one* workspace's directory speaking: the same
+  /// person may work for another workspace whose IdP calls them something else.
+  scimExternalId       String?   @map("scim_external_id")
   createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   agent   Account @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@id([licenseId, agentId])
+  /// At most one member per external id. NULLs are distinct in Postgres, so
+  /// members who never came from a directory are unaffected.
+  @@unique([licenseId, scimExternalId])
   @@index([agentId])
   @@map("agent_memberships")
 }

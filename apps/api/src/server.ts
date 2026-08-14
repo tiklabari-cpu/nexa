@@ -16,6 +16,7 @@ import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
 import authRoutes from './routes/auth.js';
 import samlRoutes from './routes/saml.js';
+import scimRoutes from './routes/scim.js';
 import agentRoutes from './routes/agents.js';
 import chatRoutes from './routes/chats.js';
 import customerRoutes from './routes/customer.js';
@@ -166,6 +167,12 @@ export async function buildServer({
       // arrives as a form post, and the content-type parser that reads it is
       // encapsulated here rather than loosened across the whole auth surface.
       await api.register(samlRoutes, { env, apiBase: `${env.API_BASE_URL}${API_PREFIX}` });
+      // Also its own scope, for two reasons of the same kind: SCIM speaks
+      // `application/scim+json` and answers failures in RFC 7644's error
+      // envelope rather than ADR-06's. Both are encapsulated here so nothing
+      // outside `/scim/v2` changes shape (see the file header for why the
+      // exception is deliberate).
+      await api.register(scimRoutes, { baseUrl: `${env.API_BASE_URL}${API_PREFIX}/scim/v2` });
       await api.register(accountLifecycleRoutes, { env, mailer });
       await api.register(chatRoutes, { env, mailer });
       await api.register(agentRoutes);

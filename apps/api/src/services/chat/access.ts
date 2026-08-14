@@ -15,6 +15,7 @@
  * enumeration oracle.
  */
 import { hasAnyScope } from '@nexa/types';
+import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 
@@ -70,6 +71,14 @@ export async function resolveVisibility(
       actorId: principal.customerId,
       isCustomer: true,
     };
+  }
+
+  // A SCIM provisioning token (NFR-S11) reaches `/scim/v2` and nothing else, so
+  // it should never arrive here — refused rather than defaulted into one of the
+  // branches below, because an absent case that quietly picks a branch is how a
+  // directory credential ends up reading conversations.
+  if (principal.kind === 'scim') {
+    throw ApiError.authorization('Provisioning credentials cannot access conversations.');
   }
 
   const actorId = principal.kind === 'agent' ? principal.accountId : principal.botId;

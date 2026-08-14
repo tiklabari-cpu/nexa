@@ -13,6 +13,49 @@
 
 ## Task log (newest-first)
 
+## tm 81.6 — S11-e · SCIM 2.0 sunucu çekirdeği: /scim/v2/Users + bearer auth + lisans kapsamı — done — 2026-08-14 UTC
+
+- **Yapıldı:** (1) `apps/api/src/routes/scim.ts` (yeni, `server.ts`'e kendi plugin kapsamında kayıtlı)
+  — `/scim/v2/Users` GET liste+filtre · GET tek · POST · PATCH · DELETE, `/scim/v2/Groups` GET
+  (salt-okuma). Saf protokol modülü `apps/api/src/lib/scim.ts` (filtre/patch/paging ayrıştırma,
+  serileştirme, RFC 7644 hata zarfı). (2) **Dördüncü principal türü** `ScimPrincipal`
+  (`services/auth/principal.ts` + `TokenService#resolve`'da `kind === 'scim'` dalı, **üyelik
+  aramasından ÖNCE** — düşseydi token'ı basan admin'in rolünü miras alırdı). Rotalar
+  `principals: ['scim']`; agent PAT'i `/scim/v2`'de 404, SCIM token'ı agent API'sinde 404.
+  (3) Migration `20260814150000_scim_server_core` — `api_tokens.kind` CHECK `pat|oauth|bot|scim` ·
+  `agent_memberships.scim_external_id` + `(license_id, scim_external_id)` tekil indeks ·
+  `scim_provision_member` (SECURITY DEFINER; var olan hesabı sahiplenir ama DEĞİŞTİRMEZ, mükerrer
+  üyelikte `membership_created=false` → 409 `uniqueness`, yeni üye `agent` + `offline`).
+  (4) **Token basan/iptal eden uç** (§D99'un sahipsiz yüzeyi) `settings.ts`'te:
+  `GET|POST /settings/scim-tokens` + `DELETE /settings/scim-tokens/{id}`, `access_rules:rw` +
+  `minimumRole: admin` (owner DEĞİL — gerekçe PLAN KS11'de), token bir kez döner, workspace başına
+  canlı token tavanı (`MAX_ACTIVE_SCIM_TOKENS`=4, aşımda **reddedilir**), `scim_token.created` /
+  `scim_token.revoked` audit eylemleri. (5) Kendi rate-limit kovası (`RATE_LIMIT_SCIM_PER_MIN`=300);
+  konsol IP allow-list'inden muaf (gerekçe `plugins/auth.ts`'te). (6) **ADR-06 istisnası PLAN
+  §D101'e yazıldı** — `/scim/v2` RFC 7644 §3.12 zarfını döner; taksonomi değişmedi, yalnız render,
+  yalnız bu plugin'in içinde (`app.setErrorHandler` encapsulation'da).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `format:check` (dokunulan dosyalar) ·
+  build 7/7 · `pnpm -w test` (`@nexa/api` 2575 → **2672**: +40 birim `scim.test.ts`, +57 entegrasyon
+  `scim.test.ts`) · `pnpm -w test:integration` 1923 → **1980** · `pnpm -w test:e2e` **131/131**
+  (6.3 dk) · `db:check-drift` temiz (migration paylaşılan `nexa` veritabanına da uygulandı).
+- **Varsayımlar:** (a) `accounts` SCIM tarafından **asla** değiştirilmez (hesap küreseldir, PRD §8.4
+  — `S11-d`'nin JIT kuralının aynısı); `userName` değişikliği sessizce düşürülmez, `mutability` ile
+  reddedilir, sahip olmadığımız diğer nitelikler kabul edilip uygulanmaz. (b) Filtre dilbilgisi
+  kasten dar: yalnız `attr eq "value"`, gerisi `invalidFilter`. (c) `PUT /Users/{id}`
+  uygulanmadı (yazılabilir alan yalnız `active`+`externalId`; yanıltıcı olurdu). (d) SCIM ucu
+  `metering.ts`'te faturalanmaz (o kanca PAT'e özgüdür) — istenirse ayrı görev.
+- **Sonraki pencereye not:** (1) **S11-f'nin işi bilerek bırakıldı:** SCIM işlemleri **audit
+  yazmıyor** (yalnız token yaşam döngüsü yazıyor) · koltuk/faturalama etkisi yok · DELETE
+  yalnız `suspended=true` yapıyor (açık sohbetlerin devri, canlı token iptali orada).
+  `plugins/audit.ts` SCIM için `actorType: 'system'` + `actorId: null` döndürüyor; S11-f
+  entry'nin `target`/`metadata`'sına token kimliğini koymalı. (2) **S11-g yeni uç AÇMAZ** —
+  `GET /settings/scim-tokens` listeyi, `DELETE` iptali zaten veriyor; ekran token'ı **bir kez**
+  göstermeli (`DeveloperPortal.tsx` `SecretOncePanel` emsali) ve SCIM taban URL'i
+  `{API_BASE_URL}/api/v1/scim/v2`'dir. (3) `agent_memberships`'e eklenen `scim_external_id`
+  NULL'lu tekil indekstir — SCIM'siz üyeler etkilenmez. (4) e2e'yi PowerShell'den koşarken
+  `apps/rtm` kök `.env`'i okumaz (`loadEnvFile` çağırmıyor): `set -a; . ./.env; set +a` ile
+  koş, yoksa RTM webServer "Invalid environment" ile düşer ve Playwright 60 sn'de timeout olur.
+
 ## tm 81.5 — S11-d · SP uçları: /auth/saml/{id}/login + /acs, hesap eşleme, JIT provizyon, oturum, audit — done — 2026-08-14 UTC
 
 - **Yapıldı:** (1) `apps/api/src/routes/saml.ts` (yeni plugin, `server.ts`'e kayıtlı) — `GET

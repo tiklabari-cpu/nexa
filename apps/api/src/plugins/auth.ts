@@ -205,7 +205,7 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     // before the IP check below, because that check runs inside `withTenant` and
     // would otherwise carry a half-built context. Brand is an agent/bot concept
     // like scopes — a customer token names none.
-    if (principal.kind !== 'customer') {
+    if (principal.kind === 'agent' || principal.kind === 'bot') {
       request.brandId = await resolveBrand(principal, request.headers['x-nexa-brand']);
     }
 
@@ -222,6 +222,17 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     //     deny-list of FR-MOD-08.9.2 (`banned-ip.ts`), enforced at token mint and
     //     the chat edge; an allow-list written for the office network would lock
     //     out every visitor, which is not what "restrict the console" means.
+    //   - SCIM principals (NFR-S11) are exempt for the same reason, one step
+    //     removed: the caller is the workspace's identity provider running in
+    //     *its* cloud, from addresses the workspace neither chooses nor
+    //     controls. An admin adding their office network would silently stop
+    //     directory provisioning — and the failure would surface days later as
+    //     "leavers are not being deprovisioned", which is the worst possible way
+    //     to learn about it. Restricting a machine credential by source address
+    //     is a reasonable thing to want, but it is a per-token list, not this
+    //     one; the controls on a SCIM token today are that it is hashed at rest,
+    //     revocable in one call, rate-limited in its own bucket, and reaches
+    //     nothing but `/scim/v2` (the `principals` gate above).
     //   - `public: true` routes (login/authorize/token/revoke) are exempt, so a
     //     workspace that saves a list excluding its own current address can still
     //     sign in, clear it and recover — the list restricts the console, never
@@ -230,7 +241,7 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     //     server.ts, narrowed to one hop): a client-supplied `X-Forwarded-For`
     //     cannot influence it, so the allow-list cannot be bypassed with a spoofed
     //     header.
-    if (principal.kind !== 'customer' && !config.public) {
+    if (principal.kind !== 'customer' && principal.kind !== 'scim' && !config.public) {
       // Read fresh on every request, never cached — the call license-gate.ts makes
       // and for the same reason: a cached list keeps admitting an address the
       // workspace just removed for the length of the TTL, which is exactly the

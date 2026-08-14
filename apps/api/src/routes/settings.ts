@@ -149,6 +149,60 @@ const updateSsoBody = z
     'revoke_previous_certificate cannot be combined with a new idp_certificate_pem — a rotation already decides what happens to the old one',
   );
 
+/**
+ * How many live SCIM provisioning tokens one workspace may hold (NFR-S11).
+ *
+ * One directory, plus room to run the next credential alongside the old one
+ * while a rotation is verified. Deliberately small: each of these manages every
+ * account in the workspace, so a drawer of forgotten ones is a drawer of
+ * forgotten master keys.
+ */
+export const MAX_ACTIVE_SCIM_TOKENS = 4;
+
+/**
+ * `api_tokens.owner_id` for a SCIM token minted by something other than a
+ * signed-in person (a bot or app principal holding `access_rules:rw`).
+ *
+ * The column is `NOT NULL` and, for this kind, purely attributional — nothing
+ * resolves a principal from it, because `TokenService#resolve` answers a SCIM
+ * row before it ever reads a membership. The sentinel is not a uuid on purpose:
+ * it can never collide with an account id, so a reader of the table cannot
+ * mistake it for one.
+ */
+const SCIM_SYSTEM_OWNER = 'system:scim';
+
+/**
+ * Naming the credential is required. A workspace with two of these during a
+ * migration has to be able to tell which connector holds which, and "Token 2" is
+ * what an unnamed one becomes the moment a rotation goes wrong.
+ *
+ * `expires_in_days` is optional because a provisioning connector is meant to run
+ * unattended for years; a workspace that wants an expiry gets one, capped at a
+ * year so "unattended" cannot quietly mean "forever, unreviewed".
+ */
+const createScimTokenBody = z.object({
+  name: z.string().trim().min(1).max(120),
+  expires_in_days: z.number().int().min(1).max(365).optional(),
+});
+
+function serialiseScimToken(row: {
+  id: string;
+  name: string | null;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+  expiresAt: Date | null;
+}) {
+  return {
+    id: row.id,
+    name: row.name,
+    created_at: row.createdAt.toISOString(),
+    // The one operational signal a workspace has that a connector is still
+    // running — and the one that says a token nobody remembers is safe to revoke.
+    last_used_at: row.lastUsedAt?.toISOString() ?? null,
+    expires_at: row.expiresAt?.toISOString() ?? null,
+  };
+}
+
 const cannedListQuery = z.object({ scope: z.enum(['chat', 'ticket']).optional() });
 
 const createCannedBody = z.object({
@@ -870,6 +924,148 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
         return count;
       });
       if (deleted === 0) throw ApiError.notFound('SSO connection not found.');
+
+      return reply.status(204).send();
+    },
+  );
+
+  // --- SCIM provisioning tokens (NFR-S11 · S11-e) -----------------------------
+  //
+  // The credential a workspace pastes into its identity provider's provisioning
+  // connector. It lives here, next to the federation it belongs to, and *with*
+  // the endpoint that verifies it (`routes/scim.ts`) rather than on the screen
+  // that displays it: the surface that MINTS a credential managing an entire
+  // organisation's user lifecycle is in the same security class as the one that
+  // ACCEPTS it, and leaving it to be invented alongside a settings screen is how
+  // a role gate ends up being whatever the screen happened to need.
+  //
+  // `admin`, not `owner`. The distinction is deliberate and rests on what a SCIM
+  // token can actually do: create members with the `agent` role, suspend them and
+  // deprovision them. Every one of those is something an admin may already do by
+  // hand (invite, suspend, remove), so the credential grants no power its minter
+  // lacks. That is exactly not true of `POST /settings/sso`, where writing the
+  // IdP certificate lets the writer sign in *as* any colleague — which is why
+  // that one is `exactRole: 'owner'` and this one is not.
+  //
+  // The plaintext token exists once, in the 201 body. It is stored as a SHA-256
+  // digest like every other bearer credential (`TokenService`), so a database
+  // dump yields nothing presentable and "show it to me again" has no answer.
+
+  app.get(
+    '/settings/scim-tokens',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const tenant = request.tenant();
+      const items = await app.tokens.listWorkspaceTokens({
+        licenseId: tenant.licenseId,
+        organizationId: tenant.organizationId,
+        kind: 'scim',
+      });
+      return reply.send({ items: items.map(serialiseScimToken) });
+    },
+  );
+
+  app.post(
+    '/settings/scim-tokens',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(createScimTokenBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      // A workspace federates one directory, occasionally two while it migrates.
+      // The cap is what stops a forgotten rotation from leaving a drawer of live
+      // credentials that each manage every account in the workspace — the same
+      // reasoning as the per-owner session cap, applied to a far sharper token.
+      // Refused rather than silently pruned: revoking the oldest would be
+      // indistinguishable from an outage to whichever connector was using it.
+      const live = await app.tokens.listWorkspaceTokens({
+        licenseId: tenant.licenseId,
+        organizationId: tenant.organizationId,
+        kind: 'scim',
+      });
+      if (live.length >= MAX_ACTIVE_SCIM_TOKENS) {
+        throw new ApiError(
+          'limit_reached',
+          `This workspace already has ${MAX_ACTIVE_SCIM_TOKENS} provisioning tokens. Revoke one before creating another.`,
+        );
+      }
+
+      const issued = await app.tokens.issue({
+        licenseId: tenant.licenseId,
+        organizationId: tenant.organizationId,
+        // Attribution, not authority. `resolve()` short-circuits on
+        // `kind === 'scim'` before it ever looks a membership up, so this id
+        // records who minted the credential and grants it nothing.
+        ownerId: principal.kind === 'agent' ? principal.accountId : SCIM_SYSTEM_OWNER,
+        kind: 'scim',
+        // Empty by construction. A SCIM token authorises one surface, and that
+        // decision is made by the route's `principals` list; a scope list here
+        // would be a second, quieter place for the same question to be answered
+        // differently.
+        scopes: [],
+        name: body.name,
+        ...(body.expires_in_days === undefined
+          ? {}
+          : { ttlSeconds: body.expires_in_days * 86_400 }),
+      });
+
+      await request.withTenant((tx) =>
+        writeAuditEntry(tx, request.auditContext(), {
+          action: 'scim_token.created',
+          target: `token:${issued.id}`,
+          // What it is and how long it lives. The digest is not recorded either:
+          // the trail says a provisioning credential was minted, never anything
+          // that helps someone present one.
+          metadata: { name: body.name, expires_at: issued.expiresAt?.toISOString() ?? null },
+        }),
+      );
+
+      // Never cached, never logged: this is the only time the plaintext exists.
+      reply.header('Cache-Control', 'no-store');
+      return reply.status(201).send({
+        id: issued.id,
+        name: body.name,
+        created_at: new Date().toISOString(),
+        last_used_at: null,
+        expires_at: issued.expiresAt?.toISOString() ?? null,
+        token: issued.token,
+      });
+    },
+  );
+
+  app.delete<{ Params: { tokenId: string } }>(
+    '/settings/scim-tokens/:tokenId',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const tokenId = parse(uuid, request.params.tokenId);
+      const tenant = request.tenant();
+
+      // Read under RLS first, and only `kind: 'scim'`. Without the kind filter
+      // this route would be a second way to revoke a colleague's personal access
+      // token — one that skips the ownership check `/auth/personal-access-tokens`
+      // makes. A token of another workspace is invisible here, so it is a 404
+      // rather than a 403 (NFR-S5).
+      const existing = await request.withTenant((tx) =>
+        tx.apiToken.findFirst({
+          where: { id: tokenId, kind: 'scim', revokedAt: null },
+          select: { id: true },
+        }),
+      );
+      if (!existing) throw ApiError.notFound('Provisioning token not found.');
+
+      await app.tokens.revoke({
+        licenseId: tenant.licenseId,
+        organizationId: tenant.organizationId,
+        tokenId,
+      });
+
+      await request.withTenant((tx) =>
+        writeAuditEntry(tx, request.auditContext(), {
+          action: 'scim_token.revoked',
+          target: `token:${tokenId}`,
+        }),
+      );
 
       return reply.status(204).send();
     },

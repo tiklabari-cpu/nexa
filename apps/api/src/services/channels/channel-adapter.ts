@@ -22,10 +22,11 @@ import { z } from 'zod';
 import { ApiError } from '../../lib/api-error.js';
 
 /**
- * The adapter channels: the v1 three (FR-MOD-08.5.4/.5/.6) plus Instagram DMs
- * (FR-MOD-08.5.7, v2). These are the values the `channels_type_check`
- * constraint allows for adapters (SMS is `twilio`, its provider). Email and the
- * Website widget resolve tenants their own way and are not adapters.
+ * The adapter channels: the v1 three (FR-MOD-08.5.4/.5/.6), Instagram DMs
+ * (FR-MOD-08.5.7, v2) and Telegram bots (FR-MOD-08.5.8, Enterprise). These are
+ * the values the `channels_type_check` constraint allows for adapters (SMS is
+ * `twilio`, its provider). Email and the Website widget resolve tenants their
+ * own way and are not adapters.
  *
  * This list is the runtime gate: `routes/channels.ts` narrows the `:type` path
  * segment through `isChannelType`, so a type here has connect / disconnect /
@@ -37,7 +38,7 @@ import { ApiError } from '../../lib/api-error.js';
  * channel the product names, including ones with no adapter). The two lists are
  * deliberately separate — different questions, different answers.
  */
-export const CHANNEL_TYPES = ['messenger', 'twilio', 'whatsapp', 'instagram'] as const;
+export const CHANNEL_TYPES = ['messenger', 'twilio', 'whatsapp', 'instagram', 'telegram'] as const;
 export type ChannelType = (typeof CHANNEL_TYPES)[number];
 
 export function isChannelType(value: unknown): value is ChannelType {

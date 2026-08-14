@@ -18,11 +18,11 @@
  * (consistent across the whole family): `recipient.id` is the connected bot's
  * `bot_username`, `sender.id` is the writer's Telegram user id.
  *
- * Not yet a member of `ChannelType` (`channel-adapter.ts`) — CHANNEL_TYPES
- * only widens, and this adapter joins the registry, in 08.5.8-c. Until then
- * `/channels/telegram/*` stays a 404 by design: the contract (08.5.8-a) and
- * this adapter land first so a type never reaches the route surface with no
- * adapter behind it (§6.1.1).
+ * Registered in `CHANNEL_TYPES` and the adapter registry (08.5.8-c), which is
+ * what opens `/channels/telegram/{connect,disconnect,messages,webhook}` — the
+ * routes are generic over the channel type, so nothing there is Telegram-aware.
+ * The contract (08.5.8-a) and this adapter landed first, in that order, so the
+ * type never reached the route surface with no adapter behind it (§6.1.1).
  */
 import { z } from 'zod';
 import { generateToken } from '../../lib/crypto.js';
@@ -51,7 +51,7 @@ const inboundSchema = z.object({
   message: z.object({ text: z.string().min(1).max(10_000) }),
 });
 
-export class TelegramAdapter implements Omit<ChannelAdapter, 'type'> {
+export class TelegramAdapter implements ChannelAdapter {
   readonly type = 'telegram' as const;
 
   parseConnect(input: unknown): ConnectResult {

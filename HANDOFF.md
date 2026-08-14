@@ -13,6 +13,29 @@
 
 ## Task log (newest-first)
 
+## tm 79.3 — 08.5.8-c · Telegram'ın adapter kanalı olarak devreye alınması — done — 2026-08-15 UTC
+
+- **Yapıldı:** `CHANNEL_TYPES` 4 → 5 (`telegram`) + `registry.ts` `ADAPTERS` kaydı; `TelegramAdapter`
+  `implements Omit<ChannelAdapter, 'type'>` → tam `implements ChannelAdapter`. `routes/channels.ts`
+  ve `channel-service.ts` **hiç değişmedi** — çekirdek kanal-agnostik olduğu için devreye alma iki
+  satır. Pinlenmiş test bilinçli çevrildi: `adapters.test.ts` listesi telegram'ı içeriyor,
+  `false` iddiası adaptörsüz `website_widget` + `chat_page`'e taşındı; integration'daki "unknown
+  channel type 404" testi `telegram` yerine `email` kullanıyor. `channelLabel()` `CHANNEL_TYPES`'ı
+  okuduğundan Telegram artık `website` kovasına düşmüyor (`reports-metrics.test.ts` pinledi).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` **2758 → 2769** ·
+  `pnpm -w test:integration` **2052 → 2063** · `pnpm -w build` 7/7 · `pnpm -w test:e2e`
+  **132/132** (bu pencere route yüzeyini gerçekten genişlettiği için koşuldu; -a/-b'de kapsam
+  dışıydı). `channels-adapters.test.ts` 47 → 58: CASES matrisi (6) + adres sahiplenme (1) +
+  Telegram'a özel 3 (doğru adaptör: `tg.` id + `bot_username`; `bot_token` **satıra** yazılmıyor;
+  sender username müşteriye taşınıyor) + cross-tenant (1).
+- **Varsayımlar:** Yok. §6.1.1'in "adres tekilliği kanal-agnostik, yeniden yazılmaz" gerekçesi
+  varsayım olarak bırakılmadı — `it.each(CASES)` telegram'ı alınca regresyon fiilen yeşil koştu.
+- **Sonraki pencereye not:** API artık `/channels/telegram/{connect,disconnect,messages,webhook}`
+  açık, ama UI hâlâ "Coming soon" gösteriyor (`apps/web/.../Channels.tsx:133` `comingSoon('telegram'…)`)
+  — bunu canlıya çeviren `08.5.8-d`, ayrıca `channelNotifiedKey('telegram')` localStorage kaydının
+  sessizce düşmesi de o kapsamda (§6.1.1 kapatılmış açık soru). `08.5.8-e` Inbox Views,
+  `08.5.8-f` uçtan uca; `-f`'in adres sahiplenme regresyonu integration tarafında zaten yeşil.
+
 ## tm 79.2 — 08.5.8-b · TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri — done — 2026-08-14 UTC
 
 - **Yapıldı:** `apps/api/src/services/channels/telegram.ts` (yeni), Instagram deseniyle birebir.

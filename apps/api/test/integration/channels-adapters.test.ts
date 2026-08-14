@@ -1,6 +1,6 @@
 /**
- * Omnichannel adapters (MOCK) — FR-MOD-08.5.4/.5/.6 (v1, Must) and
- * FR-MOD-08.5.7 (Instagram DMs, v2).
+ * Omnichannel adapters (MOCK) — FR-MOD-08.5.4/.5/.6 (v1, Must),
+ * FR-MOD-08.5.7 (Instagram DMs, v2) and FR-MOD-08.5.8 (Telegram, Enterprise).
  *
  * The properties the acceptance criteria name, proven end to end against real
  * Postgres + Redis + Fastify:
@@ -29,7 +29,7 @@ interface ConnectedChannel {
 
 /** One channel's provider-specific shapes, so the KK runs against every one. */
 interface ChannelCase {
-  type: 'messenger' | 'twilio' | 'whatsapp' | 'instagram';
+  type: 'messenger' | 'twilio' | 'whatsapp' | 'instagram' | 'telegram';
   addressA: string;
   addressB: string;
   sender: string;
@@ -95,10 +95,30 @@ const CASES: ChannelCase[] = [
       message: { text },
     }),
   },
+  {
+    // Telegram bots (08.5.8): the connected bot's `@username` is the address —
+    // public and short, unlike the other four, which is exactly why the address
+    // ownership rule below matters here. The sender is a Telegram user id.
+    type: 'telegram',
+    addressA: 'acme_support_bot',
+    addressB: 'globex_support_bot',
+    sender: '884219991',
+    connect: (bot_username) => ({
+      bot_token: '123456789:AAmockBotTokenString-Value',
+      bot_username,
+    }),
+    inbound: (bot_username, sender, text, name) => ({
+      recipient: { id: bot_username },
+      sender: { id: sender, ...(name ? { username: name } : {}) },
+      message: { text },
+    }),
+  },
 ];
 
 /** The Instagram case, for the assertions that are about it specifically. */
 const INSTAGRAM = CASES.find((c) => c.type === 'instagram')!;
+/** Likewise Telegram (08.5.8-c). */
+const TELEGRAM = CASES.find((c) => c.type === 'telegram')!;
 
 describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
   let owner: PrismaClient;
@@ -193,7 +213,11 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
     });
 
     it('404s an unknown channel type', async () => {
-      const res = await server.post('/channels/telegram/connect', { x: 1 }, auth(adminA));
+      // `email` is a channel the product names and the channels_type_check
+      // constraint allows, but it resolves its tenant its own way and has no
+      // adapter — so the route surface does not exist for it. (This stood on
+      // `telegram` until 08.5.8-c gave Telegram an adapter.)
+      const res = await server.post('/channels/email/connect', { x: 1 }, auth(adminA));
       expect(res.statusCode).toBe(404);
     });
 
@@ -432,6 +456,60 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
     });
   });
 
+  // --- Telegram wiring (08.5.8-c) --------------------------------------------
+
+  describe('telegram (FR-MOD-08.5.8)', () => {
+    const c = TELEGRAM;
+
+    it('reaches the Telegram adapter specifically, not merely some adapter', async () => {
+      // The five cases share their shapes, so a registry entry pointing at the
+      // wrong adapter would pass every one of them. The stored config and the
+      // provider message id are the tell that the right one is on the far end.
+      await connect(c.type, c.connect(c.addressA));
+
+      const row = await owner.channel.findFirst({
+        where: { licenseId: fx.a.licenseId, type: 'telegram' },
+      });
+      const config = (row?.config ?? {}) as Record<string, unknown>;
+      expect(config['bot_username']).toBe(c.addressA);
+      expect(config['address']).toBe(c.addressA);
+
+      const inbound = (await webhook(c.type, c.inbound(c.addressA, c.sender, 'hi'))).json() as {
+        chat_id: string;
+      };
+      const sent = (await sendOut(c.type, { chat_id: inbound.chat_id, text: 'on it' })).json() as {
+        provider_message_id: string;
+      };
+      expect(sent.provider_message_id).toMatch(/^tg\./);
+    });
+
+    it('never persists the bot token the caller handed it', async () => {
+      // The one way Telegram differs from the other four: `bot_token` is a real
+      // credential supplied by the caller, not a mock the server minted, and
+      // `ConnectResult.config` promises it holds no raw secret (§6.1.1). Proven
+      // against the stored row rather than the adapter's return value — the row
+      // is what a database dump, a support query or a backup would expose.
+      const res = await connect(c.type, c.connect(c.addressA));
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toContain('AAmockBotTokenString');
+
+      const row = await owner.channel.findFirstOrThrow({
+        where: { licenseId: fx.a.licenseId, type: 'telegram' },
+      });
+      expect(row.config).not.toHaveProperty('bot_token');
+      expect(JSON.stringify(row.config)).not.toContain('AAmockBotTokenString');
+    });
+
+    it('carries the sender username onto the customer it creates', async () => {
+      await connect(c.type, c.connect(c.addressA));
+      const res = (
+        await webhook(c.type, c.inbound(c.addressA, c.sender, 'merhaba', 'dana_h'))
+      ).json() as { customer_id: string };
+      const customer = await owner.customer.findUnique({ where: { id: res.customer_id } });
+      expect(customer?.name).toBe('dana_h');
+    });
+  });
+
   // --- Cross-tenant isolation (NFR-S5) ---------------------------------------
 
   describe('cross-tenant isolation', () => {
@@ -519,6 +597,42 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       ).toBe(200);
       // …and that reply is B's own outbound to a sender B has never heard from,
       // logged under B — it never touches A's chat or message log.
+      const outboundB = (await messagesFor(fx.b.licenseId)).filter(
+        (m) => m.direction === 'outbound',
+      );
+      expect(outboundB).toHaveLength(1);
+      expect(outboundB[0]).toMatchObject({ chatId: null });
+      expect(
+        (await messagesFor(fx.a.licenseId)).filter((m) => m.direction === 'outbound'),
+      ).toHaveLength(0);
+    });
+
+    it('routes a Telegram message by the receiving bot while both tenants hold telegram', async () => {
+      // Same risk as Instagram's, sharper: a bot `@username` is public, short
+      // and typed by humans, so guessing one is easier than guessing an IG
+      // account id. What decides the tenant is still the recipient address on an
+      // unauthenticated webhook — not "who has telegram connected".
+      const tg = TELEGRAM;
+      await connect(tg.type, tg.connect(tg.addressA), adminA);
+      await connect(tg.type, tg.connect(tg.addressB), adminB);
+
+      const msg = (
+        await webhook(tg.type, tg.inbound(tg.addressA, tg.sender, 'A icin mesaj'))
+      ).json() as { chat_id: string };
+
+      expect(await chatsFor(fx.a.licenseId)).toHaveLength(1);
+      expect(await chatsFor(fx.b.licenseId)).toHaveLength(0);
+      expect(await identitiesFor(fx.b.licenseId)).toHaveLength(0);
+      expect(await messagesFor(fx.b.licenseId)).toHaveLength(0);
+
+      // B cannot reply into it by chat id; naming the sender's Telegram user id
+      // sends through B's own bot to a stranger, logged under B and nowhere else.
+      expect(
+        (await sendOut(tg.type, { chat_id: msg.chat_id, text: 'intrusion' }, adminB)).statusCode,
+      ).toBe(404);
+      expect(
+        (await sendOut(tg.type, { external_id: tg.sender, text: 'intrusion' }, adminB)).statusCode,
+      ).toBe(200);
       const outboundB = (await messagesFor(fx.b.licenseId)).filter(
         (m) => m.direction === 'outbound',
       );

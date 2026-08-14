@@ -22,15 +22,16 @@ describe('channel type guard', () => {
     // Pinned deliberately: this list is the runtime gate on
     // /channels/:type/{connect,disconnect,messages,webhook} — the last one
     // public. Widening it is a route-surface decision, so it changes here too.
-    expect(CHANNEL_TYPES).toEqual(['messenger', 'twilio', 'whatsapp', 'instagram']);
+    expect(CHANNEL_TYPES).toEqual(['messenger', 'twilio', 'whatsapp', 'instagram', 'telegram']);
     for (const t of CHANNEL_TYPES) expect(isChannelType(t)).toBe(true);
     expect(isChannelType('email')).toBe(false);
     expect(isChannelType('sms')).toBe(false);
     expect(isChannelType('website')).toBe(false);
     // Named in the domain channel list and the channels_type_check constraint,
-    // but with no adapter — still a 404 (Telegram is Enterprise, out of scope).
-    expect(isChannelType('telegram')).toBe(false);
+    // but with no adapter — still a 404. `telegram` sat here until 08.5.8-c
+    // gave it one; that pin moving is what "widening is a decision" means.
     expect(isChannelType('website_widget')).toBe(false);
+    expect(isChannelType('chat_page')).toBe(false);
     expect(isChannelType('')).toBe(false);
   });
 

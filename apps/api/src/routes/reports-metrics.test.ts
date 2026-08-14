@@ -78,9 +78,11 @@ describe('channelLabel', () => {
     expect(channelLabel('messenger')).toBe('messenger');
     expect(channelLabel('twilio')).toBe('twilio');
     expect(channelLabel('whatsapp')).toBe('whatsapp');
-    // Instagram became an adapter channel in 08.5.7-c, so its message-log rows
-    // report as their own channel rather than falling into the web bucket.
+    // Instagram became an adapter channel in 08.5.7-c, Telegram in 08.5.8-c, so
+    // their message-log rows report as their own channel rather than falling
+    // into the web bucket.
     expect(channelLabel('instagram')).toBe('instagram');
+    expect(channelLabel('telegram')).toBe('telegram');
   });
 
   it("falls back to 'website' for null — the native web widget has no adapter type", () => {

@@ -7,6 +7,7 @@
 import { CHANNEL_TYPES, type ChannelAdapter, type ChannelType } from './channel-adapter.js';
 import { InstagramAdapter } from './instagram.js';
 import { MessengerAdapter } from './messenger.js';
+import { TelegramAdapter } from './telegram.js';
 import { TwilioAdapter } from './twilio.js';
 import { WhatsAppAdapter } from './whatsapp.js';
 
@@ -15,6 +16,7 @@ const ADAPTERS: Record<ChannelType, ChannelAdapter> = {
   twilio: new TwilioAdapter(),
   whatsapp: new WhatsAppAdapter(),
   instagram: new InstagramAdapter(),
+  telegram: new TelegramAdapter(),
 };
 
 export function getAdapter(type: ChannelType): ChannelAdapter {

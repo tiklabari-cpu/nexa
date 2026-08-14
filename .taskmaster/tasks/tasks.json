@@ -3465,12 +3465,12 @@
             "description": "Inbox Views grubunda Telegram kanal görünümü",
             "details": "08.5.8-e — Inbox Views grubunda Telegram kanal görünümü  [SONNET-XHIGH]\n\nPRD: 08.5.8 (PLAN §6.1.1 · dilim V3-4 · tm 79)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: Inbox sol kolonundaki \"Views\" grubu kanal bazlı görünümler taşır. Instagram v2 turunda (tm 65 `08.5.7-g`) kendi görünümünü aldı; Telegram adapter kanalı olduğu anda (`08.5.8-c`) aynı grupta yerini almalı, yoksa bağlanmış bir kanalın sohbetleri filtrelenemez ve kanal ajan için görünmez kalır.\n\nKAPSAM (denetim sonrası GERÇEK YÜZEYE İNDİRİLDİ — ilk hâli var olmayan bir filtre/sayaç kalıbı tarif ediyordu): `apps/web/src/features/inbox/views.ts` üç noktada genişler —\n- `:33` `ChannelViewType` birliği (`'messenger'|'twilio'|'whatsapp'|'instagram'`) → `'telegram'` eklenir\n- `:46` `CHANNEL_VIEW_META` kaydı (yalnız `label` + `icon` — başka alan YOK)\n- `:59` `isChannelViewType` tip guard'ı otomatik olarak genişler (birlikten türüyor)\nModülün yüzeyi bundan ibarettir: `connectedChannelViews()` (`:71`) bağlı kanallardan görünüm listesi üretir, `showChannelPromo()` (`:85`) liste boşsa `true` döner. **Filtre parametresi, sayaç/badge kaynağı ve \"boş durum metni\" bu modülde YOKTUR** — ilk kırılım bunları \"kopyalanacak desen\" diye saymıştı, denetimde çürütüldü.\n\n**DİKKAT — PİNLENMİŞ TEST GÜNCELLENECEK (denetim bulgusu — ilk hâli \"kırma\" diyordu, bu İMKÂNSIZ bir kısıttı):** `apps/web/src/features/inbox/views.test.ts:68-72` `it('ignores an unknown channel type')` testi telegram'ı **bilinmeyen tipin temsilcisi** olarak kullanıyor (`connectedChannelViews([{type:'telegram',connected:true}])` → `[]` ve `showChannelPromo` → `true`). Bu alt-görevin işi tam olarak o davranışı değiştirmektir. Test **bilinmeyen bir başka tiple** (`'chat_page'` veya `'email'`) yeniden yazılır; Telegram için yeni beklenti eklenir: bağlıyken görünüm üretilir ve `showChannelPromo` `false` döner. `08.5.8-c`'nin `adapters.test.ts` pini için yazdığı gerekçe burada da geçerlidir — pin bir hata değil, bilinçli bir kararın kaydıdır; kararı değiştirirken pini de güncellersin.\n\nDOSYALAR: `apps/web/src/features/inbox/views.ts:33,46,59` · `apps/web/src/features/inbox/views.test.ts:68-72`\n\nREFERANS DESEN (BİREBİR, aynı dosyada): Instagram görünümü (tm 65 `08.5.7-g`) — birliğe eklenen değer + `CHANNEL_VIEW_META` girdisi.\n\nKAPSAM DIŞI: kanal kartı (`08.5.8-d`), e2e (`08.5.8-f`).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir; HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/web test (views.test.ts: Telegram bağlıyken görünüm üretilir ve showChannelPromo false döner; 'ignores an unknown channel type' testi başka bir tiple yeniden yazılmış ve hâlâ yeşil; CHANNEL_VIEW_META girdisi label+icon taşır) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "79.3"
             ],
             "parentId": "79",
-            "updatedAt": "2026-08-11T21:09:39.258Z"
+            "updatedAt": "2026-08-14T23:00:17.935Z"
           },
           {
             "id": 6,
@@ -3487,7 +3487,7 @@
             "updatedAt": "2026-08-11T21:09:39.258Z"
           }
         ],
-        "updatedAt": "2026-08-14T22:47:23.568Z"
+        "updatedAt": "2026-08-14T23:00:17.935Z"
       },
       {
         "id": "80",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-14T22:47:23.568Z",
+      "lastModified": "2026-08-14T23:00:17.936Z",
       "taskCount": 123,
       "completedCount": 118,
       "tags": [

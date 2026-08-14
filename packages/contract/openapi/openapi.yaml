@@ -1345,10 +1345,11 @@ components:
     ChannelType:
       type: string
       description: |
-        A connected omnichannel adapter (FR-MOD-08.5.4-.7). SMS is `twilio`, its
-        provider. `instagram` is DM-only (FR-MOD-08.5.7). The Website widget and
-        e-mail forwarding are not adapters and are not listed here.
-      enum: [messenger, twilio, whatsapp, instagram]
+        A connected omnichannel adapter (FR-MOD-08.5.4-.8). SMS is `twilio`, its
+        provider. `instagram` is DM-only (FR-MOD-08.5.7). `telegram` is a bot
+        (FR-MOD-08.5.8). The Website widget and e-mail forwarding are not
+        adapters and are not listed here.
+      enum: [messenger, twilio, whatsapp, instagram, telegram]
 
     ConnectedChannel:
       type: object

@@ -3660,11 +3660,16 @@ export interface paths {
      * Connect a channel (mock)
      * @description Runs the channel's mock connect step and marks it on. The body differs by
      *     channel — a Messenger OAuth `code` + `page_id`, a Twilio `account_sid` +
-     *     `auth_token` + `phone_number`, a WhatsApp `waba_id` + `phone_number`, or an
-     *     Instagram OAuth `code` + `ig_user_id` — and the resulting channel *address*
-     *     (page id / phone number / IG user id) becomes the key inbound webhooks
-     *     resolve to this workspace. A credential in the body (Twilio's `auth_token`)
-     *     is verified but never stored back on the channel.
+     *     `auth_token` + `phone_number`, a WhatsApp `waba_id` + `phone_number`, an
+     *     Instagram OAuth `code` + `ig_user_id`, or a Telegram `bot_token` +
+     *     `bot_username` — and the resulting channel *address* (page id / phone
+     *     number / IG user id / bot username) becomes the key inbound webhooks
+     *     resolve to this workspace. A credential in the body (Twilio's
+     *     `auth_token`, Telegram's `bot_token`) is verified but never stored back
+     *     on the channel — unlike the other channels' mock OAuth exchange, a
+     *     Telegram `bot_token` is supplied by the caller rather than minted by
+     *     this mock, so it is real-shaped and must never be echoed into the
+     *     stored config.
      *
      *     Idempotent on the channel type: connecting again re-configures the existing
      *     channel rather than creating a second.
@@ -3771,6 +3776,11 @@ export interface paths {
      *     channel's `ig_user_id`, `sender.id` is the IGSID (an Instagram-scoped id,
      *     the sender's stable identity for that account), and `message.text` is the
      *     DM body.
+     *
+     *     Telegram mirrors the same flattened shape rather than the provider's real
+     *     `update` envelope (consistent with the other three adapters): `recipient.id`
+     *     is the connected bot's `bot_username`, `sender.id` is the Telegram user id
+     *     of the writer, and `message.text` is the message body.
      *
      *     Public and unsigned in this build (the provider is mocked, MASTER-PROMPT
      *     §5); a real deployment verifies the provider signature at the edge.
@@ -5830,12 +5840,13 @@ export interface components {
       snippet: string;
     };
     /**
-     * @description A connected omnichannel adapter (FR-MOD-08.5.4-.7). SMS is `twilio`, its
-     *     provider. `instagram` is DM-only (FR-MOD-08.5.7). The Website widget and
-     *     e-mail forwarding are not adapters and are not listed here.
+     * @description A connected omnichannel adapter (FR-MOD-08.5.4-.8). SMS is `twilio`, its
+     *     provider. `instagram` is DM-only (FR-MOD-08.5.7). `telegram` is a bot
+     *     (FR-MOD-08.5.8). The Website widget and e-mail forwarding are not
+     *     adapters and are not listed here.
      * @enum {string}
      */
-    ChannelType: 'messenger' | 'twilio' | 'whatsapp' | 'instagram';
+    ChannelType: 'messenger' | 'twilio' | 'whatsapp' | 'instagram' | 'telegram';
     /** @description A channel the workspace has connected through an adapter. */
     ConnectedChannel: {
       type: components['schemas']['ChannelType'];

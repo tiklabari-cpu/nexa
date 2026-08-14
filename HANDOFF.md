@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+## tm 79.1 — 08.5.8-a · Telegram connect/webhook kontratı + generated tip yenilemesi — done — 2026-08-14 UTC
+
+- **Yapıldı:** `ChannelType` enum'una `telegram` eklendi (Instagram deseniyle birebir, tm 65.1
+  emsali) — `packages/contract/openapi/openapi.yaml` + `paths/channels.yaml`'ın `channelConnect`/
+  `channelWebhook` prose açıklamaları Telegram `bot_token`+`bot_username` connect gövdesini ve
+  düzleştirilmiş `{recipient.id=bot_username, sender.id, message.text}` webhook şeklini belgeledi.
+  Gövde şemaları zaten genel `additionalProperties: true` obje olduğundan yeni JSON şema eklenmedi.
+  `channel-adapter.ts`'deki `CHANNEL_TYPES` **bilinçli olarak dokunulmadı** — devreye alma `08.5.8-c`'de.
+  `pnpm contract:generate` koşuldu, `packages/contract/src/generated/api.ts` yeniden üretildi. PLAN.md
+  düz tablo satırına `ilerleme K08.5.8` pointer'ı eklendi + yeni `#### K08.5.8` kanıt bloğu açıldı.
+- **Doğrulama (hepsi exit 0):** contract build + generate sonrası `git diff` sıfır (sürüklenme yok) ·
+  typecheck 11/11 · lint 8/8 · `pnpm -w test` 2751/2751 (değişmedi) · `pnpm -w test:integration`
+  2052/2052 (`contract-parity.test.ts` 5/5 dahil) · `pnpm -w build` 7/7. `test:e2e` bu dilimde
+  koşulmadı — görevin kendi testStrategy'si kapsam dışı bırakıyor (Telegram henüz hiçbir UI/adaptöre
+  bağlı değil).
+- **Varsayımlar:** Yok — görev metnindeki tüm alan/isim kararları (`bot_token`/`bot_username`, `tg.`
+  mock provider id öneki, düzleştirilmiş webhook şekli) zaten PLAN §6.1.1'de önceden karara bağlıydı.
+- **Sonraki pencereye not:** `08.5.8-b` (TelegramAdapter parseConnect/parseInbound/send + unit test)
+  bu kontrata bağımlı — `bot_token` `config`'e YAZILMAYACAK (§6.1.1/§D99 kararı), pino redaction
+  listesine ve `sanitizeAuditMetadata`'ya eklenmesi o pencerenin kapsamı. `08.5.8-c`'ye kadar
+  `CHANNEL_TYPES`'a `telegram` eklenmeyecek — sözleşme + adaptör hazır olmadan route yüzeyine girmesin.
+
 ## tm 82.1 — C4-a · REGIONS genişlemesi (eu + us) + region kayıt anında seçilir + immutable — done — 2026-08-15 UTC
 
 - **Yapıldı:** (1) `REGIONS = ['eu','us']` + yeni `DEFAULT_REGION` (`packages/types/src/domain.ts`);

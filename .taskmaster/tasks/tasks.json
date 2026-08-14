@@ -3401,7 +3401,7 @@
         "description": "FR-MOD-08.5.8 · Should (Ent.). Adres sahiplenme çekirdeği ZATEN GENEL (tm 65 08.5.7-d) — Telegram için OPUS-MAX gerekmez.",
         "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `08.5.8` · dilim V3-4\n\n6 atomik alt-görev · ~7 pencere · etiket dağılımı: SONNET-XHIGH x4 · OPUS-XHIGH x2\n\nKK: \"Get notified → tam entegrasyon (TR pazarında öncelik)\" — FR-MOD-08.5.8 birebir.\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  08.5.8-a [SONNET-XHIGH] Telegram connect/webhook kontratı + generated tip yenilemesi  (bağ: —)\n  08.5.8-b [SONNET-XHIGH] TelegramAdapter — parseConnect/parseInbound/send (MOCK) + adapter unit testleri  (bağ: 08.5.8-a)\n  08.5.8-c [OPUS-XHIGH] Telegram'ın adapter kanalı olarak devreye alınması — CHANNEL_TYPES + registry + pinlenmiş test  (bağ: 08.5.8-a, 08.5.8-b)\n  08.5.8-d [SONNET-XHIGH] Settings → Channels: Telegram kartı \"Coming soon\"dan canlı connect/disconnect'e  (bağ: 08.5.8-c)\n  08.5.8-e [SONNET-XHIGH] Inbox Views grubunda Telegram kanal görünümü  (bağ: 08.5.8-c)\n  08.5.8-f [OPUS-XHIGH] Uçtan uca doğrulama — bağla→mesaj→inbox→yanıt + cross-tenant + adres sahiplenme regresyonu  (bağ: 08.5.8-d, 08.5.8-e)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.1 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
         "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (08.5.8-f) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "35",
           "82"
@@ -3478,16 +3478,16 @@
             "description": "Uçtan uca doğrulama — bağla→mesaj→inbox→yanıt + cross-tenant + adres sahiplenme regresyonu",
             "details": "08.5.8-f — Uçtan uca doğrulama — bağla→mesaj→inbox→yanıt + cross-tenant + adres sahiplenme regresyonu  [OPUS-XHIGH]\n\nPRD: 08.5.8 (PLAN §6.1 · dilim V3-4 · tm 79)\nTAHMİN: ~2 pencere\n\nKAPSAM: (1) e2e: Telegram bağla → mock inbound mesaj → inbox'ta chat → yanıt (kanıt PNG `apps/e2e/kanit/08.5.8-telegram.png`). (2) cross-tenant negatifi. (3) ADRES SAHİPLENME REGRESYONU — bu kalemin en önemli testi: iki lisans AYNI Telegram adresini bağlamayı denediğinde İKİNCİSİ REDDEDİLİR.\n\nNEDEN (3) kritik: bu kırılım Instagram'ın `08.5.7-d` OPUS-MAX çekirdeğini Telegram için TEKRARLAMADI, çünkü koruma kanal-agnostik: `20260809090000_channel_address_uniqueness` migration'ı `channel_address_owner(p_type, p_address)` SECURITY DEFINER fonksiyonunu tip PARAMETRESİYLE kurar ve `channel-service.ts:94-163` (`assertAddressFree` + P2002 yarış dalı) kanal tipini hiçbir yerde özel-durumlamaz. Bu alt-görev o iddiayı VARSAYMAZ, TESTLE KANITLAR. Test kırmızı gelirse iddia yanlıştır ve kalem OPUS-MAX bir çekirdek alt-görevle genişletilmelidir (§D kaydı ile).\n\nDOSYALAR: `apps/e2e/tests/telegram.spec.ts` (yeni) · `apps/api/test/integration/channels-adapters.test.ts` (denetim düzeltmesi: `channels.test.ts` YOKTUR) · `apps/e2e/kanit/`\n\nREFERANS DESEN: `apps/e2e/tests/instagram.spec.ts` birebir.\n\nKAPI: bu alt-görev yeşile dönmeden kalem ✅ olmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm -w test:e2e (telegram.spec.ts dahil TÜM süit yeşil; adres sahiplenme regresyon testi integration'da yeşil)",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "79.4",
               "79.5"
             ],
             "parentId": "79",
-            "updatedAt": "2026-08-14T23:01:34.376Z"
+            "updatedAt": "2026-08-14T23:34:04.975Z"
           }
         ],
-        "updatedAt": "2026-08-14T23:01:34.376Z"
+        "updatedAt": "2026-08-14T23:34:04.975Z"
       },
       {
         "id": "80",
@@ -5933,9 +5933,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-14T23:01:34.376Z",
+      "lastModified": "2026-08-14T23:34:04.975Z",
       "taskCount": 123,
-      "completedCount": 118,
+      "completedCount": 119,
       "tags": [
         "master"
       ]

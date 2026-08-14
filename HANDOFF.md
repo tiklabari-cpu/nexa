@@ -13,6 +13,30 @@
 
 ## Task log (newest-first)
 
+## tm 81.8 — S11-g · Settings → Security: SSO bağlantı ekranı + SCIM token üretimi — done — 2026-08-14 UTC
+
+- **Yapıldı:** `apps/web/src/features/settings/SsoConnection.tsx` (yeni) — salt tüketici, yeni
+  sunucu ucu açmadı: SSO bölümü `S11-a2`'nin `/settings/sso` CRUD'unu, SCIM bölümü `S11-e`'nin
+  `/settings/scim-tokens`'ını çağırır. Görünürlük `minimumRole: 'admin'` okuma kapısını
+  `AuditLog`'un nezaket-gizleme deseniyle yansıtır (düz `agent` ekranı hiç görmez); sertifika
+  yazımı `role === 'owner'`'a kilitli, SCIM token yazımı `admin`+'ta. "Bağlantıyı doğrula" AĞA
+  ÇIKMAZ — `verifySsoMetadata` saf fonksiyonu sertifika/entity-id/URL biçimini yerel kontrol
+  eder (§D99 SSRF bulgusu kapandı). SCIM token "bir kez göster" `SecretOncePanel` (tm 72)
+  sözleşmesiyle birebir. Bağlantı silme + token iptali ikisi de onay diyaloğu ister.
+  `SettingsPage.tsx`'e `IpAllowlist`'ten hemen sonra bağlandı.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` (`@nexa/web` 1098,
+  yeni `SsoConnection.test.tsx` 15) · `pnpm -w test:integration` 2004 (dokunulmadı, kanıt
+  amaçlı) · `pnpm -w build` 7/7 · e2e `a11y.spec.ts` Settings (dark+light, 0 blocking/advisory)
+  + `settings.spec.ts` 21/21 — tam `S11-i` süiti bu alt-görevin kapsamı dışında.
+- **Varsayımlar:** Bağlantı düzenleme (PATCH ile sertifika rotasyonu/overlap) ekranda yok —
+  görev metni yalnız ekle/listele/doğrula/kaldır + SCIM üret/iptal istiyordu; rotasyon UI'ı
+  ayrı bir kalem gerektirir, açık soru olarak bırakılmadı çünkü PATCH ucu zaten var ve bir
+  sonraki tur ekleyebilir.
+- **Sonraki pencereye not:** `S11-h` (SSO zorunlu kılma) bu ekranı büyütecek — enforcement
+  toggle'ı muhtemelen `SsoConnections` içine, bağlantı listesinin yanına gelir. `S11-i`
+  (uçtan uca) `apps/e2e/tests/sso.spec.ts` yeni açacak; bu turun a11y/settings.spec.ts koşusu
+  regresyon olmadığını kanıtlar ama SSO akışının kendi e2e'si hâlâ yazılmadı.
+
 ## tm 81.7 — S11-f · SCIM yaşam döngüsü semantiği: create/suspend/deprovizyon + koltuk + audit — done — 2026-08-14 UTC
 
 - **Yapıldı:** (1) **Askıya alma etkisi tek yere çıkarıldı** —

@@ -4065,12 +4065,12 @@
             "description": "SLA ekranı + Reports'ta ihlal KPI'ı",
             "details": "11.5-e — SLA ekranı + Reports'ta ihlal KPI'ı  [SONNET-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nKAPSAM: Settings → SLA bölümü (hedef formu, iş saatleri anahtarı) + Reports'ta \"SLA ihlalleri\" KPI kartı.\n\nDOSYALAR: `apps/web/src/features/settings/SlaPolicy.tsx` (yeni) + test · `apps/web/src/features/reports/ReportsPage.tsx`\n\nREFERANS DESEN (birebir): `apps/web/src/features/reports/ReportsPage.tsx:555-561` \"Achieved goals\" KPI kartı (tm 74 · 13.3; :549-554 \"In queue now\" kartıdır — denetim düzeltmesi) — kart yerleşimi + düşük-baz uyarısı (FR-MOD-07.3.2: low-N uyarısı ZORUNLU). Form için `lib/form.tsx`.\n\nKAPSAM DIŞI: e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/web test (SLA formu doğrulaması; ihlal KPI kartı sayıyı gösterir; düşük-baz uyarısı eşiğin altında görünür; boş durum anlamlı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "84.4"
             ],
             "parentId": "84",
-            "updatedAt": "2026-08-11T21:09:39.258Z"
+            "updatedAt": "2026-08-15T13:41:58.401Z"
           },
           {
             "id": 6,
@@ -4115,7 +4115,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-15T12:50:55.996Z"
+        "updatedAt": "2026-08-15T13:41:58.401Z"
       },
       {
         "id": "85",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T12:50:55.997Z",
+      "lastModified": "2026-08-15T13:41:58.402Z",
       "taskCount": 124,
       "completedCount": 121,
       "tags": [

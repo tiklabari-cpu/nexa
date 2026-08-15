@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+## tm 83.8 — C6-g · Uçtan uca doğrulama (eylem→audit→export→zincir) — done — 2026-08-15 UTC
+
+- **Yapıldı:** Ürün kodu DEĞİŞMEDİ; yalnız test. `siem-export.test.ts` +4 (37→41): (1) gerçek
+  `PATCH /settings/siem` → zincirli satır → export → sayfa mührü → `SiemSink` dosyası, ve
+  **`.sig`'in gerçekten o gövdeyi mühürlediği** (tek bayt değişince düşüyor — eskiden yalnız
+  "imza yazıldı" kanıtlıydı); (2) `nexa_app` rolüyle UPDATE/DELETE reddi + sonrasında export
+  bayt bayt aynı; (3) boşluk negatifi: ortadaki satır owner bağlantısıyla silinince status
+  `chain_gap_detected: true` + `chain-ok: false` + `sequence_gap`, feed DURMUYOR; (4) cross-tenant
+  (A'nın izi kesikken B temiz, B'nin mührü A'nın anahtarıyla açılmıyor). E2E `apps/e2e/tests/siem.spec.ts`
+  (yeni, 3): tarayıcıda kutu işaretlenir → ayar kalıcı → o eylem ufuk serbest bırakınca feed'den
+  `prev_hash` ile bağlı geri gelir; erişim raporu + CSV; iki kiracı ayrık. PNG `kanit/C6-siem-export.png`.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **3038/3038** (+4)
+  + web 1142 · `pnpm -w test:integration` **83 dosya 2239/2239** (+4) · `pnpm -w build` 7/7 ·
+  **`pnpm -w test:e2e` 143/143** (140→143). Migration yok.
+- **DEVREDİLEN BORÇ — `siem_export` yetki reddi negatifi yazılamadı:** görevin ZORUNLU maddesi
+  `growth` planında reddi istiyor, ama kapıyı kuran `11.5-b` (**tm 84.2 hâlâ pending**) —
+  `lib/entitlements.ts` yok, `PLANS` tek kademe (`growth`). C4-g'nin `hipaa` borcuyla aynı graf
+  kısıtı; borç `tm 84.2`'nin details'ine "DEVREDİLEN BORÇ #2" olarak yazıldı (kapılanacak 3 uç,
+  `seedFixtures` planı `growth` olduğu için kırılacak 3 süit, ve `SiemSink` döngüsünün de
+  kapılanması gerektiği dahil).
+- **Sonraki pencereye:** `C6` kaleminin **kod payı kapandı** (8/8, tm 83.1–83.8); PLAN §6 C6 satırı
+  §1.2 gereği 728→340 karaktere indirildi (kanıt zaten `#### KC6`'da duruyordu). E2E'de kontrollü
+  React input'a `check()` DEĞİL `click()`+yanıt beklemesi kullanın: bu ekran optimistik değer
+  tutmuyor, `check()` "kutu değişmedi" diye düşüyor.
+
 ## tm 83.7 — C6-f · Settings → Security: SIEM export ekranı — done — 2026-08-15 UTC
 
 - **Yapıldı:** `apps/web/src/features/settings/SiemExport.tsx` (yeni) — `C6-b`'nin `GET|PATCH

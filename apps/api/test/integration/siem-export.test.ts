@@ -16,13 +16,33 @@
  *   - **The configuration row's own invariants** — target vocabulary, cursor
  *     halves, no DELETE — enforced by the database rather than by whoever
  *     writes the next caller.
+ *
+ * The last group (`end to end`) belongs to a different slice — C6-g — and is
+ * here rather than in a file of its own because it is the same surface seen
+ * whole. Every group above holds one link of the chain still: a seeded row
+ * exports, a written entry is chained, a file is delivered. C6-g joins them and
+ * runs a real security-sensitive request all the way to the sealed artefact on
+ * disk, then attacks that artefact three ways — rewrite it, cut a hole in it,
+ * read it from the wrong workspace.
  */
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { PrismaClient, Prisma } from '@prisma/client';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { withTenant, type TenantClient } from '../../src/lib/tenant.js';
+import {
+  deriveChainKey,
+  verifyAuditChain,
+  verifyExportSignature,
+  type VerifiableRow,
+} from '../../src/services/audit/audit-chain.js';
+import { SiemSink } from '../../src/services/audit/siem-sink.js';
 import {
   grantToken,
   ownerClient,
   seedFixtures,
+  testEnv,
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
@@ -36,10 +56,19 @@ interface ExportRecord {
   target: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
+  chain_seq: number | null;
+  prev_hash: string | null;
+  hash: string | null;
 }
+
+const APP_URL = process.env['DATABASE_APP_URL'];
+/** The deployment's own chain secret — the one the running server signs with. */
+const CHAIN_SECRET = testEnv().AUDIT_CHAIN_SECRET;
 
 describe('SIEM export', () => {
   let owner: PrismaClient;
+  /** The application role, which the append-only grant actually binds. */
+  let appRole: PrismaClient;
   /** Horizon off: seeded entries are exportable the instant they exist. */
   let server: TestServer;
   /** Horizon on, wide enough that a freshly written entry is held back. */
@@ -139,7 +168,9 @@ describe('SIEM export', () => {
   }
 
   beforeAll(async () => {
+    if (!APP_URL) throw new Error('DATABASE_APP_URL must be set');
     owner = ownerClient();
+    appRole = new PrismaClient({ datasourceUrl: APP_URL });
     // Zero horizon everywhere except the one suite that tests the horizon: a
     // test writes and exports in the same millisecond, and nothing else is
     // writing, so the concurrency the horizon guards against cannot occur.
@@ -150,6 +181,7 @@ describe('SIEM export', () => {
   afterAll(async () => {
     await server.close();
     await lagged.close();
+    await appRole.$disconnect();
     await owner.$disconnect();
   });
 
@@ -711,6 +743,289 @@ describe('SIEM export', () => {
           data: { licenseId: fx.a.licenseId, target: 'file' },
         }),
       ).rejects.toThrow();
+    });
+  });
+
+  // =========================================================================
+  // End to end (NFR-C6 · C6-g)
+  // =========================================================================
+
+  /**
+   * Action → audit row → export → chain → delivered file, in one pass.
+   *
+   * Each link already has a suite of its own, and each of those suites starts
+   * from a row it planted. That is the right way to test a link and the wrong
+   * way to believe a system: a planted row is one that skipped the writer, so
+   * every claim made about it is a claim about the reader. Here nothing is
+   * planted. A real request changes a real security setting, and what comes out
+   * of the far end of the pipe — the bytes on disk, with their seal — is what
+   * gets checked.
+   *
+   * Then the three ways the evidence can be attacked, in the order an attacker
+   * would reach for them: rewrite it (the grant refuses), remove it (the chain
+   * reports), read it from next door (RLS answers about the caller).
+   */
+  describe('end to end (C6-g)', () => {
+    let siemDir: string;
+
+    const keyFor = (t: TenantFixture) => deriveChainKey(CHAIN_SECRET, t.licenseId);
+    const ctx = (t: TenantFixture) => ({
+      licenseId: t.licenseId,
+      organizationId: t.organizationId,
+    });
+
+    /**
+     * A security-sensitive action, performed the way a person performs it.
+     *
+     * `PATCH /settings/siem` is the one this slice owns end to end, and it is
+     * genuinely sensitive: it decides where the workspace's audit trail is
+     * shipped. It writes `settings.security_updated` through the ordinary
+     * request path — same route, same chain writer, same transaction as any
+     * other audited mutation.
+     */
+    async function performSecurityAction(enabled: boolean): Promise<void> {
+      const res = await server.patch('/settings/siem', { enabled }, auth(settingsToken));
+      expect(res.statusCode, `security action failed: ${res.body}`).toBe(200);
+    }
+
+    /** Pull the whole trail as the SIEM would, and keep the seal that came with it. */
+    async function pullExport(token = exportToken): Promise<{
+      records: ExportRecord[];
+      body: string;
+      signature: string;
+      chainOk: boolean;
+    }> {
+      const res = await server.get('/audit-log/export', auth(token));
+      expect(res.statusCode).toBe(200);
+      return {
+        records: recordsOf(res.body),
+        body: res.body,
+        signature: res.headers['x-nexa-export-signature'] as string,
+        chainOk: res.headers['x-nexa-export-chain-ok'] === 'true',
+      };
+    }
+
+    /** Re-derive the seal over the exact bytes delivered and check it. */
+    function sealHolds(
+      t: TenantFixture,
+      page: { records: ExportRecord[]; body: string; signature: string },
+    ): boolean {
+      const seqs = page.records
+        .map((r) => r.chain_seq)
+        .filter((seq): seq is number => seq !== null);
+      return verifyExportSignature(
+        keyFor(t),
+        {
+          licenseId: t.licenseId,
+          count: page.records.length,
+          firstSeq: seqs.length > 0 ? BigInt(seqs[0] as number) : null,
+          lastSeq: seqs.length > 0 ? BigInt(seqs[seqs.length - 1] as number) : null,
+          body: page.body,
+        },
+        page.signature,
+      );
+    }
+
+    /** The workspace's whole trail, verified against its own head. */
+    async function verifyWholeTrail(t: TenantFixture) {
+      const head = await owner.auditChainHead.findUniqueOrThrow({
+        where: { licenseId: t.licenseId },
+      });
+      const rows: VerifiableRow[] = await owner.auditLogEntry.findMany({
+        where: { licenseId: t.licenseId },
+        orderBy: [{ chainSeq: 'asc' }],
+      });
+      return verifyAuditChain(rows, {
+        key: keyFor(t),
+        prunedThroughSeq: head.prunedThroughSeq ?? 0n,
+        genesisAt: head.genesisAt,
+      });
+    }
+
+    const statusOf = async (token = settingsToken) => {
+      const res = await server.get('/settings/siem/status', auth(token));
+      expect(res.statusCode).toBe(200);
+      return res.json() as { chain_gap_detected: boolean | null; exported_count: number };
+    };
+
+    beforeEach(async () => {
+      siemDir = await mkdtemp(join(tmpdir(), 'nexa-c6g-'));
+    });
+
+    afterEach(async () => {
+      await rm(siemDir, { recursive: true, force: true });
+    });
+
+    it('carries a real security action through to a sealed file the auditor can verify', async () => {
+      // 1. The action. Nothing is written by the test — this is the product.
+      await performSecurityAction(true);
+
+      // 2. The row. One entry, joined to the chain by the writer the route used.
+      const trail = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId },
+        orderBy: [{ chainSeq: 'asc' }],
+      });
+      expect(trail).toHaveLength(1);
+      expect(trail[0]?.action).toBe('settings.security_updated');
+      expect(trail[0]?.chainSeq).toBe(1n);
+
+      // 3. The export. The record the SIEM receives is the action that happened,
+      // carrying its own position and hashes inline.
+      const page = await pullExport();
+      const record = page.records.find((r) => r.action === 'settings.security_updated');
+      expect(record, 'the action never reached the feed').toBeDefined();
+      expect(record?.license_id).toBe(fx.a.licenseId.toString());
+      expect(record?.chain_seq).toBe(1);
+      expect(record?.hash).toBe(trail[0]?.hash);
+      // Position one has nothing before it — that is what makes it position one.
+      expect(record?.prev_hash).toBeNull();
+
+      // 4. The chain, both as the export saw it and over the whole trail.
+      expect(page.chainOk).toBe(true);
+      expect(sealHolds(fx.a, page)).toBe(true);
+      expect((await verifyWholeTrail(fx.a)).ok).toBe(true);
+
+      // 5. The artefact. What an auditor is actually handed is a file, and until
+      // now nothing has checked that the `.sig` beside it verifies the bytes in
+      // it — `siem-sink.test.ts` proves a signature is written, not that it is
+      // the right one over the right body.
+      const report = await new SiemSink(appRole, {
+        siemDir,
+        auditChainSecret: CHAIN_SECRET,
+        horizonMs: 0,
+      }).run();
+      const delivery = report.tenants.find((t) => t.licenseId === fx.a.licenseId.toString());
+      expect(delivery?.status).toBe('delivered');
+
+      const dir = join(siemDir, fx.a.licenseId.toString());
+      const files = (await readdir(dir)).filter((n) => n.endsWith('.ndjson'));
+      expect(files).toHaveLength(1);
+
+      const body = await readFile(join(dir, files[0] as string), 'utf8');
+      const signature = (await readFile(join(dir, `${files[0]}.sig`), 'utf8')).trim();
+      const delivered = recordsOf(body);
+      expect(delivered.map((r) => r.id)).toContain(record!.id);
+      expect(sealHolds(fx.a, { records: delivered, body, signature })).toBe(true);
+
+      // And the seal is a seal: one byte of the file changed and it stops
+      // verifying. Without this the check above would pass over a signature
+      // that happened to be computed from something else entirely.
+      expect(
+        sealHolds(fx.a, {
+          records: delivered,
+          body: body.replace('settings.security_updated', 'settings.nothing_happened'),
+          signature,
+        }),
+      ).toBe(false);
+    });
+
+    it('refuses to let the application rewrite or remove what it exported', async () => {
+      await performSecurityAction(true);
+      const before = await pullExport();
+      expect(before.records).toHaveLength(1);
+
+      const tamper = (fn: (tx: TenantClient) => Promise<unknown>) =>
+        withTenant(appRole, ctx(fx.a), fn);
+
+      // The role the API actually runs as. Not "the code does not call update" —
+      // the grant is not there to call.
+      await expect(
+        tamper((tx) => tx.auditLogEntry.updateMany({ data: { action: 'auth.login' } })),
+      ).rejects.toThrow(/permission denied|policy/i);
+      await expect(tamper((tx) => tx.auditLogEntry.deleteMany({}))).rejects.toThrow(
+        /permission denied|policy/i,
+      );
+
+      // The evidence is byte-identical afterwards, seal included. An attempt
+      // that failed loudly but left a rewritten row behind would be the worst
+      // of both.
+      const after = await pullExport();
+      expect(after.body).toBe(before.body);
+      expect(after.signature).toBe(before.signature);
+      expect(after.chainOk).toBe(true);
+      expect(sealHolds(fx.a, after)).toBe(true);
+    });
+
+    it('reports a hole cut underneath it, and keeps shipping', async () => {
+      // Three real actions, so there is a middle to cut out. Alternating the
+      // value keeps every one of them a genuine change.
+      for (const enabled of [true, false, true]) await performSecurityAction(enabled);
+      expect((await statusOf()).chain_gap_detected).toBe(false);
+
+      // The owner connection is not bound by the append-only grant — this is
+      // somebody who reached the database underneath the application, which is
+      // the only way this deletion can happen and exactly the threat the chain
+      // exists for.
+      const trail = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId },
+        orderBy: [{ chainSeq: 'asc' }],
+      });
+      expect(trail).toHaveLength(3);
+      await owner.auditLogEntry.delete({ where: { id: trail[1]!.id } });
+
+      // The screen says so…
+      expect((await statusOf()).chain_gap_detected).toBe(true);
+
+      // …the feed says so on the page itself…
+      const page = await pullExport();
+      expect(page.chainOk).toBe(false);
+      // …and it still delivers. Withholding a damaged trail turns detected
+      // tampering into a silent stop of the feed, which is what the tampering
+      // was for; the two surviving records go out marked.
+      expect(page.records).toHaveLength(2);
+      expect(sealHolds(fx.a, page)).toBe(true);
+
+      const verdict = await verifyWholeTrail(fx.a);
+      expect(verdict.ok).toBe(false);
+      expect(verdict.findings.map((f) => f.kind)).toContain('sequence_gap');
+
+      // The sink ships it too, for the same reason.
+      const report = await new SiemSink(appRole, {
+        siemDir,
+        auditChainSecret: CHAIN_SECRET,
+        horizonMs: 0,
+      }).run();
+      expect(report.tenants.find((t) => t.licenseId === fx.a.licenseId.toString())?.status).toBe(
+        'delivered',
+      );
+    });
+
+    it('answers each workspace about its own trail, damage included', async () => {
+      const grantB = (scopes: string[]) =>
+        grantToken(owner, {
+          licenseId: fx.b.licenseId,
+          organizationId: fx.b.organizationId,
+          ownerId: fx.b.ownerAccountId,
+          scopes,
+        });
+      const bExport = await grantB(['audit_log--export:ro']);
+      const bSettings = await grantB(['access_rules:rw']);
+
+      // Both workspaces act, and A's trail is then cut.
+      await performSecurityAction(true);
+      const bRes = await server.patch('/settings/siem', { enabled: true }, auth(bSettings));
+      expect(bRes.statusCode).toBe(200);
+
+      const aTrail = await owner.auditLogEntry.findMany({ where: { licenseId: fx.a.licenseId } });
+      expect(aTrail).toHaveLength(1);
+      await owner.auditLogEntry.delete({ where: { id: aTrail[0]!.id } });
+
+      // B's feed carries B's entry and has never heard of A's.
+      const bPage = await pullExport(bExport);
+      expect(bPage.records).toHaveLength(1);
+      expect(bPage.records[0]?.license_id).toBe(fx.b.licenseId.toString());
+      expect(bPage.chainOk).toBe(true);
+      expect(sealHolds(fx.b, bPage)).toBe(true);
+
+      // The damage next door is not B's problem, and — the sharper half — a gap
+      // detector written as a global query would report it as B's.
+      const [aStatus, bStatus] = await Promise.all([statusOf(), statusOf(bSettings)]);
+      expect(aStatus.chain_gap_detected).toBe(true);
+      expect(bStatus.chain_gap_detected).toBe(false);
+
+      // And B's seal is B's: A's key does not open it. The signature is what
+      // ties a delivered file to the workspace it claims to be about.
+      expect(sealHolds(fx.a, bPage)).toBe(false);
     });
   });
 });

@@ -707,6 +707,83 @@ securitySettings:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+compliance:
+  get:
+    tags: [Settings]
+    operationId: getComplianceSettings
+    summary: HIPAA cover and where this workspace lives
+    description: |
+      The two facts NFR-C4 makes HIPAA cover conditional on: the region the
+      workspace lives in, and whether its Business Associate Agreement has been
+      accepted.
+
+      `baa_available` is the server's answer to "may this workspace accept one
+      at all" — true only in `us`, because HIPAA cover is conditional on US
+      hosting. It is returned rather than left for the caller to derive from
+      `region`, so the rule is stated in one place and a screen cannot offer a
+      button the endpoint will refuse.
+    responses:
+      "200":
+        description: The current compliance state
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ComplianceSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+complianceBaa:
+  post:
+    tags: [Settings]
+    operationId: acceptHipaaBaa
+    summary: Accept the HIPAA Business Associate Agreement
+    description: |
+      Records that this workspace accepted the BAA (NFR-C4), stamping
+      `hipaa_baa_signed_at` with the moment of the first acceptance.
+
+      **The signature is mocked.** There is no contract text, no signature
+      provider and no legal workflow here — this endpoint records the single
+      fact "a BAA was accepted for this licence", which is what the HIPAA scope
+      constraints later read. No external service is called.
+
+      Two gates, both 403:
+
+      * **Owner only.** An admin cannot accept on the workspace's behalf; this
+        commits the organisation to a compliance obligation.
+      * **`us` only.** A workspace hosted in `eu` has no HIPAA cover to sign
+        into, so the endpoint refuses rather than storing an agreement that
+        claims something untrue about where the data is.
+
+      Idempotent: accepting again returns the state unchanged, keeping the
+      original timestamp. The first acceptance is the record, and a second
+      click is not a second agreement — so it also writes no second audit entry.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [accepted]
+            properties:
+              accepted:
+                type: boolean
+                enum: [true]
+                description: >-
+                  Must be `true`. An explicit affirmative, so an empty or
+                  stray POST cannot record an agreement nobody made. `false`
+                  is rejected rather than treated as a withdrawal — there is
+                  no withdrawal here.
+    responses:
+      "200":
+        description: Accepted (or already accepted)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ComplianceSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 chatTimeout:
   get:
     tags: [Settings]

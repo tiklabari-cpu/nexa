@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+## tm 82.4 — C4-d · BAA durumu + kabul akışı (MOCK) + compliance.baa_signed — done — 2026-08-15 UTC
+
+- **Yapıldı:** `licenses.hipaa_baa_signed_at` + `GET /settings/compliance`
+  (`{region, baa_available, hipaa_baa_signed_at}`) + `POST /settings/compliance/baa`
+  (`{accepted: true}`, `exactRole: 'owner'`, idempotent — ikinci kabul tarihi de denetim
+  satırını da çoğaltmaz, yarış `SELECT … FOR UPDATE` ile kapalı) + `compliance.baa_signed`
+  denetim eylemi. NFR-C4'ün "yalnız US" yarısı **veritabanında** da duruyor:
+  `licenses_baa_requires_us_region` trigger'ı (INSERT + `UPDATE OF hipaa_baa_signed_at,
+  organization_id`, SECURITY DEFINER çünkü `organizations` RLS'li). Kural iki tabloya
+  yayıldığı için CHECK yazılamıyordu; gerekçe zinciri §C-A20.3 ile aynı.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 2792 → **2808** ·
+  `pnpm -w test:integration` 2082 → **2098** (yeni `compliance-baa.test.ts`, 16 test, ilk
+  koşuda yeşil) · `pnpm -w build` 7/7 · `pnpm -w test:e2e` **135/135** · `db:migrate` +
+  `db:check-drift` temiz · `contract:generate` koşuldu.
+- **Varsayımlar:** (a) `GET /settings/compliance` görev metninde adı geçmiyordu ama eklendi —
+  POST'un yanıt şekli zaten bu, ve `C4-f`'nin kartının okuyacağı başka uç yok (contract-first
+  sırası). (b) `eu` reddi `not_allowed` (403), `validation` değil: gövde doğru, reddedilen
+  çalışma alanının durumu. (c) Damgayı NULL'a çekmek serbest — kural "US olmadan kapsam
+  olmaz", "geri alınamaz" değil.
+- **Sonraki pencereye not:** `C4-e` (HIPAA kısıtları) bu damgayı okuyacak — trigger sayesinde
+  `hipaa_baa_signed_at IS NOT NULL` zaten "ve bölge us" demek, ikinci kontrol gerekmez.
+  **Bulgu, düzeltilmedi (kapsam disiplini):** `packages/contract/openapi/openapi.yaml:513`
+  health cevabının `region` enum'u hâlâ `[eu]` — `us` dağıtımı kendi sözleşmesini ihlal eden
+  bir gövde döndürür. Tek karakterlik düzeltme; `C4-g` (uçtan uca) için not.
+
 ## tm 82.3 — C4-c · Signup ekranına bölge seçimi + kalıcılık uyarısı — done — 2026-08-15 UTC
 
 - **Yapıldı:** `SignUpPage` (`apps/web/src/features/auth/PublicPages.tsx`) — `@nexa/types`'ın

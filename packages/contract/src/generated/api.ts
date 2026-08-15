@@ -2951,6 +2951,72 @@ export interface paths {
     patch: operations['updateSecuritySettings'];
     trace?: never;
   };
+  '/settings/compliance': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * HIPAA cover and where this workspace lives
+     * @description The two facts NFR-C4 makes HIPAA cover conditional on: the region the
+     *     workspace lives in, and whether its Business Associate Agreement has been
+     *     accepted.
+     *
+     *     `baa_available` is the server's answer to "may this workspace accept one
+     *     at all" — true only in `us`, because HIPAA cover is conditional on US
+     *     hosting. It is returned rather than left for the caller to derive from
+     *     `region`, so the rule is stated in one place and a screen cannot offer a
+     *     button the endpoint will refuse.
+     */
+    get: operations['getComplianceSettings'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/compliance/baa': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Accept the HIPAA Business Associate Agreement
+     * @description Records that this workspace accepted the BAA (NFR-C4), stamping
+     *     `hipaa_baa_signed_at` with the moment of the first acceptance.
+     *
+     *     **The signature is mocked.** There is no contract text, no signature
+     *     provider and no legal workflow here — this endpoint records the single
+     *     fact "a BAA was accepted for this licence", which is what the HIPAA scope
+     *     constraints later read. No external service is called.
+     *
+     *     Two gates, both 403:
+     *
+     *     * **Owner only.** An admin cannot accept on the workspace's behalf; this
+     *       commits the organisation to a compliance obligation.
+     *     * **`us` only.** A workspace hosted in `eu` has no HIPAA cover to sign
+     *       into, so the endpoint refuses rather than storing an agreement that
+     *       claims something untrue about where the data is.
+     *
+     *     Idempotent: accepting again returns the state unchanged, keeping the
+     *     original timestamp. The first acceptance is the record, and a second
+     *     click is not a second agreement — so it also writes no second audit entry.
+     */
+    post: operations['acceptHipaaBaa'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/chat-timeout': {
     parameters: {
       query?: never;
@@ -6189,6 +6255,26 @@ export interface components {
       max_concurrent_sessions: number | null;
       /** Format: date-time */
       updated_at?: string | null;
+    };
+    /**
+     * @description What NFR-C4 makes HIPAA cover conditional on: US hosting and a signed
+     *     Business Associate Agreement. Both halves are reported together because
+     *     neither is meaningful alone — a signed BAA in `eu` would be a claim
+     *     about data that does not live there, which is why it cannot be created.
+     */
+    ComplianceSettings: {
+      /**
+       * @description Where this workspace keeps its data — chosen at signup and never changeable (ADR-12 · C4-a).
+       * @enum {string}
+       */
+      region: 'eu' | 'us';
+      /** @description Whether a BAA may be accepted here at all. True only in `us`. */
+      baa_available: boolean;
+      /**
+       * Format: date-time
+       * @description When the owner accepted the BAA, or null if never. Set once, on the first acceptance, and not moved by a later one.
+       */
+      hipaa_baa_signed_at: string | null;
     };
     /**
      * @description Per-license idle-chat auto-close window (FR-MOD-08.7.3, `inbox_settings`).
@@ -13348,6 +13434,63 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['SecuritySettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getComplianceSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current compliance state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ComplianceSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  acceptHipaaBaa: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * @description Must be `true`. An explicit affirmative, so an empty or stray POST cannot record an agreement nobody made. `false` is rejected rather than treated as a withdrawal — there is no withdrawal here.
+           * @enum {boolean}
+           */
+          accepted: true;
+        };
+      };
+    };
+    responses: {
+      /** @description Accepted (or already accepted) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ComplianceSettings'];
         };
       };
       400: components['responses']['BadRequest'];

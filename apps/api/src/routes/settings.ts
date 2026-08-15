@@ -21,7 +21,7 @@ import {
   WIDGET_POSITIONS,
   WIDGET_THEMES,
 } from '@nexa/types';
-import type { SsoAttributeMappingKey, SsoConnection } from '@nexa/types';
+import type { Region, SsoAttributeMappingKey, SsoConnection } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { resolveBrandId } from '../lib/brand.js';
@@ -444,6 +444,32 @@ const updateTagBody = z
     group_ids: tagGroupIds.optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/**
+ * Accepting the HIPAA BAA (NFR-C4 · C4-d).
+ *
+ * The literal `true` is the whole body, and it is required: an endpoint that
+ * records a compliance commitment should not be reachable by an empty POST, and
+ * `accepted: false` is refused rather than read as a withdrawal — this surface
+ * has no withdrawal, so treating it as one would be inventing a behaviour.
+ */
+const acceptBaaBody = z.object({ accepted: z.literal(true) });
+
+/**
+ * The two halves of NFR-C4's condition, reported together.
+ *
+ * `baa_available` is derived here rather than left to the caller so the rule
+ * "US hosting only" is stated by the side that enforces it — a screen deriving
+ * it from `region` would be a second copy of the rule, free to disagree with
+ * the endpoint about which button to offer.
+ */
+function serialiseCompliance(region: Region, signedAt: Date | null) {
+  return {
+    region,
+    baa_available: region === 'us',
+    hipaa_baa_signed_at: signedAt ? signedAt.toISOString() : null,
+  };
+}
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -1344,6 +1370,84 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
       });
 
       return reply.send(serialiseSecurity(updated, brandId));
+    },
+  );
+
+  // --- Compliance: HIPAA / BAA (NFR-C4 · C4-d) -------------------------------
+
+  app.get(
+    '/settings/compliance',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const region = request.requireRegion();
+      // Addressed by id, not `findFirst`: one organization may hold several
+      // licences (schema, `License`), and RLS narrows to the *organization*.
+      // The caller's licence is the one the credential names, not whichever
+      // row comes back first.
+      const licenceId = request.tenant().licenseId;
+      const licence = await request.withTenant((tx) =>
+        tx.license.findUniqueOrThrow({
+          where: { id: licenceId },
+          select: { hipaaBaaSignedAt: true },
+        }),
+      );
+      return reply.send(serialiseCompliance(region, licence.hipaaBaaSignedAt));
+    },
+  );
+
+  app.post(
+    '/settings/compliance/baa',
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner' } },
+    async (request, reply) => {
+      parse(acceptBaaBody, request.body);
+
+      // From the credential, not from a query: `requireRegion` is the region
+      // the auth plugin already resolved from this workspace's organization
+      // (C4-b), and it is the same value every other residency decision in the
+      // request was made against. Reading it again here could only disagree.
+      const region = request.requireRegion();
+      if (region !== 'us') {
+        // Not `validation`: the body is fine and there is nothing to correct.
+        // The workspace is hosted where HIPAA cover does not apply, which is a
+        // verdict about the caller's situation rather than their request. Safe
+        // to state plainly — the caller owns this workspace and already knows
+        // its region, so nothing here is enumerable that `/auth/me` is not.
+        throw new ApiError(
+          'not_allowed',
+          'HIPAA cover is only available to workspaces hosted in the US, and a workspace cannot change region. There is no agreement to accept here.',
+        );
+      }
+
+      const licenceId = request.tenant().licenseId;
+      const signedAt = await request.withTenant(async (tx) => {
+        // `FOR UPDATE`, so two owners clicking at once cannot both read null
+        // and write a timestamp — the second would move the compliance date
+        // the first had just recorded, and write a second audit entry for one
+        // agreement. The lock is on the caller's own licence row, taken inside
+        // the tenant transaction, and released with it.
+        const [before] = await tx.$queryRaw<Array<{ hipaa_baa_signed_at: Date | null }>>`
+          SELECT hipaa_baa_signed_at FROM licenses WHERE id = ${licenceId} FOR UPDATE`;
+        if (!before) throw ApiError.notFound('Workspace not found.');
+        // Idempotent, and deliberately not an upsert-shaped overwrite: the
+        // first acceptance is the record. Re-stamping it would quietly move a
+        // compliance date that an auditor reads as "covered from", and every
+        // later visit to the settings screen would move it again.
+        if (before.hipaa_baa_signed_at) return before.hipaa_baa_signed_at;
+
+        const now = new Date();
+        await tx.license.update({ where: { id: licenceId }, data: { hipaaBaaSignedAt: now } });
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'compliance.baa_signed',
+          target: `license:${licenceId}`,
+          // The other half of the NFR-C4 condition. Recorded with the
+          // acceptance so the trail carries the whole rule that made it
+          // permissible, not just the click.
+          metadata: { region },
+        });
+        return now;
+      });
+
+      return reply.send(serialiseCompliance(region, signedAt));
     },
   );
 

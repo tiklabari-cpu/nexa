@@ -58,6 +58,15 @@ export const AUDIT_ACTIONS = [
   // address, no token, no person. Naming one would mean this region writing
   // down a member of a workspace it is not allowed to hold.
   'security.region_rejected',
+  // The workspace accepted the HIPAA Business Associate Agreement (NFR-C4 ·
+  // C4-d). `compliance.*` rather than `settings.*`: the other settings entries
+  // record a configuration somebody can change back, while this one records a
+  // commitment the workspace entered into on a date — the thing an auditor
+  // asks for by name, and the thing C4-e's constraints key off. Written once,
+  // on the acceptance that actually set the timestamp; a repeated click is not
+  // a second agreement and leaves no second line. Metadata carries the region
+  // that made it permissible, which is the other half of the NFR-C4 condition.
+  'compliance.baa_signed',
   // Team membership.
   //
   // Shared with SCIM provisioning (NFR-S11 · S11-f) rather than duplicated: a

@@ -58,6 +58,12 @@ model License {
   /// the wizard. A per-license fact — the workspace is set up — so the wizard
   /// gates once for the whole workspace.
   onboardingCompletedAt DateTime? @map("onboarding_completed_at") @db.Timestamptz(6)
+  /// When the owner accepted the HIPAA Business Associate Agreement (NFR-C4 ·
+  /// C4-d), or null if never. Only a workspace hosted in `us` may hold a value
+  /// here — HIPAA cover is conditional on US hosting, and the
+  /// `licenses_baa_requires_us_region` trigger enforces that across tables,
+  /// which Prisma cannot model, so this comment is where the schema says so.
+  hipaaBaaSignedAt      DateTime? @map("hipaa_baa_signed_at") @db.Timestamptz(6)
   /// When the onboarding sample data was laid down, so the seed never runs twice.
   demoSeededAt          DateTime? @map("demo_seeded_at") @db.Timestamptz(6)
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

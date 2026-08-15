@@ -323,6 +323,10 @@ paths:
     $ref: "./paths/custom-fields.yaml#/customField"
   /settings/security:
     $ref: "./paths/settings.yaml#/securitySettings"
+  /settings/compliance:
+    $ref: "./paths/settings.yaml#/compliance"
+  /settings/compliance/baa:
+    $ref: "./paths/settings.yaml#/complianceBaa"
   /settings/chat-timeout:
     $ref: "./paths/settings.yaml#/chatTimeout"
   /settings/widget:
@@ -1817,6 +1821,33 @@ components:
             Per-owner cap on simultaneous active sessions, or null to fall
             back to the fixed `MAX_ACTIVE_TOKENS_PER_OWNER` limit (25).
         updated_at: { type: string, format: date-time, nullable: true }
+
+    ComplianceSettings:
+      type: object
+      description: |
+        What NFR-C4 makes HIPAA cover conditional on: US hosting and a signed
+        Business Associate Agreement. Both halves are reported together because
+        neither is meaningful alone — a signed BAA in `eu` would be a claim
+        about data that does not live there, which is why it cannot be created.
+      required: [region, baa_available, hipaa_baa_signed_at]
+      properties:
+        region:
+          type: string
+          enum: [eu, us]
+          description: >-
+            Where this workspace keeps its data — chosen at signup and never
+            changeable (ADR-12 · C4-a).
+        baa_available:
+          type: boolean
+          description: >-
+            Whether a BAA may be accepted here at all. True only in `us`.
+        hipaa_baa_signed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When the owner accepted the BAA, or null if never. Set once, on
+            the first acceptance, and not moved by a later one.
 
     ChatTimeoutSettings:
       type: object

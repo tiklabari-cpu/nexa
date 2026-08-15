@@ -44,6 +44,23 @@ describe('SignUpPage validation', () => {
   });
 });
 
+describe('SignUpPage region selection (ADR-12)', () => {
+  it('defaults to the European Union and warns the choice is permanent', () => {
+    renderAt(<SignUpPage />);
+    expect(screen.getByLabelText('Data region')).toHaveValue('eu');
+    expect(
+      screen.getByText(/cannot be changed after your workspace is created/i),
+    ).toBeInTheDocument();
+  });
+
+  it('lets United States be chosen instead', async () => {
+    renderAt(<SignUpPage />);
+    const region = screen.getByLabelText('Data region');
+    await userEvent.selectOptions(region, 'us');
+    expect(region).toHaveValue('us');
+  });
+});
+
 describe('ResetPasswordPage validation', () => {
   it('keeps Set password disabled until the password is long enough', async () => {
     renderAt(<ResetPasswordPage />, '/reset-password?token=abc');

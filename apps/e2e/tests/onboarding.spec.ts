@@ -80,3 +80,21 @@ test.describe('onboarding wizard (FR-MOD-00.4)', () => {
     await expect(page.getByRole('heading', { name: 'Set up your workspace' })).toHaveCount(0);
   });
 });
+
+test.describe('signup region selection (C4-c, ADR-12)', () => {
+  test('defaults to the European Union, warns the choice is permanent, and can be changed', async ({
+    page,
+  }) => {
+    await page.goto('/signup');
+    const region = page.getByLabel('Data region');
+    await expect(region).toHaveValue('eu');
+    await expect(
+      page.getByText(/cannot be changed after your workspace is created/i),
+    ).toBeVisible();
+
+    // A real control, not a static label — and the field the signup body
+    // reads from (PublicPages.tsx), not something layered on top of it.
+    await region.selectOption('us');
+    await expect(region).toHaveValue('us');
+  });
+});

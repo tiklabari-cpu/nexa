@@ -13,8 +13,10 @@
  */
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { DEFAULT_REGION, REGIONS, type Region } from '@nexa/types';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { Banner } from '../../components/ui/index.js';
 import {
   FieldError,
   compose,
@@ -137,9 +139,18 @@ function ErrorNote({ message }: { message: string | null }): ReactElement | null
 
 const MIN_PASSWORD = 12;
 
+const REGION_LABELS: Record<Region, string> = {
+  eu: 'European Union',
+  us: 'United States',
+};
+
 /** FR-MOD-00.2 — create a workspace and its first owner. */
 export function SignUpPage(): ReactElement {
   const signIn = useAuth((s) => s.signIn);
+  // Not a form field (ADR-12): a `<select>` next to a warning, not something a
+  // string validator has an opinion about — the same split `InviteTeammates`
+  // uses for its role picker.
+  const [region, setRegion] = useState<Region>(DEFAULT_REGION);
 
   const form = useForm({
     initial: { organization: '', name: '', email: '', password: '' },
@@ -158,6 +169,7 @@ export function SignUpPage(): ReactElement {
             password: values.password,
             name: values.name.trim(),
             organization_name: values.organization.trim(),
+            region,
           },
         );
         // Straight into the workspace. Making someone sign in again immediately
@@ -197,6 +209,27 @@ export function SignUpPage(): ReactElement {
           error={form.errorFor('organization')}
           autoFocus
         />
+        <div className="mb-4">
+          <label htmlFor="signup-region" className="mb-1.5 block text-sm font-medium">
+            Data region
+          </label>
+          <select
+            id="signup-region"
+            value={region}
+            onChange={(event) => setRegion(event.target.value as Region)}
+            className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+          >
+            {REGIONS.map((value) => (
+              <option key={value} value={value}>
+                {REGION_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Banner tone="warning" className="mb-4">
+          This is where your workspace's data will live. It cannot be changed after your workspace
+          is created.
+        </Banner>
         <Field
           id="name"
           label="Your name"

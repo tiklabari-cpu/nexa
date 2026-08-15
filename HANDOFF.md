@@ -13,6 +13,30 @@
 
 ## Task log (newest-first)
 
+## tm 82.3 — C4-c · Signup ekranına bölge seçimi + kalıcılık uyarısı — done — 2026-08-15 UTC
+
+- **Yapıldı:** `SignUpPage` (`apps/web/src/features/auth/PublicPages.tsx`) — `@nexa/types`'ın
+  `REGIONS`/`DEFAULT_REGION` üzerinden bir `<select>` (varsayılan `eu`) + hemen altında
+  `Banner`(`tone="warning"`) "sonradan değiştirilemez" uyarısı; seçim `useForm`'un dışında ayrı bir
+  `useState<Region>` (`InviteTeammates`'in rol seçici deseniyle aynı — doğrulayıcısı olmayan bir
+  seçim, form alanı değil) ve submit gövdesine `region` olarak eklenir. Onboarding sihirbazına
+  dokunulmadı (görev notu doğru: alan `C4-a`'nın signup gövdesine giden `region`'a gider).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 2792/2792 (+2) ·
+  `pnpm -w test:integration` 2082/2082 (değişim yok) · `pnpm -w build` 7/7 · `pnpm -w test:e2e`
+  **135/135** (134 → 135, yeni `onboarding.spec.ts` bölge testi).
+- **Varsayımlar:** Ağa giden gövdenin `region` taşıdığı birim testinde **fetch-mock ile
+  doğrulanmadı** — `PublicPages.tsx`'teki modül-tekil `ApiClient`, `fetch`'i kurucuda yakalıyor
+  (`globalThis.fetch.bind`), test gövdesindeki `vi.stubGlobal` ondan sonra çalışıyor ve asla
+  devreye girmiyor; bu singleton'a karşı ağ sahteleme emsali depoda hiç yok. Bunun yerine kod
+  incelemesi (`anonymous.post('/auth/signup', {..., region})`) + e2e'de seçicinin gerçekten
+  değiştirilebildiği doğrulandı; bölgenin DB'ye ulaştığı iddiası zaten `region.test.ts`'te (tm
+  82.1/82.2) ölçülü.
+- **Sonraki pencereye not:** `C4-d`/`C4-f`/`C4-g` hâlâ açık (BAA kartı, Settings→Security bölge
+  gösterimi, uçtan uca doğrulama). Tek-bölge (`eu`) e2e/dev sunucusunda `us` seçip gerçekten
+  submit etmek `signIn()`'in `/auth/me` çağrısında 421 üretir (C4-b'nin doğru davranışı) — bu
+  yüzden e2e'de yalnız seçicinin görünürlüğü/varsayılanı/değiştirilebilirliği test edildi, tam
+  submit akışı değil.
+
 ## tm 82.2 — C4-b · Bölge zorlaması çekirdeği: API + RTM + customer token üçünde 421 — done — 2026-08-15 UTC
 
 - **Yapıldı:** Karşılaştırmanın **sağ tarafı** artık çalışma alanının bölgesi (`organizations.region`),

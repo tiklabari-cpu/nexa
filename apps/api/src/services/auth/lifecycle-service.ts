@@ -17,7 +17,7 @@ import type { PrismaClient } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import { hashPassword } from '../../lib/crypto.js';
-import { DEFAULT_REGION, type AgentRole, type Region } from '@nexa/types';
+import { type AgentRole, type Region } from '@nexa/types';
 import { ROLE_RANK } from './principal.js';
 
 export const TRIAL_DAYS = 14;
@@ -93,20 +93,26 @@ export class LifecycleService {
     password: string;
     name: string;
     organizationName: string;
-    /** Immutable from here on (C4-a); `eu` when the caller expresses no wish. */
-    region?: Region;
+    /**
+     * Immutable from here on (C4-a), and already checked against the region
+     * this deployment serves (C4-h) — which is why it is required rather than
+     * defaulted here. A default in this layer would be a second answer to
+     * "where does an unspecified workspace land", and the route's answer is the
+     * only one that can also refuse.
+     */
+    region: Region;
   }): Promise<Session> {
     const passwordHash = await hashPassword(input.password);
 
     let created: Array<{ created_account: string; created_license: bigint }>;
     try {
-      // The default is resolved here rather than left to the function's own, so
-      // there is one answer to "where does an unspecified workspace land" and
-      // it is in TypeScript where the route can be read against it.
+      // Always passed explicitly, never left to the function's own default, so
+      // "where does an unspecified workspace land" is answered once — in the
+      // route, where the answer can also be a refusal (C4-h).
       created = await this.#db.$queryRaw`
         SELECT * FROM auth_signup(
           ${input.email}::citext, ${input.name}, ${passwordHash},
-          ${input.organizationName}, ${TRIAL_DAYS}::int, ${input.region ?? DEFAULT_REGION}
+          ${input.organizationName}, ${TRIAL_DAYS}::int, ${input.region}
         )`;
     } catch (error) {
       if (isAccountExists(error)) {

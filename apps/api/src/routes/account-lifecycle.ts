@@ -15,7 +15,7 @@ import { ApiError } from '../lib/api-error.js';
 import { withTenant } from '../lib/tenant.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { LifecycleService } from '../services/auth/lifecycle-service.js';
-import { DEFAULT_REGION, REGIONS, type AgentRole } from '@nexa/types';
+import { REGIONS, servesRegion, type AgentRole } from '@nexa/types';
 import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
 
@@ -29,8 +29,9 @@ const signupBody = z.object({
   name: z.string().trim().min(1).max(120),
   organization_name: z.string().trim().min(1).max(120),
   // Optional, and the only request that may carry it: the database refuses to
-  // change a region afterwards (C4-a). Omitted means `eu` — the region every
-  // workspace created before this field existed is in.
+  // change a region afterwards (C4-a). Omitted means the region this deployment
+  // serves — see the gate in the route below for why it cannot mean a fixed
+  // `eu` any more (C4-h).
   region: z.enum(REGIONS).optional(),
 });
 
@@ -71,12 +72,71 @@ export default async function accountLifecycleRoutes(
 
   app.post('/auth/signup', { config: { public: true } }, async (request, reply) => {
     const body = parse(signupBody, request.body);
+
+    // --- Data residency (NFR-C4 · C4-h) --------------------------------------
+    // The only anonymous route that creates a tenant, and therefore the one the
+    // region gate in `plugins/auth.ts` structurally cannot cover: that gate
+    // compares against the region carried by a *credential*, and here there is
+    // neither a credential nor a workspace to have issued one.
+    //
+    // Left ungated it did not merely answer wrongly — it wrote. A European
+    // deployment accepted `region: 'us'` and created the organization, the owner
+    // account and the licence in the European database, and only then began
+    // refusing (421) every identified request that workspace would ever make
+    // (C4-b). The founder could not get in, the rows sat on the wrong side of
+    // the border, and nothing in the product could move them: `region` is
+    // immutable by trigger (C4-a). NFR-C4 was breached by the first write, not
+    // by a later read.
+    //
+    // Refusal, not redirection, and not a narrowed selector. A second
+    // deployment's address does not exist in this repository (ADR-12 · single
+    // deployment, mocked) so `Location` would point nowhere, and offering only
+    // this region's value would quietly retire the choice NFR-C4 is sold on.
+    // In a real multi-region estate a redirect is built *on top of* this
+    // refusal, never instead of it.
+    //
+    // Before `lifecycle.signup`, for the reason `POST /customer/token` checks
+    // before it mints a visitor row: reporting a violation after committing it
+    // is not reporting it.
+    //
+    // `X-Region` is deliberately NOT honoured here, unlike the authenticated
+    // gate. There the header can only narrow — the right-hand side is read from
+    // the database and no header can move it. Here no row exists yet, so a
+    // header would *become* the right-hand side and any caller could reinstate
+    // this exact bug by asserting the region it wanted.
+    const region = body.region ?? env.NEXA_REGION;
+    if (!servesRegion(env.NEXA_REGION, region)) {
+      // Regions only. Not the address, not the email, not the workspace name:
+      // this line is written by the deployment that must not be holding these
+      // people, so naming one of them here is the thing the refusal exists to
+      // prevent (`security.region_rejected` withholds the same fields). There
+      // is no audit entry for the same reason there is no workspace — the trail
+      // is tenant-scoped and this request has no tenant to scope one to.
+      request.log.warn(
+        { requested_region: region, served_region: env.NEXA_REGION },
+        'signup refused: workspace region is not served by this deployment',
+      );
+
+      // 421, matching the three doors C4-b already guards: nothing is wrong
+      // with the request and no permission is missing — it arrived at the wrong
+      // address. `details.region` keeps its contract-wide meaning ("the region
+      // to retry against"), and `details.served_region` is added because at
+      // signup it is the only fact the caller cannot already know: there is no
+      // workspace whose home they could look up, and the form needs to be able
+      // to say which choice would work here.
+      throw new ApiError(
+        'misdirected_request',
+        'Workspaces in that region are created by the deployment that serves it.',
+        { details: { region, served_region: env.NEXA_REGION } },
+      );
+    }
+
     const session = await lifecycle.signup({
       email: body.email,
       password: body.password,
       name: body.name,
       organizationName: body.organization_name,
-      region: body.region,
+      region,
     });
 
     // Best-effort, like the password-reset confirmation below: a completed
@@ -102,8 +162,9 @@ export default async function accountLifecycleRoutes(
               target: `organization:${membership.organization_id}`,
               // `auth_signup` always lands a new workspace on the `growth`
               // plan (see the migration) — there is no other value yet to read
-              // back.
-              metadata: { region: body.region ?? DEFAULT_REGION, plan: 'growth' },
+              // back. The region is the resolved one, which the gate above has
+              // already proven is this deployment's.
+              metadata: { region, plan: 'growth' },
             },
           ),
         );

@@ -4092,12 +4092,12 @@
             "description": "Sandbox ekranı — oluştur/sıfırla + \"bu bir sandbox\" göstergesi",
             "details": "11.5-g — Sandbox ekranı — oluştur/sıfırla + \"bu bir sandbox\" göstergesi  [SONNET-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nKAPSAM: Settings → Sandbox bölümü (oluştur, sıfırla — YIKICI işlem onayı ile) + kabukta sandbox rozeti (\"bu bir sandbox çalışma alanı\").\n\n**ZORUNLU İNVARYANT (denetim bulgusu — rozet yanılırsa ÜRETİM verisi silinir):** sıfırlama butonu, aktif lisansın `sandboxOfLicenseId != null` olduğu **SUNUCU yanıtından** türetilir; istemci tarafı bir bayrak, localStorage ya da rota tahmininden TÜRETİLMEZ. Sunucu ayrıca bağımsız olarak sandbox olmayan lisansta sıfırlamayı reddeder (`11.5-f` testinde negatif olarak kanıtlı) — istemci kapısı tek savunma değildir.\n\nDOSYALAR: `apps/web/src/features/settings/Sandbox.tsx` (yeni) + test · `apps/web/src/components/AppShell.tsx` (rozet)\n\nREFERANS DESEN: yıkıcı işlem onayı — mevcut \"hesabı kapat\" akışı (`account-lifecycle`) · rozet için `apps/web/src/components/ui/Banner.tsx` segmentli kalıbı + `apps/web/src/components/StatusDot.tsx` (denetim düzeltmesi: `StatusDot` `components/ui/` altında DEĞİL).\n\nKAPSAM DIŞI: e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/web test (sandbox oluşturma butonu yalnız yetkiliyken görünür; sıfırlama onay ister; sandbox oturumunda rozet görünür, üretimde GÖRÜNMEZ) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "84.6"
             ],
             "parentId": "84",
-            "updatedAt": "2026-08-11T21:09:39.258Z"
+            "updatedAt": "2026-08-15T15:47:28.685Z"
           },
           {
             "id": 8,
@@ -4115,7 +4115,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-15T15:22:29.073Z"
+        "updatedAt": "2026-08-15T15:47:28.685Z"
       },
       {
         "id": "85",
@@ -5936,17 +5936,18 @@
         "description": "C4-g'nin (tm 82.7) uçtan uca doğrulamasında bulundu: `POST /auth/signup` anonim olduğu için bölge kapısının ÖNÜNDEDİR, ve `eu` süreci `region: 'us'` gövdesini kabul edip organizasyonu Avrupa veritabanında yaratır.",
         "details": "BULGU (tm 82.7 · `C4-g` uçtan uca doğrulama · PLAN §K KC4):\n\n`POST /auth/signup` `config: { public: true }` taşır; bölge karşılaştırması (`plugins/auth.ts`) token\nçözümünden SONRA çalıştığı için bu ucun önünde HİÇ yoktur. Sonuç, tarayıcıda birebir gözlendi\n(`apps/e2e/tests/compliance.spec.ts`, ilk test):\n\n1. Avrupa dağıtımının signup formunda \"United States\" seçilir.\n2. `auth_signup` çalışır — `organizations` (region=`us`) + sahip `accounts` + `licenses` satırları\n   **Avrupa veritabanında** yaratılır. 201 döner.\n3. Ardından gelen `signIn` 421 alır; kurucu içeri HİÇ giremez.\n\nYani bugünkü davranış: çalışma alanı yanlış bölgede DOĞAR, sonra sonsuza dek erişilemez kalır.\nNFR-C4'ün iddiası (\"veriler seçilen bölgede durur\") ilk yazma anında ihlal ediliyor, ve ihlal\nedilen satırlar kimsenin silmediği yetim satırlar olarak kalıyor. `C4-b`'nin widget token\nbasımında aynı akıl yürütme zaten uygulanmış durumda (\"reddetmeden ÖNCE yazma\" — `routes/auth.ts`,\nziyaretçi satırı yaratılmadan önce bölge kontrolü); signup'ta yok.\n\nNEDEN AYRI GÖREV: `C4-g` bir DOĞRULAMA kalemidir; düzeltme `C4-b` (zorlama çekirdeği) /\n`C4-c` (signup akışı) alanıdır ve yeni bir ürün kararı gerektirir (aşağıya bak). Kapsam\ndisiplini (CONVENTIONS §5) gereği tm 82.7 bunu yeşil bir teste gömmedi — e2e yalnız doğru olan\nyarısını iddia ediyor (üç kapı da 421 ile reddediyor).\n\nKARAR GEREKTİREN NOKTA (bu görevin ilk işi, uydurma yok): bir dağıtım kendi bölgesine ait\nOLMAYAN bir signup ile ne yapmalı? Üç aday:\n  (a) REDDET — 421 `misdirected_request` + `details.region`, hiçbir satır yaratmadan. En basit,\n      `C4-b`'nin widget basımıyla birebir tutarlı, ve istemciye doğru kapıyı söylüyor.\n  (b) YÖNLENDİR — istemciyi o bölgenin dağıtımına gönder (`Location`/istemci tarafı). Ürün olarak\n      daha nazik ama bu depoda ikinci bir dağıtımın adresi YOK (ADR-12 · tek dağıtım MOCK).\n  (c) SEÇİMİ DARALT — signup formu yalnız bu dağıtımın bölgesini sunsun. `C4-c`'nin seçicisini\n      anlamsızlaştırır; PRD'nin \"kayıtta bölge seçimi\" iddiasını zayıflatır.\nÖneri (a): tek dağıtımlı bu depoda yalnız (a) hem yazmayı önler hem seçiciyi korur; (b) gerçek\nçok-bölgeli dağıtımda (a)'nın üstüne eklenir, (a)'nın yerine değil.\n\nKAPSAM: (1) `POST /auth/signup` (ve varsa aynı sınıftaki diğer anonim yazan uçlar — taranacak)\nbölgesi bu dağıtıma ait olmayan gövdeyi **hiçbir satır yaratmadan** reddeder. (2) `C4-c`'nin\nsignup ekranı bu reddi anlaşılır biçimde gösterir (bugünkü \"Could not create that workspace.\"\nmetni YANILTICI — çalışma alanı yaratıldı, sonra erişilemez oldu; bu metin de bu görevde\ndüzeltilir). (3) Bu tur öncesinde yaratılmış yetim `us` satırları için ne yapılacağı yazılı\nkarara bağlanır (temizlik script'i mi, dokunulmuyor mu) — sessiz bırakılmaz.\n\nDOSYALAR: `apps/api/src/routes/auth.ts` (signup) · `apps/api/prisma/…/auth_signup` (gerekirse) ·\n`apps/web/src/features/auth/PublicPages.tsx` (`SignUpPage` hata metni) ·\n`apps/api/test/integration/region.test.ts` · `apps/e2e/tests/compliance.spec.ts`\n\nREFERANS DESEN (birebir): `apps/api/src/routes/auth.ts` `POST /customer/token` — bölge kontrolü\nziyaretçi satırı yaratılmadan ÖNCE, ban okumasının bile önünde; gerekçesi yorumda yazılı\n(\"hatayı bildirmeden önce ihlali işlemek olurdu\"). Signup'ta gereken tam olarak aynı sıralama.\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN §K KC4'teki `⬜` maddesi kapatılır (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
         "testStrategy": "pnpm --filter @nexa/api test:integration (`eu` dağıtımında `region: 'us'` signup REDDEDİLİR ve organizations/accounts/licenses sayıları DEĞİŞMEZ — \"eu'ya düşürüldü\" değil, \"hiç yaratılmadı\"; kendi bölgesindeki signup hâlâ 201; `us` dağıtımında ayna testi (ikinci sunucu `NEXA_REGION=us`) — orada `us` geçer, `eu` reddedilir) && pnpm --filter @nexa/web test (signup ekranı reddi doğru metinle gösterir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm -w test:e2e (compliance.spec.ts'in ilk testi bugünkü \"yaratıldı ama giremiyor\" akışından \"hiç yaratılmadı\" akışına GÜNCELLENİR)",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "82"
         ],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-08-15T16:29:58.498Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T15:22:29.074Z",
+      "lastModified": "2026-08-15T16:29:58.499Z",
       "taskCount": 124,
       "completedCount": 121,
       "tags": [

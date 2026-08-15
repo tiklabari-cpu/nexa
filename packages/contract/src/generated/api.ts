@@ -9706,9 +9706,12 @@ export interface operations {
            *     database refuses the change rather than trusting callers to
            *     not attempt it.
            *
-           *     Omitted means `eu`, which is where every workspace created
-           *     before this existed still is.
-           * @default eu
+           *     **Each deployment creates workspaces in its own region only**,
+           *     and names a region it does not serve `421` (see below).
+           *     Omitted therefore means *this* deployment's region — the
+           *     address you are talking to — rather than a fixed value. On the
+           *     European deployment that is `eu`, which is where every
+           *     workspace created before this field existed still is.
            * @enum {string}
            */
           region?: 'eu' | 'us';
@@ -9728,6 +9731,29 @@ export interface operations {
       400: components['responses']['BadRequest'];
       /** @description An account already exists for that email. */
       409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      /**
+       * @description `region` names a region this deployment does not serve, and **nothing
+       *     was created** (C4-h). Signup is anonymous, so it sits in front of the
+       *     region gate every authenticated route passes through; without this
+       *     refusal a deployment would write the organization, the owner account
+       *     and the licence into its own database and then turn away every
+       *     identified request that workspace ever made — leaving rows on the
+       *     wrong side of the border that no endpoint can move, because the
+       *     region is immutable.
+       *
+       *     `details.region` is the region that was asked for, which is the one to
+       *     retry against. `details.served_region` is what this deployment does
+       *     create, and is the only one of the two a client cannot already know —
+       *     a signup form can use it to offer a choice that will work here.
+       */
+      421: {
         headers: {
           [name: string]: unknown;
         };

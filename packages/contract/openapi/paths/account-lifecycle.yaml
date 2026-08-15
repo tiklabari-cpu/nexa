@@ -46,7 +46,6 @@ signup:
               region:
                 type: string
                 enum: [eu, us]
-                default: eu
                 description: |
                   Where this workspace's data will live (NFR-C4/C9). **This is
                   the only moment it can be set**: a workspace cannot be moved
@@ -55,8 +54,12 @@ signup:
                   database refuses the change rather than trusting callers to
                   not attempt it.
 
-                  Omitted means `eu`, which is where every workspace created
-                  before this existed still is.
+                  **Each deployment creates workspaces in its own region only**,
+                  and names a region it does not serve `421` (see below).
+                  Omitted therefore means *this* deployment's region — the
+                  address you are talking to — rather than a fixed value. On the
+                  European deployment that is `eu`, which is where every
+                  workspace created before this field existed still is.
     responses:
       "201":
         description: Workspace created
@@ -66,6 +69,24 @@ signup:
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "409":
         description: An account already exists for that email.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "421":
+        description: |
+          `region` names a region this deployment does not serve, and **nothing
+          was created** (C4-h). Signup is anonymous, so it sits in front of the
+          region gate every authenticated route passes through; without this
+          refusal a deployment would write the organization, the owner account
+          and the licence into its own database and then turn away every
+          identified request that workspace ever made — leaving rows on the
+          wrong side of the border that no endpoint can move, because the
+          region is immutable.
+
+          `details.region` is the region that was asked for, which is the one to
+          retry against. `details.served_region` is what this deployment does
+          create, and is the only one of the two a client cannot already know —
+          a signup form can use it to offer a choice that will work here.
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }

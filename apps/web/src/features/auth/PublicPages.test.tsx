@@ -6,9 +6,10 @@
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { ForgotPasswordPage, ResetPasswordPage, SignUpPage } from './PublicPages.js';
+import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 
 function renderAt(ui: ReactElement, path = '/'): void {
   render(<MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>);
@@ -58,6 +59,87 @@ describe('SignUpPage region selection (ADR-12)', () => {
     const region = screen.getByLabelText('Data region');
     await userEvent.selectOptions(region, 'us');
     expect(region).toHaveValue('us');
+  });
+});
+
+/**
+ * What the form says when the server refuses on residency (C4-h).
+ *
+ * The message is the whole feature on this side. Before the gate existed the
+ * server created the workspace in the wrong region and the form said "Could not
+ * create that workspace." — false in both halves: it was created, and it was
+ * never coming back. Now nothing is created, and the sentence has to be the one
+ * that gets the founder to a workspace on the next attempt.
+ *
+ * `ApiClient.prototype.post` is the seam rather than `fetch`: the page holds a
+ * module-level client that bound `globalThis.fetch` at import, so a stubbed
+ * global would never be consulted.
+ */
+describe('SignUpPage residency refusal (C4-h)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function submitSignUp(): Promise<void> {
+    renderAt(<SignUpPage />);
+    await userEvent.type(screen.getByLabelText('Workspace name'), 'Acme');
+    await userEvent.selectOptions(screen.getByLabelText('Data region'), 'us');
+    await userEvent.type(screen.getByLabelText('Your name'), 'Robin');
+    await userEvent.type(screen.getByLabelText('Email'), 'robin@example.com');
+    await userEvent.type(screen.getByLabelText('Password'), 'longenoughpass');
+    await userEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+  }
+
+  function refuse(details: Record<string, unknown>): void {
+    vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(
+      new ApiClientError({
+        type: 'misdirected_request',
+        status: 421,
+        message: 'Workspaces in that region are created by the deployment that serves it.',
+        requestId: 'req_1',
+        details,
+      }),
+    );
+  }
+
+  it('says nothing was created and names the region this address does serve', async () => {
+    refuse({ region: 'us', served_region: 'eu' });
+    await submitSignUp();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/nothing was created/i);
+    // The label, not the code: `served_region` is the one fact the page cannot
+    // work out for itself, and it is useless to the reader as "eu".
+    expect(alert).toHaveTextContent(/European Union/);
+    // The old sentence claimed the opposite of what happened.
+    expect(alert).not.toHaveTextContent('Could not create that workspace.');
+  });
+
+  it('still says nothing was created when the server names no served region', async () => {
+    // A deployment that answers 421 without the extra detail must not fall back
+    // to the message that says a workspace exists somewhere.
+    refuse({ region: 'us' });
+    await submitSignUp();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/nothing was created/i);
+    expect(alert).not.toHaveTextContent('Could not create that workspace.');
+  });
+
+  it('keeps the existing message for an email that already has an account', async () => {
+    vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(
+      new ApiClientError({
+        type: 'account_exists',
+        status: 409,
+        message: 'An account already exists for that email.',
+        requestId: 'req_2',
+      }),
+    );
+    await submitSignUp();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'An account already exists for that email — sign in instead.',
+    );
   });
 });
 

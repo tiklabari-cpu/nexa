@@ -1166,6 +1166,97 @@ async function resetDemoData(): Promise<void> {
   console.log(`  truncated ${tables.length} tables`);
 }
 
+/**
+ * A workspace whose region this deployment does not serve (NFR-C4 · C4-b).
+ *
+ * Seeded directly, and that is the whole point. Since C4-h the product refuses
+ * to create one: `POST /auth/signup` on a European deployment will not write a
+ * `us` workspace, which was the hole C4-h closed — and, with it, the only way a
+ * browser could produce this row. The three doors that refuse such a workspace
+ * (REST edge, socket `login`, widget token mint) are a *second* layer, and a
+ * second layer earns its keep on exactly the rows the first one did not stop: a
+ * restored backup, a migration pointed at the wrong database, a future signup
+ * path written by someone who did not read C4-h. None of those would ask
+ * permission either, so neither does this.
+ *
+ * Deliberately the minimum a credential needs — organization, licence, owner,
+ * and the OAuth client a token grant reads. No conversations, no customers, no
+ * knowledge: everything it could own would be data this deployment must not be
+ * holding in the first place.
+ */
+const MISPLACED_US = {
+  organizationName: 'Stateside Supply',
+  slug: 'stateside',
+  ownerName: 'Sam Stateside',
+} as const;
+
+async function seedMisplacedUsWorkspace(passwordHash: string): Promise<void> {
+  const existing = await prisma.organization.findFirst({
+    where: { name: MISPLACED_US.organizationName },
+    select: { id: true },
+  });
+  if (existing) {
+    console.log(`  ${MISPLACED_US.organizationName}: already present, skipping`);
+    return;
+  }
+
+  const organization = await prisma.organization.create({
+    data: { name: MISPLACED_US.organizationName, region: 'us' },
+    select: { id: true },
+  });
+
+  const license = await prisma.license.create({
+    data: {
+      organizationId: organization.id,
+      plan: 'growth',
+      billingCycle: 'monthly',
+      status: 'trialing',
+      trialEndsAt: new Date(Date.now() + 14 * 86_400_000),
+      // Nothing here will ever open a screen — every identified request this
+      // workspace makes is refused — but a null would claim the workspace is
+      // merely waiting on its wizard rather than being in the wrong country.
+      onboardingCompletedAt: new Date(),
+    },
+    select: { id: true },
+  });
+
+  const owner = await prisma.account.create({
+    data: {
+      email: `owner@${MISPLACED_US.slug}.localhost`,
+      name: MISPLACED_US.ownerName,
+      passwordHash,
+    },
+    select: { id: true, email: true },
+  });
+
+  await prisma.agentMembership.create({
+    data: {
+      licenseId: license.id,
+      agentId: owner.id,
+      role: 'owner',
+      routingStatus: 'accepting_chats',
+      concurrentChatsLimit: 6,
+    },
+  });
+
+  // The token endpoints are anonymous — residency is decided where a credential
+  // is *used*, not where it is issued — so this client is what lets the
+  // compliance suite obtain a genuine token and get it refused at each door.
+  await prisma.oauthClient.create({
+    data: {
+      id: `nexa-agent-app-${MISPLACED_US.slug}`,
+      organizationId: organization.id,
+      displayName: 'Nexa Agent App',
+      clientType: 'public',
+      redirectUris: ['http://localhost:5173/auth/callback'],
+      scopes: [],
+    },
+  });
+
+  console.log(`  ${MISPLACED_US.organizationName}  (region us — refused at every door)`);
+  console.log(`    owner        ${owner.email} / ${DEMO_PASSWORD}`);
+}
+
 async function main(): Promise<void> {
   if (process.env['NODE_ENV'] === 'production') {
     throw new Error('The demo seed must never run against production.');
@@ -1186,6 +1277,7 @@ async function main(): Promise<void> {
   for (const spec of TENANTS) {
     await seedTenant(spec, passwordHash);
   }
+  await seedMisplacedUsWorkspace(passwordHash);
 
   console.log('');
   console.log('  ⚠  Seed credentials are public and identical on every machine.');

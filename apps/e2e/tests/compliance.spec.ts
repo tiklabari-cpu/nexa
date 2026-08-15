@@ -11,17 +11,30 @@
  * and the RTM gateway are separate processes here, started by
  * `playwright.config.ts` from the same environment a developer runs, and the
  * region they serve comes from configuration rather than a test harness. So this
- * file takes one workspace that genuinely lives in `us`, created through the
- * public signup form in a real browser, and knocks on all three doors of this
- * European deployment:
+ * file knocks on all four doors of this European deployment:
  *
- *   1. the REST edge         — `GET /auth/me` with that workspace's own token
- *   2. the socket            — `login` on a real WebSocket to the gateway
+ *   0. signup               — `POST /auth/signup` for a `us` workspace (C4-h)
+ *   1. the REST edge        — `GET /auth/me` with a `us` workspace's own token
+ *   2. the socket           — `login` on a real WebSocket to the gateway
  *   3. the widget token mint — `POST /customer/token` for that organization
  *
- * Three separate proofs on purpose. A workspace whose REST calls are turned away
+ * Four separate proofs on purpose. A workspace whose REST calls are turned away
  * while its socket keeps streaming is a workspace whose data is still leaving
  * its region, and the widget mint is the door that *writes* before it answers.
+ *
+ * Door 0 is the newest and sits in front of the others. Until C4-h it did not
+ * exist: signup is anonymous, so the region gate never saw it, and this
+ * deployment cheerfully created an American workspace in the European database
+ * before spending the rest of its life refusing that workspace at doors 1-3.
+ * The founder was locked out of rows nobody could move.
+ *
+ * Closing door 0 took away the browser's way of producing a `us` workspace, so
+ * doors 1-3 now use a seeded one (`STATESIDE_OWNER`). That is the honest
+ * arrangement rather than a workaround: those doors are a second layer, and a
+ * second layer is for rows the first layer never saw — a restored backup, a
+ * migration run against the wrong database, a signup path added later by
+ * someone who did not read this. The seed writes such a row directly, which is
+ * how every one of those accidents would arrive.
  *
  * The positive side of each pair is the rest of this suite: every other spec
  * signs in, opens a socket and mints widget tokens against this same deployment
@@ -33,20 +46,15 @@ import {
   ACME_OWNER,
   API_BASE,
   NORTHWIND_OWNER,
+  STATESIDE_OWNER,
   WIDGET_ORIGIN,
   ownerAccessTokenFor,
+  type TenantOwner,
 } from './fixtures.js';
 import type { APIRequestContext, Page } from '@playwright/test';
 
 const PASSWORD = 'compliance-e2e-password';
 const RTM_WS = 'ws://localhost:4001/v1/agent/rtm/ws';
-
-/** A workspace created by this spec, with what is needed to knock on each door. */
-interface FreshWorkspace {
-  organizationId: string;
-  email: string;
-  orgPrefix: string;
-}
 
 /**
  * Create a workspace through the signup form, choosing where its data lives.
@@ -75,20 +83,16 @@ async function signUpChoosingRegion(
 }
 
 /** The organization id of a workspace, from the one place a client can read it before holding a token. */
-async function organizationIdOf(
-  request: APIRequestContext,
-  email: string,
-  orgPrefix: string,
-): Promise<string> {
+async function organizationIdOf(request: APIRequestContext, owner: TenantOwner): Promise<string> {
   const response = await request.post(`${API_BASE}/auth/login`, {
-    data: { email, password: PASSWORD },
+    data: { email: owner.email, password: owner.password },
   });
   expect(response.ok(), `login failed: ${response.status()} ${await response.text()}`).toBe(true);
   const { memberships } = (await response.json()) as {
     memberships: Array<{ organization_id: string; organization_name: string }>;
   };
-  const tenant = memberships.find((m) => m.organization_name.startsWith(orgPrefix));
-  expect(tenant, `workspace ${orgPrefix} not found on the roster`).toBeDefined();
+  const tenant = memberships.find((m) => m.organization_name.startsWith(owner.orgPrefix));
+  expect(tenant, `workspace ${owner.orgPrefix} not found on the roster`).toBeDefined();
   return tenant!.organization_id;
 }
 
@@ -141,44 +145,69 @@ async function rtmLogin(organizationId: string, token: string): Promise<RtmFrame
 }
 
 test.describe('data residency, at every door (NFR-C4 · C4-b · C4-g)', () => {
-  test('a workspace that lives in the United States is refused by this European deployment', async ({
+  test('this European deployment will not create a United States workspace at all', async ({
     page,
     request,
   }) => {
-    // --- The browser half ----------------------------------------------------
-    const { name, email } = await signUpChoosingRegion(page, 'us');
+    // --- Door 0: signup (C4-h) ----------------------------------------------
+    const { email } = await signUpChoosingRegion(page, 'us');
 
-    // Signup itself succeeds — it is anonymous, and the region is a choice
-    // rather than a claim about the caller. What fails is the sign-in that
-    // follows: the moment a credential for this workspace is presented, this
-    // deployment says it is not the one that serves it. So the founder is left
-    // on the form with an error and never reaches the shell.
-    await expect(page.getByRole('alert').first()).toBeVisible();
+    // The founder is left on the form, as before. What changed is everything
+    // behind it. This used to succeed: signup is anonymous, so the region gate
+    // never saw it, and the organization, the owner account and the licence
+    // were written into the *European* database — after which every identified
+    // request that workspace made was refused, forever, with nothing able to
+    // move the rows because a region is immutable. The refusal now happens
+    // before the first write.
+    const alert = page.getByRole('alert').first();
+    await expect(alert).toBeVisible();
+    await expect(alert).toHaveText(/nothing was created/i);
+    // And it says which choice would work here, because the founder's next move
+    // is to make one.
+    await expect(alert).toHaveText(/European Union/);
     await expect(page.getByRole('link', { name: 'Inbox' })).toHaveCount(0);
     await expect(page).toHaveURL(/\/signup/);
 
-    const fresh: FreshWorkspace = {
-      email,
-      orgPrefix: name,
-      organizationId: await organizationIdOf(request, email, name),
-    };
+    // Nothing was created — asserted from outside the browser, against the only
+    // surface that can answer for a workspace nobody holds a token for. A login
+    // that found an account would mean the row survived the refusal.
+    const login = await request.post(`${API_BASE}/auth/login`, {
+      data: { email, password: PASSWORD },
+    });
+    expect(login.status()).toBe(401);
+
+    // The same choice at the same form, in the region this deployment does
+    // serve, still works. Otherwise the assertions above would pass just as
+    // well with signup switched off. A brand-new workspace opens on the
+    // first-run wizard (FR-MOD-00.4), not the inbox — reaching it is what
+    // "created, signed in, and inside" looks like here.
+    await signUpChoosingRegion(page, 'eu');
+    await expect(page.getByRole('heading', { name: 'Set up your workspace' })).toBeVisible();
+  });
+
+  test('a workspace that lives in the United States is refused at every door', async ({
+    request,
+  }) => {
+    // The subject is seeded rather than signed up: door 0 above is exactly what
+    // stops this deployment producing one. A misplaced row reaches a database by
+    // routes that never touch signup — a restored backup, a migration aimed at
+    // the wrong host — and doors 1-3 are the layer that answers for those.
+    const organizationId = await organizationIdOf(request, STATESIDE_OWNER);
 
     // A genuine credential for that workspace. The token endpoints are
     // anonymous — residency is decided where a credential is *used*, not where
     // it is issued — so this succeeds and gives each door below something real
     // to refuse.
-    const token = await ownerAccessTokenFor(request, {
-      email: fresh.email,
-      password: PASSWORD,
-      orgPrefix: fresh.orgPrefix,
-    });
+    const token = await ownerAccessTokenFor(request, STATESIDE_OWNER);
 
     // --- Door 1: the REST edge ----------------------------------------------
     const me = await request.get(`${API_BASE}/auth/me`, {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(me.status()).toBe(421);
-    const restError = (await me.json()) as { error: { type: string; details?: { region?: string } } };
+    const restError = (await me.json()) as {
+      error: { type: string; details?: { region?: string } };
+    };
     // Not `authentication`: the credential is genuine and the caller is at the
     // wrong address. `details.region` is the workspace's region, which is the
     // only thing here that tells a correctly built client where to go instead.
@@ -186,9 +215,12 @@ test.describe('data residency, at every door (NFR-C4 · C4-b · C4-g)', () => {
     expect(restError.error.details?.region).toBe('us');
 
     // --- Door 2: the socket --------------------------------------------------
-    const login = await rtmLogin(fresh.organizationId, token);
-    expect(login.success).toBe(false);
-    const socketError = login.payload?.['error'] as { type: string; details?: { region?: string } };
+    const socketLogin = await rtmLogin(organizationId, token);
+    expect(socketLogin.success).toBe(false);
+    const socketError = socketLogin.payload?.['error'] as {
+      type: string;
+      details?: { region?: string };
+    };
     expect(socketError.type).toBe('misdirected_request');
     expect(socketError.details?.region).toBe('us');
 
@@ -201,7 +233,7 @@ test.describe('data residency, at every door (NFR-C4 · C4-b · C4-g)', () => {
     // American workspace's customer in the European database *while* producing
     // the error that reports it.
     const minted = await request.post(`${API_BASE}/customer/token`, {
-      data: { organization_id: fresh.organizationId, host_origin: WIDGET_ORIGIN },
+      data: { organization_id: organizationId, host_origin: WIDGET_ORIGIN },
       headers: { origin: WIDGET_ORIGIN },
     });
     expect(minted.status()).toBe(421);
@@ -272,7 +304,9 @@ test.describe('the compliance card (NFR-C4 · C4-d · C4-f · C4-g)', () => {
     // workspace outright, and the database refuses the timestamp under a
     // non-US organization even if the endpoint were bypassed (C4-d).
     await expect(card.getByText('Not signed')).toBeVisible();
-    await expect(card.getByText(/only available to workspaces hosted in the United States/i)).toBeVisible();
+    await expect(
+      card.getByText(/only available to workspaces hosted in the United States/i),
+    ).toBeVisible();
     await expect(card.getByRole('button', { name: 'Accept the BAA' })).toHaveCount(0);
 
     await page.screenshot({ path: 'kanit/C4-region-compliance.png', fullPage: true });
@@ -322,7 +356,9 @@ test.describe('a workspace with no signed BAA carries none of HIPAA’s constrai
     // Still refused the agreement afterwards, so nothing above quietly signed
     // it: the read is the same before and after.
     const after = await request.get(`${API_BASE}/settings/compliance`, { headers: auth });
-    expect(((await after.json()) as { hipaa_baa_signed_at: string | null }).hipaa_baa_signed_at).toBeNull();
+    expect(
+      ((await after.json()) as { hipaa_baa_signed_at: string | null }).hipaa_baa_signed_at,
+    ).toBeNull();
   });
 
   test('each workspace is told about its own compliance state and nobody else’s', async ({
@@ -343,7 +379,8 @@ test.describe('a workspace with no signed BAA carries none of HIPAA’s constrai
       request.get(`${API_BASE}/auth/me`, { headers: { authorization: `Bearer ${northwind}` } }),
     ]);
     const acmeOrg = ((await acmeMe.json()) as { organization_id: string }).organization_id;
-    const northwindOrg = ((await northwindMe.json()) as { organization_id: string }).organization_id;
+    const northwindOrg = ((await northwindMe.json()) as { organization_id: string })
+      .organization_id;
     expect(acmeOrg).not.toBe(northwindOrg);
 
     // Northwind's own answer, from Northwind's own credential. An endpoint that

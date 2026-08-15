@@ -81,7 +81,8 @@ describe('region (C4-a)', () => {
 
   describe('signup', () => {
     it('creates the workspace in the region the founder asked for', async () => {
-      const response = await server.post('/auth/signup', {
+      // At the door that serves it — which is the whole of C4-h below.
+      const response = await usServer.post('/auth/signup', {
         email: 'founder@us-newco.test',
         password: STRONG_PASSWORD,
         name: 'Founder',
@@ -93,7 +94,7 @@ describe('region (C4-a)', () => {
       expect(await regionOf('US NewCo')).toBe('us');
     });
 
-    it('lands in eu when no region is named', async () => {
+    it('lands in the region the deployment serves when none is named', async () => {
       const response = await server.post('/auth/signup', {
         email: 'founder@quiet-newco.test',
         password: STRONG_PASSWORD,
@@ -103,6 +104,22 @@ describe('region (C4-a)', () => {
 
       expect(response.statusCode).toBe(201);
       expect(await regionOf('Quiet NewCo')).toBe('eu');
+    });
+
+    it('lands a silent signup in us at the us deployment, not in eu', async () => {
+      // The mirror of the test above, and the reason "omitted means `eu`" had
+      // to stop being the rule (C4-h): a fixed default is a wrong-region write
+      // at every deployment that is not the default one, produced by a request
+      // that asked for nothing.
+      const response = await usServer.post('/auth/signup', {
+        email: 'founder@quiet-us-newco.test',
+        password: STRONG_PASSWORD,
+        name: 'Founder',
+        organization_name: 'Quiet US NewCo',
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(await regionOf('Quiet US NewCo')).toBe('us');
     });
 
     it('refuses a region that does not exist, and creates nothing', async () => {
@@ -127,7 +144,7 @@ describe('region (C4-a)', () => {
       // The region is a column on the tenant root that every token resolution
       // reads (`auth_resolve_token` returns `organization_region`). A value
       // nothing downstream expected would surface here first.
-      await server.post('/auth/signup', {
+      await usServer.post('/auth/signup', {
         email: 'founder2@us-newco.test',
         password: STRONG_PASSWORD,
         name: 'Founder',
@@ -135,7 +152,7 @@ describe('region (C4-a)', () => {
         region: 'us',
       });
 
-      const login = await server.post('/auth/login', {
+      const login = await usServer.post('/auth/login', {
         email: 'founder2@us-newco.test',
         password: STRONG_PASSWORD,
       });
@@ -150,6 +167,123 @@ describe('region (C4-a)', () => {
         select: { region: true },
       });
       expect(regions.map((r) => r.region)).toEqual(['eu', 'eu']);
+    });
+  });
+
+  // =========================================================================
+  // The signup gate (C4-h) — the door in front of every door below
+  //
+  // Signup is anonymous, so `plugins/auth.ts` never sees it: that gate compares
+  // against a credential's region, and here there is no credential and no
+  // workspace to have issued one. Until this gate existed the European
+  // deployment happily *wrote* a `us` workspace into its own database and only
+  // then began refusing it (421) forever — a founder locked out of rows nobody
+  // could move, because `region` is immutable. Everything below is therefore
+  // asserted as "nothing was created", never as "created somewhere sensible".
+  // =========================================================================
+
+  describe('signup refuses a region this deployment does not serve', () => {
+    /** Everything `auth_signup` writes, so "nothing was created" can be checked as a whole. */
+    async function tenantRowCounts(): Promise<{
+      organizations: number;
+      accounts: number;
+      licenses: number;
+    }> {
+      const [organizations, accounts, licenses] = await Promise.all([
+        owner.organization.count(),
+        owner.account.count(),
+        owner.license.count(),
+      ]);
+      return { organizations, accounts, licenses };
+    }
+
+    it('answers 421 and writes nothing when eu is asked for a us workspace', async () => {
+      const before = await tenantRowCounts();
+
+      const response = await server.post('/auth/signup', {
+        email: 'founder@misplaced.test',
+        password: STRONG_PASSWORD,
+        name: 'Founder',
+        organization_name: 'Misplaced NewCo',
+        region: 'us',
+      });
+
+      expect(response.statusCode).toBe(421);
+      expect(response.json().error.type).toBe('misdirected_request');
+      // The region asked for — the one to retry against, the same meaning the
+      // three authenticated doors give it.
+      expect(response.json().error.details.region).toBe('us');
+      // And the one thing the caller cannot look up: no workspace exists whose
+      // home would answer it.
+      expect(response.json().error.details.served_region).toBe('eu');
+
+      // Not "downgraded to eu" and not "half created": nothing at all. The
+      // account is counted too, because `auth_signup` writes the founder and the
+      // licence in the same transaction as the organization — a gate placed
+      // after the call would have left all three.
+      expect(await tenantRowCounts()).toEqual(before);
+      expect(await regionOf('Misplaced NewCo')).toBeUndefined();
+    });
+
+    it('answers 421 the same way at the us deployment for an eu workspace', async () => {
+      // The mirror, on the same build with `NEXA_REGION=us`. Without it the gate
+      // could be `region !== 'us'` — refusing correctly on this deployment for
+      // the wrong reason, and refusing every legitimate signup on the other.
+      const before = await tenantRowCounts();
+
+      const response = await usServer.post('/auth/signup', {
+        email: 'founder@misplaced-eu.test',
+        password: STRONG_PASSWORD,
+        name: 'Founder',
+        organization_name: 'Misplaced EU NewCo',
+        region: 'eu',
+      });
+
+      expect(response.statusCode).toBe(421);
+      expect(response.json().error.type).toBe('misdirected_request');
+      expect(response.json().error.details.region).toBe('eu');
+      expect(response.json().error.details.served_region).toBe('us');
+      expect(await tenantRowCounts()).toEqual(before);
+    });
+
+    it('cannot be talked out of it with X-Region', async () => {
+      // The authenticated gate reads `X-Region` as "where the caller believes
+      // they are", which can only ever narrow: the right-hand side comes from
+      // the database. Here there is no row yet, so honouring the header would
+      // make the caller both sides of the comparison and hand back the exact
+      // bug this gate exists to close.
+      const before = await tenantRowCounts();
+
+      const response = await server.post(
+        '/auth/signup',
+        {
+          email: 'founder@header-trick.test',
+          password: STRONG_PASSWORD,
+          name: 'Founder',
+          organization_name: 'Header Trick NewCo',
+          region: 'us',
+        },
+        { 'x-region': 'us' },
+      );
+
+      expect(response.statusCode).toBe(421);
+      expect(await tenantRowCounts()).toEqual(before);
+      expect(await regionOf('Header Trick NewCo')).toBeUndefined();
+    });
+
+    it('still creates a workspace in the region it does serve', async () => {
+      // The gate refuses a region, not signup. Without this the suite would pass
+      // just as well with the endpoint switched off.
+      const response = await server.post('/auth/signup', {
+        email: 'founder@welcome.test',
+        password: STRONG_PASSWORD,
+        name: 'Founder',
+        organization_name: 'Welcome NewCo',
+        region: 'eu',
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(await regionOf('Welcome NewCo')).toBe('eu');
     });
   });
 
@@ -198,14 +332,11 @@ describe('region (C4-a)', () => {
       // own connection, with RLS satisfied, updating its own row. Nothing about
       // tenancy stops this — only the trigger does.
       await expect(
-        withTenant(
-          app,
-          { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
-          (tx) =>
-            tx.organization.update({
-              where: { id: fx.a.organizationId },
-              data: { region: 'us' },
-            }),
+        withTenant(app, { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId }, (tx) =>
+          tx.organization.update({
+            where: { id: fx.a.organizationId },
+            data: { region: 'us' },
+          }),
         ),
       ).rejects.toThrow(/nexa_region_immutable/);
 
@@ -280,8 +411,9 @@ describe('region (C4-a)', () => {
     });
 
     it('holds for a workspace that was born in us as well', async () => {
-      // Symmetry matters: the rule is "no moves", not "no leaving eu".
-      await server.post('/auth/signup', {
+      // Symmetry matters: the rule is "no moves", not "no leaving eu". Born at
+      // the door that serves `us`, because since C4-h no other one will make it.
+      await usServer.post('/auth/signup', {
         email: 'founder3@us-newco.test',
         password: STRONG_PASSWORD,
         name: 'Founder',
@@ -377,9 +509,9 @@ describe('region (C4-a)', () => {
       // The pair is the property: the credential is fine, the address was not.
       const token = await tokenForA();
 
-      expect((await usServer.get('/auth/me', { authorization: `Bearer ${token}` })).statusCode).toBe(
-        421,
-      );
+      expect(
+        (await usServer.get('/auth/me', { authorization: `Bearer ${token}` })).statusCode,
+      ).toBe(421);
       expect((await server.get('/auth/me', { authorization: `Bearer ${token}` })).statusCode).toBe(
         200,
       );
@@ -467,11 +599,7 @@ describe('region (C4-a)', () => {
     // --- The widget token mint ----------------------------------------------
 
     it('refuses to mint a widget token for a workspace kept in another region', async () => {
-      const response = await mintCustomerToken(
-        usServer,
-        fx.a.organizationId,
-        fx.a.trustedDomain,
-      );
+      const response = await mintCustomerToken(usServer, fx.a.organizationId, fx.a.trustedDomain);
 
       expect(response.statusCode).toBe(421);
       expect(response.json().error.type).toBe('misdirected_request');

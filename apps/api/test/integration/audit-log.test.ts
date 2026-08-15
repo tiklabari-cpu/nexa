@@ -50,6 +50,13 @@ describe('audit log writer (NFR-S12)', () => {
   let owner: PrismaClient;
   let appRole: PrismaClient;
   let server: TestServer;
+  /**
+   * The same build configured as a US deployment. Only the signup entry below
+   * needs it: since C4-h a deployment refuses to create a workspace outside its
+   * own region, so proving the entry records the region it was *asked* for — and
+   * not a constant — has to happen at the door that would say yes.
+   */
+  let usServer: TestServer;
   let fx: Fixtures;
   let adminToken: string;
 
@@ -72,10 +79,11 @@ describe('audit log writer (NFR-S12)', () => {
     owner = ownerClient();
     appRole = new PrismaClient({ datasourceUrl: APP_URL });
     server = await startTestServer();
+    usServer = await startTestServer({ NEXA_REGION: 'us' });
   });
 
   afterAll(async () => {
-    await server.close();
+    await Promise.all([server.close(), usServer.close()]);
     await Promise.all([owner.$disconnect(), appRole.$disconnect()]);
   });
 
@@ -681,7 +689,7 @@ describe('audit log writer (NFR-S12)', () => {
     }
 
     it('records a new workspace on signup, with the region and plan but no PII', async () => {
-      const res = await server.post('/auth/signup', {
+      const res = await usServer.post('/auth/signup', {
         email: 'c6a2-signup@example.test',
         password: 'a-quite-long-passphrase',
         name: 'Founder',

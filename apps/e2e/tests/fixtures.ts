@@ -114,6 +114,21 @@ export const NORTHWIND_OWNER: TenantOwner = {
 };
 
 /**
+ * The seeded workspace that lives in `us` (NFR-C4 · C4-b) — the subject of the
+ * residency refusals in `compliance.spec.ts`.
+ *
+ * It exists only in the seed because the product will not create one here any
+ * more: since C4-h this European deployment refuses a `us` signup outright
+ * rather than writing the workspace and then locking its founder out of it. The
+ * doors still have to refuse a misplaced row, so the seed writes one.
+ */
+export const STATESIDE_OWNER: TenantOwner = {
+  email: 'owner@stateside.localhost',
+  password: DEMO.password,
+  orgPrefix: 'Stateside',
+};
+
+/**
  * An owner Bearer token for a given seeded tenant, via the same OAuth 2.1 + PKCE
  * flow the web app runs (`auth-store.ts`). A handful of e2e steps have to drive
  * the API directly — registering a webhook to prove its audit entry reaches the

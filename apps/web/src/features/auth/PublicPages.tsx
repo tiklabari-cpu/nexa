@@ -144,6 +144,39 @@ const REGION_LABELS: Record<Region, string> = {
   us: 'United States',
 };
 
+/**
+ * What to put on the form when signup fails (C4-h).
+ *
+ * The residency branch replaces a message that was actively misleading:
+ * "Could not create that workspace." was shown after the server had created
+ * it — in the wrong region, unreachable ever after. Now nothing is created, and
+ * the sentence has to say so, because the person is about to try again and the
+ * only useful next move is picking the region this address actually serves.
+ * `served_region` is the half of `details` the client cannot work out for
+ * itself; the region they chose is already on screen.
+ */
+function signupFailureMessage(failure: unknown): string {
+  if (!(failure instanceof ApiClientError)) return 'Could not create that workspace.';
+
+  if (failure.type === 'account_exists') {
+    return 'An account already exists for that email — sign in instead.';
+  }
+
+  if (failure.type === 'misdirected_request') {
+    const served = failure.details?.['served_region'];
+    const label = isRegion(served) ? REGION_LABELS[served] : null;
+    return label
+      ? `Nothing was created. This address only creates workspaces in ${label} — choose that data region, or sign up at the address that serves the one you picked.`
+      : 'Nothing was created. This address does not create workspaces in the data region you picked.';
+  }
+
+  return 'Could not create that workspace.';
+}
+
+function isRegion(value: unknown): value is Region {
+  return typeof value === 'string' && (REGIONS as readonly string[]).includes(value);
+}
+
 /** FR-MOD-00.2 — create a workspace and its first owner. */
 export function SignUpPage(): ReactElement {
   const signIn = useAuth((s) => s.signIn);
@@ -176,11 +209,7 @@ export function SignUpPage(): ReactElement {
         // after choosing a password is a step with nothing behind it.
         await signIn(values.email.trim(), values.password, session.memberships[0]!.license_id);
       } catch (failure) {
-        setSubmitError(
-          failure instanceof ApiClientError && failure.type === 'account_exists'
-            ? 'An account already exists for that email — sign in instead.'
-            : 'Could not create that workspace.',
-        );
+        setSubmitError(signupFailureMessage(failure));
       }
     },
   });

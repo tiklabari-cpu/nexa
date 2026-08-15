@@ -13,6 +13,48 @@
 
 ## Task log (newest-first)
 
+## tm 124 — C4-h · Signup bölge kapısı — done — 2026-08-15 UTC
+
+- **Yapıldı:** `POST /auth/signup` bölgesi bu dağıtıma ait olmayan gövdeyi artık **hiçbir satır
+  yaratmadan** 421 ile reddediyor (`routes/account-lifecycle.ts`, `lifecycle.signup`'tan ÖNCE —
+  `/customer/token` deseni). Üç adaydan **(a) REDDET** seçildi (gerekçe + elenenler PLAN §K KC4).
+  İki yan karar: **atlanan `region` artık sabit `eu` değil, dağıtımın kendi bölgesi** (sabit
+  varsayılan, `eu` olmayan her dağıtımda hiçbir şey istememiş bir isteğin ürettiği yanlış-bölge
+  yazmasıydı) ve `LifecycleService.signup`'ta `region` zorunlu oldu; `details.region` sözleşme
+  anlamını korur, yanına **`served_region`** eklendi (signup'ta çağıranın bilemeyeceği tek olgu).
+  **`X-Region` burada DİNLENMEZ** — satır yokken başlık karşılaştırmanın sağ tarafı olur ve hatayı
+  geri getirirdi (zorunlu negatif test). Web'de yanıltıcı "Could not create that workspace." metni
+  "Nothing was created… only creates workspaces in European Union" ile değişti.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **3145/3145** +
+  web **1170/1170** · `pnpm -w test:integration` **86 dosya 2317/2317** · `pnpm -w build` 7/7 ·
+  `pnpm -w test:e2e` **144/144** (143 → 144) · `db:check-drift` temiz (migration YOK) ·
+  `format:check` dokunulan dosyalarda temiz.
+- **Varsayımlar / bilinçli sınırlar:** (1) **Yetim `us` satırları için temizlik script'i YAZILMADI,
+  bilerek.** Bu depoda production yok (MASTER-PROMPT sınırı), yani böyle satırlar yalnız bir
+  geliştirici veritabanında olabilir; `region` trigger'la değişmez olduğu için yerinde onarım
+  imkânsız, geriye yalnız SİLMEK kalır ve gerçek konuşmaları olan bir çalışma alanını gözetimsiz
+  silen bir script bu görevin kapattığı hatadan daha tehlikelidir. Karar: **dokunulmuyor**, elle
+  müdahale insanın kararı. (2) Signup reddi **audit yazmaz** — trail kiracıya bağlıdır, bu istekte
+  kiracı yoktur; log satırı yalnız iki bölgeyi taşır (adres/e-posta/ad yok). (3) Web formunun
+  seçicisi hâlâ `DEFAULT_REGION`'la ('eu') açılıyor: uygulama oturum öncesi kendi dağıtım bölgesini
+  bilmiyor. `us` bir dağıtımda bu, ilk denemede 421 demektir — hafifletmesi, hata metninin hangi
+  bölgenin çalışacağını **söylemesi**. Kalıcı çözüm anonim bir "bu dağıtım hangi bölge" ucu ister,
+  ayrı görev. (4) `apps/e2e` kapı 1-3'ün öznesi artık **tohumlanmış** `Stateside Supply` (`us`)
+  çalışma alanıdır — C4-h tarayıcının böyle bir satır üretme yolunu kapattı; o üç kapı zaten ikinci
+  katmandır (geri yüklenmiş yedek / yanlış veritabanına koşulmuş migration gibi satırlar için), bu
+  yüzden özneyi seed'in yazması doğru olan. **e2e için `pnpm db:seed` gerekir** (idempotent).
+- **Sonraki pencereye not:** (1) **Çalışma alanı TEMİZ DEĞİL, ve kalanlar bana ait değil:** ölü bir
+  önceki pencere `tm 84.7` (`11.5-g` sandbox ekranı) işini yarım bıraktı — `apps/web/src/features/
+  settings/Sandbox.tsx` + testi (untracked), `components/AppShell.tsx` + testi, `SettingsPage.tsx`
+  (M). Task Master'da `84.7` **in-progress** (bu commit'te korundu). Bu dosyalara DOKUNMADIM; benim
+  kapımda yeşil koştular. PLAN.md'de o pencerenin bıraktığı "11.5 → 7/8 teslim" iddiasını **geri
+  aldım** (kod commit'lenmemişken depo teslim iddia edemez); 84.7 penceresi onu kendi kapanışında
+  yeniden yazar — K11.5 kanıt maddesi zaten hiç yazılmamıştı. (2) `apps/e2e/kanit/*.png` (~60 dosya)
+  her tam e2e koşusunda yeniden üretiliyor; önceki turların âdetine uyup bu commit'e aldım — içerik
+  değişikliği değil, koşu gürültüsü. (3) Tek integration dosyası koşturmanın
+  yolu: `pnpm --filter @nexa/api exec tsx scripts/with-test-datastores.ts vitest run --dir
+  test/integration region.test.ts` (~25 sn; `test:integration -- <ad>` FİLTRELEMEZ, 10 dk sürer).
+
 ## tm 84.6 — 11.5-f · Sandbox lisansı (ikinci kiracı) — done — 2026-08-15 UTC
 
 - **Yapıldı:** Sandbox **kardeş lisans değil, kendi organizasyonu** olan ikinci bir kiracı —

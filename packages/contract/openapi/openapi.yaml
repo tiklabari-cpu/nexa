@@ -27,6 +27,13 @@ info:
     the workspace, which is the one to retry against. This is not listed per
     operation, because it is decided before routing and applies to all of them.
 
+    One *anonymous* route answers the same way and is documented on its own:
+    `POST /auth/signup` creates the workspace, so it decides residency before
+    there is a credential to decide it from, and it refuses a region this
+    deployment does not serve **before writing anything** (C4-h). It is the
+    single exception to "authenticated", and the only place `error.details`
+    also carries `served_region`.
+
     Send `X-Region: <eu|us>` to state which region you believe you are talking
     to; a value that is not the caller's own workspace region is refused the
     same way, so a client working from a stale address finds out at once rather

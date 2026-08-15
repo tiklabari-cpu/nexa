@@ -4078,13 +4078,13 @@
             "description": "Sandbox lisansı (BÖLÜNMEZ) — ikinci kiracı: izolasyon + faturaya girmeme + kotaya sayılmama",
             "details": "11.5-f — Sandbox lisansı (BÖLÜNMEZ) — ikinci kiracı: izolasyon + faturaya girmeme + kotaya sayılmama  [OPUS-MAX]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: sandbox İKİNCİ BİR KİRACIDIR. Yeni lisans üretmek, onu bir üretim lisansına bağlamak, ama RLS/ölçüm/faturalama açısından ondan TAMAMEN ayırmak tek bir izolasyon akıl yürütmesidir. Parçalanırsa \"sandbox verisi üretim raporunda\", \"sandbox koltuğu faturada\" ya da en kötüsü \"sandbox token'ı üretim verisini okuyor\" sınıfı sızıntı kalır.\n\nKAPSAM: `licenses.sandboxOfLicenseId` (nullable self-FK) + sandbox oluşturma/sıfırlama uçları + ölçüm/faturalama dışında tutma (`usage_records`, `subscriptions`, koltuk sayımı) + raporların sandbox verisini üretim lisansına KARIŞTIRMAMASI. Sandbox aynı bölgeyi miras alır (C4 immutability'si ile tutarlı).\n\nDOSYALAR: `apps/api/prisma/schema.prisma` + migration · `apps/api/src/routes/settings.ts` veya yeni `routes/sandbox.ts` · `apps/api/src/services/billing/metering.ts` · `apps/api/src/services/billing/subscription-service.ts`\n\nREFERANS DESEN (birebir): Multibrand (tm 78 · MULTIBRAND) marka izolasyonu — \"yeni bir izolasyon boyutu eklerken her okuma yolunu tek tek gözden geçir\" kalıbı; `lib/brand.ts` + `brand_context` migration'ları.\n\nKAPSAM DIŞI: ekran (11.5-g), e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (sandbox oluşturulur; sandbox verisi üretim raporlarında GÖRÜNMEZ; sandbox kullanımı usage_records'a SAYILMAZ; sandbox koltuğu faturaya GİRMEZ; sandbox token'ı üretim lisansını OKUYAMAZ — cross-tenant negatifi; sıfırlama yalnız sandbox verisini siler; **ÜRETİM lisansında sıfırlama ucu 4xx döner (sandbox olmayan lisansta sıfırlama REDDEDİLİR — zorunlu negatif)**) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "84.1",
               "84.2"
             ],
             "parentId": "84",
-            "updatedAt": "2026-08-15T13:45:33.004Z"
+            "updatedAt": "2026-08-15T15:22:29.073Z"
           },
           {
             "id": 7,
@@ -4115,7 +4115,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-15T13:45:33.004Z"
+        "updatedAt": "2026-08-15T15:22:29.073Z"
       },
       {
         "id": "85",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T13:45:33.006Z",
+      "lastModified": "2026-08-15T15:22:29.074Z",
       "taskCount": 124,
       "completedCount": 121,
       "tags": [

@@ -12,7 +12,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
-import { hasAnyScope, type AgentRole } from '@nexa/types';
+import { hasAnyScope, servesRegion, type AgentRole, type Region } from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { decideIpAccess } from '../lib/ip-allowlist.js';
@@ -33,6 +33,14 @@ declare module 'fastify' {
     principal?: Principal;
     /** Throws rather than returning undefined — handlers should not null-check. */
     requirePrincipal: () => Principal;
+    /**
+     * Where the caller's workspace keeps its data (C4-b) — read from the
+     * credential, not from this process's configuration. Set together with
+     * `principal`, so it is present on exactly the same requests.
+     */
+    principalRegion?: Region;
+    /** The region half of `requirePrincipal`, with the same contract. */
+    requireRegion: () => Region;
     /**
      * The brand named by `X-Nexa-Brand`, validated to belong to the caller's
      * license (Multibrand, PRD §5.3). Undefined means license-wide. Resolved once
@@ -115,10 +123,15 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
   app.decorate('customerTokens', customerTokens);
 
   app.decorateRequest('principal', undefined);
+  app.decorateRequest('principalRegion', undefined);
   app.decorateRequest('brandId', undefined);
   app.decorateRequest('requirePrincipal', function (this: FastifyRequest) {
     if (!this.principal) throw ApiError.authentication();
     return this.principal;
+  });
+  app.decorateRequest('requireRegion', function (this: FastifyRequest) {
+    if (!this.principalRegion) throw ApiError.authentication();
+    return this.principalRegion;
   });
   app.decorateRequest('tenant', function (this: FastifyRequest) {
     const context = tenantOf(this.requirePrincipal());
@@ -182,13 +195,15 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
       throw ApiError.authentication('Authorization header is required.');
     }
 
-    const principal = await resolvePrincipal();
-    if (!principal) {
+    const resolved = await resolvePrincipal();
+    if (!resolved) {
       if (config.public) return; // a bad token on a public route is simply ignored
       throw ApiError.authentication();
     }
 
+    const { principal } = resolved;
     request.principal = principal;
+    request.principalRegion = resolved.region;
 
     // --- Principal kind ---------------------------------------------------
     const allowed = config.principals ?? DEFAULT_PRINCIPALS;
@@ -197,6 +212,56 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
       // not a permission shortfall. 404 rather than 403 so the widget-facing
       // surface cannot be used to map the agent API.
       throw ApiError.notFound('Resource not found.');
+    }
+
+    // --- Data residency (NFR-C4 · C4-b) -----------------------------------
+    // A workspace says where its data lives when it is created and can never
+    // move afterwards (C4-a). This is the door that makes that declaration
+    // mean something: a credential belonging to a workspace kept in another
+    // region is turned away here, before anything reads or writes a row on its
+    // behalf — including the brand lookup immediately below, which is already
+    // that workspace's data.
+    //
+    // The right-hand side is the *workspace's* region, carried by the
+    // credential. It used to be this process's own configuration, which made
+    // the check a tautology: `X-Region` was compared against the only value
+    // the process could ever hold, so it could correct a confused client and
+    // nothing more. The left-hand side is where the caller believes they are —
+    // `X-Region` when they say so, otherwise the region this process serves.
+    //
+    // After the principal-kind gate on purpose. A customer token that reached
+    // an agent route has already been answered 404 above and must stay 404:
+    // 421 would confirm the credential is real and merely at the wrong
+    // address, which is exactly what that 404 declines to say.
+    const requestedRegion = request.headers['x-region'];
+    const targetRegion = typeof requestedRegion === 'string' ? requestedRegion : env.NEXA_REGION;
+
+    if (!servesRegion(targetRegion, resolved.region)) {
+      // Record that a request for this workspace arrived at the wrong door
+      // (K5-4). Deliberately thin — the licence and the region that was asked
+      // for, nothing else. Not the address, not the token, not who held it:
+      // the entry is written by the region that should not be holding this
+      // workspace's people, so naming one of them here would be the very thing
+      // the refusal exists to prevent. `auth.ip_denied` withholds the address
+      // for the same reason.
+      await request.withTenant((tx) =>
+        writeAuditEntry(
+          tx,
+          request.auditContext({ ip: null, actorId: null, actorType: 'system' }),
+          {
+            action: 'security.region_rejected',
+            target: `license:${principal.licenseId}`,
+            metadata: { requested_region: targetRegion },
+          },
+        ),
+      );
+
+      // 421, not 403: nothing is wrong with the credential and no permission is
+      // missing. The workspace is served somewhere else, and `details.region`
+      // says where, so a client that followed a stale address can correct it.
+      throw new ApiError('misdirected_request', 'Wrong region for this organization.', {
+        details: { region: resolved.region },
+      });
     }
 
     // --- Brand context (Multibrand, PRD §5.3) -----------------------------
@@ -289,14 +354,6 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
       }
     }
 
-    // --- Region (ADR-12) --------------------------------------------------
-    const requestedRegion = request.headers['x-region'];
-    if (typeof requestedRegion === 'string' && requestedRegion !== env.NEXA_REGION) {
-      throw new ApiError('misdirected_request', 'Wrong region for this organization.', {
-        details: { region: env.NEXA_REGION },
-      });
-    }
-
     // --- Scopes -----------------------------------------------------------
     // Scopes are an agent/bot concept — a customer token has none by design.
     // For a customer, the route's `principals` list *is* the authorization
@@ -323,7 +380,13 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
       }
     }
 
-    async function resolvePrincipal(): Promise<Principal | null> {
+    /**
+     * The identity behind the credential, and the region its workspace lives
+     * in. The two travel together because every caller of this has to make the
+     * residency decision as well as the identity one, and a region returned
+     * separately (or looked up later) is a region somebody can forget to read.
+     */
+    async function resolvePrincipal(): Promise<{ principal: Principal; region: Region } | null> {
       // Customer tokens carry a recognisable prefix, so the common case costs
       // one string comparison instead of a database round-trip.
       if (credential!.scheme === 'bearer' && credential!.value.startsWith('nxc1.')) {
@@ -332,7 +395,9 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
           request.log.debug({ reason: verification.reason }, 'customer token rejected');
           return null;
         }
-        return verification.principal;
+        // Signed into the token at mint (`rgn`), so the widget surface reaches
+        // the same answer as the agent one without a round-trip per visitor.
+        return { principal: verification.principal, region: verification.region };
       }
 
       const resolution = await tokens.resolve(credential!.value);
@@ -346,7 +411,9 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
       if (resolution.principal.kind !== 'customer') {
         tokens.touch(resolution.principal.tokenId);
       }
-      return resolution.principal;
+      // `organization_region`, straight from `auth_resolve_token` — the tenant
+      // root's own column, not this process's configuration.
+      return { principal: resolution.principal, region: resolution.region };
     }
   });
 }

@@ -68,7 +68,7 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
   }
 
   const registry = new ConnectionRegistry();
-  const authenticator = new SocketAuthenticator(db, env.JWT_SIGNING_KEY_CUSTOMER);
+  const authenticator = new SocketAuthenticator(db, env.JWT_SIGNING_KEY_CUSTOMER, env.NEXA_REGION);
   const sync = new SyncService(db);
   // Typing flags are written on the command connection: a subscriber-mode client
   // may issue no other commands, so it cannot be reused for a `SET`.

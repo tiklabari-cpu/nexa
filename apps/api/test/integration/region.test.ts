@@ -1,10 +1,11 @@
 /**
- * Data residency: choosing a region, and never moving one (NFR-C4/C9 · C4-a).
+ * Data residency: choosing a region, never moving one (NFR-C4/C9 · C4-a), and
+ * refusing to serve a workspace that belongs somewhere else (C4-b).
  *
- * Two properties, and the second is the one that carries weight. Choosing is a
- * signup parameter; *not being able to change it afterwards* is the claim the
- * compliance item actually sells, and until this slice it was true only because
- * `eu` was the sole legal value — an accident, not a rule.
+ * For C4-a, two properties, and the second is the one that carries weight.
+ * Choosing is a signup parameter; *not being able to change it afterwards* is
+ * the claim the compliance item actually sells, and until this slice it was
+ * true only because `eu` was the sole legal value — an accident, not a rule.
  *
  * So immutability is attacked here through the database directly, not through
  * an endpoint. No endpoint updates `region` today; a guard that only exists in
@@ -12,12 +13,19 @@
  * build their enforcement on top of this column. The attacks run as the
  * application role *and* as the table owner, because a rule that the owner can
  * step around is a rule the next migration steps around.
+ *
+ * C4-b is the enforcement built on it. A column saying `us` means nothing while
+ * a European process happily answers for that workspace, so the tests below
+ * boot a *second* server configured as a US deployment and prove the same
+ * credential is served at one door and refused at the other. The socket half of
+ * the same rule lives in `apps/rtm/test/integration/region.test.ts` — a separate
+ * process, so a separate suite, deliberately not a shared one.
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { REGIONS } from '@nexa/types';
 import { withTenant } from '../../src/lib/tenant.js';
-import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -25,6 +33,8 @@ const STRONG_PASSWORD = 'a-quite-long-passphrase';
 
 describe('region (C4-a)', () => {
   let server: TestServer;
+  /** The same build, configured as a US deployment (C4-b). */
+  let usServer: TestServer;
   let owner: PrismaClient;
   let app: PrismaClient;
   let fx: Fixtures;
@@ -34,10 +44,11 @@ describe('region (C4-a)', () => {
     owner = ownerClient();
     app = new PrismaClient({ datasourceUrl: APP_URL });
     server = await startTestServer();
+    usServer = await startTestServer({ NEXA_REGION: 'us' });
   });
 
   afterAll(async () => {
-    await server.close();
+    await Promise.all([server.close(), usServer.close()]);
     await Promise.all([owner.$disconnect(), app.$disconnect()]);
   });
 
@@ -52,6 +63,16 @@ describe('region (C4-a)', () => {
       select: { region: true },
     });
     return organization?.region;
+  }
+
+  /** A personal access token for tenant A's owner — the ordinary caller. */
+  function tokenForA(): Promise<string> {
+    return grantToken(owner, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.ownerAccountId,
+      scopes: ['accounts--my:ro'],
+    });
   }
 
   // =========================================================================
@@ -275,6 +296,299 @@ describe('region (C4-a)', () => {
       await expect(
         owner.organization.update({ where: { id: created.id }, data: { region: 'eu' } }),
       ).rejects.toThrow(/nexa_region_immutable/);
+    });
+  });
+
+  // =========================================================================
+  // C4-b — the column is enforced at the door
+  // =========================================================================
+
+  describe('a request that reached the wrong region (C4-b)', () => {
+    /** A workspace that genuinely lives in `us`, with a token and a domain. */
+    async function seedUsTenant(): Promise<{
+      organizationId: string;
+      licenseId: bigint;
+      trustedDomain: string;
+      token: string;
+    }> {
+      const organization = await owner.organization.create({
+        data: { name: 'Org US', region: 'us' },
+        select: { id: true },
+      });
+      const license = await owner.license.create({
+        data: { organizationId: organization.id, plan: 'growth', status: 'active' },
+        select: { id: true },
+      });
+      const account = await owner.account.create({
+        data: { email: 'owner-us@example.test', name: 'Owner US' },
+        select: { id: true },
+      });
+      await owner.agentMembership.create({
+        data: { licenseId: license.id, agentId: account.id, role: 'owner' },
+      });
+      const trustedDomain = 'shop-us.example.test';
+      await owner.trustedDomain.create({
+        data: {
+          organizationId: organization.id,
+          licenseId: license.id,
+          domain: trustedDomain,
+          includeSubdomains: true,
+        },
+      });
+
+      const token = await grantToken(owner, {
+        licenseId: license.id,
+        organizationId: organization.id,
+        ownerId: account.id,
+        scopes: ['accounts--my:ro'],
+      });
+      return { organizationId: organization.id, licenseId: license.id, trustedDomain, token };
+    }
+
+    /** Mint a widget token the way the loader does, from a trusted origin. */
+    function mintCustomerToken(
+      target: TestServer,
+      organizationId: string,
+      host: string,
+    ): ReturnType<TestServer['post']> {
+      return target.post(
+        '/customer/token',
+        { organization_id: organizationId },
+        { origin: `https://${host}` },
+      );
+    }
+
+    // --- The agent surface -------------------------------------------------
+
+    it('refuses an agent token whose workspace lives elsewhere, and says where', async () => {
+      const token = await tokenForA();
+
+      const response = await usServer.get('/auth/me', { authorization: `Bearer ${token}` });
+
+      expect(response.statusCode).toBe(421);
+      expect(response.json().error.type).toBe('misdirected_request');
+      // The *workspace's* region — the whole correction this slice makes. Read
+      // from configuration it would have said `us`, which is where the caller
+      // already is and therefore useless.
+      expect(response.json().error.details.region).toBe('eu');
+    });
+
+    it('serves the very same token at the region that holds the workspace', async () => {
+      // The pair is the property: the credential is fine, the address was not.
+      const token = await tokenForA();
+
+      expect((await usServer.get('/auth/me', { authorization: `Bearer ${token}` })).statusCode).toBe(
+        421,
+      );
+      expect((await server.get('/auth/me', { authorization: `Bearer ${token}` })).statusCode).toBe(
+        200,
+      );
+    });
+
+    it('refuses a US workspace at the European deployment', async () => {
+      // The production direction: the workspace moved region, not the process.
+      const us = await seedUsTenant();
+
+      const response = await server.get('/auth/me', { authorization: `Bearer ${us.token}` });
+
+      expect(response.statusCode).toBe(421);
+      expect(response.json().error.details.region).toBe('us');
+    });
+
+    it('reports the workspace region, not the process region, to a caller it does serve', async () => {
+      // C4-a's leftover: `/auth/me` used to answer from configuration. Only a
+      // deployment whose region matches can observe the difference, which is
+      // exactly this pairing.
+      const us = await seedUsTenant();
+
+      const response = await usServer.get('/auth/me', { authorization: `Bearer ${us.token}` });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().region).toBe('us');
+    });
+
+    it('decides residency before it reads anything belonging to the workspace', async () => {
+      // `X-Nexa-Brand` resolution queries the caller's brands and answers 404
+      // for one it cannot see. Getting 421 here means the request was turned
+      // away before that query ran — a workspace kept in another region must
+      // not have its rows read to produce an error about it.
+      const token = await tokenForA();
+
+      const response = await usServer.get('/auth/me', {
+        authorization: `Bearer ${token}`,
+        'x-nexa-brand': '99999999-9999-4999-8999-999999999999',
+      });
+
+      expect(response.statusCode).toBe(421);
+    });
+
+    it('keeps a customer token out of the agent surface with 404, not 421', async () => {
+      // The principal-kind gate stays in front. 421 would confirm the token is
+      // genuine and merely misplaced; on a route the widget may never touch,
+      // that is more than the 404 policy (NFR-S5) is willing to say.
+      const minted = await mintCustomerToken(server, fx.a.organizationId, fx.a.trustedDomain);
+      expect(minted.statusCode).toBe(200);
+
+      const response = await usServer.get('/agents', {
+        authorization: `Bearer ${minted.json().token}`,
+      });
+
+      expect(response.statusCode).toBe(404);
+    });
+
+    // --- The header ---------------------------------------------------------
+
+    it('refuses a caller who names a region the workspace does not live in', async () => {
+      // The header says where the caller believes they are. Believing wrongly
+      // is the misdirection, even when they happen to have reached a
+      // deployment that does hold the workspace.
+      const token = await tokenForA();
+
+      const response = await server.get('/auth/me', {
+        authorization: `Bearer ${token}`,
+        'x-region': 'us',
+      });
+
+      expect(response.statusCode).toBe(421);
+      expect(response.json().error.details.region).toBe('eu');
+    });
+
+    it('serves a caller who names the workspace region correctly', async () => {
+      const token = await tokenForA();
+
+      const response = await server.get('/auth/me', {
+        authorization: `Bearer ${token}`,
+        'x-region': 'eu',
+      });
+
+      expect(response.statusCode).toBe(200);
+    });
+
+    // --- The widget token mint ----------------------------------------------
+
+    it('refuses to mint a widget token for a workspace kept in another region', async () => {
+      const response = await mintCustomerToken(
+        usServer,
+        fx.a.organizationId,
+        fx.a.trustedDomain,
+      );
+
+      expect(response.statusCode).toBe(421);
+      expect(response.json().error.type).toBe('misdirected_request');
+      expect(response.json().error.details.region).toBe('eu');
+    });
+
+    it('creates no visitor row when it refuses', async () => {
+      // The reason this door refuses *before* the rest of the route: a visitor
+      // with no `customer_id` gets one created for them, and creating it would
+      // put a European workspace's customer in the American database — the
+      // breach itself, committed while producing the error that reports it.
+      const before = await owner.customer.count();
+
+      await mintCustomerToken(usServer, fx.a.organizationId, fx.a.trustedDomain);
+
+      expect(await owner.customer.count()).toBe(before);
+    });
+
+    it('mints for the same workspace at its own region', async () => {
+      const response = await mintCustomerToken(server, fx.a.organizationId, fx.a.trustedDomain);
+
+      expect(response.statusCode).toBe(200);
+      expect(typeof response.json().token).toBe('string');
+    });
+
+    it('refuses a widget token minted elsewhere, wherever it is presented', async () => {
+      // The third door hands out a credential the other two have to recognise.
+      const minted = await mintCustomerToken(server, fx.a.organizationId, fx.a.trustedDomain);
+      const token = minted.json().token as string;
+
+      // `/auth/me` is the one route a customer principal may reach, so the
+      // refusal cannot be confused with the principal-kind gate above.
+      expect((await server.get('/auth/me', { authorization: `Bearer ${token}` })).statusCode).toBe(
+        200,
+      );
+
+      const response = await usServer.get('/auth/me', { authorization: `Bearer ${token}` });
+      expect(response.statusCode).toBe(421);
+      expect(response.json().error.details.region).toBe('eu');
+    });
+
+    it('mints a US workspace a token that carries its own region', async () => {
+      const us = await seedUsTenant();
+
+      const minted = await mintCustomerToken(usServer, us.organizationId, us.trustedDomain);
+      expect(minted.statusCode).toBe(200);
+
+      // Same token, European deployment: refused, and told where to go.
+      const response = await server.get('/auth/me', {
+        authorization: `Bearer ${minted.json().token}`,
+      });
+      expect(response.statusCode).toBe(421);
+      expect(response.json().error.details.region).toBe('us');
+    });
+
+    // --- The trail ----------------------------------------------------------
+
+    it('records the refusal as security.region_rejected, naming only the licence and the region asked for', async () => {
+      const token = await tokenForA();
+
+      await usServer.get('/auth/me', { authorization: `Bearer ${token}` });
+
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'security.region_rejected' },
+      });
+      expect(entries).toHaveLength(1);
+      const entry = entries[0]!;
+      expect(entry.target).toBe(`license:${fx.a.licenseId}`);
+      expect(entry.metadata).toMatchObject({ requested_region: 'us' });
+      // Deliberately absent: this region should not be holding this
+      // workspace's people, so the entry does not name one — nor the address
+      // they came from, nor the credential they held.
+      expect(entry.ip).toBeNull();
+      expect(entry.actorId).toBeNull();
+      expect(entry.actorType).toBe('system');
+      expect(JSON.stringify(entry.metadata)).not.toContain(token);
+    });
+
+    it('writes the trail under the refused workspace, not a neighbouring one', async () => {
+      // Tenant isolation still holds on the new write path: an entry landing on
+      // the wrong licence would be a cross-tenant leak dressed as an audit log.
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['accounts--my:ro'],
+      });
+
+      await usServer.get('/auth/me', { authorization: `Bearer ${tokenB}` });
+
+      const [a, b] = await Promise.all([
+        owner.auditLogEntry.count({
+          where: { licenseId: fx.a.licenseId, action: 'security.region_rejected' },
+        }),
+        owner.auditLogEntry.count({
+          where: { licenseId: fx.b.licenseId, action: 'security.region_rejected' },
+        }),
+      ]);
+      expect(a).toBe(0);
+      expect(b).toBe(1);
+    });
+
+    it('still refuses another tenant its neighbour, at the right region', async () => {
+      // Residency is an extra gate, not a replacement: the deployment that does
+      // serve both workspaces keeps them apart exactly as before.
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['accounts--my:ro'],
+      });
+
+      const response = await server.get('/auth/me', { authorization: `Bearer ${tokenB}` });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().organization_id).toBe(fx.b.organizationId);
+      expect(response.json().organization_id).not.toBe(fx.a.organizationId);
     });
   });
 });

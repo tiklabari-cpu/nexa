@@ -258,11 +258,10 @@ me:
                   type: string
                   enum: [eu, us]
                   description: |
-                    The region **this deployment** serves, not necessarily the
-                    one the caller's workspace declared at signup — the two
-                    are the same on every deployment that exists today, and
-                    reconciling them (refusing a request that reached the wrong
-                    region with 421) is C4-b's work.
+                    Where the caller's **workspace** keeps its data — the region
+                    it named at signup and can never leave (NFR-C4). Since a
+                    deployment refuses anything else with 421, this is also
+                    always the region answering the request.
                 scopes:
                   type: array
                   items: { type: string }
@@ -381,6 +380,12 @@ customerToken:
 
       `host_origin` is optional so server-side integrations can call this
       directly, in which case the request's own `Origin` header is used.
+
+      A deployment mints only for workspaces of its own region (NFR-C4) and
+      answers 421 otherwise — before creating the visitor, so a workspace kept
+      elsewhere gains no rows here. The issued token carries its workspace's
+      region, so presenting it to another deployment, or to that deployment's
+      realtime gateway, is refused the same way.
     security: []
     requestBody:
       required: true
@@ -416,4 +421,5 @@ customerToken:
                 organization_id: { type: string, format: uuid }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "421": { $ref: "../openapi.yaml#/components/responses/MisdirectedRequest" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

@@ -12,6 +12,7 @@
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
+import { REGIONS, servesRegion, type Region } from '@nexa/types';
 
 export interface SocketPrincipal {
   kind: 'agent' | 'bot' | 'customer';
@@ -26,10 +27,29 @@ export interface SocketPrincipal {
 }
 
 export type AuthFailure =
-  'malformed' | 'unknown' | 'expired' | 'revoked' | 'membership_missing' | 'organization_mismatch';
+  | 'malformed'
+  | 'unknown'
+  | 'expired'
+  | 'revoked'
+  | 'membership_missing'
+  | 'organization_mismatch'
+  | 'region_mismatch';
 
+/**
+ * A refusal, and — for the one refusal that is not about the credential —
+ * where the caller should have gone instead.
+ *
+ * `region_mismatch` carries its region because the socket answers it the same
+ * way the REST edge does, with `misdirected_request` and the workspace's own
+ * region in `details`. Every other failure deliberately tells the caller
+ * nothing: distinguishing "expired" from "never existed" confirms which tokens
+ * are real, whereas a residency answer is given to somebody already holding a
+ * valid credential for that workspace.
+ */
 export type AuthResult =
-  { ok: true; principal: SocketPrincipal } | { ok: false; reason: AuthFailure };
+  | { ok: true; principal: SocketPrincipal }
+  | { ok: false; reason: Exclude<AuthFailure, 'region_mismatch'> }
+  | { ok: false; reason: 'region_mismatch'; region: Region };
 
 const CUSTOMER_PREFIX = 'nxc1';
 
@@ -43,12 +63,21 @@ interface ResolvedTokenRow {
   expires_at: Date | null;
   revoked_at: Date | null;
   license_status: string;
+  /** The tenant root's own column — see the residency check in `authenticate`. */
+  organization_region: string;
 }
 
 export class SocketAuthenticator {
   constructor(
     private readonly db: PrismaClient,
     private readonly customerTokenSecret: string,
+    /**
+     * The region this gateway serves (`NEXA_REGION`), read from the same
+     * variable and validated by the same schema as the API's (C4-a). It is the
+     * left-hand side of every residency comparison below; the right-hand side
+     * is always the workspace's own.
+     */
+    private readonly region: Region,
   ) {}
 
   /**
@@ -81,6 +110,15 @@ export class SocketAuthenticator {
     }
     if (row.organization_id !== organizationId) {
       return { ok: false, reason: 'organization_mismatch' };
+    }
+    // Data residency (NFR-C4 · C4-b). The API refuses the same credential at its
+    // own edge; this gateway is a *separate process* and would otherwise keep
+    // serving a workspace the REST surface has stopped answering for — the
+    // "refused over HTTP, live over the socket" split that makes a residency
+    // guarantee worthless. Before the membership and group reads below, because
+    // those already read the workspace's data.
+    if (!servesRegion(this.region, row.organization_region)) {
+      return { ok: false, reason: 'region_mismatch', region: row.organization_region as Region };
     }
     if (row.license_status === 'canceled') return { ok: false, reason: 'expired' };
 
@@ -123,7 +161,7 @@ export class SocketAuthenticator {
     // authenticated.
     if (!constantTimeEqual(expected, signature)) return { ok: false, reason: 'unknown' };
 
-    let payload: { sub?: unknown; org?: unknown; lic?: unknown; exp?: unknown };
+    let payload: { sub?: unknown; org?: unknown; lic?: unknown; rgn?: unknown; exp?: unknown };
     try {
       payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
     } catch {
@@ -138,8 +176,17 @@ export class SocketAuthenticator {
     ) {
       return { ok: false, reason: 'malformed' };
     }
+    // The mint wrote the workspace's region into the signed payload (C4-b), so
+    // this gateway reaches the API's answer without a database round-trip —
+    // which is the whole reason customer tokens are stateless. A token with no
+    // region claim is refused rather than assumed to be local: "no claim means
+    // here" is the reading under which a token minted in another region passes.
+    if (!REGIONS.includes(payload.rgn as Region)) return { ok: false, reason: 'malformed' };
     if (payload.exp * 1000 <= Date.now()) return { ok: false, reason: 'expired' };
     if (payload.org !== organizationId) return { ok: false, reason: 'organization_mismatch' };
+    if (!servesRegion(this.region, payload.rgn as Region)) {
+      return { ok: false, reason: 'region_mismatch', region: payload.rgn as Region };
+    }
 
     return {
       ok: true,

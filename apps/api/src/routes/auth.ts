@@ -4,7 +4,9 @@ import { z } from 'zod';
 import {
   isScope,
   normalizeWidgetAppearance,
+  servesRegion,
   type PreChatFormField,
+  type Region,
   type Scope,
   type WidgetAppearance,
 } from '@nexa/types';
@@ -403,14 +405,13 @@ export default async function authRoutes(
 
   // --- GET /auth/me ----------------------------------------------------------
   //
-  // `region` below is the region *this process* serves, for all three principal
-  // kinds. Since C4-a a workspace carries its own on `organizations.region` and
-  // the two can differ, so this is stated in the contract rather than left to be
-  // assumed — and it stays this way until C4-b, which is where the request path
-  // starts reading the workspace's region (and refusing the mismatch with 421).
-  // Answering with the workspace's region here first would mean building half of
-  // that plumbing for one field, and only for the principal kind that already
-  // makes a tenant read.
+  // `region` below is the *workspace's* region (`organizations.region`), for all
+  // three principal kinds, carried by the credential that authenticated the
+  // request — C4-a's leftover debt, paid here because C4-b is what put a region
+  // on the request in the first place. Since the residency gate refuses anything
+  // else with 421, this is also always the region this process serves; stating
+  // it from the workspace rather than from configuration keeps the field true on
+  // its own terms rather than by side effect of a check elsewhere.
 
   app.get(
     '/auth/me',
@@ -423,7 +424,7 @@ export default async function authRoutes(
           kind: 'customer',
           organization_id: principal.organizationId,
           license_id: principal.licenseId.toString(),
-          region: env.NEXA_REGION,
+          region: request.requireRegion(),
           scopes: [],
         });
       }
@@ -434,7 +435,7 @@ export default async function authRoutes(
           account_id: principal.botId,
           organization_id: principal.organizationId,
           license_id: principal.licenseId.toString(),
-          region: env.NEXA_REGION,
+          region: request.requireRegion(),
           scopes: principal.scopes,
         });
       }
@@ -478,7 +479,7 @@ export default async function authRoutes(
         role: principal.role,
         organization_id: principal.organizationId,
         license_id: principal.licenseId.toString(),
-        region: env.NEXA_REGION,
+        region: request.requireRegion(),
         scopes: principal.scopes,
         routing_status: profile.membership?.routingStatus ?? 'offline',
         concurrent_chats_limit: profile.membership?.concurrentChatsLimit ?? 0,
@@ -654,11 +655,46 @@ export default async function authRoutes(
 
     const tenant = { licenseId: match.license_id, organizationId: match.organization_id };
 
+    // The workspace's own region, and whether this visitor's address is banned
+    // (FR-MOD-08.9.2) — one tenant transaction for both, because the second is
+    // a read this route already made and the first is a primary-key lookup
+    // alongside it.
+    const { region, ipBanned } = await withTenant(app.db, tenant, async (tx) => {
+      const organization = await tx.organization.findUnique({
+        where: { id: match.organization_id },
+        select: { region: true },
+      });
+      return { region: organization?.region, ipBanned: await isIpBanned(tx, request.ip) };
+    });
+
+    // --- Data residency (NFR-C4 · C4-b) --------------------------------------
+    // The third door, and the one that has to refuse *first*: everything below
+    // writes. A visitor without a `customer_id` gets a row created for them, so
+    // minting here for a workspace kept in another region would put that
+    // workspace's people in this region's database — the exact thing the
+    // guarantee forbids — before the token that carries the mistake is even
+    // handed out. Checked before the ban read is acted on for the same reason:
+    // "is this visitor banned" is already a question about somebody else's
+    // workspace.
+    //
+    // The region is then signed into the token (`rgn`), so the two doors it can
+    // later reach — the REST edge and the RTM `login` — refuse it in the wrong
+    // place without a lookup of their own.
+    if (!region || !servesRegion(env.NEXA_REGION, region)) {
+      request.log.warn(
+        { organization_id: match.organization_id, region: region ?? null },
+        'widget token requested from the wrong region',
+      );
+      throw new ApiError('misdirected_request', 'Wrong region for this organization.', {
+        ...(region ? { details: { region } } : {}),
+      });
+    }
+
     // A banned IP (FR-MOD-08.9.2) is refused a token at all, so a visitor on a
     // blocked address cannot even start a session — clearing cookies or dropping
     // their `customer_id` does not get them a fresh identity. Checked per-license
     // against `SecuritySettings`; no row means nothing is banned.
-    if (await withTenant(app.db, tenant, (tx) => isIpBanned(tx, request.ip))) {
+    if (ipBanned) {
       throw new ApiError('customer_banned', 'This customer is banned.');
     }
 
@@ -696,6 +732,10 @@ export default async function authRoutes(
       customerId,
       organizationId: match.organization_id,
       licenseId: match.license_id,
+      // Narrowed once, here: the `organizations_region_check` constraint is what
+      // makes it true, and `region.test.ts` reads that constraint back against
+      // `REGIONS` so the two cannot drift apart unnoticed.
+      region: region as Region,
     });
 
     // The widget just proved it is live on this origin, so a website added for

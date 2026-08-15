@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { CustomerTokenService } from './customer-token.js';
 
@@ -8,6 +9,18 @@ const CUSTOMER = '33333333-3333-4333-8333-333333333333';
 
 function service(ttl = 3600): CustomerTokenService {
   return new CustomerTokenService(SECRET, ttl);
+}
+
+/**
+ * Re-sign an edited payload with the real secret, so a test can present a
+ * *correctly signed* token the service still has to refuse on its contents.
+ * Without this the signature check would absorb every such case and the field
+ * validation behind it would never run.
+ */
+function resign(payload: Record<string, unknown>): string {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = createHmac('sha256', SECRET).update(`nxc1.${body}`).digest('base64url');
+  return `nxc1.${body}.${signature}`;
 }
 
 describe('CustomerTokenService', () => {
@@ -21,6 +34,7 @@ describe('CustomerTokenService', () => {
       customerId: CUSTOMER,
       organizationId: ORG,
       licenseId: 1000001n,
+      region: 'eu',
     });
     expect(expiresIn).toBe(3600);
 
@@ -40,6 +54,7 @@ describe('CustomerTokenService', () => {
       customerId: CUSTOMER,
       organizationId: ORG,
       licenseId: 1n,
+      region: 'eu',
     });
     expect(token.startsWith('nxc1.')).toBe(true);
   });
@@ -48,7 +63,7 @@ describe('CustomerTokenService', () => {
     // The whole point of signing: a widget must not be able to rewrite its own
     // token to reach a different organization.
     const svc = service();
-    const { token } = svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n });
+    const { token } = svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n, region: 'eu' });
     const [prefix, , signature] = token.split('.');
 
     const forged = Buffer.from(
@@ -56,6 +71,7 @@ describe('CustomerTokenService', () => {
         sub: CUSTOMER,
         org: OTHER_ORG,
         lic: '999',
+        rgn: 'eu',
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 3600,
       }),
@@ -71,7 +87,7 @@ describe('CustomerTokenService', () => {
     const { token } = new CustomerTokenService(
       'a-completely-different-secret-value-32chars',
       3600,
-    ).issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n });
+    ).issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n, region: 'eu' });
 
     const result = service().verify(token);
     expect(result.ok).toBe(false);
@@ -81,7 +97,7 @@ describe('CustomerTokenService', () => {
 
   it('rejects an expired token', () => {
     const svc = service(-1);
-    const { token } = svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n });
+    const { token } = svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n, region: 'eu' });
     const result = svc.verify(token);
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -114,7 +130,7 @@ describe('CustomerTokenService', () => {
     const svc = service();
     // Sign a structurally valid but incomplete payload using the service's own
     // machinery, so only the field validation can reject it.
-    const { token } = svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n });
+    const { token } = svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n, region: 'eu' });
     const [, body] = token.split('.');
     const decoded = JSON.parse(Buffer.from(body!, 'base64url').toString('utf8')) as Record<
       string,
@@ -129,13 +145,113 @@ describe('CustomerTokenService', () => {
     expect(probe.ok).toBe(false);
   });
 
+  // =========================================================================
+  // Data residency (NFR-C4 · C4-b): the token says where its workspace lives
+  // =========================================================================
+
+  it('carries the workspace region it was minted for, and hands it back', () => {
+    const svc = service();
+    const { token } = svc.issue({
+      customerId: CUSTOMER,
+      organizationId: ORG,
+      licenseId: 1n,
+      region: 'us',
+    });
+
+    const result = svc.verify(token);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Not the process's region and not a default — what the mint read from the
+    // workspace. The edge compares this, so a wrong answer here is a request
+    // served in the wrong country.
+    expect(result.region).toBe('us');
+  });
+
+  it('refuses a token with no region claim rather than assuming it is local', () => {
+    // Every token minted before C4-b looks like this. Treating a missing claim
+    // as "must be ours" is precisely how a token from another region would pass
+    // the residency gate, so the absence is malformed — these expire inside the
+    // TTL and the widget mints a fresh one.
+    const svc = service();
+    const { token } = svc.issue({
+      customerId: CUSTOMER,
+      organizationId: ORG,
+      licenseId: 1n,
+      region: 'eu',
+    });
+    const [, body] = token.split('.');
+    const decoded = JSON.parse(Buffer.from(body!, 'base64url').toString('utf8')) as Record<
+      string,
+      unknown
+    >;
+    delete decoded['rgn'];
+
+    // Re-signed with the real secret, so only the field validation can refuse it.
+    const legacy = resign(decoded);
+    const result = svc.verify(legacy);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('malformed');
+  });
+
+  it('refuses a region that is not one of the known ones', () => {
+    const svc = service();
+    const { token } = svc.issue({
+      customerId: CUSTOMER,
+      organizationId: ORG,
+      licenseId: 1n,
+      region: 'eu',
+    });
+    const [, body] = token.split('.');
+    const decoded = JSON.parse(Buffer.from(body!, 'base64url').toString('utf8')) as Record<
+      string,
+      unknown
+    >;
+    decoded['rgn'] = 'apac';
+
+    const result = svc.verify(resign(decoded));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('malformed');
+  });
+
+  it('cannot have its region edited by whoever holds it', () => {
+    // The claim is inside the HMAC. A visitor who rewrites `rgn` to the region
+    // they happen to have reached breaks the signature, not the gate.
+    const svc = service();
+    const { token } = svc.issue({
+      customerId: CUSTOMER,
+      organizationId: ORG,
+      licenseId: 1n,
+      region: 'us',
+    });
+    const [prefix, body, signature] = token.split('.');
+    const decoded = JSON.parse(Buffer.from(body!, 'base64url').toString('utf8')) as Record<
+      string,
+      unknown
+    >;
+    decoded['rgn'] = 'eu';
+    const edited = Buffer.from(JSON.stringify(decoded)).toString('base64url');
+
+    const result = svc.verify(`${prefix}.${edited}.${signature}`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('bad_signature');
+  });
+
   it('produces a different token each time, so two visitors never collide', () => {
     const svc = service();
-    const first = svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n });
+    const first = svc.issue({
+      customerId: CUSTOMER,
+      organizationId: ORG,
+      licenseId: 1n,
+      region: 'eu',
+    });
     const second = svc.issue({
       customerId: '44444444-4444-4444-8444-444444444444',
       organizationId: ORG,
       licenseId: 1n,
+      region: 'eu',
     });
     expect(first.token).not.toBe(second.token);
   });

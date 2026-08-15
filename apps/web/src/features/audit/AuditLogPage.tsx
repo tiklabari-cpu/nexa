@@ -58,7 +58,16 @@ const ACTOR_LABEL: Record<AuditLogEntry['actor_type'], string> = {
 const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }> = [
   {
     label: 'Authentication',
-    actions: ['auth.login', 'auth.login_failed', 'auth.password_reset', 'auth.ip_denied'],
+    actions: [
+      'auth.login',
+      'auth.login_failed',
+      'auth.password_reset',
+      'auth.ip_denied',
+      // Grouped with the sign-in refusals because it is the same question —
+      // "who was turned away at the door, and why" — even though the door in
+      // this case is the region rather than the credential (NFR-C4).
+      'security.region_rejected',
+    ],
   },
   {
     label: 'Team',

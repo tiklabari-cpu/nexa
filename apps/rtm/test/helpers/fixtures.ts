@@ -176,13 +176,21 @@ export function customerToken(input: {
   licenseId: bigint;
   secret: string;
   expiresInSeconds?: number;
+  /**
+   * The workspace's region (C4-b), as the API's mint writes it. Defaults to the
+   * region the fixtures are seeded in; pass `null` to leave the claim out
+   * entirely, which is what a token minted before C4-b looks like.
+   */
+  region?: string | null;
 }): string {
   const now = Math.floor(Date.now() / 1000);
+  const region = input.region === undefined ? 'eu' : input.region;
   const body = Buffer.from(
     JSON.stringify({
       sub: input.customerId,
       org: input.organizationId,
       lic: input.licenseId.toString(),
+      ...(region === null ? {} : { rgn: region }),
       iat: now,
       exp: now + (input.expiresInSeconds ?? 3600),
     }),

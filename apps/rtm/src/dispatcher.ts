@@ -98,6 +98,23 @@ export class Dispatcher {
 
     const result = await this.deps.authenticator.authenticate(token, connection.organizationId);
     if (!result.ok) {
+      // Data residency (NFR-C4 · C4-b) is the one refusal that is *not*
+      // undifferentiated. The credential is genuine and the caller is not short
+      // of permission — they opened a socket against a gateway that does not
+      // hold their workspace, and unless they are told which one does, the
+      // client's only recovery is to retry the wrong address forever. Answered
+      // exactly as the REST edge answers it, down to `details.region`, because
+      // a client that has to special-case one door per surface will eventually
+      // get one of them wrong.
+      if (result.reason === 'region_mismatch') {
+        this.deps.log.debug({ region: result.region }, 'rtm login refused: wrong region');
+        return encodeError(message.request_id, 'login', {
+          type: 'misdirected_request',
+          message: 'Wrong region for this organization.',
+          details: { region: result.region },
+        });
+      }
+
       // The precise reason is logged, never returned: distinguishing "expired"
       // from "never existed" confirms which tokens are real.
       this.deps.log.debug({ reason: result.reason }, 'rtm login rejected');

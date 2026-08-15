@@ -10,7 +10,7 @@
  * inside a tenant context.
  */
 import type { PrismaClient } from '@prisma/client';
-import type { AgentRole } from '@nexa/types';
+import type { AgentRole, Region } from '@nexa/types';
 import { generateToken, hashToken } from '../../lib/crypto.js';
 import { withTenant, type TenantClient } from '../../lib/tenant.js';
 import type { Principal } from './principal.js';
@@ -48,7 +48,13 @@ export type TokenRejection =
   'unknown' | 'revoked' | 'expired' | 'idle_expired' | 'license_expired' | 'membership_missing';
 
 export type TokenResolution =
-  | { ok: true; principal: Principal; licenseStatus: string; region: string }
+  /**
+   * `region` is the *workspace's* region (`organizations.region`), which is
+   * what the residency gate in `plugins/auth.ts` compares against. It is not
+   * the region this process serves — telling the two apart is the whole of
+   * C4-b.
+   */
+  | { ok: true; principal: Principal; licenseStatus: string; region: Region }
   | { ok: false; reason: TokenRejection };
 
 export class TokenService {
@@ -74,11 +80,17 @@ export class TokenService {
     }
     if (row.license_status === 'canceled') return { ok: false, reason: 'license_expired' };
 
+    // The column is `TEXT` in the row type because that is what Postgres hands
+    // back; the CHECK constraint on `organizations.region` is what makes the
+    // narrowing true, and `region.test.ts` reads that constraint back against
+    // `REGIONS` so the two cannot drift apart unnoticed.
+    const region = row.organization_region as Region;
+
     if (row.kind === 'bot') {
       return {
         ok: true,
         licenseStatus: row.license_status,
-        region: row.organization_region,
+        region,
         principal: {
           kind: 'bot',
           botId: row.owner_id,
@@ -103,7 +115,7 @@ export class TokenService {
       return {
         ok: true,
         licenseStatus: row.license_status,
-        region: row.organization_region,
+        region,
         principal: {
           kind: 'scim',
           licenseId: row.license_id,
@@ -151,7 +163,7 @@ export class TokenService {
     return {
       ok: true,
       licenseStatus: row.license_status,
-      region: row.organization_region,
+      region,
       principal: {
         kind: 'agent',
         accountId: row.owner_id,

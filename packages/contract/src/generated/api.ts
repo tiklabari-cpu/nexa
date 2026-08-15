@@ -503,6 +503,12 @@ export interface paths {
      *
      *     `host_origin` is optional so server-side integrations can call this
      *     directly, in which case the request's own `Origin` header is used.
+     *
+     *     A deployment mints only for workspaces of its own region (NFR-C4) and
+     *     answers 421 otherwise — before creating the visitor, so a workspace kept
+     *     elsewhere gains no rows here. The issued token carries its workspace's
+     *     region, so presenting it to another deployment, or to that deployment's
+     *     realtime gateway, is refused the same way.
      */
     post: operations['issueCustomerToken'];
     delete?: never;
@@ -8292,6 +8298,19 @@ export interface components {
       };
     };
     /**
+     * @description This deployment does not serve the region the workspace lives in
+     *     (NFR-C4). Nothing is wrong with the credential and no permission is
+     *     missing; `error.details.region` names the region to retry against.
+     */
+    MisdirectedRequest: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
+    /**
      * @description The trial has expired and the workspace is read-only (ADR-10). Reads
      *     still succeed and nothing has been deleted; writes resume on subscribing.
      */
@@ -8713,11 +8732,10 @@ export interface operations {
             organization_id: string;
             license_id: string;
             /**
-             * @description The region **this deployment** serves, not necessarily the
-             *     one the caller's workspace declared at signup — the two
-             *     are the same on every deployment that exists today, and
-             *     reconciling them (refusing a request that reached the wrong
-             *     region with 421) is C4-b's work.
+             * @description Where the caller's **workspace** keeps its data — the region
+             *     it named at signup and can never leave (NFR-C4). Since a
+             *     deployment refuses anything else with 421, this is also
+             *     always the region answering the request.
              * @enum {string}
              */
             region?: 'eu' | 'us';
@@ -9261,6 +9279,7 @@ export interface operations {
       };
       400: components['responses']['BadRequest'];
       403: components['responses']['Forbidden'];
+      421: components['responses']['MisdirectedRequest'];
       429: components['responses']['TooManyRequests'];
     };
   };

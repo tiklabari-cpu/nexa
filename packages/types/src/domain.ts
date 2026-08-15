@@ -164,6 +164,23 @@ export type Region = (typeof REGIONS)[number];
 /** Where a workspace lands when its creator expresses no preference. */
 export const DEFAULT_REGION: Region = 'eu';
 
+/**
+ * Whether a door that serves `serving` may answer for a workspace whose data
+ * lives in `home` (C4-b). A mismatch is `misdirected_request` (421), never 403:
+ * the credential is genuine and the caller is not short of permission — they
+ * are at the wrong address, and the answer tells them which one is theirs.
+ *
+ * One comparison, deliberately in the shared package, because the same answer
+ * has to come out of three separate doors — the REST edge, the RTM `login` and
+ * the widget token mint — and one of those runs in a *different process*. A
+ * rule spelled out three times is a rule that eventually disagrees with itself,
+ * and the shape of that disagreement ("REST refuses but the socket accepts") is
+ * exactly what a data-residency guarantee is sold to prevent.
+ */
+export function servesRegion(serving: string, home: string): boolean {
+  return serving === home;
+}
+
 // --- Shared shapes ----------------------------------------------------------
 
 export interface Paginated<T> {

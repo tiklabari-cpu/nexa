@@ -12,6 +12,7 @@
  * are checked per request against live data rather than trusted from the token.
  */
 import { createHmac } from 'node:crypto';
+import { REGIONS, type Region } from '@nexa/types';
 import { constantTimeEqual } from '../../lib/crypto.js';
 import type { CustomerPrincipal } from './principal.js';
 
@@ -22,6 +23,18 @@ interface CustomerTokenPayload {
   org: string;
   /** License id, as a string because JSON has no bigint. */
   lic: string;
+  /**
+   * Where the workspace this token was minted for keeps its data (C4-b).
+   *
+   * Carried in the signed payload rather than looked up per request, because
+   * that lookup is exactly what these tokens exist to avoid: one row per
+   * anonymous visitor is the cost the stateless design refuses to pay, and a
+   * database round-trip on every widget call would reintroduce it by the back
+   * door. The claim is inside the HMAC, so it cannot be edited by whoever holds
+   * the token, and it is decided at mint time — the one moment the workspace's
+   * region is read from the database anyway.
+   */
+  rgn: Region;
   /** Issued at / expires at, seconds since epoch. */
   iat: number;
   exp: number;
@@ -30,7 +43,8 @@ interface CustomerTokenPayload {
 export type CustomerTokenRejection = 'malformed' | 'bad_signature' | 'expired';
 
 export type CustomerTokenVerification =
-  { ok: true; principal: CustomerPrincipal } | { ok: false; reason: CustomerTokenRejection };
+  | { ok: true; principal: CustomerPrincipal; region: Region }
+  | { ok: false; reason: CustomerTokenRejection };
 
 /** Distinguishes these from any other HMAC the system produces. */
 const TOKEN_PREFIX = 'nxc1';
@@ -45,7 +59,13 @@ export class CustomerTokenService {
     }
   }
 
-  issue(input: { customerId: string; organizationId: string; licenseId: bigint }): {
+  issue(input: {
+    customerId: string;
+    organizationId: string;
+    licenseId: bigint;
+    /** The workspace's own region, read from `organizations.region` at mint. */
+    region: Region;
+  }): {
     token: string;
     expiresIn: number;
   } {
@@ -54,6 +74,7 @@ export class CustomerTokenService {
       sub: input.customerId,
       org: input.organizationId,
       lic: input.licenseId.toString(),
+      rgn: input.region,
       iat: now,
       exp: now + this.ttlSeconds,
     };
@@ -92,6 +113,14 @@ export class CustomerTokenService {
     ) {
       return { ok: false, reason: 'malformed' };
     }
+    // A token that does not say where its workspace lives is refused rather
+    // than assumed to belong here: "no region claim means this one" is the one
+    // reading under which a token minted elsewhere passes silently, which is
+    // the whole failure this claim exists to prevent. The only tokens without
+    // it are ones minted before C4-b, and they expire within the TTL.
+    if (!REGIONS.includes(payload.rgn as Region)) {
+      return { ok: false, reason: 'malformed' };
+    }
     if (payload.exp * 1000 <= Date.now()) {
       return { ok: false, reason: 'expired' };
     }
@@ -105,6 +134,7 @@ export class CustomerTokenService {
 
     return {
       ok: true,
+      region: payload.rgn,
       principal: {
         kind: 'customer',
         customerId: payload.sub,

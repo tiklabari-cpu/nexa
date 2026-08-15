@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+## tm 82.2 — C4-b · Bölge zorlaması çekirdeği: API + RTM + customer token üçünde 421 — done — 2026-08-15 UTC
+
+- **Yapıldı:** Karşılaştırmanın **sağ tarafı** artık çalışma alanının bölgesi (`organizations.region`),
+  süreç env'i değil — eski `X-Region` kontrolü `env.NEXA_REGION`'a bakıyordu, yani totolojiydi. Sol
+  taraf: `X-Region` varsa o, yoksa sürecin bölgesi. Tek karşılaştırma, üç kapıda tek fonksiyon
+  (`servesRegion`, `@nexa/types`). (1) REST: `plugins/auth.ts` — `resolvePrincipal` artık kimlikle
+  bölgeyi birlikte döndürür (`TokenResolution.region` bu tura kadar hiç okunmuyordu); kapı
+  principal-kind'den SONRA (müşteri token'ı ajan yolunda 404 kalır), marka çözümünden ÖNCE.
+  (2) RTM: `SocketAuthenticator` bölgeyi kurucudan alır; `dispatcher.ts` bu tek reddi ayrımsız
+  `authentication`'dan ayırıp REST'in birebir cevabını döner (`misdirected_request` + `details.region`).
+  (3) Mint: `/customer/token` yanlış bölgede **hiç basmaz** ve ban okumasının da önünde reddeder —
+  `customer_id`'siz ziyaretçiye satır yaratılıyor, yani basmak ihlali işlemek olurdu. Bölge token'ın
+  imzasına yazılır (`rgn`), böylece iki tüketici kapı sıfır round-trip ile aynı kararı verir.
+  Ayrıca: `C4-a`'nın borcu kapandı (`/auth/me` artık çalışma alanının bölgesini döndürüyor) ve
+  `security.region_rejected` denetim eylemi eklendi (yalnız lisans + istenen bölge; aktör/adres/token yok).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 2772 → **2792** ·
+  `pnpm -w test:integration` (`@nexa/api` 2066 → **2082**, `@nexa/rtm` 51 → **60**, yeni
+  `apps/rtm/test/integration/region.test.ts`) · `pnpm -w build` 7/7 · `pnpm -w test:e2e` **134/134
+  tüm süit** · `db:check-drift` temiz (migration gerekmedi) · `contract:generate` koşuldu.
+- **Varsayımlar:** (a) `rgn` claim'i olmayan müşteri token'ı `malformed` — "claim yoksa buralıdır"
+  okuması, başka bölgede basılmış token'ın sessizce geçtiği okumadır; `C4-b` öncesi token'lar TTL
+  içinde ölür. (b) `/auth/login` **kasten kapıya takılmadı**: kimliksiz public yolda henüz çalışma
+  alanı yoktur ve `C4-a`'nın testi `us` doğan bir alanın giriş yapabildiğini pinliyor; o token ilk
+  kimlikli istekte 421 alır. (c) e2e'nin ürettiği `apps/e2e/kanit/*.png` farkları geri alındı —
+  bu tur görsel hiçbir şeyi değiştirmedi, sadece render gürültüsüydü.
+- **Sonraki pencereye not:** `C4-e` (HIPAA kısıtları) ve `C4-g` (uçtan uca) bu kapının üstüne
+  kuruluyor; `C4-g`'nin "421 üç yüzeyde" maddesi burada zaten ölçüldü, oradaki iş onu **tek akışta**
+  tekrar etmek. Kapıyı genişletirken dikkat: residency kararı `withTenant`'tan ÖNCE veri okumamalı
+  (marka çözümü testi tam olarak bunu pinliyor). Denetim satırı yazan yol her reddedilen istekte bir
+  satır yazar — `auth.ip_denied` ile aynı maruziyet, ayrı bir taskta gürültü bastırma düşünülebilir.
+
 ## tm 79.6 — 08.5.8-f · Telegram uçtan uca doğrulama + adres sahiplenme regresyonu — done — 2026-08-15 UTC
 
 - **Yapıldı:** `apps/e2e/tests/telegram.spec.ts` (yeni, `instagram.spec.ts` deseni) — bağla (Settings

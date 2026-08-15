@@ -18,11 +18,27 @@ info:
     Tokens for server-to-server, and a short-lived customer token for the widget.
     Every route additionally declares the scopes it requires.
 
+    **Region** (NFR-C4). A workspace names the region it lives in when it is
+    created and can never move afterwards, so each deployment answers only for
+    the workspaces kept in its own region. *Any* authenticated route may
+    therefore return `421 misdirected_request`, whatever else it documents: the
+    credential is genuine and no permission is missing — the request arrived at
+    the wrong address. `error.details.region` names the region that does hold
+    the workspace, which is the one to retry against. This is not listed per
+    operation, because it is decided before routing and applies to all of them.
+
+    Send `X-Region: <eu|us>` to state which region you believe you are talking
+    to; a value that is not the caller's own workspace region is refused the
+    same way, so a client working from a stale address finds out at once rather
+    than after its data has been served from the wrong place. The realtime
+    gateway enforces the identical rule on `login` and answers with the same
+    `misdirected_request` type and `details.region`.
+
 servers:
   - url: http://localhost:4000/api/v1
     description: Local development
   - url: https://api.nexa.example/api/v1
-    description: Production (single region — eu)
+    description: Production (eu region; the us deployment serves us workspaces)
 
 tags:
   - name: System
@@ -4413,6 +4429,14 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     Conflict:
       description: Conflicts with current resource state
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    MisdirectedRequest:
+      description: |
+        This deployment does not serve the region the workspace lives in
+        (NFR-C4). Nothing is wrong with the credential and no permission is
+        missing; `error.details.region` names the region to retry against.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

@@ -50,6 +50,14 @@ export const AUDIT_ACTIONS = [
   // locked-out admin — or a stolen token being used from outside the office —
   // is visible in the trail; the address itself is deliberately not stored here.
   'auth.ip_denied',
+  // A request for this workspace arrived at a region that does not hold it
+  // (NFR-C4 · C4-b). Not `auth.*`, because nothing is wrong with the
+  // credential — it is genuine, and the refusal is about *where* the door is,
+  // which is a residency fact rather than an authentication one. The entry
+  // carries the licence and the region that was asked for and nothing else: no
+  // address, no token, no person. Naming one would mean this region writing
+  // down a member of a workspace it is not allowed to hold.
+  'security.region_rejected',
   // Team membership.
   //
   // Shared with SCIM provisioning (NFR-S11 · S11-f) rather than duplicated: a

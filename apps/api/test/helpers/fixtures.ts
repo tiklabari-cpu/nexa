@@ -189,12 +189,57 @@ async function seedTenant(db: PrismaClient, slug: string, index: number): Promis
   };
 }
 
-export async function seedFixtures(db: PrismaClient): Promise<Fixtures> {
+export interface SeedOptions {
+  /**
+   * Put both tenants on a plan (FR-MOD-11.5), by writing the subscription row
+   * entitlements are derived from.
+   *
+   * Omitted means **no subscription row at all** — a trial, which is what a
+   * fresh signup looks like and what every suite written before the entitlement
+   * gate has been running against. `lib/entitlements.ts` reads that as `growth`,
+   * so the default fixture unlocks nothing beyond self-serve.
+   *
+   * That default is deliberate and worth keeping. A suite exercising an
+   * Enterprise capability has to say `{ plan: 'enterprise' }` out loud, which
+   * makes the commercial requirement visible in the file that depends on it;
+   * flipping the default the other way would have made every gate in the
+   * product untested by construction, and a newly gated endpoint would go green
+   * everywhere instead of failing in the one suite that should notice.
+   */
+  plan?: string;
+}
+
+export async function seedFixtures(db: PrismaClient, options: SeedOptions = {}): Promise<Fixtures> {
   await resetDatabase(db);
-  return {
+  const fixtures = {
     a: await seedTenant(db, 'a', 1),
     b: await seedTenant(db, 'b', 2),
   };
+  if (options.plan !== undefined) {
+    // Both tenants, so the cross-tenant half of a suite is testing isolation
+    // rather than accidentally testing the gate.
+    await seedSubscription(db, fixtures.a.licenseId, options.plan);
+    await seedSubscription(db, fixtures.b.licenseId, options.plan);
+  }
+  return fixtures;
+}
+
+/**
+ * Give a license the subscription row `lib/entitlements.ts` derives its plan
+ * from — for suites that build their own tenants instead of using
+ * {@link seedFixtures}, and for the negative half of an entitlement test.
+ *
+ * The amounts are the catalogue's self-serve figures whatever the plan, exactly
+ * as a real Enterprise row looks after `updateSubscription` moves a workspace
+ * up: a quoted tier states no price, so the numbers already on the row stay put
+ * (`services/billing/subscription-service.ts`).
+ */
+export async function seedSubscription(
+  db: PrismaClient,
+  licenseId: bigint,
+  plan: string,
+): Promise<void> {
+  await db.subscription.create({ data: { licenseId, plan, status: 'active', seats: 2 } });
 }
 
 /**

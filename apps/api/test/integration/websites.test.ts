@@ -60,7 +60,9 @@ describe('websites', () => {
   });
 
   beforeEach(async () => {
-    fx = await seedFixtures(owner);
+    // The install snippet carries the widget appearance, and `poweredBy: false`
+    // only reaches it on a plan with `white_label` (FR-MOD-11.5).
+    fx = await seedFixtures(owner, { plan: 'enterprise' });
     [brandA] = await Promise.all([
       seedDefaultBrand(owner, fx.a.licenseId),
       seedDefaultBrand(owner, fx.b.licenseId),

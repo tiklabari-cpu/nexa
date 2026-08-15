@@ -21,7 +21,13 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  seedSubscription,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 describe('HIPAA BAA (C4-d)', () => {
@@ -64,6 +70,12 @@ describe('HIPAA BAA (C4-d)', () => {
    * Built directly rather than through signup because the pair of credentials
    * is the point: `exactRole: 'owner'` is only proved by an admin of the *same*
    * workspace being refused, and signup mints one owner and nobody else.
+   *
+   * On Enterprise, because HIPAA cover is (NFR-C4, "Şartlı — Enterprise") and
+   * `POST /settings/compliance/baa` is gated on the `hipaa` entitlement
+   * (FR-MOD-11.5). This suite proves C4-d's region and role rules, which need
+   * the request to get past the plan first; that the plan itself refuses is
+   * `entitlements.test.ts`'s claim, on a `growth` workspace built the same way.
    */
   async function seedUsTenant(suffix = 'one'): Promise<UsTenant> {
     const organization = await owner.organization.create({
@@ -71,9 +83,10 @@ describe('HIPAA BAA (C4-d)', () => {
       select: { id: true },
     });
     const license = await owner.license.create({
-      data: { organizationId: organization.id, plan: 'growth', status: 'active' },
+      data: { organizationId: organization.id, plan: 'enterprise', status: 'active' },
       select: { id: true },
     });
+    await seedSubscription(owner, license.id, 'enterprise');
     const ownerAccount = await owner.account.create({
       data: { email: `owner-us-${suffix}@example.test`, name: 'Owner US' },
       select: { id: true },
@@ -191,7 +204,9 @@ describe('HIPAA BAA (C4-d)', () => {
       const second = await accept(usServer, us.ownerToken);
 
       expect(second.statusCode).toBe(200);
-      expect((second.json() as { hipaa_baa_signed_at: string }).hipaa_baa_signed_at).toBe(firstDate);
+      expect((second.json() as { hipaa_baa_signed_at: string }).hipaa_baa_signed_at).toBe(
+        firstDate,
+      );
       expect((await signedAtOf(us.licenseId))?.toISOString()).toBe(firstDate);
       expect(await baaEntries(us.licenseId)).toHaveLength(1);
     });
@@ -214,7 +229,9 @@ describe('HIPAA BAA (C4-d)', () => {
       const after = await usServer.get('/settings/compliance', {
         authorization: `Bearer ${us.ownerToken}`,
       });
-      expect((after.json() as { hipaa_baa_signed_at: string | null }).hipaa_baa_signed_at).not.toBeNull();
+      expect(
+        (after.json() as { hipaa_baa_signed_at: string | null }).hipaa_baa_signed_at,
+      ).not.toBeNull();
     });
   });
 
@@ -389,7 +406,9 @@ describe('HIPAA BAA (C4-d)', () => {
       const asTwo = await usServer.get('/settings/compliance', {
         authorization: `Bearer ${two.ownerToken}`,
       });
-      expect((asTwo.json() as { hipaa_baa_signed_at: string | null }).hipaa_baa_signed_at).toBeNull();
+      expect(
+        (asTwo.json() as { hipaa_baa_signed_at: string | null }).hipaa_baa_signed_at,
+      ).toBeNull();
     });
 
     it('refuses a body that does not say yes', async () => {

@@ -126,7 +126,10 @@ describe('SIEM sink (NFR-C6 · C6-d)', () => {
   });
 
   beforeEach(async () => {
-    fx = await seedFixtures(owner);
+    // The sink refuses to deliver for a plan without `siem_export`
+    // (FR-MOD-11.5), so the workspaces it sweeps here hold it. The refusal
+    // itself is proved in `entitlements.test.ts`.
+    fx = await seedFixtures(owner, { plan: 'enterprise' });
     siemDir = await mkdtemp(join(tmpdir(), 'nexa-siem-'));
     // An hour back, so a seeded entry is comfortably older than any horizon
     // and still leaves room for a test to write something "now" after it.

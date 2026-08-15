@@ -70,6 +70,25 @@ interface TenantSpec {
   teams: string[];
   /** Whether to build a full sample conversation. */
   richDemo: boolean;
+  /**
+   * The commercial tier, and therefore what the workspace is entitled to
+   * (FR-MOD-11.5 · `services/billing/subscription-service.ts`).
+   *
+   * Both demo tenants are Enterprise, because the demo's job is to make every
+   * screen reachable and several of them — SSO, HIPAA/BAA, SIEM export — exist
+   * only on that tier. The cross-tenant specs need it on *both*: they prove
+   * isolation by asking the same Enterprise surface as two different
+   * workspaces, and a `growth` second tenant would turn "nobody else's trail"
+   * into "no trail, because that plan cannot export".
+   *
+   * A field rather than a constant, so the tier stays visible here and the
+   * later 11.5 items (the sandbox licence, the end-to-end white-label
+   * verification) have one line to change rather than a seed to unpick. What is
+   * *refused* on the tier below is proved in
+   * `test/integration/entitlements.test.ts`, which can move a workspace between
+   * plans mid-test — something a fixed demo fixture cannot express at all.
+   */
+  plan: 'growth' | 'enterprise';
   salesTracker: SalesTrackerSpec;
   /**
    * A second brand, turning this into a Multibrand license (PRD §5.3). The
@@ -98,6 +117,7 @@ const TENANTS: TenantSpec[] = [
     widgetDomain: 'acme-bikes.localhost',
     teams: ['Support', 'Sales'],
     richDemo: true,
+    plan: 'enterprise',
     // Three credited orders (USD 252.50 together) plus one the window could not
     // tie to a chat, so the demo's Ecommerce block reads 3 / $252.50 and not 4 /
     // $285.50.
@@ -117,6 +137,7 @@ const TENANTS: TenantSpec[] = [
     widgetDomain: 'northwind-supply.localhost',
     teams: ['Support'],
     richDemo: false,
+    plan: 'enterprise',
     // Tracking on, in a currency Acme does not use, and with nothing credited —
     // this tenant has no conversations for a sale to be attributed to. Its
     // report is therefore "configured, and the answer is zero", which is both a
@@ -287,7 +308,7 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
   const license = await prisma.license.create({
     data: {
       organizationId: organization.id,
-      plan: 'growth',
+      plan: spec.plan,
       billingCycle: 'monthly',
       status: 'trialing',
       trialEndsAt,
@@ -549,10 +570,15 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
 
   // --- Billing --------------------------------------------------------------
 
+  // The row entitlements are read from (`lib/entitlements.ts`), so it carries
+  // the spec's tier. The amounts stay the catalogue's self-serve figures on
+  // both tiers — Enterprise is quoted, and `updateSubscription` leaves the
+  // numbers on a row alone when it moves a workspace to a tier that states
+  // none, so this is what a real upgraded row looks like.
   await prisma.subscription.create({
     data: {
       licenseId,
-      plan: 'growth',
+      plan: spec.plan,
       seats: spec.agents.length + 1,
       unitPriceCents: 9900,
       aiResolutionsIncluded: 200,

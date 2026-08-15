@@ -186,7 +186,9 @@ describe('SIEM export', () => {
   });
 
   beforeEach(async () => {
-    fx = await seedFixtures(owner);
+    // SIEM export is Enterprise (NFR-S12 · FR-MOD-11.5) — both the settings
+    // write and `/audit-log/export` are gated on it.
+    fx = await seedFixtures(owner, { plan: 'enterprise' });
     await clearRateLimits(server.app);
     await clearRateLimits(lagged.app);
     // An hour back, so a seeded trail is comfortably older than any horizon and

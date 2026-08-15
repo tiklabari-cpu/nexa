@@ -117,7 +117,9 @@ describe('audit chain (NFR-C6 · C6-c)', () => {
   });
 
   beforeEach(async () => {
-    fx = await seedFixtures(owner);
+    // This suite reaches `/audit-log/export` and `PATCH /settings/siem`, both
+    // behind the `siem_export` entitlement (FR-MOD-11.5).
+    fx = await seedFixtures(owner, { plan: 'enterprise' });
     await clearRateLimits(server.app);
     const grant = (t: TenantFixture, scopes: string[]) =>
       grantToken(owner, {

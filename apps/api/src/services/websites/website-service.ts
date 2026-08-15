@@ -18,6 +18,7 @@ import {
   type WidgetAppearance,
 } from '@nexa/types';
 import { resolveBrandId } from '../../lib/brand.js';
+import { poweredByFor } from '../../lib/entitlements.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 /**
@@ -76,7 +77,7 @@ export class WebsiteService {
     const brandId = await resolveBrandId(tx, tenant.brandId);
     const [rows, appearance] = await Promise.all([
       tx.website.findMany({ orderBy: { domain: 'asc' } }),
-      this.appearance(tx, brandId),
+      this.appearance(tx, tenant, brandId),
     ]);
     return rows.map((row) => this.serialise(row, tenant.organizationId, appearance));
   }
@@ -86,7 +87,11 @@ export class WebsiteService {
     if (!row) return null;
     // The site's *own* brand appearance — RLS already limited what is visible, so
     // the row's brand is the right one for its snippet.
-    return this.serialise(row, tenant.organizationId, await this.appearance(tx, row.brandId));
+    return this.serialise(
+      row,
+      tenant.organizationId,
+      await this.appearance(tx, tenant, row.brandId),
+    );
   }
 
   /** Throws Prisma P2002 on a duplicate `[licenseId, brandId, domain]`; the route maps it. */
@@ -108,27 +113,35 @@ export class WebsiteService {
         createdBy: input.createdBy,
       },
     });
-    return this.serialise(row, tenant.organizationId, await this.appearance(tx, brandId));
+    return this.serialise(row, tenant.organizationId, await this.appearance(tx, tenant, brandId));
   }
 
   /**
    * A brand's widget appearance, or the shipped defaults when it has never been
    * customised. Normalised so a value that somehow bypassed the endpoint's
    * validation still cannot carry anything but its declared shape into a snippet.
+   *
+   * The white-label rule is applied here rather than left to the snippet
+   * (FR-MOD-11.5). A snippet is *copied out of the product* and pasted into a
+   * customer's HTML, where nothing this deployment does can revisit it — so a
+   * `poweredBy: false` emitted while the entitlement was held would keep that
+   * page unbranded for as long as the paste survives. `poweredByFor` is what
+   * keeps it out of the text in the first place.
    */
-  private async appearance(tx: TenantClient, brandId: string): Promise<WidgetAppearance> {
+  private async appearance(
+    tx: TenantClient,
+    tenant: TenantContext,
+    brandId: string,
+  ): Promise<WidgetAppearance> {
     const row = await tx.widgetSettings.findFirst({ where: { brandId } });
-    return normalizeWidgetAppearance(
-      row
-        ? {
-            primary_color: row.primaryColor,
-            position: row.position as WidgetAppearance['position'],
-            theme: row.theme as WidgetAppearance['theme'],
-            mobile_fullscreen: row.mobileFullscreen,
-            powered_by: row.poweredBy,
-          }
-        : null,
-    );
+    if (!row) return normalizeWidgetAppearance(null);
+    return normalizeWidgetAppearance({
+      primary_color: row.primaryColor,
+      position: row.position as WidgetAppearance['position'],
+      theme: row.theme as WidgetAppearance['theme'],
+      mobile_fullscreen: row.mobileFullscreen,
+      powered_by: await poweredByFor(tx, tenant, row.poweredBy),
+    });
   }
 
   /**

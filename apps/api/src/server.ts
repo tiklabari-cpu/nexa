@@ -11,6 +11,7 @@ import auth from './plugins/auth.js';
 import audit from './plugins/audit.js';
 import aiResidency from './plugins/ai-residency.js';
 import database from './plugins/database.js';
+import entitlementGate from './plugins/entitlement-gate.js';
 import { logSafeUrl } from './lib/log-redact.js';
 import licenseGate from './plugins/license-gate.js';
 import metering from './plugins/metering.js';
@@ -188,6 +189,10 @@ export async function buildServer({
   await app.register(aiResidency, { env });
   await app.register(rateLimit, { env });
   await app.register(licenseGate);
+  // After the licence gate, so an expired trial is told it is read-only rather
+  // than told what its plan does not include — the first is the reason it
+  // cannot write, and the second would be a confusing answer to it.
+  await app.register(entitlementGate);
   await app.register(metering, { env });
 
   app.addHook('onSend', async (request, reply) => {

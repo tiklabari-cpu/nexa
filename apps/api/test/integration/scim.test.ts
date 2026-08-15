@@ -97,7 +97,9 @@ describe('scim server core', () => {
   });
 
   beforeEach(async () => {
-    fx = await seedFixtures(owner);
+    // Directory provisioning is Enterprise (NFR-S11 · FR-MOD-11.5): every route
+    // in this suite is behind the `sso` entitlement.
+    fx = await seedFixtures(owner, { plan: 'enterprise' });
     await clearRateLimits(server.app);
     scimA = await grantToken(owner, {
       licenseId: fx.a.licenseId,
@@ -663,11 +665,17 @@ describe('scim server core', () => {
         orderBy: { createdAt: 'asc' },
       });
 
-    /** Buy `seats` for workspace A, so there is a purchased number to move. */
-    const subscribe = (seats: number) =>
-      owner.subscription.create({
-        data: { licenseId: fx.a.licenseId, seats, status: 'active' },
-      });
+    /**
+     * Set the purchased seat count on a workspace, so there is a number to move.
+     *
+     * An update rather than an insert: since the entitlement gate (FR-MOD-11.5)
+     * a workspace reaching SCIM at all necessarily has a subscription row —
+     * `sso` comes from its plan — so the fixture already laid one down, and a
+     * second row would leave "which one is the subscription?" to insertion
+     * order.
+     */
+    const subscribe = (seats: number, licenseId = fx.a.licenseId) =>
+      owner.subscription.updateMany({ where: { licenseId }, data: { seats } });
 
     const seatsOf = async (licenseId: bigint) =>
       (await owner.subscription.findFirst({ where: { licenseId } }))?.seats ?? null;
@@ -846,14 +854,27 @@ describe('scim server core', () => {
         // No subscription row means nothing has been bought; both the billing
         // view and the invoice already fall back to live headcount. Creating one
         // here would make a provisioning call the moment a trial looked paid.
-        await server.post('/scim/v2/Users', { userName: 'ada@example.test' }, scimBody(scimA));
+        //
+        // Two things now stand between a trial and that row, and the assertion
+        // at the end is the same one either way. The entitlement gate turns the
+        // call away first — a trial reads as `growth`, which does not include
+        // `sso` (FR-MOD-11.5) — so this door can no longer even reach the seat
+        // raiser. Its own trial guard (`ensureSeatsCoverHeadcount` returns
+        // early with no row) is still there behind it, and still the reason the
+        // rule holds for any future caller that is not a directory.
+        await owner.subscription.deleteMany({ where: { licenseId: fx.a.licenseId } });
+
+        const res = await server.post(
+          '/scim/v2/Users',
+          { userName: 'ada@example.test' },
+          scimBody(scimA),
+        );
+        expect(res.statusCode).toBe(403);
         expect(await owner.subscription.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
       });
 
       it("cannot move the other workspace's seats", async () => {
-        await owner.subscription.create({
-          data: { licenseId: fx.b.licenseId, seats: 2, status: 'active' },
-        });
+        await subscribe(2, fx.b.licenseId);
         await subscribe(2);
         await server.post('/scim/v2/Users', { userName: 'ada@example.test' }, scimBody(scimA));
         expect(await seatsOf(fx.b.licenseId)).toBe(2);

@@ -42,6 +42,18 @@ describe('route configuration guards', () => {
     ).toThrow(/public but declares authorization requirements/);
   });
 
+  it('refuses to register a public route that requires an entitlement', async () => {
+    // The same mistake one gate over (FR-MOD-11.5). A public route has no
+    // principal and therefore no plan to check, so the declaration would read
+    // as "Enterprise only" in review while being open to anyone with the URL —
+    // and unlike a missing scope, nothing downstream would notice.
+    app = await buildServer({ env: testEnv() });
+
+    expect(() =>
+      app!.get('/danger', { config: { public: true, entitlement: 'sso' } }, async () => ({})),
+    ).toThrow(/no workspace to check it against/);
+  });
+
   it('allows a plain public route', async () => {
     app = await buildServer({ env: testEnv() });
 

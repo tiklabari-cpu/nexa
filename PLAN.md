@@ -2139,7 +2139,7 @@ kalem buldu: _dedicated onboarding/account manager_ · _IVR routing_ · _kalan m
 | S11    | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11 (türetilmiş kod `S11`); kimlik sınırı. → §6.1 · tm 81 · ilerleme K S11 |
 | C4     | HIPAA BAA + bölgesel barındırma (US/EU)          | NFR-C4 (türetilmiş kod `C4`); ADR-12 tek bölge (`eu`) burada genişletildi (`C4-a` ✅, §D102); bölge zorlaması üç yüzeyde (`C4-b` ✅, §D103); signup ekranında seçim + kalıcılık uyarısı (`C4-c` ✅); BAA kabul akışı MOCK (`C4-d` ✅); kapsam kısıtları — retention tavanı + log/telemetri PII maskesi + AI bölge sınırı (`C4-e` ✅); Settings → Security'de bölge + BAA durum kartı (`C4-f` ✅); uçtan uca doğrulama — 421 üç kapıda + kart + kısıtsızlık + cross-tenant (`C4-g` ✅). → §6.1 · tm 82 · ilerleme K C4 |
 | C6     | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12 (türetilmiş kod `C6`). **Kod payı ✅ — 8 alt-görevin 8'i teslim** (`C6-a1`…`C6-g` · tm 83.1–83.8, uçtan uca kapı `C6-g` yeşil); **sertifikasyon süreci** §F.00'ı bloklamaz (§D97). Alt-görev kanıtı ve kilit kararlar `## K.`'dedir — hücre §1.2 gereği damga taşır, geçmiş taşımaz (bu satır 728 → 340 karaktere indirildi, tm 83.8). → §6.1 · tm 83 · ilerleme K C6 |
-| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 1'i teslim (`11.5-a`, tm 84.1). → §6.1 · tm 84 |
+| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 2'si teslim (`11.5-a`, `11.5-b`; tm 84.1–84.2). → §6.1 · tm 84 |
 | —      | SLA: uptime taahhüdü + fatura kredisi (NFR-U5)   | ⛔-**süreç** · Denetim bulgusu K1-4: PRD'nin tek somut SLA tanımı NFR-U5'tir (_"Sözleşmeli uptime taahhüdü + kredi mekanizması"_). Uptime taahhüdü bir **sözleşme** kalemidir, bu depodan üretilemez (§D97 kod/süreç ayrımı). `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder |
 | —      | Dedicated onboarding / account manager           | ⛔-**süreç** · PRD §5.4 "Kurumsal" satırının üçüncü payı. **Kod payı YOK** — insan hizmeti taahhüdü (özel onboarding + atanmış müşteri yöneticisi); depoda karşılığı olan hiçbir yüzey üretmez. Süpürmede bulundu, §F.00'ı bloklamaz (§D95) |
 | —      | Skills-based routing (Ent. payı)                 | ✅ **v2'de teslim** — `08.6.3` (tm 91). PRD §5.4 "Kanal" satırı bunu IVR ile birlikte anıyor; skill payı v2'de kapandı, IVR payı ⛔ (voice'a bağlı) |
@@ -5236,7 +5236,7 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 
 #### K11.5 — 11.5 · White-label widget · SLA yönetimi · sandbox
 
-> Kalem **AÇIK** — 8 alt-görevin 1'i teslim (`11.5-a`; tm 84.1). §6'nın Faz-3 `11.5` satırı
+> Kalem **AÇIK** — 8 alt-görevin 2'si teslim (`11.5-a`, `11.5-b`; tm 84.1–84.2). §6'nın Faz-3 `11.5` satırı
 > `C4`/`C6` gibi ilerleme damgasını kendi hücresinde taşır, kanıt burada birikir (§1.2).
 
 - ✅ **`11.5-a` — PLANS kataloğuna enterprise kademesi + altı anahtarlı yetki sözlüğü.** Yetki
@@ -5269,3 +5269,58 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
   `pnpm --filter @nexa/e2e exec playwright test billing.spec.ts` **3/3** (yanıta additive alan
   eklendi, checkout akışı bozulmadı) · `format:check` dokunulan 10 dosyada temiz ·
   `contract:generate` sonrası üretilen istemci commit'lendi. Migration YOK. tm 84.1
+- ✅ **`11.5-b` — Entitlement zorlama çekirdeği: yazma kapısı + downgrade'de okuma yolunda geri
+  alma.** 11.5-a sözlüğü kurmuştu ve **hiçbir şeyi zorlamıyordu**; bu pencereye kadar `growth`
+  planındaki bir kiracı widget markasını kaldırabiliyor, IdP federasyonu kurabiliyor, BAA
+  imzalayabiliyor ve denetim izini dışarı gönderebiliyordu. Kapı iki parçalı: (1) **bildirimsel
+  route kapısı** `apps/api/src/plugins/entitlement-gate.ts` — route `config: { entitlement }`
+  der, hook zorlar (`license-gate.ts` deseni: "şu ucu gatelemeyi unuttuk" bedava katmanın
+  sessizce sınırsızlaşma yoludur); `public: true` + `entitlement` bileşimi **boot'ta** reddedilir
+  (auth plugin'in `public`+`scopes` guard'ının aynası). (2) **tek soru, tek fonksiyon**
+  `apps/api/src/lib/entitlements.ts` — `readEntitlements` aboneliğin planını okur ve
+  `entitlementsForPlan`'a verir; ikinci bir yetki kaynağı AÇILMADI. Yetki **her çağrıda taze**
+  okunur (önbellek, planı biten bir yeteneği TTL boyunca yaşatırdı — kapının kapatmak için var
+  olduğu pencerenin ta kendisi). **Bağlanan uçlar:** `white_label` → `PUT /settings/widget`
+  (`powered_by=false` gövde koşullu; gerisi her planda serbest) · `sso` → `POST`/`PATCH
+  /settings/sso` + `/scim/v2/*`'in TAMAMI · `hipaa` → `POST /settings/compliance/baa` ·
+  `siem_export` → `PATCH /settings/siem` + `GET /audit-log/export` + **zamanlanmış `SiemSink`
+  döngüsü**. **Kapılanmayanlar bilinçli:** okuma uçları (`GET /settings/{sso,siem,compliance}`,
+  `GET /audit-log`) — ekranın "yükselt" diyebilmesi için render olması gerekir ve 403 dönen bir
+  ayar sayfası daha kötü bir ürün, daha güvenli değil; `DELETE /settings/sso/:id` — kapıyı hep
+  sökebilirsin, takamazsın (düşen plan, ne değiştirebildiği ne silebildiği bir yapılandırmayla
+  baş başa kalmamalı); ve **SAML oturum açma** — ticari bir değişiklik bir kiracının insanlarını
+  kendi hesaplarından dışarıda bırakmamalı (`license-gate`'in "rehin alma" gerekçesi birebir).
+  **Downgrade geri alması (kalemin asıl iddiası):** `poweredBy=false` satırı SİLİNMEZ (§C-A26) —
+  okurken yok sayılır, `poweredByFor()` ile ve widget görünümünü sunan **üç yolun hepsinde**:
+  ayar ekranı (`routes/settings.ts`), kurulum snippet'i (`website-service.ts` — en kritiği,
+  çünkü snippet müşterinin HTML'ine KOPYALANIR) ve ziyaretçinin token'ı (`routes/auth.ts`).
+  Ortak yol bedava: saklanan değer `true` ise sorgu hiç açılmaz (her iki yetkide de cevap aynı).
+  `SiemSink` aynı şeklin bir kat altı: yalnız HTTP kapılansaydı `enabled=true` satırı kalan bir
+  kiracı düşen planda tüm güvenlik izini zamanlayıcıyla göndermeye DEVAM ederdi — döngü artık
+  `skipped` döner, imleci kıpırdatmadan (yeniden yükselince kaldığı yerden). — yeni
+  `apps/api/src/lib/entitlements.ts` · `apps/api/src/plugins/entitlement-gate.ts` ·
+  `routes/{settings,auth,scim,audit-log}.ts` · `services/audit/siem-sink.ts` ·
+  `services/websites/website-service.ts` · `packages/contract/openapi/paths/{settings,audit-log}.yaml`
+  · test `entitlements.test.ts` (18, yeni) · `route-config.test.ts` (+1) · tm 84.2
+- ✅ **Devredilen iki borç ödendi (bu pencerede kapandı).** `hipaa` yetki reddi negatifi
+  (tm 82.7 · C4-g'den devredildi) ve `siem_export` yetki reddi negatifi (tm 83.8 · C6-g'den
+  devredildi): ikisi de "kapı henüz yok" diye yazılamamıştı (K5-3 graf kısıtı, PLAN §6.2 sırası
+  `tm 84` → `tm 82`/`tm 83` yönünde). İkisi de `entitlements.test.ts`'te, reddin TEK sebebi
+  yetki olacak biçimde: `hipaa` için bölge `us` + rol `owner` sabit tutuldu (C4-d'nin kapılarını
+  tekrar kanıtlamaz), `siem_export` için scope doğru + rol owner. **Faz-3 borç kalmadı.**
+- ✅ **Fixture kararı (C6-g'nin sorduğu (a)/(b) seçimi → (a)).** `seedFixtures(db, { plan })`
+  eklendi; **varsayılan abonelik satırı YOK** = trial = `growth` = hiçbir yetki. Enterprise
+  yeteneği koşturan süit bunu **açıkça** söyler (`sso`, `sso-enforcement`, `sso-verification`,
+  `scim`, `siem-export`, `siem-sink`, `audit-chain`, `settings`, `websites`, `compliance-baa`).
+  (b) — `seedTenant` varsayılanını `enterprise` yapmak — reddedildi: her kapı inşaen test
+  edilmemiş olurdu ve yeni kapılanan bir uç, fark etmesi gereken tek süitte kırmızıya dönmek
+  yerine her yerde yeşil geçerdi. Demo seed'inde iki kiracı da `enterprise` (`TenantSpec.plan`):
+  e2e cross-tenant spec'leri aynı Enterprise yüzeyini iki kiracı olarak sorarak izolasyonu
+  kanıtlıyor; `growth` bir ikinci kiracı "başkasının izi değil"i "o plan zaten ihraç edemez"e
+  çevirirdi. Reddin kanıtı plan değiştirebilen entegrasyon seviyesinde.
+- ✅ **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **133 dosya,
+  3082/3082** (3063 → +19) + web 1142 + types 104 + widget 69 + rtm 102 + ai-mock 136 ·
+  `pnpm -w test:integration` api **84 dosya, 2271/2271** (83/2252 → +1 dosya, +19) + rtm 60 ·
+  `pnpm -w build` 7/7 · `contract-parity` yeşil · **`pnpm -w test:e2e` 143/143** ·
+  `format:check` dokunulan dosyalarda temiz · `contract:generate` sonrası üretilen istemci
+  commit'lendi. Migration YOK. tm 84.2

@@ -54,7 +54,10 @@ describe('settings', () => {
   });
 
   beforeEach(async () => {
-    fx = await seedFixtures(owner);
+    // Turning the widget's Nexa branding off is the `white_label` entitlement
+    // (FR-MOD-11.5); the appearance suite below is about FR-MOD-11.7's
+    // customisation rules, so it runs on a plan that has bought it.
+    fx = await seedFixtures(owner, { plan: 'enterprise' });
     [brandA, brandB] = await Promise.all([
       seedDefaultBrand(owner, fx.a.licenseId),
       seedDefaultBrand(owner, fx.b.licenseId),

@@ -284,8 +284,23 @@ export default async function scimRoutes(
     return reply.status(apiError.status).type(SCIM_CONTENT_TYPE).send(scimErrorBody(apiError));
   });
 
-  /** Every SCIM route: a SCIM token and nothing else (see `plugins/auth.ts`). */
-  const scimRoute = { config: { principals: ['scim' as const] } };
+  /**
+   * Every SCIM route: a SCIM token and nothing else (see `plugins/auth.ts`),
+   * and a plan that includes directory provisioning (FR-MOD-11.5).
+   *
+   * Reads are gated here alongside the writes, unlike `/settings/sso` where the
+   * listing stays open. The difference is who is asking. That listing is a
+   * screen showing an admin what their workspace has, and greying out a control
+   * needs the screen to render; this is the identity provider itself, and every
+   * endpoint of it — including `GET /Users`, which is how a sync reconciles — is
+   * the provisioning capability rather than a view of it. A 403 is also the only
+   * answer a SCIM client can act on: it surfaces in the IdP's own error report,
+   * which is where the workspace's directory admin is actually looking.
+   *
+   * Sign-in is deliberately elsewhere and deliberately ungated — see the note
+   * above the SSO writes in `routes/settings.ts`.
+   */
+  const scimRoute = { config: { principals: ['scim' as const], entitlement: 'sso' as const } };
 
   /**
    * The caller's workspace.

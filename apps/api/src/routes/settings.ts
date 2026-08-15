@@ -28,6 +28,7 @@ import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { resolveBrandId } from '../lib/brand.js';
 import { formatAllowlistEntry, parseAllowlistEntry, wouldLockOut } from '../lib/ip-allowlist.js';
+import { poweredByFor, requireEntitlement } from '../lib/entitlements.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
 import {
   activePreviousCertificate,
@@ -849,9 +850,23 @@ export default async function settingsRoutes(
     },
   );
 
+  // The three writes below carry `entitlement: 'sso'` (FR-MOD-11.5); the read
+  // above does not. Federation is an Enterprise capability (NFR-S11), so a
+  // workspace that has not bought it cannot *configure* one — but it can still
+  // open the screen and see that it has none, which is where the upsell
+  // belongs.
+  //
+  // What is deliberately not gated is the sign-in itself (`routes/saml.ts`). A
+  // connection configured while the entitlement was held keeps authenticating
+  // people after a downgrade, for the same reason `license-gate.ts` makes an
+  // expired trial read-only rather than locked: a commercial change must not
+  // be the thing that shuts a workspace's staff out of their own account. The
+  // capability that was sold is *establishing* federation, and that is what
+  // stops.
+
   app.post(
     '/settings/sso',
-    { config: { scopes: ['access_rules:rw'], exactRole: 'owner' } },
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner', entitlement: 'sso' } },
     async (request, reply) => {
       const body = parse(createSsoBody, request.body);
       const tenant = request.tenant();
@@ -911,7 +926,7 @@ export default async function settingsRoutes(
 
   app.patch<{ Params: { connectionId: string } }>(
     '/settings/sso/:connectionId',
-    { config: { scopes: ['access_rules:rw'], exactRole: 'owner' } },
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner', entitlement: 'sso' } },
     async (request, reply) => {
       const connectionId = parse(uuid, request.params.connectionId);
       const body = parse(updateSsoBody, request.body);
@@ -1036,6 +1051,12 @@ export default async function settingsRoutes(
     },
   );
 
+  // No `entitlement` here, unlike the create and the update above. Removing a
+  // connection is how a workspace winds federation *down*, and a plan that no
+  // longer includes SSO is the most likely moment to want to: refusing this
+  // would leave a downgraded workspace holding configuration it is not allowed
+  // to change and not allowed to delete. You can always take the door out; you
+  // cannot put one in.
   app.delete<{ Params: { connectionId: string } }>(
     '/settings/sso/:connectionId',
     { config: { scopes: ['access_rules:rw'], exactRole: 'owner' } },
@@ -1426,9 +1447,16 @@ export default async function settingsRoutes(
     },
   );
 
+  // `entitlement: 'hipaa'` — NFR-C4 makes HIPAA cover "Şartlı — Enterprise",
+  // and the two halves of that condition are enforced in different places
+  // because they are different kinds of fact. The region check below is about
+  // where this workspace's data lives; the entitlement is about what its
+  // licence bought. The read above stays open on every plan: an admin should
+  // be able to see that their workspace is US-hosted and has no agreement,
+  // which is the question the upgrade answers.
   app.post(
     '/settings/compliance/baa',
-    { config: { scopes: ['access_rules:rw'], exactRole: 'owner' } },
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner', entitlement: 'hipaa' } },
     async (request, reply) => {
       parse(acceptBaaBody, request.body);
 
@@ -1507,9 +1535,15 @@ export default async function settingsRoutes(
     },
   );
 
+  // `entitlement: 'siem_export'` on the write only (FR-MOD-11.5). NFR-S12 gives
+  // every plan the audit log and sells *shipping it out*, so the reads here and
+  // `GET /audit-log` stay open while this and `GET /audit-log/export` — the
+  // endpoint that is the capability — do not. Switching the feed off is a write
+  // like any other, and a workspace that has downgraded does not need to: the
+  // sink already stops delivering for it (`services/audit/siem-sink.ts`).
   app.patch(
     '/settings/siem',
-    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin', entitlement: 'siem_export' } },
     async (request, reply) => {
       const body = parse(updateSiemBody, request.body);
       const tenant = request.tenant();
@@ -1603,6 +1637,20 @@ export default async function settingsRoutes(
   );
 
   // --- Widget appearance (FR-MOD-11.7) ---------------------------------------
+  //
+  // One field here is commercial rather than cosmetic: `powered_by`. Turning
+  // Nexa's branding off is the `white_label` entitlement (FR-MOD-11.5), so it
+  // is gated in the handler rather than on the route — the rest of the body is
+  // free on every plan, and a route-level `entitlement` would refuse an admin
+  // changing their button colour.
+  //
+  // The read applies the same rule from the other end. A workspace that turned
+  // branding off while it had the entitlement keeps its `powered_by = false`
+  // row after a downgrade (§C-A26 — the setting is not destroyed, so a
+  // re-upgrade restores it), and `poweredByFor` is what stops that row meaning
+  // anything in the meantime. Without it the write gate would be theatre: the
+  // widget would go on serving unbranded forever, which is the leak 11.5 exists
+  // to close.
 
   app.get(
     '/settings/widget',
@@ -1611,11 +1659,20 @@ export default async function settingsRoutes(
       // Brand-scoped: the row for the active brand, or the license default when
       // none is named. No row means the workspace has never customised this
       // brand's widget, which reads as the defaults.
-      const { row, brandId } = await request.withTenant(async (tx) => {
+      const { row, brandId, poweredBy } = await request.withTenant(async (tx) => {
         const brandId = await resolveBrandId(tx, request.brandId);
-        return { row: await tx.widgetSettings.findFirst({ where: { brandId } }), brandId };
+        const row = await tx.widgetSettings.findFirst({ where: { brandId } });
+        return {
+          row,
+          brandId,
+          poweredBy: await poweredByFor(
+            tx,
+            request.tenant(),
+            row?.poweredBy ?? DEFAULT_WIDGET_APPEARANCE.powered_by,
+          ),
+        };
       });
-      return reply.send(serialiseWidget(row, brandId));
+      return reply.send(serialiseWidget(row, brandId, poweredBy));
     },
   );
 
@@ -1641,7 +1698,14 @@ export default async function settingsRoutes(
       // The create fills unset fields from the defaults, so a partial first save
       // lands a complete, valid row. Keyed by `(license, brand)`, so a save under
       // one brand leaves another brand's appearance untouched.
-      const { updated, brandId } = await request.withTenant(async (tx) => {
+      const { updated, brandId, poweredBy } = await request.withTenant(async (tx) => {
+        // Before the upsert, inside the same transaction, so a refused save
+        // leaves nothing behind — not even the other fields of the same body.
+        // Only `false` is checked: branding *on* is every plan's right, and a
+        // workspace that never had the entitlement is not asking for anything
+        // when it sends `true`.
+        if (body.powered_by === false) await requireEntitlement(tx, tenant, 'white_label');
+
         const brandId = await resolveBrandId(tx, request.brandId);
         const row = await tx.widgetSettings.upsert({
           where: { licenseId_brandId: { licenseId: tenant.licenseId, brandId } },
@@ -1663,10 +1727,14 @@ export default async function settingsRoutes(
           action: 'settings.widget_updated',
           metadata: { fields: Object.keys(body) },
         });
-        return { updated: row, brandId };
+        return {
+          updated: row,
+          brandId,
+          poweredBy: await poweredByFor(tx, tenant, row.poweredBy),
+        };
       });
 
-      return reply.send(serialiseWidget(updated, brandId));
+      return reply.send(serialiseWidget(updated, brandId, poweredBy));
     },
   );
 
@@ -2138,6 +2206,12 @@ function serialiseInbox(
  * The widget appearance in the shared `WidgetAppearance` shape, plus when it was
  * last changed. No row means the defaults — the same fallback the schema column
  * defaults and the widget's own CSS encode, so all three describe one look.
+ *
+ * `poweredBy` is passed in rather than read off the row: what the stored value
+ * is allowed to *mean* depends on the licence (`lib/entitlements.ts`), and that
+ * needs a query this function has no client for. Taking it as an argument is
+ * also what keeps the screen honest — it shows the same branding the visitor
+ * will see, not the intent behind a row the plan no longer honours.
  */
 function serialiseWidget(
   row: {
@@ -2145,10 +2219,10 @@ function serialiseWidget(
     position: string;
     theme: string;
     mobileFullscreen: boolean;
-    poweredBy: boolean;
     updatedAt: Date;
   } | null,
   brandId: string,
+  poweredBy: boolean,
 ) {
   return {
     brand_id: brandId,
@@ -2156,7 +2230,7 @@ function serialiseWidget(
     position: row?.position ?? DEFAULT_WIDGET_APPEARANCE.position,
     theme: row?.theme ?? DEFAULT_WIDGET_APPEARANCE.theme,
     mobile_fullscreen: row?.mobileFullscreen ?? DEFAULT_WIDGET_APPEARANCE.mobile_fullscreen,
-    powered_by: row?.poweredBy ?? DEFAULT_WIDGET_APPEARANCE.powered_by,
+    powered_by: poweredBy,
     updated_at: row ? row.updatedAt.toISOString() : null,
   };
 }

@@ -13,6 +13,40 @@
 
 ## Task log (newest-first)
 
+## tm 84.2 — 11.5-b · Entitlement zorlama çekirdeği (yazma kapısı + downgrade geri alması) — done — 2026-08-15 UTC
+
+- **Yapıldı:** Kapı iki dosya: `apps/api/src/lib/entitlements.ts` (tek soru-tek fonksiyon:
+  `readEntitlements` → `entitlementsForPlan`; ikinci yetki kaynağı yok, her çağrıda taze okunur)
+  + `apps/api/src/plugins/entitlement-gate.ts` (route `config: { entitlement }` der, hook zorlar;
+  `public`+`entitlement` bileşimi **boot'ta** reddedilir). Bağlananlar: `white_label` →
+  `PUT /settings/widget`'ın `powered_by=false`'u (gövde koşullu, gerisi serbest) · `sso` →
+  `POST`/`PATCH /settings/sso` + `/scim/v2/*`'in tamamı · `hipaa` → `POST /settings/compliance/baa`
+  · `siem_export` → `PATCH /settings/siem` + `GET /audit-log/export` + **zamanlanmış `SiemSink`
+  döngüsü**. **Downgrade geri alması** (kalemin asıl iddiası): `poweredBy=false` satırı silinmez
+  (§C-A26), `poweredByFor()` ile okuma yolunun **üçünde birden** yok sayılır — ayar ekranı,
+  kurulum snippet'i, ziyaretçi token'ı. Devredilen iki borç (`hipaa` tm 82.7 · `siem_export`
+  tm 83.8) ödendi; **Faz-3'te devredilmiş borç kalmadı**.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **3082/3082**
+  (+19) + web 1142 · `pnpm -w test:integration` **84 dosya 2271/2271** (+1 dosya, +19) ·
+  `pnpm -w build` 7/7 · `contract-parity` yeşil · **`pnpm -w test:e2e` 143/143** ·
+  `format:check` dokunulan dosyalarda temiz. Migration YOK.
+- **Varsayımlar / bilinçli kapılanmayanlar:** (1) Okuma uçları açık (`GET /settings/{sso,siem,
+  compliance}`, `GET /audit-log`) — ekran "yükselt" diyebilsin diye. (2) `DELETE /settings/sso/:id`
+  açık — kapıyı sökebilirsin, takamazsın. (3) **SAML oturum açma kapılanmadı** — ticari değişiklik
+  kiracının insanlarını hesaplarından dışarıda bırakmamalı (`license-gate` "rehin alma" gerekçesi).
+  (4) Fixture: `seedFixtures(db, { plan })`, **varsayılan abonelik satırı yok** = trial = `growth`;
+  Enterprise koşturan 10 süit bunu açıkça söyler (C6-g'nin sorduğu (a) yolu; (b) her kapıyı inşaen
+  testsiz bırakırdı). Demo seed'inde **iki kiracı da `enterprise`** — cross-tenant e2e aynı
+  Enterprise yüzeyini iki kiracı olarak sorar.
+- **Sonraki pencereye:** `sandbox` ve `sla` anahtarları sözlükte var, **uçları henüz yok**
+  (11.5-f / 11.5-d açacak) — o pencereler route'a `config: { entitlement: 'sandbox' | 'sla' }`
+  yazsın, ikinci bir kontrol yolu açmasın. `11.5-c` (widget istemci tarafı) hâlâ açık: sunucu
+  artık markasız görünüm sızdırmıyor ama `loader.js`'in `poweredBy: false` URL parametresi
+  istemcide hâlâ dinleniyor. Web ayar ekranı (`WidgetCustomization.tsx`) toggle'ı yetkisiz planda
+  hâlâ gösteriyor; 403'ü hata olarak yüzeye çıkarıyor, gizlemiyor — kozmetik borç, 11.5-c/11.5-h'in.
+  **Bu pencerenin dışında bir kusur:** `apps/api/test/integration/region.test.ts` `format:check`'i
+  tm 82.2'den beri kırıyor (dokunulmadı, kapsam disiplini §5).
+
 ## tm 84.1 — 11.5-a · PLANS enterprise kademesi + entitlements sözlüğü — done — 2026-08-15 UTC
 
 - **Yapıldı:** `packages/types/src/entitlements.ts` (yeni) altı anahtarlı kapalı sözlük

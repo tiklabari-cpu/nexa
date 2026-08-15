@@ -140,7 +140,10 @@ describe('sso connections', () => {
   });
 
   beforeEach(async () => {
-    fx = await seedFixtures(owner);
+    // SSO configuration is Enterprise (NFR-S11 · FR-MOD-11.5), so the workspace
+    // under test has to hold the plan that includes it — this suite is about the
+    // federation rules, not about who may buy them.
+    fx = await seedFixtures(owner, { plan: 'enterprise' });
     await clearRateLimits(server.app);
 
     ownerToken = await grantToken(owner, {

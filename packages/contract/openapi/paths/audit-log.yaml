@@ -95,6 +95,13 @@ auditLogExport:
       and RLS confines it to the caller's own workspace like every other tenant
       surface.
 
+      **Enterprise only** (`siem_export` entitlement, FR-MOD-11.5). NFR-S12
+      gives every plan the audit log — `GET /audit-log` is ungated — and sells
+      the trail *leaving*: this endpoint and the scheduled sink are the
+      capability itself, not a screen describing it. A plan without it is
+      refused with `not_allowed`, naming the entitlement and the plan in
+      `details`.
+
       **Resuming.** Every response carries `x-nexa-export-cursor`: the position
       after the last record it contained, or the position you passed in when the
       page was empty. Store it and pass it back as `page_id` to continue.

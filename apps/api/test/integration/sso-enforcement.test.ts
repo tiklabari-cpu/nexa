@@ -73,7 +73,9 @@ describe('sso enforcement', () => {
   });
 
   beforeEach(async () => {
-    fx = await seedFixtures(owner);
+    // The enforcement switch is reached through `PATCH /settings/sso`, which is
+    // gated on the `sso` entitlement (FR-MOD-11.5).
+    fx = await seedFixtures(owner, { plan: 'enterprise' });
     await clearRateLimits(server.app);
     ownerWriteToken = await grantToken(owner, {
       licenseId: fx.a.licenseId,

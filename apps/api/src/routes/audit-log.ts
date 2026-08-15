@@ -135,10 +135,22 @@ export default async function auditLogRoutes(
    * `x-nexa-export-chain-ok` reports whether the page verified — false is a
    * warning, not a refusal, since withholding a damaged trail is what an
    * attacker would want.
+   *
+   * **It is Enterprise** (`entitlement: 'siem_export'`, FR-MOD-11.5). NFR-S12
+   * gives every plan the audit log — `/audit-log` above is ungated — and sells
+   * the trail *leaving*: this endpoint and the scheduled sink are the
+   * capability itself rather than a screen describing it. Gating the viewer as
+   * well would take away something the tier below Enterprise was sold.
    */
   app.get(
     '/audit-log/export',
-    { config: { scopes: ['audit_log--export:ro'], minimumRole: 'admin' } },
+    {
+      config: {
+        scopes: ['audit_log--export:ro'],
+        minimumRole: 'admin',
+        entitlement: 'siem_export',
+      },
+    },
     async (request, reply) => {
       const query = parse(exportQuery, request.query);
 

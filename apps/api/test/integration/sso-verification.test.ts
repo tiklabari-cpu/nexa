@@ -71,7 +71,10 @@ describe('sso end-to-end verification', () => {
   });
 
   beforeEach(async () => {
-    fx = await seedFixtures(owner);
+    // The SCIM half of this suite is behind the `sso` entitlement
+    // (FR-MOD-11.5); sign-in deliberately is not, which is what lets the
+    // two be joined here at all.
+    fx = await seedFixtures(owner, { plan: 'enterprise' });
     await clearRateLimits(server.app);
     scimA = await grantToken(owner, {
       licenseId: fx.a.licenseId,
@@ -387,8 +390,9 @@ describe('sso end-to-end verification', () => {
       });
 
       // The forgery, unsigned, inserted ahead of the signed assertion.
-      const forgedAssertion = /<saml:Assertion[\s\S]*<\/saml:Assertion>/
-        .exec(forged.xml.replace(/<(\w+:)?Signature[\s\S]*?<\/(\w+:)?Signature>/, ''))?.[0];
+      const forgedAssertion = /<saml:Assertion[\s\S]*<\/saml:Assertion>/.exec(
+        forged.xml.replace(/<(\w+:)?Signature[\s\S]*?<\/(\w+:)?Signature>/, ''),
+      )?.[0];
       expect(forgedAssertion).toBeDefined();
       const wrapped = genuine.xml.replace('<saml:Assertion', `${forgedAssertion!}<saml:Assertion`);
 
@@ -429,10 +433,7 @@ describe('sso end-to-end verification', () => {
       // them there (that is what B's own IdP vouching for somebody means), and
       // the question is whether any of it reaches back into A.
       const a = await connect();
-      const b = await connect(
-        { allowIdpInitiated: true, idpEntityId: MOCK_IDP_ENTITY_ID },
-        fx.b,
-      );
+      const b = await connect({ allowIdpInitiated: true, idpEntityId: MOCK_IDP_ENTITY_ID }, fx.b);
 
       const hired = await server.post(
         '/scim/v2/Users',

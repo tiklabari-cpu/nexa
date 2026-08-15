@@ -37,6 +37,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
+import { readEntitlements } from '../../lib/entitlements.js';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
 import { deriveChainKey } from './audit-chain.js';
 import { readAuditExportPage, sealExportPage } from './audit-export.js';
@@ -62,16 +63,22 @@ export interface SiemSinkDelivery {
   /**
    * `delivered` — a file was written and the cursor moved. `empty` — the sink
    * ran but nothing was pending (`last_run_at` still moves; see `siem-export.ts`
-   * on why that distinction matters to the status screen). `skipped` — no
-   * enabled destination, so nothing was even attempted. `failed` — an error
-   * (a write that could not complete) rolled the whole attempt back; the
-   * cursor is exactly where it was before this run.
+   * on why that distinction matters to the status screen). `skipped` — nothing
+   * was even attempted: no enabled destination, or a plan that does not include
+   * SIEM export. `failed` — an error (a write that could not complete) rolled
+   * the whole attempt back; the cursor is exactly where it was before this run.
    */
   status: 'delivered' | 'empty' | 'skipped' | 'failed';
   /** Records written to the file, 0 unless `status === 'delivered'`. */
   delivered: number;
   /** Path of the file written, or null when nothing was. */
   file: string | null;
+  /**
+   * Why this workspace got nothing — a failure on `failed`, and on `skipped`
+   * the reason when it is not simply "switched off". An operator reading a
+   * report where a workspace with `enabled = true` shipped nothing needs the
+   * sentence; "skipped" on its own reads as a bug.
+   */
   error: string | null;
 }
 
@@ -198,6 +205,30 @@ export class SiemSink {
         delivered: 0,
         file: null,
         error: null,
+      };
+    }
+
+    // The plan, checked here and not only at the endpoints that configure this
+    // (FR-MOD-11.5). A licence that turned the feed on as Enterprise and then
+    // downgraded still has `enabled = true` — the row survives on purpose
+    // (§C-A26) — and a gate that lived only on the HTTP surface would let this
+    // loop go on shipping the workspace's entire security trail to an external
+    // system, on a schedule, for a capability it no longer pays for. That is
+    // the quiet half of the leak; the write gate is the loud half.
+    //
+    // `skipped` rather than `failed`: nothing went wrong and nothing needs
+    // retrying. The cursor stays where it is, so re-upgrading resumes from the
+    // last delivered record rather than re-sending the trail or skipping the
+    // gap.
+    const { plan, entitlements } = await readEntitlements(tx, context);
+    if (!entitlements.siem_export) {
+      return {
+        ...base,
+        target: row.target,
+        status: 'skipped',
+        delivered: 0,
+        file: null,
+        error: `SIEM export is not included in the ${plan} plan.`,
       };
     }
 

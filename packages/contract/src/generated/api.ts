@@ -2208,7 +2208,14 @@ export interface paths {
     put?: never;
     /**
      * Federate sign-in to a SAML identity provider
-     * @description **Owner only** — an admin is not enough, and that is the point. Whoever
+     * @description **Enterprise only** (`sso` entitlement, FR-MOD-11.5). A plan without it is
+     *     refused with `not_allowed`, naming the entitlement and the plan in
+     *     `details`. Listing connections is *not* gated — a workspace can always see
+     *     what it has and what it would be buying — and neither is signing in
+     *     through a connection configured earlier, because a commercial change must
+     *     not lock a workspace's people out of their own accounts.
+     *
+     *     **Owner only** — an admin is not enough, and that is the point. Whoever
      *     writes `idp_certificate_pem` chooses the key assertions are verified
      *     against, and can therefore mint a signed assertion for any colleague in the
      *     workspace and sign in as them. That is a strictly larger power than an
@@ -2264,7 +2271,9 @@ export interface paths {
     head?: never;
     /**
      * Change a SAML connection, or rotate its certificate
-     * @description **Owner only**, for the reason given on `POST`.
+     * @description **Enterprise only** and **owner only**, for the reasons given on `POST`.
+     *     `DELETE` is deliberately neither: a downgraded workspace must not be left
+     *     holding a federation it may neither change nor remove.
      *
      *     **Certificate rotation.** Writing a new `idp_certificate_pem` revokes the
      *     old one the moment the change commits. That is the default because the
@@ -2998,8 +3007,13 @@ export interface paths {
      *     fact "a BAA was accepted for this licence", which is what the HIPAA scope
      *     constraints later read. No external service is called.
      *
-     *     Two gates, both 403:
+     *     Three gates, all 403:
      *
+     *     * **Enterprise only.** NFR-C4 makes HIPAA cover "conditional —
+     *       Enterprise", so the `hipaa` entitlement (FR-MOD-11.5) is the first of
+     *       the conditions. Reading `/settings/compliance` is not gated: an admin
+     *       has to be able to see that their workspace is US-hosted and holds no
+     *       agreement, which is the question upgrading answers.
      *     * **Owner only.** An admin cannot accept on the workspace's behalf; this
      *       commits the organisation to a compliance obligation.
      *     * **`us` only.** A workspace hosted in `eu` has no HIPAA cover to sign
@@ -3037,7 +3051,14 @@ export interface paths {
     head?: never;
     /**
      * Configure the audit trail export
-     * @description Creates the configuration on first write. Naming a destination and turning
+     * @description **Enterprise only** (`siem_export` entitlement, FR-MOD-11.5). NFR-S12
+     *     gives every plan the audit log and sells shipping it out, so reading this
+     *     configuration and `GET /audit-log` stay open while this and
+     *     `GET /audit-log/export` do not. The scheduled sink applies the same rule:
+     *     a workspace that downgrades stops being delivered without its
+     *     configuration being erased.
+     *
+     *     Creates the configuration on first write. Naming a destination and turning
      *     the feed on are two decisions — `enabled` defaults to off — so a workspace
      *     can set up the export before it starts shipping.
      *
@@ -3130,6 +3151,18 @@ export interface paths {
      *     a partial save lands a complete, valid appearance. At least one field is
      *     required. The colour must be a `#rrggbb` hex; position and theme their
      *     enums. Takes effect on the next widget load and is baked into the snippet.
+     *
+     *     **`powered_by: false` is Enterprise** (`white_label` entitlement,
+     *     FR-MOD-11.5) and is the only field here that is: everything else is
+     *     cosmetic and free on every plan. A plan without it is refused with
+     *     `not_allowed` and nothing in the body is saved, not even the fields that
+     *     would have been allowed on their own.
+     *
+     *     A value stored while the entitlement was held is **not deleted** when a
+     *     workspace downgrades, so a later upgrade restores the setting — but it
+     *     stops being honoured immediately. `powered_by` in every response, in the
+     *     install snippet, and in the appearance served to a visitor reads `true`
+     *     until the plan includes `white_label` again.
      */
     put: operations['setWidgetSettings'];
     post?: never;
@@ -5053,6 +5086,13 @@ export interface paths {
      *     line, oldest first — for continuous export to a SIEM. Owner/Admin only,
      *     and RLS confines it to the caller's own workspace like every other tenant
      *     surface.
+     *
+     *     **Enterprise only** (`siem_export` entitlement, FR-MOD-11.5). NFR-S12
+     *     gives every plan the audit log — `GET /audit-log` is ungated — and sells
+     *     the trail *leaving*: this endpoint and the scheduled sink are the
+     *     capability itself, not a screen describing it. A plan without it is
+     *     refused with `not_allowed`, naming the entitlement and the plan in
+     *     `details`.
      *
      *     **Resuming.** Every response carries `x-nexa-export-cursor`: the position
      *     after the last record it contained, or the position you passed in when the

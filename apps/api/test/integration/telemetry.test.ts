@@ -114,6 +114,26 @@ describe('telemetry (NFR-M5)', () => {
     expect(span?.status.code).not.toBe(SpanStatusCode.ERROR);
   });
 
+  it('carries the path without the query string (NFR-C4 · C4-e)', async () => {
+    // A span is the one artifact here that leaves the process for a collector
+    // somebody else runs, and this API puts personal data in query strings — a
+    // customer search takes an address. So `url.path` is the path, and the
+    // query does not travel at all rather than travelling masked. It is also
+    // what OpenTelemetry means by the attribute; the query has its own, which
+    // the plugin deliberately does not set.
+    const res = await app.inject({
+      method: 'GET',
+      url: '/ok?query=jane.doe%40example.test&limit=5',
+    });
+    expect(res.statusCode).toBe(200);
+
+    const spans = await waitForSpans(spanExporter, 1);
+    const span = spans[0];
+    expect(span?.attributes['url.path']).toBe('/ok');
+    expect(JSON.stringify(span?.attributes)).not.toContain('jane.doe');
+    expect(span?.attributes['url.query']).toBeUndefined();
+  });
+
   it('marks a 5xx span as errored and records the exception', async () => {
     const res = await app.inject({
       method: 'GET',

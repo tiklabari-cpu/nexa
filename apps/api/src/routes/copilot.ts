@@ -128,33 +128,39 @@ export default async function copilotRoutes(
     return reply.send({ items });
   });
 
-  app.post('/copilot/knowledge', { config: { scopes: KB_WRITE } }, async (request, reply) => {
-    const body = parse(createSourceBody, request.body);
-    const tenant = request.tenant();
-    const principal = request.requirePrincipal();
+  // `aiInference`, unlike the list above it: saving a source chunks and embeds
+  // its text, which is a model call over workspace content (NFR-C4 · C4-e).
+  app.post(
+    '/copilot/knowledge',
+    { config: { scopes: KB_WRITE, aiInference: true } },
+    async (request, reply) => {
+      const body = parse(createSourceBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
 
-    // A website is crawled before the transaction: the SSRF guard rejects a
-    // private/internal target with a 400 (the URL never reaches a fetcher), and
-    // the fetch+parse has no business holding a DB row open.
-    let content = body.content ?? '';
-    let sourceUrl: string | null = null;
-    if (body.type === 'website') {
-      const url = assertPublicHttpUrl(body.source_url ?? '');
-      const page = await crawl(url);
-      content = page.text;
-      sourceUrl = url.toString();
-    }
+      // A website is crawled before the transaction: the SSRF guard rejects a
+      // private/internal target with a 400 (the URL never reaches a fetcher), and
+      // the fetch+parse has no business holding a DB row open.
+      let content = body.content ?? '';
+      let sourceUrl: string | null = null;
+      if (body.type === 'website') {
+        const url = assertPublicHttpUrl(body.source_url ?? '');
+        const page = await crawl(url);
+        content = page.text;
+        sourceUrl = url.toString();
+      }
 
-    const source = await request.withTenant((tx) =>
-      copilot.createSource(tx, tenant, principal, {
-        type: body.type,
-        name: body.name,
-        content,
-        sourceUrl,
-      }),
-    );
-    return reply.status(201).send(source);
-  });
+      const source = await request.withTenant((tx) =>
+        copilot.createSource(tx, tenant, principal, {
+          type: body.type,
+          name: body.name,
+          content,
+          sourceUrl,
+        }),
+      );
+      return reply.status(201).send(source);
+    },
+  );
 
   app.delete<{ Params: { sourceId: string } }>(
     '/copilot/knowledge/:sourceId',
@@ -183,7 +189,7 @@ export default async function copilotRoutes(
 
   app.post<{ Params: { chatId: string } }>(
     '/copilot/chats/:chatId/summary',
-    { config: { scopes: CHAT_WRITE } },
+    { config: { scopes: CHAT_WRITE, aiInference: true } },
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
       const tenant = request.tenant();
@@ -212,7 +218,7 @@ export default async function copilotRoutes(
 
   app.post<{ Params: { chatId: string } }>(
     '/copilot/chats/:chatId/reply',
-    { config: { scopes: CHAT_WRITE } },
+    { config: { scopes: CHAT_WRITE, aiInference: true } },
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
       const tenant = request.tenant();
@@ -236,7 +242,7 @@ export default async function copilotRoutes(
 
   app.post<{ Params: { chatId: string } }>(
     '/copilot/chats/:chatId/enhance',
-    { config: { scopes: CHAT_WRITE } },
+    { config: { scopes: CHAT_WRITE, aiInference: true } },
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
       const body = parse(enhanceBody, request.body);
@@ -271,26 +277,30 @@ export default async function copilotRoutes(
    * `from`/`to` either — the window comes from the question ("last week") and is
    * named back in the answer, so a caller always knows what they were told.
    */
-  app.post('/copilot/bi', { config: { scopes: BI_COPILOT } }, async (request, reply) => {
-    const body = parse(biBody, request.body);
+  app.post(
+    '/copilot/bi',
+    { config: { scopes: BI_COPILOT, aiInference: true } },
+    async (request, reply) => {
+      const body = parse(biBody, request.body);
 
-    // The second half of the scope union — see BI_COPILOT/BI_REPORTS above.
-    const principal = request.requirePrincipal();
-    if (!hasAnyScope(scopesOf(principal), BI_REPORTS)) {
-      throw ApiError.authorization(
-        `This token is missing the required scope (one of: ${BI_REPORTS.join(', ')}).`,
+      // The second half of the scope union — see BI_COPILOT/BI_REPORTS above.
+      const principal = request.requirePrincipal();
+      if (!hasAnyScope(scopesOf(principal), BI_REPORTS)) {
+        throw ApiError.authorization(
+          `This token is missing the required scope (one of: ${BI_REPORTS.join(', ')}).`,
+        );
+      }
+
+      const tenant = request.tenant();
+      // Read once, here: the window a relative phrase names is a function of the
+      // request's instant, and resolving it twice inside one request could land a
+      // question asked at 23:59:59.999 on two different days.
+      const now = new Date();
+
+      const answer = await request.withTenant((tx) =>
+        copilot.answerBi(tx, tenant, body.question, now),
       );
-    }
-
-    const tenant = request.tenant();
-    // Read once, here: the window a relative phrase names is a function of the
-    // request's instant, and resolving it twice inside one request could land a
-    // question asked at 23:59:59.999 on two different days.
-    const now = new Date();
-
-    const answer = await request.withTenant((tx) =>
-      copilot.answerBi(tx, tenant, body.question, now),
-    );
-    return reply.send(answer);
-  });
+      return reply.send(answer);
+    },
+  );
 }

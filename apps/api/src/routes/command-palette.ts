@@ -84,43 +84,49 @@ const NOT_UNDERSTOOD_ANSWER =
   'customer satisfaction, response time, or automated resolutions.';
 
 export default async function commandPaletteRoutes(app: FastifyInstance): Promise<void> {
-  app.post('/palette/ai-query', { config: { scopes: READ } }, async (request, reply) => {
-    const body = parse(aiQueryBody, request.body);
+  // `aiInference`: the agent's typed question is matched by the model surface
+  // before anything is read (NFR-C4 · C4-e).
+  app.post(
+    '/palette/ai-query',
+    { config: { scopes: READ, aiInference: true } },
+    async (request, reply) => {
+      const body = parse(aiQueryBody, request.body);
 
-    const match = matchPaletteTopic(body.query);
-    if (!match) {
-      return reply.send({ answer: NOT_UNDERSTOOD_ANSWER, kind: 'not_understood' });
-    }
+      const match = matchPaletteTopic(body.query);
+      if (!match) {
+        return reply.send({ answer: NOT_UNDERSTOOD_ANSWER, kind: 'not_understood' });
+      }
 
-    const reader = TOPIC_READERS[match.topic.id];
-    /* istanbul ignore if -- every catalogue entry has a reader; guards a future topic added to one but not the other. */
-    if (!reader) {
-      return reply.send({ answer: NOT_UNDERSTOOD_ANSWER, kind: 'not_understood' });
-    }
+      const reader = TOPIC_READERS[match.topic.id];
+      /* istanbul ignore if -- every catalogue entry has a reader; guards a future topic added to one but not the other. */
+      if (!reader) {
+        return reply.send({ answer: NOT_UNDERSTOOD_ANSWER, kind: 'not_understood' });
+      }
 
-    const tenant = request.tenant();
-    // No caller-supplied window: the palette asks about "this period" the same
-    // way the Reports overview tab opens — the shared 30-day default
-    // (`resolveRange`) — so the two can be compared figure-for-figure in a test
-    // without the palette also having to expose `from`/`to` query params.
-    const { from, to } = resolveRange({});
-    const overview = (await request.withTenant((tx) =>
-      buildOverviewReport(tx, tenant.licenseId, from, to),
-    )) as unknown as OverviewSnapshot;
+      const tenant = request.tenant();
+      // No caller-supplied window: the palette asks about "this period" the same
+      // way the Reports overview tab opens — the shared 30-day default
+      // (`resolveRange`) — so the two can be compared figure-for-figure in a test
+      // without the palette also having to expose `from`/`to` query params.
+      const { from, to } = resolveRange({});
+      const overview = (await request.withTenant((tx) =>
+        buildOverviewReport(tx, tenant.licenseId, from, to),
+      )) as unknown as OverviewSnapshot;
 
-    const value = reader.read(overview);
-    if (value === null || value === undefined) {
+      const value = reader.read(overview);
+      if (value === null || value === undefined) {
+        return reply.send({
+          answer: 'No data yet for that in this period.',
+          kind: 'no_data',
+          metric_source: match.topic.metricSource,
+        });
+      }
+
       return reply.send({
-        answer: 'No data yet for that in this period.',
-        kind: 'no_data',
+        answer: reader.describe(value),
+        kind: 'summary',
         metric_source: match.topic.metricSource,
       });
-    }
-
-    return reply.send({
-      answer: reader.describe(value),
-      kind: 'summary',
-      metric_source: match.topic.metricSource,
-    });
-  });
+    },
+  );
 }

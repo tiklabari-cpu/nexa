@@ -9,7 +9,9 @@ import telemetryPlugin from './plugins/telemetry.js';
 import { createTelemetry, type Telemetry } from './telemetry/telemetry.js';
 import auth from './plugins/auth.js';
 import audit from './plugins/audit.js';
+import aiResidency from './plugins/ai-residency.js';
 import database from './plugins/database.js';
+import { logSafeUrl } from './lib/log-redact.js';
 import licenseGate from './plugins/license-gate.js';
 import metering from './plugins/metering.js';
 import rateLimit from './plugins/rate-limit.js';
@@ -70,12 +72,19 @@ export interface BuildServerOptions {
    * in-memory exporters, or `null` to force it off.
    */
   telemetry?: Telemetry | null;
+  /**
+   * Where log lines go. Omitted, pino's default (stdout). A test passes a stream
+   * to read back what was actually written — the only way to assert that a
+   * redaction happened rather than that a helper exists.
+   */
+  logStream?: NodeJS.WritableStream;
 }
 
 export async function buildServer({
   env,
   mailer = env.NODE_ENV === 'test' ? new NullMailer() : new FileMailer(env.MAIL_DIR),
   telemetry,
+  logStream,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -86,7 +95,12 @@ export async function buildServer({
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
-      // Secrets must never reach the log, even at trace level.
+      // Secrets must never reach the log, even at trace level — and neither
+      // must people (NFR-C4 · C4-e). The two are handled by one mechanism but
+      // are not the same problem: a secret is removed, while `req.url` is
+      // *masked* and survives, because the request line with no URL is a log
+      // line with nothing to debug from. `lib/log-redact.ts` says why the
+      // masking is unconditional rather than reserved for covered workspaces.
       redact: {
         paths: [
           'req.headers.authorization',
@@ -100,13 +114,24 @@ export async function buildServer({
           // OAuth `code`.
           'req.body.bot_token',
           'res.headers["set-cookie"]',
+          // The request line. This API puts personal data in query strings —
+          // the customer search takes an address — so the URL is where PII
+          // reaches the log first, and it is not covered by any secret path.
+          'req.url',
         ],
-        censor: '[redacted]',
+        censor: (value: unknown, path: string[]) =>
+          path.join('.') === 'req.url' && typeof value === 'string'
+            ? logSafeUrl(value)
+            : '[redacted]',
       },
-      transport:
-        env.NODE_ENV === 'development'
-          ? { target: 'pino/file', options: { destination: 1 } }
-          : undefined,
+      ...(logStream
+        ? { stream: logStream }
+        : {
+            transport:
+              env.NODE_ENV === 'development'
+                ? { target: 'pino/file' as const, options: { destination: 1 } }
+                : undefined,
+          }),
     },
     // Correlates the log line, the trace and the `request_id` the client sees.
     genReqId: (req) => (req.headers['x-request-id'] as string | undefined) ?? randomUUID(),
@@ -124,7 +149,10 @@ export async function buildServer({
     // exactly one trusted reverse proxy and is never exposed directly (if that
     // ever changes, this must become the proxy's address/subnet, not a count).
     trustProxy: 1,
-    disableRequestLogging: env.isTest,
+    // A test that hands us a stream is asking to read the request line; every
+    // other test keeps it off, because thousands of lines nobody reads is what
+    // made it off in the first place.
+    disableRequestLogging: env.isTest && !logStream,
     bodyLimit: 1_048_576, // 1 MiB — attachments go through signed upload URLs
   });
 
@@ -155,6 +183,9 @@ export async function buildServer({
   await app.register(redis, { env });
   await app.register(auth, { env });
   await app.register(audit);
+  // After `audit`, which it writes through, and before the routes that declare
+  // `aiInference` (NFR-C4 · C4-e).
+  await app.register(aiResidency, { env });
   await app.register(rateLimit, { env });
   await app.register(licenseGate);
   await app.register(metering, { env });

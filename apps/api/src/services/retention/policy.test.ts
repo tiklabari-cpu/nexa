@@ -5,7 +5,14 @@
  * refusal of a non-positive window is tested as carefully as the arithmetic.
  */
 import { describe, expect, it } from 'vitest';
-import { cutoffFor, resolveCutoffs, resolveRetentionPolicy } from './policy.js';
+import {
+  capRetentionForHipaa,
+  cutoffFor,
+  HIPAA_RETENTION_CEILING,
+  resolveCutoffs,
+  resolveRetentionPolicy,
+  type RetentionPolicy,
+} from './policy.js';
 
 const NOW = new Date('2026-07-25T00:00:00.000Z');
 const DAY = 86_400_000;
@@ -81,5 +88,76 @@ describe('resolveRetentionPolicy', () => {
         RETENTION_AUDIT_DAYS: 30,
       }).auditDays,
     ).toBe(30);
+  });
+});
+
+/**
+ * The HIPAA ceiling (NFR-C4 · C4-e).
+ *
+ * The rule is one sentence — a covered workspace may shorten a window and may
+ * not lengthen one — and every case below is that sentence read from a
+ * different side: above the ceiling, below it, exactly on it, and the shape
+ * "unlimited" would arrive in.
+ */
+describe('capRetentionForHipaa', () => {
+  const policy = (over: Partial<RetentionPolicy> = {}): RetentionPolicy => ({
+    threadDays: 365,
+    visitDays: 90,
+    mailDays: 30,
+    auditDays: 30,
+    ...over,
+  });
+
+  it('caps a window configured above the ceiling', () => {
+    // 3650 days is how "keep it forever" is actually spelled in an environment
+    // that only admits positive integers — a decade, which for a conversation
+    // containing PHI is the outcome the agreement exists to prevent.
+    const capped = capRetentionForHipaa(policy({ threadDays: 3650, visitDays: 3650 }));
+
+    expect(capped.threadDays).toBe(HIPAA_RETENTION_CEILING.threadDays);
+    expect(capped.visitDays).toBe(HIPAA_RETENTION_CEILING.visitDays);
+  });
+
+  it('leaves a shorter window alone — the ceiling is a maximum, not a schedule', () => {
+    // A covered workspace that keeps less than the ceiling is more compliant,
+    // not less. Raising it to the ceiling would be this code choosing a
+    // retention period for somebody's medical conversations.
+    const capped = capRetentionForHipaa(policy({ threadDays: 30, visitDays: 7, mailDays: 1 }));
+
+    expect(capped).toEqual({ threadDays: 30, visitDays: 7, mailDays: 1, auditDays: 30 });
+  });
+
+  it('is a no-op on the shipped defaults, which are the ceiling', () => {
+    expect(capRetentionForHipaa(policy())).toEqual(policy());
+  });
+
+  it('never shortens the audit window — a floor, not a ceiling', () => {
+    // NFR-S12 keeps 30 days of audit on every plan and HIPAA §164.316 requires
+    // the access record be *kept*. Capping it would shorten the one trail an
+    // investigation reads, in the name of the rule that makes the investigation
+    // possible. Tested with a long window precisely because every other field
+    // here would be cut back.
+    const capped = capRetentionForHipaa(policy({ auditDays: 2190 }));
+
+    expect(capped.auditDays).toBe(2190);
+  });
+
+  it('refuses an unlimited window rather than clamping it', () => {
+    // NFR-C8 offers "unlimited" beside 30/60/365. Whatever shape a per-workspace
+    // setting gives it, `Math.min` would return it unchanged and grant the
+    // covered workspace exactly the indefinite retention the agreement forbids —
+    // so it stops the sweep and says so instead.
+    expect(() => capRetentionForHipaa(policy({ threadDays: Number.POSITIVE_INFINITY }))).toThrow(
+      /unlimited/,
+    );
+    expect(() => capRetentionForHipaa(policy({ visitDays: Number.NaN }))).toThrow(RangeError);
+  });
+
+  it('names the window it refused', () => {
+    // The operator reading this has four windows to look at; a message that
+    // does not say which one sends them to check all four.
+    expect(() => capRetentionForHipaa(policy({ mailDays: Number.POSITIVE_INFINITY }))).toThrow(
+      /mailDays/,
+    );
   });
 });

@@ -25,6 +25,15 @@
  * cross-tenant guard, and it refuses a null or not-yet-past cutoff; a dry-run
  * counts under RLS and never calls it.
  *
+ * The windows are resolved **per tenant**, not once for the run: a workspace
+ * inside HIPAA scope (NFR-C4 · C4-e) has its windows capped at
+ * `HIPAA_RETENTION_CEILING`, and scope is a property of a licence, so two
+ * workspaces in the same deployment can be swept under different policies. Each
+ * tenant's effective policy is reported back and recorded in its audit entry,
+ * because "why did this conversation disappear a year early" has to be
+ * answerable from the trail rather than from the deployment's configuration at
+ * the time.
+ *
  * `dryRun` counts what *would* go without writing anything — no delete, no audit
  * entry — so an operator can see the blast radius before committing to it. It is
  * the default in the CLI; deletion takes an explicit `--apply`.
@@ -35,9 +44,10 @@
 import { readFile, readdir, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { type PrismaClient } from '@prisma/client';
+import { readHipaaScope } from '../../lib/hipaa.js';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
 import { writeAuditEntry } from '../audit/audit-log.js';
-import { type RetentionCutoffs, type RetentionPolicy, resolveCutoffs } from './policy.js';
+import { capRetentionForHipaa, cutoffFor, type RetentionPolicy, resolveCutoffs } from './policy.js';
 
 /**
  * Rows deleted per statement. Large enough that real workloads finish in a
@@ -54,10 +64,19 @@ export interface TenantPruneResult {
   visits: number;
   /** Audit-log entries pruned for this tenant (NFR-S12 30-day window). */
   auditEntries: number;
+  /** Whether this workspace is covered by a signed BAA (NFR-C4 · C4-e). */
+  hipaaScope: boolean;
+  /**
+   * The windows this tenant was actually swept under — the run's policy, capped
+   * when `hipaaScope`. Reported rather than inferred: an operator reading a
+   * dry-run should not have to re-derive the ceiling to know what will go.
+   */
+  policy: RetentionPolicy;
 }
 
 export interface RetentionReport {
   dryRun: boolean;
+  /** The configured windows, before any per-tenant HIPAA ceiling is applied. */
   policy: RetentionPolicy;
   startedAt: string;
   finishedAt: string;
@@ -72,6 +91,8 @@ export interface RetentionReport {
   auditEntries: number;
   totals: {
     tenants: number;
+    /** How many of them were swept under the HIPAA ceiling (NFR-C4 · C4-e). */
+    hipaaTenants: number;
     threads: number;
     visits: number;
     mailFiles: number;
@@ -105,15 +126,24 @@ export class RetentionRunner {
     const dryRun = options.dryRun;
     const now = options.now ?? new Date();
     const startedAt = now.toISOString();
-    const cutoffs = resolveCutoffs(this.#policy, now);
 
     const tenants = await this.#listTenants();
     const results: TenantPruneResult[] = [];
     for (const tenant of tenants) {
-      results.push(await this.#pruneTenant(tenant, cutoffs, dryRun));
+      results.push(await this.#pruneTenant(tenant, now, dryRun));
     }
 
-    const mailFiles = await this.#pruneMail(cutoffs.mail, dryRun);
+    // The mail spool is the one thing here that cannot be swept per tenant: the
+    // files are local artifacts with no workspace on them (`#pruneMail`), so
+    // there is no licence to look a ceiling up against. When *any* workspace in
+    // this deployment is covered, the whole spool is swept under the capped
+    // window. The alternative — per-tenant windows over unattributable files —
+    // is not implementable, and of the two directions this one only deletes
+    // sooner, which is the side of the mistake a retention ceiling is on.
+    const mailPolicy = results.some((r) => r.hipaaScope)
+      ? capRetentionForHipaa(this.#policy)
+      : this.#policy;
+    const mailFiles = await this.#pruneMail(cutoffFor(mailPolicy.mailDays, now), dryRun);
     const auditEntries = results.reduce((sum, r) => sum + r.auditEntries, 0);
 
     return {
@@ -126,6 +156,7 @@ export class RetentionRunner {
       auditEntries,
       totals: {
         tenants: results.length,
+        hipaaTenants: results.filter((r) => r.hipaaScope).length,
         threads: results.reduce((sum, r) => sum + r.threads, 0),
         visits: results.reduce((sum, r) => sum + r.visits, 0),
         mailFiles,
@@ -144,15 +175,21 @@ export class RetentionRunner {
       SELECT license_id, organization_id FROM retention_list_tenants()`;
   }
 
-  async #pruneTenant(
-    tenant: TenantRow,
-    cutoffs: RetentionCutoffs,
-    dryRun: boolean,
-  ): Promise<TenantPruneResult> {
+  async #pruneTenant(tenant: TenantRow, now: Date, dryRun: boolean): Promise<TenantPruneResult> {
     const context: TenantContext = {
       licenseId: tenant.license_id,
       organizationId: tenant.organization_id,
     };
+
+    // Scope first, because it decides the windows everything below is measured
+    // against. Read under this tenant's own RLS context, from the timestamp
+    // `C4-d` writes — which the database will not let exist outside a US
+    // organization, so it already carries both halves of NFR-C4's condition.
+    const hipaaScope = await withTenant(this.#db, context, (tx) =>
+      readHipaaScope(tx, context.licenseId),
+    );
+    const policy = hipaaScope ? capRetentionForHipaa(this.#policy) : this.#policy;
+    const cutoffs = resolveCutoffs(policy, now);
 
     const threads = dryRun
       ? await withTenant(this.#db, context, (tx) => this.#countThreads(tx, cutoffs.threads))
@@ -184,7 +221,19 @@ export class RetentionRunner {
           { licenseId: context.licenseId, actorId: null, actorType: 'system' },
           {
             action: 'data.retention_pruned',
-            metadata: { threads, visits, audit_entries: auditEntries, dry_run: false },
+            metadata: {
+              threads,
+              visits,
+              audit_entries: auditEntries,
+              dry_run: false,
+              // The windows that were actually applied, and why they were those
+              // windows. Without this the trail cannot answer "was this deleted
+              // early because we are covered, or because somebody changed the
+              // configuration" — and those are different incidents.
+              hipaa_scope: hipaaScope,
+              thread_days: policy.threadDays,
+              visit_days: policy.visitDays,
+            },
           },
         ),
       );
@@ -196,6 +245,8 @@ export class RetentionRunner {
       threads,
       visits,
       auditEntries,
+      hipaaScope,
+      policy,
     };
   }
 

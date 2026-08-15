@@ -13,6 +13,35 @@
 
 ## Task log (newest-first)
 
+## tm 82.5 — C4-e · HIPAA kapsam kısıtları (retention tavanı + PII maskesi + AI bölge sınırı) — done — 2026-08-15 UTC
+
+- **Yapıldı:** İmzalı BAA'nın üç sonucu tek yüklemden (`lib/hipaa.ts`) okunuyor. (1) **Retention
+  tavanı** — `HIPAA_RETENTION_CEILING` (365/90/30) kiracı başına uygulanır (`RetentionRunner`
+  kapsamı `withTenant` içinde okur); "sınırsız" kırpılmaz, **reddedilir** (`capWindow` →
+  `RangeError`); `auditDays` kasten tavansız (taban: HIPAA §164.316 + NFR-S12). Posta kuyruğu
+  atfedilemediği için dağıtımda bir kapsamlı kiracı varsa tamamı kırpılmış pencereyle süpürülür.
+  (2) **Log/telemetri maskesi** — `lib/log-redact.ts`; **koşulsuz**, çünkü istek satırı kimlik
+  çözülmeden yazılır (cc-mask'in birebir gerekçesi). pino `req.url` fonksiyon-censor'la
+  *maskelenir* (silinmez); span `url.path` artık yol, sorgu hiç gitmiyor. (3) **AI bölge sınırı** —
+  `services/ai/inference.ts` + `plugins/ai-residency.ts`; rota bildirimi `aiInference: true` (6
+  yüzey / 3 dosya) + `AiResponder`'ın `request.requireAiInference()`'ı; yeni `LLM_PROVIDER_REGION`;
+  ret `not_allowed` (403) + yeni denetim eylemi `compliance.ai_region_blocked`.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` (`@nexa/api` 2808 →
+  **2859**) · `pnpm -w test:integration` 2098 → **2114** (yeni `hipaa-constraints.test.ts`, 15) ·
+  `pnpm -w build` 7/7 · `pnpm -w test:e2e` **135/135** · `db:check-drift` temiz (migration
+  gerekmedi) · `contract:generate` koşuldu.
+- **Varsayımlar:** (a) Tavan = gönderilen varsayılanlar; ayrı bir "HIPAA takvimi" uydurmak yerine
+  kural "kısaltılabilir, uzatılamaz". (b) Maske koşulsuz — kapsama bağlı bir maske, yazıldığı anda
+  olmayan maskedir. (c) `AuditLogPage`'e açtığım `Compliance` grubuna `compliance.baa_signed` de
+  konuldu (C4-d eklemeyi atlamıştı); yalnız birini listeleyen bir grup yanıltıcı olurdu — tek
+  string.
+- **Sonraki pencereye not:** `C4-f` (Settings→Security kartı) `GET /settings/compliance`'ı okur;
+  kısıtların ekranda gösterilmesi gerekiyorsa uç şu an **kısıtları döndürmüyor** (yalnız
+  `region`/`baa_available`/`hipaa_baa_signed_at`). `C4-g` için iki not: (i) C4-d'nin bulduğu
+  `openapi.yaml:513` health `region` enum'u hâlâ `[eu]` — düzeltilmedi (kapsam disiplini);
+  (ii) NFR-C8'in kullanıcıya görünen retention seçimi hiç yok, tavan bugün yalnız dağıtımın
+  yapılandırdığı pencereyi bağlıyor.
+
 ## tm 82.4 — C4-d · BAA durumu + kabul akışı (MOCK) + compliance.baa_signed — done — 2026-08-15 UTC
 
 - **Yapıldı:** `licenses.hipaa_baa_signed_at` + `GET /settings/compliance`

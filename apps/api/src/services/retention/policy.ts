@@ -32,6 +32,9 @@
  * cutoff at or after "now" — would select the entire table, so `cutoffFor`
  * refuses it: the retention job must never be one misconfiguration away from
  * deleting everything.
+ *
+ * A workspace under HIPAA scope (NFR-C4 · C4-e) does not get to choose freely:
+ * see `HIPAA_RETENTION_CEILING` and `capRetentionForHipaa` below.
  */
 import { type Env } from '../../config/env.js';
 
@@ -92,6 +95,75 @@ export function cutoffFor(days: number, now: Date): Date {
     throw new RangeError(`retention window must be a positive integer number of days, got ${days}`);
   }
   return new Date(now.getTime() - days * MS_PER_DAY);
+}
+
+/**
+ * The longest window a workspace under HIPAA scope may keep (NFR-C4 · C4-e).
+ *
+ * These are the shipped defaults, restated as maximums. That is the whole rule:
+ * **a covered workspace can shorten its windows and cannot lengthen them.** A
+ * separate, longer set of "HIPAA numbers" would have been an invention — the
+ * requirement is a ceiling, not a schedule — and picking one would have meant
+ * choosing a retention period for somebody's medical conversations out of thin
+ * air. NFR-C8's top configurable tier for conversations is 365 days, and its
+ * fourth option, *unlimited*, is what this removes: indefinite retention of PHI
+ * is the thing a BAA is signed to prevent, so it is not selectable here at any
+ * value (see `capRetentionForHipaa`).
+ *
+ * `auditDays` is deliberately absent. Every other window here is a *ceiling* on
+ * personal data; the audit log is the opposite — a record of who touched that
+ * data, which HIPAA §164.316(b)(2)(i) requires be *kept*, and which NFR-S12
+ * already floors at 30 days on every plan. Capping it would shorten the one
+ * trail an investigation reads, in the name of a rule that exists to make that
+ * investigation possible.
+ */
+export const HIPAA_RETENTION_CEILING: Omit<RetentionPolicy, 'auditDays'> = {
+  threadDays: 365,
+  visitDays: 90,
+  mailDays: 30,
+};
+
+/**
+ * The effective policy for a workspace inside HIPAA scope: each window is its
+ * own value or the ceiling, whichever is shorter.
+ *
+ * Applied per tenant by the sweep — scope is a property of a licence, not of the
+ * deployment, and two workspaces in the same US deployment can differ. Reducing
+ * a window is always safe here (the sweep only ever deletes *older* data), which
+ * is why capping is the right shape rather than refusing to run.
+ */
+export function capRetentionForHipaa(policy: RetentionPolicy): RetentionPolicy {
+  return {
+    threadDays: capWindow(policy.threadDays, HIPAA_RETENTION_CEILING.threadDays, 'threadDays'),
+    visitDays: capWindow(policy.visitDays, HIPAA_RETENTION_CEILING.visitDays, 'visitDays'),
+    mailDays: capWindow(policy.mailDays, HIPAA_RETENTION_CEILING.mailDays, 'mailDays'),
+    // Untouched — a floor, not a ceiling. See HIPAA_RETENTION_CEILING.
+    auditDays: policy.auditDays,
+  };
+}
+
+/**
+ * One window against one ceiling.
+ *
+ * The guard is what makes "unlimited is not available" true rather than
+ * aspirational. NFR-C8 offers *unlimited* alongside 30/60/365, and whatever
+ * shape a per-workspace setting eventually gives it — `null`, `Infinity`, an
+ * absent field — it arrives here as a value `Math.min` would happily return
+ * unchanged, quietly granting the covered workspace exactly the indefinite
+ * retention the agreement forbids. So a non-finite window is refused outright
+ * instead of clamped: the sweep stops and says why, rather than proceeding
+ * under a policy nobody chose. Today the environment schema only admits
+ * positive integers, so this cannot fire from configuration alone — it is the
+ * door standing ready for the setting, in the same spirit as the AI provider
+ * gate.
+ */
+function capWindow(days: number, ceiling: number, name: string): number {
+  if (!Number.isFinite(days)) {
+    throw new RangeError(
+      `retention window ${name} is unlimited, which a workspace under HIPAA scope cannot select (NFR-C4)`,
+    );
+  }
+  return Math.min(days, ceiling);
 }
 
 /** All four cutoffs from a single reference instant, so a run is consistent. */

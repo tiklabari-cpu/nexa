@@ -93,6 +93,14 @@ const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }
       'settings.ip_allowlist_removed',
     ],
   },
+  {
+    // Its own family rather than folded into Settings: these two record what a
+    // workspace *committed to* and what that commitment refused, which is what
+    // an auditor asks for by name (NFR-C4). Settings entries record a
+    // configuration somebody can change back.
+    label: 'Compliance',
+    actions: ['compliance.baa_signed', 'compliance.ai_region_blocked'],
+  },
   { label: 'Sales tracking', actions: ['sale.tracked'] },
   { label: 'Billing', actions: ['billing.subscription_updated', 'billing.payment_method_updated'] },
   { label: 'Webhooks', actions: ['webhook.created', 'webhook.deleted'] },

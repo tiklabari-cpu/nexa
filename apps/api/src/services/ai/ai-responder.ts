@@ -41,6 +41,23 @@ export class AiResponder {
   ): Promise<SkillRunResult | null> {
     const tenant = request.tenant();
 
+    // Residency, before the message reaches the engine (NFR-C4 · C4-e). This is
+    // the one AI surface a *customer* triggers, and the content is the message
+    // they just typed, so it is the surface the constraint exists for. The check
+    // cannot be declared on the route — the route is "send a message", which
+    // must keep working — so it is asked for here, and a refusal leaves the
+    // conversation exactly as an unconfigured AI would: stored, untouched, and
+    // waiting for a human.
+    try {
+      await request.requireAiInference();
+    } catch (error) {
+      request.log.warn(
+        { err: error, chat_id: chatId },
+        'ai inference refused for this workspace; leaving the message for a human',
+      );
+      return null;
+    }
+
     try {
       const result = await request.withTenant((tx) =>
         this.#engine.run(tx, tenant, { message, chatId }),

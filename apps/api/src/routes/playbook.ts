@@ -401,36 +401,47 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
 
   // --- Authoring -------------------------------------------------------------
 
-  app.post('/skills/compile', { config: { scopes: WRITE } }, async (request, reply) => {
-    const body = parse(compileBody, request.body);
-    const { steps, unrecognised } = compileInstruction(body.instruction);
-    return reply.send({ steps, unrecognised });
-  });
+  // Both authoring endpoints declare `aiInference` (NFR-C4 · C4-e): compiling
+  // turns a natural-language instruction into steps, and a preview runs the
+  // real engine over a message the author supplies.
+  app.post(
+    '/skills/compile',
+    { config: { scopes: WRITE, aiInference: true } },
+    async (request, reply) => {
+      const body = parse(compileBody, request.body);
+      const { steps, unrecognised } = compileInstruction(body.instruction);
+      return reply.send({ steps, unrecognised });
+    },
+  );
 
-  app.post('/skills/preview', { config: { scopes: WRITE } }, async (request, reply) => {
-    const body = parse(previewBody, request.body);
-    const tenant = request.tenant();
+  app.post(
+    '/skills/preview',
+    { config: { scopes: WRITE, aiInference: true } },
+    async (request, reply) => {
+      const body = parse(previewBody, request.body);
+      const tenant = request.tenant();
 
-    // The real engine, no writes. A preview running different logic would be
-    // worse than no preview.
-    const result = await request.withTenant((tx) =>
-      engine.preview(tx, tenant, {
-        steps: body.steps,
-        message: body.message,
-        aiAgentId: body.ai_agent_id ?? null,
-      }),
-    );
+      // The real engine, no writes. A preview running different logic would be
+      // worse than no preview.
+      const result = await request.withTenant((tx) =>
+        engine.preview(tx, tenant, {
+          steps: body.steps,
+          message: body.message,
+          aiAgentId: body.ai_agent_id ?? null,
+        }),
+      );
 
-    return reply.send({
-      outcome: result.outcome,
-      reply: result.reply,
-      tags: result.tags,
-      transfer_to: result.transferTo,
-      summary: result.summary,
-      log: result.log,
-      errors: result.errors,
-    });
-  });
+      return reply.send({
+        outcome: result.outcome,
+        reply: result.reply,
+        tags: result.tags,
+        transfer_to: result.transferTo,
+        summary: result.summary,
+        log: result.log,
+        errors: result.errors,
+      });
+    },
+  );
 
   app.get<{ Params: { skillId: string } }>(
     '/skills/:skillId/runs',
@@ -498,62 +509,67 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
     });
   });
 
-  app.post('/knowledge-sources', { config: { scopes: WRITE } }, async (request, reply) => {
-    const body = parse(createSourceBody, request.body);
-    const tenant = request.tenant();
-    const principal = request.requirePrincipal();
+  // Indexing embeds the source text — a model call over workspace content.
+  app.post(
+    '/knowledge-sources',
+    { config: { scopes: WRITE, aiInference: true } },
+    async (request, reply) => {
+      const body = parse(createSourceBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
 
-    // A website is crawled *before* the transaction: the SSRF guard rejects a
-    // private/internal target with a 400 (`source_url` never reaches a fetcher),
-    // and the fetch+parse — even mocked — has no business holding a DB row open.
-    let content = body.content ?? '';
-    let sourceUrl: string | null = null;
-    if (body.type === 'website') {
-      const url = assertPublicHttpUrl(body.source_url ?? '');
-      const page = await crawl(url);
-      content = page.text;
-      sourceUrl = url.toString();
-    }
+      // A website is crawled *before* the transaction: the SSRF guard rejects a
+      // private/internal target with a 400 (`source_url` never reaches a fetcher),
+      // and the fetch+parse — even mocked — has no business holding a DB row open.
+      let content = body.content ?? '';
+      let sourceUrl: string | null = null;
+      if (body.type === 'website') {
+        const url = assertPublicHttpUrl(body.source_url ?? '');
+        const page = await crawl(url);
+        content = page.text;
+        sourceUrl = url.toString();
+      }
 
-    const created = await request.withTenant(async (tx) => {
-      const agent = await tx.aiAgent.findFirst({
-        where: { id: body.ai_agent_id },
-        select: { id: true },
+      const created = await request.withTenant(async (tx) => {
+        const agent = await tx.aiAgent.findFirst({
+          where: { id: body.ai_agent_id },
+          select: { id: true },
+        });
+        if (!agent) throw ApiError.validation('That AI agent does not exist.');
+
+        const source = await tx.knowledgeSource.create({
+          data: {
+            aiAgentId: body.ai_agent_id,
+            licenseId: tenant.licenseId,
+            type: body.type,
+            name: body.name,
+            content,
+            sourceUrl,
+            status: 'indexing',
+            addedBy: principal.kind === 'agent' ? principal.accountId : null,
+            updatedAt: new Date(),
+          },
+        });
+
+        // Indexed in the same transaction: a source that exists but is not
+        // searchable looks ready and answers nothing.
+        const chunks = await knowledge.index(tx, tenant, source.id, content);
+
+        return { source, chunks };
       });
-      if (!agent) throw ApiError.validation('That AI agent does not exist.');
 
-      const source = await tx.knowledgeSource.create({
-        data: {
-          aiAgentId: body.ai_agent_id,
-          licenseId: tenant.licenseId,
-          type: body.type,
-          name: body.name,
-          content,
-          sourceUrl,
-          status: 'indexing',
-          addedBy: principal.kind === 'agent' ? principal.accountId : null,
-          updatedAt: new Date(),
-        },
+      return reply.status(201).send({
+        id: created.source.id,
+        ai_agent_id: created.source.aiAgentId,
+        name: created.source.name,
+        type: created.source.type,
+        status: created.chunks > 0 ? 'ready' : 'empty',
+        source_url: created.source.sourceUrl,
+        chunk_count: created.chunks,
+        updated_at: created.source.updatedAt.toISOString(),
       });
-
-      // Indexed in the same transaction: a source that exists but is not
-      // searchable looks ready and answers nothing.
-      const chunks = await knowledge.index(tx, tenant, source.id, content);
-
-      return { source, chunks };
-    });
-
-    return reply.status(201).send({
-      id: created.source.id,
-      ai_agent_id: created.source.aiAgentId,
-      name: created.source.name,
-      type: created.source.type,
-      status: created.chunks > 0 ? 'ready' : 'empty',
-      source_url: created.source.sourceUrl,
-      chunk_count: created.chunks,
-      updated_at: created.source.updatedAt.toISOString(),
-    });
-  });
+    },
+  );
 
   /**
    * Bulk import — the multi-row counterpart of the endpoint above.
@@ -584,7 +600,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
    */
   app.post(
     '/knowledge-sources/bulk',
-    { config: { scopes: WRITE }, bodyLimit: BULK_BODY_LIMIT },
+    { config: { scopes: WRITE, aiInference: true }, bodyLimit: BULK_BODY_LIMIT },
     async (request, reply) => {
       const body = parse(bulkImportBody, request.body);
       const tenant = request.tenant();

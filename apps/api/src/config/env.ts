@@ -111,6 +111,14 @@ const envSchema = z.object({
   API_CALL_OVERAGE_CENTS: z.coerce.number().int().nonnegative().default(2_950),
 
   LLM_PROVIDER: z.enum(['mock']).default('mock'),
+  /**
+   * Where `LLM_PROVIDER` runs the inference (NFR-C4 · C4-e). Unset means "the
+   * same region as this process", which is the truth for the in-process stub and
+   * the only honest default: a deployment pointing at a model service somewhere
+   * else has to say so, because a workspace under a signed BAA may not have its
+   * content inferred outside its own region. See services/ai/inference.ts.
+   */
+  LLM_PROVIDER_REGION: z.enum(REGIONS).optional(),
   MAIL_PROVIDER: z.enum(['mock']).default('mock'),
   STORAGE_PROVIDER: z.enum(['local']).default('local'),
   /** Where the `local` provider keeps uploads. Inside `.data/`, which is ignored. */

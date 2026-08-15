@@ -19,6 +19,7 @@ import {
 } from '@opentelemetry/semantic-conventions';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
+import { requestPath } from '../lib/log-redact.js';
 import type { Telemetry } from '../telemetry/telemetry.js';
 
 declare module 'fastify' {
@@ -54,7 +55,13 @@ async function telemetryPlugin(
       attributes: {
         [ATTR_HTTP_REQUEST_METHOD]: request.method,
         [ATTR_HTTP_ROUTE]: route,
-        [ATTR_URL_PATH]: request.url,
+        // The path only — the query string is dropped, not masked (NFR-C4 ·
+        // C4-e). It used to be `request.url`, which carries the query, and a
+        // span is the one artifact here that leaves the process for a collector
+        // somebody else runs; a customer search for an address would have been
+        // exported verbatim. Also what OpenTelemetry means by `url.path`, whose
+        // query has a separate attribute this deliberately does not set.
+        [ATTR_URL_PATH]: requestPath(request.url),
         // The bridge to logs and the X-Request-Id header (server.ts genReqId).
         request_id: request.id,
       },

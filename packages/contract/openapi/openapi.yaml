@@ -34,6 +34,19 @@ info:
     gateway enforces the identical rule on `login` and answers with the same
     `misdirected_request` type and `details.region`.
 
+    **HIPAA scope** (NFR-C4). A workspace that has accepted the Business
+    Associate Agreement takes on constraints rather than gaining permissions,
+    and one of them is visible through this API: any operation that runs model
+    inference over workspace content — the Copilot assists and BI question, the
+    command palette query, skill compile/preview, and indexing a knowledge
+    source — returns `403 not_allowed` when the deployment's model provider sits
+    outside the workspace's region. `error.details` names both regions. This is
+    a property of the deployment, not of the request, so it is not listed per
+    operation; a workspace with no signed agreement is unaffected, and the
+    in-chat AI agent simply does not answer, leaving the conversation for a
+    human. Retention windows are capped for such a workspace as well, which no
+    endpoint exposes yet.
+
 servers:
   - url: http://localhost:4000/api/v1
     description: Local development

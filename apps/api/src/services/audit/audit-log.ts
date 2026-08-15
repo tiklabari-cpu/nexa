@@ -67,6 +67,13 @@ export const AUDIT_ACTIONS = [
   // a second agreement and leaves no second line. Metadata carries the region
   // that made it permissible, which is the other half of the NFR-C4 condition.
   'compliance.baa_signed',
+  // An AI feature was refused because running it would have sent a covered
+  // workspace's content to a model outside its region (NFR-C4 · C4-e). The
+  // entry exists because the question an auditor asks is not "is the gate
+  // configured" but "did anything covered ever leave" — and a gate with no
+  // trail can only answer the first. It names the two regions and the provider;
+  // the content that was about to be sent is, necessarily, not in it.
+  'compliance.ai_region_blocked',
   // Team membership.
   //
   // Shared with SCIM provisioning (NFR-S11 · S11-f) rather than duplicated: a

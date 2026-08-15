@@ -3893,10 +3893,10 @@
             "description": "Audit kapsam boşluğu envanteri — 37 route taranır, çıktı ada bağlı sabit liste",
             "details": "C6-a1 — Audit kapsam boşluğu ENVANTERİ — 37 route taranır, çıktı ada bağlı sabit liste  [OPUS-XHIGH]\n\nPRD: C6 (PLAN §6.1.4 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nBU BÖLÜNME DENETİM BULGUSUYLA YAPILDI (PLAN §D99). İlk kırılımda tek bir `SONNET-XHIGH` alt-görev hem \"hangi mutasyon güvenlik-hassastır\" kararını hem de kodu istiyordu. Bu bir GÜVENLİK DENETİMİDİR: `apps/api/src/routes/` altında **37 route dosyası** var, mevcut sözlük **44 eylem** taşıyor ve her eylemin bir METADATA MİNİMİZASYON kararı var (`member.role_changed` yalnız from/to rolleri; `auth.ip_denied` adresi KASTEN saklamıyor). §5.1.1'in `SONNET-XHIGH` ölçütü \"~3-5 dosya + kopyalanacak desen\" der; burada 37 dosya taranıp muhakeme isteniyor.\n\nKAPSAM (KOD DEĞİŞİKLİĞİ YOK — çıktı bir listedir):\n- `apps/api/src/routes/*.ts` içindeki TÜM mutasyon uçları taranır ve mevcut `AUDIT_ACTIONS` (`apps/api/src/services/audit/audit-log.ts:33`) ile karşılaştırılır.\n- Çıktı: (a) EKLENECEK eylem adlarının sabit listesi, (b) her biri için yazılacak/yazılmayacak metadata alanları, (c) kapsam dışı bırakılan uçların gerekçesi.\n- Liste PLAN §D'ye kayıt olarak yazılır ve `C6-a2`'nin girdisi olur.\n\nDOSYALAR: `apps/api/src/routes/*.ts` (yalnız okuma) · `apps/api/src/services/audit/audit-log.ts:33` · `PLAN.md` §D\n\nREFERANS DESEN: tm 92 `08.9.7-c/-d/-e` — hangi uçların audit'e bağlandığının önceki turu; onların KAPSAM DIŞI bıraktıkları bu envanterin başlangıç noktasıdır.\n\nKAPSAM DIŞI: kod değişikliği (C6-a2), export (C6-b/-c/-d).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build — hepsi exit 0 (kod değişmediği için regresyonsuz yeşil kalmalı); envanter §D'ye yazılır; HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build (kod değişmediği için tümü REGRESYONSUZ yeşil). Kabul ölçütü kod değil ÇIKTI: PLAN §D'ye eklenen envanter listesi her satırda \"route:satır → eylem adı → yazılacak metadata alanları\" taşır ve kapsam dışı bırakılan her uç gerekçelidir.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "83",
-            "updatedAt": "2026-08-15T03:26:11.155Z"
+            "updatedAt": "2026-08-15T03:47:57.306Z"
           },
           {
             "id": 2,
@@ -3994,7 +3994,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-15T03:26:11.155Z"
+        "updatedAt": "2026-08-15T03:47:57.306Z"
       },
       {
         "id": "84",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T03:26:11.156Z",
+      "lastModified": "2026-08-15T03:47:57.307Z",
       "taskCount": 124,
       "completedCount": 120,
       "tags": [

@@ -25,6 +25,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { isAgent } from '../services/auth/principal.js';
 import {
   ScheduledReportService,
@@ -123,7 +124,23 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
         ...(isAgent(principal) ? { createdByAgentId: principal.accountId } : {}),
       };
 
-      const created = await request.withTenant((tx) => schedules.create(tx, tenant, input));
+      const created = await request.withTenant(async (tx) => {
+        const result = await schedules.create(tx, tenant, input);
+        // Recipient addresses stay out — they are the one reason this surface
+        // is gated on `reports_manage`, and copying them into the append-only
+        // log would defeat that gate for anyone who can read the trail.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'scheduled_export.created',
+          target: `scheduled_export:${result.id}`,
+          metadata: {
+            group: result.group,
+            frequency: result.frequency,
+            format: result.format,
+            recipient_count: result.recipients.length,
+          },
+        });
+        return result;
+      });
       return reply.status(201).send(created);
     },
   );
@@ -157,7 +174,18 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
         ...(body.enabled === undefined ? {} : { enabled: body.enabled }),
       };
 
-      const updated = await request.withTenant((tx) => schedules.update(tx, tenant, id, patch));
+      const updated = await request.withTenant(async (tx) => {
+        const result = await schedules.update(tx, tenant, id, patch);
+        // Field names, not values — the trail shows what was touched (and the
+        // current recipient count) without copying addresses or report
+        // content into the append-only log.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'scheduled_export.updated',
+          target: `scheduled_export:${id}`,
+          metadata: { fields: Object.keys(body), recipient_count: result.recipients.length },
+        });
+        return result;
+      });
       return reply.send(updated);
     },
   );
@@ -192,7 +220,16 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
     async (request, reply) => {
       const id = parse(scheduledExportIdSchema, request.params.scheduledExportId);
       const tenant = request.tenant();
-      await request.withTenant((tx) => schedules.remove(tx, tenant, id));
+      await request.withTenant(async (tx) => {
+        // Throws not-found on a zero-row delete, so reaching the line below
+        // already proves count > 0.
+        await schedules.remove(tx, tenant, id);
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'data.deleted',
+          target: `scheduled_export:${id}`,
+          metadata: { kind: 'scheduled_export' },
+        });
+      });
       return reply.status(204).send();
     },
   );

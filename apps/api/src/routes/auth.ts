@@ -398,9 +398,25 @@ export default async function authRoutes(
     // advisory, and a wrong hint must not leave a live token behind.
     const revokedAccess = await app.tokens.revokeByToken(body.token);
     const revokedRefresh = await oauth.revokeRefreshToken(body.token);
+    const revoked = revokedAccess ?? revokedRefresh;
 
-    // Always 200: reporting whether the token existed would make this an oracle.
-    return reply.send({ revoked: revokedAccess || revokedRefresh });
+    // Only a token that actually matched something is worth an entry — the
+    // response is 200 either way (RFC 7009), so the trail must not become an
+    // oracle for which tokens exist.
+    if (revoked) {
+      await audit(
+        request,
+        { licenseId: revoked.licenseId, organizationId: revoked.organizationId },
+        { actorId: null, actorType: 'system' },
+        {
+          action: 'auth.token_revoked',
+          target: `token:${revoked.id}`,
+          metadata: { kind: revokedAccess ? 'access' : 'refresh' },
+        },
+      );
+    }
+
+    return reply.send({ revoked: revoked !== null });
   });
 
   // --- GET /auth/me ----------------------------------------------------------

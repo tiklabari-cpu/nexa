@@ -23,7 +23,11 @@ import {
   verifyPassword,
 } from '../../lib/crypto.js';
 import { withTenant } from '../../lib/tenant.js';
+import { writeAuditEntry } from '../audit/audit-log.js';
 import { TokenService } from './token-service.js';
+
+/** The only failure reasons C6-a2 records — see `#auditTokenFailure`. */
+type TokenFailureReason = 'code_replayed' | 'code_expired' | 'pkce_mismatch' | 'refresh_revoked';
 
 export interface OauthConfig {
   accessTokenTtl: number;
@@ -244,10 +248,24 @@ export class OauthService {
         record.organization_id,
         record.account_id,
       );
+      await this.#auditTokenFailure(
+        record.license_id,
+        record.organization_id,
+        'authorization_code',
+        'code_replayed',
+        client.id,
+      );
       throw oauthError('invalid_grant', 'Authorization code has already been used.');
     }
 
     if (record.expires_at.getTime() <= Date.now()) {
+      await this.#auditTokenFailure(
+        record.license_id,
+        record.organization_id,
+        'authorization_code',
+        'code_expired',
+        client.id,
+      );
       throw oauthError('invalid_grant', 'Authorization code has expired.');
     }
     // Guards against a code minted for one client being redeemed by another.
@@ -258,6 +276,13 @@ export class OauthService {
       throw oauthError('invalid_grant', 'redirect_uri does not match the authorization request.');
     }
     if (!verifyCodeChallenge(input.codeVerifier, record.code_challenge)) {
+      await this.#auditTokenFailure(
+        record.license_id,
+        record.organization_id,
+        'authorization_code',
+        'pkce_mismatch',
+        client.id,
+      );
       throw oauthError('invalid_grant', 'code_verifier does not match the code_challenge.');
     }
 
@@ -302,6 +327,13 @@ export class OauthService {
       // signature of a stolen refresh token. Refusing this one request is not
       // enough, because the thief may hold newer ones: kill the whole family.
       await this.db.$queryRaw`SELECT auth_revoke_refresh_family(${record.family_id}::uuid)`;
+      await this.#auditTokenFailure(
+        record.license_id,
+        record.organization_id,
+        'refresh_token',
+        'refresh_revoked',
+        client.id,
+      );
       throw oauthError(
         'invalid_grant',
         'Refresh token has already been used; the token family has been revoked.',
@@ -325,14 +357,25 @@ export class OauthService {
     });
   }
 
-  async revokeRefreshToken(refreshToken: string): Promise<boolean> {
-    const rows = await this.db.$queryRaw<Array<{ family_id: string }>>`
-      SELECT family_id FROM auth_resolve_refresh_token(${hashToken(refreshToken)})
+  /**
+   * Resolve and revoke by presented refresh token, returning what was revoked
+   * — the tenant and token id `/auth/revoke` needs to record
+   * `auth.token_revoked` (C6-a2). `null` when nothing matches, matching
+   * `revokeByToken`'s contract on the access-token side.
+   */
+  async revokeRefreshToken(
+    refreshToken: string,
+  ): Promise<{ id: string; licenseId: bigint; organizationId: string } | null> {
+    const rows = await this.db.$queryRaw<
+      Array<{ id: string; family_id: string; license_id: bigint; organization_id: string }>
+    >`
+      SELECT id, family_id, license_id, organization_id
+        FROM auth_resolve_refresh_token(${hashToken(refreshToken)})
     `;
-    const family = rows[0]?.family_id;
-    if (!family) return false;
-    await this.db.$queryRaw`SELECT auth_revoke_refresh_family(${family}::uuid)`;
-    return true;
+    const record = rows[0];
+    if (!record) return null;
+    await this.db.$queryRaw`SELECT auth_revoke_refresh_family(${record.family_id}::uuid)`;
+    return { id: record.id, licenseId: record.license_id, organizationId: record.organization_id };
   }
 
   // --- Internals -----------------------------------------------------------
@@ -415,6 +458,38 @@ export class OauthService {
       license_id: input.licenseId.toString(),
       organization_id: input.organizationId,
     };
+  }
+
+  /**
+   * Best-effort audit write for the four `/auth/token` failures C6-a2 records
+   * (C1): each is reached only after the record that failed was read back from
+   * the database, so the tenant is trusted data, never the caller's own
+   * `client_id`/`code`/`refresh_token`. Swallows its own failure — like
+   * `recordLoginFailure` (`routes/auth.ts`) — so a trail write can never mask
+   * the real `oauthError` the caller is about to see.
+   */
+  async #auditTokenFailure(
+    licenseId: bigint,
+    organizationId: string,
+    grantType: 'authorization_code' | 'refresh_token',
+    reason: TokenFailureReason,
+    clientId: string,
+  ): Promise<void> {
+    try {
+      await withTenant(this.db, { licenseId, organizationId }, (tx) =>
+        writeAuditEntry(
+          tx,
+          { licenseId, actorId: null, actorType: 'system' },
+          {
+            action: 'auth.token_exchange_failed',
+            target: `client:${clientId}`,
+            metadata: { grant_type: grantType, reason },
+          },
+        ),
+      );
+    } catch {
+      // Best-effort: the caller's `oauthError` is the response that matters.
+    }
   }
 
   async #revokeTokensForAccount(

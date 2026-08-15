@@ -281,16 +281,30 @@ export class TokenService {
     return result.count > 0;
   }
 
-  async revokeByToken(token: string): Promise<boolean> {
+  /**
+   * Resolve and revoke by presented token, returning what was revoked — the
+   * tenant and token id `/auth/revoke` needs to record `auth.token_revoked`
+   * (C6-a2). `null` covers both "no such token" and "already revoked", which
+   * RFC 7009 requires this endpoint to answer identically either way.
+   */
+  async revokeByToken(
+    token: string,
+  ): Promise<{ id: string; licenseId: bigint; organizationId: string } | null> {
     const resolution = await this.resolve(token);
-    if (!resolution.ok) return false;
+    if (!resolution.ok) return null;
     const { principal } = resolution;
-    if (principal.kind === 'customer') return false;
-    return this.revoke({
+    if (principal.kind === 'customer') return null;
+    const revoked = await this.revoke({
       licenseId: principal.licenseId,
       organizationId: principal.organizationId,
       tokenId: principal.tokenId,
     });
+    if (!revoked) return null;
+    return {
+      id: principal.tokenId,
+      licenseId: principal.licenseId,
+      organizationId: principal.organizationId,
+    };
   }
 
   async list(input: {

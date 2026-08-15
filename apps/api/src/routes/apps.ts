@@ -95,9 +95,20 @@ export default async function appRoutes(
     async (request, reply) => {
       const body = parse(callbackBody, request.body);
       const tenant = request.tenant();
-      const item = await request.withTenant((tx) =>
-        apps.oauthCallback(tx, tenant, request.params.appId, body),
-      );
+      const appId = request.params.appId;
+      const item = await request.withTenant(async (tx) => {
+        const result = await apps.oauthCallback(tx, tenant, appId, body);
+        // The OAuth code and the access/refresh token it was exchanged for
+        // never reach here — `apps.oauthCallback` mints only a deterministic
+        // stub account label, never a real credential. Disconnecting is
+        // already recorded as `data.deleted` (`DELETE /settings/apps/:appId`).
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'app.connected',
+          target: `app_installation:${appId}`,
+          metadata: { app_id: appId, kind: 'app_installation' },
+        });
+        return result;
+      });
       return reply.send(item);
     },
   );

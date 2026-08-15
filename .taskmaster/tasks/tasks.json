@@ -3904,12 +3904,12 @@
             "description": "Envanterdeki eylemlerin AUDIT_ACTIONS'a eklenmesi + çağrıların bağlanması",
             "details": "C6-a2 — Envanterdeki eylemlerin `AUDIT_ACTIONS`'a eklenmesi + çağrıların bağlanması  [SONNET-XHIGH]\n\nPRD: C6 (PLAN §6.1.4 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: `C6-a1` bir envanter üretti (PLAN §D'de, ada bağlı sabit liste). Bu alt-görev o listeyi UYGULAR — karar vermez, kod yazar. Liste dışına ÇIKMA; yeni eylem icat etme.\n\nKAPSAM: `C6-a1`'in listesindeki her eylem `AUDIT_ACTIONS`'a eklenir ve ilgili route handler'ında `writeAuditEntry` çağrısı bağlanır. Metadata alanları listede yazılı olanlarla SINIRLIDIR.\n\nDOSYALAR: `apps/api/src/services/audit/audit-log.ts:33` (`AUDIT_ACTIONS` birliği) · `C6-a1` listesinde adı geçen route dosyaları\n\nREFERANS DESEN (birebir): tm 92 `08.9.7-c` (webhook.created/deleted) ve `08.9.7-d`/`-e` (data.deleted) — eylem ekleme + çağrı bağlama kalıbı. `AUDIT_ACTIONS` KAPALI bir birliktir: eylem eklemek bir derleme hatasını çözmek demektir, serbest string değil.\n\nKURAL: PII minimizasyonu korunur (`sanitizeAuditMetadata`); parola/token/sır ASLA yazılmaz. Şüphede kalırsan alanı YAZMA — `C6-a1` listesi neyin yazılacağını zaten söylüyor.\n\nKAPSAM DIŞI: yeni eylem seçimi (C6-a1'in işi), export (C6-b/-c/-d).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir; HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (C6-a1 listesindeki HER eylem için: mutasyon → audit satırı yazılır; append-only korunur — UPDATE/DELETE reddi; CROSS-TENANT; audit metadata'sında sır YOK) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "83.1"
             ],
             "parentId": "83",
-            "updatedAt": "2026-08-11T21:06:36.612Z"
+            "updatedAt": "2026-08-15T04:53:07.703Z"
           },
           {
             "id": 3,
@@ -3994,7 +3994,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-15T03:47:57.306Z"
+        "updatedAt": "2026-08-15T04:53:07.703Z"
       },
       {
         "id": "84",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T03:47:57.307Z",
+      "lastModified": "2026-08-15T04:53:07.704Z",
       "taskCount": 124,
       "completedCount": 120,
       "tags": [

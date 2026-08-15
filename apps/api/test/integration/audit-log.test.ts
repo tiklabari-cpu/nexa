@@ -18,7 +18,7 @@ import { PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
-import { deriveCodeChallenge, generateToken } from '../../src/lib/crypto.js';
+import { deriveCodeChallenge, generateToken, hashToken } from '../../src/lib/crypto.js';
 import { withTenant } from '../../src/lib/tenant.js';
 import { writeAuditEntry } from '../../src/services/audit/audit-log.js';
 import {
@@ -97,6 +97,9 @@ describe('audit log writer (NFR-S12)', () => {
         'agents-bot--all:rw',
         'agents--all:rw',
         'chats--all:rw',
+        'channels--all:rw',
+        'reports_manage',
+        'customers.ban:rw',
       ],
     });
   });
@@ -618,6 +621,417 @@ describe('audit log writer (NFR-S12)', () => {
   });
 
   // =========================================================================
+  // C6-a2: the 11 actions + 4 data.deleted call sites C6-a1's inventory named
+  // =========================================================================
+
+  describe('C6-a2: newly wired actions', () => {
+    /** A fresh, valid PKCE pair. */
+    function pkce(): { verifier: string; challenge: string } {
+      const verifier = generateToken(48).slice(0, 64);
+      return { verifier, challenge: deriveCodeChallenge(verifier) };
+    }
+
+    /** Drive the full authorize → token exchange, returning the grant. */
+    async function signIn(tenant = fx.a) {
+      const { verifier, challenge } = pkce();
+      const authorized = await server.post('/auth/authorize', {
+        client_id: tenant.clientId,
+        redirect_uri: tenant.redirectUri,
+        code_challenge: challenge,
+        email: tenant.ownerEmail,
+        password: TEST_PASSWORD,
+        license_id: tenant.licenseId.toString(),
+      });
+      expect(authorized.statusCode).toBe(200);
+      const { code } = authorized.json() as { code: string };
+
+      const tokenResponse = await server.post('/auth/token', {
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: verifier,
+        client_id: tenant.clientId,
+        redirect_uri: tenant.redirectUri,
+      });
+      expect(tokenResponse.statusCode).toBe(200);
+      return tokenResponse.json() as { access_token: string; refresh_token: string };
+    }
+
+    /** Only an authorization code, for tests that need to control its use. */
+    async function getCode(tenant = fx.a) {
+      const { verifier, challenge } = pkce();
+      const authorized = await server.post('/auth/authorize', {
+        client_id: tenant.clientId,
+        redirect_uri: tenant.redirectUri,
+        code_challenge: challenge,
+        email: tenant.ownerEmail,
+        password: TEST_PASSWORD,
+        license_id: tenant.licenseId.toString(),
+      });
+      expect(authorized.statusCode).toBe(200);
+      const { code } = authorized.json() as { code: string };
+      return { code, verifier };
+    }
+
+    it('records a new workspace on signup, with the region and plan but no PII', async () => {
+      const res = await server.post('/auth/signup', {
+        email: 'c6a2-signup@example.test',
+        password: 'a-quite-long-passphrase',
+        name: 'Founder',
+        organization_name: 'C6-a2 Signup Co',
+        region: 'us',
+      });
+      expect(res.statusCode, res.payload).toBe(201);
+      const body = res.json() as {
+        account: { id: string };
+        memberships: Array<{ license_id: string; organization_id: string }>;
+      };
+      const membership = body.memberships[0]!;
+      const licenseId = BigInt(membership.license_id);
+
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId, action: 'workspace.created' },
+      });
+      expect(entries).toHaveLength(1);
+      const entry = entries[0]!;
+      expect(entry.actorId).toBe(body.account.id);
+      expect(entry.actorType).toBe('agent');
+      expect(entry.target).toBe(`organization:${membership.organization_id}`);
+      expect(entry.metadata).toMatchObject({ region: 'us', plan: 'growth' });
+      const blob = JSON.stringify(entry.metadata);
+      expect(blob).not.toContain('c6a2-signup@example.test');
+      expect(blob).not.toContain('Founder');
+      expect(blob).not.toContain('C6-a2 Signup Co');
+    });
+
+    it('records a teammate joining via invitation, with the role but not their email', async () => {
+      const invited = await server.post(
+        '/invitations',
+        { emails: ['c6a2-join@example.test'], role: 'agent' },
+        auth(adminToken),
+      );
+      expect(invited.statusCode).toBe(201);
+      const { items } = invited.json() as { items: Array<{ accept_url: string }> };
+      const token = new URL(items[0]!.accept_url).searchParams.get('token')!;
+
+      const before = await count('member.joined');
+      const accepted = await server.post('/auth/invitations/accept', {
+        token,
+        name: 'New Joiner',
+        password: 'a-quite-long-passphrase',
+      });
+      expect(accepted.statusCode, accepted.payload).toBe(200);
+      const { account } = accepted.json() as { account: { id: string } };
+
+      expect(await count('member.joined')).toBe(before + 1);
+      const entry = await latest('member.joined');
+      expect(entry?.actorId).toBe(account.id);
+      expect(entry?.actorType).toBe('agent');
+      expect(entry?.target).toBe(`account:${account.id}`);
+      expect(entry?.metadata).toMatchObject({ role: 'agent', via: 'invitation' });
+      expect((entry?.metadata as { invitation_id: string }).invitation_id).toBeTruthy();
+      expect(JSON.stringify(entry?.metadata)).not.toContain('c6a2-join@example.test');
+    });
+
+    it('records a bearer token being revoked — the access half, then the refresh half', async () => {
+      const grantA = await signIn();
+      const beforeAccess = await count('auth.token_revoked');
+      const revokeAccess = await server.post('/auth/revoke', { token: grantA.access_token });
+      expect(revokeAccess.statusCode).toBe(200);
+      expect(revokeAccess.json()).toEqual({ revoked: true });
+      expect(await count('auth.token_revoked')).toBe(beforeAccess + 1);
+      const accessEntry = await latest('auth.token_revoked');
+      expect(accessEntry?.actorType).toBe('system');
+      expect(accessEntry?.metadata).toMatchObject({ kind: 'access' });
+      expect(accessEntry?.target).not.toContain(grantA.access_token);
+
+      const grantB = await signIn();
+      const beforeRefresh = await count('auth.token_revoked');
+      const revokeRefresh = await server.post('/auth/revoke', { token: grantB.refresh_token });
+      expect(revokeRefresh.statusCode).toBe(200);
+      expect(revokeRefresh.json()).toEqual({ revoked: true });
+      expect(await count('auth.token_revoked')).toBe(beforeRefresh + 1);
+      const refreshEntry = await latest('auth.token_revoked');
+      expect(refreshEntry?.metadata).toMatchObject({ kind: 'refresh' });
+
+      // Never the token itself, on either entry.
+      const blob = JSON.stringify([accessEntry?.metadata, refreshEntry?.metadata]);
+      expect(blob).not.toContain(grantA.access_token);
+      expect(blob).not.toContain(grantB.refresh_token);
+    });
+
+    it('writes nothing when the presented token matches no live credential', async () => {
+      const before = await count('auth.token_revoked');
+      const res = await server.post('/auth/revoke', { token: 'nx_no_such_token' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ revoked: false });
+      expect(await count('auth.token_revoked')).toBe(before);
+    });
+
+    it('records a replayed authorization code, resolved to the workspace that issued it', async () => {
+      const { code, verifier } = await getCode();
+      const body = {
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: verifier,
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+      };
+      expect((await server.post('/auth/token', body)).statusCode).toBe(200);
+
+      const before = await count('auth.token_exchange_failed');
+      const replay = await server.post('/auth/token', body);
+      expect(replay.statusCode).toBe(401);
+      expect(await count('auth.token_exchange_failed')).toBe(before + 1);
+      const entry = await latest('auth.token_exchange_failed');
+      expect(entry?.target).toBe(`client:${fx.a.clientId}`);
+      expect(entry?.metadata).toMatchObject({
+        grant_type: 'authorization_code',
+        reason: 'code_replayed',
+      });
+      expect(JSON.stringify(entry?.metadata)).not.toContain(code);
+    });
+
+    it('records an expired authorization code', async () => {
+      const { code, verifier } = await getCode();
+      await owner.oauthAuthorizationCode.updateMany({
+        where: { codeHash: hashToken(code) },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+
+      const before = await count('auth.token_exchange_failed');
+      const res = await server.post('/auth/token', {
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: verifier,
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+      });
+      expect(res.statusCode).toBe(401);
+      expect(await count('auth.token_exchange_failed')).toBe(before + 1);
+      expect((await latest('auth.token_exchange_failed'))?.metadata).toMatchObject({
+        grant_type: 'authorization_code',
+        reason: 'code_expired',
+      });
+    });
+
+    it('records a PKCE verifier mismatch', async () => {
+      const { code } = await getCode();
+      const before = await count('auth.token_exchange_failed');
+      const res = await server.post('/auth/token', {
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: pkce().verifier,
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+      });
+      expect(res.statusCode).toBe(401);
+      expect(await count('auth.token_exchange_failed')).toBe(before + 1);
+      expect((await latest('auth.token_exchange_failed'))?.metadata).toMatchObject({
+        grant_type: 'authorization_code',
+        reason: 'pkce_mismatch',
+      });
+    });
+
+    it('records a reused (rotated-away) refresh token — the stolen-token signature', async () => {
+      const grant = await signIn();
+      const rotated = await server.post('/auth/token', {
+        grant_type: 'refresh_token',
+        refresh_token: grant.refresh_token,
+        client_id: fx.a.clientId,
+      });
+      expect(rotated.statusCode).toBe(200);
+
+      const before = await count('auth.token_exchange_failed');
+      const reuse = await server.post('/auth/token', {
+        grant_type: 'refresh_token',
+        refresh_token: grant.refresh_token,
+        client_id: fx.a.clientId,
+      });
+      expect(reuse.statusCode).toBe(401);
+      expect(await count('auth.token_exchange_failed')).toBe(before + 1);
+      const entry = await latest('auth.token_exchange_failed');
+      expect(entry?.target).toBe(`client:${fx.a.clientId}`);
+      expect(entry?.metadata).toMatchObject({
+        grant_type: 'refresh_token',
+        reason: 'refresh_revoked',
+      });
+      expect(JSON.stringify(entry?.metadata)).not.toContain(grant.refresh_token);
+    });
+
+    it('records a marketplace app OAuth connection, never the code or account label', async () => {
+      const APP = 'zendesk';
+      const started = await server.post(`/settings/apps/${APP}/oauth/start`, {}, auth(adminToken));
+      expect(started.statusCode).toBe(200);
+      const { state } = started.json() as { state: string };
+
+      const before = await count('app.connected');
+      const res = await server.post(
+        `/settings/apps/${APP}/oauth/callback`,
+        { state, code: 'mock-auth-code' },
+        auth(adminToken),
+      );
+      expect(res.statusCode).toBe(200);
+      expect(await count('app.connected')).toBe(before + 1);
+      const entry = await latest('app.connected');
+      expect(entry?.target).toBe(`app_installation:${APP}`);
+      expect(entry?.metadata).toMatchObject({ app_id: APP, kind: 'app_installation' });
+      expect(JSON.stringify(entry?.metadata)).not.toContain('mock-auth-code');
+    });
+
+    it('records an inbound channel being connected, then disconnected', async () => {
+      const before = await count('channel.connected');
+      const res = await server.post(
+        '/channels/messenger/connect',
+        { code: 'AQD_mock', page_id: 'pg-c6a2', page_name: 'C6-a2 Page' },
+        auth(adminToken),
+      );
+      expect(res.statusCode, res.payload).toBe(200);
+      expect(await count('channel.connected')).toBe(before + 1);
+      const connectEntry = await latest('channel.connected');
+      expect(connectEntry?.target).toBe('channel:messenger');
+      expect(connectEntry?.metadata).toMatchObject({ type: 'messenger' });
+      expect((connectEntry?.metadata as { brand_id: string }).brand_id).toBeTruthy();
+      expect(JSON.stringify(connectEntry?.metadata)).not.toContain('pg-c6a2');
+
+      const beforeDisconnect = await count('channel.disconnected');
+      const off = await server.post('/channels/messenger/disconnect', undefined, auth(adminToken));
+      expect(off.statusCode).toBe(204);
+      expect(await count('channel.disconnected')).toBe(beforeDisconnect + 1);
+      expect((await latest('channel.disconnected'))?.target).toBe('channel:messenger');
+
+      // A repeat disconnect matches nothing (404) and must not write an entry.
+      const beforeMiss = await count('channel.disconnected');
+      const missed = await server.post(
+        '/channels/messenger/disconnect',
+        undefined,
+        auth(adminToken),
+      );
+      expect(missed.statusCode).toBe(404);
+      expect(await count('channel.disconnected')).toBe(beforeMiss);
+    });
+
+    it('records a scheduled export being created, then edited — never the recipient addresses', async () => {
+      const before = await count('scheduled_export.created');
+      const created = await server.post(
+        '/reports/scheduled-exports',
+        {
+          group: 'overview',
+          frequency: 'weekly',
+          recipients: [fx.a.ownerEmail],
+        },
+        auth(adminToken),
+      );
+      expect(created.statusCode, created.payload).toBe(201);
+      const { id } = created.json() as { id: string };
+
+      expect(await count('scheduled_export.created')).toBe(before + 1);
+      const createEntry = await latest('scheduled_export.created');
+      expect(createEntry?.target).toBe(`scheduled_export:${id}`);
+      expect(createEntry?.metadata).toMatchObject({
+        group: 'overview',
+        frequency: 'weekly',
+        format: 'csv',
+        recipient_count: 1,
+      });
+      expect(JSON.stringify(createEntry?.metadata)).not.toContain(fx.a.ownerEmail);
+
+      const before2 = await count('scheduled_export.updated');
+      const updated = await server.patch(
+        `/reports/scheduled-exports/${id}`,
+        { frequency: 'daily' },
+        auth(adminToken),
+      );
+      expect(updated.statusCode, updated.payload).toBe(200);
+      expect(await count('scheduled_export.updated')).toBe(before2 + 1);
+      const updateEntry = await latest('scheduled_export.updated');
+      expect(updateEntry?.target).toBe(`scheduled_export:${id}`);
+      expect(updateEntry?.metadata).toMatchObject({ fields: ['frequency'], recipient_count: 1 });
+    });
+
+    it("a cross-tenant scheduled-export edit or delete writes to no one's log", async () => {
+      const mine = (
+        await server.post(
+          '/reports/scheduled-exports',
+          { group: 'overview', frequency: 'weekly', recipients: [fx.a.ownerEmail] },
+          auth(adminToken),
+        )
+      ).json() as { id: string };
+
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_manage'],
+      });
+
+      for (const action of ['scheduled_export.updated', 'data.deleted']) {
+        const beforeA = await count(action, fx.a.licenseId);
+        const beforeB = await count(action, fx.b.licenseId);
+
+        const res =
+          action === 'data.deleted'
+            ? await server.del(`/reports/scheduled-exports/${mine.id}`, auth(tokenB))
+            : await server.patch(
+                `/reports/scheduled-exports/${mine.id}`,
+                { frequency: 'daily' },
+                auth(tokenB),
+              );
+        expect(res.statusCode, action).toBe(404);
+
+        expect(await count(action, fx.a.licenseId), action).toBe(beforeA);
+        expect(await count(action, fx.b.licenseId), action).toBe(beforeB);
+      }
+    });
+
+    it('records a customer being banned, then unbanned — only on the transition', async () => {
+      const beforeBan = await count('customer.banned');
+      const ban = await server.post(`/customers/${fx.a.customerId}/ban`, undefined, auth(adminToken));
+      expect(ban.statusCode).toBe(200);
+      expect(await count('customer.banned')).toBe(beforeBan + 1);
+      const banEntry = await latest('customer.banned');
+      expect(banEntry?.target).toBe(`customer:${fx.a.customerId}`);
+      expect(banEntry?.metadata).toEqual(
+        expect.objectContaining({ request_id: expect.any(String) }),
+      );
+
+      // Repeating the ban is a no-op: no second, misleading entry.
+      const repeatBan = await server.post(
+        `/customers/${fx.a.customerId}/ban`,
+        undefined,
+        auth(adminToken),
+      );
+      expect(repeatBan.statusCode).toBe(200);
+      expect(await count('customer.banned')).toBe(beforeBan + 1);
+
+      const beforeUnban = await count('customer.unbanned');
+      const unban = await server.del(`/customers/${fx.a.customerId}/ban`, auth(adminToken));
+      expect(unban.statusCode).toBe(200);
+      expect(await count('customer.unbanned')).toBe(beforeUnban + 1);
+      expect((await latest('customer.unbanned'))?.target).toBe(`customer:${fx.a.customerId}`);
+
+      const repeatUnban = await server.del(`/customers/${fx.a.customerId}/ban`, auth(adminToken));
+      expect(repeatUnban.statusCode).toBe(200);
+      expect(await count('customer.unbanned')).toBe(beforeUnban + 1);
+    });
+
+    it("a cross-tenant ban writes to no one's log", async () => {
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['customers.ban:rw'],
+      });
+
+      const beforeA = await count('customer.banned', fx.a.licenseId);
+      const beforeB = await count('customer.banned', fx.b.licenseId);
+      const res = await server.post(`/customers/${fx.a.customerId}/ban`, undefined, auth(tokenB));
+      expect(res.statusCode).toBe(404);
+      expect(await count('customer.banned', fx.a.licenseId)).toBe(beforeA);
+      expect(await count('customer.banned', fx.b.licenseId)).toBe(beforeB);
+    });
+  });
+
+  // =========================================================================
   // Targeted settings-family deletes (data.deleted, 08.9.7-d)
   // =========================================================================
 
@@ -895,6 +1309,127 @@ describe('audit log writer (NFR-S12)', () => {
       const miss = await server.del(`/settings/apps/${APP}`, auth(adminToken));
       expect(miss.statusCode).toBe(404);
       expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records a KB article being deleted (and not a no-op delete)', async () => {
+      const article = (
+        await server.post(
+          '/kb-articles',
+          { title: 'audit-e-kb', body: 'gone soon as well' },
+          auth(adminToken),
+        )
+      ).json() as { id: string };
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/kb-articles/${article.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`kb_article:${article.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'kb_article' });
+      expect(JSON.stringify(entry?.metadata)).not.toContain('gone soon as well');
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/kb-articles/${article.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records a KB category being deleted (and not a no-op delete)', async () => {
+      const category = (
+        await server.post('/kb-categories', { name: 'audit-e-category' }, auth(adminToken))
+      ).json() as { id: string };
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/kb-categories/${category.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`kb_category:${category.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'kb_category' });
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/kb-categories/${category.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records an expertise area being deleted (and not a no-op delete)', async () => {
+      const expertise = (
+        await server.post('/settings/expertise', { name: 'audit-e-expertise' }, auth(adminToken))
+      ).json() as { id: string };
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/settings/expertise/${expertise.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`expertise:${expertise.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'expertise' });
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/settings/expertise/${expertise.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it('records a scheduled export being deleted (and not a no-op delete)', async () => {
+      const created = (
+        await server.post(
+          '/reports/scheduled-exports',
+          { group: 'overview', frequency: 'monthly', recipients: [fx.a.ownerEmail] },
+          auth(adminToken),
+        )
+      ).json() as { id: string };
+
+      const before = await count('data.deleted');
+      const removed = await server.del(`/reports/scheduled-exports/${created.id}`, auth(adminToken));
+      expect(removed.statusCode).toBe(204);
+      expect(await count('data.deleted')).toBe(before + 1);
+      const entry = await latest('data.deleted');
+      expect(entry?.target).toBe(`scheduled_export:${created.id}`);
+      expect(entry?.metadata).toMatchObject({ kind: 'scheduled_export' });
+      expect(JSON.stringify(entry?.metadata)).not.toContain(fx.a.ownerEmail);
+
+      const beforeMiss = await count('data.deleted');
+      const miss = await server.del(`/reports/scheduled-exports/${created.id}`, auth(adminToken));
+      expect(miss.statusCode).toBe(404);
+      expect(await count('data.deleted')).toBe(beforeMiss);
+    });
+
+    it("a cross-tenant KB/expertise delete writes to no one's log", async () => {
+      const article = (
+        await server.post(
+          '/kb-articles',
+          { title: 'audit-e-kb-cross', body: 'tenant a only' },
+          auth(adminToken),
+        )
+      ).json() as { id: string };
+      const expertise = (
+        await server.post(
+          '/settings/expertise',
+          { name: 'audit-e-expertise-cross' },
+          auth(adminToken),
+        )
+      ).json() as { id: string };
+
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['agents-bot--all:rw', 'access_rules:rw'],
+      });
+
+      const beforeA = await count('data.deleted', fx.a.licenseId);
+      const beforeB = await count('data.deleted', fx.b.licenseId);
+
+      const resArticle = await server.del(`/kb-articles/${article.id}`, auth(tokenB));
+      expect(resArticle.statusCode).toBe(404);
+      const resExpertise = await server.del(`/settings/expertise/${expertise.id}`, auth(tokenB));
+      expect(resExpertise.statusCode).toBe(404);
+
+      expect(await count('data.deleted', fx.a.licenseId)).toBe(beforeA);
+      expect(await count('data.deleted', fx.b.licenseId)).toBe(beforeB);
     });
 
     it("a cross-tenant content delete writes to no one's log", async () => {

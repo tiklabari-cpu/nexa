@@ -13,6 +13,28 @@
 
 ## Task log (newest-first)
 
+## tm 83.2 — C6-a2 · Envanterdeki eylemlerin AUDIT_ACTIONS'a eklenmesi + çağrıların bağlanması — done — 2026-08-15 UTC
+
+- **Yapıldı:** `C6-a1`'in (§D104) sabit listesi birebir uygulandı — `AUDIT_ACTIONS`'a 11 yeni eylem
+  eklendi (`workspace.created` · `member.joined` · `auth.token_revoked` ·
+  `auth.token_exchange_failed` · `app.connected` · `channel.connected` · `channel.disconnected` ·
+  `scheduled_export.created` · `scheduled_export.updated` · `customer.banned` ·
+  `customer.unbanned`) ve 15 uçta çağrı bağlandı (4'ü mevcut `data.deleted`: kb-article/kb-category/
+  expertise/scheduled-export silme). Altı çapraz-kesit kısıt (C1–C6) koda geçti: kimliksiz yolda
+  tenant DB'den okunur, yalnız durum GEÇİŞİ yazılır, `count > 0` şartı, secret alanları baştan
+  dışarıda. `lifecycle-service.ts`'in `acceptInvitation`'ı artık `licenseId`'i de döndürüyor (var
+  olan `auth_accept_invitation`'ın `joined_license` çıktısından — yeni migration gerekmedi).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api 2878 + web 1132 ·
+  `pnpm -w test:integration` **2133/2133** (79 dosya, yeni `audit-log.test.ts` senaryoları dahil —
+  15 uç × mutasyon→satır + no-op-negatifi + cross-tenant negatifi + metadata'da sır yok) ·
+  `pnpm -w build` 7/7. `test:e2e` koşulmadı (testStrategy istemiyor, kapsam backend-only).
+- **Varsayımlar:** Bu pencere önceki (ölen) bir pencerenin WIP'iyle başladı — `git status` build'i
+  zaten tamamlanmış, commit edilmemiş halde buldu; bu pencere yalnız doğruladı + kapattı, yeniden
+  yazmadı.
+- **Sonraki pencereye:** `C6-b` (SIEM export kontratı, bağımlılık yok) sıradaki güvenli başlangıç.
+  R5'in supervision kalemi ile R3'ün `custom-fields` kalemi (§D104(c)) gerçek boşluk adayı ama
+  kendi görevini hak eder — `C6-a2`'ye sokulmadı.
+
 ## tm 83.1 — C6-a1 · Audit kapsam boşluğu envanteri (kod değişmedi) — done — 2026-08-15 UTC
 
 - **Yapıldı:** `PLAN.md` **§D104** — `apps/api/src/routes/`'un **39** modülünden mutasyon taşıyan

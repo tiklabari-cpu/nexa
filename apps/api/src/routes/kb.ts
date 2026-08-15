@@ -331,9 +331,17 @@ export default async function kbRoutes(app: FastifyInstance): Promise<void> {
     { config: { scopes: WRITE } },
     async (request, reply) => {
       const id = parse(uuid, request.params.articleId);
-      const { count } = await request.withTenant((tx) =>
-        tx.kbArticle.deleteMany({ where: { id } }),
-      );
+      const { count } = await request.withTenant(async (tx) => {
+        const result = await tx.kbArticle.deleteMany({ where: { id } });
+        if (result.count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'data.deleted',
+            target: `kb_article:${id}`,
+            metadata: { kind: 'kb_article' },
+          });
+        }
+        return result;
+      });
       if (count === 0) throw ApiError.notFound('Article not found.');
       return reply.status(204).send();
     },
@@ -411,9 +419,17 @@ export default async function kbRoutes(app: FastifyInstance): Promise<void> {
       const id = parse(uuid, request.params.categoryId);
       // Articles filed under it are kept, their link cleared (FK ON DELETE SET
       // NULL) — deleting a category must not delete its articles.
-      const { count } = await request.withTenant((tx) =>
-        tx.kbCategory.deleteMany({ where: { id } }),
-      );
+      const { count } = await request.withTenant(async (tx) => {
+        const result = await tx.kbCategory.deleteMany({ where: { id } });
+        if (result.count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'data.deleted',
+            target: `kb_category:${id}`,
+            metadata: { kind: 'kb_category' },
+          });
+        }
+        return result;
+      });
       if (count === 0) throw ApiError.notFound('Category not found.');
       return reply.status(204).send();
     },

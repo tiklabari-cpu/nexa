@@ -15,7 +15,7 @@ import { ApiError } from '../lib/api-error.js';
 import { withTenant } from '../lib/tenant.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { LifecycleService } from '../services/auth/lifecycle-service.js';
-import { REGIONS, type AgentRole } from '@nexa/types';
+import { DEFAULT_REGION, REGIONS, type AgentRole } from '@nexa/types';
 import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
 
@@ -78,6 +78,40 @@ export default async function accountLifecycleRoutes(
       organizationName: body.organization_name,
       region: body.region,
     });
+
+    // Best-effort, like the password-reset confirmation below: a completed
+    // signup must not be undone because the trail could not be written. A
+    // brand-new account has exactly one membership — its own workspace.
+    const membership = session.memberships[0];
+    if (membership) {
+      try {
+        const tenant = {
+          licenseId: BigInt(membership.license_id),
+          organizationId: membership.organization_id,
+        };
+        await withTenant(app.db, tenant, (tx) =>
+          writeAuditEntry(
+            tx,
+            request.auditContext({
+              licenseId: tenant.licenseId,
+              actorId: session.account.id,
+              actorType: 'agent',
+            }),
+            {
+              action: 'workspace.created',
+              target: `organization:${membership.organization_id}`,
+              // `auth_signup` always lands a new workspace on the `growth`
+              // plan (see the migration) — there is no other value yet to read
+              // back.
+              metadata: { region: body.region ?? DEFAULT_REGION, plan: 'growth' },
+            },
+          ),
+        );
+      } catch (err) {
+        request.log.warn({ err }, 'failed to record workspace creation in audit log');
+      }
+    }
+
     return reply.code(201).send(session);
   });
 
@@ -136,13 +170,49 @@ export default async function accountLifecycleRoutes(
 
   app.post('/auth/invitations/accept', { config: { public: true } }, async (request, reply) => {
     const body = parse(acceptBody, request.body);
-    return reply.send(
-      await lifecycle.acceptInvitation({
-        token: body.token,
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.password !== undefined ? { password: body.password } : {}),
-      }),
-    );
+    const { session, licenseId } = await lifecycle.acceptInvitation({
+      token: body.token,
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      ...(body.password !== undefined ? { password: body.password } : {}),
+    });
+
+    const membership = session.memberships.find((m) => m.license_id === licenseId.toString());
+    // Best-effort, like signup and the password-reset confirmation below: a
+    // completed join must not be undone because the trail could not be
+    // written.
+    if (membership) {
+      try {
+        const tenant = { licenseId, organizationId: membership.organization_id };
+        await withTenant(app.db, tenant, async (tx) => {
+          // The invitation record — already looked up under this tenant's RLS
+          // — is where the role and the invitation id live; neither travels
+          // back through `acceptInvitation`'s SECURITY DEFINER return.
+          const invitation = await tx.invitation.findFirst({
+            where: { email: session.account.email, acceptedAt: { not: null } },
+            orderBy: { acceptedAt: 'desc' },
+            select: { id: true, role: true },
+          });
+          if (!invitation) return;
+          await writeAuditEntry(
+            tx,
+            request.auditContext({
+              licenseId: tenant.licenseId,
+              actorId: session.account.id,
+              actorType: 'agent',
+            }),
+            {
+              action: 'member.joined',
+              target: `account:${session.account.id}`,
+              metadata: { role: invitation.role, via: 'invitation', invitation_id: invitation.id },
+            },
+          );
+        });
+      } catch (err) {
+        request.log.warn({ err }, 'failed to record member join in audit log');
+      }
+    }
+
+    return reply.send(session);
   });
 
   app.get('/invitations', { config: { scopes: ['accounts--all:rw'] } }, async (request, reply) => {

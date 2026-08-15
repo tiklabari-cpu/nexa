@@ -41,6 +41,17 @@ export interface Session {
   memberships: Membership[];
 }
 
+export interface AcceptedInvitation {
+  session: Session;
+  /**
+   * The membership this call itself created or reused — `session.memberships`
+   * also lists any workspaces the account already belonged to, so it alone
+   * cannot say which one was just joined (needed to scope the `member.joined`
+   * audit entry, C6-a2).
+   */
+  licenseId: bigint;
+}
+
 export interface InvitationRecord {
   id: string;
   email: string;
@@ -258,7 +269,7 @@ export class LifecycleService {
     token: string;
     name?: string;
     password?: string;
-  }): Promise<Session> {
+  }): Promise<AcceptedInvitation> {
     const passwordHash = input.password ? await hashPassword(input.password) : null;
 
     // The function returns the account's email and name as well as its id. The
@@ -266,7 +277,12 @@ export class LifecycleService {
     // only just joined — and row level security would filter it away, failing
     // the request *after* the invitation had been consumed.
     const rows = await this.#db.$queryRaw<
-      Array<{ joined_account: string; joined_email: string; joined_name: string }>
+      Array<{
+        joined_account: string;
+        joined_license: bigint;
+        joined_email: string;
+        joined_name: string;
+      }>
     >`SELECT * FROM auth_accept_invitation(
         ${hashToken(input.token)}, ${input.name ?? null}, ${passwordHash})`;
 
@@ -274,8 +290,11 @@ export class LifecycleService {
     if (!row) throw ApiError.authentication('This invitation is no longer valid.');
 
     return {
-      account: { id: row.joined_account, email: row.joined_email, name: row.joined_name },
-      memberships: await this.#membershipsOf(row.joined_account),
+      session: {
+        account: { id: row.joined_account, email: row.joined_email, name: row.joined_name },
+        memberships: await this.#membershipsOf(row.joined_account),
+      },
+      licenseId: row.joined_license,
     };
   }
 

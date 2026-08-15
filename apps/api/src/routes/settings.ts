@@ -1828,9 +1828,17 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
       // RLS scopes the delete to the caller's licence, so another tenant's id
       // simply matches nothing — a 404 that keeps ids un-enumerable (NFR-S5).
       // The assignment rows cascade with the area (composite FK).
-      const { count } = await request.withTenant((tx) =>
-        tx.expertise.deleteMany({ where: { id } }),
-      );
+      const { count } = await request.withTenant(async (tx) => {
+        const result = await tx.expertise.deleteMany({ where: { id } });
+        if (result.count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'data.deleted',
+            target: `expertise:${id}`,
+            metadata: { kind: 'expertise' },
+          });
+        }
+        return result;
+      });
       if (count === 0) throw ApiError.notFound('Expertise area not found.');
 
       return reply.status(204).send();

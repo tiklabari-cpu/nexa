@@ -18,6 +18,7 @@ import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { withTenant } from '../lib/tenant.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { TicketService } from '../services/tickets/ticket-service.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
@@ -105,9 +106,18 @@ export default async function channelRoutes(
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
       const tenant = request.tenant();
-      const channel = await request.withTenant((tx) =>
-        channels.connect(tx, tenant, type, request.body),
-      );
+      const channel = await request.withTenant(async (tx) => {
+        const result = await channels.connect(tx, tenant, type, request.body);
+        // The bot token / API key / webhook secret and the address itself
+        // (number, @handle, mailbox) stay out — the `channels` row already
+        // holds them; the entry names only what kind of channel and brand.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'channel.connected',
+          target: `channel:${type}`,
+          metadata: { type, brand_id: result.brand_id },
+        });
+        return result;
+      });
       return reply.send(channel);
     },
   );
@@ -117,7 +127,19 @@ export default async function channelRoutes(
     { config: { scopes: ['channels--all:rw'] } },
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
-      const changed = await request.withTenant((tx) => channels.disconnect(tx, type));
+      const changed = await request.withTenant(async (tx) => {
+        const count = await channels.disconnect(tx, type);
+        // Only a disconnect that actually changed something is worth an entry
+        // — a 404 (nothing connected) is not an event.
+        if (count > 0) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'channel.disconnected',
+            target: `channel:${type}`,
+            metadata: { type },
+          });
+        }
+        return count;
+      });
       // Nothing changed means no such connected channel in this tenant — 404
       // keeps that indistinguishable from another tenant's (NFR-S5).
       if (changed === 0) throw ApiError.notFound('Channel not found.');

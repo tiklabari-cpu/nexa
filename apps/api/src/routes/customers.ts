@@ -9,6 +9,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 
@@ -188,7 +189,7 @@ async function setBanned(
   return request.withTenant(async (tx) => {
     const existing = await tx.customer.findFirst({
       where: { id: customerId },
-      select: { id: true },
+      select: { id: true, bannedAt: true },
     });
     if (!existing) throw ApiError.notFound('Customer not found.');
 
@@ -199,6 +200,18 @@ async function setBanned(
       where: { id: customerId },
       data: { bannedAt: banned ? new Date() : null },
     });
+
+    // Only the transition is worth an entry: repeating a ban that already
+    // holds (or lifting one already lifted) leaves no second line. No
+    // metadata — the name, email, phone and free-text reason a moderator
+    // might type never reach the append-only log.
+    const wasBanned = existing.bannedAt !== null;
+    if (wasBanned !== banned) {
+      await writeAuditEntry(tx, request.auditContext(), {
+        action: banned ? 'customer.banned' : 'customer.unbanned',
+        target: `customer:${customerId}`,
+      });
+    }
 
     return customers.get(tx, tenant, customerId);
   });

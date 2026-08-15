@@ -31,6 +31,10 @@ import type { TenantClient } from '../../lib/tenant.js';
  * so the set of things we audit is reviewable in one place.
  */
 export const AUDIT_ACTIONS = [
+  // Workspace lifecycle. The first row a workspace ever gets — recorded
+  // because it is the anchor everything else in the trail, and `C4-h`'s region
+  // question, are asked against.
+  'workspace.created',
   // Authentication
   'auth.login',
   'auth.login_failed',
@@ -45,6 +49,19 @@ export const AUDIT_ACTIONS = [
   'auth.sso_login',
   'auth.sso_login_failed',
   'auth.password_reset',
+  // A bearer token (access or refresh) was revoked through `/auth/revoke`
+  // (RFC 7009). No entry is written when the presented token matches nothing —
+  // the endpoint answers 200 either way, so the trail only ever names a
+  // credential that genuinely existed in this workspace.
+  'auth.token_revoked',
+  // `/auth/token` refused a grant that still resolves to a known workspace: a
+  // replayed or expired authorization code, a code whose PKCE verifier does
+  // not match, or a refresh token already rotated away (the signature of a
+  // stolen one). An invalid client or a code/token nobody issued writes
+  // nothing — there is no workspace to write it into, and doing so from
+  // caller-supplied input would let an outsider plant rows in a workspace they
+  // do not hold (C1).
+  'auth.token_exchange_failed',
   // An authenticated request was refused at the edge because the workspace's IP
   // allow-list did not admit its source address (FR-MOD-08.9.6). Recorded so a
   // locked-out admin — or a stolen token being used from outside the office —
@@ -84,6 +101,11 @@ export const AUDIT_ACTIONS = [
   // recorded where it belongs — in the entry's own metadata (`via: 'scim'` and
   // the credential's id), not in a parallel set of action names.
   'member.invited',
+  // The moment an invitation is actually redeemed and the person gains access
+  // (SOC 2 CC6.1) — a different fact from `member.invited`, which only records
+  // that access was offered. The invitee's email is deliberately not carried;
+  // the invitation named it already.
+  'member.joined',
   'member.invitation_revoked',
   'member.suspended',
   'member.unsuspended',
@@ -130,6 +152,14 @@ export const AUDIT_ACTIONS = [
   // secret the register response carries once.
   'webhook.created',
   'webhook.deleted',
+  // Scheduled report exports (PRD §5.3-Reports) — the unaudited twin of
+  // webhook.*: recurring, unattended egress of report data, just mailed
+  // instead of posted. The recipient addresses are the one thing withheld —
+  // they are the sole reason this surface is gated on `reports_manage`, and
+  // copying them into the append-only log would defeat that gate for anyone
+  // who can read the trail.
+  'scheduled_export.created',
+  'scheduled_export.updated',
   // Ticketing / HelpDesk (FR-MOD-13.6) — the lifecycle and structural changes an
   // async ticket goes through. Merge/unmerge affect data integrity across two
   // tickets, so they are recorded as much for the audit trail as for support.
@@ -144,6 +174,27 @@ export const AUDIT_ACTIONS = [
   // so it is recorded. The entry names the actor, the chat and the previous
   // assignee; never the transcript or any message content.
   'chat.taken_over',
+  // Denying a visitor service (FR-MOD-08.9.2) — a moderation decision, not a
+  // configuration change, so only the transition is recorded: repeating a ban
+  // that already holds, or lifting one already lifted, leaves no second line.
+  // No metadata — the customer id is the target, and their name, email, phone
+  // and the moderator's free-text reason are deliberately not copied in.
+  'customer.banned',
+  'customer.unbanned',
+  // External connections
+  //
+  // A marketplace integration was connected (FR-MOD-09.1) — the OAuth grant
+  // that hands the app a credential to read this workspace's data. Its own
+  // action rather than folding into `partner_app.*`: those record a third
+  // party being handed a credential to call *Nexa*, this records Nexa being
+  // handed one to call somewhere else. Disconnecting one already writes
+  // `data.deleted` (`apps.ts`).
+  'app.connected',
+  // An inbound channel — email/SMS/WhatsApp/etc. (FR-MOD-08.5.3-.6) — was
+  // wired to or unwired from an address. The address itself lives on the
+  // `channels` row already; the entry names only the channel type and brand.
+  'channel.connected',
+  'channel.disconnected',
   // Credentials
   'pat.created',
   'pat.revoked',

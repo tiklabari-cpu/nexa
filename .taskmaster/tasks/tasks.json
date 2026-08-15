@@ -3917,10 +3917,10 @@
             "description": "SIEM export kontratı + siem_export_cursors (keyset, tekrar-teslime dayanıklı) + NDJSON akışı",
             "details": "C6-b — SIEM export kontratı + siem_export_cursors (keyset, tekrar-teslime dayanıklı) + NDJSON akışı  [OPUS-MAX]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nKAPSAM: `GET /audit-log/export` (NDJSON akışı, keyset imleç) + `siem_export_cursors` tablosu (licenseId, target, lastExportedId, lastExportedAt) + RLS. İmleç TEKRAR-TESLİME DAYANIKLI olmalı: aynı imleçten iki kez okumak aynı satırları verir, satır ATLAMAZ.\n\n**HEDEF YÖNETİM UÇLARI DA BU ALT-GÖREVE AİTTİR** (denetim bulgusu: `C6-f` ekranı hiçbir uca sahip değildi, contract-first sırası kırıktı): `GET|PATCH /settings/siem` (hedef okuma/yazma, `admin+` rol kapısı, `settings.security_updated` audit'i) + `GET /settings/siem/status` (son export zamanı, satır sayısı, zincir boşluğu bayrağı) + `packages/contract/openapi/paths/settings.yaml`.\n\n**SCOPE KARARI ERTELENMİYOR** (denetim bulgusu — \"bu pencerede karara bağlanır\" bir SONNET-belirsizliğiydi, artık OPUS-MAX): export **ayrı bir scope ister** — `audit_log--all:ro` (tm 92) tek bir ekranın sayfalı okumasıdır; toplu dışa akış farklı bir yetkidir. Yeni scope `audit_log--export:ro` olarak eklenir ve `packages/types/src/scopes.ts` + kontrat + route config dörtlüsünde birden tanımlanır.\n\nDOSYALAR: `apps/api/prisma/schema.prisma` + migration · `apps/api/src/routes/audit-log.ts` · `apps/api/src/services/audit/audit-log-reader.ts` · `packages/contract/openapi/paths/audit-log.yaml`\n\nREFERANS DESEN: `audit-log-reader.ts` mevcut keyset okuma (tm 92 · `08.9.7-a`) · `apps/api/src/services/reports/report-csv.ts` (satır akışı/CSV üretimi) + `apps/api/src/services/reports/scheduled-report-sweeper.ts` (periyodik iş) — **`reports-export.ts` diye bir dosya YOKTUR** (denetim düzeltmesi) · rol/scope kapısı emsali tm 92 `08.9.7-a`.\n\nKAPSAM DIŞI: bütünlük zinciri (C6-c), hedef (C6-d).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (export NDJSON döner; imleç ilerler; AYNI imleçten iki okuma aynı sonucu verir; satır ATLAMAZ; CROSS-TENANT: başka lisansın satırları export'a girmez; scope'suz istek reddedilir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "83",
-            "updatedAt": "2026-08-15T04:55:01.479Z"
+            "updatedAt": "2026-08-15T05:41:48.846Z"
           },
           {
             "id": 4,
@@ -3994,7 +3994,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-15T04:55:01.479Z"
+        "updatedAt": "2026-08-15T05:41:48.846Z"
       },
       {
         "id": "84",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T04:55:01.479Z",
+      "lastModified": "2026-08-15T05:41:48.847Z",
       "taskCount": 124,
       "completedCount": 120,
       "tags": [

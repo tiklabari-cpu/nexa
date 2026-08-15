@@ -4558,6 +4558,62 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/access-review': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Access review — who and what can reach this workspace (SOC 2 CC6.1)
+     * @description Evidence for SOC 2 CC6.1 "logical access" (NFR-C6 · C6-e): every membership
+     *     of the workspace with its role, standing, two-factor state and last
+     *     recorded sign-in, plus every live bearer credential with its owner, scopes
+     *     and last use.
+     *
+     *     **It produces evidence and makes no judgement** (§C-A23). There is no risk
+     *     score, no "stale — consider revoking" and no highlighting: whether a dormant
+     *     admin or an old integration token is *appropriate* is the human control this
+     *     report feeds, and pre-answering it would substitute a guess for the review
+     *     an auditor must see performed.
+     *
+     *     **Gated on `audit_log--all:ro`, not `reports_read`, plus the `admin` role.**
+     *     It lives under `/reports` because that is where a workspace looks for a
+     *     report, but the authority it needs is the security-evidence one:
+     *     `reports_read` is held by every dashboard integration that charts chat
+     *     volume, and granting those the roster and the credential inventory would
+     *     widen a broad, freely-given scope into the workspace's access model. The
+     *     pairing is the same one `/audit-log` uses — the scope says the token may,
+     *     the role says the person may.
+     *
+     *     Two properties of the data are worth knowing before reading it. **Last
+     *     sign-in comes from the audit trail**, which retention prunes, so a null
+     *     `last_login_at` means "nothing since `audit_trail_starts_at`", never
+     *     "never". And **only credentials that can open the door today are listed** —
+     *     revoked and expired rows are omitted, each surviving row carrying its own
+     *     `expires_at` so a reviewer sees which are about to lapse without the list
+     *     being padded with ones that already have.
+     *
+     *     No token value and no digest appears anywhere in the response, in either
+     *     format.
+     *
+     *     With `format=csv` the response is one of the two tables instead — `section`
+     *     picks which. They are separate files rather than one because they are
+     *     separate tables: a person has a role and a last sign-in, a credential has
+     *     scopes and a last use, and merging them would force every row of each to
+     *     carry the other's empty columns. Both bodies are `no-store`; a snapshot of
+     *     who holds the keys is never served from a shared cache.
+     */
+    get: operations['getAccessReview'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/scheduled-exports': {
     parameters: {
       query?: never;
@@ -8305,6 +8361,126 @@ export interface components {
         id: string;
         /** @description Human-readable tab name. */
         label: string;
+      }[];
+    };
+    /**
+     * @description Access review evidence for SOC 2 CC6.1 (NFR-C6 · C6-e) — a point-in-time
+     *     snapshot of who and what can reach this workspace.
+     *
+     *     The report **produces evidence and makes no judgement** (§C-A23): there
+     *     is no risk score, no staleness flag and no recommendation, because
+     *     "is this access appropriate" is the human control the report exists to
+     *     feed. Every field is read off a row or derived by a rule stated here.
+     */
+    AccessReviewReport: {
+      /**
+       * Format: date-time
+       * @description The instant the snapshot was taken.
+       */
+      generated_at: string;
+      /**
+       * Format: date-time
+       * @description The oldest entry still in this workspace's audit trail, or null when
+       *     the trail is empty. A member's `last_login_at` of null means "nothing
+       *     recorded since this instant", **not** "never signed in" — the trail is
+       *     pruned on retention, so absence past this point carries no
+       *     information.
+       */
+      audit_trail_starts_at: string | null;
+      /** @description Every membership of the workspace, oldest grant first. */
+      members: {
+        /** Format: uuid */
+        account_id: string;
+        name: string;
+        email: string;
+        /** @enum {string} */
+        role: 'owner' | 'viceowner' | 'admin' | 'agent';
+        /**
+         * @description The two flags below collapsed into one value, `suspended`
+         *     winning — a suspended member cannot get in whatever else is
+         *     true of them. Both raw flags travel alongside, so nothing is
+         *     lost in the collapse.
+         * @enum {string}
+         */
+        status: 'active' | 'awaiting_approval' | 'suspended';
+        suspended: boolean;
+        awaiting_approval: boolean;
+        two_factor_enabled: boolean;
+        /**
+         * @description Whether an admin invited this member or the workspace's
+         *     directory provisioned them over SCIM. CC6.1 asks how access is
+         *     removed as well as granted, and the two answers differ: a
+         *     directory-managed member is deprovisioned by the IdP.
+         * @enum {string}
+         */
+        provisioned_via: 'manual' | 'scim';
+        /**
+         * Format: date-time
+         * @description When the membership was created — when access was granted.
+         */
+        member_since: string;
+        /**
+         * Format: date-time
+         * @description The newest `auth.login` / `auth.sso_login` for this person **in
+         *     this workspace**, from the audit trail. Per-licence on purpose:
+         *     the same person may sign into another workspace daily and this
+         *     one never. Read together with `audit_trail_starts_at`.
+         */
+        last_login_at: string | null;
+        /**
+         * @description How that sign-in was made. Separated because after an incident
+         *     the two imply different containment: `password` means a secret
+         *     Nexa holds was known, `sso` means an external system vouched.
+         * @enum {string|null}
+         */
+        last_login_method: 'password' | 'sso' | null;
+      }[];
+      /**
+       * @description Every bearer credential that can open this workspace's door **today**
+       *     — personal access tokens, OAuth access tokens, SCIM provisioning
+       *     tokens and bot tokens. Revoked and expired rows are omitted: the
+       *     claim is present-tense. Bot tokens are included even though the item
+       *     names only the other three, because an inventory that omits a kind of
+       *     credential is not an inventory.
+       *
+       *     No token value and no digest is ever returned. This names
+       *     credentials; it does not help anyone present one.
+       */
+      credentials: {
+        /** Format: uuid */
+        id: string;
+        /** @enum {string} */
+        kind: 'pat' | 'oauth' | 'bot' | 'scim';
+        name: string | null;
+        /**
+         * @description Empty for a SCIM token by construction — its authority comes
+         *     from the route's principal list, not from a scope list.
+         */
+        scopes: string[];
+        /**
+         * @description The owner reference as stored: an account uuid for
+         *     `pat`/`oauth`/`scim`, a bot id for `bot`, or the `system:scim`
+         *     sentinel for a provisioning token minted by something that was
+         *     not a person.
+         */
+        owner_id: string;
+        owner_name: string | null;
+        /** @description Resolved only when `owner_id` is a current member of this workspace. */
+        owner_email: string | null;
+        /**
+         * @description False for a bot or system credential — and, more interestingly,
+         *     for a token whose human owner is no longer a member. Revoking a
+         *     membership does not revoke that person's personal access token,
+         *     and that orphan is exactly what CC6.1 asks after, so it is a
+         *     column rather than a join the reader has to make.
+         */
+        owner_is_member: boolean;
+        /** Format: date-time */
+        created_at: string;
+        /** Format: date-time */
+        last_used_at: string | null;
+        /** Format: date-time */
+        expires_at: string | null;
       }[];
     };
     /**
@@ -16164,6 +16340,42 @@ export interface operations {
         content: {
           'text/csv': string;
           'application/pdf': string;
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAccessReview: {
+    parameters: {
+      query?: {
+        /**
+         * @description `json` (default) returns the whole review — both tables — in one round
+         *     trip. `csv` returns the single table named by `section`.
+         */
+        format?: 'json' | 'csv';
+        /**
+         * @description Which table `format=csv` renders. Ignored for JSON, which always carries
+         *     both.
+         */
+        section?: 'members' | 'credentials';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The review as JSON (default), or the chosen section as CSV */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AccessReviewReport'];
+          'text/csv': string;
         };
       };
       400: components['responses']['BadRequest'];

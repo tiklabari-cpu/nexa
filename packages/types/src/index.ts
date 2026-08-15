@@ -7,6 +7,7 @@ export * from './integrations.js';
 export * from './errors.js';
 export * from './scopes.js';
 export * from './siem.js';
+export * from './access-review.js';
 export * from './rtm.js';
 export * from './ids.js';
 export * from './realtime-bus.js';

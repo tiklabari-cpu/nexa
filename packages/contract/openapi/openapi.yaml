@@ -445,6 +445,8 @@ paths:
     $ref: "./paths/reports.yaml#/groups"
   /reports/export:
     $ref: "./paths/reports.yaml#/export"
+  /reports/access-review:
+    $ref: "./paths/reports.yaml#/accessReview"
   /reports/scheduled-exports:
     $ref: "./paths/reports.yaml#/scheduledExports"
   /reports/scheduled-exports/{scheduledExportId}:
@@ -4279,6 +4281,163 @@ components:
                 type: string
                 description: "Group id: `overview`, `breakdown`, `ai-agent` or `reviews`."
               label: { type: string, description: Human-readable tab name. }
+
+    AccessReviewReport:
+      type: object
+      description: |
+        Access review evidence for SOC 2 CC6.1 (NFR-C6 · C6-e) — a point-in-time
+        snapshot of who and what can reach this workspace.
+
+        The report **produces evidence and makes no judgement** (§C-A23): there
+        is no risk score, no staleness flag and no recommendation, because
+        "is this access appropriate" is the human control the report exists to
+        feed. Every field is read off a row or derived by a rule stated here.
+      required: [generated_at, audit_trail_starts_at, members, credentials]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+          description: The instant the snapshot was taken.
+        audit_trail_starts_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            The oldest entry still in this workspace's audit trail, or null when
+            the trail is empty. A member's `last_login_at` of null means "nothing
+            recorded since this instant", **not** "never signed in" — the trail is
+            pruned on retention, so absence past this point carries no
+            information.
+        members:
+          type: array
+          description: Every membership of the workspace, oldest grant first.
+          items:
+            type: object
+            required:
+              [
+                account_id,
+                name,
+                email,
+                role,
+                status,
+                suspended,
+                awaiting_approval,
+                two_factor_enabled,
+                provisioned_via,
+                member_since,
+                last_login_at,
+                last_login_method,
+              ]
+            properties:
+              account_id: { type: string, format: uuid }
+              name: { type: string }
+              email: { type: string }
+              role:
+                type: string
+                enum: [owner, viceowner, admin, agent]
+              status:
+                type: string
+                enum: [active, awaiting_approval, suspended]
+                description: |
+                  The two flags below collapsed into one value, `suspended`
+                  winning — a suspended member cannot get in whatever else is
+                  true of them. Both raw flags travel alongside, so nothing is
+                  lost in the collapse.
+              suspended: { type: boolean }
+              awaiting_approval: { type: boolean }
+              two_factor_enabled: { type: boolean }
+              provisioned_via:
+                type: string
+                enum: [manual, scim]
+                description: |
+                  Whether an admin invited this member or the workspace's
+                  directory provisioned them over SCIM. CC6.1 asks how access is
+                  removed as well as granted, and the two answers differ: a
+                  directory-managed member is deprovisioned by the IdP.
+              member_since:
+                type: string
+                format: date-time
+                description: When the membership was created — when access was granted.
+              last_login_at:
+                type: string
+                format: date-time
+                nullable: true
+                description: |
+                  The newest `auth.login` / `auth.sso_login` for this person **in
+                  this workspace**, from the audit trail. Per-licence on purpose:
+                  the same person may sign into another workspace daily and this
+                  one never. Read together with `audit_trail_starts_at`.
+              last_login_method:
+                type: string
+                enum: [password, sso]
+                nullable: true
+                description: |
+                  How that sign-in was made. Separated because after an incident
+                  the two imply different containment: `password` means a secret
+                  Nexa holds was known, `sso` means an external system vouched.
+        credentials:
+          type: array
+          description: |
+            Every bearer credential that can open this workspace's door **today**
+            — personal access tokens, OAuth access tokens, SCIM provisioning
+            tokens and bot tokens. Revoked and expired rows are omitted: the
+            claim is present-tense. Bot tokens are included even though the item
+            names only the other three, because an inventory that omits a kind of
+            credential is not an inventory.
+
+            No token value and no digest is ever returned. This names
+            credentials; it does not help anyone present one.
+          items:
+            type: object
+            required:
+              [
+                id,
+                kind,
+                name,
+                scopes,
+                owner_id,
+                owner_name,
+                owner_email,
+                owner_is_member,
+                created_at,
+                last_used_at,
+                expires_at,
+              ]
+            properties:
+              id: { type: string, format: uuid }
+              kind:
+                type: string
+                enum: [pat, oauth, bot, scim]
+              name: { type: string, nullable: true }
+              scopes:
+                type: array
+                items: { type: string }
+                description: |
+                  Empty for a SCIM token by construction — its authority comes
+                  from the route's principal list, not from a scope list.
+              owner_id:
+                type: string
+                description: |
+                  The owner reference as stored: an account uuid for
+                  `pat`/`oauth`/`scim`, a bot id for `bot`, or the `system:scim`
+                  sentinel for a provisioning token minted by something that was
+                  not a person.
+              owner_name: { type: string, nullable: true }
+              owner_email:
+                type: string
+                nullable: true
+                description: Resolved only when `owner_id` is a current member of this workspace.
+              owner_is_member:
+                type: boolean
+                description: |
+                  False for a bot or system credential — and, more interestingly,
+                  for a token whose human owner is no longer a member. Revoking a
+                  membership does not revoke that person's personal access token,
+                  and that orphan is exactly what CC6.1 asks after, so it is a
+                  column rather than a join the reader has to make.
+              created_at: { type: string, format: date-time }
+              last_used_at: { type: string, format: date-time, nullable: true }
+              expires_at: { type: string, format: date-time, nullable: true }
 
     ScheduledExportFrequency:
       type: string

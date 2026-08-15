@@ -3955,12 +3955,12 @@
             "description": "Erişim gözden geçirme raporu (SOC 2 CC6.1 kanıtı) — kim/hangi rol/son giriş/PAT envanteri",
             "details": "C6-e — Erişim gözden geçirme raporu (SOC 2 CC6.1 kanıtı) — kim/hangi rol/son giriş/PAT envanteri  [OPUS-XHIGH]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nKAPSAM: `GET /reports/access-review` — lisanstaki her üyelik: hesap, rol, durum (suspended/awaiting), son giriş, 2FA durumu; artı aktif PAT/OAuth/SCIM token envanteri (token DEĞERİ değil: id, sahip, scope'lar, son kullanım, oluşturma). Export edilebilir.\n\nNEDEN: SOC 2 CC6.1 (\"mantıksal erişim\") kanıtı kod tarafından ÜRETİLEBİLİR bir kanıttır; sertifikasyonun kendisi değildir. Rapor KANIT ÜRETİR, KARAR VERMEZ — \"bu erişim uygun mu\" sorusu insan denetimidir (§C-A23).\n\nDOSYALAR: `apps/api/src/routes/reports.ts` · `apps/api/src/services/reports/` · `apps/api/src/services/reports/report-csv.ts` · `packages/contract/openapi/paths/reports.yaml`\n\nREFERANS DESEN: `routes/reports.ts` mevcut rapor ucu + `apps/api/src/services/reports/report-csv.ts` (**tm 94 · `07.9-sched-d2`** — denetim düzeltmesi: `07.7-v2` tm 93'ün PLAN kalem kodudur, alt-görev değil). Rol kapısı: yalnız `admin` ve üstü.\n\nKAPSAM DIŞI: ekran — rapor bu turda API + export olarak teslim edilir; ayrı bir sayfa açılmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (rapor üyelikleri + token envanterini döner; TOKEN DEĞERİ dönmez — sızıntı negatifi; agent rolü REDDEDİLİR; CROSS-TENANT: başka lisansın üyeleri görünmez; CSV export yeşil) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "83.1"
             ],
             "parentId": "83",
-            "updatedAt": "2026-08-11T21:06:36.612Z"
+            "updatedAt": "2026-08-15T07:38:34.797Z"
           },
           {
             "id": 7,
@@ -3994,7 +3994,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-15T07:37:09.151Z"
+        "updatedAt": "2026-08-15T07:38:34.797Z"
       },
       {
         "id": "84",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T07:37:09.154Z",
+      "lastModified": "2026-08-15T07:38:34.797Z",
       "taskCount": 124,
       "completedCount": 120,
       "tags": [

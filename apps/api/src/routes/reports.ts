@@ -8,6 +8,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  ACCESS_REVIEW_SECTIONS,
   API_PACKAGE_CATALOG,
   hasAnyScope,
   isWorkScheduleProblem,
@@ -68,6 +69,12 @@ import {
   transferCount,
   windowTotals,
 } from '../services/reports/report-csv.js';
+import {
+  accessReviewCredentialTable,
+  accessReviewFilename,
+  accessReviewMemberTable,
+  buildAccessReview,
+} from '../services/reports/access-review.js';
 import { scopesOf } from '../services/auth/principal.js';
 import { presenceCoverage, type PresenceEvent } from '../services/staffing/presence-coverage.js';
 import { rosterCoverage, type RosterPlan } from '../services/staffing/roster-coverage.js';
@@ -168,6 +175,17 @@ const rangeQuery = z.object({
 const exportQuery = rangeQuery.extend({
   group: z.string().min(1).max(64),
   format: z.enum(['csv', 'pdf']).default('csv'),
+});
+
+/**
+ * The access review takes no date range — it is a snapshot of *now*, not a
+ * window (C6-e). `section` only decides which of the two tables the CSV renders;
+ * the JSON body always carries both, since a caller reading the whole review
+ * wants one round trip.
+ */
+const accessReviewQuery = z.object({
+  format: z.enum(['json', 'csv']).default('json'),
+  section: z.enum(ACCESS_REVIEW_SECTIONS).default('members'),
 });
 
 const DAY_MS = 86_400_000;
@@ -1640,6 +1658,64 @@ export default async function reportRoutes(
         .send(csv)
     );
   });
+
+  /**
+   * Access review — SOC 2 CC6.1 evidence (NFR-C6 · C6-e).
+   *
+   * Every membership of the workspace with its role, standing, 2FA state and
+   * last recorded sign-in, plus every live bearer credential with its owner,
+   * scopes and last use. The report produces evidence; it does not decide
+   * whether the access it lists is appropriate (§C-A23). See
+   * `services/reports/access-review.ts` for why last sign-in comes off the audit
+   * trail and why expired/revoked credentials are omitted.
+   *
+   * **Gated on `audit_log--all:ro`, not `reports_read`.** It sits under
+   * `/reports` because that is where a workspace looks for a report, but the
+   * authority it needs is the security-evidence one, not the analytics one:
+   * `reports_read` is held by every dashboard integration that draws a chart of
+   * chat volume, and handing those the roster and the credential inventory would
+   * widen a broad, freely-granted scope into the workspace's access model. Paired
+   * with `minimumRole: admin` exactly as `/audit-log` is — the scope says the
+   * token may, the role says the person may, and an ordinary agent holding a
+   * broad PAT is refused by the second even though the first admits them.
+   *
+   * No token value, and no digest, is ever in the response. The inventory names
+   * credentials; it does not help anyone present one.
+   */
+  app.get(
+    '/reports/access-review',
+    { config: { scopes: ['audit_log--all:ro'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const query = parse(accessReviewQuery, request.query);
+
+      // One instant for the whole snapshot: it stamps the report, decides which
+      // credentials count as expired, and names the download. Reading the clock
+      // three times would let a review generated across a second boundary
+      // disagree with its own filename.
+      const generatedAt = new Date();
+      const report = await request.withTenant((tx) => buildAccessReview(tx, generatedAt));
+
+      // An access review is a point-in-time snapshot of who holds the keys —
+      // the last thing that should be served from a shared cache or sniffed
+      // into something active by a browser.
+      reply.header('x-content-type-options', 'nosniff').header('cache-control', 'no-store');
+
+      if (query.format === 'json') return reply.send(report);
+
+      const table =
+        query.section === 'members'
+          ? accessReviewMemberTable(report)
+          : accessReviewCredentialTable(report);
+
+      return reply
+        .header('content-type', 'text/csv; charset=utf-8')
+        .header(
+          'content-disposition',
+          `attachment; filename="${accessReviewFilename(query.section, generatedAt)}"`,
+        )
+        .send(toCsv(table.headers, table.rows));
+    },
+  );
 
   app.get(
     '/billing/subscription',

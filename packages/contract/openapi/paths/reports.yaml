@@ -532,6 +532,75 @@ export:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+accessReview:
+  get:
+    tags: [Reports]
+    operationId: getAccessReview
+    summary: Access review — who and what can reach this workspace (SOC 2 CC6.1)
+    description: |
+      Evidence for SOC 2 CC6.1 "logical access" (NFR-C6 · C6-e): every membership
+      of the workspace with its role, standing, two-factor state and last
+      recorded sign-in, plus every live bearer credential with its owner, scopes
+      and last use.
+
+      **It produces evidence and makes no judgement** (§C-A23). There is no risk
+      score, no "stale — consider revoking" and no highlighting: whether a dormant
+      admin or an old integration token is *appropriate* is the human control this
+      report feeds, and pre-answering it would substitute a guess for the review
+      an auditor must see performed.
+
+      **Gated on `audit_log--all:ro`, not `reports_read`, plus the `admin` role.**
+      It lives under `/reports` because that is where a workspace looks for a
+      report, but the authority it needs is the security-evidence one:
+      `reports_read` is held by every dashboard integration that charts chat
+      volume, and granting those the roster and the credential inventory would
+      widen a broad, freely-given scope into the workspace's access model. The
+      pairing is the same one `/audit-log` uses — the scope says the token may,
+      the role says the person may.
+
+      Two properties of the data are worth knowing before reading it. **Last
+      sign-in comes from the audit trail**, which retention prunes, so a null
+      `last_login_at` means "nothing since `audit_trail_starts_at`", never
+      "never". And **only credentials that can open the door today are listed** —
+      revoked and expired rows are omitted, each surviving row carrying its own
+      `expires_at` so a reviewer sees which are about to lapse without the list
+      being padded with ones that already have.
+
+      No token value and no digest appears anywhere in the response, in either
+      format.
+
+      With `format=csv` the response is one of the two tables instead — `section`
+      picks which. They are separate files rather than one because they are
+      separate tables: a person has a role and a last sign-in, a credential has
+      scopes and a last use, and merging them would force every row of each to
+      carry the other's empty columns. Both bodies are `no-store`; a snapshot of
+      who holds the keys is never served from a shared cache.
+    parameters:
+      - name: format
+        in: query
+        description: |
+          `json` (default) returns the whole review — both tables — in one round
+          trip. `csv` returns the single table named by `section`.
+        schema: { type: string, enum: [json, csv], default: json }
+      - name: section
+        in: query
+        description: |
+          Which table `format=csv` renders. Ignored for JSON, which always carries
+          both.
+        schema: { type: string, enum: [members, credentials], default: members }
+    responses:
+      "200":
+        description: The review as JSON (default), or the chosen section as CSV
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AccessReviewReport" }
+          text/csv:
+            schema: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 scheduledExports:
   get:
     tags: [Reports]

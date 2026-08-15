@@ -13,6 +13,30 @@
 
 ## Task log (newest-first)
 
+## tm 83.6 — C6-e · Erişim gözden geçirme raporu (SOC 2 CC6.1) — done — 2026-08-15 UTC
+
+- **Yapıldı:** `GET /reports/access-review` — lisanstaki her üyelik (rol · durum · 2FA · SCIM/elle
+  · üyelik tarihi · son giriş + yöntemi) ve **bugün kapıyı açabilen** her taşıyıcı kimlik bilgisi
+  (id · tür · sahip · scope'lar · oluşturma/son kullanım/bitiş). `format=csv` + `section=members
+  |credentials` ile export (`toCsv` yeniden kullanıldı; PDF yok — kalem CSV istiyor).
+  Yeni: `services/reports/access-review.ts`, `packages/types/src/access-review.ts`, kontratta
+  `AccessReviewReport` + `accessReview` yolu. §C-A23 korundu: skor/bayrak/öneri YOK, yalnız olgu.
+- **Üç karar (sonraki pencere bunlara güvenebilir):** (1) **Kapı `audit_log--all:ro` +
+  `minimumRole: admin`**, `reports_read` DEĞİL — o scope grafik çizen her entegrasyonda var;
+  ekip listesi + kimlik bilgisi envanterini oraya bağlamak serbestçe dağıtılan bir yetkiyi
+  erişim modeline genişletirdi. (2) **Son giriş audit izinden** (`auth.login`/`auth.sso_login`),
+  `accounts.last_seen_at`'ten değil — o kolona hiçbir şey YAZMIYOR, kullanılsa tüm çalışma alanı
+  "hiç giriş yok" görünürdü. İz retention ile budandığı için `audit_trail_starts_at` cevapla
+  birlikte döner. (3) **İptal + süresi geçmiş token'lar listelenmez**; bot token'ları listelenir.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **131 dosya
+  3034/3034** (+2 dosya, +29) + web 1132 · `pnpm -w test:integration` **83 dosya 2235/2235**
+  (+1 dosya, +20) · `pnpm -w build` 7/7 · `db:check-drift` temiz · `format:check` dokunulan
+  dosyalarda temiz. `test:e2e` koşulmadı — testStrategy istemiyor, kalem "ekran kapsam dışı"
+  diyor, uçtan uca kapı `C6-g`. Migration YOK (mevcut kolonlardan okunuyor).
+- **Sonraki pencereye:** `C6-f` (Settings → Security SIEM ekranı) hâlâ açık; `C6-g` artık yalnız
+  onu bekliyor. Rapor için ekran açılırsa yeni scope gerekmez — `audit_log--all:ro` yeter.
+  `pnpm contract:generate` çıktısı (`packages/contract/src/generated/api.ts`) commit'lendi.
+
 ## tm 83.5 — C6-d · MOCK SIEM dosya sink'i + zamanlanmış gönderim — done — 2026-08-15 UTC
 
 - **Yapıldı:** `SiemSink` (`services/audit/siem-sink.ts`) — `scheduled-report-sweeper.ts`

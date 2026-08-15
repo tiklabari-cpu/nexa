@@ -34,6 +34,7 @@ import { ChannelsGrid } from './Channels.js';
 import { IpAllowlist } from './IpAllowlist.js';
 import { SsoConnection } from './SsoConnection.js';
 import { Compliance } from './Compliance.js';
+import { SiemExport } from './SiemExport.js';
 import { ScheduledExports } from './ScheduledExports.js';
 import {
   DEFAULT_PREFS,
@@ -154,6 +155,7 @@ export function SettingsPage(): ReactElement {
       <IpAllowlist canEdit={canManageAccess} />
       <SsoConnection canEdit={canManageAccess} />
       <Compliance canEdit={canManageAccess} />
+      <SiemExport canEdit={canManageAccess} />
       <AuditLog />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />

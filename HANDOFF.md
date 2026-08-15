@@ -13,6 +13,20 @@
 
 ## Task log (newest-first)
 
+## tm 83.7 — C6-f · Settings → Security: SIEM export ekranı — done — 2026-08-15 UTC
+
+- **Yapıldı:** `apps/web/src/features/settings/SiemExport.tsx` (yeni) — `C6-b`'nin `GET|PATCH
+  /settings/siem` + `GET /settings/siem/status`'unun saf tüketicisi, yeni sunucu ucu yok. Rol
+  kapısı admin+ (`Compliance`/`SsoConnection` deseni), açma/hedef seçimi `onChange`'de otomatik
+  PATCH eder, dört durum rakamı (son export/çalışma/teslim/bekleyen) "Never"/"0" boş durumuyla.
+  Boşluk uyarısı `chain_gap_detected === true` iken kırmızı `Banner`; `null`/`false` sessiz.
+  `SettingsPage.tsx`'e bağlandı. `SiemExport.test.tsx` (10 test).
+- **Doğrulama:** typecheck 11/11 · lint 8/8 · `pnpm -w test` api 3034/3034 (değişim yok) + web
+  1142 (+10) · `pnpm -w test:integration` 2235/2235 (değişim yok) · `pnpm -w build` 7/7 ·
+  `format:check` dokunulan 3 dosyada temiz. `test:e2e` koşulmadı — kapsam dışı, kapı `C6-g`.
+- **Sonraki pencereye:** `C6` kalemi 8'in 7'sinde; yalnız `C6-g` (uçtan uca doğrulama) kaldı,
+  artık `C6-c`/`C6-d`/`C6-e`/`C6-f` hepsi teslim — bağımlılığı tamam.
+
 ## tm 83.6 — C6-e · Erişim gözden geçirme raporu (SOC 2 CC6.1) — done — 2026-08-15 UTC
 
 - **Yapıldı:** `GET /reports/access-review` — lisanstaki her üyelik (rol · durum · 2FA · SCIM/elle

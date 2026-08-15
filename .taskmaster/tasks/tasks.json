@@ -3822,12 +3822,12 @@
             "description": "BAA durumu — licenses.hipaa_baa_signed_at + kabul akışı (MOCK) + compliance.baa_signed audit",
             "details": "C4-d — BAA durumu — licenses.hipaa_baa_signed_at + kabul akışı (MOCK) + compliance.baa_signed audit  [OPUS-XHIGH]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~1 pencere\n\nKAPSAM: `licenses.hipaaBaaSignedAt DateTime?` + kabul ucu (`POST /settings/compliance/baa`) + `compliance.baa_signed` audit eylemi. İmza MOCK'tur: gerçek sözleşme metni, imza sağlayıcı veya hukuki akış YOKTUR — yalnız \"bu lisans için BAA kabul edildi\" kaydı (CLAUDE.md: dış servisler mock).\n\nKISIT: BAA yalnız `region='us'` lisansta kabul edilebilir (PRD NFR-C4: \"HIPAA yalnız US hosting + BAA\"). `eu` lisansta uç 4xx döner.\n\nYETKİ: yalnız `owner` (admin YETMEZ) — §C-A20.\n\nDOSYALAR: `apps/api/prisma/schema.prisma` + migration · `apps/api/src/routes/settings.ts` · `apps/api/src/services/audit/audit-log.ts` (AUDIT_ACTIONS) · `packages/contract/openapi/paths/settings.yaml`\n\nREFERANS DESEN: `routes/settings.ts` mevcut `settings.*` audit'li mutasyon kalıbı; rol kapısı `services/auth/principal.ts:70` `roleAtLeast`.\n\nKAPSAM DIŞI: HIPAA kısıtlarının fiilen uygulanması (C4-e).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (us lisansta owner BAA kabul edebilir → hipaaBaaSignedAt dolar + compliance.baa_signed audit; admin REDDEDİLİR; eu lisansta uç REDDEDİLİR; CROSS-TENANT) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "82.1"
             ],
             "parentId": "82",
-            "updatedAt": "2026-08-15T00:57:01.574Z"
+            "updatedAt": "2026-08-15T01:28:11.412Z"
           },
           {
             "id": 5,
@@ -3872,7 +3872,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-15T00:57:01.574Z"
+        "updatedAt": "2026-08-15T01:28:11.412Z"
       },
       {
         "id": "83",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T00:57:01.574Z",
+      "lastModified": "2026-08-15T01:28:11.413Z",
       "taskCount": 123,
       "completedCount": 119,
       "tags": [

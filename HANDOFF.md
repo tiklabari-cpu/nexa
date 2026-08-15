@@ -13,6 +13,45 @@
 
 ## Task log (newest-first)
 
+## tm 84.7 — 11.5-g · Sandbox ekranı (oluştur/sıfırla + rozet) — done — 2026-08-16 UTC
+
+- **Önceki pencere `blocked` kapanmıştı — kod hatası değildi.** `.loop-logs/task-84.7.jsonl`
+  (15.08.2026 18:27): pencere uygulamayı bitirmiş, typecheck/lint/unit'i yeşile çevirmiş, ardından
+  `pnpm -w test:integration`'ı **arka planda** başlatıp beklemeye geçmişti; pencerenin süresi doldu,
+  arka plan görevi `killed` düştü ve integration/build/e2e kapıları hiç sonuçlanmadı. İş ağacında
+  hiçbir şey bozuk değildi; **değişiklikler commit'lenmeden çalışma alanında duruyordu** (3 değişmiş +
+  2 izlenmeyen dosya). Bu pencere aynı ağacı devraldı, altı kapının hepsini **ön planda** koşturdu ve
+  kapattı. Ders: uzun kapıyı arka plana atan pencere, bildirimden önce süresi dolarsa işi
+  commit'siz bırakır — kapı komutu ya ön planda koşmalı ya da sonucu bloklayarak beklenmelidir.
+- **Yapıldı:** Settings → **Sandbox** bölümü (`features/settings/Sandbox.tsx`, yeni) + kabukta kalıcı
+  **sandbox rozeti** (`components/AppShell.tsx` içinde `SandboxBadge`). Ekran `11.5-f`'in uçlarının saf
+  tüketicisi — **yeni sunucu yüzeyi yok, migration yok**. Zorunlu invaryant: rozet de sıfırlama
+  butonu da yalnız **sunucu yanıtındaki `is_sandbox`** alanından türer (istemci bayrağı/localStorage/
+  rota tahmini yok) ve iki yüzey **tek query key** (`['settings','sandbox']`) paylaşır. Rol kapıları
+  sunucunun kendi kapılarını aynalar (okuma `admin`, oluştur/sıfırla `owner`) ve nezaket gizlemesi
+  olduğu açıkça yazıldı; sıfırlama yıkıcı-onay modalı ister ve başarıda çağıranı oturumdan düşürür.
+  Ayrıntı ve elenen alternatifler PLAN §K `K11.5` → `11.5-g` maddesinde.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 10/10 paket — web
+  **115 dosya 1170/1170** (+1 dosya, +13) + api 3145 + rtm 102 + widget 71 + types 104 + ai-mock 136 ·
+  `pnpm -w test:integration` **api 86 dosya 2317/2317 + rtm 60** · `pnpm -w build` 7/7 ·
+  `pnpm -w test:e2e` **144/144** · `contract:generate` sonrası fark yok · `db:check-drift` temiz ·
+  `format:check` dokunulan 5 dosyada temiz.
+- **Varsayımlar / bilinçli sınırlar:** (1) **Yeni e2e YAZILMADI** — görevin kapsamı bunu açıkça
+  `11.5-h`'ye bırakıyor; e2e süit tam koşuldu ve 144/144 kaldığı için kabuk değişikliğinin
+  regresyon yaratmadığı kanıtlandı. (2) **`apps/e2e/kanit/*.png` churn'ü commit'lenmedi:** e2e
+  koşusu 55 görüntüyü bayt düzeyinde yeniden yazdı (rozet üretimde `null` render eder — görsel
+  fark yok, tetikleyen şey her sayfada oluşan ek `/settings/sandbox` isteğinin zamanlaması).
+  Bu görev **yeni bir kanıt görüntüsü üretmediği** için churn `git checkout` ile atıldı; çalışma
+  alanı temiz. (3) Sandbox oturumunda **plan miras alınmadığı** için (`11.5-f` sınırı) ekran
+  içeriden `entitled: false` görür; `is_sandbox` önce değerlendirildiğinden bu, "Enterprise'a
+  yükselt" üst-satışını sandbox'ın içinde göstermez — test edildi.
+- **Sonraki pencereye not:** `11.5` kaleminin **son** alt-görevi `11.5-h` (tm 84.8) kaldı — uçtan
+  uca doğrulama: white-label reddi/kabulü + downgrade geri alma + **sandbox sızıntı negatifi** +
+  SLA e2e. `11.5-g`'nin bıraktığı e2e kancaları hazır: kabuk rozeti `data-testid="sandbox-badge"`,
+  ayar bölümü `id="section-sandbox"`. e2e için kök `.env` **kaynaklanmalı** ve `pnpm db:seed`
+  koşmalı (idempotent); iki pencere aynı anda e2e koşamaz (CONVENTIONS §1.1).
+
+
 ## tm 124 — C4-h · Signup bölge kapısı — done — 2026-08-15 UTC
 
 - **Yapıldı:** `POST /auth/signup` bölgesi bu dağıtıma ait olmayan gövdeyi artık **hiçbir satır

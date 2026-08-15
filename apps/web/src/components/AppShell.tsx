@@ -23,6 +23,7 @@ import { Dropdown } from './ui/index.js';
 export function AppShell(): ReactElement {
   return (
     <div className="flex h-full flex-col bg-canvas text-content">
+      <SandboxBadge />
       <TrialBanner />
       <div className="flex min-h-0 flex-1">
         <IconRail />
@@ -31,6 +32,46 @@ export function AppShell(): ReactElement {
       {/* Reachable from every module: ⌘K opens it, and it lives outside the
           scrolling area so it overlays whatever is on screen. */}
       <CommandPalette />
+    </div>
+  );
+}
+
+interface SandboxInfo {
+  is_sandbox: boolean;
+}
+
+/**
+ * "You are in a sandbox" (FR-MOD-11.5 · 11.5-g) — persistent across every
+ * module, because it is the one fact a person must not lose track of: acting
+ * on this workspace touches no production data and nothing here is billed.
+ *
+ * **Read the module doc on `Sandbox.tsx` before touching this.** `is_sandbox`
+ * is read fresh from `GET /settings/sandbox` — the same query key that screen
+ * uses, so the two share one cache — never inferred from a client flag,
+ * `localStorage`, or the current route. A caller below `admin`
+ * (`minimumRole: 'admin'` on that route) simply gets a 403, which resolves to
+ * `!data` the same way `TrialBanner`'s billing read does below: no retry
+ * storm, no banner, not a claim either way about which workspace this is.
+ */
+function SandboxBadge(): ReactElement | null {
+  const api = useApiClient();
+  const { data } = useQuery({
+    queryKey: ['settings', 'sandbox'],
+    queryFn: () => api.get<SandboxInfo>('/settings/sandbox'),
+    retry: false,
+    staleTime: 60_000,
+  });
+
+  if (!data?.is_sandbox) return null;
+
+  return (
+    <div
+      role="status"
+      data-testid="sandbox-badge"
+      className="flex items-center justify-center gap-2 border-b border-border bg-warning/10 px-4 py-1.5 text-xs text-content"
+    >
+      <span aria-hidden="true">◐</span>
+      <span>Sandbox workspace — nothing here is billed, and nothing here is production data.</span>
     </div>
   );
 }

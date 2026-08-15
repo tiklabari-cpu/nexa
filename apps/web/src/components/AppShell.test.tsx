@@ -243,6 +243,56 @@ describe('account menu', () => {
   });
 });
 
+describe('sandbox badge', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * Stubs `fetch` for `/settings/sandbox`; every other path (brands, the trial
+   * banner's billing read) 404s the same as an unstubbed fetch would, which
+   * both already render as nothing.
+   */
+  function stubSandbox(view: { is_sandbox: boolean; entitled: boolean; sandbox: unknown }) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (String(input).includes('/settings/sandbox')) return jsonResponse(view);
+        return {
+          ok: false,
+          status: 404,
+          headers: { get: () => null },
+          json: async () => ({
+            error: { type: 'not_found', message: 'Not found.', request_id: '-' },
+          }),
+        } as unknown as Response;
+      }),
+    );
+  }
+
+  it('shows the sandbox bar when the caller is inside a sandbox', async () => {
+    stubSandbox({ is_sandbox: true, entitled: false, sandbox: null });
+    renderShell();
+
+    expect(await screen.findByTestId('sandbox-badge')).toBeInTheDocument();
+  });
+
+  it('shows nothing in a production workspace', async () => {
+    stubSandbox({ is_sandbox: false, entitled: true, sandbox: null });
+    renderShell();
+
+    await screen.findByText('Inbox module');
+    expect(screen.queryByTestId('sandbox-badge')).not.toBeInTheDocument();
+  });
+
+  it('shows nothing when the read 403s (below-admin caller)', async () => {
+    renderShell();
+
+    await screen.findByText('Inbox module');
+    expect(screen.queryByTestId('sandbox-badge')).not.toBeInTheDocument();
+  });
+});
+
 describe('brand switcher', () => {
   beforeEach(() => {
     localStorage.removeItem(BRAND_KEY);

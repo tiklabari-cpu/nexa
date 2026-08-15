@@ -2139,7 +2139,7 @@ kalem buldu: _dedicated onboarding/account manager_ · _IVR routing_ · _kalan m
 | S11    | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11 (türetilmiş kod `S11`); kimlik sınırı. → §6.1 · tm 81 · ilerleme K S11 |
 | C4     | HIPAA BAA + bölgesel barındırma (US/EU)          | NFR-C4 (türetilmiş kod `C4`); ADR-12 tek bölge (`eu`) burada genişletildi (`C4-a` ✅, §D102); bölge zorlaması üç yüzeyde (`C4-b` ✅, §D103); signup ekranında seçim + kalıcılık uyarısı (`C4-c` ✅); BAA kabul akışı MOCK (`C4-d` ✅); kapsam kısıtları — retention tavanı + log/telemetri PII maskesi + AI bölge sınırı (`C4-e` ✅); Settings → Security'de bölge + BAA durum kartı (`C4-f` ✅); uçtan uca doğrulama — 421 üç kapıda + kart + kısıtsızlık + cross-tenant (`C4-g` ✅); signup bölge kapısı (`C4-h` ✅, tm 124). → §6.1 · tm 82 · ilerleme K C4 |
 | C6     | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12 (türetilmiş kod `C6`). **Kod payı ✅ — 8 alt-görevin 8'i teslim** (`C6-a1`…`C6-g` · tm 83.1–83.8, uçtan uca kapı `C6-g` yeşil); **sertifikasyon süreci** §F.00'ı bloklamaz (§D97). Alt-görev kanıtı ve kilit kararlar `## K.`'dedir — hücre §1.2 gereği damga taşır, geçmiş taşımaz (bu satır 728 → 340 karaktere indirildi, tm 83.8). → §6.1 · tm 83 · ilerleme K C6 |
-| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 6'sı teslim (`11.5-a`…`11.5-f`; tm 84.1–84.6). → §6.1 · tm 84 |
+| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 7'si teslim (`11.5-a`…`11.5-g`; tm 84.1–84.7). → §6.1 · tm 84 |
 | —      | SLA: uptime taahhüdü + fatura kredisi (NFR-U5)   | ⛔-**süreç** · Denetim bulgusu K1-4: PRD'nin tek somut SLA tanımı NFR-U5'tir (_"Sözleşmeli uptime taahhüdü + kredi mekanizması"_). Uptime taahhüdü bir **sözleşme** kalemidir, bu depodan üretilemez (§D97 kod/süreç ayrımı). `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder |
 | —      | Dedicated onboarding / account manager           | ⛔-**süreç** · PRD §5.4 "Kurumsal" satırının üçüncü payı. **Kod payı YOK** — insan hizmeti taahhüdü (özel onboarding + atanmış müşteri yöneticisi); depoda karşılığı olan hiçbir yüzey üretmez. Süpürmede bulundu, §F.00'ı bloklamaz (§D95) |
 | —      | Skills-based routing (Ent. payı)                 | ✅ **v2'de teslim** — `08.6.3` (tm 91). PRD §5.4 "Kanal" satırı bunu IVR ile birlikte anıyor; skill payı v2'de kapandı, IVR payı ⛔ (voice'a bağlı) |
@@ -5238,7 +5238,7 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 
 #### K11.5 — 11.5 · White-label widget · SLA yönetimi · sandbox
 
-> Kalem **AÇIK** — 8 alt-görevin 6'sı teslim (`11.5-a`…`11.5-f`; tm 84.1–84.6). §6'nın Faz-3 `11.5` satırı
+> Kalem **AÇIK** — 8 alt-görevin 7'si teslim (`11.5-a`…`11.5-g`; tm 84.1–84.7). §6'nın Faz-3 `11.5` satırı
 > `C4`/`C6` gibi ilerleme damgasını kendi hücresinde taşır, kanıt burada birikir (§1.2).
 
 - ✅ **`11.5-a` — PLANS kataloğuna enterprise kademesi + altı anahtarlı yetki sözlüğü.** Yetki
@@ -5465,3 +5465,33 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
   **`pnpm -w test:e2e` 143/143** (değişmedi — sandbox ekranı `11.5-g`, uçtan uca `11.5-h`) ·
   `db:check-drift` sürüklenme yok · `format:check` dokunulan dosyalarda temiz. **Kapsam dışı:**
   sandbox ekranı (`11.5-g`), uçtan uca doğrulama (`11.5-h`). tm 84.6
+- ✅ **`11.5-g` — Sandbox ekranı: oluştur/sıfırla + kabukta "bu bir sandbox" rozeti.** Ekran
+  **yeni sunucu yüzeyi açmaz**; `11.5-f`'in `GET|POST /settings/sandbox` +
+  `POST /settings/sandbox/reset` uçlarının saf tüketicisidir. Slice'ın zorunlu invaryantı burada
+  yaşar: **hem rozet hem sıfırlama butonu yalnız sunucunun bu oturumun kimlik bilgisine verdiği
+  yanıttaki `is_sandbox` alanından türer** — istemci bayrağı, `localStorage` ya da rota tahmini
+  YOK. Gerekçe tek cümle: rozet yanılırsa insan üretim çalışma alanını sandbox sanıp sıfırlar.
+  `AppShell` rozeti `Sandbox.tsx` ile **aynı query key**'i (`['settings','sandbox']`) paylaşır, yani
+  iki yüzey tek önbellekten okur ve birbirine göre **kayamaz**; ayrı anahtar iki farklı ana göre
+  cevap veren iki yüzey demekti ve yanılanın hangisi olduğu ekranda görülmezdi. Rol kapıları
+  sunucununkini **aynalar** (nezaket gizlemesi — tek savunma değil, sunucu sıfırlamayı sandbox
+  olmayan lisansta bağımsız olarak reddeder, `11.5-f`'in negatif testi): okuma `minimumRole: 'admin'`
+  (altındaki çağıran için bileşen hiç istek atmaz), oluşturma/sıfırlama `exactRole: 'owner'`.
+  Yazma kapsı olup rolü yetmeyen admin'e buton sessizce gizlenmez, **eksik butonun nedeni yazılır**
+  — görünmeyen bir düğme ile var olmayan bir yetenek ekranda aynı şeye benziyordu. Yıkıcı onay
+  `WebhookSubscriptions`'ın `DeleteWebhookModal` desenini izler (ne kaybedileceğini adıyla söyleyen
+  `Modal` + danger onayı) ve başarıda **çağıranı oturumdan düşürür**: silinen lisans satırı,
+  token'ın kapsandığı satırın ta kendisidir. Üretimden bakıldığında var olan sandbox yalnız
+  **özetlenir**, sıfırlama önerilmez (sunucu zaten reddeder; önermek kullanıcıyı 403'e yürütmekti).
+  Rozet 403'te (admin altı çağıran) `retry: false` ile sessizce yok olur — ne yeniden deneme
+  fırtınası ne de "burası üretim" iddiası; `TrialBanner`'ın faturalama okumasıyla aynı davranış. —
+  `apps/web/src/features/settings/Sandbox.tsx` (yeni) · `apps/web/src/features/settings/SettingsPage.tsx` ·
+  `apps/web/src/components/AppShell.tsx` (`SandboxBadge`) · test `Sandbox.test.tsx` (10, yeni) ·
+  `AppShell.test.tsx` (+3, rozet) · tm 84.7
+- ✅ **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` web **115 dosya,
+  1170/1170** (114/1157 → +1 dosya, +13: `Sandbox.test.tsx` 10 + rozet 3) + api 136/3145 + rtm 102 +
+  widget 71 + types 104 + ai-mock 136 · `pnpm -w test:integration` api **86 dosya, 2317/2317** +
+  rtm 60 (**değişmedi** — ekran sunucuya dokunmadı) · `pnpm -w build` 7/7 · `pnpm -w test:e2e`
+  **144/144** (değişmedi — uçtan uca `11.5-h`) · `contract:generate` sonrası fark yok (yeni uç yok) ·
+  `db:check-drift` sürüklenme yok (migration YOK) · `format:check` dokunulan 5 dosyada temiz.
+  **Kapsam dışı:** uçtan uca doğrulama (`11.5-h`). tm 84.7

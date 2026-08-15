@@ -36,6 +36,7 @@ import { SsoConnection } from './SsoConnection.js';
 import { Compliance } from './Compliance.js';
 import { SiemExport } from './SiemExport.js';
 import { SlaPolicy } from './SlaPolicy.js';
+import { Sandbox } from './Sandbox.js';
 import { ScheduledExports } from './ScheduledExports.js';
 import {
   DEFAULT_PREFS,
@@ -158,6 +159,7 @@ export function SettingsPage(): ReactElement {
       <Compliance canEdit={canManageAccess} />
       <SiemExport canEdit={canManageAccess} />
       <SlaPolicy canEdit={canManageAccess} />
+      <Sandbox canEdit={canManageAccess} />
       <AuditLog />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />

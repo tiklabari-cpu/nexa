@@ -13,6 +13,39 @@
 
 ## Task log (newest-first)
 
+## tm 82.7 — C4-g · Uçtan uca doğrulama (421 üç kapıda + kart + kısıtsızlık + cross-tenant) — done — 2026-08-15 UTC
+
+- **Yapıldı:** `apps/e2e/tests/compliance.spec.ts` (yeni, 5) — kural artık `playwright.config.ts`'in
+  başlattığı **gerçek API + gerçek RTM ağ geçidine** karşı kanıtlı, harness'in kurduğu ikinci sürece
+  değil. Tarayıcıda signup formundan yaratılan tek bir `us` çalışma alanı bu Avrupa dağıtımının üç
+  kapısını ayrı ayrı çalıyor: REST (`/auth/me` → 421 `misdirected_request` + `details.region:'us'`) ·
+  **soket** (4001'e gerçek `WebSocket`, `login` → `success:false`, aynı hata) · **widget token basımı**
+  (`POST /customer/token` → 421). Çifti: tohumlanmış Avrupa kiracısı aynı üç kapıda geçiyor. Ayrıca
+  uyumluluk kartı (`eu`, salt-okunur, "can never be changed", BAA butonu YOK — kanıt PNG
+  `apps/e2e/kanit/C4-region-compliance.png`), imzasız hesapta **kısıt yokluğu** (`/palette/ai-query`
+  200, BAA ucu 403 `not_allowed`, damga hâlâ `null`) ve cross-tenant (Northwind kendi durumunu okur,
+  Acme'nin org kimliği `X-Nexa-Brand` olarak 404).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 1132/1132 (değişim yok —
+  bu dilim yalnız doğrulama) · `pnpm -w test:integration` 2114/2114 (değişim yok) · `pnpm -w build`
+  7/7 · `pnpm -w test:e2e` 135 → **140/140 tüm süit**.
+- **Varsayımlar:** (a) Yeni entegrasyon testi YAZILMADI — `region.test.ts` (32), `rtm/region.test.ts`
+  (11) ve `hipaa-constraints.test.ts` (15) beş kapsam kalemini zaten çift olarak kanıtlıyor; C4-g'nin
+  eklediği değer **canlı/tarayıcı katmanı**, kopya değil. (b) Widget basımının pozitifi
+  `widget.spec.ts`'e bırakıldı — tekrarı paylaşılan tohumda ikinci bir anonim ziyaretçi yaratırdı
+  (`customers.spec.ts` `last_activity_at DESC` okuyor).
+- **Sonraki pencereye not — İKİ AÇIK BORÇ, ikisi de kayıtlı:**
+  (1) **tm 124 (`C4-h`, yeni açıldı):** `POST /auth/signup` anonim olduğu için bölge kapısının
+  ÖNÜNDEDİR — `eu` süreci `region:'us'` gövdesini kabul edip organizasyon + sahip + lisans satırlarını
+  **Avrupa veritabanına yazıyor**, sonra o çalışma alanının her isteğini 421'le reddediyor (yani
+  kurucu içeri hiç giremiyor, satırlar yanlış bölgede yetim kalıyor). Gerçek bir NFR-C4 açığı; düzeltme
+  `C4-b`/`C4-c` alanı olduğu için bu pencerede YAPILMADI ve yeşil bir teste GÖMÜLMEDİ. Görevde üç aday
+  karar yazılı; signup ekranının "Could not create that workspace." metni de yanıltıcı (yaratıldı).
+  (2) **`hipaa` yetki reddi negatifi — tm 84.2'ye devredildi.** Görev tanımı zorunlu sayıyordu ama
+  kapı `11.5-b`'de kurulacak ve graf `tm 84` → `tm 82` (§6.2 · K5-3, kasıtlı sıra kısıtı), yani gerekli
+  altyapı (`entitlements.ts`, `PLANS.enterprise`) bugün YOK. Kırmızı bırakmak DoD'yi, `skip`/`todo`
+  deponun sıfır-atlanan-test kaydını, kapıyı burada kurmak `11.5-b`'nin bölünmez çekirdeğini bozardı —
+  borç tm 84.2'nin `details` alanına açık talimatla yazıldı.
+
 ## tm 82.6 — C4-f · Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi — done — 2026-08-15 UTC
 
 - **Yapıldı:** `apps/web/src/features/settings/Compliance.tsx` (yeni) — `GET /settings/compliance`'ı

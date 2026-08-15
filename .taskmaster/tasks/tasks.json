@@ -3796,12 +3796,12 @@
             "description": "Bölge zorlaması çekirdeği (BÖLÜNMEZ) — API + RTM + customer token üçünde misdirected_request (421)",
             "details": "C4-b — Bölge zorlaması çekirdeği (BÖLÜNMEZ) — API + RTM + customer token üçünde misdirected_request (421)  [OPUS-MAX]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~3 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: bölge kararı ÜÇ ayrı giriş yüzeyinde (REST `onRequest`, RTM `login`, customer/widget token verme) AYNI olmak zorundadır. Üçünü ayrı pencerelere bölmek \"REST reddediyor ama WebSocket kabul ediyor\" durumunu üretir — ve veri ikametinin fiilen ihlal edildiği yer tam olarak orasıdır.\n\n**MEVCUT DURUM (denetim düzeltmesi — \"karar noktası yok\" iddiası YANLIŞTI):** REST tarafında kapı ZATEN VAR — `apps/api/src/plugins/auth.ts:268-274` `X-Region` başlığını okuyup `misdirected_request` fırlatıyor. Eksik olan iki şey: (1) karşılaştırmanın SAĞ TARAFI süreç env'i (`env.NEXA_REGION`) — **lisansın bölgesi olmalı**; (2) RTM ve customer-token yüzeylerinde kapı **hiç yok**. Yani iş \"sıfırdan kapı kurmak\" değil, \"var olan kapıyı doğru şeye bağlamak + iki yüzeye taşımak\". İkinci bir kontrol EKLEME — var olanı düzelt. Hata tipi hazır: `packages/types/src/errors.ts:42,94` (`misdirected_request` → 421).\n\nKAPSAM: isteğin hedef bölgesi (env `NEXA_REGION` / `X-Region`) ile lisansın bölgesi uyuşmuyorsa `misdirected_request`. Üç yüzey: (1) `apps/api/src/plugins/auth.ts` onRequest zinciri, (2) `apps/rtm/src/auth.ts` + `dispatcher.ts` login yolu, (3) `apps/api/src/services/auth/customer-token.ts`.\n\nDOSYALAR: `apps/api/src/plugins/auth.ts:268-274` · `apps/api/src/config/env.ts:16` · **`apps/rtm/src/config/env.ts:5`** · `apps/rtm/src/auth.ts` · **`apps/rtm/src/dispatcher.ts:20,64,86`** (login yolu — denetim düzeltmesi: `connection.ts` içinde `login` HİÇ geçmiyor) · `apps/api/src/services/auth/customer-token.ts` · `apps/api/src/lib/api-error.ts`\n\nREFERANS DESEN: tm 80 `08.9.6-e` — IP allowlist enforcement'ın auth onRequest kapısı; aynı yere, aynı sırayla takılır. Mevcut `X-Region` doğrulaması (§C-A6: \"başlık doğrulanır ama tek değer kabul eder\") bu turda GERÇEK karara dönüşür.\n\nDİKKAT: RTM ve API ayrı süreçlerdir; ikisinin de aynı env'i okuduğundan ve aynı kararı verdiğinden emin ol. Test ikisini AYRI AYRI kanıtlamalı.\n\nKAPSAM DIŞI: HIPAA kısıtları (C4-e), UI (C4-c/-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**BÖLGE REDDİ AUDIT EYLEMİ BU ALT-GÖREVE AİTTİR** (denetim bulgusu K5-4): §6.2.1 dilim sırasını _\"`auth.sso_login`, `auth.sso_login_failed` ve bölge reddi olayları `AUDIT_ACTIONS`'a V3-1'de girer\"_ gerekçesine dayandırıyor; ama ilk kırılımda bölge reddi için hiçbir alt-görevde eylem yoktu. `security.region_rejected` eylemi `AUDIT_ACTIONS`'a burada eklenir ve reddedilen istekte yazılır (adres/token DEĞİL, yalnız lisans + istenen bölge). Emsal: `auth.ip_denied` (tm 80 · `08.9.6-e`) — aynı sınıf, aynı minimizasyon.",
             "testStrategy": "pnpm --filter @nexa/api test:integration && pnpm --filter @nexa/rtm test:integration (yanlış bölgeli lisans → API 421; RTM login 421/ret; customer token verme 421 — ÜÇÜ AYRI AYRI; doğru bölgede üçü de çalışır; CROSS-TENANT korunur) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm -w test",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "82.1"
             ],
             "parentId": "82",
-            "updatedAt": "2026-08-14T23:35:45.820Z"
+            "updatedAt": "2026-08-15T00:21:53.260Z"
           },
           {
             "id": 3,
@@ -3872,7 +3872,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-14T23:35:45.820Z"
+        "updatedAt": "2026-08-15T00:21:53.260Z"
       },
       {
         "id": "83",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-14T23:35:45.821Z",
+      "lastModified": "2026-08-15T00:21:53.261Z",
       "taskCount": 123,
       "completedCount": 119,
       "tags": [

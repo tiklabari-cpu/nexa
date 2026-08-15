@@ -13,6 +13,34 @@
 
 ## Task log (newest-first)
 
+## tm 84.4 — 11.5-d · SLA yönetimi: hedef + ölçüm + ihlal işareti — done — 2026-08-15 UTC
+
+- **Yapıldı:** İki tablo (`sla_policies` — lisans başına tek satır, `license_id` PK;
+  `sla_breaches` — rapor satırı, benzersiz `(lisans, özne, saat)` işaretlemeyi idempotent
+  kılar). Saf çekirdek `services/sla/business-hours.ts`: iş saati takvimi mevcut
+  `work_schedules`'ın **birleşimi** (en az bir ajan vardiyadaysa açık), hiç plan yoksa `null` →
+  saat kesintisiz. `GET|PUT /settings/sla` (okuma her planda açık, yazma `entitlement: 'sla'`);
+  ölçüm yolu downgrade'de satırı silmeden ölçmeyi durdurur (§C-A26), `active` alanı ekrana
+  "satın alınmadı"/"ayarlanmadı" ayrımını verir. Ölçüm noktaları: ilk ajan cevabı, cevapsız
+  arşivleme, thread kapanışı, ticket'ın `open|pending`'ten çıkışı. Süpürme `sla:run` hâlâ
+  bekleyen saatleri işaretler + kiracı başına tek özet e-posta (`notified_at`, tek sefer).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **3116/3116**
+  (+34) + web 1142 · `pnpm -w test:integration` **85 dosya 2288/2288** (+1 dosya, +17) ·
+  `pnpm -w build` 7/7 · `pnpm -w test:e2e` 143/143 (değişmedi) · `db:check-drift` temiz ·
+  `format:check` dokunulan dosyalarda temiz. Migration: `20260815180000_sla_targets`.
+- **Varsayımlar / bilinçli ret:** (1) **Ticket'a ilk-yanıt saati koşulmadı** — depoda ticket'a
+  ajan cevabı kaydı yok (cevap ucu yok, `last_message_at` her düzenlemede oynar); atamayı "ilk
+  yanıt" saymak doğru görünen yanlış bir sayı olurdu. Sohbetten doğan ticket'ta ilk yanıt o
+  sohbette ölçülür. (2) Bildirim alıcısı **çalışma alanı sahibi**, atanan kişi değil — ilk-yanıt
+  ihlalinin çoğunda atanan kimse yoktur, ihlal zaten odur. (3) Çözünürlük bir dakika ve
+  **işaretlememe** yönünde yuvarlar. (4) NFR-U5 uptime taahhüdü/fatura kredisi kapsam dışı
+  (⛔-süreç, §D99) — faturaya dokunulmadı.
+- **Sonraki pencereye:** `11.5-d` tamam, `11.5` hâlâ ◐ (8'de 4). `11.5-e` (SLA ekranı + Reports
+  ihlal KPI'ı) artık açık — **ihlal satırlarını okuyan uç henüz YOK**, onu `11.5-e` açacak
+  (`sla_breaches` tablosu ve indeksleri hazır: `(license, detected_at DESC)`). `11.5-h` uçtan
+  uca doğrulama hâlâ `11.5-c`+`11.5-e`+`11.5-g` kanıtını bekliyor. Devralınan kozmetik borç
+  (`WidgetCustomization.tsx` 403'ü hata gösteriyor) hâlâ açık.
+
 ## tm 84.3 — 11.5-c · Widget istemci tarafı — powered_by=0 URL parametresi kaldırıldı — done — 2026-08-15 UTC
 
 - **Yapıldı:** `apps/widget/src/widget.ts` — `readAppearance()` artık `powered_by` URL

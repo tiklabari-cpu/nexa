@@ -809,6 +809,97 @@ complianceBaa:
 # instruction and its state. The Settings → Security screen (C6-f) is built on
 # exactly these and opens nothing of its own.
 
+# --- SLA targets (FR-MOD-11.5 · 11.5-d) --------------------------------------
+#
+# The read is open on every plan and the write is Enterprise-only, the same
+# split `/settings/siem` makes: a workspace must be able to see what it would be
+# buying, and a settings page that 403s where the upsell belongs is a worse
+# product and no more secure.
+#
+# The measurement side applies the entitlement from the other end. Targets saved
+# while the licence held `sla` stay on the row after a downgrade (§C-A26) but
+# stop being measured — `active` is how a screen tells the two apart. The breach
+# rows themselves are read by Reports (11.5-e), not from here; this is
+# configuration, not data.
+
+slaPolicy:
+  get:
+    tags: [Settings]
+    operationId: getSlaPolicy
+    summary: First-response and resolution targets
+    description: |
+      A workspace that has never saved targets has no row and reads as two
+      nulls with business hours off — reading has no side effect and creates
+      nothing.
+    responses:
+      "200":
+        description: The current targets
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SlaPolicy" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  put:
+    tags: [Settings]
+    operationId: setSlaPolicy
+    summary: Set the SLA targets
+    description: |
+      **Enterprise only** (`sla` entitlement, FR-MOD-11.5).
+
+      A full replacement rather than a patch: the three fields are one policy,
+      and reading back what you sent is what makes "no first-response target"
+      expressible at all. Send `null` for a clock you do not want measured.
+
+      Setting a target does not re-evaluate history. Breaches are marked as
+      clocks stop (a first reply lands, a case is closed) and by the sweep for
+      cases still running past their target, so a target saved today applies to
+      what happens from today.
+
+      Records `settings.sla_updated` in the audit trail with the saved values.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [first_response_minutes, resolution_minutes, business_hours_only]
+            properties:
+              first_response_minutes:
+                type: integer
+                nullable: true
+                minimum: 1
+                maximum: 129600
+                description: >-
+                  Minutes allowed before the first agent reply, or null for no
+                  target. The upper bound is 90 days — a target past that could
+                  never be breached by anything retention still holds, so
+                  saving one would switch the feature off while the screen
+                  showed it on.
+              resolution_minutes:
+                type: integer
+                nullable: true
+                minimum: 1
+                maximum: 129600
+                description: Minutes allowed before the case is finished, or null.
+              business_hours_only:
+                type: boolean
+                description: >-
+                  Count only hours the workspace is open, from the agents'
+                  saved work schedules. With no saved schedule anywhere there is
+                  no calendar to subtract and the clocks run continuously.
+    responses:
+      "200":
+        description: The saved targets
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SlaPolicy" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 siemSettings:
   get:
     tags: [Settings]

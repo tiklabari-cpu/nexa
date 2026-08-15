@@ -120,6 +120,8 @@ model License {
   goalAchievements       GoalAchievement[]
   salesTrackerSettings   SalesTrackerSettings?
   trackedSales           TrackedSale[]
+  slaPolicy              SlaPolicy?
+  slaBreaches            SlaBreach[]
 
   invitations Invitation[]
 
@@ -1932,6 +1934,72 @@ model WorkSchedule {
   @@id([licenseId, agentId])
   @@index([agentId])
   @@map("work_schedules")
+}
+
+/// A workspace's SLA targets (FR-MOD-11.5 · §5.4 "Kurumsal").
+///
+/// One row per licence — `license_id` *is* the primary key, because a target is
+/// a workspace-wide policy rather than a list of them. The plural table name is
+/// the plan's; the singular row is what the requirement asks for, and a second
+/// row would immediately raise "which one applies?" with no answer written down.
+///
+/// Both minute columns are nullable and mean *no target*, which is a different
+/// statement from a target of zero; a positivity CHECK in the migration keeps
+/// the two from being confused. `business_hours_only` decides whether the clock
+/// runs continuously or only during the hours `work_schedules` says the
+/// workspace is open — no second calendar model was opened for it (§C-A27).
+///
+/// A row survives a downgrade (§C-A26): the read path stops honouring it, so a
+/// re-upgrade restores the workspace's configuration instead of finding it
+/// erased. `lib/entitlements.ts` is where that rule lives.
+model SlaPolicy {
+  licenseId            BigInt   @id @map("license_id")
+  firstResponseMinutes Int?     @map("first_response_minutes")
+  resolutionMinutes    Int?     @map("resolution_minutes")
+  businessHoursOnly    Boolean  @default(false) @map("business_hours_only")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("sla_policies")
+}
+
+/// One recorded miss — the report row a breach produces (§C-A27).
+///
+/// Append-only in shape, like `AgentPresenceEvent`: a row is a fact about a
+/// moment that passed, so nothing edits one afterwards except `notified_at`,
+/// which records that the alert for it went out. The unique key
+/// `(licence, subject, target)` is what makes marking *idempotent*: the clock
+/// stopping and the sweep can both notice the same miss, and the second one to
+/// arrive changes nothing. Without it a case left open over a weekend would
+/// collect one row per sweep.
+///
+/// `target_minutes` and `business_hours_only` are copied onto the row rather
+/// than joined from the policy, because the policy is editable: a report that
+/// re-read it would describe last month's misses against this month's targets.
+model SlaBreach {
+  id                String    @id @default(uuid()) @db.Uuid
+  licenseId         BigInt    @map("license_id")
+  /// `thread` or `ticket` — `SLA_SUBJECT_TYPES` in `@nexa/types`.
+  subjectType       String    @map("subject_type")
+  subjectId         String    @map("subject_id")
+  /// `first_response` or `resolution` — `SLA_TARGETS` in `@nexa/types`.
+  target            String
+  targetMinutes     Int       @map("target_minutes")
+  /// Elapsed when the miss was noticed; business minutes when the policy said so.
+  elapsedMinutes    Int       @map("elapsed_minutes")
+  businessHoursOnly Boolean   @map("business_hours_only")
+  detectedAt        DateTime  @default(now()) @map("detected_at") @db.Timestamptz(6)
+  /// When the alert for this miss was sent, or null while it is still pending.
+  notifiedAt        DateTime? @map("notified_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, subjectType, subjectId, target], map: "sla_breaches_subject_key")
+  @@index([licenseId, detectedAt(sort: Desc)])
+  @@index([licenseId, notifiedAt])
+  @@map("sla_breaches")
 }
 
 /// One recorded change of an agent's routing status — the presence history the

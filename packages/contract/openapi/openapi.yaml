@@ -340,6 +340,8 @@ paths:
     $ref: "./paths/settings.yaml#/compliance"
   /settings/compliance/baa:
     $ref: "./paths/settings.yaml#/complianceBaa"
+  /settings/sla:
+    $ref: "./paths/settings.yaml#/slaPolicy"
   /settings/siem:
     $ref: "./paths/settings.yaml#/siemSettings"
   /settings/siem/status:
@@ -2228,6 +2230,59 @@ components:
           description: >-
             The destination, or null when the workspace has never configured
             one. `file` writes NDJSON under `.data/siem`.
+
+    SlaPolicy:
+      type: object
+      description: |
+        How long a customer may wait before the case counts as a miss
+        (FR-MOD-11.5, PRD §5.4 "Kurumsal").
+
+        Measured and marked, never enforced (§C-A27): a breach writes a row and
+        raises a notification, and changes nothing about routing or priority.
+
+        This is *not* NFR-U5's contractual uptime commitment with its billing
+        credit — that is a contract term, not something this repo can promise,
+        and nothing here touches an invoice.
+      required:
+        [first_response_minutes, resolution_minutes, business_hours_only, active, updated_at]
+      properties:
+        first_response_minutes:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 129600
+          description: >-
+            Minutes a customer may wait for the first agent reply, or null for
+            no target. Null and zero are different answers, so the field is
+            nullable rather than 0-as-off.
+        resolution_minutes:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 129600
+          description: >-
+            Minutes a case may stay open before it counts as a miss, or null
+            for no target.
+        business_hours_only:
+          type: boolean
+          description: >-
+            Count only the hours the workspace is open, taken from the agents'
+            saved work schedules (`PUT /agents/{agentId}/work-schedule`). A
+            workspace where nobody has saved one has no calendar to subtract
+            from, so its clocks run continuously.
+        active:
+          type: boolean
+          description: >-
+            Whether these targets are being measured today. False when the
+            licence does not hold the `sla` entitlement — the numbers are still
+            stored, because a downgrade must not destroy configuration a
+            re-upgrade should restore — and false when both targets are null.
+            Lets a screen tell "not bought" apart from "not set".
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the targets were last saved, or null if never.
 
     SiemExportStatus:
       allOf:

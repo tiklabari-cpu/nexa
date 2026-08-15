@@ -2139,7 +2139,7 @@ kalem buldu: _dedicated onboarding/account manager_ · _IVR routing_ · _kalan m
 | S11    | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11 (türetilmiş kod `S11`); kimlik sınırı. → §6.1 · tm 81 · ilerleme K S11 |
 | C4     | HIPAA BAA + bölgesel barındırma (US/EU)          | NFR-C4 (türetilmiş kod `C4`); ADR-12 tek bölge (`eu`) burada genişletildi (`C4-a` ✅, §D102); bölge zorlaması üç yüzeyde (`C4-b` ✅, §D103); signup ekranında seçim + kalıcılık uyarısı (`C4-c` ✅); BAA kabul akışı MOCK (`C4-d` ✅); kapsam kısıtları — retention tavanı + log/telemetri PII maskesi + AI bölge sınırı (`C4-e` ✅); Settings → Security'de bölge + BAA durum kartı (`C4-f` ✅); uçtan uca doğrulama — 421 üç kapıda + kart + kısıtsızlık + cross-tenant (`C4-g` ✅). → §6.1 · tm 82 · ilerleme K C4 |
 | C6     | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12 (türetilmiş kod `C6`). **Kod payı ✅ — 8 alt-görevin 8'i teslim** (`C6-a1`…`C6-g` · tm 83.1–83.8, uçtan uca kapı `C6-g` yeşil); **sertifikasyon süreci** §F.00'ı bloklamaz (§D97). Alt-görev kanıtı ve kilit kararlar `## K.`'dedir — hücre §1.2 gereği damga taşır, geçmiş taşımaz (bu satır 728 → 340 karaktere indirildi, tm 83.8). → §6.1 · tm 83 · ilerleme K C6 |
-| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 3'ü teslim (`11.5-a`, `11.5-b`, `11.5-c`; tm 84.1–84.3). → §6.1 · tm 84 |
+| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 4'ü teslim (`11.5-a`…`11.5-d`; tm 84.1–84.4). → §6.1 · tm 84 |
 | —      | SLA: uptime taahhüdü + fatura kredisi (NFR-U5)   | ⛔-**süreç** · Denetim bulgusu K1-4: PRD'nin tek somut SLA tanımı NFR-U5'tir (_"Sözleşmeli uptime taahhüdü + kredi mekanizması"_). Uptime taahhüdü bir **sözleşme** kalemidir, bu depodan üretilemez (§D97 kod/süreç ayrımı). `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder |
 | —      | Dedicated onboarding / account manager           | ⛔-**süreç** · PRD §5.4 "Kurumsal" satırının üçüncü payı. **Kod payı YOK** — insan hizmeti taahhüdü (özel onboarding + atanmış müşteri yöneticisi); depoda karşılığı olan hiçbir yüzey üretmez. Süpürmede bulundu, §F.00'ı bloklamaz (§D95) |
 | —      | Skills-based routing (Ent. payı)                 | ✅ **v2'de teslim** — `08.6.3` (tm 91). PRD §5.4 "Kanal" satırı bunu IVR ile birlikte anıyor; skill payı v2'de kapandı, IVR payı ⛔ (voice'a bağlı) |
@@ -5344,3 +5344,42 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
   dayanmıyordu). Migration YOK. **Kapsam dışı (11.5-h'ye devredildi):** white-label
   reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifinin uçtan uca e2e kanıtı — bu
   pencere yalnız istemci mekaniğini kapattı. tm 84.3
+- ✅ **`11.5-d` — SLA hedefi + ölçüm + ihlal işareti; ölçer ve işaretler, ZORLAMAZ (§C-A27).**
+  İki tablo: `sla_policies` (lisans başına TEK satır — `license_id` birincil anahtar; hedef bir
+  liste değil, çalışma alanı politikasıdır) ve `sla_breaches` (ihlal = rapor satırı; benzersiz
+  anahtar `(lisans, özne, saat)` **işaretlemeyi idempotent** kılar, çünkü İKİ yazıcı işaretler:
+  saatin durması ve süpürme — anahtarsız, hafta sonu açık kalan bir vaka her süpürmede bir satır
+  biriktirirdi). Hedef `null` = **ölçme**, `0` DEĞİL: sıfır her sohbeti açıldığı an ihlal
+  sayardı, bu yüzden üç katmanda birden (zod · servis · CHECK) reddedilir. **İş saatleri mevcut
+  `work_schedules`'tan** — ikinci takvim modeli açılmadı; çalışma alanı **en az bir ajan
+  vardiyadaysa** açık sayılır (birleşim; kesişim bir kişinin geç vardiyası yüzünden kapatırdı).
+  Hiç kayıtlı plan yoksa takvim `null` ve saat **kesintisiz** işler — uydurma 09:00-18:00
+  çıkarılmaz. **Yetki iki uçta birden** (11.5-b'nin dersi): yazma ucu `entitlement: 'sla'`,
+  ölçüm yolu `readEffectivePolicy` ile downgrade'de satırı SİLMEDEN ölçmeyi durdurur (§C-A26);
+  yanıt gövdesindeki `active` ekrana "satın alınmadı" ile "ayarlanmadı"yı ayırt ettirir.
+  **Ölçüm noktaları:** ilk yanıt = ajanın ilk cevabı (thread başına bir kez, mesaj başına değil)
+  + hiç cevaplanmadan arşivlenen sohbet; çözüm = thread kapanışı ve ticket'ın `open|pending`
+  kümesinden çıkışı. **Ticket'a ilk-yanıt saati KOŞULMADI ve bu bilinçli bir ret:** depoda
+  ticket'a ajan cevabı diye bir kayıt yok (cevap ucu yok, `last_message_at` her düzenlemede
+  oynar), atamayı "ilk yanıt" diye raporlamak doğru görünen yanlış bir sayı olurdu; sohbetten
+  doğan ticket'ta ilk yanıt o sohbette ölçülür. **Süpürme** (`sla:run`, chat-timeout/retention
+  deseni): hâlâ bekleyen saatleri işaretler ve `notified_at` ile bir kez duyurur (kiracı başına
+  tek özet e-posta, sahibe; alıcı `notify_email`'e saygı duyar). Aday sorgusu **takvim
+  zamanıyla** ön-eler — iş saati dakikaları takvim dakikalarını asla aşamaz, yani gerekli koşul;
+  rotayı SQL'e öğretmek takvimi iki yere koyardı. Çözünürlük **bir dakika ve işaretlememe
+  yönünde yuvarlar** — ihlal bir suçlamadır. — `apps/api/prisma/schema.prisma` + migration
+  `20260815180000_sla_targets` (RLS + CHECK + `REVOKE DELETE ON sla_breaches`: ihlali silmek
+  isteyecek taraf onu üretendir) · `packages/types/src/sla.ts` (yeni) ·
+  `apps/api/src/services/sla/{business-hours,sla-service,sla-sweep,sla-run}.ts` (yeni) ·
+  `routes/settings.ts` (`GET|PUT /settings/sla`) · `services/chat/chat-service.ts` ·
+  `services/tickets/ticket-service.ts` · `services/audit/audit-log.ts`
+  (`settings.sla_updated` — alan adları değil **değerler**, "ne söz veriyorduk ve ne zamandan
+  beri" bir alan listesinden okunamaz) · `packages/contract/openapi/paths/settings.yaml` ·
+  test `src/services/sla/business-hours.test.ts` (17, yeni) ·
+  `test/integration/sla.test.ts` (17, yeni) · tm 84.4
+- ✅ **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **135 dosya,
+  3116/3116** (3082 → +34) + web 1142 · `pnpm -w test:integration` api **85 dosya, 2288/2288**
+  (84/2271 → +1 dosya, +17) + rtm 60 · `pnpm -w build` 7/7 · `contract-parity` yeşil ·
+  **`pnpm -w test:e2e` 143/143** (değişmedi — e2e payı `11.5-h`) · `db:check-drift` sürüklenme
+  yok · `format:check` dokunulan dosyalarda temiz. **Kapsam dışı:** SLA ekranı + Reports ihlal
+  KPI'ı (`11.5-e`, ihlal satırlarını okuyan uç oradadır), uçtan uca e2e (`11.5-h`). tm 84.4

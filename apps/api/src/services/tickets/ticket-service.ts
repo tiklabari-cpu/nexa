@@ -18,6 +18,7 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import type { Principal } from '../auth/principal.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
+import { evaluateSubject } from '../sla/sla-service.js';
 import { applyTicketRules } from './apply-ticket-rules.js';
 
 export const TICKET_STATUSES = ['open', 'pending', 'solved', 'closed', 'spam'] as const;
@@ -351,6 +352,33 @@ export class TicketService {
         action: 'ticket.priority_changed',
         target: `ticket:${ticketId}`,
         metadata: { from: existing.priority, to: patch.priority },
+      });
+    }
+
+    // The resolution clock stops when the ticket leaves the unresolved set
+    // (FR-MOD-11.5 · 11.5-d). Only that transition — a solved ticket edited
+    // again is not resolved a second time, and the unique key on the breach
+    // would ignore it anyway.
+    //
+    // A ticket has *no first-response clock*, and that is a deliberate refusal
+    // rather than an omission: nothing in this repo records an agent replying to
+    // a ticket (there is no reply endpoint, and `last_message_at` moves on any
+    // edit), so the only candidates would be an assignment or a status change.
+    // Reporting either as a "first response" would be a wrong number that looks
+    // right. Where a ticket came from a chat, the first reply happened in that
+    // conversation and is measured there.
+    if (
+      patch.status !== undefined &&
+      patch.status !== existing.status &&
+      UNRESOLVED.includes(existing.status as TicketStatus) &&
+      !UNRESOLVED.includes(patch.status)
+    ) {
+      await evaluateSubject(tx, tenant, {
+        subjectType: 'ticket',
+        subjectId: ticketId,
+        target: 'resolution',
+        startedAt: existing.createdAt,
+        stoppedAt: new Date(),
       });
     }
 

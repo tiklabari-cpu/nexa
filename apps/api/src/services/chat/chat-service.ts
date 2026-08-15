@@ -39,6 +39,7 @@ import {
   type TranscriptLine,
 } from '../notifications/chat-transcript.js';
 import { RoutingService, type RoutingContext } from '../routing/routing-service.js';
+import { evaluate as evaluateSla, evaluateSubject, readClock } from '../sla/sla-service.js';
 import {
   canSeeChat,
   chatVisibilityFilter,
@@ -388,9 +389,22 @@ export class ChatService {
       // First agent reply drives the first-response-time report; recorded here
       // so it cannot drift from the events it summarises.
       if (authorType === 'agent' && recipients === 'all' && !thread.firstResponseAt) {
+        const firstResponseAt = new Date(event.created_at);
         await tx.thread.update({
           where: { id: thread.id },
-          data: { firstResponseAt: event.created_at },
+          data: { firstResponseAt },
+        });
+        // The moment the first-response clock stops is the only moment it can be
+        // judged from inside a request (FR-MOD-11.5 · 11.5-d). A thread whose
+        // clock is still running is the sweep's job — nobody is here to notice.
+        // Costs one primary-key lookup on a workspace with no policy, and runs
+        // once per thread rather than once per message.
+        await evaluateSubject(tx, tenant, {
+          subjectType: 'thread',
+          subjectId: thread.id,
+          target: 'first_response',
+          startedAt: thread.createdAt,
+          stoppedAt: firstResponseAt,
         });
       }
 
@@ -563,7 +577,7 @@ export class ChatService {
     tx: TenantClient,
     tenant: TenantContext,
     chat: ChatRow,
-    thread: { id: string },
+    thread: { id: string; createdAt: Date; firstResponseAt: Date | null },
     close: { authorId: string | null; text: string; properties: Record<string, unknown> },
   ): Promise<CloseResult> {
     const closedAt = new Date();
@@ -571,6 +585,31 @@ export class ChatService {
       where: { id: thread.id },
       data: { active: false, closedAt, queuePosition: null, queuedAt: null },
     });
+
+    // Both clocks stop here (FR-MOD-11.5 · 11.5-d). Resolution is obvious; the
+    // first-response one is the case that would otherwise never be judged from a
+    // request — a conversation archived without anyone ever replying is a missed
+    // first response, and nothing else in the lifecycle notices it. Measured
+    // against the close because that is when the waiting demonstrably ended.
+    const clock = await readClock(tx, tenant, closedAt);
+    if (clock) {
+      if (!thread.firstResponseAt) {
+        await evaluateSla(tx, tenant, clock, {
+          subjectType: 'thread',
+          subjectId: thread.id,
+          target: 'first_response',
+          startedAt: thread.createdAt,
+          stoppedAt: closedAt,
+        });
+      }
+      await evaluateSla(tx, tenant, clock, {
+        subjectType: 'thread',
+        subjectId: thread.id,
+        target: 'resolution',
+        startedAt: thread.createdAt,
+        stoppedAt: closedAt,
+      });
+    }
     await tx.chat.update({ where: { id: chat.id }, data: { active: false } });
     await tx.chatUser.updateMany({ where: { chatId: chat.id }, data: { present: false } });
 

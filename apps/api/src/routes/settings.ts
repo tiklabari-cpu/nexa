@@ -21,14 +21,14 @@ import {
   WIDGET_POSITIONS,
   WIDGET_THEMES,
 } from '@nexa/types';
-import { SIEM_EXPORT_TARGETS } from '@nexa/types';
+import { SIEM_EXPORT_TARGETS, SLA_MAX_TARGET_MINUTES } from '@nexa/types';
 import type { Region, SsoAttributeMappingKey, SsoConnection } from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { resolveBrandId } from '../lib/brand.js';
 import { formatAllowlistEntry, parseAllowlistEntry, wouldLockOut } from '../lib/ip-allowlist.js';
-import { poweredByFor, requireEntitlement } from '../lib/entitlements.js';
+import { hasEntitlement, poweredByFor, requireEntitlement } from '../lib/entitlements.js';
 import { normaliseTrustedDomain } from '../lib/origin.js';
 import {
   activePreviousCertificate,
@@ -52,6 +52,11 @@ import {
   serialiseSiemSettings,
 } from '../services/audit/siem-export.js';
 import { MAX_ACTIVE_TOKENS_PER_OWNER } from '../services/auth/token-service.js';
+import {
+  readStoredPolicy,
+  saveSlaPolicy,
+  serialiseSlaPolicy,
+} from '../services/sla/sla-service.js';
 
 const SHORTCUT = /^[A-Za-z0-9_-]{1,40}$/;
 
@@ -483,6 +488,26 @@ const updateSiemBody = z
     target: z.enum(SIEM_EXPORT_TARGETS).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/**
+ * SLA targets (FR-MOD-11.5 · 11.5-d).
+ *
+ * A full replacement rather than a patch, and every field required. The three
+ * are one policy: "reply within 30 minutes" and "no resolution target" are two
+ * halves of a single statement, and a patch could not express *removing* a
+ * target without conflating "leave it alone" with "clear it". Explicit `null`
+ * is how a clock is switched off.
+ *
+ * Positive minutes only, ceiling `SLA_MAX_TARGET_MINUTES` — the same bounds the
+ * database CHECKs state. Zero is rejected rather than read as off: a client that
+ * conflated it with null would silently mark every conversation in the workspace
+ * as breached from the moment it opened.
+ */
+const updateSlaBody = z.object({
+  first_response_minutes: z.number().int().positive().max(SLA_MAX_TARGET_MINUTES).nullable(),
+  resolution_minutes: z.number().int().positive().max(SLA_MAX_TARGET_MINUTES).nullable(),
+  business_hours_only: z.boolean(),
+});
 
 /**
  * The two halves of NFR-C4's condition, reported together.
@@ -1507,6 +1532,72 @@ export default async function settingsRoutes(
       });
 
       return reply.send(serialiseCompliance(region, signedAt));
+    },
+  );
+
+  // --- SLA targets (FR-MOD-11.5 · 11.5-d) ------------------------------------
+  //
+  // What the workspace promised a customer: a first reply within N minutes, a
+  // case finished within M, counted either around the clock or only during the
+  // hours the team is rostered. The product measures against these and marks
+  // what went over; it does not re-route, re-prioritise or bill on them
+  // (§C-A27).
+  //
+  // `access_rules`, like the other workspace-wide policies here, because
+  // promising a response time on behalf of every agent is an admin decision
+  // rather than an inbox preference.
+  //
+  // The read is open on every plan and the write is Enterprise-only — the split
+  // `/settings/siem` established. A workspace has to be able to see what it
+  // would be buying, and 403-ing the page where the upsell belongs is a worse
+  // product and no more secure. `active` in the response is how the screen tells
+  // "not bought" apart from "not set".
+
+  app.get(
+    '/settings/sla',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
+    async (request, reply) => {
+      const { stored, entitled } = await request.withTenant(async (tx) => ({
+        stored: await readStoredPolicy(tx, request.tenant()),
+        entitled: await hasEntitlement(tx, request.tenant(), 'sla'),
+      }));
+      // No row means the workspace has never saved targets, which reads as two
+      // nulls — the same "reading has no side effect" shape the rest of this
+      // file uses for a setting nobody has touched.
+      return reply.send(serialiseSlaPolicy(stored, entitled));
+    },
+  );
+
+  app.put(
+    '/settings/sla',
+    { config: { scopes: ['access_rules:rw'], entitlement: 'sla' } },
+    async (request, reply) => {
+      const body = parse(updateSlaBody, request.body);
+      const tenant = request.tenant();
+
+      const saved = await request.withTenant(async (tx) => {
+        const row = await saveSlaPolicy(tx, tenant, {
+          firstResponseMinutes: body.first_response_minutes,
+          resolutionMinutes: body.resolution_minutes,
+          businessHoursOnly: body.business_hours_only,
+        });
+        // The values themselves, not just the field names: a target is a
+        // commitment the workspace made, and "who changed it to what, and when"
+        // is the question asked after a month of breaches nobody expected.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.sla_updated',
+          metadata: {
+            first_response_minutes: row.firstResponseMinutes,
+            resolution_minutes: row.resolutionMinutes,
+            business_hours_only: row.businessHoursOnly,
+          },
+        });
+        return row;
+      });
+
+      // Entitled by construction — the route gate refused otherwise — so the
+      // saved policy is always in force. Stated rather than re-queried.
+      return reply.send(serialiseSlaPolicy(saved, true));
     },
   );
 

@@ -3031,6 +3031,43 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/sla': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * First-response and resolution targets
+     * @description A workspace that has never saved targets has no row and reads as two
+     *     nulls with business hours off — reading has no side effect and creates
+     *     nothing.
+     */
+    get: operations['getSlaPolicy'];
+    /**
+     * Set the SLA targets
+     * @description **Enterprise only** (`sla` entitlement, FR-MOD-11.5).
+     *
+     *     A full replacement rather than a patch: the three fields are one policy,
+     *     and reading back what you sent is what makes "no first-response target"
+     *     expressible at all. Send `null` for a clock you do not want measured.
+     *
+     *     Setting a target does not re-evaluate history. Breaches are marked as
+     *     clocks stop (a first reply lands, a case is closed) and by the sweep for
+     *     cases still running past their target, so a target saved today applies to
+     *     what happens from today.
+     *
+     *     Records `settings.sla_updated` in the audit trail with the saved values.
+     */
+    put: operations['setSlaPolicy'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/siem': {
     parameters: {
       query?: never;
@@ -6843,6 +6880,32 @@ export interface components {
        * @enum {string|null}
        */
       target: 'file' | null;
+    };
+    /**
+     * @description How long a customer may wait before the case counts as a miss
+     *     (FR-MOD-11.5, PRD §5.4 "Kurumsal").
+     *
+     *     Measured and marked, never enforced (§C-A27): a breach writes a row and
+     *     raises a notification, and changes nothing about routing or priority.
+     *
+     *     This is *not* NFR-U5's contractual uptime commitment with its billing
+     *     credit — that is a contract term, not something this repo can promise,
+     *     and nothing here touches an invoice.
+     */
+    SlaPolicy: {
+      /** @description Minutes a customer may wait for the first agent reply, or null for no target. Null and zero are different answers, so the field is nullable rather than 0-as-off. */
+      first_response_minutes: number | null;
+      /** @description Minutes a case may stay open before it counts as a miss, or null for no target. */
+      resolution_minutes: number | null;
+      /** @description Count only the hours the workspace is open, taken from the agents' saved work schedules (`PUT /agents/{agentId}/work-schedule`). A workspace where nobody has saved one has no calendar to subtract from, so its clocks run continuously. */
+      business_hours_only: boolean;
+      /** @description Whether these targets are being measured today. False when the licence does not hold the `sla` entitlement — the numbers are still stored, because a downgrade must not destroy configuration a re-upgrade should restore — and false when both targets are null. Lets a screen tell "not bought" apart from "not set". */
+      active: boolean;
+      /**
+       * Format: date-time
+       * @description When the targets were last saved, or null if never.
+       */
+      updated_at: string | null;
     };
     SiemExportStatus: components['schemas']['SiemExportSettings'] & {
       /**
@@ -14004,6 +14067,64 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ComplianceSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getSlaPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current targets */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SlaPolicy'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setSlaPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Minutes allowed before the first agent reply, or null for no target. The upper bound is 90 days — a target past that could never be breached by anything retention still holds, so saving one would switch the feature off while the screen showed it on. */
+          first_response_minutes: number | null;
+          /** @description Minutes allowed before the case is finished, or null. */
+          resolution_minutes: number | null;
+          /** @description Count only hours the workspace is open, from the agents' saved work schedules. With no saved schedule anywhere there is no calendar to subtract and the clocks run continuously. */
+          business_hours_only: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description The saved targets */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SlaPolicy'];
         };
       };
       400: components['responses']['BadRequest'];

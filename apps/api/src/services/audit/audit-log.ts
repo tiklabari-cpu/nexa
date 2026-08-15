@@ -138,6 +138,13 @@ export const AUDIT_ACTIONS = [
   // revenue is recorded in, or widening the attribution window all move the
   // revenue figures a workspace reports. The entry names the changed fields only.
   'settings.sales_tracker_updated',
+  // SLA targets (FR-MOD-11.5 · 11.5-d). Recorded with the *values*, not just the
+  // changed field names — unlike most settings entries. A target is a promise
+  // the workspace made about response time, and the question asked after an
+  // unexpected month of breaches is "what were we promising, and since when?",
+  // which a list of field names cannot answer. Nothing here is sensitive: three
+  // numbers a workspace chose about itself.
+  'settings.sla_updated',
   // A sale was reported through the widget's tracking snippet (FR-MOD-13.5).
   // The only write in the platform where a *visitor's browser* states a figure
   // the workspace then reports as revenue, so who reported what, and when, has

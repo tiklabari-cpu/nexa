@@ -3968,14 +3968,14 @@
             "description": "Settings → Security: SIEM export ekranı (hedef, son export, boşluk uyarısı)",
             "details": "C6-f — Settings → Security: SIEM export ekranı (hedef, son export, boşluk uyarısı)  [SONNET-XHIGH]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nKAPSAM: SIEM bölümü — hedef yapılandırma formu, son export zamanı ve satır sayısı, zincir boşluğu tespit edilmişse UYARI bandı.\n\nDOSYALAR: `apps/web/src/features/settings/SiemExport.tsx` (yeni) + test · `apps/web/src/features/settings/SettingsPage.tsx`\n\n**YENİ SUNUCU UCU AÇILMAZ** (denetim bulgusu): hedef okuma/yazma ve durum uçları `C6-b`'nin malıdır (`GET|PATCH /settings/siem`, `GET /settings/siem/status`); bu ekran onları TÜKETİR.\n\nREFERANS DESEN (birebir): `apps/web/src/features/settings/ScheduledExports.tsx` (**tm 94 · `07.9-sched-h`** — denetim düzeltmesi) — zamanlanmış iş yapılandırma ekranının kalıbı; uyarı için `components/ui/Banner.tsx` (segmentli + kalıcı dismiss, tm 62).\n\nKAPSAM DIŞI: e2e (C6-g).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/web test (hedef formu doğrulaması; son export bilgisi gösterilir; boşluk uyarısı yalnız boşluk varken görünür; boş durum anlamlı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "83.3",
               "83.4",
               "83.5"
             ],
             "parentId": "83",
-            "updatedAt": "2026-08-15T08:12:34.506Z"
+            "updatedAt": "2026-08-15T08:37:04.844Z"
           },
           {
             "id": 8,
@@ -3994,7 +3994,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-15T08:12:34.506Z"
+        "updatedAt": "2026-08-15T08:37:04.844Z"
       },
       {
         "id": "84",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T08:12:34.507Z",
+      "lastModified": "2026-08-15T08:37:04.846Z",
       "taskCount": 124,
       "completedCount": 120,
       "tags": [

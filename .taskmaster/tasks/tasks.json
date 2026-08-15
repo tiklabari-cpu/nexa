@@ -3880,7 +3880,7 @@
         "description": "PRD §5.4 (Ent.) · NFR-C6/C7/S12 · KK-türetilmiş. KOD PAYI görevleşir; sertifikasyon süreci §F.00'ı BLOKLAMAZ (§D97).",
         "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `C6` · dilim V3-2\n\n7 atomik alt-görev · ~9 pencere · etiket dağılımı: SONNET-XHIGH x3 · OPUS-XHIGH x3 · OPUS-MAX x1\n\nKK: \"Genişletilmiş audit + SIEM'e export; kontrol kanıtları\" — NFR-C6/C7/S12'den türetildi (§C-A21). Sertifikasyon = dış denetim süreci, bu depodan üretilemez.\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  C6-a [SONNET-XHIGH] Audit kapsamı denetimi + genişletme — hangi güvenlik-hassas mutasyon yazmıyor  (bağ: —)\n  C6-b [OPUS-XHIGH] SIEM export kontratı + siem_export_cursors (keyset, tekrar-teslime dayanıklı) + NDJSON akışı  (bağ: —)\n  C6-c [OPUS-MAX] Export bütünlüğü çekirdeği (BÖLÜNMEZ) — kayıt zinciri (HMAC) + export imzası + boşluk tespiti  (bağ: C6-b)\n  C6-d [SONNET-XHIGH] MOCK SIEM hedefi (.data/siem dosya sink) + zamanlanmış gönderim  (bağ: C6-b, C6-c)\n  C6-e [OPUS-XHIGH] Erişim gözden geçirme raporu (SOC 2 CC6.1 kanıtı) — kim/hangi rol/son giriş/PAT envanteri  (bağ: C6-a)\n  C6-f [SONNET-XHIGH] Settings → Security: SIEM export ekranı (hedef, son export, boşluk uyarısı)  (bağ: C6-d)\n  C6-g [OPUS-XHIGH] Uçtan uca doğrulama — eylem→audit→export→zincir; append-only; boşluk negatifi; cross-tenant  (bağ: C6-c, C6-d, C6-e, C6-f)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.4 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
         "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (C6-g) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "81",
           "82"
@@ -3893,10 +3893,10 @@
             "description": "Audit kapsam boşluğu envanteri — 37 route taranır, çıktı ada bağlı sabit liste",
             "details": "C6-a1 — Audit kapsam boşluğu ENVANTERİ — 37 route taranır, çıktı ada bağlı sabit liste  [OPUS-XHIGH]\n\nPRD: C6 (PLAN §6.1.4 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nBU BÖLÜNME DENETİM BULGUSUYLA YAPILDI (PLAN §D99). İlk kırılımda tek bir `SONNET-XHIGH` alt-görev hem \"hangi mutasyon güvenlik-hassastır\" kararını hem de kodu istiyordu. Bu bir GÜVENLİK DENETİMİDİR: `apps/api/src/routes/` altında **37 route dosyası** var, mevcut sözlük **44 eylem** taşıyor ve her eylemin bir METADATA MİNİMİZASYON kararı var (`member.role_changed` yalnız from/to rolleri; `auth.ip_denied` adresi KASTEN saklamıyor). §5.1.1'in `SONNET-XHIGH` ölçütü \"~3-5 dosya + kopyalanacak desen\" der; burada 37 dosya taranıp muhakeme isteniyor.\n\nKAPSAM (KOD DEĞİŞİKLİĞİ YOK — çıktı bir listedir):\n- `apps/api/src/routes/*.ts` içindeki TÜM mutasyon uçları taranır ve mevcut `AUDIT_ACTIONS` (`apps/api/src/services/audit/audit-log.ts:33`) ile karşılaştırılır.\n- Çıktı: (a) EKLENECEK eylem adlarının sabit listesi, (b) her biri için yazılacak/yazılmayacak metadata alanları, (c) kapsam dışı bırakılan uçların gerekçesi.\n- Liste PLAN §D'ye kayıt olarak yazılır ve `C6-a2`'nin girdisi olur.\n\nDOSYALAR: `apps/api/src/routes/*.ts` (yalnız okuma) · `apps/api/src/services/audit/audit-log.ts:33` · `PLAN.md` §D\n\nREFERANS DESEN: tm 92 `08.9.7-c/-d/-e` — hangi uçların audit'e bağlandığının önceki turu; onların KAPSAM DIŞI bıraktıkları bu envanterin başlangıç noktasıdır.\n\nKAPSAM DIŞI: kod değişikliği (C6-a2), export (C6-b/-c/-d).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build — hepsi exit 0 (kod değişmediği için regresyonsuz yeşil kalmalı); envanter §D'ye yazılır; HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build (kod değişmediği için tümü REGRESYONSUZ yeşil). Kabul ölçütü kod değil ÇIKTI: PLAN §D'ye eklenen envanter listesi her satırda \"route:satır → eylem adı → yazılacak metadata alanları\" taşır ve kapsam dışı bırakılan her uç gerekçelidir.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "83",
-            "updatedAt": "2026-08-11T21:06:36.612Z"
+            "updatedAt": "2026-08-15T03:26:11.155Z"
           },
           {
             "id": 2,
@@ -3994,7 +3994,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-11T20:47:57.075Z"
+        "updatedAt": "2026-08-15T03:26:11.155Z"
       },
       {
         "id": "84",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T03:24:26.429Z",
+      "lastModified": "2026-08-15T03:26:11.156Z",
       "taskCount": 124,
       "completedCount": 120,
       "tags": [

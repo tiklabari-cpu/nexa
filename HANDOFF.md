@@ -13,6 +13,37 @@
 
 ## Task log (newest-first)
 
+## tm 83.1 — C6-a1 · Audit kapsam boşluğu envanteri (kod değişmedi) — done — 2026-08-15 UTC
+
+- **Yapıldı:** `PLAN.md` **§D104** — `apps/api/src/routes/`'un **39** modülünden mutasyon taşıyan
+  **30**'u tarandı (**139** uç), `AUDIT_ACTIONS` (bugün **51** eylem) ile karşılaştırıldı:
+  **58 denetleniyor / 81 denetlenmiyor.** Eylem adı icat edilmedi — var olan 51'in izlediği ölçüt
+  koddan geri okundu (erişim · kimlik bilgisi · dışarı kanal · veri/kanıt yıkımı · uyum taahhüdü);
+  `C6-a2`'nin sabit girdisi **11 yeni ad + 4 mevcut `data.deleted` = 15 uç**, her biri için
+  yazılacak/yazılmayacak metadata alanı ve 6 çapraz-kesit kısıt (C1–C6) ile. Kalan **66** uç beş
+  gerekçe sınıfında listelendi. `#### KC6` bloğu açıldı; §6 Faz-3 tablosunun `C6` satırına
+  `C6-a1 ✅` + `ilerleme K C6` işlendi.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` **4394/4394** ·
+  `pnpm -w test:integration` **2174/2174** · `pnpm -w build` 7/7. Ürün kodu DEĞİŞMEDİ, kapı
+  regresyonsuz yeşil; `test:e2e` koşulmadı (görevin testStrategy'si de istemiyor).
+- **Varsayımlar:** (a) Görev metni "37 route / 44 eylem" diyordu (2026-08-11); ölçüm 39/51 verdi —
+  aradaki fark `C4` ve Telegram turlarıdır, envanter bugünkü koda göre yazıldı. (b) İki gerçek
+  boşluk adayı `C6-a2`'ye KASTEN sokulmadı, çünkü karar işi içerir (kopyalanacak desen değil):
+  `chats/:id/supervise` (30 sn heartbeat → yalnız geçiş anı kaydedilmeli) ve
+  `settings/custom-fields` create/update (yeni zorunlu alan = yeni kişisel veri kategorisi; GDPR
+  `C1`/`C2` tarafı sorarsa açılmalı). Gerekçeleri §D104'te; kendi görevlerini hak ediyorlar.
+- **Sonraki pencereye not — İKİ AÇIK KALEM:**
+  (1) **`C6-a2` girdisi hazır:** §D104 (a) tablosu birebir uygulanacak, ~8 dosya. En yüksek değerli
+  ikisi `member.joined` (davet kaydediliyor, erişimin kazanıldığı an kaydedilmiyor — SOC 2 CC6.1)
+  ve `scheduled_export.*` (rapor verisinin serbest e-posta adreslerine yinelenen çıkışı;
+  **alıcı adresleri metadata'ya YAZILMAZ** — o yüzeyin `reports_manage` ile kapatılmasının tek
+  sebebi onlar). C1 kısıtı bağlayıcı: kimliksiz yolda kiracıyı istek gövdesinden alma.
+  (2) **`pnpm format:check` KIRMIZI — bu pencereden DEĞİL, önceden.** 10 dosya: `C4` turunun
+  (tm 82.x) 7'si + Telegram turunun (tm 79.x) 2'si + `log-redact.test.ts`. `M-FMT` (§K) bir kapı
+  olarak duruyordu; şu an bozuk. CONVENTIONS §1 DoD listesinde olmadığı için bu task'ı bloklamadı
+  ve §5 (kapsam disiplini) gereği burada düzeltilmedi — `prettier --write` başkasının 10 dosyasını
+  bu commit'e sokardı. Ayrı bir görev hak ediyor (tek komut, ama kendi commit'i olmalı).
+
 ## tm 82.7 — C4-g · Uçtan uca doğrulama (421 üç kapıda + kart + kısıtsızlık + cross-tenant) — done — 2026-08-15 UTC
 
 - **Yapıldı:** `apps/e2e/tests/compliance.spec.ts` (yeni, 5) — kural artık `playwright.config.ts`'in

@@ -342,6 +342,10 @@ paths:
     $ref: "./paths/settings.yaml#/complianceBaa"
   /settings/sla:
     $ref: "./paths/settings.yaml#/slaPolicy"
+  /settings/sandbox:
+    $ref: "./paths/settings.yaml#/sandbox"
+  /settings/sandbox/reset:
+    $ref: "./paths/settings.yaml#/sandboxReset"
   /settings/siem:
     $ref: "./paths/settings.yaml#/siemSettings"
   /settings/siem/status:
@@ -2283,6 +2287,77 @@ components:
           format: date-time
           nullable: true
           description: When the targets were last saved, or null if never.
+
+    Sandbox:
+      type: object
+      description: |
+        A workspace's sandbox, as its owner sees it (FR-MOD-11.5 · 11.5-f).
+
+        Deliberately thin. Every field is read from the sandbox's own licence
+        row — the one row a production workspace can see across the boundary —
+        and nothing is read from its organization, its members or its data.
+
+        There is no name: a workspace is opened by choosing it at sign-in, where
+        `POST /auth/login` already lists it with its organization's name.
+      required: [license_id, region, created_at, reset_at]
+      properties:
+        license_id:
+          type: string
+          description: >-
+            The sandbox's licence id — what a client passes as `license_id` to
+            `POST /auth/authorize` to sign in to it.
+        region:
+          type: string
+          enum: [eu, us]
+          description: >-
+            Where the sandbox keeps its data. Inherited from the parent
+            workspace and immutable (C4-a), so it always equals the caller's own
+            region; reported anyway because "my test data went somewhere else"
+            is the fear this answers.
+        created_at:
+          type: string
+          format: date-time
+        reset_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When the sandbox was last emptied, or null if never. Recorded on the
+            licence row rather than in the audit trail, because a reset destroys
+            the sandbox's own trail and writing into the parent's would be a
+            cross-licence write.
+
+    SandboxView:
+      type: object
+      description: |
+        Where the caller stands in relation to a sandbox (FR-MOD-11.5 · 11.5-f).
+
+        Three states a screen has to tell apart, which is why `entitled` is here
+        beside `sandbox` rather than inferred from it: a workspace that has not
+        bought the capability, one that has bought it and not used it, and one
+        that already has a sandbox.
+
+        Read with a credential for the sandbox itself, `is_sandbox` is the only
+        field that is true. It reports nothing about the parent — not its id,
+        not its plan, not that it exists.
+      required: [is_sandbox, entitled, sandbox]
+      properties:
+        is_sandbox:
+          type: boolean
+          description: True when the caller's own licence is a sandbox.
+        entitled:
+          type: boolean
+          description: >-
+            Whether this licence's plan includes a sandbox at all. Always false
+            inside a sandbox, which holds no subscription and so reads as the
+            self-serve tier.
+        sandbox:
+          allOf:
+            - $ref: "#/components/schemas/Sandbox"
+          nullable: true
+          description: >-
+            This licence's sandbox, or null when it has none. Always null when
+            `is_sandbox` is true — a sandbox cannot have one.
 
     SiemExportStatus:
       allOf:

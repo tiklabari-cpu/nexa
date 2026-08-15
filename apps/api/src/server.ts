@@ -15,6 +15,7 @@ import entitlementGate from './plugins/entitlement-gate.js';
 import { logSafeUrl } from './lib/log-redact.js';
 import licenseGate from './plugins/license-gate.js';
 import metering from './plugins/metering.js';
+import sandboxGate from './plugins/sandbox-gate.js';
 import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
 import authRoutes from './routes/auth.js';
@@ -193,6 +194,11 @@ export async function buildServer({
   // than told what its plan does not include — the first is the reason it
   // cannot write, and the second would be a confusing answer to it.
   await app.register(entitlementGate);
+  // Billing writes are refused inside a sandbox (FR-MOD-11.5 · 11.5-f). Last of
+  // the three gates because it is the narrowest: it costs a query only on a
+  // write under `/billing/`, where the two above have already answered the
+  // general questions.
+  await app.register(sandboxGate);
   await app.register(metering, { env });
 
   app.addHook('onSend', async (request, reply) => {

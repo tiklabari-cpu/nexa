@@ -127,6 +127,9 @@ describe('error taxonomy', () => {
     // Supervisor takeover (FR-MOD-08.6.3): the 409 a second, concurrent
     // supervisor gets when they lose the race to seize a chat.
     'takeover_conflict',
+    // The sandbox workspace (FR-MOD-11.5 · 11.5-f): the 409 for asking a
+    // licence that already has one for a second.
+    'sandbox_exists',
   ];
 
   it('carries the 24 documented types, plus Nexa additions', () => {

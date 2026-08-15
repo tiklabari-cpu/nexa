@@ -7,9 +7,34 @@
  * are supposed to agree eventually will not, and the one that decides the
  * invoice is the wrong one to discover was drifting.
  */
+import { Prisma } from '@prisma/client';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 export type LicenseAccess = 'active' | 'trialing' | 'read_only';
+
+/**
+ * Is this licence one an invoice may be built from? (FR-MOD-11.5 · 11.5-f)
+ *
+ * A sandbox is a second tenant with no commercial existence: nothing it does
+ * reaches `usage_records`, so nothing it does can reach an invoice, a quota
+ * warning or the Reports "Automated" figure derived from the same rows. Written
+ * as a predicate on the *insert* rather than as a separate lookup the caller
+ * makes first, so there is no window between asking and writing and no second
+ * round trip on the hottest write in the system — `recordApiCall` runs on every
+ * PAT request the platform serves.
+ *
+ * `EXISTS (… IS NULL)` rather than `NOT EXISTS (… IS NOT NULL)`, and the
+ * difference is which way it fails. A licence row the caller cannot see makes
+ * this false and the meter silently records nothing — under-billing. The
+ * inverted spelling would record everything, which is how a sandbox ends up on
+ * a customer's invoice. Neither happens in practice (the licence gate reads the
+ * same row on every mutating request, so an invisible one would already be
+ * failing loudly); it is written this way because the harmless failure should be
+ * the reachable one.
+ */
+const isBillableLicense = (licenseId: bigint): Prisma.Sql => Prisma.sql`EXISTS (
+  SELECT 1 FROM licenses l WHERE l.id = ${licenseId}::bigint AND l.sandbox_of_license_id IS NULL
+)`;
 
 /**
  * Overage is sold in packs of this many AI resolutions (PRD §10.1.4, the
@@ -97,9 +122,10 @@ export async function recordAiResolution(
   await tx.$executeRaw`
     INSERT INTO usage_records
       (id, license_id, metric, period, quantity, included, overage_unit, overage_unit_price_cents, updated_at)
-    VALUES
-      (gen_random_uuid(), ${tenant.licenseId}, 'ai_resolutions', ${currentPeriod()},
-       1, ${BigInt(includedPerMonth)}, ${AI_RESOLUTION_OVERAGE_UNIT}, ${overageUnitPriceCents}, now())
+    SELECT gen_random_uuid(), ${tenant.licenseId}::bigint, 'ai_resolutions', ${currentPeriod()}::char(6),
+           1, ${BigInt(includedPerMonth)}::bigint, ${AI_RESOLUTION_OVERAGE_UNIT}::integer,
+           ${overageUnitPriceCents}::integer, now()
+    WHERE ${isBillableLicense(tenant.licenseId)}
     ON CONFLICT (license_id, metric, period)
     DO UPDATE SET quantity = usage_records.quantity + 1, updated_at = now()
   `;
@@ -123,9 +149,10 @@ export async function recordApiCall(
   await tx.$executeRaw`
     INSERT INTO usage_records
       (id, license_id, metric, period, quantity, included, overage_unit, overage_unit_price_cents, updated_at)
-    VALUES
-      (gen_random_uuid(), ${tenant.licenseId}, 'api_calls', ${currentPeriod()},
-       1, ${BigInt(includedPerMonth)}, ${API_CALL_OVERAGE_UNIT}, ${overageUnitPriceCents}, now())
+    SELECT gen_random_uuid(), ${tenant.licenseId}::bigint, 'api_calls', ${currentPeriod()}::char(6),
+           1, ${BigInt(includedPerMonth)}::bigint, ${API_CALL_OVERAGE_UNIT}::integer,
+           ${overageUnitPriceCents}::integer, now()
+    WHERE ${isBillableLicense(tenant.licenseId)}
     ON CONFLICT (license_id, metric, period)
     DO UPDATE SET quantity = usage_records.quantity + 1, updated_at = now()
   `;

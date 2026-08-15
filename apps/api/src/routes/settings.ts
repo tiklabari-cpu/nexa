@@ -22,7 +22,7 @@ import {
   WIDGET_THEMES,
 } from '@nexa/types';
 import { SIEM_EXPORT_TARGETS, SLA_MAX_TARGET_MINUTES } from '@nexa/types';
-import type { Region, SsoAttributeMappingKey, SsoConnection } from '@nexa/types';
+import type { Region, SandboxView, SsoAttributeMappingKey, SsoConnection } from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
@@ -52,6 +52,12 @@ import {
   serialiseSiemSettings,
 } from '../services/audit/siem-export.js';
 import { MAX_ACTIVE_TOKENS_PER_OWNER } from '../services/auth/token-service.js';
+import {
+  createSandbox,
+  readSandbox,
+  resetSandbox,
+  sandboxResetRefused,
+} from '../services/billing/sandbox-service.js';
 import {
   readStoredPolicy,
   saveSlaPolicy,
@@ -1675,6 +1681,130 @@ export default async function settingsRoutes(
         readSiemExportStatus(tx, { horizonMs: options.env.SIEM_EXPORT_HORIZON_MS }),
       );
       return reply.send(status);
+    },
+  );
+
+  // --- Sandbox workspace (FR-MOD-11.5 · 11.5-f) -------------------------------
+  //
+  // Somewhere to point an integration at, replay a migration in, or hand to a
+  // new hire — shaped exactly like production and connected to none of it. It is
+  // a **second tenant**: its own organization, its own licence, its own row
+  // level security scope, and it is never metered, invoiced or counted as seats.
+  //
+  // Three surfaces, and the asymmetry between them is the design:
+  //
+  //   * the read is open on every plan, so a workspace can see what it would be
+  //     buying (the split `/settings/siem` and `/settings/sla` established) and
+  //     so the console can tell, from *inside* a sandbox, that it is in one;
+  //   * creating is Enterprise-only and owner-only — it mints a whole workspace,
+  //     and the person who owns the new one should be the person who owns this;
+  //   * resetting is owner-only and refused anywhere but inside a sandbox. It
+  //     deletes everything the sandbox holds, so the credential that asks has to
+  //     be a credential *for the thing being deleted*. A production token cannot
+  //     wipe anything, however it is stolen.
+
+  app.get(
+    '/settings/sandbox',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      // The caller's own region: a sandbox inherits its parent's and the value
+      // is immutable (C4-a), so this is the sandbox's region without reading
+      // the sandbox's organization — a row the parent deliberately cannot see.
+      const region = request.requireRegion();
+      const { isSandbox, sandbox, entitled } = await request.withTenant(async (tx) => ({
+        ...(await readSandbox(tx, request.tenant(), region)),
+        entitled: await hasEntitlement(tx, request.tenant(), 'sandbox'),
+      }));
+
+      return reply.send({ is_sandbox: isSandbox, entitled, sandbox } satisfies SandboxView);
+    },
+  );
+
+  app.post(
+    '/settings/sandbox',
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner', entitlement: 'sandbox' } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      const tenant = request.tenant();
+      const region = request.requireRegion();
+
+      // Refused before the work, with the reason the caller can act on. The
+      // database refuses both of these too (`licenses_sandbox_not_nested`, the
+      // unique index) — this is here because "you already have one" is a
+      // different message from a constraint name, not because the check holds
+      // anything up on its own.
+      const existing = await request.withTenant((tx) => readSandbox(tx, tenant, region));
+      if (existing.isSandbox) {
+        throw new ApiError(
+          'not_allowed',
+          'A sandbox cannot have a sandbox of its own. Create it from the production workspace.',
+        );
+      }
+      if (existing.sandbox) {
+        throw new ApiError(
+          'sandbox_exists',
+          'This workspace already has a sandbox. Reset it from inside instead of creating a second one.',
+        );
+      }
+
+      // Outside `withTenant`: this builds a workspace in an organization that
+      // does not exist yet, so there is no tenant context it could run under —
+      // the shape `/auth/signup` has for the same reason. `exactRole: 'owner'`
+      // above is what makes `principal.accountId` an owner of this licence, and
+      // `sandbox_create` verifies the membership again rather than trusting it.
+      const created = await createSandbox(
+        app.db,
+        tenant.licenseId,
+        principal.kind === 'agent' ? principal.accountId : '',
+      );
+
+      // In the *parent's* trail, which is where it belongs: a second workspace
+      // now exists on this customer's account, and the workspace that answers
+      // for it is this one. The sandbox's own trail starts empty, as a fresh
+      // workspace's does.
+      await request.withTenant((tx) =>
+        writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.sandbox_created',
+          target: `license:${created.licenseId}`,
+          metadata: { region },
+        }),
+      );
+
+      const view = await request.withTenant((tx) => readSandbox(tx, tenant, region));
+      return reply
+        .status(201)
+        .send({ is_sandbox: false, entitled: true, sandbox: view.sandbox } satisfies SandboxView);
+    },
+  );
+
+  // No `entitlement` here, and that is not an oversight. A sandbox holds no
+  // subscription, so it reads as the self-serve tier — gating this on `sandbox`
+  // would refuse every reset for want of a plan the sandbox can never have. The
+  // entitlement guards *creating* one, which is the commercial act; emptying
+  // your own test workspace is not.
+  app.post(
+    '/settings/sandbox/reset',
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner' } },
+    async (request, reply) => {
+      const tenant = request.tenant();
+      const region = request.requireRegion();
+
+      const { isSandbox } = await request.withTenant((tx) => readSandbox(tx, tenant, region));
+      if (!isSandbox) throw sandboxResetRefused();
+
+      // Outside `withTenant` because the licence row this transaction would be
+      // scoped to is one of the rows being deleted. `sandbox_reset` re-creates
+      // it with the same id and the same members, so the workspace survives its
+      // own contents; every credential inside it does not.
+      const resetAt = await resetSandbox(app.db, tenant.licenseId);
+
+      return reply.send({
+        reset_at: resetAt.toISOString(),
+        // Said plainly rather than left for the client to discover on its next
+        // 401. The reset deletes the licence row, which cascades to the tokens
+        // issued against it — including the one that made this call.
+        signed_out: true,
+      });
     },
   );
 

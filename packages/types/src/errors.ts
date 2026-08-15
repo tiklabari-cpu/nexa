@@ -44,6 +44,13 @@ export const ERROR_TYPES = [
   'not_found',
   'pending_requests_limit_reached',
   'request_timeout',
+  // Nexa addition — the sandbox workspace (FR-MOD-11.5 · 11.5-f). A licence may
+  // hold at most one sandbox, and asking for a second is a conflict rather than
+  // a malformed request: the caller's body was fine, the workspace's state is
+  // what refused them. Kept narrow like `website_exists`/`ticket_exists` rather
+  // than folding into a generic conflict, which is how the rest of this list is
+  // written.
+  'sandbox_exists',
   'service_unavailable',
   // Nexa addition — supervisor takeover (FR-MOD-08.6.3). Two supervisors racing
   // to seize the same chat: the conditional re-assign lets exactly one win, and
@@ -98,6 +105,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   not_found: 404,
   pending_requests_limit_reached: 429,
   request_timeout: 408,
+  sandbox_exists: 409,
   service_unavailable: 503,
   takeover_conflict: 409,
   ticket_exists: 409,

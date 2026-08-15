@@ -153,6 +153,15 @@ export const AUDIT_ACTIONS = [
   // orders the same way the report does. Metadata carries the amount, currency
   // and whether it was attributed; the actor is the customer token.
   'sale.tracked',
+  // A sandbox workspace was created (FR-MOD-11.5 · 11.5-f). Written into the
+  // *parent's* trail, because that is the workspace the customer answers for:
+  // a second tenant now exists on their account, holding data shaped like
+  // production's, and "when did this appear and who asked for it" is the
+  // question an auditor brings. There is deliberately no `sandbox_reset`
+  // counterpart — a reset destroys the sandbox's own trail, and writing into
+  // the parent's would be the one cross-licence write the slice exists to make
+  // impossible, so `licenses.sandbox_reset_at` carries that fact instead.
+  'settings.sandbox_created',
   'settings.trusted_domain_added',
   'settings.trusted_domain_removed',
   'settings.ip_allowlist_added',

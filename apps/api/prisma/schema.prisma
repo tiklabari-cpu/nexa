@@ -66,9 +66,25 @@ model License {
   hipaaBaaSignedAt      DateTime? @map("hipaa_baa_signed_at") @db.Timestamptz(6)
   /// When the onboarding sample data was laid down, so the seed never runs twice.
   demoSeededAt          DateTime? @map("demo_seeded_at") @db.Timestamptz(6)
+  /// The production licence this one is a sandbox of (FR-MOD-11.5 · 11.5-f), or
+  /// null on a real workspace. A sandbox is a *second tenant*: its own
+  /// organization, its own RLS scope, its own everything — this column is the
+  /// only thread back, and it exists so the meter, the invoice and the seat
+  /// count can all ask one question. Unique, so a licence has at most one
+  /// sandbox; nesting is refused by `licenses_sandbox_not_nested`, which Prisma
+  /// cannot model, so this comment is where the schema says so.
+  sandboxOfLicenseId    BigInt?   @unique @map("sandbox_of_license_id")
+  /// When this sandbox was last wiped, or null if never. Kept on the row rather
+  /// than in the audit trail because a reset destroys the sandbox's own trail,
+  /// and writing into the *parent's* would be the one cross-licence write this
+  /// slice exists to make impossible. Only a sandbox may carry a value —
+  /// `licenses_sandbox_reset_requires_sandbox` enforces that.
+  sandboxResetAt        DateTime? @map("sandbox_reset_at") @db.Timestamptz(6)
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sandboxOf              License?                @relation("LicenseSandbox", fields: [sandboxOfLicenseId], references: [id], onDelete: Cascade)
+  sandbox                License?                @relation("LicenseSandbox")
   memberships            AgentMembership[]
   apiTokens              ApiToken[]
   refreshTokens          OauthRefreshToken[]

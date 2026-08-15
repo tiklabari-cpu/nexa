@@ -2139,7 +2139,7 @@ kalem buldu: _dedicated onboarding/account manager_ · _IVR routing_ · _kalan m
 | S11    | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11 (türetilmiş kod `S11`); kimlik sınırı. → §6.1 · tm 81 · ilerleme K S11 |
 | C4     | HIPAA BAA + bölgesel barındırma (US/EU)          | NFR-C4 (türetilmiş kod `C4`); ADR-12 tek bölge (`eu`) burada genişletildi (`C4-a` ✅, §D102); bölge zorlaması üç yüzeyde (`C4-b` ✅, §D103); signup ekranında seçim + kalıcılık uyarısı (`C4-c` ✅); BAA kabul akışı MOCK (`C4-d` ✅); kapsam kısıtları — retention tavanı + log/telemetri PII maskesi + AI bölge sınırı (`C4-e` ✅); Settings → Security'de bölge + BAA durum kartı (`C4-f` ✅); uçtan uca doğrulama — 421 üç kapıda + kart + kısıtsızlık + cross-tenant (`C4-g` ✅). → §6.1 · tm 82 · ilerleme K C4 |
 | C6     | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12 (türetilmiş kod `C6`). **Kod payı ✅ — 8 alt-görevin 8'i teslim** (`C6-a1`…`C6-g` · tm 83.1–83.8, uçtan uca kapı `C6-g` yeşil); **sertifikasyon süreci** §F.00'ı bloklamaz (§D97). Alt-görev kanıtı ve kilit kararlar `## K.`'dedir — hücre §1.2 gereği damga taşır, geçmiş taşımaz (bu satır 728 → 340 karaktere indirildi, tm 83.8). → §6.1 · tm 83 · ilerleme K C6 |
-| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 5'i teslim (`11.5-a`…`11.5-e`; tm 84.1–84.5). → §6.1 · tm 84 |
+| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 6'sı teslim (`11.5-a`…`11.5-f`; tm 84.1–84.6). → §6.1 · tm 84 |
 | —      | SLA: uptime taahhüdü + fatura kredisi (NFR-U5)   | ⛔-**süreç** · Denetim bulgusu K1-4: PRD'nin tek somut SLA tanımı NFR-U5'tir (_"Sözleşmeli uptime taahhüdü + kredi mekanizması"_). Uptime taahhüdü bir **sözleşme** kalemidir, bu depodan üretilemez (§D97 kod/süreç ayrımı). `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder |
 | —      | Dedicated onboarding / account manager           | ⛔-**süreç** · PRD §5.4 "Kurumsal" satırının üçüncü payı. **Kod payı YOK** — insan hizmeti taahhüdü (özel onboarding + atanmış müşteri yöneticisi); depoda karşılığı olan hiçbir yüzey üretmez. Süpürmede bulundu, §F.00'ı bloklamaz (§D95) |
 | —      | Skills-based routing (Ent. payı)                 | ✅ **v2'de teslim** — `08.6.3` (tm 91). PRD §5.4 "Kanal" satırı bunu IVR ile birlikte anıyor; skill payı v2'de kapandı, IVR payı ⛔ (voice'a bağlı) |
@@ -5236,7 +5236,7 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 
 #### K11.5 — 11.5 · White-label widget · SLA yönetimi · sandbox
 
-> Kalem **AÇIK** — 8 alt-görevin 5'i teslim (`11.5-a`…`11.5-e`; tm 84.1–84.5). §6'nın Faz-3 `11.5` satırı
+> Kalem **AÇIK** — 8 alt-görevin 6'sı teslim (`11.5-a`…`11.5-f`; tm 84.1–84.6). §6'nın Faz-3 `11.5` satırı
 > `C4`/`C6` gibi ilerleme damgasını kendi hücresinde taşır, kanıt burada birikir (§1.2).
 
 - ✅ **`11.5-a` — PLANS kataloğuna enterprise kademesi + altı anahtarlı yetki sözlüğü.** Yetki
@@ -5411,3 +5411,55 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
   yeni ekran/kart uçtan uca `11.5-h`'nin işi) · `db:check-drift` sürüklenme yok (migration YOK) ·
   `format:check` dokunulan dosyalarda temiz. **Kapsam dışı:** sandbox ekranı (`11.5-g`), uçtan uca
   e2e (`11.5-h`). tm 84.5
+- ✅ **`11.5-f` — sandbox lisansı: ikinci kiracı, izolasyon + faturaya girmeme + kotaya sayılmama.**
+  Slice'ın tek gerçek kararı şuydu: sandbox **aynı organizasyonda ikinci bir lisans mı** olsun?
+  Hayır — `customers` tablosunun `license_id` sütunu YOK, RLS'i `organization_id` üzerinden
+  (tasarım gereği: "bir kişi bir organizasyonun birkaç lisansında tanınabilir"). Kardeş lisans
+  olsaydı sandbox, üretimin **müşteri rehberini** (ad/e-posta/telefon) — yani insanların
+  bilerek dikkatsiz olduğu ortamdan tüm PII'yi — okurdu; aşağıdaki her başka test yine yeşil
+  kalırdı. Bu yüzden sandbox **kendi organizasyonunu** alır; `licenses.sandbox_of_license_id`
+  (nullable self-FK, `ON DELETE CASCADE`, `UNIQUE`) geriye giden tek ip. Bölge organizasyonda
+  yaşadığı için "aynı bölgeyi miras alır" ancak böyle söylenebilir hale gelir (C4-a: INSERT
+  değerin yazılabildiği tek an). İzolasyonun neredeyse tamamı **yeni kod değil**: rapor,
+  koltuk sayacı, ayar ucu ve sohbet zaten lisansla daraltılıyor, hiçbiri "sandbox" kelimesini
+  öğrenmedi. Yazılan üç istisna: (1) **ölçüm** — `usage_records`'a INSERT artık
+  `EXISTS (… sandbox_of_license_id IS NULL)` yüklemiyle koşullu (ayrı bir sorgu değil: platformun
+  en sıcak yazması `recordApiCall` her PAT isteğinde koşuyor; ters yazım — `NOT EXISTS (… IS NOT
+  NULL)` — görünmeyen satırda her şeyi ölçerdi, yani hatanın ucuz olanı seçildi); (2) **fatura** —
+  `plugins/sandbox-gate.ts` `/billing/` altındaki her yazmayı reddeder, route başına `config`
+  bayrağı DEĞİL yol öneki (unutulan bir anotasyon = faturalanmayan bir çalışma alanı), okumalar
+  açık kalır ki ekran "burada hiçbir şey ücretlendirilmiyor" diyebilsin; (3) **RLS** —
+  `licenses_tenant` politikasına tek yönlü bir yan tümce (`sandbox_of_license_id =
+  nexa_current_license()`), böylece ebeveyn sandbox satırını görür ama tersi **yapısal olarak**
+  imkânsız (sandbox'ı gösteren satır yok, iç içelik tetikleyiciyle reddedildi). Sıfırlama
+  `sandbox_reset` içinde lisans satırını **silip aynı id ile geri koyar**: 54 lisans FK'sının
+  hepsi `ON DELETE CASCADE`, yani bağımlılık grafiğini Postgres'in kendisi biliyor — elle
+  yazılmış bir DELETE listesi yazıldığı gün eksiksiz, bir sonraki dilim tablo eklediği gün
+  sessizce eksik olurdu (`helpers/fixtures.ts` aynı gerekçeyle katalogdan okur). `customers`
+  cascade'in erişemediği tek tablo, organizasyona göre ayrıca silinir. Sıfırlama **yalnız
+  sandbox'ın İÇİNDEN** çağrılabilir (zorunlu negatif: üretim lisansında 403, hiçbir şey
+  silinmez) — silinecek şeyin kimlik bilgisiyle istenmesi, çalınmış bir üretim token'ının
+  hiçbir çalışma alanını silememesi demektir. Kanıt `sandbox_reset_at` sütununda tutulur, audit
+  trail'de değil: sandbox'ın kendi trail'i silinenin içinde, ebeveyninkine yazmak ise slice'ın
+  imkânsız kılmak için var olduğu tek çapraz-lisans yazması olurdu. **Bilinçli sınır:** sandbox
+  planı miras ALMAZ — aboneliği olmadığı için self-serve kademesi okur, yani SSO/SIEM/white-label/
+  SLA/HIPAA içeride de reddedilir; miras almak sandbox'ın ebeveynin aboneliğini okuması demekti
+  (bu slice'ın kapattığı şeyin ta kendisi) ve aynı zamanda sandbox'ın sandbox açmasını
+  yapısal olarak engelleyen şey budur. — `apps/api/prisma/schema.prisma` + migration
+  `20260815200000_sandbox_license` (self-FK + 2 CHECK + `licenses_sandbox_not_nested` trigger +
+  `licenses_tenant` politikasının tek yönlü genişletilmesi + `sandbox_create`/`sandbox_reset`
+  SECURITY DEFINER) · `packages/types/src/sandbox.ts` (yeni) · `packages/types/src/errors.ts`
+  (`sandbox_exists` 409) · `apps/api/src/services/billing/sandbox-service.ts` (yeni) ·
+  `apps/api/src/plugins/sandbox-gate.ts` (yeni) · `services/billing/metering.ts` ·
+  `routes/settings.ts` (`GET|POST /settings/sandbox`, `POST /settings/sandbox/reset`) ·
+  `services/audit/audit-log.ts` (`settings.sandbox_created` — ebeveynin trail'ine) ·
+  `packages/contract/openapi/{openapi,paths/settings}.yaml` ·
+  test `test/integration/sandbox.test.ts` (19, yeni) · `packages/types/src/scopes.test.ts` (+1 tip) ·
+  tm 84.6
+- ✅ **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **136 dosya,
+  3140/3140** (3121 → +19) + web 1154 + rtm 102 + types 104 · `pnpm -w test:integration` api
+  **86 dosya, 2312/2312** (85/2293 → +1 dosya, +19) + rtm 60 · `pnpm -w build` 7/7 ·
+  `contract-parity` yeşil (`contract:generate` sonrası üretilen istemci commit'lendi) ·
+  **`pnpm -w test:e2e` 143/143** (değişmedi — sandbox ekranı `11.5-g`, uçtan uca `11.5-h`) ·
+  `db:check-drift` sürüklenme yok · `format:check` dokunulan dosyalarda temiz. **Kapsam dışı:**
+  sandbox ekranı (`11.5-g`), uçtan uca doğrulama (`11.5-h`). tm 84.6

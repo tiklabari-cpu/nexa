@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+## tm 84.6 — 11.5-f · Sandbox lisansı (ikinci kiracı) — done — 2026-08-15 UTC
+
+- **Yapıldı:** Sandbox **kardeş lisans değil, kendi organizasyonu** olan ikinci bir kiracı —
+  çünkü `customers` tablosunun `license_id` sütunu yok, RLS'i organizasyon üzerinden; kardeş
+  lisans olsaydı sandbox üretimin müşteri rehberini okurdu. `licenses.sandbox_of_license_id`
+  (self-FK, cascade, unique) + `sandbox_reset_at`; migration `20260815200000_sandbox_license`:
+  2 CHECK, iç içelik tetikleyicisi, `licenses_tenant` politikasına **tek yönlü** yan tümce
+  (ebeveyn sandbox satırını görür, tersi yapısal olarak imkânsız), `sandbox_create` +
+  `sandbox_reset` SECURITY DEFINER. `GET|POST /settings/sandbox` + `POST /settings/sandbox/reset`.
+  Ölçüm `usage_records` INSERT'ünde yükleme dönüştü; `plugins/sandbox-gate.ts` `/billing/`
+  altındaki her yazmayı sandbox'ta reddeder (okumalar açık). Sıfırlama lisans satırını silip
+  aynı id ile geri koyar — cascade grafiğini Postgres bilir, elle DELETE listesi bir sonraki
+  tablo eklendiğinde sessizce eksik kalırdı.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **3140/3140**
+  (+19) + web 1154 + rtm 102 · `pnpm -w test:integration` api **86 dosya 2312/2312** (+1 dosya,
+  +19) + rtm 60 · `pnpm -w build` 7/7 · **`pnpm -w test:e2e` 143/143** · `db:check-drift` temiz ·
+  `format:check` dokunulan dosyalarda temiz.
+- **Varsayımlar / bilinçli sınırlar:** (1) **Sandbox planı miras ALMAZ** — aboneliği yok, self-serve
+  okur; SSO/SIEM/white-label/SLA/HIPAA içeride reddedilir. Miras almak sandbox'ın ebeveynin
+  aboneliğini okuması demekti (slice'ın kapattığı şey) ve sandbox'ın sandbox açmasını engelleyen
+  yapısal sebep de budur. Gerekirse ayrı task. (2) Sıfırlama **yalnız içeriden**; üretimde 403
+  (zorunlu negatif). Çağıranın token'ı da silinir → yanıt `signed_out: true`. (3) Sıfırlama audit
+  yazmaz; kanıt `sandbox_reset_at` sütununda (ebeveynin trail'ine yazmak tek çapraz-lisans yazması
+  olurdu). (4) Ebeveyn `enterprise`'dan düşerse **mevcut sandbox yaşar** (§C-A26); yalnız yenisi
+  açılamaz.
+- **Sonraki pencereye not:** (1) `11.5` hâlâ ◐ (8'de 6). Sıradaki `11.5-g` (sandbox ekranı) —
+  uçları hazır, `GET /settings/sandbox` `is_sandbox`/`entitled`/`sandbox` üçlüsünü "satın
+  alınmadı"/"açılmadı"/"var" ayrımı için verir. (2) **`@nexa/web` süiti bu makinede yük altında
+  flake:** `userEvent` testleri 5000 ms varsayılan `testTimeout`'a takılıyor; TEMİZ ağaçta
+  (değişikliklerim stash'liyken) 17 kırmızı ölçüldü, benim ağacımda 25/18/9/1/0 — yani regresyon
+  değil, CPU çekişmesi. `vitest run --maxWorkers=4` ile 1154/1154 yeşil; boş makinede `pnpm -w test`
+  de yeşil (bu turun son koşusu). Ayrı bir task hak ediyor. (3) Devralınan kozmetik borç
+  (`WidgetCustomization.tsx` 403'ü hata gösteriyor) hâlâ açık.
+
+
 ## tm 84.5 — 11.5-e · SLA ekranı + Reports'ta ihlal KPI'ı — done — 2026-08-15 UTC
 
 - **Yapıldı:** `sla_breaches`'i ilk okuyan uç: `GET /reports/overview`'a `sla: { active,

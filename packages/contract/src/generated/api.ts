@@ -3068,6 +3068,90 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/sandbox': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * This workspace's sandbox
+     * @description Answers from either end. From a production workspace: whether the plan
+     *     includes a sandbox, and the one it has if any. From inside a sandbox:
+     *     `is_sandbox` is true and nothing else is populated — the parent licence is
+     *     not named, and no credential for a sandbox can reach it.
+     *
+     *     Creates nothing. A workspace that has never made a sandbox reads as
+     *     `sandbox: null`.
+     */
+    get: operations['getSandbox'];
+    put?: never;
+    /**
+     * Create the sandbox workspace
+     * @description **Enterprise only** (`sandbox` entitlement, FR-MOD-11.5), and owner only.
+     *
+     *     Creates a whole second workspace: its own organization, licence, default
+     *     brand, OAuth client and an owner membership for the caller. The region is
+     *     inherited from this workspace and cannot be chosen — a sandbox holds data
+     *     shaped exactly like production's, so letting it land elsewhere would move
+     *     that data across the border residency exists to draw (C4-a).
+     *
+     *     Sign in to it by calling `POST /auth/login`, which now lists it as a
+     *     second membership, and then `POST /auth/authorize` with its `license_id`
+     *     and `client_id`.
+     *
+     *     A licence may hold at most one sandbox; asking for a second is a 409.
+     *     Asking from inside a sandbox is a 403 — sandboxes do not nest.
+     *
+     *     Records `settings.sandbox_created` in **this** workspace's audit trail.
+     *     The sandbox's own trail starts empty, as a fresh workspace's does.
+     *
+     *     Nothing about the new workspace is billable: no subscription, no card, no
+     *     usage packages, and every write under `/billing/` is refused inside it.
+     */
+    post: operations['createSandbox'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/sandbox/reset': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Empty the sandbox you are signed in to
+     * @description Deletes everything the sandbox holds — chats, tickets, customers,
+     *     settings, members' credentials — and leaves the workspace itself in place
+     *     with the same licence id and the same members.
+     *
+     *     **Only reachable from inside a sandbox.** Called with a credential for a
+     *     production workspace it answers 403 and deletes nothing, so a stolen
+     *     production token cannot wipe a workspace at all. There is no way to reset
+     *     *someone else's* workspace, including your own sandbox from outside it.
+     *
+     *     Every credential issued inside the sandbox is deleted with it, including
+     *     the one making this call — `signed_out` says so. Sign in again to
+     *     continue.
+     *
+     *     No `sandbox` entitlement is required: a sandbox holds no subscription, so
+     *     requiring one would refuse every reset. The entitlement guards creating a
+     *     sandbox, which is the commercial act.
+     */
+    post: operations['resetSandbox'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/siem': {
     parameters: {
       query?: never;
@@ -6906,6 +6990,52 @@ export interface components {
        * @description When the targets were last saved, or null if never.
        */
       updated_at: string | null;
+    };
+    /**
+     * @description A workspace's sandbox, as its owner sees it (FR-MOD-11.5 · 11.5-f).
+     *
+     *     Deliberately thin. Every field is read from the sandbox's own licence
+     *     row — the one row a production workspace can see across the boundary —
+     *     and nothing is read from its organization, its members or its data.
+     *
+     *     There is no name: a workspace is opened by choosing it at sign-in, where
+     *     `POST /auth/login` already lists it with its organization's name.
+     */
+    Sandbox: {
+      /** @description The sandbox's licence id — what a client passes as `license_id` to `POST /auth/authorize` to sign in to it. */
+      license_id: string;
+      /**
+       * @description Where the sandbox keeps its data. Inherited from the parent workspace and immutable (C4-a), so it always equals the caller's own region; reported anyway because "my test data went somewhere else" is the fear this answers.
+       * @enum {string}
+       */
+      region: 'eu' | 'us';
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: date-time
+       * @description When the sandbox was last emptied, or null if never. Recorded on the licence row rather than in the audit trail, because a reset destroys the sandbox's own trail and writing into the parent's would be a cross-licence write.
+       */
+      reset_at: string | null;
+    };
+    /**
+     * @description Where the caller stands in relation to a sandbox (FR-MOD-11.5 · 11.5-f).
+     *
+     *     Three states a screen has to tell apart, which is why `entitled` is here
+     *     beside `sandbox` rather than inferred from it: a workspace that has not
+     *     bought the capability, one that has bought it and not used it, and one
+     *     that already has a sandbox.
+     *
+     *     Read with a credential for the sandbox itself, `is_sandbox` is the only
+     *     field that is true. It reports nothing about the parent — not its id,
+     *     not its plan, not that it exists.
+     */
+    SandboxView: {
+      /** @description True when the caller's own licence is a sandbox. */
+      is_sandbox: boolean;
+      /** @description Whether this licence's plan includes a sandbox at all. Always false inside a sandbox, which holds no subscription and so reads as the self-serve tier. */
+      entitled: boolean;
+      /** @description This licence's sandbox, or null when it has none. Always null when `is_sandbox` is true — a sandbox cannot have one. */
+      sandbox: components['schemas']['Sandbox'] | null;
     };
     SiemExportStatus: components['schemas']['SiemExportSettings'] & {
       /**
@@ -14154,6 +14284,92 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getSandbox: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Where the caller stands */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SandboxView'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createSandbox: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SandboxView'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description This workspace already has a sandbox (`sandbox_exists`) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  resetSandbox: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Emptied */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /**
+             * Format: date-time
+             * @description The moment it was emptied. Also readable afterwards by the parent workspace as `sandbox.reset_at`.
+             */
+            reset_at: string;
+            /** @description Always true. The credential that made this call was deleted with the workspace's data. */
+            signed_out: boolean;
+          };
+        };
+      };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];

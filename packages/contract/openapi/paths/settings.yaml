@@ -1468,3 +1468,129 @@ tag:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# --- Sandbox workspace (FR-MOD-11.5 · 11.5-f) --------------------------------
+#
+# A sandbox is a **second tenant**, not a mode: its own organization, its own
+# licence, its own row level security scope. It is never metered, never
+# invoiced, and its members are never seats on the parent's bill.
+#
+# The read is open on every plan (the split `/settings/siem` and `/settings/sla`
+# established — a workspace must be able to see what it would be buying).
+# Creating is Enterprise-only and owner-only. Resetting is owner-only and
+# refused anywhere but *inside* a sandbox, so a production credential cannot
+# wipe anything however it is obtained.
+#
+# What a sandbox does not inherit is its plan: it holds no subscription, so the
+# Enterprise controls (SSO, SIEM export, white label, SLA targets, HIPAA) are
+# refused inside it exactly as on any unpaid workspace. That is also what stops
+# a sandbox creating a sandbox.
+
+sandbox:
+  get:
+    tags: [Settings]
+    operationId: getSandbox
+    summary: This workspace's sandbox
+    description: |
+      Answers from either end. From a production workspace: whether the plan
+      includes a sandbox, and the one it has if any. From inside a sandbox:
+      `is_sandbox` is true and nothing else is populated — the parent licence is
+      not named, and no credential for a sandbox can reach it.
+
+      Creates nothing. A workspace that has never made a sandbox reads as
+      `sandbox: null`.
+    responses:
+      "200":
+        description: Where the caller stands
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SandboxView" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Settings]
+    operationId: createSandbox
+    summary: Create the sandbox workspace
+    description: |
+      **Enterprise only** (`sandbox` entitlement, FR-MOD-11.5), and owner only.
+
+      Creates a whole second workspace: its own organization, licence, default
+      brand, OAuth client and an owner membership for the caller. The region is
+      inherited from this workspace and cannot be chosen — a sandbox holds data
+      shaped exactly like production's, so letting it land elsewhere would move
+      that data across the border residency exists to draw (C4-a).
+
+      Sign in to it by calling `POST /auth/login`, which now lists it as a
+      second membership, and then `POST /auth/authorize` with its `license_id`
+      and `client_id`.
+
+      A licence may hold at most one sandbox; asking for a second is a 409.
+      Asking from inside a sandbox is a 403 — sandboxes do not nest.
+
+      Records `settings.sandbox_created` in **this** workspace's audit trail.
+      The sandbox's own trail starts empty, as a fresh workspace's does.
+
+      Nothing about the new workspace is billable: no subscription, no card, no
+      usage packages, and every write under `/billing/` is refused inside it.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SandboxView" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409":
+        description: This workspace already has a sandbox (`sandbox_exists`)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+sandboxReset:
+  post:
+    tags: [Settings]
+    operationId: resetSandbox
+    summary: Empty the sandbox you are signed in to
+    description: |
+      Deletes everything the sandbox holds — chats, tickets, customers,
+      settings, members' credentials — and leaves the workspace itself in place
+      with the same licence id and the same members.
+
+      **Only reachable from inside a sandbox.** Called with a credential for a
+      production workspace it answers 403 and deletes nothing, so a stolen
+      production token cannot wipe a workspace at all. There is no way to reset
+      *someone else's* workspace, including your own sandbox from outside it.
+
+      Every credential issued inside the sandbox is deleted with it, including
+      the one making this call — `signed_out` says so. Sign in again to
+      continue.
+
+      No `sandbox` entitlement is required: a sandbox holds no subscription, so
+      requiring one would refuse every reset. The entitlement guards creating a
+      sandbox, which is the commercial act.
+    responses:
+      "200":
+        description: Emptied
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reset_at, signed_out]
+              properties:
+                reset_at:
+                  type: string
+                  format: date-time
+                  description: >-
+                    The moment it was emptied. Also readable afterwards by the
+                    parent workspace as `sandbox.reset_at`.
+                signed_out:
+                  type: boolean
+                  description: >-
+                    Always true. The credential that made this call was deleted
+                    with the workspace's data.
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

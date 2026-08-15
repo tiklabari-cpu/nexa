@@ -3809,12 +3809,12 @@
             "description": "Onboarding/kayıt akışında bölge seçimi + \"sonradan değiştirilemez\" uyarısı",
             "details": "C4-c — Onboarding/kayıt akışında bölge seçimi + \"sonradan değiştirilemez\" uyarısı  [SONNET-XHIGH]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~1 pencere\n\nKAPSAM: signup/onboarding adımına bölge seçimi (EU / US) + seçimin KALICI olduğunu söyleyen açık uyarı. Varsayılan `eu`.\n\nDOSYALAR (denetim sonrası TESPİT EDİLDİ, artık ismen): `apps/web/src/features/auth/PublicPages.tsx:141` (`SignUpPage`, `/auth/signup` POST'u `:155`) · `apps/web/src/features/auth/PublicPages.test.tsx`. **Onboarding sihirbazı DEĞİL** — `OnboardingWizard.tsx`'in adımları `welcome|website|team|sample` (`:23-25`), bölge oraya ait değil. Bölge alanı `C4-a`'nın signup gövdesine eklediği `region` alanına gider.\n\nREFERANS DESEN: mevcut onboarding sihirbazı adım kalıbı (`lib/stepper.ts`) + `lib/form.tsx` validasyon primitifi. Uyarı için `components/ui/Banner.tsx`.\n\nKAPSAM DIŞI: zorlama (C4-b), BAA kartı (C4-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/web test (bölge seçimi görünür, varsayılan eu, kalıcılık uyarısı gösterilir, seçim gövdeye geçer) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "82.1"
             ],
             "parentId": "82",
-            "updatedAt": "2026-08-15T00:25:27.088Z"
+            "updatedAt": "2026-08-15T00:55:14.203Z"
           },
           {
             "id": 4,
@@ -3872,7 +3872,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-15T00:25:27.088Z"
+        "updatedAt": "2026-08-15T00:55:14.203Z"
       },
       {
         "id": "83",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T00:25:27.089Z",
+      "lastModified": "2026-08-15T00:55:14.203Z",
       "taskCount": 123,
       "completedCount": 119,
       "tags": [

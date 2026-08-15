@@ -4052,12 +4052,12 @@
             "description": "SLA yönetimi — hedef tanımı (ilk yanıt / çözüm, iş saatleri) + ölçüm + ihlal işareti",
             "details": "11.5-d — SLA yönetimi — hedef tanımı (ilk yanıt / çözüm, iş saatleri) + ölçüm + ihlal işareti  [OPUS-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~2 pencere\n\nKAPSAM: `sla_policies` tablosu (licenseId, firstResponseMinutes, resolutionMinutes, businessHoursOnly) + RLS + CRUD + ölçüm. Sohbet/ticket üzerinde ilk yanıt ve çözüm süresi ölçülür; hedef aşılırsa İHLAL işaretlenir.\n\nKARAR: SLA ÖLÇER ve İŞARETLER; ZORLAMAZ (§C-A27). İhlal bir bildirim ve rapor satırı üretir, sohbeti yeniden yönlendirmez — routing'e dokunmak ayrı bir kalemdir.\n\nİŞ SAATLERİ: mevcut `work_schedules` tablosu (`apps/api/prisma/schema.prisma:1733`, **tm 77 · `WORKSCHED-b`** tablo+RLS / `WORKSCHED-c` okuma ucu — denetim düzeltmesi: tm 96 = \"12.4 Copilot BI komut\", ilgisiz) iş saatleri kaynağı olarak YENİDEN KULLANILIR; ikinci bir takvim modeli açılmaz.\n\nDOSYALAR: `apps/api/prisma/schema.prisma` + migration · `apps/api/src/services/tickets/` + `apps/api/src/services/chat/` (ölçüm noktaları) · `apps/api/src/routes/settings.ts` · `packages/contract/openapi/paths/settings.yaml`\n\nREFERANS DESEN: `services/staffing/` (work_schedule okuma) · `routes/ticket-rules.ts` (politika CRUD kalıbı) · ölçüm için `services/reports/` mevcut süre hesapları.\n\nKAPSAM DIŞI: ekran (11.5-e), e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**SLA KAPSAM SINIRI (denetim bulgusu K1-4):** PRD'nin tek somut SLA tanımı NFR-U5'tir — _\"Sözleşmeli uptime taahhüdü + kredi mekanizması\"_. Bu kalem SLA'yı **yanıt/çözüm SLA'sı** olarak uygular; **uptime taahhüdü ve fatura kredisi payı KAPSAM DIŞIDIR** ve `⛔-süreç` sayılır (uptime taahhüdü bir sözleşme kalemidir, bu depodan üretilemez — §D97'nin kod/süreç ayrımı). §5.5'in `MOD-10 Billing | Ent. ○ (SLA/white-label)` hücresinin SLA payı bu yüzden faturaya DOKUNMAZ. Bu daraltma §6.1.5'te ve §D99'da yazılıdır; `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (politika CRUD; ilk yanıt hedefi aşılınca ihlal işaretlenir, aşılmayınca işaretlenmez; businessHoursOnly açıkken mesai dışı süre SAYILMAZ; CROSS-TENANT) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "84.1"
             ],
             "parentId": "84",
-            "updatedAt": "2026-08-15T12:01:08.390Z"
+            "updatedAt": "2026-08-15T12:50:55.996Z"
           },
           {
             "id": 5,
@@ -4115,7 +4115,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-15T12:01:08.390Z"
+        "updatedAt": "2026-08-15T12:50:55.996Z"
       },
       {
         "id": "85",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T12:01:08.391Z",
+      "lastModified": "2026-08-15T12:50:55.997Z",
       "taskCount": 124,
       "completedCount": 121,
       "tags": [

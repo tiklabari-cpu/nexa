@@ -13,6 +13,22 @@
 
 ## Task log (newest-first)
 
+## tm 84.5 — 11.5-e · SLA ekranı + Reports'ta ihlal KPI'ı — done — 2026-08-15 UTC
+
+- **Yapıldı:** `sla_breaches`'i ilk okuyan uç: `GET /reports/overview`'a `sla: { active,
+  breaches, low_confidence }` bloğu (`totals`'a değil — `active` olmadan sayı anlamsız). Settings
+  → SLA ekranı `SlaPolicy.tsx` (yeni, `SalesTracker.tsx` deseni): hedef formu + iş saatleri
+  anahtarı, boş alan `null` hedef kaydeder, 403'ün `entitlement: 'sla'` detayı Enterprise
+  yükseltme mesajına çevrilir.
+- **Doğrulama:** typecheck/lint temiz · `pnpm -w test` api 3121/3121 (+5) + web 1154 (+12) ·
+  `pnpm -w test:integration` 85 dosya 2293/2293 (+5) · `pnpm -w build` 7/7 ·
+  `pnpm -w test:e2e` 143/143 (değişmedi) · `db:check-drift` temiz · `format:check` dokunulan
+  dosyalarda temiz. Migration YOK.
+- **Sonraki pencereye:** `11.5` hâlâ ◐ (8'de 5). Sıradaki bağımsız kalem `11.5-f` (sandbox
+  lisansı); `11.5-g` (sandbox ekranı) ona bağımlı. `11.5-h` (uçtan uca doğrulama) hâlâ
+  `11.5-c`+`11.5-e`+`11.5-g` kanıtını bekliyor. Devralınan kozmetik borç
+  (`WidgetCustomization.tsx` 403'ü hata gösteriyor) hâlâ açık.
+
 ## tm 84.4 — 11.5-d · SLA yönetimi: hedef + ölçüm + ihlal işareti — done — 2026-08-15 UTC
 
 - **Yapıldı:** İki tablo (`sla_policies` — lisans başına tek satır, `license_id` PK;

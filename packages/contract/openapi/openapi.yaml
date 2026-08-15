@@ -3517,7 +3517,17 @@ components:
     ReportsOverview:
       type: object
       required:
-        [range, previous_period, totals, chats, response_times, satisfaction, by_agent, top_tags]
+        [
+          range,
+          previous_period,
+          totals,
+          chats,
+          response_times,
+          satisfaction,
+          by_agent,
+          top_tags,
+          sla,
+        ]
       properties:
         range:
           type: object
@@ -3534,7 +3544,17 @@ components:
             - $ref: "#/components/schemas/BenchmarkWindow"
             - type: object
               required:
-                [chats, tickets, total_cases, closed, manual, assisted, automated, achieved_goals]
+                [
+                  chats,
+                  tickets,
+                  total_cases,
+                  closed,
+                  manual,
+                  assisted,
+                  automated,
+                  achieved_goals,
+                  sla_breaches,
+                ]
               properties:
                 chats: { type: integer }
                 tickets: { type: integer }
@@ -3552,6 +3572,9 @@ components:
                 achieved_goals:
                   type: integer
                   description: Goals reached in the baseline window (FR-MOD-13.3).
+                sla_breaches:
+                  type: integer
+                  description: SLA misses detected in the baseline window (FR-MOD-11.5).
         totals:
           type: object
           required:
@@ -3655,6 +3678,32 @@ components:
             properties:
               name: { type: string }
               count: { type: integer }
+        sla:
+          type: object
+          description: |
+            SLA breaches in the window (FR-MOD-11.5 · 11.5-e). Its own block
+            rather than folded into `totals`: unlike every figure there, a
+            breach count means nothing without `active` alongside it — a
+            workspace that has never configured targets has zero breaches for
+            the same reason it has zero of anything nobody asked to measure,
+            and showing that "0" bare would read as a clean record rather than
+            as SLA never having been switched on.
+          required: [active, breaches, low_confidence]
+          properties:
+            active:
+              type: boolean
+              description: |
+                Whether SLA targets are in force today — the same "bought it
+                and asked for something" rule `GET /settings/sla`'s `active`
+                field applies.
+            breaches:
+              type: integer
+              description: SLA misses detected in the range.
+            low_confidence:
+              type: boolean
+              description: |
+                Too few cases in the window to read much into the count — a
+                single slow reply can be the whole story in a two-case window.
 
     ReportsBreakdown:
       type: object

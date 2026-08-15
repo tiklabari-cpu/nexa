@@ -13,6 +13,7 @@ import {
   grantToken,
   ownerClient,
   seedFixtures,
+  seedSubscription,
   testEnv,
   type Fixtures,
 } from '../helpers/fixtures.js';
@@ -704,6 +705,83 @@ describe('reports and billing', () => {
 
       expect(report.totals.achieved_goals).toBe(1);
       expect(report.previous_period.achieved_goals).toBe(1);
+    });
+  });
+
+  // =========================================================================
+
+  describe('SLA breaches (FR-MOD-11.5 · 11.5-e)', () => {
+    /** A miss row, written straight in — the marking path is `sla.test.ts`'s. */
+    async function recordSlaBreach(
+      options: { licenseId?: bigint; detectedAt?: Date } = {},
+    ): Promise<void> {
+      await owner.slaBreach.create({
+        data: {
+          licenseId: options.licenseId ?? fx.a.licenseId,
+          subjectType: 'thread',
+          subjectId: generateShortId(),
+          target: 'first_response',
+          targetMinutes: 30,
+          elapsedMinutes: 90,
+          businessHoursOnly: false,
+          detectedAt: options.detectedAt ?? justNow(),
+        },
+      });
+    }
+
+    it('counts breaches in the range and reports SLA active once targets are configured on an Enterprise plan', async () => {
+      await seedSubscription(owner, fx.a.licenseId, 'enterprise');
+      await owner.slaPolicy.create({
+        data: { licenseId: fx.a.licenseId, firstResponseMinutes: 30 },
+      });
+      await recordSlaBreach();
+      await recordSlaBreach();
+
+      const report = (await server.get('/reports/overview', auth)).json();
+      expect(report.sla).toEqual({ active: true, breaches: 2, low_confidence: true });
+    });
+
+    it('reads a never-configured workspace as inactive, not as a clean record of zero', async () => {
+      const report = (await server.get('/reports/overview', auth)).json();
+      expect(report.sla.active).toBe(false);
+      expect(report.sla.breaches).toBe(0);
+    });
+
+    it('reads SLA as inactive on a plan without the entitlement, even with saved targets', async () => {
+      // The subscription stays on the default trial plan (growth) — no `sla`
+      // entitlement — while a policy is on file from an earlier Enterprise
+      // period (§C-A26: a downgrade keeps the row, stops honouring it).
+      await owner.slaPolicy.create({
+        data: { licenseId: fx.a.licenseId, firstResponseMinutes: 30 },
+      });
+
+      const report = (await server.get('/reports/overview', auth)).json();
+      expect(report.sla.active).toBe(false);
+    });
+
+    it("never counts another tenant's breaches", async () => {
+      await recordSlaBreach();
+      await recordSlaBreach({ licenseId: fx.b.licenseId });
+
+      const report = (await server.get('/reports/overview', auth)).json();
+      expect(report.sla.breaches).toBe(1);
+    });
+
+    it('drops a breach detected before the window into the previous period, not the current one', async () => {
+      await recordSlaBreach(); // inside the current window (now)
+      await recordSlaBreach({ detectedAt: new Date(Date.now() - 15 * 86_400_000) }); // earlier
+
+      const to = new Date();
+      const from = new Date(to.getTime() - 10 * 86_400_000);
+      const report = (
+        await server.get(
+          `/reports/overview?from=${from.toISOString()}&to=${to.toISOString()}`,
+          auth,
+        )
+      ).json();
+
+      expect(report.sla.breaches).toBe(1);
+      expect(report.previous_period.sla_breaches).toBe(1);
     });
   });
 

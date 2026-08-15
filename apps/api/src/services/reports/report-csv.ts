@@ -26,6 +26,7 @@ import {
   type TopicDoc,
 } from '@nexa/ai-mock';
 import { ApiError } from '../../lib/api-error.js';
+import { TRIAL_PLAN } from '../../lib/entitlements.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import {
   benchmarkWindow,
@@ -37,6 +38,7 @@ import {
   type BenchmarkBaseline,
 } from '../../routes/reports-metrics.js';
 import { type CsvCell } from '../../routes/reports-export.js';
+import { entitlementsForPlan } from '../billing/subscription-service.js';
 
 // ===========================================================================
 // Shared aggregation
@@ -151,6 +153,50 @@ export function achievedGoalCount(
   to: Date,
 ): Promise<number> {
   return tx.goalAchievement.count({ where: { licenseId, achievedAt: { gte: from, lte: to } } });
+}
+
+/**
+ * SLA misses detected in a window (FR-MOD-11.5 · 11.5-e) — the same
+ * `(license_id, detected_at DESC)` index the migration opened for this reader
+ * (`sla-service.ts` marks the rows; this is the first thing that reads them
+ * back). One license- and time-scoped count, no join, same shape as
+ * {@link ticketCount} and {@link achievedGoalCount}.
+ */
+export function slaBreachCount(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<number> {
+  return tx.slaBreach.count({ where: { licenseId, detectedAt: { gte: from, lte: to } } });
+}
+
+/**
+ * Whether SLA targets are in force *today* (FR-MOD-11.5 · 11.5-e) — the same
+ * "bought it and asked for something" rule `services/sla/sla-service.ts`'s
+ * `serialiseSlaPolicy` applies for the settings screen's `active` field, so
+ * the two surfaces can never disagree about whether this workspace is being
+ * measured right now.
+ *
+ * Reads the policy and the plan directly by `licenseId` rather than going
+ * through that module's `readEffectivePolicy` — a report builder carries no
+ * `organizationId` to build the `TenantContext` those functions require, and
+ * neither query below needs one.
+ */
+export async function slaActive(tx: TenantClient, licenseId: bigint): Promise<boolean> {
+  const policy = await tx.slaPolicy.findUnique({
+    where: { licenseId },
+    select: { firstResponseMinutes: true, resolutionMinutes: true },
+  });
+  if (!policy || (policy.firstResponseMinutes === null && policy.resolutionMinutes === null)) {
+    return false;
+  }
+  const subscription = await tx.subscription.findFirst({
+    where: { licenseId },
+    orderBy: { createdAt: 'desc' },
+    select: { plan: true },
+  });
+  return entitlementsForPlan(subscription?.plan ?? TRIAL_PLAN).sla;
 }
 
 /** The three stages of the Goals funnel over one window, as raw counts. */
@@ -1624,6 +1670,7 @@ export async function overviewBenchmark(
   const satisfaction = await satisfactionCounts(tx, licenseId, window.from, window.to);
   const tickets = await ticketCount(tx, licenseId, window.from, window.to);
   const achievedGoals = await achievedGoalCount(tx, licenseId, window.from, window.to);
+  const slaBreaches = await slaBreachCount(tx, licenseId, window.from, window.to);
   const chats = Number(totals.total_chats);
 
   return {
@@ -1638,6 +1685,7 @@ export async function overviewBenchmark(
     avg_duration_seconds: roundOrNull(totals.avg_duration_seconds),
     satisfaction_score: satisfactionScore(satisfaction),
     achieved_goals: achievedGoals,
+    sla_breaches: slaBreaches,
   };
 }
 

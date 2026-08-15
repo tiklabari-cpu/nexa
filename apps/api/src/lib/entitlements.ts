@@ -41,9 +41,10 @@ import type { TenantClient, TenantContext } from './tenant.js';
  * beyond the self-serve tier. Named here and matched to
  * `GET /billing/entitlements`, so what the endpoint *reports* to a screen and
  * what this module *enforces* cannot come apart on a workspace that has never
- * checked out.
+ * checked out. Exported for the report builders (`report-csv.ts`), which read
+ * a plan by license id alone and need the same no-subscription fallback.
  */
-const TRIAL_PLAN = 'growth';
+export const TRIAL_PLAN = 'growth';
 
 /**
  * How each capability is named to someone who just hit the wall.

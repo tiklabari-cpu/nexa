@@ -55,6 +55,7 @@ const OVERVIEW = {
     avg_first_response_seconds: null,
     avg_duration_seconds: null,
     satisfaction_score: null,
+    sla_breaches: 0,
   },
   totals: {
     chats: 0,
@@ -75,6 +76,7 @@ const OVERVIEW = {
   satisfaction: { good: 0, bad: 0, score: null, responses: 0 },
   by_agent: [],
   top_tags: [],
+  sla: { active: false, breaches: 0, low_confidence: false },
 };
 
 function mockReports(aiAgent: AiAgent): void {
@@ -209,6 +211,57 @@ describe('ReportsPage — Overview "Achieved goals" KPI card (13.3-h)', () => {
     expect(await screen.findByText('Achieved goals')).toBeInTheDocument();
     expect(within(kpi('Achieved goals')).getByText('0')).toBeInTheDocument();
     expect(within(kpi('Achieved goals')).getByText('No change vs previous')).toBeInTheDocument();
+  });
+});
+
+describe('ReportsPage — Overview "SLA breaches" KPI card (FR-MOD-11.5 · 11.5-e)', () => {
+  function mockOverviewSla(sla: {
+    active: boolean;
+    breaches: number;
+    low_confidence: boolean;
+  }): void {
+    api.get.mockImplementation((path: string) => {
+      if (path.startsWith('/reports/overview')) {
+        return Promise.resolve({
+          ...OVERVIEW,
+          previous_period: { ...OVERVIEW.previous_period, sla_breaches: 1 },
+          sla,
+        });
+      }
+      return Promise.reject(new Error(`unexpected ${path}`));
+    });
+  }
+
+  it('shows the breach count and its vs-previous delta when SLA is active', async () => {
+    mockOverviewSla({ active: true, breaches: 4, low_confidence: false });
+    renderReports(<ReportsPage />);
+
+    expect(await screen.findByText('SLA breaches')).toBeInTheDocument();
+    expect(within(kpi('SLA breaches')).getByText('4')).toBeInTheDocument();
+    expect(within(kpi('SLA breaches')).getByText(/↑ 3 vs previous/)).toBeInTheDocument();
+  });
+
+  it('shows a low-confidence hint below the sample threshold', async () => {
+    mockOverviewSla({ active: true, breaches: 1, low_confidence: true });
+    renderReports(<ReportsPage />);
+
+    expect(await screen.findByText('SLA breaches')).toBeInTheDocument();
+    expect(
+      within(kpi('SLA breaches')).getByText('Not enough cases yet to read much into this'),
+    ).toBeInTheDocument();
+  });
+
+  it('reads an unconfigured workspace as "not tracked", not as a clean record of zero', async () => {
+    mockOverviewSla({ active: false, breaches: 0, low_confidence: false });
+    renderReports(<ReportsPage />);
+
+    expect(await screen.findByText('SLA breaches')).toBeInTheDocument();
+    // Not "0" — a workspace that never set a target has nothing to count, and
+    // "0" there would read as a clean record rather than as untracked.
+    expect(within(kpi('SLA breaches')).getByText('—')).toBeInTheDocument();
+    expect(
+      within(kpi('SLA breaches')).getByText('Set targets in Settings → SLA to track this'),
+    ).toBeInTheDocument();
   });
 });
 

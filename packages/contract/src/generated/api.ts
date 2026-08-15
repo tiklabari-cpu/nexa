@@ -7913,6 +7913,8 @@ export interface components {
         satisfaction_score?: number | null;
         /** @description Goals reached in the baseline window (FR-MOD-13.3). */
         achieved_goals: number;
+        /** @description SLA misses detected in the baseline window (FR-MOD-11.5). */
+        sla_breaches: number;
       };
       totals: {
         chats: number;
@@ -7971,6 +7973,30 @@ export interface components {
         name: string;
         count: number;
       }[];
+      /**
+       * @description SLA breaches in the window (FR-MOD-11.5 · 11.5-e). Its own block
+       *     rather than folded into `totals`: unlike every figure there, a
+       *     breach count means nothing without `active` alongside it — a
+       *     workspace that has never configured targets has zero breaches for
+       *     the same reason it has zero of anything nobody asked to measure,
+       *     and showing that "0" bare would read as a clean record rather than
+       *     as SLA never having been switched on.
+       */
+      sla: {
+        /**
+         * @description Whether SLA targets are in force today — the same "bought it
+         *     and asked for something" rule `GET /settings/sla`'s `active`
+         *     field applies.
+         */
+        active: boolean;
+        /** @description SLA misses detected in the range. */
+        breaches: number;
+        /**
+         * @description Too few cases in the window to read much into the count — a
+         *     single slow reply can be the whole story in a two-case window.
+         */
+        low_confidence: boolean;
+      };
     };
     /**
      * @description The Overview's resolution split (manual / assisted / automated,

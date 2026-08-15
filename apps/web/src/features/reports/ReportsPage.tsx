@@ -50,6 +50,7 @@ interface Period {
   avg_first_response_seconds: number | null;
   avg_duration_seconds: number | null;
   satisfaction_score: number | null;
+  sla_breaches: number;
 }
 
 interface ReportsOverview {
@@ -81,6 +82,13 @@ interface ReportsOverview {
   satisfaction: { good: number; bad: number; score: number | null; responses: number };
   by_agent: Array<{ agent_id: string; name: string | null; chats: number }>;
   top_tags: Array<{ name: string; count: number }>;
+  sla: {
+    /** Whether targets are being measured today — see `GET /settings/sla`'s `active`. */
+    active: boolean;
+    breaches: number;
+    /** Too few cases in the window for the count to mean much (FR-MOD-07.3.2). */
+    low_confidence: boolean;
+  };
 }
 
 interface SplitRow {
@@ -662,6 +670,23 @@ function OverviewTab(props: TabProps): ReactElement {
             label="Negative ratings"
             value={formatCount(data.satisfaction.bad)}
             tone={data.satisfaction.bad > 0 ? 'warn' : 'neutral'}
+          />
+          <Kpi
+            label="SLA breaches"
+            value={data.sla.active ? formatCount(data.sla.breaches) : null}
+            delta={
+              data.sla.active ? (
+                <CountDelta current={data.sla.breaches} previous={prev.sla_breaches} />
+              ) : undefined
+            }
+            tone={data.sla.active && data.sla.breaches > 0 ? 'warn' : 'neutral'}
+            hint={
+              !data.sla.active
+                ? 'Set targets in Settings → SLA to track this'
+                : data.sla.low_confidence
+                  ? 'Not enough cases yet to read much into this'
+                  : undefined
+            }
           />
         </KpiGrid>
       </Section>

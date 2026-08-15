@@ -2139,7 +2139,7 @@ kalem buldu: _dedicated onboarding/account manager_ · _IVR routing_ · _kalan m
 | S11    | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11 (türetilmiş kod `S11`); kimlik sınırı. → §6.1 · tm 81 · ilerleme K S11 |
 | C4     | HIPAA BAA + bölgesel barındırma (US/EU)          | NFR-C4 (türetilmiş kod `C4`); ADR-12 tek bölge (`eu`) burada genişletildi (`C4-a` ✅, §D102); bölge zorlaması üç yüzeyde (`C4-b` ✅, §D103); signup ekranında seçim + kalıcılık uyarısı (`C4-c` ✅); BAA kabul akışı MOCK (`C4-d` ✅); kapsam kısıtları — retention tavanı + log/telemetri PII maskesi + AI bölge sınırı (`C4-e` ✅); Settings → Security'de bölge + BAA durum kartı (`C4-f` ✅); uçtan uca doğrulama — 421 üç kapıda + kart + kısıtsızlık + cross-tenant (`C4-g` ✅). → §6.1 · tm 82 · ilerleme K C4 |
 | C6     | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12 (türetilmiş kod `C6`). **Kod payı ✅ — 8 alt-görevin 8'i teslim** (`C6-a1`…`C6-g` · tm 83.1–83.8, uçtan uca kapı `C6-g` yeşil); **sertifikasyon süreci** §F.00'ı bloklamaz (§D97). Alt-görev kanıtı ve kilit kararlar `## K.`'dedir — hücre §1.2 gereği damga taşır, geçmiş taşımaz (bu satır 728 → 340 karaktere indirildi, tm 83.8). → §6.1 · tm 83 · ilerleme K C6 |
-| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 4'ü teslim (`11.5-a`…`11.5-d`; tm 84.1–84.4). → §6.1 · tm 84 |
+| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 5'i teslim (`11.5-a`…`11.5-e`; tm 84.1–84.5). → §6.1 · tm 84 |
 | —      | SLA: uptime taahhüdü + fatura kredisi (NFR-U5)   | ⛔-**süreç** · Denetim bulgusu K1-4: PRD'nin tek somut SLA tanımı NFR-U5'tir (_"Sözleşmeli uptime taahhüdü + kredi mekanizması"_). Uptime taahhüdü bir **sözleşme** kalemidir, bu depodan üretilemez (§D97 kod/süreç ayrımı). `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder |
 | —      | Dedicated onboarding / account manager           | ⛔-**süreç** · PRD §5.4 "Kurumsal" satırının üçüncü payı. **Kod payı YOK** — insan hizmeti taahhüdü (özel onboarding + atanmış müşteri yöneticisi); depoda karşılığı olan hiçbir yüzey üretmez. Süpürmede bulundu, §F.00'ı bloklamaz (§D95) |
 | —      | Skills-based routing (Ent. payı)                 | ✅ **v2'de teslim** — `08.6.3` (tm 91). PRD §5.4 "Kanal" satırı bunu IVR ile birlikte anıyor; skill payı v2'de kapandı, IVR payı ⛔ (voice'a bağlı) |
@@ -5236,7 +5236,7 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 
 #### K11.5 — 11.5 · White-label widget · SLA yönetimi · sandbox
 
-> Kalem **AÇIK** — 8 alt-görevin 3'ü teslim (`11.5-a`, `11.5-b`, `11.5-c`; tm 84.1–84.3). §6'nın Faz-3 `11.5` satırı
+> Kalem **AÇIK** — 8 alt-görevin 5'i teslim (`11.5-a`…`11.5-e`; tm 84.1–84.5). §6'nın Faz-3 `11.5` satırı
 > `C4`/`C6` gibi ilerleme damgasını kendi hücresinde taşır, kanıt burada birikir (§1.2).
 
 - ✅ **`11.5-a` — PLANS kataloğuna enterprise kademesi + altı anahtarlı yetki sözlüğü.** Yetki
@@ -5383,3 +5383,31 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
   **`pnpm -w test:e2e` 143/143** (değişmedi — e2e payı `11.5-h`) · `db:check-drift` sürüklenme
   yok · `format:check` dokunulan dosyalarda temiz. **Kapsam dışı:** SLA ekranı + Reports ihlal
   KPI'ı (`11.5-e`, ihlal satırlarını okuyan uç oradadır), uçtan uca e2e (`11.5-h`). tm 84.4
+- ✅ **`11.5-e` — SLA ekranı + Reports'ta ihlal KPI'ı; `11.5-d`'nin bıraktığı okuma ucunu açtı.**
+  `sla_breaches`'i **ilk okuyan uç** — `(license_id, detected_at DESC)` indeksi 84.4'te bu iş için
+  hazırlanmıştı. Sayaç `GET /reports/overview`'a kendi bloğu olarak eklendi (`totals`'a DEĞİL):
+  `sla: { active, breaches, low_confidence }`. `totals`'a girmedi çünkü `active` olmadan anlamı
+  yok — hiç hedef tanımlamamış bir çalışma alanının ihlali de sıfırdır, "temiz sicil" ile "hiç
+  ölçülmüyor"u aynı sıfır gösterirdi (Ecommerce bloğunun `configured` ayrımıyla aynı gerekçe).
+  `active`, `readEffectivePolicy`'nin TenantContext'ini değil `licenseId`'yi alır — rapor
+  kurucuları yalnız lisansı taşır, organizationId'ye ihtiyaçları yok (`report-csv.ts`'e yeni
+  `slaActive`/`slaBreachCount`, `entitlements.ts`'ten `TRIAL_PLAN` export edildi). `low_confidence`
+  — az vakalı bir pencerede ihlal sayısı gürültüdür (Staffing'in `DEFAULT_MINIMUM_SAMPLE_CHATS`
+  gerekçesiyle aynı), eşik `total_cases < 20`. Ekran `SlaPolicy.tsx` (yeni) `SalesTracker.tsx`
+  desenini birebir izler: `useForm` + tam-değiştirme `PUT`, boş alan = `null` hedef (0 DEĞİL — sıfır
+  kaydedilirse her sohbet açılır açılmaz ihlal sayılırdı). 403'ün `details.entitlement === 'sla'`
+  olması Enterprise yükseltme mesajına çevrilir — `WidgetCustomization.tsx`'in devraldığı kozmetik
+  borcu (403'ü çıplak hata göstermesi) tekrarlamadı. — `apps/api/src/routes/reports.ts` ·
+  `apps/api/src/services/reports/report-csv.ts` · `apps/api/src/lib/entitlements.ts` ·
+  `apps/web/src/features/settings/SlaPolicy.tsx` (yeni) ·
+  `apps/web/src/features/settings/SettingsPage.tsx` · `apps/web/src/features/reports/ReportsPage.tsx` ·
+  `packages/contract/openapi/openapi.yaml` · test `SlaPolicy.test.tsx` (9, yeni) ·
+  `ReportsPage.test.tsx` (+3) · `reports-billing.test.ts` (+5) · tm 84.5
+- ✅ **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **135 dosya,
+  3121/3121** (3116 → +5) + web **1154** (+12: 9 `SlaPolicy` + 3 `ReportsPage` SLA KPI'ı) ·
+  `pnpm -w test:integration` **85 dosya, 2293/2293** (2288 → +5) · `pnpm -w build` 7/7 ·
+  `contract-parity` yeşil (`contract:generate` sonrası üretilen istemci commit'lendi) ·
+  **`pnpm -w test:e2e` 143/143** (değişmedi — `reports.spec.ts`/`settings.spec.ts` regresyonsuz;
+  yeni ekran/kart uçtan uca `11.5-h`'nin işi) · `db:check-drift` sürüklenme yok (migration YOK) ·
+  `format:check` dokunulan dosyalarda temiz. **Kapsam dışı:** sandbox ekranı (`11.5-g`), uçtan uca
+  e2e (`11.5-h`). tm 84.5

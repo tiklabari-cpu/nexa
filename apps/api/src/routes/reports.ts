@@ -61,6 +61,8 @@ import {
   satisfactionByDay,
   satisfactionCounts,
   satisfactionScore,
+  slaActive,
+  slaBreachCount,
   splitBenchmark,
   SPLIT_COUNTS,
   teamPerformanceByAgent,
@@ -412,6 +414,16 @@ async function buildSubscriptionView(
 // ===========================================================================
 
 /**
+ * Below this many cases in the window, an SLA breach count is read with a
+ * caveat rather than at face value — a single slow reply can be the whole
+ * story in a two-case window. Mirrors the reasoning
+ * {@link DEFAULT_MINIMUM_SAMPLE_CHATS} documents for the staffing forecast; a
+ * separate number because the two guard different quantities (every case in
+ * the window, not chats specifically).
+ */
+const SLA_MINIMUM_SAMPLE_CASES = 20;
+
+/**
  * The Overview report for one window (FR-MOD-07.3). Shared by `GET
  * /reports/overview` and `get_report` so the two can never quote different
  * figures for the same license and range.
@@ -470,6 +482,13 @@ export async function buildOverviewReport(
   // The funnel's converted stage (FR-MOD-13.3), counted the same way as
   // tickets above — a license- and time-scoped count on its own table.
   const achievedGoals = await achievedGoalCount(tx, licenseId, from, to);
+
+  // SLA misses in the window (FR-MOD-11.5 · 11.5-e), and whether targets are
+  // in force today — the settings screen's own "not bought" vs "not set"
+  // distinction, read here so the KPI card can tell a workspace that has
+  // never configured SLA apart from one with a clean record.
+  const slaBreaches = await slaBreachCount(tx, licenseId, from, to);
+  const slaIsActive = await slaActive(tx, licenseId);
 
   const good = satisfaction.good;
   const bad = satisfaction.bad;
@@ -538,6 +557,19 @@ export async function buildOverviewReport(
         chats: Number(row.chats),
       })),
       top_tags: topTags.map((row) => ({ name: row.name, count: Number(row.count) })),
+      // Its own block, not folded into `totals`: unlike every other figure
+      // there, this one is meaningless without `active` alongside it — a
+      // workspace with no targets configured has zero breaches for the same
+      // reason it has zero of anything nobody asked to measure, and showing
+      // that "0" next to "Achieved goals" would read as a clean record rather
+      // than as SLA never having been switched on.
+      sla: {
+        active: slaIsActive,
+        breaches: slaBreaches,
+        // A count from a handful of cases is not a trend — see
+        // SLA_MINIMUM_SAMPLE_CASES.
+        low_confidence: totalChats + tickets < SLA_MINIMUM_SAMPLE_CASES,
+      },
     },
     from,
     to,

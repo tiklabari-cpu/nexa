@@ -35,6 +35,7 @@ import { IpAllowlist } from './IpAllowlist.js';
 import { SsoConnection } from './SsoConnection.js';
 import { Compliance } from './Compliance.js';
 import { SiemExport } from './SiemExport.js';
+import { SlaPolicy } from './SlaPolicy.js';
 import { ScheduledExports } from './ScheduledExports.js';
 import {
   DEFAULT_PREFS,
@@ -156,6 +157,7 @@ export function SettingsPage(): ReactElement {
       <SsoConnection canEdit={canManageAccess} />
       <Compliance canEdit={canManageAccess} />
       <SiemExport canEdit={canManageAccess} />
+      <SlaPolicy canEdit={canManageAccess} />
       <AuditLog />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />

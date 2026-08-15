@@ -135,6 +135,13 @@ const envSchema = z.object({
     .int()
     .nonnegative()
     .default(TENANT_TRANSACTION_TIMEOUT_MS),
+  /**
+   * Where the scheduled sink writes the mock SIEM target (NFR-C6 · C6-d).
+   * Inside `.data/`, like `MAIL_DIR` and `STORAGE_LOCAL_DIR` — ignored, and the
+   * whole of what this deployment can honestly offer in place of a real
+   * Splunk/Sentinel/Datadog connector (a project boundary).
+   */
+  SIEM_DIR: z.string().default('.data/siem'),
 
   TRIAL_DAYS: z.coerce.number().int().positive().default(14),
   UNIT_PRICE_CENTS: z.coerce.number().int().nonnegative().default(9900),

@@ -13,6 +13,27 @@
 
 ## Task log (newest-first)
 
+## tm 83.5 — C6-d · MOCK SIEM dosya sink'i + zamanlanmış gönderim — done — 2026-08-15 UTC
+
+- **Yapıldı:** `SiemSink` (`services/audit/siem-sink.ts`) — `scheduled-report-sweeper.ts`
+  deseniyle lisans başına döngü + hata izolasyonu, artı bu işe özgü `pg_advisory_xact_lock`
+  (lisans başına). **Sıra invaryantı:** dosya yazılır+kapatılır → SONRA `siem_export_cursors`
+  ilerler; çökme yalnız tekrar-teslime izin verir, atlamaya asla — `C6-c`'nin budaması yalnız
+  teslim edilmiş imlecin gerisini sildiği için tersi onarılamaz boşluk açardı. `.data/siem/
+  <licenseId>/<timestamp>-<random>.ndjson` + ayrık `.sig`. `siem:run` operatör script'i (dry-run
+  yok — en kötü senaryo zararsız tekrar-teslim). `SIEM_DIR` env eklendi.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api 129 dosya
+  3005/3005 + web 1132 · `pnpm -w test:integration` 82 dosya 2215/2215 · `pnpm -w build` 7/7 ·
+  `db:check-drift` temiz · `format:check` (dokunulan dosyalar) temiz. `test:e2e` koşulmadı —
+  testStrategy istemiyor, uçtan uca kapı `C6-g`.
+- **Not:** Bu pencere bir önceki pencerenin yarım bıraktığı `in-progress` işi (kod+test zaten
+  yazılmıştı, hiç doğrulanmamış/commit'lenmemişti) tamamladı. `pnpm -w test:integration`'ı
+  paralel typecheck/lint ile aynı anda çalıştırınca `siem-export.test.ts`'te (C6-b, bu dilimin
+  kapsamı dışı) bir flake gördüm — temiz (paralel iş yokken) tekrar koşuda 82/82 yeşildi;
+  gerçek bir regresyon değildi.
+- **Sonraki pencereye:** `C6-f` (Settings → Security SIEM ekranı) ve `C6-e` (erişim gözden
+  geçirme raporu) hâlâ açık; `C6-g` (uçtan uca doğrulama) ikisini de bekliyor.
+
 ## tm 83.4 — C6-c · Export bütünlüğü çekirdeği (zincir + imza + boşluk tespiti) — done — 2026-08-15 UTC
 
 - **Yapıldı:** `audit_log`'a `chain_seq`/`prev_hash`/`hash` + lisans başına `audit_chain_heads`

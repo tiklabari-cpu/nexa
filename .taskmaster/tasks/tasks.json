@@ -3849,12 +3849,12 @@
             "description": "Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi",
             "details": "C4-f — Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi (salt-okunur)  [SONNET-XHIGH]\n\nPRD: C4 (PLAN §6.1 · dilim V3-1 · tm 82)\nTAHMİN: ~1 pencere\n\nKAPSAM: Settings → Security altında \"Veri bölgesi ve uyumluluk\" kartı — bölge (**salt-okunur**, \"kayıtta sabitlendi\" notu), BAA durumu (imzalı/imzasız + tarih), `us` lisansta owner için **BAA kabul butonu** (bu bir mutasyondur; başlıktaki \"salt-okunur\" ibaresi denetimde kaldırıldı, yalnız BÖLGE gösterimi salt-okunurdur).\n\n**ROL KAPISI (denetim bulgusu):** butonu yalnız `owner` GÖRÜR — `admin` de GÖRMEZ. Sunucu kapısı `C4-d`'dedir (`owner`, `roleAtLeast` değil kesin eşitlik); bu ekran onu YANSITIR, kendi kararını vermez.\n\nDOSYALAR: `apps/web/src/features/settings/Compliance.tsx` (yeni) + test · `apps/web/src/features/settings/SettingsPage.tsx`\n\nREFERANS DESEN (birebir): `apps/web/src/features/settings/IpAllowlist.tsx` bölüm yerleşimi · rol kapılı buton kalıbı `TeamPage` rol menüsü · boş/yükleme durumları `apps/web/src/components/Skeleton.tsx` + `apps/web/src/components/EmptyState.tsx` (EK-B.1 — denetim düzeltmesi: bunlar `components/ui/` altında DEĞİL, bir üst dizinde).\n\nKAPSAM DIŞI: e2e (C4-g).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/web test (kart bölgeyi salt-okunur gösterir; eu lisansta BAA butonu YOK; us lisansta owner görür, ADMIN GÖRMEZ, agent GÖRMEZ; imzalı durumda tarih gösterilir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "82.4"
             ],
             "parentId": "82",
-            "updatedAt": "2026-08-11T21:06:36.612Z"
+            "updatedAt": "2026-08-15T02:52:02.190Z"
           },
           {
             "id": 7,
@@ -3872,7 +3872,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-15T02:26:29.523Z"
+        "updatedAt": "2026-08-15T02:52:02.190Z"
       },
       {
         "id": "83",
@@ -5933,7 +5933,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T02:26:29.524Z",
+      "lastModified": "2026-08-15T02:52:02.191Z",
       "taskCount": 123,
       "completedCount": 119,
       "tags": [

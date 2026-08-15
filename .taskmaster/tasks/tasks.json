@@ -4092,12 +4092,12 @@
             "description": "Sandbox ekranı — oluştur/sıfırla + \"bu bir sandbox\" göstergesi",
             "details": "11.5-g — Sandbox ekranı — oluştur/sıfırla + \"bu bir sandbox\" göstergesi  [SONNET-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nKAPSAM: Settings → Sandbox bölümü (oluştur, sıfırla — YIKICI işlem onayı ile) + kabukta sandbox rozeti (\"bu bir sandbox çalışma alanı\").\n\n**ZORUNLU İNVARYANT (denetim bulgusu — rozet yanılırsa ÜRETİM verisi silinir):** sıfırlama butonu, aktif lisansın `sandboxOfLicenseId != null` olduğu **SUNUCU yanıtından** türetilir; istemci tarafı bir bayrak, localStorage ya da rota tahmininden TÜRETİLMEZ. Sunucu ayrıca bağımsız olarak sandbox olmayan lisansta sıfırlamayı reddeder (`11.5-f` testinde negatif olarak kanıtlı) — istemci kapısı tek savunma değildir.\n\nDOSYALAR: `apps/web/src/features/settings/Sandbox.tsx` (yeni) + test · `apps/web/src/components/AppShell.tsx` (rozet)\n\nREFERANS DESEN: yıkıcı işlem onayı — mevcut \"hesabı kapat\" akışı (`account-lifecycle`) · rozet için `apps/web/src/components/ui/Banner.tsx` segmentli kalıbı + `apps/web/src/components/StatusDot.tsx` (denetim düzeltmesi: `StatusDot` `components/ui/` altında DEĞİL).\n\nKAPSAM DIŞI: e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/web test (sandbox oluşturma butonu yalnız yetkiliyken görünür; sıfırlama onay ister; sandbox oturumunda rozet görünür, üretimde GÖRÜNMEZ) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "84.6"
             ],
             "parentId": "84",
-            "updatedAt": "2026-08-15T15:47:28.685Z"
+            "updatedAt": "2026-08-15T23:00:12.956Z"
           },
           {
             "id": 8,
@@ -4115,7 +4115,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-15T15:47:28.685Z"
+        "updatedAt": "2026-08-15T23:00:12.956Z"
       },
       {
         "id": "85",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T17:38:38.914Z",
+      "lastModified": "2026-08-15T23:00:12.959Z",
       "taskCount": 124,
       "completedCount": 122,
       "tags": [

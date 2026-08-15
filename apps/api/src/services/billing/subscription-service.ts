@@ -1,27 +1,95 @@
 /**
  * The self-serve checkout levers — plan, billing cycle, seats (FR-MOD-10.1.1–.3).
  *
- * Nexa's pricing is deliberately one transparent number (ADR-13, the PRD's
- * §5.3 differentiator): $99 per user per month, 200 AI resolutions included. So
- * there is one plan today. The endpoint still validates `plan`, prices annual
- * billing, and guards a downgrade — the shape a second tier would need — because
- * building those in later means reopening every caller.
+ * Nexa's self-serve pricing is deliberately one transparent number (ADR-13, the
+ * PRD's §5.3 differentiator): $99 per user per month, 200 AI resolutions
+ * included. Enterprise (PRD §5.4 "Kurumsal") sits beside it as a *quoted* tier —
+ * it carries capabilities, not a price this repo is allowed to invent.
  *
  * Billing is mocked (ADR-13, A5): this persists the choice and does the
  * arithmetic; nothing is charged and no external provider is called.
  */
+import { ENTITLEMENTS, entitlementMap, type Entitlement, type EntitlementMap } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 /**
- * The plan catalogue. A map rather than inlined constants so a future tier is a
- * data change, and so the downgrade guard has something real to compare against.
- * The single entry's numbers are ADR-13's, not invented here.
+ * How a tier is priced.
+ *
+ * `listed` means the catalogue below states the number and the checkout can
+ * charge it. `quoted` means the price is agreed in a contract this deployment
+ * never sees — the PRD gives Enterprise no figure, and picking one here would
+ * put an invented price on an invoice and in the UI.
+ */
+export type PlanPricing = 'listed' | 'quoted';
+
+export interface PlanSpec {
+  pricing: PlanPricing;
+  /** List price per seat per month. `null` on a quoted tier. */
+  unitPriceCents: number | null;
+  /** Included AI resolutions per month. `null` when the contract sets it. */
+  aiResolutionsIncluded: number | null;
+  /** What this tier unlocks. Everything not listed is denied (§C-A25). */
+  entitlements: readonly Entitlement[];
+}
+
+/**
+ * The plan catalogue — the single source of both price and capability.
+ *
+ * A map rather than inlined constants so a tier is a data change, and so the
+ * downgrade guard has something real to compare against. Growth's numbers are
+ * ADR-13's, not invented here.
+ *
+ * Enterprise carries every entitlement and no numbers. That asymmetry is the
+ * point: the PRD names the Enterprise *capabilities* (§5.4, NFR-S11, NFR-C4,
+ * NFR-S12) and never names an Enterprise *price*, so the catalogue states the
+ * first and refuses to state the second. `quoted` is how that refusal travels to
+ * a caller — see {@link updateSubscription} for what the mocked bill does with
+ * it.
  */
 export const PLANS = {
-  growth: { unitPriceCents: 9900, aiResolutionsIncluded: 200 },
-} as const;
+  growth: {
+    pricing: 'listed',
+    unitPriceCents: 9900,
+    aiResolutionsIncluded: 200,
+    // Self-serve buys the product, not the Enterprise controls. Every key here
+    // would be a leak of exactly the kind 11.5 exists to close.
+    entitlements: [],
+  },
+  enterprise: {
+    pricing: 'quoted',
+    unitPriceCents: null,
+    aiResolutionsIncluded: null,
+    entitlements: [...ENTITLEMENTS],
+  },
+} as const satisfies Record<string, PlanSpec>;
+
 export type PlanId = keyof typeof PLANS;
+
+export const PLAN_IDS = Object.keys(PLANS) as PlanId[];
+
+export function isPlanId(value: unknown): value is PlanId {
+  return typeof value === 'string' && value in PLANS;
+}
+
+/**
+ * What a plan unlocks, as a total map.
+ *
+ * Takes a plain string rather than a `PlanId` because the caller is usually
+ * holding `subscription.plan` — a database column, not a checked union. A value
+ * the catalogue does not know grants nothing: a workspace whose row says
+ * `platinum` gets the free tier's answer, not an unhandled case that falls
+ * through to allow. This is the function every gate should ask; there is no
+ * second place where a capability can be turned on.
+ */
+export function entitlementsForPlan(plan: string | null | undefined): EntitlementMap {
+  return entitlementMap(isPlanId(plan) ? PLANS[plan].entitlements : []);
+}
+
+/** How the plan on a subscription row is priced; an unknown plan reads as listed. */
+export function pricingForPlan(plan: string | null | undefined): PlanPricing {
+  return isPlanId(plan) ? PLANS[plan].pricing : 'listed';
+}
 
 export const BILLING_CYCLES = ['monthly', 'annual'] as const;
 export type BillingCycle = (typeof BILLING_CYCLES)[number];
@@ -113,22 +181,46 @@ export async function updateSubscription(
   // Downgrade guard (FR-MOD-10.1.1): moving *to a different* plan whose quota is
   // below this month's usage is refused. Staying on the same plan is never a
   // downgrade — a workspace already over its quota pays overage and must still
-  // be able to change seats or cycle. Inert with one plan (no plan to move to);
-  // real the day a smaller tier exists.
+  // be able to change seats or cycle.
+  //
+  // A quoted tier has no catalogue allowance (`null`) and so can never be the
+  // smaller side of a move: refusing an *upgrade* to Enterprise because the
+  // workspace has been heavily using the product would be precisely backwards.
+  // The guard still fires in the other direction — Enterprise → growth with 250
+  // resolutions spent is a real downgrade, and this is where it is caught.
   const changingPlan = existing != null && planId !== existing.plan;
-  if (changingPlan && spec.aiResolutionsIncluded < currentAiUsage) {
+  if (
+    changingPlan &&
+    spec.aiResolutionsIncluded !== null &&
+    spec.aiResolutionsIncluded < currentAiUsage
+  ) {
     throw ApiError.validation(
       `The ${planId} plan includes ${spec.aiResolutionsIncluded} AI resolutions, ` +
         `below the ${currentAiUsage} already used this month.`,
     );
   }
 
+  // What a quoted tier bills. The catalogue has no number for Enterprise and
+  // this repo may not invent one (ADR-13's figures are the PRD's), so moving to
+  // it leaves the amounts already on the row exactly where they are: the plan
+  // change alone must not silently re-price a workspace in either direction.
+  // A workspace that has never checked out falls back to the list figures for
+  // the same reason — they are the only numbers anyone has agreed to.
+  //
+  // The honest part is that nobody reads these as an Enterprise price: the
+  // subscription view reports `pricing: "quoted"` alongside them, which is what
+  // a client shows instead of a per-seat figure. The real number arrives from a
+  // signed contract, and this deployment has no surface that takes one.
+  const fallback = PLANS.growth;
   const data = {
     plan: planId,
     billingCycle,
     seats: requestedSeats,
-    unitPriceCents: spec.unitPriceCents,
-    aiResolutionsIncluded: spec.aiResolutionsIncluded,
+    unitPriceCents: spec.unitPriceCents ?? existing?.unitPriceCents ?? fallback.unitPriceCents,
+    aiResolutionsIncluded:
+      spec.aiResolutionsIncluded ??
+      existing?.aiResolutionsIncluded ??
+      fallback.aiResolutionsIncluded,
   };
 
   const row = existing

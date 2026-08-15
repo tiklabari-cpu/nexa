@@ -4969,6 +4969,47 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/billing/entitlements': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What this workspace's plan unlocks
+     * @description The capabilities the workspace's commercial tier grants (FR-MOD-11.5,
+     *     PRD §5.4 "Kurumsal"), plus the catalogue of tiers so a screen can name the
+     *     one that would unlock a control it is greying out.
+     *
+     *     Entitlements are **derived from the plan** on every call — there is no
+     *     per-workspace feature-flag store, because two sources of truth for "may
+     *     this workspace do X" eventually disagree and nothing says which wins.
+     *     Change the plan and the answer changes with it.
+     *
+     *     `entitlements` is total: every key in the vocabulary is present with a
+     *     boolean, so an absent key can never be read as an implicit yes. A
+     *     workspace on a trial has bought nothing and answers as the self-serve tier
+     *     does.
+     *
+     *     This endpoint reports; it does not enforce. The refusal a caller gets for
+     *     acting without an entitlement comes from the endpoint that owns the
+     *     action.
+     *
+     *     Unlike the rest of `/billing`, no billing scope is required: the settings
+     *     screens that own these controls ask this question, and requiring
+     *     `billing_manage` to learn whether a widget toggle should render would push
+     *     every console session toward a scope it has no other use for.
+     */
+    get: operations['getEntitlements'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/audit-log': {
     parameters: {
       query?: never;
@@ -7527,6 +7568,16 @@ export interface components {
     };
     SubscriptionView: {
       plan: string;
+      /**
+       * @description Whether `unit_price_cents` is a price this product quotes (`listed`,
+       *     the self-serve tier) or a figure agreed in a contract the product
+       *     never sees (`quoted`, Enterprise — the PRD states its capabilities
+       *     and no price). Show the number for `listed`; show "contact sales"
+       *     for `quoted`. The amounts are still returned either way, because the
+       *     mocked invoice is built from them.
+       * @enum {string}
+       */
+      pricing: 'listed' | 'quoted';
       /** @enum {string} */
       billing_cycle: 'monthly' | 'annual';
       /** @enum {string} */
@@ -7553,6 +7604,55 @@ export interface components {
       annual_savings_cents?: number;
       /** @enum {string} */
       provider: 'mock';
+    };
+    /**
+     * @description A capability a commercial tier unlocks (FR-MOD-11.5). Closed
+     *     vocabulary — the plan catalogue, this endpoint and the screens all speak
+     *     it, so a capability cannot be spelled two ways and enforced in one place.
+     *
+     *     `sla` is the first-response/resolution target of PRD §5.4, not the
+     *     uptime commitment of NFR-U5: that is a contract term with a billing
+     *     credit, which no code in this repo can promise.
+     * @enum {string}
+     */
+    Entitlement: 'white_label' | 'sandbox' | 'sla' | 'sso' | 'hipaa' | 'siem_export';
+    /** @description What the caller's workspace may switch on, and what each tier grants. */
+    EntitlementsView: {
+      /** @description The caller's plan. A workspace with no subscription is on trial and reads as the self-serve tier. */
+      plan: string;
+      /**
+       * @description Every entitlement with a yes/no answer. Total by construction: a key
+       *     is never absent, so "missing" can never be read as an implicit yes.
+       */
+      entitlements: {
+        /** @description Widget served without Nexa branding. */
+        white_label: boolean;
+        /** @description A second */
+        sandbox: boolean;
+        /** @description First-response/resolution targets with breach marking. */
+        sla: boolean;
+        /** @description SAML 2.0/OIDC sign-in and SCIM provisioning (NFR-S11). */
+        sso: boolean;
+        /** @description Signed-BAA path and US-only hosting (NFR-C4). */
+        hipaa: boolean;
+        /** @description Audit trail shipped to an external SIEM (NFR-S12). */
+        siem_export: boolean;
+      };
+      /**
+       * @description The tier catalogue — static and identical for every workspace, so a
+       *     screen can name the tier that unlocks a control rather than saying
+       *     "upgrade" with nowhere to point.
+       */
+      plans: {
+        id: string;
+        /** @enum {string} */
+        pricing: 'listed' | 'quoted';
+        /** @description List price per seat per month. Null on a quoted tier — the PRD gives Enterprise no price, and inventing one is not this repo's call. */
+        unit_price_cents: number | null;
+        /** @description Included AI resolutions per month. Null when the contract sets it. */
+        ai_resolutions_included: number | null;
+        entitlements: components['schemas']['Entitlement'][];
+      }[];
     };
     Invoice: {
       /** @description Invoice number, `NEXA-<yyyymm>`. */
@@ -16848,6 +16948,29 @@ export interface operations {
           'application/json': {
             items: components['schemas']['ApiPackagePurchase'][];
           };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getEntitlements: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description This workspace's entitlements and the plan catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EntitlementsView'];
         };
       };
       401: components['responses']['Unauthorized'];

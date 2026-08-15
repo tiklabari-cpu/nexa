@@ -467,6 +467,8 @@ paths:
     $ref: "./paths/reports.yaml#/apiPackages"
   /billing/api-packages/purchases:
     $ref: "./paths/reports.yaml#/apiPackagePurchases"
+  /billing/entitlements:
+    $ref: "./paths/reports.yaml#/entitlements"
 
   /audit-log:
     $ref: "./paths/audit-log.yaml#/auditLog"
@@ -3205,9 +3207,20 @@ components:
           usage,
           estimated_total_cents,
           provider,
+          pricing,
         ]
       properties:
         plan: { type: string }
+        pricing:
+          type: string
+          enum: [listed, quoted]
+          description: |
+            Whether `unit_price_cents` is a price this product quotes (`listed`,
+            the self-serve tier) or a figure agreed in a contract the product
+            never sees (`quoted`, Enterprise — the PRD states its capabilities
+            and no price). Show the number for `listed`; show "contact sales"
+            for `quoted`. The amounts are still returned either way, because the
+            mocked invoice is built from them.
         billing_cycle: { type: string, enum: [monthly, annual] }
         status:
           type: string
@@ -3236,6 +3249,69 @@ components:
           type: integer
           description: What annual billing saves versus twelve monthly charges. 0 on monthly.
         provider: { type: string, enum: [mock] }
+
+    Entitlement:
+      type: string
+      description: |
+        A capability a commercial tier unlocks (FR-MOD-11.5). Closed
+        vocabulary — the plan catalogue, this endpoint and the screens all speak
+        it, so a capability cannot be spelled two ways and enforced in one place.
+
+        `sla` is the first-response/resolution target of PRD §5.4, not the
+        uptime commitment of NFR-U5: that is a contract term with a billing
+        credit, which no code in this repo can promise.
+      enum: [white_label, sandbox, sla, sso, hipaa, siem_export]
+
+    EntitlementsView:
+      type: object
+      description: |
+        What the caller's workspace may switch on, and what each tier grants.
+      required: [plan, entitlements, plans]
+      properties:
+        plan:
+          type: string
+          description: The caller's plan. A workspace with no subscription is on trial and reads as the self-serve tier.
+        entitlements:
+          type: object
+          description: |
+            Every entitlement with a yes/no answer. Total by construction: a key
+            is never absent, so "missing" can never be read as an implicit yes.
+          required: [white_label, sandbox, sla, sso, hipaa, siem_export]
+          additionalProperties: false
+          properties:
+            white_label: { type: boolean, description: Widget served without Nexa branding. }
+            sandbox:
+              { type: boolean, description: A second, non-billable workspace to test against. }
+            sla:
+              { type: boolean, description: First-response/resolution targets with breach marking. }
+            sso:
+              { type: boolean, description: SAML 2.0/OIDC sign-in and SCIM provisioning (NFR-S11). }
+            hipaa: { type: boolean, description: Signed-BAA path and US-only hosting (NFR-C4). }
+            siem_export:
+              { type: boolean, description: Audit trail shipped to an external SIEM (NFR-S12). }
+        plans:
+          type: array
+          description: |
+            The tier catalogue — static and identical for every workspace, so a
+            screen can name the tier that unlocks a control rather than saying
+            "upgrade" with nowhere to point.
+          items:
+            type: object
+            required: [id, pricing, unit_price_cents, ai_resolutions_included, entitlements]
+            properties:
+              id: { type: string }
+              pricing: { type: string, enum: [listed, quoted] }
+              unit_price_cents:
+                type: integer
+                nullable: true
+                description: List price per seat per month. Null on a quoted tier — the PRD gives Enterprise no price, and inventing one is not this repo's call.
+              ai_resolutions_included:
+                type: integer
+                nullable: true
+                description: Included AI resolutions per month. Null when the contract sets it.
+              entitlements:
+                type: array
+                items: { $ref: "#/components/schemas/Entitlement" }
 
     Invoice:
       type: object

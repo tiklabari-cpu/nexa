@@ -4002,7 +4002,7 @@
         "description": "PRD §5.4 (Ent.) · FR-MOD-11.5. BULGU: powered_by bugün HİÇBİR plan kapısı taşımıyor — Enterprise özelliği her planda açık.",
         "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `11.5` · dilim V3-3\n\n8 atomik alt-görev · ~11 pencere · etiket dağılımı: OPUS-XHIGH x3 · OPUS-MAX x2 · SONNET-XHIGH x3\n\nKK: \"Marka linki; Enterprise'da white-label\" (FR-MOD-11.5 birebir) + \"SLA yönetimi\" · \"sandbox\" (§5.4'ten türetilmiş, §C-A24).\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  11.5-a [OPUS-XHIGH] PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla)  (bağ: —)\n  11.5-b [OPUS-MAX] Entitlement zorlama çekirdeği (BÖLÜNMEZ) — yazma kapısı + downgrade'de okuma yolunda geri alma  (bağ: 11.5-a)\n  11.5-c [SONNET-XHIGH] Widget tarafı — yetki yokken powered_by=0 URL parametresinin yok sayılması  (bağ: 11.5-b)\n  11.5-d [OPUS-XHIGH] SLA yönetimi — hedef tanımı (ilk yanıt / çözüm, iş saatleri) + ölçüm + ihlal işareti  (bağ: 11.5-a)\n  11.5-e [SONNET-XHIGH] SLA ekranı + Reports'ta ihlal KPI'ı  (bağ: 11.5-d)\n  11.5-f [OPUS-MAX] Sandbox lisansı (BÖLÜNMEZ) — ikinci kiracı: izolasyon + faturaya girmeme + kotaya sayılmama  (bağ: 11.5-a, 11.5-b)\n  11.5-g [SONNET-XHIGH] Sandbox ekranı — oluştur/sıfırla + \"bu bir sandbox\" göstergesi  (bağ: 11.5-f)\n  11.5-h [OPUS-XHIGH] Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e  (bağ: 11.5-c, 11.5-e, 11.5-g)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.5 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
         "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (11.5-h) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "81",
           "82"
@@ -4015,10 +4015,10 @@
             "description": "PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla)",
             "details": "11.5-a — PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla)  [OPUS-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: `apps/api/src/services/billing/subscription-service.ts:21` → `PLANS = { growth: {...} }`, TEK kademe. Kodda \"Enterprise planı\" kavramı YOK. Yetki sözlüğü de yok; `powered_by` (`routes/settings.ts:181,827`) hiçbir kontrol olmadan kabul ediliyor.\n\nKAPSAM: `PLANS`'a `enterprise` kademesi + kademe→yetki sözlüğü + kontrat yüzeyi (`GET /billing/entitlements`).\n\n**YETKİ SÖZLÜĞÜ — ALTI ANAHTAR** (denetim bulgusu K1-2 ile üçten altıya çıkarıldı): `white_label` · `sandbox` · `sla` · **`sso`** · **`hipaa`** · **`siem_export`**. Son üçü PRD'nin **açıkça \"Enterprise\"** dediği yeteneklerdir — NFR-S11 _\"SAML 2.0/OIDC + SCIM (Enterprise)\"_, NFR-C4 _\"Şartlı (imzalı BAA + yalnız US hosting) — Enterprise\"_, NFR-S12 _\"genişletilmiş + SIEM Enterprise\"_. İlk kırılımda sözlükte yoktular; sonuç, `11.5`'in var oluş gerekçesi olan kaçağın (`powered_by` her planda açık) ÜÇ YENİ ÖRNEĞİ olurdu: Faz 3 bittiğinde `growth` planındaki her kiracı SAML SSO'ya, SCIM'e, HIPAA/BAA akışına ve SIEM export'una erişirdi.\n\nKARAR: yetki PLANDAN TÜRETİLİR, ayrı bayrak tablosu AÇILMAZ (§C-A25). İki kaynak (plan + bayrak) uyuşmazlığa düşer ve hangisinin kazandığı yazılı olmaz. Enterprise fiyatı SAYISAL OLARAK UYDURULMAZ — PRD'de Enterprise fiyatı yoktur; \"görüşmeye bağlı\" modellenir, ADR-13'ün rakamları bozulmaz.\n\nDOSYALAR: `apps/api/src/services/billing/subscription-service.ts:21` · `packages/types/src/domain.ts` · `packages/contract/openapi/paths/settings.yaml` veya `billing` · `apps/api/src/routes/settings.ts`\n\nREFERANS DESEN: `PLANS` map'in kendi yorumu — \"A map rather than inlined constants so a future tier is a data change\". Downgrade guard (`subscription-service.ts:118-124`; :113 yorum satırı) yeni kademeyle tutarlı kalmalı.\n\nKAPSAM DIŞI: zorlama (11.5-b), SLA (11.5-d), sandbox (11.5-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (enterprise kademesi seçilebilir; entitlements ucu doğru yetkileri döner; growth'ta white_label=false, enterprise'da true; downgrade guard bozulmadı; contract-parity yeşil) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "84",
-            "updatedAt": "2026-08-11T21:09:39.258Z"
+            "updatedAt": "2026-08-15T09:31:12.132Z"
           },
           {
             "id": 2,
@@ -4115,7 +4115,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-11T20:47:57.075Z"
+        "updatedAt": "2026-08-15T09:31:12.132Z"
       },
       {
         "id": "85",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T09:27:19.250Z",
+      "lastModified": "2026-08-15T09:31:12.133Z",
       "taskCount": 124,
       "completedCount": 121,
       "tags": [

@@ -2139,7 +2139,7 @@ kalem buldu: _dedicated onboarding/account manager_ · _IVR routing_ · _kalan m
 | S11    | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11 (türetilmiş kod `S11`); kimlik sınırı. → §6.1 · tm 81 · ilerleme K S11 |
 | C4     | HIPAA BAA + bölgesel barındırma (US/EU)          | NFR-C4 (türetilmiş kod `C4`); ADR-12 tek bölge (`eu`) burada genişletildi (`C4-a` ✅, §D102); bölge zorlaması üç yüzeyde (`C4-b` ✅, §D103); signup ekranında seçim + kalıcılık uyarısı (`C4-c` ✅); BAA kabul akışı MOCK (`C4-d` ✅); kapsam kısıtları — retention tavanı + log/telemetri PII maskesi + AI bölge sınırı (`C4-e` ✅); Settings → Security'de bölge + BAA durum kartı (`C4-f` ✅); uçtan uca doğrulama — 421 üç kapıda + kart + kısıtsızlık + cross-tenant (`C4-g` ✅). → §6.1 · tm 82 · ilerleme K C4 |
 | C6     | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12 (türetilmiş kod `C6`). **Kod payı ✅ — 8 alt-görevin 8'i teslim** (`C6-a1`…`C6-g` · tm 83.1–83.8, uçtan uca kapı `C6-g` yeşil); **sertifikasyon süreci** §F.00'ı bloklamaz (§D97). Alt-görev kanıtı ve kilit kararlar `## K.`'dedir — hücre §1.2 gereği damga taşır, geçmiş taşımaz (bu satır 728 → 340 karaktere indirildi, tm 83.8). → §6.1 · tm 83 · ilerleme K C6 |
-| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. → §6.1 · tm 84 |
+| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 1'i teslim (`11.5-a`, tm 84.1). → §6.1 · tm 84 |
 | —      | SLA: uptime taahhüdü + fatura kredisi (NFR-U5)   | ⛔-**süreç** · Denetim bulgusu K1-4: PRD'nin tek somut SLA tanımı NFR-U5'tir (_"Sözleşmeli uptime taahhüdü + kredi mekanizması"_). Uptime taahhüdü bir **sözleşme** kalemidir, bu depodan üretilemez (§D97 kod/süreç ayrımı). `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder |
 | —      | Dedicated onboarding / account manager           | ⛔-**süreç** · PRD §5.4 "Kurumsal" satırının üçüncü payı. **Kod payı YOK** — insan hizmeti taahhüdü (özel onboarding + atanmış müşteri yöneticisi); depoda karşılığı olan hiçbir yüzey üretmez. Süpürmede bulundu, §F.00'ı bloklamaz (§D95) |
 | —      | Skills-based routing (Ent. payı)                 | ✅ **v2'de teslim** — `08.6.3` (tm 91). PRD §5.4 "Kanal" satırı bunu IVR ile birlikte anıyor; skill payı v2'de kapandı, IVR payı ⛔ (voice'a bağlı) |
@@ -5233,3 +5233,39 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 - ✅ **`C6-g` — uçtan uca doğrulama: eylem → audit satırı → export → zincir → teslim edilen dosya, TEK geçişte.** ÜRÜN KODU DEĞİŞMEDİ; bu dilim yalnız test ekler. Alt dilimlerin her biri kendi halkasını zaten kanıtlıyordu, ama hepsi **kendi ektiği satırdan** başlıyordu — ekilen satır yazarı atlamış satırdır, yani onun hakkındaki her iddia okuyucu hakkındadır. Burada hiçbir şey ekilmiyor: gerçek bir istek (`PATCH /settings/siem`) gerçek bir güvenlik ayarını değiştiriyor, borunun öbür ucundan çıkan **diskteki baytlar ve mührü** denetleniyor. Dört entegrasyon testi: (1) eylem → tek zincirli satır (`chain_seq=1`, `prev_hash=null`) → export'ta aynı `hash` → sayfa mührü + tüm-iz doğrulaması → `SiemSink` dosyası + **`.sig` yan dosyası gerçekten o gövdeyi mühürlüyor** (tek bayt değişince doğrulama düşüyor — `siem-sink.test.ts` imzanın YAZILDIĞINI kanıtlıyordu, DOĞRU olduğunu değil). (2) **append-only, uygulama rolüyle:** `nexa_app` bağlantısında `UPDATE`/`DELETE` reddediliyor ve sonrasında export **bayt bayt aynı**, mühür aynı — gürültülü başarısız olup arkada yeniden yazılmış satır bırakan bir deneme en kötüsü olurdu. (3) **boşluk NEGATİFİ:** üç gerçek eylemden ortadaki satır owner bağlantısıyla (append-only grant'ini aşan, yani tehdidin ta kendisi) siliniyor → `/settings/siem/status` `chain_gap_detected: true`, export başlığı `chain-ok: false`, tüm-iz doğrulaması `sequence_gap`, ve **feed durmuyor** — kalan iki satır işaretli olarak gidiyor, sink teslim etmeye devam ediyor. (4) **cross-tenant:** A'nın izi kesikken B'nin feed'i temiz, B'nin durumu `false`, ve B'nin mührü A'nın anahtarıyla AÇILMIYOR — küresel bir sorgu olarak yazılmış bir boşluk dedektörü tam burada yakalanır. E2E (`apps/e2e/tests/siem.spec.ts`, 3 test): koşan dağıtımda admin tarayıcıda kutuyu işaretliyor → ayar sunucuda kalıcı → o eylemin audit kaydı **ufuk serbest bırakınca** feed'den geri geliyor, önceki kayda `prev_hash` ile bağlı, `chain-ok: true`, metadata'da sır yok; erişim raporu (`C6-e`) sahibi `last_login_at` dolu listeliyor + CSV; iki kiracı birbirinin izini görmüyor. Kanıt PNG `apps/e2e/kanit/C6-siem-export.png`. — test `apps/api/test/integration/siem-export.test.ts` (+4, 37 → 41) · `apps/e2e/tests/siem.spec.ts` (yeni, 3) · tm 83.8
 - ⚠ **`siem_export` YETKİ REDDİ NEGATİFİ bu pencerede YAZILAMADI — borç `tm 84.2`'ye devredildi (C4-g emsali).** Görevin ZORUNLU maddesi `growth` planında SIEM export/hedef uçlarının reddini istiyor; ama kapıyı kuran `11.5-b` (tm 84.2) **pending** ve `apps/api/src/lib/entitlements.ts` ile `PLANS.enterprise` henüz YOK. Şema yokken yazılacak test ya mock'lanır (atlanmış-test politikası) ya kırmızı bırakılır (DoD) — ikisi de yanlış. tm 82.7 (C4-g) `hipaa` için aynı grafik kısıtına düşmüş ve borcu 84.2'ye yazmıştı; bu madde `siem_export` payını aynı yere ekler. §6.2'nin sırası `tm 84` → `tm 82/83` yönünde olduğu için bu bir plan hatası değil, sıralamanın bilinen sonucudur. tm 83.8
 - ✅ **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 10/10 görev, api **131 dosya, 3038/3038** (3034 → 3038: +4) + web 1142 · `pnpm -w test:integration` **83 dosya, 2239/2239** (2235 → 2239: +4) · `pnpm -w build` 7/7 · **`pnpm -w test:e2e` 143/143 geçti** (140 → 143: +3; kalemin uçtan uca kapısı bu dilimdi, bu yüzden C6'da ilk kez koşuldu) · `format:check` dokunulan iki dosyada temiz. Migration YOK, ürün kodu değişmedi. tm 83.8
+
+#### K11.5 — 11.5 · White-label widget · SLA yönetimi · sandbox
+
+> Kalem **AÇIK** — 8 alt-görevin 1'i teslim (`11.5-a`; tm 84.1). §6'nın Faz-3 `11.5` satırı
+> `C4`/`C6` gibi ilerleme damgasını kendi hücresinde taşır, kanıt burada birikir (§1.2).
+
+- ✅ **`11.5-a` — PLANS kataloğuna enterprise kademesi + altı anahtarlı yetki sözlüğü.** Yetki
+  vokabüleri `packages/types/src/entitlements.ts` (yeni): `white_label` · `sandbox` · `sla` ·
+  `sso` · `hipaa` · `siem_export`. **Son üçü denetim bulgusu K1-2 ile eklendi** — PRD onları
+  açıkça Enterprise diyor (NFR-S11 SAML/SCIM, NFR-C4 BAA, NFR-S12 SIEM) ve sözlükte olmasalardı
+  `11.5`'in var oluş gerekçesi olan kaçağın üç yeni örneği kalırdı. `entitlementMap()` **eksiksiz
+  harita** üretir (her anahtar her zaman var): kısmi harita, eksik anahtarı bir yerde "yok" bir
+  yerde "bilinmiyor → izin ver" diye okuturdu; ikincisi gelir kaçağıdır. Katalog
+  `subscription-service.ts`: `PLANS.enterprise` **fiyatsız** (`pricing: 'quoted'`,
+  `unitPriceCents: null`, `aiResolutionsIncluded: null`) — PRD Enterprise yeteneklerini sayar,
+  fiyatını **hiç** vermez; buraya sayı yazmak ADR-13'ün rakamlarının yanına uydurma bir rakam
+  koymak olurdu. Yetki **plandan türetilir** (`entitlementsForPlan`), ayrı bayrak tablosu
+  açılmadı (§C-A25); katalogun tanımadığı bir plan (`plan` serbest metin bir sütun) **hiçbir şey**
+  vermez — kapalı tarafa düşer. Downgrade guard yeni kademeyle tutarlı: allowance'ı `null` olan
+  kademe bir hareketin küçük tarafı OLAMAZ (Enterprise'a çıkışı "çok kullandın" diye reddetmek
+  tam tersi olurdu), ama Enterprise → growth 250 çözümle hâlâ reddedilir. Kotalanmış kademeye
+  geçişte satırdaki tutarlar **olduğu gibi kalır** — plan değişikliği tek başına kimseyi yeniden
+  fiyatlandırmaz — ve görünüm `pricing: 'quoted'` döndüğü için hiçbir istemci 9900'ü "Enterprise
+  fiyatı" diye okumaz. Kontrat yüzeyi `GET /billing/entitlements`: bu lisansın haritası + kademe
+  kataloğu; **billing scope'u istemez** (bu soruyu ilgili ayar ekranları sorar, `billing_manage`
+  şartı her konsol oturumunu gereksiz geniş scope'a iterdi). Uç **raporlar, zorlamaz** — kapı
+  `11.5-b`'nin. — `packages/types/src/entitlements.ts` · `apps/api/src/services/billing/subscription-service.ts` ·
+  `apps/api/src/routes/reports.ts` · `packages/contract/openapi/{openapi,paths/reports}.yaml` ·
+  test `entitlements.test.ts` (7) · `subscription-service.test.ts` (12) ·
+  `reports-billing.test.ts` (+13) · tm 84.1
+- ✅ **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **132 dosya,
+  3063/3063** (131/3038 → +1 dosya, +25) + web 1142 + types (+7) · `pnpm -w test:integration`
+  **83 dosya, 2252/2252** (2239 → 2252: +13) · `pnpm -w build` 7/7 · `contract-parity` yeşil ·
+  `pnpm --filter @nexa/e2e exec playwright test billing.spec.ts` **3/3** (yanıta additive alan
+  eklendi, checkout akışı bozulmadı) · `format:check` dokunulan 10 dosyada temiz ·
+  `contract:generate` sonrası üretilen istemci commit'lendi. Migration YOK. tm 84.1

@@ -89,7 +89,11 @@ import type { TenantClient, TenantContext } from '../lib/tenant.js';
 import { currentPeriod, trialState, usageSummary } from '../services/billing/metering.js';
 import {
   BILLING_CYCLES,
+  PLANS,
+  PLAN_IDS,
+  entitlementsForPlan,
   priceSeats,
+  pricingForPlan,
   updateSubscription,
   type BillingCycle,
 } from '../services/billing/subscription-service.js';
@@ -366,9 +370,16 @@ async function buildSubscriptionView(
   const seats = subscription?.seats ?? activeUsers;
   const { seatChargeCents, annualSavingsCents } = priceSeats(unitPrice, seats, billingCycle);
   const trialing = trial.access === 'trialing';
+  const plan = subscription?.plan ?? 'growth';
 
   return {
-    plan: subscription?.plan ?? 'growth',
+    plan,
+    // Whether `unit_price_cents` below is a price this product quotes or the
+    // last figure on file under a contract nobody here can read (11.5-a). A
+    // screen shows the number for `listed` and "contact sales" for `quoted` —
+    // the amounts stay in the response either way, because the mocked invoice
+    // is still built from them.
+    pricing: pricingForPlan(plan),
     billing_cycle: billingCycle,
     status: trial.status,
     // What the workspace can still do, spelled out — a client should not have to
@@ -1950,4 +1961,51 @@ export default async function reportRoutes(
       return reply.send({ items: purchases.map(serialiseApiPackagePurchase) });
     },
   );
+
+  // What this workspace's plan unlocks, and what the other tiers would
+  // (FR-MOD-11.5). Derived from the subscription's plan on every call — there
+  // is no per-workspace flag table to drift from it (§C-A25).
+  //
+  // No scope requirement, unlike every other `/billing/*` route. The question
+  // "may this workspace use white label / SSO / SIEM export" is asked by the
+  // settings screens that own those controls, not by the billing screen, and
+  // making an admin hold `billing_manage` before a widget page can tell whether
+  // to render a toggle would push every console session toward a billing scope
+  // it has no other use for. What leaks in exchange is the caller's own plan
+  // name and the public catalogue, to a credential that already reads the
+  // workspace's chats.
+  //
+  // This endpoint *reports* entitlements; it does not enforce them. The gate
+  // that refuses a write is 11.5-b's, in one place, for the same reason the
+  // license gate is a hook rather than a per-route check.
+  app.get('/billing/entitlements', async (request, reply) => {
+    const tenant = request.tenant();
+
+    const subscription = await request.withTenant((tx) =>
+      tx.subscription.findFirst({
+        where: { licenseId: tenant.licenseId },
+        orderBy: { createdAt: 'desc' },
+        select: { plan: true },
+      }),
+    );
+
+    // No subscription row is a trial (ADR-10), and a trial is on the self-serve
+    // tier — it has bought nothing, so it unlocks nothing beyond it.
+    const plan = subscription?.plan ?? 'growth';
+
+    return reply.send({
+      plan,
+      entitlements: entitlementsForPlan(plan),
+      // The catalogue, so a screen can say *which* tier unlocks the control it
+      // just greyed out rather than "upgrade" with nowhere to point. Static and
+      // identical for every workspace, like `/billing/api-packages`.
+      plans: PLAN_IDS.map((id) => ({
+        id,
+        pricing: PLANS[id].pricing,
+        unit_price_cents: PLANS[id].unitPriceCents,
+        ai_resolutions_included: PLANS[id].aiResolutionsIncluded,
+        entitlements: [...PLANS[id].entitlements],
+      })),
+    });
+  });
 }

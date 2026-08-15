@@ -13,6 +13,35 @@
 
 ## Task log (newest-first)
 
+## tm 84.1 — 11.5-a · PLANS enterprise kademesi + entitlements sözlüğü — done — 2026-08-15 UTC
+
+- **Yapıldı:** `packages/types/src/entitlements.ts` (yeni) altı anahtarlı kapalı sözlük
+  (`white_label` · `sandbox` · `sla` · `sso` · `hipaa` · `siem_export`) + `entitlementMap()`
+  (eksiksiz harita — eksik anahtar hiçbir yerde "izin ver" okunamaz). `PLANS.enterprise`
+  eklendi: her yetkiyi taşır, **sayı taşımaz** (`pricing: 'quoted'`, fiyat/allowance `null`) —
+  PRD Enterprise fiyatı vermiyor, uydurulmadı. Yetki plandan türetilir (`entitlementsForPlan`,
+  §C-A25); tanınmayan plan **hiçbir şey** verir. Downgrade guard: `null` allowance'lı kademe
+  küçük taraf olamaz (Enterprise'a çıkış reddedilmez), Enterprise → growth reddi korundu.
+  Yeni uç `GET /billing/entitlements` (harita + kademe kataloğu) — billing scope İSTEMEZ,
+  ayar ekranları soracağı için. `SubscriptionView`'e `pricing` alanı (additive).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **3063/3063**
+  (+25) + web 1142 + types +7 · `pnpm -w test:integration` **83 dosya 2252/2252** (+13) ·
+  `pnpm -w build` 7/7 · `contract-parity` yeşil · e2e `billing.spec.ts` 3/3 · `format:check`
+  dokunulan 10 dosyada temiz. Migration yok.
+- **Varsayımlar:** (1) Yetki `subscription.plan`'dan türetilir, `license.plan`'dan DEĞİL —
+  `license.plan` sütununu bugün hiçbir kod OKUMUYOR (yalnız fixture/seed yazıyor), görünüm ve
+  checkout `subscription.plan`'ı kullanıyor. **11.5-b bu ayrımı bilerek gatelesin.** (2) Enterprise
+  `PATCH /billing/subscription` ile seçilebilir (testStrategy "seçilebilir" diyor); "self-serve
+  değil" reddi zorlama kararıdır, 11.5-a'ya yazılmadı. (3) Yetki sözlüğü `packages/types/src/
+  entitlements.ts`'e kondu, task'ın `domain.ts` önerisine değil — `api-packages.ts`/`siem.ts`
+  deseni (konu başına dosya) izlendi; `domain.ts` CHECK kısıtı aynası, yetki CHECK değil.
+- **Sonraki pencereye (tm 84.2 · 11.5-b):** kapı `entitlementsForPlan()`'ı tüketsin, ikinci bir
+  yetki kaynağı AÇMASIN. `seedTenant()` (`test/helpers/fixtures.ts:123`) hâlâ `plan: 'growth'`
+  hardcoded — 84.2'nin details'indeki iki devredilen borç (`hipaa` · `siem_export` red negatifleri)
+  ve SIEM/audit süitlerinin plan seçimi orada çözülecek. `PLANS.enterprise` ve `pricing: 'quoted'`
+  artık hazır; `lib/entitlements.ts` hâlâ yok (84.2 açacak). Bu pencerede zorlama YAPILMADI:
+  bugün `growth` planındaki bir kiracı hâlâ altı yeteneğin hepsini kullanabiliyor.
+
 ## tm 83.8 — C6-g · Uçtan uca doğrulama (eylem→audit→export→zincir) — done — 2026-08-15 UTC
 
 - **Yapıldı:** Ürün kodu DEĞİŞMEDİ; yalnız test. `siem-export.test.ts` +4 (37→41): (1) gerçek

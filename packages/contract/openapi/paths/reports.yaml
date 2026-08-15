@@ -1156,3 +1156,41 @@ apiPackagePurchases:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+entitlements:
+  get:
+    tags: [Billing]
+    operationId: getEntitlements
+    summary: What this workspace's plan unlocks
+    description: |
+      The capabilities the workspace's commercial tier grants (FR-MOD-11.5,
+      PRD §5.4 "Kurumsal"), plus the catalogue of tiers so a screen can name the
+      one that would unlock a control it is greying out.
+
+      Entitlements are **derived from the plan** on every call — there is no
+      per-workspace feature-flag store, because two sources of truth for "may
+      this workspace do X" eventually disagree and nothing says which wins.
+      Change the plan and the answer changes with it.
+
+      `entitlements` is total: every key in the vocabulary is present with a
+      boolean, so an absent key can never be read as an implicit yes. A
+      workspace on a trial has bought nothing and answers as the self-serve tier
+      does.
+
+      This endpoint reports; it does not enforce. The refusal a caller gets for
+      acting without an entitlement comes from the endpoint that owns the
+      action.
+
+      Unlike the rest of `/billing`, no billing scope is required: the settings
+      screens that own these controls ask this question, and requiring
+      `billing_manage` to learn whether a widget toggle should render would push
+      every console session toward a scope it has no other use for.
+    responses:
+      "200":
+        description: This workspace's entitlements and the plan catalogue
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/EntitlementsView" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

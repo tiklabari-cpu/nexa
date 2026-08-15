@@ -1140,6 +1140,13 @@ function readConfig(win: Window): WidgetConfig {
  * Appearance from the loader's query params, each field defaulting to the
  * shipped look. A booleans-as-`0` convention keeps the URL short: the flags are
  * only present when the snippet turned them off.
+ *
+ * `powered_by` is deliberately NOT read here (FR-MOD-11.5 / entitlement
+ * `white_label`): the visitor's browser controls this URL, so honouring it
+ * would let anyone strip the footer by editing the embed snippet, with no
+ * server check at all. The footer defaults on and only `appearanceFromApi`
+ * — the authenticated token mint, gated by `11.5-b`'s entitlement — can turn
+ * it off.
  */
 function readAppearance(params: URLSearchParams): Appearance {
   const color = params.get('color');
@@ -1151,7 +1158,7 @@ function readAppearance(params: URLSearchParams): Appearance {
     theme: theme === 'light' || theme === 'dark' ? theme : 'auto',
     position: position === 'bottom-left' ? 'bottom-left' : 'bottom-right',
     mobileFullscreen: params.get('mobile_full') !== '0',
-    poweredBy: params.get('powered_by') !== '0',
+    poweredBy: DEFAULT_APPEARANCE.poweredBy,
   };
 }
 

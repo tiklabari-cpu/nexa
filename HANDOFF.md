@@ -13,6 +13,27 @@
 
 ## Task log (newest-first)
 
+## tm 84.3 — 11.5-c · Widget istemci tarafı — powered_by=0 URL parametresi kaldırıldı — done — 2026-08-15 UTC
+
+- **Yapıldı:** `apps/widget/src/widget.ts` — `readAppearance()` artık `powered_by` URL
+  parametresini hiç okumuyor; `DEFAULT_APPEARANCE.poweredBy = true` sabit, tek kaynak
+  `appearanceFromApi` (`a.powered_by`, 11.5-b'nin gatelediği alan). Ziyaretçi tarayıcısı artık
+  markayı kaldıramaz — karar hep sunucuda. `widget.appearance.test.ts` güncellendi: URL
+  parametresinin artık hiç etkisi olmadığını + mint'in entitled/unentitled iki yolunu kanıtlayan
+  2 yeni test.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` widget 71/71 (+2) +
+  web 1142 · `pnpm -w test:integration` 84 dosya 2271/2271 (değişmedi) · `pnpm -w build` 7/7 ·
+  `pnpm -w test:e2e` 143/143 (değişmedi). Migration YOK.
+- **Varsayımlar:** Bu pencere işi zaten kısmen bitmiş (kod + testler) bir önceki kesilen
+  pencereden devraldı (`git status` başlangıçta widget.ts/widget.appearance.test.ts'te uncommitted
+  değişiklik gösteriyordu, task zaten `in-progress` işaretliydi) — sıfırdan yazmadı, DoD kapısını
+  koşup kapattı.
+- **Sonraki pencereye:** `11.5-c` tamam, `11.5` genel kalemi hâlâ ◐ (8'de 3). Sıradaki `11.5-d`
+  (SLA hedef/ölçüm) `11.5-a`'ya bağımlı, bağımsız başlayabilir. `11.5-h` (uçtan uca doğrulama)
+  hâlâ `11.5-c`'nin e2e kanıtını bekliyor — bu pencere kapsam dışı bıraktı (task tanımı böyle).
+  Web ayar ekranındaki (`WidgetCustomization.tsx`) kozmetik borç (403'ü hata gösteriyor, gizlemiyor)
+  hâlâ açık, 84.2'nin notundan devraldı.
+
 ## tm 84.2 — 11.5-b · Entitlement zorlama çekirdeği (yazma kapısı + downgrade geri alması) — done — 2026-08-15 UTC
 
 - **Yapıldı:** Kapı iki dosya: `apps/api/src/lib/entitlements.ts` (tek soru-tek fonksiyon:

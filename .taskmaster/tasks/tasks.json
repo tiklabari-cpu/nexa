@@ -4039,12 +4039,12 @@
             "description": "Widget tarafı — yetki yokken powered_by=0 URL parametresinin yok sayılması",
             "details": "11.5-c — Widget tarafı — yetki yokken powered_by=0 URL parametresinin yok sayılması  [SONNET-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nNEDEN: `apps/widget/src/widget.ts:1154` → `poweredBy: params.get('powered_by') !== '0'`. Yani markayı kaldırmak için URL parametresi YETİYOR; sunucu yetkisi okunmuyor. 11.5-b sunucu tarafını kapatır, bu alt-görev istemci tarafını hizalar.\n\nKAPSAM (denetim sonrası KESİNLEŞTİRİLDİ — \"yalnız yetki varsa etkili olsun\" bir KARAR BOŞLUĞUYDU): **`powered_by` URL parametresi TAMAMEN KALDIRILIR.** `appearanceFromParams` bu alanı artık ÜRETMEZ; `DEFAULT_APPEARANCE.poweredBy = true` ve tek kaynak `appearanceFromApi`'dir (`widget.ts:1167` → `a.powered_by`).\n\nGerekçe: istemci, API yanıtı gelmeden yetkiyi BİLEMEZ; \"yetki varsa etkili olsun\" talimatı ilk boyamada zorunlu olarak ya markayı gizler (kaçak) ya da talimatı ihlal eder. Yetki kararı istemcide HİÇ verilmez — sunucu (`11.5-b`) doğru değeri döner. Bu, işi gerçekten mekanikleştirir ve `SONNET-XHIGH` etiketini haklı kılar.\n\nBundle bütçesi KORUNUR (NFR-P3: loader < 50 KB, `apps/widget/vite.config.ts:16`'da testle zorlanıyor).\n\nDOSYALAR: `apps/widget/src/widget.ts:33,41,149,899-912,1154,1167` · `apps/widget/src/widget.appearance.test.ts`\n\nREFERANS DESEN: aynı dosyadaki diğer görünüm alanlarının (theme/position/primaryColor) sunucudan gelme yolu — `:1167` `poweredBy: a.powered_by`.\n\nKAPSAM DIŞI: e2e (11.5-h).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/widget test (powered_by URL parametresi ARTIK HİÇ OKUNMAZ (appearanceFromParams onu üretmez); yetkisiz çalışma alanında marka görünür; yetkili çalışma alanında gizlenir; loader bundle bütçe testi hâlâ yeşil) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "84.2"
             ],
             "parentId": "84",
-            "updatedAt": "2026-08-11T21:09:39.258Z"
+            "updatedAt": "2026-08-15T11:33:01.548Z"
           },
           {
             "id": 4,
@@ -4115,7 +4115,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-15T11:31:08.198Z"
+        "updatedAt": "2026-08-15T11:33:01.548Z"
       },
       {
         "id": "85",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T11:31:08.199Z",
+      "lastModified": "2026-08-15T11:33:01.549Z",
       "taskCount": 124,
       "completedCount": 121,
       "tags": [

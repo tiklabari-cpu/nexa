@@ -2139,7 +2139,7 @@ kalem buldu: _dedicated onboarding/account manager_ · _IVR routing_ · _kalan m
 | S11    | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11 (türetilmiş kod `S11`); kimlik sınırı. → §6.1 · tm 81 · ilerleme K S11 |
 | C4     | HIPAA BAA + bölgesel barındırma (US/EU)          | NFR-C4 (türetilmiş kod `C4`); ADR-12 tek bölge (`eu`) burada genişletildi (`C4-a` ✅, §D102); bölge zorlaması üç yüzeyde (`C4-b` ✅, §D103); signup ekranında seçim + kalıcılık uyarısı (`C4-c` ✅); BAA kabul akışı MOCK (`C4-d` ✅); kapsam kısıtları — retention tavanı + log/telemetri PII maskesi + AI bölge sınırı (`C4-e` ✅); Settings → Security'de bölge + BAA durum kartı (`C4-f` ✅); uçtan uca doğrulama — 421 üç kapıda + kart + kısıtsızlık + cross-tenant (`C4-g` ✅). → §6.1 · tm 82 · ilerleme K C4 |
 | C6     | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12 (türetilmiş kod `C6`). **Kod payı ✅ — 8 alt-görevin 8'i teslim** (`C6-a1`…`C6-g` · tm 83.1–83.8, uçtan uca kapı `C6-g` yeşil); **sertifikasyon süreci** §F.00'ı bloklamaz (§D97). Alt-görev kanıtı ve kilit kararlar `## K.`'dedir — hücre §1.2 gereği damga taşır, geçmiş taşımaz (bu satır 728 → 340 karaktere indirildi, tm 83.8). → §6.1 · tm 83 · ilerleme K C6 |
-| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 2'si teslim (`11.5-a`, `11.5-b`; tm 84.1–84.2). → §6.1 · tm 84 |
+| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 3'ü teslim (`11.5-a`, `11.5-b`, `11.5-c`; tm 84.1–84.3). → §6.1 · tm 84 |
 | —      | SLA: uptime taahhüdü + fatura kredisi (NFR-U5)   | ⛔-**süreç** · Denetim bulgusu K1-4: PRD'nin tek somut SLA tanımı NFR-U5'tir (_"Sözleşmeli uptime taahhüdü + kredi mekanizması"_). Uptime taahhüdü bir **sözleşme** kalemidir, bu depodan üretilemez (§D97 kod/süreç ayrımı). `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder |
 | —      | Dedicated onboarding / account manager           | ⛔-**süreç** · PRD §5.4 "Kurumsal" satırının üçüncü payı. **Kod payı YOK** — insan hizmeti taahhüdü (özel onboarding + atanmış müşteri yöneticisi); depoda karşılığı olan hiçbir yüzey üretmez. Süpürmede bulundu, §F.00'ı bloklamaz (§D95) |
 | —      | Skills-based routing (Ent. payı)                 | ✅ **v2'de teslim** — `08.6.3` (tm 91). PRD §5.4 "Kanal" satırı bunu IVR ile birlikte anıyor; skill payı v2'de kapandı, IVR payı ⛔ (voice'a bağlı) |
@@ -5236,7 +5236,7 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 
 #### K11.5 — 11.5 · White-label widget · SLA yönetimi · sandbox
 
-> Kalem **AÇIK** — 8 alt-görevin 2'si teslim (`11.5-a`, `11.5-b`; tm 84.1–84.2). §6'nın Faz-3 `11.5` satırı
+> Kalem **AÇIK** — 8 alt-görevin 3'ü teslim (`11.5-a`, `11.5-b`, `11.5-c`; tm 84.1–84.3). §6'nın Faz-3 `11.5` satırı
 > `C4`/`C6` gibi ilerleme damgasını kendi hücresinde taşır, kanıt burada birikir (§1.2).
 
 - ✅ **`11.5-a` — PLANS kataloğuna enterprise kademesi + altı anahtarlı yetki sözlüğü.** Yetki
@@ -5324,3 +5324,23 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
   `pnpm -w build` 7/7 · `contract-parity` yeşil · **`pnpm -w test:e2e` 143/143** ·
   `format:check` dokunulan dosyalarda temiz · `contract:generate` sonrası üretilen istemci
   commit'lendi. Migration YOK. tm 84.2
+- ✅ **`11.5-c` — Widget istemci tarafı: `powered_by=0` URL parametresi tamamen kaldırıldı.**
+  11.5-b sunucuyu kapatmıştı ama `apps/widget/src/widget.ts:1154`'teki
+  `poweredBy: params.get('powered_by') !== '0'` hâlâ ziyaretçinin tarayıcısının kontrol ettiği
+  URL'i dinliyordu — sunucu yetkisi hiç okunmadan marka kaldırılabiliyordu (11.5-b'nin kapattığı
+  kaçağın istemci ayağı). Çözüm mekanik: `readAppearance()` artık `powered_by`'ı hiç ÜRETMİYOR
+  (`DEFAULT_APPEARANCE.poweredBy = true` sabit döner); tek kaynak `appearanceFromApi` — kimlik
+  doğrulanmış token mint'i (`a.powered_by`, 11.5-b'nin gatelediği alan). İstemci API yanıtı
+  gelmeden yetkiyi zaten BİLEMEZ; karar hiçbir zaman istemcide verilmiyor. `DEFAULT_APPEARANCE`
+  şimdi diğer görünüm alanlarıyla (theme/position/primaryColor) aynı desende — sunucudan
+  gelmeden önce güvenli varsayılan. Bundle bütçesi (NFR-P3, loader < 50 KB) etkilenmedi:
+  `loader.js` 3.68 kB (gzip 1.64 kB). — `apps/widget/src/widget.ts` · test
+  `apps/widget/src/widget.appearance.test.ts` (+2, mint'in `powered_by`'ını fetch stub'ıyla
+  taklit ederek hem entitled hem unentitled yolu kanıtlar) · tm 84.3
+- ✅ **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` widget **10 dosya,
+  71/71** (69 → +2) + web 1142 (değişmedi) · `pnpm -w test:integration` api 84 dosya 2271/2271
+  + rtm 60 (değişmedi — istemci-yalnız değişiklik) · `pnpm -w build` 7/7 · **`pnpm -w test:e2e`
+  143/143** (değişmedi; `widget.spec.ts` dahil hiçbiri `powered_by` URL parametresine
+  dayanmıyordu). Migration YOK. **Kapsam dışı (11.5-h'ye devredildi):** white-label
+  reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifinin uçtan uca e2e kanıtı — bu
+  pencere yalnız istemci mekaniğini kapattı. tm 84.3

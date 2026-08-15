@@ -3941,13 +3941,13 @@
             "description": "MOCK SIEM hedefi (.data/siem dosya sink) + zamanlanmış gönderim",
             "details": "C6-d — MOCK SIEM hedefi (.data/siem dosya sink) + zamanlanmış gönderim  [SONNET-XHIGH]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~1 pencere\n\nKAPSAM: SIEM hedefi yapılandırması (tip + hedef) + gönderim işi. Hedef MOCK'tur: `.data/siem/<licenseId>/<timestamp>.ndjson` dosyasına yazılır. Gerçek Splunk/Sentinel/Datadog bağlantısı YAPILMAZ (CLAUDE.md sınırı).\n\nDOSYALAR: `apps/api/src/services/audit/siem-sink.ts` (yeni) · `apps/api/src/services/reports/` (sweeper emsali) · `apps/api/package.json` (`siem:run` script)\n\nREFERANS DESEN (birebir): `apps/api/src/services/reports/scheduled-report-sweeper.ts` (**tm 94 · `07.9-sched-e`** — denetim düzeltmesi: tm 93 = \"07.7 Rapor grupları\", sweeper tm 94'ündür) — periyodik iş, imleç ilerletme, hata dayanıklılığı, lisans başına kilit.\n\n**ZORUNLU SIRA İNVARYANTI (denetim bulgusu — kalıcı denetim kaydı kaybı riski):** dosya YAZILIR ve KAPATILIR → **SONRA** imleç ilerletilir; asla tersi. Sweeper lisans başına kilit alır (emsalin kilit kalıbı). Çökme hâlinde TEKRAR YAZIM kabul edilir, **ATLAMA kabul EDİLMEZ** — çünkü `C6-c`'nin invaryantı gereği budama yalnız \"export edildi\" damgalı satırı silebilir; imleç dosyadan önce ilerlerse budama gönderilmemiş satırları siler ve zincirde ONARILAMAZ boşluk kalır. Format `C6-c`'de kilitlendi; sink onu DEĞİŞTİRMEZ. Dosya sink deseni: `services/mail/mailer.ts` FileMailer (`.data/mail`) ve `services/storage` (`.data/uploads`).\n\nKAPSAM DIŞI: bütünlük (C6-c'de), ekran (C6-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (sweeper koşar → .data/siem altına NDJSON yazılır; imleç ilerler; ikinci koşu aynı satırları TEKRAR yazmaz; YAZMA ORTASINDA ÇÖKME benzetiminde imleç İLERLEMEMİŞ olur (atlama negatifi); iki sweeper eşzamanlı koşarsa satır ATLANMAZ; budama imleçten ileri satırı SİLMEZ; hedefi olmayan lisans atlanır; CROSS-TENANT: her lisansın dosyası ayrı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "83.3",
               "83.4"
             ],
             "parentId": "83",
-            "updatedAt": "2026-08-15T06:39:21.812Z"
+            "updatedAt": "2026-08-15T07:37:09.151Z"
           },
           {
             "id": 6,
@@ -3994,7 +3994,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-15T06:39:21.812Z"
+        "updatedAt": "2026-08-15T07:37:09.151Z"
       },
       {
         "id": "84",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T06:39:21.812Z",
+      "lastModified": "2026-08-15T07:37:09.154Z",
       "taskCount": 124,
       "completedCount": 120,
       "tags": [

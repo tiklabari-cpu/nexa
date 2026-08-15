@@ -4015,10 +4015,10 @@
             "description": "PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla)",
             "details": "11.5-a — PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla)  [OPUS-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: `apps/api/src/services/billing/subscription-service.ts:21` → `PLANS = { growth: {...} }`, TEK kademe. Kodda \"Enterprise planı\" kavramı YOK. Yetki sözlüğü de yok; `powered_by` (`routes/settings.ts:181,827`) hiçbir kontrol olmadan kabul ediliyor.\n\nKAPSAM: `PLANS`'a `enterprise` kademesi + kademe→yetki sözlüğü + kontrat yüzeyi (`GET /billing/entitlements`).\n\n**YETKİ SÖZLÜĞÜ — ALTI ANAHTAR** (denetim bulgusu K1-2 ile üçten altıya çıkarıldı): `white_label` · `sandbox` · `sla` · **`sso`** · **`hipaa`** · **`siem_export`**. Son üçü PRD'nin **açıkça \"Enterprise\"** dediği yeteneklerdir — NFR-S11 _\"SAML 2.0/OIDC + SCIM (Enterprise)\"_, NFR-C4 _\"Şartlı (imzalı BAA + yalnız US hosting) — Enterprise\"_, NFR-S12 _\"genişletilmiş + SIEM Enterprise\"_. İlk kırılımda sözlükte yoktular; sonuç, `11.5`'in var oluş gerekçesi olan kaçağın (`powered_by` her planda açık) ÜÇ YENİ ÖRNEĞİ olurdu: Faz 3 bittiğinde `growth` planındaki her kiracı SAML SSO'ya, SCIM'e, HIPAA/BAA akışına ve SIEM export'una erişirdi.\n\nKARAR: yetki PLANDAN TÜRETİLİR, ayrı bayrak tablosu AÇILMAZ (§C-A25). İki kaynak (plan + bayrak) uyuşmazlığa düşer ve hangisinin kazandığı yazılı olmaz. Enterprise fiyatı SAYISAL OLARAK UYDURULMAZ — PRD'de Enterprise fiyatı yoktur; \"görüşmeye bağlı\" modellenir, ADR-13'ün rakamları bozulmaz.\n\nDOSYALAR: `apps/api/src/services/billing/subscription-service.ts:21` · `packages/types/src/domain.ts` · `packages/contract/openapi/paths/settings.yaml` veya `billing` · `apps/api/src/routes/settings.ts`\n\nREFERANS DESEN: `PLANS` map'in kendi yorumu — \"A map rather than inlined constants so a future tier is a data change\". Downgrade guard (`subscription-service.ts:118-124`; :113 yorum satırı) yeni kademeyle tutarlı kalmalı.\n\nKAPSAM DIŞI: zorlama (11.5-b), SLA (11.5-d), sandbox (11.5-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (enterprise kademesi seçilebilir; entitlements ucu doğru yetkileri döner; growth'ta white_label=false, enterprise'da true; downgrade guard bozulmadı; contract-parity yeşil) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "84",
-            "updatedAt": "2026-08-15T09:31:12.132Z"
+            "updatedAt": "2026-08-15T10:04:55.769Z"
           },
           {
             "id": 2,
@@ -4115,7 +4115,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-15T09:31:12.132Z"
+        "updatedAt": "2026-08-15T10:04:55.769Z"
       },
       {
         "id": "85",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T09:31:12.133Z",
+      "lastModified": "2026-08-15T10:04:55.770Z",
       "taskCount": 124,
       "completedCount": 121,
       "tags": [

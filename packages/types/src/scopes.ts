@@ -108,6 +108,15 @@ export const SCOPES = [
   // append-only, so there is no `:rw`, and it is never scoped narrower than the
   // whole workspace. Paired with `minimumRole: admin` at the route (PLAN §D).
   'audit_log--all:ro',
+  // Streaming the whole trail out to a SIEM (NFR-C6 · C6-b) is a *second*
+  // authority, not a convenience on top of the first. `--all:ro` is what a
+  // screen holds to page through the log a hundred entries at a time; this is
+  // what a machine holds to pull every entry the workspace has, continuously,
+  // into a system Nexa does not control. A dashboard integration granted the
+  // reading scope should not thereby acquire the firehose — and because
+  // `expandScope` only widens along the `all → access/groups/my` axis, it
+  // cannot: `audit_log--all:ro` does not imply this one (PLAN §6.1.4).
+  'audit_log--export:ro',
   // Reports / Billing — do not follow the `--` pattern
   'reports_read',
   // Scheduled report exports (PRD §5.3-Reports). A Nexa addition: the source

@@ -21,7 +21,9 @@ import {
   WIDGET_POSITIONS,
   WIDGET_THEMES,
 } from '@nexa/types';
+import { SIEM_EXPORT_TARGETS } from '@nexa/types';
 import type { Region, SsoAttributeMappingKey, SsoConnection } from '@nexa/types';
+import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { resolveBrandId } from '../lib/brand.js';
@@ -42,6 +44,12 @@ import {
   type CertificateFacts,
 } from '../lib/sso-connection.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
+import {
+  readSiemExportRow,
+  readSiemExportStatus,
+  saveSiemExportSettings,
+  serialiseSiemSettings,
+} from '../services/audit/siem-export.js';
 import { MAX_ACTIVE_TOKENS_PER_OWNER } from '../services/auth/token-service.js';
 
 const SHORTCUT = /^[A-Za-z0-9_-]{1,40}$/;
@@ -456,6 +464,26 @@ const updateTagBody = z
 const acceptBaaBody = z.object({ accepted: z.literal(true) });
 
 /**
+ * Configuring the SIEM export (NFR-C6 · C6-b).
+ *
+ * `target` is the closed `SIEM_EXPORT_TARGETS` vocabulary — the same set the
+ * database CHECK holds — so an unknown destination is a 400 here rather than a
+ * row that makes the settings screen show a live export nothing delivers.
+ * Omitting it on the first write takes the default; omitting it later leaves the
+ * destination alone, which is what lets the screen send `{enabled: false}` to
+ * switch the feed off without having to restate where it points.
+ *
+ * At least one field, like the other partial-update bodies here: an empty PATCH
+ * would write an audit entry for a change nobody made.
+ */
+const updateSiemBody = z
+  .object({
+    enabled: z.boolean().optional(),
+    target: z.enum(SIEM_EXPORT_TARGETS).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/**
  * The two halves of NFR-C4's condition, reported together.
  *
  * `baa_available` is derived here rather than left to the caller so the rule
@@ -509,7 +537,10 @@ function serialiseExpertise(area: { id: bigint; name: string; slug: string }) {
   return { id: Number(area.id), name: area.name, slug: area.slug };
 }
 
-export default async function settingsRoutes(app: FastifyInstance): Promise<void> {
+export default async function settingsRoutes(
+  app: FastifyInstance,
+  options: { env: Env },
+): Promise<void> {
   // --- Trusted domains -------------------------------------------------------
 
   app.get(
@@ -1448,6 +1479,77 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
       });
 
       return reply.send(serialiseCompliance(region, signedAt));
+    },
+  );
+
+  // --- SIEM export (NFR-C6 · C6-b) -------------------------------------------
+  //
+  // Where the workspace's audit trail is shipped, and how the feed is doing.
+  // Gated like the rest of the security family — `access_rules` plus
+  // `minimumRole: admin` — and for the same reason `/settings/compliance` is:
+  // deciding that a copy of every security event in the workspace leaves for a
+  // system Nexa does not control is a workspace-security decision, not an
+  // inbox preference.
+  //
+  // Both the read and the write live here rather than beside the export itself,
+  // because this is configuration; `/audit-log/export` is the data. The screen
+  // that consumes these (C6-f) opens no endpoints of its own.
+
+  app.get(
+    '/settings/siem',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const row = await request.withTenant((tx) => readSiemExportRow(tx));
+      // No row means the workspace has never configured an export, which reads
+      // as off with no destination — the same "reading has no side effect"
+      // shape `/settings/security` uses for a workspace that never saved one.
+      return reply.send(serialiseSiemSettings(row));
+    },
+  );
+
+  app.patch(
+    '/settings/siem',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(updateSiemBody, request.body);
+      const tenant = request.tenant();
+
+      const saved = await request.withTenant(async (tx) => {
+        const row = await saveSiemExportSettings(tx, tenant.licenseId, {
+          ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
+          ...(body.target !== undefined ? { target: body.target } : {}),
+        });
+        // `settings.security_updated` with the resource in metadata, like the
+        // SSO changes above — one closed vocabulary stays queryable, and an
+        // action per verb would not. Field *names* and the destination, which
+        // is a configuration value rather than a secret; there is nothing else
+        // in this row that is not already the export's own subject.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.security_updated',
+          target: `siem_export:${row.target}`,
+          metadata: {
+            resource: 'siem_export',
+            operation: 'updated',
+            fields: Object.keys(body),
+            target: row.target,
+            enabled: row.enabled,
+          },
+        });
+        return row;
+      });
+
+      return reply.send(serialiseSiemSettings(saved));
+    },
+  );
+
+  app.get(
+    '/settings/siem/status',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const status = await request.withTenant((tx) =>
+        readSiemExportStatus(tx, { horizonMs: options.env.SIEM_EXPORT_HORIZON_MS }),
+      );
+      return reply.send(status);
     },
   );
 

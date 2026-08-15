@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { DEFAULT_REGION, REGIONS } from '@nexa/types';
+import { TENANT_TRANSACTION_TIMEOUT_MS } from '../lib/tenant.js';
 
 const secret = (minLength: number) =>
   z
@@ -98,6 +99,30 @@ const envSchema = z.object({
   RETENTION_MAIL_DAYS: z.coerce.number().int().positive().default(30),
   /** Audit log window (NFR-S12: "last 30 days" of basic audit, every plan). */
   RETENTION_AUDIT_DAYS: z.coerce.number().int().positive().default(30),
+
+  /**
+   * How far behind "now" the SIEM export stops (NFR-C6 · C6-b), in
+   * milliseconds.
+   *
+   * Not a throttle — a correctness bound. An audit row's `created_at` is
+   * `CURRENT_TIMESTAMP`, which Postgres fixes at the *start* of the writing
+   * transaction, so a row can become visible with a timestamp already behind
+   * one the export has passed. Exporting right up to `now()` would therefore
+   * step over entries written by transactions still in flight, and step over
+   * them permanently: the cursor only moves forward. The default is
+   * `TENANT_TRANSACTION_TIMEOUT_MS` — the longest a tenant transaction may run
+   * before Prisma rolls it back, and so the longest an entry's timestamp can
+   * precede its commit.
+   *
+   * Zero disables the horizon. Legitimate where nothing writes concurrently
+   * with the export (the integration suites, a single-user e2e run); a
+   * deployment that sets it is choosing to lose entries under load.
+   */
+  SIEM_EXPORT_HORIZON_MS: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(TENANT_TRANSACTION_TIMEOUT_MS),
 
   TRIAL_DAYS: z.coerce.number().int().positive().default(14),
   UNIT_PRICE_CENTS: z.coerce.number().int().nonnegative().default(9900),

@@ -340,6 +340,10 @@ paths:
     $ref: "./paths/settings.yaml#/compliance"
   /settings/compliance/baa:
     $ref: "./paths/settings.yaml#/complianceBaa"
+  /settings/siem:
+    $ref: "./paths/settings.yaml#/siemSettings"
+  /settings/siem/status:
+    $ref: "./paths/settings.yaml#/siemStatus"
   /settings/chat-timeout:
     $ref: "./paths/settings.yaml#/chatTimeout"
   /settings/widget:
@@ -464,6 +468,8 @@ paths:
 
   /audit-log:
     $ref: "./paths/audit-log.yaml#/auditLog"
+  /audit-log/export:
+    $ref: "./paths/audit-log.yaml#/auditLogExport"
 
   /kb-articles:
     $ref: "./paths/kb.yaml#/kbArticles"
@@ -2157,6 +2163,113 @@ components:
           nullable: true
           description: Source address when recorded; null when deliberately omitted.
         created_at: { type: string, format: date-time }
+
+    AuditLogExportRecord:
+      type: object
+      description: |
+        One line of the SIEM export (NFR-C6). The read surface's entry plus
+        `license_id`: a SIEM indexes several workspaces side by side and needs
+        the discriminator on the evidence itself, not on whatever the ingest
+        pipeline happened to file it under.
+      required: [id, license_id, action, actor_type, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        license_id:
+          type: string
+          description: >-
+            The workspace this entry belongs to. A string because the id is a
+            64-bit integer and JSON numbers are doubles.
+        action:
+          type: string
+          description: The security-relevant action, e.g. `auth.login`, `member.suspended`.
+        actor_id:
+          type: string
+          nullable: true
+          description: The acting account/bot/customer id, or null when unknown.
+        actor_type:
+          type: string
+          enum: [agent, bot, customer, system]
+        target:
+          type: string
+          nullable: true
+          description: The object acted on, as `<kind>:<id>` (e.g. `token:…`).
+        metadata:
+          type: object
+          additionalProperties: true
+          description: >-
+            Non-sensitive detail — field names, counts, roles. Exported exactly
+            as stored; it was stripped of anything credential-shaped on the way
+            in, and filtering again here would let the exported copy and the
+            entry an admin reads on screen disagree about what happened.
+        ip:
+          type: string
+          nullable: true
+          description: Source address when recorded; null when deliberately omitted.
+        created_at: { type: string, format: date-time }
+
+    SiemExportSettings:
+      type: object
+      description: |
+        Where a workspace ships its audit trail (NFR-C6 · C6-b), and whether it
+        is shipping.
+      required: [enabled, target]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the scheduled export delivers to the destination.
+        target:
+          type: string
+          nullable: true
+          enum: [file, null]
+          description: >-
+            The destination, or null when the workspace has never configured
+            one. `file` writes NDJSON under `.data/siem`.
+
+    SiemExportStatus:
+      allOf:
+        - $ref: "#/components/schemas/SiemExportSettings"
+        - type: object
+          description: The export's configuration plus how the feed is doing.
+          required:
+            [last_run_at, last_exported_at, exported_count, pending_count, chain_gap_detected]
+          properties:
+            last_run_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: >-
+                When a delivery last completed, or null if one never has. A
+                stale value means the export is not running at all — which is
+                a different problem from it running and falling behind.
+            last_exported_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: >-
+                The timestamp of the last entry delivered — the position, not
+                the run. Far behind `last_run_at` simply means nothing new has
+                happened since.
+            exported_count:
+              type: integer
+              description: >-
+                Entries delivered to this destination, ever. Survives retention
+                pruning the entries it counted.
+            pending_count:
+              type: integer
+              description: >-
+                Exportable entries not yet delivered — the backlog. Counted only
+                up to the export horizon, so zero means genuinely caught up
+                rather than "nothing has settled yet".
+            chain_gap_detected:
+              type: boolean
+              nullable: true
+              description: >-
+                Whether the delivered stream has a hole in it. `null` means the
+                question is not answerable yet — the integrity chain that would
+                answer it arrives with C6-c. Deliberately not `false`: an
+                unchained log cannot demonstrate its own completeness, and
+                reporting "no gaps detected" from a system that cannot detect
+                gaps is the false assurance the control exists to prevent.
 
     TrafficRespondent:
       type: object

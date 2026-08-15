@@ -149,6 +149,14 @@ export const ADMIN_SCOPES: Scope[] = [
   // pairs this scope with `minimumRole: admin`, and an ordinary agent gets
   // neither.
   'audit_log--all:ro',
+  // Streaming that trail to a SIEM (NFR-C6 · C6-b). Here for the same reason
+  // the reading scope is, and it is worth saying why the separation between the
+  // two survives it: this list is the *default* a session or an un-narrowed PAT
+  // gets, and a holder of it can already walk the whole log page by page, so
+  // withholding the export scope here would cost effort, not access. What the
+  // separation actually binds is the narrowed token — an integration granted
+  // `audit_log--all:ro` for a dashboard does not thereby get the firehose.
+  'audit_log--export:ro',
   'reports_read',
   // Defining a scheduled export (PRD §5.3-Reports) mails workspace data out on a
   // timer, so it is an owner/admin power and stops here — `DEFAULT_AGENT_SCOPES`

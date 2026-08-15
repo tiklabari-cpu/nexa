@@ -784,6 +784,107 @@ complianceBaa:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+# SIEM export configuration (NFR-C6 · C6-b).
+#
+# Where the workspace's audit trail is shipped, and how the feed is doing. Part
+# of the security family — `access_rules` plus Owner/Admin — because deciding
+# that a copy of every security event leaves for a system Nexa does not control
+# is a workspace-security decision, not an inbox preference.
+#
+# The data itself is `GET /audit-log/export`; these two describe the standing
+# instruction and its state. The Settings → Security screen (C6-f) is built on
+# exactly these and opens nothing of its own.
+
+siemSettings:
+  get:
+    tags: [Settings]
+    operationId: getSiemSettings
+    summary: Where the audit trail is exported
+    description: |
+      A workspace that has never configured an export has no row, and reads as
+      off with no destination. Reading has no side effect and creates nothing.
+    responses:
+      "200":
+        description: The current export configuration
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SiemExportSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Settings]
+    operationId: updateSiemSettings
+    summary: Configure the audit trail export
+    description: |
+      Creates the configuration on first write. Naming a destination and turning
+      the feed on are two decisions — `enabled` defaults to off — so a workspace
+      can set up the export before it starts shipping.
+
+      Neither switching the feed off nor repointing it moves the delivery
+      position: re-enabling resumes exactly where it stopped rather than
+      re-sending the retained trail or, worse, skipping everything written while
+      it was off. That is also why there is no delete — off is `enabled: false`,
+      which keeps the position.
+
+      Records `settings.security_updated` in the audit trail, naming the fields
+      that changed and the destination.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              enabled:
+                type: boolean
+                description: Whether the scheduled export ships to the destination.
+              target:
+                type: string
+                enum: [file]
+                description: >-
+                  Where to ship. `file` writes NDJSON under `.data/siem` —
+                  real SIEM connectors (Splunk, Sentinel, Datadog) are a project
+                  boundary, so this is the whole of what this deployment can
+                  honestly offer. Omitted on a first write it takes the default;
+                  omitted later it leaves the destination alone.
+    responses:
+      "200":
+        description: The saved configuration
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SiemExportSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+siemStatus:
+  get:
+    tags: [Settings]
+    operationId: getSiemExportStatus
+    summary: How the audit trail export is doing
+    description: |
+      The configuration plus its state: when a delivery last completed, how far
+      through the trail it has got, how many entries are delivered and how many
+      are waiting.
+
+      `last_run_at` and `last_exported_at` answer different questions and can be
+      far apart — a feed that ran a minute ago and found nothing new has a fresh
+      run and an old position. A stale `last_run_at` means the export is not
+      running; a growing `pending_count` means it is running and falling behind.
+    responses:
+      "200":
+        description: The export's configuration and state
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SiemExportStatus" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 chatTimeout:
   get:
     tags: [Settings]

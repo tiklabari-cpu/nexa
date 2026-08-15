@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+## tm 83.3 — C6-b · SIEM export kontratı + siem_export_cursors + NDJSON akışı — done — 2026-08-15 UTC
+
+- **Yapıldı:** `GET /audit-log/export` (NDJSON, en eski önce, keyset imleç `x-nexa-export-cursor`
+  başlığında — gövdenin her satırı bir kayıt kalsın diye; `C6-c`'nin zincir/imza yerleşimi kararı
+  serbest bırakıldı). Yeni scope `audit_log--export:ro` dört yerde tanımlandı ve
+  `audit_log--all:ro`'nun onu **ima etmediği** pinlendi. `siem_export_cursors` tablosu (RLS,
+  hedef CHECK'i, imleç-yarımları CHECK'i, `REVOKE DELETE`) + `GET|PATCH /settings/siem`
+  (`settings.security_updated` audit'i) + `GET /settings/siem/status`.
+- **Kilit karar — export ufku (`SIEM_EXPORT_HORIZON_MS`, varsayılan 10 sn):** `created_at`
+  yazan işlemin BAŞLANGIÇ anıdır, dolayısıyla uçuştaki bir işlem imlecin geçtiği bir damgayla
+  commit edebilir; imleç yalnız ileri gittiği için o satır kaybolur. Export bu yüzden
+  `now - horizon`'a kadar okur. Ufuk olmasaydı **`C6-c`'nin boşluk tespiti sağlıklı bir sistemi
+  her gün "kurcalanmış" diye raporlardı.** Sıfır = ufuk kapalı (entegrasyon süiti + e2e).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 10/10 görev, api
+  **2930/2930** · `pnpm -w test:integration` 80 dosya, api **2170/2170** · `pnpm -w build` 7/7 ·
+  `db:check-drift` temiz. `test:e2e` koşulmadı (testStrategy istemiyor; dilimde UI yok, uçtan uca
+  kapı `C6-g`).
+- **Sonraki pencereye — üç somut nokta:** (1) **`C6-d` için:** imleç satırını ilerleten TEK yer
+  sweeper'dır, pull ucu ona dokunmaz; `siem-export.ts` bilerek "imleci ilerlet" fonksiyonu
+  SUNMUYOR (dosya yaz → kapat → SONRA ilerlet sırası o işin malı). (2) **`apps/e2e` için:** API
+  sunucusuna `SIEM_EXPORT_HORIZON_MS=0` verilmezse yazılan bir eylem 10 sn export'a düşmez —
+  `playwright.config.ts`'in `env` bloğuna eklenmeli (`C6-g` bunu varsayacak). (3) **`C6-c` için:**
+  `chain_gap_detected` şu an `null` ("henüz cevaplanabilir değil"); `false` yapmak zincir gelmeden
+  sahte güvence olur.
+
 ## tm 83.2 — C6-a2 · Envanterdeki eylemlerin AUDIT_ACTIONS'a eklenmesi + çağrıların bağlanması — done — 2026-08-15 UTC
 
 - **Yapıldı:** `C6-a1`'in (§D104) sabit listesi birebir uygulandı — `AUDIT_ACTIONS`'a 11 yeni eylem

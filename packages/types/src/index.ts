@@ -6,6 +6,7 @@ export * from './api-packages.js';
 export * from './integrations.js';
 export * from './errors.js';
 export * from './scopes.js';
+export * from './siem.js';
 export * from './rtm.js';
 export * from './ids.js';
 export * from './realtime-bus.js';

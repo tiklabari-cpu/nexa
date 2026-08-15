@@ -3017,6 +3017,69 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/siem': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Where the audit trail is exported
+     * @description A workspace that has never configured an export has no row, and reads as
+     *     off with no destination. Reading has no side effect and creates nothing.
+     */
+    get: operations['getSiemSettings'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Configure the audit trail export
+     * @description Creates the configuration on first write. Naming a destination and turning
+     *     the feed on are two decisions — `enabled` defaults to off — so a workspace
+     *     can set up the export before it starts shipping.
+     *
+     *     Neither switching the feed off nor repointing it moves the delivery
+     *     position: re-enabling resumes exactly where it stopped rather than
+     *     re-sending the retained trail or, worse, skipping everything written while
+     *     it was off. That is also why there is no delete — off is `enabled: false`,
+     *     which keeps the position.
+     *
+     *     Records `settings.security_updated` in the audit trail, naming the fields
+     *     that changed and the destination.
+     */
+    patch: operations['updateSiemSettings'];
+    trace?: never;
+  };
+  '/settings/siem/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * How the audit trail export is doing
+     * @description The configuration plus its state: when a delivery last completed, how far
+     *     through the trail it has got, how many entries are delivered and how many
+     *     are waiting.
+     *
+     *     `last_run_at` and `last_exported_at` answer different questions and can be
+     *     far apart — a feed that ran a minute ago and found nothing new has a fresh
+     *     run and an old position. A stale `last_run_at` means the export is not
+     *     running; a growing `pending_count` means it is running and falling behind.
+     */
+    get: operations['getSiemExportStatus'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/settings/chat-timeout': {
     parameters: {
       query?: never;
@@ -4880,6 +4943,53 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/audit-log/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Stream audit log entries to a SIEM
+     * @description The workspace's security trail as NDJSON — one complete JSON object per
+     *     line, oldest first — for continuous export to a SIEM. Owner/Admin only,
+     *     and RLS confines it to the caller's own workspace like every other tenant
+     *     surface.
+     *
+     *     **Resuming.** Every response carries `x-nexa-export-cursor`: the position
+     *     after the last record it contained, or the position you passed in when the
+     *     page was empty. Store it and pass it back as `page_id` to continue.
+     *     `x-nexa-export-has-more` says whether more entries are already waiting, so
+     *     a consumer knows whether to poll again immediately or wait for its next
+     *     tick.
+     *
+     *     **Redelivery, never gaps.** Replaying a cursor returns the same records
+     *     again — the position is exclusive and the order is total, so a consumer
+     *     that crashed before committing its cursor loses nothing by starting over.
+     *     Duplicates in a SIEM are noise; a gap is a missing security event that
+     *     nothing downstream can tell apart from a quiet period. Everything here
+     *     trades the first away to prevent the second.
+     *
+     *     **A short delay is deliberate.** An entry becomes exportable a few seconds
+     *     after it is written, not instantly. An entry's timestamp is fixed when its
+     *     transaction *starts*, so reading right up to the present would step over
+     *     entries written by transactions still in flight — permanently, since the
+     *     cursor only moves forward.
+     *
+     *     **No filters.** Unlike the list endpoint there is no `action`, `actor_id`
+     *     or date range. A filtered export is a selective record of what happened,
+     *     and the point of the copy in the SIEM is that it is complete.
+     */
+    get: operations['exportAuditLog'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/kb-articles': {
     parameters: {
       query?: never;
@@ -6527,6 +6637,65 @@ export interface components {
       ip?: string | null;
       /** Format: date-time */
       created_at: string;
+    };
+    /**
+     * @description One line of the SIEM export (NFR-C6). The read surface's entry plus
+     *     `license_id`: a SIEM indexes several workspaces side by side and needs
+     *     the discriminator on the evidence itself, not on whatever the ingest
+     *     pipeline happened to file it under.
+     */
+    AuditLogExportRecord: {
+      /** Format: uuid */
+      id: string;
+      /** @description The workspace this entry belongs to. A string because the id is a 64-bit integer and JSON numbers are doubles. */
+      license_id: string;
+      /** @description The security-relevant action, e.g. `auth.login`, `member.suspended`. */
+      action: string;
+      /** @description The acting account/bot/customer id, or null when unknown. */
+      actor_id?: string | null;
+      /** @enum {string} */
+      actor_type: 'agent' | 'bot' | 'customer' | 'system';
+      /** @description The object acted on, as `<kind>:<id>` (e.g. `token:…`). */
+      target?: string | null;
+      /** @description Non-sensitive detail — field names, counts, roles. Exported exactly as stored; it was stripped of anything credential-shaped on the way in, and filtering again here would let the exported copy and the entry an admin reads on screen disagree about what happened. */
+      metadata?: {
+        [key: string]: unknown;
+      };
+      /** @description Source address when recorded; null when deliberately omitted. */
+      ip?: string | null;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
+     * @description Where a workspace ships its audit trail (NFR-C6 · C6-b), and whether it
+     *     is shipping.
+     */
+    SiemExportSettings: {
+      /** @description Whether the scheduled export delivers to the destination. */
+      enabled: boolean;
+      /**
+       * @description The destination, or null when the workspace has never configured one. `file` writes NDJSON under `.data/siem`.
+       * @enum {string|null}
+       */
+      target: 'file' | null;
+    };
+    SiemExportStatus: components['schemas']['SiemExportSettings'] & {
+      /**
+       * Format: date-time
+       * @description When a delivery last completed, or null if one never has. A stale value means the export is not running at all — which is a different problem from it running and falling behind.
+       */
+      last_run_at: string | null;
+      /**
+       * Format: date-time
+       * @description The timestamp of the last entry delivered — the position, not the run. Far behind `last_run_at` simply means nothing new has happened since.
+       */
+      last_exported_at: string | null;
+      /** @description Entries delivered to this destination, ever. Survives retention pruning the entries it counted. */
+      exported_count: number;
+      /** @description Exportable entries not yet delivered — the backlog. Counted only up to the export horizon, so zero means genuinely caught up rather than "nothing has settled yet". */
+      pending_count: number;
+      /** @description Whether the delivered stream has a hole in it. `null` means the question is not answerable yet — the integrity chain that would answer it arrives with C6-c. Deliberately not `false`: an unchained log cannot demonstrate its own completeness, and reporting "no gaps detected" from a system that cannot detect gaps is the false assurance the control exists to prevent. */
+      chain_gap_detected: boolean | null;
     };
     /**
      * @description Who a visitor is currently talking to (FR-MOD-03.1.3 "Chatting with").
@@ -13499,6 +13668,88 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getSiemSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current export configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SiemExportSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateSiemSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Whether the scheduled export ships to the destination. */
+          enabled?: boolean;
+          /**
+           * @description Where to ship. `file` writes NDJSON under `.data/siem` — real SIEM connectors (Splunk, Sentinel, Datadog) are a project boundary, so this is the whole of what this deployment can honestly offer. Omitted on a first write it takes the default; omitted later it leaves the destination alone.
+           * @enum {string}
+           */
+          target?: 'file';
+        };
+      };
+    };
+    responses: {
+      /** @description The saved configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SiemExportSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getSiemExportStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The export's configuration and state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SiemExportStatus'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   getChatTimeout: {
     parameters: {
       query?: never;
@@ -16400,6 +16651,48 @@ export interface operations {
             /** @description Opaque cursor for the next page; absent on the last. */
             next_page_id?: string;
           };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  exportAuditLog: {
+    parameters: {
+      query?: {
+        /** @description Resume after this position — the `x-nexa-export-cursor` value from a previous export. Omit to start from the beginning of the retained trail. A cursor this endpoint cannot read is a 400, not a silent restart: both silent answers (re-sending everything, skipping everything) are wrong and invisible to the consumer. Cursors from the list endpoint are rejected here — they run the other way. */
+        page_id?: string;
+        /** @description Records per response. Defaults to 1000, maximum 5000; above the maximum is clamped, not rejected. */
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /**
+       * @description A page of entries as NDJSON, oldest first. Empty body when the feed
+       *     has caught up — the cursor header is still present and still valid.
+       */
+      200: {
+        headers: {
+          /** @description Opaque position to resume from. Empty only when the workspace's trail is empty and no cursor was supplied. */
+          'x-nexa-export-cursor'?: string;
+          /** @description Records in this response. */
+          'x-nexa-export-count'?: number;
+          /** @description `true` when more entries are already exportable — poll again rather than waiting. */
+          'x-nexa-export-has-more'?: 'true' | 'false';
+          [name: string]: unknown;
+        };
+        content: {
+          /**
+           * @example {"id":"6f1c…","license_id":"1","action":"auth.login","actor_id":"a1…","actor_type":"agent","target":null,"metadata":{},"ip":null,"created_at":"2026-08-15T09:00:00.000Z"}
+           *     {"id":"7a2d…","license_id":"1","action":"member.role_changed","actor_id":"a1…","actor_type":"agent","target":"account:b2…","metadata":{"from":"agent","to":"admin"},"ip":null,"created_at":"2026-08-15T09:01:00.000Z"}
+           */
+          'application/x-ndjson': string;
         };
       };
       400: components['responses']['BadRequest'];

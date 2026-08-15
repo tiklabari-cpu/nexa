@@ -23,6 +23,9 @@ const NEXA_ADDED_SCOPES = [
   // The source platform has no audit resource; Nexa keeps a security trail
   // (NFR-S12) and gates reading it with a scope of its own (PLAN §D).
   'audit_log--all:ro',
+  // Bulk egress of that trail to a SIEM (NFR-C6 · C6-b) is a separate
+  // authority from paging through it on a screen.
+  'audit_log--export:ro',
   // The source platform is single-tenant-per-license with no brand concept;
   // Multibrand (PRD §5.3) makes brands a first-class resource with its own scope.
   'brands--all:ro',
@@ -75,6 +78,18 @@ describe('expandScope', () => {
 
   it('leaves non-conforming scopes alone', () => {
     expect(expandScope('reports_read')).toEqual(['reports_read']);
+  });
+
+  it('does not let reading the audit log imply exporting it', () => {
+    // The separation C6-b rests on. `--all` widens along the access axis
+    // (all → access/groups/my); `--export` is a different authority on the same
+    // resource, so no amount of read scope reaches it. If this ever inverts, a
+    // dashboard integration holding `audit_log--all:ro` silently gains the
+    // right to stream the entire trail into a system Nexa does not control.
+    expect(expandScope('audit_log--all:ro')).not.toContain('audit_log--export:ro');
+    expect(hasAnyScope(['audit_log--all:ro'], ['audit_log--export:ro'])).toBe(false);
+    // Nor the other way round: a SIEM connector is not a log browser.
+    expect(hasAnyScope(['audit_log--export:ro'], ['audit_log--all:ro'])).toBe(false);
   });
 });
 

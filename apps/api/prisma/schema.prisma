@@ -101,6 +101,7 @@ model License {
   apiPackagePurchases    ApiPackagePurchase[]
   paymentMethod          PaymentMethod?
   auditEntries           AuditLogEntry[]
+  siemExportCursors      SiemExportCursor[]
   ipAllowlistEntries     IpAllowlistEntry[]
   ssoConnections         SsoConnection[]
   securitySettings       SecuritySettings[]
@@ -1679,7 +1680,67 @@ model AuditLogEntry {
 
   @@index([licenseId, createdAt(sort: Desc)])
   @@index([licenseId, action, createdAt(sort: Desc)])
+  /// The export reads the same table the *other* way round — oldest first, from
+  /// a keyset position — so the descending indexes above serve it backwards.
+  /// Ascending index of its own, because a SIEM feed is a forward scan and the
+  /// alternative is a sort of the workspace's entire trail on every poll.
+  @@index([licenseId, createdAt, id])
   @@map("audit_log")
+}
+
+/// Where a workspace's audit trail is shipped, and how far it has got
+/// (NFR-C6 · C6-b).
+///
+/// One row per (licence, target). The row is *both* the configuration and the
+/// position, deliberately: they cannot be allowed to disagree. Held apart, a
+/// workspace could point the export at a new destination while the old
+/// destination's position carried on, and the trail would appear delivered to
+/// somewhere it never reached.
+///
+/// The position is the last row this target has been *delivered*, as the full
+/// keyset `(created_at, id)` — the same sort key the export pages on, so a
+/// resume lands exactly where the last delivery ended. It is written by the
+/// scheduled sink (C6-d); the pull endpoint (`GET /audit-log/export`) does not
+/// touch it, because there the caller holds the cursor and two consumers
+/// sharing one position would each skip the other's rows.
+model SiemExportCursor {
+  id        String @id @default(uuid()) @db.Uuid
+  licenseId BigInt @map("license_id")
+  /// A `SIEM_EXPORT_TARGETS` value — `file` today, the `.data/siem` sink.
+  /// Constrained in the database (`siem_export_cursors_target_check`): a target
+  /// nothing can deliver to would sit in the settings screen looking like a
+  /// live export while nothing ever leaves.
+  target    String
+  /// Configuration and delivery are two decisions, like `SsoConnection.enabled`:
+  /// a workspace can name its destination before turning the feed on.
+  enabled   Boolean @default(false)
+
+  /// The keyset position of the last delivered entry — `audit_log.id` and its
+  /// `created_at`. Soft reference, no foreign key: retention prunes the trail
+  /// (`audit_prune_expired`) and the position must survive the disappearance of
+  /// the row it names, or pruning would drag the cursor back to the beginning
+  /// and re-deliver everything. Both halves are set together or neither is
+  /// (`siem_export_cursors_cursor_halves_check`) — half a keyset is an
+  /// ambiguous resume point, and the ambiguity resolves to either skipping or
+  /// re-sending an unbounded number of rows.
+  lastExportedId String?   @map("last_exported_id") @db.Uuid
+  lastExportedAt DateTime? @map("last_exported_at") @db.Timestamptz(6)
+  /// When a delivery last completed — *not* the cursor. The two differ by the
+  /// age of the trail: a sink that ran a minute ago and found nothing new has a
+  /// fresh `lastRunAt` and an old `lastExportedAt`, and the status screen has to
+  /// tell "nothing happened" apart from "nothing is being shipped".
+  lastRunAt      DateTime? @map("last_run_at") @db.Timestamptz(6)
+  /// Running total of entries delivered to this target, ever. Cheap to keep and
+  /// the only figure that survives retention pruning the rows it counted.
+  exportedCount  BigInt    @default(0) @map("exported_count")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, target])
+  @@map("siem_export_cursors")
 }
 
 // ===========================================================================

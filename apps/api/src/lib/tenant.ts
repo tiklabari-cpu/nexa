@@ -36,6 +36,18 @@ export type TenantClient = Omit<
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/**
+ * How long a tenant transaction may run before Prisma rolls it back.
+ *
+ * Named rather than inlined because one other place has to reason about it: an
+ * audit row's `created_at` is `CURRENT_TIMESTAMP`, which in Postgres is the
+ * *start* of the transaction that wrote it, so a committed entry can carry a
+ * timestamp up to this long before the moment it becomes visible. The SIEM
+ * export's horizon is derived from that bound (`services/audit/audit-export.ts`)
+ * and would silently start skipping entries if the two drifted apart.
+ */
+export const TENANT_TRANSACTION_TIMEOUT_MS = 10_000;
+
 function assertValidContext(context: TenantContext): void {
   if (typeof context.licenseId !== 'bigint' || context.licenseId <= 0n) {
     throw new TypeError(`invalid tenant license id: ${String(context.licenseId)}`);
@@ -76,7 +88,7 @@ export async function withTenant<T>(
       await tx.$executeRaw`SELECT set_config('app.current_brand', ${context.brandId ?? ''}, true)`;
       return fn(tx);
     },
-    { timeout: options.timeoutMs ?? 10_000 },
+    { timeout: options.timeoutMs ?? TENANT_TRANSACTION_TIMEOUT_MS },
   );
 }
 

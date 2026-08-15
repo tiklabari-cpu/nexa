@@ -224,7 +224,7 @@ export async function buildServer({
       await api.register(reportRoutes, { env });
       await api.register(scheduledReportRoutes);
       await api.register(homeRoutes);
-      await api.register(settingsRoutes);
+      await api.register(settingsRoutes, { env });
       await api.register(onboardingRoutes);
       await api.register(websiteRoutes, { env });
       await api.register(brandRoutes);
@@ -247,7 +247,7 @@ export async function buildServer({
       await api.register(copilotRoutes, { env });
       await api.register(commandPaletteRoutes);
       await api.register(appRoutes, { env });
-      await api.register(auditLogRoutes);
+      await api.register(auditLogRoutes, { env });
     },
     { prefix: API_PREFIX },
   );

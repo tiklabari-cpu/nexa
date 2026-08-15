@@ -13,6 +13,24 @@
 
 ## Task log (newest-first)
 
+## tm 82.6 — C4-f · Settings → Security: HIPAA/BAA durum kartı + bölge gösterimi — done — 2026-08-15 UTC
+
+- **Yapıldı:** `apps/web/src/features/settings/Compliance.tsx` (yeni) — `GET /settings/compliance`'ı
+  (`C4-d`) okuyan bir kart: bölge salt-okunur ("kayıtta sabitlendi" notuyla), BAA durumu
+  (imzalı/imzasız + tarih), `us` lisansta `POST /settings/compliance/baa` ile kabul butonu.
+  Rol kapısı sunucunun iki kapısının birebir yansıması: dış bileşen `minimumRole: 'admin'`i
+  (`SsoConnection`/`AuditLog`'daki courtesy-hide deseni) taklit edip `agent`'a kartı hiç
+  göstermiyor; içeride `isOwner` `exactRole: 'owner'`i taklit edip butonu yalnız owner'a
+  gösteriyor — `admin`/`viceowner` kartı okuyor ama buton yerine kısıtlama notu görüyor.
+  `SettingsPage.tsx`'e `SsoConnection`'dan hemen sonra eklendi (`canManageAccess` scope'uyla).
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` (`@nexa/web` 1125 →
+  **1132**, yeni `Compliance.test.tsx` 7) · `pnpm -w test:integration` 2114/2114 (değişim yok) ·
+  `pnpm -w build` 7/7 · `pnpm -w test:e2e` **135/135 tüm süit** (yeni e2e yazılmadı, kapsam
+  dışı — `C4-g`'ye bırakıldı).
+- **Varsayımlar:** yok — iki uç zaten `C4-d`'de vardı, bu tur yalnız istemci.
+- **Sonraki pencereye not:** `C4-g` (uçtan uca doğrulama) bu ekranın gerçek 421/403 akışlarına
+  karşı Playwright kanıtı eklemeli; kapsam görev tanımında zaten `C4-g`'ye ayrılmış.
+
 ## tm 82.5 — C4-e · HIPAA kapsam kısıtları (retention tavanı + PII maskesi + AI bölge sınırı) — done — 2026-08-15 UTC
 
 - **Yapıldı:** İmzalı BAA'nın üç sonucu tek yüklemden (`lib/hipaa.ts`) okunuyor. (1) **Retention

@@ -33,6 +33,7 @@ import { SalesTracker } from './SalesTracker.js';
 import { ChannelsGrid } from './Channels.js';
 import { IpAllowlist } from './IpAllowlist.js';
 import { SsoConnection } from './SsoConnection.js';
+import { Compliance } from './Compliance.js';
 import { ScheduledExports } from './ScheduledExports.js';
 import {
   DEFAULT_PREFS,
@@ -152,6 +153,7 @@ export function SettingsPage(): ReactElement {
       <BannedCustomerIps canEdit={canManageAccess} />
       <IpAllowlist canEdit={canManageAccess} />
       <SsoConnection canEdit={canManageAccess} />
+      <Compliance canEdit={canManageAccess} />
       <AuditLog />
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />

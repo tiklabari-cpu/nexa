@@ -6,9 +6,16 @@
  * them at every `writeAuditEntry` call. Public (pre-auth) routes have no
  * principal — login and password reset — so those callers pass the tenant and
  * actor explicitly through `overrides`.
+ *
+ * It is also where the audit chain's root secret (NFR-C6 · C6-c) enters the
+ * request path. Handed in here once rather than imported from a module global,
+ * so the one thing every entry's integrity depends on arrives by the same route
+ * as every other piece of deployment configuration — and so a test can run a
+ * server under a different key without reaching into a singleton.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
+import type { Env } from '../config/env.js';
 import type { AuditActorType, AuditContext } from '../services/audit/audit-log.js';
 
 function actorOf(request: FastifyRequest): { actorId: string | null; actorType: AuditActorType } {
@@ -36,12 +43,15 @@ declare module 'fastify' {
   }
 }
 
-async function auditPlugin(app: FastifyInstance): Promise<void> {
+async function auditPlugin(app: FastifyInstance, options: { env: Env }): Promise<void> {
+  const chainSecret = options.env.AUDIT_CHAIN_SECRET;
+
   app.decorateRequest(
     'auditContext',
     function (this: FastifyRequest, overrides: Partial<AuditContext> = {}): AuditContext {
       const { actorId, actorType } = actorOf(this);
       return {
+        chainSecret,
         // `as bigint` documents the contract: an authenticated route has a
         // principal licence; a public one must pass `licenseId` in overrides.
         // `writeAuditEntry` throws if neither holds, so a missing tenant fails

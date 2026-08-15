@@ -27,11 +27,19 @@ import {
   seedDefaultBrand,
   seedFixtures,
   TEST_PASSWORD,
+  testEnv,
   type Fixtures,
 } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
+
+/**
+ * The same chain root the server under test runs with (NFR-C6 · C6-c), read
+ * from the environment rather than invented, so an entry written directly here
+ * lands in the same chain as one written through a request.
+ */
+const CHAIN_SECRET = testEnv().AUDIT_CHAIN_SECRET;
 
 /** sha256-hex, matching how the lifecycle service hashes reset tokens. */
 function sha256Hex(value: string): string {
@@ -985,7 +993,11 @@ describe('audit log writer (NFR-S12)', () => {
 
     it('records a customer being banned, then unbanned — only on the transition', async () => {
       const beforeBan = await count('customer.banned');
-      const ban = await server.post(`/customers/${fx.a.customerId}/ban`, undefined, auth(adminToken));
+      const ban = await server.post(
+        `/customers/${fx.a.customerId}/ban`,
+        undefined,
+        auth(adminToken),
+      );
       expect(ban.statusCode).toBe(200);
       expect(await count('customer.banned')).toBe(beforeBan + 1);
       const banEntry = await latest('customer.banned');
@@ -1383,7 +1395,10 @@ describe('audit log writer (NFR-S12)', () => {
       ).json() as { id: string };
 
       const before = await count('data.deleted');
-      const removed = await server.del(`/reports/scheduled-exports/${created.id}`, auth(adminToken));
+      const removed = await server.del(
+        `/reports/scheduled-exports/${created.id}`,
+        auth(adminToken),
+      );
       expect(removed.statusCode).toBe(204);
       expect(await count('data.deleted')).toBe(before + 1);
       const entry = await latest('data.deleted');
@@ -1519,7 +1534,11 @@ describe('audit log writer (NFR-S12)', () => {
       // in a workspace that is not theirs.
       await expect(
         withTenant(appRole, contextA(), (tx) =>
-          writeAuditEntry(tx, { licenseId: fx.b.licenseId }, { action: 'auth.login' }),
+          writeAuditEntry(
+            tx,
+            { licenseId: fx.b.licenseId, chainSecret: CHAIN_SECRET },
+            { action: 'auth.login' },
+          ),
         ),
       ).rejects.toThrow(/row-level security/i);
     });

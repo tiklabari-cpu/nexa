@@ -13,6 +13,39 @@
 
 ## Task log (newest-first)
 
+## tm 83.4 — C6-c · Export bütünlüğü çekirdeği (zincir + imza + boşluk tespiti) — done — 2026-08-15 UTC
+
+- **Yapıldı:** `audit_log`'a `chain_seq`/`prev_hash`/`hash` + lisans başına `audit_chain_heads`
+  (sıradaki konum, son hash, `genesis_at`, `pruned_through_seq`). Konum `UPDATE … RETURNING` ile
+  **satır kilidi altında** dağıtılır (eşzamanlı yazarlar zinciri çatallayamaz; rollback konumu geri
+  verir). Hash = `HMAC-SHA256` (dizi JSON payload'u, metadata kanonikleştirilmiş — JSONB anahtar
+  sırasını korumaz). Anahtar lisans başına `AUDIT_CHAIN_SECRET`'ten türetilir, **veritabanında
+  yoktur** (§C-A22). `verifyAuditChain` dört kesme yolunu da yakalar: ortadan · **önden**
+  (`pruned_through_seq` çapası) · **sondan** (head'in verdiği son konum) · zincirsiz satır.
+- **Kilit kararlar:** (1) **EXPORT FORMATI** — zincir alanları **her kayda satır içi**, imza
+  **ayrık** (`x-nexa-export-signature`; C6-d'de `.sig` yan dosyası). C6-b'nin "her satır bir
+  kayıttır" kuralı ancak böyle ayakta kalır; gövdeye imza satırı koymak onu kırardı. `C6-d`/`C6-g`
+  bunu varsayabilir. (2) Bozuk sayfa **işaretlenir, alıkonmaz** (`x-nexa-export-chain-ok`) — §6.1.4
+  açık sorusu böyle kapandı. (3) `writeAuditEntry` artık `id`+`created_at`'i kendisi verir (hash
+  ikisini de kapsamalı, sonradan damgalama imkânsız); bu C6-b'nin ufkunu daraltır.
+- **KRİTİK İNVARYANT:** `audit_prune_expired` gönderilmemiş satırı **silmez** — etkin hedefi olan
+  lisansta yalnız teslim edilmiş imlecin gerisi budanır; hiç teslim etmemiş hedef budamayı tamamen
+  durdurur, `enabled=false` durdurmaz. Testli.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **2991/2991** +
+  web 1132 · `pnpm -w test:integration` **81 dosya 2201/2201** · `pnpm -w build` 7/7 ·
+  `db:check-drift` temiz. `test:e2e` koşulmadı (testStrategy istemiyor, dilimde UI yok, kapı
+  `C6-g`).
+- **Sonraki pencereye — üç somut nokta:** (1) **Yeni zorunlu secret `AUDIT_CHAIN_SECRET`**; `.env`,
+  `.env.example` ve `ci.yml`'in **iki** env bloğuna eklendi. Onsuz API boot etmez. (2) **`ci.yml`'de
+  ÖNCEDEN VAR OLAN eksik:** `UPLOAD_SIGNING_KEY` hiçbir env bloğunda tanımlı değil ve o da zorunlu
+  bir `secret(32)` — CI'da `.env` yok, yani bu bir sonraki CI koşusunda boot hatası verir. Bu
+  pencerenin işi değil (kapsam disiplini), ayrı görev açılmalı. (3) **`pnpm -w format:check` 9
+  dosyada kırmızı** ve dokuzu da bu pencereden ÖNCE bozuktu (C4/S11/telegram dilimleri:
+  `log-redact.test.ts`, `inference.test.ts`, `customer-token.test.ts`, `compliance-baa.test.ts`,
+  `region.test.ts`, `sso-verification.test.ts`, `compliance.spec.ts`, `telegram.spec.ts`,
+  `Compliance.tsx`). Bu pencerenin dokunduğu 4 dosya biçimlendirildi; CI `format:check` koşuyor,
+  yani bu da ayrı bir düzeltme görevi.
+
 ## tm 83.3 — C6-b · SIEM export kontratı + siem_export_cursors + NDJSON akışı — done — 2026-08-15 UTC
 
 - **Yapıldı:** `GET /audit-log/export` (NDJSON, en eski önce, keyset imleç `x-nexa-export-cursor`

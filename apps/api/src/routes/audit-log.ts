@@ -24,12 +24,13 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { AUDIT_ACTIONS } from '../services/audit/audit-log.js';
 import { listAuditLog } from '../services/audit/audit-log-reader.js';
+import { deriveChainKey } from '../services/audit/audit-chain.js';
 import {
   decodeExportCursor,
   encodeExportCursor,
   NDJSON_CONTENT_TYPE,
   readAuditExportPage,
-  toNdjson,
+  sealExportPage,
 } from '../services/audit/audit-export.js';
 
 // `limit` has no upper bound in the schema — the service clamps it to the max
@@ -125,6 +126,15 @@ export default async function auditLogRoutes(
    * one place that trade-off is inverted is the horizon — see
    * `services/audit/audit-export.ts` — where redelivery is chosen over any
    * chance of a gap.)
+   *
+   * **The seal is detached** (NFR-C6 · C6-c). Each record carries its own chain
+   * position and hash inline, so a line copied out of the file keeps its
+   * evidence; the signature over the page travels in `x-nexa-export-signature`,
+   * because a signature is about the whole delivery and a body line that was
+   * not a record would break every consumer that splits on `\n`.
+   * `x-nexa-export-chain-ok` reports whether the page verified — false is a
+   * warning, not a refusal, since withholding a damaged trail is what an
+   * attacker would want.
    */
   app.get(
     '/audit-log/export',
@@ -139,13 +149,23 @@ export default async function auditLogRoutes(
         );
       }
 
+      // The route's own licence, not one the caller may name: the key is what
+      // the signature means, and deriving it from anything the request supplied
+      // would let a caller ask for a page sealed under a workspace it does not
+      // hold. RLS confines the rows to the same tenant, so the two agree by
+      // construction.
+      const licenseId = request.principal?.licenseId as bigint;
+      const chainKey = deriveChainKey(options.env.AUDIT_CHAIN_SECRET, licenseId);
+
       const page = await request.withTenant((tx) =>
         readAuditExportPage(tx, {
           after,
           ...(query.limit !== undefined ? { limit: query.limit } : {}),
           horizonMs: options.env.SIEM_EXPORT_HORIZON_MS,
+          chainKey,
         }),
       );
+      const sealed = sealExportPage(chainKey, licenseId, page.records);
 
       return (
         reply
@@ -157,7 +177,9 @@ export default async function auditLogRoutes(
           .header('x-nexa-export-count', String(page.records.length))
           .header('x-nexa-export-has-more', page.hasMore ? 'true' : 'false')
           .header('x-nexa-export-cursor', page.cursor ? encodeExportCursor(page.cursor) : '')
-          .send(toNdjson(page.records))
+          .header('x-nexa-export-signature', sealed.signature)
+          .header('x-nexa-export-chain-ok', page.chain.ok ? 'true' : 'false')
+          .send(sealed.body)
       );
     },
   );

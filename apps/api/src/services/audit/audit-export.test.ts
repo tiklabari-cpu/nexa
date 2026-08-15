@@ -26,6 +26,9 @@ const row = (over: Partial<Parameters<typeof toRecord>[0]> = {}) => ({
   metadata: {},
   ip: null,
   createdAt: new Date('2026-08-15T09:00:00.000Z'),
+  chainSeq: 7n,
+  prevHash: 'prev',
+  hash: 'own',
   ...over,
 });
 
@@ -143,7 +146,26 @@ describe('export record', () => {
       metadata: { from: 'agent', to: 'admin' },
       ip: null,
       created_at: '2026-08-15T09:00:00.000Z',
+      chain_seq: 7,
+      prev_hash: 'prev',
+      hash: 'own',
     });
+  });
+
+  it('carries the chain position as a number, not a string', () => {
+    // Deliberately unlike `license_id`. Continuity means `n + 1`, so a consumer
+    // does arithmetic on this field, and a per-workspace entry counter cannot
+    // reach the 2^53 where a JSON number would stop being exact.
+    expect(toRecord(row()).chain_seq).toBe(7);
+  });
+
+  it('says so plainly when an entry predates the chain', () => {
+    // Nullable on purpose: entries written before C6-c cannot be back-computed
+    // without the key, and inventing hashes for them would forge exactly the
+    // assurance the chain exists to give.
+    const record = toRecord(row({ chainSeq: null, prevHash: null, hash: null }));
+    expect(record.chain_seq).toBeNull();
+    expect(record.hash).toBeNull();
   });
 });
 

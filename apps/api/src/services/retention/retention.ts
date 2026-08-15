@@ -104,6 +104,12 @@ export interface RetentionRunnerOptions {
   policy: RetentionPolicy;
   /** Directory holding outgoing mail files (`env.MAIL_DIR`). */
   mailDir: string;
+  /**
+   * `AUDIT_CHAIN_SECRET` (NFR-C6 · C6-c) — this sweep writes its own audit
+   * entry, and the entry recording a deletion is the last one that should be
+   * outside the chain that makes deletions visible.
+   */
+  auditChainSecret: string;
 }
 
 interface TenantRow {
@@ -115,11 +121,13 @@ export class RetentionRunner {
   readonly #db: PrismaClient;
   readonly #policy: RetentionPolicy;
   readonly #mailDir: string;
+  readonly #auditChainSecret: string;
 
   constructor(db: PrismaClient, options: RetentionRunnerOptions) {
     this.#db = db;
     this.#policy = options.policy;
     this.#mailDir = options.mailDir;
+    this.#auditChainSecret = options.auditChainSecret;
   }
 
   async run(options: { dryRun: boolean; now?: Date }): Promise<RetentionReport> {
@@ -218,7 +226,12 @@ export class RetentionRunner {
       await withTenant(this.#db, context, (tx) =>
         writeAuditEntry(
           tx,
-          { licenseId: context.licenseId, actorId: null, actorType: 'system' },
+          {
+            licenseId: context.licenseId,
+            chainSecret: this.#auditChainSecret,
+            actorId: null,
+            actorType: 'system',
+          },
           {
             action: 'data.retention_pruned',
             metadata: {

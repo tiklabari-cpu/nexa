@@ -2264,12 +2264,17 @@ components:
               type: boolean
               nullable: true
               description: >-
-                Whether the delivered stream has a hole in it. `null` means the
-                question is not answerable yet — the integrity chain that would
-                answer it arrives with C6-c. Deliberately not `false`: an
-                unchained log cannot demonstrate its own completeness, and
-                reporting "no gaps detected" from a system that cannot detect
-                gaps is the false assurance the control exists to prevent.
+                Whether anything is missing from the workspace's audit trail.
+                Answered from the integrity chain: positions are handed out
+                gaplessly, so an absent one is an absent entry. All four cuts
+                are checked — a hole in the middle, a trail starting later than
+                retention pruned to, entries removed from the newest end, and an
+                entry written after the chain began that carries no chain at
+                all. `null` while the workspace has never written a chained
+                entry, and deliberately not `false` there: a log with no chain
+                cannot demonstrate its own completeness, and reporting "no gaps
+                detected" from a system that cannot detect gaps is the false
+                assurance the control exists to prevent.
 
     TrafficRespondent:
       type: object

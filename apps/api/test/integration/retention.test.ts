@@ -32,6 +32,7 @@ import { RetentionRunner } from '../../src/services/retention/retention.js';
 import {
   ownerClient,
   seedFixtures,
+  testEnv,
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
@@ -50,7 +51,12 @@ describe('retention sweep (NFR-C8)', () => {
   let seq = 0;
 
   const ctx = (t: TenantFixture) => ({ licenseId: t.licenseId, organizationId: t.organizationId });
-  const runner = () => new RetentionRunner(appRole, { policy: POLICY, mailDir });
+  const runner = () =>
+    new RetentionRunner(appRole, {
+      policy: POLICY,
+      mailDir,
+      auditChainSecret: testEnv().AUDIT_CHAIN_SECRET,
+    });
 
   const nextId = (prefix: string, width: number): string => {
     seq += 1;

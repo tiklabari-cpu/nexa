@@ -21,6 +21,7 @@ const BASE: NodeJS.ProcessEnv = {
   WEBHOOK_HMAC_SEED: 'dev-only-webhook-hmac-seed-at-least-32-chars',
   CUSTOMER_TOKEN_SECRET: 'dev-only-customer-token-secret-32-chars',
   UPLOAD_SIGNING_KEY: 'dev-only-upload-signing-key-at-least-32-chars',
+  AUDIT_CHAIN_SECRET: 'dev-only-audit-chain-secret-at-least-32-chars',
 };
 
 describe('NEXA_REGION', () => {

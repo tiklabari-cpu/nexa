@@ -182,7 +182,7 @@ export async function buildServer({
   await app.register(database, { env });
   await app.register(redis, { env });
   await app.register(auth, { env });
-  await app.register(audit);
+  await app.register(audit, { env });
   // After `audit`, which it writes through, and before the routes that declare
   // `aiInference` (NFR-C4 · C4-e).
   await app.register(aiResidency, { env });

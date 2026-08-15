@@ -163,6 +163,7 @@ export default async function samlRoutes(
     accessTokenTtl: env.ACCESS_TOKEN_TTL,
     refreshTokenTtl: env.REFRESH_TOKEN_TTL,
     authorizationCodeTtl: env.AUTH_CODE_TTL,
+    auditChainSecret: env.AUDIT_CHAIN_SECRET,
   });
 
   /**

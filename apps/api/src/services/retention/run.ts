@@ -32,6 +32,7 @@ async function main(): Promise<void> {
     const runner = new RetentionRunner(db, {
       policy: resolveRetentionPolicy(env),
       mailDir: env.MAIL_DIR,
+      auditChainSecret: env.AUDIT_CHAIN_SECRET,
     });
     const report = await runner.run({ dryRun });
 

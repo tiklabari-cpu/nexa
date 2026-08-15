@@ -50,6 +50,10 @@ jobs:
       JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
       WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
       CUSTOMER_TOKEN_SECRET: ci-customer-token-secret-0123456789abcdef0123
+      # Root of the audit chain's per-workspace keys (NFR-C6). Required at boot
+      # like the other secrets: it is held outside the database on purpose, so
+      # there is no fallback to derive it from.
+      AUDIT_CHAIN_SECRET: ci-audit-chain-secret-0123456789abcdef0123456
 
     steps:
       - uses: actions/checkout@v4
@@ -145,6 +149,10 @@ jobs:
       JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
       WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
       CUSTOMER_TOKEN_SECRET: ci-customer-token-secret-0123456789abcdef0123
+      # Root of the audit chain's per-workspace keys (NFR-C6). Required at boot
+      # like the other secrets: it is held outside the database on purpose, so
+      # there is no fallback to derive it from.
+      AUDIT_CHAIN_SECRET: ci-audit-chain-secret-0123456789abcdef0123456
       # The suite signs in, exchanges tokens and mints widget tokens from one
       # IP in quick succession. At the production default of 30/min that trips
       # the anonymous limiter, and the run fails with 429s that look like

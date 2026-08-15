@@ -3928,12 +3928,12 @@
             "description": "Export bütünlüğü çekirdeği (BÖLÜNMEZ) — kayıt zinciri (HMAC) + export imzası + boşluk tespiti",
             "details": "C6-c — Export bütünlüğü çekirdeği (BÖLÜNMEZ) — kayıt zinciri (HMAC) + export imzası + boşluk tespiti  [OPUS-MAX]\n\nPRD: C6 (PLAN §6.1 · dilim V3-2 · tm 83)\nTAHMİN: ~3 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: bir denetim izinin değeri SİLİNEMEZ olmasında değil, SİLİNDİĞİNİN GÖRÜLEBİLMESİNDEDİR. Zincir (her satır bir öncekinin HMAC'ini taşır), export imzası ve boşluk tespiti üçü birlikte TEK bir iddiayı taşır: \"bu export eksiksizdir ve değiştirilmemiştir\". Herhangi biri ayrı pencereye alınırsa aradaki sürümde imzalı ama EKSİK bir export üretilir; denetçiye verilen kanıt sessizce değersizleşir — üstelik testler yeşilken.\n\nKAPSAM: `audit_log` satırlarına zincir alanı (prevHash/hash) + INSERT yolunda hesaplama + export imzası + `verifyChain()` + boşluk tespiti. Anahtar lisans başına türetilir ve EXPORT'A GİRMEZ (§C-A22).\n\nKRİTİK INVARYANT (test edilecek): `RETENTION_AUDIT_DAYS=30` budaması (tm 92 `08.9.7-h`, `audit_prune_expired` SECURITY DEFINER) HENÜZ EXPORT EDİLMEMİŞ satırı SİLMEZ. Aksi hâlde kayıt kalıcı olarak kaybolur ve zincirde onarılamaz boşluk kalır.\n\nDOSYALAR: `apps/api/src/services/audit/audit-log.ts` · `apps/api/src/services/audit/audit-log-reader.ts` · `apps/api/src/lib/crypto.ts` · yeni migration (zincir kolonları + budama fonksiyonunun güncellenmesi)\n\nREFERANS DESEN: `lib/crypto.ts` HMAC kullanımı (webhook HMAC-SHA256, **tm 34 · `08.8.4-b`** — denetim düzeltmesi: tm 33 = \"06 AI Agent + Knowledge\", ilgisiz) · `audit_prune_expired` SECURITY DEFINER kalıbı (tm 92).\n\nKAPSAM DIŞI: hedef/zamanlama (C6-d), ekran (C6-f).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**EXPORT FORMATI BU PENCEREDE KİLİTLENİR** (denetim bulgusu): NDJSON'un zincir/imza alanlarını nasıl taşıdığı — her satırda `prev_hash`/`hash` alanı mı, yoksa dosya sonunda imza satırı mı, yoksa yan `.sig` dosyası mı — burada karara bağlanır ve §C'ye yazılır. `C6-d` (sink) ve `C6-g` (e2e) bu formatı VARSAYACAK; format kilitlenmezse ikisi de uyumsuz yazılır.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (zincir doğrulanır; ARADAN BİR SATIR SİLİNİRSE doğrulama BAŞARISIZ olur — boşluk tespiti pozitifi; export imzası doğrulanır; budama export edilmemiş satırı SİLMEZ — invaryant testi; append-only korunur; CROSS-TENANT) && pnpm --filter @nexa/api test:unit && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "83.3"
             ],
             "parentId": "83",
-            "updatedAt": "2026-08-11T21:06:36.612Z"
+            "updatedAt": "2026-08-15T05:43:45.898Z"
           },
           {
             "id": 5,
@@ -3994,7 +3994,7 @@
             "updatedAt": "2026-08-11T21:06:36.612Z"
           }
         ],
-        "updatedAt": "2026-08-15T05:41:48.846Z"
+        "updatedAt": "2026-08-15T05:43:45.898Z"
       },
       {
         "id": "84",
@@ -5946,7 +5946,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T05:41:48.847Z",
+      "lastModified": "2026-08-15T05:43:45.899Z",
       "taskCount": 124,
       "completedCount": 120,
       "tags": [

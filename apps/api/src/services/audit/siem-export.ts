@@ -40,13 +40,13 @@ export interface SiemExportStatus extends SiemExportSettings {
   /** Exportable entries not yet delivered — the backlog. */
   pending_count: number;
   /**
-   * Whether the delivered stream has a hole in it.
+   * Whether this workspace's trail has a hole in it (NFR-C6 · C6-c).
    *
-   * `null` — "not answerable yet" — until C6-c chains the entries and gives
-   * this a way to be computed. Deliberately not `false`: an unchained log
-   * cannot demonstrate its own completeness, and reporting "no gaps detected"
-   * from a system that cannot detect gaps is the exact false assurance an audit
-   * control exists to prevent.
+   * Still `null` for a workspace that has never written a chained entry — "not
+   * answerable" rather than "no", because a log with no chain cannot
+   * demonstrate its own completeness and reporting "no gaps detected" from a
+   * system that cannot detect gaps is the exact false assurance an audit
+   * control exists to prevent. Once the chain has begun this is a real answer.
    */
   chain_gap_detected: boolean | null;
 }
@@ -153,6 +153,77 @@ export async function readSiemExportStatus(
     last_exported_at: row?.lastExportedAt?.toISOString() ?? null,
     exported_count: Number(row?.exportedCount ?? 0n),
     pending_count: pending,
-    chain_gap_detected: null,
+    chain_gap_detected: await detectChainGap(tx),
   };
+}
+
+interface ChainHeadRow {
+  seq: bigint;
+  pruned_through_seq: bigint | null;
+  genesis_at: Date;
+}
+
+interface ChainShapeRow {
+  chained: bigint;
+  lo: bigint | null;
+  hi: bigint | null;
+  orphaned: bigint;
+}
+
+/**
+ * Is anything missing from this workspace's chain?
+ *
+ * Structural, not cryptographic, and that is the right trade for a status
+ * screen: two aggregate queries over an index answer it, where recomputing an
+ * HMAC per entry would put the workspace's whole trail through a hash on every
+ * poll of a settings page. What the structure can prove is exactly the question
+ * this flag asks — *is anything missing* — because positions are handed out
+ * gaplessly, so an absent number is an absent entry and nothing else can
+ * produce one. Whether a surviving entry has been *altered* is the deeper
+ * question, and it is answered where the evidence is actually used:
+ * `verifyAuditChain` recomputes every hash on the way out of the export.
+ *
+ * Four ways the trail can be short, and all four are checked, because each one
+ * is a different place to cut:
+ *
+ *   - **from the middle** — a hole between two surviving positions;
+ *   - **from the front** — the retained trail starts later than retention says
+ *     it pruned to, which is the cut that leaves a perfectly contiguous run
+ *     behind and is invisible without the watermark;
+ *   - **from the end** — the newest entries removed. The head knows the last
+ *     position it issued, and an issued position is only visible after its
+ *     entry committed, so a head running ahead of the table means rows went;
+ *   - **around it** — an entry written after genesis carrying no chain at all,
+ *     which would otherwise be a way to add to the log without joining it.
+ */
+export async function detectChainGap(tx: TenantClient): Promise<boolean | null> {
+  const heads = await tx.$queryRaw<ChainHeadRow[]>`
+    SELECT seq, pruned_through_seq, genesis_at FROM audit_chain_heads LIMIT 1`;
+  const head = heads[0];
+  // No head row, or one that has never issued a position: there is no chain to
+  // have a hole in, and saying "no gaps" about it would be the false assurance
+  // this whole control exists to prevent.
+  if (!head || head.seq <= 0n) return null;
+
+  const rows = await tx.$queryRaw<ChainShapeRow[]>`
+    SELECT count(*) FILTER (WHERE chain_seq IS NOT NULL) AS chained,
+           min(chain_seq) AS lo,
+           max(chain_seq) AS hi,
+           count(*) FILTER (WHERE chain_seq IS NULL AND created_at >= ${head.genesis_at}) AS orphaned
+      FROM audit_log`;
+  const shape = rows[0];
+  if (!shape) return null;
+
+  if (shape.orphaned > 0n) return true;
+
+  const pruned = head.pruned_through_seq ?? 0n;
+  // Nothing chained left. Legitimate only if retention accounts for every
+  // position ever issued; otherwise the trail did not expire, it disappeared.
+  if (shape.chained === 0n || shape.lo === null || shape.hi === null) {
+    return pruned !== head.seq;
+  }
+
+  if (shape.lo !== pruned + 1n) return true;
+  if (shape.hi !== head.seq) return true;
+  return shape.hi - shape.lo + 1n !== shape.chained;
 }

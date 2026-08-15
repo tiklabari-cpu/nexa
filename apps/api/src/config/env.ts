@@ -59,6 +59,18 @@ const envSchema = z.object({
   WEBHOOK_HMAC_SEED: secret(32),
   CUSTOMER_TOKEN_SECRET: secret(32),
   UPLOAD_SIGNING_KEY: secret(32),
+  /**
+   * Root of the audit chain's per-workspace HMAC keys (NFR-C6 · C6-c).
+   *
+   * The one secret in this list that must survive a database restore: it is
+   * held here precisely so that whoever holds the database does not hold it,
+   * which is what makes a hash chain evidence of tampering rather than a
+   * checksum against corruption. Rotating it does not invalidate the trail —
+   * entries already written keep verifying under the old value — but it does
+   * mean the old value has to be kept to verify them, so treat a rotation as
+   * archiving a key rather than replacing one.
+   */
+  AUDIT_CHAIN_SECRET: secret(32),
 
   ACCESS_TOKEN_TTL: z.coerce.number().int().positive().max(3600).default(3600),
   REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(2_592_000),
@@ -200,6 +212,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
       'WEBHOOK_HMAC_SEED',
       'CUSTOMER_TOKEN_SECRET',
       'UPLOAD_SIGNING_KEY',
+      'AUDIT_CHAIN_SECRET',
     ] as const) {
       if (env[key].startsWith('dev-only-')) {
         throw new Error(`${key} still holds its development placeholder value.`);

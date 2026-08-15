@@ -18,12 +18,19 @@
  *     record. Callers pass identifiers (account id, object id, changed field
  *     names), and `sanitizeAuditMetadata` strips any key that looks like a
  *     credential as a second line of defence against a careless caller.
+ *   - **Chained** (NFR-C6 · C6-c). Every entry takes the next position in its
+ *     workspace's chain and carries an HMAC over its own content and the entry
+ *     before it, so a later deletion leaves a hole in the numbering and a later
+ *     edit breaks the link. See `audit-chain.ts` for why that is an HMAC rather
+ *     than a digest, and why the key is not in the database.
  *
  * Reading and exporting the log is out of scope here (v1) — this is only the
  * writer.
  */
+import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import type { TenantClient } from '../../lib/tenant.js';
+import { chainRowHash, deriveChainKey } from './audit-chain.js';
 
 /**
  * The security-relevant actions Nexa records. Kept as a closed vocabulary so a
@@ -256,6 +263,18 @@ export type AuditActorType = 'agent' | 'bot' | 'customer' | 'system';
 export interface AuditContext {
   /** The tenant the entry belongs to. Must equal the surrounding `withTenant`. */
   licenseId: bigint;
+  /**
+   * The deployment's audit chain root (`AUDIT_CHAIN_SECRET`), from which this
+   * workspace's key is derived (NFR-C6 · C6-c).
+   *
+   * Threaded through the context rather than read from a module-level global,
+   * because this codebase has no ambient environment: a service that needs a
+   * secret is handed it. Required, not optional — an optional key would mean a
+   * caller that forgot it wrote an unchained entry, and an unchained entry is a
+   * row nothing later can vouch for. Almost every caller gets it for free from
+   * `request.auditContext()`.
+   */
+  chainSecret: string;
   /** The acting account/bot/customer id, or null when the actor is unknown. */
   actorId?: string | null;
   actorType?: AuditActorType;
@@ -331,9 +350,13 @@ export async function writeAuditEntry(
   tx: TenantClient,
   ctx: AuditContext,
   entry: AuditEntry,
+  options: { now?: Date } = {},
 ): Promise<void> {
   if (typeof ctx.licenseId !== 'bigint' || ctx.licenseId <= 0n) {
     throw new TypeError(`audit entry needs a valid tenant license id: ${String(ctx.licenseId)}`);
+  }
+  if (typeof ctx.chainSecret !== 'string' || ctx.chainSecret.length === 0) {
+    throw new TypeError('audit entry needs the chain secret: an unchained entry proves nothing');
   }
 
   const metadata = sanitizeAuditMetadata({
@@ -344,8 +367,39 @@ export async function writeAuditEntry(
     ...(ctx.requestId ? { request_id: ctx.requestId } : {}),
   });
 
+  // The id and the timestamp are assigned here rather than by the database,
+  // because the hash has to commit to both and there is no second chance to add
+  // them: `audit_log` has no UPDATE grant, so an entry cannot be inserted and
+  // then stamped. Excluding them instead would leave the two fields an attacker
+  // most wants to move — which entry this is, and when it happened —outside the
+  // evidence.
+  //
+  // It also tightens C6-b's horizon rather than loosening it. `CURRENT_TIMESTAMP`
+  // is the *start* of the writing transaction, so an entry could carry a stamp a
+  // whole transaction-lifetime older than the moment it became visible; this is
+  // the moment of the write itself, so the window an in-flight transaction can
+  // hide in shrinks to the time between here and commit.
+  const now = options.now ?? new Date();
+  const id = randomUUID();
+
+  const slot = await reserveChainSlot(tx, ctx.licenseId, now);
+  const hash = chainRowHash(deriveChainKey(ctx.chainSecret, ctx.licenseId), {
+    id,
+    licenseId: ctx.licenseId,
+    chainSeq: slot.seq,
+    action: entry.action,
+    actorId: ctx.actorId ?? null,
+    actorType: ctx.actorType ?? 'agent',
+    target: entry.target ?? null,
+    metadata,
+    ip: ctx.ip ?? null,
+    createdAt: now,
+    prevHash: slot.prevHash,
+  });
+
   await tx.auditLogEntry.create({
     data: {
+      id,
       licenseId: ctx.licenseId,
       actorId: ctx.actorId ?? null,
       actorType: ctx.actorType ?? 'agent',
@@ -355,6 +409,78 @@ export async function writeAuditEntry(
       // structural gap between `unknown` values and Prisma's `InputJsonValue`.
       metadata: metadata as Prisma.InputJsonObject,
       ip: ctx.ip ?? null,
+      createdAt: now,
+      chainSeq: slot.seq,
+      prevHash: slot.prevHash,
+      hash,
     },
   });
+
+  // Publish the new head so the next writer links onto this entry. Last, so a
+  // failure anywhere above leaves the head exactly where it was — although in
+  // practice the caller's transaction takes that decision: every statement here
+  // is inside it, so a rollback un-reserves the position too and the chain never
+  // acquires a hole from a request that failed.
+  await tx.$executeRaw`
+    UPDATE audit_chain_heads
+       SET hash = ${hash}, updated_at = now()
+     WHERE license_id = ${ctx.licenseId}`;
+}
+
+interface ChainSlot {
+  seq: bigint;
+  prevHash: string | null;
+}
+
+/**
+ * Take the next position in this workspace's chain.
+ *
+ * The `UPDATE … RETURNING` is doing two jobs at once. It hands back the new
+ * sequence number *and* the hash still sitting on the head — which is the
+ * previous entry's, because this statement has not written the new one yet — and
+ * it takes a row lock that is held until the caller's transaction commits. That
+ * lock is the whole concurrency story: two requests writing audit entries for
+ * the same workspace are serialised here, so they cannot both build on the same
+ * predecessor and fork the chain into two branches that each look intact.
+ *
+ * A licence writing its first entry has no head row, so the update matches
+ * nothing and one is seeded. `ON CONFLICT DO NOTHING` rather than a check-then-
+ * insert: two first writes can race, and the loser needs to fall through to the
+ * update rather than fail.
+ */
+async function reserveChainSlot(
+  tx: TenantClient,
+  licenseId: bigint,
+  now: Date,
+): Promise<ChainSlot> {
+  const advanced = await advanceChainHead(tx, licenseId);
+  if (advanced) return advanced;
+
+  await tx.$executeRaw`
+    INSERT INTO audit_chain_heads (license_id, seq, hash, genesis_at, created_at, updated_at)
+    VALUES (${licenseId}, 0, NULL, ${now}, now(), now())
+    ON CONFLICT (license_id) DO NOTHING`;
+
+  const seeded = await advanceChainHead(tx, licenseId);
+  if (seeded) return seeded;
+
+  // Unreachable through RLS-correct callers: the insert above either created
+  // the row or found it. Reaching here means the row exists but this
+  // transaction cannot see it, which is a tenant-context mismatch — the same
+  // class of error the RLS `WITH CHECK` raises on the insert below, and it must
+  // not be answered by writing an unchained entry.
+  throw new Error(
+    `audit chain head for licence ${licenseId} is unreachable from this tenant context`,
+  );
+}
+
+async function advanceChainHead(tx: TenantClient, licenseId: bigint): Promise<ChainSlot | null> {
+  const rows = await tx.$queryRaw<Array<{ seq: bigint; hash: string | null }>>`
+    UPDATE audit_chain_heads
+       SET seq = seq + 1, updated_at = now()
+     WHERE license_id = ${licenseId}
+    RETURNING seq, hash`;
+
+  const row = rows[0];
+  return row ? { seq: row.seq, prevHash: row.hash } : null;
 }

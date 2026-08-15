@@ -33,6 +33,12 @@ export interface OauthConfig {
   accessTokenTtl: number;
   refreshTokenTtl: number;
   authorizationCodeTtl: number;
+  /**
+   * `AUDIT_CHAIN_SECRET` (NFR-C6 · C6-c). This service writes one audit entry
+   * of its own — the token-exchange failure below — outside any request, so it
+   * cannot take the chain key off `request.auditContext()` like a route does.
+   */
+  auditChainSecret: string;
 }
 
 export interface OauthClientRecord {
@@ -479,7 +485,12 @@ export class OauthService {
       await withTenant(this.db, { licenseId, organizationId }, (tx) =>
         writeAuditEntry(
           tx,
-          { licenseId, actorId: null, actorType: 'system' },
+          {
+            licenseId,
+            chainSecret: this.config.auditChainSecret,
+            actorId: null,
+            actorType: 'system',
+          },
           {
             action: 'auth.token_exchange_failed',
             target: `client:${clientId}`,

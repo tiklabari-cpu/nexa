@@ -24,7 +24,13 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { RetentionPolicy } from '../../src/services/retention/policy.js';
 import { RetentionRunner } from '../../src/services/retention/retention.js';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  testEnv,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -227,7 +233,11 @@ describe('HIPAA scope constraints (C4-e)', () => {
     }
 
     const sweep = (dryRun: boolean) =>
-      new RetentionRunner(appRole, { policy: FOREVER, mailDir }).run({ dryRun });
+      new RetentionRunner(appRole, {
+        policy: FOREVER,
+        mailDir,
+        auditChainSecret: testEnv().AUDIT_CHAIN_SECRET,
+      }).run({ dryRun });
 
     it('deletes a covered workspace’s old conversation and keeps an uncovered one’s', async () => {
       // The pair. Same region, same plan, same 800-day-old closed conversation,
@@ -417,12 +427,10 @@ describe('HIPAA scope constraints (C4-e)', () => {
       );
 
       expect(response.statusCode).toBe(403);
-      expect(
-        await owner.knowledgeSource.count({ where: { licenseId: covered.licenseId } }),
-      ).toBe(0);
-      expect(await owner.knowledgeChunk.count({ where: { licenseId: covered.licenseId } })).toBe(
+      expect(await owner.knowledgeSource.count({ where: { licenseId: covered.licenseId } })).toBe(
         0,
       );
+      expect(await owner.knowledgeChunk.count({ where: { licenseId: covered.licenseId } })).toBe(0);
     });
 
     it('writes the refusal into the covered workspace’s log and nobody else’s', async () => {

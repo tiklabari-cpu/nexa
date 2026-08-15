@@ -30,6 +30,12 @@
  */
 import type { Prisma } from '@prisma/client';
 import type { TenantClient } from '../../lib/tenant.js';
+import {
+  signExportPage,
+  verifyAuditChain,
+  type ChainVerification,
+  type VerifiableRow,
+} from './audit-chain.js';
 
 /** Rows in one response when the caller does not say. */
 const DEFAULT_LIMIT = 1_000;
@@ -75,6 +81,32 @@ export interface AuditExportRecord {
   metadata: unknown;
   ip: string | null;
   created_at: string;
+  /**
+   * The integrity chain (NFR-C6 · C6-c), carried inline on every record.
+   *
+   * **This is the export format decision** the slice was told to lock, and the
+   * alternatives were a trailing signature line or a sidecar of hashes. Inline
+   * wins because it is the only one that keeps C6-b's rule — *every line is a
+   * record* — intact: a consumer can still split on `\n`, parse each half
+   * independently, and append one page to the last without a merge step, and
+   * every one of those operations now carries the evidence with it. A record
+   * that gets copied out of the file into a ticket takes its position and its
+   * hash along.
+   *
+   * The *signature* over the page is the opposite decision — detached, in a
+   * header or a `.sig` sidecar — for the same reason: a signature is about the
+   * whole delivery, not about any one line, and putting it in the body would
+   * mean one line was not a record.
+   *
+   * `chain_seq` is a JSON number rather than the string `license_id` uses,
+   * because arithmetic on it is the field's entire purpose (`n + 1` is what
+   * continuity means) and a per-workspace entry counter cannot approach the
+   * 2^53 where that would stop being safe. Null on entries written before the
+   * chain existed, which is a fact about them rather than a hole in it.
+   */
+  chain_seq: number | null;
+  prev_hash: string | null;
+  hash: string | null;
 }
 
 export interface AuditExportPage {
@@ -90,6 +122,23 @@ export interface AuditExportPage {
    * consumer polls again immediately rather than on its next tick.
    */
   hasMore: boolean;
+  /**
+   * Whether the records in *this page* form an intact chain (NFR-C6 · C6-c).
+   *
+   * Checked here, on the way out, rather than left to whoever receives the
+   * file: an export that ships a tampered page and says nothing has laundered
+   * the damage. What it can and cannot see is worth being exact about — the
+   * links *between* these records and each record's own hash are verified, the
+   * join to the previous page is not, because the predecessor's hash is not in
+   * this page. Whole-trail continuity, including the anchor retention leaves
+   * behind, is `verifyAuditChain` over the full run.
+   *
+   * A failure marks the page; it does not withhold it. PLAN's open question
+   * resolved that way deliberately: refusing to export a damaged trail converts
+   * detected tampering into a silent stop of the feed, which is what the
+   * tampering was for.
+   */
+  chain: ChainVerification;
 }
 
 export interface AuditExportOptions {
@@ -101,6 +150,8 @@ export interface AuditExportOptions {
   horizonMs: number;
   /** Injected so a test can pin the horizon; defaults to the wall clock. */
   now?: Date;
+  /** This workspace's chain key (`deriveChainKey`), for the verification above. */
+  chainKey: Buffer;
 }
 
 /**
@@ -164,6 +215,58 @@ export async function readAuditExportPage(
     records: page.map(toRecord),
     cursor: last ? { createdAt: last.createdAt.toISOString(), id: last.id } : after,
     hasMore,
+    // No `genesisAt`/`prunedThroughSeq`: both are claims about the whole trail,
+    // and a page that legitimately starts in the middle of one would fail them.
+    chain: verifyAuditChain(page as VerifiableRow[], { key: options.chainKey }),
+  };
+}
+
+/** An export page as it goes over the wire: the bytes, and the seal on them. */
+export interface SealedExportPage {
+  body: string;
+  /**
+   * Detached HMAC over the exact bytes above, the count, and the range of chain
+   * positions they claim to cover. Detached because the body's rule is that
+   * every line is a record; travels in a response header for the pull endpoint
+   * and as a `.sig` sidecar for the file sink (C6-d).
+   */
+  signature: string;
+  /** The range the signature commits to, so a consumer can file the pages. */
+  firstSeq: bigint | null;
+  lastSeq: bigint | null;
+}
+
+/**
+ * Serialise a page and sign it.
+ *
+ * One function so the pull endpoint and the scheduled sink cannot drift into
+ * signing subtly different things — a signature over bytes that are not quite
+ * the bytes delivered verifies nothing, and the failure would only ever show up
+ * on the auditor's side.
+ */
+export function sealExportPage(
+  key: Buffer,
+  licenseId: bigint,
+  records: readonly AuditExportRecord[],
+): SealedExportPage {
+  const body = toNdjson(records);
+  const seqs = records
+    .map((record) => record.chain_seq)
+    .filter((seq): seq is number => seq !== null);
+  const firstSeq = seqs.length > 0 ? BigInt(seqs[0] as number) : null;
+  const lastSeq = seqs.length > 0 ? BigInt(seqs[seqs.length - 1] as number) : null;
+
+  return {
+    body,
+    signature: signExportPage(key, {
+      licenseId,
+      count: records.length,
+      firstSeq,
+      lastSeq,
+      body,
+    }),
+    firstSeq,
+    lastSeq,
   };
 }
 
@@ -207,6 +310,9 @@ type AuditRow = {
   metadata: unknown;
   ip: string | null;
   createdAt: Date;
+  chainSeq: bigint | null;
+  prevHash: string | null;
+  hash: string | null;
 };
 
 /**
@@ -234,6 +340,9 @@ export function toRecord(row: AuditRow): AuditExportRecord {
     metadata: row.metadata,
     ip: row.ip,
     created_at: row.createdAt.toISOString(),
+    chain_seq: row.chainSeq === null ? null : Number(row.chainSeq),
+    prev_hash: row.prevHash,
+    hash: row.hash,
   };
 }
 

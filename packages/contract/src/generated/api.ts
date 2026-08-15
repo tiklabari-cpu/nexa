@@ -4980,6 +4980,34 @@ export interface paths {
      *     **No filters.** Unlike the list endpoint there is no `action`, `actor_id`
      *     or date range. A filtered export is a selective record of what happened,
      *     and the point of the copy in the SIEM is that it is complete.
+     *
+     *     **Integrity: inline chain, detached signature.** Every record carries
+     *     `chain_seq`, `prev_hash` and `hash` — its position in the workspace's
+     *     tamper-evident chain and an HMAC over its own content and the entry before
+     *     it. Inline, so a line lifted out of the file keeps its evidence, and so
+     *     the rule that *every line is a record* survives: you can still split on
+     *     `\n`, parse each half independently, and concatenate two pages into one
+     *     file. The signature over the page is therefore detached, in
+     *     `x-nexa-export-signature`, because it is a statement about the whole
+     *     delivery rather than any one line.
+     *
+     *     A missing `chain_seq` between two records means an entry was deleted —
+     *     positions are handed out gaplessly, and nothing else can produce a hole.
+     *     `chain_seq` is null only on entries written before the chain existed;
+     *     those cannot be back-computed, and inventing hashes for them would forge
+     *     the assurance the chain is there to give.
+     *
+     *     **Verification needs the key, and the key is not here.** Hashes and
+     *     signatures are HMACs under a key derived per workspace from a secret the
+     *     deployment holds and the database does not. That is the point: whoever
+     *     holds a copy of the log cannot recompute a chain that hides a deletion
+     *     from it. Ask the deployment operator to verify a file, or to hand you the
+     *     workspace's derived key if you are the one who should be checking.
+     *
+     *     **A damaged page is delivered, not withheld.** `x-nexa-export-chain-ok` is
+     *     `false` when the records in this response do not verify. Refusing to
+     *     export a damaged trail would turn detected tampering into a silent stop of
+     *     the feed, which is what the tampering was for.
      */
     get: operations['exportAuditLog'];
     put?: never;
@@ -6694,7 +6722,7 @@ export interface components {
       exported_count: number;
       /** @description Exportable entries not yet delivered — the backlog. Counted only up to the export horizon, so zero means genuinely caught up rather than "nothing has settled yet". */
       pending_count: number;
-      /** @description Whether the delivered stream has a hole in it. `null` means the question is not answerable yet — the integrity chain that would answer it arrives with C6-c. Deliberately not `false`: an unchained log cannot demonstrate its own completeness, and reporting "no gaps detected" from a system that cannot detect gaps is the false assurance the control exists to prevent. */
+      /** @description Whether anything is missing from the workspace's audit trail. Answered from the integrity chain: positions are handed out gaplessly, so an absent one is an absent entry. All four cuts are checked — a hole in the middle, a trail starting later than retention pruned to, entries removed from the newest end, and an entry written after the chain began that carries no chain at all. `null` while the workspace has never written a chained entry, and deliberately not `false` there: a log with no chain cannot demonstrate its own completeness, and reporting "no gaps detected" from a system that cannot detect gaps is the false assurance the control exists to prevent. */
       chain_gap_detected: boolean | null;
     };
     /**
@@ -16685,12 +16713,16 @@ export interface operations {
           'x-nexa-export-count'?: number;
           /** @description `true` when more entries are already exportable — poll again rather than waiting. */
           'x-nexa-export-has-more'?: 'true' | 'false';
+          /** @description Detached HMAC over the exact body bytes, the record count and the range of chain positions they cover. Store it beside the file; it is what makes the copy evidence rather than a claim. Verifiable only with the workspace's derived key, which this response deliberately does not carry. */
+          'x-nexa-export-signature'?: string;
+          /** @description `false` when the records in this response do not form an intact chain. The page is still delivered — see the description above. Note that this checks the links *within* the page; the join to the previous page is the consumer's to make, by comparing the first record's `prev_hash` with the last `hash` it already holds. */
+          'x-nexa-export-chain-ok'?: 'true' | 'false';
           [name: string]: unknown;
         };
         content: {
           /**
-           * @example {"id":"6f1c…","license_id":"1","action":"auth.login","actor_id":"a1…","actor_type":"agent","target":null,"metadata":{},"ip":null,"created_at":"2026-08-15T09:00:00.000Z"}
-           *     {"id":"7a2d…","license_id":"1","action":"member.role_changed","actor_id":"a1…","actor_type":"agent","target":"account:b2…","metadata":{"from":"agent","to":"admin"},"ip":null,"created_at":"2026-08-15T09:01:00.000Z"}
+           * @example {"id":"6f1c…","license_id":"1","action":"auth.login","actor_id":"a1…","actor_type":"agent","target":null,"metadata":{},"ip":null,"created_at":"2026-08-15T09:00:00.000Z","chain_seq":41,"prev_hash":"kQ7x…","hash":"9Zb2…"}
+           *     {"id":"7a2d…","license_id":"1","action":"member.role_changed","actor_id":"a1…","actor_type":"agent","target":"account:b2…","metadata":{"from":"agent","to":"admin"},"ip":null,"created_at":"2026-08-15T09:01:00.000Z","chain_seq":42,"prev_hash":"9Zb2…","hash":"Lm4v…"}
            */
           'application/x-ndjson': string;
         };

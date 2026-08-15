@@ -578,9 +578,12 @@ describe('SIEM export', () => {
         exported_count: 0,
         // Nothing delivered, so the whole trail is waiting.
         pending_count: 3,
-        // Not `false`: an unchained log cannot demonstrate its own
-        // completeness, and "no gaps detected" from a system that cannot
-        // detect gaps is exactly the false assurance the control prevents.
+        // Seeded entries are written straight to the table, so this workspace
+        // has no chain yet. Not `false`: a log with no chain cannot
+        // demonstrate its own completeness, and "no gaps detected" from a
+        // system that cannot detect gaps is exactly the false assurance the
+        // control prevents. Chained workspaces get a real answer — see
+        // `audit-chain.test.ts`.
         chain_gap_detected: null,
       });
     });

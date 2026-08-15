@@ -101,6 +101,7 @@ model License {
   apiPackagePurchases    ApiPackagePurchase[]
   paymentMethod          PaymentMethod?
   auditEntries           AuditLogEntry[]
+  auditChainHead         AuditChainHead?
   siemExportCursors      SiemExportCursor[]
   ipAllowlistEntries     IpAllowlistEntry[]
   ssoConnections         SsoConnection[]
@@ -1676,8 +1677,25 @@ model AuditLogEntry {
   ip        String?
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  /// Tamper-evident chain (NFR-C6 · C6-c). `chainSeq` is this workspace's own
+  /// row counter — gapless by construction, so a missing number *is* a deleted
+  /// entry — and `hash` is an HMAC over the row's content and `prevHash`, so a
+  /// changed entry no longer matches the link that points at it. Nullable only
+  /// because entries written before the chain existed cannot be back-computed:
+  /// the key lives outside the database and a migration has no access to it.
+  /// Claiming those rows are chained would be the false assurance this whole
+  /// control exists to prevent, so they are honestly marked as not chained; the
+  /// verifier reports any *post-genesis* row that is unchained as a finding.
+  chainSeq  BigInt?  @map("chain_seq")
+  prevHash  String?  @map("prev_hash")
+  hash      String?
+
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
+  /// No two entries may hold the same position. Postgres treats NULLs as
+  /// distinct, so the pre-chain rows above are all still permitted — the
+  /// constraint binds exactly the rows that make a claim.
+  @@unique([licenseId, chainSeq])
   @@index([licenseId, createdAt(sort: Desc)])
   @@index([licenseId, action, createdAt(sort: Desc)])
   /// The export reads the same table the *other* way round — oldest first, from
@@ -1686,6 +1704,47 @@ model AuditLogEntry {
   /// alternative is a sort of the workspace's entire trail on every poll.
   @@index([licenseId, createdAt, id])
   @@map("audit_log")
+}
+
+/// The head of a workspace's audit chain (NFR-C6 · C6-c).
+///
+/// One row per licence, holding the position and hash the *next* entry will
+/// build on. It exists rather than being read back off `audit_log` for two
+/// reasons, and both are about what happens after retention runs.
+///
+/// First, the anchor has to outlive the rows. Pruning removes the oldest
+/// entries; if the next sequence number were `max(chain_seq) + 1` off the
+/// table, a workspace whose trail was pruned to nothing would silently start
+/// again at 1 and two different entries would carry the same position — so two
+/// exports taken a year apart could disagree about which row seq 7 was.
+///
+/// Second, `prunedThroughSeq` is what tells a legitimate absence apart from a
+/// deletion. Without it the verifier can only check that what remains is
+/// contiguous, which means removing entries from the *front* of the retained
+/// trail leaves no trace. With it, the first surviving row is expected at
+/// `prunedThroughSeq + 1`, and anything else is a finding.
+model AuditChainHead {
+  licenseId BigInt @id @map("license_id")
+  /// The position of the last entry chained for this licence. Advanced under a
+  /// row lock, which is what serialises concurrent writers: two transactions
+  /// reading the same head would otherwise fork the chain in two.
+  seq       BigInt @default(0)
+  /// That entry's hash — the `prevHash` of whatever comes next. Null only
+  /// between the row being created and the first entry landing.
+  hash      String?
+  /// When this licence's chain began. A row written after this instant and left
+  /// unchained is a finding, which is what stops "unchained" being usable as a
+  /// way to hide an entry in plain sight.
+  genesisAt DateTime @default(now()) @map("genesis_at") @db.Timestamptz(6)
+  /// The highest position retention has legitimately removed. Written by
+  /// `audit_prune_expired`, the one function permitted to delete from the log.
+  prunedThroughSeq BigInt? @map("pruned_through_seq")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@map("audit_chain_heads")
 }
 
 /// Where a workspace's audit trail is shipped, and how far it has got

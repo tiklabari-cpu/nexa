@@ -63,6 +63,46 @@ export default tseslint.config(
     },
   },
 
+  // The mobile session, and the only store it is allowed to live in (13.7-b).
+  //
+  // A rule rather than a test, because the failure mode is an addition: someone
+  // reaches for AsyncStorage "just as a simulator fallback" and the refresh
+  // token starts living in a plain file that survives into an unencrypted
+  // backup. Nothing at runtime notices — the app keeps working, which is exactly
+  // why it needs to be refused at build time.
+  {
+    files: ['apps/mobile/src/auth/**/*.ts', 'apps/mobile/src/api/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@react-native-async-storage/async-storage',
+              message: 'Session material goes to expo-secure-store only — AsyncStorage is plain.',
+            },
+            {
+              name: 'expo-file-system',
+              message: 'Session material goes to expo-secure-store only — files are plain.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'localStorage',
+          message: 'Not a native store, and not encrypted — use SessionStore.',
+        },
+        {
+          name: 'sessionStorage',
+          message: 'Not a native store, and not encrypted — use SessionStore.',
+        },
+      ],
+    },
+  },
+
   // Tests may reach for shortcuts that would be sloppy in production code.
   {
     files: ['**/*.test.ts', '**/*.test.tsx', '**/test/**/*.ts', '**/tests/**/*.ts'],

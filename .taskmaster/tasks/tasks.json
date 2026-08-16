@@ -4363,12 +4363,12 @@
             "description": "Mobil oturum/token modeli (BÖLÜNMEZ) — güvenli saklama + PKCE native yönlendirme + yenileme/iptal",
             "details": "13.7-b — Mobil oturum/token modeli (BÖLÜNMEZ) — güvenli saklama + PKCE native yönlendirme + yenileme/iptal  [OPUS-MAX]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: oturumun NEREDE saklandığı, NASIL yenilendiği ve KAYBOLDUĞUNDA ne olduğu tek bir kimlik akıl yürütmesidir. Saklama yeri (secure enclave / keystore) ile yenileme politikası ayrı pencerelere bölünürse \"token güvenli yerde ama süresiz\" ya da \"yenileniyor ama düz metinde\" gibi yarım bir sonuç kalır; ikisi de kimlik sınırının ihlalidir.\n\nKAPSAM: OAuth 2.1 + PKCE akışının native yönlendirmeye uyarlanması (SİSTEM TARAYICISI — gömülü webview DEĞİL, §C-A29: gömülü webview kimlik bilgisi toplayabilir), token'ın cihazda güvenli saklanması (expo-secure-store), yenileme, iptal, oturum kaybında davranış.\n\nSSO ETKİLEŞİMİ: `S11-h` ile SSO zorunlu kılınmış bir lisansta mobil giriş de SSO'ya düşer — sistem tarayıcısı bunu doğal olarak destekler. Bu, V3-1'in V3-5'ten önce gelmesinin gerekçelerinden biridir.\n\n**MOBİL HTTP İSTEMCİSİ DE BU ALT-GÖREVE AİTTİR (denetim bulgusu — sahipsizdi):** `apps/mobile/src/api/client.ts` — `Authorization` başlığını iliştiren, `baseURL`'i çözen, **401'de yenilemeyi tetikleyen**, yenileme başarısızsa oturumu düşüren ve ADR-06 hata zarfını (`{error:{type,message,request_id}}`) çözen tek istemci. Token iliştiren + 401'de yenileyen kod oturum güvenliğinin parçasıdır; ilk kırılımda ilk ekran alt-görevine (`13.7-g`, SONNET) düşüyordu.\n\n**CİHAZ TOKEN'I YAŞAM DÖNGÜSÜ DE BURAYA TAŞINDI (denetim bulgusu):** kayıt/yenileme/**iptal** tetikleyicileri (açılış, çıkış, hesap değiştirme) oturum çekirdeğinin parçasıdır — `13.7-j` yalnız tercih ekranını gösterir. Zorunlu kural: **iptal çağrısı başarısız olsa bile yerel token SİLİNİR ve bir daha kullanılmaz; yeni oturum YENİ kayıt yapar. Hesap değiştirmede önceki hesabın token'ı iptal edilmeden yeni kayıt YAPILMAZ.** Aksi hâlde aynı fiziksel cihaz A kiracısının push'unu alırken B kiracısının kullanıcısının elinde olur ve `13.7-d`'nin sunucu tarafı savunması devreye giremez (sunucu açısından token hâlâ geçerlidir).\n\nDOSYALAR: `apps/mobile/src/auth/` · `apps/mobile/src/api/client.ts` · `apps/api/src/services/auth/oauth-service.ts:147,193` (redirect_uri kaydı — yeni istemci tipi) · `apps/api/src/services/auth/token-service.ts`\n\nREFERANS DESEN: `oauth-service.ts:147` `createAuthorizationCode` + `:193` `exchangeAuthorizationCode` — mevcut PKCE akışı DEĞİŞTİRİLMEZ, mobil ona bağlanır. İkinci bir token verme yolu AÇILMAZ.\n\nKAPSAM DIŞI: push (13.7-c/-d), ekranlar.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/mobile test (PKCE verifier/challenge üretimi; token güvenli depoya yazılır, düz depoya YAZILMAZ; yenileme akışı; iptal sonrası istek reddedilir; oturum kaybında giriş ekranına düşer; api/client 401'de yenilemeyi tetikler ve yenileme başarısızsa oturumu düşürür; İPTAL ÇAĞRISI BAŞARISIZ OLSA BİLE yerel cihaz token'ı silinir (negatif); hesap değiştirmede önceki token iptal edilmeden yeni kayıt yapılmaz (negatif)) && pnpm --filter @nexa/api test:integration (mobil istemci redirect_uri kaydı; PKCE zorunlu — verifier'sız değişim REDDEDİLİR) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "90.1"
             ],
             "parentId": "90",
-            "updatedAt": "2026-08-11T21:09:39.258Z"
+            "updatedAt": "2026-08-16T12:56:29.120Z"
           },
           {
             "id": 3,
@@ -4493,7 +4493,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-16T12:54:12.411Z"
+        "updatedAt": "2026-08-16T12:56:29.120Z"
       },
       {
         "id": "91",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T12:54:12.412Z",
+      "lastModified": "2026-08-16T12:56:29.120Z",
       "taskCount": 124,
       "completedCount": 123,
       "tags": [

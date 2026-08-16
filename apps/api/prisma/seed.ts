@@ -13,7 +13,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { embed, toVectorLiteral } from '@nexa/ai-mock';
-import { buildEventId, generateShortId } from '@nexa/types';
+import { buildEventId, generateShortId, MOBILE_REDIRECT_URI } from '@nexa/types';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword, hashToken } from '../src/lib/crypto.js';
 import { ADMIN_SCOPES } from '../src/services/auth/principal.js';
@@ -804,7 +804,10 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       // Public client: OAuth 2.1 relies on PKCE rather than a secret for
       // anything running in a browser, where no secret stays secret.
       clientType: 'public',
-      redirectUris: ['http://localhost:5173/auth/callback'],
+      // Both callbacks the first-party clients carry: the console's and the
+      // phone's (`auth_signup` registers the same pair). Sourced from
+      // `@nexa/types` so the seed and the mobile app cannot drift apart.
+      redirectUris: ['http://localhost:5173/auth/callback', MOBILE_REDIRECT_URI],
       scopes: [],
     },
   });
@@ -1248,7 +1251,10 @@ async function seedMisplacedUsWorkspace(passwordHash: string): Promise<void> {
       organizationId: organization.id,
       displayName: 'Nexa Agent App',
       clientType: 'public',
-      redirectUris: ['http://localhost:5173/auth/callback'],
+      // Both callbacks the first-party clients carry: the console's and the
+      // phone's (`auth_signup` registers the same pair). Sourced from
+      // `@nexa/types` so the seed and the mobile app cannot drift apart.
+      redirectUris: ['http://localhost:5173/auth/callback', MOBILE_REDIRECT_URI],
       scopes: [],
     },
   });

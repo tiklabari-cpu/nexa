@@ -6,6 +6,7 @@
  * makes a total isolation failure look like a passing test suite.
  */
 import { PrismaClient } from '@prisma/client';
+import { MOBILE_REDIRECT_URI } from '@nexa/types';
 import { hashPassword, hashToken } from '../../src/lib/crypto.js';
 import { parseEnv, type Env } from '../../src/config/env.js';
 import type { TokenKind } from '../../src/services/auth/token-service.js';
@@ -153,7 +154,11 @@ async function seedTenant(db: PrismaClient, slug: string, index: number): Promis
       organizationId: organization.id,
       displayName: `Nexa Agent App (${slug})`,
       clientType: 'public',
-      redirectUris: [redirectUri, 'http://localhost:5173/callback'],
+      // The three shapes a first-party client really carries: the hosted
+      // console, a developer's Vite server, and the phone's private-use scheme
+      // (13.7-b). `auth_signup` registers the last one for every new workspace,
+      // so a fixture without it would test a client no deployment has.
+      redirectUris: [redirectUri, 'http://localhost:5173/callback', MOBILE_REDIRECT_URI],
       scopes: [],
     },
   });

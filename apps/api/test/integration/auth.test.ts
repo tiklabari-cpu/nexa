@@ -8,6 +8,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { MOBILE_REDIRECT_URI } from '@nexa/types';
 import { deriveCodeChallenge, generateToken, hashToken } from '../../src/lib/crypto.js';
 import {
   grantToken,
@@ -986,6 +987,127 @@ describe('auth', () => {
       await new Promise((resolve) => setTimeout(resolve, 150)); // touch is async
       const stored = await owner.apiToken.findFirst({ where: { tokenHash: hashToken(token) } });
       expect(stored?.lastUsedAt).not.toBeNull();
+    });
+  });
+
+  // =========================================================================
+  // Native sign-in (FR-MOD-13.7 · 13.7-b)
+  // =========================================================================
+
+  describe('native redirect', () => {
+    /** The private-use scheme leg, end to end, with nothing else changed. */
+    async function signInFromDevice(tenant = fx.a) {
+      const { verifier, challenge } = pkce();
+      const authorized = await post('/auth/authorize', {
+        client_id: tenant.clientId,
+        redirect_uri: MOBILE_REDIRECT_URI,
+        code_challenge: challenge,
+        email: tenant.ownerEmail,
+        password: TEST_PASSWORD,
+        license_id: tenant.licenseId.toString(),
+      });
+      expect(authorized.statusCode).toBe(200);
+
+      return {
+        verifier,
+        code: authorized.json().code as string,
+        exchange: (body: Record<string, unknown>) =>
+          post('/auth/token', {
+            grant_type: 'authorization_code',
+            client_id: tenant.clientId,
+            redirect_uri: MOBILE_REDIRECT_URI,
+            ...body,
+          }),
+      };
+    }
+
+    it('signs a phone in through the same code exchange as the console', async () => {
+      const { verifier, code, exchange } = await signInFromDevice();
+
+      const response = await exchange({ code, code_verifier: verifier });
+      expect(response.statusCode).toBe(200);
+
+      const grant = response.json();
+      const me = await get('/auth/me', { authorization: `Bearer ${grant.access_token}` });
+      expect(me.statusCode).toBe(200);
+      expect(me.json()).toMatchObject({
+        kind: 'agent',
+        organization_id: fx.a.organizationId,
+        license_id: fx.a.licenseId.toString(),
+      });
+    });
+
+    it('refuses the exchange without a verifier — PKCE is not optional', async () => {
+      const { code, exchange } = await signInFromDevice();
+
+      const response = await exchange({ code });
+      expect(response.statusCode).toBe(400);
+
+      // And the code is still unspent rather than quietly consumed, so a client
+      // that simply forgot the verifier is not also locked out of retrying.
+      const retry = await exchange({ code, code_verifier: pkce().verifier });
+      expect(retry.statusCode).toBe(401);
+      expect(retry.json().error.details.oauth_error).toBe('invalid_grant');
+    });
+
+    it('refuses a verifier that does not match the challenge', async () => {
+      const { code, exchange } = await signInFromDevice();
+
+      const response = await exchange({ code, code_verifier: pkce().verifier });
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.details.oauth_error).toBe('invalid_grant');
+    });
+
+    it('refuses to redeem a device code against the console redirect', async () => {
+      // The code is bound to the URI it was issued for. Without this, a code
+      // intercepted from the device callback could be spent by a web client.
+      const { verifier, code } = await signInFromDevice();
+
+      const response = await post('/auth/token', {
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: verifier,
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+      });
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.details.oauth_error).toBe('invalid_grant');
+    });
+
+    it('refuses a private-use scheme the client never registered', async () => {
+      const { challenge } = pkce();
+      const response = await post('/auth/authorize', {
+        client_id: fx.a.clientId,
+        // Another app on the same handset, claiming a scheme of its own.
+        redirect_uri: 'nexa-evil://auth/callback',
+        code_challenge: challenge,
+        email: fx.a.ownerEmail,
+        password: TEST_PASSWORD,
+        license_id: fx.a.licenseId.toString(),
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.message).toMatch(/redirect_uri/);
+    });
+
+    it('registers the native callback on a workspace created through signup', async () => {
+      // The migration widened `auth_signup`; this is the assertion that a
+      // workspace nobody hand-seeded can actually be opened from a phone.
+      const signup = await post('/auth/signup', {
+        email: 'founder@mobileco.test',
+        password: 'Sufficiently-Long-Password-1',
+        name: 'Founder',
+        organization_name: 'MobileCo',
+      });
+      expect(signup.statusCode).toBe(201);
+
+      const client = await owner.oauthClient.findFirst({
+        where: { organization: { name: 'MobileCo' } },
+        select: { redirectUris: true },
+      });
+      expect(client!.redirectUris).toContain(MOBILE_REDIRECT_URI);
+      // The console's callback is still there — this widened the allowlist, it
+      // did not swap it.
+      expect(client!.redirectUris).toContain('http://localhost:5173/auth/callback');
     });
   });
 

@@ -13,6 +13,42 @@
 
 ## Task log (newest-first)
 
+## tm 90.2 — 13.7-b · Mobil oturum/token modeli (BÖLÜNMEZ) — done — 2026-08-16 UTC
+
+- **Yapıldı:** **İkinci token verme yolu AÇILMADI** — telefon konsolun `/auth/authorize` →
+  `/auth/token` çiftini aynı zorunlu S256 PKCE'siyle kullanır; tek ekleme, işletim sisteminin
+  uygulamaya geri yönlendirdiği private-use şema (RFC 8252 §7.1 · `nexa://auth/callback`,
+  `@nexa/types` · `MOBILE_REDIRECT_URI`). **Sunucu:** `isRegisteredRedirect` artık üç aileyi
+  kabul eder (https · loopback · private-use) ve kod taşımaması gereken şemaları (`javascript:`,
+  `data:`, `file:`, `intent:`, `ws:`, `mailto:`, …) **kayıtlı olsalar bile** reddeder; migration
+  `20260816120000_mobile_native_redirect` birinci-parti istemcilere (`nexa-agent-app-%` /
+  `nexa-sandbox-app-%`) callback'i ekler ve `auth_signup`'ı genişletir. **İstemci:**
+  `apps/mobile/src/auth/{pkce,secure-store,device-token,session,browser}.ts` +
+  `src/api/client.ts` (401 → tek-uçuşlu yenileme → **bir kez** yeniden dene; yenileme
+  başarısızsa oturum düşer). Refresh token yalnız `expo-secure-store`'da
+  (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`), access token **hiç yazılmaz**. SSO sistem tarayıcısıyla
+  (§C-A29), verifier diske hiç inmez.
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `lint` 9/9 · `pnpm -w test` 11/11
+  (api **3185**, +34; mobile **85**, +57) · `pnpm -w test:integration` api **86 dosya 2329**
+  (+6) · `pnpm -w build` 8/8 · `pnpm -w test:e2e` **149/149** (8.7 dk, root `.env` source'lanarak).
+  `format:check` bu turdan ÖNCEKİ aynı 5 dosyada kırmızı — hiçbirine dokunulmadı.
+- **Varsayımlar / bilinçli sınırlar:** (1) **Cihaz token'ı transport'u enjekte edilir** — uçlar
+  `13.7-c`'nin, bu pencerede yazılan şey SIRA'dır: iptal çağrısı başarısız olsa bile yerel token
+  silinir; hesap değiştirmede önce iptal, sonra kayıt (§C-A31, ikisi de negatif testli).
+  Transport yokken üç tetikleyici de no-op. (2) **Düz depoya düşüş eslint ile kapalı**, testle
+  değil — kusur bir *ekleme*dir ve çalışırken görünmez (`no-restricted-imports` +
+  `no-restricted-globals`, `apps/mobile/src/{auth,api}`). (3) `nexa://` şeması jenerik: aynı
+  cihazdaki düşman uygulama callback'i kapabilir, ama verifier'ı yoktur — bedeli tekrarlanan bir
+  giriş, kaçırılmış bir oturum değil. (4) Ekran YOK — `13.7-e`…`-g` bu çekirdeği tüketir.
+- **Sonraki pencereye not:** (a) `openAuthSessionAsync` + `nexa://` **Expo Go'da çalışmaz**
+  (orada deep link `exp://`); dev-client veya standalone build gerekir — mobil kapı jest +
+  `expo export`, A28 gereği Playwright değil. (b) `13.7-c` `device_tokens` uçlarını yazarken
+  `DeviceTokenTransport`/`DeviceTokenProvider` arayüzlerini uygulasın, sırayı yeniden yazmasın.
+  (c) e2e root `.env` olmadan RTM webServer'ı `Invalid environment` ile düşer;
+  `set -a && . ./.env && set +a` önce. (d) e2e ~55 `kanit` PNG'sini her koşuda yeniden yazar;
+  bu turda kasıtlı görsel kanıt üretilmediği için hepsi `git checkout` ile geri alındı (13.7-a da
+  öyle yapmıştı).
+
 ## tm 90.1 — 13.7-a · apps/mobile Expo/RN bootstrap + paylaşılan kontrat tipleri — done — 2026-08-16 UTC
 
 - **Yapıldı:** `apps/mobile` (yeni workspace) — Expo SDK 57 · RN 0.86 · React 19, managed workflow.

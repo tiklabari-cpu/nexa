@@ -92,6 +92,54 @@ function oauthError(code: string, message: string): ApiError {
   return new ApiError('authentication', message, { details: { oauth_error: code } });
 }
 
+/**
+ * Schemes that must never carry an authorization code, listed rather than
+ * inferred.
+ *
+ * `javascript:` and `data:` execute, `file:`/`filesystem:`/`blob:` reach local
+ * content, and `intent:` is Android's "send this anywhere" URI — the one that
+ * turns a redirect into a hand-off to whatever app the attacker names. The
+ * transport schemes below it are here because a redirect is a thing an
+ * operating system *opens*, and none of these open anything: a registered
+ * `mailto:` would only ever be a mistake or a probe.
+ */
+const NEVER_A_REDIRECT_SCHEME = new Set([
+  // The web schemes are here so that reaching this check *is* the refusal: an
+  // `http:` or `https:` candidate that got past the branch above already failed
+  // its own rules (plain http off loopback), and must not get a second hearing
+  // as though it were a native scheme.
+  'http:',
+  'https:',
+  'javascript:',
+  'data:',
+  'vbscript:',
+  'blob:',
+  'file:',
+  'filesystem:',
+  'about:',
+  'intent:',
+  'ws:',
+  'wss:',
+  'ftp:',
+  'ftps:',
+  'mailto:',
+  'tel:',
+  'sms:',
+]);
+
+/**
+ * A private-use URI scheme in the sense of RFC 8252 §7.1 — the phone's way home.
+ *
+ * `new URL` has already lowercased the scheme and proved it parses, so the only
+ * questions left are whether it is one of the schemes that must never be a
+ * redirect target, and whether it looks like a scheme at all rather than
+ * something that merely parsed (RFC 3986 §3.1).
+ */
+function isPrivateUseScheme(protocol: string): boolean {
+  if (NEVER_A_REDIRECT_SCHEME.has(protocol)) return false;
+  return /^[a-z][a-z0-9+.-]*:$/.test(protocol);
+}
+
 export class OauthService {
   readonly #tokens: TokenService;
 
@@ -148,6 +196,19 @@ export class OauthService {
    * (lowercasing, resolving `..`, dropping default ports) is precisely how
    * "close enough" URIs get accepted, and a redirect URI is a security
    * boundary, not a convenience.
+   *
+   * Three families are admissible, and only because each is a place a Nexa
+   * client genuinely runs: `https` (the hosted console), loopback `http` (a
+   * developer's Vite server), and a private-use scheme (the phone — RFC 8252
+   * §7.1, `@nexa/types` · `MOBILE_REDIRECT_URI`). Everything else is refused
+   * *before* the registered set is consulted, so a scheme that could execute
+   * (`javascript:`), read a file (`file:`) or hand the code to another app on
+   * the device (`intent:`) stays unusable even if one somehow reached the
+   * column. The registration surface tenants can reach already refuses
+   * anything but `https` and loopback (`partner-app-service.validateRedirectUri`),
+   * so today the only custom-scheme rows are the first-party ones a migration
+   * writes; this check is what keeps that true if a second registration path is
+   * ever opened.
    */
   static isRegisteredRedirect(candidate: string, registered: readonly string[]): boolean {
     let url: URL;
@@ -158,9 +219,15 @@ export class OauthService {
     }
     if (url.hash) return false;
     if (candidate.includes('..')) return false;
-    if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
-      return false;
-    }
+    // `https://evil.test@good.test/cb` resolves to `good.test` but reads as
+    // `evil.test`; the partner registration surface refuses these for the same
+    // reason, so a candidate carrying them cannot match anything anyway.
+    if (url.username || url.password) return false;
+
+    const isLoopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    const isWeb = url.protocol === 'https:' || (url.protocol === 'http:' && isLoopback);
+    if (!isWeb && !isPrivateUseScheme(url.protocol)) return false;
+
     return registered.some((uri) => uri === candidate);
   }
 

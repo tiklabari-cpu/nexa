@@ -1,6 +1,16 @@
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import App from './App';
+import { ROOT_TABS } from './app/navigation';
+
+/**
+ * The tab bar renders every label as plain text, and — for whichever tab is
+ * focused — that same word also appears as the header title and the
+ * placeholder screen's own heading. `getByText('Inbox')` on the focused tab
+ * is therefore ambiguous; the accessibility label React Navigation puts on
+ * the tab button itself (`"Inbox, tab, 1 of 4"`) is not.
+ */
+const tabButton = (label: string) => screen.getByLabelText(new RegExp(`^${label}, tab,`));
 
 /** Stands in for the manifest Expo injects; jest-expo leaves `extra` unset. */
 const mockExtra: { value: unknown } = { value: undefined };
@@ -13,12 +23,6 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
-/**
- * A render test at bootstrap time is not about the boot screen's wording — that
- * screen is replaced in `13.7-e`. It is about proving the harness: that Babel,
- * the React Native preset and the workspace packages agree well enough for a
- * component to mount. The next window inherits a suite that already works.
- */
 describe('App', () => {
   beforeEach(() => {
     mockExtra.value = {
@@ -27,21 +31,35 @@ describe('App', () => {
     };
   });
 
-  it('mounts and shows the configured endpoints', async () => {
+  it('mounts the shell and shows Inbox — the tab the navigator opens on', async () => {
     await render(<App />);
 
-    expect(screen.getByText('Nexa')).toBeOnTheScreen();
-    expect(screen.getByText('API https://api.nexa.test/api/v1')).toBeOnTheScreen();
-    expect(screen.getByText('RTM wss://rtm.nexa.test')).toBeOnTheScreen();
+    expect(
+      screen.getByText("Sohbet listesi, transkript ve composer 13.7-f'te gelir."),
+    ).toBeOnTheScreen();
   });
 
-  it('renders values imported at runtime from @nexa/types, not copies of them', async () => {
+  it('names all four FR-MOD-13.7 surfaces on the tab bar', async () => {
     await render(<App />);
 
-    // 6 endpoints from the contract binding; the event-type count comes from
-    // `@nexa/types` and is deliberately not restated here — a hard-coded number
-    // would pass even if the import broke and returned an empty array.
-    expect(screen.getByText(/^6 contract endpoints · \d+ event types$/)).toBeOnTheScreen();
+    for (const label of ROOT_TABS) {
+      expect(tabButton(label)).toBeOnTheScreen();
+    }
+  });
+
+  it('switches screens when a tab is pressed, each showing its own placeholder', async () => {
+    await render(<App />);
+
+    await fireEvent.press(tabButton('Customers'));
+    expect(screen.getByText("Liste ve kişi detayı 13.7-g'de gelir.")).toBeOnTheScreen();
+
+    await fireEvent.press(tabButton('Reports'));
+    expect(screen.getByText("Salt-okunur KPI kartları 13.7-h'de gelir.")).toBeOnTheScreen();
+
+    await fireEvent.press(tabButton('Settings'));
+    expect(
+      screen.getByText("Bildirim tercihleri + cihaz kaydı 13.7-j'de gelir."),
+    ).toBeOnTheScreen();
   });
 
   it('says why the screen is empty instead of white-screening on a bad app.json', async () => {
@@ -50,5 +68,7 @@ describe('App', () => {
     await render(<App />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(/apiBaseUrl is not a valid URL: nope/);
+    // The broken config must not fall through to a navigator that needs it.
+    expect(screen.queryByLabelText(/^Inbox, tab,/)).not.toBeOnTheScreen();
   });
 });

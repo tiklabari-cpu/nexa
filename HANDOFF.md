@@ -13,6 +13,27 @@
 
 ## Task log (newest-first)
 
+## tm 90.5 — 13.7-e · Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı — done — 2026-08-16 UTC
+
+- **Yapıldı:** (1) `apps/mobile/src/app/` — bottom-tab navigator (Inbox/Customers/Reports/Settings),
+  her tab kendi native-stack'inde (`RootNavigator.tsx`, `stacks/*Stack.tsx`, `navigation.ts` route
+  tipleri, `navigationTheme.ts` tek noktadan header/tab-bar rengi). (2) `apps/mobile/src/theme/` —
+  `tokens.ts` elle yazıldı + `tokens.test.ts` `apps/web/src/styles/tokens.css`'i ayrıştırıp renk/
+  radius'u karşılaştırıyor (sapma testi); `theme.tsx` `ThemeProvider`/`useTheme`, varsayılan OS
+  teması (web'in sabit `dark`'ından farklı — mobilin `kanit/` gibi tek temaya sabit kanıt seti yok).
+  (3) `App.tsx` artık `RootNavigator`'ı `ThemeProvider` içinde render ediyor; `ConfigErrorScreen`
+  (eski `13.7-a` inline hali) hâlâ navigator'dan önce devrede.
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · `pnpm -w test` (mobil **153**, +68) ·
+  `pnpm -w test:integration` api 89 dosya 2369 · `pnpm -w build` 8/8 · `pnpm -w test:e2e` **149/149**
+  (ilk koşu tek a11y testinin trace-teardown flake'iyle kesintiye uğradı — ortam, kod değil; ikinci
+  koşu tam yeşil). `format:check` bu turdan ÖNCEKİ aynı 5 dosyada kırmızı — dokunulmadı. e2e'nin
+  yeniden yazdığı kanit PNG'leri `git checkout` ile geri alındı (bu turda hiçbir yüzey değişmedi).
+- **Varsayımlar:** yok — mekanizma PLAN'da zaten kilitliydi (elle token + sapma testi,
+  `packages/tokens` açılmadı).
+- **Sonraki pencereye not:** bu pencere zaten `in-progress` + tüm dosyalar hazır halde devraldı
+  (önceki pencere yarım kalmıştı, kod tamdı); yalnız DoD kapısını koşup kapattım. `13.7-f…-j` bu
+  navigator'ı ve `theme/tokens.ts`'i tüketecek — `useTheme()` her ekranda kullanılabilir.
+
 ## tm 90.4 — 13.7-d · Push gönderim çekirdeği (BÖLÜNMEZ) — done — 2026-08-16 UTC
 
 - **Yapıldı:** (1) **`services/push/push-provider.ts`** — APNs/FCM mock'u (`FilePushProvider` /

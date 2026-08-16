@@ -18,6 +18,9 @@
 const TRANSFORMED = [
   '(jest-)?react-native.*',
   '@react-native(-community)?\\+.*',
+  // Ships ESM-only (`lib/module`, no `lib/commonjs`) as of v7 — Jest's default
+  // CJS runtime cannot execute `export`/`import` unless Babel gets to it first.
+  '@react-navigation\\+.*',
   'expo.*',
   '@expo(nent)?\\+.*',
   '@testing-library\\+react-native.*',
@@ -34,6 +37,7 @@ module.exports = {
     // `.ts` file. Metro needs the same shim; see `metro.config.js`.
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
+  setupFiles: ['<rootDir>/jest.setup.js'],
   testMatch: ['<rootDir>/src/**/*.test.ts', '<rootDir>/src/**/*.test.tsx'],
   // RNTL v14 registers its own matchers and cleanup, so no setup file is needed;
   // these two keep one test's stubs from leaking into the next.

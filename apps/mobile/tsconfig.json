@@ -1,7 +1,11 @@
 {
   "extends": ["../../tsconfig.base.json", "expo/tsconfig.base"],
   "compilerOptions": {
-    "types": ["expo/types", "jest"],
+    // `node` is here for test files only (`tokens.test.ts` reads `tokens.css`
+    // off disk, same as `apps/web/src/styles/tokens.test.ts`) — production
+    // source still avoids Node built-ins on purpose (`lib/contract.ts`), since
+    // none of them exist inside a Metro bundle.
+    "types": ["expo/types", "jest", "node"],
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false

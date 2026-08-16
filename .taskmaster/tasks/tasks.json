@@ -4002,7 +4002,7 @@
         "description": "PRD §5.4 (Ent.) · FR-MOD-11.5. BULGU: powered_by bugün HİÇBİR plan kapısı taşımıyor — Enterprise özelliği her planda açık.",
         "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `11.5` · dilim V3-3\n\n8 atomik alt-görev · ~11 pencere · etiket dağılımı: OPUS-XHIGH x3 · OPUS-MAX x2 · SONNET-XHIGH x3\n\nKK: \"Marka linki; Enterprise'da white-label\" (FR-MOD-11.5 birebir) + \"SLA yönetimi\" · \"sandbox\" (§5.4'ten türetilmiş, §C-A24).\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  11.5-a [OPUS-XHIGH] PLANS kataloğuna enterprise kademesi + entitlements sözlüğü (white_label · sandbox · sla)  (bağ: —)\n  11.5-b [OPUS-MAX] Entitlement zorlama çekirdeği (BÖLÜNMEZ) — yazma kapısı + downgrade'de okuma yolunda geri alma  (bağ: 11.5-a)\n  11.5-c [SONNET-XHIGH] Widget tarafı — yetki yokken powered_by=0 URL parametresinin yok sayılması  (bağ: 11.5-b)\n  11.5-d [OPUS-XHIGH] SLA yönetimi — hedef tanımı (ilk yanıt / çözüm, iş saatleri) + ölçüm + ihlal işareti  (bağ: 11.5-a)\n  11.5-e [SONNET-XHIGH] SLA ekranı + Reports'ta ihlal KPI'ı  (bağ: 11.5-d)\n  11.5-f [OPUS-MAX] Sandbox lisansı (BÖLÜNMEZ) — ikinci kiracı: izolasyon + faturaya girmeme + kotaya sayılmama  (bağ: 11.5-a, 11.5-b)\n  11.5-g [SONNET-XHIGH] Sandbox ekranı — oluştur/sıfırla + \"bu bir sandbox\" göstergesi  (bağ: 11.5-f)\n  11.5-h [OPUS-XHIGH] Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e  (bağ: 11.5-c, 11.5-e, 11.5-g)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.5 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
         "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (11.5-h) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "81",
           "82"
@@ -4105,17 +4105,17 @@
             "description": "Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e",
             "details": "11.5-h — Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e  [OPUS-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nKAPSAM: (1) `growth` planında white-label REDDİ, `enterprise`'da kabulü, DOWNGRADE sonrası geri alma — tarayıcıda widget çıktısıyla kanıtlanır (kanıt PNG `apps/e2e/kanit/11.5-white-label.png`). (2) sandbox veri sızıntısı negatifi. (3) SLA ihlali e2e.\n\nDOSYALAR: `apps/e2e/tests/entitlements.spec.ts` (yeni) · `apps/api/test/integration/entitlements.test.ts` · `apps/e2e/kanit/`\n\nREFERANS DESEN: `apps/e2e/tests/widget.spec.ts` — widget'ın gerçek cross-origin iframe'de sürülmesi (`acme-bikes.localhost:5174`).\n\nKAPI: bu alt-görev yeşile dönmeden kalem ✅ olmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm -w test:e2e (entitlements.spec.ts dahil TÜM süit yeşil)",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "84.3",
               "84.5",
               "84.7"
             ],
             "parentId": "84",
-            "updatedAt": "2026-08-16T10:15:15.440Z"
+            "updatedAt": "2026-08-16T11:16:09.737Z"
           }
         ],
-        "updatedAt": "2026-08-16T10:15:15.440Z"
+        "updatedAt": "2026-08-16T11:16:09.737Z"
       },
       {
         "id": "85",
@@ -5947,9 +5947,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T10:15:15.441Z",
+      "lastModified": "2026-08-16T11:16:09.738Z",
       "taskCount": 124,
-      "completedCount": 122,
+      "completedCount": 123,
       "tags": [
         "master"
       ]

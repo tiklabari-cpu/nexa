@@ -4402,12 +4402,12 @@
             "description": "Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı",
             "details": "13.7-e — Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı  [SONNET-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nKAPSAM: uygulama kabuğu, sekme/yığın navigasyonu (Inbox / Customers / Reports / Ayarlar), `apps/web/src/styles/tokens.css` token'larının RN karşılığı (renk, tipografi, spacing, radius, açık/koyu tema).\n\nDOSYALAR: `apps/mobile/src/app/` · `apps/mobile/src/theme/tokens.ts` (yeni) + test\n\nREFERANS DESEN: `apps/web/src/styles/tokens.css` + mevcut token testi. **MEKANİZMA (denetim sonrası SEÇİLDİ — ilk hâli \"tek kaynaktan türetilir\" deyip nasılını söylemiyordu):** `apps/mobile/src/theme/tokens.ts` elle yazılır AMA bir test `tokens.css`'i ayrıştırıp değerleri karşılaştırır (sapma testi). **Yeni bir workspace paketi (`packages/tokens`) AÇILMAZ** — `13.7-a`'nın kapsamında yok ve tek tüketici için paket açmak bu depoda emsalsiz. `design-brief.md` token sözlüğü referans.\n\nKAPSAM DIŞI: ekran içerikleri (13.7-f…-j).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/mobile test (navigasyon sekmeleri render olur; token değerleri web ile AYNI — sapma testi; koyu tema anahtarı çalışır) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "90.2"
             ],
             "parentId": "90",
-            "updatedAt": "2026-08-16T17:02:56.324Z"
+            "updatedAt": "2026-08-16T17:51:02.186Z"
           },
           {
             "id": 6,
@@ -4493,7 +4493,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-16T17:02:56.324Z"
+        "updatedAt": "2026-08-16T17:51:02.186Z"
       },
       {
         "id": "91",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T17:02:56.325Z",
+      "lastModified": "2026-08-16T17:51:02.187Z",
       "taskCount": 124,
       "completedCount": 123,
       "tags": [

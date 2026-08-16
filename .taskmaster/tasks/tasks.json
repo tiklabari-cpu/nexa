@@ -4376,12 +4376,12 @@
             "description": "device_tokens tablosu + RLS + kayıt/yenileme/iptal uçları",
             "details": "13.7-c — device_tokens tablosu + RLS + kayıt/yenileme/iptal uçları  [OPUS-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nNEDEN AÇIK: depoda cihaz token'ı / push altyapısı YOK (grep `device_token|APNs|FCM` → 0 eşleşme). Bildirim tercihleri bugün yalnız istemci tarafında ve üç alan: `{enabled, sound, desktop}` (`apps/web/src/features/notifications/notifications.ts:12-21`); e-posta tercihi sunucuda ayrı (`apps/api/src/routes/agents.ts:43`).\n\nKAPSAM: `device_tokens` tablosu (licenseId, accountId, platform ios|android, token, createdAt, lastSeenAt, revokedAt) + RLS + `POST /notifications/devices` (kayıt/yenileme) + `DELETE /notifications/devices/{id}` (iptal) + kontrat.\n\nDOSYALAR: `apps/api/prisma/schema.prisma` + migration · `apps/api/src/routes/agents.ts` veya yeni `routes/notifications.ts` · `packages/contract/openapi/paths/`\n\nREFERANS DESEN: `api_tokens` yaşam döngüsü (oluştur/son kullanım/iptal) · RLS policy kalıbı tm 80 `08.9.6-b`.\n\nKAPSAM DIŞI: gönderim (13.7-d), ekran (13.7-j).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**DÜZ METİN SIR NOTU (denetim bulgusu · §C'ye yazılacak):** `device_tokens.token` bir TESLİM KİMLİK BİLGİSİDİR ve push göndermek için düz metin gerektiğinden `api_tokens` gibi hash'lenemez. Bu yüzden: kolon hiçbir okuma yanıtında dönmez (yalnız id + platform + son görülme), pino redaction listesine eklenir, audit metadata'sına yazılmaz ve RLS politikası `api_tokens` kadar sıkı yazılır. Karar ve gerekçesi §C'ye assumption olarak eklenir.\n\n**BİLDİRİM TERCİHİNİN SUNUCUYA TAŞINMASI BU ALT-GÖREVE AİTTİR (denetim bulgusu K5-5):** bugün tercihler istemcide (`apps/web/src/features/notifications/notifications.ts:12-21` → `{enabled,sound,desktop}`, localStorage) ve sunucuda yalnız `notify_email` kolonu var (migration `20260725110000_notify_email_preference`). `13.7-d` push hedefini seçerken tercihi SUNUCUDAN okumak zorundadır. Şema + migration + kontrat + panelin mevcut yüzeyinin taşınması bu alt-görevin kapsamındadır (`13.7-d`'nin bölünmez çekirdeği bunu YUTMAZ). **DİKKAT:** bu değişiklik PLAN §3'teki `13.8` (`✅ → K13.8`) satırının kanıtını genişletir — damga yeniden mühürlenir ve `## K.` bloğuna madde eklenir.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (cihaz kaydı; aynı token tekrar kaydedilince ÇOĞALMAZ (upsert); iptal sonrası revokedAt dolar; CROSS-TENANT: başka lisansın cihazı okunamaz/silinemez) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "90.1"
             ],
             "parentId": "90",
-            "updatedAt": "2026-08-16T14:06:49.346Z"
+            "updatedAt": "2026-08-16T15:24:46.901Z"
           },
           {
             "id": 4,
@@ -4493,7 +4493,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-16T14:06:49.346Z"
+        "updatedAt": "2026-08-16T15:24:46.901Z"
       },
       {
         "id": "91",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T14:06:49.347Z",
+      "lastModified": "2026-08-16T15:24:46.902Z",
       "taskCount": 124,
       "completedCount": 123,
       "tags": [

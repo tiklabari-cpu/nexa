@@ -4481,7 +4481,7 @@
             "description": "Uçtan uca doğrulama — modül paritesi matrisi + push yaşam döngüsü + cross-tenant + bundle kapısı",
             "details": "13.7-k — Uçtan uca doğrulama — modül paritesi matrisi + push yaşam döngüsü + cross-tenant + bundle kapısı  [OPUS-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nKAPSAM: (1) MODÜL PARİTESİ MATRİSİ — FR-MOD-13.7 KK'sının dört yüzeyinin (Inbox/AI/CRM/Reports) mobilde çalıştığının tek yerde kanıtı; matris testi hangi yüzeyin karşılandığını ve neyin kapsam dışı olduğunu (Settings/Billing/Playbook/Team — §C-A28) açıkça sayar. (2) push yaşam döngüsü integration: kayıt → gönderim → yenileme → iptal → gönderim reddi. (3) cross-tenant negatifi. (4) `expo export` bundle kapısı.\n\nDÜRÜSTLÜK KAYDI (§D96): bu alt-görev yeşile döndüğünde 13.7 satırı `✅` DEĞİL `◐` olur — \"mağazada yayınlanmış uygulama\" payı karşılanmaz. Bu kapanış uğruna `✅` UYDURULMAZ (TASK-RUNNER-PROMPT §3: \"Gereksinimi yalnız kısmen karşıladıysan ◐ bırak\").\n\nDOSYALAR: `apps/mobile/src/__tests__/parity.test.ts` (yeni) · `apps/api/test/integration/push.test.ts` · `PLAN.md` (13.7 satırı → `◐ → K13.7`) + `## K.` bölümünde `#### K13.7` bloğu\n\nKAPI: bu alt-görev yeşile dönmeden kalem kapanmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm --filter @nexa/mobile exec expo export && pnpm -w test:e2e (mevcut süit REGRESYONSUZ yeşil — mobil e2e Playwright'a girmez)",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "90.6",
               "90.7",
@@ -4490,10 +4490,10 @@
               "90.10"
             ],
             "parentId": "90",
-            "updatedAt": "2026-08-11T20:47:57.075Z"
+            "updatedAt": "2026-08-16T21:43:20.944Z"
           }
         ],
-        "updatedAt": "2026-08-16T21:41:33.850Z"
+        "updatedAt": "2026-08-16T21:43:20.944Z"
       },
       {
         "id": "91",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T21:41:33.851Z",
+      "lastModified": "2026-08-16T21:43:20.944Z",
       "taskCount": 124,
       "completedCount": 123,
       "tags": [

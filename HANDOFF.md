@@ -13,6 +13,38 @@
 
 ## Task log (newest-first)
 
+## tm 90.11 — 13.7-k · Uçtan uca doğrulama (parite matrisi + push yaşam döngüsü) — done — 2026-08-17 UTC
+
+- **Yapıldı:** (1) `apps/mobile/src/__tests__/parity.test.ts` (31 test) — modül paritesi matrisi,
+  tamamen artefaktlardan türetilir: her yüzey (Inbox/AI/CRM/Reports) için ekran dosyası diskte,
+  rota hem `navigation.ts`'te tipli hem bir `Stack.Screen`'e verilmiş, `api.ts`'in istek literali,
+  `MOBILE_ENDPOINTS` girdisi; kapsam dışı dört modül `openapi.yaml`'dan okunur (önce "sözleşme
+  bunları tanımlıyor mu" — boş iddia olmasın — sonra "telefon hiçbirini çağırmıyor"); telefonun
+  çağırdığı 13 yolun tamamı yüzey ya da destek olarak sınıflanır (**tam eşitlik**, sınıflanmamış
+  yeni uç eklenemez). Sayım: 4 yüzey · 4 kapsam dışı · 13/183 yol · 2 açık borç.
+  (2) `apps/api/test/integration/push-lifecycle.test.ts` (2 test) — kayıt → gönderim → yenileme →
+  rotasyon → iptal → reddi, tek sohbet + tek handset üzerinde SIRAYLA ve tamamen HTTP üzerinden
+  (Prisma ile satır tohumlanmaz: ucun döndürdüğü `device_id` gönderilen push'un `device_id`'si mi —
+  per-state süitlerin kuramadığı dikiş); B'nin spool'u her adımdan sonra boş; ikinci test aynı
+  token'ı iki workspace'te tutar, iki yönde 404, A'nın iptali B'yi susturmaz.
+  (3) `PLAN.md` — `13.7` satırı **`◐ → K13.7` olarak KALDI** (§D96), kanıt `#### K13.7` bloğuna madde.
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · `pnpm -w test` (api 3251, web 1178,
+  mobil **298** +31) · `pnpm -w test:integration` 90 dosya **2374** (+2) · `pnpm -w build` 8/8
+  (mobil `expo export` ios 924 + android 920 modül — task'ın bundle kapısı) · `pnpm -w test:e2e`
+  **149 passed / 9.4 dk**, regresyonsuz. `apps/e2e/kanit/` PNG churn'ü (63 dosya, bayt düzeyinde,
+  görsel fark yok) geri alındı — bu tur yeni kanıt görseli üretmedi.
+- **Varsayımlar:** Dosya adı task metnindeki `push.test.ts` yerine `push-lifecycle.test.ts` —
+  `push-notifications.test.ts` (13.7-d) zaten var, ad ayırt edici olmalıydı. `format:check`
+  deponun genelinde zaten kırmızı (13 dosya, bu turdan önce); yalnız bu turun iki dosyası
+  formatlandı, diğerlerine dokunulmadı (CONVENTIONS §5).
+- **Sonraki pencereye not:** Matris **iki açık borcu teste yazdı**, ikisi de ödendiği gün KIRMIZIYA
+  döner (bilerek): (a) mağaza yayını — `.ipa`/`.apk` yok, kapı `expo export`; (b) **telefon
+  `/notifications/devices`'ı hiç çağırmıyor** — `DeviceTokenLifecycle` provider'sız/transport'suz
+  gelir, yani 13.7-c/-d'nin sunucu yarısı eksiksiz ve testli ama telefon yarısı bağlanmadı;
+  bağlamak `expo-notifications` + izin akışı ister (yeni bağımlılık, doğrulama işi değil) → ayrı
+  task açılmalı. `push-notifications.test.ts`'teki bilinen zamanlama flake'i (90.8/90.9 notları)
+  bu turun üç tam koşusunda hiç görülmedi.
+
 ## tm 90.10 — 13.7-j · Mobil bildirim tercihleri ekranı — done — 2026-08-16 UTC
 
 - **Yapıldı:** (1) `apps/mobile/src/features/notifications/` — `NotificationsScreen` (beş kanal:

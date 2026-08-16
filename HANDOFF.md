@@ -13,6 +13,34 @@
 
 ## Task log (newest-first)
 
+## tm 84.8 — 11.5-h · Uçtan uca doğrulama (white-label · sandbox · SLA) — done — 2026-08-16 UTC
+
+- **Yapıldı:** `apps/e2e/tests/entitlements.spec.ts` (yeni, 5 test) — (1) white-label: Enterprise'da
+  altbilgi kapanır, `growth`'a düşünce satır silinmeden geri gelir, ekran kapatmayı reddeder + `11.5-c`
+  `powered_by=0` ziyaretçinin URL'inde yok sayılır; (2) sandbox sızıntı negatifi: kendi signup
+  kiracımızda örnek veri → Enterprise → ekrandan sandbox → seçiciden sandbox oturumu → rozet var,
+  üretimin `Sample visitor`'ı YOK; (3) SLA: 1 dk hedef → geç yanıt → `Reports → Overview → SLA
+  breaches` kartında sayılır. Kanıt: `apps/e2e/kanit/11.5-{white-label,white-label-enterprise,
+  sandbox-izolasyon,sla-breach}.png`. Integration'a **sözlük süpürmesi** eklendi
+  (`Record<Entitlement, Probe>`; yeni bir anahtar gate'i yazılana kadar type-check'i durdurur).
+  Yeni sunucu yüzeyi YOK, migration YOK — bu görev yalnız doğrular.
+- **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` api **136/3151** (+6) +
+  web 1170 + rtm 102 + widget 71 + types 104 + ai-mock 136 · `pnpm -w test:integration` api
+  **86 dosya 2323/2323** (+6) + rtm 60 · `pnpm -w build` 7/7 · `pnpm -w test:e2e` **149/149** (9.1 dk).
+- **Varsayımlar / bilinçli sınırlar:** (1) **Sandbox demo kiracıda açılmaz** — sahibe ikinci üyelik
+  verir, `signIn` yardımcısı demo sahibinin doğrudan inbox'a düşmesini bekler, ve hiçbir uç sandbox'ı
+  geri silemez; bu yüzden spec kendi signup kiracısını kurar. (2) **SLA testi ~2 dk gerçek bekler** —
+  `elapsedMinutes` tam dakika sınırı sayar, `isBreach` kesin büyüktür, API'de geriye tarihleme yok;
+  seed'in eski konuşmasına yaslanmak testi başka bir spec'in davranışına bağlardı. (3) Kiracı durumu
+  `finally` ile geri bırakılır (plan `enterprise`, `powered_by` true, SLA hedefleri null) — aksi
+  halde `sso`/`siem`/`compliance` spec'leri sonradan alakasız redlerle düşer. (4) `apps/e2e/kanit`
+  churn'ü (55 PNG, bayt düzeyi) atıldı; yalnız 4 yeni kanıt görüntüsü commit'lendi.
+- **Sonraki pencereye not:** `11.5` kalemi **KAPALI** (8/8 · tm 84.1–84.8); PLAN §6 Faz-3 satırı
+  `✅ → K11.5`. Faz-3 üst-tablo özeti ("planlandı, başlanmadı") S11/C4/C6/11.5 kapandığı halde hâlâ
+  bayat — faz kapanış turunun işi, tek görev güncellemedi. Depo genelinde `format:check` bu turdan
+  ÖNCE de 5 dosyada kırmızı (`log-redact.test.ts`, `inference.test.ts`, `customer-token.test.ts`,
+  `telegram.spec.ts`, `Compliance.tsx`) — dokunulmadı, ayrı bir düzeltme görevi.
+
 ## tm 84.7 — 11.5-g · Sandbox ekranı (oluştur/sıfırla + rozet) — done — 2026-08-16 UTC
 
 - **Önceki pencere `blocked` kapanmıştı — kod hatası değildi.** `.loop-logs/task-84.7.jsonl`

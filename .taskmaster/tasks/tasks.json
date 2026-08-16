@@ -4105,17 +4105,17 @@
             "description": "Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e",
             "details": "11.5-h — Uçtan uca doğrulama — white-label reddi/kabulü/downgrade geri alma + sandbox sızıntı negatifi + SLA e2e  [OPUS-XHIGH]\n\nPRD: 11.5 (PLAN §6.1 · dilim V3-3 · tm 84)\nTAHMİN: ~1 pencere\n\nKAPSAM: (1) `growth` planında white-label REDDİ, `enterprise`'da kabulü, DOWNGRADE sonrası geri alma — tarayıcıda widget çıktısıyla kanıtlanır (kanıt PNG `apps/e2e/kanit/11.5-white-label.png`). (2) sandbox veri sızıntısı negatifi. (3) SLA ihlali e2e.\n\nDOSYALAR: `apps/e2e/tests/entitlements.spec.ts` (yeni) · `apps/api/test/integration/entitlements.test.ts` · `apps/e2e/kanit/`\n\nREFERANS DESEN: `apps/e2e/tests/widget.spec.ts` — widget'ın gerçek cross-origin iframe'de sürülmesi (`acme-bikes.localhost:5174`).\n\nKAPI: bu alt-görev yeşile dönmeden kalem ✅ olmaz.\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && pnpm -w test:e2e (entitlements.spec.ts dahil TÜM süit yeşil)",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "84.3",
               "84.5",
               "84.7"
             ],
             "parentId": "84",
-            "updatedAt": "2026-08-11T20:47:57.075Z"
+            "updatedAt": "2026-08-16T10:15:15.440Z"
           }
         ],
-        "updatedAt": "2026-08-15T23:00:12.956Z"
+        "updatedAt": "2026-08-16T10:15:15.440Z"
       },
       {
         "id": "85",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-15T23:00:12.959Z",
+      "lastModified": "2026-08-16T10:15:15.441Z",
       "taskCount": 124,
       "completedCount": 122,
       "tags": [

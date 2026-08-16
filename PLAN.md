@@ -2139,7 +2139,7 @@ kalem buldu: _dedicated onboarding/account manager_ · _IVR routing_ · _kalan m
 | S11    | SAML 2.0 SSO + SCIM provisioning                 | NFR-S11 (türetilmiş kod `S11`); kimlik sınırı. → §6.1 · tm 81 · ilerleme K S11 |
 | C4     | HIPAA BAA + bölgesel barındırma (US/EU)          | NFR-C4 (türetilmiş kod `C4`); ADR-12 tek bölge (`eu`) burada genişletildi (`C4-a` ✅, §D102); bölge zorlaması üç yüzeyde (`C4-b` ✅, §D103); signup ekranında seçim + kalıcılık uyarısı (`C4-c` ✅); BAA kabul akışı MOCK (`C4-d` ✅); kapsam kısıtları — retention tavanı + log/telemetri PII maskesi + AI bölge sınırı (`C4-e` ✅); Settings → Security'de bölge + BAA durum kartı (`C4-f` ✅); uçtan uca doğrulama — 421 üç kapıda + kart + kısıtsızlık + cross-tenant (`C4-g` ✅); signup bölge kapısı (`C4-h` ✅, tm 124). → §6.1 · tm 82 · ilerleme K C4 |
 | C6     | SOC 2 Type II · ISO 27001 · tam audit log + SIEM | NFR-C6/C7/S12 (türetilmiş kod `C6`). **Kod payı ✅ — 8 alt-görevin 8'i teslim** (`C6-a1`…`C6-g` · tm 83.1–83.8, uçtan uca kapı `C6-g` yeşil); **sertifikasyon süreci** §F.00'ı bloklamaz (§D97). Alt-görev kanıtı ve kilit kararlar `## K.`'dedir — hücre §1.2 gereği damga taşır, geçmiş taşımaz (bu satır 728 → 340 karaktere indirildi, tm 83.8). → §6.1 · tm 83 · ilerleme K C6 |
-| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **◐ → K11.5** — 8 alt-görevin 7'si teslim (`11.5-a`…`11.5-g`; tm 84.1–84.7). → §6.1 · tm 84 |
+| 11.5   | White-label widget · SLA yönetimi · sandbox      | FR-MOD-11.5 + §5.4 "Kurumsal" (SLA/sandbox türetilmiş). SLA payı = **yanıt/çözüm SLA'sı**. **✅ → K11.5** — 8 alt-görevin 8'i teslim (`11.5-a`…`11.5-h` · tm 84.1–84.8, uçtan uca kapı `11.5-h` yeşil). → §6.1 · tm 84 |
 | —      | SLA: uptime taahhüdü + fatura kredisi (NFR-U5)   | ⛔-**süreç** · Denetim bulgusu K1-4: PRD'nin tek somut SLA tanımı NFR-U5'tir (_"Sözleşmeli uptime taahhüdü + kredi mekanizması"_). Uptime taahhüdü bir **sözleşme** kalemidir, bu depodan üretilemez (§D97 kod/süreç ayrımı). `11.5` ✅ damgası yalnız yanıt/çözüm SLA'sını iddia eder |
 | —      | Dedicated onboarding / account manager           | ⛔-**süreç** · PRD §5.4 "Kurumsal" satırının üçüncü payı. **Kod payı YOK** — insan hizmeti taahhüdü (özel onboarding + atanmış müşteri yöneticisi); depoda karşılığı olan hiçbir yüzey üretmez. Süpürmede bulundu, §F.00'ı bloklamaz (§D95) |
 | —      | Skills-based routing (Ent. payı)                 | ✅ **v2'de teslim** — `08.6.3` (tm 91). PRD §5.4 "Kanal" satırı bunu IVR ile birlikte anıyor; skill payı v2'de kapandı, IVR payı ⛔ (voice'a bağlı) |
@@ -5238,7 +5238,7 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 
 #### K11.5 — 11.5 · White-label widget · SLA yönetimi · sandbox
 
-> Kalem **AÇIK** — 8 alt-görevin 7'si teslim (`11.5-a`…`11.5-g`; tm 84.1–84.7). §6'nın Faz-3 `11.5` satırı
+> Kalem **KAPALI** — 8 alt-görevin 8'i teslim (`11.5-a`…`11.5-h`; tm 84.1–84.8). §6'nın Faz-3 `11.5` satırı
 > `C4`/`C6` gibi ilerleme damgasını kendi hücresinde taşır, kanıt burada birikir (§1.2).
 
 - ✅ **`11.5-a` — PLANS kataloğuna enterprise kademesi + altı anahtarlı yetki sözlüğü.** Yetki
@@ -5495,3 +5495,47 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
   **144/144** (değişmedi — uçtan uca `11.5-h`) · `contract:generate` sonrası fark yok (yeni uç yok) ·
   `db:check-drift` sürüklenme yok (migration YOK) · `format:check` dokunulan 5 dosyada temiz.
   **Kapsam dışı:** uçtan uca doğrulama (`11.5-h`). tm 84.7
+- ✅ **`11.5-h` — Uçtan uca doğrulama: white-label reddi/kabulü/downgrade geri alması + sandbox
+  sızıntı negatifi + SLA ihlali.** Yedi alt-görevin hepsi API'ye karşı kanıtlıydı; **hiçbiri
+  tarayıcıda değildi** — müşterinin fiilen baktığı altbilginin kaybolduğu, plan düşünce geri
+  geldiği, ikinci çalışma alanının gerçekten boş olduğu, kaçırılan sözün bir yöneticinin okuduğu
+  rapora ulaştığı. `apps/e2e/tests/entitlements.spec.ts` (yeni, 5 test) üç iddiayı **durum değil
+  dizi** olarak sürer — bir yetkinin ilginç yarısı iniş yönüdür, uç durumu seed'lemek tam o yarıyı
+  atlardı. (1) **white-label:** Enterprise'da ayar ekranından altbilgi kapatılır ve ziyaretçinin
+  cross-origin iframe'inde yok olur (`kanit/11.5-white-label-enterprise.png`); `PATCH
+  /billing/subscription` ile `growth`'a inilir, satır **silinmeden** aynı widget yeniden markalanır
+  (`kanit/11.5-white-label.png`); ekran artık kapatmayı reddeder ve reddi (_"not included in the
+  growth plan"_) admin'e gösterir. Ayrıca `11.5-c`: `powered_by=0` **ziyaretçinin kendi URL'inde**
+  yok sayılır — widget belgesi tam o parametreyle doğrudan açılır, altbilgi durur. Düşülen tuzak:
+  plan değişince açık SPA sekmesi eski cevabı önbellekte tutar; iddia sunucunun ne servis ettiğiyse
+  istemci önbelleği aradan çekilmeli (`reload`), bayat bir görünüm kapının çökmesi değildir.
+  (2) **sandbox sızıntısı:** demo kiracıda DEĞİL, kendi signup'ımızda — sandbox sahibine **ikinci
+  bir üyelik** verir, suite'in `signIn` yardımcısı ise demo sahibinin doğrudan inbox'a düşmesini
+  bekler ve hiçbir uç sandbox'ı geri silemez; Acme'de açmak dokunmadığımız kırk testi bozardı. Yeni
+  çalışma alanı sihirbazın örnek verisiyle doldurulur (`Sample visitor` + konuşma), Enterprise'a
+  çıkarılır, sandbox ekrandan açılır; üretim rozeti **takmaz** ve sıfırlamayı önermez. İkinci oturum
+  çalışma alanı seçicisinden `(Sandbox)`'a girer — boş olduğu için **ilk-kurulum sihirbazına** düşer
+  (dürüst cevap: sandbox sıfırdan bir çalışma alanıdır) — kabuk rozetini görür ve üretimin kişi
+  dizini orada **yoktur** (`kanit/11.5-sandbox-izolasyon.png`). (3) **SLA:** hedef ekrandan 1 dk
+  yazılır, ziyaretçi yazar, hedef geçildikten sonra agent yanıtlar, ihlal `Reports → Overview →
+  SLA breaches` kartında sayılır (`kanit/11.5-sla-breach.png`). Bekleme **gerçektir** ve ucuzlatılamaz:
+  `elapsedMinutes` tam dakika sınırı sayar, `isBreach` kesin büyüktür, ve bu ürünün ölçtüğü her saat
+  konuşmanın kendisiyle başlar — API'de geriye tarihleme yoktur; seed'in geriye tarihlediği bir
+  konuşmaya yaslanmak testi "daha önceki bir dosya ona cevap verdi mi"ye bağlardı. **İki spec de
+  kiracıyı `finally` ile geri bırakır** (plan `enterprise`, `powered_by` true, SLA hedefleri null);
+  bırakmasaydı `sso`/`siem`/`compliance` spec'leri dosyalar sonra üç alakasız redle düşerdi.
+  Integration tarafına eklenen tek şey **sözlüğün süpürülmesi**: `Record<Entitlement, Probe>` —
+  yedinci bir anahtar, gatelediği çağrı yazılana kadar type-check'i durdurur; yazılan çağrı
+  reddetmiyorsa assertion düşer. Altı anahtarın ikisi (`sandbox`, `sla`) burada ilk kez `11.5-b`'nin
+  kendi dosyasında da doğrulanır, `hipaa` payı US dağıtımından sürülür (Avrupa fixture'ı C4'ün bölge
+  kapısını ölçerdi) — bunun için `seedUsTenant` HIPAA bloğundan dosya seviyesine taşındı. —
+  `apps/e2e/tests/entitlements.spec.ts` (yeni, 5) · `apps/api/test/integration/entitlements.test.ts`
+  (+6) · `apps/e2e/kanit/11.5-{white-label,white-label-enterprise,sandbox-izolasyon,sla-breach}.png` ·
+  tm 84.8
+- ✅ **Doğrulama (hepsi exit 0):** typecheck 11/11 · lint 8/8 · `pnpm -w test` 10/10 paket — api
+  **136 dosya, 3151/3151** (3145 → +6) + web 1170 + rtm 102 + widget 71 + types 104 + ai-mock 136 ·
+  `pnpm -w test:integration` api **86 dosya, 2323/2323** (2317 → +6) + rtm 60 · `pnpm -w build` 7/7 ·
+  `pnpm -w test:e2e` **149/149** (144 → +5, 9.1 dk) · `format:check` dokunulan 2 dosyada temiz
+  (depo genelinde 5 dosya bu turdan ÖNCE de kırmızıydı — `log-redact.test.ts`,
+  `inference.test.ts`, `customer-token.test.ts`, `telegram.spec.ts`, `Compliance.tsx`; bu görevin
+  dokunmadığı borç, §5 kapsam disiplini). Migration YOK, yeni sunucu yüzeyi YOK. tm 84.8

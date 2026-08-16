@@ -31,6 +31,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { ENTITLEMENTS, type Entitlement } from '@nexa/types';
 import { SiemSink } from '../../src/services/audit/siem-sink.js';
 import { VALID_CERTIFICATE_PEM } from '../helpers/certificates.js';
 import {
@@ -109,6 +110,49 @@ describe('plan entitlements (11.5-b)', () => {
       ownerId: fx.a.ownerAccountId,
       scopes,
     });
+  }
+
+  interface UsTenant {
+    licenseId: bigint;
+    token: string;
+  }
+
+  /**
+   * A US-hosted workspace whose owner holds the write scope, on a named plan.
+   *
+   * Region `us` and role `owner` are held constant on purpose: C4-d already
+   * proves the region and role gates, so the *only* thing that may differ
+   * between the two HIPAA cases is the plan. A refusal that could also be
+   * explained by the region would prove nothing about this gate.
+   *
+   * Out here rather than inside the HIPAA block because the vocabulary sweep at
+   * the bottom needs it too — `hipaa` is the one capability whose gate cannot be
+   * reached from a European fixture at all.
+   */
+  async function seedUsTenant(suffix: string, plan: string): Promise<UsTenant> {
+    const organization = await owner.organization.create({
+      data: { name: `Org US ${suffix}`, region: 'us' },
+      select: { id: true },
+    });
+    const license = await owner.license.create({
+      data: { organizationId: organization.id, plan, status: 'active' },
+      select: { id: true },
+    });
+    await seedSubscription(owner, license.id, plan);
+    const account = await owner.account.create({
+      data: { email: `owner-us-${suffix}@example.test`, name: 'Owner US' },
+      select: { id: true },
+    });
+    await owner.agentMembership.create({
+      data: { licenseId: license.id, agentId: account.id, role: 'owner' },
+    });
+    const token = await grantToken(owner, {
+      licenseId: license.id,
+      organizationId: organization.id,
+      ownerId: account.id,
+      scopes: ['access_rules:ro', 'access_rules:rw'],
+    });
+    return { licenseId: license.id, token };
   }
 
   /** The refusal's shape, asserted once and reused — it is a contract. */
@@ -369,45 +413,6 @@ describe('plan entitlements (11.5-b)', () => {
   // =========================================================================
 
   describe('hipaa — the BAA', () => {
-    interface UsTenant {
-      licenseId: bigint;
-      token: string;
-    }
-
-    /**
-     * A US-hosted workspace whose owner holds the write scope, on a named plan.
-     *
-     * Region `us` and role `owner` are held constant on purpose: C4-d already
-     * proves the region and role gates, so the *only* thing that may differ
-     * between the two cases below is the plan. A refusal that could also be
-     * explained by the region would prove nothing about this gate.
-     */
-    async function seedUsTenant(suffix: string, plan: string): Promise<UsTenant> {
-      const organization = await owner.organization.create({
-        data: { name: `Org US ${suffix}`, region: 'us' },
-        select: { id: true },
-      });
-      const license = await owner.license.create({
-        data: { organizationId: organization.id, plan, status: 'active' },
-        select: { id: true },
-      });
-      await seedSubscription(owner, license.id, plan);
-      const account = await owner.account.create({
-        data: { email: `owner-us-${suffix}@example.test`, name: 'Owner US' },
-        select: { id: true },
-      });
-      await owner.agentMembership.create({
-        data: { licenseId: license.id, agentId: account.id, role: 'owner' },
-      });
-      const token = await grantToken(owner, {
-        licenseId: license.id,
-        organizationId: organization.id,
-        ownerId: account.id,
-        scopes: ['access_rules:ro', 'access_rules:rw'],
-      });
-      return { licenseId: license.id, token };
-    }
-
     const accept = (token: string) =>
       usServer.post('/settings/compliance/baa', { accepted: true }, auth(token));
 
@@ -585,5 +590,122 @@ describe('plan entitlements (11.5-b)', () => {
     // The boot-time guard — `public` + `entitlement` must not register — lives
     // in `route-config.test.ts` beside the auth plugin's `public` + `scopes`
     // guard it mirrors, because it needs a server that has not started yet.
+  });
+
+  // =========================================================================
+  // The vocabulary as a whole — no key without a gate (11.5-h)
+  // =========================================================================
+  //
+  // Everything above tests a capability the author of that block remembered to
+  // test. The failure this item exists to close is the one nobody remembers: a
+  // key added to `ENTITLEMENTS` — the way `sso`, `hipaa` and `siem_export` were
+  // added to it, after their features had already shipped ungated — that is
+  // reported by `GET /billing/entitlements`, rendered by a screen, sold on a
+  // pricing page, and enforced nowhere.
+  //
+  // So this sweeps the vocabulary itself. `Record<Entitlement, Probe>` is the
+  // half that actually holds: a seventh key stops the type-check here until
+  // somebody names the call it is supposed to gate, and naming one that does
+  // not refuse fails the assertion. Neither can be satisfied by writing a
+  // plausible-looking probe, because both ends are asserted — refused below the
+  // tier, allowed on it.
+
+  describe('every capability in the vocabulary is enforced somewhere', () => {
+    /** A call the capability under test is required for, on a given tier. */
+    interface Probe {
+      call(plan: 'growth' | 'enterprise'): Promise<{ statusCode: number; json: () => unknown }>;
+      /** What the entitled call answers — a set, because a create says 201. */
+      allowed: readonly number[];
+    }
+
+    const ssoConnection = {
+      name: 'Okta (vocabulary)',
+      idp_entity_id: 'https://idp.example.test/saml/metadata',
+      idp_sso_url: 'https://idp.example.test/saml/sso',
+      idp_certificate_pem: VALID_CERTIFICATE_PEM,
+    };
+
+    const PROBES: Record<Entitlement, Probe> = {
+      white_label: {
+        allowed: [200],
+        async call(plan) {
+          await planA(plan);
+          return server.put(
+            '/settings/widget',
+            { powered_by: false },
+            auth(await ownerToken(['access_rules:rw'])),
+          );
+        },
+      },
+      sandbox: {
+        allowed: [201],
+        async call(plan) {
+          await planA(plan);
+          // `exactRole: 'owner'` on the route — the fixture's A owner is one.
+          return server.post(
+            '/settings/sandbox',
+            undefined,
+            auth(await ownerToken(['access_rules:rw'])),
+          );
+        },
+      },
+      sla: {
+        allowed: [200],
+        async call(plan) {
+          await planA(plan);
+          return server.put(
+            '/settings/sla',
+            { first_response_minutes: 15, resolution_minutes: null, business_hours_only: false },
+            auth(await ownerToken(['access_rules:rw'])),
+          );
+        },
+      },
+      sso: {
+        allowed: [201],
+        async call(plan) {
+          await planA(plan);
+          return server.post(
+            '/settings/sso',
+            ssoConnection,
+            auth(await ownerToken(['access_rules:rw'])),
+          );
+        },
+      },
+      hipaa: {
+        allowed: [200],
+        async call(plan) {
+          // The one gate a European fixture cannot reach: signing a BAA is
+          // refused outside a US-hosted workspace whatever the plan says, so a
+          // probe against tenant A would be measuring C4's region gate instead.
+          const tenant = await seedUsTenant(`vocab-${plan}`, plan);
+          return usServer.post('/settings/compliance/baa', { accepted: true }, auth(tenant.token));
+        },
+      },
+      siem_export: {
+        allowed: [200],
+        async call(plan) {
+          await planA(plan);
+          return server.patch(
+            '/settings/siem',
+            { enabled: true, target: 'file' },
+            auth(await ownerToken(['access_rules:rw'])),
+          );
+        },
+      },
+    };
+
+    for (const key of ENTITLEMENTS) {
+      it(`refuses ${key} below the tier that sells it, and allows it on Enterprise`, async () => {
+        const probe = PROBES[key];
+
+        expectDenied(await probe.call('growth'), key);
+
+        const entitled = await probe.call('enterprise');
+        expect(
+          probe.allowed,
+          `${key} on enterprise answered ${entitled.statusCode}: ${JSON.stringify(entitled.json())}`,
+        ).toContain(entitled.statusCode);
+      });
+    }
   });
 });

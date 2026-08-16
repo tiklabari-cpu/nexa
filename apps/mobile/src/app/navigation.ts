@@ -22,6 +22,8 @@ export type InboxStackParamList = {
   InboxHome: undefined;
   /** One conversation. `title` is carried so the header is right on push. */
   ChatDetail: { chatId: string; title: string };
+  /** The Copilot assist for one conversation (13.7-i), pushed from its header. */
+  ChatCopilot: { chatId: string; title: string };
 };
 export type CustomersStackParamList = {
   CustomersHome: undefined;

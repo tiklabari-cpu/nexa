@@ -13,6 +13,33 @@
 
 ## Task log (newest-first)
 
+## tm 90.9 — 13.7-i · Mobil AI/Copilot yüzeyi — özet + yanıt önerisi — done — 2026-08-16 UTC
+
+- **Yapıldı:** (1) `apps/mobile/src/features/copilot/` — `CopilotScreen` (Summary +
+  Suggested reply, KAPSAM'ın dediği ikisi yalnız; rewrite/BI web'in), `api.ts`/`types.ts`
+  (ikinci istemci yok, `13.7-b`'nin `SessionApiClient`'ı; tipler sözleşmeden türetilir),
+  `context.ts`/`CopilotProvider.tsx` (Customers/Reports'un Provider/context ayrımı),
+  `copilotDraft.ts` (web'in zustand deposunun mobil karşılığı — `useSyncExternalStore`,
+  yeni bağımlılık yok). (2) `app/navigation.ts` + `app/stacks/InboxStack.tsx` — yeni
+  `ChatCopilot` rotası, `ChatDetail` header'ında "Copilot" düğmesi, `CopilotProvider`
+  `InboxProvider`'ın yanına mount edildi. (3) `features/inbox/Composer.tsx` artık
+  `chatId` prop'u alıyor ve `useCopilotDraft` dinliyor — draft gelince reply moduna
+  zorlayıp doldurur, tüketilince temizler (web'in Composer'ıyla birebir kural).
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · `pnpm -w test` (mobil
+  **257**, +17: `copilotDraft.test.ts` 5 · `CopilotScreen.test.tsx` 9 ·
+  `Composer.copilot.test.tsx` 3) · `pnpm -w test:integration` api 89 dosya 2372 ·
+  `pnpm -w build` 8/8 (mobil `expo export` ios 922 + android 917 modül). `test:e2e`
+  bu turda koşulmadı — Playwright mobile workspace'e hiç girmiyor, task'ın kendi test
+  stratejisi de yalnız mobil jest istiyor (13.7-g/-h ile aynı gerekçe); apps/web ve
+  apps/e2e dokunulmadı.
+- **Varsayımlar:** Enhance ("Improve a draft") ve BI komutu (`/copilot/bi`) mobilde YOK
+  — görev KAPSAM'ı yalnız "özet + yanıt önerisi" diyor, web'in dört bölümlü panelinin
+  tamamı değil.
+- **Sonraki pencereye not:** `13.7-k` uçtan uca doğrulamada mobil modül paritesi
+  matrisine AI/Copilot'u eklemeli; Copilot'un rewrite/BI taşımadığı bilinçli bir
+  daralma olduğu için parite notunda açıkça yazılmalı. `13.7-j` (bildirim tercihleri)
+  son ekran, ardından yalnız `13.7-k` kalıyor.
+
 ## tm 90.8 — 13.7-h · Mobil Reports — salt-okunur KPI kartları — done — 2026-08-16 UTC
 
 - **Yapıldı:** (1) `apps/mobile/src/features/reports/` — `ReportsScreen` (Volume/Resolution/

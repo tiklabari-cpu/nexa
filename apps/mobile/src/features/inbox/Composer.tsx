@@ -11,14 +11,17 @@
  * Attachments are the console's (`13.7-k` weighs the parity); this is text,
  * which is what a phone is for.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { EventRecipients } from './types';
+import { useCopilotDraft, clearCopilotDraft } from '../copilot/copilotDraft';
 import { FONT_SIZE, RADIUS, SPACING } from '../../theme/tokens';
 import { useTheme } from '../../theme/theme';
 
 export interface ComposerProps {
+  /** Which chat this composer belongs to — needed to pick up a Copilot draft addressed to it. */
+  chatId: string;
   onSend: (input: { text: string; recipients: EventRecipients }) => void;
   sending: boolean;
   error: string | null;
@@ -26,10 +29,22 @@ export interface ComposerProps {
   disabled?: boolean;
 }
 
-export function Composer({ onSend, sending, error, disabled = false }: ComposerProps) {
+export function Composer({ chatId, onSend, sending, error, disabled = false }: ComposerProps) {
   const { colors } = useTheme();
   const [text, setText] = useState('');
   const [recipients, setRecipients] = useState<EventRecipients>('all');
+
+  // A suggestion handed over from Copilot (FR-MOD-12.3 / 13.7-i). It fills
+  // the reply — always a customer-facing reply, never a note — for the agent
+  // to edit and send. Consumed on arrival so it is not re-applied on the
+  // next render.
+  const copilotDraft = useCopilotDraft(chatId);
+  useEffect(() => {
+    if (copilotDraft === undefined) return;
+    setText(copilotDraft);
+    setRecipients('all');
+    clearCopilotDraft(chatId);
+  }, [copilotDraft, chatId]);
 
   const isNote = recipients === 'agents';
   const canSend = text.trim() !== '' && !sending && !disabled;

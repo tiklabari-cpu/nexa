@@ -79,6 +79,7 @@ export function ChatScreen({ chatId }: { chatId: string }) {
       )}
 
       <Composer
+        chatId={chatId}
         onSend={(input) => void store.send(chatId, input)}
         sending={transcript.sending}
         error={transcript.sendError}

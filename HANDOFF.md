@@ -13,6 +13,50 @@
 
 ## Task log (newest-first)
 
+## DÜZELTME — Görev grafiği onarımı: Task Master kuyruğu boştu, döngü duruyordu — 2026-08-17 UTC
+
+- **Bulgu:** `run-loop.sh` seçilebilir görev bulamıyor, "Hazır task kalmadı" deyip çıkacaktı.
+- **TEŞHİS (kanıtlanmış — dördü de elendi):** sebep (a) blocked/deferred DEĞİL, (b) bağımlılık
+  döngüsü DEĞİL, (c) var olmayan id'ye bağımlılık DEĞİL. Ölçüm: **124 görevin 124'ü ve 333
+  alt-görevin 333'ü `done`** — tek bir `pending`/`in-progress`/`blocked`/`deferred` kayıt yok;
+  döngü taraması 0 düğüm; dangling bağımlılık 0. Yani sebep **(d)'nin genel hâli: kalan iş
+  Task Master'a HİÇ AKTARILMAMIŞTI.** Statülerde ya da grafta hata YOK — graf sağlıklı, sadece
+  BOŞ. Onarılacak bir bağımlılık bulunmadığı için 2. ve 3. adımlarda (engel kaldırma, döngü
+  kırma) yapılacak iş çıkmadı.
+- **Bu desen bu depoda dördüncü kez:** PLAN.md ~900. satırdaki bulgu 3 — _"Task Master kuyruğu
+  boş … **Faz kapanış turları hiç görev olarak açılmamıştı**"_ → GL-3 (tm 87) · GL-4 (tm 88) ·
+  GL-8 (tm 114). Faz-3'ün kapanış turu da aynı şekilde hiç açılmamıştı.
+- **Durum:** Faz-3'ün beş dilimi de teslim edildi — V3-1 `S11` (tm 81) + `C4` (tm 82) ✅ ·
+  V3-2 `C6` (tm 83) ✅ · V3-3 `11.5` (tm 84) ✅ · V3-4 `08.5.8` (tm 79) ✅ · V3-5 `13.7` (tm 90)
+  `◐` kabul. Ama PLAN.md üst tablosunda Faz-3 satırı hâlâ **"⬜ planlandı, başlanmadı"** damgası
+  taşıyor: kapanış turu koşulmadığı için damga bayat.
+- **ONARIM — PLAN §G/§F'den iki görev aktarıldı** (K3 şeması · tag `master` · K1 korundu):
+  - **tm 125** — `13.7-l [OPUS-XHIGH]` Mobil cihaz kaydının bağlanması · `pending` · `medium` ·
+    bağımlılık **yok** (hemen çalışabilir). `13.7-j`'nin başlığındaki iki paydan ikincisi
+    ("+ cihaz kaydının bağlanması") teslim edilmemişti: `DeviceTokenLifecycle`
+    (`apps/mobile/src/auth/session.ts:131`) sağlayıcısız + transport'suz kuruluyor, telefon
+    `/notifications/devices`'ı hiç çağırmıyor. Sunucu yarısı (13.7-c/-d) eksiksiz ve testli.
+    tm 90.11'in parite matrisi bunu açık borç olarak teste yazmıştı
+    (`parity.test.ts:221` · `:367`) ve "ayrı task açılmalı" demişti — bu o task.
+    **Bu boşluk §D96'nın iki kabul edilen borcundan hiçbiri değildir; üçüncü ve kayıtsız
+    bir boşluktu.**
+  - **tm 126** — `GL-9 · F3-KAPAT [OPUS-MAX]` Faz-3 §F.00 kapanış turu · `pending` · `high` ·
+    bağımlılık **["125"]**. §F.1'in 10 maddesi **tam sürüm** + sayaç + damgalar + §F.2 proje
+    geneli final raporu (Faz-3 son faz olduğu için §F'nin tetikleyicisi onunla gerçekleşir).
+  - **Bağımlılık gerekçesi (tm 126 → tm 125):** §F.00 _"◐ kaldıramaz … tamamla, ya da kapsamı
+    daralt + kalanı gerekçeli yeni kaleme ayır"_ der ve kapanış raporunun **taşınan `Should`
+    borçlarını ismen** listelemesini şart koşar. tm 125 "tamamla" seçeneğidir; o iş bitmeden
+    kapanış raporunun borç listesi yanlış olur. Sıra kısıtı değil, gerçek bağ.
+  - **Öncelik notu:** ikisi de PLAN §G/§F'den **planlı iş aktarımıdır**, panel bulgusundan doğan
+    düzeltme değil → K7 uygulandı (`medium`/`high`), `critical` KULLANILMADI. Faz-3'ün mevcut
+    kalemleri de (tm 79/81/82/83/84/90) `medium`; kapanış turları emsali (GL-3/GL-4) `high`.
+- **Doğrulama:** `metadata.taskCount` 124 → **126** · `validate_dependencies` → _"Dependencies
+  validated successfully"_ · `next_task` → **tm 125**. KOD YAZILMADI (bu pencerenin kapsamı
+  yalnız görev grafiğiydi); DoD kapısı koşulmadı — kod değişmediği için kapı konusu yok.
+- **Döngü buradan devam eder: tm 125** (tek seçilebilir görev; tm 126 ona bağlı, o bitince açılır).
+  tm 126 bittiğinde Faz-3 kapanır ve §F.3 gereği **sırayı kullanıcı seçer** — yarım kalan
+  işlerden hangilerinin yapılacağına karar verilmeden yeni faz açılmaz.
+
 ## tm 90.11 — 13.7-k · Uçtan uca doğrulama (parite matrisi + push yaşam döngüsü) — done — 2026-08-17 UTC
 
 - **Yapıldı:** (1) `apps/mobile/src/__tests__/parity.test.ts` (31 test) — modül paritesi matrisi,

@@ -23,6 +23,10 @@ export type InboxStackParamList = {
   /** One conversation. `title` is carried so the header is right on push. */
   ChatDetail: { chatId: string; title: string };
 };
-export type CustomersStackParamList = { CustomersHome: undefined };
+export type CustomersStackParamList = {
+  CustomersHome: undefined;
+  /** One contact. `title` is carried so the header is right on push. */
+  CustomerDetail: { customerId: string; title: string };
+};
 export type ReportsStackParamList = { ReportsHome: undefined };
 export type SettingsStackParamList = { SettingsHome: undefined };

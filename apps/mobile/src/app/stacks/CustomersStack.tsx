@@ -1,8 +1,11 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { CustomersStackParamList } from '../navigation';
 import { buildStackScreenOptions } from '../navigationTheme';
-import { PlaceholderScreen } from '../screens/PlaceholderScreen';
+import { CustomerListScreen } from '../../features/customers/CustomerListScreen';
+import { CustomerDetailScreen } from '../../features/customers/CustomerDetailScreen';
+import { CustomersProvider } from '../../features/customers/CustomersProvider';
 import { useTheme } from '../../theme/theme';
 
 const Stack = createNativeStackNavigator<CustomersStackParamList>();
@@ -10,18 +13,35 @@ const Stack = createNativeStackNavigator<CustomersStackParamList>();
 export function CustomersStack() {
   const { colors } = useTheme();
   return (
-    <Stack.Navigator screenOptions={buildStackScreenOptions(colors)}>
-      <Stack.Screen
-        name="CustomersHome"
-        component={CustomersHomeScreen}
-        options={{ title: 'Customers' }}
-      />
-    </Stack.Navigator>
+    <CustomersProvider>
+      <Stack.Navigator screenOptions={buildStackScreenOptions(colors)}>
+        <Stack.Screen
+          name="CustomersHome"
+          component={CustomersHomeScreen}
+          options={{ title: 'Customers' }}
+        />
+        <Stack.Screen
+          name="CustomerDetail"
+          component={CustomerDetailScreenRoute}
+          options={({ route }) => ({ title: route.params.title })}
+        />
+      </Stack.Navigator>
+    </CustomersProvider>
   );
 }
 
-function CustomersHomeScreen() {
+function CustomersHomeScreen({
+  navigation,
+}: NativeStackScreenProps<CustomersStackParamList, 'CustomersHome'>) {
   return (
-    <PlaceholderScreen title="Customers" description="Liste ve kişi detayı 13.7-g'de gelir." />
+    <CustomerListScreen
+      onOpenCustomer={(customer) => navigation.navigate('CustomerDetail', customer)}
+    />
   );
+}
+
+function CustomerDetailScreenRoute({
+  route,
+}: NativeStackScreenProps<CustomersStackParamList, 'CustomerDetail'>) {
+  return <CustomerDetailScreen customerId={route.params.customerId} />;
 }

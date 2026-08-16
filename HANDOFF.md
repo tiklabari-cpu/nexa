@@ -13,6 +13,30 @@
 
 ## Task log (newest-first)
 
+## tm 90.7 — 13.7-g · Mobil Customers (CRM): liste + kişi detayı — done — 2026-08-16 UTC
+
+- **Yapıldı:** (1) `apps/mobile/src/features/customers/` — `CustomerListScreen` (arama 250ms
+  debounce + 4 segment `all`/`leads`/`recent`/`banned` + keyset "load more", nesil-sayacı
+  yarış korumalı) ve `CustomerDetailScreen` (salt-okunur: ad/e-posta/telefon/ülke/lead/banned/
+  konuşma-bilet sayısı/son aktiflik — web'in zengin panelinin değil, görevin "temel alanlar"
+  kapsamının karşılığı). (2) `context.ts` + `CustomersProvider.tsx` — Inbox'ın Provider/context
+  ayrımıyla aynı desen: yalnız Provider `useServices()`'i bilir, ekranlar `useCustomersApi()`
+  tüketir (testler sahte API'yi gerçek oturum kurmadan enjekte edebilir). (3) `api.ts` + `types.ts`
+  — ikinci istemci yok (13.7-b'nin `SessionApiClient`'ı), tipler sözleşmeden türetilir
+  (`ContractResponseBody`), elle kopyalanmaz. (4) `navigation.ts` `CustomerDetail` route'u +
+  `CustomersStack.tsx` placeholder'ı gerçek ekranlarla değiştirdi.
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · `pnpm -w test` (api 3249, mobil
+  **225**, +13) · `pnpm -w test:integration` api 89 dosya 2372 · `pnpm -w build` 8/8 (mobil
+  `expo export` ios 912 + android 907 modül). `test:e2e` bu turda koşulmadı — mobil workspace'e
+  Playwright hiç girmiyor, task'ın kendi test stratejisi de yalnız mobil jest istiyor; apps/web
+  ve apps/e2e dokunulmadı.
+- **Varsayımlar:** detay ekranı düzenleme/ban/custom fields/visit geçmişi/konuşma listesi
+  taşımıyor — görev KAPSAM'ı "salt-okunur + temel alanlar" diyor, web'in `CustomerDetailPanel`'i
+  değil.
+- **Sonraki pencereye not:** `13.7-h` (Reports KPI) ve `13.7-i` (AI/Copilot) aynı Provider/context
+  desenini izleyebilir. `13.7-k` uçtan uca doğrulamada mobil modül paritesi matrisine Customers'ı
+  eklemeli.
+
 ## tm 90.6 — 13.7-f · Mobil Inbox (liste + transcript + composer + RTM) — done — 2026-08-16 UTC
 
 - **Yapıldı:** (1) `apps/mobile/src/rtm/client.ts` — ADR-15'in AYNI zarfı, ikinci protokol yok;

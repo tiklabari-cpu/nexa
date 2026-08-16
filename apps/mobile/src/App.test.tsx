@@ -72,8 +72,11 @@ describe('App', () => {
 
     await screen.findByTestId('chat-list');
 
+    // The real Customers list, not a placeholder: 13.7-g replaced it. The
+    // shared mock answers every endpoint with `{ items: [] }`, so an empty
+    // directory is what a real fetch would show too.
     await fireEvent.press(tabButton('Customers'));
-    expect(screen.getByText("Liste ve kişi detayı 13.7-g'de gelir.")).toBeOnTheScreen();
+    expect(await screen.findByText('No customers yet.')).toBeOnTheScreen();
 
     await fireEvent.press(tabButton('Reports'));
     expect(screen.getByText("Salt-okunur KPI kartları 13.7-h'de gelir.")).toBeOnTheScreen();

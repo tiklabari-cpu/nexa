@@ -4389,12 +4389,12 @@
             "description": "Push gönderim çekirdeği (BÖLÜNMEZ) — 08.2 tercihi + hedef seçimi + cross-tenant reddi (APNs/FCM MOCK)",
             "details": "13.7-d — Push gönderim çekirdeği (BÖLÜNMEZ) — 08.2 tercihi + hedef seçimi + cross-tenant reddi (APNs/FCM MOCK)  [OPUS-MAX]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~2 pencere\n\nBÖLÜNMEZ ÇEKİRDEK (PLAN §5.1.2). Gerekçe: push HEDEFİNİ seçen kod KİRACI SINIRINI GEÇEN koddur — yanlış seçim başka bir çalışma alanının müşteri mesajını yabancı bir cihaza gönderir. Tercih kontrolü (FR-MOD-08.2), hedef seçimi ve iptal edilmiş token reddi AYNI pencerede olmalı; ayrılırsa aradaki sürümde \"tercihi kapalı kullanıcıya gönderim\" veya daha kötüsü çapraz-kiracı teslim mümkün olur.\n\nKAPSAM: yeni sohbet / atama / mention olayında ilgili ajanların CİHAZLARINA push. FR-MOD-13.8 KK'sı \"kanallar arası tutarlı\" diyor: aynı tercih kümesi (08.2) mobil kanatta da geçerli olmalı — ses/masaüstü/e-posta/tarayıcı yanına `mobile` eklenir ve tercih SUNUCUDA okunur (bugün istemci tarafında duruyor).\n\nSAĞLAYICI MOCK: gönderim `.data/push/<licenseId>/<timestamp>.json` altına yazılır; testler oradan okur. Gerçek APNs/FCM anahtarı YOKTUR (CLAUDE.md: gerçek secret yok).\n\nDOSYALAR: `apps/api/src/services/notifications/push.ts` (yeni) · **tetik noktası: `apps/api/src/routes/customer.ts:199,493,516` (`notifyAssignee` kalıbı) ve chat yazma yolları** — denetim düzeltmesi: `services/realtime/publisher.ts` bir bildirim kancası DEĞİL, RTM fan-out yayıncısıdır (\"Publishing never fails a request … after the transaction commits\"); emsalin (`assignee-email.ts`) tetiği route'tur · `apps/api/src/routes/agents.ts:43` (tercih gövdesi — model `13.7-c`'de sunucuya taşındı)\n\nREFERANS DESEN (birebir): `apps/api/src/services/notifications/assignee-email.ts` (tm 31 · 13.8) — tercih okuma + mock sink'e yazma zinciri; tetiği `routes/customer.ts:39,199` (`shouldEmailAssignee` → `notifyAssignee`). Mock sink kalıbı: `services/mail/mailer.ts` FileMailer.\n\nKAPSAM DIŞI: ekran (13.7-j), e2e (13.7-k).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/api test:integration (yeni sohbet → ilgili ajanın cihazına push yazılır; tercihi KAPALI kullanıcıya GÖNDERİLMEZ; iptal edilmiş token'a GÖNDERİLMEZ; CROSS-TENANT: başka lisansın cihazına ASLA gönderilmez — negatif matris; aynı olay iki kez push üretmez) && pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/api test:unit",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "90.3"
             ],
             "parentId": "90",
-            "updatedAt": "2026-08-16T15:26:21.254Z"
+            "updatedAt": "2026-08-16T16:26:33.949Z"
           },
           {
             "id": 5,
@@ -4493,7 +4493,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-16T15:26:21.254Z"
+        "updatedAt": "2026-08-16T16:26:33.949Z"
       },
       {
         "id": "91",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T15:26:21.255Z",
+      "lastModified": "2026-08-16T16:26:33.950Z",
       "taskCount": 124,
       "completedCount": 123,
       "tags": [

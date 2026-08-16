@@ -4352,10 +4352,10 @@
             "description": "apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları",
             "details": "13.7-a — apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları  [OPUS-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~2 pencere\n\nBARINDIRMA KARARI (§D96 — bu turda verildi): mobil bu monorepo'da `apps/mobile` olarak yaşar (Expo + React Native + TypeScript). Ayrı repo ELENDİ (CLAUDE.md \"başka repoya dokunma YOK\" sınırı; kontrat tipleri kopyalanır → drift; DoD kapısı buradan koşamaz). Erteleme ELENDİ (§F.00: gerekçesiz erteleme gizlenmiş ⬜'dir; §D60 bu tuzağı bir kez düzeltti).\n\nKAPSAM DARALTMASI (kararın ayrılmaz parçası): DoD kapısı `expo export` (JS bundle) + RN test süiti + paylaşılan kontrat tipleri üzerinden koşar. `.ipa`/`.apk` üretimi ve store yüklemesi KAPSAM DIŞI (CLAUDE.md \"production deploy yok\" + bu makinede native araç zinciri yok). Sonuç: 13.7 satırı `◐` kalır, eksik §D96'ya kabul edilen borç olarak yazılır. Mobil `Should`'dur; §F.00 kapısını bloklamaz.\n\nKAPSAM: `apps/mobile` workspace'i (`pnpm-workspace.yaml`), `@nexa/types` + `@nexa/contract` generated tiplerinin tüketimi, `turbo.json` task'larına bağlanma (typecheck/lint/test/build), `expo export` bundle kapısı.\n\nDOSYALAR: `pnpm-workspace.yaml` · `turbo.json` · `apps/mobile/package.json` · `apps/mobile/tsconfig.json` · `apps/mobile/app.json` · `tsconfig.base.json`\n\nREFERANS DESEN: `apps/widget` — framework'süz, kendi build'i olan, `@nexa/types` tüketen workspace; `turbo.json` task bağlanma kalıbı.\n\nVARSAYIM: Expo MANAGED workflow; custom native modül YAZILMAZ (araç zinciri kısıtı).\n\nKAPSAM DIŞI: oturum (13.7-b), ekranlar (13.7-e…-j).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/mobile test (iskelet testi yeşil) && pnpm --filter @nexa/mobile exec expo export (bundle üretilir, exit 0)",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "90",
-            "updatedAt": "2026-08-16T11:18:40.692Z"
+            "updatedAt": "2026-08-16T12:54:12.411Z"
           },
           {
             "id": 2,
@@ -4493,7 +4493,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-16T11:18:40.692Z"
+        "updatedAt": "2026-08-16T12:54:12.411Z"
       },
       {
         "id": "91",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T11:18:40.693Z",
+      "lastModified": "2026-08-16T12:54:12.412Z",
       "taskCount": 124,
       "completedCount": 123,
       "tags": [

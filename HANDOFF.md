@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+## tm 90.1 — 13.7-a · apps/mobile Expo/RN bootstrap + paylaşılan kontrat tipleri — done — 2026-08-16 UTC
+
+- **Yapıldı:** `apps/mobile` (yeni workspace) — Expo SDK 57 · RN 0.86 · React 19, managed workflow.
+  `pnpm-workspace.yaml`'ın `apps/*` glob'una kendiliğinden girdi; turbo'ya `build` (= `expo export`,
+  ios+android) / `typecheck` / `lint` / `test` script'leriyle bağlandı. Kontrat bağı **tip düzeyinde
+  zorunlu**: `src/lib/contract.ts` `@nexa/contract/types`'tan (bu turda eklenen `./types` alt-yolu)
+  `paths` türetir ve FR-MOD-13.7'nin dört yüzünü `MOBILE_ENDPOINTS`'te sabitler — sözleşme bir yolu
+  yeniden adlandırırsa typecheck burada düşer. Ayrıca `src/lib/api-client.ts` (kontrat-tipli, ADR-06
+  hata zarfı, zorunlu timeout) · `src/config.ts` (`expo.extra` → mutlak API/RTM tabanı).
+  **Yeni sunucu yüzeyi YOK, migration YOK.**
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `lint` 9/9 · `pnpm -w test` api 3151 +
+  web 1170 + ai-mock 136 + types 104 + rtm 102 + widget 71 + **mobile 28 (yeni)** ·
+  `test:integration` api 86 dosya 2323 + rtm · `pnpm -w build` 8/8 (mobil bundle 606/604 modül,
+  1.5 MB hbc ×2) · `pnpm -w test:e2e` **149/149** (8.9 dk). `format:check` bu turdan ÖNCE de aynı
+  5 dosyada kırmızı — dokunulmadı.
+- **Üç kurulum tuzağı, üçü de ölçülüp kapatıldı (kod kusuru değil, çözünürlük kusuru):**
+  (1) `metro.config.js` — Expo'nun monorepo rehberindeki `disableHierarchicalLookup = true` pnpm'de
+  **yanlıştır**: `expo/src/Expo.ts` → `expo-modules-core` yukarı yürüyüşle bulunur, kapatınca bundle
+  düşer. Ayrıca `@nexa/types`'ın ESM `./domain.js` belirteçleri için `.js`→`.ts` çözümleyici şimi
+  (aynısı jest'te `moduleNameMapper`). (2) `apps/web/tsconfig.json` `paths` — React 19 depoya girince
+  pnpm hoist alanına `@types/react@19` koydu ve `react-router-dom`'un `.d.ts`'i onu okudu → dokunulmamış
+  kodda "Route cannot be used as a JSX component". Her uygulama artık hangi React tipini kastettiğini
+  söylüyor. (3) `pnpm-workspace.yaml` `hoistPattern: !@types/jsdom` — `jest-expo` →
+  `jest-environment-jsdom` → `@types/jsdom` hoist edilince `vitest/optional-types.d.ts`'in
+  `import('jsdom')`'u ilk kez çözüldü, `lib.dom` **apps/api**'ye sızdı ve `xml-crypto`'nun
+  `loadSignature(node: Node)`'u tarayıcı `Node`'una dönüşerek `saml.ts`'i düşürdü. Sunucu tarayıcı
+  global'lerine karşı derlenmemeli — sızıntı kaynağında kapatıldı, çağrı yerinde örtülmedi.
+- **Sonraki pencereye not:** (a) `hoistPattern` değişikliği `node_modules`'ü bir kez yeniden kurar
+  (`confirmModulesPurge: false` eklendi, aksi halde TTY'siz pencere `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`
+  alır) ve purge sonrası **`pnpm --filter @nexa/api db:generate` gerekir** — Prisma client store'da yaşıyor.
+  (b) e2e sabit portları paylaşır: purge'den önce açık kalmış bir Vite dev sunucusu 5173'te bayat
+  optimize cache'le durur ve **126 test beyaz ekranla düşer**; kod kusuru değildir, portları öldürüp
+  yeniden koş. (c) `13.7` satırı `◐` — 1/11 alt-görev; `13.7-b` (oturum, `OPUS-MAX`) sırada.
+  §D96'nın iki paylı borcu (mağaza + modül paritesi) ayrıca ve kalıcı olarak geçerli.
+
 ## tm 84.8 — 11.5-h · Uçtan uca doğrulama (white-label · sandbox · SLA) — done — 2026-08-16 UTC
 
 - **Yapıldı:** `apps/e2e/tests/entitlements.spec.ts` (yeni, 5 test) — (1) white-label: Enterprise'da

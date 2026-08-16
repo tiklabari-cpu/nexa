@@ -19,6 +19,11 @@ build/
 coverage/
 *.tsbuildinfo
 
+# --- Expo / Metro cache (apps/mobile) ---
+# `expo export` ve `expo start` proje köküne .expo/ yazar: cihaz eşleşmeleri, paket
+# hash'leri ve makineye özgü yollar. dist/ zaten yukarıda; bu onun kardeşi.
+.expo/
+
 # --- Turborepo / araç cache ---
 .turbo/
 .cache/

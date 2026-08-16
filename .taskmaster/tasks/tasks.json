@@ -4338,7 +4338,7 @@
         "description": "FR-MOD-13.7 · Should · v1'den taşındı (§D60). Barındırma kararı §D96: bu monorepo'da apps/mobile (Expo/RN), store payı kapsam dışı.",
         "details": "Faz 3 (Enterprise) · PLAN §6.1 · kalem `13.7` · dilim V3-5\n\n11 atomik alt-görev · ~15 pencere · etiket dağılımı: OPUS-XHIGH x4 · OPUS-MAX x2 · SONNET-XHIGH x5\n\nKK: \"Inbox/AI/CRM/Reports mobilde; push; tam modül paritesi (Nexa farklılaşması)\" (FR-MOD-13.7 birebir) + \"Bkz. FR-MOD-08.2; kanallar arası tutarlı\" (FR-MOD-13.8 birebir).\n\nALT-GÖREVLER SIRAYLA (her biri tek temiz pencere, kendi DoD kapısı):\n  13.7-a [OPUS-XHIGH] apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları  (bağ: —)\n  13.7-b [OPUS-MAX] Mobil oturum/token modeli (BÖLÜNMEZ) — güvenli saklama + PKCE native yönlendirme + yenileme/iptal  (bağ: 13.7-a)\n  13.7-c [OPUS-XHIGH] device_tokens tablosu + RLS + kayıt/yenileme/iptal uçları  (bağ: 13.7-a)\n  13.7-d [OPUS-MAX] Push gönderim çekirdeği (BÖLÜNMEZ) — 08.2 tercihi + hedef seçimi + cross-tenant reddi (APNs/FCM MOCK)  (bağ: 13.7-c)\n  13.7-e [SONNET-XHIGH] Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı  (bağ: 13.7-b)\n  13.7-f [OPUS-XHIGH] Mobil Inbox — sohbet listesi + transcript + composer + RTM (reconnect/missed-event)  (bağ: 13.7-e)\n  13.7-g [SONNET-XHIGH] Mobil Customers (CRM) — liste + kişi detayı  (bağ: 13.7-e)\n  13.7-h [SONNET-XHIGH] Mobil Reports — salt-okunur KPI kartları  (bağ: 13.7-e)\n  13.7-i [SONNET-XHIGH] Mobil AI/Copilot yüzeyi — özet + yanıt önerisi (salt-tüketici)  (bağ: 13.7-f)\n  13.7-j [SONNET-XHIGH] Mobil bildirim tercihleri ekranı + cihaz kaydının bağlanması  (bağ: 13.7-c, 13.7-e)\n  13.7-k [OPUS-XHIGH] Uçtan uca doğrulama — modül paritesi matrisi + push yaşam döngüsü + cross-tenant + bundle kapısı  (bağ: 13.7-f, 13.7-g, 13.7-h, 13.7-i, 13.7-j)\n\nBAĞLAM KURULUMU (bu görev KOD YAZMAZ — alt-görevleri koşulur):\n- PLAN §6.1.6 kalem kırılımı + bölünmeyen çekirdek gerekçeleri + varsayımlar + açık sorular\n- PLAN §6.2 dilim sırası ve sıralamanın gerekçesi · PLAN §G Faz-3 düz tablosu\n- CONVENTIONS DoD kapısı · TASK-RUNNER-PROMPT pencere protokolü\n- Tam alan detayı her alt-görevin kendi `details` alanındadır (Faz-3'ün companion dosyası YOK — PLAN §D98)\n\nSINIRLAR (CLAUDE.md): dış servisler MOCK · production deploy/DNS/TLS/gerçek secret/ödeme YOK ·\nforce-push/DB drop/history rewrite YOK · başka repoya dokunma YOK.",
         "testStrategy": "Her alt-görev KENDİ tam DoD kapısından geçer (CONVENTIONS §1): pnpm -w typecheck && pnpm -w lint && pnpm -w test && pnpm -w build && ilgili test:integration/test:e2e — hepsi exit 0. Kalem ancak son doğrulama alt-görevi (13.7-k) yeşil olduğunda ✅ sayılır. Her alt-görevin kendi testStrategy alanı o pencerenin kapı komutlarını verir.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           "81",
           "82",
@@ -4352,10 +4352,10 @@
             "description": "apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları",
             "details": "13.7-a — apps/mobile Expo/RN workspace bootstrap + paylaşılan kontrat tipleri + kapı komutları  [OPUS-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~2 pencere\n\nBARINDIRMA KARARI (§D96 — bu turda verildi): mobil bu monorepo'da `apps/mobile` olarak yaşar (Expo + React Native + TypeScript). Ayrı repo ELENDİ (CLAUDE.md \"başka repoya dokunma YOK\" sınırı; kontrat tipleri kopyalanır → drift; DoD kapısı buradan koşamaz). Erteleme ELENDİ (§F.00: gerekçesiz erteleme gizlenmiş ⬜'dir; §D60 bu tuzağı bir kez düzeltti).\n\nKAPSAM DARALTMASI (kararın ayrılmaz parçası): DoD kapısı `expo export` (JS bundle) + RN test süiti + paylaşılan kontrat tipleri üzerinden koşar. `.ipa`/`.apk` üretimi ve store yüklemesi KAPSAM DIŞI (CLAUDE.md \"production deploy yok\" + bu makinede native araç zinciri yok). Sonuç: 13.7 satırı `◐` kalır, eksik §D96'ya kabul edilen borç olarak yazılır. Mobil `Should`'dur; §F.00 kapısını bloklamaz.\n\nKAPSAM: `apps/mobile` workspace'i (`pnpm-workspace.yaml`), `@nexa/types` + `@nexa/contract` generated tiplerinin tüketimi, `turbo.json` task'larına bağlanma (typecheck/lint/test/build), `expo export` bundle kapısı.\n\nDOSYALAR: `pnpm-workspace.yaml` · `turbo.json` · `apps/mobile/package.json` · `apps/mobile/tsconfig.json` · `apps/mobile/app.json` · `tsconfig.base.json`\n\nREFERANS DESEN: `apps/widget` — framework'süz, kendi build'i olan, `@nexa/types` tüketen workspace; `turbo.json` task bağlanma kalıbı.\n\nVARSAYIM: Expo MANAGED workflow; custom native modül YAZILMAZ (araç zinciri kısıtı).\n\nKAPSAM DIŞI: oturum (13.7-b), ekranlar (13.7-e…-j).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm -w typecheck && pnpm -w lint && pnpm -w build && pnpm --filter @nexa/mobile test (iskelet testi yeşil) && pnpm --filter @nexa/mobile exec expo export (bundle üretilir, exit 0)",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "90",
-            "updatedAt": "2026-08-11T20:47:57.075Z"
+            "updatedAt": "2026-08-16T11:18:40.692Z"
           },
           {
             "id": 2,
@@ -4493,7 +4493,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-11T21:09:39.258Z"
+        "updatedAt": "2026-08-16T11:18:40.692Z"
       },
       {
         "id": "91",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T11:16:09.738Z",
+      "lastModified": "2026-08-16T11:18:40.693Z",
       "taskCount": 124,
       "completedCount": 123,
       "tags": [

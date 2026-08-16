@@ -10,3 +10,27 @@ allowBuilds:
   "@prisma/engines": true
   esbuild: true
   prisma: true
+
+# pnpm hoists one copy of every transitive package into `node_modules/.pnpm/node_modules/`
+# as a fallback resolution root. That directory is visible to EVERY package in the virtual
+# store, so a type package pulled in by one workspace silently changes what `tsc` sees in
+# all the others.
+#
+# Measured when `apps/mobile` arrived (tm 90.1): `jest-expo` depends on
+# `jest-environment-jsdom`, which depends on `@types/jsdom`. Hoisted, it made
+# `vitest/optional-types.d.ts`'s `import('jsdom')` resolve for the first time, which pulled
+# `lib.dom` into `apps/api`'s program — a Node-only service — and gave it a global DOM
+# `Node`. `xml-crypto`'s `loadSignature(node: Node)` then meant the browser `Node` instead
+# of degrading to `any`, and `apps/api/src/lib/saml.ts` stopped compiling on code nobody had
+# touched. A server must not typecheck against browser globals, so the leak is closed here
+# rather than papered over at the call site. `jest-environment-jsdom` declares
+# `@types/jsdom` itself and still gets its own copy; only the repo-wide fallback is withdrawn.
+hoistPattern:
+  - "*"
+  - "!@types/jsdom"
+
+# Changing `hoistPattern` invalidates the whole `node_modules` layout, so the next install
+# rebuilds it. pnpm normally stops and asks first, and a window running without a TTY gets
+# `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` instead of an install — a gate failure with
+# nothing actually broken.
+confirmModulesPurge: false

@@ -4,7 +4,25 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    // Pin the React typings for the whole program, this app's own sources and the
+    // `.d.ts` files inside its dependencies alike.
+    //
+    // Without this, a declaration file in `node_modules` that imports from
+    // `react` — `react-router-dom` is the one that bites — resolves `@types/react`
+    // by walking up from wherever pnpm stored it, which lands in the shared
+    // `.pnpm/node_modules` hoist area rather than in `apps/web/node_modules`.
+    // That was harmless while React 18 was the only version in the repo. Once
+    // `apps/mobile` arrived with React 19 (Expo SDK 57 requires it, tm 90.1) pnpm
+    // hoisted 19 instead, `Route` started being typed against a different
+    // `ReactNode` than the one this app uses, and `tsc` reported the classic
+    // "cannot be used as a JSX component" on code nobody had touched. Two apps in
+    // one repo on two React majors is a legitimate state; each just has to say
+    // which typings it means.
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react-dom": ["./node_modules/@types/react-dom"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "vitest.setup.ts"]
 }

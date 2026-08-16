@@ -141,7 +141,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | MOD-10 Billing                |  ●  |  ○  |     |  ○   |           ✅ checkout (MOCK) + trial            |
 | MOD-11 Customer widget        |  ●  |  ○  |     |  ○   |       ✅ launcher/greeting/persona/attach       |
 | MOD-12 Copilot                |  ○  |  ●  |  ○  |      |        ✅ ayrı KB + panel + özet/yanıt/enhance         |
-| Mobil app                     |     |  ●  |  ○  |      | ⬜ → K13.7 · **Faz-3'e taşındı** (§D60 · barındırma §D96, tm 90) — ●/○ PRD §5.5 aynasıdır, taşıma bizim sapmamız |
+| Mobil app                     |     |  ●  |  ○  |      | ◐ → K13.7 · **Faz-3'e taşındı** (§D60 · barındırma §D96, tm 90) — ●/○ PRD §5.5 aynasıdır, taşıma bizim sapmamız |
 
 **Bu tablonun bakım kuralı (§D100, tm 122).** `MVP/v1/v2/Ent.` sütunları **PRD §5.5'in
 aynasıdır** — bizim faz kararlarımızla değiştirilmez; bir taşıma olduysa (ör. 13.7 → Faz 3)
@@ -567,7 +567,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 12.1–12.3 | **Copilot** (buton, ayrı KB, özet + yanıt yardımı) | Should (v1) | ✅ → K12.1-12.3 |
 | 13.1 | Home dashboard | Should (v1) | ✅ → K13.1 |
 | 13.6 | Omnichannel Ticketing / HelpDesk katmanı | Should (v1) | ✅ → K13.6 |
-| 13.7 | Mobil uygulamalar | Should (v1) | ⬜ → K13.7 |
+| 13.7 | Mobil uygulamalar | Should (v1) | ◐ → K13.7 |
 
 ---
 
@@ -4758,6 +4758,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 #### K13.7 — 13.7 · Mobil uygulamalar
 
 🔒 → **Faz 3 (Enterprise)** — v1 kapanışını bloklamadı, ama gerekçesi bu turda **düzeltildi**: eski metin "PRD §11.1/8 ile hizalı" diyordu; §11.1/8 **masaüstü** native uygulama hakkındadır, mobil hakkında değil (yanlış atıf → gerekçesiz 🔒 = §F.00'a göre gizlenmiş ⬜). Yeni gerekçe: native iOS/Android bu deponun stack'i (TS monorepo: Fastify+React+Vite) dışındadır; ayrı bir uygulama hattı + store süreci ister. Faz 3'e **açıkça** atandı → §6 · §6.1 · tm 90. §D60
+
+- ✅ **13.7-a — `apps/mobile` ayağa kalktı (2026-08-16):** Expo SDK 57 + React Native 0.86 + React 19 managed workspace; `pnpm-workspace.yaml`'ın `apps/*` glob'una kendiliğinden girdi, turbo task'larına `build`/`typecheck`/`lint`/`test` script'leriyle bağlandı. Paylaşılan kontrat **tip düzeyinde zorunlu**: `src/lib/contract.ts` `@nexa/contract/types`'tan `paths` türetir (yeni `./types` alt-yolu — paket kökü `node:fs` + `import.meta.url` taşıyor, Metro'da anlamsız), FR-MOD-13.7'nin dört yüzünü + `/health`'i `MOBILE_ENDPOINTS`'te sabitler; sözleşme bir yolu yeniden adlandırırsa `pnpm -w typecheck` burada kırmızıya döner. `src/lib/api-client.ts` — kontrat-tipli istek/yanıt, ADR-06 hata zarfı (`@nexa/types`), radyo için zorunlu timeout + `network` kategorisi. `src/config.ts` — `expo.extra`'dan mutlak API/RTM tabanı, protokol doğrulamasıyla. Kapı: `expo export` (ios+android, 606/604 modül, 1.5 MB hbc × 2) · `apps/mobile/src/{config,App}.test.tsx?` + `src/lib/{contract,api-client}.test.ts` (**28**, jest-expo + RNTL) · tm 90.1. **Kalan (10/11 alt-görev):** oturum `13.7-b`, `device_tokens` `13.7-c`, push `13.7-d`, kabuk `13.7-e`, dört ekran `13.7-f…-i`, bildirim tercihleri `13.7-j`, uçtan uca `13.7-k`. Satır bu yüzden `◐`; §D96'nın iki paylı borcu (mağaza + modül paritesi) ayrıca ve kalıcı olarak geçerli.
 
 #### K06.3.2-bulk — 06.3.2-bulk · Bulk/CSV knowledge base import
 

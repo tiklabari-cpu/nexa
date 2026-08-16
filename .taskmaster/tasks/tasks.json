@@ -4441,12 +4441,12 @@
             "description": "Mobil Reports — salt-okunur KPI kartları",
             "details": "13.7-h — Mobil Reports — salt-okunur KPI kartları  [SONNET-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nKAPSAM: FR-MOD-13.7 KK'sındaki \"Reports\" payı — Overview KPI kartları, salt-okunur. Düşük-baz (low-N) uyarısı KORUNUR (FR-MOD-07.3.2 zorunlu).\n\nDOSYALAR: `apps/mobile/src/features/reports/`\n\nREFERANS DESEN: `apps/web/src/features/reports/ReportsPage.tsx` KPI kartı kalıbı; aynı uç, aynı ADR-09 sayıları (Manual/Assisted/Automated tutarlılığı bozulmaz).\n\nKAPSAM DIŞI: rapor grupları, export, zamanlanmış raporlar (mobil kapsam dışı).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**HTTP İSTEMCİSİ (denetim bulgusu):** `13.7-b`'nin `apps/mobile/src/api/client.ts`'i kullanılır. **İkinci bir istemci veya elle `fetch` YAZILMAZ** — token iliştirme ve 401 yenileme oturum çekirdeğinin parçasıdır.",
             "testStrategy": "pnpm --filter @nexa/mobile test (KPI kartları değerleri gösterir; düşük-baz uyarısı eşiğin altında görünür; boş/yükleme durumları anlamlı) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "90.5"
             ],
             "parentId": "90",
-            "updatedAt": "2026-08-16T19:52:30.304Z"
+            "updatedAt": "2026-08-16T20:29:23.006Z"
           },
           {
             "id": 9,
@@ -4493,7 +4493,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-16T19:52:30.304Z"
+        "updatedAt": "2026-08-16T20:29:23.006Z"
       },
       {
         "id": "91",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T19:52:30.305Z",
+      "lastModified": "2026-08-16T20:29:23.007Z",
       "taskCount": 124,
       "completedCount": 123,
       "tags": [

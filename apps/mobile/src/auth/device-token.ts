@@ -25,29 +25,35 @@
  *      tenant A's chat while displaying tenant B's inbox is not a bug anybody
  *      reports — it is a bug somebody screenshots.
  *
- * The transport is injected because the endpoints it will call are `13.7-c`'s
- * and do not exist yet. What exists here is the ordering, and the ordering is
- * the part that is dangerous to get wrong later.
+ * The transport is injected because the endpoints it calls were `13.7-c`'s and
+ * did not exist when this was written. They do now, and `13.7-l` supplies both
+ * halves: `push-tokens.ts` is the provider, `device-token-transport.ts` is the
+ * transport. What stays here is the ordering, which was always the part that
+ * was dangerous to get wrong later.
  */
 import type { SessionStore } from './secure-store';
 
-/** How this app learns its own push token — `expo-notifications` in `13.7-c`. */
+/** How this app learns its own push token — `push-tokens.ts` (`13.7-l`). */
 export interface DeviceTokenProvider {
   /** `null` when the person has not granted notification permission. */
   getToken(): Promise<string | null>;
 }
 
-/** `POST`/`DELETE` against `13.7-c`'s `device_tokens` endpoints. */
+/** `POST`/`DELETE` against `13.7-c`'s `/notifications/devices` endpoints. */
 export interface DeviceTokenTransport {
   register(input: { token: string; accessToken: string }): Promise<void>;
   revoke(input: { token: string; accessToken: string }): Promise<void>;
 }
 
 /**
- * The default until `13.7-c` lands: no permission has been asked for, so there
- * is no token, so every trigger below is a no-op. Chosen over leaving the
- * dependency optional because "no token" is a real runtime state — a person who
- * declined notifications — and the lifecycle has to handle it either way.
+ * A device that will never have a token, as an object rather than a `null`
+ * dependency: "no token" is a real runtime state — a person who declined
+ * notifications — and the lifecycle has to handle it either way.
+ *
+ * This was the app's default until `13.7-l` wired the real provider in
+ * (`services.tsx`). It stays because it is still what a test wants when the
+ * subject is the ordering rather than the fetching, and because it is the
+ * honest stand-in on a platform with no push at all.
  */
 export const noDeviceToken: DeviceTokenProvider = { getToken: async () => null };
 

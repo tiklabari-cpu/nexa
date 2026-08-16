@@ -126,6 +126,48 @@ describe('SessionStore', () => {
     expect(await subject.readDeviceToken()).toBeNull();
   });
 
+  it('round-trips the registration id — the only copy of it that exists', async () => {
+    // `13.7-c` deliberately publishes no read surface that returns a token, so
+    // there is no way to ask the server "which registration is mine?". If this
+    // is not written down at register time it is gone (13.7-l).
+    const subject = new SessionStore(fakeStore());
+
+    await subject.writeDeviceId('device-9');
+
+    expect(await subject.readDeviceId()).toBe('device-9');
+  });
+
+  it('refuses to write a registration id when the store is unavailable', async () => {
+    const subject = new SessionStore(fakeStore(false));
+    await expect(subject.writeDeviceId('device-9')).rejects.toBeInstanceOf(
+      SecureStoreUnavailableError,
+    );
+  });
+
+  it('forgets the token and the registration id in one call, never one of them', async () => {
+    const store = fakeStore();
+    const subject = new SessionStore(store);
+    await subject.writeDeviceToken('device-1');
+    await subject.writeDeviceId('device-9');
+
+    await subject.clearDeviceToken();
+
+    // A leftover token is a live delivery address; a leftover id is a licence
+    // to revoke a registration this handset no longer holds. Neither survives.
+    expect(await subject.readDeviceToken()).toBeNull();
+    expect(await subject.readDeviceId()).toBeNull();
+  });
+
+  it('clears the registration id with the session too', async () => {
+    const subject = new SessionStore(fakeStore());
+    await subject.write(SESSION);
+    await subject.writeDeviceId('device-9');
+
+    await subject.clearAll();
+
+    expect(await subject.readDeviceId()).toBeNull();
+  });
+
   it('never writes the access token — only the refresh token is persisted', async () => {
     const store = fakeStore();
     await new SessionStore(store).write(SESSION);

@@ -5,10 +5,11 @@
  * read that as *screen* parity over the four surfaces the criterion names by
  * name — Inbox, AI, CRM, Reports — with Settings, Billing, Playbook and Team
  * explicitly outside the phone. Ten windows (`13.7-a`…`-j`) each closed one
- * piece of that and each said so in its own handoff note. This file is the one
- * place the claim is *counted* rather than narrated, and the only place a
- * reader can see the whole shape at once: what is covered, what was left out on
- * purpose, and what is still owed.
+ * piece of that and each said so in its own handoff note, and `13.7-l` came
+ * back for the one this file caught still open. This file is the one place the
+ * claim is *counted* rather than narrated, and the only place a reader can see
+ * the whole shape at once: what is covered, what was left out on purpose, and
+ * what is still owed.
  *
  * Everything below is derived from artifacts rather than restated from them.
  * The matrix names a surface; the test then goes and looks — at the screen file
@@ -157,8 +158,8 @@ const MATRIX: readonly Surface[] = [
 /**
  * Endpoints the phone calls that belong to no FR-MOD-13.7 surface.
  *
- * Both entries are load-bearing rather than leftovers, and both are here so
- * that the "classify everything" assertion below has somewhere honest to put
+ * Every entry is load-bearing rather than a leftover, and all of them are here
+ * so that the "classify everything" assertion below has somewhere honest to put
  * them instead of the matrix growing a fifth surface it does not have.
  */
 const SUPPORTING: readonly { endpoints: string[]; why: string }[] = [
@@ -169,6 +170,10 @@ const SUPPORTING: readonly { endpoints: string[]; why: string }[] = [
   {
     endpoints: ['/agents/me/notification-preferences'],
     why: 'FR-MOD-08.2 asks for one preference set consistent across channels, so the phone reads and writes the same five (13.7-j)',
+  },
+  {
+    endpoints: ['/notifications/devices', '/notifications/devices/{deviceId}'],
+    why: 'this handset registering itself as a delivery target — a session decision rather than a screen (§C-A31 · 13.7-l), which is why it is called from `auth/` and belongs to no surface',
   },
 ];
 
@@ -218,7 +223,6 @@ const OUT_OF_SCOPE: readonly { module: string; matches: (path: string) => boolea
  */
 const OPEN_DEBTS = [
   'store publishing: the gate builds a JS bundle (`expo export`); no .ipa/.apk, no store submission (§D96)',
-  'handset registration: `DeviceTokenLifecycle` ships with no provider and no transport, so the app never calls `/notifications/devices` — the server half (13.7-c/-d) is complete and tested without it',
 ] as const;
 
 // --- The four surfaces ------------------------------------------------------
@@ -357,16 +361,44 @@ describe('module parity matrix — the modules §C-A28 puts out of scope', () =>
 // --- The debt this matrix refuses to hide -----------------------------------
 
 describe('module parity matrix — what is still owed', () => {
-  it('does not register the handset itself — the server half stands alone', () => {
-    // `13.7-b` built the ordering (revoke before register on an account switch)
-    // and injected the transport because `13.7-c`'s endpoints did not exist
-    // yet; they do now, and nothing wired them together. Recorded rather than
-    // fixed here because wiring it needs `expo-notifications` and a permission
-    // prompt — new dependencies, not verification. When it lands, this
-    // assertion is the thing that says so.
-    expect([...REQUESTED]).not.toContain('/notifications/devices');
-    const deviceToken = readFileSync(join(SRC, 'auth', 'device-token.ts'), 'utf8');
-    expect(deviceToken).toContain('noDeviceToken');
+  it('registers the handset itself — the debt 13.7-k recorded, paid (13.7-l)', () => {
+    // The inverse of the assertion this file shipped with. `13.7-b` built the
+    // ordering (revoke before register on an account switch) and left the
+    // provider and transport injectable because `13.7-c`'s endpoints did not
+    // exist yet; `13.7-k` found them still unsupplied and wrote the gap down
+    // here rather than hiding it. Both halves now exist, so the claim flips —
+    // and it stays a claim about the app rather than about a file existing:
+    // the phone asks for both ends of the registration.
+    expect([...REQUESTED]).toContain('/notifications/devices');
+    expect([...REQUESTED]).toContain('/notifications/devices/{deviceId}');
+
+    // Wired, not merely written. The lifecycle takes both dependencies with
+    // defaults that do nothing (`noDeviceToken`, a null transport), so a
+    // construction that passed neither would leave every assertion above true
+    // of code no session ever reaches.
+    const services = readFileSync(join(SRC, 'app', 'services.tsx'), 'utf8');
+    expect(services).toContain('provider: expoPushTokens');
+    expect(services).toContain('createDeviceTokenTransport');
+    expect(services).toContain('deviceTokens: buildDeviceTokens');
+
+    // The dependency that made this a subtask of its own rather than part of
+    // 13.7-k's verification pass.
+    const manifest = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    expect(manifest.dependencies).toHaveProperty('expo-notifications');
+  });
+
+  it('tells somebody whose phone is refusing what the account permits', () => {
+    // The state that can only exist once registration is real: the account says
+    // push is on and the handset shows nothing. Left unsaid, the screen would
+    // read "delivered" to a person who is never interrupted (13.7-l).
+    const settingsScreen = readFileSync(
+      join(SRC, 'features', 'notifications', 'NotificationsScreen.tsx'),
+      'utf8',
+    );
+    expect(settingsScreen).toContain('deviceBlocksPush');
+    expect(settingsScreen).toContain('useDevicePushPermission');
   });
 
   it('builds a JS bundle, not a store artifact (§D96)', () => {
@@ -391,12 +423,12 @@ describe('module parity matrix — what is still owed', () => {
     }).toEqual({
       surfacesCovered: 4,
       modulesOutOfScope: 4,
-      endpointsCalled: 13,
+      endpointsCalled: 15,
       // Not a target — a denominator. The phone reaching 15 of the product's
       // paths is what "screen parity, not endpoint parity" (§C-A28) costs, and
       // the number moving is a prompt to re-read this matrix rather than a failure.
       contractEndpoints: 183,
-      openDebts: 2,
+      openDebts: 1,
     });
   });
 });

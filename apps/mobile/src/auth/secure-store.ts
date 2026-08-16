@@ -15,7 +15,8 @@
  *
  * The device push token is here too rather than beside the push code: it is the
  * thing that must be gone the instant a session ends (§C-A31 · 13.7-b), and
- * "gone" means gone from the same store, under the same clear.
+ * "gone" means gone from the same store, under the same clear. Its registration
+ * id sits beside it for the same reason and one more: it cannot be re-derived.
  */
 import * as SecureStore from 'expo-secure-store';
 
@@ -64,6 +65,7 @@ export interface PersistedSession {
 
 const SESSION_KEY = 'nexa.session';
 const DEVICE_TOKEN_KEY = 'nexa.device_token';
+const DEVICE_ID_KEY = 'nexa.device_id';
 
 /**
  * The session and the device token, read and written as whole values.
@@ -113,8 +115,42 @@ export class SessionStore {
     await this.#store.setItem(DEVICE_TOKEN_KEY, token);
   }
 
+  /**
+   * The id `POST /notifications/devices` answered with — what
+   * `DELETE /notifications/devices/{deviceId}` takes.
+   *
+   * Written down rather than looked up because it cannot be looked up: no read
+   * surface in that API ever returns a token (13.7-c deliberately does not
+   * publish one), so there is nothing to match a handset's own token against.
+   * A phone that remembered only its token could never name its own
+   * registration, and "sign out" would leave the row delivering.
+   *
+   * It is written immediately before the token and cleared in the same call as
+   * the token, so the pair is never half-present — see
+   * {@link clearDeviceToken}.
+   */
+  async readDeviceId(): Promise<string | null> {
+    return this.#store.getItem(DEVICE_ID_KEY);
+  }
+
+  async writeDeviceId(deviceId: string): Promise<void> {
+    await this.#requireSecureStorage();
+    await this.#store.setItem(DEVICE_ID_KEY, deviceId);
+  }
+
+  /**
+   * Forget this handset's registration — both halves of it.
+   *
+   * One method rather than two because a caller who cleared the token and kept
+   * the id would leave the next session able to revoke a registration that is
+   * no longer described anywhere, and one who did the reverse would leave a
+   * live delivery address with no way to name it.
+   */
   async clearDeviceToken(): Promise<void> {
-    await this.#store.removeItem(DEVICE_TOKEN_KEY);
+    await Promise.all([
+      this.#store.removeItem(DEVICE_TOKEN_KEY),
+      this.#store.removeItem(DEVICE_ID_KEY),
+    ]);
   }
 
   /**

@@ -12,20 +12,25 @@
  * account switch is a cross-tenant delivery risk, an isolation decision, not
  * a settings-screen one (13.7-j KAPSAM).
  *
- * "İzin durumu" here is not an OS permission prompt — a phone that never
- * asked for one has no separate capability to query, and this screen does
- * not add one. It is `pushAllowed(prefs)` (`@nexa/types`), the single place
- * the master switch's effect on push is decided, named for this screen in
- * that function's own doc comment: "the sender (13.7-d), the mobile settings
- * screen (13.7-j) and the web console cannot disagree about what
- * 'notifications off' means for a phone."
+ * "İzin durumu" is two questions, not one, and `13.7-l` is where the second
+ * one arrived. `pushAllowed(prefs)` (`@nexa/types`) is what the *account*
+ * asked for — the single place the master switch's effect on push is decided,
+ * named for this screen in that function's own doc comment: "the sender
+ * (13.7-d), the mobile settings screen (13.7-j) and the web console cannot
+ * disagree about what 'notifications off' means for a phone." What it cannot
+ * see is whether this *handset* will show anything, which is the operating
+ * system's answer and overrules the account's. A screen that reported only the
+ * first would show "on" to somebody who has denied Nexa notifications in iOS
+ * Settings and will never be interrupted — the one failure a settings screen
+ * must not have, because the person has no way to discover it.
  */
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { pushAllowed } from '@nexa/types';
 
-import { useNotificationsApi } from './context';
+import { useDevicePushPermission, useNotificationsApi } from './context';
 import type { NotificationPreferences, NotificationPreferencesPatch } from './types';
+import type { PushPermission } from '../../auth/push-tokens';
 import { FONT_SIZE, RADIUS, SPACING } from '../../theme/tokens';
 import { useTheme } from '../../theme/theme';
 import type { ColorTokens } from '../../theme/tokens';
@@ -39,9 +44,30 @@ export function NotificationsScreen() {
   const { colors } = useTheme();
   const api = useNotificationsApi();
 
+  const readDevicePermission = useDevicePushPermission();
+
   const [state, setState] = useState<ScreenState>({ status: 'loading' });
   const [saveError, setSaveError] = useState(false);
+  /** `null` until the device has answered — and on a build that cannot ask. */
+  const [devicePermission, setDevicePermission] = useState<PushPermission | null>(null);
   const generation = useRef(0);
+
+  useEffect(() => {
+    if (readDevicePermission === null) return;
+    let live = true;
+    readDevicePermission()
+      .then((permission) => {
+        if (live) setDevicePermission(permission);
+      })
+      .catch(() => {
+        // Not knowing is not a refusal; leaving it null keeps the screen quiet
+        // rather than accusing the phone of blocking something.
+        if (live) setDevicePermission(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [readDevicePermission]);
 
   useEffect(() => {
     const mine = ++generation.current;
@@ -144,8 +170,8 @@ export function NotificationsScreen() {
         />
         <Row
           label="Push notifications"
-          hint={pushStatusHint(prefs)}
-          hintTone={pushAllowed(prefs) ? 'neutral' : 'warn'}
+          hint={pushStatusHint(prefs, devicePermission)}
+          hintTone={pushReaches(prefs, devicePermission) ? 'neutral' : 'warn'}
           value={prefs.push}
           disabled={!prefs.enabled}
           onValueChange={(value) => void update({ push: value })}
@@ -173,17 +199,40 @@ export function NotificationsScreen() {
 }
 
 /**
- * The one line this screen must not get wrong: whether a push actually
- * reaches this handset right now. `pushAllowed` is the single source both
- * the sender (`13.7-d`) and the web console already defer to, so a "denied"
- * reading here can never disagree with what actually happens on send.
+ * Whether a push would actually arrive on this handset right now.
+ *
+ * Two gates, and both have to be open. `pushAllowed` is the account's, the
+ * single source the sender (`13.7-d`) and the web console already defer to, so
+ * this half can never disagree with what happens on send. The device's is the
+ * other half, and it is the one the server cannot see: the operating system
+ * shows nothing regardless of what the account asked for.
+ *
+ * `null` — not yet read, or a build that cannot ask — counts as open. The
+ * alternative is a warning that flashes on every mount before the device has
+ * answered, which trains people to ignore the one that means something.
  */
-function pushStatusHint(prefs: NotificationPreferences): string {
-  if (pushAllowed(prefs)) {
-    return 'Delivered to this phone and any other device signed in on this workspace.';
-  }
+function pushReaches(prefs: NotificationPreferences, device: PushPermission | null): boolean {
+  return pushAllowed(prefs) && !deviceBlocksPush(device);
+}
+
+function deviceBlocksPush(device: PushPermission | null): boolean {
+  return device === 'denied' || device === 'undetermined';
+}
+
+/**
+ * The one line this screen must not get wrong: why a push will or will not
+ * arrive. Ordered from the switch furthest from the person's control to the
+ * nearest, so the sentence names the thing they would have to change.
+ */
+function pushStatusHint(prefs: NotificationPreferences, device: PushPermission | null): string {
   if (!prefs.enabled) return 'Off — notifications are disabled above.';
-  return 'Off for this workspace.';
+  if (!prefs.push) return 'Off for this workspace.';
+  if (deviceBlocksPush(device)) {
+    // The state 13.7-j could not report: on for the account, silent on the
+    // handset. Says where the switch is, because it is not on this screen.
+    return 'On for this workspace, but this phone is not allowing Nexa to notify you — turn notifications on in your device settings.';
+  }
+  return 'Delivered to this phone and any other device signed in on this workspace.';
 }
 
 function Row({

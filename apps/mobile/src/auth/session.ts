@@ -181,6 +181,15 @@ export class MobileSession {
       accessToken,
       principal: await this.#loadPrincipal(accessToken),
     });
+
+    // Re-register this handset, on every launch, exactly as `13.7-c` says the
+    // app does — its upsert is keyed on the token precisely so this is cheap
+    // and idempotent. It has to happen here and not only at sign-in: a person
+    // who stays signed in for a month never passes through `#redeem` again,
+    // while the operating system may hand out a new APNs/FCM address at any
+    // point in that month. Without this, push would stop and nothing would say
+    // so. After `#set`, so the inbox is already on screen while it happens.
+    await this.#deviceTokens.onSignedIn(accessToken);
   }
 
   /** Which workspaces this password opens. Issues no token (`/auth/login`). */

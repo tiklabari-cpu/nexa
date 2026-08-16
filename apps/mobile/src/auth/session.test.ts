@@ -100,10 +100,13 @@ const ME = {
 
 function build(
   routes: Record<string, () => Response | Promise<Response>>,
-  extra: { browser?: AuthBrowser; deviceTokens?: DeviceTokenLifecycle } = {},
+  // `store` is here for the tests that have to build a `DeviceTokenLifecycle`
+  // first: the lifecycle needs a store, and the session has to be reading the
+  // same one for a persisted session to be visible to both.
+  extra: { browser?: AuthBrowser; deviceTokens?: DeviceTokenLifecycle; store?: SessionStore } = {},
 ) {
   const { store, values } = memoryStore();
-  const sessionStore = new SessionStore(store);
+  const sessionStore = extra.store ?? new SessionStore(store);
   const { impl, calls } = fakeFetch(routes);
   const session = new MobileSession({
     apiBaseUrl: API,
@@ -319,6 +322,55 @@ describe('restore', () => {
 
     await expect(session.restore()).rejects.toMatchObject({ type: 'network' });
     expect((await sessionStore.read())!.refreshToken).toBe('refresh-1');
+  });
+
+  it('re-registers the handset on every launch, not only at sign-in (13.7-l)', async () => {
+    const { store } = memoryStore();
+    const sessionStore = new SessionStore(store);
+    const register = jest.fn(async () => undefined);
+    const deviceTokens = new DeviceTokenLifecycle({
+      store: sessionStore,
+      provider: { getToken: async () => 'apns-1' },
+      transport: { register, revoke: jest.fn(async () => undefined) },
+    });
+    const { session } = build(
+      {
+        'POST /auth/token': () => json({ ...GRANT, access_token: 'access-2' }),
+        'GET /auth/me': () => json(ME),
+      },
+      { deviceTokens, store: sessionStore },
+    );
+    await sessionStore.write({
+      refreshToken: 'refresh-1',
+      clientId: 'nexa-agent-app-1',
+      licenseId: '42',
+      accountId: 'acct-1',
+    });
+
+    await session.restore();
+
+    // Somebody who stays signed in for a month never passes through `#redeem`
+    // again, while the operating system may hand out a new APNs/FCM address at
+    // any point in that month. Registering only at sign-in means push stops and
+    // nothing says so. The credential is the one this launch just minted.
+    expect(register).toHaveBeenCalledWith({ token: 'apns-1', accessToken: 'access-2' });
+  });
+
+  it('registers nothing when the launch found no session', async () => {
+    const { store } = memoryStore();
+    const sessionStore = new SessionStore(store);
+    const register = jest.fn(async () => undefined);
+    const deviceTokens = new DeviceTokenLifecycle({
+      store: sessionStore,
+      provider: { getToken: async () => 'apns-1' },
+      transport: { register, revoke: jest.fn(async () => undefined) },
+    });
+    const { session } = build({}, { deviceTokens, store: sessionStore });
+
+    await session.restore();
+
+    expect(session.getState().status).toBe('signed-out');
+    expect(register).not.toHaveBeenCalled();
   });
 });
 

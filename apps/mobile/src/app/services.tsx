@@ -15,6 +15,10 @@ import { createContext, useContext, useEffect, useMemo, useSyncExternalStore } f
 import type { PropsWithChildren } from 'react';
 
 import { SessionApiClient } from '../api/client';
+import { DeviceTokenLifecycle } from '../auth/device-token';
+import { createDeviceTokenTransport } from '../auth/device-token-transport';
+import { currentDevicePlatform, expoPushTokens } from '../auth/push-tokens';
+import { SessionStore } from '../auth/secure-store';
 import { MobileSession, type SessionState } from '../auth/session';
 import type { MobileConfig } from '../config';
 
@@ -35,7 +39,16 @@ export interface ServicesProviderProps extends PropsWithChildren {
 export function ServicesProvider({ config, services, children }: ServicesProviderProps) {
   const value = useMemo<AppServices>(() => {
     if (services !== undefined) return services;
-    const session = new MobileSession({ apiBaseUrl: config.apiBaseUrl });
+    // One store, shared: the session's refresh token and this handset's push
+    // registration are cleared together (`SessionStore.clearAll`), which two
+    // instances over the same keys would still do — but only one of them can be
+    // the object the rest of the app reasons about.
+    const store = new SessionStore();
+    const session = new MobileSession({
+      apiBaseUrl: config.apiBaseUrl,
+      store,
+      deviceTokens: buildDeviceTokens(config, store),
+    });
     return {
       config,
       session,
@@ -52,6 +65,31 @@ export function ServicesProvider({ config, services, children }: ServicesProvide
   }, [value]);
 
   return <ServicesContext.Provider value={value}>{children}</ServicesContext.Provider>;
+}
+
+/**
+ * The push-token lifecycle, with the two halves `13.7-b` left injectable
+ * actually supplied (`13.7-l`).
+ *
+ * Until this existed the app constructed the lifecycle with neither, so it held
+ * the ordering rules for a call it never made — the server side of
+ * `/notifications/devices` was complete and tested, and nothing on the phone
+ * reached it.
+ *
+ * A platform that is neither iOS nor Android gets no transport rather than a
+ * guess. The lifecycle already treats a missing transport as "do nothing",
+ * which is the honest answer for a device that cannot receive a push anyway.
+ */
+function buildDeviceTokens(config: MobileConfig, store: SessionStore): DeviceTokenLifecycle {
+  const platform = currentDevicePlatform();
+  return new DeviceTokenLifecycle({
+    store,
+    provider: expoPushTokens,
+    transport:
+      platform === null
+        ? null
+        : createDeviceTokenTransport({ baseUrl: config.apiBaseUrl, store, platform }),
+  });
 }
 
 export function useServices(): AppServices {

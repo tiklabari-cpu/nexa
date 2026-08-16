@@ -13,6 +13,36 @@
 
 ## Task log (newest-first)
 
+## 125 — 13.7-l Mobil cihaz kaydının bağlanması — done — 2026-08-17 UTC
+
+- **Yapıldı:** `DeviceTokenLifecycle` artık gerçek sağlayıcı + transport ile kuruluyor
+  (`services.tsx`), yani telefon `/notifications/devices`'ı fiilen çağırıyor. Yeni:
+  `auth/push-tokens.ts` (izin + `getDevicePushTokenAsync`), `auth/device-token-transport.ts`
+  (POST/DELETE, `ApiClient` üzerinden kimlik-bilgisi başına), `SessionStore.readDeviceId`/
+  `writeDeviceId` (DELETE `deviceId` ister, hiçbir uç token döndürmez — id yazılmazsa çıkışta
+  kayıt iptal EDİLEMEZ), `restore()` açılışta da kaydediyor, `NotificationsScreen`'e dördüncü
+  push durumu (tercih açık + cihaz izni yok). Parite matrisi tersine çevrildi: `OPEN_DEBTS` 2 → 1,
+  `endpointsCalled` 13 → 15. `expo-notifications@~57.0.11` eklendi. Sunucu/şema/sözleşme/migration
+  DEĞİŞMEDİ.
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 · `pnpm -w test`
+  (mobil **331**, diğerleri turbo cache) · `pnpm -w build` 8/8 (mobil `expo export` ios 986 +
+  android 983 modül) · integration: api **2374**/90 dosya (`--shard=1..3/3`) + rtm 60 ·
+  `pnpm -w test:e2e` **149/149** · `db:check-drift` sapma yok · `contract:generate` sonrası diff yok.
+- **Varsayımlar:** (1) `getExpoPushTokenAsync` yerine `getDevicePushTokenAsync` — task metni "Expo
+  push token" diyordu, ama o çağrı EAS proje kimliği + Expo sunucusuna canlı istek ister (CLAUDE.md
+  sınırı); native APNs/FCM adresi sözleşmenin `token` alanının zaten belgelediği şey ve `type`
+  doğrudan `platform` enum'u. (2) `SessionApiClient` yerine `ApiClient` — transport'a AÇIK bir
+  access token veriliyor (kural 2: hesap değişiminde giden hesabınki) ve `signOut()` içinden
+  tetiklenecek bir 401→refresh, bitirilmekte olan oturumu yenilemek olurdu. İkinci istemci
+  yazılmadı; aynı transport + aynı üretilmiş kontrat tipleri.
+- **Sonraki pencereye not:** `13.7` satırı hâlâ `◐` — §D96'nın mağaza payı (`.ipa`/`.apk`) ve §C-A28
+  modül daraltması açık, bu görev yalnız KAYITSIZ üçüncü boşluğu kapattı; Faz-3 kapanış turu (tm 126)
+  artık ön koşulsuz. `pnpm -w format:check` **13 dosyada kırmızı** ve hiçbiri bu turda dokunulmadı
+  (hepsi HEAD'de de kırmızıydı) — bilinen borç, görev **M-FMT**; bu pencere yalnız kendi dosyasını
+  (`device-token-transport.test.ts`) düzeltti. `apps/api` integration süiti tek koşuda 10 dk'yı
+  aşıyor: `vitest --shard=i/3` ile bölmek gerekti (`with-test-datastores.ts` üzerinden, her shard
+  kendi izole veritabanını alır).
+
 ## DÜZELTME — Görev grafiği onarımı: Task Master kuyruğu boştu, döngü duruyordu — 2026-08-17 UTC
 
 - **Bulgu:** `run-loop.sh` seçilebilir görev bulamıyor, "Hazır task kalmadı" deyip çıkacaktı.

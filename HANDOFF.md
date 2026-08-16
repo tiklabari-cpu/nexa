@@ -13,6 +13,39 @@
 
 ## Task log (newest-first)
 
+## tm 90.8 — 13.7-h · Mobil Reports — salt-okunur KPI kartları — done — 2026-08-16 UTC
+
+- **Yapıldı:** (1) `apps/mobile/src/features/reports/` — `ReportsScreen` (Volume/Resolution/
+  Chats/Responsiveness KPI kartları, `/reports/overview`'a parametresiz istek → sunucunun
+  30-günlük varsayılanı; aralık/benchmark seçici, by-agent tablosu ve top-tags listesi bilinçli
+  olarak dışarıda — 13.7-g'nin "salt-okunur + temel" daraltmasının aynısı). SLA kartı
+  `sla.low_confidence` ipucunu taşıyor (FR-MOD-07.3.2 düşük-baz uyarısı KORUNDU). (2) `context.ts`
+  + `ReportsProvider.tsx` — Customers/Inbox ile aynı Provider/context ayrımı, ikinci HTTP istemcisi
+  yok (`13.7-b`'nin `SessionApiClient`'ı). (3) `api.ts` + `types.ts` — tip sözleşmeden türetilir
+  (`ContractResponseBody<'/reports/overview','get'>`). (4) `format.ts` — formatCount/formatRate/
+  formatDuration, web'in `lib/format.ts`'ini birebir davranışta ama lokal (Metro workspace sınırını
+  aşamaz, i18n deposu henüz yok). (5) `ReportsStack.tsx` placeholder'ı gerçek ekranla değiştirdi;
+  `App.test.tsx`'in paylaşılan `fetch` mock'u `/reports/overview`'i ayrı, şema-geçerli bir gövdeyle
+  yanıtlayacak şekilde genişledi (`{items:[]}` bu şekli karşılamıyordu).
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · `pnpm -w test` (api 3249, mobil **240**,
+  +15) · `pnpm -w test:integration` api 89 dosya 2372 (ilk koşuda `push-notifications.test.ts`
+  `device_tokens_revoked_check`'e 1 kez çarptı — `revoked_at`/`created_at` art arda iki `new Date()`
+  çağrısının milisaniye sırası, apps/api'ye bu turda dokunulmadı, izole dosya 3 koşudan 2'sinde
+  yeşil; tam gate ikinci turda 5/5 yeşil — zamanlama flake'i, kod regresyonu değil). `pnpm -w build`
+  8/8 (mobil `expo export` ios 917 + android 912 modül). `test:e2e` bu turda koşulmadı — Playwright
+  mobile workspace'e hiç girmiyor, task'ın kendi test stratejisi de yalnız mobil jest istiyor;
+  apps/web ve apps/e2e dokunulmadı (13.7-g/90.7 ile aynı gerekçe).
+- **Varsayımlar:** (a) aralık/benchmark seçici YOK — görev KAPSAM'ı yalnız "Overview KPI kartları"
+  diyor, web'in on-sekmeli/aralıklı konsolu değil. (b) by-agent tablosu ve top-tags listesi mobilde
+  YOK — bunlar "KPI kartı" değil liste/tablo; mobilin diğer ekranlarının (Customers/Inbox) da
+  taşımadığı bir UI sınıfı.
+- **Sonraki pencereye not:** `13.7-i` (AI/Copilot) aynı Provider/context desenini izleyebilir.
+  `13.7-k` uçtan uca doğrulamada mobil modül paritesi matrisine Reports'u eklemeli; Reports'un
+  aralık seçici taşımadığı bilinçli bir daralma olduğu için parite notunda açıkça yazılmalı.
+  `push-notifications.test.ts`'teki zamanlama flake'i (yukarıda) hâlâ kayıtlı değil — tekrar
+  görülürse bir düzeltme task'ı açmaya değer (test, `created_at` ve `revoked_at` için ayrı
+  `new Date()` çağrılarının sıralı olacağını varsayıyor; DB check constraint bunu zorunlu kılıyor).
+
 ## tm 90.7 — 13.7-g · Mobil Customers (CRM): liste + kişi detayı — done — 2026-08-16 UTC
 
 - **Yapıldı:** (1) `apps/mobile/src/features/customers/` — `CustomerListScreen` (arama 250ms

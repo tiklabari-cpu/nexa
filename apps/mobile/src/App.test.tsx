@@ -37,19 +37,66 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
+/**
+ * A well-formed, all-zero `ReportsOverview` (13.7-h) — the shared `{ items: [] }`
+ * stand-in every other endpoint gets does not satisfy this shape, and the
+ * screen reading `totals.chats` off a mis-shaped body is exactly the crash a
+ * real empty-window response would not cause.
+ */
+const EMPTY_REPORTS_OVERVIEW = {
+  range: { from: '2026-01-01T00:00:00.000Z', to: '2026-01-31T00:00:00.000Z' },
+  previous_period: {
+    baseline: 'previous_period',
+    range: { from: '2025-12-01T00:00:00.000Z', to: '2025-12-31T00:00:00.000Z' },
+    chats: 0,
+    tickets: 0,
+    total_cases: 0,
+    closed: 0,
+    manual: 0,
+    assisted: 0,
+    automated: 0,
+    avg_first_response_seconds: null,
+    avg_duration_seconds: null,
+    satisfaction_score: null,
+    achieved_goals: 0,
+    sla_breaches: 0,
+  },
+  totals: {
+    chats: 0,
+    tickets: 0,
+    total_cases: 0,
+    closed: 0,
+    manual: 0,
+    assisted: 0,
+    automated: 0,
+    manual_rate: null,
+    assisted_rate: null,
+    automated_rate: null,
+    queued_now: 0,
+    achieved_goals: 0,
+  },
+  chats: { automated_per_hour: 0, automated_avg_duration_seconds: null, total_duration_seconds: 0 },
+  response_times: { avg_first_response_seconds: null, avg_duration_seconds: null },
+  satisfaction: { good: 0, bad: 0, score: null, responses: 0 },
+  by_agent: [],
+  top_tags: [],
+  sla: { active: false, breaches: 0, low_confidence: false },
+};
+
 describe('App', () => {
   beforeEach(() => {
     mockExtra.value = {
       apiBaseUrl: 'https://api.nexa.test/api/v1',
       rtmBaseUrl: 'wss://rtm.nexa.test',
     };
-    globalThis.fetch = jest.fn(
-      async () =>
-        new Response(JSON.stringify({ items: [] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
-    ) as unknown as typeof fetch;
+    globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const body = url.includes('/reports/overview') ? EMPTY_REPORTS_OVERVIEW : { items: [] };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
   });
 
   it('mounts the shell and shows Inbox — the tab the navigator opens on', async () => {
@@ -78,8 +125,12 @@ describe('App', () => {
     await fireEvent.press(tabButton('Customers'));
     expect(await screen.findByText('No customers yet.')).toBeOnTheScreen();
 
+    // The real Reports overview, not a placeholder: 13.7-h replaced it. The
+    // shared mock answers `/reports/overview` with an all-zero window, so an
+    // empty-but-well-formed dashboard is what a real fetch would show too.
     await fireEvent.press(tabButton('Reports'));
-    expect(screen.getByText("Salt-okunur KPI kartları 13.7-h'de gelir.")).toBeOnTheScreen();
+    expect(await screen.findByTestId('reports-overview')).toBeOnTheScreen();
+    expect(screen.getByText('Volume')).toBeOnTheScreen();
 
     await fireEvent.press(tabButton('Settings'));
     expect(

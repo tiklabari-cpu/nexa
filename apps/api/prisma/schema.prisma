@@ -182,6 +182,19 @@ model AgentMembership {
   twoFactorEnabled     Boolean   @default(false) @map("two_factor_enabled")
   /// Per-user, per-license opt-out for the e-mail notification channel (FR-MOD-13.8).
   notifyEmail          Boolean   @default(true) @map("notify_email")
+  /// Master switch over the *interruptive* channels below — sound, desktop,
+  /// push. Not over `notifyEmail`: e-mail is the fallback for somebody who is
+  /// not at a screen, and "stop alerting me now" was never a request to stop
+  /// that too (`@nexa/types` · `pushAllowed`).
+  notifyEnabled        Boolean   @default(true) @map("notify_enabled")
+  notifySound          Boolean   @default(true) @map("notify_sound")
+  notifyDesktop        Boolean   @default(true) @map("notify_desktop")
+  /// Push to this member's registered handsets (FR-MOD-13.7 · read by 13.7-d).
+  /// The three above governed a browser and lived in `localStorage` until
+  /// 13.7-c; push is chosen by the *server*, so a preference it cannot read is
+  /// a preference that does not apply to the one channel reaching a closed
+  /// laptop. That is what moved all four onto the membership.
+  notifyPush           Boolean   @default(true) @map("notify_push")
   awaitingApproval     Boolean   @default(false) @map("awaiting_approval")
   suspended            Boolean   @default(false) @map("suspended")
   /// Tie-breaker for round-robin assignment (ADR-08 step 4).
@@ -193,8 +206,9 @@ model AgentMembership {
   scimExternalId       String?   @map("scim_external_id")
   createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  agent   Account @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  license      License       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  agent        Account       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  deviceTokens DeviceToken[]
 
   @@id([licenseId, agentId])
   /// At most one member per external id. NULLs are distinct in Postgres, so
@@ -448,6 +462,67 @@ model ApiToken {
   @@index([ownerId])
   @@index([familyId])
   @@map("api_tokens")
+}
+
+/// A handset that has asked to receive this member's push notifications
+/// (FR-MOD-13.7 · 13.7-c). Registration and revocation are 13.7-c; sending is
+/// 13.7-d.
+///
+/// **`token` is stored in plain text, and it is the one credential here that
+/// cannot be hashed.** `ApiToken` above hashes because the only operation ever
+/// performed on it is *comparison* — a caller presents a token and the server
+/// asks "is this the one?". A push token is the opposite: nobody presents it,
+/// the server has to hand the literal bytes to APNs/FCM to address a device, so
+/// a digest would make the column useless for its only purpose. The decision is
+/// recorded as an assumption in PLAN §C; what it buys instead of hashing is
+/// four narrower guarantees, each enforced somewhere a careless caller cannot
+/// undo it:
+///
+///   1. The column is never in a response — reads return id, platform and last
+///      seen, and nothing else (`routes/notifications.ts`).
+///   2. It is never in an audit entry — the writers here pass an id and a
+///      platform, and `sanitizeAuditMetadata` would strip a `token` key anyway.
+///   3. It is never in a log line — `req.body.token` is on the server's pino
+///      redaction list, which is why the request field is named `token`.
+///   4. RLS is as tight as `api_tokens`', and the row is reachable only through
+///      the membership it belongs to (below).
+///
+/// The foreign key is composite — `(license_id, account_id)` into
+/// `agent_memberships` — rather than a plain account reference, and that is a
+/// tenant guard, not tidiness. A device belongs to a *person in a workspace*: if
+/// the row pointed at an account alone, a membership that was removed would
+/// leave a live delivery target for a workspace the person no longer works for,
+/// and the cascade is what makes "took them off the team" also mean "their
+/// phone stops buzzing".
+model DeviceToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  licenseId  BigInt    @map("license_id")
+  accountId  String    @map("account_id") @db.Uuid
+  /// 'ios' | 'android' — constrained in the database (see the migration).
+  platform   String
+  /// The APNs/FCM delivery address for this handset. Never returned, logged or
+  /// audited. See the note above for why it is not hashed.
+  token      String
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Refreshed every time the app re-registers, so a workspace can tell a live
+  /// handset from one reinstalled onto somebody else's phone a year ago.
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  /// Set rather than deleted, so a revoked device is still evidence that the
+  /// delivery target existed — the same reason `api_tokens` keeps a revoked row.
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  membership AgentMembership @relation(fields: [licenseId, accountId], references: [licenseId, agentId], onDelete: Cascade)
+
+  /// One row per (workspace, token): re-registering the same handset updates the
+  /// row instead of adding a second one, which is what stops a device that
+  /// launches daily from accumulating a year of duplicates and being sent the
+  /// same message once per launch. Scoped to the license rather than global on
+  /// purpose — a global unique index would answer "is this token registered
+  /// somewhere else?" to a caller who is not allowed to know that.
+  @@unique([licenseId, token])
+  /// The sender's only question: which live devices does this member have?
+  @@index([licenseId, accountId, revokedAt])
+  @@map("device_tokens")
 }
 
 // ===========================================================================

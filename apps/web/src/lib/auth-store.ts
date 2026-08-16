@@ -8,7 +8,9 @@
  * stolen one is detectable and revokes its whole family server-side.
  */
 import { create } from 'zustand';
+import { readNotificationPreferences, type NotificationPreferences } from '@nexa/types';
 import { ApiClient } from './api-client.js';
+import { savePrefs } from '../features/notifications/notifications.js';
 
 export interface Membership {
   license_id: string;
@@ -43,11 +45,13 @@ export interface CurrentAgent {
   scopes: string[];
   routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
   /**
-   * The e-mail notification channel (FR-MOD-13.8). Account-level and per license,
-   * so unlike the browser-side sound/desktop toggles it follows the agent. Absent
-   * on older tokens — treat as on, matching the server default.
+   * Every channel this agent can be reached through (FR-MOD-13.8), per user and
+   * per license. All five live on the account since 13.7-c — sound, desktop and
+   * the tab badge moved off `localStorage` when push arrived, because the server
+   * picks the handset and cannot read a browser's opinion. Absent from an older
+   * server's profile, which `readNotificationPreferences` reads as the defaults.
    */
-  notify_email?: boolean;
+  notification_preferences?: NotificationPreferences;
   /** First-run setup gate (FR-MOD-00.4). Absent on older tokens — treat as done. */
   onboarding_completed?: boolean;
 }
@@ -74,8 +78,12 @@ interface AuthState {
   completeSsoLogin: (code: string, state: string | null) => Promise<void>;
   signOut: () => Promise<void>;
   setRoutingStatus: (status: CurrentAgent['routing_status']) => Promise<void>;
-  /** Turn the e-mail notification channel on or off for the caller (FR-MOD-13.8). */
-  setNotifyEmail: (email: boolean) => Promise<void>;
+  /**
+   * Change one or more notification channels for the caller (FR-MOD-13.8).
+   * Partial: send what moved. The server answers with the complete set, which
+   * becomes both the store's value and the synchronous cache the inbox reads.
+   */
+  setNotificationPreferences: (patch: Partial<NotificationPreferences>) => Promise<void>;
   /** Flip the local gate once the wizard has told the server setup is done. */
   markOnboarded: () => void;
 }
@@ -199,7 +207,20 @@ export const useAuth = create<AuthState>((set, get) => {
 
   async function loadAgent(accessToken: string): Promise<CurrentAgent> {
     const client = new ApiClient({ getAccessToken: () => accessToken });
-    return client.get<CurrentAgent>('/auth/me');
+    const agent = await client.get<CurrentAgent>('/auth/me');
+    // Prime the synchronous cache the inbox's alerting decision reads. It runs
+    // inside a realtime push handler that cannot await a fetch, so the profile
+    // request the app already makes on every sign-in and restore is where the
+    // value has to arrive.
+    cachePreferences(agent.notification_preferences);
+    return agent;
+  }
+
+  /** Mirror the server's answer into `localStorage` for `loadPrefs`. */
+  function cachePreferences(prefs: NotificationPreferences | undefined): NotificationPreferences {
+    const resolved = readNotificationPreferences(prefs);
+    savePrefs(resolved);
+    return resolved;
   }
 
   return {
@@ -419,19 +440,33 @@ export const useAuth = create<AuthState>((set, get) => {
       set({ agent: { ...agent, routing_status: status } });
     },
 
-    async setNotifyEmail(email) {
+    async setNotificationPreferences(patch) {
       const { accessToken, agent } = get();
       if (!accessToken || !agent) return;
 
       // Optimistic: reflect the toggle immediately, then roll back if the write
-      // fails so the switch never lies about the server state.
-      const previous = agent.notify_email ?? true;
-      set({ agent: { ...agent, notify_email: email } });
+      // fails so the switch never lies about the server state. The cache moves
+      // with it in both directions — a rolled-back toggle that left the cache
+      // flipped would go on silencing the inbox for a preference the account
+      // does not hold.
+      const previous = readNotificationPreferences(agent.notification_preferences);
+      const optimistic = { ...previous, ...patch };
+      set({ agent: { ...agent, notification_preferences: optimistic } });
+      savePrefs(optimistic);
       try {
         const client = new ApiClient({ getAccessToken: () => accessToken });
-        await client.request('PUT', '/agents/me/notification-preferences', { email });
+        const confirmed = await client.request<NotificationPreferences>(
+          'PUT',
+          '/agents/me/notification-preferences',
+          patch,
+        );
+        // The server's answer, not the guess: it carries every channel, so a
+        // change made in another tab arrives here too.
+        const resolved = cachePreferences(confirmed);
+        set({ agent: { ...get().agent!, notification_preferences: resolved } });
       } catch (error) {
-        set({ agent: { ...get().agent!, notify_email: previous } });
+        set({ agent: { ...get().agent!, notification_preferences: previous } });
+        savePrefs(previous);
         throw error;
       }
     },

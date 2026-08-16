@@ -26,11 +26,13 @@ import { z } from 'zod';
 import {
   AGENT_ROLES,
   DEFAULT_WORK_SCHEDULE,
+  NOTIFICATION_CHANNELS,
   ROUTING_STATUSES,
   hasAnyScope,
   isWorkScheduleProblem,
   normalizeWorkSchedule,
   type AgentRole,
+  type NotificationChannel,
   type WorkSchedule,
 } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
@@ -39,9 +41,36 @@ import { RoutingService } from '../services/routing/routing-service.js';
 import { roleAtLeast, scopesOf, type Principal } from '../services/auth/principal.js';
 import { setMembershipSuspension } from '../services/auth/membership-service.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
+import {
+  readNotificationPreferences,
+  writeNotificationPreferences,
+} from '../services/notifications/preferences.js';
 
 const routingStatusBody = z.object({ routing_status: z.enum(ROUTING_STATUSES) });
-const notificationPrefsBody = z.object({ email: z.boolean() });
+
+/**
+ * A partial change to the caller's notification channels (FR-MOD-13.8).
+ *
+ * Every key optional, but at least one required. Optional because a screen with
+ * five checkboxes should be able to send the one that moved rather than
+ * restating four it read some seconds ago and may have lost a race on; refusing
+ * the empty body because a `PUT` that changes nothing and returns everything is
+ * a `GET` wearing the wrong verb, and one a client would reach for by accident
+ * while debugging.
+ *
+ * `.strict()` so a misspelled channel (`despktop`) is a 400 rather than a
+ * silently dropped toggle — the failure mode where the switch on screen says
+ * "off" and the server goes on interrupting.
+ */
+const notificationPrefsBody = z
+  .object(
+    Object.fromEntries(NOTIFICATION_CHANNELS.map((c) => [c, z.boolean().optional()])) as Record<
+      NotificationChannel,
+      z.ZodOptional<z.ZodBoolean>
+    >,
+  )
+  .strict()
+  .refine((body) => Object.values(body).some((v) => v !== undefined), 'at least one is required');
 const listAgentsQuery = z.object({
   status: z.enum(['active', 'suspended', 'all']).default('active'),
 });
@@ -231,12 +260,34 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  app.get(
+    '/agents/me/notification-preferences',
+    { config: { scopes: ['agents--my:ro', 'agents--all:ro'], principals: ['agent'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'agent') throw ApiError.authorization();
+
+      const tenant = request.tenant();
+      const prefs = await request.withTenant((tx) =>
+        readNotificationPreferences(tx, {
+          licenseId: tenant.licenseId,
+          agentId: principal.accountId,
+        }),
+      );
+      return reply.send(prefs);
+    },
+  );
+
   app.put(
     '/agents/me/notification-preferences',
     { config: { scopes: ['agents--my:rw', 'agents--all:rw'], principals: ['agent'] } },
     async (request, reply) => {
       const parsed = notificationPrefsBody.safeParse(request.body);
-      if (!parsed.success) throw ApiError.validation('email must be a boolean.');
+      if (!parsed.success) {
+        throw ApiError.validation(
+          `Send at least one of ${NOTIFICATION_CHANNELS.join(', ')} as a boolean.`,
+        );
+      }
 
       const principal = request.requirePrincipal();
       if (principal.kind !== 'agent') throw ApiError.authorization();
@@ -245,16 +296,15 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
       // Per user, per license (FR-MOD-08.2): the update is keyed on both, so the
       // same person opting out here does not affect their other workspaces, and
       // RLS keeps it inside the caller's tenant.
-      await request.withTenant((tx) =>
-        tx.agentMembership.update({
-          where: {
-            licenseId_agentId: { licenseId: tenant.licenseId, agentId: principal.accountId },
-          },
-          data: { notifyEmail: parsed.data.email },
+      const prefs = await request.withTenant((tx) =>
+        writeNotificationPreferences(tx, {
+          licenseId: tenant.licenseId,
+          agentId: principal.accountId,
+          patch: parsed.data,
         }),
       );
 
-      return reply.send({ email: parsed.data.email });
+      return reply.send(prefs);
     },
   );
 

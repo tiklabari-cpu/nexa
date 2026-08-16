@@ -7,18 +7,44 @@
  * settings, permission denied, the agent's own reply, a system event), and a
  * pure function is the only way to test them without a real browser, an audio
  * device and a permission prompt.
+ *
+ * **The preferences themselves now live on the account, not in this browser**
+ * (13.7-c). They moved because push does: the server picks which handset a
+ * notification is delivered to, so a preference kept only in `localStorage` would
+ * not apply to the one channel that reaches somebody who has closed their laptop.
+ * `@nexa/types` holds the shape, the API holds the value.
+ *
+ * What is left here is a *cache* of that value, in the key the browser
+ * preference used to occupy. It exists for one reason: `decideNotification` runs
+ * on every realtime push, inside a callback that cannot await a fetch, so the
+ * answer has to be readable synchronously. The auth store writes the cache
+ * whenever the server tells it something new; a stale or absent cache degrades
+ * to the defaults, which is the reachable direction to be wrong in.
  */
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  readNotificationPreferences,
+  type NotificationPreferences,
+} from '@nexa/types';
 
-export interface NotificationPrefs {
-  /** Master switch. Off means nothing happens, whatever the others say. */
-  enabled: boolean;
-  /** Play a short sound on a new message. */
-  sound: boolean;
-  /** Show a desktop (OS) notification — still gated on browser permission. */
-  desktop: boolean;
-}
+/**
+ * The contract's preference object, under the name this module has always used.
+ * Re-exported rather than redefined so there is one shape, shared with the
+ * server and the phone.
+ */
+export type NotificationPrefs = NotificationPreferences;
 
-export const DEFAULT_PREFS: NotificationPrefs = { enabled: true, sound: true, desktop: true };
+export const DEFAULT_PREFS: NotificationPrefs = DEFAULT_NOTIFICATION_PREFERENCES;
+
+/**
+ * The channels the *console* can fire. `push` and `email` are the server's to
+ * act on, and naming only what this decision reads keeps a caller from having to
+ * invent values for two channels it has no say over.
+ */
+export type ConsoleNotificationPrefs = Pick<
+  NotificationPreferences,
+  'enabled' | 'sound' | 'desktop'
+>;
 
 const STORAGE_KEY = 'nexa.notifications';
 
@@ -51,7 +77,7 @@ export interface NotifyDecision {
 export function decideNotification(args: {
   action: string;
   event: NotifiableEvent | undefined;
-  prefs: NotificationPrefs;
+  prefs: ConsoleNotificationPrefs;
   /** True when the agent is looking at this tab — do not nag them then. */
   focused: boolean;
   permission: Permission;
@@ -84,8 +110,15 @@ export function notificationTitle(base: string, unread: number): string {
 }
 
 /**
- * Load preferences, tolerating an absent, malformed or partial stored value —
- * a shape written by an older build must not throw and blank the inbox.
+ * Read the cached preferences, tolerating an absent, malformed or partial stored
+ * value.
+ *
+ * All three are ordinary rather than exceptional: absent on a first load before
+ * the profile has arrived, partial for a browser that still holds the
+ * three-field shape this key carried before the preferences moved to the
+ * account. Every one of them falls back to the defaults, because a settings
+ * cache that threw would take the inbox down with it — and would do so over a
+ * value the server already knows.
  */
 export function loadPrefs(
   storage: Pick<Storage, 'getItem'> | undefined = safeStorage(),
@@ -94,17 +127,17 @@ export function loadPrefs(
   try {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_PREFS };
-    const parsed = JSON.parse(raw) as Partial<NotificationPrefs>;
-    return {
-      enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : DEFAULT_PREFS.enabled,
-      sound: typeof parsed.sound === 'boolean' ? parsed.sound : DEFAULT_PREFS.sound,
-      desktop: typeof parsed.desktop === 'boolean' ? parsed.desktop : DEFAULT_PREFS.desktop,
-    };
+    return readNotificationPreferences(JSON.parse(raw));
   } catch {
     return { ...DEFAULT_PREFS };
   }
 }
 
+/**
+ * Write the cache. Called by the auth store when the server states the
+ * preferences — never on its own authority, so the cache cannot drift into
+ * disagreeing with the account it is standing in for.
+ */
 export function savePrefs(
   prefs: NotificationPrefs,
   storage: Pick<Storage, 'setItem'> | undefined = safeStorage(),

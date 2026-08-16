@@ -22,6 +22,7 @@ import authRoutes from './routes/auth.js';
 import samlRoutes from './routes/saml.js';
 import scimRoutes from './routes/scim.js';
 import agentRoutes from './routes/agents.js';
+import notificationRoutes from './routes/notifications.js';
 import chatRoutes from './routes/chats.js';
 import customerRoutes from './routes/customer.js';
 import customerDirectoryRoutes from './routes/customers.js';
@@ -222,6 +223,7 @@ export async function buildServer({
       await api.register(accountLifecycleRoutes, { env, mailer });
       await api.register(chatRoutes, { env, mailer });
       await api.register(agentRoutes);
+      await api.register(notificationRoutes);
       await api.register(customerRoutes, { env, mailer });
       await api.register(customerDirectoryRoutes);
       await api.register(trafficRoutes);

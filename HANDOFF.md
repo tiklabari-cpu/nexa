@@ -13,6 +13,44 @@
 
 ## Task log (newest-first)
 
+## tm 90.3 — 13.7-c · device_tokens + RLS + kayıt/yenileme/iptal uçları — done — 2026-08-16 UTC
+
+- **Yapıldı:** (1) **`device_tokens`** — migration `20260816140000_device_tokens`; FK **bileşik**
+  `(license_id, account_id) → agent_memberships` (üyelik silinince cihaz da düşer), unique
+  `(license_id, token)` = upsert idempotansı, CHECK platform/uzunluk/zaman, RLS + `GRANT`.
+  Uçlar `routes/notifications.ts`: `GET|POST /notifications/devices` (201 ilk kayıt / 200
+  tazeleme; devralma + revoke'tan geri döndürme) · `DELETE /notifications/devices/{deviceId}`
+  (revokedAt). Audit `device.registered` / `device.revoked` (tekrar-kayıt entry YAZMAZ).
+  (2) **Bildirim tercihleri sunucuya taşındı** (denetim bulgusu K5-5): `agent_memberships` +
+  `notify_enabled|sound|desktop|push`; `@nexa/types` · `NotificationPreferences` + `pushAllowed`;
+  kontrat `GET|PUT /agents/me/notification-preferences` (kısmi + `.strict()`, yanıt her zaman
+  beşi) ve `/auth/me` `notify_email` → `notification_preferences`; panel + auth-store hesaptan
+  okuyor, `localStorage` yalnız **önbellek** (`decideNotification` senkron okumak zorunda).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `lint` 9/9 · `pnpm -w test` 11/11
+  (api **3219**, +34) · `pnpm -w test:integration` api **88 dosya 2355** (+26) · `pnpm -w build`
+  8/8 · `pnpm -w test:e2e` **149/149**. `db:check-drift` temiz. `format:check` bu turdan
+  ÖNCEKİ aynı 5 dosyada kırmızı (log-redact.test · inference.test · customer-token.test ·
+  telegram.spec · Compliance.tsx) — hiçbirine dokunulmadı.
+- **Varsayımlar (PLAN §C):** **A32** — `device_tokens.token` düz metin, çünkü kimse onu *sunmaz*;
+  sunucu APNs/FCM'e harfi harfine verir, özet kolonu işe yaramaz kılardı. Hash yerine dört
+  telafi kontrolü, hepsi testli: yanıtta yok · `trace` log'unda yok · audit metadata'sında yok ·
+  RLS + kendi `account_id` filtresi. Unique index **lisans-kapsamlı**: global olsaydı "bu cihaz
+  başka workspace'e kayıtlı mı?" sorusunu kısıt ihlaliyle yanıtlardı. **A33** — `enabled` yalnız
+  *kesintiye uğratan* kanalların (ses/masaüstü/push) şalteri; `email` ona bağlı değil.
+- **Sonraki pencereye not:** (a) **`13.7-j` mobil transport'u yazarken:** `revoke` ucu `{deviceId}`
+  ile adreslenir, `DeviceTokenTransport.revoke({token})` ise token alır — kayıt yanıtındaki `id`
+  token'ın yanına (SecureStore) yazılmalı; `DeviceTokenLifecycle`'ın SIRASINI değiştirme
+  (§C-A31). Başarısız revoke zaten tasarım gereği tolere ediliyor (yerel token yine silinir),
+  sunucuda kalan satırı 13.7-d'nin cross-tenant reddi karşılar. (b) **`13.7-d`** hedefi seçerken
+  tercihi `@nexa/types` · `pushAllowed(prefs)` üzerinden okusun — kural tek yerde. (c) Gönderim
+  hâlâ YOK: `device_tokens.token`'ı okuyan tek kod 13.7-d olacak. (d) **Tuzak:** zustand v5
+  seçicisi `Object.is` ile karşılaştırır — `useAuth((s) => normalize(...))` her render'da yeni
+  nesne döndürüp Settings sayfasının tamamını sonsuz döngüye soktu (ilk e2e koşusunda 35 test
+  kırmızı). Seçici ham referansı almalı, normalizasyon `useMemo` ile dışarıda;
+  `NotificationSettings.test.tsx` bunu artık 2 saniyede yakalıyor. (e) e2e ~55 `kanit` PNG'sini
+  her koşuda yeniden yazar; yalnız `16-notifications-settings.png` **kasıtlı** olarak korundu
+  (yüzey gerçekten değişti — push satırı), kalanı `git checkout` ile geri alındı.
+
 ## tm 90.2 — 13.7-b · Mobil oturum/token modeli (BÖLÜNMEZ) — done — 2026-08-16 UTC
 
 - **Yapıldı:** **İkinci token verme yolu AÇILMADI** — telefon konsolun `/auth/authorize` →

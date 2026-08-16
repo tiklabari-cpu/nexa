@@ -274,12 +274,16 @@ me:
                     Agent principals only. Whether the workspace has finished (or
                     skipped) first-run setup — the shell gates the onboarding
                     wizard on this without a second request (FR-MOD-00.4).
-                notify_email:
-                  type: boolean
+                notification_preferences:
+                  allOf:
+                    - $ref: "../openapi.yaml#/components/schemas/NotificationPreferences"
                   description: |
-                    Agent principals only. Whether the caller receives the e-mail
-                    notification channel for chats assigned to them — per user, per
-                    license (FR-MOD-13.8 / 08.2).
+                    Agent principals only. Every channel the caller can be reached
+                    through — per user, per license (FR-MOD-13.8 / 08.2). Shipped
+                    with the profile because the console's alerting decision runs
+                    on every incoming message and cannot afford a fetch;
+                    `/agents/me/notification-preferences` is the same object on
+                    its own.
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
 
 personalAccessTokens:

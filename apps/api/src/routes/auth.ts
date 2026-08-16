@@ -23,6 +23,10 @@ import {
   type AuditEntry,
 } from '../services/audit/audit-log.js';
 import { OauthService } from '../services/auth/oauth-service.js';
+import {
+  NOTIFICATION_PREFERENCE_SELECT,
+  serialiseNotificationPreferences,
+} from '../services/notifications/preferences.js';
 import { markWebsiteConnected } from '../services/websites/website-service.js';
 import {
   ADMIN_SCOPES,
@@ -475,7 +479,11 @@ export default async function authRoutes(
             where: {
               licenseId_agentId: { licenseId: principal.licenseId, agentId: principal.accountId },
             },
-            select: { routingStatus: true, concurrentChatsLimit: true, notifyEmail: true },
+            select: {
+              routingStatus: true,
+              concurrentChatsLimit: true,
+              ...NOTIFICATION_PREFERENCE_SELECT,
+            },
           }),
           // The onboarding gate: the shell reads this to decide whether to send a
           // new owner to the first-run wizard, so it rides along with the profile
@@ -501,7 +509,12 @@ export default async function authRoutes(
         scopes: principal.scopes,
         routing_status: profile.membership?.routingStatus ?? 'offline',
         concurrent_chats_limit: profile.membership?.concurrentChatsLimit ?? 0,
-        notify_email: profile.membership?.notifyEmail ?? true,
+        // All five channels, not just e-mail. The console reads them on load and
+        // caches them for the inbox's alerting decision, which runs on every
+        // incoming message and cannot afford a fetch; shipping them with the
+        // profile it already requests is what keeps that cache honest without a
+        // second round trip (13.7-c).
+        notification_preferences: serialiseNotificationPreferences(profile.membership),
         onboarding_completed: profile.license?.onboardingCompletedAt != null,
       });
     },

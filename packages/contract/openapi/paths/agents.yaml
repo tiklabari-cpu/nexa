@@ -52,39 +52,84 @@ routingStatus:
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 notificationPreferences:
+  get:
+    tags: [Configuration]
+    operationId: getMyNotificationPreferences
+    summary: Read the caller's notification channel preferences
+    description: |
+      The same object `PUT` returns and `/auth/me` ships with the profile. Worth
+      having on its own for a client that wants to re-read the current state
+      without re-fetching a profile — a settings screen opened in a second tab,
+      or the mobile app checking what it may deliver.
+    responses:
+      "200":
+        description: The caller's preferences
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/NotificationPreferences" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
   put:
     tags: [Configuration]
     operationId: setMyNotificationPreferences
     summary: Set the caller's notification channel preferences
     description: |
-      Controls the server-driven notification channels for the caller. Today that
-      is e-mail (FR-MOD-13.8): when `email` is off, chats assigned to the caller
-      no longer trigger a notification e-mail. Sound, desktop and tab-title alerts
-      are browser-side and set in the client, not here.
+      Every channel the product can reach a person through, in one place
+      (FR-MOD-13.8).
 
-      The preference is per user and per license, so the same person can opt in on
-      one workspace and out on another (FR-MOD-08.2).
+      Sound, desktop and the tab badge used to live in one `localStorage` key per
+      browser, which was reasonable while everything they governed was also
+      per-browser — a speaker, an OS permission. Push (FR-MOD-13.7) broke that:
+      the *server* chooses the delivery target, so a preference the server cannot
+      read does not apply to the one channel that reaches somebody who has closed
+      their laptop. All five now live on the account.
+
+      **`enabled` is a master switch over the interruptive channels — sound,
+      desktop and push — and not over `email`.** Those three announce something
+      now; e-mail is the fallback for a person who is not there at all, and
+      asking not to be interrupted has never been a request to stop the fallback
+      as well.
+
+      The preference is per user and per license, so the same person can stay
+      reachable on one workspace and go quiet on another (FR-MOD-08.2).
+
+      The body is a partial update: send only the channels that changed. At least
+      one is required — an empty body would be a `GET` wearing the wrong verb —
+      and an unrecognised key is a `400` rather than a silently dropped toggle,
+      which is the failure mode where the switch on screen says "off" while the
+      server goes on interrupting. The response is always the complete set, so a
+      client that toggled one channel also learns of any change it had not seen.
     requestBody:
       required: true
       content:
         application/json:
           schema:
             type: object
-            required: [email]
+            minProperties: 1
+            additionalProperties: false
             properties:
+              enabled:
+                type: boolean
+                description: Master switch over sound, desktop and push.
+              sound:
+                type: boolean
+                description: A chime in the console when a visitor writes in.
+              desktop:
+                type: boolean
+                description: An OS notification from the console — still gated on browser permission.
+              push:
+                type: boolean
+                description: A push notification to your registered handsets.
               email:
                 type: boolean
-                description: Receive an e-mail when a chat assigned to you has new activity.
+                description: An e-mail when a chat assigned to you has new activity.
     responses:
       "200":
         description: Preferences updated
         content:
           application/json:
-            schema:
-              type: object
-              required: [email]
-              properties:
-                email: { type: boolean }
+            schema: { $ref: "../openapi.yaml#/components/schemas/NotificationPreferences" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

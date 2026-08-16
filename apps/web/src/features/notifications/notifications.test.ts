@@ -84,15 +84,21 @@ describe('notificationTitle', () => {
   });
 });
 
-describe('preferences round-trip', () => {
+describe('the preference cache', () => {
   it('loads defaults from an empty store', () => {
     const store = new Map<string, string>();
     expect(loadPrefs(memStore(store))).toEqual(DEFAULT_PREFS);
   });
 
-  it('persists and reads back a change', () => {
+  it('persists and reads back every channel', () => {
     const store = new Map<string, string>();
-    const prefs: NotificationPrefs = { enabled: false, sound: false, desktop: true };
+    const prefs: NotificationPrefs = {
+      enabled: false,
+      sound: false,
+      desktop: true,
+      push: false,
+      email: true,
+    };
     savePrefs(prefs, memStore(store));
     expect(loadPrefs(memStore(store))).toEqual(prefs);
   });
@@ -105,6 +111,29 @@ describe('preferences round-trip', () => {
   it('fills missing keys from defaults for a partial stored shape', () => {
     const store = new Map<string, string>([
       ['nexa.notifications', JSON.stringify({ sound: false })],
+    ]);
+    expect(loadPrefs(memStore(store))).toEqual({ ...DEFAULT_PREFS, sound: false });
+  });
+
+  it('reads the three-field shape an older build left behind', () => {
+    // The key held `{enabled, sound, desktop}` before the preferences moved to
+    // the account (13.7-c), and a browser that has not signed in since still
+    // holds one. The two channels it never knew about resolve to the defaults —
+    // reachable — rather than to `false`, which would silence a phone on the
+    // strength of a stale browser's opinion.
+    const store = new Map<string, string>([
+      ['nexa.notifications', JSON.stringify({ enabled: true, sound: false, desktop: false })],
+    ]);
+    expect(loadPrefs(memStore(store))).toEqual({
+      ...DEFAULT_PREFS,
+      sound: false,
+      desktop: false,
+    });
+  });
+
+  it('ignores a non-boolean channel rather than coercing it', () => {
+    const store = new Map<string, string>([
+      ['nexa.notifications', JSON.stringify({ push: 'no', email: 0, sound: false })],
     ]);
     expect(loadPrefs(memStore(store))).toEqual({ ...DEFAULT_PREFS, sound: false });
   });

@@ -101,6 +101,8 @@ tags:
     description: MCP server — tool catalogue an AI client discovers and calls.
   - name: Audit
     description: The security trail — who did what, read-only, Owner/Admin only.
+  - name: Notifications
+    description: Where a person is reachable — registered handsets for push delivery.
 
 paths:
   /health:
@@ -245,6 +247,10 @@ paths:
     $ref: "./paths/agents.yaml#/routingStatus"
   /agents/me/notification-preferences:
     $ref: "./paths/agents.yaml#/notificationPreferences"
+  /notifications/devices:
+    $ref: "./paths/notifications.yaml#/devices"
+  /notifications/devices/{deviceId}:
+    $ref: "./paths/notifications.yaml#/device"
   /groups:
     $ref: "./paths/agents.yaml#/groups"
 
@@ -536,6 +542,28 @@ components:
       description: "Personal Access Token — `base64(account_id:pat)`."
 
   schemas:
+    NotificationPreferences:
+      type: object
+      description: |
+        Every channel the product can reach one person through, for one
+        workspace (FR-MOD-13.8, FR-MOD-08.2).
+
+        `enabled` is a master switch over the *interruptive* channels — `sound`,
+        `desktop`, `push` — and deliberately not over `email`. Those three
+        announce something now; e-mail is the fallback for somebody who is not
+        at a screen at all, and "stop interrupting me" was never a request to
+        stop the fallback as well.
+
+        All five default to on. The failure this product cannot afford is an
+        agent who never learns a visitor is waiting, so a new member is
+        reachable and opts out rather than in.
+      required: [enabled, sound, desktop, push, email]
+      properties:
+        enabled: { type: boolean }
+        sound: { type: boolean }
+        desktop: { type: boolean }
+        push: { type: boolean }
+        email: { type: boolean }
     Health:
       type: object
       required: [status, service, version, region, uptime_s, dependencies]

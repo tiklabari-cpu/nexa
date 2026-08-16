@@ -7,7 +7,7 @@
  * missing configuration.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -38,13 +38,8 @@ import { SiemExport } from './SiemExport.js';
 import { SlaPolicy } from './SlaPolicy.js';
 import { Sandbox } from './Sandbox.js';
 import { ScheduledExports } from './ScheduledExports.js';
-import {
-  DEFAULT_PREFS,
-  loadPrefs,
-  savePrefs,
-  type NotificationPrefs,
-  type Permission,
-} from '../notifications/notifications.js';
+import { type Permission } from '../notifications/notifications.js';
+import { readNotificationPreferences, type NotificationPreferences } from '@nexa/types';
 import {
   currentPermission,
   requestNotificationPermission,
@@ -213,49 +208,44 @@ export function Integrations(): ReactElement {
 /**
  * Per-agent alert preferences (FR-MOD-13.8).
  *
- * These live in the browser, not the account: they are about this device — its
- * speakers, its OS permission — so a preference set on a laptop should not
- * follow the agent to a shared kiosk. The inbox reads the same store on every
- * incoming message, so a change here takes effect on the next one without a
- * reload.
+ * All five channels live on the account, per workspace, since 13.7-c. They used
+ * to be split — e-mail on the account, sound/desktop/master in this browser's
+ * `localStorage` — on the reasoning that a speaker and an OS permission are
+ * properties of a device rather than a person. Push ended that argument: the
+ * server chooses which handset to deliver to, so a preference it cannot read
+ * does not apply to the one channel that reaches somebody who has closed this
+ * laptop. Keeping two homes for one question would have meant a "notifications
+ * off" that silenced the tab while the phone went on buzzing.
+ *
+ * The browser still owns one thing, and only one: whether it has been *granted*
+ * permission to raise a desktop notification. That is not a preference, it is a
+ * capability, and no server can hold it.
  */
-function NotificationSettings(): ReactElement {
-  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
+export function NotificationSettings(): ReactElement {
   const [permission, setPermission] = useState<Permission>('default');
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-  // The e-mail channel is server-side (FR-MOD-13.8): the API sends it, so the
-  // preference lives on the account rather than in this browser. Read it from
-  // the signed-in agent and write it back through the store.
-  const notifyEmail = useAuth((s) => s.agent?.notify_email ?? true);
-  const setNotifyEmail = useAuth((s) => s.setNotifyEmail);
-  const [emailBusy, setEmailBusy] = useState(false);
-  const [emailError, setEmailError] = useState(false);
+  // Selected as the stored reference and normalised outside the selector. Zustand
+  // v5 compares the selector's result with `Object.is`, so building the object
+  // inside it would hand back a new identity on every render — an infinite loop
+  // that takes the whole Settings page down, not a stale value.
+  const stored = useAuth((s) => s.agent?.notification_preferences);
+  const prefs = useMemo(() => readNotificationPreferences(stored), [stored]);
+  const setPreferences = useAuth((s) => s.setNotificationPreferences);
 
-  async function toggleEmail(next: boolean): Promise<void> {
-    setEmailBusy(true);
-    setEmailError(false);
-    try {
-      await setNotifyEmail(next);
-    } catch {
-      setEmailError(true);
-    } finally {
-      setEmailBusy(false);
-    }
-  }
-
-  // Read once on mount — `loadPrefs` touches `localStorage`, which is not a
-  // render-time value.
+  // The permission is read once on mount — `Notification.permission` is a
+  // browser global, not a render-time value.
   useEffect(() => {
-    setPrefs(loadPrefs());
     setPermission(currentPermission());
   }, []);
 
-  function update(patch: Partial<NotificationPrefs>): void {
-    setPrefs((current) => {
-      const next = { ...current, ...patch };
-      savePrefs(next);
-      return next;
-    });
+  function update(patch: Partial<NotificationPreferences>): void {
+    setBusy(true);
+    setFailed(false);
+    void setPreferences(patch)
+      .catch(() => setFailed(true))
+      .finally(() => setBusy(false));
   }
 
   async function enableDesktop(): Promise<void> {
@@ -271,7 +261,7 @@ function NotificationSettings(): ReactElement {
   return (
     <Section
       title="Notifications"
-      description="How you are alerted to new messages. Sound and desktop are per-browser; e-mail follows your account."
+      description="How you are alerted to new messages. These follow your account on this workspace; whether this browser may show desktop notifications is its own setting."
     >
       <Card>
         <div className="divide-y divide-border">
@@ -284,7 +274,9 @@ function NotificationSettings(): ReactElement {
             <span className="flex-1 text-sm">
               Enable notifications
               <span className="block text-2xs text-content-tertiary">
-                Turning this off silences sound, desktop and tab alerts alike.
+                {failed
+                  ? 'Could not save — please try again.'
+                  : 'Turning this off silences sound, desktop, push and tab alerts alike. Email still reaches you.'}
               </span>
             </span>
             <StatusDot
@@ -345,21 +337,40 @@ function NotificationSettings(): ReactElement {
           <label className="flex items-center gap-3 p-4">
             <input
               type="checkbox"
-              checked={notifyEmail}
-              disabled={emailBusy}
-              onChange={(event) => void toggleEmail(event.target.checked)}
+              checked={prefs.push}
+              disabled={!prefs.enabled || busy}
+              onChange={(event) => update({ push: event.target.checked })}
+            />
+            <span className="flex-1 text-sm">
+              Mobile push notifications
+              <span className="block text-2xs text-content-tertiary">
+                Sent to the Nexa app on any phone you have signed in on. Which handsets those are is
+                managed from the app itself.
+              </span>
+            </span>
+            <StatusDot
+              tone={prefs.enabled && prefs.push ? 'success' : 'neutral'}
+              label={prefs.enabled && prefs.push ? 'On' : 'Off'}
+            />
+          </label>
+
+          <label className="flex items-center gap-3 p-4">
+            <input
+              type="checkbox"
+              checked={prefs.email}
+              disabled={busy}
+              onChange={(event) => update({ email: event.target.checked })}
             />
             <span className="flex-1 text-sm">
               Email notifications
               <span className="block text-2xs text-content-tertiary">
-                {emailError
-                  ? 'Could not save — please try again.'
-                  : 'Emailed when a visitor writes in a chat assigned to you, even when Nexa is closed. Applies to your account.'}
+                Emailed when a visitor writes in a chat assigned to you, even when Nexa is closed.
+                Not affected by the switch above — email is the fallback for when you are away.
               </span>
             </span>
             <StatusDot
-              tone={notifyEmail ? 'success' : 'neutral'}
-              label={notifyEmail ? 'On' : 'Off'}
+              tone={prefs.email ? 'success' : 'neutral'}
+              label={prefs.email ? 'On' : 'Off'}
             />
           </label>
         </div>

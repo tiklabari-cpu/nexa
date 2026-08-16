@@ -1589,20 +1589,120 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    get?: never;
+    /**
+     * Read the caller's notification channel preferences
+     * @description The same object `PUT` returns and `/auth/me` ships with the profile. Worth
+     *     having on its own for a client that wants to re-read the current state
+     *     without re-fetching a profile — a settings screen opened in a second tab,
+     *     or the mobile app checking what it may deliver.
+     */
+    get: operations['getMyNotificationPreferences'];
     /**
      * Set the caller's notification channel preferences
-     * @description Controls the server-driven notification channels for the caller. Today that
-     *     is e-mail (FR-MOD-13.8): when `email` is off, chats assigned to the caller
-     *     no longer trigger a notification e-mail. Sound, desktop and tab-title alerts
-     *     are browser-side and set in the client, not here.
+     * @description Every channel the product can reach a person through, in one place
+     *     (FR-MOD-13.8).
      *
-     *     The preference is per user and per license, so the same person can opt in on
-     *     one workspace and out on another (FR-MOD-08.2).
+     *     Sound, desktop and the tab badge used to live in one `localStorage` key per
+     *     browser, which was reasonable while everything they governed was also
+     *     per-browser — a speaker, an OS permission. Push (FR-MOD-13.7) broke that:
+     *     the *server* chooses the delivery target, so a preference the server cannot
+     *     read does not apply to the one channel that reaches somebody who has closed
+     *     their laptop. All five now live on the account.
+     *
+     *     **`enabled` is a master switch over the interruptive channels — sound,
+     *     desktop and push — and not over `email`.** Those three announce something
+     *     now; e-mail is the fallback for a person who is not there at all, and
+     *     asking not to be interrupted has never been a request to stop the fallback
+     *     as well.
+     *
+     *     The preference is per user and per license, so the same person can stay
+     *     reachable on one workspace and go quiet on another (FR-MOD-08.2).
+     *
+     *     The body is a partial update: send only the channels that changed. At least
+     *     one is required — an empty body would be a `GET` wearing the wrong verb —
+     *     and an unrecognised key is a `400` rather than a silently dropped toggle,
+     *     which is the failure mode where the switch on screen says "off" while the
+     *     server goes on interrupting. The response is always the complete set, so a
+     *     client that toggled one channel also learns of any change it had not seen.
      */
     put: operations['setMyNotificationPreferences'];
     post?: never;
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/notifications/devices': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List the caller's registered handsets
+     * @description The devices currently allowed to receive this account's push
+     *     notifications, most recently seen first. Revoked registrations are
+     *     omitted: the row is kept as a record that the target existed, but a device
+     *     that receives nothing does not belong on a list of what can reach you.
+     *
+     *     Scoped to the caller and to the caller's workspace, so the same person
+     *     signed into two workspaces sees two different lists — preferences and
+     *     devices are both per user *and* per license (FR-MOD-08.2).
+     */
+    get: operations['listMyDevices'];
+    put?: never;
+    /**
+     * Register this handset, or refresh a registration it already has
+     * @description One operation for both, because the app cannot tell them apart: it
+     *     re-registers on every launch and whether the server has seen this token
+     *     before is the server's business. A registration is keyed on
+     *     `(workspace, token)`, so re-posting the same token updates the existing row
+     *     rather than adding a second one — without that, a phone opened daily would
+     *     collect a row per launch and be sent every message once per row.
+     *
+     *     Re-registering also **takes the device over**: the row moves to the calling
+     *     account and any revocation on it is lifted. That is the handed-down handset
+     *     case. The app revokes before it registers when one person signs out and
+     *     another signs in, but a crash between the two would otherwise leave the
+     *     previous colleague's registration live on a phone they no longer hold.
+     *
+     *     `201` means this workspace had never seen the token; `200` means an
+     *     existing registration was refreshed. Clients need not branch on it — the
+     *     body is the same — but a status that always claimed "created" would be
+     *     false the moment the upsert did its job.
+     */
+    post: operations['registerDevice'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/notifications/devices/{deviceId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Stop delivering to a handset
+     * @description Marks the registration revoked rather than deleting it, so the record that
+     *     the delivery target existed survives an incident review — the same choice
+     *     personal access tokens make.
+     *
+     *     A device that is already revoked, was never the caller's, or belongs to
+     *     another workspace all answer `404`, so this cannot be used to find out
+     *     which. A client that treats a failed revoke as final is behaving correctly:
+     *     the mobile app drops its local token whatever the server said, so a retry
+     *     landing on `404` is the expected shape of success, not an error.
+     */
+    delete: operations['revokeDevice'];
     options?: never;
     head?: never;
     patch?: never;
@@ -5601,6 +5701,27 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /**
+     * @description Every channel the product can reach one person through, for one
+     *     workspace (FR-MOD-13.8, FR-MOD-08.2).
+     *
+     *     `enabled` is a master switch over the *interruptive* channels — `sound`,
+     *     `desktop`, `push` — and deliberately not over `email`. Those three
+     *     announce something now; e-mail is the fallback for somebody who is not
+     *     at a screen at all, and "stop interrupting me" was never a request to
+     *     stop the fallback as well.
+     *
+     *     All five default to on. The failure this product cannot afford is an
+     *     agent who never learns a visitor is waiting, so a new member is
+     *     reachable and opts out rather than in.
+     */
+    NotificationPreferences: {
+      enabled: boolean;
+      sound: boolean;
+      desktop: boolean;
+      push: boolean;
+      email: boolean;
+    };
     Health: {
       /** @enum {string} */
       status: 'ok' | 'degraded';
@@ -9065,6 +9186,35 @@ export interface components {
       | 'validation'
       | 'website_exists'
       | 'wrong_product_version';
+    /**
+     * @description A registered handset, as everything except the sender is allowed to see it.
+     *     There is no `token` field, and there is no operation that adds one.
+     */
+    Device: {
+      /**
+       * Format: uuid
+       * @description What `DELETE /notifications/devices/{deviceId}` takes.
+       */
+      id: string;
+      /** @enum {string} */
+      platform: 'ios' | 'android';
+      /**
+       * Format: date-time
+       * @description When this workspace first saw the handset.
+       */
+      created_at: string;
+      /**
+       * Format: date-time
+       * @description The last time the app re-registered. What tells a live handset from one
+       *     reinstalled onto somebody else's phone a year ago.
+       */
+      last_seen_at: string;
+      /**
+       * Format: date-time
+       * @description Always null in these responses — a revoked device is not listed.
+       */
+      revoked_at: string | null;
+    };
   };
   responses: {
     /** @description Malformed or failing validation */
@@ -9567,11 +9717,14 @@ export interface operations {
              */
             onboarding_completed?: boolean;
             /**
-             * @description Agent principals only. Whether the caller receives the e-mail
-             *     notification channel for chats assigned to them — per user, per
-             *     license (FR-MOD-13.8 / 08.2).
+             * @description Agent principals only. Every channel the caller can be reached
+             *     through — per user, per license (FR-MOD-13.8 / 08.2). Shipped
+             *     with the profile because the console's alerting decision runs
+             *     on every incoming message and cannot afford a fetch;
+             *     `/agents/me/notification-preferences` is the same object on
+             *     its own.
              */
-            notify_email?: boolean;
+            notification_preferences?: components['schemas']['NotificationPreferences'];
           };
         };
       };
@@ -11857,6 +12010,29 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  getMyNotificationPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The caller's preferences */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['NotificationPreferences'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   setMyNotificationPreferences: {
     parameters: {
       query?: never;
@@ -11867,8 +12043,16 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          /** @description Receive an e-mail when a chat assigned to you has new activity. */
-          email: boolean;
+          /** @description Master switch over sound, desktop and push. */
+          enabled?: boolean;
+          /** @description A chime in the console when a visitor writes in. */
+          sound?: boolean;
+          /** @description An OS notification from the console — still gated on browser permission. */
+          desktop?: boolean;
+          /** @description A push notification to your registered handsets. */
+          push?: boolean;
+          /** @description An e-mail when a chat assigned to you has new activity. */
+          email?: boolean;
         };
       };
     };
@@ -11879,14 +12063,107 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            email: boolean;
-          };
+          'application/json': components['schemas']['NotificationPreferences'];
         };
       };
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listMyDevices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The caller's live devices */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['Device'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  registerDevice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * @description The APNs/FCM delivery address for this handset. Write-only:
+           *     no response in this API ever returns it.
+           */
+          token: string;
+          /** @enum {string} */
+          platform: 'ios' | 'android';
+        };
+      };
+    };
+    responses: {
+      /** @description An existing registration was refreshed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Device'];
+        };
+      };
+      /** @description The handset was registered for the first time */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Device'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  revokeDevice: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        deviceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Registration revoked */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

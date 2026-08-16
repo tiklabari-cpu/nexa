@@ -230,6 +230,17 @@ export const AUDIT_ACTIONS = [
   // able to find without first working out which PAT was special.
   'scim_token.created',
   'scim_token.revoked',
+  // A handset was allowed to receive this workspace's conversations, or stopped
+  // being allowed (FR-MOD-13.7 · 13.7-c). Recorded because a push registration
+  // is a standing permission to deliver customer messages to a physical device
+  // somebody carries out of the building — the same class of grant as a
+  // credential, even though nobody presents it to get in. The *first*
+  // registration of a device writes an entry; the app's re-registration on every
+  // launch does not, or the trail would be a launch log. Metadata carries the
+  // platform and nothing else — never the token, which is a live delivery
+  // address (`sanitizeAuditMetadata` would strip it, and no writer offers it).
+  'device.registered',
+  'device.revoked',
   // Partner apps (FR-MOD-09.4). Registering an OAuth client hands a third party
   // a credential that can later act on this workspace, and its scopes, redirect
   // allowlist and secret are the whole of what bounds it — the same class of

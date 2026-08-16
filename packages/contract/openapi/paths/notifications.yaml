@@ -1,0 +1,163 @@
+# Notifications — the handsets a person's push notifications are delivered to
+# (FR-MOD-13.7 · 13.7-c).
+#
+# Every operation here acts on the *caller's own* devices; the account comes
+# from the credential and is never in a request. There is deliberately no
+# surface for managing a colleague's, because an admin who could register a
+# device on somebody else's behalf could point that person's conversations at a
+# phone in their own pocket.
+#
+# **A device token is never returned.** It is a delivery address for a physical
+# handset, held in plain text because APNs/FCM need the literal bytes, so the
+# compensating control is that only the sender ever reads it: these responses
+# carry an id, a platform and timestamps. The same reason the request field is
+# named `token` — that key is on the server's log redaction list.
+#
+# Sending is 13.7-d. Nothing described here delivers a notification; it manages
+# who *may* be delivered to. Whether a delivery actually happens is also gated
+# by the caller's notification preferences
+# (`PUT /agents/me/notification-preferences`), where `push` and the `enabled`
+# master switch live.
+
+devices:
+  get:
+    tags: [Notifications]
+    operationId: listMyDevices
+    summary: List the caller's registered handsets
+    description: |
+      The devices currently allowed to receive this account's push
+      notifications, most recently seen first. Revoked registrations are
+      omitted: the row is kept as a record that the target existed, but a device
+      that receives nothing does not belong on a list of what can reach you.
+
+      Scoped to the caller and to the caller's workspace, so the same person
+      signed into two workspaces sees two different lists — preferences and
+      devices are both per user *and* per license (FR-MOD-08.2).
+    responses:
+      "200":
+        description: The caller's live devices
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "#/Device" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    tags: [Notifications]
+    operationId: registerDevice
+    summary: Register this handset, or refresh a registration it already has
+    description: |
+      One operation for both, because the app cannot tell them apart: it
+      re-registers on every launch and whether the server has seen this token
+      before is the server's business. A registration is keyed on
+      `(workspace, token)`, so re-posting the same token updates the existing row
+      rather than adding a second one — without that, a phone opened daily would
+      collect a row per launch and be sent every message once per row.
+
+      Re-registering also **takes the device over**: the row moves to the calling
+      account and any revocation on it is lifted. That is the handed-down handset
+      case. The app revokes before it registers when one person signs out and
+      another signs in, but a crash between the two would otherwise leave the
+      previous colleague's registration live on a phone they no longer hold.
+
+      `201` means this workspace had never seen the token; `200` means an
+      existing registration was refreshed. Clients need not branch on it — the
+      body is the same — but a status that always claimed "created" would be
+      false the moment the upsert did its job.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token, platform]
+            properties:
+              token:
+                type: string
+                minLength: 1
+                maxLength: 512
+                description: |
+                  The APNs/FCM delivery address for this handset. Write-only:
+                  no response in this API ever returns it.
+              platform:
+                type: string
+                enum: [ios, android]
+    responses:
+      "200":
+        description: An existing registration was refreshed
+        content:
+          application/json:
+            schema: { $ref: "#/Device" }
+      "201":
+        description: The handset was registered for the first time
+        content:
+          application/json:
+            schema: { $ref: "#/Device" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+device:
+  delete:
+    tags: [Notifications]
+    operationId: revokeDevice
+    summary: Stop delivering to a handset
+    description: |
+      Marks the registration revoked rather than deleting it, so the record that
+      the delivery target existed survives an incident review — the same choice
+      personal access tokens make.
+
+      A device that is already revoked, was never the caller's, or belongs to
+      another workspace all answer `404`, so this cannot be used to find out
+      which. A client that treats a failed revoke as final is behaving correctly:
+      the mobile app drops its local token whatever the server said, so a retry
+      landing on `404` is the expected shape of success, not an error.
+    parameters:
+      - name: deviceId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "204": { description: Registration revoked }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+Device:
+  type: object
+  description: |
+    A registered handset, as everything except the sender is allowed to see it.
+    There is no `token` field, and there is no operation that adds one.
+  required: [id, platform, created_at, last_seen_at, revoked_at]
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: What `DELETE /notifications/devices/{deviceId}` takes.
+    platform:
+      type: string
+      enum: [ios, android]
+    created_at:
+      type: string
+      format: date-time
+      description: When this workspace first saw the handset.
+    last_seen_at:
+      type: string
+      format: date-time
+      description: |
+        The last time the app re-registered. What tells a live handset from one
+        reinstalled onto somebody else's phone a year ago.
+    revoked_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: Always null in these responses — a revoked device is not listed.

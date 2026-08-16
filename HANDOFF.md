@@ -13,6 +13,40 @@
 
 ## Task log (newest-first)
 
+## tm 90.4 — 13.7-d · Push gönderim çekirdeği (BÖLÜNMEZ) — done — 2026-08-16 UTC
+
+- **Yapıldı:** (1) **`services/push/push-provider.ts`** — APNs/FCM mock'u (`FilePushProvider` /
+  `NullPushProvider`, `mailer.ts` kalıbı). Spool **lisans-bölmeli**: `.data/push/<licenseId>/…`,
+  çünkü çapraz-kiracı sorusu böylece "B'nin dizini boş mu?" oluyor — düz dizinde alan araması
+  olurdu. `licenseId: bigint` → `JSON.stringify` fırlatır, bu yüzden payload alan alan kuruluyor.
+  Yeni env `PUSH_DIR` (`.env.example` + `config/env.ts`); test sunucusu `NullPushProvider`.
+  (2) **`services/notifications/push.ts`** — hedef seçimi **dört katman**: `withTenant` RLS ·
+  sorguda AÇIK `licenseId` · `accountId` · `revokedAt` (sorguda **ve** saf seçimde). Tercih tek
+  yerden `pushAllowed(prefs)`; e-posta ile birbirini susturmuyor (iki yön de testli). Üyeliksiz
+  hesap → `[]` (fail-closed; `serialiseNotificationPreferences(null)`'un tersi, gerekçesi dosyada).
+  (3) **Tetikler route'ta** (emsal `assignee-email`): `customer.ts` `notifyAssignee` artık
+  `kind` alıyor (`new_chat` / `message`; replay'de tekrar yok, e-posta guard'ından ÖNCE push) +
+  `chats.ts` `/transfer` → `assignment` (kendine devirde ve takıma devirde sessiz).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `lint` 9/9 · `pnpm -w test` 11/11
+  (api **3246**, +27) · `pnpm -w test:integration` api **89 dosya 2369** (+14) · `pnpm -w build`
+  8/8 · `pnpm -w test:e2e` **149/149**. `db:migrate` "no pending". `format:check` bu turdan
+  ÖNCEKİ aynı 3 dosyada kırmızı (log-redact.test · inference.test · customer-token.test) —
+  hiçbirine dokunulmadı. e2e'nin yeniden yazdığı ~67 `kanit` PNG'si `git checkout` ile geri alındı
+  (bu turda hiçbir yüzey değişmedi).
+- **Varsayımlar:** (a) **Yükte sohbet içeriği YOK** — kind + `chat_id`; ürün kart numarasını
+  maskeliyor ve log'dan PII çıkarıyorken ziyaretçinin cümlesini APNs/FCM'e vermek tutarsız olurdu,
+  uygulama kimlik doğrulamalı API'den çeker. Yan fayda: spool ikinci bir maskesiz transkript
+  deposu olamaz. (b) **"mention" tetiği YOK** — kod tabanında @-mention özelliği hiç yok
+  (`grep mention` → yalnız alakasız yorumlar); kapsamın o ayağı bugün var olmayan bir olaya işaret
+  ediyor. Karşılanan üç olay: yeni sohbet · yeni ziyaretçi mesajı · devir/atama.
+- **Sonraki pencereye not:** (a) **`13.7-j`** ekranı `pushAllowed` ile aynı kuralı göstermeli;
+  tercih artık sunucuda (90.3), `localStorage` yalnız önbellek. (b) **Borç:** `retention:run`
+  `MAIL_DIR`'i yaşa göre süpürüyor, `PUSH_DIR`'i süpürmüyor — spool sınırsız büyür. Kapsam dışı
+  bıraktım (retention'ın kendi politikası + kontratı var, CONVENTIONS §5); ayrı task'a değer.
+  (c) **`13.7-k`** push yaşam döngüsünü uçtan uca kanıtlarken hazır matris
+  `test/integration/push-notifications.test.ts`'te (14 senaryo: tercih · ana şalter · iptal ·
+  meslektaş · iki çalışma alanında AYNI token · atanmamış sohbet · devir).
+
 ## tm 90.3 — 13.7-c · device_tokens + RLS + kayıt/yenileme/iptal uçları — done — 2026-08-16 UTC
 
 - **Yapıldı:** (1) **`device_tokens`** — migration `20260816140000_device_tokens`; FK **bileşik**

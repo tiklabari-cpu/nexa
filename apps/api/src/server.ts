@@ -36,6 +36,11 @@ import customFieldRoutes from './routes/custom-fields.js';
 import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { FileMailer, NullMailer, type Mailer } from './services/mail/mailer.js';
+import {
+  FilePushProvider,
+  NullPushProvider,
+  type PushProvider,
+} from './services/push/push-provider.js';
 import reportRoutes from './routes/reports.js';
 import scheduledReportRoutes from './routes/scheduled-reports.js';
 import homeRoutes from './routes/home.js';
@@ -70,6 +75,13 @@ export interface BuildServerOptions {
    */
   mailer?: Mailer;
   /**
+   * Outgoing push. Defaults to writing files (13.7-d) — there is no APNs/FCM
+   * key to hold — and the test server discards, so a suite that starts hundreds
+   * of chats leaves nothing behind. Tests that care about delivery pass their
+   * own, the way the mailer ones do.
+   */
+  push?: PushProvider;
+  /**
    * OpenTelemetry instrumentation. Omitted, it follows `env.otelEnabled`
    * (console exporter in dev/prod, off under test). Pass an instance to inject
    * in-memory exporters, or `null` to force it off.
@@ -86,6 +98,7 @@ export interface BuildServerOptions {
 export async function buildServer({
   env,
   mailer = env.NODE_ENV === 'test' ? new NullMailer() : new FileMailer(env.MAIL_DIR),
+  push = env.NODE_ENV === 'test' ? new NullPushProvider() : new FilePushProvider(env.PUSH_DIR),
   telemetry,
   logStream,
 }: BuildServerOptions): Promise<FastifyInstance> {
@@ -221,10 +234,10 @@ export async function buildServer({
       // exception is deliberate).
       await api.register(scimRoutes, { baseUrl: `${env.API_BASE_URL}${API_PREFIX}/scim/v2` });
       await api.register(accountLifecycleRoutes, { env, mailer });
-      await api.register(chatRoutes, { env, mailer });
+      await api.register(chatRoutes, { env, mailer, push });
       await api.register(agentRoutes);
       await api.register(notificationRoutes);
-      await api.register(customerRoutes, { env, mailer });
+      await api.register(customerRoutes, { env, mailer, push });
       await api.register(customerDirectoryRoutes);
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);

@@ -40,6 +40,10 @@ const envSchema = z.object({
   WEB_APP_URL: z.string().url().default('http://localhost:5173'),
   /// Outgoing mail is written here rather than sent (PLAN A4).
   MAIL_DIR: z.string().default('.data/mail'),
+  /// Push notifications are written here rather than delivered — there is no
+  /// APNs/FCM key to hold (13.7-d). Partitioned by license underneath, so a
+  /// cross-tenant delivery would be visible as a file in the wrong directory.
+  PUSH_DIR: z.string().default('.data/push'),
   RTM_BASE_URL: z.string().default('ws://localhost:4001'),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   /// Origin serving the widget loader + iframe. The install snippet points

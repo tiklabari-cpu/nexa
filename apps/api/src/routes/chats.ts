@@ -9,6 +9,8 @@ import { hasChatScope } from '../services/chat/access.js';
 import { SupervisionService } from '../services/traffic/supervision-service.js';
 import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
+import type { PushProvider } from '../services/push/push-provider.js';
+import { pushToAgentDevices } from '../services/notifications/push.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { LocalStore } from '../services/storage/local-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
@@ -84,7 +86,7 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 export default async function chatRoutes(
   app: FastifyInstance,
-  { env, mailer }: { env: Env; mailer: Mailer },
+  { env, mailer, push }: { env: Env; mailer: Mailer; push: PushProvider },
 ): Promise<void> {
   const store = new LocalStore(env.STORAGE_LOCAL_DIR);
   const chats = new ChatService(
@@ -291,12 +293,32 @@ export default async function chatRoutes(
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
       const body = parse(transferSchema, request.body ?? {});
+      const principal = request.requirePrincipal();
 
-      const chat = await chats.transfer(request.tenant(), request.requirePrincipal(), chatId, {
+      const chat = await chats.transfer(request.tenant(), principal, chatId, {
         reason: body.reason,
         ...(body.group_id !== undefined ? { groupId: body.group_id } : {}),
         ...(body.agent_id !== undefined ? { agentId: body.agent_id } : {}),
       });
+
+      // The assignment notification (FR-MOD-13.7 · 13.7-d): a chat handed to a
+      // named colleague lands on their handset, because the whole point of
+      // transferring to a person rather than a team is that *that* person picks
+      // it up. A transfer to a team is deliberately silent — it unassigns, so
+      // there is nobody to address until routing chooses someone.
+      //
+      // Not when you hand a chat to yourself: a phone that buzzes about
+      // something you just did in the next window is noise, and the one thing
+      // an agent certainly knows is what they themselves just clicked.
+      const actorId = principal.kind === 'agent' ? principal.accountId : null;
+      if (body.agent_id !== undefined && body.agent_id !== actorId) {
+        await pushToAgentDevices(
+          { db: app.db, provider: push, log: request.log },
+          request.tenant(),
+          { accountId: body.agent_id, event: { kind: 'assignment', chatId } },
+        );
+      }
+
       return reply.send(chat);
     },
   );

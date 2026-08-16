@@ -36,7 +36,9 @@ import { AiResponder } from '../services/ai/ai-responder.js';
 import { LocalStore } from '../services/storage/local-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
 import type { Mailer } from '../services/mail/mailer.js';
+import type { PushEventKind, PushProvider } from '../services/push/push-provider.js';
 import { shouldEmailAssignee } from '../services/notifications/assignee-email.js';
+import { pushToAgentDevices } from '../services/notifications/push.js';
 import { resolveAttribution } from '../services/sales/attribution.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 
@@ -178,7 +180,7 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 export default async function customerRoutes(
   app: FastifyInstance,
-  { env, mailer }: { env: Env; mailer: Mailer },
+  { env, mailer, push }: { env: Env; mailer: Mailer; push: PushProvider },
 ): Promise<void> {
   const publisher = new RealtimePublisher(app.redis, app.log);
   const chats = new ChatService(app.db, app.redis, publisher);
@@ -189,14 +191,27 @@ export default async function customerRoutes(
   const store = new LocalStore(env.STORAGE_LOCAL_DIR);
 
   /**
-   * Email the human assigned to a chat that their visitor wrote in
-   * (FR-MOD-13.8, the e-mail channel). Best-effort on purpose: the message is
-   * already persisted and delivered over realtime, so a mail failure must not
-   * fail the visitor's send. Only fires when there is a human assignee — a
-   * queued or AI-only chat has nobody to e-mail, and emailing on every message
-   * to an unassigned chat would be noise.
+   * Tell the human assigned to a chat that their visitor wrote in
+   * (FR-MOD-13.8), on both of the channels that reach somebody who is not
+   * looking at the inbox: e-mail and their registered handsets.
+   *
+   * Best-effort on purpose: the message is already persisted and delivered over
+   * realtime, so a mail or provider failure must not fail the visitor's send.
+   * Only fires when there is a human assignee — a queued or AI-only chat has
+   * nobody to notify, and notifying on every message to an unassigned chat
+   * would be noise.
+   *
+   * The two channels are gated separately and neither can suppress the other:
+   * an agent who reads e-mail on a laptop and one who only carries a phone have
+   * made different choices, and FR-MOD-13.8's "consistent across channels" is
+   * about the *preferences* being one set, not about the deliveries being one
+   * decision.
    */
-  async function notifyAssignee(request: FastifyRequest, chatId: string): Promise<void> {
+  async function notifyAssignee(
+    request: FastifyRequest,
+    chatId: string,
+    kind: PushEventKind,
+  ): Promise<void> {
     try {
       const licenseId = request.tenant().licenseId;
       const channel = await request.withTenant(async (tx) => {
@@ -221,6 +236,7 @@ export default async function customerRoutes(
         ]);
 
         return {
+          assigneeId: thread.assigneeId,
           email: account?.email ?? null,
           name: account?.name ?? null,
           // No membership row would be an inconsistency, not an opt-out; default
@@ -228,6 +244,18 @@ export default async function customerRoutes(
           emailEnabled: membership?.notifyEmail ?? true,
         };
       });
+
+      // Push first, and outside the e-mail guard: an agent who turned e-mail off
+      // still carries their phone. `pushToAgentDevices` never throws, reads the
+      // preference and the device list under the tenant's RLS, and is silent
+      // when there is nothing to reach (13.7-d).
+      if (channel) {
+        await pushToAgentDevices(
+          { db: app.db, provider: push, log: request.log },
+          request.tenant(),
+          { accountId: channel.assigneeId, event: { kind, chatId } },
+        );
+      }
 
       // Honours the opt-out and the no-assignee/no-address cases in one place
       // (FR-MOD-13.8); the guard narrows `email` to a string for the send.
@@ -240,8 +268,9 @@ export default async function customerRoutes(
         body: `Hi ${channel.name ?? 'there'},\n\nA visitor sent a new message in a conversation assigned to you.\n\nOpen it here:\n${env.WEB_APP_URL}/app/inbox`,
       });
     } catch (error) {
-      // The realtime push already reached the agent; the e-mail is a courtesy.
-      request.log.warn({ err: error, chatId }, 'assignee notification e-mail failed');
+      // The realtime push already reached the agent's open inbox; e-mail and
+      // handset are the courtesy for when it is not open.
+      request.log.warn({ err: error, chatId }, 'assignee notification failed');
     }
   }
 
@@ -489,8 +518,9 @@ export default async function customerRoutes(
         // text gives the skill nothing to match, so it is left for a human.
         if (!replayed && maskedText?.trim()) await ai.handle(request, existing.id, maskedText);
 
-        // A replay is the same message arriving twice — do not e-mail again.
-        if (!replayed) await notifyAssignee(request, existing.id);
+        // A replay is the same message arriving twice — do not notify again, on
+        // either channel.
+        if (!replayed) await notifyAssignee(request, existing.id, 'message');
 
         return reply.status(replayed ? 200 : 201).send({ chat_id: existing.id, event });
       }
@@ -512,8 +542,10 @@ export default async function customerRoutes(
       if (maskedText?.trim()) await ai.handle(request, chat.id, maskedText);
 
       // Routing may have assigned this brand-new chat to an agent — that is the
-      // "assignment" notification (FR-MOD-13.8).
-      await notifyAssignee(request, chat.id);
+      // "assignment" notification (FR-MOD-13.8). `new_chat` rather than
+      // `assignment` because of how it reads on a phone: nobody handed this to
+      // the agent, a visitor walked in.
+      await notifyAssignee(request, chat.id, 'new_chat');
 
       const events = await chats.listEvents(tenant, principal, chat.id, { limit: 10 });
       return reply.status(201).send({

@@ -83,6 +83,21 @@ const EMPTY_REPORTS_OVERVIEW = {
   sla: { active: false, breaches: 0, low_confidence: false },
 };
 
+/**
+ * Every channel on, the shape `13.7-c`'s default row ships — the same
+ * well-formed-but-empty rule `EMPTY_REPORTS_OVERVIEW` follows: `{ items: [] }`
+ * does not satisfy this endpoint's object-of-booleans response, and a screen
+ * reading `prefs.enabled` off the wrong shape is exactly the crash a real
+ * response would not cause.
+ */
+const DEFAULT_NOTIFICATION_PREFERENCES = {
+  enabled: true,
+  sound: true,
+  desktop: true,
+  push: true,
+  email: true,
+};
+
 describe('App', () => {
   beforeEach(() => {
     mockExtra.value = {
@@ -91,7 +106,11 @@ describe('App', () => {
     };
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
-      const body = url.includes('/reports/overview') ? EMPTY_REPORTS_OVERVIEW : { items: [] };
+      const body = url.includes('/reports/overview')
+        ? EMPTY_REPORTS_OVERVIEW
+        : url.includes('/agents/me/notification-preferences')
+          ? DEFAULT_NOTIFICATION_PREFERENCES
+          : { items: [] };
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -132,10 +151,11 @@ describe('App', () => {
     expect(await screen.findByTestId('reports-overview')).toBeOnTheScreen();
     expect(screen.getByText('Volume')).toBeOnTheScreen();
 
+    // The real notification preferences screen, not a placeholder: 13.7-j
+    // replaced it. The shared mock answers every channel as on.
     await fireEvent.press(tabButton('Settings'));
-    expect(
-      screen.getByText("Bildirim tercihleri + cihaz kaydı 13.7-j'de gelir."),
-    ).toBeOnTheScreen();
+    expect(await screen.findByTestId('notification-settings')).toBeOnTheScreen();
+    expect(screen.getByText('Enable notifications')).toBeOnTheScreen();
   });
 
   it('says why the screen is empty instead of white-screening on a bad app.json', async () => {

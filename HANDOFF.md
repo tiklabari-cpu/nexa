@@ -13,6 +13,31 @@
 
 ## Task log (newest-first)
 
+## tm 90.10 — 13.7-j · Mobil bildirim tercihleri ekranı — done — 2026-08-16 UTC
+
+- **Yapıldı:** (1) `apps/mobile/src/features/notifications/` — `NotificationsScreen` (beş kanal:
+  enabled/sound/push/desktop/email; iyimser güncelleme + geri alma; ana anahtar interruptive
+  kanalları kapatır, email hariç; push durumu `pushAllowed(prefs)`'e göre üç ayrı cümle),
+  `api.ts`/`types.ts` (sözleşmeden türetilir, ikinci istemci yok — `13.7-b`'nin
+  `SessionApiClient`'ı), `context.ts`/`NotificationsProvider.tsx` (diğer ekranlarla aynı
+  Provider/context ayrımı). (2) `SettingsStack.tsx` — `PlaceholderScreen` yerine gerçek ekran,
+  `NotificationsProvider` altında; kullanılmayan `PlaceholderScreen.tsx` silindi. (3)
+  `App.test.tsx` — Settings sekmesi artık gerçek ekranı doğruluyor, paylaşılan `fetch` mock'u
+  `/agents/me/notification-preferences`'i şema-geçerli bir gövdeyle yanıtlıyor.
+  Cihaz token'ı kayıt/iptal bu alt-görevde DEĞİL (13.7-b'nin izolasyon kararı).
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · `pnpm -w test` (api 3249, web 1178,
+  mobil **267**, +10: `NotificationsScreen.test.tsx` + `App.test.tsx` güncellendi) ·
+  `pnpm -w test:integration` api 89 dosya 2372 · `pnpm -w build` 8/8 (mobil `expo export`
+  ios 925 + android 920 modül). `test:e2e` bu turda koşulmadı — Playwright mobile workspace'e
+  hiç girmiyor, task'ın kendi test stratejisi de yalnız mobil jest istiyor (13.7-g/-h/-i ile
+  aynı gerekçe); apps/web ve apps/e2e dokunulmadı.
+- **Varsayımlar:** Pencere açıldığında bu iş zaten büyük ölçüde önceki (kesintiye uğramış) bir
+  pencere tarafından yazılmış, commit edilmemiş halde bulundu; koda okuyarak/kapıyı çalıştırarak
+  doğrulandı, sıfırdan yazılmadı.
+- **Sonraki pencereye not:** `13.7-k` (uçtan uca doğrulama) artık tek kalan alt-görev — modül
+  paritesi matrisine Settings/bildirim tercihlerini eklemeli, `push-notifications.test.ts`'teki
+  bilinen zamanlama flake'i (90.8/90.9 notlarında) hâlâ kayıtlı düzeltme değil.
+
 ## tm 90.9 — 13.7-i · Mobil AI/Copilot yüzeyi — özet + yanıt önerisi — done — 2026-08-16 UTC
 
 - **Yapıldı:** (1) `apps/mobile/src/features/copilot/` — `CopilotScreen` (Summary +

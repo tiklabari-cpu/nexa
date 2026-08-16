@@ -4467,13 +4467,13 @@
             "description": "Mobil bildirim tercihleri ekranı + cihaz kaydının bağlanması",
             "details": "13.7-j — Mobil bildirim tercihleri ekranı + cihaz kaydının bağlanması  [SONNET-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~1 pencere\n\nKAPSAM (denetim sonrası DARALTILDI): bildirim tercihleri **ekranı** (FR-MOD-08.2 kümesi: yeni sohbet / atama / mention) — tercihleri okur, yazar, izin durumunu gösterir.\n\n**CİHAZ TOKEN'I KAYIT/İPTAL TETİKLEYİCİLERİ BU ALT-GÖREVDE DEĞİLDİR** — onlar `13.7-b`'nin (OPUS-MAX oturum çekirdeği) parçasıdır. Gerekçe: çıkışta/hesap değiştirmede iptalin başarısız olması çapraz-kiracı push teslimine kapı açar; bu bir izolasyon kararıdır, ekran işi değil. Bu ekran yalnız **tercihi** yönetir.\n\nDOSYALAR: `apps/mobile/src/features/notifications/`\n\nREFERANS DESEN: `apps/web/src/features/notifications/notifications.ts` tercih modeli · `apps/api/src/routes/agents.ts:43` sunucu tercih gövdesi. FR-MOD-13.8 KK'sı \"kanallar arası tutarlı\" — mobil tercihleri diğer kanallarla AYNI sözlüğü kullanır, paralel bir model açılmaz.\n\nKAPSAM DIŞI: gönderim mantığı (13.7-d), e2e (13.7-k).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.\n\n**HTTP İSTEMCİSİ (denetim bulgusu):** `13.7-b`'nin `apps/mobile/src/api/client.ts`'i kullanılır. **İkinci bir istemci veya elle `fetch` YAZILMAZ** — token iliştirme ve 401 yenileme oturum çekirdeğinin parçasıdır.",
             "testStrategy": "pnpm --filter @nexa/mobile test (tercih ekranı kaydeder ve geri okur; tercih değişikliği sunucuya yazılır ve geri okunur; izin reddedilmişse anlamlı durum gösterilir) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "90.3",
               "90.5"
             ],
             "parentId": "90",
-            "updatedAt": "2026-08-11T21:09:39.258Z"
+            "updatedAt": "2026-08-16T21:27:12.659Z"
           },
           {
             "id": 11,
@@ -4493,7 +4493,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-16T20:55:18.727Z"
+        "updatedAt": "2026-08-16T21:27:12.659Z"
       },
       {
         "id": "91",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T20:55:18.727Z",
+      "lastModified": "2026-08-16T21:27:12.660Z",
       "taskCount": 124,
       "completedCount": 123,
       "tags": [

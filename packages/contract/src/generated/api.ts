@@ -574,9 +574,20 @@ export interface paths {
     };
     /**
      * Read the transcript
-     * @description Ordered oldest-first within a thread. `after_event_id` replays everything
-     *     since a known event — the same primitive the realtime layer uses to
-     *     recover missed messages after a reconnect.
+     * @description Ordered oldest-first within a thread by default. `after_event_id` replays
+     *     everything since a known event — the same primitive the realtime layer
+     *     uses to recover missed messages after a reconnect.
+     *
+     *     A transcript that opens at the newest message and loads history as the
+     *     reader scrolls up asks the opposite question, so `sort: newest` answers
+     *     it: the tail of the thread first, then `before_event_id` walks backwards
+     *     a page at a time. Both directions page on the sequence embedded in the
+     *     event id rather than on `created_at`, because several events can share a
+     *     millisecond and an offset page shifts under an active conversation.
+     *
+     *     `next_page_id` is always the id of the last item returned: feed it back
+     *     as `after_event_id` when sorting oldest-first and as `before_event_id`
+     *     when sorting newest-first.
      *
      *     Internal notes are included for agents and omitted for customers.
      */
@@ -10398,6 +10409,14 @@ export interface operations {
         thread_id?: string;
         /** @description Return only events following this one, in the same thread. */
         after_event_id?: string;
+        /** @description Return only events preceding this one, in the same thread. */
+        before_event_id?: string;
+        /**
+         * @description `oldest` — ascending from the start of the thread (the default, and
+         *     what a replay wants) · `newest` — descending from the end of it,
+         *     which is what a transcript that scrolls backwards wants.
+         */
+        sort?: 'oldest' | 'newest';
         limit?: components['parameters']['Limit'];
       };
       header?: never;

@@ -13,7 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { pino, type Logger } from 'pino';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { RTM_LIMITS } from '@nexa/types';
+import { RTM_LIMITS, RTM_PATHS } from '@nexa/types';
 import { SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import type { RtmEnv } from './config/env.js';
 import { ConflictDetectionService } from './conflict.js';
@@ -25,10 +25,9 @@ import { decodeRequest, encodeError } from './protocol.js';
 import { SyncService } from './sync.js';
 import { TypingService } from './typing.js';
 
-export const RTM_PATHS = {
-  agent: '/v1/agent/rtm/ws',
-  customer: '/v1/customer/rtm/ws',
-} as const;
+// Defined in `@nexa/types` so the gateway and its clients cannot disagree about
+// it; re-exported here because this is where callers have always imported it.
+export { RTM_PATHS };
 
 export interface RtmServer {
   http: Server;

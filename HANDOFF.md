@@ -13,6 +13,36 @@
 
 ## Task log (newest-first)
 
+## tm 90.6 — 13.7-f · Mobil Inbox (liste + transcript + composer + RTM) — done — 2026-08-16 UTC
+
+- **Yapıldı:** (1) `apps/mobile/src/rtm/client.ts` — ADR-15'in AYNI zarfı, ikinci protokol yok;
+  jitter'lı backoff + `sync` ile kaçırılan event kurtarma. Mobile'a özgü üç ekleme: `AppState`
+  'active' → **zorla redial** (OS süreci dondurur, soketin kendine dair inancı bayattır), imleç
+  thread içinde **geri sarmaz** (sayısal sequence — `_10` metinsel olarak `_2`'nin önündedir),
+  imleçler sohbet listesinin `last_event`'inden de **tohumlanır** (uyumuş telefon hiçbir event'i
+  görmedi; reconnect artık her sohbetin kuyruğunu getiriyor). `RTM_PATHS` `@nexa/types`'a taşındı
+  (gateway re-export), `app.json` `rtmBaseUrl` 3001 → 4001. (2) **Sözleşme (katkısal):**
+  `listEvents` + `before_event_id` + `sort=oldest|newest` — ters sonsuz kaydırma thread'in
+  kuyruğunu ister, API yalnız ileri sayfalıyordu; varsayılan yön değişmedi. (3)
+  `apps/mobile/src/features/inbox/` — tek depo (liste + transcript, her yerde newest-first),
+  iyimser gönderim + idempotency key + geri alma, id ile tekilleştirme, echo değiştirme; üç ekran
+  (liste / sohbet / composer) + bağlantı bandı. TanStack Query kullanılmadı (soket zaten güncelleme
+  yolu; 13.7-k'nın tarttığı pakete bağımlılık girmedi). (4) `app/services.tsx` — 13.7-b'nin
+  `MobileSession` + `SessionApiClient`'ı ilk kez mount edildi.
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · `pnpm -w test` (mobil **212**, +59;
+  api 3249, +3) · integration api **89 dosya 2372** · `pnpm -w build` 8/8 · `pnpm -w test:e2e`
+  **149/149** · `db:migrate` "no pending". `format:check` bu turdan ÖNCEKİ aynı 5 dosyada kırmızı.
+  e2e'nin yeniden yazdığı 61 `kanit` PNG'si `git checkout` ile geri alındı (web yüzeyi değişmedi).
+- **Varsayımlar:** (a) ekler (attachment) mobil composer'da YOK — metin telefonun işi, parite borcu
+  13.7-k'ya. (b) Push aboneliği dar tutuldu (5 action): sneak-peek / tuş-başına typing / kuyruk
+  pozisyonu telefonda pil harcayıp hiçbir şey değiştirmiyordu.
+- **Sonraki pencereye not:** **oturum açma EKRANI hâlâ yok** — 13.7-b yalnız modeli teslim etti ve
+  hiçbir alt-görev ekranı üstlenmiyor; Inbox bugün sunucunun reddini dürüstçe gösteriyor, 13.7-k
+  bunu kapsamalı. `pnpm -w test:integration` turbo paralelken `push-notifications` testinin ilk
+  await'inde 30 sn zaman aşımına düşüyor (iki kez, aynı yerde); aynı süit tek başına ve
+  `turbo run test:integration --concurrency=1` ile üç kez yeşil — kod değil CPU çekişmesi, gate
+  seri koşuyla alındı. e2e kök `.env` kaynaklanmadan çalışmıyor (`set -a; . ./.env; set +a`).
+
 ## tm 90.5 — 13.7-e · Mobil kabuk + navigasyon + tasarım token'larının RN karşılığı — done — 2026-08-16 UTC
 
 - **Yapıldı:** (1) `apps/mobile/src/app/` — bottom-tab navigator (Inbox/Customers/Reports/Settings),

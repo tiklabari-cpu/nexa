@@ -12,7 +12,7 @@
     "android": { "package": "com.nexa.app", "edgeToEdgeEnabled": true },
     "extra": {
       "apiBaseUrl": "http://localhost:3000/api/v1",
-      "rtmBaseUrl": "ws://localhost:3001"
+      "rtmBaseUrl": "ws://localhost:4001"
     }
   }
 }

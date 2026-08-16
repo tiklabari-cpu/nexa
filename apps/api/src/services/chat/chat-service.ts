@@ -171,7 +171,14 @@ export class ChatService {
     tenant: TenantContext,
     principal: Principal,
     chatId: string,
-    options: { threadId?: string; afterEventId?: string; limit: number },
+    options: {
+      threadId?: string;
+      afterEventId?: string;
+      beforeEventId?: string;
+      /** `newest` walks the thread backwards — see the contract note. */
+      sort?: 'oldest' | 'newest';
+      limit: number;
+    },
   ): Promise<{ items: SerialisedEvent[]; nextPageId?: string }> {
     return withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'read');
@@ -184,11 +191,19 @@ export class ChatService {
         throw ApiError.notFound('Thread not found.');
       }
 
-      const after = options.afterEventId ? parseSequence(options.afterEventId, threadId) : 0;
+      const after = options.afterEventId
+        ? parseSequence(options.afterEventId, threadId, 'after_event_id')
+        : 0;
+      const before = options.beforeEventId
+        ? parseSequence(options.beforeEventId, threadId, 'before_event_id')
+        : null;
+      const newestFirst = options.sort === 'newest';
 
-      // Sequence lives inside the id, so "everything after N" is answerable
-      // without comparing timestamps — which matters because several events can
-      // share a millisecond.
+      // Sequence lives inside the id, so "everything after N" — and its mirror,
+      // "the page just before N" — is answerable without comparing timestamps,
+      // which matters because several events can share a millisecond. The same
+      // expression orders and bounds the page, so the two directions cannot
+      // disagree about what "next" means.
       //
       // Internal notes are filtered in SQL rather than after fetching: dropping
       // them afterwards would return short pages and let a customer infer, from
@@ -199,8 +214,9 @@ export class ChatService {
         FROM events
         WHERE thread_id = ${threadId}
           AND (split_part(id, '_', 2))::bigint > ${after}
+          ${before === null ? Prisma.empty : Prisma.sql`AND (split_part(id, '_', 2))::bigint < ${before}`}
           ${principal.kind === 'customer' ? Prisma.sql`AND recipients = 'all'` : Prisma.empty}
-        ORDER BY (split_part(id, '_', 2))::bigint ASC
+        ORDER BY (split_part(id, '_', 2))::bigint ${newestFirst ? Prisma.sql`DESC` : Prisma.sql`ASC`}
         LIMIT ${options.limit + 1}
       `);
 
@@ -1773,12 +1789,16 @@ function decodeCursor(pageId: string | undefined): Cursor | null {
   }
 }
 
-function parseSequence(eventId: string, expectedThreadId: string): number {
+function parseSequence(
+  eventId: string,
+  expectedThreadId: string,
+  parameter: 'after_event_id' | 'before_event_id' = 'after_event_id',
+): number {
   const separator = eventId.lastIndexOf('_');
   const threadId = eventId.slice(0, separator);
   const sequence = Number(eventId.slice(separator + 1));
   if (separator < 0 || !Number.isInteger(sequence) || threadId !== expectedThreadId) {
-    throw ApiError.validation('after_event_id does not belong to this thread.');
+    throw ApiError.validation(`${parameter} does not belong to this thread.`);
   }
   return sequence;
 }

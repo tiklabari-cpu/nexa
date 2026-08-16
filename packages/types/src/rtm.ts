@@ -21,6 +21,18 @@ import type { ErrorType } from './errors.js';
 
 export const RTM_VERSION = '3.6';
 
+/**
+ * Where the gateway listens. Shared rather than gateway-local because a client
+ * has to dial it: the web app carries the whole URL in an environment variable,
+ * but the mobile app is handed only a host (`expo.extra.rtmBaseUrl`) and has to
+ * append the path itself — and a path it copied by hand would be a second
+ * definition free to drift from the server's.
+ */
+export const RTM_PATHS = {
+  agent: '/v1/agent/rtm/ws',
+  customer: '/v1/customer/rtm/ws',
+} as const;
+
 /** Connection limits — v2-03 §7.5, deliberately matched. */
 export const RTM_LIMITS = {
   /** Socket is closed if `login` does not arrive within this window. */

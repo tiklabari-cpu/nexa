@@ -69,6 +69,8 @@ const seenSchema = z.object({ seen_up_to: z.coerce.date() });
 const eventsQuery = z.object({
   thread_id: z.string().optional(),
   after_event_id: z.string().max(64).optional(),
+  before_event_id: z.string().max(64).optional(),
+  sort: z.enum(['oldest', 'newest']).default('oldest'),
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
 
@@ -227,8 +229,10 @@ export default async function chatRoutes(
 
       const result = await chats.listEvents(request.tenant(), request.requirePrincipal(), chatId, {
         limit: query.limit,
+        sort: query.sort,
         ...(query.thread_id !== undefined ? { threadId: query.thread_id } : {}),
         ...(query.after_event_id !== undefined ? { afterEventId: query.after_event_id } : {}),
+        ...(query.before_event_id !== undefined ? { beforeEventId: query.before_event_id } : {}),
       });
 
       return reply.send({

@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ConfigErrorScreen } from './app/ConfigErrorScreen';
 import { RootNavigator } from './app/RootNavigator';
+import { ServicesProvider } from './app/services';
 import { MobileConfigError, readMobileConfig } from './config';
 import { ThemeProvider } from './theme/theme';
 
@@ -28,7 +29,16 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <StatusBar style="auto" />
-        {config.ok ? <RootNavigator /> : <ConfigErrorScreen message={config.error.message} />}
+        {/* The session and the API client are built from the config, so they
+            only exist on the branch where there is one — a screen behind the
+            config error has nothing to talk to anyway. */}
+        {config.ok ? (
+          <ServicesProvider config={config.value}>
+            <RootNavigator />
+          </ServicesProvider>
+        ) : (
+          <ConfigErrorScreen message={config.error.message} />
+        )}
       </ThemeProvider>
     </SafeAreaProvider>
   );

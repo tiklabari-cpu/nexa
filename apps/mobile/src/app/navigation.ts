@@ -18,7 +18,11 @@ export type RootTabParamList = {
   Settings: undefined;
 };
 
-export type InboxStackParamList = { InboxHome: undefined };
+export type InboxStackParamList = {
+  InboxHome: undefined;
+  /** One conversation. `title` is carried so the header is right on push. */
+  ChatDetail: { chatId: string; title: string };
+};
 export type CustomersStackParamList = { CustomersHome: undefined };
 export type ReportsStackParamList = { ReportsHome: undefined };
 export type SettingsStackParamList = { SettingsHome: undefined };

@@ -652,6 +652,71 @@ describe('agent chat api', () => {
       expect(seen).toEqual(Array.from({ length: 7 }, (_, i) => `m${i}`));
       expect(new Set(seen).size).toBe(seen.length);
     });
+
+    // A phone opens a conversation at its newest message and loads history as
+    // the reader scrolls up — the opposite of the replay direction above, and
+    // the reason `sort=newest` + `before_event_id` exist (13.7-f).
+    it('walks the thread backwards from its newest event', async () => {
+      const chat = await startChat(acmeAdminToken);
+      for (let i = 0; i < 7; i++) {
+        await server.post(
+          `/chats/${chat.id}/events`,
+          { type: 'message', text: `m${i}` },
+          auth(acmeAdminToken),
+        );
+      }
+
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 5; page++) {
+        const url =
+          `/chats/${chat.id}/events?limit=3&sort=newest` +
+          (cursor ? `&before_event_id=${cursor}` : '');
+        const response = await server.get(url, auth(acmeAdminToken));
+        const items = response.json().items as Array<{ id: string; text: string }>;
+        if (items.length === 0) break;
+        seen.push(...items.map((i) => i.text));
+        cursor = response.json().next_page_id;
+        if (!cursor) break;
+      }
+
+      // Newest first, no gap and no repeat — the exact reverse of the ascending
+      // walk, which is what makes an inverted list render correctly.
+      expect(seen).toEqual(['m6', 'm5', 'm4', 'm3', 'm2', 'm1', 'm0']);
+      expect(new Set(seen).size).toBe(seen.length);
+    });
+
+    it('leaves the default direction alone when sort is omitted', async () => {
+      // The web app and the realtime replay both depend on oldest-first being
+      // what an unqualified request means; adding a direction must not move it.
+      const chat = await startChat(acmeAdminToken);
+      for (let i = 0; i < 3; i++) {
+        await server.post(
+          `/chats/${chat.id}/events`,
+          { type: 'message', text: `m${i}` },
+          auth(acmeAdminToken),
+        );
+      }
+
+      const response = await server.get(`/chats/${chat.id}/events`, auth(acmeAdminToken));
+      expect(response.json().items.map((e: { text: string }) => e.text)).toEqual([
+        'm0',
+        'm1',
+        'm2',
+      ]);
+    });
+
+    it('rejects a before_event_id from a different thread', async () => {
+      const chat = await startChat(acmeAdminToken);
+      const other = generateShortId();
+
+      const response = await server.get(
+        `/chats/${chat.id}/events?before_event_id=${other}_1`,
+        auth(acmeAdminToken),
+      );
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.message).toContain('before_event_id');
+    });
   });
 
   // =========================================================================

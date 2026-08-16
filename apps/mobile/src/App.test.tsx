@@ -12,6 +12,20 @@ import { ROOT_TABS } from './app/navigation';
  */
 const tabButton = (label: string) => screen.getByLabelText(new RegExp(`^${label}, tab,`));
 
+/**
+ * The shell now builds a session and an API client from the config (13.7-f), so
+ * this suite has to stand in for both ends of that: the protected store, which
+ * answers "no session" here, and the network, which answers with an empty inbox
+ * rather than reaching for a real one.
+ */
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(async () => null),
+  setItemAsync: jest.fn(async () => undefined),
+  deleteItemAsync: jest.fn(async () => undefined),
+  isAvailableAsync: jest.fn(async () => true),
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 4,
+}));
+
 /** Stands in for the manifest Expo injects; jest-expo leaves `extra` unset. */
 const mockExtra: { value: unknown } = { value: undefined };
 jest.mock('expo-constants', () => ({
@@ -29,14 +43,20 @@ describe('App', () => {
       apiBaseUrl: 'https://api.nexa.test/api/v1',
       rtmBaseUrl: 'wss://rtm.nexa.test',
     };
+    globalThis.fetch = jest.fn(
+      async () =>
+        new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    ) as unknown as typeof fetch;
   });
 
   it('mounts the shell and shows Inbox — the tab the navigator opens on', async () => {
     await render(<App />);
 
-    expect(
-      screen.getByText("Sohbet listesi, transkript ve composer 13.7-f'te gelir."),
-    ).toBeOnTheScreen();
+    // The real conversation list, not a placeholder: 13.7-f replaced it.
+    expect(await screen.findByTestId('chat-list')).toBeOnTheScreen();
   });
 
   it('names all four FR-MOD-13.7 surfaces on the tab bar', async () => {
@@ -49,6 +69,8 @@ describe('App', () => {
 
   it('switches screens when a tab is pressed, each showing its own placeholder', async () => {
     await render(<App />);
+
+    await screen.findByTestId('chat-list');
 
     await fireEvent.press(tabButton('Customers'));
     expect(screen.getByText("Liste ve kişi detayı 13.7-g'de gelir.")).toBeOnTheScreen();

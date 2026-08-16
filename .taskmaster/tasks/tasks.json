@@ -4415,12 +4415,12 @@
             "description": "Mobil Inbox — sohbet listesi + transcript + composer + RTM (reconnect/missed-event)",
             "details": "13.7-f — Mobil Inbox — sohbet listesi + transcript + composer + RTM (reconnect/missed-event)  [OPUS-XHIGH]\n\nPRD: 13.7 (PLAN §6.1 · dilim V3-5 · tm 90)\nTAHMİN: ~2 pencere\n\nKAPSAM: FR-MOD-13.7 KK'sının en ağır payı. Sohbet listesi, transcript (ters sonsuz kaydırma), composer (yanıt + internal note), RTM bağlantısı — reconnect ve missed-event sync DAHİL.\n\nKRİTİK: RTM protokolü ADR-15'te kilitli (`{request_id, action, payload}` → `{request_id, action, type, success, payload}`); mobil AYNI protokolü konuşur, ikinci bir protokol açılmaz. Missed-event sync event id'nin thread+sıra kodlamasına dayanır (`TJ1H8CFKRV_7`) — README'nin \"Notable engineering choices\" bölümü.\n\nDOSYALAR: `apps/mobile/src/features/inbox/` · `apps/mobile/src/rtm/` (istemci)\n\nREFERANS DESEN: `apps/web/src/features/inbox/` (46 dosya — en ağır feature) ve `apps/web/src/lib/realtime.ts`; iş mantığı KOPYALANMAZ, paylaşılabilen kısım `@nexa/types` üzerinden gelir, RN yalnız sunum katmanını yazar.\n\nKAPSAM DIŞI: AI yüzeyi (13.7-i), e2e (13.7-k).\n\nDoD (CONVENTIONS §1): typecheck + lint + unit + integration + build + ilgili e2e — hepsi exit 0;\nPLAN gereksinim satırı güncellenir (damga yalnız `✅ → K<kod>` / `◐ → K<kod>`, kanıt `## K.`\nbölümüne madde olarak); HANDOFF.md'ye kısa not; commit + push; Task Master'da done.",
             "testStrategy": "pnpm --filter @nexa/mobile test (liste render + boş durum; transcript sayfalama; composer gönderim; RTM push mesajı listeye düşer; BAĞLANTI KOPUP DÖNÜNCE kaçırılan event'ler senkronlanır — missed-event testi) && pnpm -w typecheck && pnpm -w lint && pnpm -w build",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "90.5"
             ],
             "parentId": "90",
-            "updatedAt": "2026-08-16T17:52:25.903Z"
+            "updatedAt": "2026-08-16T19:25:35.037Z"
           },
           {
             "id": 7,
@@ -4493,7 +4493,7 @@
             "updatedAt": "2026-08-11T20:47:57.075Z"
           }
         ],
-        "updatedAt": "2026-08-16T17:52:25.903Z"
+        "updatedAt": "2026-08-16T19:25:35.037Z"
       },
       {
         "id": "91",
@@ -5947,7 +5947,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-16T17:52:25.905Z",
+      "lastModified": "2026-08-16T19:25:35.038Z",
       "taskCount": 124,
       "completedCount": 123,
       "tags": [

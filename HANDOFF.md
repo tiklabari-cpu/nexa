@@ -13,6 +13,34 @@
 
 ## Task log (newest-first)
 
+## 128.3 — 13.7-r: Settings → Account kartı — kim/hangi workspace/rol + Sign out + Switch account — done — 2026-08-17 UTC
+
+- **Yapıldı:** (1) Yeni `features/account/AccountScreen.tsx` (+ test, prop-based — `principal`/`onSignOut`/
+  `onSwitchAccount`, `TeamMemberScreen`'in deseni) `SettingsStack`'e dördüncü header bağlantısı olarak
+  bağlandı. (2) Workspace adı `sessionState.principal`'da yoktu — `/auth/me`'ye SUPPORTING olarak eklendi
+  (ikinci istek YOK): OpenAPI + `routes/auth.ts` (`tx.organization.findUnique`) + `contract:generate` +
+  mobil `SessionPrincipal.organization_name?`. (3) Sign out onay ister (iki adımlı ekran-içi onay, native
+  `Alert` değil — RNTL'de test edilebilir); Switch account HİÇBİR ONAY İSTEMEZ ve `signOut`/`switchAccount`'ı
+  DOĞRUDAN ÇAĞIRMAZ — yalnız yeni `SwitchAccount` rotasına gider, o da `AuthStack`'i `mode="switch"` ile
+  monte eder (yeni `features/auth/switch-account.ts`: `SignInScreen`'in çağırdığı "`signIn`" aslında
+  `session.switchAccount`'a gider — §C-A31 iptal-önce-kayıt-sonra sırası korunur, eski oturum yalnız YENİ
+  kimlik bilgisi onaylanınca kapanır). (4) `parity.test.ts` aynı turda güncellendi: isimli rota sayısı
+  8 → 10, `shipped` dizinine `account` eklendi — `REQUESTED` uç noktası seti DEĞİŞMEDİ.
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 · `pnpm -w format:check` ·
+  `pnpm --filter @nexa/mobile test` **440/440 · 39 dosya** (431 → 440: AccountScreen 6 + switch-account 3) ·
+  `pnpm -w test` (api 3251 + mobil 440, hepsi yeşil) · `pnpm -w test:integration` (api, `organization_name`
+  assertion'ı ile) · `pnpm -w build`. `pnpm -w test:e2e` KOŞULMADI — 13.7-p/-q ile aynı gerekçe: apps/mobile
+  Playwright'a hiç girmiyor, task'ın `testStrategy`'si istemiyor.
+- **Varsayımlar:** "Workspace" alanı `/auth/me`'ye eklenen `organization_name` — konsol bunu göstermiyor
+  (`AppShell.tsx` yalnız ad/e-posta/rol), mobilin kendi ihtiyacı için yeni. Switch account'ta SSO yolu
+  (`switchAccountSession.signInWithSso`) `MobileSession`'da atomik bir karşılığı olmadığı için elle
+  `signOut()` + `signInWithSso()` sırasıyla yazıldı — test edildi ama gerçek bir SSO hesabı değiştirme
+  senaryosu `App.test.tsx`'te uçtan uca YÜRÜNMEDİ (kapsam: e-posta/parola switch birincil yol).
+- **Sonraki pencereye not:** `13.7` satırı `◐` KALDI (`PLAN.md:572`) — 13.7-w çevirir. `SwitchAccount`
+  ekranının kendi başlığı yok (`headerShown:false`, iç `AuthStack` kendi başlığını yönetir) — geri gitmek
+  yalnız swipe/hardware-back ile, görünür bir "vazgeç" düğmesi yok (sıradan giriş ekranıyla aynı kural).
+  13.7-w'nin parite AUTH satırları bu görevin `SwitchAccount`/`account` eklerini de kapsamalı.
+
 ## 128.2 — 13.7-q: SSO tarayıcı bacağı bağlandı + `nexa://` deep-link (linking) — done — 2026-08-17 UTC
 
 - **Yapıldı:** (1) `app/services.tsx` oturumu artık `browser: systemBrowser` ile kuruyor — `13.7-b`'nin

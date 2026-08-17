@@ -50,6 +50,8 @@ export interface SessionPrincipal {
   name?: string;
   role?: string;
   organization_id: string;
+  /** Agent principals only — the workspace's display name (13.7-r). */
+  organization_name?: string;
   license_id: string;
   scopes: string[];
   routing_status?: 'accepting_chats' | 'not_accepting_chats' | 'offline';

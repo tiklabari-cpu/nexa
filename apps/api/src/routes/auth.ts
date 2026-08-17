@@ -470,7 +470,7 @@ export default async function authRoutes(
       if (principal.kind !== 'agent') throw ApiError.notFound('Resource not found.');
 
       const profile = await request.withTenant(async (tx) => {
-        const [account, membership, license] = await Promise.all([
+        const [account, membership, license, organization] = await Promise.all([
           tx.account.findUnique({
             where: { id: principal.accountId },
             select: { email: true, name: true, avatarUrl: true },
@@ -492,8 +492,16 @@ export default async function authRoutes(
             where: { id: principal.licenseId },
             select: { onboardingCompletedAt: true },
           }),
+          // The mobile Settings → Account card's only source for "which
+          // workspace" (13.7-r) — a long-lived session has no other request
+          // that would carry it (the console reads it once, off `/auth/login`'s
+          // membership list, and never needs it again).
+          tx.organization.findUnique({
+            where: { id: principal.organizationId },
+            select: { name: true },
+          }),
         ]);
-        return { account, membership, license };
+        return { account, membership, license, organization };
       });
 
       return reply.send({
@@ -504,6 +512,7 @@ export default async function authRoutes(
         avatar_url: profile.account?.avatarUrl ?? null,
         role: principal.role,
         organization_id: principal.organizationId,
+        organization_name: profile.organization?.name ?? null,
         license_id: principal.licenseId.toString(),
         region: request.requireRegion(),
         scopes: principal.scopes,

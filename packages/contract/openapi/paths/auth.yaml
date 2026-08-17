@@ -253,6 +253,15 @@ me:
                 name: { type: string }
                 role: { type: string, enum: [owner, viceowner, admin, agent] }
                 organization_id: { type: string, format: uuid }
+                organization_name:
+                  type: string
+                  description: |
+                    Agent principals only. The workspace's display name — shipped
+                    with the profile the app already fetches on load, rather than a
+                    second request, for a caller that has nowhere else to read it
+                    (the mobile Settings → Account card, 13.7-r; the console reads
+                    it from `/auth/login`'s membership list instead, which a
+                    long-lived session never revisits).
                 license_id: { type: string }
                 region:
                   type: string

@@ -486,29 +486,37 @@ describe('module parity matrix — the modules §C-A28 puts out of scope', () =>
     // all four live in the Settings tab, none of them is a `MATRIX` surface.
     //
     // `auth` is not a surface either, and not a module: it is the way in
-    // (13.7-p). It is reached through no tab, because it is what renders
-    // *instead of* the tabs while the session is signed out, and it calls
-    // nothing of its own — every request it causes goes through
-    // `MobileSession`, which is why `/auth/login` and `/auth/authorize` are
-    // already classified under `SUPPORTING` above rather than appearing here.
-    // `13.7-w` gives it a row of its own once sign-out and the SSO leg land.
+    // (13.7-p). It renders *instead of* the tabs while the session is signed
+    // out, and Settings → Account's "Switch account" (13.7-r) is the one
+    // exception — it pushes the same stack, in `'switch'` mode, while still
+    // signed in, rather than a tab of its own. Either way it calls nothing
+    // directly: every request it causes goes through `MobileSession`, which
+    // is why `/auth/login` and `/auth/authorize` are already classified
+    // under `SUPPORTING` above rather than appearing here. `13.7-w` gives it
+    // a row of its own once sign-out and the SSO leg land.
+    //
+    // `account` is the one Settings surface FR-MOD-08.2 does not already
+    // name — who is signed in, which workspace, sign out, switch account
+    // (13.7-r). Like `notifications` it requests nothing of its own; every
+    // field it shows is already on `sessionState.principal`.
     expect(shipped).toEqual(
       [
         ...MATRIX.map((surface) => surface.feature),
         ...PARITY_MODULES.map((module_) => module_.feature),
         'notifications',
         'auth',
+        'account',
       ].sort(),
     );
   });
 
-  it('names four tabs; the Settings tab carries FR-MOD-08.2 and the Team + Playbook + Billing parity modules, nothing from workspace administration', () => {
+  it('names four tabs; the Settings tab carries FR-MOD-08.2, the Team + Playbook + Billing parity modules and Account, nothing from workspace administration', () => {
     expect([...ROOT_TABS]).toEqual(['Inbox', 'Customers', 'Reports', 'Settings']);
     // Whatever the tab is called, what it mounts is the notification
-    // preferences screen plus the Team (13.7-m), Playbook (13.7-n) and
-    // Billing (13.7-o) surfaces — never a brand, webhook or PAT screen, which
-    // is what `Settings (workspace administration)` above still keeps off
-    // the phone.
+    // preferences screen plus the Team (13.7-m), Playbook (13.7-n), Billing
+    // (13.7-o) and Account (13.7-r) surfaces — never a brand, webhook or PAT
+    // screen, which is what `Settings (workspace administration)` above
+    // still keeps off the phone.
     const settingsStack = readFileSync(join(SRC, 'app', 'stacks', 'SettingsStack.tsx'), 'utf8');
     expect(settingsStack).toContain('features/notifications/NotificationsScreen');
     expect(settingsStack).toContain('features/team/TeamListScreen');
@@ -518,7 +526,10 @@ describe('module parity matrix — the modules §C-A28 puts out of scope', () =>
     expect(settingsStack).toContain('features/playbook/SkillDetailScreen');
     expect(settingsStack).toContain('features/playbook/KnowledgeSourceListScreen');
     expect(settingsStack).toContain('features/billing/BillingScreen');
-    expect([...settingsStack.matchAll(/name="(\w+)"/g)]).toHaveLength(8);
+    expect(settingsStack).toContain('features/account/AccountScreen');
+    // `Account` (the card) and `SwitchAccount` (`AuthStack` in `'switch'`
+    // mode) — the two routes 13.7-r added — on top of the original 8.
+    expect([...settingsStack.matchAll(/name="(\w+)"/g)]).toHaveLength(10);
   });
 });
 

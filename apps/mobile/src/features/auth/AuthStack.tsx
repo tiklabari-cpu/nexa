@@ -11,13 +11,20 @@
  * the picker, and a route param is the wrong place for them — navigation state
  * is serialised, persisted and — since `13.7-q` — addressable as a URL.
  * Component state is none of those things, and it dies with the flow.
+ *
+ * `mode` is what lets this same stack serve a second entrance: Settings →
+ * Account's "Switch account" (13.7-r) pushes it while still signed in, and
+ * `'switch'` swaps in `switchAccountSession` so the credentials this collects
+ * go to `session.switchAccount` rather than `session.signIn` — neither
+ * `SignInScreen` nor `WorkspacePickerScreen` has to know which mode is live.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { SignInScreen } from './SignInScreen';
+import { switchAccountSession } from './switch-account';
 import { WorkspacePickerScreen } from './WorkspacePickerScreen';
-import type { PendingSignIn } from './types';
+import type { AuthSession, PendingSignIn } from './types';
 import type { AuthStackParamList } from '../../app/navigation';
 import { buildStackScreenOptions } from '../../app/navigationTheme';
 import { useServices } from '../../app/services';
@@ -25,9 +32,17 @@ import { useTheme } from '../../theme/theme';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
-export function AuthStack() {
+export interface AuthStackProps {
+  mode?: 'sign-in' | 'switch';
+}
+
+export function AuthStack({ mode = 'sign-in' }: AuthStackProps = {}) {
   const { colors } = useTheme();
-  const { session } = useServices();
+  const { session: realSession } = useServices();
+  const session: AuthSession = useMemo(
+    () => (mode === 'switch' ? switchAccountSession(realSession) : realSession),
+    [mode, realSession],
+  );
   const [pending, setPending] = useState<PendingSignIn | null>(null);
 
   return (

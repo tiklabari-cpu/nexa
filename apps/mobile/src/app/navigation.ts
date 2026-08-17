@@ -81,4 +81,14 @@ export type SettingsStackParamList = {
   /** The Billing parity module (13.7-o) — one screen, no per-record push:
    * plan, usage, entitlements and invoices all load together. */
   Billing: undefined;
+  /** Who is signed in, on which workspace, and the door out (13.7-r). */
+  Account: undefined;
+  /**
+   * `AuthStack` in `'switch'` mode, pushed while still signed in. Not a
+   * `NavigatorScreenParams<AuthStackParamList>` the way `Inbox` nests
+   * `InboxStackParamList` — `AccountScreen` never names a screen inside it,
+   * it only opens the door, so there is nothing here for a route param to
+   * carry.
+   */
+  SwitchAccount: undefined;
 };

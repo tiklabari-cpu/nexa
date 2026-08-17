@@ -889,6 +889,9 @@ describe('auth', () => {
         email: fx.a.ownerEmail,
         role: 'owner',
         organization_id: fx.a.organizationId,
+        // Mobile Settings → Account's only source for "which workspace"
+        // (13.7-r) — carried on the profile the app already fetches.
+        organization_name: 'Org A',
         license_id: fx.a.licenseId.toString(),
         region: 'eu',
       });

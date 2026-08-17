@@ -9709,6 +9709,15 @@ export interface operations {
             role?: 'owner' | 'viceowner' | 'admin' | 'agent';
             /** Format: uuid */
             organization_id: string;
+            /**
+             * @description Agent principals only. The workspace's display name — shipped
+             *     with the profile the app already fetches on load, rather than a
+             *     second request, for a caller that has nowhere else to read it
+             *     (the mobile Settings → Account card, 13.7-r; the console reads
+             *     it from `/auth/login`'s membership list instead, which a
+             *     long-lived session never revisits).
+             */
+            organization_name?: string;
             license_id: string;
             /**
              * @description Where the caller's **workspace** keeps its data — the region

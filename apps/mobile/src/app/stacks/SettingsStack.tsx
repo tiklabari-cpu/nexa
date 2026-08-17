@@ -5,6 +5,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import type { SettingsStackParamList } from '../navigation';
 import { buildStackScreenOptions } from '../navigationTheme';
+import { useServices, useSessionState } from '../services';
 import { NotificationsScreen } from '../../features/notifications/NotificationsScreen';
 import { NotificationsProvider } from '../../features/notifications/NotificationsProvider';
 import { TeamListScreen } from '../../features/team/TeamListScreen';
@@ -17,6 +18,8 @@ import { KnowledgeSourceListScreen } from '../../features/playbook/KnowledgeSour
 import { PlaybookProvider } from '../../features/playbook/PlaybookProvider';
 import { BillingScreen } from '../../features/billing/BillingScreen';
 import { BillingProvider } from '../../features/billing/BillingProvider';
+import { AccountScreen } from '../../features/account/AccountScreen';
+import { AuthStack } from '../../features/auth/AuthStack';
 import { FONT_SIZE, SPACING } from '../../theme/tokens';
 import { useTheme } from '../../theme/theme';
 
@@ -28,7 +31,9 @@ const Stack = createNativeStackNavigator<SettingsStackParamList>();
  * the Playbook/AI administration parity module (13.7-n) and Billing (13.7-o)
  * are all reached from this tab's header rather than a root tab of their
  * own, the same "SettingsStack altına bağlamak" choice `13.7-m` made to keep
- * the four-tab shell `13.7-e` decided.
+ * the four-tab shell `13.7-e` decided. Account (13.7-r) joins them the same
+ * way, needing no provider of its own — everything it shows already lives on
+ * `sessionState.principal`.
  */
 export function SettingsStack() {
   const { colors } = useTheme();
@@ -59,6 +64,11 @@ export function SettingsStack() {
                         testID="settings-open-billing"
                         label="Billing"
                         onPress={() => navigation.navigate('Billing')}
+                      />
+                      <HeaderLink
+                        testID="settings-open-account"
+                        label="Account"
+                        onPress={() => navigation.navigate('Account')}
                       />
                     </HeaderLinks>
                   ),
@@ -117,6 +127,24 @@ export function SettingsStack() {
                 component={BillingScreen}
                 options={{ title: 'Billing' }}
               />
+              <Stack.Screen
+                name="Account"
+                component={AccountScreenRoute}
+                options={{ title: 'Account' }}
+              />
+              <Stack.Screen
+                name="SwitchAccount"
+                // `AuthStack` renders its own header (hidden on `SignIn`, titled
+                // on `WorkspacePicker`) — a second one here would stack two bars
+                // for the same step. The back gesture still works without it
+                // (native-stack's swipe/hardware-back do not depend on the header
+                // being shown), which is the only way out of this screen: nothing
+                // has been signed out of yet for there to be a "cancel" action to
+                // wire, so none is offered, same as the ordinary sign-in form.
+                options={{ headerShown: false }}
+              >
+                {() => <AuthStack mode="switch" />}
+              </Stack.Screen>
             </Stack.Navigator>
           </BillingProvider>
         </PlaybookProvider>
@@ -126,8 +154,8 @@ export function SettingsStack() {
 }
 
 /** The row a header carries more than one link in — `SettingsHome` is the
- * only screen that needs it (Team + Playbook + Billing); every other header
- * here has exactly one. */
+ * only screen that needs it (Team + Playbook + Billing + Account); every
+ * other header here has exactly one. */
 function HeaderLinks({ children }: PropsWithChildren) {
   return <View style={{ flexDirection: 'row', alignItems: 'center' }}>{children}</View>;
 }
@@ -182,4 +210,18 @@ function SkillDetailScreenRoute({
   route,
 }: NativeStackScreenProps<SettingsStackParamList, 'SkillDetail'>) {
   return <SkillDetailScreen skillId={route.params.skillId} />;
+}
+
+function AccountScreenRoute({
+  navigation,
+}: NativeStackScreenProps<SettingsStackParamList, 'Account'>) {
+  const { session } = useServices();
+  const { principal } = useSessionState();
+  return (
+    <AccountScreen
+      principal={principal}
+      onSignOut={() => session.signOut()}
+      onSwitchAccount={() => navigation.navigate('SwitchAccount')}
+    />
+  );
 }

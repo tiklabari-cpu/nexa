@@ -27,16 +27,18 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { DevicePlatform } from '@nexa/types';
+import type { DevicePlatform, PushEventKind } from '@nexa/types';
 
 /**
  * What happened, in the vocabulary the phone shows.
  *
- * Three kinds rather than one because the app's notification tray groups by
- * them and because a test that filters the spool needs to tell "you have been
- * given a chat" from "the visitor wrote again" without parsing prose.
+ * Declared in `@nexa/types` since `13.7-s`, and re-exported here so the fifteen
+ * call sites that already import it from this module keep working. It moved for
+ * the reason `DevicePlatform` lives there: the phone reads the `kind` it writes
+ * (`notifications/handler.ts`), and two hand-kept copies of a three-value union
+ * are a pair that can drift. Nothing about what is sent changed.
  */
-export type PushEventKind = 'new_chat' | 'assignment' | 'message';
+export type { PushEventKind };
 
 /** One delivery, to one handset. */
 export interface PushNotification {

@@ -1,9 +1,10 @@
 import { MOBILE_REDIRECT_URI } from '@nexa/types';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 
 import App from './App';
 import { ROOT_TABS } from './app/navigation';
+import { navigationRef } from './app/navigationRef';
 import { RETURNED_FROM_BROWSER } from './features/auth/messages';
 import type { ChatSummary } from './features/inbox/types';
 
@@ -104,6 +105,59 @@ jest.mock('expo-crypto', () => {
   };
 });
 
+/**
+ * The notification module, as a thing this suite can be (13.7-s).
+ *
+ * Mocked here rather than left to `jest-expo`'s automatic stand-in for two
+ * reasons: the app installs its foreground handler through it (so the mock is
+ * how "was a handler installed?" can be asked at all), and every entry point a
+ * tap can arrive through — the live listener and the response that launched the
+ * process — is a native callback with no other way to be triggered from a test.
+ *
+ * The permission calls are the ones `auth/push-tokens.ts` makes on the sign-in
+ * path; answered "denied" so no registration is attempted, which is
+ * `push-tokens.test.ts`'s subject rather than this file's.
+ */
+const mockPush: {
+  launchResponse: unknown;
+  handler: { handleNotification: (notification: unknown) => Promise<unknown> } | null;
+  listeners: ((response: unknown) => void)[];
+} = { launchResponse: null, handler: null, listeners: [] };
+
+jest.mock('expo-notifications', () => ({
+  DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
+  setNotificationHandler: jest.fn((handler: never) => {
+    mockPush.handler = handler;
+  }),
+  addNotificationResponseReceivedListener: jest.fn((listener: (response: unknown) => void) => {
+    mockPush.listeners.push(listener);
+    return {
+      remove: () => {
+        mockPush.listeners = mockPush.listeners.filter((entry) => entry !== listener);
+      },
+    };
+  }),
+  getLastNotificationResponseAsync: jest.fn(async () => mockPush.launchResponse),
+  getPermissionsAsync: jest.fn(async () => ({
+    status: 'denied',
+    granted: false,
+    canAskAgain: false,
+  })),
+  requestPermissionsAsync: jest.fn(async () => ({
+    status: 'denied',
+    granted: false,
+    canAskAgain: false,
+  })),
+  getDevicePushTokenAsync: jest.fn(async () => ({ data: '' })),
+  IosAuthorizationStatus: {
+    NOT_DETERMINED: 0,
+    DENIED: 1,
+    AUTHORIZED: 2,
+    PROVISIONAL: 3,
+    EPHEMERAL: 4,
+  },
+}));
+
 /** A workspace that federates sign-in: the password is not the way in (S11-h). */
 const SSO_MEMBERSHIP = {
   license_id: '4',
@@ -202,6 +256,9 @@ describe('App', () => {
     });
     mockMemberships.value = [];
     mockChats.value = [];
+    mockPush.launchResponse = null;
+    mockPush.handler = null;
+    mockPush.listeners = [];
     mockExtra.value = {
       apiBaseUrl: 'https://api.nexa.test/api/v1',
       rtmBaseUrl: 'wss://rtm.nexa.test',
@@ -440,6 +497,186 @@ describe('App', () => {
 
       expect(await screen.findByTestId('sign-in')).toBeOnTheScreen();
       expect(screen.getByTestId('sign-in-error')).toHaveTextContent(RETURNED_FROM_BROWSER);
+    });
+  });
+
+  /**
+   * Push, from the phone's side (13.7-s).
+   *
+   * `13.7-d` has been writing `{ kind, chat_id }` into the spool since the
+   * server side landed, and `13.7-l` registered this handset to receive it —
+   * but nothing on the phone ever read one: no foreground handler, so a
+   * notification arriving while the app was open was swallowed by the platform,
+   * and no response listener, so tapping one merely reopened whatever tab was
+   * last on screen (§D111).
+   *
+   * The real device never delivers anything in this repository — the provider
+   * is a file spool (CLAUDE.md: external services are mocked), so APNs/FCM are
+   * simulated here by calling the callbacks `expo-notifications` would have
+   * called. What is proved is everything on this side of that boundary: the
+   * handler is installed, the listener is subscribed, and where a tap lands.
+   */
+  describe('push notifications', () => {
+    const chat: ChatSummary = {
+      id: 'chat-1',
+      customer_id: 'customer-1',
+      customer_name: 'Dana',
+      active: true,
+      created_at: '2026-08-17T09:00:00.000Z',
+      thread_id: 'THREAD1',
+      assignee_id: null,
+      queue_position: null,
+      unread_count: 0,
+      last_event: null,
+      tags: [],
+    } as unknown as ChatSummary;
+
+    /** A workspace a password does get into — the way back in after a tap. */
+    const PASSWORD_MEMBERSHIP = {
+      license_id: '4',
+      organization_id: 'org-1',
+      organization_name: 'Acme',
+      role: 'owner',
+      client_id: 'client-acme',
+      password_login_available: true,
+      sso_enforced_connection_id: null,
+    };
+
+    /** What the OS hands back when somebody taps one of `13.7-d`'s pushes. */
+    function tapOn(chatId: string, id = 'delivery-1') {
+      return {
+        actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
+        notification: {
+          date: 0,
+          request: {
+            identifier: id,
+            content: {
+              title: 'New message',
+              body: 'A visitor replied.',
+              data: { kind: 'message', chat_id: chatId },
+            },
+            trigger: null,
+          },
+        },
+      };
+    }
+
+    /** Deliver a tap the way the native module would, to a live process. */
+    async function deliverTap(response: unknown): Promise<void> {
+      await act(async () => {
+        for (const listener of mockPush.listeners) listener(response);
+      });
+    }
+
+    it('shows a notification that arrives while somebody is looking at the app', async () => {
+      mockStore.session = STORED_SESSION;
+      await render(<App />);
+      await screen.findByTestId('chat-list');
+
+      // Installed by the app itself — before this the platform's default
+      // applied, which is to show nothing at all.
+      expect(mockPush.handler).not.toBeNull();
+      await expect(
+        mockPush.handler?.handleNotification({
+          request: { content: { data: { kind: 'message', chat_id: 'chat-1' } } },
+        }),
+      ).resolves.toEqual({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      });
+    });
+
+    it('opens the conversation a tapped notification names, from whatever tab is showing', async () => {
+      mockStore.session = STORED_SESSION;
+      mockChats.value = [chat];
+      await render(<App />);
+      await screen.findByTestId('chat-list');
+
+      await fireEvent.press(tabButton('Reports'));
+      await screen.findByTestId('reports-overview');
+
+      await deliverTap(tapOn('chat-1'));
+
+      // The transcript, in the Inbox tab: `/chats/chat-1/events` answers empty,
+      // so this is the conversation open with nothing said in it yet.
+      expect(await screen.findByTestId('transcript-empty')).toBeOnTheScreen();
+    });
+
+    it('opens the conversation the app was launched from, with nothing listening yet', async () => {
+      // The cold start: the tap happened before this process existed, so no
+      // listener could have heard it and the response has to be asked for.
+      mockStore.session = STORED_SESSION;
+      mockChats.value = [chat];
+      mockPush.launchResponse = tapOn('chat-1', 'delivery-cold');
+
+      await render(<App />);
+
+      expect(await screen.findByTestId('transcript-empty')).toBeOnTheScreen();
+    });
+
+    it('acts on one delivery once, however many times the platform offers it', async () => {
+      // A cold start offers the same response twice — as the launch response
+      // and again through the listener. Acted on twice, the conversation is
+      // pushed onto the stack twice and "back" lands on the same chat again.
+      mockStore.session = STORED_SESSION;
+      mockChats.value = [chat];
+      mockPush.launchResponse = tapOn('chat-1', 'delivery-cold');
+
+      await render(<App />);
+      await screen.findByTestId('transcript-empty');
+
+      await deliverTap(tapOn('chat-1', 'delivery-cold'));
+
+      const inbox = navigationRef.getRootState().routes.find((route) => route.name === 'Inbox');
+      expect(inbox?.state?.routes.map((route) => route.name)).toEqual(['InboxHome', 'ChatDetail']);
+    });
+
+    it('holds the destination while nobody is signed in, and opens it afterwards', async () => {
+      // Tapped from the lock screen with an empty store. There is no route to a
+      // conversation in the signed-out tree, so the tap cannot be honoured —
+      // and losing it would send somebody who was answering a customer to a
+      // generic inbox with no idea which chat buzzed.
+      mockMemberships.value = [PASSWORD_MEMBERSHIP];
+      mockChats.value = [chat];
+      mockPush.launchResponse = tapOn('chat-1', 'delivery-cold');
+
+      await render(<App />);
+      expect(await screen.findByTestId('sign-in')).toBeOnTheScreen();
+      expect(screen.queryByTestId('transcript-empty')).not.toBeOnTheScreen();
+
+      await fireEvent.changeText(screen.getByTestId('sign-in-email'), 'owner@acme.localhost');
+      await fireEvent.changeText(screen.getByTestId('sign-in-password'), 'nexa-demo-password');
+      // One membership, so `SignInScreen` enters it without asking which
+      // workspace — the picker is for people who belong to more than one.
+      await fireEvent.press(screen.getByTestId('sign-in-submit'));
+
+      expect(await screen.findByTestId('transcript-empty')).toBeOnTheScreen();
+    });
+
+    it('stays where it is when the notification names no conversation it can open', async () => {
+      // A build behind the server, or a payload with no chat id. Navigating
+      // somewhere arbitrary would be worse than staying put.
+      mockStore.session = STORED_SESSION;
+      mockChats.value = [chat];
+      await render(<App />);
+      await screen.findByTestId('chat-list');
+
+      await deliverTap({
+        actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
+        notification: {
+          date: 0,
+          request: {
+            identifier: 'delivery-2',
+            content: { data: { kind: 'mention' } },
+            trigger: null,
+          },
+        },
+      });
+
+      expect(screen.getByTestId('chat-list')).toBeOnTheScreen();
+      expect(screen.queryByTestId('transcript-empty')).not.toBeOnTheScreen();
     });
   });
 

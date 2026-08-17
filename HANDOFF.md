@@ -13,6 +13,40 @@
 
 ## Task log (newest-first)
 
+## 128.4 — 13.7-s: Push alımı — ön planda gösterim + dokununca ilgili sohbet (soğuk açılış dahil) — done — 2026-08-18 UTC
+
+- **Yapıldı:** (1) Yük tipi `@nexa/types`'a çıktı (`push.ts`: `PUSH_EVENT_KINDS` · `PushPayload` ·
+  `readPushPayload`; `push-provider.ts` aynı birliği re-export ediyor — sunucu davranışı DEĞİŞMEDİ).
+  (2) `apps/mobile/src/notifications/`: `handler.ts` (ön plan kararı — rota edilebilir yük → banner+liste+ses,
+  edilemeyen → yalnız liste; rozet yok), `response.ts` (dokunmayı okur; yalnız `DEFAULT_ACTION_IDENTIFIER`,
+  yani kaydırarak silme sohbet AÇMAZ; teslim kimliği taşınır), `routing.ts` (hedefi bekletir → `signed-in` +
+  `onReady` anında `Inbox → ChatDetail`). (3) `app/navigationRef.ts` + `RootNavigator` `ref`/`onReady`.
+  (4) `app.json` `plugins: [["expo-notifications", { color }]]` (ikon YOK — 13.7-u'nun işi).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 · `pnpm -w format:check` ·
+  `pnpm -w test` **11/11** (api 3251 · types 120 · mobil 465/465 · 41 dosya; taban 440/39, +25) ·
+  `pnpm -w build` 8/8 (mobil `expo export` ios 1026 + android 1023 modül — plugin bloğuyla) ·
+  `pnpm -w test:integration` **90/90 dosya · 2374/2374 + rtm 60/60** (ikinci koşu; birinciye bak).
+  Ölçülebilir KK: `grep` → 3 farklı nativ çağrı (handler/listener/last-response).
+  `pnpm -w test:e2e` KOŞULMADI — 128.1/128.2/128.3 ile aynı gerekçe: apps/mobile Playwright'a hiç girmiyor,
+  task'ın `testStrategy`'si de istemiyor; kontrat/migration değişmedi → codegen + drift kapısı gereksiz.
+- **Varsayımlar:** Ön planda gelen bildirim, o sohbet ekranda açıkken de gösterilir (RTM ile örtüşür) —
+  bilerek: "hangi rotadayım" okuyup susmanın hata biçimi SESSİZLİKTİR, ve 08.2 anahtarı zaten sunucuda
+  uygulanıyor. Navigasyon URL yerine `navigationRef` ile (signed-out linking haritasında `chats/:chatId` hiç
+  yok — oradan geçen dokunma düşerdi). Bekleyen hedef yalnız bellekte (süreçle ölür, saklanmaz). Cihazda
+  gerçek APNs/FCM gelmez (sağlayıcı dosya spool'u); testte nativ geri çağrılar simüle edilir.
+- **Sonraki pencereye not:** `13.7` satırı `◐` KALDI (`PLAN.md:572`) — 13.7-w çevirir. **13.7-u:** app.json
+  plugin bloğu `icon` almadı; ikon üretilince `{ "icon": "./assets/notification-icon.png", "color": … }`
+  olarak tamamlanmalı. **13.7-w:** parite/yolculuk testi `src/notifications/`'ı da kapsamalı (parity.test.ts
+  yalnız `src/features/*` tarar, bu dizini görmez). **tm 129 (M-GATE) için iki yeni flake kaydı — ikisi de
+  bu turun kodu DEĞİL, dosyalarına dokunulmadı:** (1) §D112 sınıfı — `pnpm -w test` bir koşuda
+  `apps/mobile ChatScreen.test.tsx` "shows the conversation…" 5000 ms aşımı; dosya tek başına 11/11 · 1.8 s,
+  sonraki tam koşu 11/11 görev yeşil. (2) §D87 sınıfı (saat kayması) — `pnpm -w test:integration` bir koşuda
+  `apps/api test/integration/push-notifications.test.ts` "does not push to a handset that was signed out"
+  `device_tokens_revoked_check` ihlaliyle düştü: test `revokedAt: new Date()` (Node saati) yazıyor, `created_at`
+  DB saatinden geliyor ve **1 ms sonra** damgalanmış (`…44.355` vs `…44.354`), CHECK ise `revoked_at >= created_at`
+  istiyor. Dosya tek başına 14/14 · 6.3 s, ikinci tam koşu 90/90 · 2374/2374 exit 0. Çözümü §D87'nin emsalidir
+  (fixture DB varsayılanı yerine açık damga kullansın) — ayrı task, burada YAPILMADI (CONVENTIONS §5).
+
 ## 128.3 — 13.7-r: Settings → Account kartı — kim/hangi workspace/rol + Sign out + Switch account — done — 2026-08-17 UTC
 
 - **Yapıldı:** (1) Yeni `features/account/AccountScreen.tsx` (+ test, prop-based — `principal`/`onSignOut`/

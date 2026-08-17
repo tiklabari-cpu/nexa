@@ -6025,7 +6025,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-17T20:53:40.721Z",
+        "updatedAt": "2026-08-17T21:48:26.339Z",
         "subtasks": [
           {
             "id": 1,
@@ -6057,12 +6057,12 @@
             "description": "Settings altında hesap kartı + çıkış + hesap değiştirme.",
             "details": "NE YAPILACAK: `SettingsStack` köküne (bugün `NotificationsScreen`, başlık bağlantıları Team/Playbook/\nBilling) bir **Account** bölümü: ad · e-posta · workspace adı · rol (`sessionState.principal`'dan —\nikinci istek YOK; principal'da yoksa `/auth/me` zaten çağrılıyor mu kontrol et; çağrılmıyorsa\n`SUPPORTING` olarak ekle ve parity matrisini güncelle) + **Sign out** (onay → `session.signOut()` —\ncihaz token'ı iptali + secure-store temizliği `session.ts:330`'da ZATEN sıralı; ekran yalnız çağırır ve\n`signed-out` olunca 13.7-p'nin kapısı AuthStack'e döner) + **Switch account** (13.7-p'nin giriş\nekranına \"başka hesap\" modunda gider; `session.switchAccount` sırası önce iptal sonra kayıt — ekran\nbunu doğrudan çağırmaz, giriş ekranı çağırır; karar 13.7-b §C-A31).\nNEDEN: `session.ts:330 signOut` / `:353 switchAccount` üretimde çağrılmıyor; telefondan çıkış yolu yok (§D111).\nDOSYALAR: `features/account/{AccountScreen.tsx,AccountScreen.test.tsx}` (yeni) · `app/stacks/SettingsStack.tsx`\n(kök ekranın üstüne Account satırı ya da ayrı rota `Account` — tipli, monteli) · `app/navigation.ts`.\nREFERANS DESEN: `features/billing/BillingScreen.tsx` (salt-okunur kart) · `features/notifications/\nNotificationsScreen.tsx` (aynı stack'te ekran) · web `AppShell.tsx` hesap menüsü.\nKK: kim olduğum + workspace görünür; Sign out onay ister, sonra giriş ekranı; Switch account giriş\nekranına götürür ve eski oturum kapanır.\nTESTLER: `AccountScreen.test.tsx` (alanlar · sign out onayı → signOut çağrısı · switch → navigasyon).\nKAPSAM DIŞI: profil düzenleme/parola değiştirme (masa işi §C-A28); sunucu değişmez.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-13.7 (mobil)**. Gereksinim satırı: `grep -n '| 13\\.7 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K13.7' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- Mobil süit exit 0; `AccountScreen.test.tsx` ≥ 4 senaryo.\n- Ölçülebilir: `grep -rn \"signOut()\" apps/mobile/src/features --include=*.tsx | grep -v test` ≥ 1.\n- PLAN: K13.7'ye madde.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "128.1"
             ],
             "parentId": "128",
-            "updatedAt": "2026-08-17T20:53:40.721Z"
+            "updatedAt": "2026-08-17T21:48:26.339Z"
           },
           {
             "id": 4,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-17T20:53:40.722Z",
+      "lastModified": "2026-08-17T21:48:26.342Z",
       "taskCount": 143,
       "completedCount": 127,
       "tags": [

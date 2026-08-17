@@ -13,6 +13,40 @@
 
 ## Task log (newest-first)
 
+## 127.3 — 13.7-o: mobil Billing yüzeyi (abonelik/plan + dönem kullanımı + entitlement listesi + fatura satırları, salt-okunur; kart/ödeme YOK) — done — 2026-08-17 UTC
+
+- **Yapıldı:** tm 127'nin üç alt-görevinden üçüncüsü ve sonuncusu — §D96'nın modül paritesi borcunun
+  Billing payı ödendi, `parity.test.ts`'in `OUT_OF_SCOPE`'u artık yalnız `Settings` taşıyor.
+  `apps/mobile/src/features/billing/` (13.7-f/-g/-m/-n deseni) dört zaten-belgeli GET'i tüketiyor
+  (`/billing/subscription`, `/billing/usage`, `/billing/invoices`, `/billing/entitlements`);
+  `/billing/api-packages` katalog opsiyoneldi ve ekran tarifine girmediği için hiç çekilmedi.
+  **Kart/ödeme kesin dışarıda** — `/billing/payment-method`, satın alma ve fatura indirme hiç
+  çağrılmadı; `parity.test.ts`'e bunu ayrıca doğrulayan bir `FORBIDDEN_ENDPOINTS` iddiası eklendi.
+  Tek ekran `BillingScreen`, dört isteği `Promise.all` ile birlikte yükler; para/tarih `en-US`'e
+  sabitlendi (diğer üç modülden farklı olarak `undefined` runtime-varsayılanı değil — cihaz yerel
+  ayarına göre ondalık ayracın sessizce değişmesi burada özellikle can sıkıcı olurdu). `SettingsStack`
+  altına bağlandı (Team/Playbook yanına üçüncü header linki). `parity.test.ts` AYNI turda
+  güncellendi: `PARITY_MODULES`'e Billing eklendi, `OUT_OF_SCOPE` 2 → 1, `endpointsCalled` 22 → 26.
+  PLAN.md: `13.7` satırı `◐` KALDI; §K13.7'ye madde eklendi, §C-A28/§D96/§5.4 daraltma cümleleri
+  Billing'i kapsam-dışı listesinden çıkaracak şekilde güncellendi (silinmedi, CONVENTIONS §1.2).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 ·
+  `pnpm --filter @nexa/mobile test` **389/389 · 33 süit** · `pnpm -w test` (api + web 1178 + mobil
+  389) · `pnpm -w build` 8/8 (mobil `expo export` ios 1005 + android 1002 modül) ·
+  `pnpm -w format:check` (bu turda düzeltildi: 4 dosya prettier'a takılmıştı, kod DEĞİŞMEDİ) ·
+  `pnpm -w test:integration` **90/90 dosya · 2374/2374 test** — ilk turda tek kırmızı
+  `push-notifications.test.ts` "does not push to a handset that was signed out" (bilinen
+  `device_tokens_revoked_check` zamanlama flake'i, K13.7 tm 90.8 notu), dosya izole tekrar
+  koşulduğunda **14/14 yeşil**; tam gate ikinci turda **90/90 · 2374/2374** kırmızısız koştu.
+  `pnpm -w test:e2e` bu turda KOŞULMADI — 13.7-m/-n ile aynı gerekçe: apps/mobile Playwright'a hiç
+  girmiyor, task'ın kendi `testStrategy`'si yalnız mobil jest + typecheck/lint/build +
+  `pnpm -w test`/`test:integration` regresyonsuzluğu istiyor.
+- **Varsayımlar:** `/billing/api-packages` katalog uçu (opsiyonel) çekilmedi — task KAPSAM'ının
+  "EKRANLAR" tarifi yalnız plan/kullanım/entitlement/fatura sayıyordu, katalog bunların dışındaydı.
+- **Sonraki pencereye not:** tm 127'nin üç alt-görevi de done — üst görev tm 127 kapatılabilir.
+  `13.7` satırı §D96'nın mağaza payı (`.ipa`/`.apk`, store yüklemesi) yüzünden kalıcı olarak `◐`
+  kalacak. `push-notifications.test.ts` flake'i hâlâ görevleşmedi (üçüncü kez aynı hatayla gözlendi:
+  tm 90.8, tm 127.1, tm 127.3).
+
 ## 127.2 — 13.7-n: mobil Playbook/AI yönetimi yüzeyi (skill listesi + detay + son çalışmalar + copilot bilgi kaynakları, salt-okunur) — done — 2026-08-17 UTC
 
 - **Yapıldı:** tm 127'nin üç alt-görevinden ikincisi — §D96'nın modül paritesi borcunun Playbook

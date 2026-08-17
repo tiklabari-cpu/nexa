@@ -65,11 +65,11 @@ export function contractPath<P extends ContractPath>(path: P): P {
 
 /**
  * The four surfaces FR-MOD-13.7 names — Inbox, AI, CRM, Reports — the parity
- * modules paid off since (Team, `13.7-m`), plus the liveness probe this
- * bootstrap exercises. The registry exists so the parity matrix `13.7-k` has
- * to check is anchored in the contract from the first window: each entry is
- * verified to exist by `tsc`, and a spec rename cannot quietly leave a
- * surface pointing at nothing.
+ * modules paid off since (Team `13.7-m`, Playbook `13.7-n`, Billing
+ * `13.7-o`), plus the liveness probe this bootstrap exercises. The registry
+ * exists so the parity matrix `13.7-k` has to check is anchored in the
+ * contract from the first window: each entry is verified to exist by `tsc`,
+ * and a spec rename cannot quietly leave a surface pointing at nothing.
  */
 export const MOBILE_ENDPOINTS = {
   health: contractPath('/health'),
@@ -85,6 +85,10 @@ export const MOBILE_ENDPOINTS = {
   skill: contractPath('/skills/{skillId}'),
   skillRuns: contractPath('/skills/{skillId}/runs'),
   copilotKnowledge: contractPath('/copilot/knowledge'),
+  billingSubscription: contractPath('/billing/subscription'),
+  billingUsage: contractPath('/billing/usage'),
+  billingInvoices: contractPath('/billing/invoices'),
+  billingEntitlements: contractPath('/billing/entitlements'),
 } as const satisfies Record<string, ContractPath>;
 
 export type MobileEndpointKey = keyof typeof MOBILE_ENDPOINTS;

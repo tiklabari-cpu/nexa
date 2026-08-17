@@ -45,4 +45,7 @@ export type SettingsStackParamList = {
   SkillList: undefined;
   SkillDetail: { skillId: string; title: string };
   KnowledgeSources: undefined;
+  /** The Billing parity module (13.7-o) — one screen, no per-record push:
+   * plan, usage, entitlements and invoices all load together. */
+  Billing: undefined;
 };

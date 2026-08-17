@@ -13,6 +13,36 @@
 
 ## Task log (newest-first)
 
+## 127.1 — 13.7-m: mobil Team yüzeyi (roster + kimlik kartı + çalışma takvimi + gruplar, salt-okunur) — done — 2026-08-17 UTC
+
+- **Yapıldı:** tm 127'nin üç alt-görevinden ilki — §D96'nın modül paritesi borcunun Team payı ödendi.
+  `apps/mobile/src/features/team/` (üç ekran: `TeamListScreen`/`TeamMemberScreen`/`GroupListScreen`
+  + `api.ts`/`types.ts`/`context.ts`/`TeamProvider.tsx`, 13.7-f/-g Provider/context deseni) üç
+  zaten-belgeli GET'i tüketiyor (`/agents`, `/agents/{agentId}/work-schedule`, `/groups`); rol/askı/
+  uzmanlık düzenleme ve davet akışı ÇAĞRILMADI. `SettingsStack` altına bağlandı (yeni kök tab yok).
+  `parity.test.ts` AYNI turda güncellendi: yeni `PARITY_MODULES` listesi (KK'nın dörtlü
+  `criterion` union'ından ayrı), `OUT_OF_SCOPE` 4 → 3, `endpointsCalled` 15 → 18. PLAN.md: `13.7`
+  satırı `◐` KALDI; §K13.7'ye madde eklendi, §C-A28/§D96/§5.4 daraltma cümleleri Team'i kapsam-dışı
+  listesinden çıkaracak şekilde güncellendi (silinmedi — CONVENTIONS §1.2).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 ·
+  `pnpm --filter @nexa/mobile test` **351/351 · 29 süit** · `pnpm -w test` (api 3251 + mobil 351) ·
+  `pnpm -w build` 8/8 (mobil `expo export` ios 930 + android 990 modül) · `pnpm -w format:check`
+  (bu turda düzeltildi: 5 dosya prettier'a takılmıştı, kod değişmedi) · `pnpm -w test:integration`
+  **89/90 dosya ilk turda** — tek kırmızı `push-notifications.test.ts` "does not push to a handset
+  that was signed out", `device_tokens_revoked_check` kısıtına art arda iki `new Date()` çağrısının
+  milisaniye sırası yüzünden çarptı; bu **önceden dokümante edilmiş zamanlama flake'i** (bkz. K13.7
+  tm 90.8 notu + bu dosyanın alt satırları) — dosya izole tekrar koşulduğunda tek başına yeşil,
+  apps/api'ye bu turda hiç dokunulmadı. `pnpm -w test:e2e` bu turda KOŞULMADI: apps/mobile Playwright
+  mobile workspace'e hiç girmiyor ve task'ın kendi `testStrategy`'si yalnız mobil jest +
+  typecheck/lint/build + `pnpm -w test`/`test:integration` regresyonsuzluğu istiyor; apps/web ve
+  apps/e2e'ye bu turda dokunulmadı.
+- **Varsayımlar:** Yok — tm 127'nin details'indeki tüm tuzaklar (1-7) ve kapsam sınırı aynen izlendi.
+- **Sonraki pencereye not:** tm 127'nin kalan 2/3'ü: Playbook `13.7-n` (tm 127.2), Billing `13.7-o`
+  (tm 127.3) — ikisi bitince `parity.test.ts`'in `OUT_OF_SCOPE`'u yalnız `Settings` taşıyacak.
+  `13.7` satırı üçü bitse de `◐` kalacak (§D96'nın mağaza payı kalıcı borç). `push-notifications.test.ts`
+  flake'i hâlâ görevleşmedi — bir sonraki pencere isterse `revokedAt`/`createdAt` sıralamasını
+  `Date.now()+1` ile ayırıp kısıtı atomik yapmayı değerlendirebilir (bu turun kapsamı dışında).
+
 ## DÜZELTME · 13.7 — çelişki denetimi: `◐` koda karşı doğrulandı, §D96'nın borcu görevleşti (tm 127 açıldı) — done — 2026-08-17 UTC
 
 - **Yapıldı:** Panelin sağlık taraması `13.7` satırını `◐` bulurken bu PRD'nin tüm tm görevlerini

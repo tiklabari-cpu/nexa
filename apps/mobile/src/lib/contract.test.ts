@@ -13,7 +13,7 @@ describe('contract binding', () => {
     expect(contractPath('/health')).toBe('/health');
   });
 
-  it('names the four FR-MOD-13.7 surfaces plus the liveness probe', () => {
+  it('names the four FR-MOD-13.7 surfaces, the Team parity module, plus the liveness probe', () => {
     expect(MOBILE_ENDPOINTS).toEqual({
       health: '/health',
       chats: '/chats',
@@ -21,12 +21,19 @@ describe('contract binding', () => {
       reportsOverview: '/reports/overview',
       copilotChatSummary: '/copilot/chats/{chatId}/summary',
       copilotChatReply: '/copilot/chats/{chatId}/reply',
+      agents: '/agents',
+      agentWorkSchedule: '/agents/{agentId}/work-schedule',
+      groups: '/groups',
     });
   });
 
   it('keeps the templated endpoints templated — substitution belongs to the client', () => {
     const templated = Object.values(MOBILE_ENDPOINTS).filter((path) => path.includes('{'));
-    expect(templated).toEqual(['/copilot/chats/{chatId}/summary', '/copilot/chats/{chatId}/reply']);
+    expect(templated).toEqual([
+      '/copilot/chats/{chatId}/summary',
+      '/copilot/chats/{chatId}/reply',
+      '/agents/{agentId}/work-schedule',
+    ]);
   });
 });
 

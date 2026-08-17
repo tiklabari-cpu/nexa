@@ -7,6 +7,7 @@
  * speculative infrastructure for routes that do not exist yet, it is the
  * minimum shape a stack navigator requires to type-check at all.
  */
+import type { Agent } from '../features/team/types';
 
 export const ROOT_TABS = ['Inbox', 'Customers', 'Reports', 'Settings'] as const;
 export type RootTabName = (typeof ROOT_TABS)[number];
@@ -31,4 +32,11 @@ export type CustomersStackParamList = {
   CustomerDetail: { customerId: string; title: string };
 };
 export type ReportsStackParamList = { ReportsHome: undefined };
-export type SettingsStackParamList = { SettingsHome: undefined };
+export type SettingsStackParamList = {
+  SettingsHome: undefined;
+  /** The roster (13.7-m). No `GET /agents/{agentId}` exists, so the row this
+   * was opened from is carried rather than re-fetched. */
+  TeamList: undefined;
+  TeamMember: { agent: Agent; title: string };
+  TeamGroups: undefined;
+};

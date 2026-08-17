@@ -156,6 +156,46 @@ const MATRIX: readonly Surface[] = [
 ];
 
 /**
+ * Modules from §D96's module-parity debt (FR-MOD-13.7's "tam modül paritesi"
+ * payload) that have since been paid off, one subtask at a time.
+ *
+ * These are deliberately not `MATRIX` entries: the acceptance criterion names
+ * Inbox/AI/CRM/Reports by name (`criterion`'s own type), and Team management
+ * was never one of the four — it is the debt §C-A28 named separately. Folding
+ * it into `MATRIX` would either widen `criterion`'s union with a word the KK
+ * never used or misclassify it as one of the four; a second list keeps both
+ * claims honest while still feeding the same two-way accounting below (every
+ * request classified, every registry entry claimed).
+ */
+interface ParityModule {
+  /** The module name §C-A28 used when it put this out of scope. */
+  module: string;
+  /** Which tab it is reached through — pushed from the header, not a root tab. */
+  tab: RootTabName;
+  /** Its directory under `src/features/`. */
+  feature: string;
+  screens: string[];
+  routes: string[];
+  endpoints: string[];
+  registry: MobileEndpointKey[];
+  narrowedTo: string;
+}
+
+const PARITY_MODULES: readonly ParityModule[] = [
+  {
+    module: 'Team',
+    tab: 'Settings',
+    feature: 'team',
+    screens: ['TeamListScreen.tsx', 'TeamMemberScreen.tsx', 'GroupListScreen.tsx'],
+    routes: ['TeamList', 'TeamMember', 'TeamGroups'],
+    endpoints: ['/agents', '/agents/{agentId}/work-schedule', '/groups'],
+    registry: ['agents', 'agentWorkSchedule', 'groups'],
+    narrowedTo:
+      'roster + identity card (built from the roster row, no per-agent GET exists) + work schedule + group list, all read-only; no role, suspension or expertise edits and no invite flow (13.7-m)',
+  },
+];
+
+/**
  * Endpoints the phone calls that belong to no FR-MOD-13.7 surface.
  *
  * Every entry is load-bearing rather than a leftover, and all of them are here
@@ -206,11 +246,6 @@ const OUT_OF_SCOPE: readonly { module: string; matches: (path: string) => boolea
       module: 'Playbook / AI administration',
       matches: (path) => path.startsWith('/skills') || path.startsWith('/copilot/knowledge'),
       why: 'authoring a skill or a knowledge source is desk work; the phone only consumes what they produce',
-    },
-    {
-      module: 'Team management',
-      matches: (path) => path === '/agents' || path.startsWith('/agents/{') || path === '/groups',
-      why: 'roles, schedules, suspensions and groups are owner/admin work with no mobile case',
     },
   ];
 
@@ -274,7 +309,10 @@ describe('module parity matrix — the surfaces FR-MOD-13.7 names', () => {
     // `MOBILE_ENDPOINTS` was created by `13.7-a` for this matrix to stand on:
     // each entry is verified by `tsc` against the generated contract, so a spec
     // rename cannot leave a surface pointing at a path that no longer exists.
-    const claimed = MATRIX.flatMap((surface) => surface.registry).sort();
+    const claimed = [
+      ...MATRIX.flatMap((surface) => surface.registry),
+      ...PARITY_MODULES.flatMap((module_) => module_.registry),
+    ].sort();
     const registered = (Object.keys(MOBILE_ENDPOINTS) as MobileEndpointKey[])
       .filter((key) => key !== 'health')
       .sort();
@@ -285,7 +323,47 @@ describe('module parity matrix — the surfaces FR-MOD-13.7 names', () => {
         expect(surface.endpoints).toContain(MOBILE_ENDPOINTS[key]);
       }
     }
+    for (const module_ of PARITY_MODULES) {
+      for (const key of module_.registry) {
+        expect(module_.endpoints).toContain(MOBILE_ENDPOINTS[key]);
+      }
+    }
   });
+});
+
+// --- The module-parity debt paid off since the four named surfaces ---------
+
+describe('module parity matrix — modules paid off since (§D96, one subtask at a time)', () => {
+  it.each(PARITY_MODULES)('$module — has screens on disk under features/$feature', (module_) => {
+    const dir = join(SRC, 'features', module_.feature);
+    expect(existsSync(dir)).toBe(true);
+    for (const screen of module_.screens) {
+      expect(existsSync(join(dir, screen))).toBe(true);
+    }
+  });
+
+  it.each(PARITY_MODULES)('$module — is reachable: its routes are typed and mounted', (module_) => {
+    for (const route of module_.routes) {
+      expect(NAVIGATION_SOURCE).toContain(`${route}:`);
+      expect(MOUNTED_ROUTES).toContain(route);
+    }
+    expect(ROOT_TABS).toContain(module_.tab);
+  });
+
+  it.each(PARITY_MODULES)('$module — requests exactly the endpoints it claims', (module_) => {
+    const api = readFileSync(join(SRC, 'features', module_.feature, 'api.ts'), 'utf8');
+    const called = [...api.matchAll(/\.request\(\s*'(?:get|post|put|patch|delete)',\s*'([^']+)'/g)]
+      .map((match) => match[1]!)
+      .sort();
+    expect([...new Set(called)]).toEqual([...module_.endpoints].sort());
+  });
+
+  it.each(PARITY_MODULES)(
+    '$module — says what it narrowed, so parity is not overclaimed',
+    (module_) => {
+      expect(module_.narrowedTo.length).toBeGreaterThan(0);
+    },
+  );
 });
 
 // --- What the phone calls, and nothing more ---------------------------------
@@ -294,6 +372,7 @@ describe('module parity matrix — every request is accounted for', () => {
   it('classifies each endpoint the app calls as a surface or as support', () => {
     const classified = [
       ...MATRIX.flatMap((surface) => surface.endpoints),
+      ...PARITY_MODULES.flatMap((module_) => module_.endpoints),
       ...SUPPORTING.flatMap((entry) => entry.endpoints),
     ].sort();
 
@@ -319,13 +398,12 @@ describe('module parity matrix — every request is accounted for', () => {
 // --- What §C-A28 leaves out -------------------------------------------------
 
 describe('module parity matrix — the modules §C-A28 puts out of scope', () => {
-  it('counts four, the four the assumption names', () => {
-    expect(OUT_OF_SCOPE).toHaveLength(4);
+  it('counts three — Team management paid off (13.7-m), Settings/Billing/Playbook remain', () => {
+    expect(OUT_OF_SCOPE).toHaveLength(3);
     expect(OUT_OF_SCOPE.map((entry) => entry.module.split(' ')[0])).toEqual([
       'Settings',
       'Billing',
       'Playbook',
-      'Team',
     ]);
   });
 
@@ -344,17 +422,30 @@ describe('module parity matrix — the modules §C-A28 puts out of scope', () =>
       .map((entry) => entry.name)
       .sort();
     // `notifications` is the FR-MOD-08.2 screen (13.7-j) — the one Settings
-    // surface that is in scope, and the reason the fourth tab exists at all.
-    expect(shipped).toEqual([...MATRIX.map((surface) => surface.feature), 'notifications'].sort());
+    // surface the criterion names by hand; `team` is the first module-parity
+    // debt paid off (13.7-m) — both live in the Settings tab, neither is a
+    // `MATRIX` surface.
+    expect(shipped).toEqual(
+      [
+        ...MATRIX.map((surface) => surface.feature),
+        ...PARITY_MODULES.map((module_) => module_.feature),
+        'notifications',
+      ].sort(),
+    );
   });
 
-  it('names four tabs, the fourth of which is FR-MOD-08.2 rather than Settings-the-module', () => {
+  it('names four tabs; the Settings tab carries FR-MOD-08.2 and the Team parity module, nothing from workspace administration', () => {
     expect([...ROOT_TABS]).toEqual(['Inbox', 'Customers', 'Reports', 'Settings']);
     // Whatever the tab is called, what it mounts is the notification
-    // preferences screen and nothing else.
+    // preferences screen plus the Team surfaces (13.7-m) — never a brand,
+    // webhook or PAT screen, which is what `Settings (workspace
+    // administration)` above still keeps off the phone.
     const settingsStack = readFileSync(join(SRC, 'app', 'stacks', 'SettingsStack.tsx'), 'utf8');
     expect(settingsStack).toContain('features/notifications/NotificationsScreen');
-    expect([...settingsStack.matchAll(/name="(\w+)"/g)]).toHaveLength(1);
+    expect(settingsStack).toContain('features/team/TeamListScreen');
+    expect(settingsStack).toContain('features/team/TeamMemberScreen');
+    expect(settingsStack).toContain('features/team/GroupListScreen');
+    expect([...settingsStack.matchAll(/name="(\w+)"/g)]).toHaveLength(4);
   });
 });
 
@@ -416,17 +507,21 @@ describe('module parity matrix — what is still owed', () => {
   it('counts the whole matrix in one place', () => {
     expect({
       surfacesCovered: MATRIX.length,
+      modulesPaidOff: PARITY_MODULES.length,
       modulesOutOfScope: OUT_OF_SCOPE.length,
       endpointsCalled: REQUESTED.size,
       contractEndpoints: CONTRACT_PATHS.length,
       openDebts: OPEN_DEBTS.length,
     }).toEqual({
       surfacesCovered: 4,
-      modulesOutOfScope: 4,
-      endpointsCalled: 15,
-      // Not a target — a denominator. The phone reaching 15 of the product's
+      // The debt §D96 recorded starts paying down here: Team (13.7-m) is the
+      // first of the three, so `OUT_OF_SCOPE` below drops from four to three.
+      modulesPaidOff: 1,
+      modulesOutOfScope: 3,
+      // Not a target — a denominator. The phone reaching 18 of the product's
       // paths is what "screen parity, not endpoint parity" (§C-A28) costs, and
       // the number moving is a prompt to re-read this matrix rather than a failure.
+      endpointsCalled: 18,
       contractEndpoints: 183,
       openDebts: 1,
     });

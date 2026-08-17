@@ -13,6 +13,46 @@
 
 ## Task log (newest-first)
 
+## DÜZELTME · 13.7 — çelişki denetimi: `◐` koda karşı doğrulandı, §D96'nın borcu görevleşti (tm 127 açıldı) — done — 2026-08-17 UTC
+
+- **Yapıldı:** Panelin sağlık taraması `13.7` satırını `◐` bulurken bu PRD'nin tüm tm görevlerini
+  kapalı buldu (90 + 90.1–90.11 + 125 + 126) → iki olağan açıklamanın (bayat damga · erken kapatılmış
+  görev) hangisi olduğu **koda karşı** denetlendi. **İkisi de değil:** PRD KK'sının (`PRD:719`) üç
+  payından ikisi yerinde — dört yüzey diskte + monteli (`apps/mobile/src/features/{inbox,copilot,
+  customers,reports}` · `app/RootNavigator.tsx:25-28`), push iki yarısıyla tam
+  (`apps/api/src/routes/notifications.ts:115-240` · `apps/mobile/src/auth/{push-tokens,
+  device-token-transport}.ts`) — üçüncüsü (_"tam modül paritesi"_) gerçekten açık:
+  `apps/mobile/src/features/` beş dizin taşır, `billing`/`playbook`/`team` YOK
+  (`__tests__/parity.test.ts:188-215` bunu zaten ilan ediyor). **Damga DEĞİŞMEDİ — `◐` doğrudur.**
+  Boşluk PLAN'da değil kuyruktaydı: §D96'nın kapatılabilir borcu hiçbir göreve bağlanmamıştı →
+  **tm 127** açıldı (`critical` · `dependencies: []` · üç salt-okunur alt-görev: Team `13.7-m` ·
+  Playbook `13.7-n` · Billing `13.7-o`). §K13.7'ye denetim maddesi, §D'ye **D108** yazıldı.
+  **Ürün kodu YAZILMADI** (CONVENTIONS §5) — değişen dosyalar: `PLAN.md` · `HANDOFF.md` ·
+  `.taskmaster/tasks/tasks.json`.
+- **Doğrulama:** `pnpm --filter @nexa/mobile test` **331/331 · 26 süit · exit 0** (K13.7'nin iddiasını
+  ölçen kapı — bu turun asıl kanıtı) · `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check`
+  exit 0 · `task-master validate_dependencies` temiz. **KOŞULMADI ve neden:** `test:integration` /
+  `test:e2e` / `build` — bu tur derlenen, lint'lenen ya da çalıştırılan hiçbir dosyaya dokunmadı
+  (üç dosyanın ikisi markdown, biri veri); `test:e2e` ayrıca ~55 kanıt PNG'sini yeniden yazıp
+  çalışma alanını kirletirdi. Son tam kapı ölçümü tm 126'dadır (§D105) ve HEAD o turdan beri ürün
+  kodu görmedi.
+- **Varsayımlar:** (1) **Mağaza payı görevleştirilmedi ve görevleştirilmeyecek** — CLAUDE.md sınırı
+  ("production deploy YOK"); `parity.test.ts:224-226`'nın tek `OPEN_DEBTS` maddesi olarak kalır,
+  yani **tm 127 bitse bile `13.7` satırı `◐`dir**. (2) Üç modül de **salt-okunur** kapsamlandı;
+  §C-A28'in "authoring is desk work" gerekçesi yazma payı için hâlâ geçerli, bu görev yalnız
+  görünürlüğü getiriyor. (3) Settings (workspace administration) mobil kapsam dışı KALDI — §C-A28
+  dört modül sayar ama §D96'nın borç cümlesi üçünü sayar. (4) tm 126'nın notu "kendiliğinden görev
+  açılmaz, seçim kullanıcınındır" diyordu; bu görevi açan şey kendiliğindenlik değil, panelin bu
+  bulguyu düzeltme penceresine göndermesidir (CONVENTIONS §4.1 `critical` akışı).
+- **Sonraki pencereye not:** Kuyruk artık boş değil — **tm 127** `critical`, üç alt-görevi
+  `pending` ve `dependencies` boş, yani hemen çalışabilir. En büyük tuzak alt-görev metinlerinde
+  yazılı: `parity.test.ts` yeni bir uç çağrıldığı anda **kırmızıya döner** (iki yönlü tam eşitlik
+  iddiası, `:294-303` ve `:332-340`) — modül `OUT_OF_SCOPE`'tan çıkarılıp matrise **aynı
+  alt-görevte** eklenmeli; testi susturmak kapıyı geçmez. Kalan diğer adaylar hâlâ görevsiz:
+  **M-MOBILE-STORE** (§D96 mağaza payı — CLAUDE.md sınırı, kullanıcı kararı) · **M-UI-GAP**
+  (§F.1/7'nin istemcisiz uçları; tm 127.3 bunlardan `/billing/entitlements`'ı tüketecek) ·
+  **01.1.2** (§D107, `Could`).
+
 ## 126 — GL-9 · F3-KAPAT: Faz-3 §F.00 kapanış turu + §F.2 proje geneli final rapor — done — 2026-08-17 UTC
 
 - **Yapıldı:** Faz-3 **kapatıldı** (§F.00 kalem kuralı **sayılarak** doğrulandı: 15 satır → **5 ✅ + 1 ◐**

@@ -69,8 +69,7 @@ function ComplianceCard({
   });
 
   const accept = useMutation({
-    mutationFn: () =>
-      api.post<ComplianceSettings>('/settings/compliance/baa', { accepted: true }),
+    mutationFn: () => api.post<ComplianceSettings>('/settings/compliance/baa', { accepted: true }),
     onSuccess: (data) => queryClient.setQueryData(['settings', 'compliance'], data),
   });
 

@@ -63,7 +63,12 @@ describe('CustomerTokenService', () => {
     // The whole point of signing: a widget must not be able to rewrite its own
     // token to reach a different organization.
     const svc = service();
-    const { token } = svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n, region: 'eu' });
+    const { token } = svc.issue({
+      customerId: CUSTOMER,
+      organizationId: ORG,
+      licenseId: 1n,
+      region: 'eu',
+    });
     const [prefix, , signature] = token.split('.');
 
     const forged = Buffer.from(
@@ -97,7 +102,12 @@ describe('CustomerTokenService', () => {
 
   it('rejects an expired token', () => {
     const svc = service(-1);
-    const { token } = svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n, region: 'eu' });
+    const { token } = svc.issue({
+      customerId: CUSTOMER,
+      organizationId: ORG,
+      licenseId: 1n,
+      region: 'eu',
+    });
     const result = svc.verify(token);
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -130,7 +140,12 @@ describe('CustomerTokenService', () => {
     const svc = service();
     // Sign a structurally valid but incomplete payload using the service's own
     // machinery, so only the field validation can reject it.
-    const { token } = svc.issue({ customerId: CUSTOMER, organizationId: ORG, licenseId: 1n, region: 'eu' });
+    const { token } = svc.issue({
+      customerId: CUSTOMER,
+      organizationId: ORG,
+      licenseId: 1n,
+      region: 'eu',
+    });
     const [, body] = token.split('.');
     const decoded = JSON.parse(Buffer.from(body!, 'base64url').toString('utf8')) as Record<
       string,

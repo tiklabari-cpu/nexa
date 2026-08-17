@@ -54,7 +54,10 @@ export function CustomerDetailScreen({ customerId }: CustomerDetailScreenProps) 
 
   if (state.status === 'loading') {
     return (
-      <View style={[styles.centre, { backgroundColor: colors.bgCanvas }]} testID="customer-detail-loading">
+      <View
+        style={[styles.centre, { backgroundColor: colors.bgCanvas }]}
+        testID="customer-detail-loading"
+      >
         <DetailSkeleton />
       </View>
     );
@@ -62,7 +65,10 @@ export function CustomerDetailScreen({ customerId }: CustomerDetailScreenProps) 
 
   if (state.status === 'error') {
     return (
-      <View style={[styles.centre, { backgroundColor: colors.bgCanvas }]} testID="customer-detail-error">
+      <View
+        style={[styles.centre, { backgroundColor: colors.bgCanvas }]}
+        testID="customer-detail-error"
+      >
         <Text accessibilityRole="alert" style={[styles.message, { color: colors.danger }]}>
           {state.message}
         </Text>
@@ -88,13 +94,17 @@ export function CustomerDetailScreen({ customerId }: CustomerDetailScreenProps) 
         First seen {formatDate(customer.created_at) ?? '—'}
       </Text>
 
-      <View style={[styles.card, { backgroundColor: colors.bgSurface, borderColor: colors.border }]}>
+      <View
+        style={[styles.card, { backgroundColor: colors.bgSurface, borderColor: colors.border }]}
+      >
         <Field label="Email" value={customer.email ?? '—'} />
         <Field label="Phone" value={customer.phone ?? '—'} />
         <Field label="Country" value={customer.country ?? customer.country_code ?? '—'} />
       </View>
 
-      <View style={[styles.card, { backgroundColor: colors.bgSurface, borderColor: colors.border }]}>
+      <View
+        style={[styles.card, { backgroundColor: colors.bgSurface, borderColor: colors.border }]}
+      >
         <Field label="Conversations" value={String(customer.chats_count)} />
         <Field label="Tickets" value={String(customer.tickets_count)} />
         <Field label="Last active" value={formatDate(customer.last_activity_at) ?? 'Never'} />
@@ -131,7 +141,9 @@ function DetailSkeleton() {
       importantForAccessibility="no-hide-descendants"
       style={styles.skeleton}
     >
-      <View style={[styles.skeletonBar, { width: '55%', height: 20, backgroundColor: colors.bgInset }]} />
+      <View
+        style={[styles.skeletonBar, { width: '55%', height: 20, backgroundColor: colors.bgInset }]}
+      />
       <View style={[styles.skeletonBar, { width: '35%', backgroundColor: colors.bgInset }]} />
       <View style={[styles.skeletonBar, { width: '80%', backgroundColor: colors.bgInset }]} />
       <View style={[styles.skeletonBar, { width: '60%', backgroundColor: colors.bgInset }]} />
@@ -143,7 +155,11 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: SPACING[4], gap: SPACING[4] },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING[6] },
-  message: { fontSize: FONT_SIZE.sm.size, lineHeight: FONT_SIZE.sm.lineHeight, textAlign: 'center' },
+  message: {
+    fontSize: FONT_SIZE.sm.size,
+    lineHeight: FONT_SIZE.sm.lineHeight,
+    textAlign: 'center',
+  },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2] },
   title: { fontSize: FONT_SIZE.xl.size, lineHeight: FONT_SIZE.xl.lineHeight, fontWeight: '600' },
   subtitle: { fontSize: FONT_SIZE['2xs'].size, lineHeight: FONT_SIZE['2xs'].lineHeight },
@@ -160,9 +176,17 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING[2],
   },
   fieldLabel: { fontSize: FONT_SIZE.sm.size, lineHeight: FONT_SIZE.sm.lineHeight },
-  fieldValue: { fontSize: FONT_SIZE.sm.size, lineHeight: FONT_SIZE.sm.lineHeight, fontWeight: '600' },
+  fieldValue: {
+    fontSize: FONT_SIZE.sm.size,
+    lineHeight: FONT_SIZE.sm.lineHeight,
+    fontWeight: '600',
+  },
   badge: { paddingHorizontal: SPACING[2], paddingVertical: 2, borderRadius: RADIUS.sm },
-  badgeText: { fontSize: FONT_SIZE['2xs'].size, lineHeight: FONT_SIZE['2xs'].lineHeight, fontWeight: '600' },
+  badgeText: {
+    fontSize: FONT_SIZE['2xs'].size,
+    lineHeight: FONT_SIZE['2xs'].lineHeight,
+    fontWeight: '600',
+  },
   skeleton: { width: '100%', gap: SPACING[3], padding: SPACING[4] },
   skeletonBar: { height: 12, borderRadius: RADIUS.sm },
 });

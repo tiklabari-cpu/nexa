@@ -45,7 +45,13 @@ export function InboxStack() {
                   }
                   style={{ paddingHorizontal: SPACING[2] }}
                 >
-                  <Text style={{ color: colors.brandText, fontSize: FONT_SIZE.sm.size, fontWeight: '600' }}>
+                  <Text
+                    style={{
+                      color: colors.brandText,
+                      fontSize: FONT_SIZE.sm.size,
+                      fontWeight: '600',
+                    }}
+                  >
                     Copilot
                   </Text>
                 </Pressable>

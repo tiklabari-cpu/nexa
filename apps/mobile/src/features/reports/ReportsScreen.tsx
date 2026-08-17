@@ -104,7 +104,11 @@ export function ReportsScreen() {
         title="Resolution"
         description="How closed conversations were handled. Manual, assisted and automated add up to every closed case."
       >
-        <KpiCard label="Manual" value={formatCount(totals.manual)} hint={closedShare(totals.manual_rate)} />
+        <KpiCard
+          label="Manual"
+          value={formatCount(totals.manual)}
+          hint={closedShare(totals.manual_rate)}
+        />
         <KpiCard
           label="Assisted"
           value={formatCount(totals.assisted)}
@@ -119,7 +123,10 @@ export function ReportsScreen() {
         />
       </Section>
 
-      <Section title="Chats" description="How fast the AI clears conversations and how long they run.">
+      <Section
+        title="Chats"
+        description="How fast the AI clears conversations and how long they run."
+      >
         <KpiCard
           label="Automated chats / hour"
           value={formatCount(chats.automated_per_hour)}
@@ -156,7 +163,9 @@ export function ReportsScreen() {
               ? 'No ratings yet'
               : `${formatCount(satisfaction.responses)} rating${satisfaction.responses === 1 ? '' : 's'}`
           }
-          tone={satisfaction.score == null ? 'neutral' : satisfaction.score >= 0.8 ? 'good' : 'warn'}
+          tone={
+            satisfaction.score == null ? 'neutral' : satisfaction.score >= 0.8 ? 'good' : 'warn'
+          }
         />
         <KpiCard
           label="Negative ratings"
@@ -197,7 +206,9 @@ function Section({
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{title}</Text>
       {description && (
-        <Text style={[styles.sectionDescription, { color: colors.textTertiary }]}>{description}</Text>
+        <Text style={[styles.sectionDescription, { color: colors.textTertiary }]}>
+          {description}
+        </Text>
       )}
       <View style={styles.grid}>{children}</View>
     </View>
@@ -256,9 +267,17 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: SPACING[4], gap: SPACING[6] },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING[6] },
-  message: { fontSize: FONT_SIZE.sm.size, lineHeight: FONT_SIZE.sm.lineHeight, textAlign: 'center' },
+  message: {
+    fontSize: FONT_SIZE.sm.size,
+    lineHeight: FONT_SIZE.sm.lineHeight,
+    textAlign: 'center',
+  },
   section: { gap: SPACING[2] },
-  sectionTitle: { fontSize: FONT_SIZE.lg.size, lineHeight: FONT_SIZE.lg.lineHeight, fontWeight: '600' },
+  sectionTitle: {
+    fontSize: FONT_SIZE.lg.size,
+    lineHeight: FONT_SIZE.lg.lineHeight,
+    fontWeight: '600',
+  },
   sectionDescription: { fontSize: FONT_SIZE['2xs'].size, lineHeight: FONT_SIZE['2xs'].lineHeight },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING[3] },
   card: {
@@ -269,8 +288,16 @@ const styles = StyleSheet.create({
     padding: SPACING[3],
     gap: SPACING[1],
   },
-  cardLabel: { fontSize: FONT_SIZE.xs.size, lineHeight: FONT_SIZE.xs.lineHeight, fontWeight: '500' },
-  cardValue: { fontSize: FONT_SIZE.xl.size, lineHeight: FONT_SIZE.xl.lineHeight, fontWeight: '600' },
+  cardLabel: {
+    fontSize: FONT_SIZE.xs.size,
+    lineHeight: FONT_SIZE.xs.lineHeight,
+    fontWeight: '500',
+  },
+  cardValue: {
+    fontSize: FONT_SIZE.xl.size,
+    lineHeight: FONT_SIZE.xl.lineHeight,
+    fontWeight: '600',
+  },
   cardHint: { fontSize: FONT_SIZE['2xs'].size, lineHeight: FONT_SIZE['2xs'].lineHeight },
   skeleton: { width: '100%', gap: SPACING[3], padding: SPACING[4] },
   skeletonBar: { height: 64, borderRadius: RADIUS.md },

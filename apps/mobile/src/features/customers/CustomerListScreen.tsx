@@ -170,7 +170,11 @@ export function CustomerListScreen({ onOpenCustomer }: CustomerListScreenProps) 
           autoCorrect={false}
           style={[
             styles.search,
-            { color: colors.textPrimary, backgroundColor: colors.bgInset, borderColor: colors.border },
+            {
+              color: colors.textPrimary,
+              backgroundColor: colors.bgInset,
+              borderColor: colors.border,
+            },
           ]}
         />
 
@@ -197,7 +201,11 @@ export function CustomerListScreen({ onOpenCustomer }: CustomerListScreenProps) 
         keyExtractor={(customer) => customer.id}
         contentContainerStyle={displayItems.length === 0 ? styles.emptyContainer : undefined}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.textTertiary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refresh}
+            tintColor={colors.textTertiary}
+          />
         }
         onEndReachedThreshold={0.5}
         onEndReached={loadMore}
@@ -211,7 +219,11 @@ export function CustomerListScreen({ onOpenCustomer }: CustomerListScreenProps) 
           state.status === 'loading' ? (
             <ListSkeleton />
           ) : (
-            <ListPlaceholder status={state.status} error={state.error} searched={debouncedQuery !== ''} />
+            <ListPlaceholder
+              status={state.status}
+              error={state.error}
+              searched={debouncedQuery !== ''}
+            />
           )
         }
         ListFooterComponent={
@@ -247,7 +259,9 @@ function SegmentButton({
         { backgroundColor: selected ? colors.brand100 : 'transparent', borderColor: colors.border },
       ]}
     >
-      <Text style={[styles.segmentLabel, { color: selected ? colors.brandText : colors.textSecondary }]}>
+      <Text
+        style={[styles.segmentLabel, { color: selected ? colors.brandText : colors.textSecondary }]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -267,7 +281,10 @@ function CustomerRow({ customer, onPress }: { customer: CustomerSummary; onPress
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: pressed ? colors.bgSurface2 : colors.bgSurface, borderBottomColor: colors.border },
+        {
+          backgroundColor: pressed ? colors.bgSurface2 : colors.bgSurface,
+          borderBottomColor: colors.border,
+        },
       ]}
     >
       <View style={styles.rowHeader}>
@@ -327,7 +344,10 @@ function ListPlaceholder({
   return (
     <View style={styles.placeholder} testID="customer-list-placeholder">
       <Text
-        style={[styles.placeholderText, { color: status === 'error' ? colors.danger : colors.textSecondary }]}
+        style={[
+          styles.placeholderText,
+          { color: status === 'error' ? colors.danger : colors.textSecondary },
+        ]}
       >
         {message}
       </Text>
@@ -399,7 +419,12 @@ const styles = StyleSheet.create({
     gap: SPACING[1],
   },
   rowHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING[2] },
-  name: { flex: 1, fontSize: FONT_SIZE.base.size, lineHeight: FONT_SIZE.base.lineHeight, fontWeight: '600' },
+  name: {
+    flex: 1,
+    fontSize: FONT_SIZE.base.size,
+    lineHeight: FONT_SIZE.base.lineHeight,
+    fontWeight: '600',
+  },
   contact: { fontSize: FONT_SIZE['2xs'].size, lineHeight: FONT_SIZE['2xs'].lineHeight },
   rowFooter: { flexDirection: 'row', gap: SPACING[3] },
   meta: {
@@ -412,7 +437,11 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: RADIUS.sm,
   },
-  badgeText: { fontSize: FONT_SIZE['2xs'].size, lineHeight: FONT_SIZE['2xs'].lineHeight, fontWeight: '600' },
+  badgeText: {
+    fontSize: FONT_SIZE['2xs'].size,
+    lineHeight: FONT_SIZE['2xs'].lineHeight,
+    fontWeight: '600',
+  },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING[6] },
   placeholderText: {
     fontSize: FONT_SIZE.sm.size,

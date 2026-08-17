@@ -36,7 +36,9 @@ describe('Composer ← Copilot draft', () => {
       offerDraft('CHAT1', 'Refunds over 500 go to finance.');
     });
 
-    expect(screen.getByTestId('composer-input').props.value).toBe('Refunds over 500 go to finance.');
+    expect(screen.getByTestId('composer-input').props.value).toBe(
+      'Refunds over 500 go to finance.',
+    );
     // Consumed, so a re-render does not re-apply it over the agent's edits.
     expect(copilotDraftStore.getDraft('CHAT1')).toBeUndefined();
   });

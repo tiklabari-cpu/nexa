@@ -80,9 +80,7 @@ describe('logSafeUrl', () => {
   it('catches an address in a key nobody named', () => {
     // The two passes exist for exactly this: the named list cannot be complete,
     // so the general pattern runs over whatever it did not cover.
-    expect(logSafeUrl('/invitations?to=someone@example.test')).toBe(
-      '/invitations?to=[redacted]',
-    );
+    expect(logSafeUrl('/invitations?to=someone@example.test')).toBe('/invitations?to=[redacted]');
   });
 
   it('leaves a plain path alone', () => {

@@ -399,12 +399,21 @@ describe('SLA targets (FR-MOD-11.5 · 11.5-d)', () => {
     // never marks, so the same wait is measured with the flag off as well.
     const now = new Date();
     const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-    // A window that opened ten minutes ago, in UTC, on every day — so "now" is
-    // inside business hours and everything before it is not.
+    // A window that opened ten minutes ago, in UTC, enabled on **today's weekday
+    // only** — so "now" is inside business hours and everything before it is not.
+    //
+    // Enabling every day read as equivalent and was not. A work schedule is a
+    // standing week (`business-hours.ts`), so yesterday carried the same window,
+    // and a run started in the small hours of a UTC day measured a six-hour wait
+    // that had spent most of itself inside yesterday's copy of it. Before 00:10
+    // UTC it was worse: `openedAt` clamped to 0, opening the calendar outright.
+    // Either way the assertion was a function of the wall clock rather than of
+    // the code under test — it failed at 00:04 UTC on 2026-08-17 (tm 126 · §D106).
     const openedAt = Math.max(0, nowMinutes - 10);
     const pad = (value: number): string => String(value).padStart(2, '0');
     const start = `${pad(Math.floor(openedAt / 60))}:${pad(openedAt % 60)}`;
-    await seedSchedule(fx.a, { start, end: '23:59' });
+    const today = WORK_SCHEDULE_DAYS[(now.getUTCDay() + 6) % 7] as string;
+    await seedSchedule(fx.a, { start, end: '23:59', days: [today] });
     await setPolicy(fx.a, { firstResponseMinutes: 30, businessHoursOnly: true });
 
     const { chatId } = await seedChat(fx.a, new Date(now.getTime() - 6 * HOUR));

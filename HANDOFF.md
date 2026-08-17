@@ -13,6 +13,185 @@
 
 ## Task log (newest-first)
 
+## 126 — GL-9 · F3-KAPAT: Faz-3 §F.00 kapanış turu + §F.2 proje geneli final rapor — done — 2026-08-17 UTC
+
+- **Yapıldı:** Faz-3 **kapatıldı** (§F.00 kalem kuralı **sayılarak** doğrulandı: 15 satır → **5 ✅ + 1 ◐**
+  açık kalemde · 2 ✅ v2'de karşılandı · 4 ⛔ · 2 ⛔-süreç · 1 faz değişikliği). Damgalar yazıldı: üst tablo
+  Faz-3 satırı `⬜ AÇIK` → **`✅ KAPALI`** · §F.00'ın Faz-3 kapı paragrafı (`2026-08-11 itibarıyla AÇIK`
+  ifadesi KALKTI) · §6 kapsam tablosunun altı kalem satırı §1.2 biçimine getirildi · §2 matrisinin dört
+  Faz-3 satırı (MOD-08.5 · 08.9 · 10 · 11) + `Mobil app`. §F.1'in **10 maddesi tam sürüm** koşuldu ve
+  **üç bulgu** üretti, üçü de kapatıldı/kayda geçti (§D105 · §D106 · §D107). Faz-3 son faz olduğu için
+  §F.2'nin proje geneli final raporu da aşağıda üretildi. **Ürün kodu yazılmadı** (CONVENTIONS §5).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` **12/12** · `pnpm -w lint` **9/9** ·
+  `pnpm -w test` exit 0; süitler tek tek ölçüldü → unit **2748** (api 877/54 dosya · web 1178/116 ·
+  mobil 331/26 · ai-mock 136/7 · types 113/12 · widget 71/10 · rtm 42/6) · integration **2434**
+  (api 2374/90 dosya `--shard=1..3/3` · rtm 60/2; `contract-parity` **5/5**) · `pnpm -w build` **8/8** ·
+  `pnpm -w test:e2e` **149/149** (9.1 dk) · `pnpm -w db:check-drift` "no drift" ·
+  `pnpm -w format:check` **exit 0** (tur başında 13 dosyada kırmızıydı).
+- **Varsayımlar:** (1) **`13.7` `◐` bırakıldı, `✅` uydurulmadı** — §D96'nın iki payı (mağaza yüklemesi ·
+  modül paritesi daraltması) kabul edilen borçtur ve `Should` olduğu için kapıyı bloklamaz (§F.00).
+  (2) **`C4`/`C6`'nın `✅`'i yalnız KOD payını iddia eder** (§D97); sertifikasyon/dış denetim/gerçek BAA
+  görevleşmez — "SOC 2 ✅" gibi bir damga YAZILMADI. (3) **§F.1/9 temiz kurulum provası** birim düşürmeden
+  koşuldu ama `make clean` (volume drop) YAPILMADI — CLAUDE.md "DB drop YOK" der; onun yerine sıfırdan
+  migration yolu `with-test-datastores.ts` ile bu pencerede ~10 kez fiilen koşuldu (her koşu kendi
+  `nexa_test_<id>` veritabanını yaratır → `migrate deploy` → düşürür) ve `db:check-drift` sapma bulmadı.
+- **Sonraki pencereye not:** **Task Master kuyruğu bu görevle yeniden boşalır** — 126'nın 126'sı `done`.
+  §F.3 gereği sıradaki adım **kullanıcının seçimidir**: aşağıdaki "yarım kalanlar" ve "sessiz borç"
+  listelerinden hangileri açılacak. Kendiliğinden açılması gereken bir görev YOKTUR; `run-loop` bu
+  noktada durmalıdır. Açılırsa ilk adaylar: **M-MOBILE-STORE** (§D96 mağaza payı — CLAUDE.md sınırı,
+  kullanıcı kararı) · **M-MOBILE-PARITY** (Billing/Playbook/Team yüzeyleri) · **M-UI-GAP** (aşağıdaki
+  7 istemcisiz uç) · **01.1.2** (§D107, `Could`).
+
+### §F.1 — Denetim: 10 maddenin her biri, kanıtıyla
+
+1. **Kapsam süpürmesi (KODA karşı).** PRD §6'nın **138 `FR-MOD` satırı** yeniden çıkarıldı
+   (`.audit-tm126/sweep.cjs` — hücre-bazlı, glif saymaz) → 137 benzersiz kod + 1 gruplu aralık
+   (`FR-MOD-02.4.1–.6`). PLAN'daki damgalar: **0 `⬜`** · 1 `◐` (`13.7`, ilan edilmiş) ·
+   1 `⛔` (`13.4`, ADR-14) · 2 `🔒` (`02.2.3`, `07.2`) · 116 `✅`. Eşleşmeyen 17 kodun 16'sı
+   **gruplu satırlarda** bulundu (`01.1.1/.4/.5`+`01.4`+`01.5` @179 · `02.1.2…02.9` @196 ·
+   `03.1.2/03.2.2` @206 · `03.3.1–.3` @544 · `04.3.2` @218 · `12.1–12.3` @567 · `02.4.1–.6` @193).
+   **BULGU: `FR-MOD-01.1.2` hiçbir satırda yoktu** ve kodda da yok (`leads qualified|leadsQualified`
+   → **0 isabet**) → §3.1'e gerekçeli `🔒` olarak eklendi (§D107).
+2. **Faz sızıntısı.** Faz-3 **son fazdır** — öne çekilecek sonraki faz yok, yani madde tersine okundu:
+   `⛔` işaretli hiçbir kalem yanlışlıkla yapılmamış olmalı. Tarama temiz (kanıt madde 10'da).
+   Süpürme ayrıca faza ait olmayan iş bulmadı; tek boşluk `01.1.2` ve o **yapılmamıştır** (sızıntı değil).
+3. **NFR kapıları — ÖLÇÜLDÜ.** **NFR-P2** (filtreli liste gecikmesi): e2e koşusunda `GET /traffic`
+   **median 46 ms · p95 56 ms · max 56 ms / 20 örnek** (bütçe 150 ms) → geçti. **M-FMT**: `format:check`
+   **13 dosyada KIRMIZI** ölçüldü oysa §7.2 `✅` damgalıydı → biçimlendirildi, şimdi exit 0 (§D105).
+   **S1–S5 / tenant izolasyonu**: cross-tenant negatifleri integration süiti içinde yeşil (api 2374).
+   **S12 audit append-only** + zincir: `audit-chain`/`audit-log` süitleri yeşil. **M4 test piramidi**:
+   2748 unit + 2434 integration + 149 e2e.
+4. **Şema artıkları.** `schema.prisma` **77 model** (61 migration) tarandı
+   (`.audit-tm126/schema-consumers.cjs`): **76'sının tüketicisi var**, tek 0-tüketicili tablo
+   `workflows` ve o **gerekçeli** (⛔ ADR-14 — tablo kalır, UI yapılmaz). İki tablo Prisma istemcisiyle
+   değil okunuyor ve tarama onları bir kez yanlış-pozitif verdi: `audit_chain_heads` **ham SQL**,
+   `password_reset_tokens` ise **SECURITY DEFINER** fonksiyonlarla (`auth_request_password_reset` /
+   `auth_consume_password_reset`) — o tabloda izin verici RLS politikası yoktur, başka türlü
+   erişilemez. İkisi de kullanımda. PLAN §8'in "41 model" iddiası **bayattı** → 77'ye düzeltildi.
+5. **Kontrat bütünlüğü.** `contract-parity` **5/5 yeşil** (`test/integration/contract-parity.test.ts`,
+   876 ms) — sunulan her route belgelenmiş, belgelenen her route sunuluyor. Sözleşme **183 path**.
+6. **Sessiz borç taraması.** **808 izlenen kaynak dosya** tarandı (`.audit-tm126/silent-debt.cjs`):
+   `TODO` **0** · `FIXME` **0** · `XXX` **0** · `HACK` **0** · `@ts-expect-error` **0** ·
+   `@ts-ignore` **0** · atlanan test (`.skip`/`xit`/`xdescribe`) **0** · odaklanmış test (`.only`) **0**.
+   `eslint-disable` **1** (`apps/e2e/tests/fixtures.ts:52` — Playwright fixture imzası boş destructuring
+   ister; gerekçe satırın üstünde yazılı). `istanbul ignore` **2**, ikisi de gerekçeli. Kapatılmış lint
+   kuralları yalnız **test + CLI** kapsamında (`eslint.config.js:105-120`), gerekçesi yazılı.
+   **TEK GERÇEK BORÇ `format:check`'ti (13 dosya) ve bu turda ödendi** — saf biçimlendirme; HEAD ile
+   çalışma alanı **tüm boşluk çıkarılarak** karşılaştırıldı, kalan farkların tamamı **sondaki virgül**.
+7. **Ölü kod & erişilemez ekran.** `.audit-tm126/dead-code.cjs`: api route modülü **40 → 0 referanssız** ·
+   web `features/` modülü **102 → 0 referanssız** · api servis modülü **98 → 5 "referanssız"**, ama
+   beşi de `package.json` script'lerine bağlı **CLI girişleri** (`retention:run` · `chat-timeout:run` ·
+   `scheduled-reports:run` · `siem:run` · `sla:run`) — ölü değil. **BULGU (ekran payı):** 183 sözleşme
+   path'inin **7'sinin hiçbir istemci çağıranı yok** — `/chats/{chatId}/seen` · `/agents/{agentId}/role` ·
+   `/settings/chat-timeout` · `/onboarding/state` · `/reports/access-review` · `/audit-log/export` ·
+   `/billing/entitlements`. Ayrıca **başsız olması TASARIM GEREĞİ** olan 15 path ayrıldı ve bulgu
+   sayılmadı: `/scim/v2/*` (4, IdP çağırır) · `/auth/saml/{connectionId}/acs` (IdP POST'u) ·
+   `/channels/email/inbound` + `/channels/{type}/messages` (sağlayıcı webhook'ları) · `/mcp/tools/{tool}`
+   (dış AI istemcisi) · `/public/kb/*` (5, kamuya açık + crawler; panel `KbArticleEditor.tsx:68`'den
+   linkler) · `/auth/personal-access-tokens/{tokenId}` · `/kb-categories/{categoryId}` (ikisinin de
+   istemcide karşılığı var).
+8. **Doküman tazeliği.** Düzeltilenler: PLAN üst tablosu Faz-3 satırı · §F.00 Faz-3 kapı paragrafı ·
+   §6 kapsam tablosunun 6 kalem satırı (`C4` hücresi **671 → 344** karakter, §1.2) · §2 matrisinin
+   5 satırı · §8'in **"41 model" → 77** · §E'nin test sayacı (**5821 → 5331**; düşüş kapsam kaybı
+   DEĞİL — eski sayım `apps/api`'nin integration testlerini hem unit hem integration sütununda
+   sayıyordu, `apps/mobile`'ın 331'i ise hiç sayılmamıştı) · **README workspace tablosu**
+   (`apps/mobile`, `apps/e2e`, `packages/ai-mock` **hiç listelenmemişti** — üçü de eklendi).
+   README "Status" bölümü sayı taşımıyor, PLAN/HANDOFF'a yönlendiriyor → bayatlayamaz, dokunulmadı.
+9. **Temiz kurulum provası.** Sıfırdan migration yolu: `with-test-datastores.ts` her koşuda yeni
+   `nexa_test_<id>` yaratıp `migrate deploy` çalıştırır — bu pencerede ~10 kez, hepsi başarılı
+   (ör. `nexa_test_d33e1310c148`). Dev veritabanında `pnpm -w db:migrate` → **61 migration, bekleyen yok**
+   · `pnpm -w db:seed` → exit 0, idempotent (üç kiracı "already present, skipping") ·
+   `db:check-drift` → "no drift". **Demo akışı** e2e ile fiilen sürüldü: widget → routing → agent
+   inbox → yanıt → arşiv (`widget.spec.ts` dahil **149/149**). _Sınır: `make clean` (volume drop)
+   koşulmadı — CLAUDE.md "DB drop YOK"._
+10. **Kapsam dışı doğrulaması (§9'un 10 maddesi).** Gerçek ödeme: `sk_live`/`pk_live`/`api.stripe.com`
+    → **0 isabet** (Stripe MOCK, ADR-13). Ses/telefon + IVR → kanal dizininde `ivr`/`voice` **0 isabet**;
+    `twilio.ts` **SMS**'tir (`08.5.5`, v1 `Must`). Canlı çeviri / sesli sentiment → **0**.
+    ClickHouse / Snowflake / BigQuery → **0** (depo genelinde). Masaüstü native (electron/tauri) → **0**.
+    Görsel Workflow builder / `reactflow` → **0** (⛔ ADR-14; `workflows` tablosu duruyor, UI yok).
+    Kaynak markanın telif içeriği: kopya varlık yok. **Yanlışlıkla yapılmış madde YOK.**
+
+### §F.2 — PROJE GENELİ FİNAL RAPOR (Faz-3 son fazdı; §F'nin tetikleyicisi gerçekleşti)
+
+**1) Tamamlanan kapsam — PRD kimlikleriyle, faz faz.**
+- **Faz 0 — MVP (PRD §5.1) · ✅ KAPALI** (2026-07-31 · GL-3 · tm 87): `Must` **51 ✅ · 0 ◐ · 0 ⬜**
+  (48 modül Must + 3 EK), toplam 54 ✅. Auth+trial (00.x) · global shell + ⌘K (01.x) · Inbox 3-pane +
+  Details + Archive (02.x) · CRM (03.2) · Team (04.x) · kanallar (08.5.x) · routing (08.6) · widget
+  (11.x) · billing MOCK (10.x) · RTM + reconnect (EK-C.1).
+- **Faz 1 — v1 (PRD §5.2) · ✅ KAPALI** (2026-07-31 · GL-4 · tm 88): `Must` **20 ✅ · 0 ◐ · 0 ⬜`
+  (05.1/05.3/05.5 · 06.1–06.4 · 08.5.4–.6 · 08.8.4 · 02.1.2 · 04.2 · 10.1.4). Playbook + AI Agent +
+  RAG · omnichannel (MOCK) · webhooks · Copilot (12.1–12.3) · Campaigns (03.3.x) · custom fields.
+- **Faz 2 — v2 (PRD §5.3) · ✅ KAPALI** (2026-08-11 · GL-8 · tm 114): **30 kalem → 27 ✅ · 0 ◐ · 0 ⬜ ·
+  3 ⛔**. Engage/Goals/Sales tracker (13.2/13.3/13.5) · Reports derinleşmesi (07.x) · Apps marketplace
+  (09.x, `APP_CATALOG` **102** kalem) · public KB · multibrand · staffing · skills-based routing
+  (08.6.3) · IP allowlist (08.9.6, Faz-3'ten öne alındı §D61).
+- **Faz 3 — Enterprise (PRD §5.4) · ✅ KAPALI** (2026-08-17 · GL-9 · tm 126 · bu tur): **15 satır →
+  5 ✅ + 1 ◐** açık kalemde. `S11` SAML 2.0 SSO + SCIM (tm 81) · `C4` HIPAA BAA + bölgesel barındırma
+  (tm 82 + tm 124) · `C6` genişletilmiş audit + SIEM export (tm 83) · `11.5` white-label + SLA +
+  sandbox (tm 84) · `08.5.8` Telegram MOCK (tm 79) ✅ · `13.7` mobil (tm 90 + tm 125) **◐**.
+
+**2) Yarım kalan işler — PRD kimliği + neden + kalan iş tahmini.**
+- **`FR-MOD-13.7` (mobil) · `◐` · Should.** İki pay eksik, ikisi de **önceden ilan edilmiş kabul edilen
+  borç** (§D96): **(a) mağaza payı** — kapı `expo export` ile JS bundle üretir, `.ipa`/`.apk` ve store
+  yüklemesi YOK; sebep CLAUDE.md sınırı (gerçek imzalama sertifikası + mağaza hesabı + harcama).
+  _Kalan iş: bu depodan üretilemez; Apple/Google hesabı + EAS Build kurulumu — ~2-3 pencere + dış hesap._
+  **(b) modül paritesi daraltması** — PRD KK "tam modül paritesi" der; teslim **Inbox/AI/CRM/Reports**
+  (dört yüzey, `parity.test.ts` bunu sayar), eksik **Billing/Playbook/Team** (§C-A28).
+  _Kalan iş: yüzey başına ~2-3 pencere, ~7-9 pencere toplam._
+  Üçüncü boşluk olan **handset kaydı tm 125'te ÖDENDİ** — `OPEN_DEBTS` 2 → 1, `endpointsCalled` 13 → 15.
+
+**3) Bilinçli olarak yapılmayanlar — ⛔ / 🔒, gerekçesiyle.**
+- **⛔ Sesli/telefon (voice/IVR) + IVR routing** — PRD §11.1/3 kapsam dışı. Skills payı v2'de kapandı (08.6.3).
+- **⛔ Gerçek zamanlı canlı çeviri · sesli sentiment** — PRD §11.1/4.
+- **⛔ Ayrı kolon-tabanlı analitik depo (ClickHouse)** — PRD §11.1/5 birebir dışlar (P3).
+- **⛔ Veri ambarı export (Snowflake/BigQuery)** — gerekçe §11.1/5 DEĞİL (o madde yalnız DEPOYU dışlar);
+  **kendi gerekçemiz**: dış hesap ister, mock bir DWH export'u hiçbir şey kanıtlamaz (§D99).
+- **⛔ Görsel Workflow builder (`13.4`)** — ADR-14; `workflows` tablosu şemada kalır, UI yapılmaz.
+  İkame: `05.6` skill şablon kataloğu 31+.
+- **⛔-süreç SLA uptime taahhüdü + fatura kredisi (NFR-U5)** — sözleşme kalemi, depodan üretilemez (§D97).
+  `11.5`'in ✅'i yalnız **yanıt/çözüm SLA'sını** iddia eder.
+- **⛔-süreç Dedicated onboarding / account manager** — insan hizmeti; kod payı sıfır.
+- **🔒 `01.1.1`/`.4`/`.5` · `01.4` · `01.5`** (hamburger, presence avatarları, Invite +N, banner, unpin)
+  · **🔒 `01.1.2`** ("N Leads qualified" pill — **bu turda bulundu**, §D107) · **🔒 `02.2.3`** ("Take tour")
+  · **🔒 `07.2`** — hepsi `Should`/`Could`, hiçbiri `Must` sayacına girmedi.
+- **Ayrıca ürün geneli:** dış servislerin tamamı MOCK (LLM `packages/ai-mock` · SMTP dosyaya · Stripe
+  lokal · object storage `.data/uploads` · Telegram/Twilio/Instagram adaptörleri) · prodüksiyon
+  deploy/DNS/TLS yok · **sertifikasyon süreci yok** (SOC 2 Type II gözlem penceresi, dış denetçi,
+  ISO belgesi, imzalı BAA, gerçek çok-bölgeli barındırma — §D97; `C6`/`C4` yalnız **kod payını** iddia eder).
+
+**4) Sessiz borç — §F.1/6 bulguları.**
+- **Ödendi bu turda:** `format:check` 13 dosyada kırmızıydı (§7.2 onu `✅` damgalarken) → biçimlendirildi.
+- **Ödendi bu turda:** `sla.test.ts`'in iş-saati testi **duvar saatine bağlıydı** ve UTC gece yarısı
+  civarında kapıyı kırıyordu → test düzeltildi, üretim kodu değişmedi (§D106).
+- **Açık, kayda geçti:** **7 uç istemci çağıranı olmadan sunuluyor** (§F.1/7 listesi). Üçü tasarım gereği
+  makine tarafından tüketilir (`/audit-log/export`, `/reports/access-review`, `/billing/entitlements`),
+  dördü ise gerçek bir **ekran boşluğudur** (`/chats/{chatId}/seen`, `/agents/{agentId}/role`,
+  `/settings/chat-timeout`, `/onboarding/state`).
+- **Açık, gerekçeli:** `workflows` tablosu 0 tüketicili (⛔ ADR-14) · 1 `eslint-disable` (Playwright
+  fixture imzası) · 2 `istanbul ignore` (ikisi de gerekçeli).
+- **Temiz:** `TODO`/`FIXME`/`XXX`/`HACK`/`@ts-expect-error`/`@ts-ignore`/`.skip`/`.only` → **808 dosyada 0**.
+- **Süreç borcu (değişmedi):** `format:check` CI'da zorunlu ama CONVENTIONS §1'in DoD listesinde yok —
+  eklenmesi kapı sözleşmesini değiştirir, **kullanıcı kararıdır** (tm 118'den beri açık öneri).
+
+**5) Sapmalar — §D'ye bu turda eklenenler.**
+- **§D105** — Faz-3 kapandı (GL-9); sayaç, kapı çıktıları, üç bulgu, taşınan `Should` borçları.
+- **§D106** — `sla.test.ts` iş-saati testinin duvar saati bağımlılığı; kök neden (duran hafta + 00:10
+  öncesi `max(0, …)` kırpması), düzeltme testtedir, üretim kodu değişmedi.
+- **§D107** — `FR-MOD-01.1.2` PLAN'a hiç aktarılmamıştı; damgasız boşluk → gerekçeli `🔒`.
+
+**6) Karar bekleyen açık sorular — PRD §11.2 ile karşılaştırmalı.**
+- **Kodda fiilen cevaplanmış (PRD'de hâlâ "açık"):** **Q3** backend dili → **Node.js** (ADR-01/02, hibrit
+  Go yok) · **Q6** AI Agent ↔ Copilot bilgi tabanları → **ayrı** (12.2 ayrı KB) · **Q7** Workflow builder ↔
+  NL skill editörü → **tek paradigma, NL** (ADR-14; görsel builder ⛔) · **Q10** olay kontratı →
+  `@nexa/types` + OpenAPI **183 path**, `contract-parity` nöbetçi · **Q11** rate limit değerleri →
+  kodda somut, `Retry-After` uygulanıyor · **Q4** trial bitişi → kısıt (salt-okuma değil, kilit).
+- **Hâlâ AÇIK ve bu depodan cevaplanamaz (ürün/finans/hukuk kararı):** **Q1** nihai fiyat kademeleri +
+  AI aşım birim fiyatı (Enterprise `pricing: 'quoted'` bilerek rakam vermiyor — §K K11.5) · **Q2**
+  "AI resolution" kesin tanımı (Billing↔Reports hizası) · **Q5** veri bölgesi seçenekleri (**kısmen
+  ilerledi**: `{eu, us}` teslim §D102, **TR barındırma kararı açık**) · **Q8** rakip konumlandırma çapası ·
+  **Q9** regüle dikey (bahis) hukuki/marka riski · **Q12** onboarding tohum verisinin sektöre göre değişimi.
+
+
 ## 125 — 13.7-l Mobil cihaz kaydının bağlanması — done — 2026-08-17 UTC
 
 - **Yapıldı:** `DeviceTokenLifecycle` artık gerçek sağlayıcı + transport ile kuruluyor

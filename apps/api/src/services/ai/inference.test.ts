@@ -71,9 +71,9 @@ describe('inferenceAllowed', () => {
   });
 
   it('allows in-region inference for a workspace with no agreement', () => {
-    expect(
-      inferenceAllowed({ provider: inRegion, workspaceRegion: 'us', hipaaScope: false }),
-    ).toBe(true);
+    expect(inferenceAllowed({ provider: inRegion, workspaceRegion: 'us', hipaaScope: false })).toBe(
+      true,
+    );
   });
 });
 

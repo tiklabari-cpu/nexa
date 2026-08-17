@@ -47,7 +47,10 @@ describe('CopilotScreen', () => {
   });
 
   it('summarises into an internal note (12.3 / 02.5)', async () => {
-    const summary: CopilotSummary = { summary: 'Customer asked about a late order.', note_event_id: 'e1' };
+    const summary: CopilotSummary = {
+      summary: 'Customer asked about a late order.',
+      note_event_id: 'e1',
+    };
     await mount('CHAT123', fakeApi({ summarise: async () => summary }));
 
     await fireEvent.press(screen.getByTestId('copilot-summarise'));

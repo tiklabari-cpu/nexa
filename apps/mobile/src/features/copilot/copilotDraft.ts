@@ -55,7 +55,9 @@ export function offerDraft(chatId: string, text: string): void {
 
 /** The composer's view of a pending draft for one chat. */
 export function useCopilotDraft(chatId: string): string | undefined {
-  return useSyncExternalStore(copilotDraftStore.subscribe, () => copilotDraftStore.getDraft(chatId));
+  return useSyncExternalStore(copilotDraftStore.subscribe, () =>
+    copilotDraftStore.getDraft(chatId),
+  );
 }
 
 /** The composer takes it, so the same draft is not re-applied on every render. */

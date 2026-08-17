@@ -73,7 +73,9 @@ test.describe('Telegram (FR-MOD-08.5.8)', () => {
     await expect(views.getByRole('link', { name: 'Telegram' })).toHaveCount(0);
 
     await agentPage.goto('/app/settings');
-    const card = agentPage.getByRole('region', { name: 'Channels' }).getByTestId('channel-telegram');
+    const card = agentPage
+      .getByRole('region', { name: 'Channels' })
+      .getByTestId('channel-telegram');
 
     // Not "Coming soon" any more, and not pretending to be connected either.
     await expect(card.getByText('Not connected')).toBeVisible();

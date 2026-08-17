@@ -31,7 +31,11 @@ export interface CopilotScreenProps {
   onInserted?: () => void;
 }
 
-export function CopilotScreen({ chatId, chatActive = true, onInserted }: CopilotScreenProps): ReactElement {
+export function CopilotScreen({
+  chatId,
+  chatActive = true,
+  onInserted,
+}: CopilotScreenProps): ReactElement {
   const { colors } = useTheme();
   const api = useCopilotApi();
   const [summary, setSummary] = useState<AsyncState<CopilotSummary>>({ status: 'idle' });
@@ -94,7 +98,11 @@ export function CopilotScreen({ chatId, chatActive = true, onInserted }: Copilot
           testID="copilot-summarise"
         />
         {summary.status === 'error' && (
-          <Text testID="copilot-summary-error" accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>
+          <Text
+            testID="copilot-summary-error"
+            accessibilityRole="alert"
+            style={[styles.error, { color: colors.danger }]}
+          >
             {summary.message}
           </Text>
         )}
@@ -103,7 +111,9 @@ export function CopilotScreen({ chatId, chatActive = true, onInserted }: Copilot
             testID="copilot-summary-result"
             style={[styles.card, { backgroundColor: colors.bgInset }]}
           >
-            <Text style={[styles.body, { color: colors.textSecondary }]}>{summary.data.summary}</Text>
+            <Text style={[styles.body, { color: colors.textSecondary }]}>
+              {summary.data.summary}
+            </Text>
             <Text style={[styles.note, { color: colors.success }]}>Added as an internal note.</Text>
           </View>
         )}
@@ -123,13 +133,20 @@ export function CopilotScreen({ chatId, chatActive = true, onInserted }: Copilot
           testID="copilot-draft-reply"
         />
         {reply.status === 'error' && (
-          <Text testID="copilot-reply-error" accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>
+          <Text
+            testID="copilot-reply-error"
+            accessibilityRole="alert"
+            style={[styles.error, { color: colors.danger }]}
+          >
             {reply.message}
           </Text>
         )}
         {reply.status === 'ready' &&
           (reply.data.draft ? (
-            <View testID="copilot-reply-result" style={[styles.card, { backgroundColor: colors.bgInset }]}>
+            <View
+              testID="copilot-reply-result"
+              style={[styles.card, { backgroundColor: colors.bgInset }]}
+            >
               <Text style={[styles.body, { color: colors.textSecondary }]}>{reply.data.draft}</Text>
               <Pressable
                 accessibilityRole="button"
@@ -138,7 +155,9 @@ export function CopilotScreen({ chatId, chatActive = true, onInserted }: Copilot
                 onPress={() => insert(reply.data.draft)}
                 style={[styles.insert, { backgroundColor: colors.brand500 }]}
               >
-                <Text style={[styles.insertLabel, { color: colors.textInverse }]}>Insert into reply</Text>
+                <Text style={[styles.insertLabel, { color: colors.textInverse }]}>
+                  Insert into reply
+                </Text>
               </Pressable>
               {reply.data.sources.length > 0 && (
                 <Text style={[styles.hint, { color: colors.textTertiary }]}>
@@ -147,7 +166,10 @@ export function CopilotScreen({ chatId, chatActive = true, onInserted }: Copilot
               )}
             </View>
           ) : (
-            <Text testID="copilot-reply-empty" style={[styles.hint, { color: colors.textTertiary }]}>
+            <Text
+              testID="copilot-reply-empty"
+              style={[styles.hint, { color: colors.textTertiary }]}
+            >
               No suggestion found in the copilot knowledge base.
             </Text>
           ))}
@@ -161,7 +183,11 @@ function Section({
   description,
   colors,
   children,
-}: PropsWithChildren<{ title: string; description: string; colors: { title: string; description: string } }>) {
+}: PropsWithChildren<{
+  title: string;
+  description: string;
+  colors: { title: string; description: string };
+}>) {
   return (
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.title }]}>{title}</Text>
@@ -211,7 +237,11 @@ const styles = StyleSheet.create({
   content: { padding: SPACING[4], gap: SPACING[6] },
   reopen: { fontSize: FONT_SIZE.xs.size, lineHeight: FONT_SIZE.xs.lineHeight },
   section: { gap: SPACING[2] },
-  sectionTitle: { fontSize: FONT_SIZE.lg.size, lineHeight: FONT_SIZE.lg.lineHeight, fontWeight: '600' },
+  sectionTitle: {
+    fontSize: FONT_SIZE.lg.size,
+    lineHeight: FONT_SIZE.lg.lineHeight,
+    fontWeight: '600',
+  },
   sectionDescription: { fontSize: FONT_SIZE.xs.size, lineHeight: FONT_SIZE.xs.lineHeight },
   action: {
     flexDirection: 'row',
@@ -222,7 +252,11 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     paddingVertical: SPACING[3],
   },
-  actionLabel: { fontSize: FONT_SIZE.sm.size, lineHeight: FONT_SIZE.sm.lineHeight, fontWeight: '600' },
+  actionLabel: {
+    fontSize: FONT_SIZE.sm.size,
+    lineHeight: FONT_SIZE.sm.lineHeight,
+    fontWeight: '600',
+  },
   card: { borderRadius: RADIUS.md, padding: SPACING[3], gap: SPACING[2] },
   body: { fontSize: FONT_SIZE.sm.size, lineHeight: FONT_SIZE.sm.lineHeight * 1.3 },
   note: { fontSize: FONT_SIZE['2xs'].size, lineHeight: FONT_SIZE['2xs'].lineHeight },
@@ -234,5 +268,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING[3],
     paddingVertical: SPACING[2],
   },
-  insertLabel: { fontSize: FONT_SIZE.xs.size, lineHeight: FONT_SIZE.xs.lineHeight, fontWeight: '600' },
+  insertLabel: {
+    fontSize: FONT_SIZE.xs.size,
+    lineHeight: FONT_SIZE.xs.lineHeight,
+    fontWeight: '600',
+  },
 });

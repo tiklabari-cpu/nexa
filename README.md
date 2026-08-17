@@ -84,14 +84,17 @@ make help
 
 ### Workspace layout
 
-| Package             | Role                                                                                |
-| ------------------- | ----------------------------------------------------------------------------------- |
-| `packages/contract` | OpenAPI 3.1 document — the contract every other package derives from                |
-| `packages/types`    | `@nexa/types`: domain vocabulary, error taxonomy, scopes, ID strategy, RTM protocol |
-| `apps/api`          | REST API (Fastify + Prisma), migrations, seed                                       |
-| `apps/rtm`          | WebSocket gateway: presence, push fan-out, missed-event sync                        |
-| `apps/web`          | Agent SPA (React + Vite + Tailwind)                                                 |
-| `apps/widget`       | Customer chat widget — loader + sandboxed iframe app                                |
+| Package             | Role                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| `packages/contract` | OpenAPI 3.1 document — the contract every other package derives from                 |
+| `packages/types`    | `@nexa/types`: domain vocabulary, error taxonomy, scopes, ID strategy, RTM protocol  |
+| `apps/api`          | REST API (Fastify + Prisma), migrations, seed                                        |
+| `apps/rtm`          | WebSocket gateway: presence, push fan-out, missed-event sync                         |
+| `apps/web`          | Agent SPA (React + Vite + Tailwind)                                                  |
+| `apps/widget`       | Customer chat widget — loader + sandboxed iframe app                                 |
+| `apps/mobile`       | Agent phone app (Expo / React Native) — Inbox, AI, CRM, Reports + push               |
+| `apps/e2e`          | Playwright suite: drives the real servers on fixed ports against the seeded database |
+| `packages/ai-mock`  | Deterministic LLM stand-in — no external model is ever called                        |
 
 ### Contract-first
 

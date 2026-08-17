@@ -12,6 +12,32 @@
 ---
 
 ## Task log (newest-first)
+
+## 134 — çelişki denetimi: tm 134 bayat DEĞİL; `08.7.7` damgası erkendi (`✅` → `◐`) — pending (görev AÇIK kalır) — 2026-08-17 UTC
+
+- **Yapıldı:** Panelin "açık görev / `✅` satır" bulgusu koda karşı çözüldü. **11.4 `✅` doğru**
+  (composer `widget.ts:837-864` + `widget.spec.ts` yolculuk testleri; başlıktaki "emoji" için ayrı seçici
+  yok ve olmayacak — PRD KK'sı seçici istemiyor, `<textarea>` OS klavyesinden emoji gönderiyor, 50 KB
+  gzip bütçesi glyph disiplinini dayatıyor; bu okuma §D114'e YAZILDI ki bir sonraki denetim yeniden
+  açmasın). **07.8 `✅` doğru** (`reports.ts:1460` + `ReviewsTab` + e2e `reports.spec.ts:129` kanıt PNG;
+  eksik olan raporun KAYNAĞI, satırın borcu değil). **08.7.7 `✅` erkendi → `◐`** (PLAN.md:560): satır
+  başlığı "(pre/post-chat)" iki yerleşim vaat ediyor, `post_chat` depoda **0 eşleşme**, K08.7.7 ertelemeyi
+  zaten dürüstçe yazıyordu — §D113'ün `I18N1/2`/`A11Y1–6` için kullandığı ölçütün birebir aynısı.
+  K08.7.7'ye `◐` maddesi, §6A damga politikası + kalem tablosu + §6A.1.7 düzeltildi, §D114 açıldı.
+- **Doğrulama:** ürün kodu YAZILMADI (CONVENTIONS §5) — yalnız `PLAN.md` + `HANDOFF.md` +
+  `.taskmaster/tasks/tasks.json`, üçü de `.prettierignore`'da (tm 118) → `format:check` etkilenmez;
+  kod yüzeyi değişmediği için typecheck/lint/test/integration/build/e2e kapıları bu turdan **etkilenmez**
+  (koşulmadı, gerekçe budur). Ölçümler: `grep -rn "\.rate(\|\.close(" apps/widget/src --include=*.ts | grep -v test`
+  → **0** · `grep -rn "post_chat\|postChat" apps/widget/src apps/api/src apps/web/src packages/contract`
+  → **0** · `apps/e2e/tests/csat.spec.ts` → **yok** · `grep -rni emoji apps/widget/` → **0**.
+- **Varsayımlar:** 08.7.7 satırı PLAN'ın daralttığı **iki** yerleşimi (pre/post) izler; PRD'nin ayrıca
+  saydığı `ticket`/`prospect` yerleşimleri bu satırın borcu değildir (tm 134.3 kapsam dışı notu ile aynı
+  çizgi) — yoksa satır 134.3 bittikten sonra bile `✅` olamazdı, yani sahipsiz borç doğardı.
+- **Sonraki pencereye not:** **tm 134 açık kalır ve DARALTILMADI** — dört alt-görevin hiçbiri yapılmamış,
+  mükerrer iş riski yoktu; run-loop onu seçtiğinde bitmiş iş yeniden yapılmaz. Görevin `details`'indeki
+  damga talimatı ve 134.3'ün kapanış notu güncellendi: 134.3 yeşil kapıdan geçince **PLAN.md:560 `◐` → `✅`**
+  çevirmek o görevin kapanış işlerinden biridir. Yeni görev AÇILMADI (priority alanına dokunulmadı).
+
 ## 128.1 — 13.7-p: mobil oturum kapısı + giriş ekranı (RootNavigator dallanır, e-posta/parola → workspace → PKCE) — done — 2026-08-17 UTC
 
 - **Yapıldı:** `RootNavigator` artık `useSessionState()`'e bakıyor — `unknown` → `LoadingScreen`

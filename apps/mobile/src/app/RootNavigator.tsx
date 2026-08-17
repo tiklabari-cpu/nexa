@@ -16,10 +16,15 @@
  * with an empty store therefore opened the inbox, asked for `/chats` without a
  * token, and left the person reading a 401 with no way forward — the whole of
  * §D111's finding, in one missing branch.
+ *
+ * The container is also where `nexa://` URLs enter (13.7-q). Which map it is
+ * given depends on the same three states, because a path only means something
+ * against the tree that is mounted — see `app/linking.ts`.
  */
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
+import { linkingFor } from './linking';
 import type { RootTabParamList } from './navigation';
 import { buildNavigationTheme, buildTabScreenOptions } from './navigationTheme';
 import { useSessionState } from './services';
@@ -43,7 +48,15 @@ export function RootNavigator() {
   if (status === 'unknown') return <LoadingScreen />;
 
   return (
-    <NavigationContainer theme={buildNavigationTheme(theme, colors)}>
+    <NavigationContainer
+      theme={buildNavigationTheme(theme, colors)}
+      linking={linkingFor(status)}
+      // Resolving the launch URL is a round trip through the platform, and the
+      // container renders nothing until it settles. Without this the app blinks
+      // to a blank screen between "restoring" and "restored" on every cold
+      // start — the one window `LoadingScreen` exists to fill.
+      fallback={<LoadingScreen />}
+    >
       {status === 'signed-out' ? (
         <AuthStack />
       ) : (

@@ -13,6 +13,36 @@
 
 ## Task log (newest-first)
 
+## 128.2 — 13.7-q: SSO tarayıcı bacağı bağlandı + `nexa://` deep-link (linking) — done — 2026-08-17 UTC
+
+- **Yapıldı:** (1) `app/services.tsx` oturumu artık `browser: systemBrowser` ile kuruyor — `13.7-b`'nin
+  yazdığı iki yarı (`signInWithSso` + `openAuthSessionAsync` sarmalayıcısı) arasındaki tek boşluk buydu;
+  sunucu/sözleşme/şema DEĞİŞMEDİ, ikinci token yolu YOK. (2) Yeni `app/linking.ts`: `NavigationContainer`
+  artık `linking` alıyor — oturuma göre iki harita (iki ağaç hiç bir arada durmadığı için tek birleşik
+  config monte olmayan ekrana gitmeyi isterdi). `authLinking` → `auth/callback` → `SignIn`, **query
+  atılarak**, yalnız `returned: true` (13.7-p'nin parola kuralı: kimlik bilgisi navigation state'e
+  yazılmaz — verifier süreçle öldüğü için kod zaten bozdurulamaz). `appLinking` → `chats/:chatId` →
+  `Inbox → ChatDetail`, `initialRouteName: InboxHome`. Önek `MOBILE_APP_SCHEME`'den türetildi.
+  (3) `ChatDetail.title` opsiyonel + `features/inbox/title.ts` (tek kural: listeden gelen başlık aynen
+  kalır, deep-link'te envanterden bulunur, bulunamazsa `Conversation`).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 · `pnpm -w format:check` ·
+  `pnpm --filter @nexa/mobile test` **431/431 · 37 dosya** (taban 409/35, +22) · `pnpm -w test` 11/11 ·
+  `pnpm -w build` 8/8 (mobil `expo export` ios 1019 + android 1016 modül) · `pnpm -w test:integration`
+  **90/90 dosya · 2374/2374**. `pnpm -w test:e2e` KOŞULMADI — tm 128.1 ile aynı gerekçe: apps/mobile
+  Playwright'a hiç girmiyor, task'ın `testStrategy`'si de istemiyor; apps/web · apps/e2e · packages/*
+  bu turda değişmedi. Kontrat/migration değişmedi → codegen + drift kapısı gereksiz.
+- **Varsayımlar:** Universal (`https`) link YOK — özel şema yeter (RFC 8252 §7.1, 13.7-b kararı);
+  doğrulanmış alan adı + association dosyası bu deponun yapmadığı deploy'dur. Başlık testi native
+  header prop'una değil saf `headerTitleFor`'a yazıldı (react-native-screens başlığı `Text` olarak
+  render etmiyor — `RNSScreenStackHeaderConfig` prop'u; ona bağlanan test bir iç detayı pinlerdi).
+- **Sonraki pencereye not:** `13.7` satırı `◐` KALDI (`PLAN.md:572`) — 13.7-w çevirir. **13.7-s için:**
+  bildirim tıklaması `nexa://chats/:chatId` yolunu hazır buluyor; ama signed-out iken `chats/...`
+  eşleşmez (harita ayrık) — "hedefi sakla, girişten sonra aç" deposu 13.7-s'nin kendi işi. Ayrıca
+  `linking` prop'u oturum durumuyla değiştiği için, oturum açıldığında React Navigation başlangıç
+  URL'ini yeniden okuyabilir; 13.7-s bekleyen hedefi kendi state'inde tutarsa bu belirsizlik konu
+  dışı kalır. `parity.test.ts` bu turda DEĞİŞMEDİ (yeni `.request(` literali yok; AUTH satırları
+  13.7-w'nin işi).
+
 ## 134 — çelişki denetimi: tm 134 bayat DEĞİL; `08.7.7` damgası erkendi (`✅` → `◐`) — pending (görev AÇIK kalır) — 2026-08-17 UTC
 
 - **Yapıldı:** Panelin "açık görev / `✅` satır" bulgusu koda karşı çözüldü. **11.4 `✅` doğru**

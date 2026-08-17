@@ -84,10 +84,15 @@ export async function enterWorkspace(
 }
 
 /**
- * Take the federated door. Wiring the system browser behind this is `13.7-q`'s
- * job — until it lands, `MobileSession` has no `AuthBrowser` and says so, which
- * is the honest thing for this button to report rather than a spinner that
- * never resolves.
+ * Take the federated door: `MobileSession` hands the identity provider to the
+ * device's own browser and waits for the callback (§C-A29 · `13.7-q`).
+ *
+ * Every way this ends other than a session is a `failed` with the session's own
+ * sentence, and they are deliberately different sentences — a dismissed sheet,
+ * a callback carrying somebody else's `state`, and an app built without a
+ * browser are three different situations, and only the first is worth pressing
+ * the button again for. `messages.ts` explains why these are shown verbatim
+ * while a server refusal is not.
  */
 export async function continueWithSso(session: AuthSession, offer: SsoOffer): Promise<EnterResult> {
   try {

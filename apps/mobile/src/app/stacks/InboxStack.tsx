@@ -1,5 +1,6 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useEffect } from 'react';
 import { Pressable, Text } from 'react-native';
 
 import type { InboxStackParamList } from '../navigation';
@@ -7,6 +8,8 @@ import { buildStackScreenOptions } from '../navigationTheme';
 import { ChatListScreen } from '../../features/inbox/ChatListScreen';
 import { ChatScreen } from '../../features/inbox/ChatScreen';
 import { InboxProvider } from '../../features/inbox/InboxProvider';
+import { headerTitleFor, UNKNOWN_CHAT_TITLE } from '../../features/inbox/title';
+import { useInboxState } from '../../features/inbox/useInbox';
 import { CopilotProvider } from '../../features/copilot/CopilotProvider';
 import { CopilotScreen } from '../../features/copilot/CopilotScreen';
 import { FONT_SIZE, SPACING } from '../../theme/tokens';
@@ -32,7 +35,10 @@ export function InboxStack() {
             name="ChatDetail"
             component={ChatDetailScreen}
             options={({ navigation, route }) => ({
-              title: route.params.title,
+              // Absent when the person did not come through the list — a deep
+              // link or a tapped notification (13.7-q). `ChatDetailScreen`
+              // replaces it as soon as the inbox knows who this is.
+              title: route.params.title ?? UNKNOWN_CHAT_TITLE,
               headerRight: () => (
                 <Pressable
                   accessibilityRole="button"
@@ -73,8 +79,23 @@ function InboxHomeScreen({ navigation }: NativeStackScreenProps<InboxStackParamL
   return <ChatListScreen onOpenChat={(chat) => navigation.navigate('ChatDetail', chat)} />;
 }
 
-function ChatDetailScreen({ route }: NativeStackScreenProps<InboxStackParamList, 'ChatDetail'>) {
-  return <ChatScreen chatId={route.params.chatId} />;
+function ChatDetailScreen({
+  navigation,
+  route,
+}: NativeStackScreenProps<InboxStackParamList, 'ChatDetail'>) {
+  const { chatId, title } = route.params;
+  const { chats } = useInboxState();
+  const header = headerTitleFor(chats, chatId, title);
+
+  // The static `options` above cannot see the inbox, so a deep-linked
+  // conversation opens generically and is named here once the list underneath
+  // it answers. Keyed on the computed title, so a store update that changes
+  // nothing visible does not touch the header.
+  useEffect(() => {
+    navigation.setOptions({ title: header });
+  }, [navigation, header]);
+
+  return <ChatScreen chatId={chatId} />;
 }
 
 function ChatCopilotScreen({

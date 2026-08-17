@@ -10,6 +10,7 @@ import { useEffect } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConnectionBanner } from './ConnectionBanner';
+import { chatTitle } from './title';
 import { useInboxState } from './useInbox';
 import { useInboxStore } from './context';
 import { FONT_SIZE, RADIUS, SPACING } from '../../theme/tokens';
@@ -47,7 +48,7 @@ export function ChatListScreen({ onOpenChat }: ChatListScreenProps) {
         renderItem={({ item }) => (
           <ChatRow
             chat={item}
-            onPress={() => onOpenChat({ chatId: item.id, title: titleOf(item) })}
+            onPress={() => onOpenChat({ chatId: item.id, title: chatTitle(item) })}
           />
         )}
         ListEmptyComponent={<ListPlaceholder status={state.status} error={state.error} />}
@@ -64,7 +65,7 @@ function ChatRow({ chat, onPress }: { chat: ChatSummary; onPress: () => void }) 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${titleOf(chat)}. ${preview}`}
+      accessibilityLabel={`${chatTitle(chat)}. ${preview}`}
       testID={`chat-row-${chat.id}`}
       onPress={onPress}
       style={({ pressed }) => [
@@ -77,7 +78,7 @@ function ChatRow({ chat, onPress }: { chat: ChatSummary; onPress: () => void }) 
     >
       <View style={styles.rowHeader}>
         <Text numberOfLines={1} style={[styles.name, { color: colors.textPrimary }]}>
-          {titleOf(chat)}
+          {chatTitle(chat)}
         </Text>
         <Text style={[styles.time, { color: colors.textTertiary }]}>
           {formatTime(chat.last_event?.created_at ?? chat.created_at)}
@@ -129,11 +130,6 @@ function ListPlaceholder({ status, error }: { status: string; error: string | nu
       </Text>
     </View>
   );
-}
-
-function titleOf(chat: ChatSummary): string {
-  // An anonymous visitor is the common case, not an error state.
-  return chat.customer_name ?? 'Visitor';
 }
 
 function previewOf(chat: ChatSummary): string {

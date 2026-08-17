@@ -6025,7 +6025,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-17T18:49:33.786Z",
+        "updatedAt": "2026-08-17T20:22:22.074Z",
         "subtasks": [
           {
             "id": 1,
@@ -6044,12 +6044,12 @@
             "description": "SSO düğmesi sistem tarayıcısını açar; nexa:// deep-link (linking) config bağlanır.",
             "details": "NE YAPILACAK: (a) `app/services.tsx` `MobileSession`'ı `browser: systemBrowser` ile kurar\n(`auth/browser.ts:21` bugün hiç import edilmiyor); (b) 13.7-p'nin \"Continue with SSO\" düğmesi\n`session.signInWithSso({connectionId, clientId})` çağırır → `expo-web-browser`\n`openAuthSessionAsync(loginUrl, MOBILE_REDIRECT_URI)` → dönen URL'deki `code`+`state` → `#redeem`\n(hepsi `session.ts:254-`'te ZATEN var; bu alt-görev bağlar ve ekranda hata/iptal durumlarını gösterir:\nkullanıcı sheet'i kapattı → \"İptal edildi\", state uyuşmadı → dürüst hata, başarı → dört sekme);\n(c) `NavigationContainer`'a `linking` config: `prefixes: ['nexa://']`, `config.screens`:\n`auth/callback` (openAuthSessionAsync onu tüketir; yine de soğuk açılışta gelen callback'in bir\nekrana düşmesi için AuthStack'e yönlenir ve \"tarayıcıdan dön\" mesajı gösterir — kod tekrar\nkullanılmaz, çünkü verifier bellekteydi ve süreç yeniden başladıysa yoktur; bu DÜRÜSTÇE yazılır),\n`chats/:chatId` → Inbox/ChatDetail (13.7-s'nin bildirim tıklaması da aynı yolu kullanır).\nNEDEN: `services.tsx:47-51` browser'sız kurulum → `signInWithSso` 'No browser is available' fırlatır;\n`Linking` importu yok, `app.json:8` `scheme: nexa` boşa duruyor (§D111).\nDOSYALAR: `app/services.tsx` · `app/RootNavigator.tsx` (`linking`) · `app/linking.ts` (yeni; config +\n`getStateFromPath` gerekmez, düz config yeter) · `features/auth/SignInScreen.tsx` (SSO düğmesi) ·\ntestler.\nREFERANS DESEN: web SSO akışı `apps/web/src/lib/auth-store.ts:startSsoLogin` + `features/auth/\nAuthCallbackPage.tsx`; mobil `session.ts:254-` + `auth/browser.ts`; mock IdP `apps/api/scripts/\nmock-idp-server.ts` (jest'te KULLANILMAZ — `AuthBrowser` arayüzü sahte ile enjekte edilir).\nKK: SSO isteyen workspace'te düğme sistem tarayıcısını açar; başarılı dönüşte oturum kurulur;\niptal/uyumsuz state/timeout üç ayrı dürüst cümle; `nexa://chats/<id>` uygulamayı ilgili sohbette açar.\nTESTLER: `SignInScreen.sso.test.tsx` (sahte browser: success/cancel/mismatch) · `linking.test.ts`\n(config → rota eşlemesi) · `session.test.ts`'e browser'lı senaryo zaten var mı kontrol et, yoksa +1.\nKAPSAM DIŞI: universal links (https) — özel şema yeter (RFC 8252 §7.1, 13.7-b kararı); sunucu değişmez.\nTUZAKLAR: (1) `expo-web-browser` jest'te mock'lanır (jest.mock hoisting); (2) `linking` verilince\n`App.test.tsx` NavigationContainer'ı `initialState`/`linking` ile çalışıyor mu bak — testte\n`linking` prop'u `enabled: false` verilebilir; (3) verifier süreç ölünce kaybolur — bunu belgele, \"code'u\nsaklayalım\" DEME.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-13.7 (mobil)**. Gereksinim satırı: `grep -n '| 13\\.7 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K13.7' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm --filter @nexa/mobile test` exit 0 (yeni SSO + linking testleri).\n- typecheck/lint/build (expo export) exit 0.\n- Ölçülebilir: `grep -n \"systemBrowser\" apps/mobile/src/app/services.tsx` = 1; `grep -n \"linking\" apps/mobile/src/app/RootNavigator.tsx` ≥ 1.\n- PLAN: K13.7'ye madde; satır 572 `◐` kalır (13.7-w).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "128.1"
             ],
             "parentId": "128",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-17T20:22:22.074Z"
           },
           {
             "id": 3,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-17T18:49:33.787Z",
+      "lastModified": "2026-08-17T20:22:22.074Z",
       "taskCount": 143,
       "completedCount": 127,
       "tags": [

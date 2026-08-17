@@ -29,7 +29,7 @@ export interface AuthSession {
  *
  * Held in component state rather than a route param on purpose: navigation
  * state is a serialisable object React Navigation persists, restores and — once
- * `13.7-q` adds `linking` — maps to and from URLs. A password does not belong
+ * `13.7-q` added `linking` — maps to and from URLs. A password does not belong
  * in any of those. `AuthStack` owns this value and hands it down as a prop, so
  * `app/navigation.ts` never has to name it.
  */

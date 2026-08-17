@@ -15,6 +15,7 @@ import { createContext, useContext, useEffect, useMemo, useSyncExternalStore } f
 import type { PropsWithChildren } from 'react';
 
 import { SessionApiClient } from '../api/client';
+import { systemBrowser } from '../auth/browser';
 import { DeviceTokenLifecycle } from '../auth/device-token';
 import { createDeviceTokenTransport } from '../auth/device-token-transport';
 import { currentDevicePlatform, expoPushTokens } from '../auth/push-tokens';
@@ -47,6 +48,12 @@ export function ServicesProvider({ config, services, children }: ServicesProvide
     const session = new MobileSession({
       apiBaseUrl: config.apiBaseUrl,
       store,
+      // The federated leg, connected (13.7-q). `13.7-b` wrote both halves —
+      // `signInWithSso` and the `openAuthSessionAsync` wrapper behind this
+      // interface — and this line was the gap between them: constructed
+      // without it, the session answered every SSO attempt with 'No browser is
+      // available for single sign-on.', which was true and useless (§D111).
+      browser: systemBrowser,
       deviceTokens: buildDeviceTokens(config, store),
     });
     return {

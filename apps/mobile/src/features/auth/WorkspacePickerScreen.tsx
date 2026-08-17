@@ -6,8 +6,8 @@
  * row is pressed.
  *
  * The email and password arrive as a prop rather than a route param. Navigation
- * state is a serialisable object React Navigation persists, restores and (once
- * `13.7-q` adds `linking`) maps to and from URLs; a password has no business in
+ * state is a serialisable object React Navigation persists, restores and (since
+ * `13.7-q` added `linking`) maps to and from URLs; a password has no business in
  * any of those. `AuthStack` holds them in component state for the length of the
  * flow, which is why this screen also has to handle arriving without them: a
  * process restart between the two steps leaves the memberships on screen and

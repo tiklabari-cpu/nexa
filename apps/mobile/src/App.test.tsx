@@ -1,7 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { MOBILE_REDIRECT_URI } from '@nexa/types';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 
 import App from './App';
 import { ROOT_TABS } from './app/navigation';
+import { RETURNED_FROM_BROWSER } from './features/auth/messages';
+import type { ChatSummary } from './features/inbox/types';
 
 /**
  * The tab bar renders every label as plain text, and — for whichever tab is
@@ -54,6 +58,66 @@ const PRINCIPAL = {
   license_id: '4',
   scopes: ['chats--all:ro', 'chats--all:rw'],
 };
+
+/**
+ * The system browser, as a thing this suite can be (13.7-q).
+ *
+ * `openAuthSessionAsync` is the whole of the federated leg — the app hands it a
+ * URL and gets a callback or nothing back — so standing in for it is what lets
+ * the SSO path be walked here rather than described. `answer` reads the URL it
+ * was given, because the callback has to echo the `state` the session just
+ * minted; hard-coding one would test a coincidence.
+ */
+const mockBrowser: {
+  urls: string[];
+  answer: (url: string) => { type: 'success'; url: string } | { type: 'dismiss' };
+} = {
+  urls: [],
+  answer: (url: string) => ({
+    type: 'success',
+    url: `${MOBILE_REDIRECT_URI}?code=code-1&state=${new URL(url).searchParams.get('state')}`,
+  }),
+};
+jest.mock('expo-web-browser', () => ({
+  openAuthSessionAsync: jest.fn(async (url: string) => {
+    mockBrowser.urls.push(url);
+    return mockBrowser.answer(url);
+  }),
+}));
+
+/**
+ * `expo-crypto` is the platform's CSPRNG and SHA-256, and there is no platform
+ * here — stubbed the same way `pkce.test.ts` stubs it. Nothing below asserts
+ * anything about the verifier; `pkce.test.ts` owns that. What matters here is
+ * only that PKCE can run at all, since every sign-in goes through it.
+ */
+jest.mock('expo-crypto', () => {
+  let counter = 0;
+  return {
+    CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+    CryptoEncoding: { HEX: 'hex', BASE64: 'base64' },
+    getRandomBytesAsync: async (count: number) => {
+      counter += 1;
+      return Uint8Array.from({ length: count }, (_, i) => (i * 31 + counter * 7) % 256);
+    },
+    digestStringAsync: async (_algorithm: string, data: string) => `sha256(${data})`,
+  };
+});
+
+/** A workspace that federates sign-in: the password is not the way in (S11-h). */
+const SSO_MEMBERSHIP = {
+  license_id: '4',
+  organization_id: 'org-1',
+  organization_name: 'Acme',
+  role: 'owner',
+  client_id: 'client-acme',
+  password_login_available: false,
+  sso_enforced_connection_id: 'conn-1',
+};
+
+/** What `/auth/login` answers, and what `/chats` lists — set per test. */
+const mockMemberships: { value: unknown[] } = { value: [] };
+const mockChats: { value: ChatSummary[] } = { value: [] };
 
 /** Stands in for the manifest Expo injects; jest-expo leaves `extra` unset. */
 const mockExtra: { value: unknown } = { value: undefined };
@@ -131,26 +195,37 @@ describe('App', () => {
   beforeEach(() => {
     mockStore.session = null;
     mockStore.hang = false;
+    mockBrowser.urls = [];
+    mockBrowser.answer = (url: string) => ({
+      type: 'success',
+      url: `${MOBILE_REDIRECT_URI}?code=code-1&state=${new URL(url).searchParams.get('state')}`,
+    });
+    mockMemberships.value = [];
+    mockChats.value = [];
     mockExtra.value = {
       apiBaseUrl: 'https://api.nexa.test/api/v1',
       rtmBaseUrl: 'wss://rtm.nexa.test',
     };
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
-      const body = url.includes('/auth/token')
-        ? {
-            access_token: 'access-1',
-            refresh_token: 'refresh-2',
-            license_id: '4',
-            account_id: 'acc-1',
-          }
-        : url.includes('/auth/me')
-          ? PRINCIPAL
-          : url.includes('/reports/overview')
-            ? EMPTY_REPORTS_OVERVIEW
-            : url.includes('/agents/me/notification-preferences')
-              ? DEFAULT_NOTIFICATION_PREFERENCES
-              : { items: [] };
+      const body = url.includes('/auth/login')
+        ? { memberships: mockMemberships.value }
+        : url.includes('/auth/token')
+          ? {
+              access_token: 'access-1',
+              refresh_token: 'refresh-2',
+              license_id: '4',
+              account_id: 'acc-1',
+            }
+          : url.includes('/auth/me')
+            ? PRINCIPAL
+            : url.includes('/reports/overview')
+              ? EMPTY_REPORTS_OVERVIEW
+              : url.includes('/agents/me/notification-preferences')
+                ? DEFAULT_NOTIFICATION_PREFERENCES
+                : url.includes('/chats?') || url.endsWith('/chats')
+                  ? { items: mockChats.value }
+                  : { items: [] };
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -227,6 +302,145 @@ describe('App', () => {
     await fireEvent.press(tabButton('Settings'));
     expect(await screen.findByTestId('notification-settings')).toBeOnTheScreen();
     expect(screen.getByText('Enable notifications')).toBeOnTheScreen();
+  });
+
+  /**
+   * The federated leg, walked rather than described (13.7-q).
+   *
+   * `13.7-b` wrote `signInWithSso` and the `openAuthSessionAsync` wrapper and
+   * `13.7-p` drew the button; between them sat one unset constructor option, so
+   * the button's honest answer was "No browser is available for single
+   * sign-on." These three tests are the seam: the real `App`, the real
+   * `MobileSession`, the real `systemBrowser`, and a stand-in only where the
+   * device would be.
+   */
+  describe('single sign-on', () => {
+    async function offerSso(): Promise<void> {
+      mockMemberships.value = [SSO_MEMBERSHIP];
+      await render(<App />);
+      await screen.findByTestId('sign-in');
+
+      await fireEvent.changeText(screen.getByTestId('sign-in-email'), 'owner@acme.localhost');
+      await fireEvent.changeText(screen.getByTestId('sign-in-password'), 'nexa-demo-password');
+      await fireEvent.press(screen.getByTestId('sign-in-submit'));
+
+      // The membership already said a password is not the way in, so none was
+      // spent on `/auth/authorize` to be told so (13.7-p · `enter.ts`).
+      await screen.findByTestId('sign-in-sso');
+    }
+
+    it('hands the identity provider to the device browser and comes back signed in', async () => {
+      await offerSso();
+
+      await fireEvent.press(screen.getByTestId('sign-in-sso'));
+
+      // The callback was redeemed and the gate swapped the tree — the whole
+      // point, and the thing that could not happen before this subtask.
+      expect(await screen.findByTestId('chat-list')).toBeOnTheScreen();
+
+      expect(mockBrowser.urls).toHaveLength(1);
+      const opened = new URL(mockBrowser.urls[0]!);
+      expect(opened.pathname).toBe('/api/v1/auth/saml/conn-1/login');
+      // Same mandatory S256 PKCE and the same exact-matched redirect the
+      // console uses — the phone adds no second way to mint a token (13.7-b).
+      expect(opened.searchParams.get('code_challenge_method')).toBe('S256');
+      expect(opened.searchParams.get('redirect_uri')).toBe(MOBILE_REDIRECT_URI);
+      expect(opened.searchParams.get('client_id')).toBe('client-acme');
+      expect(opened.searchParams.get('state')).toBeTruthy();
+    });
+
+    it('says the sheet was closed, which is not the same as a failure', async () => {
+      mockBrowser.answer = () => ({ type: 'dismiss' });
+      await offerSso();
+
+      await fireEvent.press(screen.getByTestId('sign-in-sso'));
+
+      expect(await screen.findByText('Sign-in was cancelled.')).toBeOnTheScreen();
+      // Still offered: a dismissed sheet is the one outcome worth pressing
+      // again for.
+      expect(screen.getByTestId('sign-in-sso')).toBeOnTheScreen();
+    });
+
+    it('refuses a callback that did not start here, and says which problem it is', async () => {
+      mockBrowser.answer = () => ({
+        type: 'success',
+        url: `${MOBILE_REDIRECT_URI}?code=code-1&state=somebody-else`,
+      });
+      await offerSso();
+
+      await fireEvent.press(screen.getByTestId('sign-in-sso'));
+
+      expect(await screen.findByText('This sign-in did not start in this app.')).toBeOnTheScreen();
+      expect(screen.queryByTestId('chat-list')).not.toBeOnTheScreen();
+    });
+  });
+
+  /**
+   * `nexa://` URLs, end to end: the prefix `app.json` registers, stripped by
+   * React Navigation and matched against the map in `app/linking.ts`. That map
+   * is parsed on its own in `linking.test.ts`; what is proved here is that the
+   * container is actually given it.
+   */
+  describe('deep links', () => {
+    const chat: ChatSummary = {
+      id: 'chat-1',
+      customer_id: 'customer-1',
+      customer_name: 'Dana',
+      active: true,
+      created_at: '2026-08-17T09:00:00.000Z',
+      thread_id: 'THREAD1',
+      assignee_id: null,
+      queue_position: null,
+      unread_count: 0,
+      last_event: null,
+      tags: [],
+    } as unknown as ChatSummary;
+
+    it('opens the conversation a link names instead of the tab it landed on', async () => {
+      mockStore.session = STORED_SESSION;
+      mockChats.value = [chat];
+      jest.spyOn(Linking, 'getInitialURL').mockResolvedValue('nexa://chats/chat-1');
+
+      await render(<App />);
+
+      // The transcript, not the list: `/chats/chat-1/events` answers empty, so
+      // this is the conversation open with nothing said in it yet.
+      expect(await screen.findByTestId('transcript-empty')).toBeOnTheScreen();
+    });
+
+    it('loads the inbox underneath it, which is where the header gets a name', async () => {
+      mockStore.session = STORED_SESSION;
+      mockChats.value = [chat];
+      jest.spyOn(Linking, 'getInitialURL').mockResolvedValue('nexa://chats/chat-1');
+
+      await render(<App />);
+      await screen.findByTestId('transcript-empty');
+
+      // `initialRouteName` in the linking config keeps `InboxHome` on the stack
+      // under the deep-linked screen. Without it "back" would leave the app and
+      // `/chats` would never be asked — which is the only thing that knows the
+      // customer's name, since a URL cannot carry one (`inbox/title.ts`).
+      await waitFor(() =>
+        expect(
+          (globalThis.fetch as jest.Mock).mock.calls.some(([input]: [RequestInfo | URL]) =>
+            String(input).includes('/chats?'),
+          ),
+        ).toBe(true),
+      );
+    });
+
+    it('sends a late SSO callback to the sign-in screen with nothing it carried', async () => {
+      // The sheet was dismissed, or the OS killed this process while the
+      // browser was in front and relaunched it to deliver the URL. Either way
+      // the verifier is gone (`session.ts` holds it on the stack), so the code
+      // is unredeemable — say so rather than showing a blank form.
+      jest.spyOn(Linking, 'getInitialURL').mockResolvedValue(`${MOBILE_REDIRECT_URI}?code=code-1`);
+
+      await render(<App />);
+
+      expect(await screen.findByTestId('sign-in')).toBeOnTheScreen();
+      expect(screen.getByTestId('sign-in-error')).toHaveTextContent(RETURNED_FROM_BROWSER);
+    });
   });
 
   it('says why the screen is empty instead of white-screening on a bad app.json', async () => {

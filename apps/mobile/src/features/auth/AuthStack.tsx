@@ -9,8 +9,8 @@
  * It owns one piece of state, and owning it is the point. The email and
  * password that `/auth/login` accepted have to survive the hop from the form to
  * the picker, and a route param is the wrong place for them — navigation state
- * is serialised, persisted and (after `13.7-q`) addressable as a URL. Component
- * state is none of those things, and it dies with the flow.
+ * is serialised, persisted and — since `13.7-q` — addressable as a URL.
+ * Component state is none of those things, and it dies with the flow.
  */
 import { useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -33,9 +33,13 @@ export function AuthStack() {
   return (
     <Stack.Navigator screenOptions={buildStackScreenOptions(colors)}>
       <Stack.Screen name="SignIn" options={{ headerShown: false }}>
-        {({ navigation }) => (
+        {({ navigation, route }) => (
           <SignInScreen
             session={session}
+            // Set by `app/linking.ts` when a `nexa://auth/callback` landed here
+            // with no sign-in left to finish. A boolean is the whole param —
+            // the code that came with the URL is dropped, not stored.
+            returned={route.params?.returned === true}
             onChooseWorkspace={(next) => {
               setPending(next);
               navigation.navigate('WorkspacePicker');

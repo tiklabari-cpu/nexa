@@ -14,15 +14,17 @@
  * when there is only one.
  *
  * A workspace that federates sign-in is offered its own door rather than a
- * refusal (`enter.ts`). Pressing it is `13.7-q`'s wiring; until that lands the
- * session has no browser and says so, which is a sentence somebody can act on.
+ * refusal (`enter.ts`). Pressing it hands the identity provider to the device's
+ * own browser (`13.7-q`), and the three ways that ends — signed in, dismissed,
+ * a callback this app did not start — are three different sentences, because
+ * only one of them is worth trying again.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AuthButton, AuthMessage, AuthShell } from './AuthShell';
 import { continueWithSso, enterWorkspace, type SsoOffer } from './enter';
-import { signInErrorMessage } from './messages';
+import { RETURNED_FROM_BROWSER, signInErrorMessage } from './messages';
 import type { AuthSession, PendingSignIn } from './types';
 import { FONT_SIZE, RADIUS, SPACING } from '../../theme/tokens';
 import { useTheme } from '../../theme/theme';
@@ -31,6 +33,12 @@ export interface SignInScreenProps {
   session: AuthSession;
   /** More than one workspace: the stack takes it from here (`AuthStack`). */
   onChooseWorkspace: (pending: PendingSignIn) => void;
+  /**
+   * This screen was opened by an SSO callback that nothing was waiting for
+   * (`app/linking.ts`). The sign-in cannot be resumed — say so instead of
+   * showing a blank form to somebody who just finished one.
+   */
+  returned?: boolean;
 }
 
 interface FieldErrors {
@@ -38,7 +46,7 @@ interface FieldErrors {
   password?: string;
 }
 
-export function SignInScreen({ session, onChooseWorkspace }: SignInScreenProps) {
+export function SignInScreen({ session, onChooseWorkspace, returned = false }: SignInScreenProps) {
   const { colors } = useTheme();
 
   const [email, setEmail] = useState('');
@@ -52,6 +60,14 @@ export function SignInScreen({ session, onChooseWorkspace }: SignInScreenProps) 
   // like one is checked on submit, so nobody is told they typed it wrong while
   // they are still typing it.
   const ready = email.trim() !== '' && password !== '' && !busy;
+
+  // An effect rather than the initial state, because the callback can arrive
+  // while this screen is already mounted — the app was in front, the sheet had
+  // been dismissed, and the identity provider redirected anyway. That updates
+  // the route params of a screen that is not remounting.
+  useEffect(() => {
+    if (returned) setMessage(RETURNED_FROM_BROWSER);
+  }, [returned]);
 
   const submit = async (): Promise<void> => {
     const trimmed = email.trim();

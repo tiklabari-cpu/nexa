@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 
+import { RETURNED_FROM_BROWSER } from './messages';
 import { SignInScreen } from './SignInScreen';
 import type { AuthSession, PendingSignIn } from './types';
 import { SsoRequiredError, type Workspace } from '../../auth/session';
@@ -233,14 +234,17 @@ describe('SignInScreen', () => {
     });
   });
 
-  it('reports the missing browser leg honestly rather than spinning (13.7-q wires it)', async () => {
+  it('relays the session’s own sentence when the browser leg cannot run', async () => {
     const h = harness({
       listWorkspaces: jest.fn(async () => [
         workspace({ password_login_available: false, sso_enforced_connection_id: 'conn-1' }),
       ]),
       signInWithSso: jest.fn(async () => {
-        // Exactly what `MobileSession` throws today: it is constructed without
-        // an `AuthBrowser` (`app/services.tsx`), which is `13.7-q`'s piece.
+        // What `MobileSession` throws when it is constructed without an
+        // `AuthBrowser`. The app supplies one (`app/services.tsx` · 13.7-q) and
+        // `App.test.tsx` walks that path end to end; what is checked here is
+        // that this screen does not swallow the sentence into a generic
+        // "could not sign in", which is the one thing it can get wrong.
         throw new Error('No browser is available for single sign-on.');
       }),
     });
@@ -253,6 +257,23 @@ describe('SignInScreen', () => {
     expect(screen.getByTestId('sign-in-error')).toHaveTextContent(
       'No browser is available for single sign-on.',
     );
+  });
+
+  it('says the round trip is over when a late callback opened this screen', async () => {
+    const h = harness();
+    const tree = (
+      <ThemeProvider>
+        <SignInScreen session={h.session} onChooseWorkspace={() => {}} returned />
+      </ThemeProvider>
+    );
+    await render(tree);
+    await act(async () => {});
+
+    // `app/linking.ts` routes `nexa://auth/callback` here when nothing is
+    // waiting for it. The form is usable — starting over is the only way
+    // forward — but it does not pretend nothing happened.
+    expect(screen.getByTestId('sign-in-error')).toHaveTextContent(RETURNED_FROM_BROWSER);
+    expect(screen.getByTestId('sign-in-submit')).toBeOnTheScreen();
   });
 
   it('says so when a workspace has no app registration to sign in against', async () => {

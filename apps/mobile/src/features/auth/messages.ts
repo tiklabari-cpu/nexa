@@ -33,6 +33,17 @@ export const SSO_REQUIRED =
 export const NO_CLIENT =
   'This workspace has no app registration yet. Sign in from the web console instead.';
 
+/**
+ * A callback that arrived when nothing was waiting for it (13.7-q).
+ *
+ * Says what happened rather than what to blame, because nothing went wrong:
+ * the browser finished, this process had already let go of the verifier, and
+ * the only way forward is to start again. `app/linking.ts` explains why the
+ * code that came with it is not kept.
+ */
+export const RETURNED_FROM_BROWSER =
+  'That sign-in finished in your browser, but this app had stopped waiting. Sign in again.';
+
 export function signInErrorMessage(error: unknown): string {
   if (error instanceof ApiClientError) {
     switch (error.type) {

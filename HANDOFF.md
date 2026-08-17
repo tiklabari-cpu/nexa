@@ -13,6 +13,32 @@
 
 ## Task log (newest-first)
 
+## DÜZELTME · 13.7 — çelişki denetimi (2. tur): modül paritesi borcu ÖDENDİ, `◐` yalnız mağaza payıyla kaldı — done — 2026-08-17 UTC
+
+- **Yapıldı:** Panelin bulgusu bir öncekiyle aynı desendi (`PLAN.md:571` = `◐`, ama bu PRD'yi kapsayan
+  tm görevlerinin tamamı kapalı: 90 + 90.1–90.11 + 125 + 126 + **127 + 127.1–127.3**, açık görev yok).
+  §D108 bir tur önce bunu "borç görevleşmemiş" diye çözüp tm 127'yi açmıştı; bu tur onun üç alt-görevi
+  koda karşı okundu. PRD KK'sının (`urun-gereksinim-dokumani-PRD.md:719`) üç payı: (1) dört yüzey ✅
+  (`app/stacks/{Inbox,Customers,Reports}Stack.tsx` + `RootNavigator.tsx:25-28`), (2) push ✅
+  (`apps/api/src/routes/notifications.ts:105,144,219` + `apps/mobile/src/auth/{push-tokens,device-token-transport}.ts`),
+  (3) **tam modül paritesi ✅ — bu turda kapandı**: `features/{team,playbook,billing}` diskte ve
+  `app/stacks/SettingsStack.tsx:50-62,68-119`'da monteli. `parity.test.ts:565-588`
+  `modulesPaidOff: 3 · modulesOutOfScope: 1 · openDebts: 1`.
+- **Karar:** damga **DEĞİŞMEDİ** (`◐ → K13.7`) ve **yeni görev AÇILMADI.** Kalan tek borç mağaza payıdır
+  (`.ipa`/`.apk` + store yüklemesi) — bu bir eksik iş değil **CLAUDE.md sınırıdır** ("production deploy
+  YOK"); görev açmak sınır ihlali, `✅` yazmak ise yeşil bir testin (`parity.test.ts:305-307` `OPEN_DEBTS`,
+  `:553-563` `eas`/`prebuild`/`run:*` yokluğu) tersini PLAN'a yazmak olurdu.
+- **Doğrulama:** mobil süit **389/389 · 33 dosya · exit 0** (`apps/mobile` `pnpm test`) ·
+  `npx prettier --check PLAN.md` temiz. **Ürün kodu değişmedi** (yalnız PLAN.md + HANDOFF.md), bu yüzden
+  tam DoD kapısı yeniden koşulmadı — son tam koşu tm 126 (§D105, 5331 test).
+- **Varsayımlar:** "tam modül paritesi" = **ekran paritesi** (§C-A28 · §D96); Settings'in idari payı
+  (`/brands`, `/webhooks`, `/settings/`, PAT) bilerek mobil kapsam dışıdır ve `OUT_OF_SCOPE`'un tek maddesidir.
+- **Sonraki pencereye not:** `13.7` satırı **kalıcı olarak `◐`dir** — kapanabilir borcu kalmadı, kalan pay
+  CLAUDE.md sınırıdır. Çelişki taraması bu satırı yeniden işaretlerse (◐ + kapalı görevler + açık görev yok)
+  cevap §K K13.7'nin son maddesi ve §D109'dur; **görev açma, damgayı çevirme.** §6 kırılım satırının bayat
+  "Billing/Playbook/Team yok" cümlesi de bu turda düzeltildi.
+
+
 ## 127.3 — 13.7-o: mobil Billing yüzeyi (abonelik/plan + dönem kullanımı + entitlement listesi + fatura satırları, salt-okunur; kart/ödeme YOK) — done — 2026-08-17 UTC
 
 - **Yapıldı:** tm 127'nin üç alt-görevinden üçüncüsü ve sonuncusu — §D96'nın modül paritesi borcunun

@@ -159,7 +159,7 @@ describe('SignInScreen', () => {
       email: 'agent@acme.test',
       password: 'hunter2',
       licenseId: 'lic-1',
-      // From the membership row, never a constant in `app.json` (13.7-b).
+      // From the membership row, never a constant in `app.config.ts` (13.7-b).
       clientId: 'client-acme',
     });
     expect(h.chosen).toEqual([]);

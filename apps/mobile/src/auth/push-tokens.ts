@@ -12,7 +12,7 @@
  *
  * **The native token, not an Expo one.** `getExpoPushTokenAsync` would mint a
  * token through Expo's own push service, which needs an EAS project id in
- * `app.json` and a live request to a third party this project has neither an
+ * `app.config.ts` and a live request to a third party this project has neither an
  * account with nor permission to reach (CLAUDE.md: no real secrets, external
  * services are mocked). `getDevicePushTokenAsync` asks the operating system for
  * the APNs/FCM address instead — which is what `13.7-c`'s `token` field is
@@ -51,7 +51,7 @@ export type PushPermissionReader = () => Promise<PushPermission>;
  * Which of `13.7-c`'s two platforms this build is running on, or `null` where
  * the answer is neither.
  *
- * `app.json` declares `["ios", "android"]`, so `null` is unreachable on a real
+ * `app.config.ts` declares `["ios", "android"]`, so `null` is unreachable on a real
  * handset. It is still returned rather than assumed: the alternative is posting
  * a `platform` the endpoint's enum rejects, and a registration that 400s on
  * every launch is a phone that silently never receives anything.

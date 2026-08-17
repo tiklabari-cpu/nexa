@@ -5,9 +5,11 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
     "build": "expo export --platform ios --platform android --output-dir dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint index.ts src",
+    "lint": "eslint index.ts app.config.ts src",
     "test": "jest --ci",
     "test:unit": "jest --ci"
   },

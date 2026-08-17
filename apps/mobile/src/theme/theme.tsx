@@ -4,7 +4,7 @@
  *
  * Unlike the web app (`apps/web/src/lib/theme.ts`), which pins `dark` as a
  * fixed default because its whole `apps/e2e/kanit/` evidence set was captured
- * in that theme, mobile carries no such screenshot set and `app.json` already
+ * in that theme, mobile carries no such screenshot set and `app.config.ts` already
  * declares `userInterfaceStyle: "automatic"` — so the OS preference (RN's
  * `useColorScheme`) is the honest default here, not a fixed override. A screen
  * can still force one explicitly (Settings → Appearance, `13.7-j`), which is

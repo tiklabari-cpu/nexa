@@ -37,7 +37,7 @@ export async function enterWorkspace(
   workspace: Workspace,
 ): Promise<EnterResult> {
   // `13.7-b`: the workspace's OAuth client comes from the membership row, never
-  // from a constant in `app.json` — a workspace created through signup has no
+  // from a constant in `app.config.ts` — a workspace created through signup has no
   // client any guess would match.
   const clientId = workspace.client_id ?? null;
 

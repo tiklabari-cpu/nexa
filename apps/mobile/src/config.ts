@@ -3,8 +3,8 @@
  *
  * A phone has no origin to fall back on: unlike the web app, which can send
  * `/api/v1` at whatever host served it, every request here needs an absolute
- * URL. So the two endpoints are declared in `app.json` under `expo.extra` and
- * read back through `expo-constants` — the one channel that survives both
+ * URL. So the two endpoints are declared in `app.config.ts` under `expo.extra`
+ * and read back through `expo-constants` — the one channel that survives both
  * `expo start` and an exported bundle. A missing or malformed value is a build
  * mistake, not a runtime condition to degrade around, so it throws.
  */
@@ -28,7 +28,7 @@ export class MobileConfigError extends Error {
 }
 
 /**
- * Report every broken key at once. Fixing `app.json` one thrown error per
+ * Report every broken key at once. Fixing `app.config.ts` one thrown error per
  * rebuild is a slow way to learn that two values were wrong.
  */
 export function readMobileConfig(extra: unknown = Constants.expoConfig?.extra): MobileConfig {

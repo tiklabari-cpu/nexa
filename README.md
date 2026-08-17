@@ -135,6 +135,17 @@ fully compromised widget document cannot reach the host page's storage or cookie
 
 ---
 
+## Mobile app
+
+`apps/mobile` is the agent phone app (Expo / React Native) — Inbox, Customers,
+Reports, AI/Copilot and Settings, plus push. It talks to the same API and RTM
+`make dev` already started; run it with `pnpm --filter @nexa/mobile start` in a
+separate terminal. See [apps/mobile/README.md](apps/mobile/README.md) for
+prerequisites, emulator/device networking (`localhost` doesn't mean the same
+thing on an Android emulator or a physical phone), and demo login credentials.
+
+---
+
 ## Development
 
 ```bash

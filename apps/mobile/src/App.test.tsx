@@ -433,7 +433,7 @@ describe('App', () => {
   });
 
   /**
-   * `nexa://` URLs, end to end: the prefix `app.json` registers, stripped by
+   * `nexa://` URLs, end to end: the prefix `app.config.ts` registers, stripped by
    * React Navigation and matched against the map in `app/linking.ts`. That map
    * is parsed on its own in `linking.test.ts`; what is proved here is that the
    * container is actually given it.
@@ -680,7 +680,7 @@ describe('App', () => {
     });
   });
 
-  it('says why the screen is empty instead of white-screening on a bad app.json', async () => {
+  it('says why the screen is empty instead of white-screening on a bad app.config.ts', async () => {
     mockExtra.value = { apiBaseUrl: 'nope', rtmBaseUrl: 'wss://rtm.nexa.test' };
 
     await render(<App />);

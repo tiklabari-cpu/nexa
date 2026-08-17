@@ -18,7 +18,7 @@ export default function App() {
     try {
       return { ok: true as const, value: readMobileConfig() };
     } catch (error) {
-      // A misconfigured `app.json` is the single most likely reason a fresh
+      // A misconfigured `app.config.ts` is the single most likely reason a fresh
       // checkout shows a blank app. Say so on screen instead of white-screening.
       if (error instanceof MobileConfigError) return { ok: false as const, error };
       throw error;

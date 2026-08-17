@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 128.5 — 13.7-t: Çalıştırılabilirlik — app.config.ts (env ile API/RTM tabanı, port 4000) + apps/mobile/README.md + kök README mobil bölümü + start scriptleri — done — 2026-08-18 UTC
+
+- **Yapıldı:** (1) `app.json` → `app.config.ts` (Expo config-as-code): `extra.apiBaseUrl`/`rtmBaseUrl` artık `NEXA_API_BASE_URL`/`NEXA_RTM_BASE_URL` ile ezilebilir, varsayılan port 3000/3001 → **4000/4001** (kök README tablosuyla hizalı). (2) Yeni `apps/mobile/README.md`: önkoşullar, emülatör/simülatör/fiziksel cihaz `localhost` farkı + LAN IP örneği, seed giriş bilgileri, neden `dev` script'i yok. (3) Kök `README.md`'ye "Mobile app" bölümü; `package.json`'a `android`/`ios` script'leri; `tsconfig.json`/`lint` `app.config.ts`'i kapsayacak şekilde genişledi.
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 · `pnpm -w format:check` · `pnpm -w test` (api 3251 + mobil **467/467**, 465→467: +2 `config.test.ts`) · `pnpm -w test:integration` **90/90 dosya · 2374/2374** · `pnpm -w build` 8/8. `pnpm -w test:e2e` KOŞULMADI (128.1-128.4 ile aynı gerekçe — apps/mobile Playwright'a girmiyor). Ölçülebilir KK: `grep -rn 3000 apps/mobile/{app.config.ts,src}` = 0.
+- **Varsayımlar:** Bu görev pencere açıldığında zaten kod olarak tamamlanmıştı (önceki pencere kapanışı yapmadan bitmiş, `git status` kirliydi, TM `in-progress`) — bu tur yalnız DoD kapısını doğruladı ve kapanışı (PLAN/HANDOFF/commit/push/TM done) tamamladı.
+- **Sonraki pencereye not:** `13.7` satırı `◐` KALDI (`PLAN.md:572`) — 13.7-w çevirir. Kalan alt-görevler: 13.7-u (ikon/splash), 13.7-v (ErrorBoundary + RTM retry), 13.7-w (uçtan uca soğuk açılış testi + parite).
+
 ## 128.4 — 13.7-s: Push alımı — ön planda gösterim + dokununca ilgili sohbet (soğuk açılış dahil) — done — 2026-08-18 UTC
 
 - **Yapıldı:** (1) Yük tipi `@nexa/types`'a çıktı (`push.ts`: `PUSH_EVENT_KINDS` · `PushPayload` ·

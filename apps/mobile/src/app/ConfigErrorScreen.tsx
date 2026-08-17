@@ -2,7 +2,7 @@
  * What renders instead of the navigator when `readMobileConfig` throws.
  *
  * Carried over from the `13.7-a` boot screen (`App.tsx` used to render this
- * inline) rather than dropped: a misconfigured `app.json` is still the single
+ * inline) rather than dropped: a misconfigured `app.config.ts` is still the single
  * most likely reason a fresh checkout shows a blank app, and the navigator
  * below needs a valid config anyway once its screens start calling the API.
  */

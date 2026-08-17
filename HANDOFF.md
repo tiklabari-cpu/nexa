@@ -12,6 +12,47 @@
 ---
 
 ## Task log (newest-first)
+## FAZ-4 AÇILIŞI (§F.3) · 13.7 dördüncü denetim (`✅` → `◐`, giriş yolu yok) · proje geneli kod denetimi · tm 128–143 açıldı — done — 2026-08-17 UTC
+
+- **Tetik:** panelin `suspicious-done` bulgusu (`PLAN.md:571` `✅` ama K13.7 "eksiklik anlatıyor") + kullanıcının
+  isteği: _"projenin son kısımlarında biraz kontrolsüz ilerlemiş olabiliriz … tamamen çalışır ve bir bütün içinde
+  hazır … nanotasklara böl … her task kendi başına çalışabilsin"_.
+- **13.7 (§D111):** bulgu bir yanıyla yalancıydı (K13.7'nin ilk maddeleri 2026-08-16'nın "Kalan (10/11) … Satır bu
+  yüzden ◐" kaydıydı; §D94'ün geçmiş-kip kuralı bloğa hiç uygulanmamıştı → 19 ifade çevrildi + bloğun başına GÜNCEL
+  DURUM kutusu), bir yanıyla doğruydu: koda karşı **bir insan bu uygulamaya giremiyor** — `RootNavigator.tsx:24-29`
+  oturuma bakmıyor; `session.ts` `signIn/signInWithSso/signOut` üretimde 0 çağıran; `browser.ts:21 systemBrowser`
+  bağlanmamış; `app.json:14` API portu **3000** (gerçek 4000); `linking`/bildirim tıklaması/ErrorBoundary/assets/
+  README yok. 13.7-f (tm 90.6) bu borcu 2026-08-16'da yazmıştı, 13.7-k kapsamadı, üç denetim KK metnini ölçtü.
+  **Damga `✅ → ◐`** (satır 571 · §1 Faz-3 sayacı `5 ✅ + 1 ◐` · §2 · §6 · §6.2 · §F.00) — Should, Faz-3 kapanış
+  kararı değişmez. Borç kuyrukta: **tm 128** (`high`, 8 alt-görev `13.7-p…w`).
+- **Kapı (§D112, bu makinede, hepsi fiilen koşuldu):** typecheck 12/12 · lint 9/9 · format:check · build 8/8 ·
+  db:check-drift · codegen diff temiz · integration api 90 dosya + rtm 60 → exit 0; **`pnpm -w test` exit 1** —
+  mobil jest yük altında 4 kırmızı (5000 ms timeout + RNTL "attached view"), tek başına **389/389 · 24.6 s** →
+  kapı deterministik değil → **tm 129** (`high`).
+- **Proje geneli kod denetimi (§D113, 17 bulgu):** hiçbir sweep kendiliğinden koşmuyor (5 CLI script; `index.ts`
+  başlatmıyor) → tm 130 · env paritesi (13 + 19 eksik anahtar; 2 secret turbo'da yok) + `*_PROVIDER` okunmuyor +
+  Stripe/Storage/SIEM dikişsiz + RTM health PG'siz → tm 131 · CI drift yok / README yanlış-eksik / CONVENTIONS DoD
+  listesi CI'dan dar / `.playwright-mcp` 14 döküm izli / `.audit-tm126` kalıcı değil / playbook+health testsiz →
+  tm 132 · i18n panel gövdeleri 78 dosyadan 2 (`I18N1/2` `✅→◐`) → tm 133 · widget `rate()`/`close()` çağıransız,
+  post-chat form yok, Reports CSAT boş → tm 134 · Messenger/WhatsApp/SMS kartları "coming soon" (adaptörler var) →
+  tm 135 · 4 istemcisiz uç (GL-9 bulgusu) → tm 136 · axe 13 rota ölçülmemiş (`A11Y1–6` `✅→◐`) → tm 137 ·
+  Reports/Billing ince test → tm 138 · PRD 🔒 8 satır → tm 139 · konteyner yok → tm 140 (yerel, deploy değil) ·
+  seed'de campaigns/tickets/SLA/goals/rapor/webhook/ratings yok → tm 141 · toplu güvenlik denetimi hiç yapılmadı →
+  tm 142 (salt-okuma) · kapanış → tm 143 (GL-10).
+- **Değişen dosyalar:** `PLAN.md` (§1 üst tablo Faz-4 satırı + Faz-3 sayacı · başlık damgası · §2:144 · §4.3:571 ·
+  §6:2138 · §6.2 dilim 5 · **§6A yeni (kırılım + dilimler)** · §7.2 (I18N/A11Y `◐` + 8 türetilmiş satır) · §G Faz-4
+  düz tablo (65 satır, Task Master'dan üretildi) · §D111–§D113 · §F.00 iki paragraf · §F.3 "uygulandı" · §K: K13.7
+  kutu + 19 çeviri + yeni ◐ maddesi, KI18N1-2/KA11Y ◐ maddeleri, 8 yeni K bloğu) · `.taskmaster/tasks/tasks.json`
+  (**tm 128–143: 16 görev · 62 alt-görev**, her details'te sıfır-bağlamlı BAĞLAM kutusu + bulgu dosya:satır + kapsam
+  + tuzaklar + KK + testStrategy + PLAN kapanış talimatı; priority high/medium/low, `critical` yok) · `HANDOFF.md`.
+  **Ürün kodu YAZILMADI** (CONVENTIONS §5).
+- **Sonraki pencereye not:** kuyruk dolu — `pick_next` adım 3 → **tm 128.1 (`13.7-p`)**. tm 129 yeşilleşene kadar
+  `pnpm -w test`'in mobil kırmızısı **§D112'de kayıtlı bilinen kusurdur** (CONVENTIONS §1.1 "kayıtlı kusur" dalı):
+  alt-görev kendi süitini tek başına yeşil kanıtlar ve HANDOFF'a yazar. Faz-4 kapanana kadar `13.7`/`I18N1/2`/
+  `A11Y1–6` `◐`dir ve üçünün de açık görevi VAR — panelin "◐ + açık görev yok" taraması bu turdan sonra yalancı.
+  Kullanıcı kararı gerektirenler (bu depodan cevaplanamaz, değişmedi): PRD §11.2 Q1/Q2/Q5-TR/Q8/Q9/Q12; mağaza
+  yayını `⛔-süreç`.
+
 ## DÜZELTME · 13.7 — çelişki denetimi (3. tur): damga `◐` → `✅`, mağaza payı `⛔-süreç` olarak sınıflandı — done — 2026-08-17 UTC
 
 - **Yapıldı:** Panel aynı bulguyu **üçüncü kez** açtı (`PLAN.md:571` = `◐`, ama bu PRD'yi kapsayan

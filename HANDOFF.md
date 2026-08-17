@@ -12,6 +12,41 @@
 ---
 
 ## Task log (newest-first)
+## DÜZELTME · 13.7 — çelişki denetimi (3. tur): damga `◐` → `✅`, mağaza payı `⛔-süreç` olarak sınıflandı — done — 2026-08-17 UTC
+
+- **Yapıldı:** Panel aynı bulguyu **üçüncü kez** açtı (`PLAN.md:571` = `◐`, ama bu PRD'yi kapsayan
+  tm görevlerinin tamamı kapalı: 90 + 90.1–90.11 + 125 + 126 + 127 + 127.1–127.3, açık görev yok).
+  İlk iki tur (§D108 · §D109) damganın **dayanağını** denetleyip korumuştu; bu tur **damganın
+  kendisi** denetlendi. PRD KK'sı (`urun-gereksinim-dokumani-PRD.md:719`) koda karşı yeniden ölçüldü,
+  **üç payın üçü de tam**: dört yüzey (`apps/mobile/src/app/RootNavigator.tsx:25-28` ·
+  `stacks/InboxStack.tsx:11,61-63` Copilot · `CustomersStack.tsx:6-7,18-25` · `ReportsStack.tsx:16`),
+  push (`apps/api/src/routes/notifications.ts:105,144,219` + `apps/mobile/src/app/services.tsx:83-91`),
+  tam modül paritesi (`apps/mobile/src/features/{team,playbook,billing}` →
+  `stacks/SettingsStack.tsx:67-119`, `src/__tests__/parity.test.ts:184-222`).
+- **Karar:** damga **`◐` → `✅ → K13.7`.** `◐`yi ayakta tutan tek şey KK'da **geçmeyen** bir paydı:
+  mağaza yüklemesi (`.ipa`/`.apk`). Bu depoda o payın adı `◐` değil **`⛔-süreç`**tir — §D97 tam bu
+  sınıf için yazılmıştır (`C6` SOC 2 · `C4` HIPAA: takvimi dışsal, bu depodan üretilemez, görevleşmez,
+  kalem `✅` damgalanır ve "`✅` yalnız kod payını iddia eder" notu düşülür). İkinci emsal `10.3`
+  (PLAN:565 `✅`): gerçek kart girişi CLAUDE.md/ADR-13 gereği imkânsız, kodun kendi başlığı bunu söylüyor
+  (`apps/api/src/services/billing/payment-method-service.ts:1-9`), satır yine `✅`. `13.7` bu kuralın
+  PLAN'daki **tek istisnasıydı** ve bedeli üç denetim turuydu. Gerekçe `PLAN.md` §D110.
+- **Yeni görev AÇILMADI** — mağaza adımı CLAUDE.md sınırıdır ("production deploy YOK"); §D108'in
+  "görevleşmedi ve görevleşmeyecek" kararı **korunur**. Task Master'da değişiklik yok (tm 127 zaten done).
+- **Değişen dosyalar:** `PLAN.md` (satır 571 · §1 faz tablosu sayacı `6 ✅ + 0 ◐` · §2 matrisi 144 ·
+  §6 kapsam tablosu 2138 · §6.1 gerekçe bloğu · §6.2 V3 dilim tablosu · §F.00'ın `13.7` paragrafı ·
+  GL-9 kapanış kaydına tarihî güncelleme notu · §K K13.7'ye yeni madde · §D110) ·
+  `apps/mobile/src/__tests__/parity.test.ts` (`OPEN_DEBTS` → **`SCOPE_BOUNDARIES`**, `openDebts` →
+  `scopeBoundaries`) · `HANDOFF.md`. **Ürün kodu YAZILMADI** (CONVENTIONS §5).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` **12/12** · `pnpm -w lint` **9/9** ·
+  `pnpm -w format:check` temiz · `pnpm -w test` (mobil süit **389/389 · 33 dosya**) · `pnpm -w build`.
+  **Koşulmadı:** `test:integration` + `test:e2e` — bu tur sözleşme/şema/sunucu/web'e dokunmadı,
+  değişen tek kod dosyası mobil bir test sabitinin adıdır (mobil Playwright'a girmez).
+- **Sonraki pencereye not:** `13.7` artık `✅`; mağaza payı `parity.test.ts`'te `SCOPE_BOUNDARIES`
+  olarak **hâlâ teste yazılı** (`eas`/`prebuild`/`run:*` script'inin yokluğu) — biri native build
+  adımı eklerse test kırmızıya döner ve bu matris + PLAN satırı yeniden okunmak zorunda kalır.
+  Kural olarak: bir kalemin KK'sının ölçmediği sınır payları damgada değil, sınıflandırmada
+  (`⛔`/`⛔-süreç`) yaşar — yoksa çelişki taraması o satırı sonsuza kadar bulgu olarak açar.
+
 
 ## DÜZELTME · 13.7 — çelişki denetimi (2. tur): modül paritesi borcu ÖDENDİ, `◐` yalnız mağaza payıyla kaldı — done — 2026-08-17 UTC
 

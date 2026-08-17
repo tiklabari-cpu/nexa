@@ -296,14 +296,20 @@ const FORBIDDEN_ENDPOINTS: readonly { path: string; why: string }[] = [
 ];
 
 /**
- * What is still owed after every subtask is green — §D96's honesty record.
+ * What FR-MOD-13.7 does *not* claim, because this repository cannot produce it —
+ * §D96's honesty record, reclassified by §D110.
  *
- * These are assertions about the *current* state, so each of them fails the day
- * the debt is paid. That is the intent: paying it must come with revisiting this
- * matrix and the `13.7` row in `PLAN.md`, not with a quiet green suite.
+ * This was `OPEN_DEBTS` until the last of the closeable ones was paid (§D109).
+ * What is left is not owed work: store publishing needs an Apple/Google developer
+ * account, a native toolchain and a review queue, all of them outside CLAUDE.md's
+ * "no production deploy" line and none of them schedulable here. §D97 already named
+ * that class for SOC 2 / HIPAA certification — `⛔-süreç`: it is not turned into a
+ * task, it does not count against the item, and the `✅` claims the code share only.
+ * Kept as an assertion rather than a comment so that the day someone *does* add a
+ * native build step, this matrix and the `13.7` row in `PLAN.md` are re-read.
  */
-const OPEN_DEBTS = [
-  'store publishing: the gate builds a JS bundle (`expo export`); no .ipa/.apk, no store submission (§D96)',
+const SCOPE_BOUNDARIES = [
+  'store publishing: the gate builds a JS bundle (`expo export`); no .ipa/.apk, no store submission (§D96 · ⛔-süreç per §D97/§D110)',
 ] as const;
 
 // --- The four surfaces ------------------------------------------------------
@@ -507,7 +513,7 @@ describe('module parity matrix — the modules §C-A28 puts out of scope', () =>
   });
 });
 
-// --- The debt this matrix refuses to hide -----------------------------------
+// --- What this matrix refuses to hide: paid debts, and the one boundary -----
 
 describe('module parity matrix — what is still owed', () => {
   it('registers the handset itself — the debt 13.7-k recorded, paid (13.7-l)', () => {
@@ -550,13 +556,14 @@ describe('module parity matrix — what is still owed', () => {
     expect(settingsScreen).toContain('useDevicePushPermission');
   });
 
-  it('builds a JS bundle, not a store artifact (§D96)', () => {
+  it('builds a JS bundle, not a store artifact (§D96 · ⛔-süreç)', () => {
     const manifest = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as {
       scripts: Record<string, string>;
     };
     expect(manifest.scripts['build']).toContain('expo export');
-    // The narrowing that makes the `13.7` requirement row `◐` rather than `✅`:
-    // no native toolchain step, so no `.ipa`/`.apk` and no submission.
+    // The boundary the `13.7` row names rather than carries: no native toolchain
+    // step, so no `.ipa`/`.apk` and no submission. The row is `✅` for its PRD
+    // acceptance criterion and this share is `⛔-süreç` (§D97's rule, §D110).
     expect(Object.values(manifest.scripts).join(' ')).not.toMatch(
       /eas |prebuild|run:ios|run:android/,
     );
@@ -569,7 +576,7 @@ describe('module parity matrix — what is still owed', () => {
       modulesOutOfScope: OUT_OF_SCOPE.length,
       endpointsCalled: REQUESTED.size,
       contractEndpoints: CONTRACT_PATHS.length,
-      openDebts: OPEN_DEBTS.length,
+      scopeBoundaries: SCOPE_BOUNDARIES.length,
     }).toEqual({
       surfacesCovered: 4,
       // The debt §D96 recorded pays down here one subtask at a time: Team
@@ -582,7 +589,7 @@ describe('module parity matrix — what is still owed', () => {
       // the number moving is a prompt to re-read this matrix rather than a failure.
       endpointsCalled: 26,
       contractEndpoints: 183,
-      openDebts: 1,
+      scopeBoundaries: 1,
     });
   });
 });

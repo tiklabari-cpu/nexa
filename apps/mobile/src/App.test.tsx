@@ -14,17 +14,46 @@ const tabButton = (label: string) => screen.getByLabelText(new RegExp(`^${label}
 
 /**
  * The shell now builds a session and an API client from the config (13.7-f), so
- * this suite has to stand in for both ends of that: the protected store, which
- * answers "no session" here, and the network, which answers with an empty inbox
- * rather than reaching for a real one.
+ * this suite has to stand in for both ends of that: the protected store, and the
+ * network, which answers with an empty inbox rather than reaching for a real one.
+ *
+ * What the store answers is the whole subject of half this file since `13.7-p`:
+ * `RootNavigator` branches on the session, so "is there a refresh token here?"
+ * now decides which tree renders. `mockStore.session` is that answer, and
+ * `mockStore.hang` is the third case — a read still in flight, which is what a
+ * cold launch actually looks like for a second or two.
  */
+const mockStore: { session: string | null; hang: boolean } = { session: null, hang: false };
 jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(async () => null),
+  getItemAsync: jest.fn(async (key: string) => {
+    if (key !== 'nexa.session') return null;
+    if (mockStore.hang) return new Promise<string | null>(() => {});
+    return mockStore.session;
+  }),
   setItemAsync: jest.fn(async () => undefined),
   deleteItemAsync: jest.fn(async () => undefined),
   isAvailableAsync: jest.fn(async () => true),
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 4,
 }));
+
+/** A refresh token in the protected store — what a returning launch finds. */
+const STORED_SESSION = JSON.stringify({
+  refreshToken: 'refresh-1',
+  clientId: 'client-acme',
+  licenseId: '4',
+  accountId: 'acc-1',
+});
+
+/** What `/auth/me` answers once that token has been rotated for an access token. */
+const PRINCIPAL = {
+  account_id: 'acc-1',
+  email: 'owner@acme.localhost',
+  name: 'Ada Owner',
+  role: 'owner',
+  organization_id: 'org-1',
+  license_id: '4',
+  scopes: ['chats--all:ro', 'chats--all:rw'],
+};
 
 /** Stands in for the manifest Expo injects; jest-expo leaves `extra` unset. */
 const mockExtra: { value: unknown } = { value: undefined };
@@ -100,17 +129,28 @@ const DEFAULT_NOTIFICATION_PREFERENCES = {
 
 describe('App', () => {
   beforeEach(() => {
+    mockStore.session = null;
+    mockStore.hang = false;
     mockExtra.value = {
       apiBaseUrl: 'https://api.nexa.test/api/v1',
       rtmBaseUrl: 'wss://rtm.nexa.test',
     };
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
-      const body = url.includes('/reports/overview')
-        ? EMPTY_REPORTS_OVERVIEW
-        : url.includes('/agents/me/notification-preferences')
-          ? DEFAULT_NOTIFICATION_PREFERENCES
-          : { items: [] };
+      const body = url.includes('/auth/token')
+        ? {
+            access_token: 'access-1',
+            refresh_token: 'refresh-2',
+            license_id: '4',
+            account_id: 'acc-1',
+          }
+        : url.includes('/auth/me')
+          ? PRINCIPAL
+          : url.includes('/reports/overview')
+            ? EMPTY_REPORTS_OVERVIEW
+            : url.includes('/agents/me/notification-preferences')
+              ? DEFAULT_NOTIFICATION_PREFERENCES
+              : { items: [] };
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -118,7 +158,33 @@ describe('App', () => {
     }) as unknown as typeof fetch;
   });
 
+  it('says nothing yet while the session is still being restored', async () => {
+    // The launch gap `13.7-p` gave a screen: neither a password box nor an
+    // inbox is true here, and before this branch existed the inbox was shown
+    // anyway — then failed its first request with a 401 (§D111).
+    mockStore.hang = true;
+
+    await render(<App />);
+
+    expect(screen.getByTestId('session-loading')).toBeOnTheScreen();
+    expect(screen.queryByTestId('sign-in')).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText(/^Inbox, tab,/)).not.toBeOnTheScreen();
+  });
+
+  it('opens the sign-in screen, not the inbox, when there is no session', async () => {
+    await render(<App />);
+
+    expect(await screen.findByTestId('sign-in')).toBeOnTheScreen();
+    // The four tabs are not merely hidden — the navigator that owns them is not
+    // mounted, so there is nowhere for a signed-out person to navigate to.
+    for (const label of ROOT_TABS) {
+      expect(screen.queryByLabelText(new RegExp(`^${label}, tab,`))).not.toBeOnTheScreen();
+    }
+  });
+
   it('mounts the shell and shows Inbox — the tab the navigator opens on', async () => {
+    mockStore.session = STORED_SESSION;
+
     await render(<App />);
 
     // The real conversation list, not a placeholder: 13.7-f replaced it.
@@ -126,14 +192,19 @@ describe('App', () => {
   });
 
   it('names all four FR-MOD-13.7 surfaces on the tab bar', async () => {
+    mockStore.session = STORED_SESSION;
+
     await render(<App />);
 
+    await screen.findByTestId('chat-list');
     for (const label of ROOT_TABS) {
       expect(tabButton(label)).toBeOnTheScreen();
     }
   });
 
   it('switches screens when a tab is pressed, each showing its own placeholder', async () => {
+    mockStore.session = STORED_SESSION;
+
     await render(<App />);
 
     await screen.findByTestId('chat-list');

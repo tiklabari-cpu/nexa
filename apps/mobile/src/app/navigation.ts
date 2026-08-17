@@ -12,6 +12,21 @@ import type { Agent } from '../features/team/types';
 export const ROOT_TABS = ['Inbox', 'Customers', 'Reports', 'Settings'] as const;
 export type RootTabName = (typeof ROOT_TABS)[number];
 
+/**
+ * The signed-out tree (13.7-p). Mounted instead of the tabs, never beside them.
+ *
+ * `WorkspacePicker` takes no params, and that absence is deliberate rather than
+ * incidental: the step needs the credentials `/auth/login` just accepted, and
+ * navigation state is serialised, persisted across restarts and — once `13.7-q`
+ * adds `linking` — reachable as a URL. `AuthStack` carries them in component
+ * state and hands them down as a prop, so no credential is ever named in this
+ * file.
+ */
+export type AuthStackParamList = {
+  SignIn: undefined;
+  WorkspacePicker: undefined;
+};
+
 export type RootTabParamList = {
   Inbox: undefined;
   Customers: undefined;

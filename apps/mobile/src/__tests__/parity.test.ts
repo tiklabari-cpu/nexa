@@ -484,11 +484,20 @@ describe('module parity matrix — the modules §C-A28 puts out of scope', () =>
     // surface the criterion names by hand; `team`, `playbook` and `billing`
     // are the module-parity debt paid off so far (13.7-m, 13.7-n, 13.7-o) —
     // all four live in the Settings tab, none of them is a `MATRIX` surface.
+    //
+    // `auth` is not a surface either, and not a module: it is the way in
+    // (13.7-p). It is reached through no tab, because it is what renders
+    // *instead of* the tabs while the session is signed out, and it calls
+    // nothing of its own — every request it causes goes through
+    // `MobileSession`, which is why `/auth/login` and `/auth/authorize` are
+    // already classified under `SUPPORTING` above rather than appearing here.
+    // `13.7-w` gives it a row of its own once sign-out and the SSO leg land.
     expect(shipped).toEqual(
       [
         ...MATRIX.map((surface) => surface.feature),
         ...PARITY_MODULES.map((module_) => module_.feature),
         'notifications',
+        'auth',
       ].sort(),
     );
   });

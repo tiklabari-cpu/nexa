@@ -12,6 +12,33 @@
 ---
 
 ## Task log (newest-first)
+## 128.1 — 13.7-p: mobil oturum kapısı + giriş ekranı (RootNavigator dallanır, e-posta/parola → workspace → PKCE) — done — 2026-08-17 UTC
+
+- **Yapıldı:** `RootNavigator` artık `useSessionState()`'e bakıyor — `unknown` → `LoadingScreen`
+  (NavigationContainer'ın dışında), `signed-out` → yeni `AuthStack`, `signed-in` → değişmeyen dört sekme;
+  iki ağaç hiç bir arada durmuyor. Yeni `apps/mobile/src/features/auth/`: `SignInScreen`
+  (`listWorkspaces` → tek üyelikte `signIn`, çok üyelikte picker), `WorkspacePickerScreen`, `LoadingScreen`,
+  `AuthStack`, `AuthShell` + `enter.ts` (SSO zorunlu workspace'te parola HİÇ harcanmaz) + `messages.ts`
+  (ADR-06 `type`'ından cümle; sunucu metni ekrana çıkmaz). `client_id` üyelik satırından, `app.json`'a
+  sabit yazılmadı. Parola navigasyon param'ında DEĞİL — `AuthStack`'in bileşen state'inde
+  (`grep -c password src/app/navigation.ts` → 0). `App.test.tsx` üç dalı kuruyor; `parity.test.ts`'in
+  "hesapsız feature modülü yok" iddiası `auth` için genişletildi (yeni istek literali yok).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 · `pnpm -w format:check` ·
+  `pnpm --filter @nexa/mobile test` **409/409 · 35 dosya** (taban 389/33, +20) · `pnpm -w test` 11/11 ·
+  `pnpm -w build` 8/8 (mobil `expo export` ios 1013 + android 1010 modül) · `pnpm -w test:integration`
+  **90/90 dosya · 2374/2374**. `pnpm -w test:e2e` KOŞULMADI — tm 127.1/127.2/127.3 ile aynı gerekçe:
+  apps/mobile Playwright'a hiç girmiyor, task'ın kendi testStrategy'si de onu istemiyor; apps/web,
+  apps/e2e, packages/* bu turda değişmedi. Migration/kontrat değişmedi → drift/codegen kapısı gereksiz.
+- **Varsayımlar:** "Parolamı unuttum" düğmesi konmadı (kapsam dışı, `WEB_APP_URL` telefonda yok).
+  `SsoRequiredError` iki yerden gelebiliyor (üyelik satırı `password_login_available: false` VE sunucunun
+  `/auth/authorize` reddi) — ikisi de aynı SSO teklifine düşüyor, çünkü enforcement sunucunun (§C-A17.7).
+- **Sonraki pencereye not:** SSO düğmesi `signInWithSso`'yu fiilen çağırıyor ama `app/services.tsx` hâlâ
+  `browser` vermiyor → bugün dürüst "No browser is available…" gösteriyor; bağlaması **tm 128.2 (13.7-q)**.
+  Çıkış yolu hâlâ yok (**tm 128.3**). `13.7` satırı `◐` KALDI — `✅`'yi tm 128.8 (13.7-w) yapacak.
+  `App.test.tsx`'in `mockStore` deseni (secure-store: hang / null / kayıtlı oturum) 13.7-w'nin soğuk-açılış
+  yolculuğu testi için hazır zemin.
+
+
 ## FAZ-4 AÇILIŞI (§F.3) · 13.7 dördüncü denetim (`✅` → `◐`, giriş yolu yok) · proje geneli kod denetimi · tm 128–143 açıldı — done — 2026-08-17 UTC
 
 - **Tetik:** panelin `suspicious-done` bulgusu (`PLAN.md:571` `✅` ama K13.7 "eksiklik anlatıyor") + kullanıcının

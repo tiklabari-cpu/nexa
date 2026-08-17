@@ -5997,10 +5997,10 @@
             "description": "§D96'nın modül paritesi borcunun \"Playbook\" payı: AI'ın ne yaptığı telefonda görünsün. Yazma (skill authoring, knowledge upload) masa işi olarak kapsam dışı kalır.",
             "details": "NE YAPILACAK: `apps/mobile/src/features/playbook/` — skill listesi + skill detayı + son\nçalışmalar + bilgi kaynakları listesi.\n\nUÇLAR (dördü de GET, dördü de zaten belgeli ve sunuluyor):\n- `GET /skills` — openapi.yaml:261 → paths/playbook.yaml:77-78.\n- `GET /skills/{skillId}` — openapi.yaml:267 → paths/playbook.yaml:131 (+`patch`, KULLANILMAZ).\n- `GET /skills/{skillId}/runs` — openapi.yaml:269 → paths/playbook.yaml:280.\n- `GET /copilot/knowledge` — openapi.yaml:278 → paths/copilot.yaml:1-2.\nDIŞARIDA: `POST /skills/compile` · `POST /skills/preview` · `PATCH /skills/{skillId}` ·\n`/knowledge-sources*` (bulk import dahil) · `/ai-agents*`. Skill yazmak/derlemek/önizlemek ve\nbilgi yüklemek masa işidir (§C-A28'in kendi gerekçesi) — `narrowedTo`'ya yazılır.\n\nEKRANLAR:\n- `SkillListScreen` — skill satırları (ad · durum/enabled · son çalışma özeti).\n- `SkillDetailScreen` — skill'in salt-okunur özeti + `runs` listesi (son N çalışma, sonuç rozeti).\n- `KnowledgeSourceListScreen` — copilot bilgi kaynakları, salt-okunur.\nNAVİGASYON: 13.7-m ile aynı kural — yeni kök tab zorunlu değil, ama rota TİPLİ + `Stack.Screen`'e\nfiilen verilmiş olmalı (parity.test.ts:250-256).\n\nDİKKAT: `13.7-i` (tm 90.9) zaten `/copilot/chats/{chatId}/{summary,reply}` çağırıyor ve matriste\n'AI' yüzeyidir. Bu alt-görev O YÜZEYİ GENİŞLETMEZ — 'AI' KK'nın ismen saydığı dörttendir,\n`/copilot/knowledge` ise §C-A28'in 'Playbook / AI administration' modülüdür. İkisi matriste\nAYRI kalır; karıştırmak 'AI' yüzeyinin uç listesini bozar ve parity.test.ts:259-265 kırmızıya\ndöner.\n\nWEB KARŞILIĞI (kopyalanmaz, referanstır): apps/web/src/features/playbook/{PlaybookPage,\nSkillEditor,KbArticleList}.tsx.\nORTAK KURALLAR (üst görev tm 127'nin details'i tam sürümdür — tuzaklar 1-7 ve kapsam sınırı orada):\n- Salt-okunur. Yazma ucu ÇAĞRILMAZ. Daraltma matrisin `narrowedTo` alanına yazılır.\n- Sunucu/şema/sözleşme DEĞİŞMEZ; uçlar zaten belgeli ve sunuluyor.\n- `parity.test.ts` AYNI alt-görevte güncellenir: bu modül `OUT_OF_SCOPE`'tan çıkar, matrise girer,\n  uçları `MOBILE_ENDPOINTS`'e kaydedilir. Test susturulmaz.\n- Tipler sözleşmeden türetilir (`ContractResponseBody<...>`); web'in `types.ts`'i kopyalanmaz.\n- Provider/context ayrımı 13.7-f/-g deseniyle; ekranlar `useServices()`'i doğrudan bilmez.\n- `13.7` satırı `◐` kalır (mağaza payı, §D96).",
             "testStrategy": "- `pnpm --filter @nexa/mobile test` exit 0; ekran başına test dosyası (liste: boş/hata/satır\n  açma · detay: iskelet/alanlar/çalışma listesi/hata · knowledge: boş/dolu/hata).\n- `parity.test.ts` yeşil: `OUT_OF_SCOPE`'ta artık 'Playbook' YOK, `/skills`, `/skills/{skillId}`,\n  `/skills/{skillId}/runs`, `/copilot/knowledge` sınıflanmış; 'AI' yüzeyinin uç listesi\n  DEĞİŞMEDEN yeşil kalır.\n- `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w build` exit 0.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "127",
-            "updatedAt": "2026-08-17T02:10:00.000Z"
+            "updatedAt": "2026-08-17T12:18:54.137Z"
           },
           {
             "id": 3,
@@ -6014,12 +6014,12 @@
             "updatedAt": "2026-08-17T02:10:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-17T11:48:02.174Z"
+        "updatedAt": "2026-08-17T12:18:54.137Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-17T11:48:02.175Z",
+      "lastModified": "2026-08-17T12:18:54.137Z",
       "taskCount": 127,
       "completedCount": 126,
       "tags": [

@@ -39,4 +39,10 @@ export type SettingsStackParamList = {
   TeamList: undefined;
   TeamMember: { agent: Agent; title: string };
   TeamGroups: undefined;
+  /** The Playbook/AI administration parity module (13.7-n). Unlike the
+   * roster, `GET /skills/{skillId}` exists, so only the id and the title for
+   * the header are carried — the detail screen re-fetches its own copy. */
+  SkillList: undefined;
+  SkillDetail: { skillId: string; title: string };
+  KnowledgeSources: undefined;
 };

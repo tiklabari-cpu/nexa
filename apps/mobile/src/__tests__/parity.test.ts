@@ -193,6 +193,17 @@ const PARITY_MODULES: readonly ParityModule[] = [
     narrowedTo:
       'roster + identity card (built from the roster row, no per-agent GET exists) + work schedule + group list, all read-only; no role, suspension or expertise edits and no invite flow (13.7-m)',
   },
+  {
+    module: 'Playbook',
+    tab: 'Settings',
+    feature: 'playbook',
+    screens: ['SkillListScreen.tsx', 'SkillDetailScreen.tsx', 'KnowledgeSourceListScreen.tsx'],
+    routes: ['SkillList', 'SkillDetail', 'KnowledgeSources'],
+    endpoints: ['/skills', '/skills/{skillId}', '/skills/{skillId}/runs', '/copilot/knowledge'],
+    registry: ['skills', 'skill', 'skillRuns', 'copilotKnowledge'],
+    narrowedTo:
+      'skill list + read-only detail (instruction + step count, unlike the roster this has a real per-id GET) + recent runs + the copilot knowledge base, all read-only; no compiling, previewing, editing or activating a skill, no knowledge upload/delete, no AI agent persona management and `/knowledge-sources` (the customer-facing agent’s own sources) is not called either (13.7-n)',
+  },
 ];
 
 /**
@@ -218,7 +229,8 @@ const SUPPORTING: readonly { endpoints: string[]; why: string }[] = [
 ];
 
 /**
- * The four modules §C-A28 puts outside the phone.
+ * What remains of the four modules §C-A28 put outside the phone, after Team
+ * (13.7-m) and Playbook (13.7-n) were paid off into `PARITY_MODULES` above.
  *
  * Each is stated as a predicate over contract paths, and each is checked twice:
  * that the contract really declares endpoints under it — otherwise "we do not
@@ -241,11 +253,6 @@ const OUT_OF_SCOPE: readonly { module: string; matches: (path: string) => boolea
       module: 'Billing',
       matches: (path) => path.startsWith('/billing'),
       why: 'card and plan changes are not a thing this project does at all (CLAUDE.md limits)',
-    },
-    {
-      module: 'Playbook / AI administration',
-      matches: (path) => path.startsWith('/skills') || path.startsWith('/copilot/knowledge'),
-      why: 'authoring a skill or a knowledge source is desk work; the phone only consumes what they produce',
     },
   ];
 
@@ -398,12 +405,11 @@ describe('module parity matrix — every request is accounted for', () => {
 // --- What §C-A28 leaves out -------------------------------------------------
 
 describe('module parity matrix — the modules §C-A28 puts out of scope', () => {
-  it('counts three — Team management paid off (13.7-m), Settings/Billing/Playbook remain', () => {
-    expect(OUT_OF_SCOPE).toHaveLength(3);
+  it('counts two — Team (13.7-m) and Playbook (13.7-n) paid off, Settings/Billing remain', () => {
+    expect(OUT_OF_SCOPE).toHaveLength(2);
     expect(OUT_OF_SCOPE.map((entry) => entry.module.split(' ')[0])).toEqual([
       'Settings',
       'Billing',
-      'Playbook',
     ]);
   });
 
@@ -422,9 +428,9 @@ describe('module parity matrix — the modules §C-A28 puts out of scope', () =>
       .map((entry) => entry.name)
       .sort();
     // `notifications` is the FR-MOD-08.2 screen (13.7-j) — the one Settings
-    // surface the criterion names by hand; `team` is the first module-parity
-    // debt paid off (13.7-m) — both live in the Settings tab, neither is a
-    // `MATRIX` surface.
+    // surface the criterion names by hand; `team` and `playbook` are the
+    // module-parity debt paid off so far (13.7-m, 13.7-n) — all three live in
+    // the Settings tab, none of them is a `MATRIX` surface.
     expect(shipped).toEqual(
       [
         ...MATRIX.map((surface) => surface.feature),
@@ -434,18 +440,21 @@ describe('module parity matrix — the modules §C-A28 puts out of scope', () =>
     );
   });
 
-  it('names four tabs; the Settings tab carries FR-MOD-08.2 and the Team parity module, nothing from workspace administration', () => {
+  it('names four tabs; the Settings tab carries FR-MOD-08.2 and the Team + Playbook parity modules, nothing from workspace administration', () => {
     expect([...ROOT_TABS]).toEqual(['Inbox', 'Customers', 'Reports', 'Settings']);
     // Whatever the tab is called, what it mounts is the notification
-    // preferences screen plus the Team surfaces (13.7-m) — never a brand,
-    // webhook or PAT screen, which is what `Settings (workspace
-    // administration)` above still keeps off the phone.
+    // preferences screen plus the Team (13.7-m) and Playbook (13.7-n)
+    // surfaces — never a brand, webhook or PAT screen, which is what
+    // `Settings (workspace administration)` above still keeps off the phone.
     const settingsStack = readFileSync(join(SRC, 'app', 'stacks', 'SettingsStack.tsx'), 'utf8');
     expect(settingsStack).toContain('features/notifications/NotificationsScreen');
     expect(settingsStack).toContain('features/team/TeamListScreen');
     expect(settingsStack).toContain('features/team/TeamMemberScreen');
     expect(settingsStack).toContain('features/team/GroupListScreen');
-    expect([...settingsStack.matchAll(/name="(\w+)"/g)]).toHaveLength(4);
+    expect(settingsStack).toContain('features/playbook/SkillListScreen');
+    expect(settingsStack).toContain('features/playbook/SkillDetailScreen');
+    expect(settingsStack).toContain('features/playbook/KnowledgeSourceListScreen');
+    expect([...settingsStack.matchAll(/name="(\w+)"/g)]).toHaveLength(7);
   });
 });
 
@@ -514,14 +523,15 @@ describe('module parity matrix — what is still owed', () => {
       openDebts: OPEN_DEBTS.length,
     }).toEqual({
       surfacesCovered: 4,
-      // The debt §D96 recorded starts paying down here: Team (13.7-m) is the
-      // first of the three, so `OUT_OF_SCOPE` below drops from four to three.
-      modulesPaidOff: 1,
-      modulesOutOfScope: 3,
-      // Not a target — a denominator. The phone reaching 18 of the product's
+      // The debt §D96 recorded pays down here one subtask at a time: Team
+      // (13.7-m) then Playbook (13.7-n), so `OUT_OF_SCOPE` below drops from
+      // four to two — Settings and Billing are what is left.
+      modulesPaidOff: 2,
+      modulesOutOfScope: 2,
+      // Not a target — a denominator. The phone reaching 22 of the product's
       // paths is what "screen parity, not endpoint parity" (§C-A28) costs, and
       // the number moving is a prompt to re-read this matrix rather than a failure.
-      endpointsCalled: 18,
+      endpointsCalled: 22,
       contractEndpoints: 183,
       openDebts: 1,
     });

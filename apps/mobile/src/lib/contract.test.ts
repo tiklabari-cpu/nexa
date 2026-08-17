@@ -13,7 +13,7 @@ describe('contract binding', () => {
     expect(contractPath('/health')).toBe('/health');
   });
 
-  it('names the four FR-MOD-13.7 surfaces, the Team parity module, plus the liveness probe', () => {
+  it('names the four FR-MOD-13.7 surfaces, the Team + Playbook parity modules, plus the liveness probe', () => {
     expect(MOBILE_ENDPOINTS).toEqual({
       health: '/health',
       chats: '/chats',
@@ -24,6 +24,10 @@ describe('contract binding', () => {
       agents: '/agents',
       agentWorkSchedule: '/agents/{agentId}/work-schedule',
       groups: '/groups',
+      skills: '/skills',
+      skill: '/skills/{skillId}',
+      skillRuns: '/skills/{skillId}/runs',
+      copilotKnowledge: '/copilot/knowledge',
     });
   });
 
@@ -33,6 +37,8 @@ describe('contract binding', () => {
       '/copilot/chats/{chatId}/summary',
       '/copilot/chats/{chatId}/reply',
       '/agents/{agentId}/work-schedule',
+      '/skills/{skillId}',
+      '/skills/{skillId}/runs',
     ]);
   });
 });

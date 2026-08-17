@@ -81,6 +81,10 @@ export const MOBILE_ENDPOINTS = {
   agents: contractPath('/agents'),
   agentWorkSchedule: contractPath('/agents/{agentId}/work-schedule'),
   groups: contractPath('/groups'),
+  skills: contractPath('/skills'),
+  skill: contractPath('/skills/{skillId}'),
+  skillRuns: contractPath('/skills/{skillId}/runs'),
+  copilotKnowledge: contractPath('/copilot/knowledge'),
 } as const satisfies Record<string, ContractPath>;
 
 export type MobileEndpointKey = keyof typeof MOBILE_ENDPOINTS;

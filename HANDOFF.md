@@ -13,6 +13,36 @@
 
 ## Task log (newest-first)
 
+## 127.2 — 13.7-n: mobil Playbook/AI yönetimi yüzeyi (skill listesi + detay + son çalışmalar + copilot bilgi kaynakları, salt-okunur) — done — 2026-08-17 UTC
+
+- **Yapıldı:** tm 127'nin üç alt-görevinden ikincisi — §D96'nın modül paritesi borcunun Playbook
+  payı ödendi. `apps/mobile/src/features/playbook/` (13.7-f/-g/-m deseni: `api.ts` istek
+  literalleri + sözleşmeden türetilmiş `types.ts` + `context.ts`/`PlaybookProvider.tsx`) dört
+  zaten-belgeli GET'i tüketiyor (`/skills`, `/skills/{skillId}`, `/skills/{skillId}/runs`,
+  `/copilot/knowledge`); derleme/önizleme/aktifleştirme/düzenleme ve bilgi kaynağı ekleme/silme
+  ÇAĞRILMADI. Üç ekran: `SkillListScreen`/`SkillDetailScreen`/`KnowledgeSourceListScreen`,
+  `SettingsStack` altına bağlandı (Settings header'ına "Playbook" bağlantısı, skill listesinden
+  "Knowledge"). `parity.test.ts` AYNI turda güncellendi: `PARITY_MODULES`'e Playbook eklendi,
+  `OUT_OF_SCOPE` 3 → 2 (yalnız Settings/Billing kaldı), `endpointsCalled` 18 → 22. PLAN.md:
+  `13.7` satırı `◐` KALDI; §K13.7'ye madde eklendi, §C-A28/§D96/§5.4 daraltma cümleleri
+  Playbook'u kapsam-dışı listesinden çıkaracak + Team'in eski kalıntı referanslarını da
+  düzeltecek şekilde güncellendi (silinmedi — CONVENTIONS §1.2).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 ·
+  `pnpm --filter @nexa/mobile test` **373/373 · 32 süit** · `pnpm -w test` (api 3251 + mobil 373) ·
+  `pnpm -w build` 8/8 (mobil `expo export` ios 1000 + android 997 modül) · `pnpm -w format:check`
+  (bu turda düzeltildi: 4 dosya prettier'a takılmıştı, kod değişmedi) · `pnpm -w test:integration`
+  **90/90 dosya · 2374/2374 test**, kırmızısız — tm 127.1'in notladığı `push-notifications.test.ts`
+  zamanlama flake'i bu turda tekrar ETMEDİ. `pnpm -w test:e2e` bu turda KOŞULMADI: tm 127.1 ile
+  aynı gerekçe — apps/mobile Playwright'a hiç girmiyor, task'ın kendi `testStrategy`'si yalnız
+  mobil jest + typecheck/lint/build + `pnpm -w test`/`test:integration` regresyonsuzluğu istiyor;
+  apps/web ve apps/e2e'ye bu turda dokunulmadı.
+- **Varsayımlar:** Yok — tm 127'nin details'indeki tüm tuzaklar (1-7) ve kapsam sınırı aynen
+  izlendi. `GET /skills/{skillId}` gerçekten var olduğu için (Team'in roster'ından farklı) detay
+  ekranı kendi kopyasını çekiyor, liste satırındaki nesneye güvenmiyor.
+- **Sonraki pencereye not:** tm 127'nin kalan 1/3'ü: Billing `13.7-o` (tm 127.3) — bitince
+  `parity.test.ts`'in `OUT_OF_SCOPE`'u yalnız `Settings` taşıyacak. `13.7` satırı üçü bitse de
+  `◐` kalacak (§D96'nın mağaza payı kalıcı borç).
+
 ## 127.1 — 13.7-m: mobil Team yüzeyi (roster + kimlik kartı + çalışma takvimi + gruplar, salt-okunur) — done — 2026-08-17 UTC
 
 - **Yapıldı:** tm 127'nin üç alt-görevinden ilki — §D96'nın modül paritesi borcunun Team payı ödendi.

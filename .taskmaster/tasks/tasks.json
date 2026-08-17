@@ -6025,7 +6025,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-17T23:14:42.408Z",
+        "updatedAt": "2026-08-17T23:42:55.520Z",
         "subtasks": [
           {
             "id": 1,
@@ -6084,10 +6084,10 @@
             "description": "app.config.ts + doğru port (4000) + mobil README + start scriptleri.",
             "details": "NE YAPILACAK: (a) `app.json` → `app.config.ts` (Expo config-as-code): `extra.apiBaseUrl` =\n`process.env.NEXA_API_BASE_URL ?? 'http://localhost:4000/api/v1'`, `extra.rtmBaseUrl` =\n`process.env.NEXA_RTM_BASE_URL ?? 'ws://localhost:4001'` — 3000 portu HATA (kök README:4000);\n`config.ts`'in doğrulaması DEĞİŞMEZ (hâlâ mutlak URL ister); (b) `apps/mobile/README.md`: önkoşullar\n(Node 24, pnpm 11, Expo Go / dev build), `make dev` sonrası `pnpm --filter @nexa/mobile start`,\nAndroid emülatörde `10.0.2.2`, iOS simülatörde `localhost`, fiziksel cihazda LAN IP (`NEXA_API_BASE_URL`\nile), giriş için seed kimlikleri (`owner@acme.localhost` / `nexa-demo-password` — kaynak\n`apps/api/prisma/seed.ts:25,328`), push'un mock olduğu (`.data/push`), test/typecheck/lint/build komutları;\n(c) kök `README.md`'ye \"Mobile app\" bölümü (kısa, apps/mobile/README'ye link); (d) `package.json`\nscriptleri: `android` (`expo start --android`), `ios` (`expo start --ios`) — `dev` script'i EKLENMEZ\n(turbo `dev` Expo'yu başlatıp `make dev`'i bloklamasın; §D113 bulgusu: mobil kasıtlı olarak `dev`\ntanımlamıyor — bunu README'de söyle).\nNEDEN: `app.json:14` 3000; cihazdan `localhost` erişilemez; `app.config.*` yok; mobil README yok (§D111).\nDOSYALAR: `apps/mobile/app.config.ts` (app.json silinir ya da yalnız statik alanlar kalır — Expo ikisini\nbirleştirir; tek kaynak tercih et) · `apps/mobile/README.md` (yeni) · kök `README.md` · `apps/mobile/\npackage.json` · `config.test.ts` (varsayılan taban 4000'i doğrulayan +1 test).\nREFERANS DESEN: kök README \"Quick start\" tablosu (portlar) · `apps/mobile/src/config.ts` doğrulama.\nKK: `pnpm --filter @nexa/mobile start` + Expo Go ile telefon `make dev`'in API'sine bağlanır (README\nadımlarıyla); `expo export` hâlâ yeşil; `config.test.ts` varsayılanı doğrular.\nKAPSAM DIŞI: EAS/prebuild/store (⛔-süreç §D110) · `dev` script'i.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-13.7 (mobil)**. Gereksinim satırı: `grep -n '| 13\\.7 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K13.7' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm --filter @nexa/mobile test` (config.test +1) · typecheck · lint · build (expo export ios+android — app.config.ts ile) exit 0.\n- Ölçülebilir: `grep -rn \"3000\" apps/mobile/app.config.ts apps/mobile/app.json 2>/dev/null` = 0; `apps/mobile/README.md` var ve kök README ondan söz ediyor.\n- `pnpm -w format:check` (README markdown) exit 0.\n- PLAN: K13.7'ye madde.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "128",
-            "updatedAt": "2026-08-17T23:14:42.408Z"
+            "updatedAt": "2026-08-17T23:42:55.520Z"
           },
           {
             "id": 6,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-17T23:14:42.409Z",
+      "lastModified": "2026-08-17T23:42:55.521Z",
       "taskCount": 143,
       "completedCount": 127,
       "tags": [

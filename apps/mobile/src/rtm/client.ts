@@ -78,6 +78,13 @@ export interface RtmClientOptions {
   baseUrl: string;
   organizationId: string;
   getToken: () => string | null;
+  /**
+   * Whether the session is over, as opposed to momentarily without a token.
+   * Optional: a caller that cannot tell the two apart gets the safe half of the
+   * behaviour (keep waiting), never a retry loop against a dead session — the
+   * gateway's refusal already stops that (`#login`).
+   */
+  isSignedOut?: () => boolean;
   pushes: RtmPushAction[];
   onPush: PushHandler;
   onStatusChange?: (status: RtmStatus) => void;
@@ -176,8 +183,10 @@ export class MobileRtmClient {
 
   #open(): void {
     const token = this.#options.getToken();
-    // No credential yet — the caller reconnects once there is one.
-    if (token === null || token === '') return;
+    if (token === null || token === '') {
+      this.#waitForCredential();
+      return;
+    }
 
     this.#setStatus(this.#attempt === 0 ? 'connecting' : 'reconnecting');
 
@@ -205,6 +214,36 @@ export class MobileRtmClient {
 
     // `close` always follows an error, and that is where reconnect lives.
     socket.onerror = () => {};
+  }
+
+  /**
+   * There is nothing to dial with. Two very different situations wear that same
+   * shape, and this used to return quietly for both:
+   *
+   *   - the session is over, and there will never be a token — retrying is a
+   *     loop against a door that is closed on purpose;
+   *   - a renewal is in flight, and `getAccessToken()` is null for the few
+   *     hundred milliseconds it takes.
+   *
+   * The second one is the whole reason this method exists. Returning silently
+   * left the socket closed with nothing scheduled to reopen it, so the client
+   * sat offline until something unrelated happened to poke it — an app-state
+   * change, which on a phone left in the foreground can be never. The agent's
+   * REST calls kept working (the token renewed a moment later) while messages
+   * silently stopped arriving, which is the exact failure this class exists to
+   * prevent, arrived at from the other side.
+   *
+   * So the wait uses the same jittered backoff a dropped connection uses. The
+   * status is left alone deliberately: after a drop it is already
+   * `reconnecting`, and before the first connection `offline` is the truth —
+   * "connecting" would claim a socket that was never opened.
+   */
+  #waitForCredential(): void {
+    if (this.#options.isSignedOut?.() === true) {
+      this.#setStatus('offline');
+      return;
+    }
+    this.#scheduleRetry();
   }
 
   #receive(raw: unknown): void {

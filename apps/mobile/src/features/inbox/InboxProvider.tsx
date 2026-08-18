@@ -20,6 +20,7 @@ import { createInboxApi } from './api';
 import { InboxContext } from './context';
 import { InboxStore } from './store';
 import { MobileRtmClient } from '../../rtm/client';
+import { connectivity } from '../../lib/connectivity';
 import { useServices, useSessionState } from '../../app/services';
 
 const MOBILE_PUSHES: RtmPushAction[] = [
@@ -63,9 +64,19 @@ export function InboxProvider({ store, children }: InboxProviderProps) {
         baseUrl: config.rtmBaseUrl,
         organizationId,
         getToken: () => session.getAccessToken(),
+        // Tells "the renewal has not landed yet" (wait, then dial again) from
+        // "this session is over" (stop) — the socket cannot see the difference
+        // from a null token alone (13.7-v).
+        isSignedOut: () => session.getState().status === 'signed-out',
         pushes: MOBILE_PUSHES,
         onPush: (action, payload) => inbox.applyPush(action, payload),
-        onStatusChange: (status) => inbox.setConnection(status),
+        onStatusChange: (status) => {
+          inbox.setConnection(status);
+          // A socket that reached the gateway is proof the radio is back, and
+          // often the first proof there is: while offline the screens have
+          // stopped asking for anything, so nothing else would clear the band.
+          if (status === 'live') connectivity.reportReachable();
+        },
       });
     }
 

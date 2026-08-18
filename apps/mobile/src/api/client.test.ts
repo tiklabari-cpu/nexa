@@ -6,6 +6,7 @@
  */
 import { MobileSession } from '../auth/session';
 import { SessionStore, type SecureKeyValueStore } from '../auth/secure-store';
+import { connectivity } from '../lib/connectivity';
 import { SessionApiClient } from './client';
 
 const API = 'https://api.test/api/v1';
@@ -97,6 +98,10 @@ async function signedIn(handlers: { agents: () => Response; token?: () => Respon
   };
 }
 
+// Every request is also the app's reachability probe (13.7-v), and the store it
+// reports to is module-level: one test's verdict would be the next one's start.
+beforeEach(() => connectivity.reset());
+
 describe('SessionApiClient', () => {
   it('carries the session token, and the current one after a renewal', async () => {
     let attempt = 0;
@@ -166,5 +171,42 @@ describe('SessionApiClient', () => {
     const { client } = await signedIn({ agents: () => json({ agents: [{ id: 'a-1' }] }) });
 
     await expect(client.request('get', '/agents')).resolves.toEqual({ agents: [{ id: 'a-1' }] });
+  });
+
+  describe('reachability (13.7-v)', () => {
+    it('declares the phone offline when a request reached nothing', async () => {
+      const { client } = await signedIn({
+        agents: () => {
+          // What `fetch` does with no radio, a dead DNS, or a captive portal.
+          throw new TypeError('Network request failed');
+        },
+      });
+
+      await expect(client.request('get', '/agents')).rejects.toMatchObject({ type: 'network' });
+
+      expect(connectivity.getSnapshot().online).toBe(false);
+    });
+
+    it('counts a refusal as proof the server is reachable', async () => {
+      const { client } = await signedIn({ agents: () => apiError(403, 'authorization') });
+      connectivity.reportUnreachable();
+
+      await expect(client.request('get', '/agents')).rejects.toMatchObject({ status: 403 });
+
+      // Being told "no" still means this phone got through — a band saying
+      // "no network" over a permissions error sends the agent to the wrong fix.
+      expect(connectivity.getSnapshot().online).toBe(true);
+    });
+
+    it('clears the band on the first answer, and stamps when that was', async () => {
+      const { client } = await signedIn({ agents: () => json({ agents: [] }) });
+      connectivity.reportUnreachable();
+
+      await client.request('get', '/agents');
+
+      const snapshot = connectivity.getSnapshot();
+      expect(snapshot.online).toBe(true);
+      expect(snapshot.lastReachableAt).not.toBeNull();
+    });
   });
 });

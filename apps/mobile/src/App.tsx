@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ConfigErrorScreen } from './app/ConfigErrorScreen';
+import { ErrorBoundary } from './app/ErrorBoundary';
 import { RootNavigator } from './app/RootNavigator';
 import { ServicesProvider } from './app/services';
 import { MobileConfigError, readMobileConfig } from './config';
@@ -33,9 +34,15 @@ export default function App() {
             only exist on the branch where there is one — a screen behind the
             config error has nothing to talk to anyway. */}
         {config.ok ? (
-          <ServicesProvider config={config.value}>
-            <RootNavigator />
-          </ServicesProvider>
+          // The boundary goes inside the config branch, not around it: a missing
+          // config value is not a thrown render and has an answer of its own
+          // above, whereas everything below here is code that can throw and has
+          // nothing but a white screen if it does (13.7-v).
+          <ErrorBoundary>
+            <ServicesProvider config={config.value}>
+              <RootNavigator />
+            </ServicesProvider>
+          </ErrorBoundary>
         ) : (
           <ConfigErrorScreen message={config.error.message} />
         )}

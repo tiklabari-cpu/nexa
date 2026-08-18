@@ -6,6 +6,7 @@ import { InboxContext } from './context';
 import { InboxStore } from './store';
 import type { InboxApi } from './api';
 import type { ChatEvent, ChatSummary } from './types';
+import { connectivity } from '../../lib/connectivity';
 import { ThemeProvider } from '../../theme/theme';
 
 function chat(overrides: Partial<ChatSummary> & { id: string }): ChatSummary {
@@ -71,6 +72,10 @@ async function mount(
   await act(async () => {});
   return { onOpenChat };
 }
+
+// The offline signal is a module-level store (`lib/connectivity.ts`) — one
+// test's verdict would otherwise be the next test's starting state.
+beforeEach(() => connectivity.reset());
 
 describe('ChatListScreen', () => {
   it('says the inbox is empty rather than showing a blank rectangle', async () => {
@@ -210,5 +215,52 @@ describe('ChatListScreen', () => {
     await act(async () => store.setConnection('live'));
 
     await waitFor(() => expect(screen.queryByTestId('connection-banner')).not.toBeOnTheScreen());
+  });
+
+  it('says the network is gone, which a quiet socket does not', async () => {
+    const store = new InboxStore({ api: api() });
+    await mount(store);
+    await act(async () => store.setConnection('live'));
+
+    // A request failed to reach anything at all — the socket, still backing off
+    // between attempts, would only have said "reconnecting".
+    await act(async () => connectivity.reportUnreachable());
+
+    await waitFor(() =>
+      expect(screen.getByTestId('connection-banner')).toHaveTextContent(/^No network/),
+    );
+  });
+
+  it('outranks the socket, because no radio is the bigger fact', async () => {
+    const store = new InboxStore({ api: api() });
+    await mount(store);
+
+    await act(async () => {
+      store.setConnection('reconnecting');
+      connectivity.reportUnreachable();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('connection-banner')).toHaveTextContent(/^No network/),
+    );
+    expect(screen.queryByText('Reconnecting — messages will catch up')).not.toBeOnTheScreen();
+  });
+
+  it('refetches once the network is back, since every request made meanwhile failed', async () => {
+    const listChats = jest.fn(async () => ({ items: [] }));
+    const store = new InboxStore({ api: api({ listChats }) });
+    await mount(store);
+    await act(async () => store.setConnection('live'));
+    expect(listChats).toHaveBeenCalledTimes(1);
+
+    await act(async () => connectivity.reportUnreachable());
+    // Nothing on mount and nothing while away: a second load here would be two
+    // requests for one list.
+    expect(listChats).toHaveBeenCalledTimes(1);
+
+    await act(async () => connectivity.reportReachable());
+
+    await waitFor(() => expect(listChats).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId('connection-banner')).not.toBeOnTheScreen();
   });
 });

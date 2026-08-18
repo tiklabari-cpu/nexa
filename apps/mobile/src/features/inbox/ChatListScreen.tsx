@@ -6,7 +6,7 @@
  * re-sorted here: a list that reshuffles on render moves the row under the
  * thumb that is reaching for it.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { ConnectionBanner } from './ConnectionBanner';
@@ -14,6 +14,7 @@ import { chatTitle } from './title';
 import { useInboxState } from './useInbox';
 import { useInboxStore } from './context';
 import { FONT_SIZE, RADIUS, SPACING } from '../../theme/tokens';
+import { useConnectivity } from '../../lib/connectivity';
 import { useTheme } from '../../theme/theme';
 import type { ChatSummary } from './types';
 
@@ -25,10 +26,30 @@ export function ChatListScreen({ onOpenChat }: ChatListScreenProps) {
   const store = useInboxStore();
   const state = useInboxState();
   const { colors } = useTheme();
+  const { online } = useConnectivity();
+  const wasOffline = useRef(false);
 
   useEffect(() => {
     if (state.status === 'idle') void store.loadChats();
   }, [store, state.status]);
+
+  /**
+   * The network came back. Nothing else would notice: every request made while
+   * it was gone has already failed, and the socket's own reconnect only replays
+   * events for chats it holds a cursor for — a conversation that arrived while
+   * this phone was in a tunnel is in neither. So the band lifting is what
+   * refetches the list, and the ref is what keeps that from firing on mount,
+   * where it would be a second load of a list that is already loading.
+   */
+  useEffect(() => {
+    if (!online) {
+      wasOffline.current = true;
+      return;
+    }
+    if (!wasOffline.current) return;
+    wasOffline.current = false;
+    void store.loadChats({ refresh: true });
+  }, [online, store]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.bgCanvas }]}>

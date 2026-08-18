@@ -26,6 +26,7 @@
  *     original 401 is what the caller sees.
  */
 import { ApiClient, ApiClientError } from '../lib/api-client';
+import { connectivity } from '../lib/connectivity';
 import type {
   ContractMethod,
   ContractPath,
@@ -81,7 +82,7 @@ export class SessionApiClient {
     options: SessionRequestOptions<P, M> = {},
   ): Promise<ContractResponseBody<P, M>> {
     try {
-      return await this.#transport.request(method, path, options);
+      return await this.#reachable(this.#transport.request(method, path, options));
     } catch (error) {
       if (!isExpiredCredential(error)) throw error;
 
@@ -92,7 +93,40 @@ export class SessionApiClient {
       // empty list as though the request had succeeded.
       if (renewed === null) throw error;
 
-      return await this.#transport.request(method, path, options);
+      return await this.#reachable(this.#transport.request(method, path, options));
+    }
+  }
+
+  /**
+   * Every request is also a reachability probe, and this is where the two other
+   * halves of "am I offline?" get joined (`13.7-v`): a call that reached
+   * *something* — even a 500, even a 403 — proves the radio works, and only the
+   * transport's `network` category proves it does not.
+   *
+   * Here rather than in `lib/api-client.ts` on purpose. That client is also the
+   * anonymous one `MobileSession` signs in with, and a failed sign-in already
+   * has a screen saying so; letting it raise an app-wide band would mean the
+   * inbox announcing a network problem for a request nobody made from it.
+   *
+   * `timeout` is deliberately neither: a request that ran out of time proves
+   * nothing in either direction — the server may be slow, or the radio may be
+   * gone — and `lib/api-client.ts` keeps it a separate category precisely so
+   * this decision can be made once, here, instead of being guessed at twice.
+   */
+  async #reachable<T>(pending: Promise<T>): Promise<T> {
+    try {
+      const result = await pending;
+      connectivity.reportReachable();
+      return result;
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        // Status 0 is the transport's own verdict — nothing came back. Any
+        // status at all came from the server, a refusal included: being told
+        // "no" still proves this phone can reach it.
+        if (error.type === 'network') connectivity.reportUnreachable();
+        else if (error.status > 0) connectivity.reportReachable();
+      }
+      throw error;
     }
   }
 }

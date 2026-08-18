@@ -68,7 +68,10 @@ class FakeSocket implements RtmSocket {
   }
 }
 
-function harness(overrides: { token?: string | null } = {}) {
+function harness(overrides: { token?: string | null; isSignedOut?: () => boolean } = {}) {
+  // Mutable, because the interesting case is a token that arrives *later*: a
+  // renewal in flight is the ordinary reason `getAccessToken()` is null.
+  let token: string | null = overrides.token === undefined ? 'access-token' : overrides.token;
   const sockets: FakeSocket[] = [];
   const pushes: Array<{ action: string; payload: Record<string, unknown> }> = [];
   const statuses: string[] = [];
@@ -84,7 +87,8 @@ function harness(overrides: { token?: string | null } = {}) {
   const client = new MobileRtmClient({
     baseUrl: 'wss://rtm.nexa.test',
     organizationId: 'org-1',
-    getToken: () => (overrides.token === undefined ? 'access-token' : overrides.token),
+    getToken: () => token,
+    ...(overrides.isSignedOut ? { isSignedOut: overrides.isSignedOut } : {}),
     pushes: ['incoming_event'],
     onPush: (action, payload) => pushes.push({ action, payload }),
     onStatusChange: (status) => statuses.push(status),
@@ -107,6 +111,9 @@ function harness(overrides: { token?: string | null } = {}) {
     latest: () => sockets[sockets.length - 1] as FakeSocket,
     foreground: () => appStateListener?.('active'),
     hasAppStateListener: () => appStateListener !== null,
+    setToken: (next: string | null) => {
+      token = next;
+    },
   };
 }
 
@@ -151,6 +158,37 @@ describe('connecting', () => {
   it('opens no socket at all without a credential', () => {
     const h = harness({ token: null });
     h.client.connect();
+
+    expect(h.sockets).toHaveLength(0);
+    expect(h.client.status).toBe('offline');
+  });
+
+  it('keeps waiting for a token instead of sitting closed until something pokes it', () => {
+    // The ordinary way this happens: a renewal is in flight, so the token is
+    // null for a few hundred milliseconds. Returning quietly used to leave the
+    // socket closed with nothing scheduled — on a phone held in the foreground,
+    // no app-state change ever arrives to reopen it, and messages just stop.
+    const h = harness({ token: null });
+    h.client.connect();
+    expect(h.sockets).toHaveLength(0);
+
+    h.setToken('renewed-token');
+    jest.advanceTimersByTime(250); // 0.5 × the first 500ms backoff window
+
+    expect(h.sockets).toHaveLength(1);
+    h.latest().open();
+    expect(h.latest().sent.find((message) => message.action === 'login')?.payload['token']).toBe(
+      'Bearer renewed-token',
+    );
+  });
+
+  it('stops waiting for a token once the session is over', () => {
+    // There is no renewal coming. Retrying forever would be a wakeup every
+    // fifteen seconds for a door that is closed on purpose.
+    const h = harness({ token: null, isSignedOut: () => true });
+    h.client.connect();
+
+    jest.advanceTimersByTime(60_000);
 
     expect(h.sockets).toHaveLength(0);
     expect(h.client.status).toBe('offline');
